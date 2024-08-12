@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net7.0</TargetFramework>
+        <TargetFramework>net8.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
     </PropertyGroup>
@@ -48,10 +48,6 @@
     <ItemGroup>
       <Content Include="Domain\.DS_Store" />
       <Content Include="Settings\.DS_Store" />
-    </ItemGroup>
-
-    <ItemGroup>
-      <Folder Include="DbUp\Scripts_2024\" />
     </ItemGroup>
     
 </Project>
