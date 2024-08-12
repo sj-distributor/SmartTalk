@@ -2,10 +2,11 @@ using Autofac;
 using Serilog;
 using Destructurama;
 using SmartTalk.Core;
-using SmartTalk.Core.DbUp;
+using SmartTalk.Core.DbUpFile;
 using SmartTalk.Core.Settings;
 using SmartTalk.Core.Settings.Logging;
 using Autofac.Extensions.DependencyInjection;
+
 namespace SmartTalk.Api;
 
 public class Program
@@ -33,7 +34,7 @@ public class Program
         {
             Log.Information("Configuring api host ({ApplicationContext})...", application);
                 
-            new DbUpRunner(new SmartTalkConnectionString(configuration).Value).Run();
+            new DbUpFileRunner(new SmartTalkConnectionString(configuration).Value).Run(nameof(Core.DbUpFile), typeof(DbUpFileRunner).Assembly);
                 
             var webHost = CreateHostBuilder(args, configuration).Build();
 

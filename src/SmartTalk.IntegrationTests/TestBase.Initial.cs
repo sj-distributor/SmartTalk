@@ -4,7 +4,7 @@ using SmartTalk.Core;
 using NSubstitute;
 using MySqlConnector;
 using Newtonsoft.Json;
-using SmartTalk.Core.DbUp;
+using SmartTalk.Core.DbUpFile;
 using SmartTalk.Core.Settings;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.IntegrationTests.Mocks;
@@ -50,7 +50,7 @@ public partial class TestBase
         if (!ShouldRunDbUpDatabases.GetValueOrDefault(_databaseName, true))
             return;
 
-        new DbUpRunner(new SmartTalkConnectionString(CurrentConfiguration).Value).Run();
+        new DbUpFileRunner(new SmartTalkConnectionString(CurrentConfiguration).Value).Run(nameof(Core.DbUpFile), typeof(DbUpFileRunner).Assembly);
 
         ShouldRunDbUpDatabases[_databaseName] = false;
     }

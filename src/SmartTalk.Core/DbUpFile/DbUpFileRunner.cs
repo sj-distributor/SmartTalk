@@ -1,25 +1,33 @@
 using DbUp;
+using System.Reflection;
+using DbUp.ScriptProviders;
 using MySql.Data.MySqlClient;
 
-namespace SmartTalk.Core.DbUp;
+namespace SmartTalk.Core.DbUpFile;
 
-public class DbUpRunner
+public class DbUpFileRunner
 {
     private readonly string _connectionString;
 
-    public DbUpRunner(string connectionString)
+    public DbUpFileRunner(string connectionString)
     {
         _connectionString = connectionString;
     }
 
-    public void Run()
+    public void Run(string scriptFolderName, Assembly assembly)
     {
         CreateDatabaseIfNotExist(_connectionString);
         
         EnsureDatabase.For.MySqlDatabase(_connectionString);
 
         var upgradeEngine = DeployChanges.To.MySqlDatabase(_connectionString)
-            .WithScriptsEmbeddedInAssembly(typeof(DbUpRunner).Assembly)
+            .WithScriptsFromFileSystem(
+                Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? string.Empty, scriptFolderName),
+                new FileSystemScriptOptions
+                {
+                    IncludeSubDirectories = true
+                })
+            .WithScriptsAndCodeEmbeddedInAssembly(assembly, s => s.StartsWith($"{assembly.GetName().Name}.{scriptFolderName}"))
             .WithTransaction()
             .LogToAutodetectedLog()
             .LogToConsole()
