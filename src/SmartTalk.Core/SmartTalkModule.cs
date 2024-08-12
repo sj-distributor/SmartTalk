@@ -1,14 +1,11 @@
-using Amazon;
 using Serilog;
 using Autofac;
-using Amazon.S3;
 using Mediator.Net;
 using System.Reflection;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Data;
 using Mediator.Net.Autofac;
 using SmartTalk.Core.Settings;
-using SmartTalk.Core.Settings.Aws;
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Services.Caching;
 using Mediator.Net.Middlewares.Serilog;
@@ -40,7 +37,6 @@ public class SmartTalkModule : Module
         RegisterDatabase(builder);
         RegisterDependency(builder);
         RegisterAutoMapper(builder);
-        RegisterAwsS3Client(builder);
     }
 
     private void RegisterDependency(ContainerBuilder builder)
@@ -112,14 +108,5 @@ public class SmartTalkModule : Module
             var pool = cfx.Resolve<IRedisConnectionPool>();
             return pool.GetConnection();
         }).ExternallyOwned();
-    }
-    
-    private void RegisterAwsS3Client(ContainerBuilder builder)
-    {
-        builder.Register(c =>
-        {
-            var settings = c.Resolve<AwsS3Settings>();
-            return new AmazonS3Client(settings.AccessKeyId, settings.AccessKeySecret, RegionEndpoint.GetBySystemName(settings.Region));
-        }).AsSelf().InstancePerLifetimeScope();
     }
 }
