@@ -7,7 +7,6 @@ EXPOSE 443
 COPY ./src/SmartTalk.Api ./build/SmartTalk.Api
 COPY ./src/SmartTalk.Core ./build/SmartTalk.Core
 COPY ./src/SmartTalk.Messages ./build/SmartTalk.Messages
-COPY ./NuGet.Config ./build
 
 RUN dotnet publish build/SmartTalk.Api -c Release -o out
 
