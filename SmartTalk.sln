@@ -1,0 +1,46 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Facade", "Facade", "{9F356A7A-2CB4-4E4D-8FCF-0C5EEE83B548}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SmartTalk.Api", "src\SmartTalk.Api\SmartTalk.Api.csproj", "{92E74238-E9CA-48FD-80FB-3C9C88356185}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Libraries", "Libraries", "{B913BE00-7D04-44FC-8FCE-65B0A7DD17FA}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{4255D696-11C5-45C6-8345-A9E7B95E75F2}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SmartTalk.Core", "src\SmartTalk.Core\SmartTalk.Core.csproj", "{68B12E45-E85D-4CC2-93B5-24EBECC9DC24}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SmartTalk.Messages", "src\SmartTalk.Messages\SmartTalk.Messages.csproj", "{39FF2412-A6C8-487E-BADE-1611A5DE6717}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SmartTalk.IntegrationTests", "src\SmartTalk.IntegrationTests\SmartTalk.IntegrationTests.csproj", "{3420D68C-294D-4E51-9AC0-39AF82EB22BB}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{92E74238-E9CA-48FD-80FB-3C9C88356185}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{92E74238-E9CA-48FD-80FB-3C9C88356185}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{92E74238-E9CA-48FD-80FB-3C9C88356185}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{92E74238-E9CA-48FD-80FB-3C9C88356185}.Release|Any CPU.Build.0 = Release|Any CPU
+		{68B12E45-E85D-4CC2-93B5-24EBECC9DC24}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{68B12E45-E85D-4CC2-93B5-24EBECC9DC24}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{68B12E45-E85D-4CC2-93B5-24EBECC9DC24}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{68B12E45-E85D-4CC2-93B5-24EBECC9DC24}.Release|Any CPU.Build.0 = Release|Any CPU
+		{39FF2412-A6C8-487E-BADE-1611A5DE6717}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{39FF2412-A6C8-487E-BADE-1611A5DE6717}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{39FF2412-A6C8-487E-BADE-1611A5DE6717}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{39FF2412-A6C8-487E-BADE-1611A5DE6717}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3420D68C-294D-4E51-9AC0-39AF82EB22BB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3420D68C-294D-4E51-9AC0-39AF82EB22BB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3420D68C-294D-4E51-9AC0-39AF82EB22BB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3420D68C-294D-4E51-9AC0-39AF82EB22BB}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{92E74238-E9CA-48FD-80FB-3C9C88356185} = {9F356A7A-2CB4-4E4D-8FCF-0C5EEE83B548}
+		{68B12E45-E85D-4CC2-93B5-24EBECC9DC24} = {B913BE00-7D04-44FC-8FCE-65B0A7DD17FA}
+		{39FF2412-A6C8-487E-BADE-1611A5DE6717} = {B913BE00-7D04-44FC-8FCE-65B0A7DD17FA}
+		{3420D68C-294D-4E51-9AC0-39AF82EB22BB} = {4255D696-11C5-45C6-8345-A9E7B95E75F2}
+	EndGlobalSection
+EndGlobal
