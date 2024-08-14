@@ -31,9 +31,6 @@ create table if not exists `phone_order_order_item`
     `created_date` datetime(3) not null
 ) charset = utf8mb4;
 
-CREATE INDEX `idx_id` ON `phone_order_record` (id);
-CREATE INDEX `idx_id` ON `phone_order_conversation` (id);
-CREATE INDEX `idx_id` ON `phone_order_order_item` (id);
 CREATE INDEX `idx_record_id` ON `phone_order_conversation` (record_id);
 CREATE INDEX `idx_record_id` ON `phone_order_order_item` (record_id);
 CREATE INDEX `idx_restaurant` ON `phone_order_record` (restaurant);
