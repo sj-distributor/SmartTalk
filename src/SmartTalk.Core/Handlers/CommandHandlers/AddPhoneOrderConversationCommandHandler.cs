@@ -5,7 +5,7 @@ using SmartTalk.Messages.Commands;
 
 namespace SmartTalk.Core.Handlers.CommandHandlers;
 
-public class AddPhoneOrderConversationCommandHandler : ICommandHandler<AddPhoneOrderConversationsCommand, AddPhoneOrderConversationsResponse >
+public class AddPhoneOrderConversationCommandHandler : ICommandHandler<AddPhoneOrderConversationsCommand, AddPhoneOrderConversationsResponse>
 {
     private readonly IPhoneOrderService _phoneOrderService;
 
