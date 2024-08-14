@@ -3,7 +3,7 @@ FROM registry-vpc.cn-hongkong.aliyuncs.com/wiltechs/sdk:8.0 AS build-env
 USER root
 
 WORKDIR /app
-EXPOSE 80
+EXPOSE 8080
 EXPOSE 443
 
 COPY ./src/SmartTalk.Api ./build/SmartTalk.Api
@@ -16,6 +16,16 @@ RUN dotnet publish build/SmartTalk.Api -c Release -o out
 FROM registry-vpc.cn-hongkong.aliyuncs.com/wiltechs/aspnet:8.0
 
 USER root
+
+# ffmpeg
+RUN apt-get update && apt-get install -y bzip2 make gcc yasm libopencore-amrnb-dev libopencore-amrwb-dev wget
+
+RUN wget https://ffmpeg.org/releases/ffmpeg-snapshot.tar.bz2 && \
+ tar -jxvf ffmpeg-snapshot.tar.bz2 && \
+cd ffmpeg && \
+ ./configure --enable-gpl --enable-libopencore-amrnb --enable-libopencore-amrwb --prefix=/usr/local/ffmpeg --enable-version3 && \
+make -j8 && make install && \
+ ln -s /usr/local/ffmpeg/bin/ffmpeg /usr/local/bin/
 
 WORKDIR /app
 COPY --from=build-env /app/out .
