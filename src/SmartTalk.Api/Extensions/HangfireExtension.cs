@@ -5,7 +5,6 @@ using Hangfire.Correlate;
 using SmartTalk.Core.Jobs;
 using SmartTalk.Core.Constants;
 using SmartTalk.Core.Services.Jobs;
-using SmartTalk.Core.Settings.Caching;
 
 namespace SmartTalk.Api.Extensions;
 
@@ -18,7 +17,6 @@ public static class HangfireExtension
             c.UseCorrelate(sp);
             c.UseMaxArgumentSizeToRender(int.MaxValue);
             c.UseFilter(new AutomaticRetryAttribute { Attempts = 0 });
-            c.UseRedisStorage(new RedisCacheConnectionStringSetting(configuration).Value);
             c.UseSerializerSettings(new JsonSerializerSettings
             {
                 TypeNameHandling = TypeNameHandling.All

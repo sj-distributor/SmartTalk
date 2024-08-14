@@ -28,7 +28,6 @@ public class Startup
         services.AddEndpointsApiExplorer();
         services.AddHttpContextAccessor();
         services.AddCustomSwagger();
-        services.AddCustomAuthentication(Configuration);
         services.AddCorsPolicy(Configuration);
 
         services.AddMvc(options =>

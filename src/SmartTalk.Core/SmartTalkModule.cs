@@ -7,7 +7,6 @@ using SmartTalk.Core.Data;
 using Mediator.Net.Autofac;
 using SmartTalk.Core.Settings;
 using Microsoft.EntityFrameworkCore;
-using SmartTalk.Core.Services.Caching;
 using Mediator.Net.Middlewares.Serilog;
 using Microsoft.Extensions.Configuration;
 using AutoMapper.Contrib.Autofac.DependencyInjection;
@@ -99,14 +98,5 @@ public class SmartTalkModule : Module
     private void RegisterAutoMapper(ContainerBuilder builder)
     {
         builder.RegisterAutoMapper(typeof(SmartTalkModule).Assembly);
-    }
-    
-    private void RegisterCaching(ContainerBuilder builder)
-    {
-        builder.Register(cfx =>
-        {
-            var pool = cfx.Resolve<IRedisConnectionPool>();
-            return pool.GetConnection();
-        }).ExternallyOwned();
     }
 }
