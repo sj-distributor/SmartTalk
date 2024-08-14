@@ -11,17 +11,17 @@ public class PhoneOrderConversation : IEntity, IHasCreatedFields
     [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     public int Id { get; set; }
     
-    [Column("session_id")]
-    public string SessionId { get; set; }
+    [Column("record_id")]
+    public int RecordId { get; set; }
     
-    [Column("restaurant_id")]
-    public int RestaurantId { get; set; }
+    [Column("question")]
+    public string Question { get; set; }
     
-    [Column("tips")]
-    public string Tips { get; set; }
+    [Column("answer")]
+    public string Answer { get; set; }
     
-    [Column("url")]
-    public string Url { get; set; }
+    [Column("order")]
+    public int Order { get; set; }
 
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }

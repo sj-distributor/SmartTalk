@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using SmartTalk.Messages.Enums.PhoneOrder;
 
 namespace SmartTalk.Core.Domain.PhoneOrder;
 
@@ -11,8 +12,8 @@ public class PhoneOrderOrderItem : IEntity, IHasCreatedFields
     [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     public int Id { get; set; }
     
-    [Column("conversation_id")]
-    public int ConversationId { get; set; }
+    [Column("record_id")]
+    public int RecordId { get; set; }
     
     [Column("food_name")]
     public string FoodName { get; set; }
@@ -25,6 +26,9 @@ public class PhoneOrderOrderItem : IEntity, IHasCreatedFields
     
     [Column("note")]
     public string Note { get; set; }
+    
+    [Column("order_type")]
+    public PhoneOrderOrderType OrderType { get; set; }
     
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
