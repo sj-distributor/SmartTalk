@@ -33,7 +33,7 @@ public class SmartTalkModule : Module
         RegisterLogger(builder);
         RegisterSettings(builder);
         RegisterMediator(builder);
-        RegisterCaching(builder);
+        /*RegisterCaching(builder);*/
         RegisterDatabase(builder);
         RegisterDependency(builder);
         RegisterAutoMapper(builder);

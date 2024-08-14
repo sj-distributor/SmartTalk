@@ -36,7 +36,7 @@ public class Startup
             options.Filters.Add<GlobalExceptionFilter>();
         });
 
-        services.AddHangfireInternal(Configuration);
+        /* services.AddHangfireInternal(Configuration);*/
     }
     
     public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
@@ -57,7 +57,7 @@ public class Startup
         app.UseResponseCaching();
         app.UseAuthentication();
         app.UseAuthorization();
-        app.UseHangfireInternal();
+        /*app.UseHangfireInternal();*/
         
         app.UseEndpoints(endpoints =>
         {
