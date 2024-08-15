@@ -50,8 +50,6 @@ public partial class PhoneOrderService
             command.RecordContent, TranscriptionLanguage.Chinese, TranscriptionFileType.Wav, TranscriptionResponseFormat.Text, cancellationToken).ConfigureAwait(false);
 
         Log.Information("Phone order record transcription: " + transcription);
-
-        _backgroundJobClient.Enqueue(() => SendWorkWeChatRobotNotifyAsync(command.RecordContent, recordInfo, transcription, cancellationToken));
         
         // todo recognize speaker
 
@@ -59,6 +57,9 @@ public partial class PhoneOrderService
         {
             new() { SessionId = Guid.NewGuid().ToString(), Restaurant = recordInfo.Restaurant, TranscriptionText = transcription, Url = fileUrl }
         }, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        if (!string.IsNullOrEmpty(recordInfo.WorkWeChatRobotUrl))
+            await SendWorkWeChatRobotNotifyAsync(command.RecordContent, recordInfo, transcription, cancellationToken).ConfigureAwait(false);
     }
     
     private async Task<bool> CheckPhoneOrderRecordDurationAsync(byte[] recordContent, CancellationToken cancellationToken)
