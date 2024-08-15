@@ -25,7 +25,7 @@ public class PhoneOrderOrderItem : IEntity, IHasCreatedFields
     public double Price { get; set; }
     
     [Column("note")]
-    public string? Note { get; set; }
+    public string Note { get; set; }
     
     [Column("order_type")]
     public PhoneOrderOrderType OrderType { get; set; }
