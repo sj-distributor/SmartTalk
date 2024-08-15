@@ -2,6 +2,8 @@ using AutoMapper;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.System;
 using SmartTalk.Core.Services.Wiltechs;
+using SmartTalk.Messages.Dto.Users;
+using SmartTalk.Messages.Enums.Account;
 using SmartTalk.Messages.Requests.Account;
 
 namespace SmartTalk.Core.Services.Account;
@@ -9,6 +11,8 @@ namespace SmartTalk.Core.Services.Account;
 public interface IAccountService : IScopedDependency
 {
     Task<LoginResponse> LoginAsync(LoginRequest request, CancellationToken cancellationToken);
+    
+    Task<UserAccountDto> GetOrCreateUserAccountFromThirdPartyAsync(string userId, string userName, UserAccountIssuer issuer, CancellationToken cancellationToken);
 }
 
 public partial class AccountService : IAccountService
