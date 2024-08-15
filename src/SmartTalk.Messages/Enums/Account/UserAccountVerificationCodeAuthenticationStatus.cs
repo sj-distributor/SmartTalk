@@ -1,4 +1,4 @@
-namespace SmartTalk.Messages.Enums.System;
+namespace SmartTalk.Messages.Enums.Account;
 
 public enum UserAccountVerificationCodeAuthenticationStatus
 {
