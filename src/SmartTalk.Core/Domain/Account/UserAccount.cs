@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using SmartTalk.Core.Domain.Security;
 using SmartTalk.Messages.Enums.Account;
 
 namespace SmartTalk.Core.Domain.Account
@@ -35,11 +36,24 @@ namespace SmartTalk.Core.Domain.Account
         [Column("password")]
         [StringLength(128)]
         public string Password { get; set; }
+    
+        [Column("third_party_user_id")]
+        [StringLength(128)]
+        public string ThirdPartyUserId { get; set; }
         
         [Column("issuer")]
         public UserAccountIssuer Issuer { get; set; }
         
         [Column("active", TypeName = "tinyint(1)")]
         public bool IsActive { get; set; }
+        
+        [NotMapped]
+        public List<Role> Roles { get; set; } = new();
+
+        [NotMapped]
+        public List<Permission> Permissions { get; set; } = new();
+    
+        [NotMapped]
+        public UserAccountProfile UserAccountProfile { get; set; }
     }
 }

@@ -1,16 +1,14 @@
-using Mediator.Net;
-using Microsoft.EntityFrameworkCore;
+using Xunit;
 using Shouldly;
+using Mediator.Net;
 using SmartTalk.Core.Data;
+using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Domain.PhoneOrder;
-using SmartTalk.IntegrationTests.TestBaseClasses;
-using SmartTalk.Messages.Commands;
-using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Enums.PhoneOrder;
-using SmartTalk.Messages.Requests;
+using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Requests.PhoneOrder;
-using Xunit;
+using SmartTalk.IntegrationTests.TestBaseClasses;
 
 namespace SmartTalk.IntegrationTests.Services.PhoneOrder;
 
