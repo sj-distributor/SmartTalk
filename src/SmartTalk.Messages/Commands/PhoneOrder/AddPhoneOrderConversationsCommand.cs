@@ -2,7 +2,7 @@ using Mediator.Net.Contracts;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Responses;
 
-namespace SmartTalk.Messages.Commands;
+namespace SmartTalk.Messages.Commands.PhoneOrder;
 
 public class AddPhoneOrderConversationsCommand : ICommand
 {

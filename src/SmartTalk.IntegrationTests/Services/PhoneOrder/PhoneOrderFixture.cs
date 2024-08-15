@@ -5,9 +5,11 @@ using SmartTalk.Core.Data;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.IntegrationTests.TestBaseClasses;
 using SmartTalk.Messages.Commands;
+using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Requests;
+using SmartTalk.Messages.Requests.PhoneOrder;
 using Xunit;
 
 namespace SmartTalk.IntegrationTests.Services.PhoneOrder;
