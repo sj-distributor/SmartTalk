@@ -6,7 +6,7 @@ using SmartTalk.Core.Ioc;
 
 namespace SmartTalk.Core.Services.Http;
 
-public interface ISmartiesHttpClientFactory : IScopedDependency
+public interface ISmartTalkHttpClientFactory : IScopedDependency
 {
     Task<T> GetAsync<T>(string requestUrl, CancellationToken cancellationToken, 
         TimeSpan? timeout = null, bool beginScope = false, Dictionary<string, string> headers = null, bool isNeedToReadErrorContent = false);
@@ -30,11 +30,11 @@ public interface ISmartiesHttpClientFactory : IScopedDependency
     HttpClient CreateClient(TimeSpan? timeout = null, bool beginScope = false, Dictionary<string, string> headers = null);
 }
 
-public class SmartiesHttpClientFactory : ISmartiesHttpClientFactory
+public class SmartTalkHttpClientFactory : ISmartTalkHttpClientFactory
 {
     private readonly ILifetimeScope _scope;
 
-    public SmartiesHttpClientFactory(ILifetimeScope scope)
+    public SmartTalkHttpClientFactory(ILifetimeScope scope)
     {
         _scope = scope;
     }

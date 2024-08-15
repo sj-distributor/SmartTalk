@@ -1,6 +1,6 @@
 using Newtonsoft.Json;
 
-namespace Smarties.Api.Authentication.OME;
+namespace SmartTalk.Api.Authentication.OME;
 
 public class OMEAuthorizationMessage
 {

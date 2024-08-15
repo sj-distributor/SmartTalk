@@ -3,7 +3,6 @@ using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
 using Serilog;
-using Smarties.Api.Authentication.OME;
 using SmartTalk.Core.Constants;
 using SmartTalk.Core.Domain.OME;
 using SmartTalk.Core.Services.Account;
@@ -20,10 +19,10 @@ public class OMEAuthenticationHandler : AuthenticationHandler<OMEAuthenticationO
     private readonly ICacheManager _cacheManager;
     private readonly IAccountService _accountService;
     private readonly IOMEDataProvider _omeDataProvider;
-    private readonly ISmartiesHttpClientFactory _clientFactory;
+    private readonly ISmartTalkHttpClientFactory _clientFactory;
 
     public OMEAuthenticationHandler(ICacheManager cacheManager, IOptionsMonitor<OMEAuthenticationOptions> options, ILoggerFactory logger, 
-        UrlEncoder encoder, ISystemClock clock, IAccountService accountService, ISmartiesHttpClientFactory clientFactory, IOMEDataProvider omeDataProvider)
+        UrlEncoder encoder, ISystemClock clock, IAccountService accountService, ISmartTalkHttpClientFactory clientFactory, IOMEDataProvider omeDataProvider)
         : base(options, logger, encoder, clock)
     {
         _cacheManager = cacheManager;

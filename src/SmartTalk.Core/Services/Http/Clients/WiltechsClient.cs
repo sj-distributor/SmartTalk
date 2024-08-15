@@ -14,10 +14,10 @@ public interface IWiltechsClient : IScopedDependency
 
 public class WiltechsClient : IWiltechsClient
 {
-    private readonly ISmartiesHttpClientFactory _httpClientFactory;
+    private readonly ISmartTalkHttpClientFactory _httpClientFactory;
     private readonly WiltechsAuthenticationSettings _wiltechsAuthenticationSettings;
     
-    public WiltechsClient(ISmartiesHttpClientFactory httpClientFactory, WiltechsAuthenticationSettings wiltechsAuthenticationSettings)
+    public WiltechsClient(ISmartTalkHttpClientFactory httpClientFactory, WiltechsAuthenticationSettings wiltechsAuthenticationSettings)
     {
         _httpClientFactory = httpClientFactory;
         _wiltechsAuthenticationSettings = wiltechsAuthenticationSettings;

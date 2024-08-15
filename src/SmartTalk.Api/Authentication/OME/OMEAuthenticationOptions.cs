@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Authentication;
 
-namespace Smarties.Api.Authentication.OME;
+namespace SmartTalk.Api.Authentication.OME;
 
 public class OMEAuthenticationOptions : AuthenticationSchemeOptions
 {
