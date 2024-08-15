@@ -1,9 +1,9 @@
 using Mediator.Net.Context;
 using Mediator.Net.Contracts;
 using SmartTalk.Core.Services.PhoneOrder;
-using SmartTalk.Messages.Commands;
+using SmartTalk.Messages.Commands.PhoneOrder;
 
-namespace SmartTalk.Core.Handlers.CommandHandlers;
+namespace SmartTalk.Core.Handlers.CommandHandlers.PhoneOrder;
 
 public class AddPhoneOrderConversationCommandHandler : ICommandHandler<AddPhoneOrderConversationsCommand, AddPhoneOrderConversationsResponse>
 {
