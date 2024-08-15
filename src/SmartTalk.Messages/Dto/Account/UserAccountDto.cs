@@ -1,17 +1,16 @@
-using SmartTalk.Messages.Dto.Account;
 using SmartTalk.Messages.Dto.Security;
 using SmartTalk.Messages.DTO.Security;
 using SmartTalk.Messages.Enums.Account;
 
-namespace SmartTalk.Messages.Dto.Users;
+namespace SmartTalk.Messages.Dto.Account;
 
 public class UserAccountDto
 {
     public int Id { get; set; }
     
-    public DateTime CreatedOn { get; set; }
+    public DateTimeOffset CreatedOn { get; set; }
     
-    public DateTime ModifiedOn { get; set; }
+    public DateTimeOffset ModifiedOn { get; set; }
     
     public Guid Uuid { get; set; }
     
