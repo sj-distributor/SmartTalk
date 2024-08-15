@@ -1,5 +1,6 @@
 using Mediator.Net.Context;
 using Mediator.Net.Contracts;
+using SmartTalk.Core.Constants;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Messages.Commands.PhoneOrder;
@@ -17,6 +18,6 @@ public class ReceivePhoneOrderRecordCommandHandler : ICommandHandler<ReceivePhon
 
     public async Task Handle(IReceiveContext<ReceivePhoneOrderRecordCommand> context, CancellationToken cancellationToken)
     {
-        _backgroundJobClient.Enqueue<IPhoneOrderService>(x => x.ReceivePhoneOrderRecordAsync(context.Message, cancellationToken));
+        _backgroundJobClient.Enqueue<IPhoneOrderService>(x => x.ReceivePhoneOrderRecordAsync(context.Message, cancellationToken), HangfireConstants.InternalHostingPhoneOrder);
     }
 }
