@@ -1,9 +1,9 @@
 using Mediator.Net.Context;
 using Mediator.Net.Contracts;
 using SmartTalk.Core.Services.PhoneOrder;
-using SmartTalk.Messages.Requests;
+using SmartTalk.Messages.Requests.PhoneOrder;
 
-namespace SmartTalk.Core.Handlers.RequestHandlers;
+namespace SmartTalk.Core.Handlers.RequestHandlers.PhoneOrder;
 
 public class GetPhoneOrderRecordsRequestHandler : IRequestHandler<GetPhoneOrderRecordsRequest, GetPhoneOrderRecordsResponse >
 {

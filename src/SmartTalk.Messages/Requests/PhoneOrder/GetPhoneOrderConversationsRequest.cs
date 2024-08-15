@@ -2,7 +2,7 @@ using Mediator.Net.Contracts;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Responses;
 
-namespace SmartTalk.Messages.Requests;
+namespace SmartTalk.Messages.Requests.PhoneOrder;
 
 public class GetPhoneOrderConversationsRequest : IRequest
 {
