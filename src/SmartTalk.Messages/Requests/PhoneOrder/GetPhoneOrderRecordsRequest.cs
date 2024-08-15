@@ -3,7 +3,7 @@ using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Responses;
 
-namespace SmartTalk.Messages.Requests;
+namespace SmartTalk.Messages.Requests.PhoneOrder;
 
 public class GetPhoneOrderRecordsRequest : IRequest
 {

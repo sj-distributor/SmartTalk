@@ -1,9 +1,8 @@
 using Mediator.Net;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using SmartTalk.Messages.Commands;
+using Microsoft.AspNetCore.Authorization;
 using SmartTalk.Messages.Commands.PhoneOrder;
-using SmartTalk.Messages.Requests;
+using SmartTalk.Messages.Requests.PhoneOrder;
 
 namespace SmartTalk.Api.Controllers;
 

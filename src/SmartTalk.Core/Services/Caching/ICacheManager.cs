@@ -16,6 +16,8 @@ public interface ICacheManager : IScopedDependency
     
     Task SetAsync(string key, object data, CachingType cachingType,
         TimeSpan? expiry = null, CancellationToken cancellationToken = default);
+    
+    Task RemoveAsync(string key, CachingType cachingType, CancellationToken cancellationToken = default);
 }
 
 public class CacheManager : ICacheManager
@@ -98,5 +100,16 @@ public class CacheManager : ICacheManager
         };
         
         await cachingService.SetAsync(key, data, expiry, cancellationToken).ConfigureAwait(false);
+    }
+    
+    public async Task RemoveAsync(string key, CachingType cachingType, CancellationToken cancellationToken = default)
+    {
+        ICachingService cachingService = cachingType switch
+        {
+            CachingType.RedisCache => _redisCacheService,
+            CachingType.MemoryCache => _memoryCacheService
+        };
+        
+        await cachingService.RemoveAsync(key, cancellationToken).ConfigureAwait(false);
     }
 }
