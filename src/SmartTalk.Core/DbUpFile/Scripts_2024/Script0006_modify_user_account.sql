@@ -1,0 +1,1 @@
+ALTER TABLE `user_account` MODIFY `password` varchar(128);
