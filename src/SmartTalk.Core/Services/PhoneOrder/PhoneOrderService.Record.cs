@@ -1,9 +1,10 @@
 using Serilog;
+using SmartTalk.Core.Extensions;
 using SmartTalk.Messages.Enums.STT;
 using SmartTalk.Messages.Dto.WeChat;
 using System.Text.RegularExpressions;
-using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Messages.Enums.WeChat;
+using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Dto.Attachments;
 using SmartTalk.Messages.Enums.PhoneOrder;
@@ -130,7 +131,7 @@ public partial class PhoneOrderService
                 MsgType = "text",
                 Text = new SendWorkWechatGroupRobotTextDto
                 {
-                    Content = $"----------{recordInfo.Restaurant.ToString()}-PST {recordInfo.OrderDate.ToOffset(TimeSpan.FromHours(-7)):yyyy/MM/dd HH:mm:ss}----------"
+                    Content = $"----------{recordInfo.Restaurant.GetDescription()}-PST {recordInfo.OrderDate.ToOffset(TimeSpan.FromHours(-7)):yyyy/MM/dd HH:mm:ss}----------"
                 }
             }, cancellationToken);
         
