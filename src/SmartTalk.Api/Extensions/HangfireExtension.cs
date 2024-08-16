@@ -33,6 +33,13 @@ public static class HangfireExtension
                 HangfireConstants.DefaultQueue
             };
         });
+        
+        services.AddHangfireServer(opt =>
+        {
+            opt.WorkerCount = 1;
+            opt.Queues = new[] { HangfireConstants.InternalHostingPhoneOrder };
+            opt.ServerName = $"DEPLOY-{HangfireConstants.InternalHostingPhoneOrder.ToUpper()}-{Guid.NewGuid()}";
+        });
     }
     
     public static void UseHangfireInternal(this IApplicationBuilder app)
