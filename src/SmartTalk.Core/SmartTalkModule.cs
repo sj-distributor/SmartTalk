@@ -2,6 +2,7 @@ using Serilog;
 using Autofac;
 using Mediator.Net;
 using System.Reflection;
+using Aliyun.OSS;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Data;
 using Mediator.Net.Autofac;
@@ -11,6 +12,7 @@ using SmartTalk.Core.Services.Caching;
 using Mediator.Net.Middlewares.Serilog;
 using Microsoft.Extensions.Configuration;
 using AutoMapper.Contrib.Autofac.DependencyInjection;
+using SmartTalk.Core.Settings.AliYun;
 using Module = Autofac.Module;
 
 namespace SmartTalk.Core;
@@ -37,6 +39,7 @@ public class SmartTalkModule : Module
         RegisterDatabase(builder);
         RegisterDependency(builder);
         RegisterAutoMapper(builder);
+        RegisterAliYunOssClient(builder);
     }
 
     private void RegisterDependency(ContainerBuilder builder)
@@ -108,5 +111,17 @@ public class SmartTalkModule : Module
             var pool = cfx.Resolve<IRedisConnectionPool>();
             return pool.GetConnection();
         }).ExternallyOwned();
+    }
+    
+    private void RegisterAliYunOssClient(ContainerBuilder builder)
+    {
+        builder.Register(c =>
+        {
+            var settings = c.Resolve<AliYunSettings>();
+            var endpoint = settings.OssEndpoint;
+            var accessKeyId = settings.AccessKeyId;
+            var accessKeySecret = settings.AccessKeySecret;
+            return new OssClient(endpoint, accessKeyId, accessKeySecret);
+        }).AsSelf().InstancePerLifetimeScope();
     }
 }
