@@ -51,7 +51,7 @@ public class SpeechToTextService : ISpeechToTextService
         {
             var transcriptionResponse = await TranscriptionAsync(audio, language, fileType, responseFormat, cancellationToken).ConfigureAwait(false);
             
-            transcriptionResult.Append(transcriptionResponse);
+            transcriptionResult.Append(transcriptionResponse.Text);
         }
 
         Log.Information("Transcription result {Transcription}", transcriptionResult.ToString());
