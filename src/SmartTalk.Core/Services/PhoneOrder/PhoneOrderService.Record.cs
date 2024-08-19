@@ -73,7 +73,7 @@ public partial class PhoneOrderService
 
         var timeSpan = TimeSpan.Parse(audioDuration);
 
-        return timeSpan.TotalSeconds < 3 || timeSpan.Seconds == 14;
+        return timeSpan.TotalSeconds < 3 || timeSpan.Seconds == 14 || timeSpan.Seconds == 10;
     }
     
     private async Task<string> UploadRecordFileAsync(string fileName, byte[] fileContent, CancellationToken cancellationToken)
