@@ -13,6 +13,7 @@ public class SpeechmaticsTranscriptionDto
     [JsonProperty("translation_config")]
     public SpeechmaticsTranslationConfigDto TranslationConfig { get; set; }
 }
+
 public class SpeechmaticsTranscriptionConfigDto
 {
     [JsonProperty("operating_point")]

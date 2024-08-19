@@ -4,14 +4,8 @@ namespace SmartTalk.Messages.Dto.Speechmatics;
 
 public class SpeechmaticsCreateJobRequestDto
 {
-    [JsonProperty("config")] 
+    [JsonProperty("config")]
     public SpeechmaticsJobConfigDto SpeechmaticsJobConfigDto { get; set; }
-    
-    // [JsonProperty("data_file", NullValueHandling = NullValueHandling.Ignore)]
-    // public string DataFile { get; set; }
-    //
-    // [JsonProperty("text_file", NullValueHandling = NullValueHandling.Ignore)]
-    // public string TextFile { get; set; }
 }
 
 public class SpeechmaticsGetAllJobsRequestDto
