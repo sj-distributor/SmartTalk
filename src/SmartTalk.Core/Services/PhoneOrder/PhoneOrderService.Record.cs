@@ -58,7 +58,7 @@ public partial class PhoneOrderService
 
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync(new List<PhoneOrderRecord>
         {
-            new() { SessionId = Guid.NewGuid().ToString(), Restaurant = recordInfo.Restaurant, TranscriptionText = transcription, Url = fileUrl, CreatedDate = recordInfo.OrderDate }
+            new() { SessionId = Guid.NewGuid().ToString(), Restaurant = recordInfo.Restaurant, TranscriptionText = transcription, Url = fileUrl, CreatedDate = recordInfo.OrderDate.ToOffset(TimeSpan.FromHours(-7)) }
         }, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         if (!string.IsNullOrEmpty(recordInfo.WorkWeChatRobotUrl))
