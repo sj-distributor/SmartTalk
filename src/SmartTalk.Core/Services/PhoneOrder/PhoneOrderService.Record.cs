@@ -51,8 +51,8 @@ public partial class PhoneOrderService
             command.RecordContent, TranscriptionLanguage.Chinese, TranscriptionFileType.Wav, TranscriptionResponseFormat.Text, cancellationToken).ConfigureAwait(false);
 
         Log.Information("Phone order record transcription: " + transcription);
-
-        if (string.IsNullOrEmpty(transcription) || transcription.Contains("GENERAL") || transcription.Contains("感謝收看") || transcription.Contains("訂閱") || transcription.Contains("点赞") || transcription.Contains("立場") || transcription.Contains("字幕") || transcription.Contains("結束")) return;
+        
+        if (string.IsNullOrEmpty(transcription) || transcription.Contains("GENERAL") || transcription.Contains("感謝收看") || transcription.Contains("訂閱") || transcription.Contains("点赞") || transcription.Contains("立場") || transcription.Contains("字幕") || transcription.Contains("結束") || transcription.Contains("謝謝觀看") || transcription.Contains("幕後大臣") || transcription == "醒醒" || transcription == "跟著我" || transcription.Contains("政經關峻") || transcription.Contains("您拨打的电话") || transcription.Contains("Mailbox memory is full")) return;
         
         // todo recognize speaker
 
