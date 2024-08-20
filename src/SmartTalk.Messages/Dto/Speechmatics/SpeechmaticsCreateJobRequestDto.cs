@@ -8,18 +8,6 @@ public class SpeechmaticsCreateJobRequestDto
     public SpeechmaticsJobConfigDto SpeechmaticsJobConfigDto { get; set; }
 }
 
-public class SpeechmaticsGetAllJobsRequestDto
-{
-    [JsonProperty("created_before", NullValueHandling = NullValueHandling.Ignore)]
-    public string CreatedBefore { get; set; }
-
-    [JsonProperty("limit", NullValueHandling = NullValueHandling.Ignore)]
-    public int? Limit { get; set; }
-
-    [JsonProperty("include_deleted", NullValueHandling = NullValueHandling.Ignore)]
-    public bool? IncludeDeleted { get; set; }
-}
-
 public class SpeechmaticsGetAllJobsResponseDto
 {
     [JsonProperty("jobs")]

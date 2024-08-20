@@ -1,6 +1,6 @@
-using System.Text;
 using Autofac;
 using Serilog;
+using System.Text;
 using Newtonsoft.Json;
 using SmartTalk.Core.Ioc;
 
@@ -31,6 +31,8 @@ public interface ISmartiesHttpClientFactory : IScopedDependency
         bool shouldLogError = true, bool isNeedToReadErrorContent = false);
 
     HttpClient CreateClient(TimeSpan? timeout = null, bool beginScope = false, Dictionary<string, string> headers = null);
+    
+    Task<T> SafelyProcessRequestAsync<T>(string methodName, Func<Task<T>> func, CancellationToken cancellationToken, bool shouldThrow = false);
 }
 
 public class SmartiesHttpClientFactory : ISmartiesHttpClientFactory
@@ -214,7 +216,7 @@ public class SmartiesHttpClientFactory : ISmartiesHttpClientFactory
             httpMethod.ToString(), requestUrl, JsonConvert.SerializeObject(response), responseAsString);
     }
     
-    private static async Task<T> SafelyProcessRequestAsync<T>(string requestUrl, Func<Task<T>> func, CancellationToken cancellationToken, bool shouldLogError = true)
+    public async Task<T> SafelyProcessRequestAsync<T>(string requestUrl, Func<Task<T>> func, CancellationToken cancellationToken, bool shouldLogError = true)
     {
         try
         {
