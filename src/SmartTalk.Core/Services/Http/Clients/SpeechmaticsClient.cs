@@ -3,7 +3,7 @@ using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Settings.Speechmatics;
 using SmartTalk.Messages.Dto.Speechmatics;
 
-namespace Smarties.Core.Services.Http.Clients;
+namespace SmartTalk.Core.Services.Http.Clients;
 
 public interface ISpeechmaticsClient : IScopedDependency
 {
@@ -36,13 +36,13 @@ public class SpeechmaticsClient : ISpeechmaticsClient
 
         _headers = new Dictionary<string, string>
         {
-            { "Authorization",$"Bearer {speechmaticsSetting.ApiKey}" },
+            { "Authorization", $"Bearer {speechmaticsSetting.ApiKey}" },
         };
     }
     
     public async Task<string> CreateJobAsync(SpeechmaticsCreateJobRequestDto speechmaticsCreateJobRequestDto, byte[] data, byte[] text, CancellationToken cancellationToken)
     {
-        string jobConfig = JsonConvert.SerializeObject(speechmaticsCreateJobRequestDto.SpeechmaticsJobConfigDto, Formatting.Indented);
+        var jobConfig = JsonConvert.SerializeObject(speechmaticsCreateJobRequestDto.SpeechmaticsJobConfigDto, Formatting.Indented);
         
         var formData = new Dictionary<string, string>()
         { 
@@ -57,8 +57,7 @@ public class SpeechmaticsClient : ISpeechmaticsClient
             fileData.Add("text_file", (text, "text.txt"));
         }
         
-        return await _httpClientFactory.PostAsMultipartAsync<string>($"{_speechmaticsSetting.BaseUrl}/jobs/", formData,fileData, cancellationToken,headers:_headers)
-            .ConfigureAwait(false);
+        return await _httpClientFactory.PostAsMultipartAsync<string>($"{_speechmaticsSetting.BaseUrl}/jobs/", formData, fileData, cancellationToken, headers:_headers).ConfigureAwait(false);
     }
     
     public async Task<SpeechmaticsGetAllJobsResponseDto> GetAllJobsAsync(CancellationToken cancellationToken)
@@ -77,7 +76,7 @@ public class SpeechmaticsClient : ISpeechmaticsClient
     
     public async Task<SpeechmaticsDeleteJobResponseDto> DeleteJobAsync(string jobId, CancellationToken cancellationToken)
     {
-        var data= await _httpClientFactory.DeleteAsync<string>(
+        var data = await _httpClientFactory.DeleteAsync<string>(
             $"{_speechmaticsSetting.BaseUrl}/jobs/{jobId}", cancellationToken, headers: _headers).ConfigureAwait(false);
 
         return JsonConvert.DeserializeObject<SpeechmaticsDeleteJobResponseDto>(data);

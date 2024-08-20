@@ -13,5 +13,6 @@ public class SpeechmaticsAlignmentDto
 
 public class SpeechmaticsAlignmentConfigDto
 {
-    [JsonProperty("language")] public string Language { get; set; }
+    [JsonProperty("language")] 
+    public string Language { get; set; }
 }
