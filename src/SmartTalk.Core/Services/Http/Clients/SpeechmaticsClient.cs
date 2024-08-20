@@ -27,9 +27,9 @@ public class SpeechmaticsClient : ISpeechmaticsClient
     private readonly Dictionary<string, string> _headers;
 
     private readonly SpeechmaticsSettings _speechmaticsSetting;
-    private readonly ISmartiesHttpClientFactory _httpClientFactory;
+    private readonly ISmartTalkHttpClientFactory _httpClientFactory;
     
-    public SpeechmaticsClient(SpeechmaticsSettings speechmaticsSetting, ISmartiesHttpClientFactory httpClientFactory)
+    public SpeechmaticsClient(SpeechmaticsSettings speechmaticsSetting, ISmartTalkHttpClientFactory httpClientFactory)
     {
         _speechmaticsSetting = speechmaticsSetting;
         _httpClientFactory = httpClientFactory;

@@ -13,9 +13,6 @@ public interface ISmartiesHttpClientFactory : IScopedDependency
 
     Task<T> PostAsync<T>(string requestUrl, HttpContent content, CancellationToken cancellationToken, 
         TimeSpan? timeout = null, bool beginScope = false, Dictionary<string, string> headers = null, bool isNeedToReadErrorContent = false);
-
-    Task<T> DeleteAsync<T>(string requestUrl, CancellationToken cancellationToken, TimeSpan? timeout = null,
-        bool beginScope = false, Dictionary<string, string> headers = null, bool isNeedToReadErrorContent = false);
     
     Task<T> PostAsJsonAsync<T>(string requestUrl, object value, CancellationToken cancellationToken, 
         TimeSpan? timeout = null, bool beginScope = false, Dictionary<string, string> headers = null, bool shouldLogError = true, bool isNeedToReadErrorContent = false);
@@ -87,19 +84,6 @@ public class SmartiesHttpClientFactory : ISmartiesHttpClientFactory
                 .PostAsync(requestUrl, content, cancellationToken).ConfigureAwait(false);
 
             return await ReadAndLogResponseAsync<T>(requestUrl, HttpMethod.Post, response, cancellationToken, isNeedToReadErrorContent).ConfigureAwait(false);
-            
-        }, cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task<T> DeleteAsync<T>(string requestUrl, CancellationToken cancellationToken, TimeSpan? timeout = null,
-        bool beginScope = false, Dictionary<string, string> headers = null, bool isNeedToReadErrorContent = false)
-    {
-        return await SafelyProcessRequestAsync(requestUrl, async () =>
-        {
-            var response = await CreateClient(timeout: timeout, beginScope: beginScope, headers: headers)
-                .DeleteAsync(requestUrl, cancellationToken).ConfigureAwait(false);
-
-            return await ReadAndLogResponseAsync<T>(requestUrl, HttpMethod.Delete, response, cancellationToken, isNeedToReadErrorContent).ConfigureAwait(false);
             
         }, cancellationToken).ConfigureAwait(false);
     }
