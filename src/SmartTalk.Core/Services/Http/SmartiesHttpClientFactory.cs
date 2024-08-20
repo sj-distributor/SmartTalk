@@ -4,7 +4,7 @@ using System.Text;
 using Newtonsoft.Json;
 using SmartTalk.Core.Ioc;
 
-namespace Smarties.Core.Services.Http;
+namespace SmartTalk.Core.Services.Http;
 
 public interface ISmartiesHttpClientFactory : IScopedDependency
 {
