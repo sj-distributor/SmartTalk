@@ -31,7 +31,7 @@ public interface ISmartiesHttpClientFactory : IScopedDependency
         bool shouldLogError = true, bool isNeedToReadErrorContent = false);
 
     HttpClient CreateClient(TimeSpan? timeout = null, bool beginScope = false, Dictionary<string, string> headers = null);
-    
+
     Task<T> SafelyProcessRequestAsync<T>(string methodName, Func<Task<T>> func, CancellationToken cancellationToken, bool shouldThrow = false);
 }
 

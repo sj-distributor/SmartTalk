@@ -1,6 +1,8 @@
 using SmartTalk.Core.Constants;
 using Microsoft.AspNetCore.Authorization;
 using SmartTalk.Api.Authentication.ApiKey;
+using SmartTalk.Api.Authentication.OME;
+using SmartTalk.Api.Authentication.Wiltechs;
 
 namespace SmartTalk.Api.Extensions;
 
@@ -14,12 +16,28 @@ public static class AuthenticationExtension
                 options.DefaultChallengeScheme = AuthenticationSchemeConstants.ApiKeyAuthenticationScheme;
             })
             .AddScheme<ApiKeyAuthenticationOptions, ApiKeyAuthenticationHandler>(
-                AuthenticationSchemeConstants.ApiKeyAuthenticationScheme, _ => { });
+                AuthenticationSchemeConstants.ApiKeyAuthenticationScheme, _ => { })
+            .AddScheme<WiltechsAuthenticationOptions, WiltechsAuthenticationHandler>(
+                AuthenticationSchemeConstants.WiltechsAuthenticationScheme, options =>
+                {
+                    options.Issuers = configuration["Authentication:Wiltechs:Issuers"]?.Split(",").ToList();
+                    options.Authority = configuration["Authentication:Wiltechs:Authority"];
+                    options.SymmetricKey = configuration["Authentication:Wiltechs:SymmetricKey"];
+                })
+            .AddScheme<OMEAuthenticationOptions, OMEAuthenticationHandler>(
+                AuthenticationSchemeConstants.OMEAuthenticationScheme, options =>
+                {
+                    options.Authority = configuration["Authentication:OME:Authority"];
+                    options.AppId = configuration["Authentication:OME:AppId"];
+                    options.AppSecret = configuration["Authentication:OME:AppSecret"];
+                });
         
         services.AddAuthorization(options =>
         {
             options.DefaultPolicy = new AuthorizationPolicyBuilder(
-                AuthenticationSchemeConstants.ApiKeyAuthenticationScheme).RequireAuthenticatedUser().Build();
+                AuthenticationSchemeConstants.ApiKeyAuthenticationScheme,
+                AuthenticationSchemeConstants.WiltechsAuthenticationScheme,
+                AuthenticationSchemeConstants.OMEAuthenticationScheme).RequireAuthenticatedUser().Build();
         });
     }
 }

@@ -1,8 +1,8 @@
 using Mediator.Net;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using SmartTalk.Messages.Commands;
-using SmartTalk.Messages.Requests;
+using Microsoft.AspNetCore.Authorization;
+using SmartTalk.Messages.Commands.PhoneOrder;
+using SmartTalk.Messages.Requests.PhoneOrder;
 
 namespace SmartTalk.Api.Controllers;
 
@@ -52,5 +52,20 @@ public class PhoneOrderController : ControllerBase
         var response = await _mediator.SendAsync<AddPhoneOrderConversationsCommand, AddPhoneOrderConversationsResponse>(command).ConfigureAwait(false);
         
         return Ok(response);
+    }
+
+    [HttpPost("record/receive")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> ReceivePhoneOrderRecordAsync([FromForm] IFormFile file)
+    {
+        var ms = new MemoryStream();
+
+        await file.CopyToAsync(ms).ConfigureAwait(false);
+
+        var fileContent = ms.ToArray();
+        
+        await _mediator.SendAsync(new ReceivePhoneOrderRecordCommand { RecordName = file.FileName, RecordContent = fileContent }).ConfigureAwait(false);
+        
+        return Ok();
     }
 }

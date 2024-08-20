@@ -1,9 +1,10 @@
 using Autofac;
 using Serilog;
-using SmartTalk.Core;
 using NSubstitute;
 using MySqlConnector;
+using SmartTalk.Core;
 using Newtonsoft.Json;
+using OpenAI.Interfaces;
 using SmartTalk.Core.DbUpFile;
 using SmartTalk.Core.Settings;
 using SmartTalk.Core.Services.Jobs;
@@ -27,6 +28,8 @@ public partial class TestBase
         
         containerBuilder.RegisterModule(
             new SmartTalkModule(logger, configuration, typeof(SmartTalkModule).Assembly, typeof(TestBase).Assembly));
+        
+        containerBuilder.RegisterInstance(Substitute.For<IOpenAIService>()).AsImplementedInterfaces();
         
         RegisterSugarTalkBackgroundJobClient(containerBuilder);
     }
