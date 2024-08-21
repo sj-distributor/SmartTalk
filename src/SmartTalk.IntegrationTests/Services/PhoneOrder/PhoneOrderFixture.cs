@@ -126,7 +126,6 @@ public class PhoneOrderFixture : PhoneOrderFixtureBase
             var response = await mediator.RequestAsync<GetPhoneOrderConversationsRequest, GetPhoneOrderConversationsResponse>(new GetPhoneOrderConversationsRequest { RecordId = 1 });
             
             response.Data.Count.ShouldBe(conversations.Count);
-            var res = await repository.Query<PhoneOrderRecord>().ToListAsync().ConfigureAwait(false);
             
             await mediator.SendAsync<AddPhoneOrderConversationsCommand, AddPhoneOrderConversationsResponse>(new AddPhoneOrderConversationsCommand
             {
