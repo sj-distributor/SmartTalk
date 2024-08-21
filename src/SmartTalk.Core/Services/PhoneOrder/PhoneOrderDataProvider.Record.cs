@@ -31,15 +31,19 @@ public partial class PhoneOrderDataProvider
                 from user in userGroup.DefaultIfEmpty()
                 where record.Restaurant == restaurant
                 orderby record.CreatedDate descending 
-                select new { record, user };
+                select new PhoneOrderRecord
+                {
+                    Id = record.Id,
+                    SessionId = record.SessionId,
+                    Restaurant = record.Restaurant,
+                    Tips = record.Tips,
+                    TranscriptionText = record.TranscriptionText,
+                    Url = record.Url,
+                    LastModifiedBy = record.LastModifiedBy,
+                    CreatedDate = record.CreatedDate,
+                    UserAccount = user
+                };
 
-        var result = await query.ToListAsync(cancellationToken).ConfigureAwait(false);
-
-        return result.Select(x =>
-        {
-            var record = x.record;
-            record.UserAccount = x.user;
-            return record;
-        }).ToList();
+        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }
