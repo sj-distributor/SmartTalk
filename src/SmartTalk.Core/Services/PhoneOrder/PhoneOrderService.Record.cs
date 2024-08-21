@@ -52,11 +52,13 @@ public partial class PhoneOrderService
 
         Log.Information("Phone order record transcription: " + transcription);
         
+        if (string.IsNullOrEmpty(transcription) || transcription.Length < 15 || transcription.Contains("GENERAL") || transcription.Contains("感謝收看") || transcription.Contains("訂閱") || transcription.Contains("点赞") || transcription.Contains("立場") || transcription.Contains("字幕") || transcription.Contains("結束") || transcription.Contains("謝謝觀看") || transcription.Contains("幕後大臣") || transcription == "醒醒" || transcription == "跟著我" || transcription.Contains("政經關峻") || transcription.Contains("您拨打的电话") || transcription.Contains("Mailbox memory is full")) return;
+        
         // todo recognize speaker
 
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync(new List<PhoneOrderRecord>
         {
-            new() { SessionId = Guid.NewGuid().ToString(), Restaurant = recordInfo.Restaurant, TranscriptionText = transcription, Url = fileUrl }
+            new() { SessionId = Guid.NewGuid().ToString(), Restaurant = recordInfo.Restaurant, TranscriptionText = transcription, Url = fileUrl, CreatedDate = recordInfo.OrderDate.AddHours(-7) }
         }, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         if (!string.IsNullOrEmpty(recordInfo.WorkWeChatRobotUrl))
@@ -71,7 +73,7 @@ public partial class PhoneOrderService
 
         var timeSpan = TimeSpan.Parse(audioDuration);
 
-        return timeSpan.TotalSeconds < 3 || timeSpan.Seconds == 14;
+        return timeSpan.TotalSeconds < 3 || timeSpan.Seconds == 14 || timeSpan.Seconds == 10;
     }
     
     private async Task<string> UploadRecordFileAsync(string fileName, byte[] fileContent, CancellationToken cancellationToken)

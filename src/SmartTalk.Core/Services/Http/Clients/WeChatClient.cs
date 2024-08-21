@@ -7,8 +7,9 @@ namespace SmartTalk.Core.Services.Http.Clients;
 public interface IWeChatClient : IScopedDependency
 {
     Task<WorkWeChatResponseDto> SendWorkWechatRobotMessagesAsync(string requestUrl, SendWorkWechatGroupRobotMessageDto messages, CancellationToken cancellationToken);
-    
-    Task<UploadWorkWechatTemporaryFileResponseDto> UploadWorkWechatTemporaryFileAsync(string accessToken, string fileName, UploadWorkWechatTemporaryFileType type, byte[] bytes, CancellationToken cancellationToken);
+
+    Task<UploadWorkWechatTemporaryFileResponseDto> UploadWorkWechatTemporaryFileAsync(string url, string fileName, UploadWorkWechatTemporaryFileType type, byte[] bytes, CancellationToken cancellationToken);
+
 }
 
 public class WeChatClient : IWeChatClient
@@ -26,7 +27,8 @@ public class WeChatClient : IWeChatClient
         return await _httpClientFactory.PostAsJsonAsync<WorkWeChatResponseDto>(requestUrl, messages, cancellationToken).ConfigureAwait(false);
     }
     
-    public async Task<UploadWorkWechatTemporaryFileResponseDto> UploadWorkWechatTemporaryFileAsync(string accessToken, string fileName, UploadWorkWechatTemporaryFileType type, byte[] bytes, CancellationToken cancellationToken)
+
+    public async Task<UploadWorkWechatTemporaryFileResponseDto> UploadWorkWechatTemporaryFileAsync(string url, string fileName, UploadWorkWechatTemporaryFileType type, byte[] bytes, CancellationToken cancellationToken)
     {
         var boundary = DateTime.Now.Ticks.ToString("X");
         var content = new MultipartFormDataContent(boundary);
@@ -41,8 +43,6 @@ public class WeChatClient : IWeChatClient
         byteContent.Headers.TryAddWithoutValidation("Content-Type", "application/octet-stream");
         byteContent.Headers.TryAddWithoutValidation("Content-Disposition", $"form-data; name=\"media\";filename=\"{fileName}\";filelength={bytes.Length}");
 
-        var sendUrl = $"https://qyapi.weixin.qq.com/cgi-bin/media/upload?access_token={accessToken}&type={type.ToString().ToLower()}";
-
-        return await _httpClientFactory.PostAsync<UploadWorkWechatTemporaryFileResponseDto>(sendUrl, content, cancellationToken).ConfigureAwait(false);
+        return await _httpClientFactory.PostAsync<UploadWorkWechatTemporaryFileResponseDto>(url, content, cancellationToken).ConfigureAwait(false);
     }
 }
