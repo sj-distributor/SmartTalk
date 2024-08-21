@@ -1,8 +1,7 @@
 using System.Reflection;
 using Autofac;
-using SmartTalk.IntegrationTests;
 
-namespace Smarties.IntegrationTests;
+namespace SmartTalk.IntegrationTests;
 
 public class TestUtil : TestUtilBase
 {

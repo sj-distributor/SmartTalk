@@ -1,10 +1,6 @@
 using Autofac;
-using Microsoft.EntityFrameworkCore;
-using Smarties.IntegrationTests;
 using SmartTalk.Core.Data;
 using SmartTalk.Core.Domain.Account;
-using SmartTalk.Core.Domain.Security;
-using SmartTalk.Core.Services.Account;
 using SmartTalk.Core.Services.Identity;
 
 namespace SmartTalk.IntegrationTests.Utils.Account;

@@ -3,7 +3,6 @@ using Shouldly;
 using Mediator.Net;
 using SmartTalk.Core.Data;
 using Microsoft.EntityFrameworkCore;
-using NSubstitute.Extensions;
 using SmartTalk.Core.Domain.Account;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Messages.Dto.PhoneOrder;
