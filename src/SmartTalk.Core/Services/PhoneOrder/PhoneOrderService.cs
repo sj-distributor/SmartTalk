@@ -3,6 +3,7 @@ using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Attachments;
 using SmartTalk.Core.Services.Ffmpeg;
 using SmartTalk.Core.Services.Http.Clients;
+using SmartTalk.Core.Services.Identity;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.STT;
 using SmartTalk.Core.Settings.PhoneOrder;
@@ -16,6 +17,7 @@ public partial interface IPhoneOrderService : IScopedDependency
 public partial class PhoneOrderService : IPhoneOrderService
 {
     private readonly IMapper _mapper;
+    private readonly ICurrentUser _currentUser;
     private readonly IWeChatClient _weChatClient;
     private readonly IFfmpegService _ffmpegService;
     private readonly PhoneOrderSetting _phoneOrderSetting;
@@ -26,6 +28,7 @@ public partial class PhoneOrderService : IPhoneOrderService
 
     public PhoneOrderService(
         IMapper mapper,
+        ICurrentUser currentUser,
         IWeChatClient weChatClient,
         IFfmpegService ffmpegService,
         PhoneOrderSetting phoneOrderSetting,
@@ -35,6 +38,7 @@ public partial class PhoneOrderService : IPhoneOrderService
         ISmartTalkBackgroundJobClient backgroundJobClient)
     {
         _mapper = mapper;
+        _currentUser = currentUser;
         _weChatClient = weChatClient;
         _ffmpegService = ffmpegService;
         _phoneOrderSetting = phoneOrderSetting;

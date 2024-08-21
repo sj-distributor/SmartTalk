@@ -16,7 +16,8 @@ namespace SmartTalk.Core.Services.Account
 {
     public interface IAccountDataProvider : IScopedDependency
     {
-        Task<UserAccount> GetUserAccountAsync(int id, CancellationToken cancellationToken = default);
+        Task<UserAccount> GetUserAccountAsync(
+            int? id = null, string username = null, string password = null, string thirdPartyUserId = null, bool isActive = true, UserAccountIssuer? issuer = null, bool includeRoles = false, CancellationToken cancellationToken = default);
         
         Task<UserAccountDto> GetUserAccountByApiKeyAsync(string apiKey, CancellationToken cancellationToken = default);
 
@@ -41,11 +42,6 @@ namespace SmartTalk.Core.Services.Account
             _mapper = mapper;
             _unitOfWork = unitOfWork;
             _repository = repository;
-        }
-
-        public async Task<UserAccount> GetUserAccountAsync(int id, CancellationToken cancellationToken = default)
-        {
-            return await _repository.QueryNoTracking<UserAccount>().FirstOrDefaultAsync(x => x.Id == id, cancellationToken).ConfigureAwait(false);
         }
         
         public async Task<UserAccountDto> GetUserAccountByApiKeyAsync(string apiKey, CancellationToken cancellationToken = default)
