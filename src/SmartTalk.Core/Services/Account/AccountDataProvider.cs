@@ -3,13 +3,13 @@ using Serilog;
 using AutoMapper;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Data;
-using SmartTalk.Messages.Dto.Users;
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Constants;
 using SmartTalk.Core.Domain.Account;
 using SmartTalk.Core.Domain.Security;
 using SmartTalk.Core.Extensions;
 using SmartTalk.Core.Services.Account.Exceptions;
+using SmartTalk.Messages.Dto.Account;
 using SmartTalk.Messages.Enums.Account;
 
 namespace SmartTalk.Core.Services.Account

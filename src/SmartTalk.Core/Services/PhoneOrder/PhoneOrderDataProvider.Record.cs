@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SmartTalk.Core.Domain.Account;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Messages.Enums.PhoneOrder;
 
@@ -25,6 +26,20 @@ public partial class PhoneOrderDataProvider
 
     public async Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(PhoneOrderRestaurant restaurant, CancellationToken cancellationToken)
     {
-        return await _repository.Query<PhoneOrderRecord>(x => x.Restaurant == restaurant).ToListAsync(cancellationToken).ConfigureAwait(false);
+        var query = from record in _repository.Query<PhoneOrderRecord>()
+                join user in _repository.Query<UserAccount>() on record.LastModifiedBy equals user.Id into userGroup
+                from user in userGroup.DefaultIfEmpty()
+                where record.Restaurant == restaurant
+                orderby record.CreatedDate descending 
+                select new { record, user };
+
+        var result = await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+
+        return result.Select(x =>
+        {
+            var record = x.record;
+            record.UserAccount = x.user;
+            return record;
+        }).ToList();
     }
 }
