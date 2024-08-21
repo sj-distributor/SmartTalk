@@ -1,7 +1,7 @@
 ﻿using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
-using Smarties.Messages.Constants;
 using SmartTalk.Core.Constants;
+using SmartTalk.Messages.Constants;
 using SmartTalk.Messages.Enums.Account;
 
 namespace SmartTalk.Core.Services.Identity;

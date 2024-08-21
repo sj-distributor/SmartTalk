@@ -1,10 +1,10 @@
 using SmartTalk.Core.Constants;
 using Microsoft.AspNetCore.Authorization;
-using Smarties.Core.Settings.System;
 using SmartTalk.Api.Authentication.ApiKey;
 using SmartTalk.Api.Authentication.OME;
 using SmartTalk.Api.Authentication.Wiltechs;
 using SmartTalk.Core.Services.Identity;
+using SmartTalk.Core.Settings.System;
 using SmartTalk.Messages.Enums.System;
 
 namespace SmartTalk.Api.Extensions;

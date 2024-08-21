@@ -177,10 +177,11 @@ public partial class PhoneOrderService
         }
     }
     
-    private async Task UpdatePhoneOrderRecordModifiedUserASync(int recordId, int modifiedBy, CancellationToken cancellationToken)
+    private async Task UpdatePhoneOrderRecordSpecificFieldsASync(int recordId, int modifiedBy, string tips, CancellationToken cancellationToken)
     {
         var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByIdAsync(recordId, cancellationToken).ConfigureAwait(false);
 
+        record.Tips = tips;
         record.LastModifiedBy = modifiedBy;
 
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);

@@ -1,4 +1,4 @@
-namespace Smarties.Messages.Constants;
+namespace SmartTalk.Messages.Constants;
 
 public static class CurrentUsers
 {
