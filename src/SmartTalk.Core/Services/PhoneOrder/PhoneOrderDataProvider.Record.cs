@@ -60,6 +60,6 @@ public partial class PhoneOrderDataProvider
 
     public async Task<PhoneOrderRecord> GetPhoneOrderRecordByIdAsync(int recordId, CancellationToken cancellationToken)
     {
-        return await _repository.Query<PhoneOrderRecord>(x => x.Id == recordId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        return await _repository.Query<PhoneOrderRecord>().Where(x => x.Id == recordId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 }

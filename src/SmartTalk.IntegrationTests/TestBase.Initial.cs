@@ -1,25 +1,35 @@
 using Autofac;
-using Serilog;
-using NSubstitute;
-using MySqlConnector;
-using SmartTalk.Core;
-using Newtonsoft.Json;
-using OpenAI.Interfaces;
-using SmartTalk.Core.DbUpFile;
-using SmartTalk.Core.Settings;
-using SmartTalk.Core.Services.Jobs;
-using SmartTalk.IntegrationTests.Mocks;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
+using MySql.Data.MySqlClient;
+using Newtonsoft.Json;
+using NSubstitute;
+using OpenAI.Interfaces;
+using Serilog;
+using SmartTalk.Core;
+using SmartTalk.Core.DbUpFile;
+using SmartTalk.Core.Services.AliYun;
+using SmartTalk.Core.Services.Identity;
+using SmartTalk.Core.Services.Jobs;
+using SmartTalk.Core.Settings;
+using SmartTalk.IntegrationTests.Mocks;
 
 namespace SmartTalk.IntegrationTests;
 
 public partial class TestBase
 {
+    private readonly TestCurrentUser _testCurrentUser = new();
+
     private readonly List<string> _tableRecordsDeletionExcludeList = new()
     {
         "schemaversions"
     };
     
+    public async Task InitializeAsync()
+    {
+        await _identityUtil.CreateUser(_testCurrentUser);
+    }
+
     private void RegisterBaseContainer(ContainerBuilder containerBuilder)
     {
         var logger = Substitute.For<ILogger>();
@@ -29,9 +39,12 @@ public partial class TestBase
         containerBuilder.RegisterModule(
             new SmartTalkModule(logger, configuration, typeof(SmartTalkModule).Assembly, typeof(TestBase).Assembly));
         
+        containerBuilder.RegisterInstance(new TestCurrentUser()).As<ICurrentUser>();
         containerBuilder.RegisterInstance(Substitute.For<IOpenAIService>()).AsImplementedInterfaces();
+        containerBuilder.RegisterInstance(Substitute.For<IHttpContextAccessor>()).AsImplementedInterfaces();
+        containerBuilder.RegisterInstance(Substitute.For<IAliYunOssService>()).AsImplementedInterfaces();
         
-        RegisterSugarTalkBackgroundJobClient(containerBuilder);
+        RegisterSmartiesBackgroundJobClient(containerBuilder);
     }
     
     private IConfiguration RegisterConfiguration(ContainerBuilder containerBuilder)
@@ -46,6 +59,11 @@ public partial class TestBase
         var configuration = new ConfigurationBuilder().AddJsonFile(targetJson).Build();
         containerBuilder.RegisterInstance(configuration).AsImplementedInterfaces();
         return configuration;
+    }
+
+    private void RegisterSmartiesBackgroundJobClient(ContainerBuilder containerBuilder)
+    {
+        containerBuilder.RegisterType<MockingBackgroundJobClient>().As<ISmartTalkBackgroundJobClient>().InstancePerLifetimeScope();
     }
     
     private void RunDbUpIfRequired()
@@ -100,18 +118,9 @@ public partial class TestBase
         }
     }
     
-    private void RegisterSugarTalkBackgroundJobClient(ContainerBuilder containerBuilder)
-    {
-        containerBuilder.RegisterType<MockingBackgroundJobClient>().As<ISmartTalkBackgroundJobClient>().InstancePerLifetimeScope();
-    }
-    
     public void Dispose()
     {
         ClearDatabaseRecord();
-    }
-
-    public async Task InitializeAsync()
-    {
     }
 
     public Task DisposeAsync()

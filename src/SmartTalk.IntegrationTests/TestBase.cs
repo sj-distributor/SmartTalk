@@ -1,9 +1,8 @@
 using Xunit;
 using Autofac;
-using NSubstitute;
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Configuration;
-using SmartTalk.Core.Services.Infrastructure;
+using SmartTalk.IntegrationTests.Utils.Account;
 
 namespace SmartTalk.IntegrationTests;
 
@@ -11,6 +10,8 @@ public partial class TestBase : TestUtilBase, IAsyncLifetime, IDisposable
 {
     private readonly string _testTopic;
     private readonly string _databaseName;
+    
+    private readonly IdentityUtil _identityUtil;
     
     private static readonly ConcurrentDictionary<string, IContainer> Containers = new();
 
@@ -20,7 +21,7 @@ public partial class TestBase : TestUtilBase, IAsyncLifetime, IDisposable
 
     protected IConfiguration CurrentConfiguration => CurrentScope.Resolve<IConfiguration>();
 
-    protected TestBase(string testTopic, string databaseName)
+    protected TestBase(string testTopic, string databaseName, Action<ContainerBuilder>? extraRegistration = null)
     {
         _testTopic = testTopic;
         _databaseName = databaseName;
@@ -30,6 +31,7 @@ public partial class TestBase : TestUtilBase, IAsyncLifetime, IDisposable
         {
             var containerBuilder = new ContainerBuilder();
             RegisterBaseContainer(containerBuilder);
+            extraRegistration?.Invoke(containerBuilder);
             root = containerBuilder.Build();
             Containers[testTopic] = root;
         }
@@ -38,14 +40,7 @@ public partial class TestBase : TestUtilBase, IAsyncLifetime, IDisposable
 
         RunDbUpIfRequired();
         SetupScope(CurrentScope);
-    }
     
-    protected IClock MockClock(ContainerBuilder builder, DateTimeOffset? mockedDate = null)
-    {
-        mockedDate ??= DateTimeOffset.Now;
-        var clock = Substitute.For<IClock>();
-        clock.Now.Returns(mockedDate.Value);
-        builder.Register(_ => clock);
-        return clock;
+        _identityUtil = new IdentityUtil(CurrentScope);
     }
 }

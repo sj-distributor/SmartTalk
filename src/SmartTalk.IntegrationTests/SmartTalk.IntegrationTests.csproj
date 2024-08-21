@@ -28,5 +28,11 @@
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </None>
     </ItemGroup>
+
+    <ItemGroup>
+        <Content Include="DbUpFileFixture\*\*.sql">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </Content>
+    </ItemGroup>
     
 </Project>

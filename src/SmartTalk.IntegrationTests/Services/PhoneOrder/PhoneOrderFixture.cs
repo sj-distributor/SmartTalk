@@ -3,6 +3,7 @@ using Shouldly;
 using Mediator.Net;
 using SmartTalk.Core.Data;
 using Microsoft.EntityFrameworkCore;
+using NSubstitute.Extensions;
 using SmartTalk.Core.Domain.Account;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Messages.Dto.PhoneOrder;
@@ -78,6 +79,15 @@ public class PhoneOrderFixture : PhoneOrderFixtureBase
     [Fact]
     public async Task ShouldGetOrAddPhoneOrderConversations()
     {
+        var record = new PhoneOrderRecord
+        {
+            Id = 1,
+            SessionId = Guid.NewGuid().ToString(),
+            Restaurant = PhoneOrderRestaurant.MoonHouse,
+            TranscriptionText = "hello hi hi hi",
+            Url = "https://xxx.com"
+        };
+        
         var conversations = new List<PhoneOrderConversation>
         {
             new()
@@ -108,6 +118,7 @@ public class PhoneOrderFixture : PhoneOrderFixtureBase
         
         await RunWithUnitOfWork<IRepository>(async repository =>
         {
+            await repository.InsertAsync(record);
             await repository.InsertAllAsync(conversations);
         });
 
@@ -116,6 +127,7 @@ public class PhoneOrderFixture : PhoneOrderFixtureBase
             var response = await mediator.RequestAsync<GetPhoneOrderConversationsRequest, GetPhoneOrderConversationsResponse>(new GetPhoneOrderConversationsRequest { RecordId = 1 });
             
             response.Data.Count.ShouldBe(conversations.Count);
+            var res = await repository.Query<PhoneOrderRecord>().ToListAsync().ConfigureAwait(false);
             
             await mediator.SendAsync<AddPhoneOrderConversationsCommand, AddPhoneOrderConversationsResponse>(new AddPhoneOrderConversationsCommand
             {
