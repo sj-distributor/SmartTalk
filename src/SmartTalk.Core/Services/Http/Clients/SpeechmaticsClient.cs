@@ -7,7 +7,7 @@ namespace SmartTalk.Core.Services.Http.Clients;
 
 public interface ISpeechmaticsClient : IScopedDependency
 {
-    Task<string> CreateJobAsync(SpeechmaticsCreateJobRequestDto speechmaticsCreateTranscriptionJobRequestDto, byte[] data, byte[] text, CancellationToken cancellationToken);
+    Task<string> CreateJobAsync(SpeechmaticsCreateJobRequestDto speechmaticsCreateJobRequestDto, byte[] data, byte[] text, CancellationToken cancellationToken);
     
     Task<SpeechmaticsGetAllJobsResponseDto> GetAllJobsAsync(CancellationToken cancellationToken);
     
@@ -16,8 +16,6 @@ public interface ISpeechmaticsClient : IScopedDependency
     Task<SpeechmaticsDeleteJobResponseDto> DeleteJobAsync(string jobId, CancellationToken cancellationToken);
     
     Task<string> GetTranscriptAsync(string jobId, string format, CancellationToken cancellationToken);
-    
-    Task<string> GetAlignedTextAsync(string jobId, string tags, CancellationToken cancellationToken);
     
     Task<SpeechmaticsGetUsageResponseDto> GetUsageStatisticsAsync(SpeechmaticsGetUsageRequestDto speechmaticsGetUsageRequestDto, CancellationToken cancellationToken);
 }
@@ -42,7 +40,7 @@ public class SpeechmaticsClient : ISpeechmaticsClient
     
     public async Task<string> CreateJobAsync(SpeechmaticsCreateJobRequestDto speechmaticsCreateJobRequestDto, byte[] data, byte[] text, CancellationToken cancellationToken)
     {
-        var jobConfig = JsonConvert.SerializeObject(speechmaticsCreateJobRequestDto.SpeechmaticsJobConfigDto, Formatting.Indented);
+        var jobConfig = JsonConvert.SerializeObject(speechmaticsCreateJobRequestDto.JobConfig, Formatting.Indented);
         
         var formData = new Dictionary<string, string>()
         { 
@@ -52,10 +50,6 @@ public class SpeechmaticsClient : ISpeechmaticsClient
         {
             { "data_file", (data, "audio.wav") }
         };
-        if (speechmaticsCreateJobRequestDto.SpeechmaticsJobConfigDto.Type.Equals("alignment"))
-        {
-            fileData.Add("text_file", (text, "text.txt"));
-        }
         
         return await _httpClientFactory.PostAsMultipartAsync<string>($"{_speechmaticsSetting.BaseUrl}/jobs/", formData, fileData, cancellationToken, headers:_headers).ConfigureAwait(false);
     }
@@ -87,13 +81,6 @@ public class SpeechmaticsClient : ISpeechmaticsClient
         return await _httpClientFactory
             .GetAsync<string>(
                 $"{_speechmaticsSetting.BaseUrl}/jobs/{jobId}/transcript?format={format}", cancellationToken,
-                headers: _headers).ConfigureAwait(false);
-    }
-
-    public async Task<string> GetAlignedTextAsync(string jobId, string tags, CancellationToken cancellationToken)
-    {
-        return await _httpClientFactory
-            .GetAsync<string>($"{_speechmaticsSetting.BaseUrl}/jobs/{jobId}/alignment?tags={tags}", cancellationToken,
                 headers: _headers).ConfigureAwait(false);
     }
 

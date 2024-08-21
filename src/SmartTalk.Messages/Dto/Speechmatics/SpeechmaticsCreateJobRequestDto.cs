@@ -5,7 +5,7 @@ namespace SmartTalk.Messages.Dto.Speechmatics;
 public class SpeechmaticsCreateJobRequestDto
 {
     [JsonProperty("config")]
-    public SpeechmaticsJobConfigDto SpeechmaticsJobConfigDto { get; set; }
+    public SpeechmaticsJobConfigDto JobConfig { get; set; }
 }
 
 public class SpeechmaticsGetAllJobsResponseDto
