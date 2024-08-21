@@ -1,8 +1,7 @@
 using Microsoft.Extensions.Configuration;
-using SmartTalk.Core.Settings;
 using SmartTalk.Messages.Enums.System;
 
-namespace Smarties.Core.Settings.System;
+namespace SmartTalk.Core.Settings.System;
 
 public class ApiRunModeSetting : IConfigurationSetting<ApiRunMode>
 {
