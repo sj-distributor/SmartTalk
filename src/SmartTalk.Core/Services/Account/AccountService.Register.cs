@@ -1,5 +1,5 @@
 using SmartTalk.Core.Services.Account.Exceptions;
-using SmartTalk.Messages.Dto.Users;
+using SmartTalk.Messages.Dto.Account;
 using SmartTalk.Messages.Enums.Account;
 
 namespace SmartTalk.Core.Services.Account;

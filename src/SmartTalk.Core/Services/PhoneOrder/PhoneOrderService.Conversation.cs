@@ -32,6 +32,9 @@ public partial class PhoneOrderService
         
         var conversations = await _phoneOrderDataProvider.AddPhoneOrderConversationsAsync(_mapper.Map<List<PhoneOrderConversation>>(command.Conversations), cancellationToken: cancellationToken).ConfigureAwait(false);
 
+        if (_currentUser.Id.HasValue)
+            await UpdatePhoneOrderRecordModifiedUserASync(command.Conversations.First().RecordId, _currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
+        
         return new AddPhoneOrderConversationsResponse
         {
             Data = _mapper.Map<List<PhoneOrderConversationDto>>(conversations)

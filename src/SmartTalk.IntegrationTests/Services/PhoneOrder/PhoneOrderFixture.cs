@@ -3,12 +3,14 @@ using Shouldly;
 using Mediator.Net;
 using SmartTalk.Core.Data;
 using Microsoft.EntityFrameworkCore;
+using SmartTalk.Core.Domain.Account;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Requests.PhoneOrder;
 using SmartTalk.IntegrationTests.TestBaseClasses;
+using SmartTalk.Messages.Enums.Account;
 
 namespace SmartTalk.IntegrationTests.Services.PhoneOrder;
 
@@ -31,13 +33,26 @@ public class PhoneOrderFixture : PhoneOrderFixtureBase
                 Restaurant = i <= 2 ? PhoneOrderRestaurant.MoonHouse : i <= 5 ? PhoneOrderRestaurant.JiangNanChun : PhoneOrderRestaurant.XiangTanRenJia,
                 Tips = "",
                 TranscriptionText = $"transcription text {i}",
-                Url = $"https://restaurant{i}.com"
+                Url = $"https://restaurant{i}.com",
+                LastModifiedBy = i % 2 ==0 ? 2 : null
             });
         }
+
+        var user = new UserAccount
+        {
+            Id = 2,
+            Uuid = Guid.NewGuid(),
+            UserName = "jojo",
+            Password = "jojo",
+            ThirdPartyUserId = Guid.NewGuid().ToString(),
+            Issuer = UserAccountIssuer.Wiltechs,
+            IsActive = true
+        };
 
         await RunWithUnitOfWork<IRepository>(async repository =>
         {
             await repository.InsertAllAsync(records);
+            await repository.InsertAsync(user);
         });
 
         await RunWithUnitOfWork<IMediator>(async mediator =>
