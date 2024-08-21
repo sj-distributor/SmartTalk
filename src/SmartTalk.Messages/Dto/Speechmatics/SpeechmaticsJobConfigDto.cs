@@ -12,7 +12,4 @@ public class SpeechmaticsJobConfigDto
     
     [JsonProperty("transcription_config", NullValueHandling = NullValueHandling.Ignore)]
     public SpeechmaticsTranscriptionConfigDto? TranscriptionConfig { get; set; }
-    
-    [JsonProperty("alignment_config", NullValueHandling = NullValueHandling.Ignore)]
-    public SpeechmaticsAlignmentConfigDto? AlignmentConfig { get; set; }
 }
