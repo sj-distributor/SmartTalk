@@ -18,6 +18,7 @@ public partial class PhoneOrderService : IPhoneOrderService
     private readonly IMapper _mapper;
     private readonly IWeChatClient _weChatClient;
     private readonly IFfmpegService _ffmpegService;
+    private readonly ISmartiesClient _smartiesClient;
     private readonly PhoneOrderSetting _phoneOrderSetting;
     private readonly IAttachmentService _attachmentService;
     private readonly ISpeechToTextService _speechToTextService;
@@ -28,6 +29,7 @@ public partial class PhoneOrderService : IPhoneOrderService
         IMapper mapper,
         IWeChatClient weChatClient,
         IFfmpegService ffmpegService,
+        ISmartiesClient smartiesClient,
         PhoneOrderSetting phoneOrderSetting,
         IAttachmentService attachmentService,
         ISpeechToTextService speechToTextService,
@@ -37,6 +39,7 @@ public partial class PhoneOrderService : IPhoneOrderService
         _mapper = mapper;
         _weChatClient = weChatClient;
         _ffmpegService = ffmpegService;
+        _smartiesClient = smartiesClient;
         _phoneOrderSetting = phoneOrderSetting;
         _attachmentService = attachmentService;
         _speechToTextService = speechToTextService;
