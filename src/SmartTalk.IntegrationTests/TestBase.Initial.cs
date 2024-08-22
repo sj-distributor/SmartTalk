@@ -44,7 +44,7 @@ public partial class TestBase
         containerBuilder.RegisterInstance(Substitute.For<IHttpContextAccessor>()).AsImplementedInterfaces();
         containerBuilder.RegisterInstance(Substitute.For<IAliYunOssService>()).AsImplementedInterfaces();
         
-        RegisterSmartiesBackgroundJobClient(containerBuilder);
+        RegisterSmartTalkBackgroundJobClient(containerBuilder);
     }
     
     private IConfiguration RegisterConfiguration(ContainerBuilder containerBuilder)
@@ -61,7 +61,7 @@ public partial class TestBase
         return configuration;
     }
 
-    private void RegisterSmartiesBackgroundJobClient(ContainerBuilder containerBuilder)
+    private void RegisterSmartTalkBackgroundJobClient(ContainerBuilder containerBuilder)
     {
         containerBuilder.RegisterType<MockingBackgroundJobClient>().As<ISmartTalkBackgroundJobClient>().InstancePerLifetimeScope();
     }
