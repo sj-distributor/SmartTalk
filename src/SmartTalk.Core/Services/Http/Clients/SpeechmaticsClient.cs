@@ -7,7 +7,7 @@ namespace SmartTalk.Core.Services.Http.Clients;
 
 public interface ISpeechmaticsClient : IScopedDependency
 {
-    Task<string> CreateJobAsync(SpeechmaticsCreateJobRequestDto speechmaticsCreateJobRequestDto, byte[] data, byte[] text, CancellationToken cancellationToken);
+    Task<string> CreateJobAsync(SpeechmaticsCreateJobRequestDto speechmaticsCreateJobRequestDto, SpeechmaticsCreateTranscritionDto speechmaticsCreateTranscritionDto, CancellationToken cancellationToken);
     
     Task<SpeechmaticsGetAllJobsResponseDto> GetAllJobsAsync(CancellationToken cancellationToken);
     
@@ -38,7 +38,7 @@ public class SpeechmaticsClient : ISpeechmaticsClient
         };
     }
     
-    public async Task<string> CreateJobAsync(SpeechmaticsCreateJobRequestDto speechmaticsCreateJobRequestDto, byte[] data, byte[] text, CancellationToken cancellationToken)
+    public async Task<string> CreateJobAsync(SpeechmaticsCreateJobRequestDto speechmaticsCreateJobRequestDto, SpeechmaticsCreateTranscritionDto speechmaticsCreateTranscritionDto, CancellationToken cancellationToken)
     {
         var jobConfig = JsonConvert.SerializeObject(speechmaticsCreateJobRequestDto.JobConfig, Formatting.Indented);
         
@@ -48,7 +48,7 @@ public class SpeechmaticsClient : ISpeechmaticsClient
         };
         var fileData = new Dictionary<string, (byte[], string)>
         {
-            { "data_file", (data, "audio.wav") }
+            { "data_file", (speechmaticsCreateTranscritionDto.Data, speechmaticsCreateTranscritionDto.FileName) }
         };
         
         return await _httpClientFactory.PostAsMultipartAsync<string>($"{_speechmaticsSetting.BaseUrl}/jobs/", formData, fileData, cancellationToken, headers:_headers).ConfigureAwait(false);

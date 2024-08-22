@@ -8,20 +8,9 @@ public class SpeechmaticsCreateJobRequestDto
     public SpeechmaticsJobConfigDto JobConfig { get; set; }
 }
 
-public class SpeechmaticsGetAllJobsResponseDto
+public class SpeechmaticsCreateTranscritionDto
 {
-    [JsonProperty("jobs")]
-    public List<SpeechmaticsJobDetailDto> JobDetails { get; set; }
-}
-
-public class SpeechmaticsGetJobDetailResponseDto
-{
-    [JsonProperty("job")]
-    public SpeechmaticsJobDetailDto JobDetail { get; set; }
-}
-
-public class SpeechmaticsDeleteJobResponseDto
-{
-    [JsonProperty("job")]
-    public SpeechmaticsJobDetailDto JobDetail { get; set; }
+    public byte[] Data { get; set; }
+    
+    public string FileName { get; set; }
 }

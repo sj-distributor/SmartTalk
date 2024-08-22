@@ -22,3 +22,23 @@ public class SpeechmaticsJobDetailDto
     [JsonProperty("config")]
     public SpeechmaticsJobConfigDto? Config { get; set; }
 }
+
+public class SpeechmaticsGetAllJobsResponseDto
+{
+    [JsonProperty("jobs")]
+    public List<SpeechmaticsJobDetailDto> JobDetails { get; set; }
+}
+
+public class SpeechmaticsGetJobDetailResponseDto : SpeechmaticsJobDetailResponseDto
+{
+}
+
+public class SpeechmaticsDeleteJobResponseDto : SpeechmaticsJobDetailResponseDto
+{
+}
+
+public class SpeechmaticsJobDetailResponseDto
+{
+    [JsonProperty("job")]
+    public SpeechmaticsJobDetailDto JobDetail { get; set; }
+}
