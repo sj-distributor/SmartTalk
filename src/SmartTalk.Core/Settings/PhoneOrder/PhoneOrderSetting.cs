@@ -4,6 +4,7 @@ namespace SmartTalk.Core.Settings.PhoneOrder;
 
 public class PhoneOrderSetting : IConfigurationSetting
 {
+    public PhoneOrderSetting(){}
     public PhoneOrderSetting(IConfiguration configuration)
     {
         Robots = JsonSerializer.Deserialize<Dictionary<string, string>>(configuration.GetValue<string>("PhoneOrder:Robots"));

@@ -3,20 +3,21 @@ using Serilog;
 using AutoMapper;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Data;
-using SmartTalk.Messages.Dto.Users;
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Constants;
 using SmartTalk.Core.Domain.Account;
 using SmartTalk.Core.Domain.Security;
 using SmartTalk.Core.Extensions;
 using SmartTalk.Core.Services.Account.Exceptions;
+using SmartTalk.Messages.Dto.Account;
 using SmartTalk.Messages.Enums.Account;
 
 namespace SmartTalk.Core.Services.Account
 {
     public interface IAccountDataProvider : IScopedDependency
     {
-        Task<UserAccount> GetUserAccountAsync(int id, CancellationToken cancellationToken = default);
+        Task<UserAccount> GetUserAccountAsync(
+            int? id = null, string username = null, string password = null, string thirdPartyUserId = null, bool isActive = true, UserAccountIssuer? issuer = null, bool includeRoles = false, CancellationToken cancellationToken = default);
         
         Task<UserAccountDto> GetUserAccountByApiKeyAsync(string apiKey, CancellationToken cancellationToken = default);
 
@@ -41,11 +42,6 @@ namespace SmartTalk.Core.Services.Account
             _mapper = mapper;
             _unitOfWork = unitOfWork;
             _repository = repository;
-        }
-
-        public async Task<UserAccount> GetUserAccountAsync(int id, CancellationToken cancellationToken = default)
-        {
-            return await _repository.QueryNoTracking<UserAccount>().FirstOrDefaultAsync(x => x.Id == id, cancellationToken).ConfigureAwait(false);
         }
         
         public async Task<UserAccountDto> GetUserAccountByApiKeyAsync(string apiKey, CancellationToken cancellationToken = default)
