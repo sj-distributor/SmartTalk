@@ -2,7 +2,7 @@ using AutoMapper;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.System;
 using SmartTalk.Core.Services.Wiltechs;
-using SmartTalk.Messages.Dto.Users;
+using SmartTalk.Messages.Dto.Account;
 using SmartTalk.Messages.Enums.Account;
 using SmartTalk.Messages.Requests.Account;
 

@@ -3,6 +3,9 @@ using Microsoft.AspNetCore.Authorization;
 using SmartTalk.Api.Authentication.ApiKey;
 using SmartTalk.Api.Authentication.OME;
 using SmartTalk.Api.Authentication.Wiltechs;
+using SmartTalk.Core.Services.Identity;
+using SmartTalk.Core.Settings.System;
+using SmartTalk.Messages.Enums.System;
 
 namespace SmartTalk.Api.Extensions;
 
@@ -39,5 +42,22 @@ public static class AuthenticationExtension
                 AuthenticationSchemeConstants.WiltechsAuthenticationScheme,
                 AuthenticationSchemeConstants.OMEAuthenticationScheme).RequireAuthenticatedUser().Build();
         });
+        
+        RegisterCurrentUser(services, configuration);
+    }
+    
+    private static void RegisterCurrentUser(IServiceCollection services, IConfiguration configuration)
+    {
+        var appType = new ApiRunModeSetting(configuration).Value;
+
+        switch (appType)
+        {
+            case ApiRunMode.Api:
+                services.AddScoped<ICurrentUser, ApiUser>();
+                break;
+            case ApiRunMode.Internal:
+                services.AddScoped<ICurrentUser, InternalUser>();
+                break;
+        }
     }
 }
