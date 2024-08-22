@@ -1,12 +1,12 @@
 using SmartTalk.Core.Ioc;
-using SmartTalk.Messages.Dto.Smarties;
+using Smarties.Messages.Requests.Ask;
 using SmartTalk.Core.Settings.Smarties;
 
 namespace SmartTalk.Core.Services.Http.Clients;
 
 public interface ISmartiesClient : IScopedDependency
 {
-    Task<AskGptResponse> PerformQueryAsync(AskGptRequestDto request, CancellationToken cancellationToken);
+    Task<AskGptResponse> PerformQueryAsync(AskGptRequest request, CancellationToken cancellationToken);
 }
 
 public class SmartiesClient : ISmartiesClient
@@ -26,7 +26,7 @@ public class SmartiesClient : ISmartiesClient
         };
     }
     
-    public async Task<AskGptResponse> PerformQueryAsync(AskGptRequestDto request, CancellationToken cancellationToken)
+    public async Task<AskGptResponse> PerformQueryAsync(AskGptRequest request, CancellationToken cancellationToken)
     {
         return await _httpClientFactory.PostAsJsonAsync<AskGptResponse>(
             $"{_smartiesSettings.BaseUrl}/api/Ask/general/query", request, cancellationToken, headers: _headers).ConfigureAwait(false);

@@ -1,12 +1,10 @@
 using Serilog;
-using SmartTalk.Messages.Enums;
 using SmartTalk.Core.Extensions;
-using SmartTalk.Messages.Enums.STT;
-using SmartTalk.Messages.Dto.OpenAi;
+using Smarties.Messages.DTO.OpenAi;
 using SmartTalk.Messages.Dto.WeChat;
 using System.Text.RegularExpressions;
-using SmartTalk.Messages.Enums.OpenAi;
-using SmartTalk.Messages.Dto.Smarties;
+using Smarties.Messages.Enums.OpenAi;
+using Smarties.Messages.Requests.Ask;
 using SmartTalk.Messages.Enums.WeChat;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Messages.Dto.PhoneOrder;
@@ -15,6 +13,9 @@ using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Requests.PhoneOrder;
 using SmartTalk.Messages.Commands.Attachments;
+using TranscriptionFileType = SmartTalk.Messages.Enums.STT.TranscriptionFileType;
+using TranscriptionLanguage = SmartTalk.Messages.Enums.STT.TranscriptionLanguage;
+using TranscriptionResponseFormat = SmartTalk.Messages.Enums.STT.TranscriptionResponseFormat;
 
 namespace SmartTalk.Core.Services.PhoneOrder;
 
@@ -80,21 +81,21 @@ public partial class PhoneOrderService
 
     public async Task ExtractMenuAsync(string transcription, bool isUseGpt4, int recordId, CancellationToken cancellationToken)
     {
-        var messages = new List<ChatCompletionMessageDto>
+        var messages = new List<CompletionsRequestMessageDto>
         {
             new ()
             {
-                Role = ChatCompletionMessageRole.System,
-                Content = "You are a highly skilled AI capable of understanding and extracting dish information from text. Your task is to analyze the following article and find out the name of the dish, corresponding quantity and price. Translate all dish names into traditional Chinese. Do not repeat the name of the dish. If the quantity is not mentioned, assume it is one. If no price is provided, the price is assumed to be zero. Ignore any total price or total amount that relates to the entire order rather than individual items. For example, if the article mentions \"Barbecue pork chow fun, spicy pork chops, total $44.90,\" you should extract :\\n\\n1. Food name: Char Siu Fried noodles, quantity :1, price :0\\n2. food_name: Spicy pork chop, quantity :1, Price :0\\n\\n Please list the extracted information using the following format :\\n\\n1. Food name :XXX, quantity :XXX, Price :XXX\\n2. Food name :XXX, quantity :XXX, Price :XXX\\n3. food_name: XXX, quantity: XXX, price: XXX\\n\\n Make sure to extract the quantity, quantity and price of dishes correctly, translate all dish names into traditional Chinese, ignoring any total price."
+                Role = "system",
+                Content = new CompletionsStringContent("You are a highly skilled AI capable of understanding and extracting dish information from text. Your task is to analyze the following article and find out the name of the dish, corresponding quantity and price. Translate all dish names into traditional Chinese. Do not repeat the name of the dish. If the quantity is not mentioned, assume it is one. If no price is provided, the price is assumed to be zero. Ignore any total price or total amount that relates to the entire order rather than individual items. For example, if the article mentions \"Barbecue pork chow fun, spicy pork chops, total $44.90,\" you should extract :\\n\\n1. Food name: Char Siu Fried noodles, quantity :1, price :0\\n2. food_name: Spicy pork chop, quantity :1, Price :0\\n\\n Please list the extracted information using the following format :\\n\\n1. Food name :XXX, quantity :XXX, Price :XXX\\n2. Food name :XXX, quantity :XXX, Price :XXX\\n3. food_name: XXX, quantity: XXX, price: XXX\\n\\n Make sure to extract the quantity, quantity and price of dishes correctly, translate all dish names into traditional Chinese, ignoring any total price.")
             },
             new ()
             {
-                Role = ChatCompletionMessageRole.User,
-                Content = $" minutes:\n\"{transcription}\"\nresult:\n"
+                Role = "user",
+                Content = new CompletionsStringContent($" minutes:\n\"{transcription}\"\nresult:\n")
             }
         };
 
-        var gptResponse = await _smartiesClient.PerformQueryAsync(new AskGptRequestDto
+        var gptResponse = await _smartiesClient.PerformQueryAsync(new AskGptRequest
         {
             Model = isUseGpt4 ? OpenAiModel.Gpt4o : OpenAiModel.Gpt35Turbo16K,
             Messages = messages.Select(m => new CompletionsRequestMessageDto
@@ -135,21 +136,21 @@ public partial class PhoneOrderService
 
     public async Task<bool> DecideWhetherPlaceAnOrderAsync(string transcription, bool isUseGpt4, CancellationToken cancellationToken)
     {
-        var messages = new List<ChatCompletionMessageDto>
+        var messages = new List<CompletionsRequestMessageDto>
         {
             new ()
             {
-                Role = ChatCompletionMessageRole.System,
-                Content = "You are a highly skilled AI trained to understand language and determine if there is a need to place an order. Your task is to read the following article, analyze whether there is a demand for an order, and clearly determine whether the order is a takeaway (for example, if it mentions keywords such as \"takeaway\", \"delivery\", \"how long\", etc.) rather than a reservation. The purpose is to ensure that if there is an order demand and it is a takeaway, the order is placed successfully. If the article indicates a need for takeout, return yes, if not, return no.Use the following template to generate traditional Chinese:result: yes or no"
+                Role = "system",
+                Content = new CompletionsStringContent("You are a highly skilled AI trained to understand language and determine if there is a need to place an order. Your task is to read the following article, analyze whether there is a demand for an order, and clearly determine whether the order is a takeaway (for example, if it mentions keywords such as \"takeaway\", \"delivery\", \"how long\", etc.) rather than a reservation. The purpose is to ensure that if there is an order demand and it is a takeaway, the order is placed successfully. If the article indicates a need for takeout, return yes, if not, return no.Use the following template to generate traditional Chinese:result: yes or no")
             },
             new ()
             {
-                Role = ChatCompletionMessageRole.User,
-                Content = $" minutes:\n\"{transcription}\"\nresult:\n"
+                Role = "user",
+                Content = new CompletionsStringContent($" minutes:\n\"{transcription}\"\nresult:\n")
             }
         };
 
-        var gptResponse = await _smartiesClient.PerformQueryAsync(new AskGptRequestDto
+        var gptResponse = await _smartiesClient.PerformQueryAsync(new AskGptRequest
         {
             Model = isUseGpt4 ? OpenAiModel.Gpt4o : OpenAiModel.Gpt35Turbo16K,
             Messages = messages.Select(m => new CompletionsRequestMessageDto
