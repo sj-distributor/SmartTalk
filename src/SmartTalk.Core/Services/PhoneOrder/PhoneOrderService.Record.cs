@@ -1,4 +1,5 @@
 using Serilog;
+using Newtonsoft.Json;
 using SmartTalk.Core.Extensions;
 using Smarties.Messages.DTO.OpenAi;
 using SmartTalk.Messages.Dto.WeChat;
@@ -86,12 +87,12 @@ public partial class PhoneOrderService
             new ()
             {
                 Role = "system",
-                Content = new CompletionsStringContent("You are a highly skilled AI capable of understanding and extracting dish information from text. Your task is to analyze the following article and find out the name of the dish, corresponding quantity and price. Translate all dish names into traditional Chinese. Do not repeat the name of the dish. If the quantity is not mentioned, assume it is one. If no price is provided, the price is assumed to be zero. Ignore any total price or total amount that relates to the entire order rather than individual items. For example, if the article mentions \"Barbecue pork chow fun, spicy pork chops, total $44.90,\" you should extract :\\n\\n1. Food name: Char Siu Fried noodles, quantity :1, price :0\\n2. food_name: Spicy pork chop, quantity :1, Price :0\\n\\n Please list the extracted information using the following format :\\n\\n1. Food name :XXX, quantity :XXX, Price :XXX\\n2. Food name :XXX, quantity :XXX, Price :XXX\\n3. food_name: XXX, quantity: XXX, price: XXX\\n\\n Make sure to extract the quantity, quantity and price of dishes correctly, translate all dish names into traditional Chinese, ignoring any total price.")
+                Content = new CompletionsStringContent("\"You are a highly skilled AI capable of understanding and extracting dish information from text. Your task is to analyze the following article and find out the name of the dish, corresponding quantity, and price. Translate all dish names into traditional Chinese. Do not repeat the name of the dish. If the quantity is not mentioned, assume it is one. If no price is provided, the price is assumed to be zero. Ignore any total price or total amount that relates to the entire order rather than individual items. For example, if the article mentions \"Barbecue pork chow fun, spicy pork chops, total $44.90,\" you should extract:\n[{\"food_name\": \"Char Siu Fried noodles\", \"quantity\": 1, \"price\": 0},\n{\"food_name\": \"Spicy pork chop\", \"quantity\": 1, \"price\": 0}]")
             },
             new ()
             {
                 Role = "user",
-                Content = new CompletionsStringContent($" minutes:\n\"{transcription}\"\nresult:\n")
+                Content = new CompletionsStringContent($" minutes:\n\"{transcription}\"")
             }
         };
 
@@ -107,31 +108,15 @@ public partial class PhoneOrderService
 
         Log.Information("Transcription: {transcription},\n Menu result: {result}", transcription, gptResponse.Data.Response);
         
-        var dishes = gptResponse.Data.Response.Split('\n')
-            .Where(line => !string.IsNullOrWhiteSpace(line))
-            .Select(line => ParseDish(line, recordId)).ToList();
+        var dishes = JsonConvert.DeserializeObject<List<PhoneOrderOrderItem>>(gptResponse.Data.Response);
+
+        dishes = dishes.Select(x =>
+        {
+            x.RecordId = recordId;
+            return x;
+        }).ToList();
         
         await _phoneOrderDataProvider.AddPhoneOrderItemAsync(dishes, cancellationToken: cancellationToken).ConfigureAwait(false);
-    }
-
-    public static PhoneOrderOrderItem ParseDish(string line, int recordId)
-    {
-        var parts = line.Split(',')
-            .Select(part => part.Trim())
-            .ToArray();
-
-        var foodName = parts[0].Split(':')[1].Trim();
-        var quantity = int.Parse(parts[1].Split(':')[1].Trim());
-        var price = double.Parse(parts[2].Split(':')[1].Trim());
-
-        return new PhoneOrderOrderItem
-        {
-            RecordId = recordId,
-            Price = price,
-            FoodName = foodName,
-            Quantity = quantity,
-            OrderType = PhoneOrderOrderType.AIOrder
-        };
     }
 
     public async Task<bool> DecideWhetherPlaceAnOrderAsync(string transcription, bool isUseGpt4, CancellationToken cancellationToken)

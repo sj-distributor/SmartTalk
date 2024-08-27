@@ -1,6 +1,7 @@
+using Newtonsoft.Json;
+using SmartTalk.Messages.Enums.PhoneOrder;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using SmartTalk.Messages.Enums.PhoneOrder;
 
 namespace SmartTalk.Core.Domain.PhoneOrder;
 
@@ -16,12 +17,15 @@ public class PhoneOrderOrderItem : IEntity, IHasCreatedFields
     public int RecordId { get; set; }
     
     [Column("food_name")]
+    [JsonProperty("food_name")]
     public string FoodName { get; set; }
     
     [Column("quantity")]
+    [JsonProperty("quantity")]
     public int Quantity { get; set; }
     
     [Column("price")]
+    [JsonProperty("price")]
     public double Price { get; set; }
     
     [Column("note")]
