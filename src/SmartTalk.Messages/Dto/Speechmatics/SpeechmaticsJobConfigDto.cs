@@ -1,13 +1,13 @@
 using Newtonsoft.Json;
-using Newtonsoft.Json.Converters;
+using SmartTalk.Core.Utils;
 using SmartTalk.Messages.Enums.Speechmatics;
 
 namespace SmartTalk.Messages.Dto.Speechmatics;
 
-public class SpeechmaticsJobConfigDto
+public class  SpeechmaticsJobConfigDto
 {
     [JsonProperty("type")]
-    [JsonConverter(typeof(StringEnumConverter))]
+    [JsonConverter(typeof(LowerFirstLetterEnumConverter), typeof(JobType))]
     public JobType Type { get; set; } = JobType.Transcription;
     
     [JsonProperty("transcription_config", NullValueHandling = NullValueHandling.Ignore)]

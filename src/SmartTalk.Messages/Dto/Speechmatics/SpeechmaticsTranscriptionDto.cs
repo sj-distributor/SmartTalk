@@ -1,4 +1,6 @@
 using Newtonsoft.Json;
+using SmartTalk.Core.Utils;
+using SmartTalk.Messages.Enums.Speechmatics;
 
 namespace SmartTalk.Messages.Dto.Speechmatics;
 
@@ -17,13 +19,16 @@ public class SpeechmaticsTranscriptionDto
 public class SpeechmaticsTranscriptionConfigDto
 {
     [JsonProperty("operating_point")]
-    public string OperatingPoint { get; set; }
+    [JsonConverter(typeof(LowerFirstLetterEnumConverter), typeof(OperatingPointType))]
+    public OperatingPointType OperatingPoint { get; set; }
     
     [JsonProperty("language")]
-    public string Language { get; set; }
+    [JsonConverter(typeof(LowerFirstLetterEnumConverter), typeof(LanguageType))]
+    public LanguageType Language { get; set; }
     
     [JsonProperty("diarization")]
-    public string Diarization { get; set; }
+    [JsonConverter(typeof(LowerFirstLetterEnumConverter), typeof(DiarizationType))]
+    public DiarizationType Diarization { get; set; }
 }
 
 public class SpeechmaticsTranslationConfigDto

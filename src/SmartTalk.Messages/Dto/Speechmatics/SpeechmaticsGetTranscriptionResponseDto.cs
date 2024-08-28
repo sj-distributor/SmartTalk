@@ -63,4 +63,7 @@ public class SpeechmaticsAlternativeDto
 {
     [JsonProperty("speaker")]
     public string Speaker { get; set; }
+    
+    [JsonProperty("content")]
+    public string Content { get; set; }
 }
