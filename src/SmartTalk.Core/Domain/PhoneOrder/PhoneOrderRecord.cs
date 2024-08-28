@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using SmartTalk.Core.Domain.Account;
 using SmartTalk.Messages.Enums.PhoneOrder;
 
 namespace SmartTalk.Core.Domain.PhoneOrder;
@@ -26,7 +27,13 @@ public class PhoneOrderRecord : IEntity, IHasCreatedFields
     
     [Column("url")]
     public string Url { get; set; }
+    
+    [Column("last_modified_by")]
+    public int? LastModifiedBy { get; set; }
 
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
+    
+    [NotMapped]
+    public UserAccount UserAccount { get; set; }
 }
