@@ -25,8 +25,6 @@ public partial interface IPhoneOrderService
     Task<GetPhoneOrderRecordsResponse> GetPhoneOrderRecordsAsync(GetPhoneOrderRecordsRequest request, CancellationToken cancellationToken);
 
     Task ReceivePhoneOrderRecordAsync(ReceivePhoneOrderRecordCommand command, CancellationToken cancellationToken);
-
-    Task ExtractMenuAsync(string transcription, int recordId, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderService
