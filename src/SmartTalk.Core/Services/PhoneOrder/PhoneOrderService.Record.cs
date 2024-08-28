@@ -25,6 +25,8 @@ public partial interface IPhoneOrderService
     Task<GetPhoneOrderRecordsResponse> GetPhoneOrderRecordsAsync(GetPhoneOrderRecordsRequest request, CancellationToken cancellationToken);
 
     Task ReceivePhoneOrderRecordAsync(ReceivePhoneOrderRecordCommand command, CancellationToken cancellationToken);
+
+    Task ExtractMenuAsync(string transcription, int recordId, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderService
@@ -114,7 +116,7 @@ public partial class PhoneOrderService
 
         Log.Information("Transcription: {transcription},\n Menu result: {result}", transcription, gptResponse.Data.Response);
         
-        var dishes = JsonConvert.DeserializeObject<List<PhoneOrderOrderItem>>(gptResponse.Data.Response);
+        var dishes = JsonConvert.DeserializeObject<List<PhoneOrderOrderItemDto>>(gptResponse.Data.Response);
 
         dishes = dishes.Select(x =>
         {
@@ -122,7 +124,7 @@ public partial class PhoneOrderService
             return x;
         }).ToList();
         
-        await _phoneOrderDataProvider.AddPhoneOrderItemAsync(dishes, cancellationToken: cancellationToken).ConfigureAwait(false);
+        await _phoneOrderDataProvider.AddPhoneOrderItemAsync(_mapper.Map<List<PhoneOrderOrderItem>>(dishes), cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<bool> DecideWhetherPlaceAnOrderAsync(string transcription, CancellationToken cancellationToken)
