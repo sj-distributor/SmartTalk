@@ -8,7 +8,7 @@ public class SpeechmaticsCreateJobRequestDto
     public SpeechmaticsJobConfigDto JobConfig { get; set; }
 }
 
-public class SpeechmaticsCreateTranscritionDto
+public class SpeechmaticsCreateTranscriptionDto
 {
     public byte[] Data { get; set; }
     

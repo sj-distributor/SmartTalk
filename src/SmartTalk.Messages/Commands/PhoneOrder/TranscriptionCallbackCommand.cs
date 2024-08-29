@@ -5,8 +5,9 @@ using ICommand = Mediator.Net.Contracts.ICommand;
 
 namespace SmartTalk.Messages.Commands.PhoneOrder;
 
-public class TranscriptionCallbackCommand : SpeechmaticsGetTranscriptionResponseDto, ICommand
+public class TranscriptionCallbackCommand : ICommand
 {
+    public SpeechmaticsGetTranscriptionResponseDto Transcription { get; set; }
 }
 
 public class TranscriptionCallbackResponse : SmartTalkResponse<List<PhoneOrderConversationDto>>

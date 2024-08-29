@@ -2,6 +2,7 @@ using Mediator.Net;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Newtonsoft.Json.Linq;
+using Org.BouncyCastle.Asn1.X509.Qualified;
 using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Dto.Speechmatics;
 using SmartTalk.Messages.Requests.PhoneOrder;
@@ -72,12 +73,12 @@ public class PhoneOrderController : ControllerBase
     }
 
     [HttpPost("transcription/callback")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(TranscriptionCallbackResponse))]
     public async Task<IActionResult> TranscriptionCallback(JObject jObject)
     {
-        var transcriptionDto = jObject.ToObject<SpeechmaticsGetTranscriptionResponseDto>();
+        var transcription = jObject.ToObject<SpeechmaticsGetTranscriptionResponseDto>();
         
-        var response = await _mediator.SendAsync<TranscriptionCallbackCommand, TranscriptionCallbackResponse>((TranscriptionCallbackCommand)transcriptionDto);
+        var response = await _mediator.SendAsync<TranscriptionCallbackCommand, TranscriptionCallbackResponse>(new TranscriptionCallbackCommand{Transcription = transcription});
         
         return Ok(response);
     }

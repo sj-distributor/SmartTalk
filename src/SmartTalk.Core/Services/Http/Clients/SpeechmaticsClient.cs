@@ -7,7 +7,7 @@ namespace SmartTalk.Core.Services.Http.Clients;
 
 public interface ISpeechmaticsClient : IScopedDependency
 {
-    Task<string> CreateJobAsync(SpeechmaticsCreateJobRequestDto speechmaticsCreateJobRequestDto, SpeechmaticsCreateTranscritionDto speechmaticsCreateTranscritionDto, CancellationToken cancellationToken);
+    Task<string> CreateJobAsync(SpeechmaticsCreateJobRequestDto speechmaticsCreateJobRequestDto, SpeechmaticsCreateTranscriptionDto speechmaticsCreateTranscritionDto, CancellationToken cancellationToken);
     
     Task<SpeechmaticsGetAllJobsResponseDto> GetAllJobsAsync(CancellationToken cancellationToken);
     
@@ -38,7 +38,7 @@ public class SpeechmaticsClient : ISpeechmaticsClient
         };
     }
     
-    public async Task<string> CreateJobAsync(SpeechmaticsCreateJobRequestDto speechmaticsCreateJobRequestDto, SpeechmaticsCreateTranscritionDto speechmaticsCreateTranscritionDto, CancellationToken cancellationToken)
+    public async Task<string> CreateJobAsync(SpeechmaticsCreateJobRequestDto speechmaticsCreateJobRequestDto, SpeechmaticsCreateTranscriptionDto speechmaticsCreateTranscritionDto, CancellationToken cancellationToken)
     {
         var jobConfig = JsonConvert.SerializeObject(speechmaticsCreateJobRequestDto.JobConfig, Formatting.Indented);
         
