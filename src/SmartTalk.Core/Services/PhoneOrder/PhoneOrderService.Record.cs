@@ -264,7 +264,7 @@ public partial class PhoneOrderService
                 Order = order
             });
         }
-        var data = await _phoneOrderDataProvider.AddPhoneOrderConversationsAsync(phoneOrderConversations, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var data = await _phoneOrderDataProvider.AddPhoneOrderConversationsAsync(phoneOrderConversations, true, cancellationToken).ConfigureAwait(false);
 
         return new TranscriptionCallbackResponse { Data = _mapper.Map<List<PhoneOrderConversationDto>>(data) };
     }

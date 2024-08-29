@@ -2,7 +2,6 @@ using Mediator.Net;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Newtonsoft.Json.Linq;
-using Org.BouncyCastle.Asn1.X509.Qualified;
 using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Dto.Speechmatics;
 using SmartTalk.Messages.Requests.PhoneOrder;
