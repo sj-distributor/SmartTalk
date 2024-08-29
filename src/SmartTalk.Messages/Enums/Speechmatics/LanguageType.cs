@@ -4,5 +4,6 @@ public enum LanguageType
 {
     Cmn,
     Yue,
-    Auto
+    Auto,
+    En
 }

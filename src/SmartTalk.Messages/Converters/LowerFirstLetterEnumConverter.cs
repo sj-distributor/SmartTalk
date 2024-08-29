@@ -1,6 +1,7 @@
 using Newtonsoft.Json;
+using SmartTalk.Messages.Extensions;
 
-namespace SmartTalk.Core.Utils;
+namespace SmartTalk.Messages.Converters;
 
 public class LowerFirstLetterEnumConverter: JsonConverter
 {
@@ -18,10 +19,7 @@ public class LowerFirstLetterEnumConverter: JsonConverter
 
     public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
     {
-        var enumValue = (Enum)value;
-        var stringValue = enumValue.ToString();
-        var lowercasedStringValue = char.ToLower(stringValue[0]) + stringValue.Substring(1);
-        writer.WriteValue(lowercasedStringValue);
+        writer.WriteValue(((Enum)value).ToString().ToCamelCase());
     }
 
     public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
@@ -29,8 +27,7 @@ public class LowerFirstLetterEnumConverter: JsonConverter
         var stringValue = (string)reader.Value;
         if (stringValue != null)
         {
-            var uppercaseStringValue = char.ToUpper(stringValue[0]) + stringValue.Substring(1);
-            var enumValue = Enum.Parse(_enumType, uppercaseStringValue);
+            var enumValue = Enum.Parse(_enumType, stringValue.ToUpperFirstCase());
             return enumValue;
         }
         throw new JsonSerializationException("Unexpected value when deserializing enum.");

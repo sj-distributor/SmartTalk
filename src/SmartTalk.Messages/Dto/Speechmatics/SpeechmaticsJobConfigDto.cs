@@ -1,10 +1,10 @@
 using Newtonsoft.Json;
-using SmartTalk.Core.Utils;
+using SmartTalk.Messages.Converters;
 using SmartTalk.Messages.Enums.Speechmatics;
 
 namespace SmartTalk.Messages.Dto.Speechmatics;
 
-public class  SpeechmaticsJobConfigDto
+public class SpeechmaticsJobConfigDto
 {
     [JsonProperty("type")]
     [JsonConverter(typeof(LowerFirstLetterEnumConverter), typeof(JobType))]

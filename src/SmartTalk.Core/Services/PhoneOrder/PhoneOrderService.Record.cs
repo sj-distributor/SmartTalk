@@ -58,29 +58,11 @@ public partial class PhoneOrderService
         Log.Information("Phone order record transcription: " + transcription);
         
         // todo recognize speaker
-        var createTranscriptionDto = new SpeechmaticsCreateTranscriptionDto(){Data = command.RecordContent, FileName = command.RecordName};
-        
-        var jobConfigDto = new SpeechmaticsJobConfigDto
-        {
-            Type = JobType.Transcription,
-            TranscriptionConfig = new SpeechmaticsTranscriptionConfigDto
-            {
-                Language = LanguageType.Auto,
-                Diarization = DiarizationType.Speaker,
-                OperatingPoint = OperatingPointType.Enhanced
-            },
-            NotificationConfig = new SpeechmaticsNotificationConfigDto
-            {
-                AuthHeaders = _phoneOrderSetting.AuthHeaders,
-                Contents = [JobType.Transcription.ToString()],
-                Url = _phoneOrderSetting.Url
-            }
-        };
-        var transcriptionJobId = _speechmaticsClient.CreateJobAsync(new SpeechmaticsCreateJobRequestDto{JobConfig = jobConfigDto}, createTranscriptionDto, cancellationToken);
+        var transcriptionJobId = await CreateTranscriptionJobAsync(command.RecordContent, command.RecordName, cancellationToken).ConfigureAwait(false);
             
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync(new List<PhoneOrderRecord>
         {
-            new() { SessionId = Guid.NewGuid().ToString(), Restaurant = recordInfo.Restaurant, TranscriptionText = transcription, Url = fileUrl, TranscriptionJobId = transcriptionJobId.Result }
+            new() { SessionId = Guid.NewGuid().ToString(), Restaurant = recordInfo.Restaurant, TranscriptionText = transcription, Url = fileUrl, TranscriptionJobId = transcriptionJobId }
         }, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         if (!string.IsNullOrEmpty(recordInfo.WorkWeChatRobotUrl))
@@ -267,5 +249,28 @@ public partial class PhoneOrderService
         var data = await _phoneOrderDataProvider.AddPhoneOrderConversationsAsync(phoneOrderConversations, true, cancellationToken).ConfigureAwait(false);
 
         return new TranscriptionCallbackResponse { Data = _mapper.Map<List<PhoneOrderConversationDto>>(data) };
+    }
+    
+    private async Task<string> CreateTranscriptionJobAsync(byte[] data, string fileName, CancellationToken cancellationToken)
+    {
+        var createTranscriptionDto = new SpeechmaticsCreateTranscriptionDto(){Data = data, FileName = fileName};
+        
+        var jobConfigDto = new SpeechmaticsJobConfigDto
+        {
+            Type = JobType.Transcription,
+            TranscriptionConfig = new SpeechmaticsTranscriptionConfigDto
+            {
+                Language = LanguageType.Auto,
+                Diarization = DiarizationType.Speaker,
+                OperatingPoint = OperatingPointType.Enhanced
+            },
+            NotificationConfig = new SpeechmaticsNotificationConfigDto
+            {
+                AuthHeaders = _transcriptionCallbackSetting.AuthHeaders,
+                Contents = [JobType.Transcription.ToString()],
+                Url = _transcriptionCallbackSetting.Url
+            }
+        };
+        return await _speechmaticsClient.CreateJobAsync(new SpeechmaticsCreateJobRequestDto{JobConfig = jobConfigDto}, createTranscriptionDto, cancellationToken).ConfigureAwait(false);
     }
 }

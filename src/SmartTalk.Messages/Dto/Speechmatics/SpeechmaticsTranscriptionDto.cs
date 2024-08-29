@@ -1,5 +1,5 @@
 using Newtonsoft.Json;
-using SmartTalk.Core.Utils;
+using SmartTalk.Messages.Converters;
 using SmartTalk.Messages.Enums.Speechmatics;
 
 namespace SmartTalk.Messages.Dto.Speechmatics;

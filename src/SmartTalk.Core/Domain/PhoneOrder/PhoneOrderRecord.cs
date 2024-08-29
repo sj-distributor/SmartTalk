@@ -34,7 +34,7 @@ public class PhoneOrderRecord : IEntity, IHasCreatedFields
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
     
-    [Column("transcriptionjob_id")]
+    [Column("transcription_job_id")]
     public string TranscriptionJobId { get; set; }
     
     [NotMapped]
