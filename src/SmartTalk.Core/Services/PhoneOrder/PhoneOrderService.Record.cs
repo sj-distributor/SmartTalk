@@ -4,6 +4,7 @@ using SmartTalk.Core.Extensions;
 using SmartTalk.Messages.Enums.STT;
 using SmartTalk.Messages.Dto.WeChat;
 using System.Text.RegularExpressions;
+using Microsoft.IdentityModel.Tokens;
 using SmartTalk.Messages.Enums.WeChat;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Messages.Dto.PhoneOrder;
@@ -196,33 +197,32 @@ public partial class PhoneOrderService
     public async Task<TranscriptionCallbackResponse> TranscriptionCallbackAsync(TranscriptionCallbackCommand command, CancellationToken cancellationToken)
     {
         var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByTranscriptionJobIdAsync(command.Transcription.Job.Id, cancellationToken).ConfigureAwait(false);
+
+        var result = command.Transcription.Results;
         
-        var alternatives = command.Transcription.Results.FirstOrDefault()!.Alternatives;
+        if (result.IsNullOrEmpty())
+        {
+            throw new Exception("Results not exist");
+        }
+        var alternatives = result.FirstOrDefault().Alternatives;
 
-        var phoneOrderConversations = new List<PhoneOrderConversation>();
-
+        if (alternatives.IsNullOrEmpty())
+        {
+            throw new Exception("Alternatives not exist");
+        }
+        
+        var order = 0;
         var isQuestion = true;
-        var currentSpeaker = (string)null;
         var answer = new StringBuilder();
         var question = new StringBuilder();
-        var order = 0;
+        var currentSpeaker = (string) null;
+        var phoneOrderConversations = new List<PhoneOrderConversation>();
 
         foreach (var alternative in alternatives)
         {
             if (currentSpeaker != null && !alternative.Speaker.Equals(currentSpeaker))
             {
-                if (question.Length > 0 && answer.Length > 0 && !isQuestion)
-                {
-                    phoneOrderConversations.Add(new PhoneOrderConversation
-                    {
-                        Answer = answer.ToString(),
-                        Question = question.ToString(),
-                        RecordId = record.Id,
-                        Order = order++
-                    });
-                    question.Clear();
-                    answer.Clear();
-                }
+                AddConversationList(phoneOrderConversations, question, answer, record.Id, order++);
                 isQuestion = !isQuestion;
             }
             if (isQuestion)
@@ -235,17 +235,8 @@ public partial class PhoneOrderService
             }
             currentSpeaker = alternative.Speaker;
         }
-
-        if (question.Length > 0 || answer.Length > 0)
-        {
-            phoneOrderConversations.Add(new PhoneOrderConversation
-            {
-                Answer = answer.ToString(),
-                Question = question.ToString(),
-                RecordId = record.Id,
-                Order = order
-            });
-        }
+        AddConversationList(phoneOrderConversations, question, answer, record.Id, order);
+        
         var data = await _phoneOrderDataProvider.AddPhoneOrderConversationsAsync(phoneOrderConversations, true, cancellationToken).ConfigureAwait(false);
 
         return new TranscriptionCallbackResponse { Data = _mapper.Map<List<PhoneOrderConversationDto>>(data) };
@@ -257,20 +248,35 @@ public partial class PhoneOrderService
         
         var jobConfigDto = new SpeechmaticsJobConfigDto
         {
-            Type = JobType.Transcription,
+            Type = SpeechmaticsJobType.Transcription,
             TranscriptionConfig = new SpeechmaticsTranscriptionConfigDto
             {
-                Language = LanguageType.Auto,
-                Diarization = DiarizationType.Speaker,
-                OperatingPoint = OperatingPointType.Enhanced
+                Language = SpeechmaticsLanguageType.Auto,
+                Diarization = SpeechmaticsDiarizationType.Speaker,
+                OperatingPoint = SpeechmaticsOperatingPointType.Enhanced
             },
             NotificationConfig = new SpeechmaticsNotificationConfigDto
             {
                 AuthHeaders = _transcriptionCallbackSetting.AuthHeaders,
-                Contents = [JobType.Transcription.ToString()],
+                Contents = [SpeechmaticsJobType.Transcription.ToString()],
                 Url = _transcriptionCallbackSetting.Url
             }
         };
         return await _speechmaticsClient.CreateJobAsync(new SpeechmaticsCreateJobRequestDto{JobConfig = jobConfigDto}, createTranscriptionDto, cancellationToken).ConfigureAwait(false);
+    }
+    
+    private void AddConversationList(List<PhoneOrderConversation> conversations, StringBuilder question, StringBuilder answer, int recordId, int order)
+    {
+        if (question.Length <= 0 || answer.Length <= 0) return;
+        conversations.Add(new PhoneOrderConversation
+        {
+            Answer = answer.ToString(),
+            Question = question.ToString(),
+            RecordId = recordId,
+            Order = order
+        });
+
+        question.Clear();
+        answer.Clear();
     }
 }

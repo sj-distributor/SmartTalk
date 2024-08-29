@@ -77,7 +77,7 @@ public class PhoneOrderController : ControllerBase
     {
         var transcription = jObject.ToObject<SpeechmaticsGetTranscriptionResponseDto>();
         
-        var response = await _mediator.SendAsync<TranscriptionCallbackCommand, TranscriptionCallbackResponse>(new TranscriptionCallbackCommand{Transcription = transcription});
+        var response = await _mediator.SendAsync<TranscriptionCallbackCommand, TranscriptionCallbackResponse>(new TranscriptionCallbackCommand { Transcription = transcription });
         
         return Ok(response);
     }

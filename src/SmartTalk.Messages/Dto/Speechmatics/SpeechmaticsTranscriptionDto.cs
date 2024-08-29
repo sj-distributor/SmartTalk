@@ -19,16 +19,16 @@ public class SpeechmaticsTranscriptionDto
 public class SpeechmaticsTranscriptionConfigDto
 {
     [JsonProperty("operating_point")]
-    [JsonConverter(typeof(LowerFirstLetterEnumConverter), typeof(OperatingPointType))]
-    public OperatingPointType OperatingPoint { get; set; }
+    [JsonConverter(typeof(LowerFirstLetterEnumConverter), typeof(SpeechmaticsOperatingPointType))]
+    public SpeechmaticsOperatingPointType OperatingPoint { get; set; }
     
     [JsonProperty("language")]
-    [JsonConverter(typeof(LowerFirstLetterEnumConverter), typeof(LanguageType))]
-    public LanguageType Language { get; set; }
+    [JsonConverter(typeof(LowerFirstLetterEnumConverter), typeof(SpeechmaticsLanguageType))]
+    public SpeechmaticsLanguageType Language { get; set; }
     
     [JsonProperty("diarization")]
-    [JsonConverter(typeof(LowerFirstLetterEnumConverter), typeof(DiarizationType))]
-    public DiarizationType Diarization { get; set; }
+    [JsonConverter(typeof(LowerFirstLetterEnumConverter), typeof(SpeechmaticsDiarizationType))]
+    public SpeechmaticsDiarizationType Diarization { get; set; }
 }
 
 public class SpeechmaticsTranslationConfigDto

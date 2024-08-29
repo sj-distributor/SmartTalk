@@ -1,6 +1,6 @@
 namespace SmartTalk.Messages.Enums.Speechmatics;
 
-public enum LanguageType
+public enum SpeechmaticsLanguageType
 {
     Cmn,
     Yue,

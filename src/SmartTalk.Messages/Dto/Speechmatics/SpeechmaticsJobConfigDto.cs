@@ -7,8 +7,8 @@ namespace SmartTalk.Messages.Dto.Speechmatics;
 public class SpeechmaticsJobConfigDto
 {
     [JsonProperty("type")]
-    [JsonConverter(typeof(LowerFirstLetterEnumConverter), typeof(JobType))]
-    public JobType Type { get; set; } = JobType.Transcription;
+    [JsonConverter(typeof(LowerFirstLetterEnumConverter), typeof(SpeechmaticsJobType))]
+    public SpeechmaticsJobType Type { get; set; } = SpeechmaticsJobType.Transcription;
     
     [JsonProperty("transcription_config", NullValueHandling = NullValueHandling.Ignore)]
     public SpeechmaticsTranscriptionConfigDto? TranscriptionConfig { get; set; }
