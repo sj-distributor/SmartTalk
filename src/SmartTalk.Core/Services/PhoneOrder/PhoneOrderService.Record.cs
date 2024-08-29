@@ -90,7 +90,7 @@ public partial class PhoneOrderService
                 Content = new CompletionsStringContent("你是一款高度理解语言的智能助手，专门用于识别和处理电话订单。\n" +
                                                        "你需要根据电话录音的内容，判断客人通话中需要今天内出单给厨房配餐的菜单中的菜品名和数量以及单价\n" +
                                                        "注意用json的格式返回:规则: [{\"food_name\":\"菜品名\",\"quantity\":1,\"price\":0}]"+
-                                                       "具体有以下规则:\n1.对话中有出现过菜品名、菜品价格、菜品数量等词语\n2.如果对话中没有出现菜品价格和菜品数量，则菜品价格为0菜品数量为1\n3.禁止将总价赋予某个菜品，总价一般是最后的价格\n4.严格按着规定格式返回\n5.不要提取重复的菜名或者相识的菜品\n6.提取出来的菜名翻译成中文\n" +
+                                                       "具体有以下规则:\n1.对话中有出现过菜品名、菜品价格、菜品数量等词语\n2.如果对话中没有出现菜品价格和菜品数量，则菜品价格为0菜品数量为1\n3.禁止将总价赋予某个菜品，总价一般是最后的价格\n4.严格按着规定格式返回，不要添加```json```\n5.不要提取重复的菜名或者相识的菜品\n6.提取出来的菜名翻译成中文\n" +
                                                        "- 样本与输出：\n" +
                                                        "input:你好 你好 我想要一份松花鱼 红烧松花鱼还是糖醋松花鱼 要红烧松花鱼 好还有需要的吗 上海青有吗 有上海青 多少钱 27 好再来两份小炒肉 青椒小炒肉还是黄牛小炒肉 青椒小炒肉 好359 大概要多少 三十五分钟 还要一个六块的香肠 好.output:[{\"food_name\":\"红烧松花鱼\",\"quantity\":1,\"price\":0},{\"food_name\":\"青椒小炒肉\",\"quantity\":2,\"price\":0},{\"food_name\":\"上海青\",\"quantity\":1,\"price\":27},{\"food_name\":\"香肠\",\"quantity\":1,\"price\":6}]\n" +
                                                        "input:你好我想要一份扬州炒饭 好的 它里面有什么 有火腿、香菇等 好的.output:[(\"food_name\":\"扬州炒饭\",\"quantity\":1,\"price\":0)]\n" +
@@ -110,8 +110,7 @@ public partial class PhoneOrderService
             {
                 Content = m.Content,
                 Role = m.Role.ToString().ToLower()
-            }).ToList(),
-            ResponseFormat = new CompletionResponseFormatDto{ Type = "json_object" }
+            }).ToList()
         }, cancellationToken).ConfigureAwait(false);
 
         Log.Information("Transcription: {transcription},\n Menu result: {result}", transcription, gptResponse.Data.Response);
