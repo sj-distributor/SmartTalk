@@ -5,7 +5,6 @@ create table if not exists `phone_order_record`
     `restaurant` int not null,
     `tips` varchar(255) null,
     `url` varchar(255) not null,
-    `transcription_job_id` varchar(255) not null,
     `transcription_text` text not null,
     `created_date` datetime(3) not null
 ) charset = utf8mb4;
