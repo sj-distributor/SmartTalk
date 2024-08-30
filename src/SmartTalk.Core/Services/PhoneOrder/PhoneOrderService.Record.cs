@@ -210,7 +210,6 @@ public partial class PhoneOrderService
         {
             throw new Exception("Alternatives not exist");
         }
-        
         var order = 0;
         var isQuestion = true;
         var answer = new StringBuilder();
