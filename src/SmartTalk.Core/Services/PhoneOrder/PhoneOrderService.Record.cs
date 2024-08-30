@@ -58,7 +58,6 @@ public partial class PhoneOrderService
 
         Log.Information("Phone order record transcription: " + transcription);
         
-        // todo recognize speaker
         var transcriptionJobId = await CreateTranscriptionJobAsync(command.RecordContent, command.RecordName, cancellationToken).ConfigureAwait(false);
             
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync(new List<PhoneOrderRecord>
@@ -196,20 +195,18 @@ public partial class PhoneOrderService
 
     public async Task<TranscriptionCallbackResponse> TranscriptionCallbackAsync(TranscriptionCallbackCommand command, CancellationToken cancellationToken)
     {
-        var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByTranscriptionJobIdAsync(command.Transcription.Job.Id, cancellationToken).ConfigureAwait(false);
-
-        var result = command.Transcription.Results;
-        
-        if (result.IsNullOrEmpty())
+        if (command.Transcription.Results.IsNullOrEmpty())
         {
             throw new Exception("Results not exist");
         }
-        var alternatives = result.FirstOrDefault().Alternatives;
+        var alternatives = command.Transcription.Results.FirstOrDefault().Alternatives;
 
         if (alternatives.IsNullOrEmpty())
         {
             throw new Exception("Alternatives not exist");
         }
+        var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByTranscriptionJobIdAsync(command.Transcription.Job.Id, cancellationToken).ConfigureAwait(false);
+        
         var order = 0;
         var isQuestion = true;
         var answer = new StringBuilder();
@@ -243,7 +240,7 @@ public partial class PhoneOrderService
     
     private async Task<string> CreateTranscriptionJobAsync(byte[] data, string fileName, CancellationToken cancellationToken)
     {
-        var createTranscriptionDto = new SpeechmaticsCreateTranscriptionDto(){Data = data, FileName = fileName};
+        var createTranscriptionDto = new SpeechmaticsCreateTranscriptionDto { Data = data, FileName = fileName };
         
         var jobConfigDto = new SpeechmaticsJobConfigDto
         {
@@ -261,7 +258,7 @@ public partial class PhoneOrderService
                 Url = _transcriptionCallbackSetting.Url
             }
         };
-        return await _speechmaticsClient.CreateJobAsync(new SpeechmaticsCreateJobRequestDto{JobConfig = jobConfigDto}, createTranscriptionDto, cancellationToken).ConfigureAwait(false);
+        return await _speechmaticsClient.CreateJobAsync(new SpeechmaticsCreateJobRequestDto { JobConfig = jobConfigDto }, createTranscriptionDto, cancellationToken).ConfigureAwait(false);
     }
     
     private void AddConversationList(List<PhoneOrderConversation> conversations, StringBuilder question, StringBuilder answer, int recordId, int order)
