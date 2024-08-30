@@ -67,20 +67,20 @@ public partial class PhoneOrderService
         
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync(orderRecord, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        _backgroundJobClient.Enqueue(() => ExtractAiOrderInformationAsync(transcription, orderRecord[0].Id, cancellationToken));
+        _backgroundJobClient.Enqueue(() => ExtractAiOrderInformationAsync(transcription, orderRecord[0], cancellationToken));
         
         if (!string.IsNullOrEmpty(recordInfo.WorkWeChatRobotUrl))
             await SendWorkWeChatRobotNotifyAsync(command.RecordContent, recordInfo, transcription, cancellationToken).ConfigureAwait(false);
     }
     
-    public async Task ExtractAiOrderInformationAsync(string transcription, int recordId, CancellationToken cancellationToken)
+    public async Task ExtractAiOrderInformationAsync(string transcription, PhoneOrderRecord record, CancellationToken cancellationToken)
     {
         if (!await DecideWhetherPlaceAnOrderAsync(transcription, cancellationToken).ConfigureAwait(false)) return;
         
-        await ExtractMenuAsync(transcription, recordId, cancellationToken).ConfigureAwait(false);
+        await ExtractPhoneOrderAiMenuAsync(transcription, record, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task ExtractMenuAsync(string transcription, int recordId, CancellationToken cancellationToken)
+    public async Task ExtractPhoneOrderAiMenuAsync(string transcription, PhoneOrderRecord record, CancellationToken cancellationToken)
     {
         var messages = new List<CompletionsRequestMessageDto>
         {
@@ -94,12 +94,14 @@ public partial class PhoneOrderService
                                                        "- 样本与输出：\n" +
                                                        "input:你好 你好 我想要一份松花鱼 红烧松花鱼还是糖醋松花鱼 要红烧松花鱼 好还有需要的吗 上海青有吗 有上海青 多少钱 27 好再来两份小炒肉 青椒小炒肉还是黄牛小炒肉 青椒小炒肉 好359 大概要多少 三十五分钟 还要一个六块的香肠 好.output:[{\"food_name\":\"红烧松花鱼\",\"quantity\":1,\"price\":0},{\"food_name\":\"青椒小炒肉\",\"quantity\":2,\"price\":0},{\"food_name\":\"上海青\",\"quantity\":1,\"price\":27},{\"food_name\":\"香肠\",\"quantity\":1,\"price\":6}]\n" +
                                                        "input:你好我想要一份扬州炒饭 好的 它里面有什么 有火腿、香菇等 好的.output:[(\"food_name\":\"扬州炒饭\",\"quantity\":1,\"price\":0)]\n" +
-                                                       "input:你好要一份海鲜烩饭 好的 海鲜烩饭中有什么海鲜 有虾仁,鲍鱼 不好意思我对这个两个过敏，不要了 好的，有其他需要吗 没有了.output:null")
+                                                       "input:你好要一份海鲜烩饭 好的 海鲜烩饭中有什么海鲜 有虾仁,鲍鱼 不好意思我对这个两个过敏，不要了 好的，有其他需要吗 没有了.output:null\n" +
+                                                       "input:你好,您好,我只是想知道如果我可以下单 可以,您的电话号码是什么? 559-765-6199 好的,您的下单是什么? 我可以来两个康康鸡丸特写吗? 好的,您想要什么? 它是有黄米的,对吗? 您想要黄米,没问题 您想要辣的味增汤吗? 辣的和酸辣的 是的,这个 好的,十分钟 好的,再见.output:[{\"food_name\":\"康康鸡丸特写\",\"quantity\":2,\"price\":0},{\"food_name\":\"味增汤\",\"quantity\":1,\"price\":0}]\n" +
+                                                       "input:可以幫我點餐嗎? 310-826-9668 點什麼? 午餐特別,蒙古牛肉 好的 午餐特別,辣椒魚 好的 午餐特別,蝦肉配蘿蔔醬 好的 一個普通的蒙古牛肉 一個普通的蒙古牛肉? 是的 好的 一個六塊的香腸 好的 這樣就夠了嗎? 多少錢? 總共是九十多塊 我們會花20分鐘 是的 我們可以點兩碗甜酸湯和一碗玉米湯嗎? 好的 謝謝 再見.output:[{\"food_name\":\"蒙古牛肉\",\"quantity\":1,\"price\":0},{\"food_name\":\"辣椒魚\",\"quantity\":1,\"price\":0},{\"food_name\":\"蝦肉配蘿蔔醬\",\"quantity\":1,\"price\":0},{\"food_name\":\"香腸\",\"quantity\":1,\"price\":6},{\"food_name\":\"甜酸湯\",\"quantity\":2,\"price\":0},{\"food_name\":\"玉米湯\",\"quantity\":1,\"price\":0},]")
             },
             new ()
             {
                 Role = "user",
-                Content = new CompletionsStringContent($" minutes:\n\"{transcription}\"")
+                Content = new CompletionsStringContent($"input:\n\"{transcription}\",output:")
             }
         };
 
@@ -121,7 +123,7 @@ public partial class PhoneOrderService
 
         dishes = dishes.Select(x =>
         {
-            x.RecordId = recordId;
+            x.RecordId = record.Id;
             return x;
         }).ToList();
         
@@ -139,13 +141,13 @@ public partial class PhoneOrderService
                                                        "你需要根据电话录音的内容，判断客人通话的目的是否为【叫外卖】、【预订餐】等需要今天内出单给厨房配餐\n" +
                                                        "注意返回格式: true or false\n"+
                                                        "具体有以下特征：\n正面特征:\n1.对话中有出现过菜品名、菜品价格、菜品数量、电话号码、总价格等词语\n2.有提及需要多久\n反面特征:\n1.没有出现菜品名、菜品价格、菜品数量、电话号码、总价格等词语\n2.出现预定、询问订单的情况" +
-                                                       "反面例子：\"你好 你好 星期五可以预定吗 可以 你需要什么 有什么套餐吗 有宴会套餐a1488和宴会套餐b1688 我需要宴会套餐a 好的 你的手机号码 xxx-xxx-xxx 好的.\" false;\n" +
-                                                       "正面例子：\"你好 你好 我想要一份松花鱼 好还需要什么 上海青有吗 有 好再来两份小炒肉 好的 大概什么时候好 二十分钟之后 好.\"true。")
+                                                       "反面例子：input:\"你好 你好 星期五可以预定吗 可以 你需要什么 有什么套餐吗 有宴会套餐a1488和宴会套餐b1688 我需要宴会套餐a 好的 你的手机号码 xxx-xxx-xxx 好的.\"output:false\n" +
+                                                       "正面例子：input:\"你好 你好 我想要一份松花鱼 好还需要什么 上海青有吗 有 好再来两份小炒肉 好的 大概什么时候好 二十分钟之后 好.\"output:true。")
             },
             new ()
             {
                 Role = "user",
-                Content = new CompletionsStringContent($"article:\n\"{transcription}\"\nresult:")
+                Content = new CompletionsStringContent($"input:\n\"{transcription}\",output:")
             }
         };
 
