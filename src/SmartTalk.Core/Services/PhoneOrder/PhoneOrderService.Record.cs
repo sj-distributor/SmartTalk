@@ -48,7 +48,7 @@ public partial class PhoneOrderService
         Log.Information("Phone order record information: {@recordInfo}", recordInfo);
         
         var transcription = await _speechToTextService.SpeechToTextAsync(
-            command.RecordContent, TranscriptionLanguage.Chinese, TranscriptionFileType.Wav, TranscriptionResponseFormat.Text, cancellationToken).ConfigureAwait(false);
+            command.RecordContent, responseFormat: TranscriptionResponseFormat.Text, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         Log.Information("Phone order record transcription: " + transcription);
         
