@@ -16,7 +16,7 @@ namespace SmartTalk.Core.Services.STT;
 public interface ISpeechToTextService : IScopedDependency
 {
     Task<string> SpeechToTextAsync(
-        byte[] file, TranscriptionLanguage? language, TranscriptionFileType fileType = TranscriptionFileType.Wav,
+        byte[] file, TranscriptionLanguage? language = null, TranscriptionFileType fileType = TranscriptionFileType.Wav,
         TranscriptionResponseFormat responseFormat = TranscriptionResponseFormat.Vtt, CancellationToken cancellationToken = default);
 }
 
@@ -36,7 +36,7 @@ public class SpeechToTextService : ISpeechToTextService
     }
 
     public async Task<string> SpeechToTextAsync(
-        byte[] file, TranscriptionLanguage? language, TranscriptionFileType fileType = TranscriptionFileType.Wav,
+        byte[] file, TranscriptionLanguage? language = null, TranscriptionFileType fileType = TranscriptionFileType.Wav,
         TranscriptionResponseFormat responseFormat = TranscriptionResponseFormat.Vtt, CancellationToken cancellationToken = default)
     {
         if (file == null) return null;
