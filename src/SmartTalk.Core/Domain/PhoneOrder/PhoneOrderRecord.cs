@@ -17,7 +17,7 @@ public class PhoneOrderRecord : IEntity, IHasCreatedFields
     public string SessionId { get; set; }
 
     [Column("status")]
-    public PhoneOrderRecordStatus Status { get; set; }
+    public PhoneOrderRecordStatus Status { get; set; } = PhoneOrderRecordStatus.Recieved;
     
     [Column("restaurant")]
     public PhoneOrderRestaurant Restaurant { get; set; }
