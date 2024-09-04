@@ -114,6 +114,44 @@ public partial class TestBase
         ShouldRunDbUpDatabases[_databaseName] = false;
     }
     
+    private void FlushRedisDatabase()
+    {
+        try
+        {
+            if (!RedisPool.TryGetValue(_redisDatabaseIndex, out var redis)) return;
+            
+            foreach (var endpoint in redis.GetEndPoints())
+            {
+                var server = redis.GetServer(endpoint);
+                    
+                server.FlushDatabase(_redisDatabaseIndex);    
+            }
+        }
+        catch
+        {
+            // ignored
+        }
+    }
+    
+    private void FlushRedisStackDatabase()
+    {
+        try
+        {
+            if (!RedisStackPool.TryGetValue(_redisDatabaseIndex, out var redis)) return;
+            
+            foreach (var endpoint in redis.GetEndPoints())
+            {
+                var server = redis.GetServer(endpoint);
+                    
+                server.FlushDatabase(_redisDatabaseIndex);    
+            }
+        }
+        catch
+        {
+            // ignored
+        }
+    }
+    
     private void ClearDatabaseRecord()
     {
         try
@@ -159,6 +197,8 @@ public partial class TestBase
     public void Dispose()
     {
         ClearDatabaseRecord();
+        FlushRedisDatabase();
+        FlushRedisStackDatabase();
     }
 
     public Task DisposeAsync()
