@@ -8,6 +8,8 @@ public class PhoneOrderRecordDto
     public int Id { get; set; }
 
     public string SessionId { get; set; }
+    
+    public PhoneOrderRecordStatus Status { get; set; }
 
     public PhoneOrderRestaurant Restaurant { get; set; }
     
