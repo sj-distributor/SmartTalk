@@ -1,6 +1,6 @@
 namespace SmartTalk.Messages.Enums.Speechmatics;
 
-public enum SpeechmaticsDiarizationType
+public enum SpeechMaticsDiarizationType
 {
     Speaker,
     Channel

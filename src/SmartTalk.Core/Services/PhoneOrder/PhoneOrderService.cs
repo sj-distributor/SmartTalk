@@ -22,7 +22,7 @@ public partial class PhoneOrderService : IPhoneOrderService
     private readonly IFfmpegService _ffmpegService;
     private readonly PhoneOrderSetting _phoneOrderSetting;
     private readonly IAttachmentService _attachmentService;
-    private readonly SpeechmaticsClient _speechmaticsClient;
+    private readonly SpeechMaticsClient _speechMaticsClient;
     private readonly ISpeechToTextService _speechToTextService;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
@@ -36,7 +36,7 @@ public partial class PhoneOrderService : IPhoneOrderService
         PhoneOrderSetting phoneOrderSetting,
         IAttachmentService attachmentService,
         ISpeechToTextService speechToTextService,
-        SpeechmaticsClient speechmaticsClient,
+        SpeechMaticsClient speechMaticsClient,
         IPhoneOrderDataProvider phoneOrderDataProvider,
         ISmartTalkBackgroundJobClient backgroundJobClient,
         TranscriptionCallbackSetting transcriptionCallbackSetting)
@@ -48,7 +48,7 @@ public partial class PhoneOrderService : IPhoneOrderService
         _phoneOrderSetting = phoneOrderSetting;
         _attachmentService = attachmentService;
         _speechToTextService = speechToTextService;
-        _speechmaticsClient = speechmaticsClient;
+        _speechMaticsClient = speechMaticsClient;
         _backgroundJobClient = backgroundJobClient;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _transcriptionCallbackSetting = transcriptionCallbackSetting;

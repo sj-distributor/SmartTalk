@@ -72,12 +72,12 @@ public class PhoneOrderController : ControllerBase
     }
 
     [HttpPost("transcription/callback")]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(TranscriptionCallbackResponse))]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(TranscriptionCallbackHandledResponse))]
     public async Task<IActionResult> TranscriptionCallback(JObject jObject)
     {
-        var transcription = jObject.ToObject<SpeechmaticsGetTranscriptionResponseDto>();
+        var transcription = jObject.ToObject<SpeechMaticsGetTranscriptionResponseDto>();
         
-        var response = await _mediator.SendAsync<TranscriptionCallbackCommand, TranscriptionCallbackResponse>(new TranscriptionCallbackCommand { Transcription = transcription });
+        var response = await _mediator.SendAsync<HandleTranscriptionCallbackCommand, TranscriptionCallbackHandledResponse>(new HandleTranscriptionCallbackCommand { Transcription = transcription });
         
         return Ok(response);
     }

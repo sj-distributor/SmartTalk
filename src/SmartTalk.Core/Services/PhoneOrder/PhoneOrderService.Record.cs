@@ -1,10 +1,8 @@
-using System.Text;
 using Serilog;
 using SmartTalk.Core.Extensions;
 using SmartTalk.Messages.Enums.STT;
 using SmartTalk.Messages.Dto.WeChat;
 using System.Text.RegularExpressions;
-using Microsoft.IdentityModel.Tokens;
 using SmartTalk.Messages.Enums.WeChat;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Messages.Dto.PhoneOrder;
@@ -193,26 +191,26 @@ public partial class PhoneOrderService
     
     private async Task<string> CreateTranscriptionJobAsync(byte[] data, string fileName, CancellationToken cancellationToken)
     {
-        var createTranscriptionDto = new SpeechmaticsCreateTranscriptionDto { Data = data, FileName = fileName };
+        var createTranscriptionDto = new SpeechMaticsCreateTranscriptionDto { Data = data, FileName = fileName };
         
-        var jobConfigDto = new SpeechmaticsJobConfigDto
+        var jobConfigDto = new SpeechMaticsJobConfigDto
         {
-            Type = SpeechmaticsJobType.Transcription,
-            TranscriptionConfig = new SpeechmaticsTranscriptionConfigDto
+            Type = SpeechMaticsJobType.Transcription,
+            TranscriptionConfig = new SpeechMaticsTranscriptionConfigDto
             {
-                Language = SpeechmaticsLanguageType.Auto,
-                Diarization = SpeechmaticsDiarizationType.Speaker,
-                OperatingPoint = SpeechmaticsOperatingPointType.Enhanced
+                Language = SpeechMaticsLanguageType.Auto,
+                Diarization = SpeechMaticsDiarizationType.Speaker,
+                OperatingPoint = SpeechMaticsOperatingPointType.Enhanced
             },
-            NotificationConfig = new SpeechmaticsNotificationConfigDto
+            NotificationConfig = new SpeechMaticsNotificationConfigDto
             {
                 AuthHeaders = _transcriptionCallbackSetting.AuthHeaders,
-                Contents = [SpeechmaticsJobType.Transcription.ToString()],
+                Contents = [SpeechMaticsJobType.Transcription.ToString()],
                 Url = _transcriptionCallbackSetting.Url
             }
         };
         
-        return await _speechmaticsClient.CreateJobAsync(new SpeechmaticsCreateJobRequestDto { JobConfig = jobConfigDto }, createTranscriptionDto, cancellationToken).ConfigureAwait(false);
+        return await _speechMaticsClient.CreateJobAsync(new SpeechMaticsCreateJobRequestDto { JobConfig = jobConfigDto }, createTranscriptionDto, cancellationToken).ConfigureAwait(false);
         
     }
 }

@@ -2,7 +2,7 @@ using Newtonsoft.Json;
 
 namespace SmartTalk.Messages.Dto.Speechmatics;
 
-public class SpeechmaticsJobDetailDto
+public class SpeechMaticsJobDetailDto
 {
     [JsonProperty("created_at")]
     public DateTime CreatedAt { get; set; }
@@ -20,25 +20,25 @@ public class SpeechmaticsJobDetailDto
     public int? Duration { get; set; }
     
     [JsonProperty("config")]
-    public SpeechmaticsJobConfigDto? Config { get; set; }
+    public SpeechMaticsJobConfigDto? Config { get; set; }
 }
 
-public class SpeechmaticsGetAllJobsResponseDto
+public class SpeechMaticsGetAllJobsResponseDto
 {
     [JsonProperty("jobs")]
-    public List<SpeechmaticsJobDetailDto> JobDetails { get; set; }
+    public List<SpeechMaticsJobDetailDto> JobDetails { get; set; }
 }
 
-public class SpeechmaticsGetJobDetailResponseDto : SpeechmaticsJobDetailResponseDto
+public class SpeechMaticsGetJobDetailResponseDto : SpeechMaticsJobDetailResponseDto
 {
 }
 
-public class SpeechmaticsDeleteJobResponseDto : SpeechmaticsJobDetailResponseDto
+public class SpeechMaticsDeleteJobResponseDto : SpeechMaticsJobDetailResponseDto
 {
 }
 
-public class SpeechmaticsJobDetailResponseDto
+public class SpeechMaticsJobDetailResponseDto
 {
     [JsonProperty("job")]
-    public SpeechmaticsJobDetailDto JobDetail { get; set; }
+    public SpeechMaticsJobDetailDto JobDetail { get; set; }
 }

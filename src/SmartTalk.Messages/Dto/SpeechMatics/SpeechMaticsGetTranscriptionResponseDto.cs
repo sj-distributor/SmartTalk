@@ -2,22 +2,22 @@ using Newtonsoft.Json;
 
 namespace SmartTalk.Messages.Dto.Speechmatics;
 
-public class SpeechmaticsGetTranscriptionResponseDto
+public class SpeechMaticsGetTranscriptionResponseDto
 {
     [JsonProperty("format")]
     public string Format { get; set; }
 
     [JsonProperty("job")]
-    public SpeechmaticsJobInfoDto Job { get; set; }
+    public SpeechMaticsJobInfoDto Job { get; set; }
 
     [JsonProperty("metadata")]
-    public SpeechmaticsMetadataDto Metadata { get; set; }
+    public SpeechMaticsMetadataDto Metadata { get; set; }
 
     [JsonProperty("results")]
-    public List<SpeechmaticsResultDto> Results { get; set; }
+    public List<SpeechMaticsResultDto> Results { get; set; }
 }
 
-public class SpeechmaticsJobInfoDto
+public class SpeechMaticsJobInfoDto
 {
     [JsonProperty("created_at")]
     public DateTime CreatedAt { get; set; }
@@ -32,7 +32,7 @@ public class SpeechmaticsJobInfoDto
     public string Id { get; set; }
 }
 
-public class SpeechmaticsMetadataDto
+public class SpeechMaticsMetadataDto
 {
     [JsonProperty("created_at")]
     public DateTime CreatedAt { get; set; }
@@ -41,7 +41,7 @@ public class SpeechmaticsMetadataDto
     public string Type { get; set; }
 }
 
-public class SpeechmaticsResultDto
+public class SpeechMaticsResultDto
 {
     [JsonProperty("channel")]
     public string Channel { get; set; }
@@ -56,10 +56,10 @@ public class SpeechmaticsResultDto
     public string Type { get; set; } 
     
     [JsonProperty("alternatives")]
-    public List<SpeechmaticsAlternativeDto> Alternatives { get; set; }
+    public List<SpeechMaticsAlternativeDto> Alternatives { get; set; }
 }
 
-public class SpeechmaticsAlternativeDto
+public class SpeechMaticsAlternativeDto
 {
     [JsonProperty("speaker")]
     public string Speaker { get; set; }

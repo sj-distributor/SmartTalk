@@ -2,7 +2,7 @@ using Newtonsoft.Json;
 
 namespace SmartTalk.Messages.Dto.Speechmatics;
 
-public class SpeechmaticsNotificationConfigDto
+public class SpeechMaticsNotificationConfigDto
 {
     [JsonProperty("url")]
     public string Url { get; set; }

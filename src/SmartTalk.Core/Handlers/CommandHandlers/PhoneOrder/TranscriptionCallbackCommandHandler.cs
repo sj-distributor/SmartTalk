@@ -5,17 +5,17 @@ using SmartTalk.Messages.Commands.PhoneOrder;
 
 namespace SmartTalk.Core.Handlers.CommandHandlers.PhoneOrder;
 
-public class TranscriptionCallbackCommandHandler : ICommandHandler<TranscriptionCallbackCommand, TranscriptionCallbackResponse>
+public class TranscriptionCallbackCommandHandler : ICommandHandler<HandleTranscriptionCallbackCommand, TranscriptionCallbackHandledResponse>
 {
-    private readonly ISpeechmaticsService _speechmaticsService;
+    private readonly ISpeechMaticsService _speechMaticsService;
     
-    public TranscriptionCallbackCommandHandler(ISpeechmaticsService speechmaticsService)
+    public TranscriptionCallbackCommandHandler(ISpeechMaticsService speechMaticsService)
     {
-        _speechmaticsService = speechmaticsService;
+        _speechMaticsService = speechMaticsService;
     }
 
-    public async Task<TranscriptionCallbackResponse> Handle(IReceiveContext<TranscriptionCallbackCommand> context, CancellationToken cancellationToken)
+    public async Task<TranscriptionCallbackHandledResponse> Handle(IReceiveContext<HandleTranscriptionCallbackCommand> context, CancellationToken cancellationToken)
     {
-        return await _speechmaticsService.TranscriptionCallbackAsync(context.Message, cancellationToken).ConfigureAwait(false);
+        return await _speechMaticsService.HandleTranscriptionCallbackAsync(context.Message, cancellationToken).ConfigureAwait(false);
     }
 }

@@ -1,6 +1,6 @@
 namespace SmartTalk.Messages.Enums.Speechmatics;
 
-public enum SpeechmaticsOperatingPointType
+public enum SpeechMaticsOperatingPointType
 {
     Enhanced,
     Standard

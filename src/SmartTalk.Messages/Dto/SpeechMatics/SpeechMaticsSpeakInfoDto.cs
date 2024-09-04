@@ -1,6 +1,6 @@
 namespace SmartTalk.Messages.Dto.Speechmatics;
 
-public class SpeechmaticsSpeakInfoDto
+public class SpeechMaticsSpeakInfoDto
 {
     public double StartTime { get; set; }
     

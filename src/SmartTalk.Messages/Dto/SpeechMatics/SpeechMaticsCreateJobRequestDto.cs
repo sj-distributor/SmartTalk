@@ -2,13 +2,13 @@ using Newtonsoft.Json;
 
 namespace SmartTalk.Messages.Dto.Speechmatics;
 
-public class SpeechmaticsCreateJobRequestDto
+public class SpeechMaticsCreateJobRequestDto
 {
     [JsonProperty("config")]
-    public SpeechmaticsJobConfigDto JobConfig { get; set; }
+    public SpeechMaticsJobConfigDto JobConfig { get; set; }
 }
 
-public class SpeechmaticsCreateTranscriptionDto
+public class SpeechMaticsCreateTranscriptionDto
 {
     public byte[] Data { get; set; }
     
