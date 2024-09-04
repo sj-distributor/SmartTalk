@@ -12,7 +12,11 @@ using SmartTalk.Core.Services.AliYun;
 using SmartTalk.Core.Services.Identity;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Settings;
+using SmartTalk.Core.Settings.Caching;
+using SmartTalk.Core.Settings.VectorDb;
 using SmartTalk.IntegrationTests.Mocks;
+using SmartTalk.Messages.Enums.Caching;
+using StackExchange.Redis;
 
 namespace SmartTalk.IntegrationTests;
 
@@ -44,6 +48,7 @@ public partial class TestBase
         containerBuilder.RegisterInstance(Substitute.For<IHttpContextAccessor>()).AsImplementedInterfaces();
         containerBuilder.RegisterInstance(Substitute.For<IAliYunOssService>()).AsImplementedInterfaces();
         
+        RegisterRedis(containerBuilder);
         RegisterSmartTalkBackgroundJobClient(containerBuilder);
     }
     
@@ -64,6 +69,39 @@ public partial class TestBase
     private void RegisterSmartTalkBackgroundJobClient(ContainerBuilder containerBuilder)
     {
         containerBuilder.RegisterType<MockingBackgroundJobClient>().As<ISmartTalkBackgroundJobClient>().InstancePerLifetimeScope();
+    }
+    
+    private void RegisterRedis(ContainerBuilder builder)
+    {
+        builder.Register(cfx =>
+        {
+            if (RedisPool.ContainsKey(_redisDatabaseIndex))
+                return RedisPool[_redisDatabaseIndex];
+                
+            var redisConnectionSetting = cfx.Resolve<RedisCacheConnectionStringSetting>();
+                
+            var connString = $"{redisConnectionSetting.Value},defaultDatabase={_redisDatabaseIndex}";
+
+            var instance = ConnectionMultiplexer.Connect(connString);
+            
+            return RedisPool.GetOrAdd(_redisDatabaseIndex, instance);
+            
+        }).Keyed<ConnectionMultiplexer>(RedisServer.System).ExternallyOwned();
+        
+        builder.Register(cfx =>
+        {
+            if (RedisStackPool.ContainsKey(_redisDatabaseIndex))
+                return RedisStackPool[_redisDatabaseIndex];
+                
+            var vectorDbSettings = cfx.Resolve<VectorDbSettings>();
+                
+            var connString = $"{vectorDbSettings.ConnectionString},defaultDatabase={_redisDatabaseIndex}";
+
+            var instance = ConnectionMultiplexer.Connect(connString);
+            
+            return RedisStackPool.GetOrAdd(_redisDatabaseIndex, instance);
+            
+        }).Keyed<ConnectionMultiplexer>(RedisServer.Vector).ExternallyOwned();
     }
     
     private void RunDbUpIfRequired()

@@ -42,18 +42,18 @@ public class WiltechsAuthenticationHandler : AuthenticationHandler<WiltechsAuthe
         try
         {
             var userInfo = await _cacheManager.GetOrAddAsync(authorization, 
-                async () => await GetUserInfoAsync(authorization), CachingType.RedisCache, TimeSpan.FromDays(30)).ConfigureAwait(false);
+                async () => await GetUserInfoAsync(authorization), new RedisCachingSetting(expiry: TimeSpan.FromDays(30))).ConfigureAwait(false);
 
             if (userInfo.UserId == Guid.Empty && string.IsNullOrWhiteSpace(userInfo.UserName))
             {
-                await _cacheManager.RemoveAsync(authorization, CachingType.RedisCache).ConfigureAwait(false);
+                await _cacheManager.RemoveAsync(authorization, new RedisCachingSetting()).ConfigureAwait(false);
                 
                 return AuthenticateResult.NoResult();
             }
 
             var userAccount = await _cacheManager.GetOrAddAsync(userInfo.UserId.ToString(), async () => 
                 await _accountService.GetOrCreateUserAccountFromThirdPartyAsync(userInfo.UserId.ToString(), userInfo.UserName, UserAccountIssuer.Wiltechs, default)
-                    .ConfigureAwait(false), CachingType.RedisCache, TimeSpan.FromDays(30)).ConfigureAwait(false);
+                    .ConfigureAwait(false), new RedisCachingSetting(expiry: TimeSpan.FromDays(30))).ConfigureAwait(false);
 
             var identity = new ClaimsIdentity(new[]
             {
