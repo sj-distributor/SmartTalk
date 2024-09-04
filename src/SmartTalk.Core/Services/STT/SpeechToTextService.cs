@@ -16,8 +16,8 @@ namespace SmartTalk.Core.Services.STT;
 public interface ISpeechToTextService : IScopedDependency
 {
     Task<string> SpeechToTextAsync(
-        byte[] file, TranscriptionLanguage? language = null, TranscriptionFileType fileType = TranscriptionFileType.Wav,
-        TranscriptionResponseFormat responseFormat = TranscriptionResponseFormat.Vtt, CancellationToken cancellationToken = default);
+        byte[] file, TranscriptionLanguage? language, TranscriptionFileType fileType = TranscriptionFileType.Wav,
+        TranscriptionResponseFormat responseFormat = TranscriptionResponseFormat.Vtt, string prompt = null, CancellationToken cancellationToken = default);
 }
 
 public class SpeechToTextService : ISpeechToTextService
@@ -36,8 +36,8 @@ public class SpeechToTextService : ISpeechToTextService
     }
 
     public async Task<string> SpeechToTextAsync(
-        byte[] file, TranscriptionLanguage? language = null, TranscriptionFileType fileType = TranscriptionFileType.Wav,
-        TranscriptionResponseFormat responseFormat = TranscriptionResponseFormat.Vtt, CancellationToken cancellationToken = default)
+        byte[] file, TranscriptionLanguage? language, TranscriptionFileType fileType = TranscriptionFileType.Wav,
+        TranscriptionResponseFormat responseFormat = TranscriptionResponseFormat.Vtt, string prompt = null, CancellationToken cancellationToken = default)
     {
         if (file == null) return null;
         
@@ -49,7 +49,7 @@ public class SpeechToTextService : ISpeechToTextService
 
         foreach (var audio in splitAudios)
         {
-            var transcriptionResponse = await TranscriptionAsync(audio, language, fileType, responseFormat, cancellationToken).ConfigureAwait(false);
+            var transcriptionResponse = await TranscriptionAsync(audio, language, fileType, responseFormat, prompt, cancellationToken).ConfigureAwait(false);
             
             transcriptionResult.Append(transcriptionResponse.Text);
         }
@@ -61,7 +61,7 @@ public class SpeechToTextService : ISpeechToTextService
     
     public async Task<AudioTranscriptionResponseDto> TranscriptionAsync(
         byte[] file, TranscriptionLanguage? language, TranscriptionFileType fileType = TranscriptionFileType.Wav, 
-        TranscriptionResponseFormat responseFormat = TranscriptionResponseFormat.Vtt, CancellationToken cancellationToken = default)
+        TranscriptionResponseFormat responseFormat = TranscriptionResponseFormat.Vtt, string prompt = null, CancellationToken cancellationToken = default)
     {
         var filename = $"{Guid.NewGuid()}.{fileType.ToString().ToLower()}";
         
@@ -85,8 +85,16 @@ public class SpeechToTextService : ISpeechToTextService
         if (language.HasValue) transcriptionRequest.Language = language.Value.GetDescription();
         
         var response = await _httpClientFactory.SafelyProcessRequestAsync(nameof(SpeechToTextAsync), async () =>
-            await _openAiService.Audio.CreateTranscription(transcriptionRequest, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
-        
+            await _openAiService.Audio.CreateTranscription(new AudioCreateTranscriptionRequest
+            {
+                File = file,
+                FileName = filename,
+                Model = Models.WhisperV1,
+                ResponseFormat = fileResponseFormat,
+                Language = language?.GetDescription(),
+                Prompt = prompt
+            }, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+
         Log.Information("Transcription {FileName} response {@Response}", filename, response);
         
         return _mapper.Map<AudioTranscriptionResponseDto>(response);
