@@ -7,7 +7,6 @@ using SmartTalk.Core.Services.Identity;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.STT;
 using SmartTalk.Core.Settings.PhoneOrder;
-using SmartTalk.Core.Settings.Speechmatics;
 
 namespace SmartTalk.Core.Services.PhoneOrder;
 
@@ -37,7 +36,7 @@ public partial class PhoneOrderService : IPhoneOrderService
         PhoneOrderSetting phoneOrderSetting,
         IAttachmentService attachmentService,
         ISpeechToTextService speechToTextService,
-        SpeechmaticsClient _speechmaticsClient,
+        SpeechmaticsClient speechmaticsClient,
         IPhoneOrderDataProvider phoneOrderDataProvider,
         ISmartTalkBackgroundJobClient backgroundJobClient,
         TranscriptionCallbackSetting transcriptionCallbackSetting)
@@ -49,7 +48,7 @@ public partial class PhoneOrderService : IPhoneOrderService
         _phoneOrderSetting = phoneOrderSetting;
         _attachmentService = attachmentService;
         _speechToTextService = speechToTextService;
-        _speechmaticsClient = _speechmaticsClient;
+        _speechmaticsClient = speechmaticsClient;
         _backgroundJobClient = backgroundJobClient;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _transcriptionCallbackSetting = transcriptionCallbackSetting;

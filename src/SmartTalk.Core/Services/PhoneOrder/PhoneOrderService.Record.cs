@@ -23,8 +23,6 @@ public partial interface IPhoneOrderService
     Task<GetPhoneOrderRecordsResponse> GetPhoneOrderRecordsAsync(GetPhoneOrderRecordsRequest request, CancellationToken cancellationToken);
 
     Task ReceivePhoneOrderRecordAsync(ReceivePhoneOrderRecordCommand command, CancellationToken cancellationToken);
-
-    Task<TranscriptionCallbackResponse> TranscriptionCallbackAsync(TranscriptionCallbackCommand command, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderService
@@ -192,51 +190,6 @@ public partial class PhoneOrderService
 
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
-
-    public async Task<TranscriptionCallbackResponse> TranscriptionCallbackAsync(TranscriptionCallbackCommand command, CancellationToken cancellationToken)
-    {
-        if (command.Transcription.Results.IsNullOrEmpty())
-        {
-            throw new Exception("Results not exist");
-        }
-        var alternatives = command.Transcription.Results.FirstOrDefault().Alternatives;
-
-        if (alternatives.IsNullOrEmpty())
-        {
-            throw new Exception("Alternatives not exist");
-        }
-        var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByTranscriptionJobIdAsync(command.Transcription.Job.Id, cancellationToken).ConfigureAwait(false);
-        
-        var order = 0;
-        var isQuestion = true;
-        var answer = new StringBuilder();
-        var question = new StringBuilder();
-        var currentSpeaker = (string) null;
-        var phoneOrderConversations = new List<PhoneOrderConversation>();
-
-        foreach (var alternative in alternatives)
-        {
-            if (currentSpeaker != null && !alternative.Speaker.Equals(currentSpeaker))
-            {
-                AddConversationList(phoneOrderConversations, question, answer, record.Id, order++);
-                isQuestion = !isQuestion;
-            }
-            if (isQuestion)
-            {
-                question.Append(alternative.Content);
-            }
-            else
-            {
-                answer.Append(alternative.Content);
-            }
-            currentSpeaker = alternative.Speaker;
-        }
-        AddConversationList(phoneOrderConversations, question, answer, record.Id, order);
-        
-        var data = await _phoneOrderDataProvider.AddPhoneOrderConversationsAsync(phoneOrderConversations, true, cancellationToken).ConfigureAwait(false);
-
-        return new TranscriptionCallbackResponse { Data = _mapper.Map<List<PhoneOrderConversationDto>>(data) };
-    }
     
     private async Task<string> CreateTranscriptionJobAsync(byte[] data, string fileName, CancellationToken cancellationToken)
     {
@@ -259,20 +212,5 @@ public partial class PhoneOrderService
             }
         };
         return await _speechmaticsClient.CreateJobAsync(new SpeechmaticsCreateJobRequestDto { JobConfig = jobConfigDto }, createTranscriptionDto, cancellationToken).ConfigureAwait(false);
-    }
-    
-    private void AddConversationList(List<PhoneOrderConversation> conversations, StringBuilder question, StringBuilder answer, int recordId, int order)
-    {
-        if (question.Length <= 0 || answer.Length <= 0) return;
-        conversations.Add(new PhoneOrderConversation
-        {
-            Answer = answer.ToString(),
-            Question = question.ToString(),
-            RecordId = recordId,
-            Order = order
-        });
-
-        question.Clear();
-        answer.Clear();
     }
 }
