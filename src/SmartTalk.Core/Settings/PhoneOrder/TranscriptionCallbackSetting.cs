@@ -4,8 +4,6 @@ namespace SmartTalk.Core.Settings.PhoneOrder;
 
 public class TranscriptionCallbackSetting : IConfigurationSetting
 {
-    public TranscriptionCallbackSetting(){}
-    
     public TranscriptionCallbackSetting(IConfiguration configuration)
     {
         Url = configuration.GetValue<string>("TranscriptionCallback:Url");

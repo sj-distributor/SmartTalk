@@ -211,6 +211,8 @@ public partial class PhoneOrderService
                 Url = _transcriptionCallbackSetting.Url
             }
         };
+        
         return await _speechmaticsClient.CreateJobAsync(new SpeechmaticsCreateJobRequestDto { JobConfig = jobConfigDto }, createTranscriptionDto, cancellationToken).ConfigureAwait(false);
+        
     }
 }
