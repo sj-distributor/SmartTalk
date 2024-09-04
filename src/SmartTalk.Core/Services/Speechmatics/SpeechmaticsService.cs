@@ -74,6 +74,12 @@ public class SpeechmaticsService : ISpeechmaticsService
             }
             
             var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByTranscriptionJobIdAsync(command.Transcription.Job.Id, cancellationToken).ConfigureAwait(false);
+
+            if (record is null)
+            {
+                throw new Exception("Record not exist");
+            }
+            
             record.Status = PhoneOrderRecordStatus.Transcription;
             await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken);
         }
@@ -82,8 +88,11 @@ public class SpeechmaticsService : ISpeechmaticsService
             if (!command.Transcription.Job.Id.IsNullOrEmpty())
             {
                 var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByTranscriptionJobIdAsync(command.Transcription.Job.Id, cancellationToken).ConfigureAwait(false);
-                record.Status = PhoneOrderRecordStatus.Exception;
-                await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken);
+                if (record is not null)
+                {
+                    record.Status = PhoneOrderRecordStatus.Exception;
+                    await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken);
+                }
             }
             Log.Warning(e.Message);
         }
