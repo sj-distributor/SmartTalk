@@ -1,8 +1,7 @@
 using System.Text.Json.Serialization;
-using Smarties.Messages.DTO.RetrievalDb;
 using SmartTalk.Messages.Dto.Embedding;
 
-namespace SmartTalk.Messages.Dto.RetrievalDb.VectorDb;
+namespace SmartTalk.Messages.Dto.VectorDb;
 
 public class VectorRecordDto
 {

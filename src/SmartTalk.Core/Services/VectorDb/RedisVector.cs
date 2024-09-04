@@ -11,7 +11,7 @@ using Smarties.Core.Services.RetrievalDb.VectorDb;
 using SmartTalk.Core.Settings.VectorDb;
 using SmartTalk.Messages.Constants;
 using SmartTalk.Messages.Dto.Embedding;
-using SmartTalk.Messages.Dto.RetrievalDb.VectorDb;
+using SmartTalk.Messages.Dto.VectorDb;
 using SmartTalk.Messages.Enums.Caching;
 using StackExchange.Redis;
 

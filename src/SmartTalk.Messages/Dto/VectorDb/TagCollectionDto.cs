@@ -1,7 +1,7 @@
 using System.Collections;
 using SmartTalk.Messages.Constants;
 
-namespace Smarties.Messages.DTO.RetrievalDb;
+namespace SmartTalk.Messages.Dto.VectorDb;
 
 public class TagCollectionDto : IDictionary<string, List<string>>
 {

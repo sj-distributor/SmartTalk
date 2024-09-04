@@ -1,5 +1,5 @@
 using SmartTalk.Core.Ioc;
-using SmartTalk.Messages.Dto.RetrievalDb.VectorDb;
+using SmartTalk.Messages.Dto.VectorDb;
 
 namespace SmartTalk.Core.Services.RetrievalDb.VectorDb;
 
