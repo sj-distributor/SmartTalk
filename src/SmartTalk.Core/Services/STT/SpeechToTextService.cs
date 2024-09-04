@@ -16,7 +16,7 @@ namespace SmartTalk.Core.Services.STT;
 public interface ISpeechToTextService : IScopedDependency
 {
     Task<string> SpeechToTextAsync(
-        byte[] file, TranscriptionLanguage? language, TranscriptionFileType fileType = TranscriptionFileType.Wav,
+        byte[] file, TranscriptionLanguage? language = null, TranscriptionFileType fileType = TranscriptionFileType.Wav,
         TranscriptionResponseFormat responseFormat = TranscriptionResponseFormat.Vtt, CancellationToken cancellationToken = default);
 }
 
@@ -36,7 +36,7 @@ public class SpeechToTextService : ISpeechToTextService
     }
 
     public async Task<string> SpeechToTextAsync(
-        byte[] file, TranscriptionLanguage? language, TranscriptionFileType fileType = TranscriptionFileType.Wav,
+        byte[] file, TranscriptionLanguage? language = null, TranscriptionFileType fileType = TranscriptionFileType.Wav,
         TranscriptionResponseFormat responseFormat = TranscriptionResponseFormat.Vtt, CancellationToken cancellationToken = default)
     {
         if (file == null) return null;
@@ -73,16 +73,19 @@ public class SpeechToTextService : ISpeechToTextService
             TranscriptionResponseFormat.Json => StaticValues.AudioStatics.ResponseFormat.Json,
             TranscriptionResponseFormat.VerboseJson => StaticValues.AudioStatics.ResponseFormat.Vtt
         };
+
+        var transcriptionRequest = new AudioCreateTranscriptionRequest
+        {
+            File = file,
+            FileName = filename,
+            Model = Models.WhisperV1,
+            ResponseFormat = fileResponseFormat
+        };
+
+        if (language.HasValue) transcriptionRequest.Language = language.Value.GetDescription();
         
         var response = await _httpClientFactory.SafelyProcessRequestAsync(nameof(SpeechToTextAsync), async () =>
-            await _openAiService.Audio.CreateTranscription(new AudioCreateTranscriptionRequest
-            {
-                File = file,
-                FileName = filename,
-                Model = Models.WhisperV1,
-                ResponseFormat = fileResponseFormat,
-                Language = language?.GetDescription() ?? TranscriptionLanguage.Chinese.GetDescription()
-            }, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+            await _openAiService.Audio.CreateTranscription(transcriptionRequest, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
         
         Log.Information("Transcription {FileName} response {@Response}", filename, response);
         
