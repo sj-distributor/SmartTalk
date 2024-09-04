@@ -17,6 +17,8 @@ using SmartTalk.Messages.Commands.Attachments;
 using TranscriptionFileType = SmartTalk.Messages.Enums.STT.TranscriptionFileType;
 using TranscriptionLanguage = SmartTalk.Messages.Enums.STT.TranscriptionLanguage;
 using TranscriptionResponseFormat = SmartTalk.Messages.Enums.STT.TranscriptionResponseFormat;
+using SmartTalk.Messages.Dto.Speechmatics;
+using SmartTalk.Messages.Enums.Speechmatics;
 
 namespace SmartTalk.Core.Services.PhoneOrder;
 
@@ -62,33 +64,15 @@ public partial class PhoneOrderService
         }
 
         var recordInfo = ExtractPhoneOrderRecordInfoFromRecordName(command.RecordName);
-        
-        record.Url = fileUrl;
-        record.Restaurant = recordInfo.Restaurant;
-
-        await AddPhoneOrderRecordAsync(record, PhoneOrderRecordStatus.Diarization, cancellationToken).ConfigureAwait(false);
 
         // todo diarization job
-
-        /*Log.Information("Phone order record information: {@recordInfo}", recordInfo);
-
-      var transcriptionBase = await _speechToTextService.SpeechToTextAsync(
-          command.RecordContent, null, TranscriptionFileType.Wav, TranscriptionResponseFormat.Text, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-      var detection = await _translationClient.DetectLanguageAsync(transcriptionBase, cancellationToken).ConfigureAwait(false);
-
-      var (transcriptionLanguage, prompt) = SelectRestaurantMenuPrompt((PhoneOrderRestaurant.MoonHouse, detection.Language));
-
-      var transcription = await _speechToTextService.SpeechToTextAsync(
-          command.RecordContent, transcriptionLanguage, TranscriptionFileType.Wav, TranscriptionResponseFormat.Text, prompt, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-      Log.Information("Phone order record transcription: " + transcription);*/
         
-        /*_backgroundJobClient.Enqueue(() => ExtractAiOrderInformationAsync(transcription, orderRecord[0], cancellationToken));*/
-        
-        /*
-        if (!string.IsNullOrEmpty(recordInfo.WorkWeChatRobotUrl))
-            await SendWorkWeChatRobotNotifyAsync(command.RecordContent, recordInfo, transcription, cancellationToken).ConfigureAwait(false);*/
+        var transcriptionJobId = await CreateTranscriptionJobAsync(command.RecordContent, command.RecordName, cancellationToken).ConfigureAwait(false);
+            
+        await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync(new List<PhoneOrderRecord>
+        {
+            new() { SessionId = Guid.NewGuid().ToString(), Restaurant = recordInfo.Restaurant, Url = fileUrl, Status = PhoneOrderRecordStatus.Diarization, TranscriptionJobId = transcriptionJobId }
+        }, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
     private async Task AddPhoneOrderRecordAsync(PhoneOrderRecord record, PhoneOrderRecordStatus status, CancellationToken cancellationToken)
@@ -327,5 +311,30 @@ public partial class PhoneOrderService
         record.LastModifiedBy = modifiedBy;
 
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+    
+    private async Task<string> CreateTranscriptionJobAsync(byte[] data, string fileName, CancellationToken cancellationToken)
+    {
+        var createTranscriptionDto = new SpeechMaticsCreateTranscriptionDto { Data = data, FileName = fileName };
+        
+        var jobConfigDto = new SpeechMaticsJobConfigDto
+        {
+            Type = SpeechMaticsJobType.Transcription,
+            TranscriptionConfig = new SpeechMaticsTranscriptionConfigDto
+            {
+                Language = SpeechMaticsLanguageType.Auto,
+                Diarization = SpeechMaticsDiarizationType.Speaker,
+                OperatingPoint = SpeechMaticsOperatingPointType.Enhanced
+            },
+            NotificationConfig = new SpeechMaticsNotificationConfigDto
+            {
+                AuthHeaders = _transcriptionCallbackSetting.AuthHeaders,
+                Contents = [SpeechMaticsJobType.Transcription.ToString()],
+                Url = _transcriptionCallbackSetting.Url
+            }
+        };
+        
+        return await _speechMaticsClient.CreateJobAsync(new SpeechMaticsCreateJobRequestDto { JobConfig = jobConfigDto }, createTranscriptionDto, cancellationToken).ConfigureAwait(false);
+        
     }
 }

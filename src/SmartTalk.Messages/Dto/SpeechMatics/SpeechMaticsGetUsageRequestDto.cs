@@ -1,9 +1,8 @@
 using Newtonsoft.Json;
-using Newtonsoft.Json.Serialization;
 
 namespace SmartTalk.Messages.Dto.Speechmatics;
 
-public class SpeechmaticsGetUsageResponseDto
+public class SpeechMaticsGetUsageResponseDto
 {
     [JsonProperty("since")]
     public DateTime Since { get; set; }
@@ -12,13 +11,13 @@ public class SpeechmaticsGetUsageResponseDto
     public DateTime Until { get; set; }
 
     [JsonProperty("summary")]
-    public List<SpeechmaticsUsageDetailsDto> Summary { get; set; }
+    public List<SpeechMaticsUsageDetailsDto> Summary { get; set; }
 
     [JsonProperty("details")]
-    public List<SpeechmaticsUsageDetailsDto> Details { get; set; }
+    public List<SpeechMaticsUsageDetailsDto> Details { get; set; }
 }
 
-public class SpeechmaticsUsageDetailsDto
+public class SpeechMaticsUsageDetailsDto
 {
     [JsonProperty("mode")]
     public string Mode { get; set; }
@@ -33,7 +32,7 @@ public class SpeechmaticsUsageDetailsDto
     public double DurationHrs { get; set; }
 }
 
-public class SpeechmaticsGetUsageRequestDto
+public class SpeechMaticsGetUsageRequestDto
 {
     [JsonProperty("since")]
     public string Since { get; set; }

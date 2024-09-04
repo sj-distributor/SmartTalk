@@ -1,6 +1,6 @@
 namespace SmartTalk.Messages.Enums.Speechmatics;
 
-public enum JobType
+public enum SpeechMaticsJobType
 {
     Transcription
 }

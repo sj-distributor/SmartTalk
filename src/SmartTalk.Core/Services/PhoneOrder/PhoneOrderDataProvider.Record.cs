@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Domain.Account;
 using SmartTalk.Core.Domain.PhoneOrder;
+using SmartTalk.Messages.Dto.Speechmatics;
 using SmartTalk.Messages.Enums.PhoneOrder;
 
 namespace SmartTalk.Core.Services.PhoneOrder;
@@ -16,6 +17,8 @@ public partial interface IPhoneOrderDataProvider
     Task UpdatePhoneOrderRecordsAsync(PhoneOrderRecord record, bool forceSave = true, CancellationToken cancellationToken = default);
 
     Task<PhoneOrderRecord> GetPhoneOrderRecordByIdAsync(int recordId, CancellationToken cancellationToken);
+
+    Task<PhoneOrderRecord> GetPhoneOrderRecordByTranscriptionJobIdAsync(string transcriptionJobId, CancellationToken cancellationToken = default);
 }
 
 public partial class PhoneOrderDataProvider
@@ -74,4 +77,8 @@ public partial class PhoneOrderDataProvider
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
     
+    public async Task<PhoneOrderRecord> GetPhoneOrderRecordByTranscriptionJobIdAsync(string transcriptionJobId, CancellationToken cancellationToken = default)
+    {
+        return await _repository.Query<PhoneOrderRecord>().Where(x => x.TranscriptionJobId == transcriptionJobId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
 }

@@ -23,9 +23,11 @@ public partial class PhoneOrderService : IPhoneOrderService
     private readonly ISmartiesClient _smartiesClient;
     private readonly PhoneOrderSetting _phoneOrderSetting;
     private readonly IAttachmentService _attachmentService;
+    private readonly SpeechMaticsClient _speechMaticsClient;
     private readonly ISpeechToTextService _speechToTextService;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
+    private readonly TranscriptionCallbackSetting _transcriptionCallbackSetting;
 
     public PhoneOrderService(
         IMapper mapper,
@@ -36,8 +38,10 @@ public partial class PhoneOrderService : IPhoneOrderService
         PhoneOrderSetting phoneOrderSetting,
         IAttachmentService attachmentService,
         ISpeechToTextService speechToTextService,
+        SpeechMaticsClient speechMaticsClient,
         IPhoneOrderDataProvider phoneOrderDataProvider,
-        ISmartTalkBackgroundJobClient backgroundJobClient)
+        ISmartTalkBackgroundJobClient backgroundJobClient,
+        TranscriptionCallbackSetting transcriptionCallbackSetting)
     {
         _mapper = mapper;
         _currentUser = currentUser;
@@ -47,7 +51,9 @@ public partial class PhoneOrderService : IPhoneOrderService
         _phoneOrderSetting = phoneOrderSetting;
         _attachmentService = attachmentService;
         _speechToTextService = speechToTextService;
+        _speechMaticsClient = speechMaticsClient;
         _backgroundJobClient = backgroundJobClient;
         _phoneOrderDataProvider = phoneOrderDataProvider;
+        _transcriptionCallbackSetting = transcriptionCallbackSetting;
     }
 }

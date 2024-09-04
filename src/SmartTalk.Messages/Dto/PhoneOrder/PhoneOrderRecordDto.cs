@@ -24,4 +24,6 @@ public class PhoneOrderRecordDto
     public DateTimeOffset CreatedDate { get; set; }
     
     public UserAccountDto UserAccount { get; set; }
+    
+    public string TranscriptionJobId { get; set; }
 }
