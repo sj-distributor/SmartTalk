@@ -27,7 +27,7 @@ public partial class TestBase : TestUtilBase, IAsyncLifetime, IDisposable
 
     protected IConfiguration CurrentConfiguration => CurrentScope.Resolve<IConfiguration>();
 
-    protected TestBase(string testTopic, string databaseName, Action<ContainerBuilder>? extraRegistration = null)
+    protected TestBase(string testTopic, string databaseName, int redisDatabaseIndex, Action<ContainerBuilder>? extraRegistration = null)
     {
         _testTopic = testTopic;
         _databaseName = databaseName;
