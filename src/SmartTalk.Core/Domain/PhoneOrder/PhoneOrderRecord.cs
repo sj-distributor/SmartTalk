@@ -6,7 +6,7 @@ using SmartTalk.Messages.Enums.PhoneOrder;
 namespace SmartTalk.Core.Domain.PhoneOrder;
 
 [Table("phone_order_record")]
-public class PhoneOrderRecord : IEntity, IHasCreatedFields
+public class PhoneOrderRecord : IEntity
 {
     [Key]
     [Column("id")]
