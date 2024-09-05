@@ -28,7 +28,6 @@ public class SpeechMaticsService : ISpeechMaticsService
 
     public async Task<TranscriptionCallbackHandledResponse> HandleTranscriptionCallbackAsync(HandleTranscriptionCallbackCommand command, CancellationToken cancellationToken)
     {
-        
         if (command.Transcription == null || command.Transcription.Results.IsNullOrEmpty() || command.Transcription.Job == null || command.Transcription.Job.Id.IsNullOrEmpty())
             return new TranscriptionCallbackHandledResponse();
 
