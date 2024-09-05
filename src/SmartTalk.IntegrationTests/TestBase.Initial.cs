@@ -93,9 +93,9 @@ public partial class TestBase
             if (RedisStackPool.ContainsKey(_redisDatabaseIndex))
                 return RedisStackPool[_redisDatabaseIndex];
                 
-            var vectorDbSettings = cfx.Resolve<VectorDbSettings>();
+            var redisConnectionForVectorSetting = cfx.Resolve<RedisCacheConnectionStringForVectorSetting>();
                 
-            var connString = $"{vectorDbSettings.ConnectionString},defaultDatabase={_redisDatabaseIndex}";
+            var connString = $"{redisConnectionForVectorSetting.Value},defaultDatabase={_redisDatabaseIndex}";
 
             var instance = ConnectionMultiplexer.Connect(connString);
             

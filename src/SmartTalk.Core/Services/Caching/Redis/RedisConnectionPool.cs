@@ -15,7 +15,7 @@ public class RedisConnectionPool : IRedisConnectionPool
 {
     private readonly Dictionary<RedisServer, List<ConnectionMultiplexer>> _pool;
 
-    public RedisConnectionPool(RedisCacheConnectionStringSetting connectionStringSetting, VectorDbSettings vectorDbSettings)
+    public RedisConnectionPool(RedisCacheConnectionStringSetting connectionStringSetting, RedisCacheConnectionStringForVectorSetting connectionStringForVectorSetting)
     {
         _pool = new Dictionary<RedisServer, List<ConnectionMultiplexer>>
         {
@@ -24,7 +24,7 @@ public class RedisConnectionPool : IRedisConnectionPool
         };
         
         InitializePool(RedisServer.System, connectionStringSetting.Value);
-        InitializePool(RedisServer.Vector, vectorDbSettings.ConnectionString);
+        InitializePool(RedisServer.Vector, connectionStringForVectorSetting.Value);
     }
 
     public ConnectionMultiplexer GetConnection(RedisServer redisServer = RedisServer.System)
