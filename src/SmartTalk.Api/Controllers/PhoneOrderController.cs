@@ -76,7 +76,7 @@ public class PhoneOrderController : ControllerBase
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(TranscriptionCallbackHandledResponse))]
     public async Task<IActionResult> TranscriptionCallbackAsync(JObject jObject)
     {
-        Log.Information("Receive parameter : {jObject}",jObject.ToString());
+        Log.Information("Receive parameter : {jObject}", jObject.ToString());
         
         var transcription = jObject.ToObject<SpeechMaticsGetTranscriptionResponseDto>();
         
