@@ -204,11 +204,13 @@ public partial class PhoneOrderService
                 Diarization = SpeechMaticsDiarizationType.Speaker,
                 OperatingPoint = SpeechMaticsOperatingPointType.Enhanced
             },
-            NotificationConfig = new SpeechMaticsNotificationConfigDto
+            NotificationConfig = new List<SpeechMaticsNotificationConfigDto>
             {
-                AuthHeaders = _transcriptionCallbackSetting.AuthHeaders,
-                Contents = [SpeechMaticsJobType.Transcription.ToString()],
-                Url = _transcriptionCallbackSetting.Url
+                new SpeechMaticsNotificationConfigDto{
+                    AuthHeaders = _transcriptionCallbackSetting.AuthHeaders,
+                    Contents = [SpeechMaticsContentType.Transcript.ToString()],
+                    Url = _transcriptionCallbackSetting.Url
+                }
             }
         };
         

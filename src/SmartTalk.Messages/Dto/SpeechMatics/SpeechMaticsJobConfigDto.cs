@@ -14,5 +14,5 @@ public class SpeechMaticsJobConfigDto
     public SpeechMaticsTranscriptionConfigDto? TranscriptionConfig { get; set; }
     
     [JsonProperty("notification_config", NullValueHandling = NullValueHandling.Ignore)]
-    public SpeechMaticsNotificationConfigDto? NotificationConfig { get; set; }
+    public List<SpeechMaticsNotificationConfigDto>? NotificationConfig { get; set; }
 }
