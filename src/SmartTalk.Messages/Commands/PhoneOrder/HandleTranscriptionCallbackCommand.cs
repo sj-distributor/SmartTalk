@@ -1,5 +1,5 @@
 using SmartTalk.Messages.Dto.PhoneOrder;
-using SmartTalk.Messages.Dto.Speechmatics;
+using SmartTalk.Messages.Dto.SpeechMatics;
 using SmartTalk.Messages.Responses;
 using ICommand = Mediator.Net.Contracts.ICommand;
 

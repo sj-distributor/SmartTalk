@@ -1,6 +1,6 @@
 using Mediator.Net.Context;
 using Mediator.Net.Contracts;
-using SmartTalk.Core.Services.Speechmatics;
+using SmartTalk.Core.Services.SpeechMatics;
 using SmartTalk.Messages.Commands.PhoneOrder;
 
 namespace SmartTalk.Core.Handlers.CommandHandlers.PhoneOrder;

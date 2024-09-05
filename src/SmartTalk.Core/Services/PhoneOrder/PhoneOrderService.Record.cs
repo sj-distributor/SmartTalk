@@ -11,8 +11,8 @@ using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Requests.PhoneOrder;
 using SmartTalk.Messages.Commands.Attachments;
-using SmartTalk.Messages.Dto.Speechmatics;
-using SmartTalk.Messages.Enums.Speechmatics;
+using SmartTalk.Messages.Dto.SpeechMatics;
+using SmartTalk.Messages.Enums.SpeechMatics;
 
 namespace SmartTalk.Core.Services.PhoneOrder;
 

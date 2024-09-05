@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Newtonsoft.Json.Linq;
 using SmartTalk.Messages.Commands.PhoneOrder;
-using SmartTalk.Messages.Dto.Speechmatics;
+using SmartTalk.Messages.Dto.SpeechMatics;
 using SmartTalk.Messages.Requests.PhoneOrder;
 
 namespace SmartTalk.Api.Controllers;

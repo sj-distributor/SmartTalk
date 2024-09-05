@@ -5,11 +5,10 @@ using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Messages.Commands.PhoneOrder;
-using SmartTalk.Messages.Dto.PhoneOrder;
-using SmartTalk.Messages.Dto.Speechmatics;
+using SmartTalk.Messages.Dto.SpeechMatics;
 using SmartTalk.Messages.Enums.PhoneOrder;
 
-namespace SmartTalk.Core.Services.Speechmatics;
+namespace SmartTalk.Core.Services.SpeechMatics;
 
 public interface ISpeechMaticsService : IScopedDependency
 {

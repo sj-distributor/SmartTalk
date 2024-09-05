@@ -1,7 +1,7 @@
 using Newtonsoft.Json;
 using SmartTalk.Core.Ioc;
-using SmartTalk.Core.Settings.Speechmatics;
-using SmartTalk.Messages.Dto.Speechmatics;
+using SmartTalk.Core.Settings.SpeechMatics;
+using SmartTalk.Messages.Dto.SpeechMatics;
 
 namespace SmartTalk.Core.Services.Http.Clients;
 
