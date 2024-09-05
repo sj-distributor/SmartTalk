@@ -35,12 +35,12 @@ public class SpeechMaticsService : ISpeechMaticsService
 
         var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByTranscriptionJobIdAsync(command.Transcription.Job.Id, cancellationToken).ConfigureAwait(false);
         
+        var results = command.Transcription.Results;
+        
         try
         {
             if (record is null)
                 throw new Exception("Record not exist");
-
-            var results = command.Transcription.Results;
 
             var speakInfos = await StructureDiarizationResultsAsync(results, record, cancellationToken).ConfigureAwait(false);
         }
