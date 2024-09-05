@@ -2,6 +2,7 @@ using Mediator.Net;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Newtonsoft.Json.Linq;
+using Serilog;
 using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Dto.SpeechMatics;
 using SmartTalk.Messages.Requests.PhoneOrder;
@@ -75,6 +76,8 @@ public class PhoneOrderController : ControllerBase
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(TranscriptionCallbackHandledResponse))]
     public async Task<IActionResult> TranscriptionCallbackAsync(JObject jObject)
     {
+        Log.Information("Receive parameter : {jObject}",jObject.ToString());
+        
         var transcription = jObject.ToObject<SpeechMaticsGetTranscriptionResponseDto>();
         
         var response = await _mediator.SendAsync<HandleTranscriptionCallbackCommand, TranscriptionCallbackHandledResponse>(new HandleTranscriptionCallbackCommand { Transcription = transcription }).ConfigureAwait(false);
