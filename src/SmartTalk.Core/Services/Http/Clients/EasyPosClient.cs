@@ -26,7 +26,7 @@ public class EasyPosClient : IEasyPosClient
         var (authorization, merchantId, companyId, merchantStaffId) = GetRestaurantAuthHeaders(restaurant);
         
         return await _httpClientFactory.GetAsync<EasyPosResponseDto>(
-            requestUrl: "https://roosterpos-test-api.proton-system.com/api/merchant/resource", headers: new Dictionary<string, string>
+            requestUrl: $"{_easyPosSetting.BaseUrl}/api/merchant/resource", headers: new Dictionary<string, string>
             {
                 { "Authorization", $"Bearer {authorization}"},
                 { "MerchantId", merchantId },
