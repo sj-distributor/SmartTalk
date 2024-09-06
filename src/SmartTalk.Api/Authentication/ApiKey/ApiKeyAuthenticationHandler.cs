@@ -33,7 +33,7 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<ApiKeyAuthentic
 
         var userInfo = await _cacheManager.GetOrAddAsync(apiKey,
             async _ => await _accountDataProvider.GetUserAccountByApiKeyAsync(apiKey).ConfigureAwait(false),
-            CachingType.RedisCache, TimeSpan.FromHours(24), CancellationToken.None);
+            new RedisCachingSetting(expiry: TimeSpan.FromHours(24)), CancellationToken.None);
         
         if (userInfo == null)
             return AuthenticateResult.NoResult();

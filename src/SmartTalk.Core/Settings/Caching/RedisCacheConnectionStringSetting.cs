@@ -12,6 +12,16 @@ public class RedisCacheConnectionStringSetting : IConfigurationSetting<string>
     public string Value { get; set; }
 }
 
+public class RedisCacheConnectionStringForVectorSetting : IConfigurationSetting<string>
+{
+    public RedisCacheConnectionStringForVectorSetting(IConfiguration configuration)
+    {
+        Value = configuration.GetValue<string>("RedisCacheConnectionStringForVector");
+    }
+    
+    public string Value { get; set; }
+}
+
 public class RedisServerUrlSetting : IConfigurationSetting<string>
 {
     public RedisServerUrlSetting(IConfiguration configuration)
