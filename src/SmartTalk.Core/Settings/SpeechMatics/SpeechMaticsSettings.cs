@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Configuration;
 
-namespace SmartTalk.Core.Settings.Speechmatics;
+namespace SmartTalk.Core.Settings.SpeechMatics;
 
 public class SpeechMaticsSettings : IConfigurationSetting
 {

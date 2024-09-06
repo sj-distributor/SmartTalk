@@ -19,6 +19,8 @@ using TranscriptionLanguage = SmartTalk.Messages.Enums.STT.TranscriptionLanguage
 using TranscriptionResponseFormat = SmartTalk.Messages.Enums.STT.TranscriptionResponseFormat;
 using SmartTalk.Messages.Dto.Speechmatics;
 using SmartTalk.Messages.Enums.Speechmatics;
+using SmartTalk.Messages.Dto.SpeechMatics;
+using SmartTalk.Messages.Enums.SpeechMatics;
 
 namespace SmartTalk.Core.Services.PhoneOrder;
 
@@ -67,11 +69,15 @@ public partial class PhoneOrderService
 
         // todo diarization job
         
+       // if (string.IsNullOrEmpty(transcription) || transcription.Length < 15 || transcription.Contains("GENERAL") || transcription.Contains("感謝收看") || transcription.Contains("訂閱") || transcription.Contains("点赞") || transcription.Contains("立場") || transcription.Contains("字幕") || transcription.Contains("結束") || transcription.Contains("謝謝觀看") || transcription.Contains("幕後大臣") || transcription == "醒醒" || transcription == "跟著我" || transcription.Contains("政經關峻") || transcription.Contains("您拨打的电话") || transcription.Contains("Mailbox memory is full")) return;
+
         var transcriptionJobId = await CreateTranscriptionJobAsync(command.RecordContent, command.RecordName, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Phone order record transcriptionJobId: {@transcriptionJobId}", transcriptionJobId);
             
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync(new List<PhoneOrderRecord>
         {
-            new() { SessionId = Guid.NewGuid().ToString(), Restaurant = recordInfo.Restaurant, Url = fileUrl, Status = PhoneOrderRecordStatus.Diarization, TranscriptionJobId = transcriptionJobId }
+            new() { SessionId = Guid.NewGuid().ToString(), Restaurant = recordInfo.Restaurant, Url = fileUrl, CreatedDate = recordInfo.OrderDate.AddHours(-7), TranscriptionJobId = transcriptionJobId}
         }, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
@@ -197,7 +203,7 @@ public partial class PhoneOrderService
 
         var timeSpan = TimeSpan.Parse(audioDuration);
 
-        return timeSpan.TotalSeconds < 3 || timeSpan.Seconds == 14;
+        return timeSpan.TotalSeconds < 3 || timeSpan.Seconds == 14 || timeSpan.Seconds == 10;
     }
     
     private async Task<string> UploadRecordFileAsync(string fileName, byte[] fileContent, CancellationToken cancellationToken)
@@ -326,11 +332,13 @@ public partial class PhoneOrderService
                 Diarization = SpeechMaticsDiarizationType.Speaker,
                 OperatingPoint = SpeechMaticsOperatingPointType.Enhanced
             },
-            NotificationConfig = new SpeechMaticsNotificationConfigDto
+            NotificationConfig = new List<SpeechMaticsNotificationConfigDto>
             {
-                AuthHeaders = _transcriptionCallbackSetting.AuthHeaders,
-                Contents = [SpeechMaticsJobType.Transcription.ToString()],
-                Url = _transcriptionCallbackSetting.Url
+                new SpeechMaticsNotificationConfigDto{
+                    AuthHeaders = _transcriptionCallbackSetting.AuthHeaders,
+                    Contents = ["transcript"],
+                    Url = _transcriptionCallbackSetting.Url
+                }
             }
         };
         

@@ -1,8 +1,8 @@
 using Newtonsoft.Json;
 using SmartTalk.Messages.Converters;
-using SmartTalk.Messages.Enums.Speechmatics;
+using SmartTalk.Messages.Enums.SpeechMatics;
 
-namespace SmartTalk.Messages.Dto.Speechmatics;
+namespace SmartTalk.Messages.Dto.SpeechMatics;
 
 public class SpeechMaticsJobConfigDto
 {
@@ -14,5 +14,5 @@ public class SpeechMaticsJobConfigDto
     public SpeechMaticsTranscriptionConfigDto? TranscriptionConfig { get; set; }
     
     [JsonProperty("notification_config", NullValueHandling = NullValueHandling.Ignore)]
-    public SpeechMaticsNotificationConfigDto? NotificationConfig { get; set; }
+    public List<SpeechMaticsNotificationConfigDto>? NotificationConfig { get; set; }
 }

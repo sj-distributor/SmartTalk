@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Domain.Account;
 using SmartTalk.Core.Domain.PhoneOrder;
-using SmartTalk.Messages.Dto.Speechmatics;
 using SmartTalk.Messages.Enums.PhoneOrder;
 
 namespace SmartTalk.Core.Services.PhoneOrder;

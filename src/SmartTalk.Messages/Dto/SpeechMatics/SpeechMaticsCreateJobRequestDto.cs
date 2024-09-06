@@ -1,6 +1,6 @@
 using Newtonsoft.Json;
 
-namespace SmartTalk.Messages.Dto.Speechmatics;
+namespace SmartTalk.Messages.Dto.SpeechMatics;
 
 public class SpeechMaticsCreateJobRequestDto
 {

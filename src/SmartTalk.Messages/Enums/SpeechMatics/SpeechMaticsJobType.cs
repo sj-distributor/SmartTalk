@@ -1,4 +1,4 @@
-namespace SmartTalk.Messages.Enums.Speechmatics;
+namespace SmartTalk.Messages.Enums.SpeechMatics;
 
 public enum SpeechMaticsJobType
 {

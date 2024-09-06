@@ -5,11 +5,10 @@ using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Messages.Commands.PhoneOrder;
-using SmartTalk.Messages.Dto.PhoneOrder;
-using SmartTalk.Messages.Dto.Speechmatics;
+using SmartTalk.Messages.Dto.SpeechMatics;
 using SmartTalk.Messages.Enums.PhoneOrder;
 
-namespace SmartTalk.Core.Services.Speechmatics;
+namespace SmartTalk.Core.Services.SpeechMatics;
 
 public interface ISpeechMaticsService : IScopedDependency
 {
@@ -29,20 +28,25 @@ public class SpeechMaticsService : ISpeechMaticsService
 
     public async Task<TranscriptionCallbackHandledResponse> HandleTranscriptionCallbackAsync(HandleTranscriptionCallbackCommand command, CancellationToken cancellationToken)
     {
-        
         if (command.Transcription == null || command.Transcription.Results.IsNullOrEmpty() || command.Transcription.Job == null || command.Transcription.Job.Id.IsNullOrEmpty())
             return new TranscriptionCallbackHandledResponse();
 
         var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByTranscriptionJobIdAsync(command.Transcription.Job.Id, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Get Phone order record : {record}", record);
+        
+        var results = command.Transcription.Results;
+        
+        Log.Information("Transcription results : {results}", results);
         
         try
         {
             if (record is null)
                 throw new Exception("Record not exist");
 
-            var results = command.Transcription.Results;
-
             var speakInfos = await StructureDiarizationResultsAsync(results, record, cancellationToken).ConfigureAwait(false);
+            
+            Log.Information("speakInfos : {speakInfos}", speakInfos);
         }
         catch (Exception e)
         {
