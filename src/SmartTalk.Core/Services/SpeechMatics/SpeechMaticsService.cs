@@ -1,12 +1,13 @@
-using AutoMapper;
-using Microsoft.IdentityModel.Tokens;
 using Serilog;
-using SmartTalk.Core.Domain.PhoneOrder;
+using AutoMapper;
 using SmartTalk.Core.Ioc;
+using Microsoft.IdentityModel.Tokens;
+using SmartTalk.Core.Domain.PhoneOrder;
+using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Core.Services.PhoneOrder;
-using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Dto.SpeechMatics;
 using SmartTalk.Messages.Enums.PhoneOrder;
+using SmartTalk.Messages.Commands.PhoneOrder;
 
 namespace SmartTalk.Core.Services.SpeechMatics;
 
@@ -17,12 +18,12 @@ public interface ISpeechMaticsService : IScopedDependency
 
 public class SpeechMaticsService : ISpeechMaticsService
 {
-    private readonly IMapper _mapper;
+    private readonly IPhoneOrderService _phoneOrderService;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     
-    public SpeechMaticsService(IMapper mapper, IPhoneOrderDataProvider phoneOrderDataProvider)
+    public SpeechMaticsService(IPhoneOrderService phoneOrderService, IPhoneOrderDataProvider phoneOrderDataProvider)
     {
-        _mapper = mapper;
+        _phoneOrderService = phoneOrderService;
         _phoneOrderDataProvider = phoneOrderDataProvider;
     }
 
@@ -47,6 +48,8 @@ public class SpeechMaticsService : ISpeechMaticsService
             var speakInfos = await StructureDiarizationResultsAsync(results, record, cancellationToken).ConfigureAwait(false);
             
             Log.Information("speakInfos : {@speakInfos}", speakInfos);
+
+            await _phoneOrderService.ExtractPhoneOrderRecordAiMenuAsync(speakInfos, record, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception e)
         {

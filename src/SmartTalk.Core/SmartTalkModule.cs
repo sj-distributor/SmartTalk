@@ -12,7 +12,9 @@ using SmartTalk.Core.Services.Caching;
 using Mediator.Net.Middlewares.Serilog;
 using Microsoft.Extensions.Configuration;
 using AutoMapper.Contrib.Autofac.DependencyInjection;
+using Google.Cloud.Translation.V2;
 using SmartTalk.Core.Settings.AliYun;
+using SmartTalk.Core.Settings.Google;
 using Module = Autofac.Module;
 
 namespace SmartTalk.Core;
@@ -40,6 +42,7 @@ public class SmartTalkModule : Module
         RegisterDependency(builder);
         RegisterAutoMapper(builder);
         RegisterAliYunOssClient(builder);
+        RegisterTranslationClient(builder);
     }
 
     private void RegisterDependency(ContainerBuilder builder)
@@ -122,6 +125,15 @@ public class SmartTalkModule : Module
             var accessKeyId = settings.AccessKeyId;
             var accessKeySecret = settings.AccessKeySecret;
             return new OssClient(endpoint, accessKeyId, accessKeySecret);
+        }).AsSelf().InstancePerLifetimeScope();
+    }
+    
+    private void RegisterTranslationClient(ContainerBuilder builder)
+    {
+        builder.Register(c =>
+        {
+            var googleTranslateApiKey = c.Resolve<GoogleTranslateApiKeySetting>().Value;
+            return TranslationClient.CreateFromApiKey(googleTranslateApiKey);
         }).AsSelf().InstancePerLifetimeScope();
     }
 }

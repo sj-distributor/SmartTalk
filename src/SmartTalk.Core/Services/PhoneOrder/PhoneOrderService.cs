@@ -1,4 +1,5 @@
 using AutoMapper;
+using Google.Cloud.Translation.V2;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Attachments;
 using SmartTalk.Core.Services.Ffmpeg;
@@ -21,6 +22,7 @@ public partial class PhoneOrderService : IPhoneOrderService
     private readonly IWeChatClient _weChatClient;
     private readonly IFfmpegService _ffmpegService;
     private readonly ISmartiesClient _smartiesClient;
+    private readonly TranslationClient _translationClient;
     private readonly PhoneOrderSetting _phoneOrderSetting;
     private readonly IAttachmentService _attachmentService;
     private readonly SpeechMaticsClient _speechMaticsClient;
@@ -35,6 +37,7 @@ public partial class PhoneOrderService : IPhoneOrderService
         IWeChatClient weChatClient,
         IFfmpegService ffmpegService,
         ISmartiesClient smartiesClient,
+        TranslationClient translationClient,
         PhoneOrderSetting phoneOrderSetting,
         IAttachmentService attachmentService,
         ISpeechToTextService speechToTextService,
@@ -48,6 +51,7 @@ public partial class PhoneOrderService : IPhoneOrderService
         _weChatClient = weChatClient;
         _ffmpegService = ffmpegService;
         _smartiesClient = smartiesClient;
+        _translationClient = translationClient;
         _phoneOrderSetting = phoneOrderSetting;
         _attachmentService = attachmentService;
         _speechToTextService = speechToTextService;
