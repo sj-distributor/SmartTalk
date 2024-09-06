@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
-namespace SmartTalk.Core.Domain.Restaurant;
+namespace SmartTalk.Core.Domain.Restaurants;
 
 [Table("restaurant")]
 public class Restaurant : IEntity 
