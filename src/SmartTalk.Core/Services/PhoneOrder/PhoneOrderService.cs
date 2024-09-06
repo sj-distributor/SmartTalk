@@ -7,6 +7,7 @@ using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Identity;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.STT;
+using SmartTalk.Core.Services.WebSocket;
 using SmartTalk.Core.Settings.PhoneOrder;
 
 namespace SmartTalk.Core.Services.PhoneOrder;
@@ -25,6 +26,7 @@ public partial class PhoneOrderService : IPhoneOrderService
     private readonly TranslationClient _translationClient;
     private readonly PhoneOrderSetting _phoneOrderSetting;
     private readonly IAttachmentService _attachmentService;
+    private readonly IAsteriskService _asteriskService;
     private readonly SpeechMaticsClient _speechMaticsClient;
     private readonly ISpeechToTextService _speechToTextService;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
@@ -40,6 +42,7 @@ public partial class PhoneOrderService : IPhoneOrderService
         TranslationClient translationClient,
         PhoneOrderSetting phoneOrderSetting,
         IAttachmentService attachmentService,
+        IAsteriskService asteriskService,
         ISpeechToTextService speechToTextService,
         SpeechMaticsClient speechMaticsClient,
         IPhoneOrderDataProvider phoneOrderDataProvider,
@@ -54,6 +57,7 @@ public partial class PhoneOrderService : IPhoneOrderService
         _translationClient = translationClient;
         _phoneOrderSetting = phoneOrderSetting;
         _attachmentService = attachmentService;
+        _asteriskService = asteriskService;
         _speechToTextService = speechToTextService;
         _speechMaticsClient = speechMaticsClient;
         _backgroundJobClient = backgroundJobClient;
