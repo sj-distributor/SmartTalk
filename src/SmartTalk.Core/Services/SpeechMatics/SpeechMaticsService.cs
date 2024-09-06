@@ -33,11 +33,11 @@ public class SpeechMaticsService : ISpeechMaticsService
 
         var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByTranscriptionJobIdAsync(command.Transcription.Job.Id, cancellationToken).ConfigureAwait(false);
         
-        Log.Information("Get Phone order record : {record}", record);
+        Log.Information("Get Phone order record : {@record}", record);
         
         var results = command.Transcription.Results;
         
-        Log.Information("Transcription results : {results}", results);
+        Log.Information("Transcription results : {@results}", results);
         
         try
         {
@@ -46,7 +46,7 @@ public class SpeechMaticsService : ISpeechMaticsService
 
             var speakInfos = await StructureDiarizationResultsAsync(results, record, cancellationToken).ConfigureAwait(false);
             
-            Log.Information("speakInfos : {speakInfos}", speakInfos);
+            Log.Information("speakInfos : {@speakInfos}", speakInfos);
         }
         catch (Exception e)
         {

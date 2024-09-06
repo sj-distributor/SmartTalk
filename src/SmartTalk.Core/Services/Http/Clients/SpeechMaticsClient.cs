@@ -52,7 +52,7 @@ public class SpeechMaticsClient : ISpeechMaticsClient
             { "data_file", (speechMaticsCreateTranscritionDto.Data, speechMaticsCreateTranscritionDto.FileName) }
         };
         
-        Log.Information("formData : {formData} , fileData : {fileData}", formData, fileData);
+        Log.Information("formData : {@formData} , fileData : {@fileData}", formData, fileData);
         
         return await _httpClientFactory.PostAsMultipartAsync<string>($"{_speechMaticsSetting.BaseUrl}/jobs/", formData, fileData, cancellationToken, headers: _headers).ConfigureAwait(false);
     }
