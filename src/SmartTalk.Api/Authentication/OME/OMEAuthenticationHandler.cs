@@ -46,20 +46,20 @@ public class OMEAuthenticationHandler : AuthenticationHandler<OMEAuthenticationO
         try
         {
             var userInfo = await _cacheManager.GetOrAddAsync(authorization, 
-                async () => await GetUserFromAuthorizationServerAsync(authorization, default), CachingType.RedisCache, TimeSpan.FromDays(30)).ConfigureAwait(false);
+                async () => await GetUserFromAuthorizationServerAsync(authorization, default), new RedisCachingSetting(expiry: TimeSpan.FromDays(30))).ConfigureAwait(false);
 
             var id = Guid.TryParse(userInfo.Sub, out var userId) ? userId : Guid.Empty;
 
             if (string.IsNullOrWhiteSpace(userInfo.Sub) || id == Guid.Empty || string.IsNullOrWhiteSpace(userInfo.Username))
             {
-                await _cacheManager.RemoveAsync(authorization, CachingType.RedisCache).ConfigureAwait(false);
+                await _cacheManager.RemoveAsync(authorization, new RedisCachingSetting()).ConfigureAwait(false);
                 
                 return AuthenticateResult.NoResult();
             }
 
             var userAccount = await _cacheManager.GetOrAddAsync(userInfo.Sub, async () => 
                 await _accountService.GetOrCreateUserAccountFromThirdPartyAsync(userInfo.Sub, userInfo.Username, UserAccountIssuer.OME, default)
-                    .ConfigureAwait(false), CachingType.RedisCache, TimeSpan.FromDays(30)).ConfigureAwait(false);
+                    .ConfigureAwait(false), new RedisCachingSetting(expiry: TimeSpan.FromDays(30))).ConfigureAwait(false);
 
             var identity = new ClaimsIdentity(new[]
             {

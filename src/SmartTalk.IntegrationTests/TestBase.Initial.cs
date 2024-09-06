@@ -12,7 +12,11 @@ using SmartTalk.Core.Services.AliYun;
 using SmartTalk.Core.Services.Identity;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Settings;
+using SmartTalk.Core.Settings.Caching;
+using SmartTalk.Core.Settings.VectorDb;
 using SmartTalk.IntegrationTests.Mocks;
+using SmartTalk.Messages.Enums.Caching;
+using StackExchange.Redis;
 
 namespace SmartTalk.IntegrationTests;
 
@@ -44,6 +48,7 @@ public partial class TestBase
         containerBuilder.RegisterInstance(Substitute.For<IHttpContextAccessor>()).AsImplementedInterfaces();
         containerBuilder.RegisterInstance(Substitute.For<IAliYunOssService>()).AsImplementedInterfaces();
         
+        RegisterRedis(containerBuilder);
         RegisterSmartTalkBackgroundJobClient(containerBuilder);
     }
     
@@ -66,6 +71,39 @@ public partial class TestBase
         containerBuilder.RegisterType<MockingBackgroundJobClient>().As<ISmartTalkBackgroundJobClient>().InstancePerLifetimeScope();
     }
     
+    private void RegisterRedis(ContainerBuilder builder)
+    {
+        builder.Register(cfx =>
+        {
+            if (RedisPool.ContainsKey(_redisDatabaseIndex))
+                return RedisPool[_redisDatabaseIndex];
+                
+            var redisConnectionSetting = cfx.Resolve<RedisCacheConnectionStringSetting>();
+                
+            var connString = $"{redisConnectionSetting.Value},defaultDatabase={_redisDatabaseIndex}";
+
+            var instance = ConnectionMultiplexer.Connect(connString);
+            
+            return RedisPool.GetOrAdd(_redisDatabaseIndex, instance);
+            
+        }).Keyed<ConnectionMultiplexer>(RedisServer.System).ExternallyOwned();
+        
+        builder.Register(cfx =>
+        {
+            if (RedisStackPool.ContainsKey(_redisDatabaseIndex))
+                return RedisStackPool[_redisDatabaseIndex];
+                
+            var redisConnectionForVectorSetting = cfx.Resolve<RedisCacheConnectionStringForVectorSetting>();
+                
+            var connString = $"{redisConnectionForVectorSetting.Value},defaultDatabase={_redisDatabaseIndex}";
+
+            var instance = ConnectionMultiplexer.Connect(connString);
+            
+            return RedisStackPool.GetOrAdd(_redisDatabaseIndex, instance);
+            
+        }).Keyed<ConnectionMultiplexer>(RedisServer.Vector).ExternallyOwned();
+    }
+    
     private void RunDbUpIfRequired()
     {
         if (!ShouldRunDbUpDatabases.GetValueOrDefault(_databaseName, true))
@@ -74,6 +112,44 @@ public partial class TestBase
         new DbUpFileRunner(new SmartTalkConnectionString(CurrentConfiguration).Value).Run(nameof(Core.DbUpFile), typeof(DbUpFileRunner).Assembly);
 
         ShouldRunDbUpDatabases[_databaseName] = false;
+    }
+    
+    private void FlushRedisDatabase()
+    {
+        try
+        {
+            if (!RedisPool.TryGetValue(_redisDatabaseIndex, out var redis)) return;
+            
+            foreach (var endpoint in redis.GetEndPoints())
+            {
+                var server = redis.GetServer(endpoint);
+                    
+                server.FlushDatabase(_redisDatabaseIndex);    
+            }
+        }
+        catch
+        {
+            // ignored
+        }
+    }
+    
+    private void FlushRedisStackDatabase()
+    {
+        try
+        {
+            if (!RedisStackPool.TryGetValue(_redisDatabaseIndex, out var redis)) return;
+            
+            foreach (var endpoint in redis.GetEndPoints())
+            {
+                var server = redis.GetServer(endpoint);
+                    
+                server.FlushDatabase(_redisDatabaseIndex);    
+            }
+        }
+        catch
+        {
+            // ignored
+        }
     }
     
     private void ClearDatabaseRecord()
@@ -121,6 +197,8 @@ public partial class TestBase
     public void Dispose()
     {
         ClearDatabaseRecord();
+        FlushRedisDatabase();
+        FlushRedisStackDatabase();
     }
 
     public Task DisposeAsync()
