@@ -1,4 +1,5 @@
 using Newtonsoft.Json;
+using Serilog;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Settings.SpeechMatics;
 using SmartTalk.Messages.Dto.SpeechMatics;
@@ -42,7 +43,7 @@ public class SpeechMaticsClient : ISpeechMaticsClient
     {
         var jobConfig = JsonConvert.SerializeObject(speechMaticsCreateJobRequestDto.JobConfig, Formatting.Indented);
         
-        var formData = new Dictionary<string, string>()
+        var formData = new Dictionary<string, string>
         { 
             { "config", jobConfig }
         };
@@ -50,6 +51,8 @@ public class SpeechMaticsClient : ISpeechMaticsClient
         {
             { "data_file", (speechMaticsCreateTranscritionDto.Data, speechMaticsCreateTranscritionDto.FileName) }
         };
+        
+        Log.Information("formData : {formData} , fileData : {fileData}", formData, fileData);
         
         return await _httpClientFactory.PostAsMultipartAsync<string>($"{_speechMaticsSetting.BaseUrl}/jobs/", formData, fileData, cancellationToken, headers: _headers).ConfigureAwait(false);
     }
