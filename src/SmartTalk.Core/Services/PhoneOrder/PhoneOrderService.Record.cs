@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Serilog;
 using Newtonsoft.Json;
 using SmartTalk.Core.Extensions;
@@ -6,6 +7,8 @@ using SmartTalk.Messages.Dto.WeChat;
 using System.Text.RegularExpressions;
 using Smarties.Messages.Enums.OpenAi;
 using Smarties.Messages.Requests.Ask;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using SmartTalk.Messages.Enums.WeChat;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Messages.Dto.PhoneOrder;
@@ -71,7 +74,9 @@ public partial class PhoneOrderService
         
        // if (string.IsNullOrEmpty(transcription) || transcription.Length < 15 || transcription.Contains("GENERAL") || transcription.Contains("感謝收看") || transcription.Contains("訂閱") || transcription.Contains("点赞") || transcription.Contains("立場") || transcription.Contains("字幕") || transcription.Contains("結束") || transcription.Contains("謝謝觀看") || transcription.Contains("幕後大臣") || transcription == "醒醒" || transcription == "跟著我" || transcription.Contains("政經關峻") || transcription.Contains("您拨打的电话") || transcription.Contains("Mailbox memory is full")) return;
 
-        var transcriptionJobId = await CreateTranscriptionJobAsync(command.RecordContent, command.RecordName, cancellationToken).ConfigureAwait(false);
+        var transcriptionJobIdJObject = JObject.Parse(await CreateTranscriptionJobAsync(command.RecordContent, command.RecordName, cancellationToken).ConfigureAwait(false)) ;
+        
+        var transcriptionJobId = transcriptionJobIdJObject["id"]?.ToString();
         
         Log.Information("Phone order record transcriptionJobId: {@transcriptionJobId}", transcriptionJobId);
             
