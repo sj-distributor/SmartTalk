@@ -1,4 +1,5 @@
 using SmartTalk.Core.Ioc;
+using SmartTalk.Core.Settings.EasyPos;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Enums.PhoneOrder;
 
@@ -11,10 +12,12 @@ public interface IEasyPosClient : IScopedDependency
 
 public class EasyPosClient : IEasyPosClient
 {
+    private readonly EasyPosSetting _easyPosSetting;
     private readonly ISmartiesHttpClientFactory _httpClientFactory;
 
-    public EasyPosClient(ISmartiesHttpClientFactory httpClientFactory)
+    public EasyPosClient(EasyPosSetting easyPosSetting, ISmartiesHttpClientFactory httpClientFactory)
     {
+        _easyPosSetting = easyPosSetting;
         _httpClientFactory = httpClientFactory;
     }
     
@@ -25,7 +28,7 @@ public class EasyPosClient : IEasyPosClient
         return await _httpClientFactory.GetAsync<EasyPosResponseDto>(
             requestUrl: "https://roosterpos-test-api.proton-system.com/api/merchant/resource", headers: new Dictionary<string, string>
             {
-                { "Authorization", authorization},
+                { "Authorization", $"Bearer {authorization}"},
                 { "MerchantId", merchantId },
                 { "CompanyId", companyId },
                 { "MerchantStaffId", merchantStaffId }
@@ -37,14 +40,11 @@ public class EasyPosClient : IEasyPosClient
         return restaurant switch
         {
             PhoneOrderRestaurant.MoonHouse =>
-            ("Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1laWRlbnRpZmllciI6Ijg5NjM2MDM1ODkwMzkxMDkiLCJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9zeXN0ZW0iOiJDb21wYW55QWNjb3VudCIsIm5iZiI6MTcyNTQzMTkxMiwiZXhwIjoxNzg4NTAzOTEyLCJpc3MiOiJodHRwczovL2Vhc3lwb3MuY29tIiwiYXVkIjoic2luZ2xlLXBvcyJ9.zsExvb8cZl1pC4VBS3I5j72ha0ck3RRwZzyDSYfZwc8",
-                "9224998680331269", "9224980557202437", "9224998683214853"),
+                (_easyPosSetting.Authorizations[0], _easyPosSetting.MerchantIds[0], _easyPosSetting.CompanyIds[0], _easyPosSetting.MerchantStaffIds[0]),
             PhoneOrderRestaurant.JiangNanChun =>
-                ("Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1laWRlbnRpZmllciI6Ijg5NjM2MDM1ODkwMzkxMDkiLCJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9zeXN0ZW0iOiJDb21wYW55QWNjb3VudCIsIm5iZiI6MTcyNTQzMjgzNywiZXhwIjoxNzg4NTA0ODM3LCJpc3MiOiJodHRwczovL2Vhc3lwb3MuY29tIiwiYXVkIjoic2luZ2xlLXBvcyJ9.zRgxr5msw5RC8t8soCQJCjnzhNy3PQgr3WeUsV4usUM",
-                    "9236665971508229", "9236657812603909", "9236665975047173"),
+                (_easyPosSetting.Authorizations[1], _easyPosSetting.MerchantIds[1], _easyPosSetting.CompanyIds[1], _easyPosSetting.MerchantStaffIds[1]),
             PhoneOrderRestaurant.XiangTanRenJia =>
-                ("Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1laWRlbnRpZmllciI6Ijg5NjM2MDM1ODkwMzkxMDkiLCJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9zeXN0ZW0iOiJDb21wYW55QWNjb3VudCIsIm5iZiI6MTcyNTQzMjk0NywiZXhwIjoxNzg4NTA0OTQ3LCJpc3MiOiJodHRwczovL2Vhc3lwb3MuY29tIiwiYXVkIjoic2luZ2xlLXBvcyJ9.oHdrFrB8deaaoEas5jBG_BNgcvg1xKklfi4TY_v67UM",
-                    "9078939242529797", "9078928332948485", "9078939246134277"),
+                (_easyPosSetting.Authorizations[2], _easyPosSetting.MerchantIds[2], _easyPosSetting.CompanyIds[2], _easyPosSetting.MerchantStaffIds[2]),
             _ => throw new NotSupportedException(nameof(restaurant))
         };
     }
