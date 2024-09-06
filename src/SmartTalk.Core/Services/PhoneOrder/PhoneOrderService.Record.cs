@@ -57,7 +57,13 @@ public partial class PhoneOrderService
         
         Log.Information("Phone order record information: {@recordInfo}", recordInfo);
         
-        var record = new PhoneOrderRecord { SessionId = Guid.NewGuid().ToString(), Restaurant = recordInfo.Restaurant, CreatedDate = recordInfo.OrderDate.AddHours(-7), Status = PhoneOrderRecordStatus.Recieved};
+        // transcript auto
+        var transcriptionBase = await _speechToTextService.SpeechToTextAsync(
+            command.RecordContent, null, TranscriptionFileType.Wav, TranscriptionResponseFormat.Text, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var detection = await _translationClient.DetectLanguageAsync(transcriptionBase, cancellationToken).ConfigureAwait(false);
+        
+        var record = new PhoneOrderRecord { SessionId = Guid.NewGuid().ToString(), Restaurant = recordInfo.Restaurant, CreatedDate = recordInfo.OrderDate.AddHours(-7), Status = PhoneOrderRecordStatus.Recieved };
 
         if (await CheckPhoneOrderRecordDurationAsync(command.RecordContent, cancellationToken).ConfigureAwait(false))
         {
@@ -106,14 +112,14 @@ public partial class PhoneOrderService
             }
         }, transcription, cancellationToken).ConfigureAwait(false);
         
-        await ExtractAiOrderInformationAsync(transcription, record, cancellationToken).ConfigureAwait(false);
+        // await ExtractAiOrderInformationAsync(transcription, record, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task AddPhoneOrderRecordAsync(PhoneOrderRecord record, PhoneOrderRecordStatus status, CancellationToken cancellationToken)
     {
         record.Status = status;
         
-        await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync([record], cancellationToken: cancellationToken).ConfigureAwait(false);
+        await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync(new List<PhoneOrderRecord> { record }, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<bool> CheckPhoneOrderRecordDurationAsync(byte[] recordContent, CancellationToken cancellationToken)
@@ -207,18 +213,24 @@ public partial class PhoneOrderService
                 Log.Information("Phone Order transcript originText: {originText}", originText);
 
                 var intent = await RecognizeIntentAsync(originText, cancellationToken).ConfigureAwait(false);
+
+                switch (intent)
+                {
+                    case PhoneOrderIntent.AddOrder:
+                        //AddOrderDetailAsync
+                    break;
+                    case PhoneOrderIntent.ReduceOrder:
+                        //ReduceOrderDetailAsync
+                }
                 
-                var openAiService = new OpenAIService(new OpenAiOptions { ApiKey = "sk-xxx" });
+                //embedding search output extract_food_item json
                 
-                var client = new HttpClient();
-        
-                var byteArray = new UTF8Encoding().GetBytes($"admin:xxx@2024");
-        
-                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(byteArray));
-                
-                var speech = await _asteriskService.HandleIntentAsync(intent, openAiService, client, "http://xxx:8088/ari").ConfigureAwait(false);
-                
+                // S1 餐厅，S2 客人
                 texts.Add(speakDetail.Speaker + ":" + originText);
+                
+                await _phoneOrderDataProvider.AddPhoneOrderConversationsAsync().ConfigureAwait(false);
+                
+                await 
             }
             catch (Exception ex)
             {
@@ -244,25 +256,28 @@ public partial class PhoneOrderService
     
         var splitAudios = await _ffmpegService.SpiltAudioAsync(audioBytes, speakStartTimeVideo, speakEndTimeVideo, cancellationToken).ConfigureAwait(false);
 
-        var reSplitAudios = await _ffmpegService.SplitAudioAsync(splitAudios.FirstOrDefault(), secondsPerAudio: 60 * 2, cancellationToken: cancellationToken).ConfigureAwait(false);
+        // var reSplitAudios = await _ffmpegService.SplitAudioAsync(splitAudios.FirstOrDefault(), secondsPerAudio: 60 * 2, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        var transcriptionBase = await _speechToTextService.SpeechToTextAsync(
-            reSplitAudios[0], null, TranscriptionFileType.Wav, TranscriptionResponseFormat.Text, null, cancellationToken: cancellationToken).ConfigureAwait(false);
+        // var transcriptionBase = await _speechToTextService.SpeechToTextAsync(
+        //     reSplitAudios[0], null, TranscriptionFileType.Wav, TranscriptionResponseFormat.Text, null, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        var detection = await _translationClient.DetectLanguageAsync(transcriptionBase, cancellationToken).ConfigureAwait(false);
+        // var detection = await _translationClient.DetectLanguageAsync(transcriptionBase, cancellationToken).ConfigureAwait(false);
 
-        var (language, prompt) = SelectRestaurantMenuPrompt((record.Restaurant, detection.Language));
+        // var (language, prompt) = SelectRestaurantMenuPrompt((record.Restaurant, detection.Language));
         
         var transcriptionResult = new StringBuilder();
-    
-        foreach (var reSplitAudio in reSplitAudios)
+        var conversations = new List<PhoneOrderConversation>();
+        
+        foreach (var reSplitAudio in splitAudios)
         {
             var transcriptionResponse = await _speechToTextService.SpeechToTextAsync(
-                reSplitAudio, language, TranscriptionFileType.Wav, TranscriptionResponseFormat.Text, null, cancellationToken: cancellationToken).ConfigureAwait(false);
-            
+                reSplitAudio, language, TranscriptionFileType.Wav, TranscriptionResponseFormat.Text, cancellationToken: cancellationToken).ConfigureAwait(false);
+            conversations.Add();
             transcriptionResult.Append(transcriptionResponse);
         }
-    
+
+        await _phoneOrderDataProvider.AddPhoneOrderConversationsAsync(conversations, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
         Log.Information("Transcription result {Transcription}", transcriptionResult.ToString());
         
         return transcriptionResult.ToString();
@@ -343,7 +358,7 @@ public partial class PhoneOrderService
                 new ()
                 {
                     Role = "user",
-                    Content = new CompletionsStringContent($"用户输入: {input},输出:")
+                    Content = new CompletionsStringContent($"用户输入: {input}\n输出意图数字:")
                 }
             },
             Model = OpenAiModel.Gpt4o

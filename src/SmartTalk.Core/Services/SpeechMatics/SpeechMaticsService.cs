@@ -13,7 +13,7 @@ namespace SmartTalk.Core.Services.SpeechMatics;
 
 public interface ISpeechMaticsService : IScopedDependency
 {
-    Task<TranscriptionCallbackHandledResponse> HandleTranscriptionCallbackAsync(HandleTranscriptionCallbackCommand command, CancellationToken cancellationToken);
+    Task HandleTranscriptionCallbackAsync(HandleTranscriptionCallbackCommand command, CancellationToken cancellationToken);
 }
 
 public class SpeechMaticsService : ISpeechMaticsService
@@ -27,10 +27,9 @@ public class SpeechMaticsService : ISpeechMaticsService
         _phoneOrderDataProvider = phoneOrderDataProvider;
     }
 
-    public async Task<TranscriptionCallbackHandledResponse> HandleTranscriptionCallbackAsync(HandleTranscriptionCallbackCommand command, CancellationToken cancellationToken)
+    public async Task HandleTranscriptionCallbackAsync(HandleTranscriptionCallbackCommand command, CancellationToken cancellationToken)
     {
-        if (command.Transcription == null || command.Transcription.Results.IsNullOrEmpty() || command.Transcription.Job == null || command.Transcription.Job.Id.IsNullOrEmpty())
-            return new TranscriptionCallbackHandledResponse();
+        if (command.Transcription == null || command.Transcription.Results.IsNullOrEmpty() || command.Transcription.Job == null || command.Transcription.Job.Id.IsNullOrEmpty()) return;
 
         var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByTranscriptionJobIdAsync(command.Transcription.Job.Id, cancellationToken).ConfigureAwait(false);
         
@@ -42,14 +41,17 @@ public class SpeechMaticsService : ISpeechMaticsService
         
         try
         {
-            if (record is null)
-                throw new Exception("Record not exist");
+            if (record is null) throw new Exception("Record not exist");
 
             var speakInfos = await StructureDiarizationResultsAsync(results, record, cancellationToken).ConfigureAwait(false);
             
             Log.Information("speakInfos : {@speakInfos}", speakInfos);
 
             await _phoneOrderService.ExtractPhoneOrderRecordAiMenuAsync(speakInfos, record, cancellationToken).ConfigureAwait(false);
+            
+            // send放到这里
+            record.Status = PhoneOrderRecordStatus.Sent;
+            await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception e)
         {
@@ -61,8 +63,6 @@ public class SpeechMaticsService : ISpeechMaticsService
             
             Log.Warning(e.Message);
         }
-        
-        return new TranscriptionCallbackHandledResponse();
     }
 
     private async Task<List<SpeechMaticsSpeakInfoDto>> StructureDiarizationResultsAsync(List<SpeechMaticsResultDto> results, PhoneOrderRecord record, CancellationToken cancellationToken)

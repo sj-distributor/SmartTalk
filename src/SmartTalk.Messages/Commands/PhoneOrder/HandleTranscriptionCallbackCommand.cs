@@ -9,7 +9,3 @@ public class HandleTranscriptionCallbackCommand : ICommand
 {
     public SpeechMaticsGetTranscriptionResponseDto Transcription { get; set; }
 }
-
-public class TranscriptionCallbackHandledResponse : SmartTalkResponse<List<PhoneOrderConversationDto>>
-{
-}

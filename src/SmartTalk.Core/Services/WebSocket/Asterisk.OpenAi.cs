@@ -105,20 +105,17 @@ public partial class Asterisk
                 ChatMessage.FromSystem("你是一款高度理解语言的智能助手，专门用于识别和处理电话订单。" +
                                        "根据我输入，来帮我补全food_details，count是菜品的数量，如果你不清楚数量的时候，count默认为1，remark是对菜品的备注" +
                                        "特别注意：如果当用户的请求的菜品不在菜单上时，也需要返回菜品种类，菜品名称数量和备注。 " +
-                                       "注意用json格式返回；规则：{\"food_details\": [{\"food_category\": \"菜品类别，包括小吃、粥、粉面、飯，用于分类菜品。\",\"food_name\": {\"小吃\": [\"炸鸡翼\",\"港式咖喱魚旦\",\"椒盐鸡翼\",\"菠萝油\"]," +
-                                       "\"粥\": [\"皮蛋瘦肉粥\",\"明火白粥\"]," +
-                                       "\"粉面\": [\"海鲜炒面\",\"豉椒牛肉炒河\",\"鲜虾云吞汤面\",\"特式炒一丁\"]," +
-                                       "\"饭\": [\"扬州炒饭\",\"椒盐猪扒饭\",\"叉烧炒饭\"]}," +
-                                       "\"饮料\": [\"可乐\",\"雪碧\",\"柠檬茶\",\"港式奶茶\"]},\"count\": 1,\"remark\": \"不要葱\"}]\n}\n " +
+                                       "注意用json格式返回；规则：{\"food_details\": [{\"food_name\": {\"小吃\": [\"炸鸡翼\",\"港式咖喱魚旦\",\"椒盐鸡翼\",\"菠萝油\"]," +
+               
                                        "-样本与输出：" +
                                        "input:我要两份皮蛋瘦肉粥，有一个不要皮蛋; " +
-                                       "output:{\"food_details\": [{\"food_category\": \"粥\", \"food_name\": \"皮蛋瘦肉粥\",\"count\":2, \"remark\":一份不要皮蛋}]}}\n" +
+                                       "output:{\"food_details\": [{\"food_name\": \"皮蛋瘦肉粥\",\"count\":2, \"remark\":一份不要皮蛋}]}}\n" +
                                        "input:要可乐; " +
-                                       "output:{\"food_details\": [{\"food_category\": \"饮料\", \"food_name\": \"可乐\",\"count\":1, \"remark\":null}]}}\n" +
+                                       "output:{\"food_details\": [{\"food_name\": \"可乐\",\"count\":1, \"remark\":null}]}}\n" +
                                        "input:我要四个扬州炒饭，有两份不要葱，还要一份草莓绵绵冰; " +
-                                       "output:{\"food_details\": [{\"food_category\": \"饭\", \"food_name\": \"扬州炒饭\",\"count\":4, \"remark\":两份不要葱},{\"food_category\": \"其他\", \"food_name\": \"草莓绵绵冰\",\"count\":1, \"remark\":null}]}}\n" +
+                                       "output:{\"food_details\": [{\"food_name\": \"扬州炒饭\",\"count\":4, \"remark\":两份不要葱},{\"food_category\": \"其他\", \"food_name\": \"草莓绵绵冰\",\"count\":1, \"remark\":null}]}}\n" +
                                        "input:要一个炸鸡翼和一个稠一点的白粥 " +
-                                       "output:{\"food_details\": [{\"food_category\": \"粥\", \"food_name\": \"明火白粥\",\"count\":1, \"remark\":稠一点},{\"food_category\": \"小吃\", \"food_name\": \"炸鸡翼\",\"count\":1, \"remark\":null}]}}\n "),
+                                       "output:{\"food_details\": [{\"food_name\": \"明火白粥\",\"count\":1, \"remark\":稠一点},{\"food_category\": \"小吃\", \"food_name\": \"炸鸡翼\",\"count\":1, \"remark\":null}]}}\n "),
                 
                 ChatMessage.FromUser( $"input: {query}, output:"),
             },
@@ -132,7 +129,7 @@ public partial class Asterisk
         return openaiResponse == null ? null : JsonConvert.DeserializeObject<PhoneOrderDetailDto>(openaiResponse);
     }
     
-    private async Task<PhoneOrderDetailDto?> ReduceOrderDetailAsync(IOpenAIService openAiService, List<FoodDetailDto> shoppingCart, string query)
+    private async Task<PhoneOrderDetailDto> ReduceOrderDetailAsync(IOpenAIService openAiService, List<FoodDetailDto> shoppingCart, string query)
     {
         var shoppingCar = JsonConvert.SerializeObject(shoppingCart, Formatting.Indented);
         
