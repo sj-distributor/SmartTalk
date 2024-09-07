@@ -366,7 +366,7 @@ public partial class PhoneOrderService
             {
                 new SpeechMaticsNotificationConfigDto{
                     AuthHeaders = _transcriptionCallbackSetting.AuthHeaders,
-                    Contents = ["transcript"],
+                    Contents = new List<string> { "transcript" },
                     Url = _transcriptionCallbackSetting.Url
                 }
             }
