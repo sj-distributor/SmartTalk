@@ -185,15 +185,15 @@ public partial class PhoneOrderService
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
     
-     public async Task<byte[]> TranscriptAsync(List<SpeechMaticsSpeakInfoDto> phoneOrderInfo, PhoneOrderRecord record, CancellationToken cancellationToken)
+    public async Task<byte[]> TranscriptAsync(List<SpeechMaticsSpeakInfoDto> phoneOrderInfo, PhoneOrderRecord record, CancellationToken cancellationToken)
     {
         var conversationIndex = 0;
         var goalTexts = new List<string>();
-        var menu = new PhoneOrderDetailDto();
+        var shoppingCart = new PhoneOrderDetailDto();
         var conversations = new List<PhoneOrderConversation>();
         
         var recordContent = await _smartTalkHttpClientFactory.GetAsync<byte[]>(record.Url, cancellationToken).ConfigureAwait(false);
-            
+        
         foreach (var speakDetail in phoneOrderInfo)
         {
             var speakStartTimeVideo = speakDetail.StartTime * 1000 - 0;
@@ -209,38 +209,31 @@ public partial class PhoneOrderService
 
                 var intent = await RecognizeIntentAsync(originText, cancellationToken).ConfigureAwait(false);
 
-                var extractFoods = new PhoneOrderDetailDto();
+                PhoneOrderDetailDto extractFoods = null;
                 
                 switch (intent)
                 {
                     case PhoneOrderIntent.AddOrder:
                         extractFoods = await AddOrderDetailAsync(originText, cancellationToken).ConfigureAwait(false);
-                        
-                        menu = await GetSimilarRestaurantByRecordAsync(record, extractFoods, cancellationToken).ConfigureAwait(false);
+                        extractFoods = await GetSimilarRestaurantByRecordAsync(record, extractFoods, cancellationToken).ConfigureAwait(false);
+                        CheckOrAddToShoppingCart(shoppingCart.FoodDetails, extractFoods.FoodDetails);
                         break;
                     case PhoneOrderIntent.ReduceOrder:
-                        extractFoods = await ReduceOrderDetailAsync(menu.FoodDetails, originText, cancellationToken).ConfigureAwait(false);
-                        
-                        menu = await GetSimilarRestaurantByRecordAsync(record, extractFoods, cancellationToken).ConfigureAwait(false);
+                        extractFoods = await ReduceOrderDetailAsync(shoppingCart.FoodDetails, originText, cancellationToken).ConfigureAwait(false);
+                        extractFoods = await GetSimilarRestaurantByRecordAsync(record, extractFoods, cancellationToken).ConfigureAwait(false);
+                        CheckOrReduceFromShoppingCart(shoppingCart.FoodDetails, extractFoods.FoodDetails);
                         break;
                 }
                 
-                goalTexts.Add(speakDetail.Speaker.Equals("S1") ? "餐厅" : "客人" + ":" + originText);
-                if (speakDetail.Speaker.Equals("S1"))
+                goalTexts.Add(speakDetail.Role == PhoneOrderRole.Restaurant ? "餐厅" : "客人" + ":" + originText);
+                
+                if (speakDetail.Role == PhoneOrderRole.Restaurant) 
+                    conversations.Add(new PhoneOrderConversation { RecordId = record.Id, Question = originText, Order = conversationIndex });
+                else
                 {
-                    conversations.Add(new PhoneOrderConversation
-                    {
-                        Intent = intent,
-                        RecordId = record.Id,
-                        Question = originText,
-                        Order = conversationIndex,
-                        ExtractFoodItem = JsonConvert.SerializeObject(extractFoods?.FoodDetails)
-                    });
-                }else
-                {
+                    conversations[conversationIndex].Intent = intent;
                     conversations[conversationIndex].Answer = originText;
-                    conversations[conversationIndex].Answer = JsonConvert.SerializeObject(menu);
-                    
+                    if (extractFoods != null) conversations[conversationIndex].ExtractFoodItem = JsonConvert.SerializeObject(extractFoods.FoodDetails);
                     conversationIndex++;
                 }
             }
@@ -264,7 +257,59 @@ public partial class PhoneOrderService
         return recordContent;
     }
     
-     private async Task<PhoneOrderDetailDto?> AddOrderDetailAsync(string query, CancellationToken cancellationToken)
+    private static void CheckOrAddToShoppingCart(List<FoodDetailDto> shoppingCart, List<FoodDetailDto> foods)
+    {
+        var hasFoods = new List<FoodDetailDto>();
+        
+        foods.ForEach(x =>
+        {
+            if (!string.IsNullOrEmpty(x.Remark))
+            {
+                hasFoods.Add(x);
+            }
+            else
+            {
+                if (shoppingCart.Any(t => t.FoodName == x.FoodName && string.IsNullOrEmpty(t.Remark)))
+                {
+                    foreach (var food in shoppingCart)
+                    {
+                        if(food.FoodName == x.FoodName && string.IsNullOrEmpty(food.Remark))
+                            food.Count += x.Count;
+                    }
+                }
+                else
+                {
+                    hasFoods.Add(x);
+                }
+            }
+        });
+
+        if (hasFoods.Any()) shoppingCart.AddRange(hasFoods);
+        
+        Log.Information("Shopping cart after add: {ShoppingCart}", JsonConvert.SerializeObject(shoppingCart));
+    }
+    
+    private void CheckOrReduceFromShoppingCart(List<FoodDetailDto> shoppingCart, List<FoodDetailDto> foods)
+    {
+        var hasFoods = new List<FoodDetailDto>();
+        
+        foods.ForEach(x =>
+        {
+            if (shoppingCart.Any(s => x.FoodName.Trim() == s.FoodName.Trim())) hasFoods.Add(x);
+        });
+        
+        shoppingCart.ForEach(x =>
+        {
+            if (hasFoods.Any(s => s.FoodName.Trim() == x.FoodName.Trim()))
+                x.Count += hasFoods.First(s => s.FoodName.Trim() == x.FoodName.Trim()).Count;
+        });
+
+        shoppingCart = shoppingCart.Where(x => x.Count > 0).ToList();
+        
+        Log.Information("Shopping cart after reduce: {ShoppingCart}", JsonConvert.SerializeObject(shoppingCart));
+    }
+    
+    private async Task<PhoneOrderDetailDto?> AddOrderDetailAsync(string query, CancellationToken cancellationToken)
     {
         var completionResult = await _smartiesClient.PerformQueryAsync( new AskGptRequest
         {
@@ -305,7 +350,7 @@ public partial class PhoneOrderService
         return openaiResponse == null ? null : JsonConvert.DeserializeObject<PhoneOrderDetailDto>(openaiResponse);
     }
      
-     private async Task<PhoneOrderDetailDto> ReduceOrderDetailAsync(List<FoodDetailDto> shoppingCart, string query, CancellationToken cancellationToken)
+    private async Task<PhoneOrderDetailDto> ReduceOrderDetailAsync(List<FoodDetailDto> shoppingCart, string query, CancellationToken cancellationToken)
     {
         var shoppingCar = JsonConvert.SerializeObject(shoppingCart, Formatting.Indented);
         
@@ -318,17 +363,13 @@ public partial class PhoneOrderService
                     Content = new CompletionsStringContent("你是一款高度理解语言的智能助手，专门用于识别和处理电话订单。" +
                                                            $"根据我目前购物车的内容和输入，来帮我补全food_details，count是菜品的数量，如果你不清楚数量的时候，count默认为-1，购物车内容如下：{shoppingCar}，remark固定为null;" +
                                                            "特别注意：如果当用户的请求的菜品不在菜单上时，也需要返回菜品种类，菜品名称数量和备注。" +
-                                                           "注意用json格式返回；规则：{\"food_details\": [{\"food_category\": \"菜品类别，包括小吃、粥、粉面、飯，用于分类菜品。\",\"food_name\": {\"小吃\": [\"炸鸡翼\",\"港式咖喱魚旦\",\"椒盐鸡翼\",\"菠萝油\"]," +
-                                                           "\"粥\": [\"皮蛋瘦肉粥\",\"明火白粥\"]," +
-                                                           "\"粉面\": [\"海鲜炒面\",\"豉椒牛肉炒河\",\"鲜虾云吞汤面\",\"特式炒一丁\"]," +
-                                                           "\"饭\": [\"扬州炒饭\",\"椒盐猪扒饭\",\"叉烧炒饭\"]}," +
-                                                           "\"饮料\": [\"可乐\",\"雪碧\",\"柠檬茶\",\"港式奶茶\"]},\"count\": 1,\"remark\": \"不要葱\"}]\n}\n " +
+                                                           "注意用json格式返回；规则：{\"food_details\": [{\"food_name\": \"菜品名字\",\"count\":减少的数量（负数）, \"remark\":null}]}}" +
                                                            "- 样本与输出：\n" +
-                                                           "input:你帮我去一个菠萝油,留一个给老婆 output:{\"food_details\": [{\"food_category\": \"小吃\", \"food_name\": \"菠萝油\",\"count\":-1, \"remark\":null}]}}\n" +
-                                                           "input:刚刚点的那一份皮蛋瘦肉粥不要了 output:{\"food_details\": [{\"food_category\": \"粥\", \"food_name\": \"皮蛋瘦肉粥\",\"count\":-1, \"remark\":null}]}}\n" +
+                                                           "input:你帮我去一个菠萝油,留一个给老婆 output:{\"food_details\": [{\"food_name\": \"菠萝油\",\"count\":-1, \"remark\":null}]}}\n" +
+                                                           "input:刚刚点的那一份皮蛋瘦肉粥不要了 output:{\"food_details\": [{\"food_name\": \"皮蛋瘦肉粥\",\"count\":-1, \"remark\":null}]}}\n" +
                                                            "input:全部不要了 output: null\n" +
                                                            "（假设购物车里有三份扬州炒饭）" +
-                                                           "input:刚刚点的扬州炒饭不要了 output:{\"food_details\": [{\"food_category\": \"饭\", \"food_name\": \"扬州炒饭\",\"count\":-3, \"remark\":null}]}}\n")
+                                                           "input:刚刚点的扬州炒饭不要了 output:{\"food_details\": [{\"food_name\": \"扬州炒饭\",\"count\":-3, \"remark\":null}]}}\n")
                 },
                 new ()
                 {
@@ -446,6 +487,5 @@ public partial class PhoneOrderService
         };
         
         return await _speechMaticsClient.CreateJobAsync(new SpeechMaticsCreateJobRequestDto { JobConfig = jobConfigDto }, createTranscriptionDto, cancellationToken).ConfigureAwait(false);
-        
     }
 }

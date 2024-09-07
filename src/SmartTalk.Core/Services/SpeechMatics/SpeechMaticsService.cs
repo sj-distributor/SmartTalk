@@ -44,18 +44,16 @@ public class SpeechMaticsService : ISpeechMaticsService
         if (command.Transcription == null || command.Transcription.Results.IsNullOrEmpty() || command.Transcription.Job == null || command.Transcription.Job.Id.IsNullOrEmpty()) return;
 
         var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByTranscriptionJobIdAsync(command.Transcription.Job.Id, cancellationToken).ConfigureAwait(false);
-        
+
         Log.Information("Get Phone order record : {@record}", record);
         
-        var results = command.Transcription.Results;
+        if (record == null) return;
         
-        Log.Information("Transcription results : {@results}", results);
+        Log.Information("Transcription results : {@results}", command.Transcription.Results);
         
         try
         {
-            if (record is null) throw new Exception("Record not exist");
-
-            var speakInfos = await StructureDiarizationResultsAsync(results, record, cancellationToken).ConfigureAwait(false);
+            var speakInfos = await StructureDiarizationResultsAsync(command.Transcription.Results, record, cancellationToken).ConfigureAwait(false);
             
             Log.Information("speakInfos : {@speakInfos}", speakInfos);
 
@@ -143,6 +141,7 @@ public class SpeechMaticsService : ISpeechMaticsService
     private async Task<List<SpeechMaticsSpeakInfoDto>> StructureDiarizationResultsAsync(List<SpeechMaticsResultDto> results, PhoneOrderRecord record, CancellationToken cancellationToken)
     {
         string currentSpeaker = null;
+        PhoneOrderRole? currentRole = null;
         var startTime = 0.0;
         var endTime = 0.0;
         var speakInfos = new List<SpeechMaticsSpeakInfoDto>();
@@ -152,6 +151,7 @@ public class SpeechMaticsService : ISpeechMaticsService
             if (currentSpeaker == null)
             {
                 currentSpeaker = result.Alternatives[0].Speaker;
+                currentRole = PhoneOrderRole.Restaurant;
                 startTime = result.StartTime;
                 endTime = result.EndTime;
                 continue;
@@ -163,8 +163,9 @@ public class SpeechMaticsService : ISpeechMaticsService
             }
             else
             {
-                speakInfos.Add(new SpeechMaticsSpeakInfoDto { EndTime = endTime, StartTime = startTime, Speaker = currentSpeaker });
+                speakInfos.Add(new SpeechMaticsSpeakInfoDto { EndTime = endTime, StartTime = startTime, Speaker = currentSpeaker, Role = currentRole.Value });
                 currentSpeaker = result.Alternatives[0].Speaker;
+                currentRole = currentRole == PhoneOrderRole.Restaurant ? PhoneOrderRole.Client : PhoneOrderRole.Restaurant;
                 startTime = result.StartTime;
                 endTime = result.EndTime;
             }
