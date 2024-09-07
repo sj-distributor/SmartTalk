@@ -1,5 +1,7 @@
 using Mediator.Net.Context;
 using Mediator.Net.Contracts;
+using SmartTalk.Core.Constants;
+using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.SpeechMatics;
 using SmartTalk.Messages.Commands.PhoneOrder;
 
@@ -7,15 +9,15 @@ namespace SmartTalk.Core.Handlers.CommandHandlers.PhoneOrder;
 
 public class TranscriptionCallbackCommandHandler : ICommandHandler<HandleTranscriptionCallbackCommand>
 {
-    private readonly ISpeechMaticsService _speechMaticsService;
-    
-    public TranscriptionCallbackCommandHandler(ISpeechMaticsService speechMaticsService)
-    {
-        _speechMaticsService = speechMaticsService;
-    }
+    private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
 
+    public TranscriptionCallbackCommandHandler(ISmartTalkBackgroundJobClient backgroundJobClient)
+    {
+        _backgroundJobClient = backgroundJobClient;
+    }
+    
     public async Task Handle(IReceiveContext<HandleTranscriptionCallbackCommand> context, CancellationToken cancellationToken)
     {
-        await _speechMaticsService.HandleTranscriptionCallbackAsync(context.Message, cancellationToken).ConfigureAwait(false);
+        _backgroundJobClient.Enqueue<ISpeechMaticsService>(x => x.HandleTranscriptionCallbackAsync(context.Message, cancellationToken), HangfireConstants.InternalHostingPhoneOrder);
     }
 }
