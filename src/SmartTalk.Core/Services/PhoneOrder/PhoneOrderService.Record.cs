@@ -19,6 +19,7 @@ using SmartTalk.Messages.Enums.SpeechMatics;
 using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Requests.PhoneOrder;
 using SmartTalk.Messages.Commands.Attachments;
+using SmartTalk.Messages.Constants;
 using SmartTalk.Messages.Dto.Restaurant;
 using TranscriptionFileType = SmartTalk.Messages.Enums.STT.TranscriptionFileType;
 using TranscriptionResponseFormat = SmartTalk.Messages.Enums.STT.TranscriptionResponseFormat;
@@ -282,7 +283,7 @@ public partial class PhoneOrderService
 
             if (similarFoodsResponse.Count == 0) return null;
             
-            var payload = similarFoodsResponse.First().Item1.Payload.ToString();
+            var payload = similarFoodsResponse.First().Item1.Payload[VectorDbStore.ReservedRestaurantPayload].ToString();
             
             if (string.IsNullOrEmpty(payload)) return null;
             
