@@ -86,11 +86,7 @@ public partial class Asterisk
 
     private async Task<List<string>> HandleAskDishesIntentAsync(IOpenAIService openAiService, string question)
     {
-        var dish = await AskDishDetailAsync(openAiService, question);
-        var foodUrl = GetFoods(dish?.FoodDetails?.FirstOrDefault()?.FoodCategory ?? string.Empty, dish?.FoodDetails?.FirstOrDefault()?.FoodName ?? string.Empty);
-        
-        ReplyText = GetReplyText(new List<string> { foodUrl });
-        return new List<string> { foodUrl };
+        return new List<string>();
     }
 
     private async Task<List<string>> HandleAddOrderIntentAsync(IOpenAIService openAiService, HttpClient client, string question, string AriUrl)
