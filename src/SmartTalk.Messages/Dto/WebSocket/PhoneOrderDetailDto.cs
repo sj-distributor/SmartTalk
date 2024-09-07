@@ -18,4 +18,6 @@ public class FoodDetailDto
     
     [JsonProperty("remark")]
     public string Remark { get; set; }
+    
+    public double Price { get; set; }
 }
