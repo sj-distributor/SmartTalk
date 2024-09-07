@@ -40,7 +40,7 @@ public class SmartiesClient : ISmartiesClient
     {
         Log.Information("Ask gpt embedding request: {@Request}", request);
 
-        var response = await _httpClientFactory.PostAsJsonAsync<AskGptEmbeddingResponseDto>(_smartiesSettings.BaseUrl, request, cancellationToken, headers: _headers).ConfigureAwait(false);
+        var response = await _httpClientFactory.PostAsJsonAsync<AskGptEmbeddingResponseDto>(_smartiesSettings.BaseUrl + "/api/Ask/embedding", request, cancellationToken, headers: _headers).ConfigureAwait(false);
         
         Log.Information("Ask gpt embedding response: {@Response}", response);
 
