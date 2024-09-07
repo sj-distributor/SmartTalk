@@ -4,6 +4,7 @@ using SmartTalk.Core.Extensions;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Messages.Commands.Restaurant;
+using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Enums.PhoneOrder;
 
 namespace SmartTalk.Core.Services.Restaurants;
@@ -48,10 +49,19 @@ public class RestaurantProcessJobService : IRestaurantProcessJobService
         {
             RestaurantId = restaurant.Id,
             Price = x.Price,
-            NameEn = x.Localizations.Where(l => l.LanguageCode == "en_US" && l.Field == "name").FirstOrDefault()?.Value ?? x.Localizations.Where(l => l.LanguageCode == "en_US" && l.Field == "posName").FirstOrDefault()?.Value,
-            NameZh = x.Localizations.Where(l => l.LanguageCode == "zh_CN" && l.Field == "name").FirstOrDefault()?.Value ?? x.Localizations.Where(l => l.LanguageCode == "zh_CN" && l.Field == "posName").FirstOrDefault()?.Value,
+            NameEn = GetMenuItemName(x.Localizations, "en_US"),
+            NameZh = GetMenuItemName(x.Localizations, "zh_CN"),
         }).ToList();
 
         await _restaurantDataProvider.AddRestaurantMenuItemsAsync(menuItems, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    private string GetMenuItemName(List<EasyPosResponseLocalization> localizations, string languageCode)
+    {
+        var name = localizations.Where(l => l.LanguageCode == languageCode && l.Field == "name").FirstOrDefault()?.Value;
+        var posName = localizations.Where(l => l.LanguageCode == languageCode && l.Field == "posName").FirstOrDefault()?.Value;
+        var sendChefName = localizations.Where(l => l.LanguageCode == languageCode && l.Field == "sendChefName").FirstOrDefault()?.Value;
+
+        return !string.IsNullOrEmpty(name) ? name : !string.IsNullOrEmpty(posName) ? posName : !string.IsNullOrEmpty(sendChefName) ? sendChefName : string.Empty;
     }
 }
