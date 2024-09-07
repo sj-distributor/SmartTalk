@@ -13,8 +13,11 @@ using Mediator.Net.Middlewares.Serilog;
 using Microsoft.Extensions.Configuration;
 using AutoMapper.Contrib.Autofac.DependencyInjection;
 using Google.Cloud.Translation.V2;
+using SmartTalk.Core.Services.Caching.Redis;
 using SmartTalk.Core.Settings.AliYun;
 using SmartTalk.Core.Settings.Google;
+using SmartTalk.Messages.Enums.Caching;
+using StackExchange.Redis;
 using Module = Autofac.Module;
 
 namespace SmartTalk.Core;
@@ -113,7 +116,13 @@ public class SmartTalkModule : Module
         {
             var pool = cfx.Resolve<IRedisConnectionPool>();
             return pool.GetConnection();
-        }).ExternallyOwned();
+        }).Keyed<ConnectionMultiplexer>(RedisServer.System).ExternallyOwned();
+        
+        builder.Register(cfx =>
+        {
+            var pool = cfx.Resolve<IRedisConnectionPool>();
+            return pool.GetConnection(RedisServer.Vector);
+        }).Keyed<ConnectionMultiplexer>(RedisServer.Vector).ExternallyOwned();
     }
     
     private void RegisterAliYunOssClient(ContainerBuilder builder)

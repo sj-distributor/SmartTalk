@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using SmartTalk.Messages.Enums.PhoneOrder;
 
 namespace SmartTalk.Core.Domain.PhoneOrder;
 
@@ -22,6 +23,12 @@ public class PhoneOrderConversation : IEntity, IHasCreatedFields
     
     [Column("order")]
     public int Order { get; set; }
+
+    [Column("intent")]
+    public PhoneOrderIntent Intent { get; set; } = PhoneOrderIntent.Chat;
+    
+    [Column("extract_food_item")]
+    public string ExtractFoodItem { get; set; }
 
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }

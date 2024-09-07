@@ -8,16 +8,16 @@ public enum PhoneOrderIntent
     Chat = 0,
 
     [Description("問菜品")]
-    AskDishes= 1,
+    AskDishes = 1,
     
     [Description("打招呼")]
-    SayHi= 2,
+    SayHi = 2,
 
     [Description("转人工")]
-    TransferToHuman= 3,
+    TransferToHuman = 3,
     
     [Description("下單")]
-    Order= 4,
+    Order = 4,
     
     [Description("营业时间")]
     AskOpeningHours = 5,
@@ -44,5 +44,5 @@ public enum PhoneOrderIntent
     AskMSG = 12,
 
     [Description("default")]
-    Default= 9999
+    Default = 9999
 }
