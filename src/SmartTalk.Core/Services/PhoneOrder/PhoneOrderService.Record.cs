@@ -209,28 +209,28 @@ public partial class PhoneOrderService
                 
                 goalTexts.Add((speakDetail.Role == PhoneOrderRole.Restaurant ? PhoneOrderRole.Restaurant.ToString() : PhoneOrderRole.Client.ToString()) + ": " + originText);
                 
+                var intent = await RecognizeIntentAsync(originText, cancellationToken).ConfigureAwait(false);
+
+                PhoneOrderDetailDto extractFoods = null;
+                
+                switch (intent)
+                {
+                    case PhoneOrderIntent.AddOrder:
+                        extractFoods = await AddOrderDetailAsync(originText, cancellationToken).ConfigureAwait(false);
+                        extractFoods = await GetSimilarRestaurantByRecordAsync(record, extractFoods, cancellationToken).ConfigureAwait(false);
+                        CheckOrAddToShoppingCart(shoppingCart.FoodDetails, extractFoods.FoodDetails);
+                        break;
+                    case PhoneOrderIntent.ReduceOrder:
+                        extractFoods = await ReduceOrderDetailAsync(shoppingCart.FoodDetails, originText, cancellationToken).ConfigureAwait(false);
+                        extractFoods = await GetSimilarRestaurantByRecordAsync(record, extractFoods, cancellationToken).ConfigureAwait(false);
+                        CheckOrReduceFromShoppingCart(shoppingCart.FoodDetails, extractFoods.FoodDetails);
+                        break;
+                }
+                
                 if (speakDetail.Role == PhoneOrderRole.Restaurant) 
                     conversations.Add(new PhoneOrderConversation { RecordId = record.Id, Question = originText, Order = conversationIndex });
                 else
                 {
-                    var intent = await RecognizeIntentAsync(originText, cancellationToken).ConfigureAwait(false);
-
-                    PhoneOrderDetailDto extractFoods = null;
-                
-                    switch (intent)
-                    {
-                        case PhoneOrderIntent.AddOrder:
-                            extractFoods = await AddOrderDetailAsync(originText, cancellationToken).ConfigureAwait(false);
-                            extractFoods = await GetSimilarRestaurantByRecordAsync(record, extractFoods, cancellationToken).ConfigureAwait(false);
-                            CheckOrAddToShoppingCart(shoppingCart.FoodDetails, extractFoods.FoodDetails);
-                            break;
-                        case PhoneOrderIntent.ReduceOrder:
-                            extractFoods = await ReduceOrderDetailAsync(shoppingCart.FoodDetails, originText, cancellationToken).ConfigureAwait(false);
-                            extractFoods = await GetSimilarRestaurantByRecordAsync(record, extractFoods, cancellationToken).ConfigureAwait(false);
-                            CheckOrReduceFromShoppingCart(shoppingCart.FoodDetails, extractFoods.FoodDetails);
-                            break;
-                    }
-
                     conversations[conversationIndex].Intent = intent;
                     conversations[conversationIndex].Answer = originText;
                     if (extractFoods != null) conversations[conversationIndex].ExtractFoodItem = JsonConvert.SerializeObject(extractFoods.FoodDetails);
