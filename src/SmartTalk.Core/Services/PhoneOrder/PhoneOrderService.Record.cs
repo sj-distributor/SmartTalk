@@ -221,6 +221,7 @@ public partial class PhoneOrderService
                     break;
                     case PhoneOrderIntent.ReduceOrder:
                         //ReduceOrderDetailAsync
+                    break;
                 }
                 
                 //embedding search output extract_food_item json
