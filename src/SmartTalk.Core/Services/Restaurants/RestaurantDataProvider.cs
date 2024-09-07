@@ -10,6 +10,8 @@ public interface IRestaurantDataProvider : IScopedDependency
     Task AddRestaurantMenuItemsAsync(List<RestaurantMenuItem> menuItems, bool forceSave = true, CancellationToken cancellationToken = default);
 
     Task<Restaurant> GetRestaurantByNameAsync(string name, CancellationToken cancellationToken);
+
+    Task<List<RestaurantMenuItem>> GetRestaurantMenuItemsAsync(CancellationToken cancellationToken);
 }
 
 public class RestaurantDataProvider : IRestaurantDataProvider
@@ -33,5 +35,10 @@ public class RestaurantDataProvider : IRestaurantDataProvider
     public async Task<Restaurant> GetRestaurantByNameAsync(string name, CancellationToken cancellationToken)
     {
         return await _repository.Query<Restaurant>(x => x.Name == name).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<RestaurantMenuItem>> GetRestaurantMenuItemsAsync(CancellationToken cancellationToken)
+    {
+        return await _repository.QueryNoTracking<RestaurantMenuItem>().ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }
