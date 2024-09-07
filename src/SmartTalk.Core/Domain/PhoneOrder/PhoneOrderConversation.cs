@@ -25,7 +25,7 @@ public class PhoneOrderConversation : IEntity, IHasCreatedFields
     public int Order { get; set; }
 
     [Column("intent")]
-    public PhoneOrderIntent Intent { get; set; } = PhoneOrderIntent.Chat;
+    public PhoneOrderIntent? Intent { get; set; }
     
     [Column("extract_food_item")]
     public string ExtractFoodItem { get; set; }

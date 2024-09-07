@@ -53,9 +53,10 @@ public class SpeechMaticsService : ISpeechMaticsService
         
         try
         {
-            var speakInfos = await StructureDiarizationResultsAsync(command.Transcription.Results, record, cancellationToken).ConfigureAwait(false);
+            record.Status = PhoneOrderRecordStatus.Transcription;
+            await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken).ConfigureAwait(false);
             
-            Log.Information("speakInfos : {@speakInfos}", speakInfos);
+            var speakInfos = StructureDiarizationResults(command.Transcription.Results);
 
             var recordContent = await _phoneOrderService.ExtractPhoneOrderRecordAiMenuAsync(speakInfos, record, cancellationToken).ConfigureAwait(false);
             
@@ -74,12 +75,9 @@ public class SpeechMaticsService : ISpeechMaticsService
         }
         catch (Exception e)
         {
-            if (record is not null)
-            {
-                record.Status = PhoneOrderRecordStatus.Exception;
-                await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken).ConfigureAwait(false);
-            }
-            
+            record.Status = PhoneOrderRecordStatus.Exception;
+            await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken).ConfigureAwait(false);
+
             Log.Warning(e.Message);
         }
     }
@@ -138,7 +136,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         }
     }
     
-    private async Task<List<SpeechMaticsSpeakInfoDto>> StructureDiarizationResultsAsync(List<SpeechMaticsResultDto> results, PhoneOrderRecord record, CancellationToken cancellationToken)
+    private List<SpeechMaticsSpeakInfoDto> StructureDiarizationResults(List<SpeechMaticsResultDto> results)
     {
         string currentSpeaker = null;
         PhoneOrderRole? currentRole = null;
@@ -173,9 +171,8 @@ public class SpeechMaticsService : ISpeechMaticsService
 
         speakInfos.Add(new SpeechMaticsSpeakInfoDto { EndTime = endTime, StartTime = startTime, Speaker = currentSpeaker });
 
-        record.Status = PhoneOrderRecordStatus.Transcription;
-        await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken).ConfigureAwait(false);
-
+        Log.Information("Structure diarization results : {@speakInfos}", speakInfos);
+        
         return speakInfos;
     }
 }

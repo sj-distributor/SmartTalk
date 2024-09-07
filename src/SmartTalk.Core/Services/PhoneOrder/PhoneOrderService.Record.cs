@@ -250,18 +250,22 @@ public partial class PhoneOrderService
         
         record.Status = PhoneOrderRecordStatus.Sent;
         record.TranscriptionText = string.Join("\n", goalTexts);
+        conversations.Where(x => string.IsNullOrEmpty(x.Answer)).ForEach(x => x.Answer = string.Empty);
         
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
         await _phoneOrderDataProvider.AddPhoneOrderConversationsAsync(conversations, true, cancellationToken).ConfigureAwait(false);
-        await _phoneOrderDataProvider.AddPhoneOrderItemAsync(shoppingCart.FoodDetails.Select(x =>
-            new PhoneOrderOrderItem
-            {
-                RecordId = record.Id,
-                FoodName = x.FoodName,
-                Quantity = x.Count ?? 0,
-                Price = x.Price,
-                Note = x.Remark
-            }).ToList(), true, cancellationToken).ConfigureAwait(false);
+
+        var items = shoppingCart.FoodDetails.Select(x => new PhoneOrderOrderItem
+        {
+            RecordId = record.Id,
+            FoodName = x.FoodName,
+            Quantity = x.Count ?? 0,
+            Price = x.Price,
+            Note = x.Remark
+        }).ToList();
+
+        if (items.Any())
+            await _phoneOrderDataProvider.AddPhoneOrderItemAsync(items, true, cancellationToken).ConfigureAwait(false);
         
         return recordContent;
     }
@@ -339,6 +343,8 @@ public partial class PhoneOrderService
         }, cancellationToken).ConfigureAwait(false); 
 
         var responseContent = response.Data.Response;
+        
+        Log.Information("OpenAI classify client intent response: {responseContent}", responseContent);
         
         return int.TryParse(responseContent, out var intent) && Enum.IsDefined(typeof(PhoneOrderIntent), intent) ? (PhoneOrderIntent)intent : PhoneOrderIntent.Default;
     }
