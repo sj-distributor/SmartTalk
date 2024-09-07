@@ -26,9 +26,10 @@ public class RestaurantProcessJobService : IRestaurantProcessJobService
 
     public async Task SyncRestaurantMenusAsync(SchedulingSyncRestaurantMenuCommand command, CancellationToken cancellationToken)
     {
-        await PersistRestaurantMenuItemsAsync(PhoneOrderRestaurant.MoonHouse, cancellationToken).ConfigureAwait(false);
-        await PersistRestaurantMenuItemsAsync(PhoneOrderRestaurant.JiangNanChun, cancellationToken).ConfigureAwait(false);
-        await PersistRestaurantMenuItemsAsync(PhoneOrderRestaurant.XiangTanRenJia, cancellationToken).ConfigureAwait(false);
+        var syncTasks = Enum.GetValues(typeof(PhoneOrderRestaurant))
+            .Cast<PhoneOrderRestaurant>().Select(restaurant => PersistRestaurantMenuItemsAsync(restaurant, cancellationToken));
+
+        await Task.WhenAll(syncTasks).ConfigureAwait(false);
     }
 
     private async Task PersistRestaurantMenuItemsAsync(PhoneOrderRestaurant restaurantType, CancellationToken cancellationToken)
