@@ -251,6 +251,7 @@ public partial class PhoneOrderService
         
         return (record.TranscriptionText, localhostUrl);
     }
+     
     private async Task<PhoneOrderDetailDto> GetSimilarRestaurantByRecordAsync(PhoneOrderRecord record, PhoneOrderDetailDto foods, CancellationToken cancellationToken)
     {
         var result = new PhoneOrderDetailDto { FoodDetails = new List<FoodDetailDto>() };
@@ -278,8 +279,7 @@ public partial class PhoneOrderService
 
         return result;
     }
-
-
+    
     public async Task<string> SplitAudioAsync(byte[] file, PhoneOrderRecord record, double speakStartTimeVideo, double speakEndTimeVideo, TranscriptionFileType fileType = TranscriptionFileType.Wav, CancellationToken cancellationToken = default)
     {
         if (file == null) return null;
