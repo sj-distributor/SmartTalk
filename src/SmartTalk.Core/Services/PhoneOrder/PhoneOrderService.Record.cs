@@ -225,6 +225,16 @@ public partial class PhoneOrderService
                 }
                 
                 //embedding search output extract_food_item json
+                var restaurant = await _restaurantDataProvider.GetRestaurantByNameAsync(record.Restaurant.GetDescription(), cancellationToken).ConfigureAwait(false);
+                
+                var response = await _vectorDb
+                    .GetSimilarListAsync(restaurant.Name, "", minRelevance: 0.4, cancellationToken: cancellationToken)
+                    .ToListAsync(cancellationToken).ConfigureAwait(false);
+
+                foreach (var (responseRecord, relevance) in response)
+                {
+                    
+                }
                 
                 // S1 餐厅，S2 客人
                 texts.Add(speakDetail.Speaker + ":" + originText);
