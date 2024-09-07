@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using SmartTalk.Messages.Enums.Restaurants;
 
 namespace SmartTalk.Core.Domain.Restaurants;
 
@@ -17,11 +18,11 @@ public class RestaurantMenuItem : IEntity
     [Column("price")]
     public decimal Price { get; set; }
     
-    [Column("name_en"), StringLength(256)]
-    public string NameEn { get; set; }
-    
-    [Column("name_zh"), StringLength(256)]
-    public string NameZh { get; set; }
+    [Column("name"), StringLength(256)]
+    public string Name { get; set; }
+
+    [Column("language")] 
+    public RestaurantItemLanguage Language { get; set; }
     
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; } = DateTimeOffset.Now;

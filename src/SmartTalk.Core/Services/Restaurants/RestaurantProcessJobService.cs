@@ -6,6 +6,7 @@ using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Messages.Commands.Restaurant;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Enums.PhoneOrder;
+using SmartTalk.Messages.Enums.Restaurants;
 
 namespace SmartTalk.Core.Services.Restaurants;
 
@@ -45,15 +46,16 @@ public class RestaurantProcessJobService : IRestaurantProcessJobService
         
         Log.Information("Get easy pos menu item response: {@Response}", response);
         
-        var menuItems = response.Data.Products.Select(x => new RestaurantMenuItem
-        {
-            RestaurantId = restaurant.Id,
-            Price = x.Price,
-            NameEn = GetMenuItemName(x.Localizations, "en_US"),
-            NameZh = GetMenuItemName(x.Localizations, "zh_CN"),
-        }).ToList();
+        var items = new[] { "zh_CN", "en_US" }
+            .SelectMany(language => response.Data.Products.Select(x => new RestaurantMenuItem
+            {
+                RestaurantId = restaurant.Id,
+                Price = x.Price,
+                Name = GetMenuItemName(x.Localizations, language),
+                Language = language == "zh_CN" ? RestaurantItemLanguage.Chinese : RestaurantItemLanguage.English
+            })).ToList();
 
-        await _restaurantDataProvider.AddRestaurantMenuItemsAsync(menuItems, cancellationToken: cancellationToken).ConfigureAwait(false);
+        await _restaurantDataProvider.AddRestaurantMenuItemsAsync(items, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
     private string GetMenuItemName(List<EasyPosResponseLocalization> localizations, string languageCode)
