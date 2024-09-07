@@ -2,7 +2,7 @@ using SmartTalk.Messages.Enums.Restaurants;
 
 namespace SmartTalk.Messages.Dto.Restaurant;
 
-public class RestaurantMenuItemDto
+public class RestaurantPayloadDto
 {
     public int Id { get; set; }
 
@@ -13,6 +13,4 @@ public class RestaurantMenuItemDto
     public string Name { get; set; }
     
     public RestaurantItemLanguage Language { get; set; }
-    
-    public DateTimeOffset CreatedDate { get; set; }
 }
