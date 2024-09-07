@@ -18,7 +18,10 @@ using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Requests.PhoneOrder;
 using SmartTalk.Messages.Commands.Attachments;
+using SmartTalk.Messages.Constants;
+using SmartTalk.Messages.Dto.Restaurant;
 using SmartTalk.Messages.Dto.SpeechMatics;
+using SmartTalk.Messages.Dto.WebSocket;
 using SmartTalk.Messages.Dto.WeChat;
 using SmartTalk.Messages.Enums.SpeechMatics;
 using SmartTalk.Messages.Enums.STT;
@@ -217,23 +220,13 @@ public partial class PhoneOrderService
                 switch (intent)
                 {
                     case PhoneOrderIntent.AddOrder:
-                        //AddOrderDetailAsync
-                    break;
+                        var extractFoods = new PhoneOrderDetailDto();  //AddOrderDetailAsync
+                        
+                        var similarFoods = await GetSimilarRestaurantByRecordAsync(record, extractFoods, cancellationToken).ConfigureAwait(false);
+                        break;
                     case PhoneOrderIntent.ReduceOrder:
                         //ReduceOrderDetailAsync
-                    break;
-                }
-                
-                //embedding search output extract_food_item json
-                var restaurant = await _restaurantDataProvider.GetRestaurantByNameAsync(record.Restaurant.GetDescription(), cancellationToken).ConfigureAwait(false);
-                
-                var response = await _vectorDb
-                    .GetSimilarListAsync(restaurant.Name, "", minRelevance: 0.4, cancellationToken: cancellationToken)
-                    .ToListAsync(cancellationToken).ConfigureAwait(false);
-
-                foreach (var (responseRecord, relevance) in response)
-                {
-                    
+                        break;
                 }
                 
                 // S1 餐厅，S2 客人
@@ -258,6 +251,34 @@ public partial class PhoneOrderService
         
         return (record.TranscriptionText, localhostUrl);
     }
+    private async Task<PhoneOrderDetailDto> GetSimilarRestaurantByRecordAsync(PhoneOrderRecord record, PhoneOrderDetailDto foods, CancellationToken cancellationToken)
+    {
+        var result = new PhoneOrderDetailDto { FoodDetails = new List<FoodDetailDto>() };
+        var restaurant = await _restaurantDataProvider.GetRestaurantByNameAsync(record.Restaurant.GetDescription(), cancellationToken).ConfigureAwait(false);
+
+        var tasks = foods.FoodDetails.Select(async foodDetail =>
+        {
+            var similarFoodsResponse = await _vectorDb.GetSimilarListAsync(
+                restaurant.Name, foodDetail.FoodName, minRelevance: 0.4, cancellationToken: cancellationToken).ToListAsync(cancellationToken);
+
+            if (similarFoodsResponse.Count == 0) return null;
+            
+            var payload = similarFoodsResponse.First().Item1.Payload.ToString();
+            
+            if (string.IsNullOrEmpty(payload)) return null;
+            
+            foodDetail.FoodName = JsonConvert.DeserializeObject<RestaurantPayloadDto>(payload).Name;
+            
+            return foodDetail;
+        }).ToList();
+
+        var completedTasks = await Task.WhenAll(tasks);
+        
+        result.FoodDetails.AddRange(completedTasks.Where(fd => fd != null));
+
+        return result;
+    }
+
 
     public async Task<string> SplitAudioAsync(byte[] file, PhoneOrderRecord record, double speakStartTimeVideo, double speakEndTimeVideo, TranscriptionFileType fileType = TranscriptionFileType.Wav, CancellationToken cancellationToken = default)
     {
