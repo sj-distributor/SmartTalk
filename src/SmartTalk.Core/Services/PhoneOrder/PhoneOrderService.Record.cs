@@ -260,7 +260,7 @@ public partial class PhoneOrderService
         var tasks = foods.FoodDetails.Select(async foodDetail =>
         {
             var similarFoodsResponse = await _vectorDb.GetSimilarListAsync(
-                restaurant.Name, foodDetail.FoodName, minRelevance: 0.4, cancellationToken: cancellationToken).ToListAsync(cancellationToken);
+                restaurant.Id.ToString(), foodDetail.FoodName, minRelevance: 0.4, cancellationToken: cancellationToken).ToListAsync(cancellationToken);
 
             if (similarFoodsResponse.Count == 0) return null;
             
