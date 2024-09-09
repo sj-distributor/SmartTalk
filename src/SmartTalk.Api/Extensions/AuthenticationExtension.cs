@@ -1,9 +1,13 @@
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using SmartTalk.Core.Constants;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.IdentityModel.Tokens;
 using SmartTalk.Api.Authentication.ApiKey;
 using SmartTalk.Api.Authentication.OME;
 using SmartTalk.Api.Authentication.Wiltechs;
 using SmartTalk.Core.Services.Identity;
+using SmartTalk.Core.Settings.Authentication;
 using SmartTalk.Core.Settings.System;
 using SmartTalk.Messages.Enums.System;
 
@@ -13,10 +17,25 @@ public static class AuthenticationExtension
 {
     public static void AddCustomAuthentication(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddAuthentication(options =>
+        services
+            .AddAuthentication(options =>
             {
+                options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
                 options.DefaultAuthenticateScheme = AuthenticationSchemeConstants.ApiKeyAuthenticationScheme;
-                options.DefaultChallengeScheme = AuthenticationSchemeConstants.ApiKeyAuthenticationScheme;
+            })
+            .AddJwtBearer(options =>
+            {
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateLifetime = false,
+                    ValidateAudience = false,
+                    ValidateIssuer = false,
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey =
+                        new SymmetricSecurityKey(
+                            Encoding.UTF8.GetBytes(new JwtSymmetricKeySetting(configuration).Value
+                                .PadRight(256 / 8, '\0')))
+                };
             })
             .AddScheme<ApiKeyAuthenticationOptions, ApiKeyAuthenticationHandler>(
                 AuthenticationSchemeConstants.ApiKeyAuthenticationScheme, _ => { })
@@ -38,6 +57,7 @@ public static class AuthenticationExtension
         services.AddAuthorization(options =>
         {
             options.DefaultPolicy = new AuthorizationPolicyBuilder(
+                JwtBearerDefaults.AuthenticationScheme,
                 AuthenticationSchemeConstants.ApiKeyAuthenticationScheme,
                 AuthenticationSchemeConstants.WiltechsAuthenticationScheme,
                 AuthenticationSchemeConstants.OMEAuthenticationScheme).RequireAuthenticatedUser().Build();
