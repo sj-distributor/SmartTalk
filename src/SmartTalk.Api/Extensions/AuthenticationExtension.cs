@@ -1,4 +1,5 @@
 using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using SmartTalk.Core.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.IdentityModel.Tokens;
@@ -16,10 +17,11 @@ public static class AuthenticationExtension
 {
     public static void AddCustomAuthentication(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddAuthentication(options =>
+        services
+            .AddAuthentication(options =>
             {
+                options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
                 options.DefaultAuthenticateScheme = AuthenticationSchemeConstants.ApiKeyAuthenticationScheme;
-                options.DefaultChallengeScheme = AuthenticationSchemeConstants.ApiKeyAuthenticationScheme;
             })
             .AddJwtBearer(options =>
             {
@@ -55,6 +57,7 @@ public static class AuthenticationExtension
         services.AddAuthorization(options =>
         {
             options.DefaultPolicy = new AuthorizationPolicyBuilder(
+                JwtBearerDefaults.AuthenticationScheme,
                 AuthenticationSchemeConstants.ApiKeyAuthenticationScheme,
                 AuthenticationSchemeConstants.WiltechsAuthenticationScheme,
                 AuthenticationSchemeConstants.OMEAuthenticationScheme).RequireAuthenticatedUser().Build();
