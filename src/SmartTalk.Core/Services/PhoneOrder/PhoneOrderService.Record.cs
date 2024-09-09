@@ -138,7 +138,7 @@ public partial class PhoneOrderService
         var originText = await SplitAudioAsync(audioContent, record, phoneOrderInfos[0].StartTime * 1000, phoneOrderInfos[0].EndTime * 1000,
             TranscriptionFileType.Wav, cancellationToken).ConfigureAwait(false);
         
-        if (!await CheckAudioFirstSentenceIsRestaurantAsync(originText, cancellationToken).ConfigureAwait(false)) return phoneOrderInfos;
+        if (await CheckAudioFirstSentenceIsRestaurantAsync(originText, cancellationToken).ConfigureAwait(false)) return phoneOrderInfos;
         
         foreach (var phoneOrderInfo in phoneOrderInfos)
         {
