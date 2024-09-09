@@ -5,6 +5,7 @@ using Microsoft.IdentityModel.Tokens;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Extensions;
 using SmartTalk.Core.Services.Ffmpeg;
+using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Core.Services.PhoneOrder;
@@ -29,14 +30,16 @@ public class SpeechMaticsService : ISpeechMaticsService
     private readonly PhoneOrderSetting _phoneOrderSetting;
     private readonly IPhoneOrderService _phoneOrderService;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
+    private readonly ISmartTalkHttpClientFactory _smartTalkHttpClientFactory;
     
-    public SpeechMaticsService(IWeChatClient weChatClient, IFfmpegService ffmpegService, PhoneOrderSetting phoneOrderSetting, IPhoneOrderService phoneOrderService, IPhoneOrderDataProvider phoneOrderDataProvider)
+    public SpeechMaticsService(IWeChatClient weChatClient, IFfmpegService ffmpegService, PhoneOrderSetting phoneOrderSetting, IPhoneOrderService phoneOrderService, IPhoneOrderDataProvider phoneOrderDataProvider, ISmartTalkHttpClientFactory smartTalkHttpClientFactory)
     {
         _weChatClient = weChatClient;
         _ffmpegService = ffmpegService;
         _phoneOrderSetting = phoneOrderSetting;
         _phoneOrderService = phoneOrderService;
         _phoneOrderDataProvider = phoneOrderDataProvider;
+        _smartTalkHttpClientFactory = smartTalkHttpClientFactory;
     }
 
     public async Task HandleTranscriptionCallbackAsync(HandleTranscriptionCallbackCommand command, CancellationToken cancellationToken)
@@ -58,9 +61,11 @@ public class SpeechMaticsService : ISpeechMaticsService
             
             var speakInfos = StructureDiarizationResults(command.Transcription.Results);
 
-            var recordContent = await _phoneOrderService.ExtractPhoneOrderRecordAiMenuAsync(speakInfos, record, cancellationToken).ConfigureAwait(false);
+            var audioContent = await _smartTalkHttpClientFactory.GetAsync<byte[]>(record.Url, cancellationToken).ConfigureAwait(false);
             
-            await SendWorkWeChatRobotNotifyAsync(recordContent, new PhoneOrderRecordInformationDto
+            await _phoneOrderService.ExtractPhoneOrderRecordAiMenuAsync(speakInfos, record, audioContent, cancellationToken).ConfigureAwait(false);
+            
+            await SendWorkWeChatRobotNotifyAsync(audioContent, new PhoneOrderRecordInformationDto
             {
                 OrderDate = record.CreatedDate,
                 Restaurant = record.Restaurant,

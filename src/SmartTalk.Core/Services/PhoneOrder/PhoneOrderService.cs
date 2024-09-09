@@ -36,7 +36,6 @@ public partial class PhoneOrderService : IPhoneOrderService
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly IRestaurantDataProvider _restaurantDataProvider;
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
-    private readonly ISmartTalkHttpClientFactory _smartTalkHttpClientFactory;
     private readonly TranscriptionCallbackSetting _transcriptionCallbackSetting;
 
     public PhoneOrderService(
@@ -55,7 +54,6 @@ public partial class PhoneOrderService : IPhoneOrderService
         IRestaurantDataProvider restaurantDataProvider,
         IPhoneOrderDataProvider phoneOrderDataProvider,
         ISmartTalkBackgroundJobClient backgroundJobClient,
-        ISmartTalkHttpClientFactory smartTalkHttpClientFactory,
         TranscriptionCallbackSetting transcriptionCallbackSetting)
     {
         _mapper = mapper;
@@ -73,7 +71,6 @@ public partial class PhoneOrderService : IPhoneOrderService
         _backgroundJobClient = backgroundJobClient;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _restaurantDataProvider = restaurantDataProvider;
-        _smartTalkHttpClientFactory = smartTalkHttpClientFactory;
         _transcriptionCallbackSetting = transcriptionCallbackSetting;
     }
 }

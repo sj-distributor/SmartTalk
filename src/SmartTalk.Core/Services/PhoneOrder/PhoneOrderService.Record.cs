@@ -32,7 +32,7 @@ public partial interface IPhoneOrderService
 
     Task ReceivePhoneOrderRecordAsync(ReceivePhoneOrderRecordCommand command, CancellationToken cancellationToken);
 
-    Task<byte[]> ExtractPhoneOrderRecordAiMenuAsync(List<SpeechMaticsSpeakInfoDto> speakInfos, PhoneOrderRecord record, CancellationToken cancellationToken);
+    Task ExtractPhoneOrderRecordAiMenuAsync(List<SpeechMaticsSpeakInfoDto> phoneOrderInfo, PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderService
@@ -102,12 +102,169 @@ public partial class PhoneOrderService
         };
     }
 
-    public async Task<byte[]> ExtractPhoneOrderRecordAiMenuAsync(
-        List<SpeechMaticsSpeakInfoDto> speakInfos, PhoneOrderRecord record, CancellationToken cancellationToken)
+    public async Task ExtractPhoneOrderRecordAiMenuAsync(
+        List<SpeechMaticsSpeakInfoDto> phoneOrderInfo, PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken)
     {
-        var recordContent = await TranscriptAsync(speakInfos, record, cancellationToken).ConfigureAwait(false);
+        if (phoneOrderInfo is { Count: 0 }) return;
         
-        return recordContent;
+        phoneOrderInfo = await HandlerConversationFirstSentenceAsync(phoneOrderInfo, record, audioContent, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Phone order record info: {@phoneOrderInfo}", phoneOrderInfo);
+        
+        var (goalTexts, shoppingCart, conversations) = await PhoneOrderTranscriptionAsync(phoneOrderInfo, record, audioContent, cancellationToken).ConfigureAwait(false);
+        
+        record.Status = PhoneOrderRecordStatus.Sent;
+        record.TranscriptionText = string.Join("\n", goalTexts);
+        conversations.Where(x => string.IsNullOrEmpty(x.Answer)).ForEach(x => x.Answer = string.Empty);
+        
+        await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
+        await _phoneOrderDataProvider.AddPhoneOrderConversationsAsync(conversations, true, cancellationToken).ConfigureAwait(false);
+
+        var items = shoppingCart.FoodDetails.Select(x => new PhoneOrderOrderItem
+        {
+            RecordId = record.Id,
+            FoodName = x.FoodName,
+            Quantity = x.Count ?? 0,
+            Price = x.Price,
+            Note = x.Remark
+        }).ToList();
+
+        if (items.Any())
+            await _phoneOrderDataProvider.AddPhoneOrderItemAsync(items, true, cancellationToken).ConfigureAwait(false);
+    }
+    
+    private async Task<List<SpeechMaticsSpeakInfoDto>> HandlerConversationFirstSentenceAsync(List<SpeechMaticsSpeakInfoDto> phoneOrderInfos, PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken)
+    {
+        var originText = await SplitAudioAsync(audioContent, record, phoneOrderInfos[0].StartTime * 1000, phoneOrderInfos[0].EndTime * 1000,
+            TranscriptionFileType.Wav, cancellationToken).ConfigureAwait(false);
+        
+        if (!await CheckAudioFirstSentenceIsRestaurantAsync(originText, cancellationToken).ConfigureAwait(false)) return phoneOrderInfos;
+        
+        foreach (var phoneOrderInfo in phoneOrderInfos)
+        {
+            phoneOrderInfo.Speaker = phoneOrderInfo.Speaker == "S1" ? "S2" : "S1";
+            phoneOrderInfo.Role = phoneOrderInfo.Role == PhoneOrderRole.Restaurant ? PhoneOrderRole.Client : PhoneOrderRole.Restaurant;
+        }
+
+        phoneOrderInfos.Insert(0, new SpeechMaticsSpeakInfoDto
+        {
+            StartTime = 0,
+            EndTime = 0,
+            Role = PhoneOrderRole.Restaurant,
+            Speaker = "S1"
+        });
+
+        return phoneOrderInfos;
+    }
+
+    private async Task<(List<string>, PhoneOrderDetailDto, List<PhoneOrderConversation>)> PhoneOrderTranscriptionAsync(
+        List<SpeechMaticsSpeakInfoDto> phoneOrderInfo, PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken)
+    {
+        var conversationIndex = 0;
+        var goalTexts = new List<string>();
+        var shoppingCart = new PhoneOrderDetailDto();
+        var conversations = new List<PhoneOrderConversation>();
+
+        foreach (var speakDetail in phoneOrderInfo)
+        {
+            Log.Information("Start time of speak in video: {SpeakStartTimeVideo}, End time of speak in video: {SpeakEndTimeVideo}", speakDetail.StartTime * 1000, speakDetail.EndTime * 1000);
+
+            try
+            {
+                string originText;
+                
+                if (speakDetail.StartTime != 0 && speakDetail.EndTime != 0)
+                    originText = await SplitAudioAsync(
+                        audioContent, record, speakDetail.StartTime * 1000, speakDetail.EndTime * 1000, TranscriptionFileType.Wav, cancellationToken).ConfigureAwait(false);
+                else
+                {
+                    originText = "";
+                }
+                
+                Log.Information("Phone Order transcript originText: {originText}", originText);
+                    
+                goalTexts.Add((speakDetail.Role == PhoneOrderRole.Restaurant
+                    ? PhoneOrderRole.Restaurant.ToString()
+                    : PhoneOrderRole.Client.ToString()) + ": " + originText);
+                
+                if (speakDetail.Role == PhoneOrderRole.Restaurant)
+                    conversations.Add(new PhoneOrderConversation
+                        { RecordId = record.Id, Question = originText, Order = conversationIndex });
+                else
+                {
+                    var intent = await RecognizeIntentAsync(originText, cancellationToken).ConfigureAwait(false);
+
+                    PhoneOrderDetailDto extractFoods = null;
+
+                    switch (intent)
+                    {
+                        case PhoneOrderIntent.AddOrder:
+                            extractFoods = await AddOrderDetailAsync(originText, cancellationToken).ConfigureAwait(false);
+                            extractFoods = await GetSimilarRestaurantByRecordAsync(record, extractFoods, cancellationToken).ConfigureAwait(false);
+                            CheckOrAddToShoppingCart(shoppingCart.FoodDetails, extractFoods.FoodDetails);
+                            break;
+                        case PhoneOrderIntent.ReduceOrder:
+                            extractFoods = await ReduceOrderDetailAsync(shoppingCart.FoodDetails, originText, cancellationToken).ConfigureAwait(false);
+                            extractFoods = await GetSimilarRestaurantByRecordAsync(record, extractFoods, cancellationToken).ConfigureAwait(false);
+                            CheckOrReduceFromShoppingCart(shoppingCart.FoodDetails, extractFoods.FoodDetails);
+                            break;
+                    }
+
+                    conversations[conversationIndex].Intent = intent;
+                    conversations[conversationIndex].Answer = originText;
+                    if (extractFoods != null)
+                        conversations[conversationIndex].ExtractFoodItem = JsonConvert.SerializeObject(extractFoods.FoodDetails);
+
+                    conversationIndex++;
+                }
+            }
+            catch (Exception ex)
+            {
+                record.Status = PhoneOrderRecordStatus.Exception;
+
+                Log.Information("transcription error: {ErrorMessage}", ex.Message);
+            }
+        }
+
+        Log.Information("Phone order conversation: {@conversations}, shopping cart: {@shoppingCart}", conversations,
+            shoppingCart);
+
+        return (goalTexts, shoppingCart, conversations);
+    }
+
+    private async Task<bool> CheckAudioFirstSentenceIsRestaurantAsync(string query, CancellationToken cancellationToken)
+    {
+        var completionResult = await _smartiesClient.PerformQueryAsync( new AskGptRequest
+        {
+            Messages = new List<CompletionsRequestMessageDto>
+            {
+                new () {
+                    Role = "system",
+                    Content = new CompletionsStringContent("你是一款餐厅订餐语句高度理解的智能助手，专门用于分辨语句是顾客还是餐厅说的。" +
+                                                           "请根据我提供的语句，判断语句是属于餐厅还是顾客说的，如果是餐厅的话，请返回\"true\"，如果是顾客的话，请返回\"false\"，" +
+                                                           "注意:\n" +
+                                                           "1. 如果语句中没有提及餐馆或或者点餐意图的，只是单纯的打招呼，则判断为餐厅说的，返回true。\n" +
+                                                           "2. 如果是比较短的语句且是一些莫名其妙的字眼，例如Hamras（实际是Hello, Moon house），可以判断是餐厅说的\n" +
+                                                           "- 样本与输出：\n" +
+                                                           "input:你好,江南春 output:true\n" +
+                                                           "input:hello,MoonHouse output:true\n" +
+                                                           "input:你好,湘里人家 output:true\n" +
+                                                           "input:喂,out:true\n" +
+                                                           "input:Hamras, output:true" +
+                                                           "input:你好，我要点单 output:false\n" +
+                                                           "input:你好，这里是江南春吗 output:false\n" +
+                                                           "input:你好，我是小明，我可以订餐吗 output:false")
+                },
+                new ()
+                {
+                    Role = "user",
+                    Content = new CompletionsStringContent($"input: {query}, output:")
+                }
+            },
+            Model = OpenAiModel.Gpt4o
+        }, cancellationToken).ConfigureAwait(false);
+        
+        return bool.Parse(completionResult.Data.Response);
     }
 
     private async Task AddPhoneOrderRecordAsync(PhoneOrderRecord record, PhoneOrderRecordStatus status, CancellationToken cancellationToken)
@@ -185,91 +342,6 @@ public partial class PhoneOrderService
 
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
-    
-    public async Task<byte[]> TranscriptAsync(List<SpeechMaticsSpeakInfoDto> phoneOrderInfo, PhoneOrderRecord record, CancellationToken cancellationToken)
-    {
-        var conversationIndex = 0;
-        var goalTexts = new List<string>();
-        var shoppingCart = new PhoneOrderDetailDto();
-        var conversations = new List<PhoneOrderConversation>();
-        
-        var recordContent = await _smartTalkHttpClientFactory.GetAsync<byte[]>(record.Url, cancellationToken).ConfigureAwait(false);
-        
-        foreach (var speakDetail in phoneOrderInfo)
-        {
-            var speakStartTimeVideo = speakDetail.StartTime * 1000 - 0;
-            var speakEndTimeVideo = speakDetail.EndTime * 1000 - 0;
-
-            Log.Information("Start time of speak in video: {SpeakStartTimeVideo}, End time of speak in video: {SpeakEndTimeVideo}", speakStartTimeVideo, speakEndTimeVideo);
-
-            try
-            {
-                var originText = await SplitAudioAsync(recordContent, record, speakStartTimeVideo, speakEndTimeVideo, TranscriptionFileType.Wav, cancellationToken).ConfigureAwait(false);
-
-                Log.Information("Phone Order transcript originText: {originText}", originText);
-                
-                goalTexts.Add((speakDetail.Role == PhoneOrderRole.Restaurant ? PhoneOrderRole.Restaurant.ToString() : PhoneOrderRole.Client.ToString()) + ": " + originText);
-                
-                var intent = await RecognizeIntentAsync(originText, cancellationToken).ConfigureAwait(false);
-
-                PhoneOrderDetailDto extractFoods = null;
-                
-                switch (intent)
-                {
-                    case PhoneOrderIntent.AddOrder:
-                        extractFoods = await AddOrderDetailAsync(originText, cancellationToken).ConfigureAwait(false);
-                        extractFoods = await GetSimilarRestaurantByRecordAsync(record, extractFoods, cancellationToken).ConfigureAwait(false);
-                        CheckOrAddToShoppingCart(shoppingCart.FoodDetails, extractFoods.FoodDetails);
-                        break;
-                    case PhoneOrderIntent.ReduceOrder:
-                        extractFoods = await ReduceOrderDetailAsync(shoppingCart.FoodDetails, originText, cancellationToken).ConfigureAwait(false);
-                        extractFoods = await GetSimilarRestaurantByRecordAsync(record, extractFoods, cancellationToken).ConfigureAwait(false);
-                        CheckOrReduceFromShoppingCart(shoppingCart.FoodDetails, extractFoods.FoodDetails);
-                        break;
-                }
-                
-                if (speakDetail.Role == PhoneOrderRole.Restaurant) 
-                    conversations.Add(new PhoneOrderConversation { RecordId = record.Id, Question = originText, Order = conversationIndex });
-                else
-                {
-                    conversations[conversationIndex].Intent = intent;
-                    conversations[conversationIndex].Answer = originText;
-                    if (extractFoods != null) conversations[conversationIndex].ExtractFoodItem = JsonConvert.SerializeObject(extractFoods.FoodDetails);
-                    
-                    conversationIndex++;
-                }
-            }
-            catch (Exception ex)
-            {
-                record.Status = PhoneOrderRecordStatus.Exception;
-
-                Log.Information("transcription error: {ErrorMessage}", ex.Message);
-            }
-        }
-        
-        Log.Information("Phone order conversation: {@conversations}, shopping cart: {@shoppingCart}", conversations, shoppingCart);
-        
-        record.Status = PhoneOrderRecordStatus.Sent;
-        record.TranscriptionText = string.Join("\n", goalTexts);
-        conversations.Where(x => string.IsNullOrEmpty(x.Answer)).ForEach(x => x.Answer = string.Empty);
-        
-        await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
-        await _phoneOrderDataProvider.AddPhoneOrderConversationsAsync(conversations, true, cancellationToken).ConfigureAwait(false);
-
-        var items = shoppingCart.FoodDetails.Select(x => new PhoneOrderOrderItem
-        {
-            RecordId = record.Id,
-            FoodName = x.FoodName,
-            Quantity = x.Count ?? 0,
-            Price = x.Price,
-            Note = x.Remark
-        }).ToList();
-
-        if (items.Any())
-            await _phoneOrderDataProvider.AddPhoneOrderItemAsync(items, true, cancellationToken).ConfigureAwait(false);
-        
-        return recordContent;
-    }
      
     private async Task<PhoneOrderDetailDto> GetSimilarRestaurantByRecordAsync(PhoneOrderRecord record, PhoneOrderDetailDto foods, CancellationToken cancellationToken)
     {
@@ -313,7 +385,8 @@ public partial class PhoneOrderService
         foreach (var reSplitAudio in splitAudios)
         {
             var transcriptionResponse = await _speechToTextService.SpeechToTextAsync(
-                reSplitAudio, record.Language, TranscriptionFileType.Wav, TranscriptionResponseFormat.Text, cancellationToken: cancellationToken).ConfigureAwait(false);
+                reSplitAudio, TranscriptionLanguage.English, TranscriptionFileType.Wav, TranscriptionResponseFormat.Text, 
+               "Moon, Hello Moon house, Moon house", cancellationToken: cancellationToken).ConfigureAwait(false);
             
             transcriptionResult.Append(transcriptionResponse);
         }
@@ -321,6 +394,17 @@ public partial class PhoneOrderService
         Log.Information("Transcription result {Transcription}", transcriptionResult.ToString());
         
         return transcriptionResult.ToString();
+    }
+
+    private string SelectPrompt(PhoneOrderRestaurant restaurant)
+    {
+        return restaurant switch
+        {
+            PhoneOrderRestaurant.MoonHouse => "你好,江南春",
+            PhoneOrderRestaurant.XiangTanRenJia => "你好,湘里人家",
+            PhoneOrderRestaurant.JiangNanChun => "hello,MoonHouse",
+            _ => ""
+        };
     }
     
      private async Task<PhoneOrderIntent> RecognizeIntentAsync(string input, CancellationToken cancellationToken)
@@ -441,12 +525,10 @@ public partial class PhoneOrderService
             Model = OpenAiModel.Gpt4o,
             ResponseFormat = new () { Type = "json_object" }
         }, cancellationToken).ConfigureAwait(false);
-
-        var openaiResponse = completionResult.Data.Response;
-
-        Console.WriteLine("openaiResponse:" + openaiResponse);
         
-        return openaiResponse == null ? null : JsonConvert.DeserializeObject<PhoneOrderDetailDto>(openaiResponse);
+        Log.Information("AddOrderDetail openaiResponse:" + completionResult.Data.Response);
+        
+        return completionResult.Data.Response == null ? null : JsonConvert.DeserializeObject<PhoneOrderDetailDto>(completionResult.Data.Response);
     }
     
     private void CheckOrReduceFromShoppingCart(List<FoodDetailDto> shoppingCart, List<FoodDetailDto> foods)
@@ -499,10 +581,9 @@ public partial class PhoneOrderService
             Model = OpenAiModel.Gpt4o,
             ResponseFormat = new () { Type = "json_object" }
         }, cancellationToken).ConfigureAwait(false);
-
-        var openaiResponse = completionResult.Data.Response;
-
-        Console.WriteLine("openaiResponse:" + openaiResponse);
-        return openaiResponse == null ? null : JsonConvert.DeserializeObject<PhoneOrderDetailDto>(openaiResponse);
+        
+        Log.Information("ReduceOrderDetail openaiResponse:" + completionResult.Data.Response);
+        
+        return completionResult.Data.Response == null ? null : JsonConvert.DeserializeObject<PhoneOrderDetailDto>(completionResult.Data.Response);
     }
 }
