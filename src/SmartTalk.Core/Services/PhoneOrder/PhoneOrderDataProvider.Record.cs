@@ -38,6 +38,7 @@ public partial class PhoneOrderDataProvider
                 join user in _repository.Query<UserAccount>() on record.LastModifiedBy equals user.Id into userGroup
                 from user in userGroup.DefaultIfEmpty()
                 where record.Restaurant == restaurant
+                where record.Status == PhoneOrderRecordStatus.Sent
                 orderby record.CreatedDate descending 
                 select new PhoneOrderRecord
                 {
