@@ -82,7 +82,7 @@ public partial class PhoneOrderService
             return;
         }
         
-        var transcriptionJobIdJObject = JObject.Parse(await CreateTranscriptionJobAsync(command.RecordContent, command.RecordName, cancellationToken).ConfigureAwait(false)) ;
+        var transcriptionJobIdJObject = JObject.Parse(await CreateTranscriptionJobAsync(command.RecordContent, command.RecordName, detection.Language, cancellationToken).ConfigureAwait(false)) ;
         
         var transcriptionJobId = transcriptionJobIdJObject["id"]?.ToString();
         
@@ -436,7 +436,7 @@ public partial class PhoneOrderService
         return int.TryParse(responseContent, out var intent) && Enum.IsDefined(typeof(PhoneOrderIntent), intent) ? (PhoneOrderIntent)intent : PhoneOrderIntent.Default;
     }
     
-    private async Task<string> CreateTranscriptionJobAsync(byte[] data, string fileName, CancellationToken cancellationToken)
+    private async Task<string> CreateTranscriptionJobAsync(byte[] data, string fileName, string language, CancellationToken cancellationToken)
     {
         var createTranscriptionDto = new SpeechMaticsCreateTranscriptionDto { Data = data, FileName = fileName };
         
@@ -445,7 +445,7 @@ public partial class PhoneOrderService
             Type = SpeechMaticsJobType.Transcription,
             TranscriptionConfig = new SpeechMaticsTranscriptionConfigDto
             {
-                Language = SpeechMaticsLanguageType.Auto,
+                Language = SelectSpeechMetisLanguageType(language),
                 Diarization = SpeechMaticsDiarizationType.Speaker,
                 OperatingPoint = SpeechMaticsOperatingPointType.Enhanced
             },
@@ -460,6 +460,15 @@ public partial class PhoneOrderService
         };
         
         return await _speechMaticsClient.CreateJobAsync(new SpeechMaticsCreateJobRequestDto { JobConfig = jobConfigDto }, createTranscriptionDto, cancellationToken).ConfigureAwait(false);
+    }
+
+    private SpeechMaticsLanguageType SelectSpeechMetisLanguageType(string language)
+    {
+        return language switch
+        {
+            "en" => SpeechMaticsLanguageType.En,
+            _ => SpeechMaticsLanguageType.Auto
+        };
     }
     
     private static void CheckOrAddToShoppingCart(List<FoodDetailDto> shoppingCart, List<FoodDetailDto> foods)

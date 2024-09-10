@@ -17,8 +17,7 @@ public static class AuthenticationExtension
 {
     public static void AddCustomAuthentication(this IServiceCollection services, IConfiguration configuration)
     {
-        services
-            .AddAuthentication(options =>
+        services.AddAuthentication(options =>
             {
                 options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
                 options.DefaultAuthenticateScheme = AuthenticationSchemeConstants.ApiKeyAuthenticationScheme;
