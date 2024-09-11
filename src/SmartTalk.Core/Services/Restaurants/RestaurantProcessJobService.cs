@@ -63,7 +63,7 @@ public class RestaurantProcessJobService : IRestaurantProcessJobService
         
         Log.Information("Get easy pos menu item response: {@Response}", response);
 
-        var allItems = await _restaurantDataProvider.GetRestaurantMenuItemsAsync(cancellationToken).ConfigureAwait(false);
+        var allItems = await _restaurantDataProvider.GetRestaurantMenuItemsAsync(restaurant.Id, cancellationToken).ConfigureAwait(false);
         
         foreach (var item in allItems)
             await _vectorDb.DeleteAsync(restaurant.Id.ToString(), new VectorRecordDto { Id = item.Id.ToString() }, cancellationToken).ConfigureAwait(false);
@@ -76,7 +76,8 @@ public class RestaurantProcessJobService : IRestaurantProcessJobService
                 Name = GetMenuItemName(x.Localizations, language),
                 Language = language == "zh_CN" ? RestaurantItemLanguage.Chinese : RestaurantItemLanguage.English
             })).ToList();
-
+        
+        await _restaurantDataProvider.DeleteRestaurantMenuItemsAsync(allItems, cancellationToken: cancellationToken).ConfigureAwait(false);
         await _restaurantDataProvider.AddRestaurantMenuItemsAsync(items, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         foreach (var item in items)

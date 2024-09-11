@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using SmartTalk.Core.Domain.Account;
 using SmartTalk.Messages.Enums.PhoneOrder;
+using SmartTalk.Messages.Enums.STT;
 
 namespace SmartTalk.Core.Domain.PhoneOrder;
 
@@ -31,11 +32,17 @@ public class PhoneOrderRecord : IEntity
     [Column("url")]
     public string Url { get; set; }
     
+    [Column("language")]
+    public TranscriptionLanguage Language { get; set; }
+    
     [Column("last_modified_by")]
     public int? LastModifiedBy { get; set; }
 
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
+    
+    [Column("transcription_job_id")]
+    public string TranscriptionJobId { get; set; }
     
     [NotMapped]
     public UserAccount UserAccount { get; set; }

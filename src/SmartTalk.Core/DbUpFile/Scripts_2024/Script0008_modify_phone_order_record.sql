@@ -1,0 +1,1 @@
+ALTER TABLE `phone_order_record` add column `transcription_job_id` varchar(255);

@@ -1,8 +1,8 @@
 using Newtonsoft.Json;
 
-namespace SmartTalk.Messages.Dto.Speechmatics;
+namespace SmartTalk.Messages.Dto.SpeechMatics;
 
-public class SpeechmaticsNotificationConfigDto
+public class SpeechMaticsNotificationConfigDto
 {
     [JsonProperty("url")]
     public string Url { get; set; }

@@ -17,7 +17,7 @@ public class RestaurantController : ControllerBase
         _mediator = mediator;
     }
 
-    [Route("create")]
+    [Route("create"), HttpPost]
     public async Task<IActionResult> AddRestaurantAsync([FromBody] AddRestaurantCommand command)
     {
         await _mediator.SendAsync(command).ConfigureAwait(false);

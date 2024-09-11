@@ -13,7 +13,9 @@ public interface IRestaurantDataProvider : IScopedDependency
 
     Task<Restaurant> GetRestaurantByNameAsync(string name, CancellationToken cancellationToken);
 
-    Task<List<RestaurantMenuItem>> GetRestaurantMenuItemsAsync(CancellationToken cancellationToken);
+    Task<List<RestaurantMenuItem>> GetRestaurantMenuItemsAsync(int? restaurantId = null, CancellationToken cancellationToken = default);
+    
+    Task DeleteRestaurantMenuItemsAsync(List<RestaurantMenuItem> menuItems, bool forceSave = true, CancellationToken cancellationToken = default);
 }
 
 public class RestaurantDataProvider : IRestaurantDataProvider
@@ -49,8 +51,21 @@ public class RestaurantDataProvider : IRestaurantDataProvider
         return await _repository.Query<Restaurant>(x => x.Name == name).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<RestaurantMenuItem>> GetRestaurantMenuItemsAsync(CancellationToken cancellationToken)
+    public async Task<List<RestaurantMenuItem>> GetRestaurantMenuItemsAsync(int? restaurantId = null, CancellationToken cancellationToken = default)
     {
-        return await _repository.QueryNoTracking<RestaurantMenuItem>().ToListAsync(cancellationToken).ConfigureAwait(false);
+        var query = _repository.QueryNoTracking<RestaurantMenuItem>();
+
+        if (restaurantId.HasValue)
+            query = query.Where(x => x.RestaurantId == restaurantId.Value);
+        
+        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task DeleteRestaurantMenuItemsAsync(
+        List<RestaurantMenuItem> menuItems, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.DeleteAllAsync(menuItems, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 }

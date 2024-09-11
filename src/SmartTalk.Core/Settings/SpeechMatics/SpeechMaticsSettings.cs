@@ -1,10 +1,10 @@
 using Microsoft.Extensions.Configuration;
 
-namespace SmartTalk.Core.Settings.Speechmatics;
+namespace SmartTalk.Core.Settings.SpeechMatics;
 
-public class SpeechmaticsSettings : IConfigurationSetting
+public class SpeechMaticsSettings : IConfigurationSetting
 {
-    public SpeechmaticsSettings(IConfiguration configuration)
+    public SpeechMaticsSettings(IConfiguration configuration)
     {
         ApiKey = configuration.GetValue<string>("Speechmatics:ApiKey");
         BaseUrl = configuration.GetValue<string>("Speechmatics:BaseUrl");
