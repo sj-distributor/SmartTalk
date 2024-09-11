@@ -8,8 +8,6 @@ public class PhoneOrderRecordInformationDto
     
     public DateTimeOffset OrderDate { get; set; }
     
-    public string OrderNumber { get; set; }
-    
     public string WorkWeChatRobotKey { get; set; }
 
     public string WorkWeChatRobotUrl => "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=" + WorkWeChatRobotKey;

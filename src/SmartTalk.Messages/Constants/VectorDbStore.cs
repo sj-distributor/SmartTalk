@@ -21,6 +21,8 @@ public class VectorDbStore
     
     public const string ReservedPayloadContentField = $"{ReservedTagsPrefix}content";
     
+    public const string ReservedRestaurantPayload = $"{ReservedTagsPrefix}restaurant_payload";
+    
     public const string VectorAlgorithm = "HNSW";
 
     public static readonly Dictionary<string, char?> Tags = new()

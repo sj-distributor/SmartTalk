@@ -5,13 +5,13 @@ namespace SmartTalk.Core.Services.PhoneOrder;
 
 public partial interface IPhoneOrderDataProvider
 {
-    Task<List<PhoneOrderOrderItem>> GetPhoneOrderOrderItemsAsync(int RecordId, CancellationToken cancellationToken);
+    Task<List<PhoneOrderOrderItem>> GetPhoneOrderOrderItemsAsync(int recordId, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderDataProvider
 {
-    public async Task<List<PhoneOrderOrderItem>> GetPhoneOrderOrderItemsAsync(int RecordId, CancellationToken cancellationToken)
+    public async Task<List<PhoneOrderOrderItem>> GetPhoneOrderOrderItemsAsync(int recordId, CancellationToken cancellationToken)
     {
-        return await _repository.Query<PhoneOrderOrderItem>(x => x.RecordId == RecordId).ToListAsync(cancellationToken).ConfigureAwait(false);
+        return await _repository.Query<PhoneOrderOrderItem>(x => x.RecordId == recordId).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }
