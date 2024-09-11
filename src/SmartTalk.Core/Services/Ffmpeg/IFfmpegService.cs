@@ -22,6 +22,8 @@ public interface IFfmpegService: IScopedDependency
     Task<string> GetAudioDurationAsync(byte[] wavBytes, CancellationToken cancellationToken);
     
     Task<byte[]> ConvertFileFormatAsync(byte[] file, TranscriptionFileType fileType, CancellationToken cancellationToken);
+    
+    Task<List<byte[]>> SpiltAudioAsync(byte[] audioBytes, double startTime, double endTime, CancellationToken cancellationToken);
 }
 
 public class FfmpegService : IFfmpegService
@@ -355,5 +357,76 @@ public class FfmpegService : IFfmpegService
             TranscriptionFileType.Mp4 => await ConvertMp4ToWavAsync(file, cancellationToken: cancellationToken).ConfigureAwait(false),
             _ => Array.Empty<byte>()
         };
+    }
+    
+     public async  Task<List<byte[]>> SpiltAudioAsync(byte[] audioBytes, double startTime, double endTime, CancellationToken cancellationToken)
+    {
+        var audioDataList = new List<byte[]>();
+        var baseFileName = Guid.NewGuid().ToString();
+        var inputFileName = $"{baseFileName}.wav";
+        var outputFileName = $"{baseFileName}-spilt.wav";
+
+        var startTimeSpan = TimeSpan.FromMilliseconds(startTime);
+        var endTimeSpan = TimeSpan.FromMilliseconds(endTime);
+
+        var startTimeFormatted = startTimeSpan.ToString(@"hh\:mm\:ss\.fff");
+        var endTimeFormatted = endTimeSpan.ToString(@"hh\:mm\:ss\.fff");
+
+        try
+        {
+            Log.Information("According stareTime Splitting audio, the audio length is {Length}", audioBytes.Length);
+
+            await File.WriteAllBytesAsync(inputFileName, audioBytes, cancellationToken).ConfigureAwait(false);
+
+            if (!File.Exists(inputFileName))
+            {
+                Log.Error("Splitting audio, persisted failed");
+                return audioDataList;
+            }
+
+            var spiltArguments =
+                $"-i {inputFileName} -ss {startTimeFormatted} -to {endTimeFormatted} -c copy {outputFileName}";
+
+            Log.Information("spilt command arguments: {spiltArguments}", spiltArguments);
+
+            using (var proc = new Process())
+            {
+                proc.StartInfo = new ProcessStartInfo
+                {
+                    FileName = "ffmpeg",
+                    RedirectStandardError = true,
+                    RedirectStandardOutput = true,
+                    Arguments = spiltArguments
+                };
+                proc.OutputDataReceived += (_, e) => Log.Information("Splitting audio, {@Output}", e);
+
+                proc.Start();
+                proc.BeginErrorReadLine();
+                proc.BeginOutputReadLine();
+
+                await proc.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            if (File.Exists(outputFileName))
+            {
+                audioDataList.Add(await File.ReadAllBytesAsync(outputFileName, cancellationToken)
+                    .ConfigureAwait(false));
+
+                File.Delete(outputFileName);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Splitting audio error.");
+        }
+        finally
+        {
+            Log.Information("Splitting audio finally deleting files");
+
+            if (File.Exists(inputFileName))
+                File.Delete(inputFileName);
+        }
+
+        return audioDataList;
     }
 }

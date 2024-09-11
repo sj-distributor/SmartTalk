@@ -30,7 +30,8 @@ public static class HangfireExtension
             opt.ServerTimeout = TimeSpan.FromHours(2);
             opt.Queues = new[]
             {
-                HangfireConstants.DefaultQueue
+                HangfireConstants.DefaultQueue,
+                HangfireConstants.InternalHostingRestaurant
             };
         });
         
