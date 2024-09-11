@@ -387,8 +387,8 @@ public partial class PhoneOrderService
         foreach (var reSplitAudio in splitAudios)
         {
             var transcriptionResponse = await _speechToTextService.SpeechToTextAsync(
-                reSplitAudio, TranscriptionLanguage.English, TranscriptionFileType.Wav, TranscriptionResponseFormat.Text, 
-               "Moon, Hello Moon house, Moon house", cancellationToken: cancellationToken).ConfigureAwait(false);
+                reSplitAudio, record.Language, TranscriptionFileType.Wav, TranscriptionResponseFormat.Text, 
+                SelectPrompt(record.Restaurant), cancellationToken: cancellationToken).ConfigureAwait(false);
             
             transcriptionResult.Append(transcriptionResponse);
         }
@@ -402,7 +402,7 @@ public partial class PhoneOrderService
     {
         return restaurant switch
         {
-            PhoneOrderRestaurant.MoonHouse => "你好,江南春",
+            PhoneOrderRestaurant.MoonHouse => "Moon, Hello Moon house, Moon house",
             PhoneOrderRestaurant.XiangTanRenJia => "你好,湘里人家",
             PhoneOrderRestaurant.JiangNanChun => "hello,MoonHouse",
             _ => ""
