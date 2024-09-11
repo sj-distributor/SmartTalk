@@ -57,6 +57,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         try
         {
             record.Status = PhoneOrderRecordStatus.Transcription;
+            
             await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken).ConfigureAwait(false);
             
             var speakInfos = StructureDiarizationResults(command.Transcription.Results);
@@ -81,6 +82,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         catch (Exception e)
         {
             record.Status = PhoneOrderRecordStatus.Exception;
+            
             await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken).ConfigureAwait(false);
 
             Log.Warning(e.Message);
