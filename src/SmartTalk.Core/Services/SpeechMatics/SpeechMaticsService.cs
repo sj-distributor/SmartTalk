@@ -97,7 +97,7 @@ public class SpeechMaticsService : ISpeechMaticsService
                 MsgType = "text",
                 Text = new SendWorkWechatGroupRobotTextDto
                 {
-                    Content = $"----------{recordInfo.Restaurant.GetDescription()}-PST {recordInfo.OrderDate.ToOffset(TimeSpan.FromHours(-7)):yyyy/MM/dd HH:mm:ss}----------"
+                    Content = $"----------{recordInfo.Restaurant.GetDescription()}-PST {recordInfo.OrderDate.ToString("yyyy/MM/dd HH:mm:ss")}----------"
                 }
             }, cancellationToken);
         
