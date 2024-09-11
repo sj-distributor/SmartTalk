@@ -9,7 +9,6 @@ public interface IWeChatClient : IScopedDependency
     Task<WorkWeChatResponseDto> SendWorkWechatRobotMessagesAsync(string requestUrl, SendWorkWechatGroupRobotMessageDto messages, CancellationToken cancellationToken);
 
     Task<UploadWorkWechatTemporaryFileResponseDto> UploadWorkWechatTemporaryFileAsync(string url, string fileName, UploadWorkWechatTemporaryFileType type, byte[] bytes, CancellationToken cancellationToken);
-
 }
 
 public class WeChatClient : IWeChatClient
@@ -27,7 +26,6 @@ public class WeChatClient : IWeChatClient
         return await _httpClientFactory.PostAsJsonAsync<WorkWeChatResponseDto>(requestUrl, messages, cancellationToken).ConfigureAwait(false);
     }
     
-
     public async Task<UploadWorkWechatTemporaryFileResponseDto> UploadWorkWechatTemporaryFileAsync(string url, string fileName, UploadWorkWechatTemporaryFileType type, byte[] bytes, CancellationToken cancellationToken)
     {
         var boundary = DateTime.Now.Ticks.ToString("X");
