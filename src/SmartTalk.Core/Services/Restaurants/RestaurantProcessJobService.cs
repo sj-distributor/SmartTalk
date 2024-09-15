@@ -45,13 +45,13 @@ public class RestaurantProcessJobService : IRestaurantProcessJobService
 
     public async Task SyncRestaurantMenusAsync(SchedulingSyncRestaurantMenuCommand command, CancellationToken cancellationToken)
     {
-        var syncTasks = Enum.GetValues(typeof(PhoneOrderRestaurant))
-            .Cast<PhoneOrderRestaurant>().Select(restaurant => PersistRestaurantMenuItemsAsync(restaurant, cancellationToken));
+        var restaurants = Enum.GetValues(typeof(PhoneOrderRestaurant)).Cast<PhoneOrderRestaurant>().ToList();
 
-        await Task.WhenAll(syncTasks).ConfigureAwait(false);
+        foreach (var restaurant in restaurants)
+            _smartTalkBackgroundJobClient.Enqueue(() => PersistRestaurantMenuItemsAsync(restaurant, cancellationToken), HangfireConstants.InternalHostingRestaurant);
     }
 
-    private async Task PersistRestaurantMenuItemsAsync(PhoneOrderRestaurant restaurantType, CancellationToken cancellationToken)
+    public async Task PersistRestaurantMenuItemsAsync(PhoneOrderRestaurant restaurantType, CancellationToken cancellationToken)
     {
         var restaurant = await _restaurantDataProvider.GetRestaurantByNameAsync(restaurantType.GetDescription(), cancellationToken).ConfigureAwait(false);
         
