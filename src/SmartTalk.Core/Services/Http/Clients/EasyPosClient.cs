@@ -42,7 +42,7 @@ public class EasyPosClient : IEasyPosClient
         var (authorization, merchantId, companyId, merchantStaffId) = GetRestaurantAuthHeaders(restaurant);
         
         return await _httpClientFactory.GetAsync<GetOrderResponse>(
-            requestUrl: $"{_easyPosSetting.BaseUrl}/api/merchant/order?id={id}", headers: new Dictionary<string, string>
+            requestUrl: $"{_easyPosSetting.BaseUrl}/api/merchant/order?id={ id }", headers: new Dictionary<string, string>
             {
                 { "Authorization", $"Bearer {authorization}"},
                 { "MerchantId", merchantId },

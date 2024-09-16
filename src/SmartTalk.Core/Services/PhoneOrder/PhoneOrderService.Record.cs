@@ -429,7 +429,7 @@ public partial class PhoneOrderService
         {
             PhoneOrderRestaurant.MoonHouse => "Moon, Hello Moon house, Moon house",
             PhoneOrderRestaurant.XiangTanRenJia => "你好,湘里人家",
-            PhoneOrderRestaurant.JiangNanChun => "hello,MoonHouse",
+            PhoneOrderRestaurant.JiangNanChun => "你好,江南春",
             _ => ""
         };
     }

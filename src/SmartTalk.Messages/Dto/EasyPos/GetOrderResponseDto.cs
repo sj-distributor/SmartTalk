@@ -3,13 +3,6 @@ using SmartTalk.Messages.Enums.PhoneOrder;
 
 namespace SmartTalk.Messages.Dto.EasyPos;
 
-public class GetOrderRequestDto
-{
-    public long Id { get; set; }
-
-    public PhoneOrderRestaurant restaurant { get; set; }
-}
-
 public class GetOrderResponse
 {
     [JsonProperty("code")]
