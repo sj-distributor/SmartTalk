@@ -86,4 +86,13 @@ public class PhoneOrderController : ControllerBase
 
         return Ok();
     }
+
+    [Route("Manual/order"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(AddManualOrderResponse))]
+    public async Task<IActionResult> AddManualOrderAsync([FromBody] AddManualOrderCommand command)
+    {
+        var response = await _mediator.SendAsync<AddManualOrderCommand, AddManualOrderResponse>(command).ConfigureAwait(false);
+
+        return Ok(response);
+    }
 }
