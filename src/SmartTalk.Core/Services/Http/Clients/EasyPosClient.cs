@@ -8,6 +8,8 @@ namespace SmartTalk.Core.Services.Http.Clients;
 public interface IEasyPosClient : IScopedDependency
 {
     Task<EasyPosResponseDto> GetEasyPosRestaurantMenusAsync(PhoneOrderRestaurant restaurant, CancellationToken cancellationToken);
+
+    Task<GetOrderResponse> GetOrderAsync(GetOrderRequestDto request, CancellationToken cancellationToken);
 }
 
 public class EasyPosClient : IEasyPosClient
@@ -27,6 +29,20 @@ public class EasyPosClient : IEasyPosClient
         
         return await _httpClientFactory.GetAsync<EasyPosResponseDto>(
             requestUrl: $"{_easyPosSetting.BaseUrl}/api/merchant/resource", headers: new Dictionary<string, string>
+            {
+                { "Authorization", $"Bearer {authorization}"},
+                { "MerchantId", merchantId },
+                { "CompanyId", companyId },
+                { "MerchantStaffId", merchantStaffId }
+            }, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<GetOrderResponse> GetOrderAsync(GetOrderRequestDto request, CancellationToken cancellationToken)
+    {
+        var (authorization, merchantId, companyId, merchantStaffId) = GetRestaurantAuthHeaders(request.restaurant);
+        
+        return await _httpClientFactory.GetAsync<GetOrderResponse>(
+            requestUrl: $"{_easyPosSetting.BaseUrl}/api/merchant/order?id={request.Id}", headers: new Dictionary<string, string>
             {
                 { "Authorization", $"Bearer {authorization}"},
                 { "MerchantId", merchantId },
