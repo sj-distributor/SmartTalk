@@ -33,6 +33,9 @@ public partial interface IPhoneOrderService
     Task ReceivePhoneOrderRecordAsync(ReceivePhoneOrderRecordCommand command, CancellationToken cancellationToken);
 
     Task ExtractPhoneOrderRecordAiMenuAsync(List<SpeechMaticsSpeakInfoDto> phoneOrderInfo, PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken);
+
+    Task<PhoneOrderDetailDto> ExtractMenuItemsAsync(
+        PhoneOrderIntent intent, PhoneOrderRecord record, PhoneOrderDetailDto shoppingCart, string originText, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderService
@@ -196,24 +199,11 @@ public partial class PhoneOrderService
                 {
                     var intent = await RecognizeIntentAsync(originText, cancellationToken).ConfigureAwait(false);
 
-                    PhoneOrderDetailDto extractFoods = null;
-
-                    switch (intent)
-                    {
-                        case PhoneOrderIntent.AddOrder:
-                            extractFoods = await AddOrderDetailAsync(originText, cancellationToken).ConfigureAwait(false);
-                            extractFoods = await GetSimilarRestaurantByRecordAsync(record, extractFoods, cancellationToken).ConfigureAwait(false);
-                            CheckOrAddToShoppingCart(shoppingCart.FoodDetails, extractFoods.FoodDetails);
-                            break;
-                        case PhoneOrderIntent.ReduceOrder:
-                            extractFoods = await ReduceOrderDetailAsync(shoppingCart.FoodDetails, originText, cancellationToken).ConfigureAwait(false);
-                            extractFoods = await GetSimilarRestaurantByRecordAsync(record, extractFoods, cancellationToken).ConfigureAwait(false);
-                            CheckOrReduceFromShoppingCart(shoppingCart.FoodDetails, extractFoods.FoodDetails);
-                            break;
-                    }
+                    var extractFoods = await ExtractMenuItemsAsync(intent, record, shoppingCart, originText, cancellationToken).ConfigureAwait(false);
 
                     conversations[conversationIndex].Intent = intent;
                     conversations[conversationIndex].Answer = originText;
+                    
                     if (extractFoods != null)
                         conversations[conversationIndex].ExtractFoodItem = JsonConvert.SerializeObject(extractFoods.FoodDetails);
 
@@ -232,6 +222,28 @@ public partial class PhoneOrderService
             shoppingCart);
 
         return (goalTexts, shoppingCart, conversations);
+    }
+
+    public async Task<PhoneOrderDetailDto> ExtractMenuItemsAsync(
+        PhoneOrderIntent intent, PhoneOrderRecord record, PhoneOrderDetailDto shoppingCart, string originText, CancellationToken cancellationToken)
+    {
+        PhoneOrderDetailDto extractFoods = null;
+
+        switch (intent)
+        {
+            case PhoneOrderIntent.AddOrder:
+                extractFoods = await AddOrderDetailAsync(originText, cancellationToken).ConfigureAwait(false);
+                extractFoods = await GetSimilarRestaurantByRecordAsync(record, extractFoods, cancellationToken).ConfigureAwait(false);
+                CheckOrAddToShoppingCart(shoppingCart.FoodDetails, extractFoods.FoodDetails);
+                break;
+            case PhoneOrderIntent.ReduceOrder:
+                extractFoods = await ReduceOrderDetailAsync(shoppingCart.FoodDetails, originText, cancellationToken).ConfigureAwait(false);
+                extractFoods = await GetSimilarRestaurantByRecordAsync(record, extractFoods, cancellationToken).ConfigureAwait(false);
+                CheckOrReduceFromShoppingCart(shoppingCart.FoodDetails, extractFoods.FoodDetails);
+                break;
+        }
+
+        return extractFoods;
     }
 
     private async Task<bool> CheckAudioFirstSentenceIsRestaurantAsync(string query, CancellationToken cancellationToken)

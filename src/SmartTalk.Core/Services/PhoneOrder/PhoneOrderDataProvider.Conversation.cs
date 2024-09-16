@@ -12,6 +12,8 @@ public partial interface IPhoneOrderDataProvider
     Task<List<PhoneOrderConversation>> AddPhoneOrderConversationsAsync(List<PhoneOrderConversation> conversations, bool forceSave = true, CancellationToken cancellationToken = default);
 
     Task DeletePhoneOrderConversationsAsync(int recordId, CancellationToken cancellationToken);
+
+    Task<List<PhoneOrderConversation>> GetPhoneOrderConversationsWithSpecificFieldAsync(CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderDataProvider
@@ -35,5 +37,13 @@ public partial class PhoneOrderDataProvider
         var conversations = await _repository.Query<PhoneOrderConversation>(x => x.RecordId == recordId).ToListAsync(cancellationToken).ConfigureAwait(false);
 
         if (conversations.Any()) await _repository.DeleteAllAsync(conversations, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<PhoneOrderConversation>> GetPhoneOrderConversationsWithSpecificFieldAsync(CancellationToken cancellationToken)
+    {
+        return await _repository.Query<PhoneOrderConversation>()
+            .Where(x => (x.Intent == PhoneOrderIntent.AddOrder || x.Intent == PhoneOrderIntent.AskDishes)
+                        && (string.IsNullOrEmpty(x.ExtractFoodItem) || x.ExtractFoodItem == "[]"))
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }
