@@ -1,6 +1,6 @@
 using Hangfire;
 using Mediator.Net;
-using SmartTalk.Messages.Commands.Restaurant;
+using SmartTalk.Messages.Commands.Restaurants;
 
 namespace SmartTalk.Core.Jobs.RecurringJobs;
 
@@ -21,4 +21,6 @@ public class SchedulingSyncRestaurantMenuRecurringJob : IRecurringJob
     public string JobId => nameof(SchedulingSyncRestaurantMenuRecurringJob);
 
     public string CronExpression => Cron.Daily();
+
+    public string TimeZone = "Asia/Shanghai";
 }

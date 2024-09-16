@@ -1,7 +1,7 @@
 using Mediator.Net.Context;
 using Mediator.Net.Contracts;
 using SmartTalk.Core.Services.Restaurants;
-using SmartTalk.Messages.Commands.Restaurant;
+using SmartTalk.Messages.Commands.Restaurants;
 
 namespace SmartTalk.Core.Handlers.CommandHandlers.Restaurant;
 

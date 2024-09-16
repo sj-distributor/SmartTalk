@@ -7,7 +7,7 @@ using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.RetrievalDb.VectorDb;
-using SmartTalk.Messages.Commands.Restaurant;
+using SmartTalk.Messages.Commands.Restaurants;
 using SmartTalk.Messages.Constants;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Embedding;
