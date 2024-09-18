@@ -33,6 +33,8 @@ public partial interface IPhoneOrderService
     Task ReceivePhoneOrderRecordAsync(ReceivePhoneOrderRecordCommand command, CancellationToken cancellationToken);
 
     Task ExtractPhoneOrderRecordAiMenuAsync(List<SpeechMaticsSpeakInfoDto> phoneOrderInfo, PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken);
+
+    Task<AddManualOrderResponse> AddManualOrderAsync(AddManualOrderCommand command, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderService
@@ -58,7 +60,7 @@ public partial class PhoneOrderService
         var transcription = await _speechToTextService.SpeechToTextAsync(
             command.RecordContent,fileType: TranscriptionFileType.Wav, responseFormat: TranscriptionResponseFormat.Text, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        if (transcription.Contains("amazon", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("We're sorry, your call did not go through.", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("Verizon Wireless", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("Beep, Beep, Beep", StringComparison.InvariantCultureIgnoreCase)) return;
+        if (string.IsNullOrEmpty(transcription) || transcription.Length < 15 || transcription.Contains("GENERAL") || transcription.Contains("感謝收看") || transcription.Contains("訂閱") || transcription.Contains("点赞") || transcription.Contains("立場") || transcription.Contains("字幕") || transcription.Contains("結束") || transcription.Contains("謝謝觀看") || transcription.Contains("幕後大臣") || transcription == "醒醒" || transcription == "跟著我" || transcription.Contains("政經關峻") || transcription.Contains("您拨打的电话") || transcription.Contains("Mailbox memory is full") || transcription.Contains("amazon", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("We're sorry, your call did not go through.", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("Verizon Wireless", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("Beep", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("USPS customer service center", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("not go through", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("stop serving in two hours", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("Welcome to customer support", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("For the upcoming flight booking", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("Please check and dial again.", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("largest cable TV network", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("拨打的用户暂时无法接通") || transcription.Contains("您有一份国际快递即将退回")) return;
         
         var detection = await _translationClient.DetectLanguageAsync(transcription, cancellationToken).ConfigureAwait(false);
         
@@ -134,7 +136,34 @@ public partial class PhoneOrderService
         if (items.Any())
             await _phoneOrderDataProvider.AddPhoneOrderItemAsync(items, true, cancellationToken).ConfigureAwait(false);
     }
-    
+
+    public async Task<AddManualOrderResponse> AddManualOrderAsync(AddManualOrderCommand command, CancellationToken cancellationToken)
+    {
+        var manualOrder = await _easyPosClient.GetOrderAsync(command.OrderId, command.Restaurant, cancellationToken).ConfigureAwait(false);
+
+        Log.Information("Get order response: response: {@manualOrder}", manualOrder);
+        
+        if (manualOrder.Data == null) return  new AddManualOrderResponse();
+        
+        var oderItems = manualOrder.Data.Order.OrderItems.Select(x =>
+        {
+            return new PhoneOrderOrderItem
+            {
+                RecordId = command.RecordId,
+                FoodName = x.Localizations.First(c => c.Field == "name" && c.languageCode == "zh_CN").Value,
+                Quantity = x.Quantity,
+                Price = x.Price
+            };
+        }).ToList();
+        
+        await _phoneOrderDataProvider.AddPhoneOrderItemAsync(oderItems, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        return new AddManualOrderResponse
+        {
+            Data = _mapper.Map<List<PhoneOrderOrderItemDto>>(oderItems)
+        };
+    }
+
     private async Task<List<SpeechMaticsSpeakInfoDto>> HandlerConversationFirstSentenceAsync(List<SpeechMaticsSpeakInfoDto> phoneOrderInfos, PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken)
     {
         var originText = await SplitAudioAsync(audioContent, record, phoneOrderInfos[0].StartTime * 1000, phoneOrderInfos[0].EndTime * 1000,
@@ -387,8 +416,8 @@ public partial class PhoneOrderService
         foreach (var reSplitAudio in splitAudios)
         {
             var transcriptionResponse = await _speechToTextService.SpeechToTextAsync(
-                reSplitAudio, TranscriptionLanguage.English, TranscriptionFileType.Wav, TranscriptionResponseFormat.Text, 
-               "Moon, Hello Moon house, Moon house", cancellationToken: cancellationToken).ConfigureAwait(false);
+                reSplitAudio, record.Language, TranscriptionFileType.Wav, TranscriptionResponseFormat.Text, 
+                SelectPrompt(record.Restaurant), cancellationToken: cancellationToken).ConfigureAwait(false);
             
             transcriptionResult.Append(transcriptionResponse);
         }
@@ -402,9 +431,9 @@ public partial class PhoneOrderService
     {
         return restaurant switch
         {
-            PhoneOrderRestaurant.MoonHouse => "你好,江南春",
+            PhoneOrderRestaurant.MoonHouse => "Moon, Hello Moon house, Moon house",
             PhoneOrderRestaurant.XiangTanRenJia => "你好,湘里人家",
-            PhoneOrderRestaurant.JiangNanChun => "hello,MoonHouse",
+            PhoneOrderRestaurant.JiangNanChun => "你好,江南春",
             _ => ""
         };
     }
