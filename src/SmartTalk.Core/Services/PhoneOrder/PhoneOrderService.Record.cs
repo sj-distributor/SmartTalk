@@ -33,6 +33,8 @@ public partial interface IPhoneOrderService
     Task ReceivePhoneOrderRecordAsync(ReceivePhoneOrderRecordCommand command, CancellationToken cancellationToken);
 
     Task ExtractPhoneOrderRecordAiMenuAsync(List<SpeechMaticsSpeakInfoDto> phoneOrderInfo, PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken);
+
+    Task<AddManualOrderResponse> AddManualOrderAsync(AddManualOrderCommand command, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderService
@@ -134,7 +136,34 @@ public partial class PhoneOrderService
         if (items.Any())
             await _phoneOrderDataProvider.AddPhoneOrderItemAsync(items, true, cancellationToken).ConfigureAwait(false);
     }
-    
+
+    public async Task<AddManualOrderResponse> AddManualOrderAsync(AddManualOrderCommand command, CancellationToken cancellationToken)
+    {
+        var manualOrder = await _easyPosClient.GetOrderAsync(command.OrderId, command.Restaurant, cancellationToken).ConfigureAwait(false);
+
+        Log.Information("Get order response: response: {@manualOrder}", manualOrder);
+        
+        if (manualOrder.Data == null) return  new AddManualOrderResponse();
+        
+        var oderItems = manualOrder.Data.Order.OrderItems.Select(x =>
+        {
+            return new PhoneOrderOrderItem
+            {
+                RecordId = command.RecordId,
+                FoodName = x.Localizations.First(c => c.Field == "name" && c.languageCode == "zh_CN").Value,
+                Quantity = x.Quantity,
+                Price = x.Price
+            };
+        }).ToList();
+        
+        await _phoneOrderDataProvider.AddPhoneOrderItemAsync(oderItems, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        return new AddManualOrderResponse
+        {
+            Data = _mapper.Map<List<PhoneOrderOrderItemDto>>(oderItems)
+        };
+    }
+
     private async Task<List<SpeechMaticsSpeakInfoDto>> HandlerConversationFirstSentenceAsync(List<SpeechMaticsSpeakInfoDto> phoneOrderInfos, PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken)
     {
         var originText = await SplitAudioAsync(audioContent, record, phoneOrderInfos[0].StartTime * 1000, phoneOrderInfos[0].EndTime * 1000,
@@ -404,7 +433,7 @@ public partial class PhoneOrderService
         {
             PhoneOrderRestaurant.MoonHouse => "Moon, Hello Moon house, Moon house",
             PhoneOrderRestaurant.XiangTanRenJia => "你好,湘里人家",
-            PhoneOrderRestaurant.JiangNanChun => "hello,MoonHouse",
+            PhoneOrderRestaurant.JiangNanChun => "你好,江南春",
             _ => ""
         };
     }
