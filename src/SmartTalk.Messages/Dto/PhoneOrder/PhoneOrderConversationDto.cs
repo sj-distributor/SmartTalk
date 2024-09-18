@@ -1,6 +1,6 @@
-using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
+using Newtonsoft.Json;
 using SmartTalk.Messages.Enums.PhoneOrder;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace SmartTalk.Messages.Dto.PhoneOrder;
 
@@ -18,8 +18,16 @@ public class PhoneOrderConversationDto
     public PhoneOrderIntent Intent { get; set; } = PhoneOrderIntent.Chat;
     
     public int Order { get; set; }
-    
-    public string ExtractFoodItem { get; set; }
 
+    public string FoodItem { get; set; }
+
+    public int Count { get; set; }
+
+    public string Remark { get; set; }
+
+    public double Price { get; set; }
+    
+    public string ExtractFoodItem => JsonConvert.SerializeObject( new { FoodItem, Count, Remark, Price } );
+    
     public DateTimeOffset CreatedDate { get; set; }
 }
