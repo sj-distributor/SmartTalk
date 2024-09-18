@@ -21,7 +21,7 @@ public class PhoneOrderConversationDto
 
     public List<ExtractFoodItemDto> ExtractFoodItemOjects { get; set; }
     
-    public string ExtractFoodItem => JsonConvert.SerializeObject( ExtractFoodItemOject );
+    public string ExtractFoodItem => JsonConvert.SerializeObject( ExtractFoodItemOjects );
     
     public DateTimeOffset CreatedDate { get; set; }
 }
