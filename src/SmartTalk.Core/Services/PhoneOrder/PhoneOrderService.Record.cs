@@ -141,6 +141,10 @@ public partial class PhoneOrderService
     {
         var manualOrder = await _easyPosClient.GetOrderAsync(command.OrderId, command.Restaurant, cancellationToken).ConfigureAwait(false);
 
+        Log.Information("Get order response: response: {@manualOrder}", manualOrder);
+        
+        if (manualOrder.Data == null) return  new AddManualOrderResponse();
+        
         var oderItems = manualOrder.Data.Order.OrderItems.Select(x =>
         {
             return new PhoneOrderOrderItem

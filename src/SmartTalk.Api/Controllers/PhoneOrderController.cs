@@ -87,7 +87,7 @@ public class PhoneOrderController : ControllerBase
         return Ok();
     }
 
-    [Route("Manual/order"), HttpPost]
+    [Route("manual/order"), HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(AddManualOrderResponse))]
     public async Task<IActionResult> AddManualOrderAsync([FromBody] AddManualOrderCommand command)
     {

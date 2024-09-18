@@ -21,19 +21,19 @@ public class GetOrderResponse
 public class GetOrderResponseDto
 {
     [JsonProperty("order")]
-    public OrderDto Order { get; set; }
+    public EasyPosOrderDto Order { get; set; }
 }
 
-public class OrderDto
+public class EasyPosOrderDto
 {
     [JsonProperty("orderItems")]
-    public List<OrderItemDto> OrderItems { get; set; }
+    public List<EasyPosOrderItemDto> OrderItems { get; set; }
 
     [JsonProperty("createAt")]
     public DateTimeOffset CreateAt { get; set; }
 }
 
-public class OrderItemDto
+public class EasyPosOrderItemDto
 {
     [JsonProperty("orderId")]
     public long OrderId { get; set; }
@@ -51,10 +51,10 @@ public class OrderItemDto
     public int Quantity { get; set; }
 
     [JsonProperty("localizations")]
-    public List<LocalizationsDto> Localizations { get; set; }
+    public List<EasyPosLocalizationsDto> Localizations { get; set; }
 }
 
-public class LocalizationsDto
+public class EasyPosLocalizationsDto
 {
     [JsonProperty("field")]
     public string Field { get; set; }
