@@ -19,7 +19,7 @@ public class PhoneOrderConversationDto
     
     public int Order { get; set; }
 
-    public List<ExtractFoodItemDto> ExtractFoodItemOject { get; set; }
+    public List<ExtractFoodItemDto> ExtractFoodItemOjects { get; set; }
     
     public string ExtractFoodItem => JsonConvert.SerializeObject( ExtractFoodItemOject );
     
