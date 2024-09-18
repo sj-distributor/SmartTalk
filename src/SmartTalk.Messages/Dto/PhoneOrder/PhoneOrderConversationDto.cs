@@ -19,15 +19,20 @@ public class PhoneOrderConversationDto
     
     public int Order { get; set; }
 
-    public string FoodItem { get; set; }
-
-    public int Count { get; set; }
-
-    public string Remark { get; set; }
-
-    public double Price { get; set; }
+    public ExtractFoodItemDto ExtractFoodItemOject { get; set; }
     
-    public string ExtractFoodItem => JsonConvert.SerializeObject( new { FoodItem, Count, Remark, Price } );
+    public string ExtractFoodItem => JsonConvert.SerializeObject( ExtractFoodItemOject );
     
     public DateTimeOffset CreatedDate { get; set; }
+}
+
+public class ExtractFoodItemDto
+{
+    public int Count { get; set; }
+    
+    public double Price { get; set; }
+    
+    public string Remark { get; set; }
+
+    public string FoodItem { get; set; }
 }
