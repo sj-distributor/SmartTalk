@@ -22,5 +22,5 @@ public class SchedulingSyncRestaurantMenuRecurringJob : IRecurringJob
 
     public string CronExpression => Cron.Daily();
 
-    public string TimeZone = "Asia/Shanghai";
+    public TimeZoneInfo TimeZone => TimeZoneInfo.FindSystemTimeZoneById("Asia/Shanghai");
 }
