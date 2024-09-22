@@ -10,6 +10,7 @@ using Smarties.Messages.Requests.Ask;
 using System.Text.RegularExpressions;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Extensions;
+using SmartTalk.Core.Services.Caching;
 using SmartTalk.Messages.Dto.WebSocket;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Dto.Attachments;
@@ -58,7 +59,7 @@ public partial class PhoneOrderService
         Log.Information("Phone order record information: {@recordInfo}", recordInfo);
         
         var transcription = await _speechToTextService.SpeechToTextAsync(
-            command.RecordContent,fileType: TranscriptionFileType.Wav, responseFormat: TranscriptionResponseFormat.Text, cancellationToken: cancellationToken).ConfigureAwait(false);
+            command.RecordContent, fileType: TranscriptionFileType.Wav, responseFormat: TranscriptionResponseFormat.Text, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (string.IsNullOrEmpty(transcription) || transcription.Length < 15 || transcription.Contains("GENERAL") || transcription.Contains("感謝收看") || transcription.Contains("訂閱") || transcription.Contains("点赞") || transcription.Contains("立場") || transcription.Contains("字幕") || transcription.Contains("結束") || transcription.Contains("謝謝觀看") || transcription.Contains("幕後大臣") || transcription == "醒醒" || transcription == "跟著我" || transcription.Contains("政經關峻") || transcription.Contains("您拨打的电话") || transcription.Contains("Mailbox memory is full") || transcription.Contains("amazon", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("We're sorry, your call did not go through.", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("Verizon Wireless", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("Beep", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("USPS customer service center", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("not go through", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("stop serving in two hours", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("Welcome to customer support", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("For the upcoming flight booking", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("Please check and dial again.", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("largest cable TV network", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("拨打的用户暂时无法接通") || transcription.Contains("您有一份国际快递即将退回")) return;
         
@@ -117,6 +118,7 @@ public partial class PhoneOrderService
         
         var (goalTexts, shoppingCart, conversations) = await PhoneOrderTranscriptionAsync(phoneOrderInfo, record, audioContent, cancellationToken).ConfigureAwait(false);
         
+        record.Tips = goalTexts.First();
         record.Status = PhoneOrderRecordStatus.Sent;
         record.TranscriptionText = string.Join("\n", goalTexts);
         conversations.Where(x => string.IsNullOrEmpty(x.Answer)).ForEach(x => x.Answer = string.Empty);
@@ -192,6 +194,7 @@ public partial class PhoneOrderService
         List<SpeechMaticsSpeakInfoDto> phoneOrderInfo, PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken)
     {
         var conversationIndex = 0;
+        var recordingContext = new List<string>();
         var goalTexts = new List<string>();
         var shoppingCart = new PhoneOrderDetailDto();
         var conversations = new List<PhoneOrderConversation>();
@@ -217,25 +220,26 @@ public partial class PhoneOrderService
                 goalTexts.Add((speakDetail.Role == PhoneOrderRole.Restaurant
                     ? PhoneOrderRole.Restaurant.ToString()
                     : PhoneOrderRole.Client.ToString()) + ": " + originText);
-                
+
                 if (speakDetail.Role == PhoneOrderRole.Restaurant)
-                    conversations.Add(new PhoneOrderConversation
-                        { RecordId = record.Id, Question = originText, Order = conversationIndex });
+                    conversations.Add(new PhoneOrderConversation { RecordId = record.Id, Question = originText, Order = conversationIndex });
                 else
                 {
-                    var intent = await RecognizeIntentAsync(originText, cancellationToken).ConfigureAwait(false);
+                    var recordContext = await _cacheManager.GetAsync<string>($"{record.Id}", new RedisCachingSetting(), cancellationToken).ConfigureAwait(false);
+                    
+                    var intent = await RecognizeIntentAsync(originText, recordContext, cancellationToken).ConfigureAwait(false);
 
                     PhoneOrderDetailDto extractFoods = null;
 
                     switch (intent)
                     {
                         case PhoneOrderIntent.AddOrder:
-                            extractFoods = await AddOrderDetailAsync(originText, cancellationToken).ConfigureAwait(false);
+                            extractFoods = await AddOrderDetailAsync(originText, recordContext, cancellationToken).ConfigureAwait(false);
                             extractFoods = await GetSimilarRestaurantByRecordAsync(record, extractFoods, cancellationToken).ConfigureAwait(false);
                             CheckOrAddToShoppingCart(shoppingCart.FoodDetails, extractFoods.FoodDetails);
                             break;
                         case PhoneOrderIntent.ReduceOrder:
-                            extractFoods = await ReduceOrderDetailAsync(shoppingCart.FoodDetails, originText, cancellationToken).ConfigureAwait(false);
+                            extractFoods = await ReduceOrderDetailAsync(shoppingCart.FoodDetails, originText, recordContext, cancellationToken).ConfigureAwait(false);
                             extractFoods = await GetSimilarRestaurantByRecordAsync(record, extractFoods, cancellationToken).ConfigureAwait(false);
                             CheckOrReduceFromShoppingCart(shoppingCart.FoodDetails, extractFoods.FoodDetails);
                             break;
@@ -248,6 +252,14 @@ public partial class PhoneOrderService
 
                     conversationIndex++;
                 }
+
+                if (recordingContext.Count == 8)
+                    recordingContext.RemoveRange(0, 2);
+                
+                recordingContext.Add($"{speakDetail.Role.ToString()}: {originText}");
+                
+                await _cacheManager.SetAsync(
+                    $"{record.Id}", string.Join("\n", recordingContext), new RedisCachingSetting(expiry: TimeSpan.FromHours(1)), cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -257,8 +269,7 @@ public partial class PhoneOrderService
             }
         }
 
-        Log.Information("Phone order conversation: {@conversations}, shopping cart: {@shoppingCart}", conversations,
-            shoppingCart);
+        Log.Information("Phone order conversation: {@conversations}, shopping cart: {@shoppingCart}", conversations, shoppingCart);
 
         return (goalTexts, shoppingCart, conversations);
     }
@@ -438,7 +449,7 @@ public partial class PhoneOrderService
         };
     }
     
-     private async Task<PhoneOrderIntent> RecognizeIntentAsync(string input, CancellationToken cancellationToken)
+     private async Task<PhoneOrderIntent> RecognizeIntentAsync(string input, string recordContext, CancellationToken cancellationToken)
     {
         var response = await _smartiesClient.PerformQueryAsync(new AskGptRequest
         {
@@ -447,12 +458,35 @@ public partial class PhoneOrderService
                 new ()
                 {
                     Role = "system",
-                    Content = new CompletionsStringContent("你是一个智能助手，能够根据用户的输入识别出相应的意图。以下是可能的意图和对应的样本：\n{\n  \"0\": {\"intent\": \"闲聊\", \"sample\": [\"你今日开心吗？\", \"今天天气点呀？\", \"你做紧d咩？\"]},\n  \"1\": {\"intent\": \"问菜品\", \"sample\": [\"今日有什麼可以食\", \"你们有什么推荐菜\", \"今日有咩推荐\", \"有什么粥吃\", \"有什么饭食\", \"小吃有什么\", \"有什么喝的？\", \"有什么饮料？\" ]},\n  \"2\": {\"intent\": \"打招呼\", \"sample\": [\"hello\", \"你好\", \"喂\", \"hi\"]},\n  \"3\": {\"intent\": \"转人工\", \"sample\": [\"帮我换人工\", \"人工服务\", \"转人工\", \"叫个真人嚟\", \"我需要人工客服。\"]},\n  \"5\": {\"intent\": \"营业时间\", \"sample\": [\"营业时间乜？\", \"你哋幾點开门？\", \"你哋幾點关门？\", \"宜家仲营业嗎？\", \"你哋今日几点开门？\", \"今天还营业吗？\", \"今天还营业吗？\"]},\n  \"6\": {\"intent\": \"地址\", \"sample\": [\"餐厅喺边度？\", \"地址有冇？\", \"地址喺边度？\", \"餐厅喺咩位置？\", \"可唔可以讲下餐厅嘅地址？\", \"餐厅在哪里？\"]},\n  \"7\": {\"intent\": \"是否gluten free\", \"sample\": [\"呢道菜系咪gluten free嘅？\", \"请问呢道菜系咪gluten free嘅？\", \"这道菜系gluten free的吗？\", \"这道菜有麸质吗？\", \"这道菜是gluten free的吗？\"]}\n  \"8\": {\"intent\": \"加单(点菜)\", \"sample\": [\"帮我拿个白粥\", \"仲要两份椒盐鸡翼\", \"再嚟个扬州炒饭\", \"多個海鮮炒面同埋炸鸡翼\", \"我要叉烧炒饭\"]},\n  \"9\": {\"intent\": \"减单\", \"sample\": [\"你帮我去一个菠萝油,留一个给老婆\", \"唔要啱啱嗰道菜\", \"取消啱啱點嘅全部菜\", \"唔要魚旦啦\", \"乜都唔要啦\", \"不要刚刚点的了\", \"取消扬州炒饭\", \"取消扬州炒饭\"]},\n  \"10\": {\"intent\": \"问单\", \"sample\": [\"睇下我點咗啲乜嘢？\", \"落单裡有啲乜嘢？\", \"宜家落左啲乜嘢？\", \"睇下我宜家单里有啲乜嘢。\", \"现在下了些什么\", \"落了些什么\" ]},\n  \"11\": {\"intent\": \"欢送语\", \"sample\": [\"再见\", \"拜拜\", \"下次见\", \"冇咗，多谢\"]},\n  \"12\": {\"intent\": \"有无味精\", \"sample\": [\"菜里面有冇味精？\", \"会唔会放味精？\", \"呢度面有冇味精？\", \"请问呢道菜加咗味精未呀？\", \"有味精吗里面\"]},\n}\n\n根据以上意图和样本，请识别以下用户输入的意图，并返回相应的意图标识符（例如 1或2）。\ninput:我想要一罐可乐，一份扬州炒饭，一份湿炒牛河，output:8\ninput:有无咩推荐啊，output:1\ninput:我落左咩单，全部讲来听下，output:10\ninput:落单之前的菜，output:4\ninput:下单一份炒饭，output:8\ninput:下单炒饭，output:8\n\n--规则：\n1. 如果打招呼intent和其他intent同时存在的时候，优先选择其他intent，例如\"hello，今日有什么卖啊？\"，应该识别成【问菜品】的intent而不是打招呼\n2. 如果下单intent中输入有菜品，都应该落入加单intent中而不是下单\n\n请根据用户的实际输入进行意图识别，并返回一个标识数字表示识别出的意图。")
+                    Content = new CompletionsStringContent("你是一个智能助手，能够根据用户的输入结合上下文识别出相应的意图。" +
+                                                           "--规则：" +
+                                                           "1.根据上下文，分析当前用户意图" +
+                                                           "2. 如果打招呼intent和其他intent同时存在的时候，优先选择其他intent，例如\"hello，我要一份蛋炒饭？\"，应该识别成【加单】的intent而不是打招呼" +
+                                                           "3. 如果下单intent中输入有菜品，都应该落入加单intent中而不是下单" +
+                                                           "4.请根据用户的实际输入进行意图识别，并返回一个标识数字表示识别出的意图。以下是可能的意图和对应的样本：\n" +
+                                                           " {\n \"0\": {\"intent\": \"闲聊\", \"sample\": [\"你今日开心吗？, \"今天天气点呀？\", \"你做紧d咩？\"]},\n " +
+                                                           "\"1\": {\"intent\": \"加单(点菜)\", \"sample\": [\"帮我拿个白粥\", \"仲要两份椒盐鸡翼\", \"再嚟个扬州炒饭\", \"多個海鮮炒面同埋炸鸡翼\", \"我要叉烧炒饭\"]},\n" +
+                                                           " \"2\": {\"intent\": \"减单\", \"sample\": [\"你帮我去一个菠萝油,留一个给老婆\", \"唔要啱啱嗰道菜\", \"取消啱啱點嘅全部菜\", \"唔要魚旦啦\", \"乜都唔要啦\", \"不要刚刚点的了\", \"取消扬州炒饭\", \"取消扬州炒饭\"]},\n根据以上意图和样本，请识别以下用户输入的意图，并返回相应的意图标识符（例如 0或1）。\n" +
+                                                           "上下文:" +
+                                                           "Restaurant: ," +
+                                                           "Client:Hi,can I place an order for pickup? " +
+                                                           "Restaurant:phone number," +
+                                                           "Client:818-336-2982, " +
+                                                           "Restaurant:Ok,what's your order?" +
+                                                           "Client:Do you have chicken fried rice?" +
+                                                           "Restaurant:Okay; \n" +
+                                                           "当前用户意图:and that's it.output:1 \n" +
+                                                           "当前用户意图:我想要一罐可乐，一份扬州炒饭，一份湿炒牛河，output:1\n" +
+                                                           "当前用户意图:有无咩推荐啊，output:0\n" +
+                                                           "当前用户意图:我落左咩单，全部讲来听下，output:0\n" +
+                                                           "当前用户意图:落单之前的菜，output:0\n" +
+                                                           "当前用户意图:下单一份炒饭，output:1\n" +
+                                                           "当前用户意图:下单炒饭，output:1\n" )
                 },
                 new ()
                 {
                     Role = "user",
-                    Content = new CompletionsStringContent($"用户输入: {input}\n输出意图数字:")
+                    Content = new CompletionsStringContent($"上下文:{recordContext} \n当前用户意图: {input}\n输出意图数字:")
                 }
             },
             Model = OpenAiModel.Gpt4o
@@ -532,7 +566,7 @@ public partial class PhoneOrderService
         Log.Information("Shopping cart after add: {ShoppingCart}", JsonConvert.SerializeObject(shoppingCart));
     }
     
-    private async Task<PhoneOrderDetailDto?> AddOrderDetailAsync(string query, CancellationToken cancellationToken)
+    private async Task<PhoneOrderDetailDto?> AddOrderDetailAsync(string query, string recordContext, CancellationToken cancellationToken)
     {
         var completionResult = await _smartiesClient.PerformQueryAsync( new AskGptRequest
         {
@@ -540,26 +574,37 @@ public partial class PhoneOrderService
             {
                 new () {
                     Role = "system",
-                    Content = new CompletionsStringContent("你是一款高度理解语言的智能助手，专门用于识别和处理电话订单。" +
-                                       "根据我输入，来帮我补全food_details，count是菜品的数量，如果你不清楚数量的时候，count默认为1，remark是对菜品的备注" +
-                                       "特别注意：如果当用户的请求的菜品不在菜单上时，也需要返回菜品种类，菜品名称数量和备注。 " +
+                    Content = new CompletionsStringContent("你是一款高度理解语言的智能助手，结合上下文专门从当前语句用于识别和处理电话订单。" +
+                                       "--规则：" +
+                                       "1.根据上下文，结合用户当前问题帮我补全food_details，count是菜品的数量，如果你不清楚数量的时候，count默认为1，remark是对菜品的备注" +
+                                       "2.如果当用户的请求的菜品不在菜单上时，也需要返回菜品种类，菜品名称数量和备注。 " +
                                        "注意用json格式返回；规则：{\"food_details\": [{\"food_name\": {\"小吃\": [\"炸鸡翼\",\"港式咖喱魚旦\",\"椒盐鸡翼\",\"菠萝油\"]," +
-               
                                        "-样本与输出：" +
-                                       "input:我要两份皮蛋瘦肉粥，有一个不要皮蛋; " +
+                                       "上下文:" +
+                                       "Restaurant: ," +
+                                       "Client:Hi,can I place an order for pickup? " +
+                                       "Restaurant:phone number," +
+                                       "Client:818-336-2982, " +
+                                       "Restaurant:Ok,what's your order?" +
+                                       "Client:Do you have chicken fried rice?" +
+                                       "Restaurant:Okay; \n" +
+                                       "用户当前问题:and that's it." +
+                                       "output:{\"food_details\": [{\"food_name\": \"rice\",\"count\":1, \"remark\":null}]}}" +
+                                       "用户当前问题:我要两份皮蛋瘦肉粥，有一个不要皮蛋; " +
                                        "output:{\"food_details\": [{\"food_name\": \"皮蛋瘦肉粥\",\"count\":2, \"remark\":一份不要皮蛋}]}}\n" +
-                                       "input:要可乐; " +
+                                       "用户当前问题:要可乐; " +
                                        "output:{\"food_details\": [{\"food_name\": \"可乐\",\"count\":1, \"remark\":null}]}}\n" +
-                                       "input:我要四个扬州炒饭，有两份不要葱，还要一份草莓绵绵冰; " +
+                                       "用户当前问题:我要四个扬州炒饭，有两份不要葱，还要一份草莓绵绵冰; " +
                                        "output:{\"food_details\": [{\"food_name\": \"扬州炒饭\",\"count\":4, \"remark\":两份不要葱},{\"food_category\": \"其他\", \"food_name\": \"草莓绵绵冰\",\"count\":1, \"remark\":null}]}}\n" +
-                                       "input:要一个炸鸡翼和一个稠一点的白粥 " +
-                                       "output:{\"food_details\": [{\"food_name\": \"明火白粥\",\"count\":1, \"remark\":稠一点},{\"food_category\": \"小吃\", \"food_name\": \"炸鸡翼\",\"count\":1, \"remark\":null}]}}\n ")
+                                       "用户当前问题:要一个炸鸡翼和一个稠一点的白粥 " +
+                                       "output:{\"food_details\": [{\"food_name\": \"明火白粥\",\"count\":1, \"remark\":稠一点},{\"food_category\": \"小吃\", \"food_name\": \"炸鸡翼\",\"count\":1, \"remark\":null}]}}\n"
+                                       )
                     
                 },
                 new ()
                 {
                     Role = "user",
-                    Content = new CompletionsStringContent($"input: {query}, output:")
+                    Content = new CompletionsStringContent($"上下文:{recordContext} \n 用户当前问题: {query}, output:")
                 }
             },
             Model = OpenAiModel.Gpt4o,
@@ -591,7 +636,7 @@ public partial class PhoneOrderService
         Log.Information("Shopping cart after reduce: {ShoppingCart}", JsonConvert.SerializeObject(shoppingCart));
     }
     
-    private async Task<PhoneOrderDetailDto> ReduceOrderDetailAsync(List<FoodDetailDto> shoppingCart, string query, CancellationToken cancellationToken)
+    private async Task<PhoneOrderDetailDto> ReduceOrderDetailAsync(List<FoodDetailDto> shoppingCart, string query, string recordContext, CancellationToken cancellationToken)
     {
         var shoppingCar = JsonConvert.SerializeObject(shoppingCart, Formatting.Indented);
         
@@ -602,20 +647,32 @@ public partial class PhoneOrderService
                 new () {
                     Role = "system",
                     Content = new CompletionsStringContent("你是一款高度理解语言的智能助手，专门用于识别和处理电话订单。" +
-                                                           $"根据我目前购物车的内容和输入，来帮我补全food_details，count是菜品的数量，如果你不清楚数量的时候，count默认为-1，购物车内容如下：{shoppingCar}，remark固定为null;" +
-                                                           "特别注意：如果当用户的请求的菜品不在菜单上时，也需要返回菜品种类，菜品名称数量和备注。" +
+                                                           "--规则" +
+                                                           $"1.根据上下文结合我目前的购物车的内容和输入，来帮我补全food_details，count是菜品的数量，如果你不清楚数量的时候，count默认为-1，购物车内容如下：{shoppingCar}，remark固定为null;" +
+                                                           "2.如果当用户的请求的菜品不在菜单上时，也需要返回菜品种类，菜品名称数量和备注。" +
                                                            "注意用json格式返回；规则：{\"food_details\": [{\"food_name\": \"菜品名字\",\"count\":减少的数量（负数）, \"remark\":null}]}}" +
                                                            "- 样本与输出：\n" +
-                                                           "input:你帮我去一个菠萝油,留一个给老婆 output:{\"food_details\": [{\"food_name\": \"菠萝油\",\"count\":-1, \"remark\":null}]}}\n" +
-                                                           "input:刚刚点的那一份皮蛋瘦肉粥不要了 output:{\"food_details\": [{\"food_name\": \"皮蛋瘦肉粥\",\"count\":-1, \"remark\":null}]}}\n" +
-                                                           "input:全部不要了 output: null\n" +
+                                                           "上下文:" +
+                                                           "Restaurant: ," +
+                                                           "Client:Hi,can I place an order for pickup? " +
+                                                           "Restaurant:phone number," +
+                                                           "Client:818-336-2982, " +
+                                                           "Restaurant:Ok,what's your order?" +
+                                                           "Client:Do you have chicken fried rice?" +
+                                                           "Restaurant:Okay; " +
+                                                           "Client:and that's it." +
+                                                           "Restaurant:Okay; \n" +
+                                                           "用户当前问题:I don't want the food I just ordered. output:{\"food_details\": [{\"food_name\": \"chicken fried rice\",\"count\":-1, \"remark\":null}]}}" +
+                                                           "用户当前问题:你帮我去一个菠萝油,留一个给老婆 output:{\"food_details\": [{\"food_name\": \"菠萝油\",\"count\":-1, \"remark\":null}]}}\n" +
+                                                           "用户当前问题:刚刚点的那一份皮蛋瘦肉粥不要了 output:{\"food_details\": [{\"food_name\": \"皮蛋瘦肉粥\",\"count\":-1, \"remark\":null}]}}\n" +
+                                                           "用户当前问题:全部不要了 output: null\n" +
                                                            "（假设购物车里有三份扬州炒饭）" +
-                                                           "input:刚刚点的扬州炒饭不要了 output:{\"food_details\": [{\"food_name\": \"扬州炒饭\",\"count\":-3, \"remark\":null}]}}\n")
+                                                           "用户当前问题:刚刚点的扬州炒饭不要了 output:{\"food_details\": [{\"food_name\": \"扬州炒饭\",\"count\":-3, \"remark\":null}]}}\n")
                 },
                 new ()
                 {
                     Role = "user",
-                    Content = new CompletionsStringContent($"input: {query}, output:")
+                    Content = new CompletionsStringContent($"上下文:{recordContext}\n用户当前问题: {query}, output:")
                 }
             },
             Model = OpenAiModel.Gpt4o,

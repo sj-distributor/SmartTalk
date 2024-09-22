@@ -2,6 +2,7 @@ using AutoMapper;
 using Google.Cloud.Translation.V2;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Attachments;
+using SmartTalk.Core.Services.Caching;
 using SmartTalk.Core.Services.Ffmpeg;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
@@ -24,7 +25,8 @@ public partial class PhoneOrderService : IPhoneOrderService
     private readonly IVectorDb _vectorDb;
     private readonly ICurrentUser _currentUser;
     private readonly IWeChatClient _weChatClient;
-    private readonly  IEasyPosClient _easyPosClient;
+    private readonly ICacheManager _cacheManager;
+    private readonly IEasyPosClient _easyPosClient;
     private readonly IFfmpegService _ffmpegService;
     private readonly ISmartiesClient _smartiesClient;
     private readonly TranslationClient _translationClient;
@@ -42,6 +44,7 @@ public partial class PhoneOrderService : IPhoneOrderService
         IVectorDb vectorDb,
         ICurrentUser currentUser,
         IWeChatClient weChatClient,
+        ICacheManager cacheManager,
         IEasyPosClient easyPosClient,
         IFfmpegService ffmpegService,
         ISmartiesClient smartiesClient,
@@ -59,6 +62,7 @@ public partial class PhoneOrderService : IPhoneOrderService
         _vectorDb = vectorDb;
         _currentUser = currentUser;
         _weChatClient = weChatClient;
+        _cacheManager = cacheManager;
         _easyPosClient = easyPosClient;
         _ffmpegService = ffmpegService;
         _smartiesClient = smartiesClient;
