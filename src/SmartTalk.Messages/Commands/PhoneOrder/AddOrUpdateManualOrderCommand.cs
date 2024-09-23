@@ -5,7 +5,7 @@ using SmartTalk.Messages.Responses;
 
 namespace SmartTalk.Messages.Commands.PhoneOrder;
 
-public class AddManualOrderCommand : ICommand
+public class AddOrUpdateManualOrderCommand : ICommand
 {
     public string OrderId { get; set; }
     
@@ -14,6 +14,6 @@ public class AddManualOrderCommand : ICommand
     public PhoneOrderRestaurant Restaurant { get; set; }
 }
 
-public class AddManualOrderResponse : SmartTalkResponse<List<PhoneOrderOrderItemDto>>
+public class AddOrUpdateManualOrderResponse : SmartTalkResponse<List<PhoneOrderOrderItemDto>>
 {
 }
