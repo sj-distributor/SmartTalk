@@ -22,7 +22,7 @@ public class PhoneOrderOrderItemDto
 
     public string Note { get; set; }
 
-    public long ManualOrderId { get; set; }
+    public long? ManualOrderId { get; set; }
 
     public PhoneOrderOrderType OrderType { get; set; }
 
