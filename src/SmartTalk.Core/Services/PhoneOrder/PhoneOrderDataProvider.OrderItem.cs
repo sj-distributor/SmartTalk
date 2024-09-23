@@ -18,7 +18,7 @@ public partial class PhoneOrderDataProvider
         var query = _repository.Query<PhoneOrderOrderItem>(x => x.RecordId == recordId);
 
         if (type.HasValue)
-            query = query.Where(x => x.OrderType == type);
+            query = query.Where(x => x.OrderType == type.Value);
         
         return  await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
