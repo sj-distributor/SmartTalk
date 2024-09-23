@@ -7,7 +7,7 @@ namespace SmartTalk.Messages.Commands.PhoneOrder;
 
 public class AddManualOrderCommand : ICommand
 {
-    public long OrderId { get; set; }
+    public string OrderId { get; set; }
     
     public int RecordId { get; set; }
 
