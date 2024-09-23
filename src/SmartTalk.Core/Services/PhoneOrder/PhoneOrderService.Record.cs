@@ -160,12 +160,17 @@ public partial class PhoneOrderService
             {
                 Price = x.Price,
                 Quantity = x.Quantity,
-                ManualOrderId = orderId,
                 RecordId = command.RecordId,
                 OrderType = PhoneOrderOrderType.ManualOrder,
                 FoodName = x.Localizations.First(c => c.Field == "name" && c.languageCode == "zh_CN").Value
             };
         }).ToList();
+        
+        var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByIdAsync(command.RecordId, cancellationToken).ConfigureAwait(false);
+        
+        record.ManualOrderId = orderId;
+        
+        await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         await _phoneOrderDataProvider.AddPhoneOrderItemAsync(oderItems, cancellationToken: cancellationToken).ConfigureAwait(false);
         
