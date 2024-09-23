@@ -29,7 +29,7 @@ public class PhoneOrderOrderItem : IEntity, IHasCreatedFields
     public string Note { get; set; }
     
     [Column("manual_order_id")]
-    public long ManualOrderId { get; set; }
+    public long? ManualOrderId { get; set; }
     
     [Column("order_type")]
     public PhoneOrderOrderType OrderType { get; set; }
