@@ -1,1 +1,1 @@
-alter table `phone_order_order_item` add column `manual_order_id` long null;
+alter table `phone_order_order_item` add column `manual_order_id` bigint null;
