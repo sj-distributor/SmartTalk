@@ -34,7 +34,7 @@ public partial interface IPhoneOrderService
 
     Task ExtractPhoneOrderRecordAiMenuAsync(List<SpeechMaticsSpeakInfoDto> phoneOrderInfo, PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken);
 
-    Task<AddManualOrderResponse> AddManualOrderAsync(AddManualOrderCommand command, CancellationToken cancellationToken);
+    Task<AddOrUpdateManualOrderResponse> AddOrUpdateManualOrderAsync(AddOrUpdateManualOrderCommand command, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderService
@@ -137,28 +137,44 @@ public partial class PhoneOrderService
             await _phoneOrderDataProvider.AddPhoneOrderItemAsync(items, true, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<AddManualOrderResponse> AddManualOrderAsync(AddManualOrderCommand command, CancellationToken cancellationToken)
+    public async Task<AddOrUpdateManualOrderResponse> AddOrUpdateManualOrderAsync(AddOrUpdateManualOrderCommand command, CancellationToken cancellationToken)
     {
-        var manualOrder = await _easyPosClient.GetOrderAsync(command.OrderId, command.Restaurant, cancellationToken).ConfigureAwait(false);
+        var orderId = long.Parse(command.OrderId); 
+        
+        Log.Information($"Add manual order: {orderId}", orderId);
+        
+        var manualOrder = await _easyPosClient.GetOrderAsync(orderId, command.Restaurant, cancellationToken).ConfigureAwait(false);
 
         Log.Information("Get order response: response: {@manualOrder}", manualOrder);
         
-        if (manualOrder.Data == null) return  new AddManualOrderResponse();
+        if (manualOrder.Data == null) return  new AddOrUpdateManualOrderResponse();
+        
+        var items = await _phoneOrderDataProvider.GetPhoneOrderOrderItemsAsync(command.RecordId, PhoneOrderOrderType.ManualOrder, cancellationToken).ConfigureAwait(false);
+
+        if (items is { Count: > 0 })
+            await _phoneOrderDataProvider.DeletePhoneOrderItemsAsync(items, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         var oderItems = manualOrder.Data.Order.OrderItems.Select(x =>
         {
             return new PhoneOrderOrderItem
             {
-                RecordId = command.RecordId,
-                FoodName = x.Localizations.First(c => c.Field == "name" && c.languageCode == "zh_CN").Value,
+                Price = x.Price,
                 Quantity = x.Quantity,
-                Price = x.Price
+                RecordId = command.RecordId,
+                OrderType = PhoneOrderOrderType.ManualOrder,
+                FoodName = x.Localizations.First(c => c.Field == "name" && c.languageCode == "zh_CN").Value
             };
         }).ToList();
         
+        var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByIdAsync(command.RecordId, cancellationToken).ConfigureAwait(false);
+        
+        record.ManualOrderId = orderId;
+        
+        await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
         await _phoneOrderDataProvider.AddPhoneOrderItemAsync(oderItems, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        return new AddManualOrderResponse
+        return new AddOrUpdateManualOrderResponse
         {
             Data = _mapper.Map<List<PhoneOrderOrderItemDto>>(oderItems)
         };

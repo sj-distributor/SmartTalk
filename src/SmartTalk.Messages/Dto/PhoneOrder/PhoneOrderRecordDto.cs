@@ -17,6 +17,8 @@ public class PhoneOrderRecordDto
 
     public string TranscriptionText { get; set; }
     
+    public long? ManualOrderId { get; set; }
+    
     public string Url { get; set; }
     
     public int? LastModifiedBy { get; set; }
