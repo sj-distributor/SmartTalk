@@ -35,6 +35,9 @@ public class PhoneOrderRecord : IEntity
     [Column("language")]
     public TranscriptionLanguage Language { get; set; }
     
+    [Column("manual_order_id")]
+    public long? ManualOrderId { get; set; }
+    
     [Column("last_modified_by")]
     public int? LastModifiedBy { get; set; }
 
