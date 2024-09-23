@@ -139,7 +139,11 @@ public partial class PhoneOrderService
 
     public async Task<AddManualOrderResponse> AddManualOrderAsync(AddManualOrderCommand command, CancellationToken cancellationToken)
     {
-        var manualOrder = await _easyPosClient.GetOrderAsync(command.OrderId, command.Restaurant, cancellationToken).ConfigureAwait(false);
+        var orderId = long.Parse(command.OrderId); 
+        
+        Log.Information($"Add manual order: {orderId}", orderId);
+        
+        var manualOrder = await _easyPosClient.GetOrderAsync(orderId, command.Restaurant, cancellationToken).ConfigureAwait(false);
 
         Log.Information("Get order response: response: {@manualOrder}", manualOrder);
         
@@ -152,7 +156,8 @@ public partial class PhoneOrderService
                 RecordId = command.RecordId,
                 FoodName = x.Localizations.First(c => c.Field == "name" && c.languageCode == "zh_CN").Value,
                 Quantity = x.Quantity,
-                Price = x.Price
+                Price = x.Price,
+                OrderType = PhoneOrderOrderType.ManualOrder
             };
         }).ToList();
         
