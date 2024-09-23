@@ -151,11 +151,11 @@ public partial class PhoneOrderService
         {
             return new PhoneOrderOrderItem
             {
-                RecordId = command.RecordId,
-                FoodName = x.Localizations.First(c => c.Field == "name" && c.languageCode == "zh_CN").Value,
-                Quantity = x.Quantity,
                 Price = x.Price,
-                OrderType = PhoneOrderOrderType.ManualOrder
+                Quantity = x.Quantity,
+                RecordId = command.RecordId,
+                OrderType = PhoneOrderOrderType.ManualOrder,
+                FoodName = x.Localizations.First(c => c.Field == "name" && c.languageCode == "zh_CN").Value,
             };
         }).ToList();
         
