@@ -18,6 +18,6 @@ public class GetPhoneOrderOrderItemsData
     public List<PhoneOrderOrderItemDto> ManualItems { get; set; }
         
     public List<PhoneOrderOrderItemDto> AIItems { get; set; }
-    
+
     public string ManualOrderId { get; set; }
 }
