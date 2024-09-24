@@ -18,4 +18,6 @@ public class GetPhoneOrderOrderItemsData
     public List<PhoneOrderOrderItemDto> ManualItems { get; set; }
         
     public List<PhoneOrderOrderItemDto> AIItems { get; set; }
+
+    public long? ManualOrderId { get; set; }
 }
