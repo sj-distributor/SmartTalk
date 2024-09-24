@@ -1,0 +1,1 @@
+alter table `phone_order_record` add column `manual_order_id` bigint null;

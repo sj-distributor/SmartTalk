@@ -50,6 +50,7 @@ public partial class PhoneOrderDataProvider
                     Url = record.Url,
                     LastModifiedBy = record.LastModifiedBy,
                     CreatedDate = record.CreatedDate,
+                    ManualOrderId = record.ManualOrderId,
                     UserAccount = user
                 };
 
