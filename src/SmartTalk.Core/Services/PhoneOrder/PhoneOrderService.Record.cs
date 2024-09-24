@@ -476,7 +476,7 @@ public partial class PhoneOrderService
                     Role = "system",
                     Content = new CompletionsStringContent("你是一个智能助手，能够根据用户的输入结合上下文识别出相应的意图。" +
                                                            "--规则：" +
-                                                           "1.根据上下文，分析当前用户意图" +
+                                                           "1.根据上下文，分析当前用户问题" +
                                                            "2. 如果打招呼intent和其他intent同时存在的时候，优先选择其他intent，例如\"hello，我要一份蛋炒饭？\"，应该识别成【加单】的intent而不是打招呼" +
                                                            "3. 如果下单intent中输入有菜品，都应该落入加单intent中而不是下单" +
                                                            "4.请根据用户的实际输入进行意图识别，并返回一个标识数字表示识别出的意图。以下是可能的意图和对应的样本：\n" +
@@ -491,13 +491,13 @@ public partial class PhoneOrderService
                                                            "Restaurant:Ok,what's your order?" +
                                                            "Client:Do you have chicken fried rice?" +
                                                            "Restaurant:Okay; \n" +
-                                                           "当前用户意图:and that's it.output:1 \n" +
-                                                           "当前用户意图:我想要一罐可乐，一份扬州炒饭，一份湿炒牛河，output:1\n" +
-                                                           "当前用户意图:有无咩推荐啊，output:0\n" +
-                                                           "当前用户意图:我落左咩单，全部讲来听下，output:0\n" +
-                                                           "当前用户意图:落单之前的菜，output:0\n" +
-                                                           "当前用户意图:下单一份炒饭，output:1\n" +
-                                                           "当前用户意图:下单炒饭，output:1\n" )
+                                                           "当前用户问题:and that's it.output:1 \n" +
+                                                           "当前用户问题:我想要一罐可乐，一份扬州炒饭，一份湿炒牛河，output:1\n" +
+                                                           "当前用户问题:有无咩推荐啊，output:0\n" +
+                                                           "当前用户问题:我落左咩单，全部讲来听下，output:0\n" +
+                                                           "当前用户问题:落单之前的菜，output:0\n" +
+                                                           "当前用户问题:下单一份炒饭，output:1\n" +
+                                                           "当前用户问题:下单炒饭，output:1\n" )
                 },
                 new ()
                 {
@@ -596,24 +596,12 @@ public partial class PhoneOrderService
                                        "2.如果当用户的请求的菜品不在菜单上时，也需要返回菜品种类，菜品名称数量和备注。 " +
                                        "注意用json格式返回；规则：{\"food_details\": [{\"food_name\": {\"小吃\": [\"炸鸡翼\",\"港式咖喱魚旦\",\"椒盐鸡翼\",\"菠萝油\"]," +
                                        "-样本与输出：" +
-                                       "上下文:" +
-                                       "Restaurant: ," +
-                                       "Client:Hi,can I place an order for pickup? " +
-                                       "Restaurant:phone number," +
-                                       "Client:818-336-2982, " +
-                                       "Restaurant:Ok,what's your order?" +
-                                       "Client:Do you have chicken fried rice?" +
-                                       "Restaurant:Okay; \n" +
-                                       "用户当前问题:and that's it." +
-                                       "output:{\"food_details\": [{\"food_name\": \"rice\",\"count\":1, \"remark\":null}]}}" +
-                                       "用户当前问题:我要两份皮蛋瘦肉粥，有一个不要皮蛋; " +
-                                       "output:{\"food_details\": [{\"food_name\": \"皮蛋瘦肉粥\",\"count\":2, \"remark\":一份不要皮蛋}]}}\n" +
-                                       "用户当前问题:要可乐; " +
-                                       "output:{\"food_details\": [{\"food_name\": \"可乐\",\"count\":1, \"remark\":null}]}}\n" +
-                                       "用户当前问题:我要四个扬州炒饭，有两份不要葱，还要一份草莓绵绵冰; " +
-                                       "output:{\"food_details\": [{\"food_name\": \"扬州炒饭\",\"count\":4, \"remark\":两份不要葱},{\"food_category\": \"其他\", \"food_name\": \"草莓绵绵冰\",\"count\":1, \"remark\":null}]}}\n" +
-                                       "用户当前问题:要一个炸鸡翼和一个稠一点的白粥 " +
-                                       "output:{\"food_details\": [{\"food_name\": \"明火白粥\",\"count\":1, \"remark\":稠一点},{\"food_category\": \"小吃\", \"food_name\": \"炸鸡翼\",\"count\":1, \"remark\":null}]}}\n"
+                                       "上下文: Restaurant: . Client:Hi,can I place an order for pickup. Restaurant:phone number. Client:818-336-2982. Restaurant:Ok,what's your order? Client:Do you have chicken fried rice? Restaurant:Okay; \n" +
+                                       "用户当前问题:and that's it; output:{\"food_details\": [{\"food_name\": \"rice\",\"count\":1, \"remark\":null}]}}" +
+                                       "用户当前问题:我要两份皮蛋瘦肉粥，有一个不要皮蛋; output:{\"food_details\": [{\"food_name\": \"皮蛋瘦肉粥\",\"count\":2, \"remark\":一份不要皮蛋}]}}\n" +
+                                       "用户当前问题:要可乐; output:{\"food_details\": [{\"food_name\": \"可乐\",\"count\":1, \"remark\":null}]}}\n" +
+                                       "用户当前问题:我要四个扬州炒饭，有两份不要葱，还要一份草莓绵绵冰; output:{\"food_details\": [{\"food_name\": \"扬州炒饭\",\"count\":4, \"remark\":两份不要葱},{\"food_category\": \"其他\", \"food_name\": \"草莓绵绵冰\",\"count\":1, \"remark\":null}]}}\n" +
+                                       "用户当前问题:要一个炸鸡翼和一个稠一点的白粥 output:{\"food_details\": [{\"food_name\": \"明火白粥\",\"count\":1, \"remark\":稠一点},{\"food_category\": \"小吃\", \"food_name\": \"炸鸡翼\",\"count\":1, \"remark\":null}]}}\n"
                                        )
                     
                 },
@@ -668,16 +656,7 @@ public partial class PhoneOrderService
                                                            "2.如果当用户的请求的菜品不在菜单上时，也需要返回菜品种类，菜品名称数量和备注。" +
                                                            "注意用json格式返回；规则：{\"food_details\": [{\"food_name\": \"菜品名字\",\"count\":减少的数量（负数）, \"remark\":null}]}}" +
                                                            "- 样本与输出：\n" +
-                                                           "上下文:" +
-                                                           "Restaurant: ," +
-                                                           "Client:Hi,can I place an order for pickup? " +
-                                                           "Restaurant:phone number," +
-                                                           "Client:818-336-2982, " +
-                                                           "Restaurant:Ok,what's your order?" +
-                                                           "Client:Do you have chicken fried rice?" +
-                                                           "Restaurant:Okay; " +
-                                                           "Client:and that's it." +
-                                                           "Restaurant:Okay; \n" +
+                                                           "上下文: Restaurant: . Client:Hi,can I place an order for pickup? Restaurant:phone number. Client:818-336-2982. Restaurant:Ok,what's your order? Client:Do you have chicken fried rice? Restaurant:Okay; Client:and that's it. Restaurant:Okay; \n" +
                                                            "用户当前问题:I don't want the food I just ordered. output:{\"food_details\": [{\"food_name\": \"chicken fried rice\",\"count\":-1, \"remark\":null}]}}" +
                                                            "用户当前问题:你帮我去一个菠萝油,留一个给老婆 output:{\"food_details\": [{\"food_name\": \"菠萝油\",\"count\":-1, \"remark\":null}]}}\n" +
                                                            "用户当前问题:刚刚点的那一份皮蛋瘦肉粥不要了 output:{\"food_details\": [{\"food_name\": \"皮蛋瘦肉粥\",\"count\":-1, \"remark\":null}]}}\n" +
