@@ -119,7 +119,7 @@ public partial class PhoneOrderService
         
         var (goalTexts, shoppingCart, conversations) = await PhoneOrderTranscriptionAsync(phoneOrderInfo, record, audioContent, cancellationToken).ConfigureAwait(false);
         
-        record.Tips = goalTexts.First();
+        record.Tips = goalTexts.First().Split([':'], 2)[1].Trim();
         record.Status = PhoneOrderRecordStatus.Sent;
         record.TranscriptionText = string.Join("\n", goalTexts);
         conversations.Where(x => string.IsNullOrEmpty(x.Answer)).ForEach(x => x.Answer = string.Empty);
