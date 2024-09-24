@@ -19,5 +19,5 @@ public class GetPhoneOrderOrderItemsData
         
     public List<PhoneOrderOrderItemDto> AIItems { get; set; }
 
-    public long? ManualOrderId { get; set; }
+    public string ManualOrderId { get; set; }
 }

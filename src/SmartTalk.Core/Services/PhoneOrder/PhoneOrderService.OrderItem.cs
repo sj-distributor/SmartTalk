@@ -25,7 +25,7 @@ public partial class PhoneOrderService
         {
             Data = new GetPhoneOrderOrderItemsData
             {
-                ManualOrderId = record.ManualOrderId,
+                ManualOrderId = record.ManualOrderId.ToString(),
                 ManualItems = _mapper.Map<List<PhoneOrderOrderItemDto>>(orderItems.Where(x => x.OrderType == PhoneOrderOrderType.ManualOrder).ToList()),
                 AIItems = _mapper.Map<List<PhoneOrderOrderItemDto>>(orderItems.Where(x => x.OrderType == PhoneOrderOrderType.AIOrder).ToList())
             }
