@@ -483,14 +483,7 @@ public partial class PhoneOrderService
                                                            " {\n \"0\": {\"intent\": \"闲聊\", \"sample\": [\"你今日开心吗？, \"今天天气点呀？\", \"你做紧d咩？\"]},\n " +
                                                            "\"1\": {\"intent\": \"加单(点菜)\", \"sample\": [\"帮我拿个白粥\", \"仲要两份椒盐鸡翼\", \"再嚟个扬州炒饭\", \"多個海鮮炒面同埋炸鸡翼\", \"我要叉烧炒饭\"]},\n" +
                                                            " \"2\": {\"intent\": \"减单\", \"sample\": [\"你帮我去一个菠萝油,留一个给老婆\", \"唔要啱啱嗰道菜\", \"取消啱啱點嘅全部菜\", \"唔要魚旦啦\", \"乜都唔要啦\", \"不要刚刚点的了\", \"取消扬州炒饭\", \"取消扬州炒饭\"]},\n根据以上意图和样本，请识别以下用户输入的意图，并返回相应的意图标识符（例如 0或1）。\n" +
-                                                           "上下文:" +
-                                                           "Restaurant: ," +
-                                                           "Client:Hi,can I place an order for pickup? " +
-                                                           "Restaurant:phone number," +
-                                                           "Client:818-336-2982, " +
-                                                           "Restaurant:Ok,what's your order?" +
-                                                           "Client:Do you have chicken fried rice?" +
-                                                           "Restaurant:Okay; \n" +
+                                                           "上下文: Restaurant: . Client:Hi,can I place an order for pickup? Restaurant:phone number. Client:818-336-2982. Restaurant:Ok,what's your order? Client:Do you have chicken fried rice? Restaurant:Okay; \n" +
                                                            "当前用户问题:and that's it.output:1 \n" +
                                                            "当前用户问题:我想要一罐可乐，一份扬州炒饭，一份湿炒牛河，output:1\n" +
                                                            "当前用户问题:有无咩推荐啊，output:0\n" +
@@ -600,8 +593,8 @@ public partial class PhoneOrderService
                                        "用户当前问题:and that's it; output:{\"food_details\": [{\"food_name\": \"rice\",\"count\":1, \"remark\":null}]}}" +
                                        "用户当前问题:我要两份皮蛋瘦肉粥，有一个不要皮蛋; output:{\"food_details\": [{\"food_name\": \"皮蛋瘦肉粥\",\"count\":2, \"remark\":一份不要皮蛋}]}}\n" +
                                        "用户当前问题:要可乐; output:{\"food_details\": [{\"food_name\": \"可乐\",\"count\":1, \"remark\":null}]}}\n" +
-                                       "用户当前问题:我要四个扬州炒饭，有两份不要葱，还要一份草莓绵绵冰; output:{\"food_details\": [{\"food_name\": \"扬州炒饭\",\"count\":4, \"remark\":两份不要葱},{\"food_category\": \"其他\", \"food_name\": \"草莓绵绵冰\",\"count\":1, \"remark\":null}]}}\n" +
-                                       "用户当前问题:要一个炸鸡翼和一个稠一点的白粥 output:{\"food_details\": [{\"food_name\": \"明火白粥\",\"count\":1, \"remark\":稠一点},{\"food_category\": \"小吃\", \"food_name\": \"炸鸡翼\",\"count\":1, \"remark\":null}]}}\n"
+                                       "用户当前问题:我要四个扬州炒饭，有两份不要葱，还要一份草莓绵绵冰; output:{\"food_details\": [{\"food_name\": \"扬州炒饭\",\"count\":4, \"remark\":两份不要葱},{\"food_name\": \"草莓绵绵冰\",\"count\":1, \"remark\":null}]}}\n" +
+                                       "用户当前问题:要一个炸鸡翼和一个稠一点的白粥 output:{\"food_details\": [{\"food_name\": \"明火白粥\",\"count\":1, \"remark\":稠一点},{\"food_name\": \"炸鸡翼\",\"count\":1, \"remark\":null}]}}\n"
                                        )
                     
                 },
