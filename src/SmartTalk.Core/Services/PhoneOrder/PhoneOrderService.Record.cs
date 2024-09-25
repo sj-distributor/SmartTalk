@@ -593,12 +593,13 @@ public partial class PhoneOrderService
                                        "2.如果当用户的请求的菜品不在菜单上时，也需要返回菜品种类，菜品名称数量和备注。 " +
                                        "注意用json格式返回；规则：{\"food_details\": [{\"food_name\": {\"小吃\": [\"炸鸡翼\",\"港式咖喱魚旦\",\"椒盐鸡翼\",\"菠萝油\"]," +
                                        "-样本与输出：" +
-                                       "上下文: Restaurant: . Client:Hi,can I place an order for pickup. Restaurant:phone number. Client:818-336-2982. Restaurant:Ok,what's your order? Client:Do you have chicken fried rice? Restaurant:Okay; \n" +
-                                       "用户当前问题:and that's it; output:{\"food_details\": [{\"food_name\": \"rice\",\"count\":1, \"remark\":null}]}}" +
-                                       "用户当前问题:我要两份皮蛋瘦肉粥，有一个不要皮蛋; output:{\"food_details\": [{\"food_name\": \"皮蛋瘦肉粥\",\"count\":2, \"remark\":一份不要皮蛋}]}}\n" +
-                                       "用户当前问题:要可乐; output:{\"food_details\": [{\"food_name\": \"可乐\",\"count\":1, \"remark\":null}]}}\n" +
-                                       "用户当前问题:我要四个扬州炒饭，有两份不要葱，还要一份草莓绵绵冰; output:{\"food_details\": [{\"food_name\": \"扬州炒饭\",\"count\":4, \"remark\":两份不要葱},{\"food_name\": \"草莓绵绵冰\",\"count\":1, \"remark\":null}]}}\n" +
-                                       "用户当前问题:要一个炸鸡翼和一个稠一点的白粥 output:{\"food_details\": [{\"food_name\": \"明火白粥\",\"count\":1, \"remark\":稠一点},{\"food_name\": \"炸鸡翼\",\"count\":1, \"remark\":null}]}}\n"
+                                       "上下文: Restaurant: . Client:Hi,can I place an order for pickup. Restaurant:phone number. Client:818-336-2982. Restaurant:Ok,what's your order? Client:Do you have chicken fried rice? Restaurant:Okay; \n用户当前问题:and that's it; output:{\"food_details\": [{\"food_name\": \"rice\",\"count\":1, \"remark\":null}]}}" +
+                                       "上下文: Restaurant: 你好，需要点餐吗. Client:我想要一份煎饺，一份炸柳条. Restaurant:好的，还需要什么吗. \n用户当前问题:我要两份皮蛋瘦肉粥，有一个不要皮蛋; output:{\"food_details\": [{\"food_name\": \"皮蛋瘦肉粥\",\"count\":2, \"remark\":一份不要皮蛋}]}}\n" +
+                                       "上下文: Restaurant: 你好，需要点餐吗. Client:我想要一份煎饺，一份炸柳条. \n用户当前问题:要可乐; output:{\"food_details\": [{\"food_name\": \"可乐\",\"count\":1, \"remark\":null}]}}\n" +
+                                       "上下文: Restaurant: 你好，需要点餐吗. \n用户当前问题:我要四个扬州炒饭，有两份不要葱，还要一份草莓绵绵冰; output:{\"food_details\": [{\"food_name\": \"扬州炒饭\",\"count\":4, \"remark\":两份不要葱},{\"food_name\": \"草莓绵绵冰\",\"count\":1, \"remark\":null}]}}\n" +
+                                       "上下文: Restaurant: 你好，需要点餐吗. \n用户当前问题:要一个炸鸡翼和一个稠一点的白粥 output:{\"food_details\": [{\"food_name\": \"明火白粥\",\"count\":1, \"remark\":稠一点},{\"food_name\": \"炸鸡翼\",\"count\":1, \"remark\":null}]}}\n" +
+                                       "上下文: Restaurant: . Client:Hi, 我可以要一個外賣嗎? Restaurant:可以啊,要什麼? \n用户当前问题: 我要幾個特價午餐,要一個蒙古牛,要一個蛋花湯跟這個,再要一個椒鹽排骨蛋花湯,然後再要一個魚香肉絲,不要辣的蛋花湯。out{\"food_details\": [{\"food_name\":\"蒙古牛\",\"count\":1, \"remark\":null},{\"food_name\":\"蛋花湯\",\"count\":2, \"remark\":null},{\"food_name\":\"蛋花湯\",\"count\":1, \"remark\":\"不要辣\"},{\"food_name\":\"椒鹽排骨\",\"count\":1, \"remark\":null},{\"food_name\":\"魚香肉絲\",\"count\":1, \"remark\":null}]}" +
+                                       "上下文: Restaurant: . Client:Hi, 我可以要一個外賣嗎? Restaurant:可以啊,要什麼? Client: 我要幾個特價午餐,要一個蒙古牛,要一個蛋花湯跟這個,再要一個椒鹽排骨蛋花湯,然後再要一個魚香肉絲,不要辣的蛋花湯。Restaurant:可以吧 \n用户当前问题:然后再要一个春卷 再要一个法式柠檬柳粒。out:{\"food_details\": [{\"food_name\":\"春卷\",\"count\":1, \"remark\":null},{\"food_name\":\"法式柠檬柳粒\",\"count\":1, \"remark\":null}]}"
                                        )
                     
                 },
@@ -653,13 +654,12 @@ public partial class PhoneOrderService
                                                            "2.如果当用户的请求的菜品不在菜单上时，也需要返回菜品种类，菜品名称数量和备注。" +
                                                            "注意用json格式返回；规则：{\"food_details\": [{\"food_name\": \"菜品名字\",\"count\":减少的数量（负数）, \"remark\":null}]}}" +
                                                            "- 样本与输出：\n" +
-                                                           "上下文: Restaurant: . Client:Hi,can I place an order for pickup? Restaurant:phone number. Client:818-336-2982. Restaurant:Ok,what's your order? Client:Do you have chicken fried rice? Restaurant:Okay; Client:and that's it. Restaurant:Okay; \n" +
-                                                           "用户当前问题:I don't want the food I just ordered. output:{\"food_details\": [{\"food_name\": \"chicken fried rice\",\"count\":-1, \"remark\":null}]}}" +
-                                                           "用户当前问题:你帮我去一个菠萝油,留一个给老婆 output:{\"food_details\": [{\"food_name\": \"菠萝油\",\"count\":-1, \"remark\":null}]}}\n" +
-                                                           "用户当前问题:刚刚点的那一份皮蛋瘦肉粥不要了 output:{\"food_details\": [{\"food_name\": \"皮蛋瘦肉粥\",\"count\":-1, \"remark\":null}]}}\n" +
-                                                           "用户当前问题:全部不要了 output: null\n" +
+                                                           "上下文: Restaurant: 你好需要点餐吗。 Client:Hi,can I place an order for pickup? Restaurant:phone number. Client:818-336-2982. Restaurant:Ok,what's your order? Client:Do you have chicken fried rice? Restaurant:Okay; Client:and that's it. Restaurant:Okay;\n用户当前问题:I don't want the food I just ordered. output:{\"food_details\": [{\"food_name\": \"chicken fried rice\",\"count\":-1, \"remark\":null}]}}" +
+                                                           "上下文: Restaurant: 你好需要点餐吗。 Client:我要两个菠萝油 Restaurant:好的。\n用户当前问题:你帮我去一个菠萝油,留一个给老婆 output:{\"food_details\": [{\"food_name\": \"菠萝油\",\"count\":-1, \"remark\":null}]}}\n" +
+                                                           "上下文: Restaurant: 你好需要点餐吗。 Client:我要一份皮蛋瘦肉粥。Restaurant:Okay;\n用户当前问题:刚刚点的那一份皮蛋瘦肉粥不要了 output:{\"food_details\": [{\"food_name\": \"皮蛋瘦肉粥\",\"count\":-1, \"remark\":null}]}}\n" +
+                                                           "上下文: Restaurant: 你好需要点餐吗。 Client:我要一份蛋炒饭，一份炒牛河 Restaurant: 好的。\n用户当前问题:全部不要了 output: null\n" +
                                                            "（假设购物车里有三份扬州炒饭）" +
-                                                           "用户当前问题:刚刚点的扬州炒饭不要了 output:{\"food_details\": [{\"food_name\": \"扬州炒饭\",\"count\":-3, \"remark\":null}]}}\n")
+                                                           "上下文: Restaurant: 你好需要点餐吗。 Client:我要三份扬州炒饭。 Restaurant: 好的。 \n用户当前问题:刚刚点的扬州炒饭不要了 output:{\"food_details\": [{\"food_name\": \"扬州炒饭\",\"count\":-3, \"remark\":null}]}}\n")
                 },
                 new ()
                 {
