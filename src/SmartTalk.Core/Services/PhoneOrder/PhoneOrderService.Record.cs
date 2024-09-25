@@ -1,3 +1,4 @@
+using System.Net;
 using Serilog;
 using System.Text;
 using Newtonsoft.Json;
@@ -147,7 +148,11 @@ public partial class PhoneOrderService
 
         Log.Information("Get order response: response: {@manualOrder}", manualOrder);
         
-        if (manualOrder.Data == null) return  new AddOrUpdateManualOrderResponse();
+        if (manualOrder.Data == null) return  new AddOrUpdateManualOrderResponse
+        {
+            Code = HttpStatusCode.NotFound,
+            Msg = "pos not find order"
+        };
         
         var items = await _phoneOrderDataProvider.GetPhoneOrderOrderItemsAsync(command.RecordId, PhoneOrderOrderType.ManualOrder, cancellationToken).ConfigureAwait(false);
 
