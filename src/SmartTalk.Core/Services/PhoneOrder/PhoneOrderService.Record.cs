@@ -152,7 +152,6 @@ public partial class PhoneOrderService
         
         if (manualOrder.Data == null) return  new AddOrUpdateManualOrderResponse
         {
-            Code = HttpStatusCode.NotFound,
             Msg = "pos not find order"
         };
         
