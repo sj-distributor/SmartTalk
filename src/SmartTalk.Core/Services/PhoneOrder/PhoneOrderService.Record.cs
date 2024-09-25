@@ -1,4 +1,3 @@
-using System.Net;
 using Serilog;
 using System.Text;
 using Newtonsoft.Json;
@@ -119,7 +118,6 @@ public partial class PhoneOrderService
         
         var (goalTexts, shoppingCart, conversations) = await PhoneOrderTranscriptionAsync(phoneOrderInfo, record, audioContent, cancellationToken).ConfigureAwait(false);
         
-        record.Tips = goalTexts.First().Split([':'], 2)[1].Trim();
         record.Status = PhoneOrderRecordStatus.Sent;
         record.TranscriptionText = string.Join("\n", goalTexts);
         conversations.Where(x => string.IsNullOrEmpty(x.Answer)).ForEach(x => x.Answer = string.Empty);
@@ -150,10 +148,7 @@ public partial class PhoneOrderService
 
         Log.Information("Get order response: response: {@manualOrder}", manualOrder);
         
-        if (manualOrder.Data == null) return  new AddOrUpdateManualOrderResponse
-        {
-            Msg = "pos not find order"
-        };
+        if (manualOrder.Data == null) return  new AddOrUpdateManualOrderResponse();
         
         var items = await _phoneOrderDataProvider.GetPhoneOrderOrderItemsAsync(command.RecordId, PhoneOrderOrderType.ManualOrder, cancellationToken).ConfigureAwait(false);
 
