@@ -473,7 +473,7 @@ public partial class PhoneOrderService
 
     private async Task<PhoneOrderDetailDto> GetOrderDetailsAsync(string query, CancellationToken cancellationToken)
     {
-         var completionResult = await _smartiesClient.PerformQueryAsync( new AskGptRequest
+        var completionResult = await _smartiesClient.PerformQueryAsync( new AskGptRequest
         {
             Messages = new List<CompletionsRequestMessageDto>
             {
@@ -494,7 +494,7 @@ public partial class PhoneOrderService
                 new ()
                 {
                     Role = "user",
-                    Content = new CompletionsStringContent($"input:{query} , output:")
+                    Content = new CompletionsStringContent($"input:{query}, output:")
                 }
             },
             Model = OpenAiModel.Gpt4o,
