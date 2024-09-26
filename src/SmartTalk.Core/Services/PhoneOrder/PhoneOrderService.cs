@@ -25,7 +25,6 @@ public partial class PhoneOrderService : IPhoneOrderService
     private readonly IVectorDb _vectorDb;
     private readonly ICurrentUser _currentUser;
     private readonly IWeChatClient _weChatClient;
-    private readonly ICacheManager _cacheManager;
     private readonly IEasyPosClient _easyPosClient;
     private readonly IFfmpegService _ffmpegService;
     private readonly ISmartiesClient _smartiesClient;
@@ -44,7 +43,6 @@ public partial class PhoneOrderService : IPhoneOrderService
         IVectorDb vectorDb,
         ICurrentUser currentUser,
         IWeChatClient weChatClient,
-        ICacheManager cacheManager,
         IEasyPosClient easyPosClient,
         IFfmpegService ffmpegService,
         ISmartiesClient smartiesClient,
@@ -62,7 +60,6 @@ public partial class PhoneOrderService : IPhoneOrderService
         _vectorDb = vectorDb;
         _currentUser = currentUser;
         _weChatClient = weChatClient;
-        _cacheManager = cacheManager;
         _easyPosClient = easyPosClient;
         _ffmpegService = ffmpegService;
         _smartiesClient = smartiesClient;

@@ -10,7 +10,6 @@ using Smarties.Messages.Requests.Ask;
 using System.Text.RegularExpressions;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Extensions;
-using SmartTalk.Core.Services.Caching;
 using SmartTalk.Messages.Dto.WebSocket;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Dto.Attachments;
@@ -116,26 +115,14 @@ public partial class PhoneOrderService
         
         Log.Information("Phone order record info: {@phoneOrderInfo}", phoneOrderInfo);
         
-        var (goalTexts, shoppingCart, conversations) = await PhoneOrderTranscriptionAsync(phoneOrderInfo, record, audioContent, cancellationToken).ConfigureAwait(false);
+        var goalTexts = await PhoneOrderTranscriptionAsync(phoneOrderInfo, record, audioContent, cancellationToken).ConfigureAwait(false);
+        
+        await ExtractPhoneOrderShoppingCartAsync(goalTexts, record, cancellationToken).ConfigureAwait(false);
         
         record.Status = PhoneOrderRecordStatus.Sent;
-        record.TranscriptionText = string.Join("\n", goalTexts);
-        conversations.Where(x => string.IsNullOrEmpty(x.Answer)).ForEach(x => x.Answer = string.Empty);
+        record.TranscriptionText = goalTexts;
         
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
-        await _phoneOrderDataProvider.AddPhoneOrderConversationsAsync(conversations, true, cancellationToken).ConfigureAwait(false);
-
-        var items = shoppingCart.FoodDetails.Select(x => new PhoneOrderOrderItem
-        {
-            RecordId = record.Id,
-            FoodName = x.FoodName,
-            Quantity = x.Count ?? 0,
-            Price = x.Price,
-            Note = x.Remark
-        }).ToList();
-
-        if (items.Any())
-            await _phoneOrderDataProvider.AddPhoneOrderItemAsync(items, true, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<AddOrUpdateManualOrderResponse> AddOrUpdateManualOrderAsync(AddOrUpdateManualOrderCommand command, CancellationToken cancellationToken)
@@ -205,13 +192,11 @@ public partial class PhoneOrderService
         return phoneOrderInfos;
     }
 
-    private async Task<(List<string>, PhoneOrderDetailDto, List<PhoneOrderConversation>)> PhoneOrderTranscriptionAsync(
+    private async Task<string> PhoneOrderTranscriptionAsync(
         List<SpeechMaticsSpeakInfoDto> phoneOrderInfo, PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken)
     {
         var conversationIndex = 0;
-        var recordingContext = new List<string>();
         var goalTexts = new List<string>();
-        var shoppingCart = new PhoneOrderDetailDto();
         var conversations = new List<PhoneOrderConversation>();
 
         foreach (var speakDetail in phoneOrderInfo)
@@ -226,9 +211,7 @@ public partial class PhoneOrderService
                     originText = await SplitAudioAsync(
                         audioContent, record, speakDetail.StartTime * 1000, speakDetail.EndTime * 1000, TranscriptionFileType.Wav, cancellationToken).ConfigureAwait(false);
                 else
-                {
                     originText = "";
-                }
                 
                 Log.Information("Phone Order transcript originText: {originText}", originText);
                     
@@ -240,41 +223,9 @@ public partial class PhoneOrderService
                     conversations.Add(new PhoneOrderConversation { RecordId = record.Id, Question = originText, Order = conversationIndex });
                 else
                 {
-                    var recordContext = await _cacheManager.GetAsync<string>($"{record.Id}", new RedisCachingSetting(), cancellationToken).ConfigureAwait(false);
-                    
-                    var intent = await RecognizeIntentAsync(originText, recordContext, cancellationToken).ConfigureAwait(false);
-
-                    PhoneOrderDetailDto extractFoods = null;
-
-                    switch (intent)
-                    {
-                        case PhoneOrderIntent.AddOrder:
-                            extractFoods = await AddOrderDetailAsync(originText, recordContext, cancellationToken).ConfigureAwait(false);
-                            extractFoods = await GetSimilarRestaurantByRecordAsync(record, extractFoods, cancellationToken).ConfigureAwait(false);
-                            CheckOrAddToShoppingCart(shoppingCart.FoodDetails, extractFoods.FoodDetails);
-                            break;
-                        case PhoneOrderIntent.ReduceOrder:
-                            extractFoods = await ReduceOrderDetailAsync(shoppingCart.FoodDetails, originText, recordContext, cancellationToken).ConfigureAwait(false);
-                            extractFoods = await GetSimilarRestaurantByRecordAsync(record, extractFoods, cancellationToken).ConfigureAwait(false);
-                            CheckOrReduceFromShoppingCart(shoppingCart.FoodDetails, extractFoods.FoodDetails);
-                            break;
-                    }
-
-                    conversations[conversationIndex].Intent = intent;
                     conversations[conversationIndex].Answer = originText;
-                    if (extractFoods != null)
-                        conversations[conversationIndex].ExtractFoodItem = JsonConvert.SerializeObject(extractFoods.FoodDetails);
-
                     conversationIndex++;
                 }
-
-                if (recordingContext.Count == 8)
-                    recordingContext.RemoveRange(0, 2);
-                
-                recordingContext.Add($"{speakDetail.Role.ToString()}: {originText}");
-                
-                await _cacheManager.SetAsync(
-                    $"{record.Id}", string.Join("\n", recordingContext), new RedisCachingSetting(expiry: TimeSpan.FromHours(1)), cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -284,9 +235,11 @@ public partial class PhoneOrderService
             }
         }
 
-        Log.Information("Phone order conversation: {@conversations}, shopping cart: {@shoppingCart}", conversations, shoppingCart);
+        conversations.Where(x => string.IsNullOrEmpty(x.Answer)).ForEach(x => x.Answer = string.Empty);
 
-        return (goalTexts, shoppingCart, conversations);
+        await _phoneOrderDataProvider.AddPhoneOrderConversationsAsync(conversations, true, cancellationToken).ConfigureAwait(false);
+
+        return string.Join("\n", goalTexts);
     }
 
     private async Task<bool> CheckAudioFirstSentenceIsRestaurantAsync(string query, CancellationToken cancellationToken)
@@ -464,49 +417,6 @@ public partial class PhoneOrderService
         };
     }
     
-     private async Task<PhoneOrderIntent> RecognizeIntentAsync(string input, string recordContext, CancellationToken cancellationToken)
-    {
-        var response = await _smartiesClient.PerformQueryAsync(new AskGptRequest
-        {
-            Messages = new List<CompletionsRequestMessageDto>
-            {
-                new ()
-                {
-                    Role = "system",
-                    Content = new CompletionsStringContent("你是一个智能助手，能够根据用户的输入结合上下文识别出相应的意图。" +
-                                                           "--规则：" +
-                                                           "1.根据上下文，分析当前用户问题" +
-                                                           "2. 如果打招呼intent和其他intent同时存在的时候，优先选择其他intent，例如\"hello，我要一份蛋炒饭？\"，应该识别成【加单】的intent而不是打招呼" +
-                                                           "3. 如果下单intent中输入有菜品，都应该落入加单intent中而不是下单" +
-                                                           "4.请根据用户的实际输入进行意图识别，并返回一个标识数字表示识别出的意图。以下是可能的意图和对应的样本：\n" +
-                                                           " {\n \"0\": {\"intent\": \"闲聊\", \"sample\": [\"你今日开心吗？, \"今天天气点呀？\", \"你做紧d咩？\"]},\n " +
-                                                           "\"1\": {\"intent\": \"加单(点菜)\", \"sample\": [\"帮我拿个白粥\", \"仲要两份椒盐鸡翼\", \"再嚟个扬州炒饭\", \"多個海鮮炒面同埋炸鸡翼\", \"我要叉烧炒饭\"]},\n" +
-                                                           " \"2\": {\"intent\": \"减单\", \"sample\": [\"你帮我去一个菠萝油,留一个给老婆\", \"唔要啱啱嗰道菜\", \"取消啱啱點嘅全部菜\", \"唔要魚旦啦\", \"乜都唔要啦\", \"不要刚刚点的了\", \"取消扬州炒饭\", \"取消扬州炒饭\"]},\n根据以上意图和样本，请识别以下用户输入的意图，并返回相应的意图标识符（例如 0或1）。\n" +
-                                                           "上下文: Restaurant: . Client:Hi,can I place an order for pickup? Restaurant:phone number. Client:818-336-2982. Restaurant:Ok,what's your order? Client:Do you have chicken fried rice? Restaurant:Okay; \n" +
-                                                           "当前用户问题:and that's it.output:1 \n" +
-                                                           "当前用户问题:我想要一罐可乐，一份扬州炒饭，一份湿炒牛河，output:1\n" +
-                                                           "当前用户问题:有无咩推荐啊，output:0\n" +
-                                                           "当前用户问题:我落左咩单，全部讲来听下，output:0\n" +
-                                                           "当前用户问题:落单之前的菜，output:0\n" +
-                                                           "当前用户问题:下单一份炒饭，output:1\n" +
-                                                           "当前用户问题:下单炒饭，output:1\n" )
-                },
-                new ()
-                {
-                    Role = "user",
-                    Content = new CompletionsStringContent($"上下文:{recordContext} \n当前用户意图: {input}\n输出意图数字:")
-                }
-            },
-            Model = OpenAiModel.Gpt4o
-        }, cancellationToken).ConfigureAwait(false); 
-
-        var responseContent = response.Data.Response;
-        
-        Log.Information("OpenAI classify client intent response: {responseContent}", responseContent);
-        
-        return int.TryParse(responseContent, out var intent) && Enum.IsDefined(typeof(PhoneOrderIntent), intent) ? (PhoneOrderIntent)intent : PhoneOrderIntent.Default;
-    }
-    
     private async Task<string> CreateTranscriptionJobAsync(byte[] data, string fileName, string language, CancellationToken cancellationToken)
     {
         var createTranscriptionDto = new SpeechMaticsCreateTranscriptionDto { Data = data, FileName = fileName };
@@ -542,131 +452,54 @@ public partial class PhoneOrderService
         };
     }
     
-    private static void CheckOrAddToShoppingCart(List<FoodDetailDto> shoppingCart, List<FoodDetailDto> foods)
+    private async Task ExtractPhoneOrderShoppingCartAsync(string goalTexts, PhoneOrderRecord record, CancellationToken cancellationToken)
     {
-        var hasFoods = new List<FoodDetailDto>();
-        
-        foods.ForEach(x =>
-        {
-            if (!string.IsNullOrEmpty(x.Remark))
-            {
-                hasFoods.Add(x);
-            }
-            else
-            {
-                if (shoppingCart.Any(t => t.FoodName == x.FoodName && string.IsNullOrEmpty(t.Remark)))
-                {
-                    foreach (var food in shoppingCart)
-                    {
-                        if(food.FoodName == x.FoodName && string.IsNullOrEmpty(food.Remark))
-                            food.Count += x.Count;
-                    }
-                }
-                else
-                {
-                    hasFoods.Add(x);
-                }
-            }
-        });
+        var shoppingCart = await GetOrderDetailsAsync(goalTexts, cancellationToken).ConfigureAwait(false);
 
-        if (hasFoods.Any()) shoppingCart.AddRange(hasFoods);
+        shoppingCart = await GetSimilarRestaurantByRecordAsync(record, shoppingCart, cancellationToken).ConfigureAwait(false);
         
-        Log.Information("Shopping cart after add: {ShoppingCart}", JsonConvert.SerializeObject(shoppingCart));
+        var items = shoppingCart.FoodDetails.Select(x => new PhoneOrderOrderItem
+        {
+            RecordId = record.Id,
+            FoodName = x.FoodName,
+            Quantity = x.Count ?? 0,
+            Price = x.Price,
+            Note = x.Remark
+        }).ToList();
+
+        if (items.Any())
+            await _phoneOrderDataProvider.AddPhoneOrderItemAsync(items, true, cancellationToken).ConfigureAwait(false);
     }
-    
-    private async Task<PhoneOrderDetailDto?> AddOrderDetailAsync(string query, string recordContext, CancellationToken cancellationToken)
+
+    private async Task<PhoneOrderDetailDto> GetOrderDetailsAsync(string query, CancellationToken cancellationToken)
     {
-        var completionResult = await _smartiesClient.PerformQueryAsync( new AskGptRequest
+         var completionResult = await _smartiesClient.PerformQueryAsync( new AskGptRequest
         {
             Messages = new List<CompletionsRequestMessageDto>
             {
                 new () {
                     Role = "system",
-                    Content = new CompletionsStringContent("你是一款高度理解语言的智能助手，结合上下文专门从当前语句用于识别和处理电话订单。" +
+                    Content = new CompletionsStringContent("你是一款高度理解语言的智能助手，根据所有对话提取Client的food_details。" +
                                        "--规则：" +
-                                       "1.根据上下文，结合用户当前问题帮我补全food_details，count是菜品的数量，如果你不清楚数量的时候，count默认为1，remark是对菜品的备注" +
+                                       "1.根据全文帮我提取food_details，count是菜品的数量，如果你不清楚数量的时候，count默认为1，remark是对菜品的备注" +
                                        "2.如果当用户的请求的菜品不在菜单上时，也需要返回菜品种类，菜品名称数量和备注。 " +
-                                       "注意用json格式返回；规则：{\"food_details\": [{\"food_name\": {\"小吃\": [\"炸鸡翼\",\"港式咖喱魚旦\",\"椒盐鸡翼\",\"菠萝油\"]," +
+                                       "3.根据对话中Client的话为主提取food_details" +
+                                       "4.不要出现重复菜品，如果有特殊的要求请标明数量，例如我要两份粥，一份要辣，则标注一份要辣" +
+                                       "注意用json格式返回；规则：{\"food_details\": [{\"food_name\": \"菜品名字\",\"count\":减少的数量（负数）, \"remark\":null}]}}" +
                                        "-样本与输出：" +
-                                       "上下文: Restaurant: . Client:Hi,can I place an order for pickup. Restaurant:phone number. Client:818-336-2982. Restaurant:Ok,what's your order? Client:Do you have chicken fried rice? Restaurant:Okay; \n用户当前问题:and that's it; output:{\"food_details\": [{\"food_name\": \"rice\",\"count\":1, \"remark\":null}]}}" +
-                                       "上下文: Restaurant: 你好，需要点餐吗. Client:我想要一份煎饺，一份炸柳条. Restaurant:好的，还需要什么吗. \n用户当前问题:我要两份皮蛋瘦肉粥，有一个不要皮蛋; output:{\"food_details\": [{\"food_name\": \"皮蛋瘦肉粥\",\"count\":2, \"remark\":一份不要皮蛋}]}}\n" +
-                                       "上下文: Restaurant: 你好，需要点餐吗. Client:我想要一份煎饺，一份炸柳条. \n用户当前问题:要可乐; output:{\"food_details\": [{\"food_name\": \"可乐\",\"count\":1, \"remark\":null}]}}\n" +
-                                       "上下文: Restaurant: 你好，需要点餐吗. \n用户当前问题:我要四个扬州炒饭，有两份不要葱，还要一份草莓绵绵冰; output:{\"food_details\": [{\"food_name\": \"扬州炒饭\",\"count\":4, \"remark\":两份不要葱},{\"food_name\": \"草莓绵绵冰\",\"count\":1, \"remark\":null}]}}\n" +
-                                       "上下文: Restaurant: 你好，需要点餐吗. \n用户当前问题:要一个炸鸡翼和一个稠一点的白粥 output:{\"food_details\": [{\"food_name\": \"明火白粥\",\"count\":1, \"remark\":稠一点},{\"food_name\": \"炸鸡翼\",\"count\":1, \"remark\":null}]}}\n" +
-                                       "上下文: Restaurant: . Client:Hi, 我可以要一個外賣嗎? Restaurant:可以啊,要什麼? \n用户当前问题: 我要幾個特價午餐,要一個蒙古牛,要一個蛋花湯跟這個,再要一個椒鹽排骨蛋花湯,然後再要一個魚香肉絲,不要辣的蛋花湯。out{\"food_details\": [{\"food_name\":\"蒙古牛\",\"count\":1, \"remark\":null},{\"food_name\":\"蛋花湯\",\"count\":2, \"remark\":null},{\"food_name\":\"蛋花湯\",\"count\":1, \"remark\":\"不要辣\"},{\"food_name\":\"椒鹽排骨\",\"count\":1, \"remark\":null},{\"food_name\":\"魚香肉絲\",\"count\":1, \"remark\":null}]}" +
-                                       "上下文: Restaurant: . Client:Hi, 我可以要一個外賣嗎? Restaurant:可以啊,要什麼? Client: 我要幾個特價午餐,要一個蒙古牛,要一個蛋花湯跟這個,再要一個椒鹽排骨蛋花湯,然後再要一個魚香肉絲,不要辣的蛋花湯。Restaurant:可以吧 \n用户当前问题:然后再要一个春卷 再要一个法式柠檬柳粒。out:{\"food_details\": [{\"food_name\":\"春卷\",\"count\":1, \"remark\":null},{\"food_name\":\"法式柠檬柳粒\",\"count\":1, \"remark\":null}]}"
+                                       "input: Restaurant: . Client:Hi, 我可以要一個外賣嗎? Restaurant:可以啊,要什麼? Client: 我要幾個特價午餐,要一個蒙古牛,要一個蛋花湯跟這個,再要一個椒鹽排骨蛋花湯,然後再要一個魚香肉絲,不要辣的蛋花湯。Restaurant:可以吧。Client:然后再要一个春卷 再要一个法式柠檬柳粒。out:{\"food_details\": [{\"food_name\":\"蒙古牛\",\"count\":1, \"remark\":null},{\"food_name\":\"蛋花湯\",\"count\":3, \"remark\":},{\"food_name\":\"椒鹽排骨\",\"count\":1, \"remark\":null},{\"food_name\":\"魚香肉絲\",\"count\":1, \"remark\":null},{\"food_name\":\"春卷\",\"count\":1, \"remark\":null},{\"food_name\":\"法式柠檬柳粒\",\"count\":1, \"remark\":null}]}"
                                        )
                     
                 },
                 new ()
                 {
                     Role = "user",
-                    Content = new CompletionsStringContent($"上下文:{recordContext} \n 用户当前问题: {query}, output:")
+                    Content = new CompletionsStringContent($"input:{query} , output:")
                 }
             },
             Model = OpenAiModel.Gpt4o,
             ResponseFormat = new () { Type = "json_object" }
         }, cancellationToken).ConfigureAwait(false);
-        
-        Log.Information("AddOrderDetail openaiResponse:" + completionResult.Data.Response);
-        
-        return completionResult.Data.Response == null ? null : JsonConvert.DeserializeObject<PhoneOrderDetailDto>(completionResult.Data.Response);
-    }
-    
-    private void CheckOrReduceFromShoppingCart(List<FoodDetailDto> shoppingCart, List<FoodDetailDto> foods)
-    {
-        var hasFoods = new List<FoodDetailDto>();
-        
-        foods.ForEach(x =>
-        {
-            if (shoppingCart.Any(s => x.FoodName.Trim() == s.FoodName.Trim())) hasFoods.Add(x);
-        });
-        
-        shoppingCart.ForEach(x =>
-        {
-            if (hasFoods.Any(s => s.FoodName.Trim() == x.FoodName.Trim()))
-                x.Count += hasFoods.First(s => s.FoodName.Trim() == x.FoodName.Trim()).Count;
-        });
-
-        shoppingCart = shoppingCart.Where(x => x.Count > 0).ToList();
-        
-        Log.Information("Shopping cart after reduce: {ShoppingCart}", JsonConvert.SerializeObject(shoppingCart));
-    }
-    
-    private async Task<PhoneOrderDetailDto> ReduceOrderDetailAsync(List<FoodDetailDto> shoppingCart, string query, string recordContext, CancellationToken cancellationToken)
-    {
-        var shoppingCar = JsonConvert.SerializeObject(shoppingCart, Formatting.Indented);
-        
-        var completionResult = await _smartiesClient.PerformQueryAsync( new AskGptRequest
-        {
-            Messages = new List<CompletionsRequestMessageDto>
-            {
-                new () {
-                    Role = "system",
-                    Content = new CompletionsStringContent("你是一款高度理解语言的智能助手，专门用于识别和处理电话订单。" +
-                                                           "--规则" +
-                                                           $"1.根据上下文结合我目前的购物车的内容和输入，来帮我补全food_details，count是菜品的数量，如果你不清楚数量的时候，count默认为-1，购物车内容如下：{shoppingCar}，remark固定为null;" +
-                                                           "2.如果当用户的请求的菜品不在菜单上时，也需要返回菜品种类，菜品名称数量和备注。" +
-                                                           "注意用json格式返回；规则：{\"food_details\": [{\"food_name\": \"菜品名字\",\"count\":减少的数量（负数）, \"remark\":null}]}}" +
-                                                           "- 样本与输出：\n" +
-                                                           "上下文: Restaurant: 你好需要点餐吗。 Client:Hi,can I place an order for pickup? Restaurant:phone number. Client:818-336-2982. Restaurant:Ok,what's your order? Client:Do you have chicken fried rice? Restaurant:Okay; Client:and that's it. Restaurant:Okay;\n用户当前问题:I don't want the food I just ordered. output:{\"food_details\": [{\"food_name\": \"chicken fried rice\",\"count\":-1, \"remark\":null}]}}" +
-                                                           "上下文: Restaurant: 你好需要点餐吗。 Client:我要两个菠萝油 Restaurant:好的。\n用户当前问题:你帮我去一个菠萝油,留一个给老婆 output:{\"food_details\": [{\"food_name\": \"菠萝油\",\"count\":-1, \"remark\":null}]}}\n" +
-                                                           "上下文: Restaurant: 你好需要点餐吗。 Client:我要一份皮蛋瘦肉粥。Restaurant:Okay;\n用户当前问题:刚刚点的那一份皮蛋瘦肉粥不要了 output:{\"food_details\": [{\"food_name\": \"皮蛋瘦肉粥\",\"count\":-1, \"remark\":null}]}}\n" +
-                                                           "上下文: Restaurant: 你好需要点餐吗。 Client:我要一份蛋炒饭，一份炒牛河 Restaurant: 好的。\n用户当前问题:全部不要了 output: null\n" +
-                                                           "（假设购物车里有三份扬州炒饭）" +
-                                                           "上下文: Restaurant: 你好需要点餐吗。 Client:我要三份扬州炒饭。 Restaurant: 好的。 \n用户当前问题:刚刚点的扬州炒饭不要了 output:{\"food_details\": [{\"food_name\": \"扬州炒饭\",\"count\":-3, \"remark\":null}]}}\n")
-                },
-                new ()
-                {
-                    Role = "user",
-                    Content = new CompletionsStringContent($"上下文:{recordContext}\n用户当前问题: {query}, output:")
-                }
-            },
-            Model = OpenAiModel.Gpt4o,
-            ResponseFormat = new () { Type = "json_object" }
-        }, cancellationToken).ConfigureAwait(false);
-        
-        Log.Information("ReduceOrderDetail openaiResponse:" + completionResult.Data.Response);
         
         return completionResult.Data.Response == null ? null : JsonConvert.DeserializeObject<PhoneOrderDetailDto>(completionResult.Data.Response);
     }
