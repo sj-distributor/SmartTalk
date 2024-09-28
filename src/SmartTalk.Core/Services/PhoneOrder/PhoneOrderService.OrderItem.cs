@@ -19,10 +19,13 @@ public partial class PhoneOrderService
     {
         var orderItems = await _phoneOrderDataProvider.GetPhoneOrderOrderItemsAsync(request.RecordId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
+        var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByIdAsync(request.RecordId, cancellationToken).ConfigureAwait(false);
+        
         return new GetPhoneOrderOrderItemsRessponse
         {
             Data = new GetPhoneOrderOrderItemsData
             {
+                ManualOrderId = record.ManualOrderId.ToString(),
                 ManualItems = _mapper.Map<List<PhoneOrderOrderItemDto>>(orderItems.Where(x => x.OrderType == PhoneOrderOrderType.ManualOrder).ToList()),
                 AIItems = _mapper.Map<List<PhoneOrderOrderItemDto>>(orderItems.Where(x => x.OrderType == PhoneOrderOrderType.AIOrder).ToList())
             }
