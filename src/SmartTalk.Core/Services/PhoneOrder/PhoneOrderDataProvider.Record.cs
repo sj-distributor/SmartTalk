@@ -18,6 +18,10 @@ public partial interface IPhoneOrderDataProvider
     Task<PhoneOrderRecord> GetPhoneOrderRecordByIdAsync(int recordId, CancellationToken cancellationToken);
 
     Task<PhoneOrderRecord> GetPhoneOrderRecordByTranscriptionJobIdAsync(string transcriptionJobId, CancellationToken cancellationToken = default);
+    
+    //获取白班或夜班的录音
+    Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAndTimeAsync(DateTimeOffset startTime, DateTimeOffset endTime, CancellationToken cancellationToken = default);
+    //获取考核期的客服校准ai的总量
 }
 
 public partial class PhoneOrderDataProvider
@@ -81,5 +85,11 @@ public partial class PhoneOrderDataProvider
     public async Task<PhoneOrderRecord> GetPhoneOrderRecordByTranscriptionJobIdAsync(string transcriptionJobId, CancellationToken cancellationToken = default)
     {
         return await _repository.Query<PhoneOrderRecord>().Where(x => x.TranscriptionJobId == transcriptionJobId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAndTimeAsync(
+        DateTimeOffset startTime, DateTimeOffset endTime, CancellationToken cancellationToken = default)
+    {
+        var query = await _repository.Query<PhoneOrderRecord>().Where(x => x.CreatedDate >= startTime && x.CreatedDate <= endTime).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }
