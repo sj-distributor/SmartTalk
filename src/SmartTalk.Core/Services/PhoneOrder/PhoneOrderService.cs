@@ -3,7 +3,6 @@ using Google.Cloud.Translation.V2;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Attachments;
 using SmartTalk.Core.Services.Ffmpeg;
-using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Identity;
 using SmartTalk.Core.Services.Jobs;
@@ -24,7 +23,7 @@ public partial class PhoneOrderService : IPhoneOrderService
     private readonly IVectorDb _vectorDb;
     private readonly ICurrentUser _currentUser;
     private readonly IWeChatClient _weChatClient;
-    private readonly  IEasyPosClient _easyPosClient;
+    private readonly IEasyPosClient _easyPosClient;
     private readonly IFfmpegService _ffmpegService;
     private readonly ISmartiesClient _smartiesClient;
     private readonly TranslationClient _translationClient;
