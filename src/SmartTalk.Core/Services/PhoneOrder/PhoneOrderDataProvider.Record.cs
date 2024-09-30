@@ -93,7 +93,7 @@ public partial class PhoneOrderDataProvider
     public async Task<List<GetPhoneOrderRecordsForRestaurantCountDto>> GetPhoneOrderRecordsForRestaurantCountAsync(
         DateTimeOffset dayShiftTime, DateTimeOffset dateTime, DateTimeOffset nightShiftTime, CancellationToken cancellationToken)
     {
-        var groupedRecords = await _repository.Query<PhoneOrderRecord>()
+        return await _repository.Query<PhoneOrderRecord>()
             .GroupBy(x => x.Restaurant)
             .Select(restaurantGroup => new GetPhoneOrderRecordsForRestaurantCountDto
             {
@@ -114,14 +114,12 @@ public partial class PhoneOrderDataProvider
             })
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
-        
-        return groupedRecords;
     }
 
     public async  Task<List<GetPhoneOrderRecordsWithUserCountDto>> GetPhoneOrderRecordsWithUserCountAsync(
         DateTimeOffset startTime, DateTimeOffset endTime, CancellationToken cancellationToken)
     {
-        var query = await _repository.Query<PhoneOrderRecord>()
+        return await _repository.Query<PhoneOrderRecord>()
             .Where(x => x.LastModifiedBy.HasValue)
             .Where(x => x.CreatedDate >= startTime && x.CreatedDate < endTime)
             .Join(_repository.Query<UserAccount>(), x => x.LastModifiedBy, s => s.Id, (record, account) => new
@@ -137,7 +135,5 @@ public partial class PhoneOrderDataProvider
             })
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
-        
-        return query;
     }
 }
