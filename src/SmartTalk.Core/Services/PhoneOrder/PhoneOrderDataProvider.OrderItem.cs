@@ -19,7 +19,7 @@ public partial class PhoneOrderDataProvider
 
         if (type.HasValue)
             query = query.Where(x => x.OrderType == type.Value);
-        
+
         return  await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
