@@ -1,5 +1,4 @@
-﻿using Mediator.Net;
-using Mediator.Net.Context;
+﻿using Mediator.Net.Context;
 using Mediator.Net.Contracts;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Messages.Commands.PhoneOrder;
@@ -15,8 +14,8 @@ public class SchedulingPhoneOrderDailyDataBroadcastCommandHandler : ICommandHand
         _phoneOrderService = phoneOrderService;
     }
 
-    public Task Handle(IReceiveContext<SchedulingPhoneOrderDailyDataBroadcastCommand> context, CancellationToken cancellationToken)
+    public async Task Handle(IReceiveContext<SchedulingPhoneOrderDailyDataBroadcastCommand> context, CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
+        await _phoneOrderService.DailyDataBroadcastAsync(context.Message, cancellationToken).ConfigureAwait(false);
     }
 }

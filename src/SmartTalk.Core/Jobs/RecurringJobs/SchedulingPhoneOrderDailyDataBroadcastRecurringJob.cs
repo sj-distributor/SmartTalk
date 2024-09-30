@@ -17,9 +17,10 @@ public class SchedulingPhoneOrderDailyDataBroadcastRecurringJob : IRecurringJob
 
     public async Task Execute()
     {
-        await _mediator.SendAsync(new SchedulingPhoneOrderDailyDataBroadcastCommand()).ConfigureAwait(false);
+        await _mediator.SendAsync(new SchedulingPhoneOrderDailyDataBroadcastCommand{ RobotUrl = _cronExpressionSetting.RobotUrl }).ConfigureAwait(false);
     }
 
     public string JobId => nameof(SchedulingPhoneOrderDailyDataBroadcastRecurringJob);
+    
     public string CronExpression => _cronExpressionSetting.Value;
 }

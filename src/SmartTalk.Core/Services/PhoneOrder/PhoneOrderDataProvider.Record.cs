@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Domain.Account;
 using SmartTalk.Core.Domain.PhoneOrder;
+using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Enums.PhoneOrder;
 
 namespace SmartTalk.Core.Services.PhoneOrder;
@@ -19,9 +20,11 @@ public partial interface IPhoneOrderDataProvider
 
     Task<PhoneOrderRecord> GetPhoneOrderRecordByTranscriptionJobIdAsync(string transcriptionJobId, CancellationToken cancellationToken = default);
     
-    //获取白班或夜班的录音
-    Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAndTimeAsync(DateTimeOffset startTime, DateTimeOffset endTime, CancellationToken cancellationToken = default);
-    //获取考核期的客服校准ai的总量
+    Task<List<GetPhoneOrderRecordsForRestaurantCountDto>> GetPhoneOrderRecordsForRestaurantCountAsync(
+        DateTimeOffset dayShiftTime, DateTimeOffset dateTime, DateTimeOffset nightShiftTime, CancellationToken cancellationToken);
+
+    Task<List<GetPhoneOrderRecordsWithUserCountDto>> GetPhoneOrderRecordsWithUserCountAsync(
+        DateTimeOffset startTime, DateTimeOffset endTime, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderDataProvider
@@ -87,9 +90,54 @@ public partial class PhoneOrderDataProvider
         return await _repository.Query<PhoneOrderRecord>().Where(x => x.TranscriptionJobId == transcriptionJobId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAndTimeAsync(
-        DateTimeOffset startTime, DateTimeOffset endTime, CancellationToken cancellationToken = default)
+    public async Task<List<GetPhoneOrderRecordsForRestaurantCountDto>> GetPhoneOrderRecordsForRestaurantCountAsync(
+        DateTimeOffset dayShiftTime, DateTimeOffset dateTime, DateTimeOffset nightShiftTime, CancellationToken cancellationToken)
     {
-        var query = await _repository.Query<PhoneOrderRecord>().Where(x => x.CreatedDate >= startTime && x.CreatedDate <= endTime).ToListAsync(cancellationToken).ConfigureAwait(false);
+        var groupedRecords = await _repository.Query<PhoneOrderRecord>()
+            .GroupBy(x => x.Restaurant)
+            .Select(restaurantGroup => new GetPhoneOrderRecordsForRestaurantCountDto
+            {
+                Restaurant = restaurantGroup.Key,
+                Classes = new List<RestaurantCountDto>
+                {
+                    new()
+                    {
+                        TimeFrame = "夜班",
+                        Count = restaurantGroup.Count(x => x.CreatedDate >= dayShiftTime && x.CreatedDate < dateTime)
+                    },
+                    new()
+                    {
+                        TimeFrame = "日班",
+                        Count = restaurantGroup.Count(x => x.CreatedDate >= dateTime && x.CreatedDate < nightShiftTime)
+                    }
+                }
+            })
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+        
+        return groupedRecords;
+    }
+
+    public async  Task<List<GetPhoneOrderRecordsWithUserCountDto>> GetPhoneOrderRecordsWithUserCountAsync(
+        DateTimeOffset startTime, DateTimeOffset endTime, CancellationToken cancellationToken)
+    {
+        var query = await _repository.Query<PhoneOrderRecord>()
+            .Where(x => x.LastModifiedBy.HasValue)
+            .Where(x => x.CreatedDate >= startTime && x.CreatedDate < endTime)
+            .Join(_repository.Query<UserAccount>(), x => x.LastModifiedBy, s => s.Id, (record, account) => new
+            {
+                UserName = account.UserName,
+                record
+            })
+            .GroupBy(x => x.UserName)
+            .Select(g => new GetPhoneOrderRecordsWithUserCountDto
+            {
+                UserName = g.Key,
+                Count = g.Count()
+            })
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+        
+        return query;
     }
 }
