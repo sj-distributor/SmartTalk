@@ -23,4 +23,6 @@ public class SchedulingPhoneOrderDailyDataBroadcastRecurringJob : IRecurringJob
     public string JobId => nameof(SchedulingPhoneOrderDailyDataBroadcastRecurringJob);
     
     public string CronExpression => _cronExpressionSetting.Value;
+    
+    public TimeZoneInfo TimeZone => TimeZoneInfo.FindSystemTimeZoneById("America/Los_Angeles");
 }
