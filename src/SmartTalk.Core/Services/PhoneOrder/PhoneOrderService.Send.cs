@@ -25,7 +25,7 @@ public partial class PhoneOrderService : IPhoneOrderService
             MsgType = "text",
             Text = new SendWorkWechatGroupRobotTextDto
             {
-                Content = $"SMART TALK AI每日數據播報:\n\n1.平台錄音數量\n{dailyDataReport}\n2.AI素材校準量\n{assessmentPeriodReport}"
+                Content = $"SMART TALK AI每日數據播報:\n{today:MM/dd/yyyy}\n1.平台錄音數量\n{dailyDataReport}\n2.AI素材校準量\n{assessmentPeriodReport}"
             }
         }, cancellationToken).ConfigureAwait(false);
     }
@@ -46,8 +46,7 @@ public partial class PhoneOrderService : IPhoneOrderService
         var (dayShiftTime, nightShiftTime, endTime) = DefineTimeInterval(today, yesterday);
     
         var restaurantCount = await _phoneOrderDataProvider
-            .GetPhoneOrderRecordsForRestaurantCountAsync(dayShiftTime, endTime, nightShiftTime, cancellationToken)
-            .ConfigureAwait(false);
+            .GetPhoneOrderRecordsForRestaurantCountAsync(dayShiftTime, endTime, nightShiftTime, cancellationToken).ConfigureAwait(false);
     
         var stringBuilder = new StringBuilder();
     
