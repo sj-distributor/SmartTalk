@@ -17,7 +17,7 @@ public partial class PhoneOrderService : IPhoneOrderService
         var (today, yesterday) = PstTime();
 
         var dailyDataReport = await GenerateDailyDataReportAsync(today, yesterday, cancellationToken).ConfigureAwait(false);
-        var assessmentPeriodReport = await GenerateCustomerServiceAssessmentPeriodReportAsync(today, yesterday, cancellationToken).ConfigureAwait(false);
+        var assessmentPeriodReport = await GenerateCustomerServiceAssessmentPeriodReportAsync(today, cancellationToken).ConfigureAwait(false);
 
         await _weChatClient.SendWorkWechatRobotMessagesAsync(command.RobotUrl, 
             new SendWorkWechatGroupRobotMessageDto
@@ -43,10 +43,10 @@ public partial class PhoneOrderService : IPhoneOrderService
     
     private async Task<string> GenerateDailyDataReportAsync(DateTimeOffset today, DateTimeOffset yesterday, CancellationToken cancellationToken)
     {
-        var (dayShiftTime, nightShiftTime, endTime) = DefineTimeInterval(today, yesterday);
+        var (dayShiftStartTime, dayShiftEndTime, nightShiftStartTime, nightShiftEndTime) = DefineTimeInterval(today, yesterday);
     
         var restaurantCount = await _phoneOrderDataProvider
-            .GetPhoneOrderRecordsForRestaurantCountAsync(dayShiftTime, endTime, nightShiftTime, cancellationToken).ConfigureAwait(false);
+            .GetPhoneOrderRecordsForRestaurantCountAsync(dayShiftStartTime, dayShiftEndTime, nightShiftStartTime, nightShiftEndTime, cancellationToken).ConfigureAwait(false);
     
         var stringBuilder = new StringBuilder();
     
@@ -65,7 +65,7 @@ public partial class PhoneOrderService : IPhoneOrderService
         return stringBuilder.ToString();
     }
 
-    private async Task<string> GenerateCustomerServiceAssessmentPeriodReportAsync(DateTimeOffset today, DateTimeOffset yesterday, CancellationToken cancellationToken)
+    private async Task<string> GenerateCustomerServiceAssessmentPeriodReportAsync(DateTimeOffset today, CancellationToken cancellationToken)
     {
         var (previous20Th, nowDate) = CustomerServiceAssessmentPeriod(today);
     
@@ -84,10 +84,11 @@ public partial class PhoneOrderService : IPhoneOrderService
         return stringBuilder.ToString();
     }
     
-    private static (DateTimeOffset dayShiftTime, DateTimeOffset nightShiftTime, DateTimeOffset EndTime) DefineTimeInterval(DateTimeOffset today, DateTimeOffset yesterday) => 
-        (new DateTimeOffset(yesterday.Year, yesterday.Month, yesterday.Day, 8, 0, 0, TimeSpan.Zero),
-            new DateTimeOffset(today.Year, today.Month, today.Day, 1, 30, 0, TimeSpan.Zero),
-            new DateTimeOffset(yesterday.Year, yesterday.Month, yesterday.Day, 16, 0, 0, TimeSpan.Zero));
+    private static (DateTimeOffset dayShiftStartTime, DateTimeOffset dayShiftEndTime, DateTimeOffset nightShiftStartTime, DateTimeOffset nightShiftEndTime) DefineTimeInterval(DateTimeOffset today, DateTimeOffset yesterday) => 
+        (new DateTimeOffset(yesterday.Year, yesterday.Month, yesterday.Day, 15, 0, 0, TimeSpan.Zero),
+            new DateTimeOffset(today.Year, today.Month, today.Day, 0, 0, 0, TimeSpan.Zero),
+            new DateTimeOffset(today.Year, today.Month, today.Day, 7, 0, 0, TimeSpan.Zero),
+            new DateTimeOffset(today.Year, today.Month, today.Day, 15, 0, 0, TimeSpan.Zero));
     
     private static (DateTimeOffset startPeriod, DateTimeOffset endPeriod) CustomerServiceAssessmentPeriod(DateTimeOffset today)
     {
