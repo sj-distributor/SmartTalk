@@ -43,10 +43,10 @@ public partial class PhoneOrderService : IPhoneOrderService
     
     private async Task<string> GenerateDailyDataReportAsync(DateTimeOffset today, DateTimeOffset yesterday, CancellationToken cancellationToken)
     {
-        var (dayShiftStartTime, dayShiftEndTime, nightShiftStartTime, nightShiftEndTime) = DefineTimeInterval(today, yesterday);
+        var (dayShiftTime, nightShiftTime, endTime) = DefineTimeInterval(today, yesterday);
     
         var restaurantCount = await _phoneOrderDataProvider
-            .GetPhoneOrderRecordsForRestaurantCountAsync(dayShiftStartTime, dayShiftEndTime, nightShiftStartTime, nightShiftEndTime, cancellationToken).ConfigureAwait(false);
+            .GetPhoneOrderRecordsForRestaurantCountAsync(dayShiftTime, nightShiftTime, endTime, cancellationToken).ConfigureAwait(false);
     
         var stringBuilder = new StringBuilder();
     
@@ -84,11 +84,10 @@ public partial class PhoneOrderService : IPhoneOrderService
         return stringBuilder.ToString();
     }
     
-    private static (DateTimeOffset dayShiftStartTime, DateTimeOffset dayShiftEndTime, DateTimeOffset nightShiftStartTime, DateTimeOffset nightShiftEndTime) DefineTimeInterval(DateTimeOffset today, DateTimeOffset yesterday) => 
-        (new DateTimeOffset(yesterday.Year, yesterday.Month, yesterday.Day, 15, 0, 0, TimeSpan.Zero),
-            new DateTimeOffset(today.Year, today.Month, today.Day, 0, 0, 0, TimeSpan.Zero),
-            new DateTimeOffset(today.Year, today.Month, today.Day, 7, 0, 0, TimeSpan.Zero),
-            new DateTimeOffset(today.Year, today.Month, today.Day, 15, 0, 0, TimeSpan.Zero));
+    private static (DateTimeOffset dayShiftTime, DateTimeOffset nightShiftTime, DateTimeOffset endTime) DefineTimeInterval(DateTimeOffset today, DateTimeOffset yesterday) => 
+        (new DateTimeOffset(yesterday.Year, yesterday.Month, yesterday.Day, 7, 0, 0, TimeSpan.Zero),
+            new DateTimeOffset(yesterday.Year, yesterday.Month, yesterday.Day, 15, 0, 0, TimeSpan.Zero),
+            new DateTimeOffset(today.Year, today.Month, today.Day, 0, 0, 0, TimeSpan.Zero));
     
     private static (DateTimeOffset startPeriod, DateTimeOffset endPeriod) CustomerServiceAssessmentPeriod(DateTimeOffset today)
     {

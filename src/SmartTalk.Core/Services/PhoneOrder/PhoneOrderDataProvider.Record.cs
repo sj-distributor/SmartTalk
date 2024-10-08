@@ -21,7 +21,7 @@ public partial interface IPhoneOrderDataProvider
     Task<PhoneOrderRecord> GetPhoneOrderRecordByTranscriptionJobIdAsync(string transcriptionJobId, CancellationToken cancellationToken = default);
     
     Task<List<GetPhoneOrderRecordsForRestaurantCountDto>> GetPhoneOrderRecordsForRestaurantCountAsync(
-        DateTimeOffset dayShiftStartTime, DateTimeOffset dayShiftEndTime, DateTimeOffset nightShiftStartTime, DateTimeOffset nightShiftEndTime, CancellationToken cancellationToken);
+        DateTimeOffset dayShiftTime, DateTimeOffset nightShiftTime, DateTimeOffset endTime, CancellationToken cancellationToken);
 
     Task<List<GetPhoneOrderRecordsWithUserCountDto>> GetPhoneOrderRecordsWithUserCountAsync(
         DateTimeOffset startTime, DateTimeOffset endTime, CancellationToken cancellationToken);
@@ -91,7 +91,7 @@ public partial class PhoneOrderDataProvider
     }
 
     public async Task<List<GetPhoneOrderRecordsForRestaurantCountDto>> GetPhoneOrderRecordsForRestaurantCountAsync(
-        DateTimeOffset dayShiftStartTime, DateTimeOffset dayShiftEndTime, DateTimeOffset nightShiftStartTime, DateTimeOffset nightShiftEndTime, CancellationToken cancellationToken)
+        DateTimeOffset dayShiftTime, DateTimeOffset nightShiftTime, DateTimeOffset endTime, CancellationToken cancellationToken)
     {
         return await _repository.Query<PhoneOrderRecord>()
             .Where(x => x.Status == PhoneOrderRecordStatus.Sent)
@@ -103,13 +103,13 @@ public partial class PhoneOrderDataProvider
                 {
                     new()
                     {
-                        TimeFrame = "日班",
-                        Count = restaurantGroup.Count(x => x.CreatedDate >= dayShiftStartTime && x.CreatedDate <= dayShiftEndTime)
+                        TimeFrame = "夜班",
+                        Count = restaurantGroup.Count(x => x.CreatedDate >= dayShiftTime && x.CreatedDate <= nightShiftTime)
                     },
                     new()
                     {
-                        TimeFrame = "夜班",
-                        Count = restaurantGroup.Count(x => x.CreatedDate >= nightShiftStartTime && x.CreatedDate < nightShiftEndTime)
+                        TimeFrame = "日班",
+                        Count = restaurantGroup.Count(x => x.CreatedDate >= nightShiftTime && x.CreatedDate < endTime)
                     }
                 }
             })
