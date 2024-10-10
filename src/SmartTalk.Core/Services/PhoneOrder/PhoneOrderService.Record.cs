@@ -355,6 +355,7 @@ public partial class PhoneOrderService
 
         record.Tips = tips;
         record.LastModifiedBy = modifiedBy;
+        record.LastModifiedDate = DateTimeOffset.Now;
 
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
