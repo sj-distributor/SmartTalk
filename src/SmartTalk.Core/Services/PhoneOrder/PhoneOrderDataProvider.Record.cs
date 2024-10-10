@@ -135,6 +135,7 @@ public partial class PhoneOrderDataProvider
                 UserName = g.Key,
                 Count = g.Count()
             })
+            .OrderBy(x => x.UserName)
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
     }
