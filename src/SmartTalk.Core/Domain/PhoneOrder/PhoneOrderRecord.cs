@@ -42,7 +42,7 @@ public class PhoneOrderRecord : IEntity
     public int? LastModifiedBy { get; set; }
     
     [Column("last_modified_date")]
-    public DateTimeOffset LastModifiedDate { get; set; }
+    public DateTimeOffset? LastModifiedDate { get; set; }
 
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
