@@ -123,7 +123,7 @@ public partial class PhoneOrderDataProvider
         return await _repository.Query<PhoneOrderRecord>()
             .Where(x => x.LastModifiedBy.HasValue)
             .Where(x => x.Status == PhoneOrderRecordStatus.Sent)
-            .Where(x => x.CreatedDate >= startTime && x.CreatedDate < endTime)
+            .Where(x => x.LastModifiedDate >= startTime && x.LastModifiedDate < endTime)
             .Join(_repository.Query<UserAccount>(), x => x.LastModifiedBy, s => s.Id, (record, account) => new
             {
                 UserName = account.UserName,
