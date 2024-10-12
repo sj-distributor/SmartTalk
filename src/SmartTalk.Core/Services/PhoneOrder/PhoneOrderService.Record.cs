@@ -36,6 +36,8 @@ public partial interface IPhoneOrderService
     Task ExtractPhoneOrderRecordAiMenuAsync(List<SpeechMaticsSpeakInfoDto> phoneOrderInfo, PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken);
 
     Task<AddOrUpdateManualOrderResponse> AddOrUpdateManualOrderAsync(AddOrUpdateManualOrderCommand command, CancellationToken cancellationToken);
+
+    Task<bool> CheckRestaurantRecordingRoleAsync(string query, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderService
@@ -120,7 +122,7 @@ public partial class PhoneOrderService
         
         await ExtractPhoneOrderShoppingCartAsync(goalTexts, record, cancellationToken).ConfigureAwait(false);
         
-        record.Tips = goalTexts.First().Split([':'], 2)[1].Trim();
+        //record.Tips = goalTexts.First().Split([':'], 2)[1].Trim();
         record.Status = PhoneOrderRecordStatus.Sent;
         record.TranscriptionText = goalTexts;
         
@@ -242,6 +244,29 @@ public partial class PhoneOrderService
 
         conversations.Where(x => string.IsNullOrEmpty(x.Answer)).ForEach(x => x.Answer = string.Empty);
 
+        var goalTextsString = string.Join("\n", goalTexts);
+        
+        if (!await CheckRestaurantRecordingRoleAsync(goalTextsString, cancellationToken).ConfigureAwait(false))
+        {
+            for (var i = 0; i < conversations.Count; i++)
+            {
+                if (conversations[0].Question == "")
+                {
+                    if (i == conversations.Count - 1)
+                    {
+                        conversations[i].Question = conversations[i].Answer;
+                        conversations[i].Answer = null;
+                    }
+                    else
+                    {
+                        conversations[i].Question = conversations[i].Answer;
+                        conversations[i].Answer = conversations[i + 1].Question;
+                    }
+                }
+                else (conversations[i].Question, conversations[i].Answer) = (conversations[i].Answer, conversations[i].Question);
+            }
+        }
+
         await _phoneOrderDataProvider.AddPhoneOrderConversationsAsync(conversations, true, cancellationToken).ConfigureAwait(false);
 
         return string.Join("\n", goalTexts);
@@ -269,6 +294,39 @@ public partial class PhoneOrderService
                                                            "input:你好，我要点单 output:false\n" +
                                                            "input:你好，这里是江南春吗 output:false\n" +
                                                            "input:你好，我是小明，我可以订餐吗 output:false")
+                },
+                new ()
+                {
+                    Role = "user",
+                    Content = new CompletionsStringContent($"input: {query}, output:")
+                }
+            },
+            Model = OpenAiModel.Gpt4o
+        }, cancellationToken).ConfigureAwait(false);
+        
+        return bool.Parse(completionResult.Data.Response);
+    }
+    
+    public async Task<bool> CheckRestaurantRecordingRoleAsync(string query, CancellationToken cancellationToken)
+    {
+        var completionResult = await _smartiesClient.PerformQueryAsync( new AskGptRequest
+        {
+            Messages = new List<CompletionsRequestMessageDto>
+            {
+                new () {
+                    Role = "system",
+                    Content = new CompletionsStringContent("你是一款高度智能的餐厅订餐语句理解助手，专门用于分辨对话中角色的言辞是否符合其身份。" +
+                                                           "请基于以下规则判断对话角色是否正确匹配：\n" +
+                                                           "1.上下文通篇理解，判断角色是否存在颠倒 \n" +
+                                                           "2.提出咨询客人信息以及提供餐厅信息的一般是餐厅(Restaurant) \n" +
+                                                           "3.咨询菜品、下单、营业时间的语句一般为客人(Client) \n" +
+                                                           "4.只有在大量颠倒时需要返回true，大约颠倒75% \n" +
+                                                           "- 样本与输出：\n" +
+                                                           "input:Restaurant: Hello. Client: Hi, can I place an order for pick up?Restaurant: Give me your phone number.Client: 310-463-6100.Restaurant: Can I get your order?Client: Barbecued pork fried rice, no vegetables.Restaurant: Okay, 10 minutes.Client: Thank you.Restaurant: You're welcome. output:true\n" +
+                                                           "input:Restaurant: Hi, I wanted to know if I could order Peking duck.Client: Yeah, sure.Restaurant: What's your phone number? Client: 310-536-6320.Restaurant: Ok, thanks.Client: Ok, 20 minutes ok?Restaurant: Sure. output:false\n" +
+                                                           "input:Restaurant: . Client: I'm out. Restaurant: Hi, I wanted to know if I could order Peking duck for pickup. Client: Yeah, you got no freaking network pick up Sorry? Oh yeah, yes, you can. Restaurant: Okay, um, can we get, um, can I get one order then?. Client: I need your phone number. Restaurant: Ok, 310, 536, 6320. Client: Okay, 536, set 320. Restaurant: Sorry, 310-536-6320. Client: Okay, so you want to pick up and pick in that you're a hobo? Restaurant: I think a half. Ok, anything else? Sorry, I didn't understand. Client: I say, something else? Restaurant: No, that's it. Client: Ok, 20 minutes ok. Restaurant: Okay, great. Client: Thank you. Bye bye. Bye. output:false\n" +
+                                                           "input:Restaurant: Hello. Client: Hi, can I place an order for pick up? Ok.Restaurant: Give me your phone number. Client: 310-463-6100. Restaurant: Okay, well I know that. Client: Can I get some barbecued pork fried rice, no vegetables? Restaurant: Okay. Client: Thank you. Restaurant: Welcome, 10 minutes ok? Yeah, thank you so much Ok, see you, bye bye. output:true\n" +
+                                                           "input:Restaurant: Hi Moon house Hello. Client: Yes, can I order a pickup please? Restaurant: Sir, phone number? Your phone number? Client: 310-600-1459. Restaurant: Hello, what's your order?Client: Paradise desire. Restaurant: Alright. Client: We're wonton soup. Restaurant: Okay. Client: and a side of brown rice. Restaurant: Ok, one minute Thank you Bye. output:true")
                 },
                 new ()
                 {
