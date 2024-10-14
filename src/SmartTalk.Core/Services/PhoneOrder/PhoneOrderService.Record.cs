@@ -116,13 +116,13 @@ public partial class PhoneOrderService
         
         Log.Information("Phone order record info: {@phoneOrderInfo}", phoneOrderInfo);
         
-        var goalTexts = await PhoneOrderTranscriptionAsync(phoneOrderInfo, record, audioContent, cancellationToken).ConfigureAwait(false);
+        var (goalText, tip) = await PhoneOrderTranscriptionAsync(phoneOrderInfo, record, audioContent, cancellationToken).ConfigureAwait(false);
         
-        await ExtractPhoneOrderShoppingCartAsync(goalTexts, record, cancellationToken).ConfigureAwait(false);
+        await ExtractPhoneOrderShoppingCartAsync(goalText, record, cancellationToken).ConfigureAwait(false);
         
-        //record.Tips = goalTexts.First().Split([':'], 2)[1].Trim();
+        record.Tips = tip;
         record.Status = PhoneOrderRecordStatus.Sent;
-        record.TranscriptionText = goalTexts;
+        record.TranscriptionText = goalText;
         
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
@@ -197,7 +197,7 @@ public partial class PhoneOrderService
         return phoneOrderInfos;
     }
 
-    private async Task<string> PhoneOrderTranscriptionAsync(
+    private async Task<(string, string)> PhoneOrderTranscriptionAsync(
         List<SpeechMaticsSpeakInfoDto> phoneOrderInfo, PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken)
     {
         var conversationIndex = 0;
@@ -262,7 +262,7 @@ public partial class PhoneOrderService
 
         await _phoneOrderDataProvider.AddPhoneOrderConversationsAsync(conversations, true, cancellationToken).ConfigureAwait(false);
 
-        return goalTextsString;
+        return (goalTextsString, goalTexts.First().Split([':'], 2)[1].Trim());
     }
 
     private async Task<bool> CheckAudioFirstSentenceIsRestaurantAsync(string query, CancellationToken cancellationToken)
@@ -421,6 +421,7 @@ public partial class PhoneOrderService
 
         record.Tips = tips;
         record.LastModifiedBy = modifiedBy;
+        record.LastModifiedDate = DateTimeOffset.Now;
 
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
