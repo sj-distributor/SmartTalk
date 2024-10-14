@@ -250,10 +250,9 @@ public partial class PhoneOrderService
             {
                 conversations.Insert(0, new PhoneOrderConversation
                 {
-                    RecordId = record.Id,
-                    Question = "",
                     Answer = "",
-                    Order = 0
+                    Question = "",
+                    RecordId = record.Id
                 });
             }
 
