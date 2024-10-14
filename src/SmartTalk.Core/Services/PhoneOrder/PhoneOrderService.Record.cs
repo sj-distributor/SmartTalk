@@ -36,8 +36,6 @@ public partial interface IPhoneOrderService
     Task ExtractPhoneOrderRecordAiMenuAsync(List<SpeechMaticsSpeakInfoDto> phoneOrderInfo, PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken);
 
     Task<AddOrUpdateManualOrderResponse> AddOrUpdateManualOrderAsync(AddOrUpdateManualOrderCommand command, CancellationToken cancellationToken);
-
-    Task<bool> CheckRestaurantRecordingRoleAsync(string query, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderService
@@ -246,25 +244,20 @@ public partial class PhoneOrderService
 
         var goalTextsString = string.Join("\n", goalTexts);
         
-        if (!await CheckRestaurantRecordingRoleAsync(goalTextsString, cancellationToken).ConfigureAwait(false))
+        if (await CheckRestaurantRecordingRoleAsync(goalTextsString, cancellationToken).ConfigureAwait(false))
         {
-            for (var i = 0; i < conversations.Count; i++)
+            if (conversations[0].Question != "")
             {
-                if (conversations[0].Question == "")
+                conversations.Insert(0, new PhoneOrderConversation
                 {
-                    if (i == conversations.Count - 1)
-                    {
-                        conversations[i].Question = conversations[i].Answer;
-                        conversations[i].Answer = null;
-                    }
-                    else
-                    {
-                        conversations[i].Question = conversations[i].Answer;
-                        conversations[i].Answer = conversations[i + 1].Question;
-                    }
-                }
-                else (conversations[i].Question, conversations[i].Answer) = (conversations[i].Answer, conversations[i].Question);
+                    RecordId = record.Id,
+                    Question = "",
+                    Answer = "",
+                    Order = 0
+                });
             }
+
+            ShiftConversations(conversations);
         }
 
         await _phoneOrderDataProvider.AddPhoneOrderConversationsAsync(conversations, true, cancellationToken).ConfigureAwait(false);
@@ -307,7 +300,7 @@ public partial class PhoneOrderService
         return bool.Parse(completionResult.Data.Response);
     }
     
-    public async Task<bool> CheckRestaurantRecordingRoleAsync(string query, CancellationToken cancellationToken)
+    private async Task<bool> CheckRestaurantRecordingRoleAsync(string query, CancellationToken cancellationToken)
     {
         var completionResult = await _smartiesClient.PerformQueryAsync( new AskGptRequest
         {
@@ -317,16 +310,14 @@ public partial class PhoneOrderService
                     Role = "system",
                     Content = new CompletionsStringContent("你是一款高度智能的餐厅订餐语句理解助手，专门用于分辨对话中角色的言辞是否符合其身份。" +
                                                            "请基于以下规则判断对话角色是否正确匹配：\n" +
-                                                           "1.上下文通篇理解，判断角色是否存在颠倒 \n" +
+                                                           "1.结合上下文通篇理解，判断角色是否存在颠倒 \n" +
                                                            "2.提出咨询客人信息以及提供餐厅信息的一般是餐厅(Restaurant) \n" +
                                                            "3.咨询菜品、下单、营业时间的语句一般为客人(Client) \n" +
-                                                           "4.只有在大量颠倒时需要返回true，大约颠倒75% \n" +
+                                                           "4.当颠倒占比大于75%就需要返回true \n" +
                                                            "- 样本与输出：\n" +
-                                                           "input:Restaurant: Hello. Client: Hi, can I place an order for pick up?Restaurant: Give me your phone number.Client: 310-463-6100.Restaurant: Can I get your order?Client: Barbecued pork fried rice, no vegetables.Restaurant: Okay, 10 minutes.Client: Thank you.Restaurant: You're welcome. output:true\n" +
-                                                           "input:Restaurant: Hi, I wanted to know if I could order Peking duck.Client: Yeah, sure.Restaurant: What's your phone number? Client: 310-536-6320.Restaurant: Ok, thanks.Client: Ok, 20 minutes ok?Restaurant: Sure. output:false\n" +
-                                                           "input:Restaurant: . Client: I'm out. Restaurant: Hi, I wanted to know if I could order Peking duck for pickup. Client: Yeah, you got no freaking network pick up Sorry? Oh yeah, yes, you can. Restaurant: Okay, um, can we get, um, can I get one order then?. Client: I need your phone number. Restaurant: Ok, 310, 536, 6320. Client: Okay, 536, set 320. Restaurant: Sorry, 310-536-6320. Client: Okay, so you want to pick up and pick in that you're a hobo? Restaurant: I think a half. Ok, anything else? Sorry, I didn't understand. Client: I say, something else? Restaurant: No, that's it. Client: Ok, 20 minutes ok. Restaurant: Okay, great. Client: Thank you. Bye bye. Bye. output:false\n" +
-                                                           "input:Restaurant: Hello. Client: Hi, can I place an order for pick up? Ok.Restaurant: Give me your phone number. Client: 310-463-6100. Restaurant: Okay, well I know that. Client: Can I get some barbecued pork fried rice, no vegetables? Restaurant: Okay. Client: Thank you. Restaurant: Welcome, 10 minutes ok? Yeah, thank you so much Ok, see you, bye bye. output:true\n" +
-                                                           "input:Restaurant: Hi Moon house Hello. Client: Yes, can I order a pickup please? Restaurant: Sir, phone number? Your phone number? Client: 310-600-1459. Restaurant: Hello, what's your order?Client: Paradise desire. Restaurant: Alright. Client: We're wonton soup. Restaurant: Okay. Client: and a side of brown rice. Restaurant: Ok, one minute Thank you Bye. output:true")
+                                                           "input:Restaurant: Client: 你能告诉我今天的营业时间吗？Restaurant: 我想点两份牛排和一份沙拉。Client: 我们的牛排是鲜嫩多汁的，适合搭配红酒。Restaurant: 请告诉我您的联系方式。Client: 好的，我的电话是12345678。output:true\n" +
+                                                           "input:Restaurant: Client: 我想预定今晚8点的晚餐。Restaurant: 好的，请告诉我您的联系方式。Client: 我的电话是12345678。Restaurant: 今天有什么推荐菜吗？Client: 我们有牛排和烤鸡，特别受欢迎。output:false\n" +
+                                                           "input:Restaurant: . Client: 请问你们什么时候打烊？Restaurant: 我们晚上10点打烊。Client: 我想预定一份牛排和一份意面。Restaurant: 好的，请问您的联系方式？output:false\n")
                 },
                 new ()
                 {
@@ -336,8 +327,26 @@ public partial class PhoneOrderService
             },
             Model = OpenAiModel.Gpt4o
         }, cancellationToken).ConfigureAwait(false);
-        
+
         return bool.Parse(completionResult.Data.Response);
+    }
+    
+    private static void ShiftConversations(List<PhoneOrderConversation> conversations)
+    {
+        for (var i = 0; i < conversations.Count; i++)
+        {
+            var currentConversation = conversations[i];
+            var nextConversation = conversations[i + 1];
+            
+            currentConversation.Question = currentConversation.Answer;
+            currentConversation.Answer = nextConversation.Question;
+            currentConversation.Order = i;
+        }
+        
+        var lastConversation = conversations[^1];
+        lastConversation.Question = lastConversation.Answer;
+        lastConversation.Answer = null;
+        lastConversation.Order = conversations.Count - 1;
     }
 
     private async Task AddPhoneOrderRecordAsync(PhoneOrderRecord record, PhoneOrderRecordStatus status, CancellationToken cancellationToken)
