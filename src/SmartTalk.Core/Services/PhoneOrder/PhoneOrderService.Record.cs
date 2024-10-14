@@ -262,7 +262,7 @@ public partial class PhoneOrderService
 
         await _phoneOrderDataProvider.AddPhoneOrderConversationsAsync(conversations, true, cancellationToken).ConfigureAwait(false);
 
-        return string.Join("\n", goalTexts);
+        return goalTextsString;
     }
 
     private async Task<bool> CheckAudioFirstSentenceIsRestaurantAsync(string query, CancellationToken cancellationToken)
