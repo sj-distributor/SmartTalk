@@ -246,7 +246,7 @@ public partial class PhoneOrderService
         
         if (await CheckRestaurantRecordingRoleAsync(goalTextsString, cancellationToken).ConfigureAwait(false))
         {
-            if (conversations[0].Question != "")
+            if (conversations[0].Question.IsNullOrEmpty())
             {
                 conversations.Insert(0, new PhoneOrderConversation
                 {
@@ -327,7 +327,7 @@ public partial class PhoneOrderService
             Model = OpenAiModel.Gpt4o
         }, cancellationToken).ConfigureAwait(false);
 
-        return bool.Parse(completionResult.Data.Response);
+        return bool.TryParse(completionResult.Data.Response, out var result) && result;
     }
     
     private static void ShiftConversations(List<PhoneOrderConversation> conversations)
