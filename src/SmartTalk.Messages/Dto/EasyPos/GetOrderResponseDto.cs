@@ -44,14 +44,17 @@ public class EasyPosOrderItemDto
     [JsonProperty("categoryId")]
     public long CategoryId { get; set; }
 
-    [JsonProperty("price")]
-    public double Price { get; set; }
+    [JsonProperty("itemAmount")]
+    public double ItemAmount { get; set; }
 
     [JsonProperty("quantity")]
     public int Quantity { get; set; }
 
     [JsonProperty("localizations")]
     public List<EasyPosLocalizationsDto> Localizations { get; set; }
+    
+    [JsonProperty("condiments")]
+    public List<EasyPosCondimentsDto> Condiments { get; set; }
 }
 
 public class EasyPosLocalizationsDto
@@ -64,4 +67,22 @@ public class EasyPosLocalizationsDto
 
     [JsonProperty("value")]
     public string Value { get; set; }
+}
+
+public class EasyPosCondimentsDto
+{
+    [JsonProperty("price")] 
+    public decimal Price { get; set; }
+    
+    [JsonProperty("quantity")]
+    public int Quantity { get; set; }
+    
+    [JsonProperty("notes")]
+    public string Notes { get; set; }
+    
+    [JsonProperty("localizations")]
+    public List<EasyPosLocalizationsDto> Localizations { get; set; }
+    
+    [JsonProperty("actionLocalizations")]
+    public List<EasyPosLocalizationsDto> ActionLocalizations { get; set; }
 }
