@@ -351,7 +351,7 @@ public partial class PhoneOrderService
     
     private static void ShiftConversations(List<PhoneOrderConversation> conversations)
     {
-        for (var i = 0; i < conversations.Count; i++)
+        for (var i = 0; i < conversations.Count - 1; i++)
         {
             var currentConversation = conversations[i];
             var nextConversation = conversations[i + 1];
