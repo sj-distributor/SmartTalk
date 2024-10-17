@@ -21,6 +21,7 @@ using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Requests.PhoneOrder;
 using SmartTalk.Messages.Commands.Attachments;
 using SmartTalk.Messages.Constants;
+using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Restaurant;
 using TranscriptionFileType = SmartTalk.Messages.Enums.STT.TranscriptionFileType;
 using TranscriptionResponseFormat = SmartTalk.Messages.Enums.STT.TranscriptionResponseFormat;
@@ -151,10 +152,11 @@ public partial class PhoneOrderService
         {
             return new PhoneOrderOrderItem
             {
-                Price = x.Price,
+                Price = x.ItemAmount,
                 Quantity = x.Quantity,
                 RecordId = command.RecordId,
                 OrderType = PhoneOrderOrderType.ManualOrder,
+                Note = PickUpAnOrderNote(x),
                 FoodName = x.Localizations.First(c => c.Field == "name" && c.languageCode == "zh_CN").Value
             };
         }).ToList();
@@ -171,6 +173,23 @@ public partial class PhoneOrderService
         {
             Data = _mapper.Map<List<PhoneOrderOrderItemDto>>(oderItems)
         };
+    }
+
+    private static string PickUpAnOrderNote(EasyPosOrderItemDto item)
+    {
+        if (item.Condiments is { Count: 0 }) return null;
+     
+        var note = "";
+        
+        foreach (var condiment in item.Condiments)
+        {
+            if (condiment.ActionLocalizations is not { Count: 0 } && condiment.Localizations is not { Count: 0 })
+                note = note + $"{condiment.ActionLocalizations.First(c => c.Field == "name" && c.languageCode == "zh_CN").Value + condiment.Localizations.First(c => c.Field == "name" && c.languageCode == "zh_CN").Value} (${condiment.Price})";
+            else
+                note = note + $"{condiment.Notes}(${condiment.Price})";
+        }
+        
+        return note;
     }
 
     private async Task<List<SpeechMaticsSpeakInfoDto>> HandlerConversationFirstSentenceAsync(List<SpeechMaticsSpeakInfoDto> phoneOrderInfos, PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken)
@@ -240,8 +259,6 @@ public partial class PhoneOrderService
             }
         }
 
-        conversations.Where(x => string.IsNullOrEmpty(x.Answer)).ForEach(x => x.Answer = string.Empty);
-
         var goalTextsString = string.Join("\n", goalTexts);
         
         if (await CheckRestaurantRecordingRoleAsync(goalTextsString, cancellationToken).ConfigureAwait(false))
@@ -258,6 +275,8 @@ public partial class PhoneOrderService
 
             ShiftConversations(conversations);
         }
+        
+        conversations.Where(x => string.IsNullOrEmpty(x.Answer)).ForEach(x => x.Answer = string.Empty);
 
         await _phoneOrderDataProvider.AddPhoneOrderConversationsAsync(conversations, true, cancellationToken).ConfigureAwait(false);
 
@@ -332,7 +351,7 @@ public partial class PhoneOrderService
     
     private static void ShiftConversations(List<PhoneOrderConversation> conversations)
     {
-        for (var i = 0; i < conversations.Count; i++)
+        for (var i = 0; i < conversations.Count - 1; i++)
         {
             var currentConversation = conversations[i];
             var nextConversation = conversations[i + 1];
@@ -363,7 +382,7 @@ public partial class PhoneOrderService
 
         var timeSpan = TimeSpan.Parse(audioDuration);
 
-        return timeSpan.TotalSeconds < 3 || timeSpan.Seconds == 14 || timeSpan.Seconds == 10;
+        return timeSpan.TotalSeconds < 15 && (timeSpan.TotalSeconds < 3 || timeSpan.Seconds == 14 || timeSpan.Seconds == 10);
     }
     
     private async Task<string> UploadRecordFileAsync(string fileName, byte[] fileContent, CancellationToken cancellationToken)
