@@ -242,10 +242,26 @@ public partial class PhoneOrderService
 
         conversations.Where(x => string.IsNullOrEmpty(x.Answer)).ForEach(x => x.Answer = string.Empty);
 
+        var goalTextsString = string.Join("\n", goalTexts);
+        
+        if (await CheckRestaurantRecordingRoleAsync(goalTextsString, cancellationToken).ConfigureAwait(false))
+        {
+            if (conversations[0].Question.IsNullOrEmpty())
+            {
+                conversations.Insert(0, new PhoneOrderConversation
+                {
+                    Answer = "",
+                    Question = "",
+                    RecordId = record.Id
+                });
+            }
+
+            ShiftConversations(conversations);
+        }
+
         await _phoneOrderDataProvider.AddPhoneOrderConversationsAsync(conversations, true, cancellationToken).ConfigureAwait(false);
 
-        
-        return (string.Join("\n", goalTexts), goalTexts.First().Split([':'], 2)[1].Trim());
+        return (goalTextsString, goalTexts.First().Split([':'], 2)[1].Trim());
     }
 
     private async Task<bool> CheckAudioFirstSentenceIsRestaurantAsync(string query, CancellationToken cancellationToken)
@@ -281,6 +297,55 @@ public partial class PhoneOrderService
         }, cancellationToken).ConfigureAwait(false);
         
         return bool.Parse(completionResult.Data.Response);
+    }
+    
+    private async Task<bool> CheckRestaurantRecordingRoleAsync(string query, CancellationToken cancellationToken)
+    {
+        var completionResult = await _smartiesClient.PerformQueryAsync( new AskGptRequest
+        {
+            Messages = new List<CompletionsRequestMessageDto>
+            {
+                new () {
+                    Role = "system",
+                    Content = new CompletionsStringContent("你是一款高度智能的餐厅订餐语句理解助手，专门用于分辨对话中角色的言辞是否符合其身份。" +
+                                                           "请基于以下规则判断对话角色是否正确匹配：\n" +
+                                                           "1.结合上下文通篇理解，判断角色是否存在颠倒 \n" +
+                                                           "2.提出咨询客人信息以及提供餐厅信息的一般是餐厅(Restaurant) \n" +
+                                                           "3.咨询菜品、下单、营业时间的语句一般为客人(Client) \n" +
+                                                           "4.当颠倒占比大于75%就需要返回true \n" +
+                                                           "- 样本与输出：\n" +
+                                                           "input:Restaurant: Client: 你能告诉我今天的营业时间吗？Restaurant: 我想点两份牛排和一份沙拉。Client: 我们的牛排是鲜嫩多汁的，适合搭配红酒。Restaurant: 请告诉我您的联系方式。Client: 好的，我的电话是12345678。output:true\n" +
+                                                           "input:Restaurant: Client: 我想预定今晚8点的晚餐。Restaurant: 好的，请告诉我您的联系方式。Client: 我的电话是12345678。Restaurant: 今天有什么推荐菜吗？Client: 我们有牛排和烤鸡，特别受欢迎。output:false\n" +
+                                                           "input:Restaurant: . Client: 请问你们什么时候打烊？Restaurant: 我们晚上10点打烊。Client: 我想预定一份牛排和一份意面。Restaurant: 好的，请问您的联系方式？output:false\n")
+                },
+                new ()
+                {
+                    Role = "user",
+                    Content = new CompletionsStringContent($"input: {query}, output:")
+                }
+            },
+            Model = OpenAiModel.Gpt4o
+        }, cancellationToken).ConfigureAwait(false);
+
+        return bool.TryParse(completionResult.Data.Response, out var result) && result;
+    }
+    
+    private static void ShiftConversations(List<PhoneOrderConversation> conversations)
+    {
+        for (var i = 0; i < conversations.Count; i++)
+        {
+            var currentConversation = conversations[i];
+            var nextConversation = conversations[i + 1];
+            
+            currentConversation.Question = currentConversation.Answer;
+            currentConversation.Answer = nextConversation.Question;
+            currentConversation.Order = i;
+        }
+        
+        var lastConversation = conversations[^1];
+        lastConversation.Question = lastConversation.Answer;
+        lastConversation.Answer = null;
+        lastConversation.Order = conversations.Count - 1;
     }
 
     private async Task AddPhoneOrderRecordAsync(PhoneOrderRecord record, PhoneOrderRecordStatus status, CancellationToken cancellationToken)
