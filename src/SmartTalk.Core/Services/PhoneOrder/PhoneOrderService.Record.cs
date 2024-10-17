@@ -259,8 +259,6 @@ public partial class PhoneOrderService
             }
         }
 
-        conversations.Where(x => string.IsNullOrEmpty(x.Answer)).ForEach(x => x.Answer = string.Empty);
-
         var goalTextsString = string.Join("\n", goalTexts);
         
         if (await CheckRestaurantRecordingRoleAsync(goalTextsString, cancellationToken).ConfigureAwait(false))
@@ -277,6 +275,8 @@ public partial class PhoneOrderService
 
             ShiftConversations(conversations);
         }
+        
+        conversations.Where(x => string.IsNullOrEmpty(x.Answer)).ForEach(x => x.Answer = string.Empty);
 
         await _phoneOrderDataProvider.AddPhoneOrderConversationsAsync(conversations, true, cancellationToken).ConfigureAwait(false);
 
