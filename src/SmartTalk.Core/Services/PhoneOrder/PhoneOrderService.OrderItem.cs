@@ -19,7 +19,7 @@ public partial class PhoneOrderService
     {
         var orderItems = await _phoneOrderDataProvider.GetPhoneOrderOrderItemsAsync(request.RecordId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByIdAsync(request.RecordId, cancellationToken).ConfigureAwait(false);
+        var record = await _phoneOrderDataProvider.GetPhoneOrderRecordFirstAsync(request.RecordId, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         return new GetPhoneOrderOrderItemsRessponse
         {
