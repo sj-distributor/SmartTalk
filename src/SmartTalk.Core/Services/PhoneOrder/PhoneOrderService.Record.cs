@@ -267,6 +267,7 @@ public partial class PhoneOrderService
             {
                 conversations.Insert(0, new PhoneOrderConversation
                 {
+                    Order = 0,
                     Answer = "",
                     Question = "",
                     RecordId = record.Id
@@ -365,6 +366,8 @@ public partial class PhoneOrderService
         lastConversation.Question = lastConversation.Answer;
         lastConversation.Answer = null;
         lastConversation.Order = conversations.Count - 1;
+        
+        Log.Information("Shift conversations: {@conversations}", conversations);
     }
 
     private async Task AddPhoneOrderRecordAsync(PhoneOrderRecord record, PhoneOrderRecordStatus status, CancellationToken cancellationToken)
