@@ -277,8 +277,19 @@ public partial class PhoneOrderService
             ShiftConversations(conversations);
         }
         
-        conversations.Where(x => string.IsNullOrEmpty(x.Answer)).ForEach(x => x.Answer = string.Empty);
+        foreach (var conversation in conversations)
+        {
+            if (string.IsNullOrEmpty(conversation.Answer))
+            {
+                conversation.Answer = string.Empty;
+            }
 
+            if (string.IsNullOrEmpty(conversation.Question))
+            {
+                conversation.Question = string.Empty;
+            }
+        }
+        
         await _phoneOrderDataProvider.AddPhoneOrderConversationsAsync(conversations, true, cancellationToken).ConfigureAwait(false);
 
         return (goalTextsString, goalTexts.First().Split([':'], 2)[1].Trim());
@@ -352,6 +363,8 @@ public partial class PhoneOrderService
     
     private static void ShiftConversations(List<PhoneOrderConversation> conversations)
     {
+        Log.Information("Before shift conversations: {@conversations}", conversations);
+        
         for (var i = 0; i < conversations.Count - 1; i++)
         {
             var currentConversation = conversations[i];
@@ -367,7 +380,7 @@ public partial class PhoneOrderService
         lastConversation.Answer = null;
         lastConversation.Order = conversations.Count - 1;
         
-        Log.Information("Shift conversations: {@conversations}", conversations);
+        Log.Information("After shift conversations: {@conversations}", conversations);
     }
 
     private async Task AddPhoneOrderRecordAsync(PhoneOrderRecord record, PhoneOrderRecordStatus status, CancellationToken cancellationToken)
