@@ -288,10 +288,7 @@ public partial class PhoneOrderService
     {
         foreach (var conversation in conversations.ToList())
         {
-            if (string.IsNullOrEmpty(conversation.Answer) && string.IsNullOrEmpty(conversation.Question))
-            {
-                conversations.Remove(conversation);
-            }
+            if (string.IsNullOrEmpty(conversation.Answer) && string.IsNullOrEmpty(conversation.Question)) conversations.Remove(conversation);
             else
             {
                 if (string.IsNullOrEmpty(conversation.Answer))
