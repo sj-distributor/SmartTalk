@@ -277,22 +277,32 @@ public partial class PhoneOrderService
             ShiftConversations(conversations);
         }
         
-        foreach (var conversation in conversations)
-        {
-            if (string.IsNullOrEmpty(conversation.Answer))
-            {
-                conversation.Answer = string.Empty;
-            }
-
-            if (string.IsNullOrEmpty(conversation.Question))
-            {
-                conversation.Question = string.Empty;
-            }
-        }
+        ProcessConversation(conversations);
         
         await _phoneOrderDataProvider.AddPhoneOrderConversationsAsync(conversations, true, cancellationToken).ConfigureAwait(false);
 
         return (goalTextsString, goalTexts.First().Split([':'], 2)[1].Trim());
+    }
+
+    private static void ProcessConversation(List<PhoneOrderConversation> conversations)
+    {
+        foreach (var conversation in conversations.ToList())
+        {
+            if (string.IsNullOrEmpty(conversation.Answer) && string.IsNullOrEmpty(conversation.Question))
+            {
+                conversations.Remove(conversation);
+            }
+            else
+            {
+                if (string.IsNullOrEmpty(conversation.Answer))
+                    conversation.Answer = string.Empty;
+
+                if (string.IsNullOrEmpty(conversation.Question))
+                    conversation.Question = string.Empty;
+            }
+        }
+        
+        Log.Information("Processed conversation:{@conversations}", conversations);
     }
 
     private async Task<bool> CheckAudioFirstSentenceIsRestaurantAsync(string query, CancellationToken cancellationToken)
