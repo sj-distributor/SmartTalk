@@ -100,7 +100,7 @@ public partial class PhoneOrderService
 
     private async Task<bool> CheckOrderExistAsync(DateTimeOffset createdDate, CancellationToken cancellationToken)
     {
-        return await _phoneOrderDataProvider.GetPhoneOrderRecordFirstAsync(null, createdDate, cancellationToken).ConfigureAwait(false) == null;
+        return (await _phoneOrderDataProvider.GetPhoneOrderRecordAsync(createdDate: createdDate, cancellationToken: cancellationToken).ConfigureAwait(false)).Any();
     }
 
     public TranscriptionLanguage SelectLanguageEnum(string language)
@@ -166,7 +166,7 @@ public partial class PhoneOrderService
             };
         }).ToList();
         
-        var record = await _phoneOrderDataProvider.GetPhoneOrderRecordFirstAsync(command.RecordId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var record = (await _phoneOrderDataProvider.GetPhoneOrderRecordAsync(command.RecordId, cancellationToken: cancellationToken).ConfigureAwait(false)).First();
         
         record.ManualOrderId = orderId;
         
@@ -423,7 +423,7 @@ public partial class PhoneOrderService
     
     private async Task UpdatePhoneOrderRecordSpecificFieldsAsync(int recordId, int modifiedBy, string tips, CancellationToken cancellationToken)
     {
-        var record = await _phoneOrderDataProvider.GetPhoneOrderRecordFirstAsync(recordId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var record = (await _phoneOrderDataProvider.GetPhoneOrderRecordAsync(recordId, cancellationToken: cancellationToken).ConfigureAwait(false)).First();
 
         record.Tips = tips;
         record.LastModifiedBy = modifiedBy;
