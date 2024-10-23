@@ -58,6 +58,8 @@ public partial class PhoneOrderService
         var recordInfo = ExtractPhoneOrderRecordInfoFromRecordName(command.RecordName);
         
         Log.Information("Phone order record information: {@recordInfo}", recordInfo);
+
+        if (await CheckOrderExistAsync(recordInfo.OrderDate.AddHours(-7), cancellationToken).ConfigureAwait(false)) return;
         
         var transcription = await _speechToTextService.SpeechToTextAsync(
             command.RecordContent, fileType: TranscriptionFileType.Wav, responseFormat: TranscriptionResponseFormat.Text, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -95,6 +97,11 @@ public partial class PhoneOrderService
         Log.Information("Phone order record transcriptionJobId: {@transcriptionJobId}", transcriptionJobId);
         
         await AddPhoneOrderRecordAsync(record, PhoneOrderRecordStatus.Diarization, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<bool> CheckOrderExistAsync(DateTimeOffset createdDate, CancellationToken cancellationToken)
+    {
+        return (await _phoneOrderDataProvider.GetPhoneOrderRecordAsync(createdDate: createdDate, cancellationToken: cancellationToken).ConfigureAwait(false)).Any();
     }
 
     public TranscriptionLanguage SelectLanguageEnum(string language)
@@ -161,7 +168,7 @@ public partial class PhoneOrderService
             };
         }).ToList();
         
-        var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByIdAsync(command.RecordId, cancellationToken).ConfigureAwait(false);
+        var record = (await _phoneOrderDataProvider.GetPhoneOrderRecordAsync(command.RecordId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
         
         record.ManualOrderId = orderId;
         
@@ -458,7 +465,7 @@ public partial class PhoneOrderService
     
     private async Task UpdatePhoneOrderRecordSpecificFieldsAsync(int recordId, int modifiedBy, string tips, CancellationToken cancellationToken)
     {
-        var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByIdAsync(recordId, cancellationToken).ConfigureAwait(false);
+        var record = (await _phoneOrderDataProvider.GetPhoneOrderRecordAsync(recordId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
 
         record.Tips = tips;
         record.LastModifiedBy = modifiedBy;

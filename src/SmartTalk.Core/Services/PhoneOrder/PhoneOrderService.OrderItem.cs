@@ -1,9 +1,5 @@
-using AutoMapper;
-using SmartTalk.Core.Domain.PhoneOrder;
-using SmartTalk.Core.Ioc;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Enums.PhoneOrder;
-using SmartTalk.Messages.Requests;
 using SmartTalk.Messages.Requests.PhoneOrder;
 
 namespace SmartTalk.Core.Services.PhoneOrder;
@@ -19,7 +15,7 @@ public partial class PhoneOrderService
     {
         var orderItems = await _phoneOrderDataProvider.GetPhoneOrderOrderItemsAsync(request.RecordId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByIdAsync(request.RecordId, cancellationToken).ConfigureAwait(false);
+        var record = (await _phoneOrderDataProvider.GetPhoneOrderRecordAsync(request.RecordId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
         
         return new GetPhoneOrderOrderItemsRessponse
         {
