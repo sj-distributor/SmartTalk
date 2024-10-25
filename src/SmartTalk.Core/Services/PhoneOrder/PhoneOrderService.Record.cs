@@ -164,7 +164,7 @@ public partial class PhoneOrderService
                 RecordId = command.RecordId,
                 OrderType = PhoneOrderOrderType.ManualOrder,
                 Note = PickUpAnOrderNote(x),
-                FoodName = x.Localizations.First(c => c.Field == "name" && c.languageCode == "zh_CN").Value
+                FoodName = x.Localizations.First(c => c.Field == "posName" && c.languageCode == "zh_CN").Value
             };
         }).ToList();
         
