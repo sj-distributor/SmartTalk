@@ -284,18 +284,20 @@ public partial class PhoneOrderService
             ShiftConversations(conversations);
         }
         
-        ProcessConversation(conversations);
+        goalTextsString = ProcessConversation(conversations);
         
         await _phoneOrderDataProvider.AddPhoneOrderConversationsAsync(conversations, true, cancellationToken).ConfigureAwait(false);
 
-        return (goalTextsString, goalTexts.First().Split([':'], 2)[1].Trim());
+        return (goalTextsString, conversations.First().Question);
     }
 
-    private static void ProcessConversation(List<PhoneOrderConversation> conversations)
+    private static string ProcessConversation(List<PhoneOrderConversation> conversations)
     {
+        var goalTextsString = "";
+        
         foreach (var conversation in conversations.ToList())
         {
-            if (string.IsNullOrEmpty(conversation.Answer) && string.IsNullOrEmpty(conversation.Question)) conversations.Remove(conversation);
+            if (string.IsNullOrEmpty(conversation.Answer) && string.IsNullOrEmpty(conversation.Question))conversations.Remove(conversation);
             else
             {
                 if (string.IsNullOrEmpty(conversation.Answer))
@@ -303,10 +305,14 @@ public partial class PhoneOrderService
 
                 if (string.IsNullOrEmpty(conversation.Question))
                     conversation.Question = string.Empty;
+                
+                goalTextsString = goalTextsString + "Restaurant: " + conversation.Question + "\nClient:" + conversation.Answer + "\n";
             }
         }
         
-        Log.Information("Processed conversation:{@conversations}", conversations);
+        Log.Information("Processed conversation:{@conversations}， goalText:{@goalTextsString}", conversations, goalTextsString);
+        
+        return goalTextsString;
     }
 
     private async Task<bool> CheckAudioFirstSentenceIsRestaurantAsync(string query, CancellationToken cancellationToken)
