@@ -87,14 +87,23 @@ public partial class PhoneOrderService
             
             return;
         }
+
+        try
+        {
+            var transcriptionJobIdJObject = JObject.Parse(await CreateTranscriptionJobAsync(command.RecordContent, command.RecordName, detection.Language, cancellationToken).ConfigureAwait(false)) ;
+
+            Log.Information("Phone order record transcriptionJobIdJObject: {@transcriptionJobIdJObject}", transcriptionJobIdJObject);
+            
+            var transcriptionJobId = transcriptionJobIdJObject["id"]?.ToString();
         
-        var transcriptionJobIdJObject = JObject.Parse(await CreateTranscriptionJobAsync(command.RecordContent, command.RecordName, detection.Language, cancellationToken).ConfigureAwait(false)) ;
-        
-        var transcriptionJobId = transcriptionJobIdJObject["id"]?.ToString();
-        
-        record.TranscriptionJobId = transcriptionJobId;
+            record.TranscriptionJobId = transcriptionJobId;
+        }
+        catch (Exception e)
+        {
+            Log.Information("Phone order record create transcription job failed: {@e}", e);
+        }
      
-        Log.Information("Phone order record transcriptionJobId: {@transcriptionJobId}", transcriptionJobId);
+        Log.Information("Phone order record transcriptionJobId: {@transcriptionJobId}",  record.TranscriptionJobId);
         
         await AddPhoneOrderRecordAsync(record, PhoneOrderRecordStatus.Diarization, cancellationToken).ConfigureAwait(false);
     }
