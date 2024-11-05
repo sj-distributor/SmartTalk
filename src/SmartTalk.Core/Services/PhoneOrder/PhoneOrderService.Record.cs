@@ -649,6 +649,7 @@ public partial class PhoneOrderService
                 if (notEnabledKey != null)
                 {
                     notEnabledKey.Status = SpeechMaticsKeyStatus.Active;
+                    notEnabledKey.LastModifiedDate = DateTimeOffset.Now;
                     activeKeys.ForEach(x => x.Status = SpeechMaticsKeyStatus.Discard);
                 }
 
