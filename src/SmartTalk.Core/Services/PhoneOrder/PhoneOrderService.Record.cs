@@ -59,7 +59,7 @@ public partial class PhoneOrderService
         
         Log.Information("Phone order record information: {@recordInfo}", recordInfo);
 
-        if (await CheckOrderExistAsync(recordInfo.OrderDate.AddHours(-7), cancellationToken).ConfigureAwait(false)) return;
+        if (await CheckOrderExistAsync(recordInfo.OrderDate.AddHours(-8), cancellationToken).ConfigureAwait(false)) return;
         
         var transcription = await _speechToTextService.SpeechToTextAsync(
             command.RecordContent, fileType: TranscriptionFileType.Wav, responseFormat: TranscriptionResponseFormat.Text, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -68,7 +68,7 @@ public partial class PhoneOrderService
         
         var detection = await _translationClient.DetectLanguageAsync(transcription, cancellationToken).ConfigureAwait(false);
         
-        var record = new PhoneOrderRecord { SessionId = Guid.NewGuid().ToString(), Restaurant = recordInfo.Restaurant, TranscriptionText = transcription, Language = SelectLanguageEnum(detection.Language), CreatedDate = recordInfo.OrderDate.AddHours(-7), Status = PhoneOrderRecordStatus.Recieved };
+        var record = new PhoneOrderRecord { SessionId = Guid.NewGuid().ToString(), Restaurant = recordInfo.Restaurant, TranscriptionText = transcription, Language = SelectLanguageEnum(detection.Language), CreatedDate = recordInfo.OrderDate.AddHours(-8), Status = PhoneOrderRecordStatus.Recieved };
 
         if (await CheckPhoneOrderRecordDurationAsync(command.RecordContent, cancellationToken).ConfigureAwait(false))
         {
