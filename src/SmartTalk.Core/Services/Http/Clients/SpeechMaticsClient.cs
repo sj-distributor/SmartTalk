@@ -1,7 +1,7 @@
 using Newtonsoft.Json;
 using Serilog;
 using SmartTalk.Core.Ioc;
-using SmartTalk.Core.Services.PhoneOrder;
+using SmartTalk.Core.Services.SpeechMatics;
 using SmartTalk.Core.Settings.SpeechMatics;
 using SmartTalk.Messages.Dto.SpeechMatics;
 using SmartTalk.Messages.Enums.SpeechMatics;
@@ -27,13 +27,13 @@ public class SpeechMaticsClient : ISpeechMaticsClient
 {
     private readonly SpeechMaticsSettings _speechMaticsSetting;
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
-    private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
+    private readonly ISpeechMaticsDataProvider _speechMaticsDataProvider;
     
-    public SpeechMaticsClient(SpeechMaticsSettings speechMaticsSetting, ISmartTalkHttpClientFactory httpClientFactory, IPhoneOrderDataProvider phoneOrderDataProvider)
+    public SpeechMaticsClient(SpeechMaticsSettings speechMaticsSetting, ISmartTalkHttpClientFactory httpClientFactory, ISpeechMaticsDataProvider speechMaticsDataProvider)
     {
         _speechMaticsSetting = speechMaticsSetting;
         _httpClientFactory = httpClientFactory;
-        _phoneOrderDataProvider = phoneOrderDataProvider;
+        _speechMaticsDataProvider = speechMaticsDataProvider;
     }
     
     public async Task<string> CreateJobAsync(SpeechMaticsCreateJobRequestDto speechMaticsCreateJobRequestDto, SpeechMaticsCreateTranscriptionDto speechMaticsCreateTranscritionDto, CancellationToken cancellationToken)
@@ -97,7 +97,7 @@ public class SpeechMaticsClient : ISpeechMaticsClient
 
     public async Task<Dictionary<string, string>> GetHeadersAsync(CancellationToken cancellationToken)
     {
-        var speechMaticsKey = (await _phoneOrderDataProvider.GetSpeechMaticsKeysAsync([SpeechMaticsKeyStatus.Active], cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+        var speechMaticsKey = (await _speechMaticsDataProvider.GetSpeechMaticsKeysAsync([SpeechMaticsKeyStatus.Active], cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
         
         Log.Information("SpeechMatics key is: {@speechMaticsKey}", speechMaticsKey?.Key);
         

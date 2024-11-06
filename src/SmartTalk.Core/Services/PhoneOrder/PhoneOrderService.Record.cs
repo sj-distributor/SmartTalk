@@ -644,8 +644,8 @@ public partial class PhoneOrderService
 
             Log.Information("Create speechMatics job abnormal, start replacement key");
 
-            var keys = await _phoneOrderDataProvider.GetSpeechMaticsKeysAsync(
-                [SpeechMaticsKeyStatus.Active, SpeechMaticsKeyStatus.NotEnabled], cancellationToken).ConfigureAwait(false);
+            var keys = await _speechMaticsDataProvider.GetSpeechMaticsKeysAsync(
+                [SpeechMaticsKeyStatus.Active, SpeechMaticsKeyStatus.NotEnabled], cancellationToken: cancellationToken).ConfigureAwait(false);
 
             Log.Information("Get speechMatics keys：{@keys}", keys);
 
@@ -662,7 +662,7 @@ public partial class PhoneOrderService
 
             Log.Information("Update speechMatics keys：{@keys}", keys);
             
-            await _phoneOrderDataProvider.UpdateSpeechMaticsKeysAsync(activeKeys.Concat(new List<SpeechMaticsKey> { notEnabledKey }).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
+            await _speechMaticsDataProvider.UpdateSpeechMaticsKeysAsync(activeKeys.Concat(new List<SpeechMaticsKey> { notEnabledKey }).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
             
             retryCount--;
 
