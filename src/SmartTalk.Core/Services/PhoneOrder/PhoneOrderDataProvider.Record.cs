@@ -168,7 +168,7 @@ public partial class PhoneOrderDataProvider
     public async Task UpdateSpeechMaticsKeysAsync(
         List<SpeechMaticsKey> speechMaticsKeys, bool forceSave = true, CancellationToken cancellationToken = default)
     {
-        await  _repository.UpdateAllAsync(speechMaticsKeys, cancellationToken).ConfigureAwait(false);
+        await _repository.UpdateAllAsync(speechMaticsKeys, cancellationToken).ConfigureAwait(false);
         
         if (forceSave)
         {
