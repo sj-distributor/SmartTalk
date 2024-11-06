@@ -171,8 +171,6 @@ public partial class PhoneOrderDataProvider
         await _repository.UpdateAllAsync(speechMaticsKeys, cancellationToken).ConfigureAwait(false);
         
         if (forceSave)
-        {
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-        }
     }
 }

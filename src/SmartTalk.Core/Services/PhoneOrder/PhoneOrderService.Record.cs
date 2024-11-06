@@ -9,7 +9,6 @@ using Microsoft.IdentityModel.Tokens;
 using Smarties.Messages.Enums.OpenAi;
 using Smarties.Messages.Requests.Ask;
 using System.Text.RegularExpressions;
-using NetTopologySuite.Index.Quadtree;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Domain.SpeechMatics;
 using SmartTalk.Core.Extensions;

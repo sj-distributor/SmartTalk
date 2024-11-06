@@ -53,11 +53,7 @@ public class SpeechMaticsClient : ISpeechMaticsClient
         
         Log.Information("formData : {@formData} , fileData : {@fileData}", formData, fileData);
         
-        var response = await _httpClientFactory.PostAsMultipartAsync<string>($"{_speechMaticsSetting.BaseUrl}/jobs/", formData, fileData, cancellationToken, headers: headers, isNeedToReadErrorContent: true).ConfigureAwait(false);
-        
-        Log.Information("SmartTalk CreateJob Response:{@response}", response);
-        
-        return response;
+        return await _httpClientFactory.PostAsMultipartAsync<string>($"{_speechMaticsSetting.BaseUrl}/jobs/", formData, fileData, cancellationToken, headers: headers, isNeedToReadErrorContent: true).ConfigureAwait(false);;
     }
     
     public async Task<SpeechMaticsGetAllJobsResponseDto> GetAllJobsAsync(CancellationToken cancellationToken)
