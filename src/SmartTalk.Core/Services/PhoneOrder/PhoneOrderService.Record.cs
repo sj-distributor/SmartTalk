@@ -628,58 +628,56 @@ public partial class PhoneOrderService
         
         while (retryCount > 0)
         {
-            try
-            {
-                var transcriptionJobIdJObject = JObject.Parse(await CreateTranscriptionJobAsync(recordContent, recordName, language, cancellationToken).ConfigureAwait(false));
-            
-                var transcriptionJobId = transcriptionJobIdJObject["id"]?.ToString();
-        
-                Log.Information("Phone order record transcriptionJobId: {@transcriptionJobId}",  transcriptionJobId);
-                
+            var transcriptionJobIdJObject = JObject.Parse(await CreateTranscriptionJobAsync(recordContent, recordName, language, cancellationToken).ConfigureAwait(false));
+
+            var transcriptionJobId = transcriptionJobIdJObject["id"]?.ToString();
+
+            Log.Information("Phone order record transcriptionJobId: {@transcriptionJobId}", transcriptionJobId);
+
+            if (transcriptionJobId != null)
                 return transcriptionJobId;
-            }
-            catch (Exception e)
+
+            Log.Information("Create speechMatics job abnormal, start replacement key");
+
+            var keys = await _phoneOrderDataProvider.GetSpeechMaticsKeysAsync(
+                [SpeechMaticsKeyStatus.Active, SpeechMaticsKeyStatus.NotEnabled], cancellationToken).ConfigureAwait(false);
+
+            Log.Information("Get speechMatics keys：{@keys}", keys);
+
+            var activeKeys = keys.Where(x => x.Status == SpeechMaticsKeyStatus.Active).ToList();
+
+            var notEnabledKey = keys.FirstOrDefault(x => x.Status == SpeechMaticsKeyStatus.NotEnabled);
+
+            if (notEnabledKey != null)
             {
-                Log.Information("Create speechMatics job abnormal, start replacement key");
-                
-                var keys = await _phoneOrderDataProvider.GetSpeechMaticsKeysAsync([SpeechMaticsKeyStatus.Active, SpeechMaticsKeyStatus.NotEnabled], cancellationToken).ConfigureAwait(false);
-                
-                Log.Information("Get speechMatics keys：{@keys}", keys);
-                
-                var activeKeys = keys.Where(x => x.Status == SpeechMaticsKeyStatus.Active).ToList();
-                
-                var notEnabledKey = keys.FirstOrDefault(x => x.Status == SpeechMaticsKeyStatus.NotEnabled);
-
-                if (notEnabledKey != null)
-                {
-                    notEnabledKey.Status = SpeechMaticsKeyStatus.Active;
-                    notEnabledKey.LastModifiedDate = DateTimeOffset.Now;
-                    activeKeys.ForEach(x => x.Status = SpeechMaticsKeyStatus.Discard);
-                }
-
-                await _phoneOrderDataProvider.UpdateSpeechMaticsKeysAsync(activeKeys.Concat(new List<SpeechMaticsKey> { notEnabledKey }).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
-            
-                Log.Information("Phone order record create transcription job failed: {@e}", e);
-
-                retryCount--;
-                
-                if (retryCount <= 0)
-                {
-                    await _weChatClient.SendWorkWechatRobotMessagesAsync(_speechMaticsKeySetting.SpeechMaticsKeyEarlyWarningRobotUrl, 
-                        new SendWorkWechatGroupRobotMessageDto
-                        {
-                            MsgType = "text",
-                            Text = new SendWorkWechatGroupRobotTextDto
-                            {
-                                Content = $"SMT Speech Matics Key Error: {e.Message}"
-                            }
-                        }, cancellationToken).ConfigureAwait(false);
-
-                    return null;
-                }
-                
-                Log.Information("Retrying Create Speech Matics Job Attempts remaining: {RetryCount}", retryCount);
+                notEnabledKey.Status = SpeechMaticsKeyStatus.Active;
+                notEnabledKey.LastModifiedDate = DateTimeOffset.Now;
+                activeKeys.ForEach(x => x.Status = SpeechMaticsKeyStatus.Discard);
             }
+
+            Log.Information("Update speechMatics keys：{@keys}", keys);
+            
+            await _phoneOrderDataProvider.UpdateSpeechMaticsKeysAsync(activeKeys.Concat(new List<SpeechMaticsKey> { notEnabledKey }).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
+            
+            retryCount--;
+
+            if (retryCount <= 0)
+            {
+                await _weChatClient.SendWorkWechatRobotMessagesAsync(
+                    _speechMaticsKeySetting.SpeechMaticsKeyEarlyWarningRobotUrl,
+                    new SendWorkWechatGroupRobotMessageDto
+                    {
+                        MsgType = "text",
+                        Text = new SendWorkWechatGroupRobotTextDto
+                        {
+                            Content = $"SMT Speech Matics Key Error"
+                        }
+                    }, cancellationToken).ConfigureAwait(false);
+
+                return null;
+            }
+
+            Log.Information("Retrying Create Speech Matics Job Attempts remaining: {RetryCount}", retryCount);
         }
         
         return null;
