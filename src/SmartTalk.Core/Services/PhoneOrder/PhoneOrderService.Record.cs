@@ -636,7 +636,7 @@ public partial class PhoneOrderService
         {
             try
             {
-                var transcriptionJobIdJObject = JObject.Parse(await CreateTranscriptionJobAsync(recordContent, recordName, language, cancellationToken).ConfigureAwait(false)) ;
+                var transcriptionJobIdJObject = JObject.Parse(await CreateTranscriptionJobAsync(recordContent, recordName, language, cancellationToken).ConfigureAwait(false));
             
                 var transcriptionJobId = transcriptionJobIdJObject["id"]?.ToString();
         
@@ -646,7 +646,11 @@ public partial class PhoneOrderService
             }
             catch (Exception e)
             {
+                Log.Information("Create speechMatics job abnormal, start replacement key");
+                
                 var keys = await _phoneOrderDataProvider.GetSpeechMaticsKeysAsync([SpeechMaticsKeyStatus.Active, SpeechMaticsKeyStatus.NotEnabled], cancellationToken).ConfigureAwait(false);
+                
+                Log.Information("Get speechMatics keys：{@keys}", keys);
                 
                 var activeKeys = keys.Where(x => x.Status == SpeechMaticsKeyStatus.Active).ToList();
                 
