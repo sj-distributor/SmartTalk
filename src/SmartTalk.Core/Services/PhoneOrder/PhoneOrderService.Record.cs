@@ -10,6 +10,7 @@ using Smarties.Messages.Enums.OpenAi;
 using Smarties.Messages.Requests.Ask;
 using System.Text.RegularExpressions;
 using SmartTalk.Core.Domain.PhoneOrder;
+using SmartTalk.Core.Domain.SpeechMatics;
 using SmartTalk.Core.Extensions;
 using SmartTalk.Messages.Dto.WebSocket;
 using SmartTalk.Messages.Dto.PhoneOrder;
@@ -23,6 +24,7 @@ using SmartTalk.Messages.Commands.Attachments;
 using SmartTalk.Messages.Constants;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Restaurant;
+using SmartTalk.Messages.Dto.WeChat;
 using TranscriptionFileType = SmartTalk.Messages.Enums.STT.TranscriptionFileType;
 using TranscriptionResponseFormat = SmartTalk.Messages.Enums.STT.TranscriptionResponseFormat;
 
@@ -87,14 +89,8 @@ public partial class PhoneOrderService
             
             return;
         }
-        
-        var transcriptionJobIdJObject = JObject.Parse(await CreateTranscriptionJobAsync(command.RecordContent, command.RecordName, detection.Language, cancellationToken).ConfigureAwait(false)) ;
-        
-        var transcriptionJobId = transcriptionJobIdJObject["id"]?.ToString();
-        
-        record.TranscriptionJobId = transcriptionJobId;
-     
-        Log.Information("Phone order record transcriptionJobId: {@transcriptionJobId}", transcriptionJobId);
+
+        record.TranscriptionJobId = await CreateSpeechMaticsJobAsync(command.RecordContent, command.RecordName, detection.Language, cancellationToken).ConfigureAwait(false);
         
         await AddPhoneOrderRecordAsync(record, PhoneOrderRecordStatus.Diarization, cancellationToken).ConfigureAwait(false);
     }
@@ -629,5 +625,64 @@ public partial class PhoneOrderService
         }, cancellationToken).ConfigureAwait(false);
         
         return completionResult.Data.Response == null ? null : JsonConvert.DeserializeObject<PhoneOrderDetailDto>(completionResult.Data.Response);
+    }
+    
+    private async Task<string> CreateSpeechMaticsJobAsync(byte[] recordContent, string recordName, string language, CancellationToken cancellationToken)
+    {
+        var retryCount = 2;
+        
+        while (true)
+        {
+            var transcriptionJobIdJObject = JObject.Parse(await CreateTranscriptionJobAsync(recordContent, recordName, language, cancellationToken).ConfigureAwait(false));
+
+            var transcriptionJobId = transcriptionJobIdJObject["id"]?.ToString();
+
+            Log.Information("Phone order record transcriptionJobId: {@transcriptionJobId}", transcriptionJobId);
+
+            if (transcriptionJobId != null)
+                return transcriptionJobId;
+
+            Log.Information("Create speechMatics job abnormal, start replacement key");
+
+            var keys = await _speechMaticsDataProvider.GetSpeechMaticsKeysAsync(
+                [SpeechMaticsKeyStatus.Active, SpeechMaticsKeyStatus.NotEnabled], cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            Log.Information("Get speechMatics keys：{@keys}", keys);
+
+            var activeKey = keys.FirstOrDefault(x => x.Status == SpeechMaticsKeyStatus.Active);
+
+            var notEnabledKey = keys.FirstOrDefault(x => x.Status == SpeechMaticsKeyStatus.NotEnabled);
+
+            if (notEnabledKey != null && activeKey != null)
+            {
+                notEnabledKey.Status = SpeechMaticsKeyStatus.Active;
+                notEnabledKey.LastModifiedDate = DateTimeOffset.Now;
+                activeKey.Status = SpeechMaticsKeyStatus.Discard;
+            }
+
+            Log.Information("Update speechMatics keys：{@keys}", keys);
+            
+            await _speechMaticsDataProvider.UpdateSpeechMaticsKeysAsync([notEnabledKey, activeKey], cancellationToken: cancellationToken).ConfigureAwait(false);
+            
+            retryCount--;
+
+            if (retryCount <= 0)
+            {
+                await _weChatClient.SendWorkWechatRobotMessagesAsync(
+                    _speechMaticsKeySetting.SpeechMaticsKeyEarlyWarningRobotUrl,
+                    new SendWorkWechatGroupRobotMessageDto
+                    {
+                        MsgType = "text",
+                        Text = new SendWorkWechatGroupRobotTextDto
+                        {
+                            Content = $"SMT Speech Matics Key Error"
+                        }
+                    }, cancellationToken).ConfigureAwait(false);
+
+                return null;
+            }
+
+            Log.Information("Retrying Create Speech Matics Job Attempts remaining: {RetryCount}", retryCount);
+        }
     }
 }

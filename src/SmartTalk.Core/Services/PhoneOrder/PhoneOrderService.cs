@@ -8,8 +8,10 @@ using SmartTalk.Core.Services.Identity;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.Restaurants;
 using SmartTalk.Core.Services.RetrievalDb.VectorDb;
+using SmartTalk.Core.Services.SpeechMatics;
 using SmartTalk.Core.Services.STT;
 using SmartTalk.Core.Settings.PhoneOrder;
+using SmartTalk.Core.Settings.SpeechMatics;
 
 namespace SmartTalk.Core.Services.PhoneOrder;
 
@@ -31,9 +33,11 @@ public partial class PhoneOrderService : IPhoneOrderService
     private readonly IAttachmentService _attachmentService;
     private readonly SpeechMaticsClient _speechMaticsClient;
     private readonly ISpeechToTextService _speechToTextService;
+    private readonly SpeechMaticsKeySetting _speechMaticsKeySetting;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly IRestaurantDataProvider _restaurantDataProvider;
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
+    private readonly ISpeechMaticsDataProvider _speechMaticsDataProvider;
     private readonly TranscriptionCallbackSetting _transcriptionCallbackSetting;
 
     public PhoneOrderService(
@@ -49,9 +53,11 @@ public partial class PhoneOrderService : IPhoneOrderService
         IAttachmentService attachmentService,
         ISpeechToTextService speechToTextService,
         SpeechMaticsClient speechMaticsClient,
+        SpeechMaticsKeySetting speechMaticsKeySetting,
         IRestaurantDataProvider restaurantDataProvider,
         IPhoneOrderDataProvider phoneOrderDataProvider,
         ISmartTalkBackgroundJobClient backgroundJobClient,
+        ISpeechMaticsDataProvider speechMaticsDataProvider,
         TranscriptionCallbackSetting transcriptionCallbackSetting)
     {
         _mapper = mapper;
@@ -67,8 +73,10 @@ public partial class PhoneOrderService : IPhoneOrderService
         _speechToTextService = speechToTextService;
         _speechMaticsClient = speechMaticsClient;
         _backgroundJobClient = backgroundJobClient;
+        _speechMaticsKeySetting = speechMaticsKeySetting;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _restaurantDataProvider = restaurantDataProvider;
+        _speechMaticsDataProvider = speechMaticsDataProvider;
         _transcriptionCallbackSetting = transcriptionCallbackSetting;
     }
 }
