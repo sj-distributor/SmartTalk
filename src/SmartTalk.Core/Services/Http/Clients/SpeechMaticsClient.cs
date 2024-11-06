@@ -103,11 +103,11 @@ public class SpeechMaticsClient : ISpeechMaticsClient
     {
         var speechMaticsKey = (await _phoneOrderDataProvider.GetSpeechMaticsKeysAsync([SpeechMaticsKeyStatus.Active], cancellationToken).ConfigureAwait(false)).FirstOrDefault();
         
-        Log.Information("SpeechMatics key is: {@speechMaticsKey}", speechMaticsKey);
+        Log.Information("SpeechMatics key is: {@speechMaticsKey}", speechMaticsKey?.Key);
         
         return new Dictionary<string, string>
         {
-            { "Authorization", $"Bearer {speechMaticsKey}" },
+            { "Authorization", $"Bearer {speechMaticsKey?.Key}" },
         };
     }
 }
