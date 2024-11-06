@@ -631,7 +631,7 @@ public partial class PhoneOrderService
     {
         var retryCount = 2;
         
-        while (retryCount > 0)
+        while (true)
         {
             var transcriptionJobIdJObject = JObject.Parse(await CreateTranscriptionJobAsync(recordContent, recordName, language, cancellationToken).ConfigureAwait(false));
 
@@ -649,20 +649,20 @@ public partial class PhoneOrderService
 
             Log.Information("Get speechMatics keys：{@keys}", keys);
 
-            var activeKeys = keys.Where(x => x.Status == SpeechMaticsKeyStatus.Active).ToList();
+            var activeKey = keys.FirstOrDefault(x => x.Status == SpeechMaticsKeyStatus.Active);
 
             var notEnabledKey = keys.FirstOrDefault(x => x.Status == SpeechMaticsKeyStatus.NotEnabled);
 
-            if (notEnabledKey != null)
+            if (notEnabledKey != null && activeKey != null)
             {
                 notEnabledKey.Status = SpeechMaticsKeyStatus.Active;
                 notEnabledKey.LastModifiedDate = DateTimeOffset.Now;
-                activeKeys.ForEach(x => x.Status = SpeechMaticsKeyStatus.Discard);
+                activeKey.Status = SpeechMaticsKeyStatus.Discard;
             }
 
             Log.Information("Update speechMatics keys：{@keys}", keys);
             
-            await _speechMaticsDataProvider.UpdateSpeechMaticsKeysAsync(activeKeys.Concat(new List<SpeechMaticsKey> { notEnabledKey }).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
+            await _speechMaticsDataProvider.UpdateSpeechMaticsKeysAsync([notEnabledKey, activeKey], cancellationToken: cancellationToken).ConfigureAwait(false);
             
             retryCount--;
 
@@ -684,7 +684,5 @@ public partial class PhoneOrderService
 
             Log.Information("Retrying Create Speech Matics Job Attempts remaining: {RetryCount}", retryCount);
         }
-        
-        return null;
     }
 }
