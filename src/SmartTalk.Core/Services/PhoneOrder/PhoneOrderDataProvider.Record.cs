@@ -27,10 +27,6 @@ public partial interface IPhoneOrderDataProvider
 
     Task<List<GetPhoneOrderRecordsWithUserCountDto>> GetPhoneOrderRecordsWithUserCountAsync(
         DateTimeOffset startTime, DateTimeOffset endTime, CancellationToken cancellationToken);
-    
-    Task<List<SpeechMaticsKey>> GetSpeechMaticsKeysAsync(List<SpeechMaticsKeyStatus> status = null, CancellationToken cancellationToken = default);
-
-    Task UpdateSpeechMaticsKeysAsync(List<SpeechMaticsKey> speechMaticsKeys, bool forceSave = true, CancellationToken cancellationToken = default);
 }
 
 public partial class PhoneOrderDataProvider
@@ -153,26 +149,5 @@ public partial class PhoneOrderDataProvider
             .OrderBy(x => x.UserName)
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
-    }
-
-    public async Task<List<SpeechMaticsKey>> GetSpeechMaticsKeysAsync(List<SpeechMaticsKeyStatus> status = null, CancellationToken cancellationToken = default)
-    {
-        var query = _repository.Query<SpeechMaticsKey>();
-
-        if (status is not { Count: 0 })
-            query = query.Where(x => status.Contains(x.Status));
-        
-        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task UpdateSpeechMaticsKeysAsync(
-        List<SpeechMaticsKey> speechMaticsKeys, bool forceSave = true, CancellationToken cancellationToken = default)
-    {
-        await _repository.UpdateAllAsync(speechMaticsKeys, cancellationToken).ConfigureAwait(false);
-        
-        if (forceSave)
-        {
-            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-        }
     }
 }
