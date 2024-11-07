@@ -653,12 +653,14 @@ public partial class PhoneOrderService
 
             var notEnabledKey = keys.FirstOrDefault(x => x.Status == SpeechMaticsKeyStatus.NotEnabled);
 
-            if (notEnabledKey != null && activeKey != null)
+            if (notEnabledKey != null)
             {
                 notEnabledKey.Status = SpeechMaticsKeyStatus.Active;
                 notEnabledKey.LastModifiedDate = DateTimeOffset.Now;
-                activeKey.Status = SpeechMaticsKeyStatus.Discard;
             }
+
+            if (activeKey != null)
+                activeKey.Status = SpeechMaticsKeyStatus.Discard;
 
             Log.Information("Update speechMatics keys：{@keys}", keys);
             
@@ -666,16 +668,17 @@ public partial class PhoneOrderService
             
             retryCount--;
 
-            if (retryCount <= 0)
+            if (retryCount <= 0 || keys.Count <= 3)
             {
-                await _weChatClient.SendWorkWechatRobotMessagesAsync(
-                    _speechMaticsKeySetting.SpeechMaticsKeyEarlyWarningRobotUrl,
+                Log.Information("Speech matics retry failure");
+                
+                await _weChatClient.SendWorkWechatRobotMessagesAsync(_speechMaticsKeySetting.SpeechMaticsKeyEarlyWarningRobotUrl,
                     new SendWorkWechatGroupRobotMessageDto
                     {
                         MsgType = "text",
                         Text = new SendWorkWechatGroupRobotTextDto
                         {
-                            Content = $"SMT Speech Matics Key Error"
+                            Content = $"SMT Speechmatics key error, remaining keys count：{@keys.Count}"
                         }
                     }, cancellationToken).ConfigureAwait(false);
 
