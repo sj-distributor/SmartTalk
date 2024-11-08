@@ -25,7 +25,7 @@ public partial class PhoneOrderService : IPhoneOrderService
             MsgType = "text",
             Text = new SendWorkWechatGroupRobotTextDto
             {
-                Content = $"SMART TALK AI每日數據播報:\n{yesterday:MM/dd/yyyy}\n1.平台錄音數量\n{dailyDataReport}\n2.AI素材校準量\n{assessmentPeriodReport}"
+                Content = $"SMARTTALK AI每日數據播報:\n{yesterday:MM/dd/yyyy}\n1.平台錄音數量\n{dailyDataReport}\n2.AI素材校準量\n{assessmentPeriodReport}"
             }
         }, cancellationToken).ConfigureAwait(false);
     }
@@ -68,17 +68,25 @@ public partial class PhoneOrderService : IPhoneOrderService
     private async Task<string> GenerateCustomerServiceAssessmentPeriodReportAsync(DateTimeOffset today, CancellationToken cancellationToken)
     {
         var (previous20Th, nowDate) = CustomerServiceAssessmentPeriod(today);
-    
+
+        var (todayStartTime, todayEndTime) = CustomerServiceToday(today);
+        
         var userHasProofreadTheNumber = await _phoneOrderDataProvider
             .GetPhoneOrderRecordsWithUserCountAsync(previous20Th, nowDate, cancellationToken)
             .ConfigureAwait(false);
-    
+        
+        var userTodayHasProofreadTheNumber = await _phoneOrderDataProvider
+            .GetPhoneOrderRecordsWithUserCountAsync(todayStartTime, todayEndTime, cancellationToken)
+            .ConfigureAwait(false);
+        
         var stringBuilder = new StringBuilder();
         var userIndex = 1;
 
         foreach (var user in userHasProofreadTheNumber)
         {
-            stringBuilder.AppendLine($"   {userIndex++}) {user.UserName}: {user.Count}");
+            var todayCount = userTodayHasProofreadTheNumber.FirstOrDefault(x => x.UserName == user.UserName)?.Count ?? 0;
+            
+            stringBuilder.AppendLine($"   {userIndex++}) {user.UserName}: {todayCount} (當期累計: {user.Count})");
         }
 
         return stringBuilder.ToString();
@@ -97,6 +105,15 @@ public partial class PhoneOrderService : IPhoneOrderService
         
         var endPeriod = new DateTimeOffset(today.Year, today.Month, today.Day, 23, 59, 59, TimeSpan.Zero);
         
+        return (startPeriod, endPeriod);
+    }
+
+    private static (DateTimeOffset startPeriod, DateTimeOffset endPeriod) CustomerServiceToday(DateTimeOffset today)
+    {
+        var startPeriod = new DateTimeOffset(today.Year, today.Month, today.Day, 0, 0, 0, TimeSpan.Zero);
+
+        var endPeriod = new DateTimeOffset(today.Year, today.Month, today.Day, 23, 59, 59, TimeSpan.Zero);
+
         return (startPeriod, endPeriod);
     }
 }
