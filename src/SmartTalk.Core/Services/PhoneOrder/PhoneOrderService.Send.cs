@@ -71,13 +71,11 @@ public partial class PhoneOrderService : IPhoneOrderService
 
         var (todayStartTime, todayEndTime) = CustomerServiceToday(today);
         
-        var userHasProofreadTheNumber = await _phoneOrderDataProvider
-            .GetPhoneOrderRecordsWithUserCountAsync(previous20Th, nowDate, cancellationToken)
-            .ConfigureAwait(false);
+        var userHasProofreadTheNumber = await _phoneOrderDataProvider.GetPhoneOrderRecordsWithUserCountAsync(
+            previous20Th, nowDate, cancellationToken).ConfigureAwait(false);
         
-        var userTodayHasProofreadTheNumber = await _phoneOrderDataProvider
-            .GetPhoneOrderRecordsWithUserCountAsync(todayStartTime, todayEndTime, cancellationToken)
-            .ConfigureAwait(false);
+        var userTodayHasProofreadTheNumber = await _phoneOrderDataProvider.GetPhoneOrderRecordsWithUserCountAsync(
+            todayStartTime, todayEndTime, cancellationToken).ConfigureAwait(false);
         
         var stringBuilder = new StringBuilder();
         var userIndex = 1;
