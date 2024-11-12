@@ -450,14 +450,14 @@ public partial class PhoneOrderService
             {
                 '3' or '6' => PhoneOrderRestaurant.JiangNanChun,
                 '5' or '7' => PhoneOrderRestaurant.XiangTanRenJia,
-                '8' or '9' => PhoneOrderRestaurant.MoonHouse,
+                '8' or '9' or '2' => PhoneOrderRestaurant.MoonHouse,
                 _ => throw new Exception("Phone Number not exist")
             },
             WorkWeChatRobotKey = phoneNumber[0] switch
             {
                 '3' or '6' => _phoneOrderSetting.GetSetting("江南春"),
                 '5' or '7' =>  _phoneOrderSetting.GetSetting("湘潭人家"),
-                '8' or '9' => _phoneOrderSetting.GetSetting("福满楼"),
+                '8' or '9' or '2' => _phoneOrderSetting.GetSetting("福满楼"),
                 _ => throw new Exception("Phone Number not exist")
             }
         };
