@@ -14,6 +14,8 @@ using Microsoft.Extensions.Configuration;
 using AutoMapper.Contrib.Autofac.DependencyInjection;
 using Google.Cloud.Translation.V2;
 using SmartTalk.Core.Middlewares.Authorization;
+using SmartTalk.Core.Middlewares.UnifyResponse;
+using SmartTalk.Core.Middlewares.UnitOfWork;
 using SmartTalk.Core.Services.Caching.Redis;
 using SmartTalk.Core.Settings.AliYun;
 using SmartTalk.Core.Settings.Google;
@@ -73,8 +75,8 @@ public class SmartTalkModule : Module
         
         mediatorBuilder.ConfigureGlobalReceivePipe(c =>
         {
-            /*c.UseUnitOfWork();
-            c.UseUnifyResponse();*/
+            c.UseUnitOfWork();
+            c.UseUnifyResponse();
             c.UseAuthorization();
             c.UseSerilog(logger: _logger);
         });

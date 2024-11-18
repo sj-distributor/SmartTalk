@@ -13,7 +13,7 @@ create table if not exists role_permission_user
 insert into role (created_on, modified_on, uuid, name)
 VALUES (now(3), now(3), uuid(), 'SuperAdministrator'),
        (now(3), now(3), uuid(),'Administrator'),
-       (now(3), now(3), uuid(),'user');
+       (now(3), now(3), uuid(),'User');
 
 INSERT INTO permission (created_date, last_modified_date, name, is_system)
 VALUES

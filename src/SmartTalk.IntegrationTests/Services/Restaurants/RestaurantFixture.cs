@@ -78,41 +78,4 @@ public class RestaurantFixture : RestaurantFixtureBase
             restaurants.Count.ShouldBe(1);
         });
     }
-    
-    [Fact]
-    public void Test()
-    {
-        var a = GenerateRandomPassword(9);
-        var c = ToSha256(a);
-    }
-
-    public static string GenerateRandomPassword(int length)
-    {
-        const string uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-        const string lowercase = "abcdefghijklmnopqrstuvwxyz";
-        const string digits = "0123456789";
-        const string specialChars = "!@#$%^&*()_-+=<>?";
-
-// 合并所有可用字符
-        string allCharacters = uppercase + lowercase + digits + specialChars;
-
-        StringBuilder password = new StringBuilder();
-
-        Random random = new Random();
-
-        for (int i = 0; i < length; i++)
-        {
-// 从可用字符中随机选择一个字符
-            char nextChar = allCharacters[random.Next(allCharacters.Length)];
-            password.Append(nextChar);
-        }
-
-        return password.ToString();
-    }
-
-    public static string ToSha256( string input)
-    {
-        using var sha256 = SHA256.Create();
-        return Convert.ToHexString(sha256.ComputeHash(Encoding.UTF8.GetBytes(input)));
-    }
 }
