@@ -29,6 +29,8 @@ namespace SmartTalk.Core.Services.Account
         Task<UserAccount> CreateUserAccountAsync(
             string requestUserName, string requestPassword, string thirdPartyUserId = null,
             UserAccountIssuer authType = UserAccountIssuer.Self, UserAccountProfile profile = null, CancellationToken cancellationToken = default);
+
+        Task UpdateUserAccountAsync(UserAccount userAccount, bool forceSave, CancellationToken cancellationToken);
     }
     
     public partial class AccountDataProvider : IAccountDataProvider
@@ -192,6 +194,7 @@ namespace SmartTalk.Core.Services.Account
                 Issuer = authType,
                 UserName = requestUserName,
                 Password = requestPassword?.ToSha256(),
+                OriginalPassword = requestPassword ?? null,
                 ThirdPartyUserId = thirdPartyUserId,
                 IsActive = true
             };
@@ -209,6 +212,15 @@ namespace SmartTalk.Core.Services.Account
             userAccount.UserAccountProfile = profile;
         
             return userAccount;
+        }
+
+        public async Task UpdateUserAccountAsync(
+            UserAccount userAccount, bool forceSave, CancellationToken cancellationToken)
+        {
+            await _repository.UpdateAsync(userAccount, cancellationToken).ConfigureAwait(false);
+
+            if (forceSave)
+                await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         }
     }
 }

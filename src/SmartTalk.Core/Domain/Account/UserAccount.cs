@@ -36,6 +36,10 @@ namespace SmartTalk.Core.Domain.Account
         [Column("password")]
         [StringLength(128)]
         public string Password { get; set; }
+
+        [Column("original_password")]
+        [StringLength(128)]
+        public string OriginalPassword { get; set; }
     
         [Column("third_party_user_id")]
         [StringLength(128)]

@@ -1,5 +1,7 @@
 using Mediator.Net;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SmartTalk.Messages.Commands.Account;
 using SmartTalk.Messages.Requests.Account;
 
 namespace SmartTalk.Api.Controllers;
@@ -21,6 +23,16 @@ public class AccountController : ControllerBase
     {
         var response = await _mediator.RequestAsync<LoginRequest, LoginResponse>(request);
         
+        return Ok(response);
+    }
+
+    [Authorize]
+    [Route("create"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(CreateResponse))]
+    public async Task<IActionResult> CreateAsync([FromBody] CreateCommand command)
+    {
+        var response = await _mediator.SendAsync<CreateCommand, CreateResponse>(command).ConfigureAwait(false);
+
         return Ok(response);
     }
 }
