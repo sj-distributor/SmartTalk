@@ -92,8 +92,8 @@ public partial class PhoneOrderService : IPhoneOrderService
     private static (DateTimeOffset startPeriod, DateTimeOffset endPeriod) CustomerServiceAssessmentPeriod(DateTimeOffset today, DateTimeOffset yesterday)
     {
         var startPeriod = today.Day >= 21
-            ? new DateTimeOffset(today.Year, today.Month, 19, 16, 0, 0, TimeSpan.Zero) 
-            : new DateTimeOffset(today.Year, today.Month, 19, 16, 0, 0, TimeSpan.Zero).AddMonths(-1);
+            ? new DateTimeOffset(today.Year, today.Month, 20, 16, 0, 0, TimeSpan.Zero) 
+            : new DateTimeOffset(today.Year, today.Month, 20, 16, 0, 0, TimeSpan.Zero).AddMonths(-1);
         
         var endPeriod = new DateTimeOffset(today.Year, today.Month, today.Day, 16, 0, 0, TimeSpan.Zero);
         
