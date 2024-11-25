@@ -57,9 +57,5 @@
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </Content>
     </ItemGroup>
-
-    <ItemGroup>
-      <Folder Include="Handlers\RequestHandlers\Authority\" />
-    </ItemGroup>
     
 </Project>

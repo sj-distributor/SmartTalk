@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using SmartTalk.Messages.Commands.Account;
 using SmartTalk.Messages.Commands.Authority;
+using SmartTalk.Messages.Requests.Authority;
 
 namespace SmartTalk.Api.Controllers;
 
@@ -27,11 +28,11 @@ public class AuthorityController : ControllerBase
         return Ok(response);
     }
     
-    [Route("get"), HttpPost]
+    [Route("get"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAccountsResponse))]
-    public async Task<IActionResult> GetAccountsAsync([FromBody] GetAccountsCommand command)
+    public async Task<IActionResult> GetAccountsAsync([FromBody] GetAccountsRequest request)
     {
-        var response = await _mediator.SendAsync<GetAccountsCommand, GetAccountsResponse>(command).ConfigureAwait(false);
+        var response = await _mediator.RequestAsync<GetAccountsRequest, GetAccountsResponse>(request).ConfigureAwait(false);
 
         return Ok(response);
     }

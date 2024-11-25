@@ -7,10 +7,10 @@ using SmartTalk.Core.Services.System;
 using SmartTalk.Core.Services.Wiltechs;
 using SmartTalk.Messages.Commands.Account;
 using SmartTalk.Messages.Commands.Authority;
-using SmartTalk.Messages.Constants;
 using SmartTalk.Messages.Dto.Account;
 using SmartTalk.Messages.Enums.Account;
 using SmartTalk.Messages.Requests.Account;
+using SmartTalk.Messages.Requests.Authority;
 
 namespace SmartTalk.Core.Services.Account;
 
@@ -22,7 +22,7 @@ public interface IAccountService : IScopedDependency
 
     Task<CreateResponse> CreateUserAccount(CreateCommand command, CancellationToken cancellationToken);
 
-    Task<GetAccountsResponse> GetAccountsAsync(GetAccountsCommand command, CancellationToken cancellationToken);
+    Task<GetAccountsResponse> GetAccountsAsync(GetAccountsRequest request, CancellationToken cancellationToken);
 
     Task<DeleteAccountsResponse> DeleteUserAccountAsync(DeleteAccountsCommand command, CancellationToken cancellationToken);
 }
@@ -75,9 +75,9 @@ public partial class AccountService : IAccountService
         };
     }
 
-    public async Task<GetAccountsResponse> GetAccountsAsync(GetAccountsCommand command, CancellationToken cancellationToken)
+    public async Task<GetAccountsResponse> GetAccountsAsync(GetAccountsRequest request, CancellationToken cancellationToken)
     {
-        var userAccount = await _accountDataProvider.GetUserAccountDtoAsync(userNameContain: command.UserName, pageSize: command.PageSize, pageIndex: command.PageIndex, includeRoles: true, creator: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var userAccount = await _accountDataProvider.GetUserAccountDtoAsync(userNameContain: request.UserName, pageSize: request.PageSize, pageIndex: request.PageIndex, includeRoles: true, creator: true, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         return new GetAccountsResponse
         {

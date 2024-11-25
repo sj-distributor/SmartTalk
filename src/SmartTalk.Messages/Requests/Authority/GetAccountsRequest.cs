@@ -2,9 +2,9 @@ using Mediator.Net.Contracts;
 using SmartTalk.Messages.Responses;
 using SmartTalk.Messages.Dto.Account;
 
-namespace SmartTalk.Messages.Commands.Authority;
+namespace SmartTalk.Messages.Requests.Authority;
 
-public class GetAccountsCommand : ICommand
+public class GetAccountsRequest : IRequest
 {
     public int? PageIndex { get; set; } = 1;
 
