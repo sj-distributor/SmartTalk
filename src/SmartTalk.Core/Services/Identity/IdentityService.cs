@@ -21,7 +21,7 @@ public class IdentityService : IIdentityService
         var userId = _currentUser.Id;
 
         if (userId != null)
-            return await _accountDataProvider.GetUserAccountDtoAsync(userId.Value, cancellationToken: cancellationToken).ConfigureAwait(false);
+            return (await _accountDataProvider.GetUserAccountDtoAsync(userId.Value, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
         
         if (throwWhenNotFound)
             throw new UnauthorizedAccessException();
@@ -32,7 +32,7 @@ public class IdentityService : IIdentityService
     public async Task<bool> IsInRolesAsync(int? userId, IEnumerable<string> requiredRolesOrPermissions, CancellationToken cancellationToken)
     {
         var user = 
-            await _accountDataProvider.GetUserAccountAsync(userId, includeRoles: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+            (await _accountDataProvider.GetUserAccountAsync(userId, includeRoles: true, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
 
         if (user == null) return false;
         

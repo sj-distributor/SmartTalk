@@ -1,17 +1,20 @@
-using System.Security.Cryptography;
 using System.Text;
 using Mediator.Net.Contracts;
-using SmartTalk.Messages.Dto.Account;
-using SmartTalk.Messages.Enums.Account;
+using System.Security.Cryptography;
 using SmartTalk.Messages.Responses;
+using SmartTalk.Messages.Attributes;
+using SmartTalk.Messages.Dto.Account;
+using SmartTalk.Messages.Enums.MessageLogging;
 
 namespace SmartTalk.Messages.Commands.Account;
 
+[SmartTalkLogging(LoggingSystemType.Security)]
+[SmartTalkAuthorize("CanCreateAccount")]
 public class CreateCommand : ICommand
 {
     public string UserName { get; set; }
     
-    public UserAccountRole Roles { get; set; }
+    public string RoleName { get; set; }
     
     public string OriginalPassword => _originalPassword ?? GenerateRandomPassword(6);
     

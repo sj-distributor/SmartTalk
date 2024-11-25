@@ -6,7 +6,7 @@ using SmartTalk.Messages.Enums.Account;
 namespace SmartTalk.Core.Domain.Account
 {
     [Table("user_account")]
-    public class UserAccount : IEntity
+    public class UserAccount : IEntity, IHasModifiedFields
     {
         public UserAccount()
         {
@@ -50,6 +50,12 @@ namespace SmartTalk.Core.Domain.Account
         
         [Column("active", TypeName = "tinyint(1)")]
         public bool IsActive { get; set; }
+        
+        [Column("last_modified_by")]
+        public int? LastModifiedBy { get; set; }
+    
+        [Column("last_modified_date")]
+        public DateTimeOffset? LastModifiedDate { get; set; }
         
         [NotMapped]
         public List<Role> Roles { get; set; } = new();

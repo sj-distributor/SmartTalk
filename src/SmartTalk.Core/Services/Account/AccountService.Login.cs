@@ -44,11 +44,11 @@ public partial class AccountService
         var account = loginVerificationType switch
         {
             UserAccountVerificationType.Password => 
-                await _accountDataProvider
-                    .GetUserAccountDtoAsync(username: username, password: clearTextPassword.ToSha256(), issuer: UserAccountIssuer.Self, includeRoles: true, cancellationToken: cancellationToken).ConfigureAwait(false),
+                (await _accountDataProvider
+                    .GetUserAccountDtoAsync(username: username, password: clearTextPassword.ToSha256(), issuer: UserAccountIssuer.Self, includeRoles: true, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault(),
             UserAccountVerificationType.VerificationCode => 
-                await _accountDataProvider
-                    .GetUserAccountDtoAsync(username: username, issuer: UserAccountIssuer.Self, includeRoles: true, cancellationToken: cancellationToken).ConfigureAwait(false)
+                (await _accountDataProvider
+                    .GetUserAccountDtoAsync(username: username, issuer: UserAccountIssuer.Self, includeRoles: true, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault()
         };
 
         if (account == null)

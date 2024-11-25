@@ -7,13 +7,13 @@ namespace SmartTalk.Core.Services.Security;
 public partial interface ISecurityDataProvider
 {
     Task<List<Role>> GetRolesAsync(
-        List<RoleSystemSource> systemSources = null, bool? isSystem = null, int? userId  = null, CancellationToken cancellationToken = default);
+        List<RoleSystemSource> systemSources = null, bool? isSystem = null, int? userId  = null, string name = null, CancellationToken cancellationToken = default);
 }
 
 public partial class SecurityDataProvider
 {
     public async Task<List<Role>> GetRolesAsync(
-        List<RoleSystemSource> systemSources = null, bool? isSystem = null, int? userId  = null, CancellationToken cancellationToken = default)
+        List<RoleSystemSource> systemSources = null, bool? isSystem = null, int? userId  = null, string name = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<Role>();
         
@@ -22,6 +22,9 @@ public partial class SecurityDataProvider
         
         if (isSystem.HasValue)
             query = query.Where(x => x.IsSystem == isSystem.Value);
+
+        if (!string.IsNullOrEmpty(name))
+            query = query.Where(x => x.Name == name);
         
         if (userId.HasValue)
             query = from role in query
