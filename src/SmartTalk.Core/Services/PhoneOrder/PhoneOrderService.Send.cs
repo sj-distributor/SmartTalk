@@ -69,7 +69,7 @@ public partial class PhoneOrderService : IPhoneOrderService
     {
         var (previous20Th, nowDate) = CustomerServiceAssessmentPeriod(today, yesterday);
 
-        var (todayStartTime, todayEndTime) = CustomerServiceToday(today);
+        var (todayStartTime, todayEndTime) = CustomerServiceToday(today, yesterday);
         
         var userHasProofreadTheNumber = await _phoneOrderDataProvider.GetPhoneOrderRecordsWithUserCountAsync(
             previous20Th, nowDate, cancellationToken).ConfigureAwait(false);
@@ -106,11 +106,11 @@ public partial class PhoneOrderService : IPhoneOrderService
         return (startPeriod, endPeriod);
     }
 
-    private static (DateTimeOffset startPeriod, DateTimeOffset endPeriod) CustomerServiceToday(DateTimeOffset today)
+    private static (DateTimeOffset startPeriod, DateTimeOffset endPeriod) CustomerServiceToday(DateTimeOffset today, DateTimeOffset yesterday)
     {
-        var startPeriod = new DateTimeOffset(today.Year, today.Month, today.Day, 0, 0, 0, TimeSpan.Zero);
+        var startPeriod = new DateTimeOffset(yesterday.Year, yesterday.Month, yesterday.Day, 16, 0, 0, TimeSpan.Zero);
 
-        var endPeriod = new DateTimeOffset(today.Year, today.Month, today.Day, 23, 59, 59, TimeSpan.Zero);
+        var endPeriod = new DateTimeOffset(today.Year, today.Month, today.Day, 16, 0, 0, TimeSpan.Zero);
 
         return (startPeriod, endPeriod);
     }
