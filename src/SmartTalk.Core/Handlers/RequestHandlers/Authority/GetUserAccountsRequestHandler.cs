@@ -5,16 +5,16 @@ using SmartTalk.Messages.Requests.Authority;
 
 namespace SmartTalk.Core.Handlers.RequestHandlers.Authority;
 
-public class GetAccountsRequestHandler : IRequestHandler<GetAccountsRequest, GetAccountsResponse>
+public class GetUserAccountsRequestHandler : IRequestHandler<GetUserAccountsRequest, GetUserAccountsResponse>
 {
     private readonly IAccountService _accountService;
     
-    public GetAccountsRequestHandler(IAccountService accountService)
+    public GetUserAccountsRequestHandler(IAccountService accountService)
     {
         _accountService = accountService;
     }
     
-    public async Task<GetAccountsResponse> Handle(IReceiveContext<GetAccountsRequest> context, CancellationToken cancellationToken)
+    public async Task<GetUserAccountsResponse> Handle(IReceiveContext<GetUserAccountsRequest> context, CancellationToken cancellationToken)
     {
         return await _accountService.GetAccountsAsync(context.Message, cancellationToken).ConfigureAwait(false);
     }

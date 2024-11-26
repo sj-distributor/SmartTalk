@@ -11,7 +11,7 @@ namespace SmartTalk.Core.Services.Security;
 
 public interface ISecurityService : IScopedDependency
 {
-    Task<UpdateResponse> UpdateRoleUserAsync(UpdateCommand command, CancellationToken cancellationToken);
+    Task<UpdateUserAccountResponse> UpdateRoleUserAsync(UpdateUserAccountCommand command, CancellationToken cancellationToken);
     
      Task<GetCurrentUserRolesResponse> GetCurrentUserRoleAsync(
         GetCurrentUserRolesRequest request, CancellationToken cancellationToken);
@@ -33,7 +33,7 @@ public class SecurityService : ISecurityService
         _securityDataProvider = securityDataProvider;
     }
                             
-    public async Task<UpdateResponse> UpdateRoleUserAsync(UpdateCommand command, CancellationToken cancellationToken)
+    public async Task<UpdateUserAccountResponse> UpdateRoleUserAsync(UpdateUserAccountCommand command, CancellationToken cancellationToken)
     {
         var roleUser = await _securityDataProvider.GetRoleUserByIdAsync(command.RoleId, command.UserId, cancellationToken).ConfigureAwait(false);
         
@@ -43,7 +43,7 @@ public class SecurityService : ISecurityService
         
         await _securityDataProvider.UpdateRoleUsersAsync([roleUser], cancellationToken).ConfigureAwait(false);
 
-        return _mapper.Map<UpdateResponse>(roleUser);
+        return _mapper.Map<UpdateUserAccountResponse>(roleUser);
     }
      
     public async Task<GetCurrentUserRolesResponse> GetCurrentUserRoleAsync(

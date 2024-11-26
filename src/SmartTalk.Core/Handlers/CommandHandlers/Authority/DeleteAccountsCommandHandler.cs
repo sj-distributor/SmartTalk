@@ -5,7 +5,7 @@ using SmartTalk.Messages.Commands.Authority;
 
 namespace SmartTalk.Core.Handlers.CommandHandlers.Authority;
 
-public class DeleteAccountsCommandHandler : ICommandHandler<DeleteAccountsCommand, DeleteAccountsResponse>
+public class DeleteAccountsCommandHandler : ICommandHandler<DeleteUserAccountsCommand, DeleteUserAccountsResponse>
 {
     private readonly IAccountService _accountService;
     
@@ -14,7 +14,7 @@ public class DeleteAccountsCommandHandler : ICommandHandler<DeleteAccountsComman
         _accountService = accountService;
     }
     
-    public async Task<DeleteAccountsResponse> Handle(IReceiveContext<DeleteAccountsCommand> context, CancellationToken cancellationToken)
+    public async Task<DeleteUserAccountsResponse> Handle(IReceiveContext<DeleteUserAccountsCommand> context, CancellationToken cancellationToken)
     {
         return await _accountService.DeleteUserAccountAsync(context.Message, cancellationToken).ConfigureAwait(false);
     }

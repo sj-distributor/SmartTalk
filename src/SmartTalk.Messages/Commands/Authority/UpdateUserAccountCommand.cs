@@ -5,7 +5,7 @@ using SmartTalk.Messages.Attributes;
 namespace SmartTalk.Messages.Commands.Authority;
 
 [SmartTalkAuthorize("CanUpdateAccount")]
-public class UpdateCommand : ICommand
+public class UpdateUserAccountCommand : ICommand
 {
     public int UserId { get; set; }
 
@@ -14,7 +14,7 @@ public class UpdateCommand : ICommand
     public string RoleName { get; set; }
 }
 
-public class UpdateResponse : SmartTalkResponse
+public class UpdateUserAccountResponse : SmartTalkResponse
 {
     public int Id { get; set; }
     

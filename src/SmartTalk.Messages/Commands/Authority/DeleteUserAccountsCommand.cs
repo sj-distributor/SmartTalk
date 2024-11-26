@@ -5,7 +5,7 @@ using SmartTalk.Messages.Responses;
 namespace SmartTalk.Messages.Commands.Authority;
 
 [SmartiesAuthorize("CanDeleteAccount")]
-public class DeleteAccountsCommand : ICommand
+public class DeleteUserAccountsCommand : ICommand
 {
     public int UserId { get; set; }
 
@@ -14,6 +14,6 @@ public class DeleteAccountsCommand : ICommand
     public string UserName { get; set; }
 }
 
-public class DeleteAccountsResponse : SmartTalkResponse
+public class DeleteUserAccountsResponse : SmartTalkResponse
 {
 }

@@ -5,7 +5,7 @@ using SmartTalk.Messages.Commands.Authority;
 
 namespace SmartTalk.Core.Handlers.CommandHandlers.Authority;
 
-public class AuthorityCommandHandler : ICommandHandler<UpdateCommand, UpdateResponse>
+public class AuthorityCommandHandler : ICommandHandler<UpdateUserAccountCommand, UpdateUserAccountResponse>
 {
     private readonly ISecurityService _securityService;
     
@@ -14,7 +14,7 @@ public class AuthorityCommandHandler : ICommandHandler<UpdateCommand, UpdateResp
         _securityService = securityService;
     }
     
-    public async Task<UpdateResponse> Handle(IReceiveContext<UpdateCommand> context, CancellationToken cancellationToken)
+    public async Task<UpdateUserAccountResponse> Handle(IReceiveContext<UpdateUserAccountCommand> context, CancellationToken cancellationToken)
     {
         return await _securityService.UpdateRoleUserAsync(context.Message, cancellationToken).ConfigureAwait(false);
     }

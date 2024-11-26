@@ -10,7 +10,7 @@ namespace SmartTalk.Messages.Commands.Account;
 
 [SmartTalkLogging(LoggingSystemType.Security)]
 [SmartTalkAuthorize("CanCreateAccount")]
-public class CreateCommand : ICommand
+public class CreateUserAccountCommand : ICommand
 {
     public string UserName { get; set; }
     
@@ -43,6 +43,6 @@ public class CreateCommand : ICommand
     }
 }
 
-public class CreateResponse : SmartTalkResponse<UserAccountDto>
+public class CreateUserAccountResponse : SmartTalkResponse<UserAccountDto>
 {
 }

@@ -4,7 +4,7 @@ using SmartTalk.Messages.Dto.Account;
 
 namespace SmartTalk.Messages.Requests.Authority;
 
-public class GetAccountsRequest : IRequest
+public class GetUserAccountsRequest : IRequest
 {
     public int? PageIndex { get; set; } = 1;
 
@@ -13,7 +13,7 @@ public class GetAccountsRequest : IRequest
     public string UserName { get; set; }
 }
 
-public class GetAccountsResponse : SmartTalkResponse
+public class GetUserAccountsResponse : SmartTalkResponse
 {
     public List<UserAccountDto> UserAccounts { get; set; }
 

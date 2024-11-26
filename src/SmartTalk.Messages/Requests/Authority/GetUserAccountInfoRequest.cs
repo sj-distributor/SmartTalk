@@ -5,12 +5,12 @@ using SmartTalk.Messages.Responses;
 namespace SmartTalk.Messages.Requests.Authority;
 
 [SmartiesAuthorize("CanCopyAccount")]
-public class GetAccountInfoRequest : IRequest
+public class GetUserAccountInfoRequest : IRequest
 {
     public int UserId { get; set; }
 }
 
-public class GetAccountInfoResponse : SmartTalkResponse
+public class GetUserAccountInfoResponse : SmartTalkResponse
 {
     public int UserId { get; set; }
     

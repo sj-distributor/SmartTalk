@@ -5,7 +5,7 @@ using SmartTalk.Messages.Requests.Authority;
 
 namespace SmartTalk.Core.Handlers.RequestHandlers.Authority;
 
-public class GetAccountInfoRequestHandler : IRequestHandler<GetAccountInfoRequest, GetAccountInfoResponse>
+public class GetAccountInfoRequestHandler : IRequestHandler<GetUserAccountInfoRequest, GetUserAccountInfoResponse>
 {
     private readonly IAccountService _accountService;
     
@@ -14,7 +14,7 @@ public class GetAccountInfoRequestHandler : IRequestHandler<GetAccountInfoReques
         _accountService = accountService;
     }
     
-    public async Task<GetAccountInfoResponse> Handle(IReceiveContext<GetAccountInfoRequest> context, CancellationToken cancellationToken)
+    public async Task<GetUserAccountInfoResponse> Handle(IReceiveContext<GetUserAccountInfoRequest> context, CancellationToken cancellationToken)
     {
         return await _accountService.GetAccountInfoAsync(context.Message, cancellationToken).ConfigureAwait(false);
     }

@@ -29,6 +29,6 @@ public class SecurityMapping : Profile
         CreateMap<UserPermission, UserPermissionDto>().ReverseMap();
         CreateMap<RolePermission, RolePermissionDto>().ReverseMap();
         CreateMap<Permission, PermissionDto>().ReverseMap();
-        CreateMap<RoleUser, UpdateResponse>().ReverseMap();
+        CreateMap<RoleUser, UpdateUserAccountResponse>().ReverseMap();
     }
 }

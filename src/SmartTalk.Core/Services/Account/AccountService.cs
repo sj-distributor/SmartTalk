@@ -19,13 +19,13 @@ public interface IAccountService : IScopedDependency
     
     Task<UserAccountDto> GetOrCreateUserAccountFromThirdPartyAsync(string userId, string userName, UserAccountIssuer issuer, CancellationToken cancellationToken);
 
-    Task<CreateResponse> CreateUserAccount(CreateCommand command, CancellationToken cancellationToken);
+    Task<CreateUserAccountResponse> CreateUserAccount(CreateUserAccountCommand userAccountCommand, CancellationToken cancellationToken);
 
-    Task<GetAccountsResponse> GetAccountsAsync(GetAccountsRequest request, CancellationToken cancellationToken);
+    Task<GetUserAccountsResponse> GetAccountsAsync(GetUserAccountsRequest request, CancellationToken cancellationToken);
 
-    Task<DeleteAccountsResponse> DeleteUserAccountAsync(DeleteAccountsCommand command, CancellationToken cancellationToken);
+    Task<DeleteUserAccountsResponse> DeleteUserAccountAsync(DeleteUserAccountsCommand command, CancellationToken cancellationToken);
     
-    Task<GetAccountInfoResponse> GetAccountInfoAsync(GetAccountInfoRequest request, CancellationToken cancellationToken);
+    Task<GetUserAccountInfoResponse> GetAccountInfoAsync(GetUserAccountInfoRequest request, CancellationToken cancellationToken);
 }
 
 public partial class AccountService : IAccountService
@@ -48,16 +48,16 @@ public partial class AccountService : IAccountService
         _verificationCodeService = verificationCodeService;
     }
 
-    public async Task<CreateResponse> CreateUserAccount(CreateCommand command, CancellationToken cancellationToken)
+    public async Task<CreateUserAccountResponse> CreateUserAccount(CreateUserAccountCommand userAccountCommand, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrEmpty(command.RoleName) || string.IsNullOrEmpty(command.UserName)) return null;
+        if (string.IsNullOrEmpty(userAccountCommand.RoleName) || string.IsNullOrEmpty(userAccountCommand.UserName)) return null;
 
-        var role = (await _securityDataProvider.GetRolesAsync([0], name: command.RoleName, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+        var role = (await _securityDataProvider.GetRolesAsync([0], name: userAccountCommand.RoleName, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
         
         if (role == null) return null;
         
         var account = await _accountDataProvider.CreateUserAccountAsync(
-            command.UserName, command.OriginalPassword, null,
+            userAccountCommand.UserName, userAccountCommand.OriginalPassword, null,
             UserAccountIssuer.Self, null, cancellationToken).ConfigureAwait(false);
         
         await _securityDataProvider.CreateRoleUsersAsync([new RoleUser
@@ -66,26 +66,26 @@ public partial class AccountService : IAccountService
             UserId = account.Id
         }], cancellationToken).ConfigureAwait(false);
         
-        return new CreateResponse
+        return new CreateUserAccountResponse
         {
             Data = _mapper.Map<UserAccountDto>(account)
         };
     }
 
-    public async Task<GetAccountsResponse> GetAccountsAsync(GetAccountsRequest request, CancellationToken cancellationToken)
+    public async Task<GetUserAccountsResponse> GetAccountsAsync(GetUserAccountsRequest request, CancellationToken cancellationToken)
     {
         var (count, userAccount) = await _accountDataProvider.GetUserAccountDtoAsync(
             userNameContain: request.UserName, pageSize: request.PageSize, pageIndex: request.PageIndex,
             includeRoles: true, creator: true, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        return new GetAccountsResponse
+        return new GetUserAccountsResponse
         {
             UserAccounts = userAccount,
             Count = count
         };
     }
     
-    public async Task<DeleteAccountsResponse> DeleteUserAccountAsync(DeleteAccountsCommand command, CancellationToken cancellationToken)
+    public async Task<DeleteUserAccountsResponse> DeleteUserAccountAsync(DeleteUserAccountsCommand command, CancellationToken cancellationToken)
     {
         var (accountCount, account) = await _accountDataProvider.GetUserAccountAsync(id: command.UserId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -101,10 +101,10 @@ public partial class AccountService : IAccountService
         
         await _securityDataProvider.DeleteRoleUsersAsync(roleUsers, cancellationToken).ConfigureAwait(false);
         
-        return new DeleteAccountsResponse();
+        return new DeleteUserAccountsResponse();
     }
 
-    public async Task<GetAccountInfoResponse> GetAccountInfoAsync(GetAccountInfoRequest request, CancellationToken cancellationToken)
+    public async Task<GetUserAccountInfoResponse> GetAccountInfoAsync(GetUserAccountInfoRequest request, CancellationToken cancellationToken)
     {
         var (accountCount, accounts) = await _accountDataProvider.GetUserAccountAsync(id: request.UserId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -112,7 +112,7 @@ public partial class AccountService : IAccountService
 
         if (account == null) return null;
         
-        return new GetAccountInfoResponse
+        return new GetUserAccountInfoResponse
         {
             UserId = account.Id,
             UserName = account.UserName,

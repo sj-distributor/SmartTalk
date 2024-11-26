@@ -20,46 +20,46 @@ public class AuthorityController : ControllerBase
     }
 
     [Route("create"), HttpPost]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(CreateResponse))]
-    public async Task<IActionResult> CreateAsync([FromBody] CreateCommand command)
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(CreateUserAccountResponse))]
+    public async Task<IActionResult> CreateUserAccountAsync([FromBody] CreateUserAccountCommand userAccountCommand)
     {
-        var response = await _mediator.SendAsync<CreateCommand, CreateResponse>(command).ConfigureAwait(false);
+        var response = await _mediator.SendAsync<CreateUserAccountCommand, CreateUserAccountResponse>(userAccountCommand).ConfigureAwait(false);
 
         return Ok(response);
     }
     
     [Route("get"), HttpGet]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAccountsResponse))]
-    public async Task<IActionResult> GetAccountsAsync([FromQuery] GetAccountsRequest request)
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetUserAccountsResponse))]
+    public async Task<IActionResult> GetUserAccountAccountsAsync([FromQuery] GetUserAccountsRequest request)
     {
-        var response = await _mediator.RequestAsync<GetAccountsRequest, GetAccountsResponse>(request).ConfigureAwait(false);
+        var response = await _mediator.RequestAsync<GetUserAccountsRequest, GetUserAccountsResponse>(request).ConfigureAwait(false);
 
         return Ok(response);
     }
 
     [Route("update"), HttpPost]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdateResponse))]
-    public async Task<IActionResult> UpdateAsync([FromBody] UpdateCommand command)
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdateUserAccountResponse))]
+    public async Task<IActionResult> UpdateUserAccountAsync([FromBody] UpdateUserAccountCommand command)
     {
-        var response = await _mediator.SendAsync<UpdateCommand, UpdateResponse>(command).ConfigureAwait(false);
+        var response = await _mediator.SendAsync<UpdateUserAccountCommand, UpdateUserAccountResponse>(command).ConfigureAwait(false);
 
         return Ok(response);
     }
     
     [Route("delete"), HttpPost]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAccountsResponse))]
-    public async Task<IActionResult> DeleteAccountsAsync([FromBody] DeleteAccountsCommand command)
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(DeleteUserAccountsCommand))]
+    public async Task<IActionResult> DeleteUserAccountsAsync([FromBody] DeleteUserAccountsCommand command)
     {
-        var response = await _mediator.SendAsync<DeleteAccountsCommand, DeleteAccountsResponse>(command).ConfigureAwait(false);
+        var response = await _mediator.SendAsync<DeleteUserAccountsCommand, DeleteUserAccountsResponse>(command).ConfigureAwait(false);
 
         return Ok(response);
     }
     
     [Route("copy"), HttpGet]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAccountInfoResponse))]
-    public async Task<IActionResult> GetAccountInfoAsync([FromQuery] GetAccountInfoRequest request)
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetUserAccountInfoResponse))]
+    public async Task<IActionResult> GetUserAccountInfoAsync([FromQuery] GetUserAccountInfoRequest request)
     {
-        var response = await _mediator.RequestAsync<GetAccountInfoRequest, GetAccountInfoResponse>(request).ConfigureAwait(false);
+        var response = await _mediator.RequestAsync<GetUserAccountInfoRequest, GetUserAccountInfoResponse>(request).ConfigureAwait(false);
 
         return Ok(response);
     }
