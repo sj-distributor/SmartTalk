@@ -13,6 +13,9 @@ public class GetAccountsRequest : IRequest
     public string UserName { get; set; }
 }
 
-public class GetAccountsResponse : SmartTalkResponse<List<UserAccountDto>>
+public class GetAccountsResponse : SmartTalkResponse
 {
+    public List<UserAccountDto> UserAccounts { get; set; }
+
+    public int Count { get; set; }
 }

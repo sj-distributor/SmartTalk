@@ -54,4 +54,13 @@ public class AuthorityController : ControllerBase
 
         return Ok(response);
     }
+    
+    [Route("copy"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAccountInfoResponse))]
+    public async Task<IActionResult> GetAccountInfoAsync([FromQuery] GetAccountInfoRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetAccountInfoRequest, GetAccountInfoResponse>(request).ConfigureAwait(false);
+
+        return Ok(response);
+    }
 }

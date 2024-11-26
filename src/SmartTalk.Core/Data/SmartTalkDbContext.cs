@@ -1,12 +1,12 @@
 using System.Reflection;
 using SmartTalk.Core.Domain;
 using SmartTalk.Core.Settings;
+using SmartTalk.Messages.Constants;
 using Microsoft.EntityFrameworkCore;
-using SmartTalk.Core.Services.Infrastructure;
-using Microsoft.EntityFrameworkCore.ChangeTracking;
 using SmartTalk.Core.Data.Exceptions;
 using SmartTalk.Core.Services.Identity;
-using SmartTalk.Messages.Constants;
+using SmartTalk.Core.Services.Infrastructure;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 namespace SmartTalk.Core.Data;
 

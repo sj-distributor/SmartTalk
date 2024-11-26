@@ -22,9 +22,9 @@ public partial class AccountService
         if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(username))
             throw new UserAccountColumnsRequiredException(nameof(userId), nameof(username));
         
-        var userAccount = (await _accountDataProvider.GetUserAccountDtoAsync(thirdPartyUserId: userId, includeRoles: true, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+        var (count, userAccount) = await _accountDataProvider.GetUserAccountDtoAsync(thirdPartyUserId: userId, includeRoles: true, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        if (userAccount != null) return userAccount;
+        if (userAccount is not { Count: 0 }) return userAccount.FirstOrDefault();
 
         var account = await _accountDataProvider
             .CreateUserAccountAsync(username, null, userId, issuer, cancellationToken: cancellationToken).ConfigureAwait(false);

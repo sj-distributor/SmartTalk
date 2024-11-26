@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Security.Claims;
 using Serilog;
 using AutoMapper;
@@ -16,17 +17,17 @@ namespace SmartTalk.Core.Services.Account
 {
     public interface IAccountDataProvider : IScopedDependency
     {
-        Task<List<UserAccount>> GetUserAccountAsync(
-            int? id = null, string username = null, string password = null, string thirdPartyUserId = null, bool isActive = true, UserAccountIssuer? issuer = null, bool includeRoles = false, string userNameContain = null, int? pageSize = null, int? pageIndex = null, CancellationToken cancellationToken = default);
+        Task<(int, List<UserAccount>)> GetUserAccountAsync(
+            int? id = null, string username = null, string password = null, string thirdPartyUserId = null, bool isActive = true, UserAccountIssuer? issuer = null, bool includeRoles = false, string userNameContain = null, int? pageSize = null, int? pageIndex = null, bool orderbyCreatedOn = false, CancellationToken cancellationToken = default);
         
         Task<UserAccountDto> GetUserAccountByApiKeyAsync(string apiKey, CancellationToken cancellationToken = default);
         
-        Task<UserAccountProfile> GetUserAccountProfileAsync(int userAccountId, CancellationToken cancellationToken = default);
+        Task<UserAccountProfile> GetUserAccountProfileAsync(int userAccountId, CancellationToken cancellationToken);
 
         Task DeleteUserAccountProfileAsync(UserAccountProfile userAccountProfile, bool forceSave = true, CancellationToken cancellationToken = default);
 
-        Task<List<UserAccountDto>> GetUserAccountDtoAsync(
-            int? id = null, string username = null, string password = null, string thirdPartyUserId = null, bool isActive = true, UserAccountIssuer? issuer = null, bool includeRoles = false, string userNameContain = null, int? pageSize = null, int? pageIndex = null, bool creator = false, CancellationToken cancellationToken = default);
+        Task<(int, List<UserAccountDto>)> GetUserAccountDtoAsync(
+            int? id = null, string username = null, string password = null, string thirdPartyUserId = null, bool isActive = true, UserAccountIssuer? issuer = null, bool includeRoles = false, string userNameContain = null, int? pageSize = null, int? pageIndex = null, bool creator = false, bool orderbyCreatedOn = false, CancellationToken cancellationToken = default);
 
         List<Claim> GenerateClaimsFromUserAccount(UserAccountDto account);
 
@@ -34,7 +35,7 @@ namespace SmartTalk.Core.Services.Account
             string requestUserName, string requestPassword, string thirdPartyUserId = null,
             UserAccountIssuer authType = UserAccountIssuer.Self, UserAccountProfile profile = null, CancellationToken cancellationToken = default);
 
-        Task UpdateUserAccountAsync(UserAccount userAccount, bool forceSave, CancellationToken cancellationToken);
+        Task UpdateUserAccountAsync(UserAccount userAccount, bool forceSave = true, CancellationToken cancellationToken = default);
         
         Task DeleteUserAccountAsync(UserAccount userAccount, bool forceSave = true, CancellationToken cancellationToken = default);
     }
@@ -63,7 +64,7 @@ namespace SmartTalk.Core.Services.Account
             if (accountApiKey == null)
                 return null;
 
-            var account = await GetUserAccountAsync(id: accountApiKey.UserAccountId, cancellationToken: cancellationToken).ConfigureAwait(false);
+            var (count, account) = await GetUserAccountAsync(id: accountApiKey.UserAccountId, cancellationToken: cancellationToken).ConfigureAwait(false);
  
             return account != null ? _mapper.Map<UserAccountDto>(account) : null;
         }
@@ -82,16 +83,16 @@ namespace SmartTalk.Core.Services.Account
                 await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        public async Task<List<UserAccountDto>> GetUserAccountDtoAsync(
+        public async Task<(int, List<UserAccountDto>)> GetUserAccountDtoAsync(
             int? id = null, string username = null, string password = null, string thirdPartyUserId = null, bool isActive = true, UserAccountIssuer? issuer = null,
-            bool includeRoles = false, string userNameContain = null, int? pageSize = null, int? pageIndex = null, bool creator = false, CancellationToken cancellationToken = default)
+            bool includeRoles = false, string userNameContain = null, int? pageSize = null, int? pageIndex = null, bool creator = false, bool orderbyCreatedOn = false, CancellationToken cancellationToken = default)
         {
-            var account = await GetUserAccountAsync(id, username, password, thirdPartyUserId, isActive, issuer, includeRoles, userNameContain, pageSize, pageIndex, cancellationToken).ConfigureAwait(false);
-
+            var (count, account) = await GetUserAccountAsync(id, username, password, thirdPartyUserId, isActive, issuer, includeRoles, userNameContain, pageSize, pageIndex, true, cancellationToken).ConfigureAwait(false);
+            
             if (creator)
-               return await GetUserAccountAsync(account, cancellationToken).ConfigureAwait(false);
+               return (count, await GetUserAccountAsync(account, cancellationToken).ConfigureAwait(false));
 
-            return account != null ? _mapper.Map<List<UserAccountDto>>(account) : null;
+            return account != null ? (count, _mapper.Map<List<UserAccountDto>>(account)) : (count, null);
         }
         
         private async Task<List<UserAccountDto>> GetUserAccountAsync(
@@ -113,9 +114,9 @@ namespace SmartTalk.Core.Services.Account
             return targetUserAccount;
         }
         
-        public async Task<List<UserAccount>> GetUserAccountAsync(
+        public async Task<(int, List<UserAccount>)> GetUserAccountAsync(
             int? id = null, string username = null, string password = null, string thirdPartyUserId = null, bool isActive = true,
-            UserAccountIssuer? issuer = null, bool includeRoles = false, string userNameContain = null, int? pageSize = null, int? pageIndex = null, CancellationToken cancellationToken = default)
+            UserAccountIssuer? issuer = null, bool includeRoles = false, string userNameContain = null, int? pageSize = null, int? pageIndex = null, bool orderbyCreatedOn = false,  CancellationToken cancellationToken = default)
         {
             var query = _repository.QueryNoTracking<UserAccount>().Where(x => x.IsActive == isActive);
 
@@ -139,18 +140,23 @@ namespace SmartTalk.Core.Services.Account
 
             if (!string.IsNullOrEmpty(userNameContain))
                 query = query.Where(x => x.UserName.Contains(userNameContain));
+
+            if (orderbyCreatedOn)
+                query = query.OrderByDescending(x => x.CreatedOn);
             
-            if (pageSize.HasValue && pageIndex.HasValue)
-                query = query.Skip(pageSize.Value * (pageIndex.Value - 1)).Take(pageSize.Value);
+            var count = await query.CountAsync(cancellationToken).ConfigureAwait(false);
         
+             if (pageSize.HasValue && pageIndex.HasValue)
+                query = query.Skip(pageSize.Value * (pageIndex.Value - 1)).Take(pageSize.Value);
+            
             var account = await query
                 .ToListAsync(cancellationToken).ConfigureAwait(false);
 
-            if (account is { Count: 0 }) return null;
+            if (account is { Count: 0 }) return (count, null);
         
             await EnrichUserAccountsAsync(account, includeRoles, cancellationToken).ConfigureAwait(false);
 
-            return account;
+            return (count, account);
         }
         
         private async Task EnrichUserAccountsAsync(List<UserAccount> accounts, bool includeRoles, CancellationToken cancellationToken)
@@ -264,7 +270,7 @@ namespace SmartTalk.Core.Services.Account
         }
 
         public async Task UpdateUserAccountAsync(
-            UserAccount userAccount, bool forceSave, CancellationToken cancellationToken)
+            UserAccount userAccount, bool forceSave = true, CancellationToken cancellationToken = default)
         {
             await _repository.UpdateAsync(userAccount, cancellationToken).ConfigureAwait(false);
 

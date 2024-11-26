@@ -55,8 +55,6 @@ public class SecurityService : ISecurityService
 
         var rolePermissionData = await GetRolePermissionDataAsync(currentRoles, cancellationToken);
         
-        var rolePermissionUsers = await _securityDataProvider.GetRolePermissionUsersAsync(roleIds: currentRoles.Select(x => x.Id).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
-
         return new GetCurrentUserRolesResponse
         {
             Data = new GetCurrentUserRolesResponseData
