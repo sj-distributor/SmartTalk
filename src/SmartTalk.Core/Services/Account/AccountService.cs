@@ -7,9 +7,8 @@ using SmartTalk.Core.Services.Security;
 using SmartTalk.Core.Services.Wiltechs;
 using SmartTalk.Messages.Enums.Account;
 using SmartTalk.Messages.Requests.Account;
-using SmartTalk.Messages.Commands.Account;
-using SmartTalk.Messages.Commands.Authority;
-using SmartTalk.Messages.Requests.Authority;
+using SmartTalk.Messages.Commands.Security;
+using SmartTalk.Messages.Requests.Security;
 
 namespace SmartTalk.Core.Services.Account;
 
@@ -50,11 +49,7 @@ public partial class AccountService : IAccountService
 
     public async Task<CreateUserAccountResponse> CreateUserAccount(CreateUserAccountCommand userAccountCommand, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrEmpty(userAccountCommand.RoleName) || string.IsNullOrEmpty(userAccountCommand.UserName)) return null;
-
-        var role = (await _securityDataProvider.GetRolesAsync([0], name: userAccountCommand.RoleName, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
-        
-        if (role == null) return null;
+        if (string.IsNullOrEmpty(userAccountCommand.UserName)) return null;
         
         var account = await _accountDataProvider.CreateUserAccountAsync(
             userAccountCommand.UserName, userAccountCommand.OriginalPassword, null,
@@ -62,7 +57,7 @@ public partial class AccountService : IAccountService
         
         await _securityDataProvider.CreateRoleUsersAsync([new RoleUser
         {
-            RoleId = role.Id,
+            RoleId = userAccountCommand.RoleId,
             UserId = account.Id
         }], cancellationToken).ConfigureAwait(false);
         

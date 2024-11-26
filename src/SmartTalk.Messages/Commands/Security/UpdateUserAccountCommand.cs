@@ -2,7 +2,7 @@ using Mediator.Net.Contracts;
 using SmartTalk.Messages.Responses;
 using SmartTalk.Messages.Attributes;
 
-namespace SmartTalk.Messages.Commands.Authority;
+namespace SmartTalk.Messages.Commands.Security;
 
 [SmartTalkAuthorize("CanUpdateAccount")]
 public class UpdateUserAccountCommand : ICommand

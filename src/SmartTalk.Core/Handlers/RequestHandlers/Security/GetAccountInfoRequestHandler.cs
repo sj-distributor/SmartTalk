@@ -1,9 +1,9 @@
 using Mediator.Net.Context;
 using Mediator.Net.Contracts;
 using SmartTalk.Core.Services.Account;
-using SmartTalk.Messages.Requests.Authority;
+using SmartTalk.Messages.Requests.Security;
 
-namespace SmartTalk.Core.Handlers.RequestHandlers.Authority;
+namespace SmartTalk.Core.Handlers.RequestHandlers.Security;
 
 public class GetAccountInfoRequestHandler : IRequestHandler<GetUserAccountInfoRequest, GetUserAccountInfoResponse>
 {

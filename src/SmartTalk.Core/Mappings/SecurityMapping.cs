@@ -4,7 +4,7 @@ using SmartTalk.Messages.Dto.Security;
 using SmartTalk.Messages.DTO.Security;
 using SmartTalk.Messages.Dto.Security.Data;
 using SmartTalk.Messages.DTO.Security.Data;
-using SmartTalk.Messages.Commands.Authority;
+using SmartTalk.Messages.Commands.Security;
 
 namespace SmartTalk.Core.Mappings;
 

@@ -6,7 +6,7 @@ using SmartTalk.Messages.Attributes;
 using SmartTalk.Messages.Dto.Account;
 using SmartTalk.Messages.Enums.MessageLogging;
 
-namespace SmartTalk.Messages.Commands.Account;
+namespace SmartTalk.Messages.Commands.Security;
 
 [SmartTalkLogging(LoggingSystemType.Security)]
 [SmartTalkAuthorize("CanCreateAccount")]
@@ -14,7 +14,7 @@ public class CreateUserAccountCommand : ICommand
 {
     public string UserName { get; set; }
     
-    public string RoleName { get; set; }
+    public int RoleId { get; set; }
     
     public string OriginalPassword => _originalPassword ?? GenerateRandomPassword(6);
     

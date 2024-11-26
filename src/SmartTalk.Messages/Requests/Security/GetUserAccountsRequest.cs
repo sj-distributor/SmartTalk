@@ -2,7 +2,7 @@ using Mediator.Net.Contracts;
 using SmartTalk.Messages.Responses;
 using SmartTalk.Messages.Dto.Account;
 
-namespace SmartTalk.Messages.Requests.Authority;
+namespace SmartTalk.Messages.Requests.Security;
 
 public class GetUserAccountsRequest : IRequest
 {

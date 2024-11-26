@@ -1,9 +1,9 @@
 using Mediator.Net.Context;
 using Mediator.Net.Contracts;
 using SmartTalk.Core.Services.Security;
-using SmartTalk.Messages.Commands.Authority;
+using SmartTalk.Messages.Commands.Security;
 
-namespace SmartTalk.Core.Handlers.CommandHandlers.Authority;
+namespace SmartTalk.Core.Handlers.CommandHandlers.Security;
 
 public class AuthorityCommandHandler : ICommandHandler<UpdateUserAccountCommand, UpdateUserAccountResponse>
 {

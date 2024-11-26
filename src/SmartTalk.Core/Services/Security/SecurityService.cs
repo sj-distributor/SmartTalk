@@ -5,7 +5,7 @@ using SmartTalk.Messages.Dto.Security;
 using SmartTalk.Messages.DTO.Security;
 using SmartTalk.Core.Services.Identity;
 using SmartTalk.Messages.Requests.Security;
-using SmartTalk.Messages.Commands.Authority;
+using SmartTalk.Messages.Commands.Security;
 
 namespace SmartTalk.Core.Services.Security;
 

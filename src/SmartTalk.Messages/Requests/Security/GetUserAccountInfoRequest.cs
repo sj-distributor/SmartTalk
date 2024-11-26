@@ -2,7 +2,7 @@ using Mediator.Net.Contracts;
 using Smarties.Messages.Attributes;
 using SmartTalk.Messages.Responses;
 
-namespace SmartTalk.Messages.Requests.Authority;
+namespace SmartTalk.Messages.Requests.Security;
 
 [SmartiesAuthorize("CanCopyAccount")]
 public class GetUserAccountInfoRequest : IRequest
