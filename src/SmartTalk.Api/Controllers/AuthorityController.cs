@@ -30,7 +30,7 @@ public class AuthorityController : ControllerBase
     
     [Route("get"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAccountsResponse))]
-    public async Task<IActionResult> GetAccountsAsync([FromBody] GetAccountsRequest request)
+    public async Task<IActionResult> GetAccountsAsync([FromQuery] GetAccountsRequest request)
     {
         var response = await _mediator.RequestAsync<GetAccountsRequest, GetAccountsResponse>(request).ConfigureAwait(false);
 
