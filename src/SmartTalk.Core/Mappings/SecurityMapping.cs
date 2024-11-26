@@ -1,10 +1,10 @@
 using AutoMapper;
-using Microsoft.IdentityModel.Tokens;
 using SmartTalk.Core.Domain.Security;
 using SmartTalk.Messages.Dto.Security;
 using SmartTalk.Messages.DTO.Security;
 using SmartTalk.Messages.Dto.Security.Data;
 using SmartTalk.Messages.DTO.Security.Data;
+using SmartTalk.Messages.Commands.Security;
 
 namespace SmartTalk.Core.Mappings;
 
@@ -29,5 +29,6 @@ public class SecurityMapping : Profile
         CreateMap<UserPermission, UserPermissionDto>().ReverseMap();
         CreateMap<RolePermission, RolePermissionDto>().ReverseMap();
         CreateMap<Permission, PermissionDto>().ReverseMap();
+        CreateMap<RoleUser, UpdateUserAccountResponse>().ReverseMap();
     }
 }
