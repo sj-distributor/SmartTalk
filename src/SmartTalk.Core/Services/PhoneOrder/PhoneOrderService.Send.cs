@@ -17,7 +17,7 @@ public partial class PhoneOrderService : IPhoneOrderService
         var (today, yesterday) = PstTime();
 
         var dailyDataReport = await GenerateDailyDataReportAsync(today, yesterday, cancellationToken).ConfigureAwait(false);
-        var assessmentPeriodReport = await GenerateCustomerServiceAssessmentPeriodReportAsync(today, cancellationToken).ConfigureAwait(false);
+        var assessmentPeriodReport = await GenerateCustomerServiceAssessmentPeriodReportAsync(today, yesterday, cancellationToken).ConfigureAwait(false);
 
         await _weChatClient.SendWorkWechatRobotMessagesAsync(command.RobotUrl, 
             new SendWorkWechatGroupRobotMessageDto
@@ -65,9 +65,9 @@ public partial class PhoneOrderService : IPhoneOrderService
         return stringBuilder.ToString();
     }
 
-    private async Task<string> GenerateCustomerServiceAssessmentPeriodReportAsync(DateTimeOffset today, CancellationToken cancellationToken)
+    private async Task<string> GenerateCustomerServiceAssessmentPeriodReportAsync(DateTimeOffset today, DateTimeOffset yesterday, CancellationToken cancellationToken)
     {
-        var (previous20Th, nowDate) = CustomerServiceAssessmentPeriod(today);
+        var (previous20Th, nowDate) = CustomerServiceAssessmentPeriod(today, yesterday);
 
         var (todayStartTime, todayEndTime) = CustomerServiceToday(today);
         
@@ -95,13 +95,13 @@ public partial class PhoneOrderService : IPhoneOrderService
             new DateTimeOffset(yesterday.Year, yesterday.Month, yesterday.Day, 15, 0, 0, TimeSpan.Zero),
             new DateTimeOffset(today.Year, today.Month, today.Day, 0, 0, 0, TimeSpan.Zero));
     
-    private static (DateTimeOffset startPeriod, DateTimeOffset endPeriod) CustomerServiceAssessmentPeriod(DateTimeOffset today)
+    private static (DateTimeOffset startPeriod, DateTimeOffset endPeriod) CustomerServiceAssessmentPeriod(DateTimeOffset today, DateTimeOffset yesterday)
     {
-        var startPeriod = today.Day >= 20 
-            ? new DateTimeOffset(today.Year, today.Month, 20, 0, 0, 0, TimeSpan.Zero) 
-            : new DateTimeOffset(today.Year, today.Month, 20, 0, 0, 0, TimeSpan.Zero).AddMonths(-1);
+        var startPeriod = today.Day >= 21
+            ? new DateTimeOffset(today.Year, today.Month, 20, 16, 0, 0, TimeSpan.Zero) 
+            : new DateTimeOffset(today.Year, today.Month, 20, 16, 0, 0, TimeSpan.Zero).AddMonths(-1);
         
-        var endPeriod = new DateTimeOffset(today.Year, today.Month, today.Day, 23, 59, 59, TimeSpan.Zero);
+        var endPeriod = new DateTimeOffset(today.Year, today.Month, today.Day, 16, 0, 0, TimeSpan.Zero);
         
         return (startPeriod, endPeriod);
     }
