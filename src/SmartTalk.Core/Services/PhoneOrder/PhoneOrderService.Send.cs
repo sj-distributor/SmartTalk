@@ -19,15 +19,18 @@ public partial class PhoneOrderService : IPhoneOrderService
         var dailyDataReport = await GenerateDailyDataReportAsync(today, yesterday, cancellationToken).ConfigureAwait(false);
         var assessmentPeriodReport = await GenerateCustomerServiceAssessmentPeriodReportAsync(today, yesterday, cancellationToken).ConfigureAwait(false);
 
-        await _weChatClient.SendWorkWechatRobotMessagesAsync(command.RobotUrl, 
-            new SendWorkWechatGroupRobotMessageDto
+        foreach (var robotUrl in command.RobotUrl)
         {
-            MsgType = "text",
-            Text = new SendWorkWechatGroupRobotTextDto
+            await _weChatClient.SendWorkWechatRobotMessagesAsync(robotUrl,
+                new SendWorkWechatGroupRobotMessageDto
             {
-                Content = $"SMART TALK AI每日數據播報:\n{yesterday:MM/dd/yyyy}\n1.平台錄音數量\n{dailyDataReport}\n2.AI素材校準量\n{assessmentPeriodReport}"
-            }
-        }, cancellationToken).ConfigureAwait(false);
+                MsgType = "text",
+                Text = new SendWorkWechatGroupRobotTextDto
+                {
+                    Content = $"SMARTTALK AI每日數據播報:\n{yesterday:MM/dd/yyyy}\n1.平台錄音數量\n{dailyDataReport}\n2.AI素材校準量\n{assessmentPeriodReport}"
+                }
+            }, cancellationToken).ConfigureAwait(false);
+        }
     }
 
     private static (DateTimeOffset today, DateTimeOffset yesterday) PstTime()
@@ -68,17 +71,23 @@ public partial class PhoneOrderService : IPhoneOrderService
     private async Task<string> GenerateCustomerServiceAssessmentPeriodReportAsync(DateTimeOffset today, DateTimeOffset yesterday, CancellationToken cancellationToken)
     {
         var (previous20Th, nowDate) = CustomerServiceAssessmentPeriod(today, yesterday);
-    
-        var userHasProofreadTheNumber = await _phoneOrderDataProvider
-            .GetPhoneOrderRecordsWithUserCountAsync(previous20Th, nowDate, cancellationToken)
-            .ConfigureAwait(false);
-    
+
+        var (todayStartTime, todayEndTime) = CustomerServiceToday(today, yesterday);
+        
+        var userHasProofreadTheNumber = await _phoneOrderDataProvider.GetPhoneOrderRecordsWithUserCountAsync(
+            previous20Th, nowDate, cancellationToken).ConfigureAwait(false);
+        
+        var userTodayHasProofreadTheNumber = await _phoneOrderDataProvider.GetPhoneOrderRecordsWithUserCountAsync(
+            todayStartTime, todayEndTime, cancellationToken).ConfigureAwait(false);
+        
         var stringBuilder = new StringBuilder();
         var userIndex = 1;
 
         foreach (var user in userHasProofreadTheNumber)
         {
-            stringBuilder.AppendLine($"   {userIndex++}) {user.UserName}: {user.Count}");
+            var todayCount = userTodayHasProofreadTheNumber.FirstOrDefault(x => x.UserName == user.UserName)?.Count ?? 0;
+            
+            stringBuilder.AppendLine($"   {userIndex++}) {user.UserName}: {todayCount} (當期累計: {user.Count})");
         }
 
         return stringBuilder.ToString();
@@ -97,6 +106,15 @@ public partial class PhoneOrderService : IPhoneOrderService
         
         var endPeriod = new DateTimeOffset(today.Year, today.Month, today.Day, 16, 0, 0, TimeSpan.Zero);
         
+        return (startPeriod, endPeriod);
+    }
+
+    private static (DateTimeOffset startPeriod, DateTimeOffset endPeriod) CustomerServiceToday(DateTimeOffset today, DateTimeOffset yesterday)
+    {
+        var startPeriod = new DateTimeOffset(yesterday.Year, yesterday.Month, yesterday.Day, 16, 0, 0, TimeSpan.Zero);
+
+        var endPeriod = new DateTimeOffset(today.Year, today.Month, today.Day, 16, 0, 0, TimeSpan.Zero);
+
         return (startPeriod, endPeriod);
     }
 }
