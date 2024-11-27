@@ -51,7 +51,7 @@ public partial class AccountService
                     username: username, issuer: UserAccountIssuer.Self, includeRoles: true, cancellationToken: cancellationToken).ConfigureAwait(false)
         };
 
-        var account = accounts.FirstOrDefault();
+        var account = accounts?.FirstOrDefault();
 
         if (account == null)
         {
