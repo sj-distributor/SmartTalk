@@ -11,7 +11,7 @@ namespace SmartTalk.Api.Controllers;
 [Route("api/[controller]")]
 public class SecurityController : ControllerBase
 {
-     private readonly IMediator _mediator;
+    private readonly IMediator _mediator;
 
     public SecurityController(IMediator mediator)
     {
