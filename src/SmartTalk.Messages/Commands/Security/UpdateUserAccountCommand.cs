@@ -9,9 +9,9 @@ public class UpdateUserAccountCommand : ICommand
 {
     public int UserId { get; set; }
 
-    public int RoleId { get; set; } 
+    public int OldRoleId { get; set; } 
 
-    public string RoleName { get; set; }
+    public int NewRoleId { get; set; }
 }
 
 public class UpdateUserAccountResponse : SmartTalkResponse

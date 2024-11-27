@@ -115,9 +115,7 @@ public partial class SecurityDataProvider
         var count = await query.CountAsync(cancellationToken).ConfigureAwait(false);
         
         if (pageIndex.HasValue && pageSize.HasValue)
-        {
             query = query.OrderByDescending(x => x.CreatedOn).Skip((pageIndex.Value - 1) * pageSize.Value).Take(pageSize.Value);
-        }
 
         if (!pageIndex.HasValue && !pageSize.HasValue && string.IsNullOrEmpty(keyword))
         {

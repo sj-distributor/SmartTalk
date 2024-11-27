@@ -11,7 +11,7 @@ namespace SmartTalk.Api.Controllers;
 [Route("api/[controller]")]
 public class SecurityController : ControllerBase
 {
-     private readonly IMediator _mediator;
+    private readonly IMediator _mediator;
 
     public SecurityController(IMediator mediator)
     {
@@ -59,6 +59,15 @@ public class SecurityController : ControllerBase
     public async Task<IActionResult> GetUserAccountInfoAsync([FromQuery] GetUserAccountInfoRequest request)
     {
         var response = await _mediator.RequestAsync<GetUserAccountInfoRequest, GetUserAccountInfoResponse>(request).ConfigureAwait(false);
+
+        return Ok(response);
+    }
+    
+    [Route("get/role"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetRolesResponse))]
+    public async Task<IActionResult> GetRolesAsync([FromQuery] GetRolesRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetRolesRequest, GetRolesResponse>(request).ConfigureAwait(false);
 
         return Ok(response);
     }
