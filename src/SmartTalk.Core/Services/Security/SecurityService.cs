@@ -6,6 +6,7 @@ using SmartTalk.Messages.DTO.Security;
 using SmartTalk.Core.Services.Identity;
 using SmartTalk.Messages.Requests.Security;
 using SmartTalk.Messages.Commands.Security;
+using SmartTalk.Messages.Enums.Security;
 
 namespace SmartTalk.Core.Services.Security;
 
@@ -18,6 +19,8 @@ public interface ISecurityService : IScopedDependency
      
      Task<GetPermissionsByRoleIdResponse> GetPermissionsByRoleIdAsync(
         GetPermissionsByRoleIdRequest request, CancellationToken cancellationToken);
+     
+     Task<GetRolesResponse> GetRolesAsync(GetRolesRequest request, CancellationToken cancellationToken);
 }
 
 public class SecurityService : ISecurityService
@@ -35,11 +38,9 @@ public class SecurityService : ISecurityService
                             
     public async Task<UpdateUserAccountResponse> UpdateRoleUserAsync(UpdateUserAccountCommand command, CancellationToken cancellationToken)
     {
-        var roleUser = await _securityDataProvider.GetRoleUserByIdAsync(command.RoleId, command.UserId, cancellationToken).ConfigureAwait(false);
+        var roleUser = await _securityDataProvider.GetRoleUserByIdAsync(command.OldRoleId, command.UserId, cancellationToken).ConfigureAwait(false);
         
-        var role = await _securityDataProvider.GetRolesAsync([0], name: command.RoleName, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        roleUser.RoleId = role.FirstOrDefault()?.Id ?? command.RoleId;
+        roleUser.RoleId = command.NewRoleId;
         
         await _securityDataProvider.UpdateRoleUsersAsync([roleUser], cancellationToken).ConfigureAwait(false);
 
@@ -124,6 +125,20 @@ public class SecurityService : ISecurityService
                 Permissions = _mapper.Map<List<PermissionDto>>(permissions),
                 RolePermissions = mapperRolePermissions,
                 RolePermissionUsers = _mapper.Map<List<RolePermissionUserDto>>(rolePermissionUsers)
+            }
+        };
+    }
+
+    public async Task<GetRolesResponse> GetRolesAsync(GetRolesRequest request, CancellationToken cancellationToken)
+    {
+        var (count, roles) = await _securityDataProvider.GetRolesAsync(pageSize: request.PageSize, pageIndex: request.PageIndex, systemSource: RoleSystemSource.System, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return new GetRolesResponse
+        {
+            Data = new GetRolesResponseData
+            {
+                Count = count,
+                Roles = _mapper.Map<List<RoleDto>>(roles)
             }
         };
     }

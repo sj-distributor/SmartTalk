@@ -63,6 +63,15 @@ public class SecurityController : ControllerBase
         return Ok(response);
     }
     
+    [Route("get/role"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetRolesResponse))]
+    public async Task<IActionResult> GetRolesAsync([FromQuery] GetRolesRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetRolesRequest, GetRolesResponse>(request).ConfigureAwait(false);
+
+        return Ok(response);
+    }
+    
     [Route("mine/roles"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetCurrentUserRolesResponse))]
     public async Task<IActionResult> GetCurrentUserRoleAsync([FromQuery] GetCurrentUserRolesRequest request)
