@@ -19,15 +19,18 @@ public partial class PhoneOrderService : IPhoneOrderService
         var dailyDataReport = await GenerateDailyDataReportAsync(today, yesterday, cancellationToken).ConfigureAwait(false);
         var assessmentPeriodReport = await GenerateCustomerServiceAssessmentPeriodReportAsync(today, yesterday, cancellationToken).ConfigureAwait(false);
 
-        await _weChatClient.SendWorkWechatRobotMessagesAsync(command.RobotUrl, 
-            new SendWorkWechatGroupRobotMessageDto
+        foreach (var robotUrl in command.RobotUrl)
         {
-            MsgType = "text",
-            Text = new SendWorkWechatGroupRobotTextDto
+            await _weChatClient.SendWorkWechatRobotMessagesAsync(robotUrl,
+                new SendWorkWechatGroupRobotMessageDto
             {
-                Content = $"SMARTTALK AI每日數據播報:\n{yesterday:MM/dd/yyyy}\n1.平台錄音數量\n{dailyDataReport}\n2.AI素材校準量\n{assessmentPeriodReport}"
-            }
-        }, cancellationToken).ConfigureAwait(false);
+                MsgType = "text",
+                Text = new SendWorkWechatGroupRobotTextDto
+                {
+                    Content = $"SMARTTALK AI每日數據播報:\n{yesterday:MM/dd/yyyy}\n1.平台錄音數量\n{dailyDataReport}\n2.AI素材校準量\n{assessmentPeriodReport}"
+                }
+            }, cancellationToken).ConfigureAwait(false);
+        }
     }
 
     private static (DateTimeOffset today, DateTimeOffset yesterday) PstTime()
