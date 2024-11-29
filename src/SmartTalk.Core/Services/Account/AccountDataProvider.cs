@@ -64,8 +64,10 @@ namespace SmartTalk.Core.Services.Account
             if (accountApiKey == null)
                 return null;
 
-            var (count, account) = await GetUserAccountAsync(id: accountApiKey.UserAccountId, cancellationToken: cancellationToken).ConfigureAwait(false);
+            var (count, accounts) = await GetUserAccountAsync(id: accountApiKey.UserAccountId, cancellationToken: cancellationToken).ConfigureAwait(false);
  
+            var account = accounts.FirstOrDefault();
+            
             return account != null ? _mapper.Map<UserAccountDto>(account) : null;
         }
 
