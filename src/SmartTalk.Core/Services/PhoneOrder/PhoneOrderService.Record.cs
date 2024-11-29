@@ -70,6 +70,8 @@ public partial class PhoneOrderService
         
         var detection = await _translationClient.DetectLanguageAsync(transcription, cancellationToken).ConfigureAwait(false);
         
+        Log.Information("Phone order record transcription detected language: {@detectionLanguage}", detection.Language);
+        
         var record = new PhoneOrderRecord { SessionId = Guid.NewGuid().ToString(), Restaurant = recordInfo.Restaurant, TranscriptionText = transcription, Language = SelectLanguageEnum(detection.Language), CreatedDate = recordInfo.OrderDate.AddHours(-8), Status = PhoneOrderRecordStatus.Recieved };
 
         if (await CheckPhoneOrderRecordDurationAsync(command.RecordContent, cancellationToken).ConfigureAwait(false))
