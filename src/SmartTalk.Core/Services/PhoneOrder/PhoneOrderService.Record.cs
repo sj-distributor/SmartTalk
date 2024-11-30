@@ -571,7 +571,8 @@ public partial class PhoneOrderService
         return language switch
         {
             "en" => SpeechMaticsLanguageType.En,
-            _ => SpeechMaticsLanguageType.Auto
+            "zh" => SpeechMaticsLanguageType.Yue,
+            _ => SpeechMaticsLanguageType.En
         };
     }
     
