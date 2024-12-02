@@ -53,7 +53,7 @@ public partial class AccountService : IAccountService
         
         var (accountCount, accounts) = await _accountDataProvider.GetUserAccountAsync(username: userAccountCommand.UserName, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        if (accounts is { Count: 0 })
+        if (accounts is not { Count: 0 })
             return new CreateUserAccountResponse
             {
                 Msg = "該賬戶已存在，請重新輸入賬戶名稱"
