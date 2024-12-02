@@ -29,7 +29,7 @@ public class SecurityController : ControllerBase
     
     [Route("get"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetUserAccountsResponse))]
-    public async Task<IActionResult> GetUserAccountAccountsAsync([FromQuery] GetUserAccountsRequest request)
+    public async Task<IActionResult> GetUserAccountsAsync([FromQuery] GetUserAccountsRequest request)
     {
         var response = await _mediator.RequestAsync<GetUserAccountsRequest, GetUserAccountsResponse>(request).ConfigureAwait(false);
 
