@@ -44,7 +44,10 @@ public class SecurityService : ISecurityService
         
         await _securityDataProvider.UpdateRoleUsersAsync([roleUser], cancellationToken).ConfigureAwait(false);
 
-        return _mapper.Map<UpdateUserAccountResponse>(roleUser);
+        return new UpdateUserAccountResponse
+        {
+            Data = _mapper.Map<UpdateUserAccountDto>(roleUser)
+        };
     }
      
     public async Task<GetCurrentUserRolesResponse> GetCurrentUserRoleAsync(
