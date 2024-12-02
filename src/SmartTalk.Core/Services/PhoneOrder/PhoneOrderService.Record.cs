@@ -106,7 +106,6 @@ public partial class PhoneOrderService
         {
             "zh" => TranscriptionLanguage.Chinese,
             "en" => TranscriptionLanguage.English,
-            "es" => TranscriptionLanguage.Spanish,
             _ => TranscriptionLanguage.English
         };
     }
