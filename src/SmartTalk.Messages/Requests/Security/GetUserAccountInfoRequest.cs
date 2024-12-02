@@ -10,7 +10,11 @@ public class GetUserAccountInfoRequest : IRequest
     public int UserId { get; set; }
 }
 
-public class GetUserAccountInfoResponse : SmartTalkResponse
+public class GetUserAccountInfoResponse : SmartTalkResponse<GetUserAccountInfoDto>
+{
+}
+
+public class GetUserAccountInfoDto
 {
     public int UserId { get; set; }
     

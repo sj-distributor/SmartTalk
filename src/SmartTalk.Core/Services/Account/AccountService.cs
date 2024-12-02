@@ -51,6 +51,14 @@ public partial class AccountService : IAccountService
     {
         if (string.IsNullOrEmpty(userAccountCommand.UserName)) return null;
         
+        var (accountCount, accounts) = await _accountDataProvider.GetUserAccountAsync(username: userAccountCommand.UserName, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (accounts is { Count: 0 })
+            return new CreateUserAccountResponse
+            {
+                Msg = "該賬戶已存在，請重新輸入賬戶名稱"
+            };
+        
         var account = await _accountDataProvider.CreateUserAccountAsync(
             userAccountCommand.UserName, userAccountCommand.OriginalPassword, null,
             UserAccountIssuer.Self, null, cancellationToken).ConfigureAwait(false);
@@ -75,8 +83,11 @@ public partial class AccountService : IAccountService
 
         return new GetUserAccountsResponse
         {
-            UserAccounts = userAccount,
-            Count = count
+           Data = new GetUserAccountsDto
+           {
+               UserAccounts = userAccount,
+               Count = count
+           }
         };
     }
     
@@ -109,9 +120,12 @@ public partial class AccountService : IAccountService
         
         return new GetUserAccountInfoResponse
         {
-            UserId = account.Id,
-            UserName = account.UserName,
-            PassWord = account.OriginalPassword
+           Data = new GetUserAccountInfoDto
+           {
+               UserId = account.Id,
+               UserName = account.UserName,
+               PassWord = account.OriginalPassword
+           }
         };
     }
 }

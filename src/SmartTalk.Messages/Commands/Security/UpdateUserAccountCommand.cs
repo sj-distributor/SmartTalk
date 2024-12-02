@@ -14,7 +14,11 @@ public class UpdateUserAccountCommand : ICommand
     public int NewRoleId { get; set; }
 }
 
-public class UpdateUserAccountResponse : SmartTalkResponse
+public class UpdateUserAccountResponse : SmartTalkResponse<UpdateUserAccountDto>
+{
+}
+
+public class UpdateUserAccountDto
 {
     public int Id { get; set; }
     
