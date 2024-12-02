@@ -13,7 +13,11 @@ public class GetUserAccountsRequest : IRequest
     public string UserName { get; set; }
 }
 
-public class GetUserAccountsResponse : SmartTalkResponse
+public class GetUserAccountsResponse : SmartTalkResponse<GetUserAccountsDto>
+{
+}
+
+public class GetUserAccountsDto
 {
     public List<UserAccountDto> UserAccounts { get; set; }
 
