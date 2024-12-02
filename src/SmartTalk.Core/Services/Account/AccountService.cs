@@ -18,7 +18,7 @@ public interface IAccountService : IScopedDependency
     
     Task<UserAccountDto> GetOrCreateUserAccountFromThirdPartyAsync(string userId, string userName, UserAccountIssuer issuer, CancellationToken cancellationToken);
 
-    Task<CreateUserAccountResponse> CreateUserAccount(CreateUserAccountCommand userAccountCommand, CancellationToken cancellationToken);
+    Task<CreateUserAccountResponse> CreateUserAccountAsync(CreateUserAccountCommand userAccountCommand, CancellationToken cancellationToken);
 
     Task<GetUserAccountsResponse> GetAccountsAsync(GetUserAccountsRequest request, CancellationToken cancellationToken);
 
@@ -47,7 +47,7 @@ public partial class AccountService : IAccountService
         _verificationCodeService = verificationCodeService;
     }
 
-    public async Task<CreateUserAccountResponse> CreateUserAccount(CreateUserAccountCommand userAccountCommand, CancellationToken cancellationToken)
+    public async Task<CreateUserAccountResponse> CreateUserAccountAsync(CreateUserAccountCommand userAccountCommand, CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(userAccountCommand.UserName)) return null;
         
