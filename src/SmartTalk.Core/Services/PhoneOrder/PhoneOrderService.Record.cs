@@ -65,10 +65,10 @@ public partial class PhoneOrderService
         
         var transcription = await _speechToTextService.SpeechToTextAsync(
             command.RecordContent, fileType: TranscriptionFileType.Wav, responseFormat: TranscriptionResponseFormat.Text, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        if (string.IsNullOrEmpty(transcription) || transcription.Length < 15 || transcription.Contains("GENERAL") || transcription.Contains("感謝收看") || transcription.Contains("訂閱") || transcription.Contains("点赞") || transcription.Contains("立場") || transcription.Contains("字幕") || transcription.Contains("結束") || transcription.Contains("謝謝觀看") || transcription.Contains("幕後大臣") || transcription == "醒醒" || transcription == "跟著我" || transcription.Contains("政經關峻") || transcription.Contains("您拨打的电话") || transcription.Contains("Mailbox memory is full") || transcription.Contains("amazon", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("We're sorry, your call did not go through.", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("Verizon Wireless", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("Beep", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("USPS customer service center", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("not go through", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("stop serving in two hours", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("Welcome to customer support", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("For the upcoming flight booking", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("Please check and dial again.", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("largest cable TV network", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("拨打的用户暂时无法接通") || transcription.Contains("您有一份国际快递即将退回")) return;
         
         var detection = await _translationClient.DetectLanguageAsync(transcription, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Phone order record transcription detected language: {@detectionLanguage}", detection.Language);
         
         var record = new PhoneOrderRecord { SessionId = Guid.NewGuid().ToString(), Restaurant = recordInfo.Restaurant, TranscriptionText = transcription, Language = SelectLanguageEnum(detection.Language), CreatedDate = recordInfo.OrderDate.AddHours(-8), Status = PhoneOrderRecordStatus.Recieved };
 
@@ -106,8 +106,7 @@ public partial class PhoneOrderService
         {
             "zh" => TranscriptionLanguage.Chinese,
             "en" => TranscriptionLanguage.English,
-            "es" => TranscriptionLanguage.Spanish,
-            _ => TranscriptionLanguage.Chinese
+            _ => TranscriptionLanguage.English
         };
     }
 
@@ -571,7 +570,8 @@ public partial class PhoneOrderService
         return language switch
         {
             "en" => SpeechMaticsLanguageType.En,
-            _ => SpeechMaticsLanguageType.Auto
+            "zh" => SpeechMaticsLanguageType.Yue,
+            _ => SpeechMaticsLanguageType.En
         };
     }
     
@@ -585,7 +585,7 @@ public partial class PhoneOrderService
         {
             RecordId = record.Id,
             FoodName = x.FoodName,
-            Quantity = x.Count ?? 0,
+            Quantity = int.TryParse(x.Count, out var parsedValue) ? parsedValue : 1,
             Price = x.Price,
             Note = x.Remark
         }).ToList();
