@@ -34,10 +34,18 @@ public partial class PhoneOrderService
 
         if (_currentUser.Id.HasValue)
             await UpdatePhoneOrderRecordSpecificFieldsAsync(command.Conversations.First().RecordId, _currentUser.Id.Value, command.Conversations.First().Question, cancellationToken).ConfigureAwait(false);
-        
+
+        var conversationsList = string.Concat(string.Join(",", conversations.Select(x => x.Question)), string.Join(",", conversations.Select(x => x.Answer)));
+
+        var phoneOrderDetail = await GetOrderDetailsAsync(conversationsList, cancellationToken).ConfigureAwait(false);
+
         return new AddPhoneOrderConversationsResponse
         {
-            Data = _mapper.Map<List<PhoneOrderConversationDto>>(conversations)
+            Data = new AddPhoneOrderConversationsResponseData()
+            {
+                Conversations = _mapper.Map<List<PhoneOrderConversationDto>>(conversations),
+                PhoneOrderDetail = phoneOrderDetail
+            }
         };
     }
 }

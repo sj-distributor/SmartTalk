@@ -39,6 +39,8 @@ public partial interface IPhoneOrderService
     Task ExtractPhoneOrderRecordAiMenuAsync(List<SpeechMaticsSpeakInfoDto> phoneOrderInfo, PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken);
 
     Task<AddOrUpdateManualOrderResponse> AddOrUpdateManualOrderAsync(AddOrUpdateManualOrderCommand command, CancellationToken cancellationToken);
+
+    Task<PhoneOrderDetailDto> GetOrderDetailsAsync(string query, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderService
@@ -594,7 +596,7 @@ public partial class PhoneOrderService
             await _phoneOrderDataProvider.AddPhoneOrderItemAsync(items, true, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<PhoneOrderDetailDto> GetOrderDetailsAsync(string query, CancellationToken cancellationToken)
+    public async Task<PhoneOrderDetailDto> GetOrderDetailsAsync(string query, CancellationToken cancellationToken)
     {
         var completionResult = await _smartiesClient.PerformQueryAsync( new AskGptRequest
         {
