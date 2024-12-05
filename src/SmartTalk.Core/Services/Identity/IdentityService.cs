@@ -67,4 +67,11 @@ public class IdentityService : IIdentityService
         
         return (roles, permissions);
     }
+
+    public async Task<bool> IsCurrentUserExistAsync(int id, CancellationToken cancellationToken)
+    {
+        var (count, users) = await _accountDataProvider.GetUserAccountAsync(id, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        return users is { Count: > 0 };
+    }
 }
