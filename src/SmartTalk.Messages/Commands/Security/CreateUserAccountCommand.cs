@@ -8,7 +8,6 @@ using SmartTalk.Messages.Enums.MessageLogging;
 
 namespace SmartTalk.Messages.Commands.Security;
 
-[SmartTalkLogging(LoggingSystemType.Security)]
 [SmartTalkAuthorize("CanCreateAccount")]
 public class CreateUserAccountCommand : ICommand
 {

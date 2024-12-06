@@ -1,10 +1,10 @@
 using Mediator.Net.Contracts;
-using Smarties.Messages.Attributes;
+using SmartTalk.Messages.Attributes;
 using SmartTalk.Messages.Responses;
 
 namespace SmartTalk.Messages.Commands.Security;
 
-[SmartiesAuthorize("CanDeleteAccount")]
+[SmartTalkAuthorize("CanDeleteAccount")]
 public class DeleteUserAccountsCommand : ICommand
 {
     public int UserId { get; set; }
