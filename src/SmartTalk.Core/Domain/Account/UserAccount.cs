@@ -11,7 +11,7 @@ namespace SmartTalk.Core.Domain.Account
         public UserAccount()
         {
             Uuid = Guid.NewGuid();
-            CreatedOn = DateTimeOffset.Now;
+            CreatedOn = new DateTimeOffset(TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("America/Los_Angeles")).DateTime, TimeSpan.Zero);
             ModifiedOn = DateTimeOffset.Now;
         }
         
@@ -50,6 +50,9 @@ namespace SmartTalk.Core.Domain.Account
         
         [Column("active", TypeName = "tinyint(1)")]
         public bool IsActive { get; set; }
+        
+        [Column("creator")]
+        public string Creator { get; set; }
         
         [Column("last_modified_by")]
         public int? LastModifiedBy { get; set; }
