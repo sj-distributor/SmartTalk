@@ -3,6 +3,7 @@ using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.System;
 using SmartTalk.Messages.Dto.Account;
 using SmartTalk.Core.Domain.Security;
+using SmartTalk.Core.Services.Identity;
 using SmartTalk.Core.Services.Security;
 using SmartTalk.Core.Services.Wiltechs;
 using SmartTalk.Messages.Enums.Account;
@@ -30,6 +31,7 @@ public interface IAccountService : IScopedDependency
 public partial class AccountService : IAccountService
 {
     private readonly IMapper _mapper;
+    private readonly ICurrentUser _currentUser;
     private readonly ITokenProvider _tokenProvider;
     private readonly IWiltechsService _wiltechsService;
     private readonly IAccountDataProvider _accountDataProvider;
@@ -37,9 +39,10 @@ public partial class AccountService : IAccountService
     private readonly IVerificationCodeService _verificationCodeService;
     
     public AccountService(
-        IMapper mapper, ITokenProvider tokenProvider, IWiltechsService wiltechsService, IAccountDataProvider accountDataProvider, ISecurityDataProvider securityDataProvider, IVerificationCodeService verificationCodeService)
+        IMapper mapper, ICurrentUser currentUser, ITokenProvider tokenProvider, IWiltechsService wiltechsService, IAccountDataProvider accountDataProvider, ISecurityDataProvider securityDataProvider, IVerificationCodeService verificationCodeService)
     {
         _mapper = mapper;
+        _currentUser = currentUser;
         _tokenProvider = tokenProvider;
         _wiltechsService = wiltechsService;
         _accountDataProvider = accountDataProvider;
@@ -53,7 +56,7 @@ public partial class AccountService : IAccountService
         
         var account = await _accountDataProvider.CreateUserAccountAsync(
             userAccountCommand.UserName, userAccountCommand.OriginalPassword, null,
-            UserAccountIssuer.Self, null, cancellationToken).ConfigureAwait(false);
+            UserAccountIssuer.Self, null, _currentUser.Name, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         await _securityDataProvider.CreateRoleUsersAsync([new RoleUser
         {
@@ -71,7 +74,7 @@ public partial class AccountService : IAccountService
     {
         var (count, userAccount) = await _accountDataProvider.GetUserAccountDtoAsync(
             userNameContain: request.UserName, pageSize: request.PageSize, pageIndex: request.PageIndex,
-            includeRoles: true, creator: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+            includeRoles: true, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         return new GetUserAccountsResponse
         {

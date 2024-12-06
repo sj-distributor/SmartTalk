@@ -27,13 +27,13 @@ namespace SmartTalk.Core.Services.Account
         Task DeleteUserAccountProfileAsync(UserAccountProfile userAccountProfile, bool forceSave = true, CancellationToken cancellationToken = default);
 
         Task<(int, List<UserAccountDto>)> GetUserAccountDtoAsync(
-            int? id = null, string username = null, string password = null, string thirdPartyUserId = null, bool isActive = true, UserAccountIssuer? issuer = null, bool includeRoles = false, string userNameContain = null, int? pageSize = null, int? pageIndex = null, bool creator = false, bool orderbyCreatedOn = false, CancellationToken cancellationToken = default);
+            int? id = null, string username = null, string password = null, string thirdPartyUserId = null, bool isActive = true, UserAccountIssuer? issuer = null, bool includeRoles = false, string userNameContain = null, int? pageSize = null, int? pageIndex = null, bool orderbyCreatedOn = false, CancellationToken cancellationToken = default);
 
         List<Claim> GenerateClaimsFromUserAccount(UserAccountDto account);
 
         Task<UserAccount> CreateUserAccountAsync(
             string requestUserName, string requestPassword, string thirdPartyUserId = null,
-            UserAccountIssuer authType = UserAccountIssuer.Self, UserAccountProfile profile = null, CancellationToken cancellationToken = default);
+            UserAccountIssuer authType = UserAccountIssuer.Self, UserAccountProfile profile = null, string creator = null, CancellationToken cancellationToken = default);
 
         Task UpdateUserAccountAsync(UserAccount userAccount, bool forceSave = true, CancellationToken cancellationToken = default);
         
@@ -87,12 +87,9 @@ namespace SmartTalk.Core.Services.Account
 
         public async Task<(int, List<UserAccountDto>)> GetUserAccountDtoAsync(
             int? id = null, string username = null, string password = null, string thirdPartyUserId = null, bool isActive = true, UserAccountIssuer? issuer = null,
-            bool includeRoles = false, string userNameContain = null, int? pageSize = null, int? pageIndex = null, bool creator = false, bool orderbyCreatedOn = false, CancellationToken cancellationToken = default)
+            bool includeRoles = false, string userNameContain = null, int? pageSize = null, int? pageIndex = null, bool orderbyCreatedOn = false, CancellationToken cancellationToken = default)
         {
             var (count, account) = await GetUserAccountAsync(id, username, password, thirdPartyUserId, isActive, issuer, includeRoles, userNameContain, pageSize, pageIndex, true, cancellationToken).ConfigureAwait(false);
-            
-            if (creator)
-               return (count, await GetUserAccountAsync(account, cancellationToken).ConfigureAwait(false));
 
             return account != null ? (count, _mapper.Map<List<UserAccountDto>>(account)) : (count, null);
         }
@@ -243,12 +240,13 @@ namespace SmartTalk.Core.Services.Account
         
         public async Task<UserAccount> CreateUserAccountAsync(
             string requestUserName, string requestPassword, string thirdPartyUserId = null, 
-            UserAccountIssuer authType = UserAccountIssuer.Self, UserAccountProfile profile = null, CancellationToken cancellationToken = default)
+            UserAccountIssuer authType = UserAccountIssuer.Self, UserAccountProfile profile = null, string creator = null, CancellationToken cancellationToken = default)
         {
             var userAccount = new UserAccount
             {
                 Uuid = Guid.NewGuid(),
                 Issuer = authType,
+                Creator = creator,
                 UserName = requestUserName,
                 Password = requestPassword?.ToSha256(),
                 OriginalPassword = requestPassword ?? null,
