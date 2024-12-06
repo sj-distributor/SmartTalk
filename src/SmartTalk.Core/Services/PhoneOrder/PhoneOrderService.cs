@@ -33,6 +33,7 @@ public partial class PhoneOrderService : IPhoneOrderService
     private readonly IAttachmentService _attachmentService;
     private readonly SpeechMaticsClient _speechMaticsClient;
     private readonly ISpeechToTextService _speechToTextService;
+    private readonly IPhoneOrderUtilService _phoneOrderUtilService;
     private readonly SpeechMaticsKeySetting _speechMaticsKeySetting;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly IRestaurantDataProvider _restaurantDataProvider;
@@ -53,6 +54,7 @@ public partial class PhoneOrderService : IPhoneOrderService
         IAttachmentService attachmentService,
         ISpeechToTextService speechToTextService,
         SpeechMaticsClient speechMaticsClient,
+        IPhoneOrderUtilService phoneOrderUtilService,
         SpeechMaticsKeySetting speechMaticsKeySetting,
         IRestaurantDataProvider restaurantDataProvider,
         IPhoneOrderDataProvider phoneOrderDataProvider,
@@ -73,6 +75,7 @@ public partial class PhoneOrderService : IPhoneOrderService
         _speechToTextService = speechToTextService;
         _speechMaticsClient = speechMaticsClient;
         _backgroundJobClient = backgroundJobClient;
+        _phoneOrderUtilService = phoneOrderUtilService;
         _speechMaticsKeySetting = speechMaticsKeySetting;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _restaurantDataProvider = restaurantDataProvider;

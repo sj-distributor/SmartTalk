@@ -1,5 +1,3 @@
-using Newtonsoft.Json;
-using SmartTalk.Messages.Enums.PhoneOrder;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace SmartTalk.Messages.Dto.PhoneOrder;
