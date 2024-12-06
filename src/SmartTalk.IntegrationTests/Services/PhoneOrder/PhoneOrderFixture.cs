@@ -5,13 +5,9 @@ using Mediator.Net;
 using SmartTalk.Core.Data;
 using Microsoft.EntityFrameworkCore;
 using NSubstitute;
-using Smarties.Messages.DTO.OpenAi;
-using Smarties.Messages.DTO.Warehouse;
-using Smarties.Messages.Requests.Ask;
 using SmartTalk.Core.Domain.Account;
 using SmartTalk.Core.Domain.PhoneOrder;
-using SmartTalk.Core.Services.Http.Clients;
-using SmartTalk.Core.Services.RetrievalDb.VectorDb;
+using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Commands.PhoneOrder;
@@ -181,30 +177,11 @@ public class PhoneOrderFixture : PhoneOrderFixtureBase
             },
             builder =>
             {
-                var smartiesClient = Substitute.For<ISmartiesClient>();
+                var phoneOrderUtilService = Substitute.For<IPhoneOrderUtilService>();
 
-                smartiesClient.PerformQueryAsync(Arg.Any<AskGptRequest>(), Arg.Any<CancellationToken>())
-                    .Returns(new AskGptResponse
-                    {
-                        Data = new CompletionsResponseDto()
-                        {
-                            Choices = new List<CompletionsChoiceDto>
-                            {
-                                new()
-                                {
-                                    Message = new CompletionsChoiceMessageDto
-                                    {
-                                        Role = null,
-                                        Content =
-                                            "{\"food_details\": [{\"food_name\":\"蒙古牛\",\"count\":1, \"remark\":null},{\"food_name\":\"蛋花湯\",\"count\":3, \"remark\":null},{\"food_name\":\"椒鹽排骨\",\"count\":1, \"remark\":null},{\"food_name\":\"魚香肉絲\",\"count\":1, \"remark\":null},{\"food_name\":\"春卷\",\"count\":1, \"remark\":null},{\"food_name\":\"法式柠檬柳粒\",\"count\":1, \"remark\":null}]}"
-                                    }
-                                }
-                            },
-                            Error = null
-                        }
-                    });
-
-                builder.RegisterInstance(smartiesClient);
+                phoneOrderUtilService.ExtractPhoneOrderShoppingCartAsync(Arg.Any<string>(), Arg.Any<PhoneOrderRecord>(), Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);;
+                
+                builder.RegisterInstance(phoneOrderUtilService);
             });
     }
 
