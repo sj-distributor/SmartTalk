@@ -1,4 +1,5 @@
 using Mediator.Net.Contracts;
+using SmartTalk.Messages.Dto.Account;
 using SmartTalk.Messages.DTO.Security;
 using SmartTalk.Messages.Enums.Security;
 using SmartTalk.Messages.Responses;
@@ -17,6 +18,8 @@ public class GetCurrentUserRolesResponse : SmartTalkResponse<GetCurrentUserRoles
 public class GetCurrentUserRolesResponseData
 {
     public int Count { get; set; }
+
+    public UserAccountDto UserAccount { get; set; }
     
     public List<RolePermissionDataDto> RolePermissionData { get; set; }
 }
