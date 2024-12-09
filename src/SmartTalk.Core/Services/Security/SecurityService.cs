@@ -1,6 +1,8 @@
+using System.Net;
 using AutoMapper;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Domain.Security;
+using SmartTalk.Core.Middlewares.Security;
 using SmartTalk.Core.Services.Account;
 using SmartTalk.Messages.Dto.Security;
 using SmartTalk.Messages.DTO.Security;
@@ -58,7 +60,7 @@ public class SecurityService : ISecurityService
     {
         var user = await _accountDataProvider.GetUserAccountDtoAsync(_currentUser.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        if (user.Item1 == 0) return new GetCurrentUserRolesResponse();
+        if (user.Item1 == 0) throw new AccountExpiredException("User Account Is Not Exist");
 
         var currentRoles = await _securityDataProvider.GetCurrentUserRolesAsync(request.SystemSource, cancellationToken).ConfigureAwait(false);
 
