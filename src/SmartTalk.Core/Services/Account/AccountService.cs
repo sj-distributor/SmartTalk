@@ -95,8 +95,9 @@ public partial class AccountService : IAccountService
         var accountProfile = await _accountDataProvider.GetUserAccountProfileAsync(command.UserId, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         var (count, roleUsers) = await _securityDataProvider.GetRoleUsersPagingAsync(roleId: command.RoleId, keyword: command.UserName , cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        await _accountDataProvider.DeleteUserAccountProfileAsync(accountProfile, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (accountProfile != null)
+            await _accountDataProvider.DeleteUserAccountProfileAsync(accountProfile, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         await _accountDataProvider.DeleteUserAccountAsync(account.FirstOrDefault(), true, cancellationToken).ConfigureAwait(false);
         
