@@ -1,6 +1,7 @@
 using AutoMapper;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Domain.Security;
+using SmartTalk.Core.Services.Account;
 using SmartTalk.Messages.Dto.Security;
 using SmartTalk.Messages.DTO.Security;
 using SmartTalk.Core.Services.Identity;
@@ -27,12 +28,14 @@ public class SecurityService : ISecurityService
 {
     private readonly IMapper _mapper;
     private readonly ICurrentUser _currentUser;
+    private readonly IAccountDataProvider _accountDataProvider;
     private readonly ISecurityDataProvider _securityDataProvider;
     
-    public SecurityService(IMapper mapper, ICurrentUser currentUser, ISecurityDataProvider securityDataProvider)
+    public SecurityService(IMapper mapper, ICurrentUser currentUser, IAccountDataProvider accountDataProvider, ISecurityDataProvider securityDataProvider)
     {
         _mapper = mapper;
         _currentUser = currentUser;
+        _accountDataProvider = accountDataProvider;
         _securityDataProvider = securityDataProvider;
     }
                             
@@ -53,11 +56,15 @@ public class SecurityService : ISecurityService
     public async Task<GetCurrentUserRolesResponse> GetCurrentUserRoleAsync(
         GetCurrentUserRolesRequest request, CancellationToken cancellationToken)
     {
+        var user = await _accountDataProvider.GetUserAccountDtoAsync(_currentUser.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (user.Item1 == 0) return new GetCurrentUserRolesResponse();
+
         var currentRoles = await _securityDataProvider.GetCurrentUserRolesAsync(request.SystemSource, cancellationToken).ConfigureAwait(false);
 
-        if (!currentRoles.Any()) return new GetCurrentUserRolesResponse();
+        if (!currentRoles.Any()) return new GetCurrentUserRolesResponse { Data = new GetCurrentUserRolesResponseData { UserAccount = user.Item2.FirstOrDefault() } };
 
-        var rolePermissionData = await GetRolePermissionDataAsync(currentRoles, cancellationToken);
+        var rolePermissionData = await GetRolePermissionDataAsync(currentRoles, cancellationToken).ConfigureAwait(false);
         
         return new GetCurrentUserRolesResponse
         {
@@ -65,6 +72,7 @@ public class SecurityService : ISecurityService
             {
                 Count = currentRoles.Count,
                 RolePermissionData = rolePermissionData,
+                UserAccount = user.Item2.FirstOrDefault()
             }
         };
     }
