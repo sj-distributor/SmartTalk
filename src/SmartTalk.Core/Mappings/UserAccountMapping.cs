@@ -8,7 +8,10 @@ public class UserAccountMapping : Profile
 {
     public UserAccountMapping()
     {
-        CreateMap<UserAccount, UserAccountDto>().ReverseMap();
+        CreateMap<UserAccount, UserAccountDto>()
+            .ForMember(x => x.LastModifiedByName, opt => opt.MapFrom(src => src.Creator));
+        CreateMap<UserAccountDto, UserAccount>()
+            .ForMember(x => x.Creator, opt => opt.MapFrom(src => src.LastModifiedByName));
         CreateMap<UserAccountProfile, UserAccountProfileDto>().ReverseMap();
     }
 }
