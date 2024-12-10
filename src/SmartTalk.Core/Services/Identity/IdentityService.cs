@@ -1,4 +1,5 @@
 ﻿using System.Reflection;
+using Serilog;
 using SmartTalk.Core.Services.Account;
 using SmartTalk.Messages.Attributes;
 using SmartTalk.Messages.Dto.Account;
@@ -35,6 +36,8 @@ public class IdentityService : IIdentityService
     
     public async Task<bool> IsInRolesAsync(int? userId, IEnumerable<string> requiredRolesOrPermissions, CancellationToken cancellationToken)
     {
+        Log.Information("IsInRolesAsync start time: {datetime}", DateTime.Now.ToString("HH:mm:ss zz"));
+        
         var (count, users) = await _accountDataProvider.GetUserAccountAsync(userId, includeRoles: true, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         var user = users.FirstOrDefault();
@@ -49,12 +52,16 @@ public class IdentityService : IIdentityService
 
         var userRolesOrPermissions = userRoles.Concat(userPermissions).ToList();
 
+        Log.Information("IsInRolesAsync end time: {datetime}", DateTime.Now.ToString("HH:mm:ss zz"));
+        
         return requiredRolesOrPermissions.All(requiredRolesOrPermission =>
             userRolesOrPermissions.Contains(requiredRolesOrPermission));
     }
     
     public (List<string> RequiredRoles, List<string> RequiredPermissions) GetRolesAndPermissionsFromAttributes(Type messageType)
     {
+        Log.Information("GetRolesAndPermissionsFromAttributes start time: {datetime}", DateTime.Now.ToString("HH:mm:ss zz"));
+        
         var authorizeAttributes = messageType.GetCustomAttributes<SmartTalkAuthorizeAttribute>().ToList();
         
         var roles = authorizeAttributes
@@ -64,6 +71,8 @@ public class IdentityService : IIdentityService
         var permissions = authorizeAttributes
             .Where(x => x.Permissions != null && x.Permissions.Any())
             .SelectMany(x => x.Permissions).ToList();
+        
+        Log.Information("GetRolesAndPermissionsFromAttributes end time: {datetime}", DateTime.Now.ToString("HH:mm:ss zz"));
         
         return (roles, permissions);
     }
