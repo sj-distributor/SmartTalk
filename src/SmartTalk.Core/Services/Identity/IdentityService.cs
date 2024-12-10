@@ -70,8 +70,8 @@ public class IdentityService : IIdentityService
 
     public async Task<bool> IsCurrentUserExistAsync(int id, CancellationToken cancellationToken)
     {
-        var (count, users) = await _accountDataProvider.GetUserAccountAsync(id, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var users = await _accountDataProvider.IsUserAccountExistAsync(id, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        return users is { Count: > 0 };
+        return users is not null;
     }
 }

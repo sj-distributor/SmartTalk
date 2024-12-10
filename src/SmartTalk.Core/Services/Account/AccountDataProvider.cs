@@ -38,6 +38,11 @@ namespace SmartTalk.Core.Services.Account
         Task UpdateUserAccountAsync(UserAccount userAccount, bool forceSave = true, CancellationToken cancellationToken = default);
         
         Task DeleteUserAccountAsync(UserAccount userAccount, bool forceSave = true, CancellationToken cancellationToken = default);
+        
+        Task<(int, List<UserAccountDto>)> GetUserAccountDtoAsync(
+            string userNameContain = null, int? pageSize = null, int? pageIndex = null, bool orderByCreatedOn = false, CancellationToken cancellationToken = default);
+
+        Task<UserAccount> IsUserAccountExistAsync(int id, CancellationToken cancellationToken);
     }
     
     public partial class AccountDataProvider : IAccountDataProvider
@@ -284,6 +289,51 @@ namespace SmartTalk.Core.Services.Account
 
             if (forceSave)
                 await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        
+        public async Task<(int, List<UserAccountDto>)> GetUserAccountDtoAsync(string userNameContain = null, int? pageSize = null, int? pageIndex = null,
+            bool orderByCreatedOn = false, CancellationToken cancellationToken = default)
+        {
+            var query =  _repository.Query<UserAccount>().Where(x => x.Issuer == 0);
+
+            if (!string.IsNullOrEmpty(userNameContain))
+                query = query.Where(x => userNameContain.Contains(x.UserName));
+            
+            if (orderByCreatedOn)
+                query = query.OrderByDescending(x => x.CreatedOn);
+
+            var count = await query.CountAsync(cancellationToken).ConfigureAwait(false);
+            
+            if (pageSize.HasValue && pageIndex.HasValue)
+                query = query.Skip(pageSize.Value * (pageIndex.Value - 1)).Take(pageSize.Value);
+            
+            var account = await query
+                .ToListAsync(cancellationToken).ConfigureAwait(false);
+
+            if (account is { Count: 0 }) return (count, null);
+            
+            var accountIds = query.Select(x => x.Id).ToList();
+
+            var roleUsers = await (from roleUser in _repository.QueryNoTracking<RoleUser>().Where(x => accountIds.Contains(x.UserId))
+                join role in _repository.Query<Role>() on roleUser.RoleId equals role.Id
+                select new { roleUser.UserId, role}).ToListAsync(cancellationToken);
+
+            account = account.Select(x =>
+            {
+                x.Roles = roleUsers.Where(s => s.UserId == x.Id).Select(x => x.role).ToList();
+                
+                return x;
+            }).ToList();
+            
+            return (count, _mapper.Map<List<UserAccountDto>>(account));
+        }
+        
+        public async Task<UserAccount> IsUserAccountExistAsync(int id, CancellationToken cancellationToken)
+        {
+            var userAccount = await _repository.FirstOrDefaultAsync<UserAccount>(x => x.Id == id, cancellationToken).ConfigureAwait(false);
+            
+            return userAccount;
         }
     }
 }

@@ -1,16 +1,19 @@
 using Xunit;
+using Autofac;
 using Shouldly;
+using NSubstitute;
 using Mediator.Net;
 using SmartTalk.Core.Data;
+using Google.Cloud.Translation.V2;
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Domain.Account;
+using SmartTalk.Messages.Enums.Account;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Requests.PhoneOrder;
 using SmartTalk.IntegrationTests.TestBaseClasses;
-using SmartTalk.Messages.Enums.Account;
 
 namespace SmartTalk.IntegrationTests.Services.PhoneOrder;
 
@@ -168,6 +171,9 @@ public class PhoneOrderFixture : PhoneOrderFixtureBase
             afterAdd.All(x => x.Question.Contains("早上好")).ShouldBeTrue();
             afterAdd.All(x => x.Answer.Contains("中午好")).ShouldBeTrue();
             afterAdd.Count.ShouldBe(4);
+        }, builder =>
+        {
+            builder.RegisterInstance(Substitute.For<TranslationClient>());
         });
     }
 

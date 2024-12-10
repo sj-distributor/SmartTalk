@@ -52,8 +52,6 @@ public partial class AccountService : IAccountService
 
     public async Task<CreateUserAccountResponse> CreateUserAccountAsync(CreateUserAccountCommand userAccountCommand, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrEmpty(userAccountCommand.UserName)) return null;
-        
         var account = await _accountDataProvider.CreateUserAccountAsync(
             userAccountCommand.UserName, userAccountCommand.OriginalPassword, null,
             UserAccountIssuer.Self, null, _currentUser.Name, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -73,8 +71,7 @@ public partial class AccountService : IAccountService
     public async Task<GetUserAccountsResponse> GetAccountsAsync(GetUserAccountsRequest request, CancellationToken cancellationToken)
     {
         var (count, userAccount) = await _accountDataProvider.GetUserAccountDtoAsync(
-            userNameContain: request.UserName, pageSize: request.PageSize, pageIndex: request.PageIndex,
-            includeRoles: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+            request.UserName, request.PageSize, request.PageIndex, true, cancellationToken).ConfigureAwait(false);
 
         return new GetUserAccountsResponse
         {
