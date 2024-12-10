@@ -38,9 +38,7 @@ public class IdentityService : IIdentityService
     {
         Log.Information("IsInRolesAsync start time: {datetime}", DateTime.Now.ToString("HH:mm:ss zz"));
         
-        var (count, users) = await _accountDataProvider.GetUserAccountAsync(userId, includeRoles: true, cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        var user = users.FirstOrDefault();
+        var user = await _accountDataProvider.GetUserAccountRolePermissionsByUserIdAsync(userId, cancellationToken).ConfigureAwait(false);
 
         if (user == null) return false;
         
