@@ -338,8 +338,7 @@ namespace SmartTalk.Core.Services.Account
             return userAccount;
         }
 
-        public async Task<UserAccount> GetUserAccountRolePermissionsByUserIdAsync(
-            int? userId, CancellationToken cancellationToken)
+        public async Task<UserAccount> GetUserAccountRolePermissionsByUserIdAsync(int? userId, CancellationToken cancellationToken)
         {
             if (!userId.HasValue) throw new UserAccountAtLeastOneParamPassingException();
             
