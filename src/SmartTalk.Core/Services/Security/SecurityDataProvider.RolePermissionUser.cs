@@ -75,7 +75,6 @@ public partial class SecurityDataProvider : ISecurityDataProvider
 
     public async Task<RoleUser> GetRoleUserByIdAsync(int roleId, int userId, CancellationToken cancellationToken)
     {
-        return await _repository.Query<RoleUser>()
-            .Where(x => x.RoleId == roleId && x.UserId == userId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        return await _repository.FirstOrDefaultAsync<RoleUser>(x => x.RoleId == roleId && x.UserId == userId, cancellationToken).ConfigureAwait(false);
     }
 }

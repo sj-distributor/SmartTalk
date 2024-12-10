@@ -1,5 +1,6 @@
 using System.Net;
 using AutoMapper;
+using Serilog;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Domain.Security;
 using SmartTalk.Core.Middlewares.Security;
@@ -10,6 +11,7 @@ using SmartTalk.Core.Services.Identity;
 using SmartTalk.Messages.Requests.Security;
 using SmartTalk.Messages.Commands.Security;
 using SmartTalk.Messages.Enums.Security;
+using SmartTalk.Messages.Events.Security;
 
 namespace SmartTalk.Core.Services.Security;
 
@@ -24,6 +26,9 @@ public interface ISecurityService : IScopedDependency
         GetPermissionsByRoleIdRequest request, CancellationToken cancellationToken);
      
      Task<GetRolesResponse> GetRolesAsync(GetRolesRequest request, CancellationToken cancellationToken);
+     
+     Task<UserPermissionsCreatedEvent> CreateUserPermissionsAsync(
+         CreateUserPermissionsCommand command, CancellationToken cancellationToken);
 }
 
 public class SecurityService : ISecurityService
@@ -153,6 +158,18 @@ public class SecurityService : ISecurityService
                 Count = count,
                 Roles = _mapper.Map<List<RoleDto>>(roles)
             }
+        };
+    }
+      
+    public async Task<UserPermissionsCreatedEvent> CreateUserPermissionsAsync(CreateUserPermissionsCommand command, CancellationToken cancellationToken)
+    {
+        var userPermissions = _mapper.Map<List<UserPermission>>(command.UserPermissions);
+        
+        await _securityDataProvider.CreateUserPermissionsAsync(userPermissions, cancellationToken).ConfigureAwait(false);
+
+        return new UserPermissionsCreatedEvent
+        {
+            UserPermissions = _mapper.Map<List<UserPermissionDto>>(userPermissions)
         };
     }
 }
