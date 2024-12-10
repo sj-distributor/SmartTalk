@@ -242,8 +242,19 @@ public class PhoneOrderFixture : PhoneOrderFixtureBase
             }
         };
         
+        var record = new PhoneOrderRecord
+        {
+            Id = 1,
+            SessionId = Guid.NewGuid().ToString(),
+            Restaurant = PhoneOrderRestaurant.MoonHouse,
+            TranscriptionText = "hello hi hi hi",
+            Url = "https://xxx.com",
+            ManualOrderId = 123456889,
+        };
+        
         await RunWithUnitOfWork<IRepository>(async repository =>
         {
+            await repository.InsertAsync(record);
             await repository.InsertAllAsync(orderItems);
         });
 
@@ -254,6 +265,7 @@ public class PhoneOrderFixture : PhoneOrderFixtureBase
             response.Data.ShouldNotBeNull();
             response.Data.ManualItems.Count.ShouldBe(2);
             response.Data.AIItems.Count.ShouldBe(3);
+            response.Data.ManualOrderId.ShouldBe(123456889.ToString());
         });
     }
 }

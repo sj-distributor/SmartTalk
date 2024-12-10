@@ -4,6 +4,7 @@ using Smarties.Messages.Enums.OpenAi;
 using Smarties.Messages.Requests.Ask;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Extensions;
+using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Restaurants;
 using SmartTalk.Core.Services.RetrievalDb.VectorDb;
@@ -13,7 +14,7 @@ using SmartTalk.Messages.Dto.WebSocket;
 
 namespace SmartTalk.Core.Services.PhoneOrder;
 
-public interface IPhoneOrderUtilService
+public interface IPhoneOrderUtilService : IScopedDependency
 {
     Task ExtractPhoneOrderShoppingCartAsync(string goalTexts, PhoneOrderRecord record, CancellationToken cancellationToken);
 }
