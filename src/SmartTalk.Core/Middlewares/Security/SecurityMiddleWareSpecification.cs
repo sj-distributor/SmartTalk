@@ -3,6 +3,7 @@ using System.Runtime.ExceptionServices;
 using Mediator.Net.Context;
 using Mediator.Net.Contracts;
 using Mediator.Net.Pipeline;
+using Serilog;
 using SmartTalk.Core.Services.Identity;
 using SmartTalk.Messages.Requests.PhoneOrder;
 using SmartTalk.Messages.Responses;
@@ -28,6 +29,8 @@ public class SecurityMiddleWareSpecification<TContext> : IPipeSpecification<TCon
 
     public async Task BeforeExecute(TContext context, CancellationToken cancellationToken)
     {
+        Log.Information("SecurityMiddleWareSpecification start time: {datetime}", DateTime.Now.ToString("HH:mm:ss zz"));
+        
         if (_currentUser.Id.HasValue)
         {
             var isCurrentUserExist = await _identityService.IsCurrentUserExistAsync(_currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
@@ -35,6 +38,8 @@ public class SecurityMiddleWareSpecification<TContext> : IPipeSpecification<TCon
             if (!isCurrentUserExist)
                 throw new AccountExpiredException("User Account Is Not Exist");
         }
+        
+        Log.Information("SecurityMiddleWareSpecification end time: {datetime}", DateTime.Now.ToString("HH:mm:ss zz"));
     }
 
     public Task Execute(TContext context, CancellationToken cancellationToken)

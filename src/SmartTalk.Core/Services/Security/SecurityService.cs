@@ -1,5 +1,6 @@
 using System.Net;
 using AutoMapper;
+using Serilog;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Domain.Security;
 using SmartTalk.Core.Middlewares.Security;
@@ -43,12 +44,16 @@ public class SecurityService : ISecurityService
                             
     public async Task<UpdateUserAccountResponse> UpdateRoleUserAsync(UpdateUserAccountCommand command, CancellationToken cancellationToken)
     {
+        Log.Information("UpdateRoleUserAsync start time: {datetime}", DateTime.Now.ToString("HH:mm:ss zz"));
+        
         var roleUser = await _securityDataProvider.GetRoleUserByIdAsync(command.OldRoleId, command.UserId, cancellationToken).ConfigureAwait(false);
         
         roleUser.RoleId = command.NewRoleId;
         
         await _securityDataProvider.UpdateRoleUsersAsync([roleUser], cancellationToken).ConfigureAwait(false);
 
+        Log.Information("UpdateRoleUserAsync end time: {datetime}", DateTime.Now.ToString("HH:mm:ss zz"));
+        
         return new UpdateUserAccountResponse
         {
             Data = _mapper.Map<UpdateUserAccountDto>(roleUser)

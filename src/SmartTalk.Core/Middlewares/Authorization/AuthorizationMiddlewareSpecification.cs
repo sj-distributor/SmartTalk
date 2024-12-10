@@ -2,6 +2,7 @@ using System.Runtime.ExceptionServices;
 using Mediator.Net.Context;
 using Mediator.Net.Contracts;
 using Mediator.Net.Pipeline;
+using Serilog;
 using SmartTalk.Core.Services.Identity;
 
 namespace SmartTalk.Core.Middlewares.Authorization;
@@ -25,6 +26,8 @@ public class AuthorizationMiddlewareSpecification<TContext> : IPipeSpecification
 
     public async Task BeforeExecute(TContext context, CancellationToken cancellationToken)
     {
+        Log.Information("AuthrizationMiddelwareSpecification start time: {datetime}", DateTime.Now.ToString("HH:mm:ss zz"));
+        
         var (requiredRoles, requiredPermissions) =
             _identityService.GetRolesAndPermissionsFromAttributes(context.Message.GetType());
 
@@ -38,6 +41,8 @@ public class AuthorizationMiddlewareSpecification<TContext> : IPipeSpecification
             if (!isInRole)
                 throw new ForbiddenAccessException();
         }
+        
+        Log.Information("AuthrizationMiddelwareSpecification end time: {datetime}", DateTime.Now.ToString("HH:mm:ss zz"));
     }
     
     public Task Execute(TContext context, CancellationToken cancellationToken)

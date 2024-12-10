@@ -1,4 +1,5 @@
 using AutoMapper;
+using Serilog;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.System;
 using SmartTalk.Messages.Dto.Account;
@@ -85,6 +86,8 @@ public partial class AccountService : IAccountService
     
     public async Task<DeleteUserAccountsResponse> DeleteUserAccountAsync(DeleteUserAccountsCommand command, CancellationToken cancellationToken)
     {
+        Log.Information("DeleteUserAccountAsync start time: {datetime}", DateTime.Now.ToString("HH:mm:ss zz"));
+        
         var (accountCount, account) = await _accountDataProvider.GetUserAccountAsync(id: command.UserId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (account is { Count: 0 }) return null;
@@ -100,17 +103,22 @@ public partial class AccountService : IAccountService
         
         await _securityDataProvider.DeleteRoleUsersAsync(roleUsers, cancellationToken).ConfigureAwait(false);
         
+        Log.Information("DeleteUserAccountAsync end time: {datetime}", DateTime.Now.ToString("HH:mm:ss zz"));
+        
         return new DeleteUserAccountsResponse();
     }
 
     public async Task<GetUserAccountInfoResponse> GetAccountInfoAsync(GetUserAccountInfoRequest request, CancellationToken cancellationToken)
     {
+        Log.Information("GetUserAccountInfoRequest start time: {datetime}", DateTime.Now.ToString("HH:mm:ss zz"));
+        
         var (accountCount, accounts) = await _accountDataProvider.GetUserAccountAsync(id: request.UserId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var account = accounts.FirstOrDefault();
 
         if (account == null) return null;
         
+        Log.Information("GetUserAccountInfoRequest end time: {datetime}", DateTime.Now.ToString("HH:mm:ss zz"));
         return new GetUserAccountInfoResponse
         {
            Data = new GetUserAccountInfoDto
