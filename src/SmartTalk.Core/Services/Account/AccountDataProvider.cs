@@ -43,6 +43,8 @@ namespace SmartTalk.Core.Services.Account
             string userNameContain = null, int? pageSize = null, int? pageIndex = null, bool orderByCreatedOn = false, CancellationToken cancellationToken = default);
 
         Task<UserAccount> IsUserAccountExistAsync(int id, CancellationToken cancellationToken);
+
+        Task<UserAccount> GetUserAccountRolePermissionsByUserIdAsync(int? userId, CancellationToken cancellationToken);
     }
     
     public partial class AccountDataProvider : IAccountDataProvider
@@ -334,6 +336,27 @@ namespace SmartTalk.Core.Services.Account
             var userAccount = await _repository.FirstOrDefaultAsync<UserAccount>(x => x.Id == id, cancellationToken).ConfigureAwait(false);
             
             return userAccount;
+        }
+
+        public async Task<UserAccount> GetUserAccountRolePermissionsByUserIdAsync(
+            int? userId, CancellationToken cancellationToken)
+        {
+            if (!userId.HasValue) throw new UserAccountAtLeastOneParamPassingException();
+            
+            var user = await _repository.FirstOrDefaultAsync<UserAccount>(x => x.Id == userId, cancellationToken).ConfigureAwait(false);
+
+            var roles = await (from roleUser in _repository.Query<RoleUser>().Where(x => x.UserId == userId)
+                join role in _repository.Query<Role>() on roleUser.RoleId equals role.Id
+                join rolePermission in _repository.Query<RolePermission>() on role.Id equals rolePermission.RoleId
+                join permission in _repository.Query<Permission>() on rolePermission.PermissionId equals permission.Id 
+                select new {role, permission}).ToListAsync(cancellationToken);
+
+            if (user == null) throw new UserAccountAtLeastOneParamPassingException();
+                        
+            user.Roles = roles.Select(x => x.role).ToList();
+            user.Permissions = roles.Select(x => x.permission).ToList();
+
+            return user;
         }
     }
 }

@@ -35,9 +35,7 @@ public class IdentityService : IIdentityService
     
     public async Task<bool> IsInRolesAsync(int? userId, IEnumerable<string> requiredRolesOrPermissions, CancellationToken cancellationToken)
     {
-        var (count, users) = await _accountDataProvider.GetUserAccountAsync(userId, includeRoles: true, cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        var user = users.FirstOrDefault();
+        var user = await _accountDataProvider.GetUserAccountRolePermissionsByUserIdAsync(userId, cancellationToken).ConfigureAwait(false);
 
         if (user == null) return false;
         
