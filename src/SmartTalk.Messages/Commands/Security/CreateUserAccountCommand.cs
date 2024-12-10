@@ -3,12 +3,12 @@ using Mediator.Net.Contracts;
 using System.Security.Cryptography;
 using SmartTalk.Messages.Responses;
 using SmartTalk.Messages.Attributes;
+using SmartTalk.Messages.Constants;
 using SmartTalk.Messages.Dto.Account;
-using SmartTalk.Messages.Enums.MessageLogging;
 
 namespace SmartTalk.Messages.Commands.Security;
 
-[SmartTalkAuthorize("CanCreateAccount")]
+[SmartTalkAuthorize(Permissions = [SecurityStore.Permissions.CanCreateAccount])]
 public class CreateUserAccountCommand : ICommand
 {
     public string UserName { get; set; }
