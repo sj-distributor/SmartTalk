@@ -351,10 +351,14 @@ namespace SmartTalk.Core.Services.Account
                 join permission in _repository.Query<Permission>() on rolePermission.PermissionId equals permission.Id 
                 select new {role, permission}).ToListAsync(cancellationToken);
 
+            var userPermissions = await (from userPermission in _repository.Query<UserPermission>().Where( x => x.UserId == userId)
+                join permission in _repository.Query<Permission>() on userPermission.PermissionId equals permission.Id
+                select permission).ToListAsync(cancellationToken);
+            
             if (user == null) throw new UserAccountAtLeastOneParamPassingException();
                         
             user.Roles = roles.Select(x => x.role).ToList();
-            user.Permissions = roles.Select(x => x.permission).ToList();
+            user.Permissions = roles.Select(x => x.permission).Concat(userPermissions).ToList();
 
             return user;
         }
