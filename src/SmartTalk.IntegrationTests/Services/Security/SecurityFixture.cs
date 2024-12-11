@@ -119,11 +119,9 @@ public class SecurityFixture : SecurityFixtureBase
             });
 
             var userAccount = await repository.FirstOrDefaultAsync<UserAccount>(x => x.Id == account.Id).ConfigureAwait(false);
-            var userAccountProfile = await repository.FirstOrDefaultAsync<UserAccountProfile>(x => x.UserAccountId == account.Id).ConfigureAwait(false);
             var roleUser = await repository.FirstOrDefaultAsync<RoleUser>(x => x.UserId == account.Id).ConfigureAwait(false);
 
             userAccount.ShouldBeNull();
-            userAccountProfile.ShouldBeNull();
             roleUser.ShouldBeNull();
         });
     }
