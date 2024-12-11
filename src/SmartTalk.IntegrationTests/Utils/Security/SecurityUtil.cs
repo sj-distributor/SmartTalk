@@ -7,6 +7,7 @@ using SmartTalk.Core.Domain.Security;
 using SmartTalk.Messages.Commands.Security;
 using SmartTalk.Messages.Dto.Security.Data;
 using SmartTalk.Messages.DTO.Security.Data;
+using SmartTalk.Messages.Enums.Security;
 using SmartTalk.Messages.Requests.Security;
 
 namespace SmartTalk.IntegrationTests.Utils.Security;
@@ -19,31 +20,23 @@ public class SecurityUtil : TestUtil
 
     public async Task<int> AddRolesAsync(string? name = null, string? description = null)
     {
-        var roleId = 0;
         name ??= "默认角色";
         
-        await RunWithUnitOfWork<IMediator>(async mediator =>
+        var role = new Role
         {
-            await mediator.SendAsync<CreateRolesCommand, CreateRolesResponse>(new CreateRolesCommand
-            {
-                Roles = new List<CreateOrUpdateRoleDto>
-                {
-                    new()
-                    {
-                        Name = name,
-                        Description = description ?? "默认描述"
-                    }
-                }
-            }).ConfigureAwait(false);
-        });
+            Name = name,
+            IsSystem = true,
+            Description = description ?? "默认描述",
+            SystemSource = RoleSystemSource.System
+        };
+       
         
         await RunWithUnitOfWork<IRepository>(async repository =>
         {
-            roleId = (await repository.QueryNoTracking<Role>().Where(x => x.Name == name).ToListAsync()
-                .ConfigureAwait(false)).First().Id;
+            await repository.InsertAsync(role).ConfigureAwait(false);
         });
-
-        return roleId;
+        
+        return role.Id;
     }
     
     public async Task DeleteRolesAsync(int id)

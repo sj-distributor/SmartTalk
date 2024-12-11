@@ -54,7 +54,7 @@ public partial class SecurityDataProvider : ISecurityDataProvider
     }
 
     public async Task<List<RolePermissionUser>> GetRolePermissionUsersAsync(
-        int? roleId = null, int? permissionId = null, CancellationToken cancellationToken = default)
+        int? roleId = null, int? permissionId = null, List<int> permissionIds = null, List<int> roleIds = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<RolePermissionUser>();
 
@@ -63,13 +63,18 @@ public partial class SecurityDataProvider : ISecurityDataProvider
         
         if (permissionId.HasValue)
             query = query.Where(x => x.PermissionId == permissionId);
+
+        if (permissionIds is not { Count: 0 })
+            query = query.Where(x => permissionIds.Contains(x.PermissionId));
+
+        if (roleIds is not { Count: 0 })
+            query = query.Where(x => roleIds.Contains(x.RoleId));
         
         return await query.OrderByDescending(x => x.CreatedDate).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<RoleUser> GetRoleUserByIdAsync(int roleId, int userId, CancellationToken cancellationToken)
     {
-        return await _repository.Query<RoleUser>()
-            .Where(x => x.RoleId == roleId && x.UserId == userId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        return await _repository.FirstOrDefaultAsync<RoleUser>(x => x.RoleId == roleId && x.UserId == userId, cancellationToken).ConfigureAwait(false);
     }
 }

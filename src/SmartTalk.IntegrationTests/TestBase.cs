@@ -3,6 +3,7 @@ using Autofac;
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Configuration;
 using SmartTalk.IntegrationTests.Utils.Account;
+using SmartTalk.IntegrationTests.Utils.Security;
 using StackExchange.Redis;
 
 namespace SmartTalk.IntegrationTests;
@@ -14,6 +15,7 @@ public partial class TestBase : TestUtilBase, IAsyncLifetime, IDisposable
     private readonly int _redisDatabaseIndex;
     
     private readonly IdentityUtil _identityUtil;
+    private readonly SecurityUtil _securityUtil;
     
     private static readonly ConcurrentDictionary<string, IContainer> Containers = new();
 
@@ -31,6 +33,8 @@ public partial class TestBase : TestUtilBase, IAsyncLifetime, IDisposable
     {
         _testTopic = testTopic;
         _databaseName = databaseName;
+        _redisDatabaseIndex = redisDatabaseIndex;
+        
         var root = Containers.GetValueOrDefault(testTopic);
 
         if (root == null)
@@ -48,5 +52,6 @@ public partial class TestBase : TestUtilBase, IAsyncLifetime, IDisposable
         SetupScope(CurrentScope);
     
         _identityUtil = new IdentityUtil(CurrentScope);
+        _securityUtil = new SecurityUtil(CurrentScope);
     }
 }

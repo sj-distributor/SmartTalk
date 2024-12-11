@@ -9,12 +9,13 @@ using Serilog;
 using SmartTalk.Core;
 using SmartTalk.Core.DbUpFile;
 using SmartTalk.Core.Services.AliYun;
+using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Identity;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Settings;
 using SmartTalk.Core.Settings.Caching;
-using SmartTalk.Core.Settings.VectorDb;
 using SmartTalk.IntegrationTests.Mocks;
+using SmartTalk.Messages.Constants;
 using SmartTalk.Messages.Enums.Caching;
 using StackExchange.Redis;
 
@@ -32,6 +33,7 @@ public partial class TestBase
     public async Task InitializeAsync()
     {
         await _identityUtil.CreateUser(_testCurrentUser);
+        await _securityUtil.AddPermissionsAndAssignToUserAsync(_testCurrentUser.Id.Value, SecurityStore.Permissions.AllPermissions);
     }
 
     private void RegisterBaseContainer(ContainerBuilder containerBuilder)
@@ -47,6 +49,7 @@ public partial class TestBase
         containerBuilder.RegisterInstance(Substitute.For<IOpenAIService>()).AsImplementedInterfaces();
         containerBuilder.RegisterInstance(Substitute.For<IHttpContextAccessor>()).AsImplementedInterfaces();
         containerBuilder.RegisterInstance(Substitute.For<IAliYunOssService>()).AsImplementedInterfaces();
+        containerBuilder.RegisterInstance(Substitute.For<IEasyPosClient>()).AsImplementedInterfaces();
         
         RegisterRedis(containerBuilder);
         RegisterSmartTalkBackgroundJobClient(containerBuilder);
@@ -124,7 +127,7 @@ public partial class TestBase
             {
                 var server = redis.GetServer(endpoint);
                     
-                server.FlushDatabase(_redisDatabaseIndex);    
+                server.FlushDatabase(_redisDatabaseIndex);
             }
         }
         catch

@@ -21,7 +21,11 @@ public class IdentityService : IIdentityService
         var userId = _currentUser.Id;
 
         if (userId != null)
-            return await _accountDataProvider.GetUserAccountDtoAsync(userId.Value, cancellationToken: cancellationToken).ConfigureAwait(false);
+        {
+            var (count, account) = await _accountDataProvider.GetUserAccountDtoAsync(userId.Value, cancellationToken: cancellationToken).ConfigureAwait(false);
+         
+            return account.FirstOrDefault() != null ? account.FirstOrDefault() : null;
+        }
         
         if (throwWhenNotFound)
             throw new UnauthorizedAccessException();
@@ -31,8 +35,7 @@ public class IdentityService : IIdentityService
     
     public async Task<bool> IsInRolesAsync(int? userId, IEnumerable<string> requiredRolesOrPermissions, CancellationToken cancellationToken)
     {
-        var user = 
-            await _accountDataProvider.GetUserAccountAsync(userId, includeRoles: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var user = await _accountDataProvider.GetUserAccountRolePermissionsByUserIdAsync(userId, cancellationToken).ConfigureAwait(false);
 
         if (user == null) return false;
         
@@ -61,5 +64,12 @@ public class IdentityService : IIdentityService
             .SelectMany(x => x.Permissions).ToList();
         
         return (roles, permissions);
+    }
+
+    public async Task<bool> IsCurrentUserExistAsync(int id, CancellationToken cancellationToken)
+    {
+        var users = await _accountDataProvider.IsUserAccountExistAsync(id, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        return users is not null;
     }
 }

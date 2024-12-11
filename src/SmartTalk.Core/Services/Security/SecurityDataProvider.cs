@@ -128,7 +128,7 @@ public partial interface ISecurityDataProvider : IScopedDependency
         int pageIndex, int pageSize, int? roleId = null, int? permissionId = null, CancellationToken cancellationToken = default);
     
     Task<List<RolePermissionUser>> GetRolePermissionUsersAsync(
-        int? roleId = null, int? permissionId = null, CancellationToken cancellationToken = default);
+        int? roleId = null, int? permissionId = null, List<int> permissionIds = null, List<int> roleIds = null, CancellationToken cancellationToken = default);
     
     Task<RoleUser> GetRoleUserByIdAsync(int roleId, int userId, CancellationToken cancellationToken);
 }
