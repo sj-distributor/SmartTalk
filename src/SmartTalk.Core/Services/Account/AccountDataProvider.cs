@@ -33,7 +33,7 @@ namespace SmartTalk.Core.Services.Account
 
         Task<UserAccount> CreateUserAccountAsync(
             string requestUserName, string requestPassword, string thirdPartyUserId = null,
-            UserAccountIssuer authType = UserAccountIssuer.Self, UserAccountProfile profile = null, string creator = null, CancellationToken cancellationToken = default);
+            UserAccountIssuer authType = UserAccountIssuer.Self, UserAccountProfile profile = null, string creator = null, bool isProfile = true, CancellationToken cancellationToken = default);
 
         Task UpdateUserAccountAsync(UserAccount userAccount, bool forceSave = true, CancellationToken cancellationToken = default);
         
@@ -247,7 +247,7 @@ namespace SmartTalk.Core.Services.Account
         
         public async Task<UserAccount> CreateUserAccountAsync(
             string requestUserName, string requestPassword, string thirdPartyUserId = null, 
-            UserAccountIssuer authType = UserAccountIssuer.Self, UserAccountProfile profile = null, string creator = null, CancellationToken cancellationToken = default)
+            UserAccountIssuer authType = UserAccountIssuer.Self, UserAccountProfile profile = null, string creator = null, bool isProfile = true, CancellationToken cancellationToken = default)
         {
             var userAccount = new UserAccount
             {
@@ -263,7 +263,9 @@ namespace SmartTalk.Core.Services.Account
         
             await _repository.InsertAsync(userAccount, cancellationToken).ConfigureAwait(false);
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-        
+
+            if (!isProfile) return userAccount;
+            
             profile ??= new UserAccountProfile();
 
             profile.UserAccountId = userAccount.Id;

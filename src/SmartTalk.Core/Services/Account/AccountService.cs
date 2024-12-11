@@ -55,7 +55,7 @@ public partial class AccountService : IAccountService
     {
         var account = await _accountDataProvider.CreateUserAccountAsync(
             userAccountCommand.UserName, userAccountCommand.OriginalPassword, null,
-            UserAccountIssuer.Self, null, _currentUser.Name, cancellationToken: cancellationToken).ConfigureAwait(false);
+            UserAccountIssuer.Self, null, _currentUser.Name, isProfile: false, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         await _securityDataProvider.CreateRoleUsersAsync([new RoleUser
         {
@@ -87,19 +87,14 @@ public partial class AccountService : IAccountService
     public async Task<DeleteUserAccountsResponse> DeleteUserAccountAsync(DeleteUserAccountsCommand command, CancellationToken cancellationToken)
     {
         Log.Information("DeleteUserAccountAsync start time: {datetime}", DateTime.Now.ToString("HH:mm:ss zz"));
-        
-        var (accountCount, account) = await _accountDataProvider.GetUserAccountAsync(id: command.UserId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        if (account is { Count: 0 }) return null;
-        
-        var accountProfile = await _accountDataProvider.GetUserAccountProfileAsync(command.UserId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var account = await _accountDataProvider.IsUserAccountExistAsync(command.UserId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (account is null) return null;
         
         var (count, roleUsers) = await _securityDataProvider.GetRoleUsersPagingAsync(roleId: command.RoleId, keyword: command.UserName , cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        if (accountProfile != null)
-            await _accountDataProvider.DeleteUserAccountProfileAsync(accountProfile, cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        await _accountDataProvider.DeleteUserAccountAsync(account.FirstOrDefault(), true, cancellationToken).ConfigureAwait(false);
+        await _accountDataProvider.DeleteUserAccountAsync(account, true, cancellationToken).ConfigureAwait(false);
         
         await _securityDataProvider.DeleteRoleUsersAsync(roleUsers, cancellationToken).ConfigureAwait(false);
         
