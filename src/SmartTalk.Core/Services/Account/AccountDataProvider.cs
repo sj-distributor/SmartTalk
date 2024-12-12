@@ -302,7 +302,7 @@ namespace SmartTalk.Core.Services.Account
             var query =  _repository.Query<UserAccount>().Where(x => x.Issuer == 0);
 
             if (!string.IsNullOrEmpty(userNameContain))
-                query = query.Where(x => userNameContain.Contains(x.UserName));
+                query = query.Where(x => x.UserName.Contains(userNameContain));
             
             if (orderByCreatedOn)
                 query = query.OrderByDescending(x => x.CreatedOn);
