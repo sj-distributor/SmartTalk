@@ -1,7 +1,5 @@
-using System.Net;
 using Serilog;
 using System.Text;
-using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using SmartTalk.Messages.Enums.STT;
 using Smarties.Messages.DTO.OpenAi;
@@ -10,9 +8,6 @@ using Smarties.Messages.Enums.OpenAi;
 using Smarties.Messages.Requests.Ask;
 using System.Text.RegularExpressions;
 using SmartTalk.Core.Domain.PhoneOrder;
-using SmartTalk.Core.Domain.SpeechMatics;
-using SmartTalk.Core.Extensions;
-using SmartTalk.Messages.Dto.WebSocket;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Dto.Attachments;
 using SmartTalk.Messages.Enums.PhoneOrder;
@@ -21,9 +16,8 @@ using SmartTalk.Messages.Enums.SpeechMatics;
 using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Requests.PhoneOrder;
 using SmartTalk.Messages.Commands.Attachments;
-using SmartTalk.Messages.Constants;
+using SmartTalk.Messages.Commands.Smarties;
 using SmartTalk.Messages.Dto.EasyPos;
-using SmartTalk.Messages.Dto.Restaurant;
 using SmartTalk.Messages.Dto.WeChat;
 using TranscriptionFileType = SmartTalk.Messages.Enums.STT.TranscriptionFileType;
 using TranscriptionResponseFormat = SmartTalk.Messages.Enums.STT.TranscriptionResponseFormat;
@@ -63,6 +57,17 @@ public partial class PhoneOrderService
 
         if (await CheckOrderExistAsync(recordInfo.OrderDate.AddHours(-8), cancellationToken).ConfigureAwait(false)) return;
         
+        try
+        {
+            await SpeechParticipleAsync(command.RecordName, command.RecordContent, recordInfo, cancellationToken).ConfigureAwait(false);
+            
+            return;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Phone order record SpeechParticipleAsync error");
+        }
+        
         var transcription = await _speechToTextService.SpeechToTextAsync(
             command.RecordContent, fileType: TranscriptionFileType.Wav, responseFormat: TranscriptionResponseFormat.Text, cancellationToken: cancellationToken).ConfigureAwait(false);
         
@@ -93,6 +98,94 @@ public partial class PhoneOrderService
         record.TranscriptionJobId = await CreateSpeechMaticsJobAsync(command.RecordContent, command.RecordName, detection.Language, cancellationToken).ConfigureAwait(false);
         
         await AddPhoneOrderRecordAsync(record, PhoneOrderRecordStatus.Diarization, cancellationToken).ConfigureAwait(false);
+    }
+    
+    private async Task SpeechParticipleAsync(string recordName, byte[] recordContent, PhoneOrderRecordInformationDto recordInfo, CancellationToken cancellationToken)
+    {
+        var record = new PhoneOrderRecord { SessionId = Guid.NewGuid().ToString(), Restaurant = recordInfo.Restaurant, Language = TranscriptionLanguage.English, CreatedDate = recordInfo.OrderDate.AddHours(-8), Status = PhoneOrderRecordStatus.Recieved };
+        
+        if (await CheckPhoneOrderRecordDurationAsync(recordContent, cancellationToken).ConfigureAwait(false))
+        {
+            await AddPhoneOrderRecordAsync(record, PhoneOrderRecordStatus.NoContent, cancellationToken).ConfigureAwait(false);
+            
+            return;
+        }
+        
+        var url = await UploadRecordFileAsync(recordName, recordContent, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information($"Phone order record file url: {url}", url);
+        
+        if (string.IsNullOrEmpty(url))
+        {
+            await AddPhoneOrderRecordAsync(record, PhoneOrderRecordStatus.NoContent, cancellationToken).ConfigureAwait(false);
+            
+            return;
+        }
+        
+        await AddPhoneOrderRecordAsync(record, PhoneOrderRecordStatus.Diarization, cancellationToken).ConfigureAwait(false);
+        
+        var speech = await _smartiesClient.SpeechParticipleAsync(new SpeechParticipleCommandDto
+        {
+            Url = url,
+        }, cancellationToken).ConfigureAwait(false);
+        
+        var (goalText, tip)= await StructureDiarizationResults(speech, record, cancellationToken).ConfigureAwait(false);
+        
+        await _phoneOrderUtilService.ExtractPhoneOrderShoppingCartAsync(goalText, record, cancellationToken).ConfigureAwait(false);
+        
+        record.Tips = tip;
+        record.Status = PhoneOrderRecordStatus.Sent;
+        record.TranscriptionText = goalText;
+        
+        await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+    
+    private async Task<(string, string)> StructureDiarizationResults(SpeechParticipleResponseDto results, PhoneOrderRecord record, CancellationToken cancellationToken)
+    {
+        var goalTexts = "";
+        var conversationIndex = 0;
+        var conversations = new List<PhoneOrderConversation>();
+
+        foreach (var speech in results.Result)
+        {
+            var originText = speech.Value.Text;
+            
+            var currentRole = int.Parse(speech.Key) % 2 == 0 ? PhoneOrderRole.Restaurant : PhoneOrderRole.Client;
+            
+            goalTexts += currentRole + ": " + originText + "\n";
+            
+            if (currentRole == PhoneOrderRole.Restaurant)
+                conversations.Add(new PhoneOrderConversation { RecordId = record.Id, Question = originText, Order = conversationIndex });
+            else
+            {
+                conversations[conversationIndex].Answer = originText;
+                conversationIndex++;
+            }
+        }
+
+        Log.Information("Structure diarization goalTextsString : {@speakInfos}, conversations:{@conversations}", goalTexts, conversations);
+        
+        if (await CheckRestaurantRecordingRoleAsync(goalTexts, cancellationToken).ConfigureAwait(false))
+        {
+            if (conversations[0].Question.IsNullOrEmpty())
+            {
+                conversations.Insert(0, new PhoneOrderConversation
+                {
+                    Order = 0,
+                    Answer = "",
+                    Question = "",
+                    RecordId = record.Id
+                });
+            }
+
+            ShiftConversations(conversations);
+        }
+        
+        goalTexts = ProcessConversation(conversations);
+        
+        await _phoneOrderDataProvider.AddPhoneOrderConversationsAsync(conversations, true, cancellationToken).ConfigureAwait(false);
+        
+        return (goalTexts, conversations.First().Question);
     }
 
     private async Task<bool> CheckOrderExistAsync(DateTimeOffset createdDate, CancellationToken cancellationToken)
