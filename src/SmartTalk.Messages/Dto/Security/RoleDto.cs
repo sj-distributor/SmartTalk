@@ -18,11 +18,22 @@ public class RoleDto
     
     public string Name { get; set; }
     
-    public string DisplayName { get; set; }
+    public string DisplayName => GetDisplayName(Name);
     
     public RoleSystemSource SystemSource { get; set; }
     
     public string Description { get; set; }
     
     public bool IsSystem { get; set; }
+
+    private string GetDisplayName(string name)
+    {
+        return name switch
+        {
+            "SuperAdministrator" => "超级管理员",
+            "Administrator" => "管理员",
+            "User" => "操作员",
+            _ => null
+        };
+    }
 }

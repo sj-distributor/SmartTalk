@@ -6,12 +6,12 @@ using SmartTalk.Messages.Enums.Account;
 namespace SmartTalk.Core.Domain.Account
 {
     [Table("user_account")]
-    public class UserAccount : IEntity
+    public class UserAccount : IEntity, IHasModifiedFields
     {
         public UserAccount()
         {
             Uuid = Guid.NewGuid();
-            CreatedOn = DateTimeOffset.Now;
+            CreatedOn = new DateTimeOffset(TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("America/Los_Angeles")).DateTime, TimeSpan.Zero);
             ModifiedOn = DateTimeOffset.Now;
         }
         
@@ -36,6 +36,10 @@ namespace SmartTalk.Core.Domain.Account
         [Column("password")]
         [StringLength(128)]
         public string Password { get; set; }
+
+        [Column("original_password")]
+        [StringLength(128)]
+        public string OriginalPassword { get; set; }
     
         [Column("third_party_user_id")]
         [StringLength(128)]
@@ -46,6 +50,15 @@ namespace SmartTalk.Core.Domain.Account
         
         [Column("active", TypeName = "tinyint(1)")]
         public bool IsActive { get; set; }
+        
+        [Column("creator")]
+        public string Creator { get; set; }
+        
+        [Column("last_modified_by")]
+        public int? LastModifiedBy { get; set; }
+    
+        [Column("last_modified_date")]
+        public DateTimeOffset? LastModifiedDate { get; set; }
         
         [NotMapped]
         public List<Role> Roles { get; set; } = new();

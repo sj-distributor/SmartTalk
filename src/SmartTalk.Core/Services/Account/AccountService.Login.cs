@@ -41,15 +41,17 @@ public partial class AccountService
 
         authenticateInternalResult.CannotLoginReason = UserAccountCannotLoginReason.None;
         
-        var account = loginVerificationType switch
+        var (count, accounts) = loginVerificationType switch
         {
             UserAccountVerificationType.Password => 
-                await _accountDataProvider
-                    .GetUserAccountDtoAsync(username: username, password: clearTextPassword.ToSha256(), issuer: UserAccountIssuer.Self, includeRoles: true, cancellationToken: cancellationToken).ConfigureAwait(false),
+                await _accountDataProvider.GetUserAccountDtoAsync(
+                    username: username, password: clearTextPassword.ToSha256(), issuer: UserAccountIssuer.Self, includeRoles: true, cancellationToken: cancellationToken).ConfigureAwait(false),
             UserAccountVerificationType.VerificationCode => 
-                await _accountDataProvider
-                    .GetUserAccountDtoAsync(username: username, issuer: UserAccountIssuer.Self, includeRoles: true, cancellationToken: cancellationToken).ConfigureAwait(false)
+                await _accountDataProvider.GetUserAccountDtoAsync(
+                    username: username, issuer: UserAccountIssuer.Self, includeRoles: true, cancellationToken: cancellationToken).ConfigureAwait(false)
         };
+
+        var account = accounts?.FirstOrDefault();
 
         if (account == null)
         {
