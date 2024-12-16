@@ -1,3 +1,4 @@
+using Autofac;
 using Xunit;
 using Autofac;
 using Shouldly;
@@ -6,9 +7,11 @@ using Mediator.Net;
 using SmartTalk.Core.Data;
 using Google.Cloud.Translation.V2;
 using Microsoft.EntityFrameworkCore;
+using NSubstitute;
 using SmartTalk.Core.Domain.Account;
 using SmartTalk.Messages.Enums.Account;
 using SmartTalk.Core.Domain.PhoneOrder;
+using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Commands.PhoneOrder;
@@ -89,7 +92,7 @@ public class PhoneOrderFixture : PhoneOrderFixtureBase
             TranscriptionText = "hello hi hi hi",
             Url = "https://xxx.com"
         };
-        
+
         var conversations = new List<PhoneOrderConversation>
         {
             new()
@@ -117,7 +120,7 @@ public class PhoneOrderFixture : PhoneOrderFixtureBase
                 Order = 3
             },
         };
-        
+
         await RunWithUnitOfWork<IRepository>(async repository =>
         {
             await repository.InsertAsync(record);
@@ -125,56 +128,64 @@ public class PhoneOrderFixture : PhoneOrderFixtureBase
         });
 
         await RunWithUnitOfWork<IMediator, IRepository>(async (mediator, repository) =>
-        {
-            var response = await mediator.RequestAsync<GetPhoneOrderConversationsRequest, GetPhoneOrderConversationsResponse>(new GetPhoneOrderConversationsRequest { RecordId = 1 });
-            
-            response.Data.Count.ShouldBe(conversations.Count);
-            
-            await mediator.SendAsync<AddPhoneOrderConversationsCommand, AddPhoneOrderConversationsResponse>(new AddPhoneOrderConversationsCommand
             {
-                Conversations = new List<PhoneOrderConversationDto>
-                {
-                    new()
+                var response =
+                    await mediator.RequestAsync<GetPhoneOrderConversationsRequest, GetPhoneOrderConversationsResponse>(
+                        new GetPhoneOrderConversationsRequest { RecordId = 1 });
+
+                response.Data.Count.ShouldBe(conversations.Count);
+
+                await mediator.SendAsync<AddPhoneOrderConversationsCommand, AddPhoneOrderConversationsResponse>(
+                    new AddPhoneOrderConversationsCommand
                     {
-                        RecordId = 1,
-                        Question = "早上好11",
-                        Answer = "中午好11",
-                        Order = 1
-                    },
-                    new()
-                    {
-                        RecordId = 1,
-                        Question = "早上好22",
-                        Answer = "中午好22",
-                        Order = 2
-                    },
-                    new()
-                    {
-                        RecordId = 1,
-                        Question = "早上好33",
-                        Answer = "中午好33",
-                        Order = 3
-                    },
-                    new()
-                    {
-                        RecordId = 1,
-                        Question = "早上好44",
-                        Answer = "中午好44",
-                        Order = 4
-                    },
-                }
+                        Conversations = new List<PhoneOrderConversationDto>
+                        {
+                            new()
+                            {
+                                RecordId = 1,
+                                Question = "早上好11",
+                                Answer = "中午好11",
+                                Order = 1
+                            },
+                            new()
+                            {
+                                RecordId = 1,
+                                Question = "早上好22",
+                                Answer = "中午好22",
+                                Order = 2
+                            },
+                            new()
+                            {
+                                RecordId = 1,
+                                Question = "早上好33",
+                                Answer = "中午好33",
+                                Order = 3
+                            },
+                            new()
+                            {
+                                RecordId = 1,
+                                Question = "早上好44",
+                                Answer = "中午好44",
+                                Order = 4
+                            },
+                        }
+                    });
+
+                var afterAdd = await repository.Query<PhoneOrderConversation>().ToListAsync();
+
+                afterAdd.ShouldNotBeNull();
+                afterAdd.All(x => x.Question.Contains("早上好")).ShouldBeTrue();
+                afterAdd.All(x => x.Answer.Contains("中午好")).ShouldBeTrue();
+                afterAdd.Count.ShouldBe(4);
+            },
+            builder =>
+            {
+                var phoneOrderUtilService = Substitute.For<IPhoneOrderUtilService>();
+
+                phoneOrderUtilService.ExtractPhoneOrderShoppingCartAsync(Arg.Any<string>(), Arg.Any<PhoneOrderRecord>(), Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);;
+                
+                builder.RegisterInstance(phoneOrderUtilService);
             });
-
-            var afterAdd = await repository.Query<PhoneOrderConversation>().ToListAsync();
-
-            afterAdd.ShouldNotBeNull();
-            afterAdd.All(x => x.Question.Contains("早上好")).ShouldBeTrue();
-            afterAdd.All(x => x.Answer.Contains("中午好")).ShouldBeTrue();
-            afterAdd.Count.ShouldBe(4);
-        }, builder =>
-        {
-            builder.RegisterInstance(Substitute.For<TranslationClient>());
-        });
     }
 
     [Fact]
@@ -234,8 +245,19 @@ public class PhoneOrderFixture : PhoneOrderFixtureBase
             }
         };
         
+        var record = new PhoneOrderRecord
+        {
+            Id = 1,
+            SessionId = Guid.NewGuid().ToString(),
+            Restaurant = PhoneOrderRestaurant.MoonHouse,
+            TranscriptionText = "hello hi hi hi",
+            Url = "https://xxx.com",
+            ManualOrderId = 123456889,
+        };
+        
         await RunWithUnitOfWork<IRepository>(async repository =>
         {
+            await repository.InsertAsync(record);
             await repository.InsertAllAsync(orderItems);
         });
 
@@ -246,6 +268,7 @@ public class PhoneOrderFixture : PhoneOrderFixtureBase
             response.Data.ShouldNotBeNull();
             response.Data.ManualItems.Count.ShouldBe(2);
             response.Data.AIItems.Count.ShouldBe(3);
+            response.Data.ManualOrderId.ShouldBe(123456889.ToString());
         });
     }
 }

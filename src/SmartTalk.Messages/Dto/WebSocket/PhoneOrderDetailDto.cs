@@ -14,7 +14,7 @@ public class FoodDetailDto
     public string FoodName { get; set; }
     
     [JsonProperty("count")]
-    public int? Count { get; set; }
+    public string Count { get; set; }
     
     [JsonProperty("remark")]
     public string Remark { get; set; }

@@ -65,10 +65,10 @@ public partial class PhoneOrderService
         
         var transcription = await _speechToTextService.SpeechToTextAsync(
             command.RecordContent, fileType: TranscriptionFileType.Wav, responseFormat: TranscriptionResponseFormat.Text, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        if (string.IsNullOrEmpty(transcription) || transcription.Length < 15 || transcription.Contains("GENERAL") || transcription.Contains("感謝收看") || transcription.Contains("訂閱") || transcription.Contains("点赞") || transcription.Contains("立場") || transcription.Contains("字幕") || transcription.Contains("結束") || transcription.Contains("謝謝觀看") || transcription.Contains("幕後大臣") || transcription == "醒醒" || transcription == "跟著我" || transcription.Contains("政經關峻") || transcription.Contains("您拨打的电话") || transcription.Contains("Mailbox memory is full") || transcription.Contains("amazon", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("We're sorry, your call did not go through.", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("Verizon Wireless", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("Beep", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("USPS customer service center", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("not go through", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("stop serving in two hours", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("Welcome to customer support", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("For the upcoming flight booking", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("Please check and dial again.", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("largest cable TV network", StringComparison.InvariantCultureIgnoreCase) || transcription.Contains("拨打的用户暂时无法接通") || transcription.Contains("您有一份国际快递即将退回")) return;
         
         var detection = await _translationClient.DetectLanguageAsync(transcription, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Phone order record transcription detected language: {@detectionLanguage}", detection.Language);
         
         var record = new PhoneOrderRecord { SessionId = Guid.NewGuid().ToString(), Restaurant = recordInfo.Restaurant, TranscriptionText = transcription, Language = SelectLanguageEnum(detection.Language), CreatedDate = recordInfo.OrderDate.AddHours(-8), Status = PhoneOrderRecordStatus.Recieved };
 
@@ -106,8 +106,7 @@ public partial class PhoneOrderService
         {
             "zh" => TranscriptionLanguage.Chinese,
             "en" => TranscriptionLanguage.English,
-            "es" => TranscriptionLanguage.Spanish,
-            _ => TranscriptionLanguage.Chinese
+            _ => TranscriptionLanguage.English
         };
     }
 
@@ -122,7 +121,7 @@ public partial class PhoneOrderService
         
         var (goalText, tip) = await PhoneOrderTranscriptionAsync(phoneOrderInfo, record, audioContent, cancellationToken).ConfigureAwait(false);
         
-        await ExtractPhoneOrderShoppingCartAsync(goalText, record, cancellationToken).ConfigureAwait(false);
+        await _phoneOrderUtilService.ExtractPhoneOrderShoppingCartAsync(goalText, record, cancellationToken).ConfigureAwait(false);
         
         record.Tips = tip;
         record.Status = PhoneOrderRecordStatus.Sent;
@@ -452,14 +451,14 @@ public partial class PhoneOrderService
             {
                 '3' or '6' => PhoneOrderRestaurant.JiangNanChun,
                 '5' or '7' => PhoneOrderRestaurant.XiangTanRenJia,
-                '8' or '9' => PhoneOrderRestaurant.MoonHouse,
+                '8' or '9' or '2' or '0' => PhoneOrderRestaurant.MoonHouse,
                 _ => throw new Exception("Phone Number not exist")
             },
             WorkWeChatRobotKey = phoneNumber[0] switch
             {
                 '3' or '6' => _phoneOrderSetting.GetSetting("江南春"),
                 '5' or '7' =>  _phoneOrderSetting.GetSetting("湘潭人家"),
-                '8' or '9' => _phoneOrderSetting.GetSetting("福满楼"),
+                '8' or '9' or '2' or '0' => _phoneOrderSetting.GetSetting("福满楼"),
                 _ => throw new Exception("Phone Number not exist")
             }
         };
@@ -474,35 +473,6 @@ public partial class PhoneOrderService
         record.LastModifiedDate = DateTimeOffset.Now;
 
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
-    }
-     
-    private async Task<PhoneOrderDetailDto> GetSimilarRestaurantByRecordAsync(PhoneOrderRecord record, PhoneOrderDetailDto foods, CancellationToken cancellationToken)
-    {
-        var result = new PhoneOrderDetailDto { FoodDetails = new List<FoodDetailDto>() };
-        var restaurant = await _restaurantDataProvider.GetRestaurantByNameAsync(record.Restaurant.GetDescription(), cancellationToken).ConfigureAwait(false);
-
-        var tasks = foods.FoodDetails.Select(async foodDetail =>
-        {
-            var similarFoodsResponse = await _vectorDb.GetSimilarListAsync(
-                restaurant.Id.ToString(), foodDetail.FoodName, minRelevance: 0.4, cancellationToken: cancellationToken).ToListAsync(cancellationToken);
-
-            if (similarFoodsResponse.Count == 0) return null;
-            
-            var payload = similarFoodsResponse.First().Item1.Payload[VectorDbStore.ReservedRestaurantPayload].ToString();
-            
-            if (string.IsNullOrEmpty(payload)) return null;
-            
-            foodDetail.FoodName = JsonConvert.DeserializeObject<RestaurantPayloadDto>(payload).Name;
-            foodDetail.Price = (double)JsonConvert.DeserializeObject<RestaurantPayloadDto>(payload).Price;
-            
-            return foodDetail;
-        }).ToList();
-
-        var completedTasks = await Task.WhenAll(tasks);
-        
-        result.FoodDetails.AddRange(completedTasks.Where(fd => fd != null));
-
-        return result;
     }
     
     public async Task<string> SplitAudioAsync(byte[] file, PhoneOrderRecord record, double speakStartTimeVideo, double speakEndTimeVideo, TranscriptionFileType fileType = TranscriptionFileType.Wav, CancellationToken cancellationToken = default)
@@ -571,61 +541,12 @@ public partial class PhoneOrderService
         return language switch
         {
             "en" => SpeechMaticsLanguageType.En,
-            _ => SpeechMaticsLanguageType.Auto
+            "zh" => SpeechMaticsLanguageType.Yue,
+            _ => SpeechMaticsLanguageType.En
         };
     }
     
-    private async Task ExtractPhoneOrderShoppingCartAsync(string goalTexts, PhoneOrderRecord record, CancellationToken cancellationToken)
-    {
-        var shoppingCart = await GetOrderDetailsAsync(goalTexts, cancellationToken).ConfigureAwait(false);
-
-        shoppingCart = await GetSimilarRestaurantByRecordAsync(record, shoppingCart, cancellationToken).ConfigureAwait(false);
-        
-        var items = shoppingCart.FoodDetails.Select(x => new PhoneOrderOrderItem
-        {
-            RecordId = record.Id,
-            FoodName = x.FoodName,
-            Quantity = x.Count ?? 0,
-            Price = x.Price,
-            Note = x.Remark
-        }).ToList();
-
-        if (items.Any())
-            await _phoneOrderDataProvider.AddPhoneOrderItemAsync(items, true, cancellationToken).ConfigureAwait(false);
-    }
-
-    private async Task<PhoneOrderDetailDto> GetOrderDetailsAsync(string query, CancellationToken cancellationToken)
-    {
-        var completionResult = await _smartiesClient.PerformQueryAsync( new AskGptRequest
-        {
-            Messages = new List<CompletionsRequestMessageDto>
-            {
-                new () {
-                    Role = "system",
-                    Content = new CompletionsStringContent("你是一款高度理解语言的智能助手，根据所有对话提取Client的food_details。" +
-                                       "--规则：" +
-                                       "1.根据全文帮我提取food_details，count是菜品的数量且为整数，如果你不清楚数量的时候，count默认为1，remark是对菜品的备注" +
-                                       "2.根据对话中Client的话为主提取food_details" +
-                                       "3.不要出现重复菜品，如果有特殊的要求请标明数量，例如我要两份粥，一份要辣，则标注一份要辣" +
-                                       "注意用json格式返回；规则：{\"food_details\": [{\"food_name\": \"菜品名字\",\"count\":减少的数量（负数）, \"remark\":null}]}}" +
-                                       "-样本与输出：" +
-                                       "input: Restaurant: . Client:Hi, 我可以要一個外賣嗎? Restaurant:可以啊,要什麼? Client: 我要幾個特價午餐,要一個蒙古牛,要一個蛋花湯跟這個,再要一個椒鹽排骨蛋花湯,然後再要一個魚香肉絲,不要辣的蛋花湯。Restaurant:可以吧。Client:然后再要一个春卷 再要一个法式柠檬柳粒。out:{\"food_details\": [{\"food_name\":\"蒙古牛\",\"count\":1, \"remark\":null},{\"food_name\":\"蛋花湯\",\"count\":3, \"remark\":},{\"food_name\":\"椒鹽排骨\",\"count\":1, \"remark\":null},{\"food_name\":\"魚香肉絲\",\"count\":1, \"remark\":null},{\"food_name\":\"春卷\",\"count\":1, \"remark\":null},{\"food_name\":\"法式柠檬柳粒\",\"count\":1, \"remark\":null}]}" +
-                                       "input: Restaurant: Moon house Client: Hi, may I please have a compound chicken with steamed white rice? Restaurant: Sure, 10 minutes, thank you. Client: Hold on, I'm not finished, I'm not finished Restaurant: Ok, Sir, First Sir, give me your phone number first One minute, One minute, One minute, One minute, Ok, One minute, One minute Client: Okay Restaurant: Ok, 213 Client: 590-6995 You guys want me to order something for you guys? Restaurant: 295, Rm Client: 590-2995 Restaurant: Ah, no, yeah, maybe they have an old one, so, that's why. Client: Okay, come have chicken with cream white rice Restaurant: Bye bye, okay, something else? Client: Good morning, Kidman Restaurant: Okay Client: What do you want?  An order of mongolian beef also with cream white rice please Restaurant: Client: Do you want something, honey?  No, on your plate, you want it?  Let's go to the level, that's a piece of meat.  Let me get an order of combination fried rice, please. Restaurant: Sure, Question is how many wires do we need? Client: Maverick, do you want to share a chicken chow mein with me, for later?  And a chicken chow mein, please.  So that's one compote chicken, one orange chicken, one mingolian beef, one combination rice, and one chicken chow mein, please. Restaurant: Okay, let's see how many, one or two Client: Moon house Restaurant: Tube Tuner, right? Client: Can you separate, can you put in a bag by itself, the combination rice and the mongolian beef with one steamed rice please, because that's for getting here with my daughter. Restaurant: Okay, so let me know.  Okay, so I'm going to leave it.  Okay.  Got it Client: Moon house Restaurant: I'll make it 20 minutes, OK?  Oh, I'm sorry, you want a Mangaloreng beef on a fried rice and one steamed rice separate, right?  Yes.  OK. Client: combination rice, the mongolian beans and the steamed rice separate in one bag. Restaurant: Okay, Thank you Thank you out:{\"food_details\":[{\"food_name\":\"compound chicken\",\"count\":1, \"remark\":null},{\"food_name\":\"orange chicken\",\"count\":1, \"remark\":null},{\"food_name\":\"mongolian beef\",\"count\":1, \"remark\":null},{\"food_name\":\"chicken chow mein\",\"count\":1, \"remark\":null},{\"food_name\":\"combination rice\",\"count\":1, \"remark\":null},{\"food_name\":\"white rice\",\"count\":2, \"remark\":null}]}"
-                                       )
-                    
-                },
-                new ()
-                {
-                    Role = "user",
-                    Content = new CompletionsStringContent($"input:{query}, output:")
-                }
-            },
-            Model = OpenAiModel.Gpt4o,
-            ResponseFormat = new () { Type = "json_object" }
-        }, cancellationToken).ConfigureAwait(false);
-        
-        return completionResult.Data.Response == null ? null : JsonConvert.DeserializeObject<PhoneOrderDetailDto>(completionResult.Data.Response);
-    }
+   
     
     private async Task<string> CreateSpeechMaticsJobAsync(byte[] recordContent, string recordName, string language, CancellationToken cancellationToken)
     {
