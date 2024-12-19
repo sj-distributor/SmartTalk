@@ -9,6 +9,7 @@ using SmartTalk.IntegrationTests.Utils.Account;
 using SmartTalk.IntegrationTests.Utils.Security;
 using SmartTalk.Messages.Commands.Security;
 using SmartTalk.Messages.Enums.Account;
+using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Requests.Security;
 using Xunit;
 using Xunit.Abstractions;
@@ -160,14 +161,5 @@ public class SecurityFixture : SecurityFixtureBase
             currentUserRoles.Data.Roles[1].Id.ShouldBe(userRoleId);
             currentUserRoles.Data.Roles[1].Name.ShouldBe("User");
         });
-    }
-
-    [Fact]
-    public async Task Test()
-    {
-        string? userName = null;
-        
-        if (string.IsNullOrEmpty(userName) || !Regex.IsMatch(userName, @"^[a-zA-Z]+$")) _testOutputHelper.WriteLine("2");
-        
     }
 }

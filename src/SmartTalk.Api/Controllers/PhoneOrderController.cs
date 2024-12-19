@@ -5,6 +5,7 @@ using Newtonsoft.Json.Linq;
 using Serilog;
 using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Dto.SpeechMatics;
+using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Requests.PhoneOrder;
 
 namespace SmartTalk.Api.Controllers;
@@ -59,7 +60,7 @@ public class PhoneOrderController : ControllerBase
 
     [HttpPost("record/receive")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> ReceivePhoneOrderRecordAsync([FromForm] IFormFile file)
+    public async Task<IActionResult> ReceivePhoneOrderRecordAsync([FromForm] IFormFile file, [FromForm] string restaurant)
     {
         var ms = new MemoryStream();
 
@@ -67,7 +68,7 @@ public class PhoneOrderController : ControllerBase
 
         var fileContent = ms.ToArray();
         
-        await _mediator.SendAsync(new ReceivePhoneOrderRecordCommand { RecordName = file.FileName, RecordContent = fileContent }).ConfigureAwait(false);
+        await _mediator.SendAsync(new ReceivePhoneOrderRecordCommand { RecordName = file.FileName, RecordContent = fileContent, Restaurant = restaurant}).ConfigureAwait(false);
         
         return Ok();
     }
