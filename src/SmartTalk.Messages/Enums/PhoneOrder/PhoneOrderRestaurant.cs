@@ -11,5 +11,8 @@ public enum PhoneOrderRestaurant
     JiangNanChun,
     
     [Description("湘谭人家")]
-    XiangTanRenJia
+    XiangTanRenJia,
+    
+    [Description("悟空")]
+    Wukong
 }
