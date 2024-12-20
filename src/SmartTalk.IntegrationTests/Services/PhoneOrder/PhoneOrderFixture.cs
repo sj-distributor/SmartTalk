@@ -121,9 +121,32 @@ public class PhoneOrderFixture : PhoneOrderFixtureBase
             },
         };
 
+        var items = new List<PhoneOrderOrderItem>()
+        {
+            new PhoneOrderOrderItem()
+            {
+                Id = 1,
+                RecordId = 1,
+                FoodName = "BBQ",
+                Quantity = 1,
+                Price = 1,
+                OrderType = PhoneOrderOrderType.AIOrder
+            },
+            new PhoneOrderOrderItem()
+            {
+                Id = 2,
+                RecordId = 1,
+                FoodName = "BBc",
+                Quantity = 2,
+                Price = 2,
+                OrderType = PhoneOrderOrderType.AIOrder
+            }
+        };
+
         await RunWithUnitOfWork<IRepository>(async repository =>
         {
             await repository.InsertAsync(record);
+            await repository.InsertAllAsync(items);
             await repository.InsertAllAsync(conversations);
         });
 
@@ -173,10 +196,14 @@ public class PhoneOrderFixture : PhoneOrderFixtureBase
 
                 var afterAdd = await repository.Query<PhoneOrderConversation>().ToListAsync();
 
+                var afterItems = await repository.Query<PhoneOrderOrderItem>().ToListAsync();
+                
                 afterAdd.ShouldNotBeNull();
                 afterAdd.All(x => x.Question.Contains("早上好")).ShouldBeTrue();
                 afterAdd.All(x => x.Answer.Contains("中午好")).ShouldBeTrue();
                 afterAdd.Count.ShouldBe(4);
+                
+                afterItems.Count.ShouldBe(0);
             },
             builder =>
             {
