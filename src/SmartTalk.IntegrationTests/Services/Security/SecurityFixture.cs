@@ -162,26 +162,4 @@ public class SecurityFixture : SecurityFixtureBase
             currentUserRoles.Data.Roles[1].Name.ShouldBe("User");
         });
     }
-
-    [Fact]
-    public async Task Test()
-    {
-        var userName = "out-3238103941-000000-20241218-030236-1734462156.7837.wav";
-        var roleId = "in-2004-unknown-20241218-120924-1734494964.8311.wav";
-        
-        var regexInOut = new Regex(@"-(\d+)\.");
-        var match = regexInOut.Match(userName);
-        
-        var match2 = regexInOut.Match(roleId);
-        
-        var a = match.Groups[1].Value;
-        
-        var b = match2.Groups[1].Value;
-
-        var restaurant = "Wukong";
-        var c = (PhoneOrderRestaurant)Enum.Parse(typeof(PhoneOrderRestaurant), restaurant, true);
-        
-        if (string.IsNullOrEmpty(userName) || !Regex.IsMatch(userName, @"^[a-zA-Z]+$")) _testOutputHelper.WriteLine("2");
-        
-    }
 }

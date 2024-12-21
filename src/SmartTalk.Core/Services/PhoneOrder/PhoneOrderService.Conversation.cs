@@ -1,3 +1,4 @@
+using Serilog;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Commands.PhoneOrder;
@@ -39,6 +40,12 @@ public partial class PhoneOrderService
 
         var conversationsList = string.Concat(string.Join(",", conversations.Select(x => x.Question)), string.Join(",", conversations.Select(x => x.Answer)));
 
+        var orderItems = await _phoneOrderDataProvider.GetPhoneOrderOrderItemsAsync(command.Conversations.First().RecordId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        await _phoneOrderDataProvider.DeletePhoneOrderItemsAsync(orderItems,true, cancellationToken).ConfigureAwait(false);
+
+        Log.Information("Delete Phone Order Items When Add Phone Order Conversations {@orderItems}", orderItems);
+        
         await _phoneOrderUtilService.ExtractPhoneOrderShoppingCartAsync(conversationsList, record, cancellationToken).ConfigureAwait(false);
 
         return new AddPhoneOrderConversationsResponse
