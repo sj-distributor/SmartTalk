@@ -58,6 +58,8 @@ public class RestaurantProcessJobService : IRestaurantProcessJobService
         if (restaurant == null) throw new Exception("Could not get the restaurant by restaurant tye name");
         
         var response = await _easyPosClient.GetEasyPosRestaurantMenusAsync(restaurantType, cancellationToken).ConfigureAwait(false);
+
+        response.Data.Products = response.Data.Products.Where(x => x.IsIndependentSale).ToList();
         
         Log.Information("Get easy pos menu item response: {@Response}", response);
 
