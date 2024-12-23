@@ -40,23 +40,17 @@ public partial class PhoneOrderService
 
         var conversationsList = string.Concat(string.Join(",", conversations.Select(x => x.Question)), string.Join(",", conversations.Select(x => x.Answer)));
 
-        _backgroundJobClient.Enqueue(() =>
-            ExtractingConversationFoodItemsAsync(command.Conversations.First().RecordId, conversationsList, record, cancellationToken));
-       
-        return new AddPhoneOrderConversationsResponse
-        {
-            Data = _mapper.Map<List<PhoneOrderConversationDto>>(conversations)
-        };
-    }
-
-    public async Task ExtractingConversationFoodItemsAsync(int recordId, string conversationsList, PhoneOrderRecord record, CancellationToken cancellationToken)
-    {
-        var orderItems = await _phoneOrderDataProvider.GetPhoneOrderOrderItemsAsync(recordId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var orderItems = await _phoneOrderDataProvider.GetPhoneOrderOrderItemsAsync(command.Conversations.First().RecordId, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         await _phoneOrderDataProvider.DeletePhoneOrderItemsAsync(orderItems,true, cancellationToken).ConfigureAwait(false);
 
         Log.Information("Delete Phone Order Items When Add Phone Order Conversations {@orderItems}", orderItems);
         
         await _phoneOrderUtilService.ExtractPhoneOrderShoppingCartAsync(conversationsList, record, cancellationToken).ConfigureAwait(false);
+
+        return new AddPhoneOrderConversationsResponse
+        {
+            Data = _mapper.Map<List<PhoneOrderConversationDto>>(conversations)
+        };
     }
 }
