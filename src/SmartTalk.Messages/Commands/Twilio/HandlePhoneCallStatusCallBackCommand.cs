@@ -1,12 +1,16 @@
 using Mediator.Net.Contracts;
-using SmartTalk.Messages.DTO.Communication;
-using SmartTalk.Messages.Enums.Communication.PhoneCall;
 
 namespace SmartTalk.Messages.Commands.Twilio;
 
 public class HandlePhoneCallStatusCallBackCommand : ICommand
 {
-    public PhoneCallProvider Provider { get; set; }
+   public string CallSid { get; set; }
     
-    public ICommunicationCallBackDto CallBackMessage { get; set; }
+   public string From { get; set; }
+    
+   public string To { get; set; }
+    
+   public string Status { get; set; }
+    
+   public string Direction { get; set; }
 }
