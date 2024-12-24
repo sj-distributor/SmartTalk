@@ -36,7 +36,7 @@ public class TwilioService : ITwilioService
                 MsgType = "text",
                 Text = new SendWorkWechatGroupRobotTextDto
                 {
-                    Content = $"PhoneCall Number: {result.GetDescription()},\n    Status: {result.GetDescription()}"
+                    Content = $"PhoneCall Number: {callback.To},\n Status: {result.GetDescription()}"
                 }
             }, cancellationToken).ConfigureAwait(false);
     }
