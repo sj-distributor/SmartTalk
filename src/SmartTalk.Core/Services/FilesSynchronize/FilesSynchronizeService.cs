@@ -19,7 +19,7 @@ public class FilesSynchronizeService : IFilesSynchronizeService
         
         var rsyncCommand = $"-avz --progress -e \"ssh -i {privateKeyPath}\" \"{command.Source.User}@{command.Source.Server}:{command.Source.Path}\" \"{localPath}\"";
         
-        Log.Information($"开始下载文件到临时目录：{command.Source.Path} -> {localPath}");
+        Log.Information($"开始下载文件到本地目录：{command.Source.Path} -> {localPath}");
         
         var downloadSuccess = await ExecuteCommandAsync("/opt/homebrew/bin/rsync", rsyncCommand, cancellationToken).ConfigureAwait(false);
         
@@ -44,7 +44,7 @@ public class FilesSynchronizeService : IFilesSynchronizeService
         
         if (!uploadSuccess)
         {
-            Log.Error($"{destination.Server}上传文件失败！！！");
+            Log.Error("上传文件失败！！！");
             return false;
         }
         
@@ -77,11 +77,11 @@ public class FilesSynchronizeService : IFilesSynchronizeService
         const string reloadScriptPath = "/root/asterisk-reload.sh";
         var sshCommand = $"-i {privateKeyPath} {destination.User}@{destination.Server} \"bash {reloadScriptPath}\"";
         
-        Log.Information($"在服务器 {destination.Server} 上执行服务重启命令...");
+        Log.Information($"执行服务重启命令...");
         
         var success = await ExecuteCommandAsync("/usr/bin/ssh", sshCommand, cancellationToken).ConfigureAwait(false);
         
-        Log.Information($"远程服务器 {destination.Server} 上的脚本执行 {(success ? "成功" : "失败")}。");
+        Log.Information($"远程服务器脚本执行 {(success ? "成功" : "失败")}。");
 
         return success;
     }
