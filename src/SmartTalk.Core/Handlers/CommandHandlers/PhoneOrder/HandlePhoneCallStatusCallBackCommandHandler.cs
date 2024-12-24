@@ -1,22 +1,21 @@
 using Mediator.Net.Context;
 using Mediator.Net.Contracts;
 using SmartTalk.Messages.Commands.Twilio;
-using SmartTalk.Core.Services.Communication;
+using SmartTalk.Core.Services.Communication.Twilio;
 
 namespace SmartTalk.Core.Handlers.CommandHandlers.PhoneOrder;
 
 public class HandlePhoneCallStatusCallBackCommandHandler : ICommandHandler<HandlePhoneCallStatusCallBackCommand>
 {
-    private readonly ICommunicationProviderSwitcher _communicationProviderSwitcher;
+    private readonly ITwilioService _twilioService;
 
-    public HandlePhoneCallStatusCallBackCommandHandler(ICommunicationProviderSwitcher communicationProviderSwitcher)
+    public HandlePhoneCallStatusCallBackCommandHandler(ITwilioService twilioService)
     {
-        _communicationProviderSwitcher = communicationProviderSwitcher;
+        _twilioService = twilioService;
     }
 
     public async Task Handle(IReceiveContext<HandlePhoneCallStatusCallBackCommand> context, CancellationToken cancellationToken)
     {
-        await _communicationProviderSwitcher.PhoneCallProvider(context.Message.Provider)
-            .HandlePhoneCallStatusCallbackAsync(context.Message, cancellationToken).ConfigureAwait(false);
+        await _twilioService.HandlePhoneCallStatusCallbackAsync(context.Message, cancellationToken).ConfigureAwait(false);
     }
 }

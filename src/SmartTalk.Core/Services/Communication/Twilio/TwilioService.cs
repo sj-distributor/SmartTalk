@@ -2,15 +2,15 @@ using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Extensions;
 using SmartTalk.Messages.Dto.WeChat;
 using SmartTalk.Messages.Enums.Twilio;
+using SmartTalk.Messages.Commands.Twilio;
 using SmartTalk.Core.Services.Http.Clients;
-using SmartTalk.Messages.DTO.Communication.Twilio;
 using SmartTalk.Core.Settings.Communication.PhoneCall;
 
 namespace SmartTalk.Core.Services.Communication.Twilio;
 
 public interface ITwilioService : IScopedDependency
 {
-    Task HandlePhoneCallStatusCallbackAsync(TwilioPhoneCallStatusCallbackDto callback, CancellationToken cancellationToken);
+    Task HandlePhoneCallStatusCallbackAsync(HandlePhoneCallStatusCallBackCommand callback, CancellationToken cancellationToken);
 }
 
 public class TwilioService : ITwilioService
@@ -24,7 +24,7 @@ public class TwilioService : ITwilioService
         _phoneCallBroadcastSetting = phoneCallBroadcastSetting;
     }
 
-    public async Task HandlePhoneCallStatusCallbackAsync(TwilioPhoneCallStatusCallbackDto callback, CancellationToken cancellationToken)
+    public async Task HandlePhoneCallStatusCallbackAsync(HandlePhoneCallStatusCallBackCommand callback, CancellationToken cancellationToken)
     {
         if (_phoneCallBroadcastSetting.PhoneNumber != callback.From) return;
 
@@ -36,7 +36,7 @@ public class TwilioService : ITwilioService
                 MsgType = "text",
                 Text = new SendWorkWechatGroupRobotTextDto
                 {
-                    Content = $"PhoneCall Number: {result.GetDescription()},\n    Status: {result.GetDescription()}"
+                    Content = $"PhoneCall Number: {callback.To},\n Status: {result.GetDescription()}"
                 }
             }, cancellationToken).ConfigureAwait(false);
     }
