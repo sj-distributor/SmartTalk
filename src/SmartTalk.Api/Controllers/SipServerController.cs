@@ -8,16 +8,16 @@ namespace SmartTalk.Api.Controllers;
 [Authorize]
 [ApiController]
 [Route("api/[controller]")]
-public class FilesSynchronizeController : ControllerBase
+public class SipServerController : ControllerBase
 {
     private readonly IMediator _mediator;
 
-    public FilesSynchronizeController(IMediator mediator)
+    public SipServerController(IMediator mediator)
     {
         _mediator = mediator;
     }
     
-    [Route("create"), HttpPost]
+    [Route("backup"), HttpPost]
     public async Task<IActionResult> SynchronizeFilesAsync([FromBody] SynchronizeFilesCommand command)
     {
         await _mediator.SendAsync(command).ConfigureAwait(false);
