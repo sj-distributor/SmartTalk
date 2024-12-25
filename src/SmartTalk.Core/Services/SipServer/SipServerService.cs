@@ -1,30 +1,30 @@
-using Serilog;
 using System.Diagnostics;
+using Serilog;
 using SmartTalk.Core.Ioc;
-using SmartTalk.Core.Settings.FilesSynchronize;
-using SmartTalk.Messages.Commands.FilesSynchronize;
+using SmartTalk.Core.Settings.SipServer;
+using SmartTalk.Messages.Commands.SipServer;
 
-namespace SmartTalk.Core.Services.FilesSynchronize;
+namespace SmartTalk.Core.Services.SipServer;
 
-public interface IFilesSynchronizeService : IScopedDependency
+public interface ISipServerService : IScopedDependency
 {
-    Task SynchronizeFilesAsync(SynchronizeFilesCommand command, CancellationToken cancellationToken);
+    Task BackupSipServerDataAsync(BackupSipServerDataCommand command, CancellationToken cancellationToken);
 }
 
-public class FilesSynchronizeService : IFilesSynchronizeService
+public class SipServerService : ISipServerService
 {
-    private readonly FilesSynchronizeSetting _filesSynchronizeSetting;
+    private readonly SipServerSetting _sipServerSetting;
     
-    public FilesSynchronizeService(FilesSynchronizeSetting filesSynchronizeSetting)
+    public SipServerService(SipServerSetting sipServerSetting)
     {
-        _filesSynchronizeSetting = filesSynchronizeSetting;
+        _sipServerSetting = sipServerSetting;
     }
     
-    public async Task SynchronizeFilesAsync(SynchronizeFilesCommand command, CancellationToken cancellationToken)
+    public async Task BackupSipServerDataAsync(BackupSipServerDataCommand command, CancellationToken cancellationToken)
     {
-        command = EnhanceCommandParam(command);
+        command = UseDefaultBackupSettingIfRequired(command);
 
-        var localPath = CreateTempFolderAsync();
+        var localPath = CreateTempFolder();
 
         var privateKeyPath = await GeneratePrivateKeyTempPathAsync(cancellationToken).ConfigureAwait(false);
         
@@ -49,24 +49,24 @@ public class FilesSynchronizeService : IFilesSynchronizeService
         Log.Information("所有同步任务执行完成");
     }
     
-    private SynchronizeFilesCommand EnhanceCommandParam(SynchronizeFilesCommand command)
+    private BackupSipServerDataCommand UseDefaultBackupSettingIfRequired(BackupSipServerDataCommand command)
     {
         if (command.Source != null && command.Destinations != null) return command;
         
-        return new SynchronizeFilesCommand
+        return new BackupSipServerDataCommand
         {
-            Source = new SynchronizeFilesData
+            Source = new BackupSipServerData
             {
-                ServerPath = _filesSynchronizeSetting.Source
+                ServerPath = _sipServerSetting.Source
             },
-            Destinations = _filesSynchronizeSetting.Destinations.Select(destination => new SynchronizeFilesDestinationData
+            Destinations = _sipServerSetting.Destinations.Select(destination => new BackupSipServerDestinationData
             {
                 ServerPath = destination
             }).ToList()
         };
     }
 
-    private string CreateTempFolderAsync()
+    private string CreateTempFolder()
     {
         var tempDirectory = Path.GetTempPath();
         var fullFolderPath = Path.Combine(tempDirectory, "AsteriskBackup");
@@ -99,7 +99,7 @@ public class FilesSynchronizeService : IFilesSynchronizeService
         {
             if (File.Exists(privateKeyTempPath)) File.Delete(privateKeyTempPath); 
         
-            await File.WriteAllTextAsync(privateKeyTempPath, _filesSynchronizeSetting.PrivateKey, cancellationToken).ConfigureAwait(false);
+            await File.WriteAllTextAsync(privateKeyTempPath, _sipServerSetting.PrivateKey, cancellationToken).ConfigureAwait(false);
         
             File.SetAttributes(privateKeyTempPath, FileAttributes.ReadOnly);
 
@@ -141,7 +141,7 @@ public class FilesSynchronizeService : IFilesSynchronizeService
         return privateKeyTempPath;
     }
     
-    private async Task<bool> SyncServerDataAsync(string privateKeyPath, string localPath, SynchronizeFilesDestinationData destination, CancellationToken cancellationToken)
+    private async Task<bool> SyncServerDataAsync(string privateKeyPath, string localPath, BackupSipServerDestinationData destination, CancellationToken cancellationToken)
     {
         var uploadSuccess = await UploadDataToServerAsync(privateKeyPath, localPath, destination, cancellationToken).ConfigureAwait(false);
         
@@ -156,7 +156,7 @@ public class FilesSynchronizeService : IFilesSynchronizeService
         return await ReloadServerDataAsync(privateKeyPath, destination, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<bool> UploadDataToServerAsync(string privateKeyPath, string localPath, SynchronizeFilesDestinationData destination, CancellationToken cancellationToken)
+    private async Task<bool> UploadDataToServerAsync(string privateKeyPath, string localPath, BackupSipServerDestinationData destination, CancellationToken cancellationToken)
     {
         var rsyncCommand = BuildRsyncCommand(privateKeyPath, localPath, destination);
     
@@ -165,14 +165,14 @@ public class FilesSynchronizeService : IFilesSynchronizeService
         return await ExecuteCommandAsync("/opt/homebrew/bin/rsync", rsyncCommand, cancellationToken).ConfigureAwait(false);
     }
     
-    private string BuildRsyncCommand(string privateKeyPath, string tempPath, SynchronizeFilesDestinationData destination)
+    private string BuildRsyncCommand(string privateKeyPath, string tempPath, BackupSipServerDestinationData destination)
     {
         var excludeArgs = string.Join(" ", destination.ExcludeFiles.Select(file => $"--exclude=\"{file}\""));
         
         return $"-e \"ssh -i {privateKeyPath}\" -avz --chown=asterisk:asterisk --checksum --delete --progress {excludeArgs} \"{tempPath}\" \"{destination.User}@{destination.Server}:{destination.Path}\"";
     }
 
-    private async Task<bool> ReloadServerDataAsync(string privateKeyPath, SynchronizeFilesDestinationData destination, CancellationToken cancellationToken)
+    private async Task<bool> ReloadServerDataAsync(string privateKeyPath, BackupSipServerDestinationData destination, CancellationToken cancellationToken)
     {
         const string reloadScriptPath = "/root/asterisk-reload.sh";
         

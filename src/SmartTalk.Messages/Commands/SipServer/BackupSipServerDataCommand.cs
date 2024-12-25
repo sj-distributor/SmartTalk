@@ -1,15 +1,15 @@
 using Mediator.Net.Contracts;
 
-namespace SmartTalk.Messages.Commands.FilesSynchronize;
+namespace SmartTalk.Messages.Commands.SipServer;
 
-public class SynchronizeFilesCommand : ICommand
+public class BackupSipServerDataCommand : ICommand
 {
-    public SynchronizeFilesData Source { get; set; }
+    public BackupSipServerData Source { get; set; }
     
-    public List<SynchronizeFilesDestinationData> Destinations { get; set; }
+    public List<BackupSipServerDestinationData> Destinations { get; set; }
 }
 
-public abstract class SynchronizeFilesBaseData
+public abstract class BackupSipServerBaseData
 {
     public string User { get; set; }
     
@@ -42,11 +42,11 @@ public abstract class SynchronizeFilesBaseData
     protected virtual void OnServerPathParsed(List<string> extraParts) { }
 }
 
-public class SynchronizeFilesData : SynchronizeFilesBaseData
+public class BackupSipServerData : BackupSipServerBaseData
 {
 }
 
-public class SynchronizeFilesDestinationData : SynchronizeFilesBaseData
+public class BackupSipServerDestinationData : BackupSipServerBaseData
 {
     public List<string> ExcludeFiles { get; set; } = [];
 

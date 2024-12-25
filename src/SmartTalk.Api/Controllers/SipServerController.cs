@@ -1,7 +1,7 @@
 using Mediator.Net;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
-using SmartTalk.Messages.Commands.FilesSynchronize;
+using SmartTalk.Messages.Commands.SipServer;
 
 namespace SmartTalk.Api.Controllers;
 
@@ -18,7 +18,7 @@ public class SipServerController : ControllerBase
     }
     
     [Route("backup"), HttpPost]
-    public async Task<IActionResult> SynchronizeFilesAsync([FromBody] SynchronizeFilesCommand command)
+    public async Task<IActionResult> BackupSipServerDataAsync([FromBody] BackupSipServerDataCommand command)
     {
         await _mediator.SendAsync(command).ConfigureAwait(false);
         
