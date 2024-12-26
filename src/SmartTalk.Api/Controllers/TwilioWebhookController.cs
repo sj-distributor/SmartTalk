@@ -2,6 +2,7 @@ using Mediator.Net;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using SmartTalk.Messages.Commands.Twilio;
+using SmartTalk.Messages.Requests.Twilio;
 
 namespace SmartTalk.Api.Controllers;
 
@@ -23,5 +24,14 @@ public class TwilioWebhookController : ControllerBase
         await _mediator.SendAsync(command).ConfigureAwait(false);
         
         return Ok();
+    }
+
+    [Route("get/cdr"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAsteriskCdrAsync([FromQuery] GetAsteriskCdrRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetAsteriskCdrRequest, GetAsteriskCdrResponse>(request);
+
+        return Ok(response);
     }
 }
