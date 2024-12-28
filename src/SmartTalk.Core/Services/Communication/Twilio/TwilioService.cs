@@ -39,14 +39,13 @@ public class TwilioService : ITwilioService
         
         //todo 添加获取服务器数据，添加到本系统中
         var cdrData = await _asteriskClient.GetAsteriskCdrAsync(_phoneCallBroadcastSetting.PhoneNumber, cancellationToken).ConfigureAwait(false);
-
+        
         //todo 持久化
         await _twilioServiceDataProvider.CreateAsteriskCdrAsync(_mapper.Map<AsteriskCdr>(cdrData.Data), cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        
         TryParsePhoneCallStatus(cdrData.Data, out var result);
         
-        if (result != PhoneCallStatus.Completed)
+        if (result != PhoneCallStatus.NoAnswer)
             await _weChatClient.SendWorkWechatRobotMessagesAsync(_phoneCallBroadcastSetting.BroadcastUrl, new SendWorkWechatGroupRobotMessageDto
             {
                 MsgType = "text",
@@ -59,7 +58,13 @@ public class TwilioService : ITwilioService
     
     public static bool TryParsePhoneCallStatus(GetAsteriskCdrData cdrData, out PhoneCallStatus result)
     {
-        
+        if (cdrData.Disposition.Equals("NO ANSWER") || cdrData.LastApp.Equals("Dial"))
+        {
+            result = (PhoneCallStatus)70;
+            return true;
+        }
+
+        result = (PhoneCallStatus)90;
         return false;
     }
 }
