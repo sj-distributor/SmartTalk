@@ -58,7 +58,7 @@ public class TwilioService : ITwilioService
     
     public static bool TryParsePhoneCallStatus(GetAsteriskCdrData cdrData, out PhoneCallStatus result)
     {
-        if (cdrData.Disposition.Equals("NO ANSWER") || cdrData.LastApp.Equals("Dial"))
+        if (cdrData.Disposition.Equals("NO ANSWER") && cdrData.LastApp.Equals("Dial"))
         {
             result = (PhoneCallStatus)70;
             return true;
