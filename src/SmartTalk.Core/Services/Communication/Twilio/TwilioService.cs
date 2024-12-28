@@ -1,3 +1,5 @@
+using AutoMapper;
+using SmartTalk.Core.Domain.Asterisk;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Extensions;
 using SmartTalk.Messages.Dto.WeChat;
@@ -5,6 +7,7 @@ using SmartTalk.Messages.Enums.Twilio;
 using SmartTalk.Messages.Commands.Twilio;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Settings.Communication.PhoneCall;
+using SmartTalk.Messages.Requests.Twilio;
 
 namespace SmartTalk.Core.Services.Communication.Twilio;
 
@@ -15,20 +18,33 @@ public interface ITwilioService : IScopedDependency
 
 public class TwilioService : ITwilioService
 {
+    private readonly IMapper _mapper;
+    private readonly IAsteriskClient _asteriskClient;
     private readonly IWeChatClient _weChatClient;
     private readonly PhoneCallBroadcastSetting _phoneCallBroadcastSetting;
+    private readonly ITwilioServiceDataProvider _twilioServiceDataProvider;
     
-    public TwilioService(IWeChatClient weChatClient, PhoneCallBroadcastSetting phoneCallBroadcastSetting)
+    public TwilioService(IMapper mapper, IAsteriskClient asteriskClient, IWeChatClient weChatClient, PhoneCallBroadcastSetting phoneCallBroadcastSetting, ITwilioServiceDataProvider twilioServiceDataProvider)
     {
+        _mapper = mapper;
         _weChatClient = weChatClient;
+        _asteriskClient = asteriskClient;
         _phoneCallBroadcastSetting = phoneCallBroadcastSetting;
+        _twilioServiceDataProvider = twilioServiceDataProvider;
     }
 
     public async Task HandlePhoneCallStatusCallbackAsync(HandlePhoneCallStatusCallBackCommand callback, CancellationToken cancellationToken)
     {
         if (_phoneCallBroadcastSetting.PhoneNumber != callback.From) return;
+        
+        //todo 添加获取服务器数据，添加到本系统中
+        var cdrData = await _asteriskClient.GetAsteriskCdrAsync(_phoneCallBroadcastSetting.PhoneNumber, cancellationToken).ConfigureAwait(false);
 
-        TryParsePhoneCallStatus(callback.Status, out var result);
+        //todo 持久化
+        await _twilioServiceDataProvider.CreateAsteriskCdrAsync(_mapper.Map<AsteriskCdr>(cdrData.Data), cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        
+        TryParsePhoneCallStatus(cdrData.Data, out var result);
         
         if (result != PhoneCallStatus.Completed)
             await _weChatClient.SendWorkWechatRobotMessagesAsync(_phoneCallBroadcastSetting.BroadcastUrl, new SendWorkWechatGroupRobotMessageDto
@@ -41,25 +57,9 @@ public class TwilioService : ITwilioService
             }, cancellationToken).ConfigureAwait(false);
     }
     
-    public static bool TryParsePhoneCallStatus(string status, out PhoneCallStatus result)
+    public static bool TryParsePhoneCallStatus(GetAsteriskCdrData cdrData, out PhoneCallStatus result)
     {
-        if (Enum.TryParse(status, true, out PhoneCallStatus recordStatus))
-        {
-            result = recordStatus;
-            return true;
-        }
-
-        var match = Enum.GetValues(typeof(PhoneCallStatus))
-            .Cast<PhoneCallStatus>()
-            .FirstOrDefault(x => x.GetDescription().Equals(status, StringComparison.OrdinalIgnoreCase));
-
-        if (match != default)
-        {
-            result = match;
-            return true;
-        }
-
-        result = default;
+        
         return false;
     }
 }

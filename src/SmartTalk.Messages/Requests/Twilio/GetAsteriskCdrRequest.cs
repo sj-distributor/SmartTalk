@@ -16,7 +16,7 @@ public class GetAsteriskCdrResponse : SmartTalkResponse<GetAsteriskCdrResponseDt
 public class GetAsteriskCdrResponseDto
 {
     [JsonProperty("data")]
-    public List<GetAsteriskCdrData> Data { get; set; }
+    public GetAsteriskCdrData Data { get; set; }
 }
 
 public class GetAsteriskCdrData
