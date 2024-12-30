@@ -29,4 +29,7 @@ public class GetAsteriskCdrData
     
     [JsonProperty("disposition")]
     public string Disposition { get; set; }
+
+    [JsonProperty("calldate")]
+    public DateTimeOffset CallDate { get; set; }
 }
