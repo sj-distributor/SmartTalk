@@ -1,9 +1,9 @@
 using System.Net.WebSockets;
 using System.Text;
+using System.Text.Json;
 using Mediator.Net;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
-using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Serilog;
 using SmartTalk.Core.Settings.OpenAi;
@@ -13,7 +13,6 @@ using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Requests.PhoneOrder;
 using Twilio.AspNet.Core;
 using Twilio.TwiML;
-using JsonElement = System.Text.Json.JsonElement;
 
 namespace SmartTalk.Api.Controllers;
 
@@ -178,28 +177,33 @@ public class PhoneOrderController : ControllerBase
 
                 if (result.Count > 0)
                 {
-                    var message = Encoding.UTF8.GetString(buffer, 0, result.Count);
-                    var data = JsonConvert.DeserializeObject<JsonElement>(message);
-
-                    if (data.GetProperty("event").GetString() == "media" && openAiWebSocket.State == WebSocketState.Open)
+                    using var jsonDocument = JsonSerializer.Deserialize<JsonDocument>(buffer.AsSpan(0, result.Count));
+                    var eventMessage = jsonDocument?.RootElement.GetProperty("event").GetString();
+                    Log.Information("ReceiveFromTwilioAsync: {eventMessage}", eventMessage);
+                    
+                    switch (eventMessage)
                     {
-                        var audioAppend = new
-                        {
-                            type = "input_audio_buffer.append",
-                            audio = data.GetProperty("media").GetProperty("payload").GetString()
-                        };
-
-                        await openAiWebSocket.SendAsync(
-                            new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(audioAppend))),
-                            WebSocketMessageType.Text,
-                            true,
-                            CancellationToken.None
-                        );
-                    }
-                    else if (data.GetProperty("event").GetString() == "start")
-                    {
-                        context.StreamSid = data.GetProperty("start").GetProperty("streamSid").GetString();
-                        Log.Information($"Incoming stream has started: {context.StreamSid}");
+                        case "connected":
+                            break;
+                        case "start":
+                            context.StreamSid = jsonDocument?.RootElement.GetProperty("start").GetProperty("streamSid").GetString();
+                            break;
+                        case "media":
+                            var payload = jsonDocument?.RootElement.GetProperty("media").GetProperty("payload").GetString();
+                            var audioAppend = new
+                            {
+                                type = "input_audio_buffer.append",
+                                audio = payload
+                            };
+                            await openAiWebSocket.SendAsync(
+                                new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(audioAppend))),
+                                WebSocketMessageType.Text,
+                                true,
+                                CancellationToken.None
+                            );
+                            break;
+                        case "stop":
+                            break;
                     }
                 }
             }
@@ -221,19 +225,19 @@ public class PhoneOrderController : ControllerBase
 
                 if (result.Count > 0)
                 {
-                    var response = JsonConvert.DeserializeObject<JsonElement>(Encoding.UTF8.GetString(buffer, 0, result.Count));
+                    var jsonDocument = JsonSerializer.Deserialize<JsonDocument>(buffer.AsSpan(0, result.Count));
 
-                    if (LogEventTypes.Contains(response.GetProperty("type").GetString()))
+                    if (LogEventTypes.Contains(jsonDocument?.RootElement.GetProperty("type").GetString()))
                     {
-                        Log.Information($"Received event: {response.GetProperty("type")}");
+                        Log.Information($"Received event: {jsonDocument?.RootElement.GetProperty("type").GetString()}");
                     }
 
-                    if (response.GetProperty("type").GetString() == "session.updated")
+                    if (jsonDocument?.RootElement.GetProperty("type").GetString() == "session.updated")
                     {
                         Log.Information("Session updated successfully");
                     }
 
-                    if (response.GetProperty("type").GetString() == "response.audio.delta" && response.TryGetProperty("delta", out var delta))
+                    if (jsonDocument?.RootElement.GetProperty("type").GetString() == "response.audio.delta" && jsonDocument.RootElement.TryGetProperty("delta", out var delta))
                     {
                         try
                         {
@@ -245,7 +249,7 @@ public class PhoneOrderController : ControllerBase
                             };
 
                             await twilioWebSocket.SendAsync(
-                                new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(audioDelta))),
+                                new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(audioDelta))),
                                 WebSocketMessageType.Text,
                                 true,
                                 CancellationToken.None
@@ -282,7 +286,7 @@ public class PhoneOrderController : ControllerBase
             }
         };
 
-        var message = JsonConvert.SerializeObject(sessionUpdate);
+        var message = JsonSerializer.Serialize(sessionUpdate);
         Log.Information($"Sending session update: {message}");
 
         await openAiWebSocket.SendAsync(
@@ -297,5 +301,4 @@ public class PhoneOrderController : ControllerBase
     {
         public string? StreamSid { get; set; }
     }
-
 }
