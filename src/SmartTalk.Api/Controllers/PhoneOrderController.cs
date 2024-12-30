@@ -121,7 +121,7 @@ public class PhoneOrderController : ControllerBase
         var twimlResponse = $@"
             <Response>
                 <Connect>
-                    <Stream url='wss://{host}/call/media-stream' />
+                    <Stream url='wss://{host}/api/PhoneOrder/media-stream' />
                 </Connect>
             </Response>";
 
