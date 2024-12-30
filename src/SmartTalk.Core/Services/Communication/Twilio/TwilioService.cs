@@ -51,26 +51,12 @@ public class TwilioService : ITwilioService
         await _twilioServiceDataProvider.CreateAsteriskCdrAsync(_mapper.Map<AsteriskCdr>(originalData.Data[0]), cancellationToken: cancellationToken).ConfigureAwait(false);
         
         var callStatus = TryParsePhoneCallStatus(originalData.Data[0].Disposition);
-        
+
         if (callStatus == PhoneCallStatus.Answered)
-            await _weChatClient.SendWorkWechatRobotMessagesAsync(_phoneCallBroadcastSetting.BroadcastUrl, new SendWorkWechatGroupRobotMessageDto
-            {
-                MsgType = "text",
-                Text = new SendWorkWechatGroupRobotTextDto
-                {
-                    Content = $"PhoneCall Number: {callback.To},\n Status: {callStatus.GetDescription()}"
-                }
-            }, cancellationToken).ConfigureAwait(false);
+            await SendWorkWechatRobotMessagesAsync(callback.To, callStatus, cancellationToken).ConfigureAwait(false);
 
         if (callStatus != PhoneCallStatus.Answered)
-            await _weChatClient.SendWorkWechatRobotMessagesAsync(_phoneCallBroadcastSetting.BroadcastUrl, new SendWorkWechatGroupRobotMessageDto
-            {
-                MsgType = "text",
-                Text = new SendWorkWechatGroupRobotTextDto
-                {
-                    Content = $"PhoneCall Number: {callback.To},\n Status: {callStatus.GetDescription()}"
-                }
-            }, cancellationToken).ConfigureAwait(false);
+            await SendWorkWechatRobotMessagesAsync(callback.To, callStatus, cancellationToken).ConfigureAwait(false);
     }
     
     private static PhoneCallStatus TryParsePhoneCallStatus(string disposition)
@@ -79,5 +65,17 @@ public class TwilioService : ITwilioService
             return PhoneCallStatus.Failed;
         
         return Enum.TryParse(disposition.Replace(" ", ""), true, out PhoneCallStatus status) ? status : PhoneCallStatus.Failed;
+    }
+
+    private async Task SendWorkWechatRobotMessagesAsync(string targetNumber, PhoneCallStatus callStatus, CancellationToken cancellationToken)
+    {
+        await _weChatClient.SendWorkWechatRobotMessagesAsync(_phoneCallBroadcastSetting.BroadcastUrl, new SendWorkWechatGroupRobotMessageDto
+        {
+            MsgType = "text",
+            Text = new SendWorkWechatGroupRobotTextDto
+            {
+                Content = $"PhoneCall Number: {targetNumber},\n Status: {callStatus.GetDescription()}"
+            }
+        }, cancellationToken).ConfigureAwait(false);
     }
 }
