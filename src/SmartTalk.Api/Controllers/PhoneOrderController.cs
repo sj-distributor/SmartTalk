@@ -11,6 +11,7 @@ using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Dto.SpeechMatics;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Requests.PhoneOrder;
+using Twilio.AspNet.Core;
 using Twilio.TwiML;
 using JsonElement = System.Text.Json.JsonElement;
 
@@ -128,7 +129,7 @@ public class PhoneOrderController : ControllerBase
             </Response>";
 
         response.Append(connect);
-        return Ok(twimlResponse);
+        return Ok(Results.Extensions.TwiML(response));
     }
     
     [AllowAnonymous]
