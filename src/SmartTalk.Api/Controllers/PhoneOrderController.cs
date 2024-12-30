@@ -1,6 +1,9 @@
+using System.Net.WebSockets;
+using System.Text;
 using Mediator.Net;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Serilog;
 using SmartTalk.Messages.Commands.PhoneOrder;
@@ -16,10 +19,12 @@ namespace SmartTalk.Api.Controllers;
 public class PhoneOrderController : ControllerBase
 {
     private readonly IMediator _mediator;
+    private readonly string? _openAiApiKey;
 
-    public PhoneOrderController(IMediator mediator)
+    public PhoneOrderController(IMediator mediator, IConfiguration configuration)
     {
         _mediator = mediator;
+        _openAiApiKey = configuration["OpenAI:ApiKey"];
     }
     
     [Route("records"), HttpGet]
@@ -95,5 +100,97 @@ public class PhoneOrderController : ControllerBase
         var response = await _mediator.SendAsync<AddOrUpdateManualOrderCommand, AddOrUpdateManualOrderResponse>(command).ConfigureAwait(false);
 
         return Ok(response);
+    }
+    
+    [HttpPost("incoming-call")]
+    public async Task<IActionResult> HandleIncomingCallAsync()
+    {
+        var host = HttpContext.Request.Host.Host;
+        
+        var twimlResponse = $@"
+            <Response>
+                <Connect>
+                    <Stream url='wss://{host}/call/media-stream' />
+                </Connect>
+            </Response>";
+
+        return Ok(Content(twimlResponse, "application/xml"));
+    }
+    
+    [HttpGet("media-stream")]
+    public async Task HandleMediaStreamAsync()
+    {
+        if (HttpContext.WebSockets.IsWebSocketRequest)
+        {
+            using var clientSocket = await HttpContext.WebSockets.AcceptWebSocketAsync();
+            Console.WriteLine("Client connected");
+
+            using var openaiSocket = new ClientWebSocket();
+            openaiSocket.Options.SetRequestHeader("Authorization", $"Bearer {_openAiApiKey}");
+            openaiSocket.Options.SetRequestHeader("OpenAI-Beta", "realtime=v1");
+
+            var openaiUri = new Uri("wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01");
+            await openaiSocket.ConnectAsync(openaiUri, CancellationToken.None);
+
+            await SendSessionUpdate(openaiSocket);
+            await ProxyWebSocketTraffic(clientSocket, openaiSocket);
+        }
+        else
+        {
+            HttpContext.Response.StatusCode = 400;
+        }
+    }
+
+    private async Task SendSessionUpdate(WebSocket openaiSocket)
+    {
+        var sessionUpdate = new
+        {
+            type = "session_update",
+            data = new { }
+        };
+
+        var json = JsonConvert.SerializeObject(sessionUpdate);
+        var buffer = Encoding.UTF8.GetBytes(json);
+
+        await openaiSocket.SendAsync(
+            new ArraySegment<byte>(buffer),
+            WebSocketMessageType.Text,
+            true,
+            CancellationToken.None);
+    }
+
+    private async Task ProxyWebSocketTraffic(WebSocket clientSocket, WebSocket openaiSocket)
+    {
+        var buffer = new byte[1024 * 4];
+
+        async Task HandleSocket(WebSocket sourceSocket, WebSocket destinationSocket)
+        {
+            while (sourceSocket.State == WebSocketState.Open)
+            {
+                var result = await sourceSocket.ReceiveAsync(
+                    new ArraySegment<byte>(buffer),
+                    CancellationToken.None);
+
+                if (result.MessageType == WebSocketMessageType.Close)
+                {
+                    await destinationSocket.CloseAsync(
+                        WebSocketCloseStatus.NormalClosure,
+                        "Closing",
+                        CancellationToken.None);
+                    break;
+                }
+
+                await destinationSocket.SendAsync(
+                    new ArraySegment<byte>(buffer, 0, result.Count),
+                    result.MessageType,
+                    result.EndOfMessage,
+                    CancellationToken.None);
+            }
+        }
+
+        var clientToOpenAITask = HandleSocket(clientSocket, openaiSocket);
+        var openaiToClientTask = HandleSocket(openaiSocket, clientSocket);
+
+        await Task.WhenAll(clientToOpenAITask, openaiToClientTask);
     }
 }
