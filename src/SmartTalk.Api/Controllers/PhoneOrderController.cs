@@ -162,13 +162,14 @@ public class PhoneOrderController : ControllerBase
 
     private async Task ReceiveFromTwilioAsync(WebSocket twilioWebSocket, WebSocket openAiWebSocket, StreamContext context)
     {
-        var buffer = new byte[4096];
+        var buffer = new byte[1024 * 4];
         try
         {
             while (twilioWebSocket.State == WebSocketState.Open)
             {
                 var result = await twilioWebSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
-
+                Log.Information("ReceiveFromTwilioAsync: {@result}", result);
+                
                 if (result.MessageType == WebSocketMessageType.Close)
                 {
                     await openAiWebSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Twilio closed", CancellationToken.None);
