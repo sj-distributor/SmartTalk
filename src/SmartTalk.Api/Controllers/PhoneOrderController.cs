@@ -112,6 +112,7 @@ public class PhoneOrderController : ControllerBase
         return Ok(response);
     }
     
+    [AllowAnonymous]
     [HttpGet("incoming-call")]
     [HttpPost("incoming-call")]
     public async Task<IActionResult> HandleIncomingCallAsync()
@@ -127,6 +128,7 @@ public class PhoneOrderController : ControllerBase
         return Ok(twimlResponse);
     }
     
+    [AllowAnonymous]
     [HttpGet("media-stream")]
     public async Task HandleMediaStream()
     {
