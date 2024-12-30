@@ -34,6 +34,13 @@ public partial class PhoneOrderDataProvider
     public async Task AddPhoneOrderRecordsAsync(List<PhoneOrderRecord> phoneOrderRecords, bool forceSave = true, CancellationToken cancellationToken = default)
     {
         if (phoneOrderRecords == null || phoneOrderRecords.Count == 0) return;
+        
+        foreach (var record in phoneOrderRecords)
+        {
+            var user = await _repository.Query<UserAccount>().Where(u => u.Id == record.LastModifiedBy).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        
+            record.LastModifiedByName = user?.UserName;
+        }
 
         await _repository.InsertAllAsync(phoneOrderRecords, cancellationToken).ConfigureAwait(false);
 
