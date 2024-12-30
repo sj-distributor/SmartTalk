@@ -117,11 +117,10 @@ public class PhoneOrderController : ControllerBase
     [HttpPost("incoming-call")]
     public async Task<IActionResult> HandleIncomingCallAsync()
     {
-        var host = HttpContext.Request.Host.Host;
         var twimlResponse = $@"
             <Response>
                 <Connect>
-                    <Stream url='wss://{host}/api/PhoneOrder/media-stream' />
+                    <Stream url='wss://{HttpContext.Request.Host}/api/PhoneOrder/media-stream' />
                 </Connect>
             </Response>";
 
@@ -130,8 +129,9 @@ public class PhoneOrderController : ControllerBase
     
     [AllowAnonymous]
     [HttpGet("media-stream")]
-    public async Task HandleMediaStream()
+    public async Task HandleMediaStreamAsync()
     {
+        Log.Information(HttpContext.WebSockets.IsWebSocketRequest.ToString());
         if (HttpContext.WebSockets.IsWebSocketRequest)
         {
             using var clientWebSocket = await HttpContext.WebSockets.AcceptWebSocketAsync();

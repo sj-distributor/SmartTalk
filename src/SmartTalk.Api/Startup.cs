@@ -5,6 +5,8 @@ using Correlate.AspNetCore;
 using SmartTalk.Api.Filters;
 using SmartTalk.Api.Extensions;
 using Correlate.DependencyInjection;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.WebSockets;
 using SmartTalk.Core.Settings.OpenAi;
 using Swashbuckle.AspNetCore.SwaggerUI;
 
@@ -62,6 +64,11 @@ public class Startup
         app.UseAuthentication();
         app.UseAuthorization();
         app.UseHangfireInternal();
+        
+        app.UseForwardedHeaders(new ForwardedHeadersOptions
+        {
+            ForwardedHeaders = ForwardedHeaders.All
+        });
         app.UseWebSockets();
         
         app.UseEndpoints(endpoints =>
