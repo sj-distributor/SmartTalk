@@ -179,6 +179,7 @@ public class PhoneOrderController : ControllerBase
                 if (result.Count > 0)
                 {
                     using var jsonDocument = JsonSerializer.Deserialize<JsonDocument>(buffer.AsSpan(0, result.Count));
+                    Log.Information("ReceiveFromTwilioAsync: {@jsonDocument}", jsonDocument);
                     var eventMessage = jsonDocument?.RootElement.GetProperty("event").GetString();
                     Log.Information("ReceiveFromTwilioAsync: {eventMessage}", eventMessage);
                     
