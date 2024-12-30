@@ -117,19 +117,13 @@ public class PhoneOrderController : ControllerBase
     [AllowAnonymous]
     [HttpGet("incoming-call")]
     [HttpPost("incoming-call")]
-    public async Task<IActionResult> HandleIncomingCallAsync()
+    public IActionResult HandleIncomingCall()
     {
         var response = new VoiceResponse();
         var connect = new Twilio.TwiML.Voice.Connect();
-        var twimlResponse = $@"
-            <Response>
-                <Connect>
-                    <Stream url='wss://{HttpContext.Request.Host.Host}/api/PhoneOrder/media-stream' />
-                </Connect>
-            </Response>";
-
+        connect.Stream(url: $"wss://{HttpContext.Request.Host.Host}/api/PhoneOrder/media-stream");
         response.Append(connect);
-        return Ok(Results.Extensions.TwiML(response));
+        return Results.Extensions.TwiML(response);
     }
     
     [AllowAnonymous]
