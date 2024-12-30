@@ -120,7 +120,7 @@ public class PhoneOrderController : ControllerBase
         var twimlResponse = $@"
             <Response>
                 <Connect>
-                    <Stream url='wss://{HttpContext.Request.Host}/api/PhoneOrder/media-stream' />
+                    <Stream url='wss://{HttpContext.Request.Host.Host}/api/PhoneOrder/media-stream' />
                 </Connect>
             </Response>";
 
@@ -151,7 +151,7 @@ public class PhoneOrderController : ControllerBase
         openAiWebSocket.Options.SetRequestHeader("Authorization", $"Bearer {_openAiSettings.ApiKey}");
         openAiWebSocket.Options.SetRequestHeader("OpenAI-Beta", "realtime=v1");
 
-        await openAiWebSocket.ConnectAsync(new Uri("wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01"), CancellationToken.None);
+        await openAiWebSocket.ConnectAsync(new Uri("wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17"), CancellationToken.None);
         await SendSessionUpdateAsync(openAiWebSocket);
         
         var context = new StreamContext();
