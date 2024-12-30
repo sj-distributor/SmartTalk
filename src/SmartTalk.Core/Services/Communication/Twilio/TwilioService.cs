@@ -1,6 +1,10 @@
+using Serilog;
+using AutoMapper;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Extensions;
 using SmartTalk.Messages.Dto.WeChat;
+using System.Text.RegularExpressions;
+using SmartTalk.Core.Domain.Asterisk;
 using SmartTalk.Messages.Enums.Twilio;
 using SmartTalk.Messages.Commands.Twilio;
 using SmartTalk.Core.Services.Http.Clients;
@@ -15,51 +19,63 @@ public interface ITwilioService : IScopedDependency
 
 public class TwilioService : ITwilioService
 {
+    private readonly IMapper _mapper;
+    private readonly IAsteriskClient _asteriskClient;
     private readonly IWeChatClient _weChatClient;
     private readonly PhoneCallBroadcastSetting _phoneCallBroadcastSetting;
+    private readonly ITwilioServiceDataProvider _twilioServiceDataProvider;
     
-    public TwilioService(IWeChatClient weChatClient, PhoneCallBroadcastSetting phoneCallBroadcastSetting)
+    public TwilioService(IMapper mapper, IAsteriskClient asteriskClient, IWeChatClient weChatClient, PhoneCallBroadcastSetting phoneCallBroadcastSetting, ITwilioServiceDataProvider twilioServiceDataProvider)
     {
+        _mapper = mapper;
         _weChatClient = weChatClient;
+        _asteriskClient = asteriskClient;
         _phoneCallBroadcastSetting = phoneCallBroadcastSetting;
+        _twilioServiceDataProvider = twilioServiceDataProvider;
     }
 
     public async Task HandlePhoneCallStatusCallbackAsync(HandlePhoneCallStatusCallBackCommand callback, CancellationToken cancellationToken)
     {
-        if (_phoneCallBroadcastSetting.PhoneNumber != callback.From) return;
+        if (!string.Equals(callback.Status, "Completed", StringComparison.OrdinalIgnoreCase) || _phoneCallBroadcastSetting.PhoneNumber != callback.From) return;
 
-        TryParsePhoneCallStatus(callback.Status, out var result);
+        var originalData = await _asteriskClient.GetAsteriskCdrAsync(Regex.Replace(_phoneCallBroadcastSetting.PhoneNumber, @"^\+1", ""), cancellationToken).ConfigureAwait(false);
+
+        Log.Information("AsteriskCdr OriginalData: {@originalData}", originalData);
         
-        if (result != PhoneCallStatus.Completed)
-            await _weChatClient.SendWorkWechatRobotMessagesAsync(_phoneCallBroadcastSetting.BroadcastUrl, new SendWorkWechatGroupRobotMessageDto
-            {
-                MsgType = "text",
-                Text = new SendWorkWechatGroupRobotTextDto
-                {
-                    Content = $"PhoneCall Number: {callback.To},\n Status: {result.GetDescription()}"
-                }
-            }, cancellationToken).ConfigureAwait(false);
+        var oldData = await _twilioServiceDataProvider.GetAsteriskCdrAsync(createdDate: originalData.Data[0].CallDate, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        Log.Information($"AsteriskCdr OldData: {oldData}", oldData);
+
+        if (oldData != null) return;
+        
+        await _twilioServiceDataProvider.CreateAsteriskCdrAsync(_mapper.Map<AsteriskCdr>(originalData.Data[0]), cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var callStatus = TryParsePhoneCallStatus(originalData.Data[0].Disposition);
+
+        if (callStatus == PhoneCallStatus.Answered)
+            await SendWorkWechatRobotMessagesAsync(callback.To, callStatus, cancellationToken).ConfigureAwait(false);
+
+        if (callStatus != PhoneCallStatus.Answered)
+            await SendWorkWechatRobotMessagesAsync(callback.To, callStatus, cancellationToken).ConfigureAwait(false);
     }
     
-    public static bool TryParsePhoneCallStatus(string status, out PhoneCallStatus result)
+    private static PhoneCallStatus TryParsePhoneCallStatus(string disposition)
     {
-        if (Enum.TryParse(status, true, out PhoneCallStatus recordStatus))
+        if (string.IsNullOrWhiteSpace(disposition))
+            return PhoneCallStatus.Failed;
+        
+        return Enum.TryParse(disposition.Replace(" ", ""), true, out PhoneCallStatus status) ? status : PhoneCallStatus.Failed;
+    }
+
+    private async Task SendWorkWechatRobotMessagesAsync(string targetNumber, PhoneCallStatus callStatus, CancellationToken cancellationToken)
+    {
+        await _weChatClient.SendWorkWechatRobotMessagesAsync(_phoneCallBroadcastSetting.BroadcastUrl, new SendWorkWechatGroupRobotMessageDto
         {
-            result = recordStatus;
-            return true;
-        }
-
-        var match = Enum.GetValues(typeof(PhoneCallStatus))
-            .Cast<PhoneCallStatus>()
-            .FirstOrDefault(x => x.GetDescription().Equals(status, StringComparison.OrdinalIgnoreCase));
-
-        if (match != default)
-        {
-            result = match;
-            return true;
-        }
-
-        result = default;
-        return false;
+            MsgType = "text",
+            Text = new SendWorkWechatGroupRobotTextDto
+            {
+                Content = $"PhoneCall Number: {targetNumber},\n Status: {callStatus.GetDescription()}"
+            }
+        }, cancellationToken).ConfigureAwait(false);
     }
 }
