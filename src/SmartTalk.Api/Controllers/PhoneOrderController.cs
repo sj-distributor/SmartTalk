@@ -121,7 +121,7 @@ public class PhoneOrderController : ControllerBase
     {
         var response = new VoiceResponse();
         var connect = new Twilio.TwiML.Voice.Connect();
-        connect.Stream(url: $"wss://{HttpContext.Request.Host.Host}/api/PhoneOrder/media-stream");
+        connect.Stream(url: $"wss://{HttpContext.Request.Host}/api/PhoneOrder/media-stream");
         response.Append(connect);
         return Results.Extensions.TwiML(response);
     }
