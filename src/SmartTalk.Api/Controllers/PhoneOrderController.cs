@@ -112,6 +112,21 @@ public class PhoneOrderController : ControllerBase
         return Ok(response);
     }
     
+    [HttpGet("incoming-call")]
+    [HttpPost("incoming-call")]
+    public async Task<IActionResult> HandleIncomingCallAsync()
+    {
+        var host = HttpContext.Request.Host.Host;
+        var twimlResponse = $@"
+            <Response>
+                <Connect>
+                    <Stream url='wss://{host}/call/media-stream' />
+                </Connect>
+            </Response>";
+
+        return Ok(twimlResponse);
+    }
+    
     [HttpGet("media-stream")]
     public async Task HandleMediaStream()
     {
