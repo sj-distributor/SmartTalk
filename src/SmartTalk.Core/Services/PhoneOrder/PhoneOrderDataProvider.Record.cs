@@ -60,7 +60,8 @@ public partial class PhoneOrderDataProvider
                     LastModifiedBy = record.LastModifiedBy,
                     CreatedDate = record.CreatedDate,
                     ManualOrderId = record.ManualOrderId,
-                    UserAccount = user
+                    UserAccount = user,
+                    LastModifiedByName = user != null ? user.UserName : null
                 };
 
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
