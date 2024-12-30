@@ -1,7 +1,7 @@
 using SmartTalk.Core.Data;
-using SmartTalk.Core.Domain.Asterisk;
 using SmartTalk.Core.Ioc;
-using SmartTalk.Messages.Requests.Twilio;
+using SmartTalk.Core.Domain.Asterisk;
+using Microsoft.EntityFrameworkCore;
 
 namespace SmartTalk.Core.Services.Communication.Twilio;
 
@@ -9,7 +9,7 @@ public interface ITwilioServiceDataProvider : IScopedDependency
 {
     Task CreateAsteriskCdrAsync(AsteriskCdr cdr, bool forceSave = true, CancellationToken cancellationToken = default);
     
-    Task<AsteriskCdr> GetAsteriskCdrAsync(string src, CancellationToken cancellationToken);
+    Task<AsteriskCdr> GetAsteriskCdrAsync(string src = null, DateTimeOffset? createdDate = null, CancellationToken cancellationToken = default);
 }
 
 public class TwilioServiceDataProvider : ITwilioServiceDataProvider
@@ -31,10 +31,16 @@ public class TwilioServiceDataProvider : ITwilioServiceDataProvider
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<AsteriskCdr> GetAsteriskCdrAsync(string src, CancellationToken cancellationToken)
+    public async Task<AsteriskCdr> GetAsteriskCdrAsync(string src = null, DateTimeOffset? createdDate = null, CancellationToken cancellationToken = default)
     {
-        var response = await _repository.FirstOrDefaultAsync<AsteriskCdr>(x => x.Src == src).ConfigureAwait(false);
+        var query = _repository.Query<AsteriskCdr>();
 
-        return response;
+        if (!string.IsNullOrEmpty(src))
+            query = query.Where(x => x.Src == src);
+
+        if (createdDate.HasValue)
+            query = query.Where(x => x.CreatedDate == createdDate.Value);
+        
+        return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 }

@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace SmartTalk.Core.Domain.Asterisk;
 
 [Table("asterisk_cdr")]
-public class AsteriskCdr : IEntity, IHasCreatedFields
+public class AsteriskCdr : IEntity
 {
     [Column("id")]
     public int Id { get; set; }

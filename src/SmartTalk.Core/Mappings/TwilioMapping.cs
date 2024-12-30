@@ -8,6 +8,7 @@ public class TwilioMapping : Profile
 {
     public TwilioMapping()
     {
-        CreateMap<AsteriskCdr, GetAsteriskCdrData>().ReverseMap();
+        CreateMap<GetAsteriskCdrData, AsteriskCdr>()
+            .ForMember(des => des.CreatedDate, opt => opt.MapFrom(x => x.CallDate));
     }
 }

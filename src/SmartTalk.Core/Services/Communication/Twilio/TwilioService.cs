@@ -1,13 +1,14 @@
+using Serilog;
 using AutoMapper;
-using SmartTalk.Core.Domain.Asterisk;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Extensions;
 using SmartTalk.Messages.Dto.WeChat;
+using System.Text.RegularExpressions;
+using SmartTalk.Core.Domain.Asterisk;
 using SmartTalk.Messages.Enums.Twilio;
 using SmartTalk.Messages.Commands.Twilio;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Settings.Communication.PhoneCall;
-using SmartTalk.Messages.Requests.Twilio;
 
 namespace SmartTalk.Core.Services.Communication.Twilio;
 
@@ -35,36 +36,48 @@ public class TwilioService : ITwilioService
 
     public async Task HandlePhoneCallStatusCallbackAsync(HandlePhoneCallStatusCallBackCommand callback, CancellationToken cancellationToken)
     {
-        if (_phoneCallBroadcastSetting.PhoneNumber != callback.From) return;
+        if (!string.Equals(callback.Status, "Completed", StringComparison.OrdinalIgnoreCase) || _phoneCallBroadcastSetting.PhoneNumber != callback.From) return;
+
+        var originalData = await _asteriskClient.GetAsteriskCdrAsync(Regex.Replace(_phoneCallBroadcastSetting.PhoneNumber, @"^\+1", ""), cancellationToken).ConfigureAwait(false);
+
+        Log.Information("AsteriskCdr OriginalData: {@originalData}", originalData);
         
-        //todo 添加获取服务器数据，添加到本系统中
-        var cdrData = await _asteriskClient.GetAsteriskCdrAsync(_phoneCallBroadcastSetting.PhoneNumber, cancellationToken).ConfigureAwait(false);
+        var oldData = await _twilioServiceDataProvider.GetAsteriskCdrAsync(createdDate: originalData.Data[0].CallDate, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        //todo 持久化
-        await _twilioServiceDataProvider.CreateAsteriskCdrAsync(_mapper.Map<AsteriskCdr>(cdrData.Data), cancellationToken: cancellationToken).ConfigureAwait(false);
+        Log.Information($"AsteriskCdr OldData: {oldData}", oldData);
+
+        if (oldData != null) return;
         
-        TryParsePhoneCallStatus(cdrData.Data, out var result);
+        await _twilioServiceDataProvider.CreateAsteriskCdrAsync(_mapper.Map<AsteriskCdr>(originalData.Data[0]), cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        if (result != PhoneCallStatus.NoAnswer)
+        var callStatus = TryParsePhoneCallStatus(originalData.Data[0].Disposition);
+        
+        if (callStatus == PhoneCallStatus.Answered)
             await _weChatClient.SendWorkWechatRobotMessagesAsync(_phoneCallBroadcastSetting.BroadcastUrl, new SendWorkWechatGroupRobotMessageDto
             {
                 MsgType = "text",
                 Text = new SendWorkWechatGroupRobotTextDto
                 {
-                    Content = $"PhoneCall Number: {callback.To},\n Status: {result.GetDescription()}"
+                    Content = $"PhoneCall Number: {callback.To},\n Status: {callStatus.GetDescription()}"
+                }
+            }, cancellationToken).ConfigureAwait(false);
+
+        if (callStatus != PhoneCallStatus.Answered)
+            await _weChatClient.SendWorkWechatRobotMessagesAsync(_phoneCallBroadcastSetting.BroadcastUrl, new SendWorkWechatGroupRobotMessageDto
+            {
+                MsgType = "text",
+                Text = new SendWorkWechatGroupRobotTextDto
+                {
+                    Content = $"PhoneCall Number: {callback.To},\n Status: {callStatus.GetDescription()}"
                 }
             }, cancellationToken).ConfigureAwait(false);
     }
     
-    public static bool TryParsePhoneCallStatus(GetAsteriskCdrData cdrData, out PhoneCallStatus result)
+    private static PhoneCallStatus TryParsePhoneCallStatus(string disposition)
     {
-        if (cdrData.Disposition.Equals("NO ANSWER") && cdrData.LastApp.Equals("Dial"))
-        {
-            result = (PhoneCallStatus)70;
-            return true;
-        }
-
-        result = (PhoneCallStatus)90;
-        return false;
+        if (string.IsNullOrWhiteSpace(disposition))
+            return PhoneCallStatus.Failed;
+        
+        return Enum.TryParse(disposition.Replace(" ", ""), true, out PhoneCallStatus status) ? status : PhoneCallStatus.Failed;
     }
 }

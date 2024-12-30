@@ -16,7 +16,7 @@ public class GetAsteriskCdrResponse : SmartTalkResponse<GetAsteriskCdrResponseDt
 public class GetAsteriskCdrResponseDto
 {
     [JsonProperty("data")]
-    public GetAsteriskCdrData Data { get; set; }
+    public List<GetAsteriskCdrData> Data { get; set; }
 }
 
 public class GetAsteriskCdrData
@@ -29,4 +29,7 @@ public class GetAsteriskCdrData
     
     [JsonProperty("disposition")]
     public string Disposition { get; set; }
+
+    [JsonProperty("calldate")]
+    public DateTimeOffset CallDate { get; set; }
 }
