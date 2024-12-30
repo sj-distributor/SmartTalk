@@ -130,7 +130,6 @@ public class PhoneOrderController : ControllerBase
     [HttpGet("media-stream")]
     public async Task HandleMediaStreamAsync()
     {
-        Log.Information(HttpContext.WebSockets.IsWebSocketRequest.ToString());
         if (HttpContext.WebSockets.IsWebSocketRequest)
         {
             using var clientWebSocket = await HttpContext.WebSockets.AcceptWebSocketAsync();
@@ -152,7 +151,7 @@ public class PhoneOrderController : ControllerBase
 
         await openAiWebSocket.ConnectAsync(new Uri("wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17"), CancellationToken.None);
         await SendSessionUpdateAsync(openAiWebSocket);
-        
+        Log.Information("SendSessionUpdateAsync is successful");
         var context = new StreamContext();
 
         var receiveFromTwilioTask = ReceiveFromTwilioAsync(twilioWebSocket, openAiWebSocket, context);
