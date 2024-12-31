@@ -220,6 +220,7 @@ public class PhoneOrderController : ControllerBase
 
     private async Task SendToTwilioAsync(WebSocket twilioWebSocket, WebSocket openAiWebSocket, StreamContext context)
     {
+        Log.Information("Sending to twilio.");
         var buffer = new byte[4096];
         try
         {
@@ -399,12 +400,7 @@ public class PhoneOrderController : ControllerBase
         var message = JsonSerializer.Serialize(sessionUpdate);
         Log.Information($"Sending session update: {message}");
 
-        await openAiWebSocket.SendAsync(
-            new ArraySegment<byte>(Encoding.UTF8.GetBytes(message)),
-            WebSocketMessageType.Text,
-            true,
-            CancellationToken.None
-        );
+        await SendToWebSocketAsync(openAiWebSocket, message);
     }
     
     public class StreamContext
