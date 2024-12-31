@@ -402,10 +402,7 @@ public class PhoneOrderController : ControllerBase
             }
         };
 
-        var message = JsonSerializer.Serialize(sessionUpdate);
-        Log.Information($"Sending session update: {message}");
-
-        await SendToWebSocketAsync(openAiWebSocket, message);
+        await SendToWebSocketAsync(openAiWebSocket, sessionUpdate);
     }
     
     public class StreamContext
