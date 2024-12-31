@@ -39,7 +39,7 @@ public class SipServerService : ISipServerService
             Log.Error("下载文件失败，终止后续上传任务。");
             return;
         }
-    
+        
         Log.Information("文件下载完成，开始上传到目标服务器...");
         
         var tasks = command.Destinations.Select(destination => SyncServerDataAsync(privateKeyPath, localPath, destination, cancellationToken));
