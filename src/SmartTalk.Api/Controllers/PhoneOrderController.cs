@@ -239,7 +239,7 @@ public class PhoneOrderController : ControllerBase
                     
                     if (jsonDocument?.RootElement.GetProperty("type").GetString() == "error" && jsonDocument.RootElement.TryGetProperty("error", out var error))
                     {
-                        Log.Information("Receive openai websocket error" + error.GetProperty("message").GetString() ?? string.Empty);
+                        Log.Information("Receive openai websocket error" + error.GetProperty("message").GetString());
                     }
 
                     if (jsonDocument?.RootElement.GetProperty("type").GetString() == "session.updated")
