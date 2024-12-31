@@ -232,10 +232,7 @@ public class PhoneOrderController : ControllerBase
                 {
                     var jsonDocument = JsonSerializer.Deserialize<JsonDocument>(buffer.AsSpan(0, result.Count));
 
-                    if (LogEventTypes.Contains(jsonDocument?.RootElement.GetProperty("type").GetString()))
-                    {
-                        Log.Information($"Received event: {jsonDocument?.RootElement.GetProperty("type").GetString()}");
-                    }
+                    Log.Information($"Received event: {jsonDocument?.RootElement.GetProperty("type").GetString()}");
                     
                     if (jsonDocument?.RootElement.GetProperty("type").GetString() == "error" && jsonDocument.RootElement.TryGetProperty("error", out var error))
                     {
