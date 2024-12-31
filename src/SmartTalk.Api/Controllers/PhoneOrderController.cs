@@ -30,7 +30,7 @@ public class PhoneOrderController : ControllerBase
     {
         "error", "response.content.done", "rate_limits.updated", "response.done", "input_audio_buffer.committed",
         "input_audio_buffer.speech_stopped", "input_audio_buffer.speech_started", "session.created"
-    }; 
+    };
 
     public PhoneOrderController(IMediator mediator, OpenAiSettings openAiSettings)
     {
@@ -179,7 +179,6 @@ public class PhoneOrderController : ControllerBase
                 {
                     using var jsonDocument = JsonSerializer.Deserialize<JsonDocument>(buffer.AsSpan(0, result.Count));
                     var eventMessage = jsonDocument?.RootElement.GetProperty("event").GetString();
-                    Log.Information("ReceiveFromTwilioAsync: {eventMessage}", eventMessage);
                     
                     switch (eventMessage)
                     {
@@ -187,6 +186,9 @@ public class PhoneOrderController : ControllerBase
                             break;
                         case "start":
                             context.StreamSid = jsonDocument?.RootElement.GetProperty("start").GetProperty("streamSid").GetString();
+                            context.ResponseStartTimestampTwilio = null;
+                            context.LatestMediaTimestamp = 0;
+                            context.LastAssistantItem = null;
                             break;
                         case "media":
                             var payload = jsonDocument?.RootElement.GetProperty("media").GetProperty("payload").GetString();
@@ -239,26 +241,46 @@ public class PhoneOrderController : ControllerBase
 
                     if (jsonDocument?.RootElement.GetProperty("type").GetString() == "response.audio.delta" && jsonDocument.RootElement.TryGetProperty("delta", out var delta))
                     {
-                        try
+                        var audioDelta = new
                         {
-                            var audioDelta = new
-                            {
-                                @event = "media",
-                                streamSid = context.StreamSid,
-                                media = new { payload = delta.GetString() }
-                            };
+                            @event = "media",
+                            streamSid = context.StreamSid,
+                            media = new { payload = delta.GetString() }
+                        };
 
-                            await twilioWebSocket.SendAsync(
-                                new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(audioDelta))),
-                                WebSocketMessageType.Text,
-                                true,
-                                CancellationToken.None
-                            );
-                        }
-                        catch (Exception e)
+                        await twilioWebSocket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(audioDelta))), WebSocketMessageType.Text, true, CancellationToken.None);
+                        
+                        if (context.ResponseStartTimestampTwilio == null)
                         {
-                            Log.Information($"Error processing audio data: {e.Message}");
+                            context.ResponseStartTimestampTwilio = context.LatestMediaTimestamp;
+                            if (context.ShowTimingMath)
+                            {
+                                Log.Information($"Setting start timestamp for new response: {context.ResponseStartTimestampTwilio}ms");
+                            }
                         }
+
+                        if (jsonDocument.RootElement.TryGetProperty("item_id", out var itemId))
+                        {
+                            context.LastAssistantItem = itemId.ToString();
+                        }
+
+                        await SendMark(twilioWebSocket, context);
+                    }
+                    
+                    if (jsonDocument?.RootElement.GetProperty("type").GetString() == "input_audio_buffer.speech_started")
+                    {
+                        Log.Information("Speech started detected.");
+                        if (!string.IsNullOrEmpty(context.LastAssistantItem))
+                        {
+                            Log.Information($"Interrupting response with id: {context.LastAssistantItem}");
+                            await HandleSpeechStartedEventAsync(twilioWebSocket, openAiWebSocket, context);
+                        }
+                    }
+
+                    if (!context.InitialConversationSent)
+                    {
+                        await SendInitialConversationItem(openAiWebSocket);
+                        context.InitialConversationSent = true;
                     }
                 }
             }
@@ -268,7 +290,93 @@ public class PhoneOrderController : ControllerBase
             Log.Information($"Send to Twilio error: {ex.Message}");
         }
     }
+    
+    private async Task HandleSpeechStartedEventAsync(WebSocket twilioWebSocket, WebSocket openAiWebSocket, StreamContext context)
+    {
+        Console.WriteLine("Handling speech started event.");
+        if (context.MarkQueue.Count > 0 && context.ResponseStartTimestampTwilio.HasValue)
+        {
+            var elapsedTime = context.LatestMediaTimestamp - context.ResponseStartTimestampTwilio.Value;
+            if (context.ShowTimingMath)
+            {
+                Console.WriteLine($"Calculating elapsed time for truncation: {context.LatestMediaTimestamp} - {context.ResponseStartTimestampTwilio.Value} = {elapsedTime}ms");
+            }
 
+            if (!string.IsNullOrEmpty(context.LastAssistantItem))
+            {
+                if (context.ShowTimingMath)
+                {
+                    Console.WriteLine($"Truncating item with ID: {context.LastAssistantItem}, Truncated at: {elapsedTime}ms");
+                }
+
+                var truncateEvent = new
+                {
+                    type = "conversation.item.truncate",
+                    item_id = context.LastAssistantItem,
+                    content_index = 0,
+                    audio_end_ms = elapsedTime
+                };
+                await SendToWebSocketAsync(openAiWebSocket, truncateEvent);
+            }
+
+            var clearEvent = new
+            {
+                Event = "clear",
+                context.StreamSid
+            };
+            
+            await SendToWebSocketAsync(twilioWebSocket, clearEvent);
+
+            context.MarkQueue.Clear();
+            context.LastAssistantItem = null;
+            context.ResponseStartTimestampTwilio = null;
+        }
+    }
+
+    private async Task SendInitialConversationItem(WebSocket openaiWebSocket)
+    {
+        var initialConversationItem = new
+        {
+            type = "conversation.item.create",
+            item = new
+            {
+                type = "message",
+                role = "user",
+                content = new[]
+                {
+                    new
+                    {
+                        type = "input_text",
+                        text = "Greet the user with: 'Hello Moon house, Santa Monica.'"
+                    }
+                }
+            }
+        };
+
+        await SendToWebSocketAsync(openaiWebSocket, initialConversationItem);
+        await SendToWebSocketAsync(openaiWebSocket, new { type = "response.create" });
+    }
+    
+    private async Task SendMark(WebSocket twilioWebSocket, StreamContext context)
+    {
+        if (!string.IsNullOrEmpty(context.StreamSid))
+        {
+            var markEvent = new
+            {
+                @event = "mark",
+                streamSid = context.StreamSid,
+                mark = new { name = "responsePart" }
+            };
+            await SendToWebSocketAsync(twilioWebSocket, markEvent);
+            context.MarkQueue.Enqueue("responsePart");
+        }
+    }
+    
+    private async Task SendToWebSocketAsync(WebSocket socket, object message)
+    {
+        await socket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(message))), WebSocketMessageType.Text, true, CancellationToken.None);
+    }
+    
     private async Task SendSessionUpdateAsync(WebSocket openAiWebSocket)
     {
         var sessionUpdate = new
@@ -300,5 +408,17 @@ public class PhoneOrderController : ControllerBase
     public class StreamContext
     {
         public string? StreamSid { get; set; }
+
+        public int LatestMediaTimestamp { get; set; } = 0;
+        
+        public string? LastAssistantItem { get; set; }
+        
+        public Queue<string> MarkQueue = new Queue<string>();
+
+        public long? ResponseStartTimestampTwilio { get; set; } = null;
+        
+        public bool InitialConversationSent { get; set; } = false;
+
+        public bool ShowTimingMath { get; set; } = false;
     }
 }
