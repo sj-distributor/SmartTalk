@@ -32,7 +32,7 @@ public class SipServerService : ISipServerService
         
         Log.Information("开始下载文件到本地目录...");
         
-        var downloadSuccess = await ExecuteCommandAsync("/opt/homebrew/bin/rsync", rsyncCommand, cancellationToken).ConfigureAwait(false);
+        var downloadSuccess = await ExecuteCommandAsync("rsync", rsyncCommand, cancellationToken).ConfigureAwait(false);
         
         if (!downloadSuccess)
         {
@@ -162,7 +162,7 @@ public class SipServerService : ISipServerService
     
         Log.Information("开始上传...");
     
-        return await ExecuteCommandAsync("/opt/homebrew/bin/rsync", rsyncCommand, cancellationToken).ConfigureAwait(false);
+        return await ExecuteCommandAsync("rsync", rsyncCommand, cancellationToken).ConfigureAwait(false);
     }
     
     private string BuildRsyncCommand(string privateKeyPath, string tempPath, BackupSipServerDestinationData destination)
