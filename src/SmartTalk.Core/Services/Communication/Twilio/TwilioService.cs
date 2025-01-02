@@ -36,7 +36,7 @@ public class TwilioService : ITwilioService
 
     public async Task HandlePhoneCallStatusCallbackAsync(HandlePhoneCallStatusCallBackCommand callback, CancellationToken cancellationToken)
     {
-        if (!string.Equals(callback.Status, "Completed", StringComparison.OrdinalIgnoreCase) || _phoneCallBroadcastSetting.PhoneNumber != callback.From) return;
+        if (_phoneCallBroadcastSetting.PhoneNumber != callback.From) return;
 
         var originalData = await _asteriskClient.GetAsteriskCdrAsync(Regex.Replace(_phoneCallBroadcastSetting.PhoneNumber, @"^\+1", ""), cancellationToken).ConfigureAwait(false);
 
@@ -54,9 +54,19 @@ public class TwilioService : ITwilioService
 
         if (callStatus == PhoneCallStatus.Answered)
             await SendWorkWechatRobotMessagesAsync(callback.To, callStatus, cancellationToken).ConfigureAwait(false);
-
+        
         if (callStatus != PhoneCallStatus.Answered)
+        {
             await SendWorkWechatRobotMessagesAsync(callback.To, callStatus, cancellationToken).ConfigureAwait(false);
+            await _weChatClient.SendWorkWechatRobotMessagesAsync(_phoneCallBroadcastSetting.BroadcastUrl, new SendWorkWechatGroupRobotMessageDto
+            {
+                MsgType = "text",
+                Text = new SendWorkWechatGroupRobotTextDto
+                {
+                    Content = $"正在切换服务器"
+                }
+            }, cancellationToken).ConfigureAwait(false);
+        }
     }
     
     private static PhoneCallStatus TryParsePhoneCallStatus(string disposition)
