@@ -36,7 +36,7 @@ public class TwilioService : ITwilioService
 
     public async Task HandlePhoneCallStatusCallbackAsync(HandlePhoneCallStatusCallBackCommand callback, CancellationToken cancellationToken)
     {
-        if (_phoneCallBroadcastSetting.PhoneNumber != callback.From) return;
+        if (!string.Equals(callback.Status, "Completed", StringComparison.OrdinalIgnoreCase) || _phoneCallBroadcastSetting.PhoneNumber != callback.From) return;
 
         var originalData = await _asteriskClient.GetAsteriskCdrAsync(Regex.Replace(_phoneCallBroadcastSetting.PhoneNumber, @"^\+1", ""), cancellationToken).ConfigureAwait(false);
 
@@ -51,22 +51,31 @@ public class TwilioService : ITwilioService
         await _twilioServiceDataProvider.CreateAsteriskCdrAsync(_mapper.Map<AsteriskCdr>(originalData.Data[0]), cancellationToken: cancellationToken).ConfigureAwait(false);
         
         var callStatus = TryParsePhoneCallStatus(originalData.Data[0].Disposition);
-
-        if (callStatus == PhoneCallStatus.Answered)
-            await SendWorkWechatRobotMessagesAsync(callback.To, callStatus, cancellationToken).ConfigureAwait(false);
         
-        if (callStatus != PhoneCallStatus.Answered)
-        {
-            await SendWorkWechatRobotMessagesAsync(callback.To, callStatus, cancellationToken).ConfigureAwait(false);
+        var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+        var pacificTime = DateTimeOffset.UtcNow.ConvertFromUtc(pacificZone);
+        var currentDate = pacificTime.ToString("yyyy-MM-dd");
+        var currentTime = pacificTime.ToString("HH:mm");
+        
+        if (callStatus == PhoneCallStatus.Answered)
             await _weChatClient.SendWorkWechatRobotMessagesAsync(_phoneCallBroadcastSetting.BroadcastUrl, new SendWorkWechatGroupRobotMessageDto
             {
                 MsgType = "text",
                 Text = new SendWorkWechatGroupRobotTextDto
                 {
-                    Content = $"正在切换服务器"
+                    Content = $"PST {currentDate} linphone服务器情况 \n\n{currentTime} 正常"
                 }
             }, cancellationToken).ConfigureAwait(false);
-        }
+        else
+            await _weChatClient.SendWorkWechatRobotMessagesAsync(_phoneCallBroadcastSetting.BroadcastUrl, new SendWorkWechatGroupRobotMessageDto
+            {
+                MsgType = "text",
+                Text = new SendWorkWechatGroupRobotTextDto
+                {
+                    Content = $"PST {currentDate} linphone服务器情况\n\n{currentTime} 🆘🆘 異常",
+                    MentionedMobileList = "@all"
+                }
+            }, cancellationToken).ConfigureAwait(false);
     }
     
     private static PhoneCallStatus TryParsePhoneCallStatus(string disposition)
