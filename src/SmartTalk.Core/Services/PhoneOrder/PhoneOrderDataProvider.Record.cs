@@ -43,25 +43,9 @@ public partial class PhoneOrderDataProvider
 
     public async Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(PhoneOrderRestaurant restaurant, CancellationToken cancellationToken)
     {
-        var query = from record in _repository.Query<PhoneOrderRecord>()
-                join user in _repository.Query<UserAccount>() on record.LastModifiedBy equals user.Id into userGroup
-                from user in userGroup.DefaultIfEmpty()
-                where record.Restaurant == restaurant
-                where record.Status == PhoneOrderRecordStatus.Sent
-                orderby record.CreatedDate descending 
-                select new PhoneOrderRecord
-                {
-                    Id = record.Id,
-                    SessionId = record.SessionId,
-                    Restaurant = record.Restaurant,
-                    Tips = record.Tips,
-                    TranscriptionText = record.TranscriptionText,
-                    Url = record.Url,
-                    LastModifiedBy = record.LastModifiedBy,
-                    CreatedDate = record.CreatedDate,
-                    ManualOrderId = record.ManualOrderId,
-                    UserAccount = user
-                };
+        var query = _repository.Query<PhoneOrderRecord>()
+            .Where(record => record.Restaurant == restaurant && record.Status == PhoneOrderRecordStatus.Sent)
+            .OrderByDescending(record => record.CreatedDate);
 
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }

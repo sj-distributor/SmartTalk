@@ -447,13 +447,14 @@ public partial class PhoneOrderService
         };
     }
     
-    private async Task UpdatePhoneOrderRecordSpecificFieldsAsync(int recordId, int modifiedBy, string tips, CancellationToken cancellationToken)
+    private async Task UpdatePhoneOrderRecordSpecificFieldsAsync(int recordId, int modifiedBy, string tips, string lastModifiedByName, CancellationToken cancellationToken)
     {
         var record = (await _phoneOrderDataProvider.GetPhoneOrderRecordAsync(recordId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
 
         record.Tips = tips;
         record.LastModifiedBy = modifiedBy;
         record.LastModifiedDate = DateTimeOffset.Now;
+        record.LastModifiedByName = lastModifiedByName;
 
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
