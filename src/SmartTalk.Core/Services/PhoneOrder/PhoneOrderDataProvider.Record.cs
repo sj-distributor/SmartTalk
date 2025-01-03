@@ -18,7 +18,7 @@ public partial interface IPhoneOrderDataProvider
     
     Task UpdatePhoneOrderRecordsAsync(PhoneOrderRecord record, bool forceSave = true, CancellationToken cancellationToken = default);
 
-    Task<List<PhoneOrderRecord>> GetPhoneOrderRecordAsync(int? recordId = null, DateTimeOffset? createdDate = null, CancellationToken cancellationToken = default);
+    Task<List<PhoneOrderRecord>> GetPhoneOrderRecordAsync(int? recordId = null, DateTimeOffset? createdDate = null, PhoneOrderRestaurant? restaurant = null, CancellationToken cancellationToken = default);
 
     Task<PhoneOrderRecord> GetPhoneOrderRecordByTranscriptionJobIdAsync(string transcriptionJobId, CancellationToken cancellationToken = default);
     
@@ -74,7 +74,7 @@ public partial class PhoneOrderDataProvider
     }
 
     public async Task<List<PhoneOrderRecord>> GetPhoneOrderRecordAsync(
-        int? recordId = null, DateTimeOffset? createdDate = null, CancellationToken cancellationToken = default)
+        int? recordId = null, DateTimeOffset? createdDate = null, PhoneOrderRestaurant? restaurant = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<PhoneOrderRecord>();
 
@@ -83,6 +83,9 @@ public partial class PhoneOrderDataProvider
 
         if (createdDate.HasValue)
             query = query.Where(x => x.CreatedDate == createdDate && x.Status == PhoneOrderRecordStatus.Sent);
+
+        if (restaurant.HasValue)
+            query = query.Where(x => x.Restaurant == restaurant);
         
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
