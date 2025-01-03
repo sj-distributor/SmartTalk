@@ -451,19 +451,12 @@ public partial class PhoneOrderService
     {
         var record = (await _phoneOrderDataProvider.GetPhoneOrderRecordAsync(recordId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
 
-        if (record != null)
-        {
-            record.Tips = tips;
-            record.LastModifiedBy = modifiedBy;
-            record.LastModifiedDate = DateTimeOffset.Now;
-            record.LastModifiedByName = lastModifiedByName;
-
-            await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
-        }
-        else
-        {
-            throw new Exception("Record not found.");
-        }
+        record.Tips = tips;
+        record.LastModifiedBy = modifiedBy;
+        record.LastModifiedDate = DateTimeOffset.Now;
+        record.LastModifiedByName = lastModifiedByName;
+        
+        await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
     
     public async Task<string> SplitAudioAsync(byte[] file, PhoneOrderRecord record, double speakStartTimeVideo, double speakEndTimeVideo, TranscriptionFileType fileType = TranscriptionFileType.Wav, CancellationToken cancellationToken = default)
