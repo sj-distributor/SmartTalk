@@ -105,7 +105,7 @@ public class SipServerService : ISipServerService
 
             if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
             {
-                var chmodCommand = $"chmod 400 \"{privateKeyTempPath}\"";
+                var chmodCommand = $"chmod 600 \"{privateKeyTempPath}\"";
 
                 var process = new Process
                 {
