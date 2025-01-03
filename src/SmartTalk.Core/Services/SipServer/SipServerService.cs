@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using Renci.SshNet;
 using Serilog;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Settings.SipServer;
@@ -28,10 +27,6 @@ public class SipServerService : ISipServerService
         var localPath = CreateTempFolder();
 
         var privateKeyPath = await GeneratePrivateKeyTempPathAsync(cancellationToken).ConfigureAwait(false);
-
-        VerifySshConnection(command, privateKeyPath);
-        
-        return;
         
         var rsyncCommand = $"-avz --progress -e \"ssh -i {privateKeyPath}\" \"{command.Source.ServerPath}\" \"{localPath}\"";
         
@@ -97,7 +92,7 @@ public class SipServerService : ISipServerService
     
     private async Task<string> GeneratePrivateKeyTempPathAsync(CancellationToken cancellationToken)
     {
-        var privateKeyTempPath = Path.Combine(Path.GetTempPath(), "temp_key.pem");
+        var privateKeyTempPath = Path.Combine(Path.GetTempPath(), "temp_key");
 
         try
         {
@@ -112,15 +107,28 @@ public class SipServerService : ISipServerService
             if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
             {
                 var chmodCommand = $"chmod 400 \"{privateKeyTempPath}\"";
-                var checkPermissionCommand = $"ls -l \"{privateKeyTempPath}\"";
-                
-                await ExecuteShellCommandAsync(chmodCommand, cancellationToken);
 
-                var permissions = await ExecuteShellCommandAsync(checkPermissionCommand, cancellationToken);
-                
-                Log.Information($"File permissions for {privateKeyTempPath}: {permissions.Trim()}");
+                var process = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = "/bin/bash",
+                        Arguments = $"-c \"{chmodCommand}\"",
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    }
+                };
 
-                return privateKeyTempPath;
+                process.Start();
+
+                await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+
+                if (process.ExitCode != 0)
+                {
+                    throw new InvalidOperationException("Failed to set permissions for the private key file.");
+                }
             }
         }
         catch (Exception e)
@@ -130,23 +138,6 @@ public class SipServerService : ISipServerService
         }
 
         return privateKeyTempPath;
-    }
-
-    private void VerifySshConnection(BackupSipServerDataCommand command, string privateKeyPath)
-    {
-        var connectionInfo = new PrivateKeyConnectionInfo(command.Source.Server, command.Source.User, new PrivateKeyFile(privateKeyPath));
-
-        using var client = new SshClient(connectionInfo);
-        
-        try
-        {
-            client.Connect();
-            Log.Information("密钥验证成功！");
-        }
-        catch (Exception ex)
-        {
-           throw new Exception($"密钥验证失败：{ex.Message}");
-        }
     }
     
     private async Task<bool> SyncServerDataAsync(string privateKeyPath, string localPath, BackupSipServerDestinationData destination, CancellationToken cancellationToken)
@@ -232,33 +223,5 @@ public class SipServerService : ISipServerService
             Log.Error($"执行出现异常！{ex.Message}");
             return false;
         }
-    }
-    
-    private async Task<string> ExecuteShellCommandAsync(string command, CancellationToken cancellationToken)
-    {
-        var process = new Process
-        {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = "/bin/bash",
-                Arguments = $"-c \"{command}\"",
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            }
-        };
-
-        process.Start();
-        var output = await process.StandardOutput.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
-        await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-
-        if (process.ExitCode != 0)
-        {
-            var error = await process.StandardError.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
-            throw new InvalidOperationException($"Command failed: {command}\nError: {error.Trim()}");
-        }
-
-        return output;
     }
 }
