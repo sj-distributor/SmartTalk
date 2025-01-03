@@ -52,9 +52,7 @@ public class TwilioService : ITwilioService
         
         var callStatus = TryParsePhoneCallStatus(originalData.Data[0].Disposition);
 
-        if (callStatus == PhoneCallStatus.Answered)
-            await SendWorkWechatRobotMessagesAsync($"正常", false, cancellationToken).ConfigureAwait(false);
-        else
+        if (callStatus != PhoneCallStatus.Answered)
             await SendWorkWechatRobotMessagesAsync($"🆘🆘 異常", true, cancellationToken).ConfigureAwait(false);
     }
     
