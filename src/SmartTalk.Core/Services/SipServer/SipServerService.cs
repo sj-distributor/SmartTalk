@@ -97,7 +97,7 @@ public class SipServerService : ISipServerService
     
     private async Task<string> GeneratePrivateKeyTempPathAsync(CancellationToken cancellationToken)
     {
-        var privateKeyTempPath = Path.Combine(Path.GetTempPath(), "temp_key");
+        var privateKeyTempPath = Path.Combine(Path.GetTempPath(), "temp_key.pem");
 
         try
         {
