@@ -51,31 +51,11 @@ public class TwilioService : ITwilioService
         await _twilioServiceDataProvider.CreateAsteriskCdrAsync(_mapper.Map<AsteriskCdr>(originalData.Data[0]), cancellationToken: cancellationToken).ConfigureAwait(false);
         
         var callStatus = TryParsePhoneCallStatus(originalData.Data[0].Disposition);
-        
-        var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
-        var pacificTime = DateTimeOffset.UtcNow.ConvertFromUtc(pacificZone);
-        var currentDate = pacificTime.ToString("yyyy-MM-dd");
-        var currentTime = pacificTime.ToString("HH:mm");
-        
+
         if (callStatus == PhoneCallStatus.Answered)
-            await _weChatClient.SendWorkWechatRobotMessagesAsync(_phoneCallBroadcastSetting.BroadcastUrl, new SendWorkWechatGroupRobotMessageDto
-            {
-                MsgType = "text",
-                Text = new SendWorkWechatGroupRobotTextDto
-                {
-                    Content = $"PST {currentDate} linphone服务器情况 \n\n{currentTime} 正常"
-                }
-            }, cancellationToken).ConfigureAwait(false);
+            await SendWorkWechatRobotMessagesAsync($"正常", false, cancellationToken).ConfigureAwait(false);
         else
-            await _weChatClient.SendWorkWechatRobotMessagesAsync(_phoneCallBroadcastSetting.BroadcastUrl, new SendWorkWechatGroupRobotMessageDto
-            {
-                MsgType = "text",
-                Text = new SendWorkWechatGroupRobotTextDto
-                {
-                    Content = $"PST {currentDate} linphone服务器情况\n\n{currentTime} 🆘🆘 異常",
-                    MentionedMobileList = "@all"
-                }
-            }, cancellationToken).ConfigureAwait(false);
+            await SendWorkWechatRobotMessagesAsync($"🆘🆘 異常", true, cancellationToken).ConfigureAwait(false);
     }
     
     private static PhoneCallStatus TryParsePhoneCallStatus(string disposition)
@@ -86,15 +66,21 @@ public class TwilioService : ITwilioService
         return Enum.TryParse(disposition.Replace(" ", ""), true, out PhoneCallStatus status) ? status : PhoneCallStatus.Failed;
     }
 
-    private async Task SendWorkWechatRobotMessagesAsync(string targetNumber, PhoneCallStatus callStatus, CancellationToken cancellationToken)
+    private async Task SendWorkWechatRobotMessagesAsync(string content, bool atAll, CancellationToken cancellationToken)
     {
+        var pacificTime = DateTimeOffset.UtcNow.ConvertFromUtc(TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
+        var currentDate = pacificTime.ToString("yyyy-MM-dd");
+        var currentTime = pacificTime.ToString("HH:mm");
+        
+        var text = new SendWorkWechatGroupRobotTextDto { Content = $"PST {currentDate} linphone服务器情况 \n\n{currentTime} {content}" };
+
+        if (atAll)
+            text.MentionedMobileList = "@all";
+        
         await _weChatClient.SendWorkWechatRobotMessagesAsync(_phoneCallBroadcastSetting.BroadcastUrl, new SendWorkWechatGroupRobotMessageDto
         {
             MsgType = "text",
-            Text = new SendWorkWechatGroupRobotTextDto
-            {
-                Content = $"PhoneCall Number: {targetNumber},\n Status: {callStatus.GetDescription()}"
-            }
+            Text = text
         }, cancellationToken).ConfigureAwait(false);
     }
 }
