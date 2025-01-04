@@ -37,8 +37,14 @@ public class TwilioService : ITwilioService
     public async Task HandlePhoneCallStatusCallbackAsync(HandlePhoneCallStatusCallBackCommand callback, CancellationToken cancellationToken)
     {
         if (!string.Equals(callback.Status, "Completed", StringComparison.OrdinalIgnoreCase) || _phoneCallBroadcastSetting.PhoneNumber != callback.From) return;
+        
+        var restaurantAsterisk = await _twilioServiceDataProvider.GetRestaurantAsteriskAsync(callback.To, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("RestaurantAsterisk is: {@restaurantAsterisk}", restaurantAsterisk);
 
-        var originalData = await _asteriskClient.GetAsteriskCdrAsync(Regex.Replace(_phoneCallBroadcastSetting.PhoneNumber, @"^\+1", ""), cancellationToken).ConfigureAwait(false);
+        if (restaurantAsterisk == null) return;
+        
+        var originalData = await _asteriskClient.GetAsteriskCdrAsync(Regex.Replace(_phoneCallBroadcastSetting.PhoneNumber, @"^\+1", ""), restaurantAsterisk.CdrDomainName, cancellationToken).ConfigureAwait(false);
 
         Log.Information("AsteriskCdr OriginalData: {@originalData}", originalData);
         

@@ -4,4 +4,4 @@ create table if not exists asterisk_cdr(
     last_app varchar(250) not null,
     disposition varchar(250) null,
     created_date datetime(3) not null
-)
+)charset=utf8mb4;
