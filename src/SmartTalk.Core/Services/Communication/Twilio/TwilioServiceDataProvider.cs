@@ -11,7 +11,7 @@ public interface ITwilioServiceDataProvider : IScopedDependency
     
     Task<AsteriskCdr> GetAsteriskCdrAsync(string src = null, DateTimeOffset? createdDate = null, CancellationToken cancellationToken = default);
     
-    Task<RestaurantAsterisk> GetRestaurantAsteriskAsync(string restaurantPhoneNumber, CancellationToken cancellationToken);
+    Task<RestaurantAsterisk> GetRestaurantAsteriskAsync(string restaurantPhoneNumber, string twilioNumber, CancellationToken cancellationToken);
 }
 
 public class TwilioServiceDataProvider : ITwilioServiceDataProvider
@@ -46,8 +46,8 @@ public class TwilioServiceDataProvider : ITwilioServiceDataProvider
         return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<RestaurantAsterisk> GetRestaurantAsteriskAsync(string restaurantPhoneNumber, CancellationToken cancellationToken)
+    public async Task<RestaurantAsterisk> GetRestaurantAsteriskAsync(string restaurantPhoneNumber, string twilioNumber, CancellationToken cancellationToken)
     {
-        return await _repository.FirstOrDefaultAsync<RestaurantAsterisk>(x => x.RestaurantPhoneNumber == restaurantPhoneNumber, cancellationToken).ConfigureAwait(false);
+        return await _repository.FirstOrDefaultAsync<RestaurantAsterisk>(x => x.RestaurantPhoneNumber == restaurantPhoneNumber && x.TwilioNumber == twilioNumber, cancellationToken).ConfigureAwait(false);
     }
 }

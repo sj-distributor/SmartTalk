@@ -13,6 +13,9 @@ public class RestaurantAsterisk : IEntity
     [Column("restaurant_phone_number")]
     public string RestaurantPhoneNumber { get; set; }
 
+    [Column("twilio_number")]
+    public string TwilioNumber { get; set; }
+
     [Column("cdr_domain_name")]
     public string CdrDomainName { get; set; }
 
