@@ -1,5 +1,5 @@
 using AlibabaCloud.SDK.Alidns20150109.Models;
-using SmartTalk.Core.Constants;
+using Serilog;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Settings.AliYun;
 
@@ -7,7 +7,7 @@ namespace SmartTalk.Core.Services.Http.Clients;
 
 public interface IAlidnsClient : IScopedDependency
 {
-    Task<UpdateDomainRecordResponseBody> UpdateDomainRecordAsync(string endpoint, string hostRecords, string value);
+    Task<UpdateDomainRecordResponseBody> UpdateDomainRecordAsync(string describeDomain, string endpoint, string hostRecords, string value);
 }
 
 public class AlidnsClient : IAlidnsClient
@@ -31,28 +31,29 @@ public class AlidnsClient : IAlidnsClient
         return new AlibabaCloud.SDK.Alidns20150109.Client(config);
     }
 
-    public async Task<UpdateDomainRecordResponseBody> UpdateDomainRecordAsync(string endpoint, string hostRecords, string value)
+    public async Task<UpdateDomainRecordResponseBody> UpdateDomainRecordAsync(string describeDomain, string endpoint, string hostRecords, string value)
     {
         var client = CreateClient(endpoint);
 
-        var describeDomainRecordsRequest = new DescribeDomainRecordsRequest { DomainName = AliyunConstants.DescribeDomain };
+        var describeDomainRecordsRequest = new DescribeDomainRecordsRequest { DomainName = describeDomain };
 
         var runtime = new AlibabaCloud.TeaUtil.Models.RuntimeOptions();
 
         var resp = await client.DescribeDomainRecordsWithOptionsAsync(describeDomainRecordsRequest, runtime).ConfigureAwait(false);
         
-        var describeDomain = resp.Body.DomainRecords.Record.Where(x => x.RR == hostRecords).FirstOrDefault();
+        var describeDomainRecord = resp.Body.DomainRecords.Record.Where(x => x.RR == hostRecords).FirstOrDefault();
 
+        if (describeDomainRecord == null) { throw new Exception("Cannot find the describeDomain"); }
+        
+        Log.Information("UpdateDomainRecordAsync describeDomainRecord {@describeDomainRecord}", describeDomainRecord);
+        
         var request = new UpdateDomainRecordRequest();
         
-        if (describeDomain != null)
-        {
-            request.RecordId = describeDomain.RecordId;
-            request.RR = describeDomain.RR;
-            request.Type = describeDomain.Type;
-            request.Value = value;
-        }
-
+        request.RecordId = describeDomainRecord.RecordId;
+        request.RR = describeDomainRecord.RR;
+        request.Type = describeDomainRecord.Type;
+        request.Value = value;
+        
         var updateDomainRecordWithOptions = await client.UpdateDomainRecordWithOptionsAsync(request, runtime).ConfigureAwait(false);
 
         return updateDomainRecordWithOptions.Body;
