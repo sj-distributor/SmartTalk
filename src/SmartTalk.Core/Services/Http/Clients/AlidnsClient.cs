@@ -7,7 +7,7 @@ namespace SmartTalk.Core.Services.Http.Clients;
 
 public interface IAlidnsClient : IScopedDependency
 {
-    Task<UpdateDomainRecordResponseBody> UpdateDomainRecordAsync(string endpoint, string hostRecords, UpdateDomainRecordRequest request);
+    Task<UpdateDomainRecordResponseBody> UpdateDomainRecordAsync(string endpoint, string hostRecords, string value);
 }
 
 public class AlidnsClient : IAlidnsClient
@@ -31,7 +31,7 @@ public class AlidnsClient : IAlidnsClient
         return new AlibabaCloud.SDK.Alidns20150109.Client(config);
     }
 
-    public async Task<UpdateDomainRecordResponseBody> UpdateDomainRecordAsync(string endpoint, string hostRecords, UpdateDomainRecordRequest request)
+    public async Task<UpdateDomainRecordResponseBody> UpdateDomainRecordAsync(string endpoint, string hostRecords, string value)
     {
         var client = CreateClient(endpoint);
 
@@ -41,8 +41,18 @@ public class AlidnsClient : IAlidnsClient
 
         var resp = await client.DescribeDomainRecordsWithOptionsAsync(describeDomainRecordsRequest, runtime).ConfigureAwait(false);
         
-        request.RecordId = resp.Body.DomainRecords.Record.Where(x => x.RR == hostRecords).FirstOrDefault()?.RecordId;
+        var describeDomain = resp.Body.DomainRecords.Record.Where(x => x.RR == hostRecords).FirstOrDefault();
+
+        var request = new UpdateDomainRecordRequest();
         
+        if (describeDomain != null)
+        {
+            request.RecordId = describeDomain.RecordId;
+            request.RR = describeDomain.RR;
+            request.Type = describeDomain.Type;
+            request.Value = value;
+        }
+
         var updateDomainRecordWithOptions = await client.UpdateDomainRecordWithOptionsAsync(request, runtime).ConfigureAwait(false);
 
         return updateDomainRecordWithOptions.Body;
