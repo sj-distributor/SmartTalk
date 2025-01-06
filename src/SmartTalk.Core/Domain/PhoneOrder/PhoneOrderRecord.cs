@@ -52,4 +52,7 @@ public class PhoneOrderRecord : IEntity
     
     [NotMapped]
     public UserAccount UserAccount { get; set; }
+    
+    [Column("last_modified_by_name")]
+    public string LastModifiedByName { get; set; }
 }
