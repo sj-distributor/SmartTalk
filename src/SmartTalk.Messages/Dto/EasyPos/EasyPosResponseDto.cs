@@ -31,6 +31,9 @@ public class EasyPosResponseProduct
     [JsonProperty("price")]
     public decimal Price { get; set; }
 
+    [JsonProperty("isIndependentSale")]
+    public bool IsIndependentSale { get; set; }
+
     [JsonProperty("localizations")]
     public List<EasyPosResponseLocalization> Localizations { get; set; }
 }

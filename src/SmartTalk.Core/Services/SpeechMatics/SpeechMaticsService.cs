@@ -65,19 +65,6 @@ public class SpeechMaticsService : ISpeechMaticsService
             var audioContent = await _smartTalkHttpClientFactory.GetAsync<byte[]>(record.Url, cancellationToken).ConfigureAwait(false);
             
             await _phoneOrderService.ExtractPhoneOrderRecordAiMenuAsync(speakInfos, record, audioContent, cancellationToken).ConfigureAwait(false);
-            
-            await SendWorkWeChatRobotNotifyAsync(audioContent, new PhoneOrderRecordInformationDto
-            {
-                OrderDate = record.CreatedDate,
-                Restaurant = record.Restaurant,
-                WorkWeChatRobotKey = record.Restaurant switch
-                {
-                    PhoneOrderRestaurant.JiangNanChun => _phoneOrderSetting.GetSetting("江南春"),
-                    PhoneOrderRestaurant.XiangTanRenJia =>  _phoneOrderSetting.GetSetting("湘潭人家"),
-                    PhoneOrderRestaurant.MoonHouse => _phoneOrderSetting.GetSetting("福满楼"),
-                    _ => throw new Exception("Restaurant not exist")
-                }
-            }, record.TranscriptionText, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception e)
         {
@@ -86,60 +73,6 @@ public class SpeechMaticsService : ISpeechMaticsService
             await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken).ConfigureAwait(false);
 
             Log.Warning(e.Message);
-        }
-    }
-    
-    public async Task SendWorkWeChatRobotNotifyAsync(byte[] recordContent, PhoneOrderRecordInformationDto recordInfo, string transcription, CancellationToken cancellationToken)
-    {
-        await _weChatClient.SendWorkWechatRobotMessagesAsync(recordInfo.WorkWeChatRobotUrl,
-            new SendWorkWechatGroupRobotMessageDto
-            {
-                MsgType = "text",
-                Text = new SendWorkWechatGroupRobotTextDto
-                {
-                    Content = $"----------{recordInfo.Restaurant.GetDescription()}-PST {recordInfo.OrderDate.ToString("yyyy/MM/dd HH:mm:ss")}----------"
-                }
-            }, cancellationToken);
-        
-        var splitAudios = await ConvertAndSplitAudioAsync(recordContent, secondsPerAudio: 60, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        await SendMultiAudioMessagesAsync(splitAudios, recordInfo, cancellationToken).ConfigureAwait(false);
-
-        await _weChatClient.SendWorkWechatRobotMessagesAsync(
-            recordInfo.WorkWeChatRobotUrl, new SendWorkWechatGroupRobotMessageDto
-            {
-                MsgType = "text", Text = new SendWorkWechatGroupRobotTextDto { Content = transcription }
-            }, CancellationToken.None);
-        
-        await _weChatClient.SendWorkWechatRobotMessagesAsync(
-            recordInfo.WorkWeChatRobotUrl, new SendWorkWechatGroupRobotMessageDto
-            {
-                MsgType = "text", Text = new SendWorkWechatGroupRobotTextDto { Content = "-------------------------End-------------------------" }
-            }, CancellationToken.None);
-    }
-
-    public async Task<List<byte[]>> ConvertAndSplitAudioAsync(byte[] record, int secondsPerAudio, CancellationToken cancellationToken)
-    {
-        var amrAudio = await _ffmpegService.ConvertWavToAmrAsync(record, "", cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        return await _ffmpegService.SplitAudioAsync(amrAudio, secondsPerAudio, "amr", cancellationToken: cancellationToken).ConfigureAwait(false);
-    }
-    
-    public async Task SendMultiAudioMessagesAsync(List<byte[]> audios, PhoneOrderRecordInformationDto recordInfo, CancellationToken cancellationToken)
-    {
-        foreach (var audio in audios)
-        {
-            var uploadResponse = await _weChatClient.UploadWorkWechatTemporaryFileAsync(
-                recordInfo.WorkWeChatRobotUploadVoiceUrl, Guid.NewGuid() + ".amr", UploadWorkWechatTemporaryFileType.Voice, audio, cancellationToken: cancellationToken).ConfigureAwait(false);
-            
-            if (string.IsNullOrEmpty(uploadResponse?.MediaId)) continue;
-            
-            await _weChatClient.SendWorkWechatRobotMessagesAsync(recordInfo.WorkWeChatRobotUrl,
-                new SendWorkWechatGroupRobotMessageDto
-                {
-                    MsgType = "voice",
-                    Voice = new SendWorkWechatGroupRobotFileDto { MediaId = uploadResponse.MediaId }
-                }, cancellationToken);
         }
     }
     

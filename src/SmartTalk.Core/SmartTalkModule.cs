@@ -13,6 +13,11 @@ using Mediator.Net.Middlewares.Serilog;
 using Microsoft.Extensions.Configuration;
 using AutoMapper.Contrib.Autofac.DependencyInjection;
 using Google.Cloud.Translation.V2;
+using SmartTalk.Core.Middlewares.Authorization;
+using SmartTalk.Core.Middlewares.FluentMessageValidator;
+using SmartTalk.Core.Middlewares.Security;
+using SmartTalk.Core.Middlewares.UnifyResponse;
+using SmartTalk.Core.Middlewares.UnitOfWork;
 using SmartTalk.Core.Services.Caching.Redis;
 using SmartTalk.Core.Settings.AliYun;
 using SmartTalk.Core.Settings.Google;
@@ -46,6 +51,7 @@ public class SmartTalkModule : Module
         RegisterAutoMapper(builder);
         RegisterAliYunOssClient(builder);
         RegisterTranslationClient(builder);
+        RegisterValidators(builder);
     }
 
     private void RegisterDependency(ContainerBuilder builder)
@@ -72,8 +78,11 @@ public class SmartTalkModule : Module
         
         mediatorBuilder.ConfigureGlobalReceivePipe(c =>
         {
-            /*c.UseUnitOfWork();
-            c.UseUnifyResponse();*/
+            c.UseUnitOfWork();
+            c.UseUnifyResponse();
+            c.UseSecurity();
+            c.UseAuthorization();
+            c.UseMessageValidator();
             c.UseSerilog(logger: _logger);
         });
 
@@ -144,5 +153,11 @@ public class SmartTalkModule : Module
             var googleTranslateApiKey = c.Resolve<GoogleTranslateApiKeySetting>().Value;
             return TranslationClient.CreateFromApiKey(googleTranslateApiKey);
         }).AsSelf().InstancePerLifetimeScope();
+    }
+    
+    private void RegisterValidators(ContainerBuilder builder)
+    {
+        builder.RegisterTypes(typeof(SmartTalkModule).Assembly.GetTypes()
+            .Where(x => x.IsClass && typeof(IFluentMessageValidator).IsAssignableFrom(x)).ToArray()).AsSelf().AsImplementedInterfaces();
     }
 }

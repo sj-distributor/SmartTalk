@@ -57,10 +57,10 @@ public partial class PhoneOrderService
     {
         if (command.RecordName.IsNullOrEmpty()) return;
         
-        var recordInfo = ExtractPhoneOrderRecordInfoFromRecordName(command.RecordName);
+        var recordInfo = ExtractPhoneOrderRecordInfoFromRecordName(command.RecordName, command.Restaurant);
         
         Log.Information("Phone order record information: {@recordInfo}", recordInfo);
-
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
         if (await CheckOrderExistAsync(recordInfo.OrderDate.AddHours(-8), cancellationToken).ConfigureAwait(false)) return;
         
         var transcription = await _speechToTextService.SpeechToTextAsync(
@@ -430,48 +430,32 @@ public partial class PhoneOrderService
         return uploadResponse.Attachment.FileUrl;
     }
     
-    private PhoneOrderRecordInformationDto ExtractPhoneOrderRecordInfoFromRecordName(string recordName)
+    private PhoneOrderRecordInformationDto ExtractPhoneOrderRecordInfoFromRecordName(string recordName, string restaurant)
     {
         var time = string.Empty;
-        var phoneNumber = string.Empty;
-        
-        var regexInOut = new Regex(@"(?:in-(\d+)|out-\d+-(\d+))-.*-(\d+)\.\d+\.wav");
+
+        var regexInOut = new Regex(@"-(\d+)\.");
         var match = regexInOut.Match(recordName);
 
         if (match.Success)
-        {
-            time = match.Groups[3].Value;
-            phoneNumber = match.Groups[1].Success ? match.Groups[1].Value : match.Groups[2].Value;
-        }
+            time = match.Groups[1].Value;
 
         return new PhoneOrderRecordInformationDto
         {
             OrderDate = DateTimeOffset.FromUnixTimeSeconds(long.Parse(time)),
-            Restaurant = phoneNumber[0] switch
-            {
-                '3' or '6' => PhoneOrderRestaurant.JiangNanChun,
-                '5' or '7' => PhoneOrderRestaurant.XiangTanRenJia,
-                '8' or '9' or '2' or '0' => PhoneOrderRestaurant.MoonHouse,
-                _ => throw new Exception("Phone Number not exist")
-            },
-            WorkWeChatRobotKey = phoneNumber[0] switch
-            {
-                '3' or '6' => _phoneOrderSetting.GetSetting("江南春"),
-                '5' or '7' =>  _phoneOrderSetting.GetSetting("湘潭人家"),
-                '8' or '9' or '2' or '0' => _phoneOrderSetting.GetSetting("福满楼"),
-                _ => throw new Exception("Phone Number not exist")
-            }
+            Restaurant = (PhoneOrderRestaurant)Enum.Parse(typeof(PhoneOrderRestaurant), restaurant, true)
         };
     }
     
-    private async Task UpdatePhoneOrderRecordSpecificFieldsAsync(int recordId, int modifiedBy, string tips, CancellationToken cancellationToken)
+    private async Task UpdatePhoneOrderRecordSpecificFieldsAsync(int recordId, int modifiedBy, string tips, string lastModifiedByName, CancellationToken cancellationToken)
     {
         var record = (await _phoneOrderDataProvider.GetPhoneOrderRecordAsync(recordId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
 
         record.Tips = tips;
         record.LastModifiedBy = modifiedBy;
         record.LastModifiedDate = DateTimeOffset.Now;
-
+        record.LastModifiedByName = lastModifiedByName;
+        
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
     

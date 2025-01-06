@@ -1,11 +1,15 @@
 using Autofac;
 using Xunit;
+using Autofac;
 using Shouldly;
+using NSubstitute;
 using Mediator.Net;
 using SmartTalk.Core.Data;
+using Google.Cloud.Translation.V2;
 using Microsoft.EntityFrameworkCore;
 using NSubstitute;
 using SmartTalk.Core.Domain.Account;
+using SmartTalk.Messages.Enums.Account;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Messages.Dto.PhoneOrder;
@@ -13,7 +17,6 @@ using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Requests.PhoneOrder;
 using SmartTalk.IntegrationTests.TestBaseClasses;
-using SmartTalk.Messages.Enums.Account;
 
 namespace SmartTalk.IntegrationTests.Services.PhoneOrder;
 

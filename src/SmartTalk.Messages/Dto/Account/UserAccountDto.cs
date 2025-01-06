@@ -22,6 +22,12 @@ public class UserAccountDto
     
     public UserAccountIssuer Issuer { get; set; }
     
+    public int? LastModifiedBy { get; set; }
+
+    public string LastModifiedByName { get; set; }
+
+    public DateTimeOffset? LastModifiedDate { get; set; }
+    
     public List<RoleDto> Roles { get; set; } = new();
 
     public List<PermissionDto> Permissions { get; set; } = new();

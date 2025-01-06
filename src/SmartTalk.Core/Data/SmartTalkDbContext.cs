@@ -1,7 +1,10 @@
 using System.Reflection;
 using SmartTalk.Core.Domain;
 using SmartTalk.Core.Settings;
+using SmartTalk.Messages.Constants;
 using Microsoft.EntityFrameworkCore;
+using SmartTalk.Core.Data.Exceptions;
+using SmartTalk.Core.Services.Identity;
 using SmartTalk.Core.Services.Infrastructure;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 
@@ -10,11 +13,13 @@ namespace SmartTalk.Core.Data;
 public class SmartTalkDbContext : DbContext, IUnitOfWork
 {
     private readonly IClock _clock;
+    private readonly ICurrentUser _currentUser;
     private readonly SmartTalkConnectionString _connectionString;
 
-    public SmartTalkDbContext(IClock clock, SmartTalkConnectionString connectionString)
+    public SmartTalkDbContext(IClock clock, ICurrentUser currentUser, SmartTalkConnectionString connectionString)
     {
         _clock = clock;
+        _currentUser = currentUser;
         _connectionString = connectionString;
     }
 
@@ -41,6 +46,7 @@ public class SmartTalkDbContext : DbContext, IUnitOfWork
         foreach (var entityEntry in ChangeTracker.Entries())
         {
             TrackCreated(entityEntry);
+            TrackModification(entityEntry);
         }
         
         return await base.SaveChangesAsync(cancellationToken);
@@ -51,6 +57,19 @@ public class SmartTalkDbContext : DbContext, IUnitOfWork
         if (entityEntry.State == EntityState.Added && entityEntry.Entity is IHasCreatedFields createdEntity)
         {
             createdEntity.CreatedDate = _clock.Now;
+        }
+    }
+    
+    private void TrackModification(EntityEntry entityEntry)
+    {
+        if (entityEntry.Entity is IHasModifiedFields modifyEntity && entityEntry.State is EntityState.Modified or EntityState.Added)
+        { 
+            if (_currentUser is not { Id: not null } && modifyEntity.LastModifiedBy == 0) throw new MissingCurrentUserWhenSavingNonNullableFieldException(nameof(modifyEntity.LastModifiedBy));
+            
+            modifyEntity.LastModifiedDate = _clock.Now;
+            
+            if (_currentUser?.Id != null && (modifyEntity.LastModifiedBy == 0 || _currentUser.Id.Value != CurrentUsers.InternalUser.Id))
+                modifyEntity.LastModifiedBy = _currentUser.Id.Value;
         }
     }
     
