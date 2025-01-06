@@ -169,7 +169,7 @@ public class PhoneOrderController : ControllerBase
 
     private async Task ReceiveFromTwilioAsync(WebSocket twilioWebSocket, WebSocket openAiWebSocket, StreamContext context)
     {
-        var buffer = new byte[1024 * 4];
+        var buffer = new byte[1024 * 10];
         try
         {
             while (twilioWebSocket.State == WebSocketState.Open)
@@ -227,7 +227,7 @@ public class PhoneOrderController : ControllerBase
     private async Task SendToTwilioAsync(WebSocket twilioWebSocket, WebSocket openAiWebSocket, StreamContext context)
     {
         Log.Information("Sending to twilio.");
-        var buffer = new byte[4096];
+        var buffer = new byte[1024 * 30];
         try
         {
             while (openAiWebSocket.State == WebSocketState.Open)
