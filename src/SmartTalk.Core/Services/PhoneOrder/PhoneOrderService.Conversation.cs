@@ -34,7 +34,7 @@ public partial class PhoneOrderService
 
         var record = (await _phoneOrderDataProvider.GetPhoneOrderRecordAsync(command.Conversations.First().RecordId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
         
-        if(_currentUser.Id.HasValue) 
+        if (_currentUser.Id.HasValue)
             await UpdatePhoneOrderRecordSpecificFieldsAsync(command.Conversations.First().RecordId, _currentUser.Id.Value, command.Conversations.First().Question, _currentUser.Name, cancellationToken).ConfigureAwait(false);
 
         var conversationsList = string.Concat(string.Join(",", conversations.Select(x => x.Question)), string.Join(",", conversations.Select(x => x.Answer)));
