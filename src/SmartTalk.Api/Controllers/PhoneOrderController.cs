@@ -233,6 +233,7 @@ public class PhoneOrderController : ControllerBase
             while (openAiWebSocket.State == WebSocketState.Open)
             {
                 var result = await openAiWebSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+                Log.Information("ReceiveFromOpenAi result: {result}", Encoding.UTF8.GetString(buffer, 0, result.Count));
 
                 if (result.Count > 0)
                 {
