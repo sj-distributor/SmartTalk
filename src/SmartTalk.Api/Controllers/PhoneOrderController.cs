@@ -175,7 +175,7 @@ public class PhoneOrderController : ControllerBase
             while (twilioWebSocket.State == WebSocketState.Open)
             {
                 var result = await twilioWebSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
-                Log.Information("ReceiveFromTwilioAsync: {@result}", result);
+                Log.Information("ReceiveFromTwilioAsync result: {result}", Encoding.UTF8.GetString(buffer, 0, result.Count));
                 
                 if (result.MessageType == WebSocketMessageType.Close)
                 {
@@ -186,7 +186,6 @@ public class PhoneOrderController : ControllerBase
                 if (result.Count > 0)
                 {
                     using var jsonDocument = JsonSerializer.Deserialize<JsonDocument>(buffer.AsSpan(0, result.Count));
-                    Log.Information("ReceiveFromTwilioAsync: {@jsonDocument}", jsonDocument);
                     var eventMessage = jsonDocument?.RootElement.GetProperty("event").GetString();
                     
                     switch (eventMessage)
