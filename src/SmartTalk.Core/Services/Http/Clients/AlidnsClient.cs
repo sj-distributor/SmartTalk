@@ -1,4 +1,5 @@
 using AlibabaCloud.SDK.Alidns20150109.Models;
+using SmartTalk.Core.Constants;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Settings.AliYun;
 
@@ -6,7 +7,7 @@ namespace SmartTalk.Core.Services.Http.Clients;
 
 public interface IAlidnsClient : IScopedDependency
 {
-    public UpdateDomainRecordResponseBody UpdateDomainRecordAsync(UpdateDomainRecordRequest request);
+    Task<UpdateDomainRecordResponseBody> UpdateDomainRecordAsync(string endpoint, UpdateDomainRecordRequest request);
 }
 
 public class AlidnsClient : IAlidnsClient
@@ -18,7 +19,7 @@ public class AlidnsClient : IAlidnsClient
         _aliYunSettings = aliYunSettings;
     }
 
-    private AlibabaCloud.SDK.Alidns20150109.Client CreateClient()
+    private AlibabaCloud.SDK.Alidns20150109.Client CreateClient(string endpoint)
     {
         var config = new AlibabaCloud.OpenApiClient.Models.Config
         {
@@ -26,23 +27,23 @@ public class AlidnsClient : IAlidnsClient
             AccessKeySecret = _aliYunSettings.AccessKeySecret,
         };
 
-        config.Endpoint = "alidns.us-east-1.aliyuncs.com";
+        config.Endpoint = endpoint;
         return new AlibabaCloud.SDK.Alidns20150109.Client(config);
     }
 
-    public UpdateDomainRecordResponseBody UpdateDomainRecordAsync(UpdateDomainRecordRequest request)
+    public async Task<UpdateDomainRecordResponseBody> UpdateDomainRecordAsync(string endpoint, UpdateDomainRecordRequest request)
     {
-        var client = CreateClient();
+        var client = CreateClient(endpoint);
 
-        var describeDomainRecordsRequest = new DescribeDomainRecordsRequest() { DomainName = "sip-us.sjfood.us" };
+        var describeDomainRecordsRequest = new DescribeDomainRecordsRequest { DomainName = AliyunConstants.DescribeDomain };
 
         var runtime = new AlibabaCloud.TeaUtil.Models.RuntimeOptions();
 
-        var resp = client.DescribeDomainRecordsWithOptions(describeDomainRecordsRequest, runtime);
+        var resp = await client.DescribeDomainRecordsWithOptionsAsync(describeDomainRecordsRequest, runtime).ConfigureAwait(false);
 
         request.RecordId = resp.Body.DomainRecords.Record[0].RecordId;
         
-        var updateDomainRecordWithOptions = client.UpdateDomainRecordWithOptions(request, runtime);
+        var updateDomainRecordWithOptions = await client.UpdateDomainRecordWithOptionsAsync(request, runtime).ConfigureAwait(false);
 
         return updateDomainRecordWithOptions.Body;
     }
