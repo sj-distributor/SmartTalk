@@ -157,7 +157,14 @@ public class PhoneOrderController : ControllerBase
         var receiveFromTwilioTask = ReceiveFromTwilioAsync(twilioWebSocket, openAiWebSocket, context);
         var sendToTwilioTask = SendToTwilioAsync(twilioWebSocket, openAiWebSocket, context);
 
-        await Task.WhenAll(receiveFromTwilioTask, sendToTwilioTask);
+        try
+        {
+            await Task.WhenAll(receiveFromTwilioTask, sendToTwilioTask);
+        }
+        catch (Exception ex)
+        {
+            Log.Information("Error in one of the tasks: " + ex.Message);
+        }
     }
 
     private async Task ReceiveFromTwilioAsync(WebSocket twilioWebSocket, WebSocket openAiWebSocket, StreamContext context)
