@@ -31,7 +31,7 @@ public class AlidnsClient : IAlidnsClient
         return new AlibabaCloud.SDK.Alidns20150109.Client(config);
     }
 
-    public async Task<UpdateDomainRecordResponseBody> UpdateDomainRecordAsync(string endpoint, UpdateDomainRecordRequest request)
+    public async Task<UpdateDomainRecordResponseBody> UpdateDomainRecordAsync(string endpoint, string RR, UpdateDomainRecordRequest request)
     {
         var client = CreateClient(endpoint);
 
@@ -40,8 +40,8 @@ public class AlidnsClient : IAlidnsClient
         var runtime = new AlibabaCloud.TeaUtil.Models.RuntimeOptions();
 
         var resp = await client.DescribeDomainRecordsWithOptionsAsync(describeDomainRecordsRequest, runtime).ConfigureAwait(false);
-
-        request.RecordId = resp.Body.DomainRecords.Record[0].RecordId;
+        
+        request.RecordId = resp.Body.DomainRecords.Record.Where(x => x.RR == RR).FirstOrDefault()?.RecordId;
         
         var updateDomainRecordWithOptions = await client.UpdateDomainRecordWithOptionsAsync(request, runtime).ConfigureAwait(false);
 
