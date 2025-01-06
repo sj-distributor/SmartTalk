@@ -24,4 +24,20 @@ public class SipServerController : ControllerBase
         
         return Ok();
     }
+    
+    [Route("host/servers/add"), HttpPost]
+    public async Task<IActionResult> AddSipHostServersAsync([FromBody] AddSipHostServersCommand command)
+    {
+        var response = await _mediator.SendAsync<AddSipHostServersCommand, AddSipHostServersResponse>(command).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("backup/servers/add"), HttpPost]
+    public async Task<IActionResult> AddSipBackupServersAsync([FromBody] AddSipBackupServersCommand command)
+    {
+        var response = await _mediator.SendAsync<AddSipBackupServersCommand, AddSipBackupServersResponse>(command).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
 }

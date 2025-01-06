@@ -1,34 +1,52 @@
-using System.Diagnostics;
 using Serilog;
+using System.Diagnostics;
+using AutoMapper;
 using SmartTalk.Core.Ioc;
+using SmartTalk.Core.Constants;
+using SmartTalk.Core.Domain.SipServer;
+using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Settings.SipServer;
 using SmartTalk.Messages.Commands.SipServer;
 
 namespace SmartTalk.Core.Services.SipServer;
 
-public interface ISipServerService : IScopedDependency
+public partial interface ISipServerService : IScopedDependency
 {
     Task BackupSipServerDataAsync(BackupSipServerDataCommand command, CancellationToken cancellationToken);
 }
 
-public class SipServerService : ISipServerService
+public partial class SipServerService : ISipServerService
 {
+    private readonly IMapper _mapper;
     private readonly SipServerSetting _sipServerSetting;
+    private readonly SipServerDataProvider _sipServerDataProvider;
+    private readonly SmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
     
-    public SipServerService(SipServerSetting sipServerSetting)
+    public SipServerService(IMapper mapper, SipServerSetting sipServerSetting, SipServerDataProvider sipServerDataProvider, SmartTalkBackgroundJobClient smartTalkBackgroundJobClient)
     {
+        _mapper = mapper;
         _sipServerSetting = sipServerSetting;
+        _sipServerDataProvider = sipServerDataProvider;
+        _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
     }
     
     public async Task BackupSipServerDataAsync(BackupSipServerDataCommand command, CancellationToken cancellationToken)
     {
-        command = UseDefaultBackupSettingIfRequired(command);
+        var hostServers = await _sipServerDataProvider.GetAllSipHostServersAsync(cancellationToken).ConfigureAwait(false);
 
+        foreach (var hostServer in hostServers)
+        {
+            _smartTalkBackgroundJobClient.Enqueue(() => ProcessServersBackupAsync(hostServer, cancellationToken), HangfireConstants.InternalHostingSipServer);
+        }
+    }
+
+    public async Task ProcessServersBackupAsync(SipHostServer server, CancellationToken cancellationToken)
+    {
         var localPath = CreateTempFolder();
 
         var privateKeyPath = await GeneratePrivateKeyTempPathAsync(cancellationToken).ConfigureAwait(false);
         
-        var rsyncCommand = $"-avz --progress -e \"ssh -i {privateKeyPath}\" \"{command.Source.ServerPath}\" \"{localPath}\"";
+        var rsyncCommand = $"-avz --progress -e \"ssh -i {privateKeyPath}\" \"{server.ServerPath}\" \"{localPath}\"";
         
         Log.Information("开始下载文件到本地目录...");
         
@@ -42,28 +60,11 @@ public class SipServerService : ISipServerService
     
         Log.Information("文件下载完成，开始上传到目标服务器...");
         
-        var tasks = command.Destinations.Select(destination => SyncServerDataAsync(privateKeyPath, localPath, destination, cancellationToken));
+        var tasks = server.BackupServers.Select(backupServer => SyncServerDataAsync(privateKeyPath, localPath, backupServer, cancellationToken));
         
         await Task.WhenAll(tasks).ConfigureAwait(false);
     
         Log.Information("所有同步任务执行完成");
-    }
-    
-    private BackupSipServerDataCommand UseDefaultBackupSettingIfRequired(BackupSipServerDataCommand command)
-    {
-        if (command.Source != null && command.Destinations != null) return command;
-        
-        return new BackupSipServerDataCommand
-        {
-            Source = new BackupSipServerData
-            {
-                ServerPath = _sipServerSetting.Source
-            },
-            Destinations = _sipServerSetting.Destinations.Select(destination => new BackupSipServerDestinationData
-            {
-                ServerPath = destination
-            }).ToList()
-        };
     }
 
     private string CreateTempFolder()
@@ -140,9 +141,9 @@ public class SipServerService : ISipServerService
         return privateKeyTempPath;
     }
     
-    private async Task<bool> SyncServerDataAsync(string privateKeyPath, string localPath, BackupSipServerDestinationData destination, CancellationToken cancellationToken)
+    private async Task<bool> SyncServerDataAsync(string privateKeyPath, string localPath, SipBackupServer backupServer, CancellationToken cancellationToken)
     {
-        var uploadSuccess = await UploadDataToServerAsync(privateKeyPath, localPath, destination, cancellationToken).ConfigureAwait(false);
+        var uploadSuccess = await UploadDataToServerAsync(privateKeyPath, localPath, backupServer, cancellationToken).ConfigureAwait(false);
         
         if (!uploadSuccess)
         {
@@ -152,30 +153,34 @@ public class SipServerService : ISipServerService
         
         Log.Information("上传成功，准备重启服务...");
         
-        return await ReloadServerDataAsync(privateKeyPath, destination, cancellationToken).ConfigureAwait(false);
+        return await ReloadServerDataAsync(privateKeyPath, backupServer, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<bool> UploadDataToServerAsync(string privateKeyPath, string localPath, BackupSipServerDestinationData destination, CancellationToken cancellationToken)
+    private async Task<bool> UploadDataToServerAsync(string privateKeyPath, string localPath, SipBackupServer backupServer, CancellationToken cancellationToken)
     {
-        var rsyncCommand = BuildRsyncCommand(privateKeyPath, localPath, destination);
+        var rsyncCommand = BuildRsyncCommand(privateKeyPath, localPath, backupServer);
     
         Log.Information("开始上传...");
     
         return await ExecuteCommandAsync("rsync", rsyncCommand, cancellationToken).ConfigureAwait(false);
     }
     
-    private string BuildRsyncCommand(string privateKeyPath, string tempPath, BackupSipServerDestinationData destination)
+    private string BuildRsyncCommand(string privateKeyPath, string tempPath, SipBackupServer backupServer)
     {
-        var excludeArgs = string.Join(" ", destination.ExcludeFiles.Select(file => $"--exclude=\"{file}\""));
+        if (string.IsNullOrEmpty(backupServer.ExcludeFiles)) return string.Empty;
         
-        return $"-e \"ssh -i {privateKeyPath}\" -avz --chown=asterisk:asterisk --checksum --delete --progress {excludeArgs} \"{tempPath}\" \"{destination.User}@{destination.Server}:{destination.Path}\"";
+        var excludeFiles = backupServer.ExcludeFiles.Split(",").ToList();
+        
+        var excludeArgs = string.Join(" ", excludeFiles.Select(file => $"--exclude=\"{file}\""));
+        
+        return $"-e \"ssh -i {privateKeyPath}\" -avz --chown=asterisk:asterisk --checksum --delete --progress {excludeArgs} \"{tempPath}\" \"{backupServer.UserName}@{backupServer.ServerIp}:{backupServer.DestinationPath}\"";
     }
 
-    private async Task<bool> ReloadServerDataAsync(string privateKeyPath, BackupSipServerDestinationData destination, CancellationToken cancellationToken)
+    private async Task<bool> ReloadServerDataAsync(string privateKeyPath, SipBackupServer backupServer, CancellationToken cancellationToken)
     {
         const string reloadScriptPath = "/root/asterisk-reload.sh";
         
-        var sshCommand = $"-i {privateKeyPath} {destination.User}@{destination.Server} \"bash {reloadScriptPath}\"";
+        var sshCommand = $"-i {privateKeyPath} {backupServer.UserName}@{backupServer.ServerIp} \"bash {reloadScriptPath}\"";
         
         Log.Information($"执行服务重启命令...");
         
