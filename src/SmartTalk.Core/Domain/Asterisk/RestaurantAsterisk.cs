@@ -9,7 +9,16 @@ public class RestaurantAsterisk : IEntity
     [Key]
     [Column("id")]
     public int Id { get; set; }
+    
+    [Column("host_id")]
+    public int HostId { get; set; }
 
+    [Column("endpoint")]
+    public string Endpoint { get; set; }
+
+    [Column("host_records")]
+    public string HostRecords { get; set; }
+    
     [Column("restaurant_phone_number")]
     public string RestaurantPhoneNumber { get; set; }
 

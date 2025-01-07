@@ -1,16 +1,16 @@
-using AutoMapper;
-using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Data;
-using SmartTalk.Core.Domain.SipServer;
 using SmartTalk.Core.Ioc;
+using Microsoft.EntityFrameworkCore;
+using SmartTalk.Core.Domain.SipServer;
+using SmartTalk.Messages.Enums.SipServer;
 
 namespace SmartTalk.Core.Services.SipServer;
 
 public interface ISipServerDataProvider : IScopedDependency
 {
-    Task<List<SipHostServer>> GetAllSipHostServersAsync(CancellationToken cancellationToken);
+    Task<List<SipHostServer>> GetAllSipHostServersAsync(int? id = null, List<SipServerStatus> status = null, CancellationToken cancellationToken = default);
 
-    Task<List<SipBackupServer>> GetAllSipBackupServersAsync(CancellationToken cancellationToken);
+    Task<List<SipBackupServer>> GetAllSipBackupServersAsync(List<SipServerStatus> status = null, CancellationToken cancellationToken = default);
     
     Task<List<SipHostServer>> AddSipHostServersAsync(List<SipHostServer> servers, bool forceSave = true, CancellationToken cancellationToken = default);
     
@@ -32,13 +32,16 @@ public class SipServerDataProvider : ISipServerDataProvider
         _unitOfWork = unitOfWork;
     }
     
-    public async Task<List<SipHostServer>> GetAllSipHostServersAsync(CancellationToken cancellationToken)
+    public async Task<List<SipHostServer>> GetAllSipHostServersAsync(int? id = null, List<SipServerStatus> status = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<SipHostServer>();
 
+        if (id.HasValue)
+            query = query.Where(x => x.Id == id);
+
         var hostServers = await query.ToListAsync(cancellationToken).ConfigureAwait(false);
 
-        var backupServers = await GetAllSipBackupServersAsync(cancellationToken).ConfigureAwait(false);
+        var backupServers = await GetAllSipBackupServersAsync(status, cancellationToken).ConfigureAwait(false);
         
         hostServers.ForEach(x =>
         {
@@ -48,9 +51,14 @@ public class SipServerDataProvider : ISipServerDataProvider
         return hostServers;
     }
     
-    public async Task<List<SipBackupServer>> GetAllSipBackupServersAsync(CancellationToken cancellationToken)
+    public async Task<List<SipBackupServer>> GetAllSipBackupServersAsync(List<SipServerStatus> status = null, CancellationToken cancellationToken = default)
     {
-        return await _repository.Query<SipBackupServer>().ToListAsync(cancellationToken).ConfigureAwait(false);  
+        var response = _repository.Query<SipBackupServer>();
+
+        if (status is not { Count: 0 })
+            response = response.Where(x => status.Contains(x.Status));
+        
+        return await response.ToListAsync(cancellationToken).ConfigureAwait(false);  
     }
 
     public async Task<List<SipHostServer>> AddSipHostServersAsync(List<SipHostServer> servers, bool forceSave = true, CancellationToken cancellationToken = default)
