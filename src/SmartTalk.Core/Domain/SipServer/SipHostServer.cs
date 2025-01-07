@@ -20,9 +20,6 @@ public class SipHostServer : IEntity,IHasCreatedFields
     [Column("source_path"), StringLength(1024)]
     public string SourcePath { get; set; }
 
-    [Column("restaurant_id")]
-    public int? RestaurantId { get; set; }
-
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
 

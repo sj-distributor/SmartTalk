@@ -19,7 +19,4 @@ public class SipBackupServerDto
     public DateTimeOffset CreatedDate { get; set; }
 
     public DateTimeOffset? LastModifiedDate { get; set; }
-    
-    [JsonIgnore]
-    public string ServerPath => $"{UserName}@{ServerIp}:{DestinationPath}";
 }

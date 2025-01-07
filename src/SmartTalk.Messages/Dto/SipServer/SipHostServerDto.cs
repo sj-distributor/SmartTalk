@@ -12,14 +12,9 @@ public class SipHostServerDto
     
     public string SourcePath { get; set; }
 
-    public int? RestaurantId { get; set; }
-
     public DateTimeOffset CreatedDate { get; set; }
 
     public DateTimeOffset? LastModifiedDate { get; set; }
     
     public List<SipBackupServerDto> BackupServers { get; set; }
-    
-    [JsonIgnore]
-    public string ServerPath => $"{UserName}@{ServerIp}:{SourcePath}";
 }

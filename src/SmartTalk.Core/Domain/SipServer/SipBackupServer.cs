@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using SmartTalk.Messages.Enums.SipServer;
 
 namespace SmartTalk.Core.Domain.SipServer;
 
@@ -25,6 +26,9 @@ public class SipBackupServer : IEntity,IHasCreatedFields
     
     [Column("exclude_files")]
     public string ExcludeFiles { get; set; }
+
+    [Column("status")]
+    public SipServerStatus Status { get; set; } = SipServerStatus.Pending;
 
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
