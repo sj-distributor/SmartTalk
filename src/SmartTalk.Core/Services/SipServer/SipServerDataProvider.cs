@@ -12,9 +12,9 @@ public interface ISipServerDataProvider : IScopedDependency
 
     Task<List<SipBackupServer>> GetAllSipBackupServersAsync(CancellationToken cancellationToken);
     
-    Task AddSipHostServersAsync(List<SipHostServer> servers, bool forceSave = true, CancellationToken cancellationToken = default);
+    Task<List<SipHostServer>> AddSipHostServersAsync(List<SipHostServer> servers, bool forceSave = true, CancellationToken cancellationToken = default);
     
-    Task AddSipBackupServersAsync(List<SipBackupServer> servers, bool forceSave = true, CancellationToken cancellationToken = default);
+    Task<List<SipBackupServer>> AddSipBackupServersAsync(List<SipBackupServer> servers, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task UpdateSipHostServersAsync(List<SipHostServer> servers, bool forceSave = true, CancellationToken cancellationToken = default);
     
@@ -53,20 +53,24 @@ public class SipServerDataProvider : ISipServerDataProvider
         return await _repository.Query<SipBackupServer>().ToListAsync(cancellationToken).ConfigureAwait(false);  
     }
 
-    public async Task AddSipHostServersAsync(List<SipHostServer> servers, bool forceSave = true, CancellationToken cancellationToken = default)
+    public async Task<List<SipHostServer>> AddSipHostServersAsync(List<SipHostServer> servers, bool forceSave = true, CancellationToken cancellationToken = default)
     {
         await _repository.InsertAllAsync(servers, cancellationToken).ConfigureAwait(false);
 
         if (forceSave)
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        return servers;
     }
     
-    public async Task AddSipBackupServersAsync(List<SipBackupServer> servers, bool forceSave = true, CancellationToken cancellationToken = default)
+    public async Task<List<SipBackupServer>> AddSipBackupServersAsync(List<SipBackupServer> servers, bool forceSave = true, CancellationToken cancellationToken = default)
     {
         await _repository.InsertAllAsync(servers, cancellationToken).ConfigureAwait(false);
 
         if (forceSave)
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        
+        return servers;
     }
 
     public async Task UpdateSipHostServersAsync(List<SipHostServer> servers, bool forceSave = true, CancellationToken cancellationToken = default)
