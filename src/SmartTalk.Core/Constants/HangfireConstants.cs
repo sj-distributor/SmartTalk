@@ -7,4 +7,6 @@ public static class HangfireConstants
     public const string InternalHostingPhoneOrder = "phone-order";
     
     public const string InternalHostingRestaurant = "restaurant";
+    
+    public const string InternalHostingSipServer = "sip-server";
 }
