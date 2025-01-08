@@ -32,5 +32,5 @@ public class RestaurantAsterisk : IEntity
     public DateTimeOffset CreatedDate { get; set; }
 
     [NotMapped] 
-    public string CdrBaseUrl => "http//" + HostRecords + "." + DomainName + ":5000";
+    public string CdrBaseUrl => "http://" + HostRecords + "." + DomainName + ":5000";
 }
