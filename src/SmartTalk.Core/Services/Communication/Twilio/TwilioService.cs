@@ -51,7 +51,7 @@ public class TwilioService : ITwilioService
 
         if (restaurantAsterisk == null) return;
         
-        var originalData = await _asteriskClient.GetAsteriskCdrAsync(Regex.Replace(callback.From, @"^\+1", ""), restaurantAsterisk.CdrDomainName, cancellationToken).ConfigureAwait(false);
+        var originalData = await _asteriskClient.GetAsteriskCdrAsync(Regex.Replace(callback.From, @"^\+1", ""), restaurantAsterisk.CdrBaseUrl, cancellationToken).ConfigureAwait(false);
 
         Log.Information("AsteriskCdr OriginalData: {@originalData}", originalData);
         
@@ -84,7 +84,7 @@ public class TwilioService : ITwilioService
         if (pendingIp == null)
             throw new Exception("Cannot find sip backup server");
             
-        var updateDomainRecord = await _alidnsClient.UpdateDomainRecordAsync(restaurantAsterisk.CdrDomainName, restaurantAsterisk.Endpoint, restaurantAsterisk.HostRecords, pendingIp.ServerIp, cancellationToken).ConfigureAwait(false);
+        var updateDomainRecord = await _alidnsClient.UpdateDomainRecordAsync(restaurantAsterisk.DomainName, restaurantAsterisk.Endpoint, restaurantAsterisk.HostRecords, pendingIp.ServerIp, cancellationToken).ConfigureAwait(false);
             
         Log.Information("Phone CallBack updateDomainRecord: {@updateDomainRecord}", updateDomainRecord);
             

@@ -24,8 +24,8 @@ public class AlidnsClient : IAlidnsClient
     {
         var config = new AlibabaCloud.OpenApiClient.Models.Config
         {
-            AccessKeyId = _aliYunSettings.AccessKeyId,
-            AccessKeySecret = _aliYunSettings.AccessKeySecret,
+            AccessKeyId = _aliYunSettings.DnsAccessKeyId,
+            AccessKeySecret = _aliYunSettings.DnsAccessKeySecret,
         };
 
         config.Endpoint = endpoint;
