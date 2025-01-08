@@ -19,7 +19,6 @@ public class AsteriskClient : IAsteriskClient
 
     public async Task<GetAsteriskCdrResponseDto> GetAsteriskCdrAsync(string number, string asteriskBaseUrl, CancellationToken cancellationToken)
     {
-        return new GetAsteriskCdrResponseDto
         return await _smartTalkHttpClientFactory.GetAsync<GetAsteriskCdrResponseDto>($"{asteriskBaseUrl}/api/cdr?src_number={number}", cancellationToken).ConfigureAwait(false);
     }
 }
