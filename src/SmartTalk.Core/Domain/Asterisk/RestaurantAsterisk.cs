@@ -25,9 +25,12 @@ public class RestaurantAsterisk : IEntity
     [Column("twilio_number")]
     public string TwilioNumber { get; set; }
 
-    [Column("cdr_domain_name")]
-    public string CdrDomainName { get; set; }
+    [Column("domain_name")]
+    public string DomainName { get; set; }
 
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
+
+    [NotMapped] 
+    public string CdrBaseUrl => "http//" + HostRecords + "." + DomainName + ":5000";
 }
