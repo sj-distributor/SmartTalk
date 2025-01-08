@@ -6,17 +6,17 @@ namespace SmartTalk.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class PhoneCallController : ControllerBase
+public class AiSpeechAssistantController : ControllerBase
 {
     private readonly IMediator _mediator;
 
-    public PhoneCallController(IMediator mediator)
+    public AiSpeechAssistantController(IMediator mediator)
     {
         _mediator = mediator;
     }
 
-    [HttpGet("assistant")]
-    [HttpPost("assistant")]
+    [HttpGet("call")]
+    [HttpPost("call")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> CallAiSpeechAssistantAsync([FromForm] CallAiSpeechAssistantCommand command)
     {
@@ -25,7 +25,7 @@ public class PhoneCallController : ControllerBase
         return Ok();
     }
 
-    [HttpGet("assistant/connect")]
+    [HttpGet("connect")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task ConnectAiSpeechAssistantAsync([FromQuery] ConnectAiSpeechAssistantCommand command)
     {
