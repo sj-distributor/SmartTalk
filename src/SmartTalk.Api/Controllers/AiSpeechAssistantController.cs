@@ -20,9 +20,9 @@ public class AiSpeechAssistantController : ControllerBase
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> CallAiSpeechAssistantAsync([FromForm] CallAiSpeechAssistantCommand command)
     {
-        await _mediator.SendAsync(command);
+        var response = await _mediator.SendAsync<CallAiSpeechAssistantCommand, CallAiSpeechAssistantResponse>(command);
 
-        return Ok();
+        return Ok(response);
     }
 
     [HttpGet("connect")]
