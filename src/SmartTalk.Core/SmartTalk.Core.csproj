@@ -59,5 +59,9 @@
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </Content>
     </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="Services\PhoneCall\" />
+    </ItemGroup>
     
 </Project>

@@ -15,13 +15,28 @@ public class PhoneCallController : ControllerBase
         _mediator = mediator;
     }
 
-    [Route("assistant")]
-    [HttpGet]
-    [HttpPost]
-    public async Task<IActionResult> AiSpeechAssistantCallAsync(IFormCollection form)
+    [HttpGet("assistant")]
+    [HttpPost("assistant")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> CallAiSpeechAssistantAsync([FromForm] CallAiSpeechAssistantCommand command)
     {
-        await _mediator.SendAsync<AiSpeechAssistantCallCommand>(new AiSpeechAssistantCallCommand { From = form["From"], To = form["To"]} );
+        await _mediator.SendAsync(command);
 
         return Ok();
+    }
+
+    [HttpGet("assistant/connect")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task ConnectAiSpeechAssistantAsync([FromQuery] ConnectAiSpeechAssistantCommand command)
+    {
+        if (HttpContext.WebSockets.IsWebSocketRequest)
+        {
+            command.TwilioWebSocket = await HttpContext.WebSockets.AcceptWebSocketAsync();
+            await _mediator.SendAsync(command);
+        }
+        else
+        {
+            HttpContext.Response.StatusCode = 400;
+        }
     }
 }
