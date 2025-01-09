@@ -39,7 +39,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         var response = new VoiceResponse();
         var connect = new Twilio.TwiML.Voice.Connect();
         
-        connect.Stream(url: $"wss://{command.Host}/api/AiSpeechAssistant/connect?From={HttpUtility.UrlEncode(command.From)}&To={HttpUtility.UrlEncode(command.To)}");
+        connect.Stream(url: $"wss://{command.Host}/api/AiSpeechAssistant/connect?From={Uri.EscapeDataString(command.From)}&To={Uri.EscapeDataString(command.To)}");
         response.Append(connect);
 
         var twiMlResult = Results.Extensions.TwiML(response);
