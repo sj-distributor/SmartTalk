@@ -41,12 +41,9 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
     {
         var response = new VoiceResponse();
         var connect = new Connect();
-        var stream = new Stream { Url = $"wss://{command.Host}/api/AiSpeechAssistant/connect" };
+
+        connect.Stream(url: $"wss://{command.Host}/api/AiSpeechAssistant/connect/{command.From}/{command.To}");
         
-        stream.Parameter("From", command.From);
-        stream.Parameter("To", command.To);
-        
-        connect.Append(stream);
         response.Append(connect);
 
         var twiMlResult = Results.Extensions.TwiML(response);
