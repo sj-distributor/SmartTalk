@@ -44,7 +44,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         var stream = new Stream { Url = $"wss://{command.Host}/api/AiSpeechAssistant/connect" };
         
         stream.Parameter("From", command.From);
-        stream.Parameter("From", command.To);
+        stream.Parameter("To", command.To);
         
         connect.Append(stream);
         response.Append(connect);
