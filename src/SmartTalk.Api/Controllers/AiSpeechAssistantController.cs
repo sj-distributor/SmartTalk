@@ -27,7 +27,7 @@ public class AiSpeechAssistantController : ControllerBase
 
     [HttpGet("connect")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task ConnectAiSpeechAssistantAsync([FromQuery] ConnectAiSpeechAssistantCommand command)
+    public async Task ConnectAiSpeechAssistantAsync([FromForm] ConnectAiSpeechAssistantCommand command)
     {
         if (HttpContext.WebSockets.IsWebSocketRequest)
         {
