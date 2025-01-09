@@ -13,6 +13,7 @@ using SmartTalk.Messages.Commands.PhoneCall;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
 using Twilio.TwiML.Voice;
+using Twilio.Types;
 using Stream = Twilio.TwiML.Voice.Stream;
 using Task = System.Threading.Tasks.Task;
 
@@ -40,11 +41,12 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
     {
         var response = new VoiceResponse();
         var connect = new Connect();
-
-        connect.Stream(url: $"wss://{command.Host}/api/AiSpeechAssistant/connect");
-        connect.Append(new Parameter(name: "From", value: command.From));
-        connect.Append(new Parameter(name: "To", value: command.To));
+        var stream = new Stream { Url = $"wss://{command.Host}/api/AiSpeechAssistant/connect" };
         
+        stream.Parameter("From", command.From);
+        stream.Parameter("From", command.To);
+        
+        connect.Append(stream);
         response.Append(connect);
 
         var twiMlResult = Results.Extensions.TwiML(response);
