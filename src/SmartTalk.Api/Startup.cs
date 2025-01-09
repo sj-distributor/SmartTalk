@@ -64,7 +64,6 @@ public class Startup
         app.UseAuthentication();
         app.UseAuthorization();
         app.UseHangfireInternal();
-        app.UseWebSockets();
         
         app.UseForwardedHeaders(new ForwardedHeadersOptions
         {
