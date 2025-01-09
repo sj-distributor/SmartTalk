@@ -87,7 +87,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
 
         if (assistant == null || promptTemplate == null || string.IsNullOrEmpty(promptTemplate.Template)) return string.Empty;
 
-        var finalPrompt = promptTemplate.Template.Replace("#{user_profile}", string.IsNullOrEmpty(userProfile.ProfileJson) ? " " : userProfile.ProfileJson);
+        var finalPrompt = promptTemplate.Template.Replace("#{user_profile}", string.IsNullOrEmpty(userProfile?.ProfileJson) ? " " : userProfile.ProfileJson);
         
         Log.Information($"The final prompt: {finalPrompt}");
 
