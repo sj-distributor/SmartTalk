@@ -15,8 +15,7 @@ public class AiSpeechAssistantController : ControllerBase
         _mediator = mediator;
     }
 
-    [HttpGet("call")]
-    [HttpPost("call")]
+    [Route("call"), HttpGet, HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> CallAiSpeechAssistantAsync([FromForm] CallAiSpeechAssistantCommand command)
     {

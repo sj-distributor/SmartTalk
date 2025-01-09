@@ -231,21 +231,19 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
     
     private async Task HandleSpeechStartedEventAsync(WebSocket twilioWebSocket, WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context)
     {
-        Console.WriteLine("Handling speech started event.");
+        Log.Information("Handling speech started event.");
+        
         if (context.MarkQueue.Count > 0 && context.ResponseStartTimestampTwilio.HasValue)
         {
             var elapsedTime = context.LatestMediaTimestamp - context.ResponseStartTimestampTwilio.Value;
+            
             if (context.ShowTimingMath)
-            {
-                Console.WriteLine($"Calculating elapsed time for truncation: {context.LatestMediaTimestamp} - {context.ResponseStartTimestampTwilio.Value} = {elapsedTime}ms");
-            }
+                Log.Information($"Calculating elapsed time for truncation: {context.LatestMediaTimestamp} - {context.ResponseStartTimestampTwilio.Value} = {elapsedTime}ms");
 
             if (!string.IsNullOrEmpty(context.LastAssistantItem))
             {
                 if (context.ShowTimingMath)
-                {
-                    Console.WriteLine($"Truncating item with ID: {context.LastAssistantItem}, Truncated at: {elapsedTime}ms");
-                }
+                    Log.Information($"Truncating item with ID: {context.LastAssistantItem}, Truncated at: {elapsedTime}ms");
 
                 var truncateEvent = new
                 {
