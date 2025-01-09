@@ -24,14 +24,19 @@ public class AiSpeechAssistantController : ControllerBase
 
         return response.Data;
     }
-
+    
     [HttpGet("connect")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task ConnectAiSpeechAssistantAsync([FromForm] ConnectAiSpeechAssistantCommand command)
+    [HttpGet("connect/{from}/{to}")]
+    public async Task ConnectAiSpeechAssistantAsync(string from, string to)
     {
         if (HttpContext.WebSockets.IsWebSocketRequest)
         {
-            command.TwilioWebSocket = await HttpContext.WebSockets.AcceptWebSocketAsync();
+            var command = new ConnectAiSpeechAssistantCommand
+            {
+                From = from,
+                To = to,
+                TwilioWebSocket = await HttpContext.WebSockets.AcceptWebSocketAsync()
+            };
             await _mediator.SendAsync(command);
         }
         else
