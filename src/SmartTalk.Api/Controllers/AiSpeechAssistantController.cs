@@ -21,7 +21,7 @@ public class AiSpeechAssistantController : ControllerBase
     {
         var response = await _mediator.SendAsync<CallAiSpeechAssistantCommand, CallAiSpeechAssistantResponse>(command);
 
-        return Ok(response);
+        return Ok(response.Data);
     }
 
     [HttpGet("connect")]
