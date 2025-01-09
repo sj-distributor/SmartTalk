@@ -43,6 +43,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         response.Append(connect);
 
         var twiMlResult = Results.Extensions.TwiML(response);
+        Log.Information("TwiMl result: {@TwiMlResult}", twiMlResult);
 
         return new CallAiSpeechAssistantResponse { Data = twiMlResult };
     }
