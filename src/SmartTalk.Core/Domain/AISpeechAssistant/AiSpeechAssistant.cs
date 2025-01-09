@@ -12,7 +12,7 @@ public class AiSpeechAssistant : IEntity
     [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     public int Id { get; set; }
 
-    [Column("did_number"), StringLength(255)]
+    [Column("name"), StringLength(255)]
     public string Name { get; set; }
     
     [Column("did_number"), StringLength(32)]
