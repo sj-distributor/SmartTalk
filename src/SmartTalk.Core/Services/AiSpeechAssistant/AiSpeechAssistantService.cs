@@ -60,7 +60,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
 
         if (string.IsNullOrEmpty(knowledgeBase)) return new AiSpeechAssistantConnectCloseEvent();
 
-        var openaiWebSocket = await ConnectOpenAiRealTimeSocketAsync(cancellationToken).ConfigureAwait(false);
+        var openaiWebSocket = await ConnectOpenAiRealTimeSocketAsync(knowledgeBase, cancellationToken).ConfigureAwait(false);
         
         var context = new AiSpeechAssistantStreamContxtDto();
         
@@ -95,14 +95,14 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         return finalPrompt;
     }
 
-    private async Task<WebSocket> ConnectOpenAiRealTimeSocketAsync(CancellationToken cancellationToken)
+    private async Task<WebSocket> ConnectOpenAiRealTimeSocketAsync(string prompt, CancellationToken cancellationToken)
     {
         var openAiWebSocket = new ClientWebSocket();
         openAiWebSocket.Options.SetRequestHeader("Authorization", $"Bearer {_openAiSettings.ApiKey}");
         openAiWebSocket.Options.SetRequestHeader("OpenAI-Beta", "realtime=v1");
 
         await openAiWebSocket.ConnectAsync(new Uri($"wss://api.openai.com/v1/realtime?model={OpenAiRealtimeModel.Gpt4o1217.GetDescription()}"), cancellationToken).ConfigureAwait(false);
-
+        await SendSessionUpdateAsync(openAiWebSocket, prompt).ConfigureAwait(false);
         return openAiWebSocket;
     }
     
