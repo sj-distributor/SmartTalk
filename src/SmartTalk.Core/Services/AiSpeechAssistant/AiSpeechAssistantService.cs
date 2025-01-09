@@ -5,7 +5,6 @@ using System.Text.Json;
 using SmartTalk.Core.Ioc;
 using Twilio.AspNet.Core;
 using System.Net.WebSockets;
-using System.Web;
 using Microsoft.AspNetCore.Http;
 using Smarties.Messages.Extensions;
 using SmartTalk.Core.Settings.OpenAi;
@@ -13,6 +12,9 @@ using SmartTalk.Messages.Enums.OpenAi;
 using SmartTalk.Messages.Commands.PhoneCall;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
+using Twilio.TwiML.Voice;
+using Stream = Twilio.TwiML.Voice.Stream;
+using Task = System.Threading.Tasks.Task;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
 
@@ -37,9 +39,12 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
     public CallAiSpeechAssistantResponse CallAiSpeechAssistant(CallAiSpeechAssistantCommand command)
     {
         var response = new VoiceResponse();
-        var connect = new Twilio.TwiML.Voice.Connect();
+        var connect = new Connect();
+
+        connect.Stream(url: $"wss://{command.Host}/api/AiSpeechAssistant/connect");
+        connect.Append(new Parameter(name: "From", value: command.From));
+        connect.Append(new Parameter(name: "To", value: command.To));
         
-        connect.Stream(url: $"wss://{command.Host}/api/AiSpeechAssistant/connect?From={Uri.EscapeDataString(command.From)}&To={Uri.EscapeDataString(command.To)}");
         response.Append(connect);
 
         var twiMlResult = Results.Extensions.TwiML(response);
