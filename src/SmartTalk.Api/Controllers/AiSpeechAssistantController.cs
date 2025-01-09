@@ -22,7 +22,7 @@ public class AiSpeechAssistantController : ControllerBase
         command.Host = HttpContext.Request.Host.Host;
         var response = await _mediator.SendAsync<CallAiSpeechAssistantCommand, CallAiSpeechAssistantResponse>(command);
 
-        return Ok(response.Data);
+        return response.Data;
     }
 
     [HttpGet("connect")]
