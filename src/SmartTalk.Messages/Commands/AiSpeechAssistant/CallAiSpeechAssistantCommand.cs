@@ -2,7 +2,7 @@ using Twilio.AspNet.Core;
 using Mediator.Net.Contracts;
 using SmartTalk.Messages.Responses;
 
-namespace SmartTalk.Messages.Commands.PhoneCall;
+namespace SmartTalk.Messages.Commands.AiSpeechAssistant;
 
 public class CallAiSpeechAssistantCommand : ICommand
 {
