@@ -49,7 +49,7 @@ public partial class PhoneOrderService : IPhoneOrderService
         var (dayShiftTime, nightShiftTime, endTime) = DefineTimeInterval(today, yesterday);
     
         var restaurantCount = await _phoneOrderDataProvider
-            .GetPhoneOrderRecordsForRestaurantCountAsync(dayShiftTime, nightShiftTime, endTime, cancellationToken).ConfigureAwait(false);
+            .GetPhoneCallRecordsForRestaurantCountAsync(dayShiftTime, nightShiftTime, endTime, cancellationToken).ConfigureAwait(false);
     
         var stringBuilder = new StringBuilder();
     
@@ -74,10 +74,10 @@ public partial class PhoneOrderService : IPhoneOrderService
 
         var (todayStartTime, todayEndTime) = CustomerServiceToday(today, yesterday);
         
-        var userHasProofreadTheNumber = await _phoneOrderDataProvider.GetPhoneOrderRecordsWithUserCountAsync(
+        var userHasProofreadTheNumber = await _phoneOrderDataProvider.GetPhoneCallRecordsWithUserCountAsync(
             previous20Th, nowDate, cancellationToken).ConfigureAwait(false);
         
-        var userTodayHasProofreadTheNumber = await _phoneOrderDataProvider.GetPhoneOrderRecordsWithUserCountAsync(
+        var userTodayHasProofreadTheNumber = await _phoneOrderDataProvider.GetPhoneCallRecordsWithUserCountAsync(
             todayStartTime, todayEndTime, cancellationToken).ConfigureAwait(false);
         
         var stringBuilder = new StringBuilder();

@@ -1,11 +1,9 @@
-using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
 using Newtonsoft.Json;
 using SmartTalk.Messages.Enums.PhoneOrder;
 
 namespace SmartTalk.Messages.Dto.PhoneOrder;
 
-public class PhoneOrderOrderItemDto
+public class PhoneCallOrderItemDto
 {
     public int Id { get; set; }
     

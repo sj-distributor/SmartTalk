@@ -2,7 +2,7 @@ using Newtonsoft.Json;
 using Smarties.Messages.DTO.OpenAi;
 using Smarties.Messages.Enums.OpenAi;
 using Smarties.Messages.Requests.Ask;
-using SmartTalk.Core.Domain.PhoneOrder;
+using SmartTalk.Core.Domain.PhoneCall;
 using SmartTalk.Core.Extensions;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Http.Clients;
@@ -16,7 +16,7 @@ namespace SmartTalk.Core.Services.PhoneOrder;
 
 public interface IPhoneOrderUtilService : IScopedDependency
 {
-    Task ExtractPhoneOrderShoppingCartAsync(string goalTexts, PhoneOrderRecord record, CancellationToken cancellationToken);
+    Task ExtractPhoneOrderShoppingCartAsync(string goalTexts, PhoneCallRecord record, CancellationToken cancellationToken);
 }
 
 public class PhoneOrderUtilService : IPhoneOrderUtilService
@@ -35,13 +35,13 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
         _restaurantDataProvider = restaurantDataProvider;
     }
 
-    public async Task ExtractPhoneOrderShoppingCartAsync(string goalTexts, PhoneOrderRecord record, CancellationToken cancellationToken)
+    public async Task ExtractPhoneOrderShoppingCartAsync(string goalTexts, PhoneCallRecord record, CancellationToken cancellationToken)
     {
         var shoppingCart = await GetOrderDetailsAsync(goalTexts, cancellationToken).ConfigureAwait(false);
 
         shoppingCart = await GetSimilarRestaurantByRecordAsync(record, shoppingCart, cancellationToken).ConfigureAwait(false);
         
-        var items = shoppingCart.FoodDetails.Select(x => new PhoneOrderOrderItem
+        var items = shoppingCart.FoodDetails.Select(x => new PhoneCallOrderItem
         {
             RecordId = record.Id,
             FoodName = x.FoodName,
@@ -87,7 +87,7 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
         return completionResult.Data.Response == null ? null : JsonConvert.DeserializeObject<PhoneOrderDetailDto>(completionResult.Data.Response);
     }
 
-    private async Task<PhoneOrderDetailDto> GetSimilarRestaurantByRecordAsync(PhoneOrderRecord record, PhoneOrderDetailDto foods, CancellationToken cancellationToken)
+    private async Task<PhoneOrderDetailDto> GetSimilarRestaurantByRecordAsync(PhoneCallRecord record, PhoneOrderDetailDto foods, CancellationToken cancellationToken)
     {
         var result = new PhoneOrderDetailDto { FoodDetails = new List<FoodDetailDto>() };
         var restaurant = await _restaurantDataProvider.GetRestaurantByNameAsync(record.Restaurant.GetDescription(), cancellationToken).ConfigureAwait(false);

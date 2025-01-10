@@ -2,7 +2,6 @@ using Serilog;
 using AutoMapper;
 using SmartTalk.Core.Ioc;
 using Microsoft.IdentityModel.Tokens;
-using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Extensions;
 using SmartTalk.Core.Services.Ffmpeg;
 using SmartTalk.Core.Services.Http;
@@ -46,7 +45,7 @@ public class SpeechMaticsService : ISpeechMaticsService
     {
         if (command.Transcription == null || command.Transcription.Results.IsNullOrEmpty() || command.Transcription.Job == null || command.Transcription.Job.Id.IsNullOrEmpty()) return;
 
-        var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByTranscriptionJobIdAsync(command.Transcription.Job.Id, cancellationToken).ConfigureAwait(false);
+        var record = await _phoneOrderDataProvider.GetPhoneCallRecordByTranscriptionJobIdAsync(command.Transcription.Job.Id, cancellationToken).ConfigureAwait(false);
 
         Log.Information("Get Phone order record : {@record}", record);
         
@@ -58,7 +57,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         {
             record.Status = PhoneOrderRecordStatus.Transcription;
             
-            await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken).ConfigureAwait(false);
+            await _phoneOrderDataProvider.UpdatePhoneCallRecordsAsync(record, true, cancellationToken).ConfigureAwait(false);
             
             var speakInfos = StructureDiarizationResults(command.Transcription.Results);
 
@@ -70,7 +69,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         {
             record.Status = PhoneOrderRecordStatus.Exception;
             
-            await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken).ConfigureAwait(false);
+            await _phoneOrderDataProvider.UpdatePhoneCallRecordsAsync(record, true, cancellationToken).ConfigureAwait(false);
 
             Log.Warning(e.Message);
         }

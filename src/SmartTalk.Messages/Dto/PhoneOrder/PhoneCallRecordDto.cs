@@ -3,7 +3,7 @@ using SmartTalk.Messages.Enums.PhoneOrder;
 
 namespace SmartTalk.Messages.Dto.PhoneOrder;
 
-public class PhoneOrderRecordDto
+public class PhoneCallRecordDto
 {
     public int Id { get; set; }
 

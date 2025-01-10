@@ -9,6 +9,6 @@ public class GetPhoneOrderConversationsRequest : IRequest
     public int RecordId { get; set; }
 }
 
-public class GetPhoneOrderConversationsResponse : SmartTalkResponse<List<PhoneOrderConversationDto>>
+public class GetPhoneOrderConversationsResponse : SmartTalkResponse<List<PhoneCallConversationDto>>
 {
 }

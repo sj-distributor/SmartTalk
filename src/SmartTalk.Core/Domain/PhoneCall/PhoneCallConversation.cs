@@ -1,11 +1,10 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using SmartTalk.Messages.Enums.PhoneOrder;
 
-namespace SmartTalk.Core.Domain.PhoneOrder;
+namespace SmartTalk.Core.Domain.PhoneCall;
 
-[Table("phone_order_conversation")]
-public class PhoneOrderConversation : IEntity, IHasCreatedFields
+[Table("phone_call_conversation")]
+public class PhoneCallConversation : IEntity, IHasCreatedFields
 {
     [Key]
     [Column("id")]

@@ -1,12 +1,11 @@
-using Newtonsoft.Json;
-using SmartTalk.Messages.Enums.PhoneOrder;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using SmartTalk.Messages.Enums.PhoneOrder;
 
-namespace SmartTalk.Core.Domain.PhoneOrder;
+namespace SmartTalk.Core.Domain.PhoneCall;
 
-[Table("phone_order_order_item")]
-public class PhoneOrderOrderItem : IEntity, IHasCreatedFields
+[Table("phone_call_order_item")]
+public class PhoneCallOrderItem : IEntity, IHasCreatedFields
 {
     [Key]
     [Column("id")]

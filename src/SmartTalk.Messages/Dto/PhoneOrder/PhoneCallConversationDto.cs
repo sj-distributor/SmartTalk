@@ -2,8 +2,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace SmartTalk.Messages.Dto.PhoneOrder;
 
-[Table("phone_order_conversation")]
-public class PhoneOrderConversationDto
+public class PhoneCallConversationDto
 {
     public int Id { get; set; }
 

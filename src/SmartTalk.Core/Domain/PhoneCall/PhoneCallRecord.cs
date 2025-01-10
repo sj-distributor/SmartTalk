@@ -4,10 +4,10 @@ using SmartTalk.Core.Domain.Account;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.STT;
 
-namespace SmartTalk.Core.Domain.PhoneOrder;
+namespace SmartTalk.Core.Domain.PhoneCall;
 
-[Table("phone_order_record")]
-public class PhoneOrderRecord : IEntity
+[Table("phone_call_record")]
+public class PhoneCallRecord : IEntity
 {
     [Key]
     [Column("id")]
@@ -49,6 +49,12 @@ public class PhoneOrderRecord : IEntity
     
     [Column("transcription_job_id")]
     public string TranscriptionJobId { get; set; }
+    
+    [Column("call_status")]
+    public PhoneCallStatus CallStatus { get; set; }
+    
+    [Column("agent")]
+    public PhoneCallAgent Agent { get; set; }
     
     [NotMapped]
     public UserAccount UserAccount { get; set; }

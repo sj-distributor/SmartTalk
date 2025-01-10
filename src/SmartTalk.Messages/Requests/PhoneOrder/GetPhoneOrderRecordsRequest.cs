@@ -13,6 +13,6 @@ public class GetPhoneOrderRecordsRequest : IRequest
     public PhoneOrderRestaurant Restaurant { get; set; }
 }
 
-public class GetPhoneOrderRecordsResponse : SmartTalkResponse<List<PhoneOrderRecordDto>>
+public class GetPhoneOrderRecordsResponse : SmartTalkResponse<List<PhoneCallRecordDto>>
 {
 }

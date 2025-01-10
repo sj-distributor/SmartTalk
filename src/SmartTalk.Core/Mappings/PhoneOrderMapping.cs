@@ -1,5 +1,5 @@
 using AutoMapper;
-using SmartTalk.Core.Domain.PhoneOrder;
+using SmartTalk.Core.Domain.PhoneCall;
 using SmartTalk.Messages.Dto.PhoneOrder;
 
 namespace SmartTalk.Core.Mappings;
@@ -8,8 +8,8 @@ public class PhoneOrderMapping : Profile
 {
     public PhoneOrderMapping()
     {
-        CreateMap<PhoneOrderRecord, PhoneOrderRecordDto>().ReverseMap();
-        CreateMap<PhoneOrderConversation, PhoneOrderConversationDto>().ReverseMap();
-        CreateMap<PhoneOrderOrderItem, PhoneOrderOrderItemDto>().ReverseMap();
+        CreateMap<PhoneCallRecord, PhoneCallRecordDto>().ReverseMap();
+        CreateMap<PhoneCallConversation, PhoneCallConversationDto>().ReverseMap();
+        CreateMap<PhoneCallOrderItem, PhoneCallOrderItemDto>().ReverseMap();
     }
 }

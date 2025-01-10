@@ -2,7 +2,7 @@ using SmartTalk.Messages.Enums.PhoneOrder;
 
 namespace SmartTalk.Messages.Dto.PhoneOrder;
 
-public class GetPhoneOrderRecordsForRestaurantCountDto
+public class GetPhoneCallRecordsForRestaurantCountDto
 {
     public PhoneOrderRestaurant Restaurant { get; set; }
 

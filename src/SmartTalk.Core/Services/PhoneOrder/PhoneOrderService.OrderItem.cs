@@ -15,15 +15,15 @@ public partial class PhoneOrderService
     {
         var orderItems = await _phoneOrderDataProvider.GetPhoneOrderOrderItemsAsync(request.RecordId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        var record = (await _phoneOrderDataProvider.GetPhoneOrderRecordAsync(request.RecordId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+        var record = (await _phoneOrderDataProvider.GetPhoneCallRecordAsync(request.RecordId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
         
         return new GetPhoneOrderOrderItemsRessponse
         {
             Data = new GetPhoneOrderOrderItemsData
             {
                 ManualOrderId = record.ManualOrderId.ToString(),
-                ManualItems = _mapper.Map<List<PhoneOrderOrderItemDto>>(orderItems.Where(x => x.OrderType == PhoneOrderOrderType.ManualOrder).ToList()),
-                AIItems = _mapper.Map<List<PhoneOrderOrderItemDto>>(orderItems.Where(x => x.OrderType == PhoneOrderOrderType.AIOrder).ToList())
+                ManualItems = _mapper.Map<List<PhoneCallOrderItemDto>>(orderItems.Where(x => x.OrderType == PhoneOrderOrderType.ManualOrder).ToList()),
+                AIItems = _mapper.Map<List<PhoneCallOrderItemDto>>(orderItems.Where(x => x.OrderType == PhoneOrderOrderType.AIOrder).ToList())
             }
         };
     }

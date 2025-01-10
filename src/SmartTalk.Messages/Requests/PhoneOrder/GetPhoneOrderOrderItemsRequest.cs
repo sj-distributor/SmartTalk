@@ -15,9 +15,9 @@ public class GetPhoneOrderOrderItemsRessponse : SmartTalkResponse<GetPhoneOrderO
 
 public class GetPhoneOrderOrderItemsData
 {
-    public List<PhoneOrderOrderItemDto> ManualItems { get; set; }
+    public List<PhoneCallOrderItemDto> ManualItems { get; set; }
         
-    public List<PhoneOrderOrderItemDto> AIItems { get; set; }
+    public List<PhoneCallOrderItemDto> AIItems { get; set; }
 
     public string ManualOrderId { get; set; }
 }

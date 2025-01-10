@@ -9,8 +9,8 @@ using Google.Cloud.Translation.V2;
 using Microsoft.EntityFrameworkCore;
 using NSubstitute;
 using SmartTalk.Core.Domain.Account;
+using SmartTalk.Core.Domain.PhoneCall;
 using SmartTalk.Messages.Enums.Account;
-using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Enums.PhoneOrder;
@@ -28,11 +28,11 @@ public class PhoneOrderFixture : PhoneOrderFixtureBase
     [InlineData(PhoneOrderRestaurant.XiangTanRenJia)]
     public async Task ShouldGetPhoneOrderRecords(PhoneOrderRestaurant restaurant)
     {
-        var records = new List<PhoneOrderRecord>();
+        var records = new List<PhoneCallRecord>();
 
         for (var i = 1; i <= 10; i++)
         {
-            records.Add(new PhoneOrderRecord
+            records.Add(new PhoneCallRecord
             {
                 Id = i,
                 SessionId = Guid.NewGuid().ToString(),
@@ -84,7 +84,7 @@ public class PhoneOrderFixture : PhoneOrderFixtureBase
     [Fact]
     public async Task ShouldGetOrAddPhoneOrderConversations()
     {
-        var record = new PhoneOrderRecord
+        var record = new PhoneCallRecord
         {
             Id = 1,
             SessionId = Guid.NewGuid().ToString(),
@@ -93,7 +93,7 @@ public class PhoneOrderFixture : PhoneOrderFixtureBase
             Url = "https://xxx.com"
         };
 
-        var conversations = new List<PhoneOrderConversation>
+        var conversations = new List<PhoneCallConversation>
         {
             new()
             {
@@ -138,7 +138,7 @@ public class PhoneOrderFixture : PhoneOrderFixtureBase
                 await mediator.SendAsync<AddPhoneOrderConversationsCommand, AddPhoneOrderConversationsResponse>(
                     new AddPhoneOrderConversationsCommand
                     {
-                        Conversations = new List<PhoneOrderConversationDto>
+                        Conversations = new List<PhoneCallConversationDto>
                         {
                             new()
                             {
@@ -171,7 +171,7 @@ public class PhoneOrderFixture : PhoneOrderFixtureBase
                         }
                     });
 
-                var afterAdd = await repository.Query<PhoneOrderConversation>().ToListAsync();
+                var afterAdd = await repository.Query<PhoneCallConversation>().ToListAsync();
 
                 afterAdd.ShouldNotBeNull();
                 afterAdd.All(x => x.Question.Contains("早上好")).ShouldBeTrue();
@@ -182,7 +182,7 @@ public class PhoneOrderFixture : PhoneOrderFixtureBase
             {
                 var phoneOrderUtilService = Substitute.For<IPhoneOrderUtilService>();
 
-                phoneOrderUtilService.ExtractPhoneOrderShoppingCartAsync(Arg.Any<string>(), Arg.Any<PhoneOrderRecord>(), Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);;
+                phoneOrderUtilService.ExtractPhoneOrderShoppingCartAsync(Arg.Any<string>(), Arg.Any<PhoneCallRecord>(), Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);;
                 
                 builder.RegisterInstance(phoneOrderUtilService);
             });
@@ -191,7 +191,7 @@ public class PhoneOrderFixture : PhoneOrderFixtureBase
     [Fact]
     public async Task ShouldGetPhoneOrderOrderItems()
     {
-        var orderItems = new List<PhoneOrderOrderItem>
+        var orderItems = new List<PhoneCallOrderItem>
         {
             new ()
             {
@@ -245,7 +245,7 @@ public class PhoneOrderFixture : PhoneOrderFixtureBase
             }
         };
         
-        var record = new PhoneOrderRecord
+        var record = new PhoneCallRecord
         {
             Id = 1,
             SessionId = Guid.NewGuid().ToString(),

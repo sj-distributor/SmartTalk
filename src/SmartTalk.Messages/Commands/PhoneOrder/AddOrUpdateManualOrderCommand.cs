@@ -14,6 +14,6 @@ public class AddOrUpdateManualOrderCommand : ICommand
     public PhoneOrderRestaurant Restaurant { get; set; }
 }
 
-public class AddOrUpdateManualOrderResponse : SmartTalkResponse<List<PhoneOrderOrderItemDto>>
+public class AddOrUpdateManualOrderResponse : SmartTalkResponse<List<PhoneCallOrderItemDto>>
 {
 }

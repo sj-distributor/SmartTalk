@@ -1,6 +1,6 @@
 namespace SmartTalk.Messages.Dto.PhoneOrder;
 
-public class GetPhoneOrderRecordsWithUserCountDto
+public class GetPhoneCallRecordsWithUserCountDto
 {
     public string UserName { get; set; }
 

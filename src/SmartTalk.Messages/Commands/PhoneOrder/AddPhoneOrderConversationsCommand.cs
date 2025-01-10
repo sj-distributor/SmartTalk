@@ -6,9 +6,9 @@ namespace SmartTalk.Messages.Commands.PhoneOrder;
 
 public class AddPhoneOrderConversationsCommand : ICommand
 {
-    public List<PhoneOrderConversationDto> Conversations { get; set; }
+    public List<PhoneCallConversationDto> Conversations { get; set; }
 }
 
-public class AddPhoneOrderConversationsResponse : SmartTalkResponse<List<PhoneOrderConversationDto>>
+public class AddPhoneOrderConversationsResponse : SmartTalkResponse<List<PhoneCallConversationDto>>
 {
 }

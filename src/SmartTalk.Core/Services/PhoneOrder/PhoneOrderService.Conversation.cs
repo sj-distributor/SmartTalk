@@ -1,4 +1,4 @@
-using SmartTalk.Core.Domain.PhoneOrder;
+using SmartTalk.Core.Domain.PhoneCall;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Requests.PhoneOrder;
@@ -20,7 +20,7 @@ public partial class PhoneOrderService
 
         return new GetPhoneOrderConversationsResponse
         {
-            Data = _mapper.Map<List<PhoneOrderConversationDto>>(conversations)
+            Data = _mapper.Map<List<PhoneCallConversationDto>>(conversations)
         };
     }
 
@@ -30,9 +30,9 @@ public partial class PhoneOrderService
         
         await _phoneOrderDataProvider.DeletePhoneOrderConversationsAsync(command.Conversations.First().RecordId, cancellationToken).ConfigureAwait(false);
         
-        var conversations = await _phoneOrderDataProvider.AddPhoneOrderConversationsAsync(_mapper.Map<List<PhoneOrderConversation>>(command.Conversations), cancellationToken: cancellationToken).ConfigureAwait(false);
+        var conversations = await _phoneOrderDataProvider.AddPhoneOrderConversationsAsync(_mapper.Map<List<PhoneCallConversation>>(command.Conversations), cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        var record = (await _phoneOrderDataProvider.GetPhoneOrderRecordAsync(command.Conversations.First().RecordId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+        var record = (await _phoneOrderDataProvider.GetPhoneCallRecordAsync(command.Conversations.First().RecordId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
         
         if (_currentUser.Id.HasValue)
             await UpdatePhoneOrderRecordSpecificFieldsAsync(command.Conversations.First().RecordId, _currentUser.Id.Value, command.Conversations.First().Question, _currentUser.Name, cancellationToken).ConfigureAwait(false);
@@ -43,7 +43,7 @@ public partial class PhoneOrderService
 
         return new AddPhoneOrderConversationsResponse
         {
-            Data = _mapper.Map<List<PhoneOrderConversationDto>>(conversations)
+            Data = _mapper.Map<List<PhoneCallConversationDto>>(conversations)
         };
     }
 }
