@@ -1,19 +1,14 @@
 using Serilog;
-using AutoMapper;
 using SmartTalk.Core.Ioc;
 using Microsoft.IdentityModel.Tokens;
-using SmartTalk.Core.Extensions;
 using SmartTalk.Core.Services.Ffmpeg;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
-using SmartTalk.Messages.Dto.PhoneOrder;
-using SmartTalk.Core.Services.PhoneOrder;
-using SmartTalk.Core.Settings.PhoneOrder;
+using SmartTalk.Core.Services.PhoneCall;
+using SmartTalk.Core.Settings.PhoneCall;
 using SmartTalk.Messages.Dto.SpeechMatics;
 using SmartTalk.Messages.Enums.PhoneOrder;
-using SmartTalk.Messages.Commands.PhoneOrder;
-using SmartTalk.Messages.Dto.WeChat;
-using SmartTalk.Messages.Enums.WeChat;
+using SmartTalk.Messages.Commands.PhoneCall;
 
 namespace SmartTalk.Core.Services.SpeechMatics;
 
@@ -24,20 +19,20 @@ public interface ISpeechMaticsService : IScopedDependency
 
 public class SpeechMaticsService : ISpeechMaticsService
 {
-    private readonly  IWeChatClient _weChatClient;
-    private  readonly IFfmpegService _ffmpegService;
-    private readonly PhoneOrderSetting _phoneOrderSetting;
-    private readonly IPhoneOrderService _phoneOrderService;
-    private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
+    private readonly IWeChatClient _weChatClient;
+    private readonly IFfmpegService _ffmpegService;
+    private readonly PhoneCallSetting _phoneCallSetting;
+    private readonly IPhoneCallService _phoneCallService;
+    private readonly IPhoneCallDataProvider _phoneCallDataProvider;
     private readonly ISmartTalkHttpClientFactory _smartTalkHttpClientFactory;
     
-    public SpeechMaticsService(IWeChatClient weChatClient, IFfmpegService ffmpegService, PhoneOrderSetting phoneOrderSetting, IPhoneOrderService phoneOrderService, IPhoneOrderDataProvider phoneOrderDataProvider, ISmartTalkHttpClientFactory smartTalkHttpClientFactory)
+    public SpeechMaticsService(IWeChatClient weChatClient, IFfmpegService ffmpegService, PhoneCallSetting phoneCallSetting, IPhoneCallService phoneCallService, IPhoneCallDataProvider phoneCallDataProvider, ISmartTalkHttpClientFactory smartTalkHttpClientFactory)
     {
         _weChatClient = weChatClient;
         _ffmpegService = ffmpegService;
-        _phoneOrderSetting = phoneOrderSetting;
-        _phoneOrderService = phoneOrderService;
-        _phoneOrderDataProvider = phoneOrderDataProvider;
+        _phoneCallSetting = phoneCallSetting;
+        _phoneCallService = phoneCallService;
+        _phoneCallDataProvider = phoneCallDataProvider;
         _smartTalkHttpClientFactory = smartTalkHttpClientFactory;
     }
 
@@ -45,7 +40,7 @@ public class SpeechMaticsService : ISpeechMaticsService
     {
         if (command.Transcription == null || command.Transcription.Results.IsNullOrEmpty() || command.Transcription.Job == null || command.Transcription.Job.Id.IsNullOrEmpty()) return;
 
-        var record = await _phoneOrderDataProvider.GetPhoneCallRecordByTranscriptionJobIdAsync(command.Transcription.Job.Id, cancellationToken).ConfigureAwait(false);
+        var record = await _phoneCallDataProvider.GetPhoneCallRecordByTranscriptionJobIdAsync(command.Transcription.Job.Id, cancellationToken).ConfigureAwait(false);
 
         Log.Information("Get Phone order record : {@record}", record);
         
@@ -55,21 +50,21 @@ public class SpeechMaticsService : ISpeechMaticsService
         
         try
         {
-            record.Status = PhoneOrderRecordStatus.Transcription;
+            record.Status = PhoneCallRecordStatus.Transcription;
             
-            await _phoneOrderDataProvider.UpdatePhoneCallRecordsAsync(record, true, cancellationToken).ConfigureAwait(false);
+            await _phoneCallDataProvider.UpdatePhoneCallRecordsAsync(record, true, cancellationToken).ConfigureAwait(false);
             
             var speakInfos = StructureDiarizationResults(command.Transcription.Results);
 
             var audioContent = await _smartTalkHttpClientFactory.GetAsync<byte[]>(record.Url, cancellationToken).ConfigureAwait(false);
             
-            await _phoneOrderService.ExtractPhoneOrderRecordAiMenuAsync(speakInfos, record, audioContent, cancellationToken).ConfigureAwait(false);
+            await _phoneCallService.ExtractPhoneOrderRecordAiMenuAsync(speakInfos, record, audioContent, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception e)
         {
-            record.Status = PhoneOrderRecordStatus.Exception;
+            record.Status = PhoneCallRecordStatus.Exception;
             
-            await _phoneOrderDataProvider.UpdatePhoneCallRecordsAsync(record, true, cancellationToken).ConfigureAwait(false);
+            await _phoneCallDataProvider.UpdatePhoneCallRecordsAsync(record, true, cancellationToken).ConfigureAwait(false);
 
             Log.Warning(e.Message);
         }
@@ -78,7 +73,7 @@ public class SpeechMaticsService : ISpeechMaticsService
     private List<SpeechMaticsSpeakInfoDto> StructureDiarizationResults(List<SpeechMaticsResultDto> results)
     {
         string currentSpeaker = null;
-        PhoneOrderRole? currentRole = null;
+        PhoneCallRole? currentRole = null;
         var startTime = 0.0;
         var endTime = 0.0;
         var speakInfos = new List<SpeechMaticsSpeakInfoDto>();
@@ -88,7 +83,7 @@ public class SpeechMaticsService : ISpeechMaticsService
             if (currentSpeaker == null)
             {
                 currentSpeaker = result.Alternatives[0].Speaker;
-                currentRole = PhoneOrderRole.Restaurant;
+                currentRole = PhoneCallRole.Restaurant;
                 startTime = result.StartTime;
                 endTime = result.EndTime;
                 continue;
@@ -102,7 +97,7 @@ public class SpeechMaticsService : ISpeechMaticsService
             {
                 speakInfos.Add(new SpeechMaticsSpeakInfoDto { EndTime = endTime, StartTime = startTime, Speaker = currentSpeaker, Role = currentRole.Value });
                 currentSpeaker = result.Alternatives[0].Speaker;
-                currentRole = currentRole == PhoneOrderRole.Restaurant ? PhoneOrderRole.Client : PhoneOrderRole.Restaurant;
+                currentRole = currentRole == PhoneCallRole.Restaurant ? PhoneCallRole.Client : PhoneCallRole.Restaurant;
                 startTime = result.StartTime;
                 endTime = result.EndTime;
             }

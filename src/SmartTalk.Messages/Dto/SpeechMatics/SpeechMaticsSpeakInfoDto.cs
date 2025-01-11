@@ -10,5 +10,5 @@ public class SpeechMaticsSpeakInfoDto
     
     public string Speaker { get; set; }
     
-    public PhoneOrderRole Role { get; set; }
+    public PhoneCallRole Role { get; set; }
 }

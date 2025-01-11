@@ -3,10 +3,10 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Newtonsoft.Json.Linq;
 using Serilog;
-using SmartTalk.Messages.Commands.PhoneOrder;
+using SmartTalk.Messages.Commands.PhoneCall;
 using SmartTalk.Messages.Dto.SpeechMatics;
 using SmartTalk.Messages.Enums.PhoneOrder;
-using SmartTalk.Messages.Requests.PhoneOrder;
+using SmartTalk.Messages.Requests.PhoneCall;
 
 namespace SmartTalk.Api.Controllers;
 
@@ -23,37 +23,37 @@ public class PhoneOrderController : ControllerBase
     }
     
     [Route("records"), HttpGet]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPhoneOrderRecordsResponse))]
-    public async Task<IActionResult> GetPhoneOrderRecordsAsync([FromQuery] GetPhoneOrderRecordsRequest request)
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPhoneCallRecordsResponse))]
+    public async Task<IActionResult> GetPhoneOrderRecordsAsync([FromQuery] GetPhoneCallRecordsRequest request)
     {
-        var response = await _mediator.RequestAsync<GetPhoneOrderRecordsRequest, GetPhoneOrderRecordsResponse>(request).ConfigureAwait(false);
+        var response = await _mediator.RequestAsync<GetPhoneCallRecordsRequest, GetPhoneCallRecordsResponse>(request).ConfigureAwait(false);
         
         return Ok(response);
     }
     
     [Route("conversations"), HttpGet]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPhoneOrderConversationsResponse))]
-    public async Task<IActionResult> GetPhoneOrderConversationsAsync([FromQuery] GetPhoneOrderConversationsRequest request)
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPhoneCallConversationsResponse))]
+    public async Task<IActionResult> GetPhoneOrderConversationsAsync([FromQuery] GetPhoneCallConversationsRequest request)
     {
-        var response = await _mediator.RequestAsync<GetPhoneOrderConversationsRequest, GetPhoneOrderConversationsResponse>(request).ConfigureAwait(false);
+        var response = await _mediator.RequestAsync<GetPhoneCallConversationsRequest, GetPhoneCallConversationsResponse>(request).ConfigureAwait(false);
         
         return Ok(response);
     }
     
     [Route("items"), HttpGet]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPhoneOrderOrderItemsRessponse))]
-    public async Task<IActionResult> GetPhoneOrderOrderItemsAsync([FromQuery] GetPhoneOrderOrderItemsRequest request)
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPhoneCallOrderItemsRessponse))]
+    public async Task<IActionResult> GetPhoneOrderOrderItemsAsync([FromQuery] GetPhoneCallOrderItemsRequest request)
     {
-        var response = await _mediator.RequestAsync<GetPhoneOrderOrderItemsRequest, GetPhoneOrderOrderItemsRessponse>(request).ConfigureAwait(false);
+        var response = await _mediator.RequestAsync<GetPhoneCallOrderItemsRequest, GetPhoneCallOrderItemsRessponse>(request).ConfigureAwait(false);
         
         return Ok(response);
     }
     
     [Route("conversation/add"), HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(AddPhoneOrderConversationsResponse))]
-    public async Task<IActionResult> AddPhoneOrderConversationsAsync([FromBody] AddPhoneOrderConversationsCommand command) 
+    public async Task<IActionResult> AddPhoneOrderConversationsAsync([FromBody] AddPhoneCallConversationsCommand command) 
     {
-        var response = await _mediator.SendAsync<AddPhoneOrderConversationsCommand, AddPhoneOrderConversationsResponse>(command).ConfigureAwait(false);
+        var response = await _mediator.SendAsync<AddPhoneCallConversationsCommand, AddPhoneOrderConversationsResponse>(command).ConfigureAwait(false);
         
         return Ok(response);
     }
@@ -68,7 +68,7 @@ public class PhoneOrderController : ControllerBase
 
         var fileContent = ms.ToArray();
         
-        await _mediator.SendAsync(new ReceivePhoneOrderRecordCommand { RecordName = file.FileName, RecordContent = fileContent, Restaurant = restaurant}).ConfigureAwait(false);
+        await _mediator.SendAsync(new ReceivePhoneCallRecordCommand { RecordName = file.FileName, RecordContent = fileContent, Restaurant = restaurant}).ConfigureAwait(false);
         
         return Ok();
     }

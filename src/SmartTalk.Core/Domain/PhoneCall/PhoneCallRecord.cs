@@ -18,10 +18,10 @@ public class PhoneCallRecord : IEntity
     public string SessionId { get; set; }
 
     [Column("status")]
-    public PhoneOrderRecordStatus Status { get; set; } = PhoneOrderRecordStatus.Recieved;
+    public PhoneCallRecordStatus Status { get; set; } = PhoneCallRecordStatus.Recieved;
     
     [Column("restaurant")]
-    public PhoneOrderRestaurant Restaurant { get; set; }
+    public PhoneCallRestaurant Restaurant { get; set; }
     
     [Column("tips")]
     public string Tips { get; set; }

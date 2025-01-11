@@ -7,9 +7,9 @@ namespace SmartTalk.Core.Services.Http.Clients;
 
 public interface IEasyPosClient : IScopedDependency
 {
-    Task<EasyPosResponseDto> GetEasyPosRestaurantMenusAsync(PhoneOrderRestaurant restaurant, CancellationToken cancellationToken);
+    Task<EasyPosResponseDto> GetEasyPosRestaurantMenusAsync(PhoneCallRestaurant restaurant, CancellationToken cancellationToken);
 
-    Task<GetOrderResponse> GetOrderAsync(long id, PhoneOrderRestaurant restaurant, CancellationToken cancellationToken);
+    Task<GetOrderResponse> GetOrderAsync(long id, PhoneCallRestaurant restaurant, CancellationToken cancellationToken);
 }
 
 public class EasyPosClient : IEasyPosClient
@@ -23,7 +23,7 @@ public class EasyPosClient : IEasyPosClient
         _httpClientFactory = httpClientFactory;
     }
     
-    public async Task<EasyPosResponseDto> GetEasyPosRestaurantMenusAsync(PhoneOrderRestaurant restaurant, CancellationToken cancellationToken)
+    public async Task<EasyPosResponseDto> GetEasyPosRestaurantMenusAsync(PhoneCallRestaurant restaurant, CancellationToken cancellationToken)
     {
         var (authorization, merchantId, companyId, merchantStaffId) = GetRestaurantAuthHeaders(restaurant);
         
@@ -37,7 +37,7 @@ public class EasyPosClient : IEasyPosClient
             }, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<GetOrderResponse> GetOrderAsync(long id, PhoneOrderRestaurant restaurant, CancellationToken cancellationToken)
+    public async Task<GetOrderResponse> GetOrderAsync(long id, PhoneCallRestaurant restaurant, CancellationToken cancellationToken)
     {
         var (authorization, merchantId, companyId, merchantStaffId) = GetRestaurantAuthHeaders(restaurant);
         
@@ -51,15 +51,15 @@ public class EasyPosClient : IEasyPosClient
             }, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
-    public (string Authorization, string MerchantId, string CompanyId, string MerchantStaffId) GetRestaurantAuthHeaders(PhoneOrderRestaurant restaurant)
+    public (string Authorization, string MerchantId, string CompanyId, string MerchantStaffId) GetRestaurantAuthHeaders(PhoneCallRestaurant restaurant)
     {
         return restaurant switch
         {
-            PhoneOrderRestaurant.MoonHouse =>
+            PhoneCallRestaurant.MoonHouse =>
                 (_easyPosSetting.Authorizations[0], _easyPosSetting.MerchantIds[0], _easyPosSetting.CompanyIds[0], _easyPosSetting.MerchantStaffIds[0]),
-            PhoneOrderRestaurant.JiangNanChun =>
+            PhoneCallRestaurant.JiangNanChun =>
                 (_easyPosSetting.Authorizations[1], _easyPosSetting.MerchantIds[1], _easyPosSetting.CompanyIds[1], _easyPosSetting.MerchantStaffIds[1]),
-            PhoneOrderRestaurant.XiangTanRenJia =>
+            PhoneCallRestaurant.XiangTanRenJia =>
                 (_easyPosSetting.Authorizations[2], _easyPosSetting.MerchantIds[2], _easyPosSetting.CompanyIds[2], _easyPosSetting.MerchantStaffIds[2]),
             _ => throw new NotSupportedException(nameof(restaurant))
         };

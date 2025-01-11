@@ -28,7 +28,7 @@ public class PhoneCallOrderItem : IEntity, IHasCreatedFields
     public string Note { get; set; }
     
     [Column("order_type")]
-    public PhoneOrderOrderType OrderType { get; set; }
+    public PhoneCallOrderType CallOrderType { get; set; }
     
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
