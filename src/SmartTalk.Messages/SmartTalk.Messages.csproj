@@ -11,6 +11,7 @@
         <PackageReference Include="Mediator.Net.Autofac" Version="4.7.0" />
         <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
         <PackageReference Include="Smarties.Messages" Version="3.86.1" />
+        <PackageReference Include="Twilio.AspNet.Core" Version="8.0.0" />
     </ItemGroup>
     
 </Project>
