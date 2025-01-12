@@ -1,6 +1,6 @@
 using Mediator.Net.Contracts;
 using SmartTalk.Messages.Dto.PhoneCall;
-using SmartTalk.Messages.Enums.PhoneOrder;
+using SmartTalk.Messages.Enums.PhoneCall;
 using SmartTalk.Messages.Responses;
 
 namespace SmartTalk.Messages.Commands.PhoneCall;

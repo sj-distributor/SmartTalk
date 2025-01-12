@@ -51,7 +51,7 @@ public class PhoneCallUtilService : IPhoneCallUtilService
         }).ToList();
 
         if (items.Any())
-            await _phoneCallDataProvider.AddPhoneOrderItemAsync(items, true, cancellationToken).ConfigureAwait(false);
+            await _phoneCallDataProvider.AddPhoneCallItemAsync(items, true, cancellationToken).ConfigureAwait(false);
     }
     
      public async Task<PhoneCallDetailDto> GetOrderDetailsAsync(string query, CancellationToken cancellationToken)

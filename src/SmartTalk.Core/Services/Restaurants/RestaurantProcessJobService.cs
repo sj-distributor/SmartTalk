@@ -14,7 +14,7 @@ using SmartTalk.Messages.Dto.Embedding;
 using SmartTalk.Messages.Dto.Restaurant;
 using SmartTalk.Messages.Dto.Smarties;
 using SmartTalk.Messages.Dto.VectorDb;
-using SmartTalk.Messages.Enums.PhoneOrder;
+using SmartTalk.Messages.Enums.PhoneCall;
 using SmartTalk.Messages.Enums.Restaurants;
 
 namespace SmartTalk.Core.Services.Restaurants;

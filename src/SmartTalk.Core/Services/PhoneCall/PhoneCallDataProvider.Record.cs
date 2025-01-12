@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Domain.Account;
 using SmartTalk.Core.Domain.PhoneCall;
 using SmartTalk.Messages.Dto.PhoneCall;
-using SmartTalk.Messages.Enums.PhoneOrder;
+using SmartTalk.Messages.Enums.PhoneCall;
 
 namespace SmartTalk.Core.Services.PhoneCall;
 
@@ -12,7 +12,7 @@ public partial interface IPhoneCallDataProvider
     
     Task<List<PhoneCallRecord>> GetPhoneCallRecordsAsync(PhoneCallRestaurant restaurant, CancellationToken cancellationToken);
 
-    Task AddPhoneOrderItemAsync(List<PhoneCallOrderItem> phoneOrderOrderItems, bool forceSave = true, CancellationToken cancellationToken = default);
+    Task AddPhoneCallItemAsync(List<PhoneCallOrderItem> phoneOrderOrderItems, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task UpdatePhoneCallRecordsAsync(PhoneCallRecord record, bool forceSave = true, CancellationToken cancellationToken = default);
 
@@ -69,7 +69,7 @@ public partial class PhoneCallDataProvider
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task AddPhoneOrderItemAsync(
+    public async Task AddPhoneCallItemAsync(
         List<PhoneCallOrderItem> phoneOrderOrderItems, bool forceSave = true, CancellationToken cancellationToken = default)
     {
         await _repository.InsertAllAsync(phoneOrderOrderItems, cancellationToken).ConfigureAwait(false);

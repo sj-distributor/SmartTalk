@@ -10,14 +10,14 @@ using SmartTalk.Core.Domain.PhoneCall;
 using SmartTalk.Messages.Enums.Account;
 using SmartTalk.Core.Services.PhoneCall;
 using SmartTalk.Messages.Dto.PhoneCall;
-using SmartTalk.Messages.Enums.PhoneOrder;
+using SmartTalk.Messages.Enums.PhoneCall;
 using SmartTalk.Messages.Commands.PhoneCall;
 using SmartTalk.Messages.Requests.PhoneCall;
 using SmartTalk.IntegrationTests.TestBaseClasses;
 
-namespace SmartTalk.IntegrationTests.Services.PhoneOrder;
+namespace SmartTalk.IntegrationTests.Services.PhoneCall;
 
-public class PhoneOrderFixture : PhoneOrderFixtureBase
+public class PhoneCallFixture : PhoneCallFixtureBase
 {
     [Theory]
     [InlineData(PhoneCallRestaurant.MoonHouse)]

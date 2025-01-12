@@ -1,5 +1,5 @@
 using SmartTalk.Messages.Dto.PhoneCall;
-using SmartTalk.Messages.Enums.PhoneOrder;
+using SmartTalk.Messages.Enums.PhoneCall;
 using SmartTalk.Messages.Requests.PhoneCall;
 
 namespace SmartTalk.Core.Services.PhoneCall;

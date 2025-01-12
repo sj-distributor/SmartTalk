@@ -1,4 +1,4 @@
-using SmartTalk.Messages.Enums.PhoneOrder;
+using SmartTalk.Messages.Enums.PhoneCall;
 
 namespace SmartTalk.Messages.Dto.PhoneCall;
 

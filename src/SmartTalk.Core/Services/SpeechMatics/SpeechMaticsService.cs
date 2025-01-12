@@ -7,7 +7,7 @@ using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.PhoneCall;
 using SmartTalk.Core.Settings.PhoneCall;
 using SmartTalk.Messages.Dto.SpeechMatics;
-using SmartTalk.Messages.Enums.PhoneOrder;
+using SmartTalk.Messages.Enums.PhoneCall;
 using SmartTalk.Messages.Commands.PhoneCall;
 
 namespace SmartTalk.Core.Services.SpeechMatics;

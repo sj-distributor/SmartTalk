@@ -1,4 +1,4 @@
-namespace SmartTalk.Messages.Enums.PhoneOrder;
+namespace SmartTalk.Messages.Enums.PhoneCall;
 
 public enum PhoneCallStatus
 {

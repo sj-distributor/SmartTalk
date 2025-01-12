@@ -5,7 +5,7 @@ using Newtonsoft.Json.Linq;
 using Serilog;
 using SmartTalk.Messages.Commands.PhoneCall;
 using SmartTalk.Messages.Dto.SpeechMatics;
-using SmartTalk.Messages.Enums.PhoneOrder;
+using SmartTalk.Messages.Enums.PhoneCall;
 using SmartTalk.Messages.Requests.PhoneCall;
 
 namespace SmartTalk.Api.Controllers;

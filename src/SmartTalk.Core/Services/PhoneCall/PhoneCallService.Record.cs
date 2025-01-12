@@ -15,7 +15,7 @@ using SmartTalk.Core.Extensions;
 using SmartTalk.Messages.Dto.WebSocket;
 using SmartTalk.Messages.Dto.PhoneCall;
 using SmartTalk.Messages.Dto.Attachments;
-using SmartTalk.Messages.Enums.PhoneOrder;
+using SmartTalk.Messages.Enums.PhoneCall;
 using SmartTalk.Messages.Dto.SpeechMatics;
 using SmartTalk.Messages.Enums.SpeechMatics;
 using SmartTalk.Messages.Commands.PhoneCall;
@@ -169,7 +169,7 @@ public partial class PhoneCallService
         
         await _phoneCallDataProvider.UpdatePhoneCallRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        await _phoneCallDataProvider.AddPhoneOrderItemAsync(oderItems, cancellationToken: cancellationToken).ConfigureAwait(false);
+        await _phoneCallDataProvider.AddPhoneCallItemAsync(oderItems, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         return new AddOrUpdateManualOrderResponse
         {

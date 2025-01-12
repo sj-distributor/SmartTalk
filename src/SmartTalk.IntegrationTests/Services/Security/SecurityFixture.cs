@@ -9,7 +9,7 @@ using SmartTalk.IntegrationTests.Utils.Account;
 using SmartTalk.IntegrationTests.Utils.Security;
 using SmartTalk.Messages.Commands.Security;
 using SmartTalk.Messages.Enums.Account;
-using SmartTalk.Messages.Enums.PhoneOrder;
+using SmartTalk.Messages.Enums.PhoneCall;
 using SmartTalk.Messages.Requests.Security;
 using Xunit;
 using Xunit.Abstractions;

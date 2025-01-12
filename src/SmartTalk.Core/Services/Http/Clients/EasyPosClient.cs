@@ -1,7 +1,7 @@
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Settings.EasyPos;
 using SmartTalk.Messages.Dto.EasyPos;
-using SmartTalk.Messages.Enums.PhoneOrder;
+using SmartTalk.Messages.Enums.PhoneCall;
 
 namespace SmartTalk.Core.Services.Http.Clients;
 

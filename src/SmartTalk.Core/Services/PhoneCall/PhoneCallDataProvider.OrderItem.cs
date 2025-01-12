@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Domain.PhoneCall;
-using SmartTalk.Messages.Enums.PhoneOrder;
+using SmartTalk.Messages.Enums.PhoneCall;
 
 namespace SmartTalk.Core.Services.PhoneCall;
 

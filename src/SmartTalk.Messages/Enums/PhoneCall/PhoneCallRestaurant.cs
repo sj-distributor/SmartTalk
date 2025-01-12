@@ -1,6 +1,6 @@
 using System.ComponentModel;
 
-namespace SmartTalk.Messages.Enums.PhoneOrder;
+namespace SmartTalk.Messages.Enums.PhoneCall;
 
 public enum PhoneCallRestaurant
 {
@@ -14,5 +14,8 @@ public enum PhoneCallRestaurant
     XiangTanRenJia,
     
     [Description("悟空")]
-    Wukong
+    Wukong,
+    
+    [Description("Ai")]
+    Ai
 }
