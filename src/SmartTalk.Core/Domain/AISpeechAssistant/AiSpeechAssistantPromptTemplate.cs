@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace SmartTalk.Core.Domain.AIAssistant;
 
 [Table("ai_speech_assistant_prompt_template")]
-public class AiSpeechAssistantPromptTemplate : IEntity
+public class AiSpeechAssistantPromptTemplate : IEntity, IHasCreatedFields
 {
     [Key]
     [Column("id")]
@@ -18,5 +18,5 @@ public class AiSpeechAssistantPromptTemplate : IEntity
     public string Template { get; set; }
     
     [Column("created_date")]
-    public DateTimeOffset CreatedTime { get; set; }
+    public DateTimeOffset CreatedDate { get; set; }
 }

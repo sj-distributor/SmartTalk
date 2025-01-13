@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace SmartTalk.Core.Domain.AIAssistant;
 
 [Table("ai_speech_assistant_user_profile")]
-public class AiSpeechAssistantUserProfile : IEntity
+public class AiSpeechAssistantUserProfile : IEntity, IHasCreatedFields
 {
     [Key]
     [Column("id")]
@@ -21,5 +21,5 @@ public class AiSpeechAssistantUserProfile : IEntity
     public string ProfileJson { get; set; }
     
     [Column("created_date")]
-    public DateTimeOffset CreatedTime { get; set; }
+    public DateTimeOffset CreatedDate { get; set; }
 }

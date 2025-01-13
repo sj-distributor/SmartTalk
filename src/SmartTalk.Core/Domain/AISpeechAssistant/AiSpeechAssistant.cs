@@ -5,7 +5,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace SmartTalk.Core.Domain.AISpeechAssistant;
 
 [Table("ai_speech_assistant")]
-public class AiSpeechAssistant : IEntity
+public class AiSpeechAssistant : IEntity, IHasCreatedFields
 {
     [Key]
     [Column("id")]
@@ -22,5 +22,5 @@ public class AiSpeechAssistant : IEntity
     public AiSpeechAssistantScenario Scenario { get; set; }
     
     [Column("created_date")]
-    public DateTimeOffset CreatedTime { get; set; }
+    public DateTimeOffset CreatedDate { get; set; }
 }

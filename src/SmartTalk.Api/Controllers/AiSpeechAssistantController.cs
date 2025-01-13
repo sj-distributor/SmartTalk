@@ -1,6 +1,6 @@
 using Mediator.Net;
 using Microsoft.AspNetCore.Mvc;
-using SmartTalk.Messages.Commands.PhoneCall;
+using SmartTalk.Messages.Commands.AiSpeechAssistant;
 
 namespace SmartTalk.Api.Controllers;
 

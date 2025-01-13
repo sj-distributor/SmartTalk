@@ -1,7 +1,7 @@
 using System.Net.WebSockets;
 using Mediator.Net.Contracts;
 
-namespace SmartTalk.Messages.Commands.PhoneCall;
+namespace SmartTalk.Messages.Commands.AiSpeechAssistant;
 
 public class ConnectAiSpeechAssistantCommand : ICommand
 {
