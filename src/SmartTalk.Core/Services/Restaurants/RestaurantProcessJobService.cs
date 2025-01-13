@@ -69,13 +69,9 @@ public class RestaurantProcessJobService : IRestaurantProcessJobService
             await _vectorDb.DeleteAsync(restaurant.Id.ToString(), new VectorRecordDto { Id = item.Id.ToString() }, cancellationToken).ConfigureAwait(false);
         
         var items = new[] { "zh_CN", "en_US" }
-            .SelectMany(language => response.Data.Products.Select(x => new RestaurantMenuItem
-            {
-                RestaurantId = restaurant.Id,
-                Price = x.Price,
-                Name = GetMenuItemName(x.Localizations, language),
-                Language = language == "zh_CN" ? RestaurantItemLanguage.Chinese : RestaurantItemLanguage.English
-            })).ToList();
+            .SelectMany(language => response.Data.Products.SelectMany(x => GenerateMenuItems(x, language, restaurant.Id))).ToList();
+        
+        Log.Information("Get menu items: {@Items}", items);
         
         await _restaurantDataProvider.DeleteRestaurantMenuItemsAsync(allItems, cancellationToken: cancellationToken).ConfigureAwait(false);
         await _restaurantDataProvider.AddRestaurantMenuItemsAsync(items, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -105,6 +101,39 @@ public class RestaurantProcessJobService : IRestaurantProcessJobService
         var posName = localizations.Where(l => l.LanguageCode == languageCode && l.Field == "posName").FirstOrDefault()?.Value;
         var sendChefName = localizations.Where(l => l.LanguageCode == languageCode && l.Field == "sendChefName").FirstOrDefault()?.Value;
 
-        return !string.IsNullOrEmpty(name) ? name : !string.IsNullOrEmpty(posName) ? posName : !string.IsNullOrEmpty(sendChefName) ? sendChefName : string.Empty;
+        return !string.IsNullOrEmpty(posName) ? posName : !string.IsNullOrEmpty(name) ? name : !string.IsNullOrEmpty(sendChefName) ? sendChefName : string.Empty;
+    }
+    
+    private List<RestaurantMenuItem> GenerateMenuItems(EasyPosResponseProduct product, string language, int restaurantId)
+    {
+        var menuItems = new List<RestaurantMenuItem>();
+        var languageEnum = language == "zh_CN" ? RestaurantItemLanguage.Chinese : RestaurantItemLanguage.English;
+
+        if (product.Price == 0 && product.ModifierGroups.Any())
+        {
+            var modifierGroup = product.ModifierGroups.First();
+            foreach (var modifierProduct in modifierGroup.ModifierProducts)
+            {
+                menuItems.Add(new RestaurantMenuItem
+                {
+                    RestaurantId = restaurantId,
+                    Price = modifierProduct.Price,
+                    Name = $"{GetMenuItemName(product.Localizations, language)} {GetMenuItemName(modifierProduct.Localizations, language)}",
+                    Language = languageEnum
+                });
+            }
+        }
+        else
+        {
+            menuItems.Add(new RestaurantMenuItem
+            {
+                RestaurantId = restaurantId,
+                Price = product.Price,
+                Name = GetMenuItemName(product.Localizations, language),
+                Language = languageEnum
+            });
+        }
+
+        return menuItems;
     }
 }

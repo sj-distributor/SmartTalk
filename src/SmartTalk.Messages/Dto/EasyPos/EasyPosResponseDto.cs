@@ -36,9 +36,9 @@ public class EasyPosResponseProduct
 
     [JsonProperty("localizations")]
     public List<EasyPosResponseLocalization> Localizations { get; set; }
-    
+
     [JsonProperty("modifierGroups")]
-    public List<EasyPosResponsemodifierGroups> ModifierGroups { get; set; }
+    public List<EasyPosResponseModifierGroups> ModifierGroups { get; set; }
 }
 
 public class EasyPosResponseLocalization
@@ -53,43 +53,17 @@ public class EasyPosResponseLocalization
     public string Value { get; set; }
 }
 
-public class EasyPosResponsemodifierGroups
+public class EasyPosResponseModifierGroups
 {
-    [JsonProperty("id")]
-    public long Id { get; set; }
-
-    [JsonProperty("companyId")]
-    public long CompanyId { get; set; }
-
-    [JsonProperty("merchantId")]
-    public long MerchantId { get; set; }
-
-    [JsonProperty("productId")]
-    public long ProductId { get; set; }
-    
-    [JsonProperty("minimumSelect")]
-    public int MinimumSelect { get; set; }
-    
-    [JsonProperty("maximumSelect")]
-    public int MaximumSelect { get; set; }
-    
-    [JsonProperty("maximumRepetition")]
-    public int MaximumRepetition { get; set; }
-    
-    [JsonProperty("desc")]
-    public string Desc { get; set; }
-    
-    [JsonProperty("sort")]
-    public int Sort { get; set; }
-    
-    [JsonProperty("localizations")]
-    public List<EasyPosResponseLocalization> Localizations { get; set; }
-    
     [JsonProperty("modifierProducts")]
     public List<EasyPosResponseModifierProducts> ModifierProducts { get; set; }
 }
 
 public class EasyPosResponseModifierProducts
 {
+    [JsonProperty("price")]
+    public decimal Price { get; set; }
     
+    [JsonProperty("localizations")]
+    public List<EasyPosResponseLocalization> Localizations { get; set; }
 }
