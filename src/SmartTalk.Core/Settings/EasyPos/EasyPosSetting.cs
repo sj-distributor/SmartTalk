@@ -12,10 +12,10 @@ public class EasyPosSetting : IConfigurationSetting
         CompanyIds = configuration.GetValue<string>("EasyPos:CompanyIds").Split(',').ToList();
         MerchantStaffIds = configuration.GetValue<string>("EasyPos:MerchantStaffIds").Split(',').ToList();
         
-        PosOrderAuthorization = configuration.GetValue<string>("EasyPos:PosOrder:Authorization");
-        PosOrderMerchantId = configuration.GetValue<string>("EasyPos:PosOrder:MerchantId");
-        PosOrderCompanyId = configuration.GetValue<string>("EasyPos:PosOrder:CompanyId");
-        PosOrderMerchantStaffId = configuration.GetValue<string>("EasyPos:PosOrder:MerchantStaffId");
+        MoonHousePosOrderAuthorization = configuration.GetValue<string>("EasyPos:PosOrder:MoonHouse:Authorization");
+        MoonHousePosOrderMerchantId = configuration.GetValue<string>("EasyPos:PosOrder:MoonHouse:MerchantId");
+        MoonHousePosOrderCompanyId = configuration.GetValue<string>("EasyPos:PosOrder:MoonHouse:CompanyId");
+        MoonHousePosOrderMerchantStaffId = configuration.GetValue<string>("EasyPos:PosOrder:MoonHouse:MerchantStaffId");
     }
     
     public string BaseUrl { get; set; }
@@ -28,11 +28,11 @@ public class EasyPosSetting : IConfigurationSetting
     
     public List<string> MerchantStaffIds { get; set; }
     
-    public string PosOrderAuthorization { get; set; }
+    public string MoonHousePosOrderAuthorization { get; set; }
     
-    public string PosOrderMerchantId { get; set; }
+    public string MoonHousePosOrderMerchantId { get; set; }
     
-    public string PosOrderCompanyId { get; set; }
+    public string MoonHousePosOrderCompanyId { get; set; }
     
-    public string PosOrderMerchantStaffId { get; set; }
+    public string MoonHousePosOrderMerchantStaffId { get; set; }
 }

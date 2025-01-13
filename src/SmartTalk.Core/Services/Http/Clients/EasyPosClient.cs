@@ -57,16 +57,14 @@ public class EasyPosClient : IEasyPosClient
     {
         var headers = new Dictionary<string, string>
         {
-            { "Authorization", _easyPosSetting.PosOrderAuthorization },
-            { "MerchantId", _easyPosSetting.PosOrderMerchantId },
-            { "CompanyId", _easyPosSetting.PosOrderCompanyId },
-            { "MerchantStaffId", _easyPosSetting.PosOrderMerchantStaffId }
+            { "Authorization", _easyPosSetting.MoonHousePosOrderAuthorization },
+            { "MerchantId", _easyPosSetting.MoonHousePosOrderMerchantId },
+            { "CompanyId", _easyPosSetting.MoonHousePosOrderCompanyId },
+            { "MerchantStaffId", _easyPosSetting.MoonHousePosOrderMerchantStaffId }
         };
 
-        var res = await _httpClientFactory.PostAsJsonAsync<PlaceOrderToEasyPosResponseDto>(
+        return await _httpClientFactory.PostAsJsonAsync<PlaceOrderToEasyPosResponseDto>(
             $"{_easyPosSetting.BaseUrl}/api/merchant/order", request, cancellationToken, headers: headers).ConfigureAwait(false);
-
-        return res;
     }
 
     public (string Authorization, string MerchantId, string CompanyId, string MerchantStaffId) GetRestaurantAuthHeaders(PhoneOrderRestaurant restaurant)
