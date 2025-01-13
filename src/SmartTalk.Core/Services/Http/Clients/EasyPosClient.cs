@@ -10,6 +10,8 @@ public interface IEasyPosClient : IScopedDependency
     Task<EasyPosResponseDto> GetEasyPosRestaurantMenusAsync(PhoneOrderRestaurant restaurant, CancellationToken cancellationToken);
 
     Task<GetOrderResponse> GetOrderAsync(long id, PhoneOrderRestaurant restaurant, CancellationToken cancellationToken);
+    
+    Task<PlaceOrderToEasyPosResponseDto> PlaceOrderToEasyPosAsync(PlaceOrderToEasyPosRequestDto request, CancellationToken cancellationToken);
 }
 
 public class EasyPosClient : IEasyPosClient
@@ -49,6 +51,22 @@ public class EasyPosClient : IEasyPosClient
                 { "CompanyId", companyId },
                 { "MerchantStaffId", merchantStaffId }
             }, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+    
+    public async Task<PlaceOrderToEasyPosResponseDto> PlaceOrderToEasyPosAsync(PlaceOrderToEasyPosRequestDto request, CancellationToken cancellationToken)
+    {
+        var headers = new Dictionary<string, string>
+        {
+            { "Authorization", _easyPosSetting.PosOrderAuthorization },
+            { "MerchantId", _easyPosSetting.PosOrderMerchantId },
+            { "CompanyId", _easyPosSetting.PosOrderCompanyId },
+            { "MerchantStaffId", _easyPosSetting.PosOrderMerchantStaffId }
+        };
+
+        var res = await _httpClientFactory.PostAsJsonAsync<PlaceOrderToEasyPosResponseDto>(
+            $"{_easyPosSetting.BaseUrl}/api/merchant/order", request, cancellationToken, headers: headers).ConfigureAwait(false);
+
+        return res;
     }
 
     public (string Authorization, string MerchantId, string CompanyId, string MerchantStaffId) GetRestaurantAuthHeaders(PhoneOrderRestaurant restaurant)

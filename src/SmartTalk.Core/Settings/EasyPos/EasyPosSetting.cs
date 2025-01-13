@@ -11,6 +11,11 @@ public class EasyPosSetting : IConfigurationSetting
         MerchantIds = configuration.GetValue<string>("EasyPos:MerchantIds").Split(',').ToList();
         CompanyIds = configuration.GetValue<string>("EasyPos:CompanyIds").Split(',').ToList();
         MerchantStaffIds = configuration.GetValue<string>("EasyPos:MerchantStaffIds").Split(',').ToList();
+        
+        PosOrderAuthorization = configuration.GetValue<string>("EasyPos:PosOrder:Authorization");
+        PosOrderMerchantId = configuration.GetValue<string>("EasyPos:PosOrder:MerchantId");
+        PosOrderCompanyId = configuration.GetValue<string>("EasyPos:PosOrder:CompanyId");
+        PosOrderMerchantStaffId = configuration.GetValue<string>("EasyPos:PosOrder:MerchantStaffId");
     }
     
     public string BaseUrl { get; set; }
@@ -22,4 +27,12 @@ public class EasyPosSetting : IConfigurationSetting
     public List<string> CompanyIds { get; set; }
     
     public List<string> MerchantStaffIds { get; set; }
+    
+    public string PosOrderAuthorization { get; set; }
+    
+    public string PosOrderMerchantId { get; set; }
+    
+    public string PosOrderCompanyId { get; set; }
+    
+    public string PosOrderMerchantStaffId { get; set; }
 }
