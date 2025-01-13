@@ -297,7 +297,7 @@ public class PhoneOrderController : ControllerBase
                         {
                             var firstOutput = output[0];
 
-                            if (firstOutput.GetProperty("type").GetString() == "function_call" && firstOutput.GetProperty("name").GetString() == "transfer to human")
+                            if (firstOutput.GetProperty("type").GetString() == "function_call" && firstOutput.GetProperty("name").GetString() == "transfer_to_human")
                             {
                                 await SendTransferringHuman(openAiWebSocket);
                             }
@@ -440,7 +440,7 @@ public class PhoneOrderController : ControllerBase
                     new
                     {
                         type = "function",
-                        name = "transfer to human",
+                        name = "transfer_to_human",
                         description = "When the customer explicitly requests that the call be transferred to a real human"
                     }
                 }
