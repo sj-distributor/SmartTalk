@@ -40,4 +40,13 @@ public class SipServerController : ControllerBase
         
         return Ok(response);
     }
+    
+    [Route("update/dns"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdateDomainIpResponse))]
+    public async Task<IActionResult> UpdateDomainIpAsync([FromBody] UpdateDomainIpCommand command)
+    {
+        var response = await _mediator.SendAsync<UpdateDomainIpCommand, UpdateDomainIpResponse>(command).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
 }
