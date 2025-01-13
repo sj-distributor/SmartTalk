@@ -2,7 +2,7 @@ using Microsoft.Extensions.Configuration;
 
 namespace SmartTalk.Core.Settings.Twilio;
 
-public class TwilioSettings
+public class TwilioSettings : IConfigurationSetting
 {
     public TwilioSettings(IConfiguration configuration)
     {
