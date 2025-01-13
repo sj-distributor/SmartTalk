@@ -14,7 +14,7 @@ using SmartTalk.Messages.Dto.Embedding;
 using SmartTalk.Messages.Dto.Restaurant;
 using SmartTalk.Messages.Dto.Smarties;
 using SmartTalk.Messages.Dto.VectorDb;
-using SmartTalk.Messages.Enums.PhoneOrder;
+using SmartTalk.Messages.Enums.PhoneCall;
 using SmartTalk.Messages.Enums.Restaurants;
 
 namespace SmartTalk.Core.Services.Restaurants;
@@ -45,11 +45,11 @@ public class RestaurantProcessJobService : IRestaurantProcessJobService
 
     public async Task SyncRestaurantMenusAsync(SchedulingSyncRestaurantMenuCommand command, CancellationToken cancellationToken)
     {
-        foreach (var restaurant in Enum.GetValues(typeof(PhoneOrderRestaurant)).Cast<PhoneOrderRestaurant>())
+        foreach (var restaurant in Enum.GetValues(typeof(PhoneCallRestaurant)).Cast<PhoneCallRestaurant>())
             _smartTalkBackgroundJobClient.Enqueue(() => PersistRestaurantMenuItemsAsync(restaurant, cancellationToken), HangfireConstants.InternalHostingRestaurant);
     }
 
-    public async Task PersistRestaurantMenuItemsAsync(PhoneOrderRestaurant restaurantType, CancellationToken cancellationToken)
+    public async Task PersistRestaurantMenuItemsAsync(PhoneCallRestaurant restaurantType, CancellationToken cancellationToken)
     {
         var restaurant = await _restaurantDataProvider.GetRestaurantByNameAsync(restaurantType.GetDescription(), cancellationToken).ConfigureAwait(false);
         

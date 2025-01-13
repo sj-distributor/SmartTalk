@@ -7,10 +7,13 @@ using Twilio.AspNet.Core;
 using System.Net.WebSockets;
 using Microsoft.AspNetCore.Http;
 using Smarties.Messages.Extensions;
+using SmartTalk.Core.Domain.PhoneCall;
+using SmartTalk.Core.Services.PhoneCall;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.OpenAi;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
+using SmartTalk.Messages.Enums.PhoneCall;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
 using Twilio.TwiML.Voice;
 using Twilio.Types;
@@ -29,11 +32,13 @@ public interface IAiSpeechAssistantService : IScopedDependency
 public class AiSpeechAssistantService : IAiSpeechAssistantService
 {
     private readonly OpenAiSettings _openAiSettings;
+    private readonly IPhoneCallDataProvider _phoneCallDataProvider;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
 
-    public AiSpeechAssistantService(OpenAiSettings openAiSettings, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
+    public AiSpeechAssistantService(OpenAiSettings openAiSettings, IPhoneCallDataProvider phoneCallDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
         _openAiSettings = openAiSettings;
+        _phoneCallDataProvider = phoneCallDataProvider;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
     }
 
@@ -63,8 +68,12 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         
         var context = new AiSpeechAssistantStreamContxtDto();
         
+        var record = new PhoneCallRecord { SessionId = Guid.NewGuid().ToString(), Restaurant = PhoneCallRestaurant.Ai, CreatedDate = DateTimeOffset.Now, Status = PhoneCallRecordStatus.Recieved, Agent = PhoneCallAgent.Ai, CallStatus = PhoneCallStatus.Ringing};
+
+        await _phoneCallDataProvider.AddPhoneCallRecordsAsync([record], cancellationToken: cancellationToken).ConfigureAwait(false);
+        
         var receiveFromTwilioTask = ReceiveFromTwilioAsync(command.TwilioWebSocket, openaiWebSocket, context);
-        var sendToTwilioTask = SendToTwilioAsync(command.TwilioWebSocket, openaiWebSocket, context);
+        var sendToTwilioTask = SendToTwilioAsync(command.TwilioWebSocket, openaiWebSocket, context, record);
 
         try
         {
@@ -157,7 +166,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         }
     }
 
-    private async Task SendToTwilioAsync(WebSocket twilioWebSocket, WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context)
+    private async Task SendToTwilioAsync(WebSocket twilioWebSocket, WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context, PhoneCallRecord record)
     {
         Log.Information("Sending to twilio.");
         var buffer = new byte[1024 * 30];
@@ -177,11 +186,17 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                     if (jsonDocument?.RootElement.GetProperty("type").GetString() == "error" && jsonDocument.RootElement.TryGetProperty("error", out var error))
                     {
                         Log.Information("Receive openai websocket error" + error.GetProperty("message").GetString());
+
+                        record.CallStatus = PhoneCallStatus.Failed;
+                        await _phoneCallDataProvider.UpdatePhoneCallRecordsAsync(record).ConfigureAwait(false);
                     }
 
                     if (jsonDocument?.RootElement.GetProperty("type").GetString() == "session.updated")
                     {
                         Log.Information("Session updated successfully");
+                        
+                        record.CallStatus = PhoneCallStatus.Completed;
+                        await _phoneCallDataProvider.UpdatePhoneCallRecordsAsync(record).ConfigureAwait(false);
                     }
 
                     if (jsonDocument?.RootElement.GetProperty("type").GetString() == "response.audio.delta" && jsonDocument.RootElement.TryGetProperty("delta", out var delta))

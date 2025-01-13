@@ -1,4 +1,4 @@
-using SmartTalk.Messages.Enums.PhoneOrder;
+using SmartTalk.Messages.Enums.PhoneCall;
 
 namespace SmartTalk.Messages.Dto.SpeechMatics;
 
@@ -10,5 +10,5 @@ public class SpeechMaticsSpeakInfoDto
     
     public string Speaker { get; set; }
     
-    public PhoneOrderRole Role { get; set; }
+    public PhoneCallRole Role { get; set; }
 }

@@ -4,7 +4,7 @@ using Mediator.Net.Context;
 using Mediator.Net.Contracts;
 using Mediator.Net.Pipeline;
 using SmartTalk.Core.Services.Identity;
-using SmartTalk.Messages.Requests.PhoneOrder;
+using SmartTalk.Messages.Requests.PhoneCall;
 using SmartTalk.Messages.Responses;
 
 namespace SmartTalk.Core.Middlewares.Security;
