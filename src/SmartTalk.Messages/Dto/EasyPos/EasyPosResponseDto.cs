@@ -36,6 +36,9 @@ public class EasyPosResponseProduct
 
     [JsonProperty("localizations")]
     public List<EasyPosResponseLocalization> Localizations { get; set; }
+
+    [JsonProperty("modifierGroups")]
+    public List<EasyPosResponseModifierGroups> ModifierGroups { get; set; }
 }
 
 public class EasyPosResponseLocalization
@@ -50,3 +53,17 @@ public class EasyPosResponseLocalization
     public string Value { get; set; }
 }
 
+public class EasyPosResponseModifierGroups
+{
+    [JsonProperty("modifierProducts")]
+    public List<EasyPosResponseModifierProducts> ModifierProducts { get; set; }
+}
+
+public class EasyPosResponseModifierProducts
+{
+    [JsonProperty("price")]
+    public decimal Price { get; set; }
+    
+    [JsonProperty("localizations")]
+    public List<EasyPosResponseLocalization> Localizations { get; set; }
+}
