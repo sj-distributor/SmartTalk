@@ -8,6 +8,8 @@ public class RestaurantMenuItemDto
 
     public int RestaurantId { get; set; }
     
+    public int SerialNumber { get; set; }
+    
     public decimal Price { get; set; }
     
     public string Name { get; set; }

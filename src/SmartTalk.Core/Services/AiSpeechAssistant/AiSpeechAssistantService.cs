@@ -13,8 +13,6 @@ using SmartTalk.Messages.Enums.OpenAi;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
 using Twilio.TwiML.Voice;
-using Twilio.Types;
-using Stream = Twilio.TwiML.Voice.Stream;
 using Task = System.Threading.Tasks.Task;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
@@ -322,18 +320,64 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
     
     private async Task SendSessionUpdateAsync(WebSocket openAiWebSocket, string prompt)
     {
-        var sessionUpdate = new
+        var sessionUpdate = new AiSpeechAssistantSessionDto
         {
-            type = "session.update",
-            session = new
+            Type = "session.update",
+            Session = new Session
             {
-                turn_detection = new { type = "server_vad" },
-                input_audio_format = "g711_ulaw",
-                output_audio_format = "g711_ulaw",
-                voice = "alloy",
-                instructions = prompt,
-                modalities = new[] { "text", "audio" },
-                temperature = 0.8
+                TurnDetection = new TurnDetection { Type = "server_vad" },
+                InputAudioFormat = "g711_ulaw",
+                OutputAudioFormat = "g711_ulaw",
+                Voice = "alloy",
+                Instructions = prompt,
+                Modalities = new List<string> { "text", "audio" },
+                Temperature = 0.8,
+                ToolChoice = "auto",
+                Tools = new List<Tool>
+                {
+                    new Tool
+                    {
+                        Type = "function",
+                        Name = "order",
+                        Description = "When the customer says that's enough, or clearly says he wants to place an order, " +
+                                      "the rest are not the final order, but just recording the order.",
+                        Parameters = new ToolParameters
+                        {
+                            Type = "object",
+                            Properties = new ToolProperties
+                            {
+                                OrderedItems = new OrderedItems
+                                {
+                                    Type = "array",
+                                    Description = "List of items ordered by the customer",
+                                    Items = new OrderedItemProperties
+                                    {
+                                        ItemName = new ItemProperty
+                                        {
+                                            Type = "string",
+                                            Description = "Name of the item ordered"
+                                        },
+                                        Count = new ItemProperty
+                                        {
+                                            Type = "number",
+                                            Description = "Quantity of the item ordered"
+                                        },
+                                        Comment = new ItemProperty
+                                        {
+                                            Type = "string",
+                                            Description = "Special requirements or comments regarding the item"
+                                        },
+                                        SerialNumber = new ItemProperty()
+                                        {
+                                            Type = "number",
+                                            Description = "The serial number of the item ordered"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         };
 
