@@ -175,7 +175,7 @@ public class PhoneOrderController : ControllerBase
             while (twilioWebSocket.State == WebSocketState.Open)
             {
                 var result = await twilioWebSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
-                Log.Information("ReceiveFromTwilioAsync result: {result}", Encoding.UTF8.GetString(buffer, 0, result.Count));
+                // Log.Information("ReceiveFromTwilioAsync result: {result}", Encoding.UTF8.GetString(buffer, 0, result.Count));
                 
                 if (result.MessageType == WebSocketMessageType.Close)
                 {
