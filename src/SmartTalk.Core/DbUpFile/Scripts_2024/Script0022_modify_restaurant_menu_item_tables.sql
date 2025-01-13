@@ -1,0 +1,1 @@
+ALTER TABLE `restaurant_menu_item` add column `serial_number` int null;

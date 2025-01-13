@@ -15,6 +15,9 @@ public class RestaurantMenuItem : IEntity
     [Column("restaurant_id")]
     public int RestaurantId { get; set; }
     
+    [Column("serial_number")]
+    public int SerialNumber { get; set; }
+    
     [Column("price")]
     public decimal Price { get; set; }
     
