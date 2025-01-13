@@ -313,7 +313,7 @@ public class PhoneOrderController : ControllerBase
                                 TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
                                 
                                 var callResource = await CallResource.UpdateAsync(
-                                        twiml: new Twiml($"<Response><Dial>{new PhoneNumber("+12134660868")}</Dial></Response>"),
+                                        twiml: new Twiml("<Response><Dial><Number>+12134660868</Number></Dial></Response>"),
                                         pathSid: context.CallSid).ConfigureAwait(false);
                             }
                         }
