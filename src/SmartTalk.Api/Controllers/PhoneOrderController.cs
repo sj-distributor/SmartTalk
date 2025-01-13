@@ -16,6 +16,7 @@ using Twilio;
 using Twilio.AspNet.Core;
 using Twilio.Rest.Api.V2010.Account;
 using Twilio.TwiML;
+using Twilio.Types;
 
 namespace SmartTalk.Api.Controllers;
 
@@ -312,7 +313,7 @@ public class PhoneOrderController : ControllerBase
                                 TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
                                 
                                 var callResource = await CallResource.UpdateAsync(
-                                        twiml: new Twilio.Types.Twiml("<Response><Dial>+12134660868</Dial></Response>"),
+                                        twiml: new Twiml($"<Response><Dial>{new PhoneNumber("+12134660868")}</Dial></Response>"),
                                         pathSid: context.CallSid).ConfigureAwait(false);
                             }
                         }
