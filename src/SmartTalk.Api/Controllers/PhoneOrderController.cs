@@ -133,7 +133,7 @@ public class PhoneOrderController : ControllerBase
     }
     
     [AllowAnonymous]
-    [HttpGet("media-stream{callSid}")]
+    [HttpGet("media-stream/{callSid}")]
     public async Task HandleMediaStreamAsync(string callSid)
     {
         if (HttpContext.WebSockets.IsWebSocketRequest)
