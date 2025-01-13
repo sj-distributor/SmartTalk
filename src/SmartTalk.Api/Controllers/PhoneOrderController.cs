@@ -289,6 +289,21 @@ public class PhoneOrderController : ControllerBase
                         }
                     }
 
+                    if (jsonDocument?.RootElement.GetProperty("type").GetString() == "response.done")
+                    {
+                        var response = jsonDocument.RootElement.GetProperty("response");
+                        
+                        if (response.TryGetProperty("output", out var output) && output.GetArrayLength() > 0)
+                        {
+                            var firstOutput = output[0];
+
+                            if (firstOutput.GetProperty("type").GetString() == "function_call" && firstOutput.GetProperty("name").GetString() == "transfer to human")
+                            {
+                                await SendTransferringHuman(openAiWebSocket);
+                            }
+                        }
+                    }
+
                     if (!context.InitialConversationSent)
                     {
                         await SendInitialConversationItem(openAiWebSocket);
@@ -369,6 +384,22 @@ public class PhoneOrderController : ControllerBase
         await SendToWebSocketAsync(openaiWebSocket, new { type = "response.create" });
     }
     
+    private async Task SendTransferringHuman(WebSocket openaiWebSocket)
+    {
+        var initialConversationItem = new
+        {
+            type = "conversation.item.create",
+            item = new
+            {
+                type = "message",
+                output = "Tell the customer that you are transferring the call to a real person."
+            }
+        };
+
+        await SendToWebSocketAsync(openaiWebSocket, initialConversationItem);
+        await SendToWebSocketAsync(openaiWebSocket, new { type = "response.create" });
+    }
+    
     private async Task SendMark(WebSocket twilioWebSocket, StreamContext context)
     {
         if (!string.IsNullOrEmpty(context.StreamSid))
@@ -402,7 +433,17 @@ public class PhoneOrderController : ControllerBase
                 voice = "alloy",
                 instructions = SystemMessage,
                 modalities = new[] { "text", "audio" },
-                temperature = 0.8
+                temperature = 0.8,
+                tool_choice = "auto",
+                tools = new[]
+                {
+                    new
+                    {
+                        type = "function",
+                        name = "transfer to human",
+                        description = "When the customer explicitly requests that the call be transferred to a real human"
+                    }
+                }
             }
         };
 
