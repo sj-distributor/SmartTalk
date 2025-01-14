@@ -10,6 +10,8 @@ public interface IEasyPosClient : IScopedDependency
     Task<EasyPosResponseDto> GetEasyPosRestaurantMenusAsync(PhoneOrderRestaurant restaurant, CancellationToken cancellationToken);
 
     Task<GetOrderResponse> GetOrderAsync(long id, PhoneOrderRestaurant restaurant, CancellationToken cancellationToken);
+    
+    Task<PlaceOrderToEasyPosResponseDto> PlaceOrderToEasyPosAsync(PlaceOrderToEasyPosRequestDto request, CancellationToken cancellationToken);
 }
 
 public class EasyPosClient : IEasyPosClient
@@ -50,17 +52,27 @@ public class EasyPosClient : IEasyPosClient
                 { "MerchantStaffId", merchantStaffId }
             }, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
+    
+    public async Task<PlaceOrderToEasyPosResponseDto> PlaceOrderToEasyPosAsync(PlaceOrderToEasyPosRequestDto request, CancellationToken cancellationToken)
+    {
+        var headers = new Dictionary<string, string>
+        {
+            { "Authorization", $"Bearer {_easyPosSetting.MoonHouseAuthorization}" },
+            { "MerchantId", _easyPosSetting.MoonHouseMerchantId },
+            { "CompanyId", _easyPosSetting.MoonHouseCompanyId },
+            { "MerchantStaffId", _easyPosSetting.MoonHouseMerchantStaffId }
+        };
+
+        return await _httpClientFactory.PostAsJsonAsync<PlaceOrderToEasyPosResponseDto>(
+            $"{_easyPosSetting.BaseUrl}/api/merchant/order", request, cancellationToken, headers: headers).ConfigureAwait(false);
+    }
 
     public (string Authorization, string MerchantId, string CompanyId, string MerchantStaffId) GetRestaurantAuthHeaders(PhoneOrderRestaurant restaurant)
     {
         return restaurant switch
         {
             PhoneOrderRestaurant.MoonHouse =>
-                (_easyPosSetting.Authorizations[0], _easyPosSetting.MerchantIds[0], _easyPosSetting.CompanyIds[0], _easyPosSetting.MerchantStaffIds[0]),
-            PhoneOrderRestaurant.JiangNanChun =>
-                (_easyPosSetting.Authorizations[1], _easyPosSetting.MerchantIds[1], _easyPosSetting.CompanyIds[1], _easyPosSetting.MerchantStaffIds[1]),
-            PhoneOrderRestaurant.XiangTanRenJia =>
-                (_easyPosSetting.Authorizations[2], _easyPosSetting.MerchantIds[2], _easyPosSetting.CompanyIds[2], _easyPosSetting.MerchantStaffIds[2]),
+                (_easyPosSetting.MoonHouseAuthorization, _easyPosSetting.MoonHouseMerchantId, _easyPosSetting.MoonHouseCompanyId, _easyPosSetting.MoonHouseMerchantStaffId),
             _ => throw new NotSupportedException(nameof(restaurant))
         };
     }
