@@ -1,21 +1,23 @@
-using AutoMapper;
 using Serilog;
-using SmartTalk.Core.Constants;
-using SmartTalk.Core.Domain.Restaurants;
-using SmartTalk.Core.Extensions;
+using AutoMapper;
+using Newtonsoft.Json;
 using SmartTalk.Core.Ioc;
-using SmartTalk.Core.Services.Http.Clients;
+using SmartTalk.Core.Constants;
+using SmartTalk.Core.Extensions;
 using SmartTalk.Core.Services.Jobs;
-using SmartTalk.Core.Services.RetrievalDb.VectorDb;
-using SmartTalk.Messages.Commands.Restaurant;
 using SmartTalk.Messages.Constants;
 using SmartTalk.Messages.Dto.EasyPos;
-using SmartTalk.Messages.Dto.Embedding;
-using SmartTalk.Messages.Dto.Restaurant;
 using SmartTalk.Messages.Dto.Smarties;
 using SmartTalk.Messages.Dto.VectorDb;
+using SmartTalk.Messages.Dto.Embedding;
+using SmartTalk.Core.Domain.Restaurants;
+using SmartTalk.Messages.Dto.PhoneOrder;
+using SmartTalk.Messages.Dto.Restaurant;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.Restaurants;
+using SmartTalk.Core.Services.Http.Clients;
+using SmartTalk.Messages.Commands.Restaurant;
+using SmartTalk.Core.Services.RetrievalDb.VectorDb;
 
 namespace SmartTalk.Core.Services.Restaurants;
 
@@ -112,12 +114,26 @@ public class RestaurantProcessJobService : IRestaurantProcessJobService
         if (product.Price == 0 && product.ModifierGroups.Any())
         {
             var modifierGroup = product.ModifierGroups.First();
+
+            var orderItemModifiers = new PhoneCallOrderItemModifiers
+            {
+                Quantity = 1,
+                ModifierId = modifierGroup.Id,
+                Localizations = modifierGroup.Localizations
+            };
+            
             foreach (var modifierProduct in modifierGroup.ModifierProducts)
             {
+                orderItemModifiers.Price = modifierProduct.Price;
+                orderItemModifiers.ModifierProductId = modifierProduct.Id;
+                orderItemModifiers.ModifierLocalizations = modifierProduct.Localizations;
+                
                 menuItems.Add(new RestaurantMenuItem
                 {
                     RestaurantId = restaurantId,
                     Price = modifierProduct.Price,
+                    ProductId = product.Id,
+                    OrderItemModifiers = JsonConvert.SerializeObject(orderItemModifiers),
                     Name = $"{GetMenuItemName(product.Localizations, language)} {GetMenuItemName(modifierProduct.Localizations, language)}",
                     Language = languageEnum
                 });
@@ -129,6 +145,7 @@ public class RestaurantProcessJobService : IRestaurantProcessJobService
             {
                 RestaurantId = restaurantId,
                 Price = product.Price,
+                ProductId = product.Id,
                 Name = GetMenuItemName(product.Localizations, language),
                 Language = languageEnum
             });

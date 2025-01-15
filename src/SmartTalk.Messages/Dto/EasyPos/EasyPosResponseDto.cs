@@ -55,12 +55,21 @@ public class EasyPosResponseLocalization
 
 public class EasyPosResponseModifierGroups
 {
+    [JsonProperty("id")]
+    public long Id { get; set; }
+
+    [JsonProperty("localizations")]
+    public List<EasyPosResponseLocalization> Localizations { get; set; }
+    
     [JsonProperty("modifierProducts")]
     public List<EasyPosResponseModifierProducts> ModifierProducts { get; set; }
 }
 
 public class EasyPosResponseModifierProducts
 {
+    [JsonProperty("id")]
+    public long Id { get; set; }
+    
     [JsonProperty("price")]
     public decimal Price { get; set; }
     
