@@ -19,7 +19,7 @@ public class PhoneCallOrderItem
 {
     public int Id { get; set; }
     
-    public string ProductId { get; set; }
+    public long ProductId { get; set; }
     
     public int Quantity { get; set; }
     
@@ -28,6 +28,36 @@ public class PhoneCallOrderItem
     public double Price { get; set; }
 
     public string Notes { get; set; } = string.Empty;
+    
+    public List<PhoneCallOrderItemModifiers> OrderItemModifiers { get; set; }
+}
+
+public class PhoneCallOrderItemModifiers
+{
+    public double Price { get; set; }
+    
+    public int Quantity { get; set; }
+    
+    public long ModifierId { get; set; }
+    
+    public long ModifierProductId { get; set; }
+    
+    public List<PhoneCallOrderItemLocalization> Localizations { get; set; }
+    
+    public List<PhoneCallOrderItemModifierLocalization> ModifierLocalizations { get; set; }
+}
+
+public class PhoneCallOrderItemLocalization
+{
+    public string Field { get; set; }
+    
+    public string LanguageCode { get; set; }
+    
+    public string Value { get; set; }
+}
+
+public class PhoneCallOrderItemModifierLocalization : PhoneCallOrderItemLocalization
+{
 }
 
 public class PlaceOrderToEasyPosResponseDto : SmartTalkResponse<PlaceOrderToEasyPosResponseData>
