@@ -11,7 +11,11 @@ public interface ITwilioServiceDataProvider : IScopedDependency
     
     Task<AsteriskCdr> GetAsteriskCdrAsync(string src = null, DateTimeOffset? createdDate = null, CancellationToken cancellationToken = default);
     
-    Task<RestaurantAsterisk> GetRestaurantAsteriskAsync(string restaurantPhoneNumber, string twilioNumber, CancellationToken cancellationToken);
+    Task<List<RestaurantAsterisk>> GetRestaurantAsteriskAsync(
+        string restaurantPhoneNumber = null, string twilioNumber = null, string hostRecords = null,
+        string domainName = null, CancellationToken cancellationToken = default);
+
+    Task UpdateRestaurantAsterisksAsync(List<RestaurantAsterisk> restaurantAsterisks, bool forceSave = true, CancellationToken cancellationToken = default);
 }
 
 public class TwilioServiceDataProvider : ITwilioServiceDataProvider
@@ -46,8 +50,32 @@ public class TwilioServiceDataProvider : ITwilioServiceDataProvider
         return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<RestaurantAsterisk> GetRestaurantAsteriskAsync(string restaurantPhoneNumber, string twilioNumber, CancellationToken cancellationToken)
+    public async Task<List<RestaurantAsterisk>> GetRestaurantAsteriskAsync(
+        string restaurantPhoneNumber = null, string twilioNumber = null, string hostRecords = null,
+        string domainName = null, CancellationToken cancellationToken = default)
     {
-        return await _repository.FirstOrDefaultAsync<RestaurantAsterisk>(x => x.RestaurantPhoneNumber == restaurantPhoneNumber && x.TwilioNumber == twilioNumber, cancellationToken).ConfigureAwait(false);
+        var query = _repository.Query<RestaurantAsterisk>();
+        
+        if (!string.IsNullOrEmpty(restaurantPhoneNumber))
+            query = query.Where(x => x.RestaurantPhoneNumber == restaurantPhoneNumber);
+        
+        if (!string.IsNullOrEmpty(twilioNumber))
+            query = query.Where(x => x.TwilioNumber == twilioNumber);
+        
+        if (!string.IsNullOrEmpty(hostRecords))
+            query = query.Where(x => x.HostRecords == hostRecords);
+        
+        if (!string.IsNullOrEmpty(domainName))
+            query = query.Where(x => x.DomainName == domainName);
+        
+        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task UpdateRestaurantAsterisksAsync(List<RestaurantAsterisk> restaurantAsterisks, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.UpdateAllAsync(restaurantAsterisks, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave)
+            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 }

@@ -1,3 +1,4 @@
+using SmartTalk.Messages.Enums.SipServer;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -27,6 +28,9 @@ public class RestaurantAsterisk : IEntity
 
     [Column("domain_name")]
     public string DomainName { get; set; }
+    
+    [Column("phone_path_status")]
+    public PhonePathStatus PhonePathStatus { get; set; }
 
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
