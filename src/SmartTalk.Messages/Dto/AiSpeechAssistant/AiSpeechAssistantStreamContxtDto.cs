@@ -45,4 +45,6 @@ public class AiSpeechAssistantOrderItemDto
     public int Quantity { get; set; }
     
     public string Comment { get; set; }
+    
+    public AiSpeechAssistantPortionSize PortionSize { get; set; }
 }
