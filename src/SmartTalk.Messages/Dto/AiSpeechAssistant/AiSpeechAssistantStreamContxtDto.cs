@@ -18,12 +18,12 @@ public class AiSpeechAssistantStreamContxtDto
 
     public bool ShowTimingMath { get; set; } = false;
     
-    public AiSpeechAssistantStreamContxtUserInfoDto UserInfo { get; set; }
+    public AiSpeechAssistantUserInfoDto UserInfo { get; set; }
 
-    public List<AiSpeechAssistantStreamContxtOrderItemDto> OrderItems { get; set; } = [];
+    public List<AiSpeechAssistantOrderItemDto> OrderItems { get; set; } = [];
 }
 
-public class AiSpeechAssistantStreamContxtUserInfoDto
+public class AiSpeechAssistantUserInfoDto
 {
     public string UserName { get; set; }
     
@@ -36,7 +36,7 @@ public class AiSpeechAssistantStreamContxtUserInfoDto
     public AiSpeechAssistantDeliverType DeliveryType { get; set; }
 }
 
-public class AiSpeechAssistantStreamContxtOrderItemDto
+public class AiSpeechAssistantOrderItemDto
 {
     public string Name { get; set; }
     
