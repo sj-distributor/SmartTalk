@@ -2,7 +2,7 @@ using System.ComponentModel;
 
 namespace SmartTalk.Messages.Enums.AiSpeechAssistant;
 
-public enum AiSpeechAssistantDeliverType
+public enum AiSpeechAssistantOrderType
 {
     [Description("堂食")]
     DineIn,

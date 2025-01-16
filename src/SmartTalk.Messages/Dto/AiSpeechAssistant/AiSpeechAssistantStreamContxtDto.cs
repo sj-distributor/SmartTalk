@@ -30,10 +30,6 @@ public class AiSpeechAssistantUserInfoDto
     public string PhoneNumber { get; set; }
     
     public string Address { get; set; }
-    
-    public string DeliveryTime { get; set; }
-    
-    public AiSpeechAssistantDeliverType DeliveryType { get; set; }
 }
 
 public class AiSpeechAssistantOrderItemDto
@@ -46,5 +42,7 @@ public class AiSpeechAssistantOrderItemDto
     
     public string Comments { get; set; }
     
-    public AiSpeechAssistantPortionSize PortionSize { get; set; }
+    public string PortionSize { get; set; }
+    
+    public AiSpeechAssistantOrderType OrderType { get; set; }
 }
