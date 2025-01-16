@@ -42,7 +42,7 @@ public class AiSpeechAssistantOrderItemDto
     
     public string Comments { get; set; }
     
-    public string PortionSize { get; set; }
+    public string Specification { get; set; }
     
     public AiSpeechAssistantOrderType OrderType { get; set; }
 }
