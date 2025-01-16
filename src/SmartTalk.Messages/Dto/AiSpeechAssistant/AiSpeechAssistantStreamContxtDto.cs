@@ -1,3 +1,5 @@
+using SmartTalk.Messages.Enums.AiSpeechAssistant;
+
 namespace SmartTalk.Messages.Dto.AiSpeechAssistant;
 
 public class AiSpeechAssistantStreamContxtDto
@@ -15,4 +17,32 @@ public class AiSpeechAssistantStreamContxtDto
     public bool InitialConversationSent { get; set; } = false;
 
     public bool ShowTimingMath { get; set; } = false;
+    
+    public AiSpeechAssistantUserInfoDto UserInfo { get; set; }
+
+    public List<AiSpeechAssistantOrderItemDto> OrderItems { get; set; } = [];
+}
+
+public class AiSpeechAssistantUserInfoDto
+{
+    public string UserName { get; set; }
+    
+    public string PhoneNumber { get; set; }
+    
+    public string Address { get; set; }
+}
+
+public class AiSpeechAssistantOrderItemDto
+{
+    public string Name { get; set; }
+    
+    public decimal Price { get; set; }
+    
+    public int Quantity { get; set; }
+    
+    public string Comments { get; set; }
+    
+    public string Specification { get; set; }
+    
+    public AiSpeechAssistantOrderType OrderType { get; set; }
 }
