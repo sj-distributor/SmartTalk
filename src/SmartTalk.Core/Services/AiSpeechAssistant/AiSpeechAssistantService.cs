@@ -87,7 +87,12 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
 
         if (assistant == null || promptTemplate == null || string.IsNullOrEmpty(promptTemplate.Template)) return string.Empty;
 
-        var finalPrompt = promptTemplate.Template.Replace("#{user_profile}", string.IsNullOrEmpty(userProfile?.ProfileJson) ? " " : userProfile.ProfileJson);
+        var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
+        var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
+        
+        var finalPrompt = promptTemplate.Template
+            .Replace("#{user_profile}", string.IsNullOrEmpty(userProfile?.ProfileJson) ? $"CallerNumber:{from}" : userProfile.ProfileJson)
+            .Replace("#{current_time}", currentTime);
         
         Log.Information($"The final prompt: {finalPrompt}");
 
