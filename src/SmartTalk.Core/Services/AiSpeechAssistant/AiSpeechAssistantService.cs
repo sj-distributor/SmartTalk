@@ -6,6 +6,7 @@ using SmartTalk.Core.Ioc;
 using Twilio.AspNet.Core;
 using System.Net.WebSockets;
 using Microsoft.AspNetCore.Http;
+using Newtonsoft.Json;
 using Smarties.Messages.Extensions;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
@@ -14,6 +15,7 @@ using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
 using Twilio.TwiML.Voice;
 using Twilio.Types;
+using JsonSerializer = System.Text.Json.JsonSerializer;
 using Stream = Twilio.TwiML.Voice.Stream;
 using Task = System.Threading.Tasks.Task;
 
@@ -62,6 +64,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         var openaiWebSocket = await ConnectOpenAiRealTimeSocketAsync(knowledgeBase, cancellationToken).ConfigureAwait(false);
         
         var context = new AiSpeechAssistantStreamContxtDto();
+        context.OriginalPrompt = knowledgeBase;
         
         var receiveFromTwilioTask = ReceiveFromTwilioAsync(command.TwilioWebSocket, openaiWebSocket, context);
         var sendToTwilioTask = SendToTwilioAsync(command.TwilioWebSocket, openaiWebSocket, context);
@@ -227,6 +230,29 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                         }
                     }
 
+                    if (jsonDocument?.RootElement.GetProperty("type").GetString() == "response.done")
+                    {
+                        var response = jsonDocument.RootElement.GetProperty("response");
+
+                        if (response.TryGetProperty("output", out var output) && output.GetArrayLength() > 0)
+                        {
+                            var firstOutput = output[0];
+
+                            if (firstOutput.GetProperty("type").GetString() == "function_call")
+                            {
+                                switch (firstOutput.GetProperty("name").GetString())
+                                {
+                                    case "record_customer_info":
+                                        await ProcessRecordCustomerInfoAsync(openAiWebSocket, context, firstOutput);
+                                        break;
+                                    case "update_order":
+                                        await ProcessUpdateOrderAsync(openAiWebSocket, context, firstOutput);
+                                        break;
+                                }
+                            }
+                        }
+                    }
+
                     if (!context.InitialConversationSent)
                     {
                         await SendInitialConversationItem(openAiWebSocket);
@@ -239,6 +265,26 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         {
             Log.Information($"Send to Twilio error: {ex.Message}");
         }
+    }
+    
+    private async Task ProcessRecordCustomerInfoAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context, JsonElement jsonDocument)
+    {
+        Log.Information("Ai phone customer into: {@into}", jsonDocument.GetProperty("Parameters").ToString());
+        var prompt = "";
+        context.LasterOrderItems = context.OrderItems;
+        context.OrderItems = JsonConvert.DeserializeObject<List<AiSpeechAssistantOrderItemDto>>(jsonDocument.GetProperty("Parameters").ToString());
+        
+        await SendSessionUpdateAsync(openAiWebSocket, prompt);
+    }
+    
+    private async Task ProcessUpdateOrderAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context, JsonElement jsonDocument)
+    {
+        Log.Information("Ai phone order items: {@items}", jsonDocument.GetProperty("Parameters").ToString());
+        var prompt = "";
+        context.LasterOrderItems = context.OrderItems;
+        context.OrderItems = JsonConvert.DeserializeObject<List<AiSpeechAssistantOrderItemDto>>(jsonDocument.GetProperty("Parameters").ToString());
+        
+        await SendSessionUpdateAsync(openAiWebSocket, prompt);
     }
     
     private async Task HandleSpeechStartedEventAsync(WebSocket twilioWebSocket, WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context)
