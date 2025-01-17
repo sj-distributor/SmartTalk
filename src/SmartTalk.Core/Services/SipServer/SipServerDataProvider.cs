@@ -55,7 +55,7 @@ public class SipServerDataProvider : ISipServerDataProvider
     {
         var response = _repository.Query<SipBackupServer>();
 
-        if (status is not { Count: 0 })
+        if (status is { Count: >0})
             response = response.Where(x => status.Contains(x.Status));
         
         return await response.ToListAsync(cancellationToken).ConfigureAwait(false);  

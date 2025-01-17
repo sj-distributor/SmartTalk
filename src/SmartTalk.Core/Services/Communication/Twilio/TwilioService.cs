@@ -45,7 +45,7 @@ public class TwilioService : ITwilioService
     {
         if (!string.Equals(callback.Status, "Completed", StringComparison.OrdinalIgnoreCase)) return;
         
-        var restaurantAsterisk = await _twilioServiceDataProvider.GetRestaurantAsteriskAsync(callback.To, callback.From, cancellationToken).ConfigureAwait(false);
+        var restaurantAsterisk = (await _twilioServiceDataProvider.GetRestaurantAsteriskAsync(callback.To, callback.From, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
         
         Log.Information("RestaurantAsterisk is: {@restaurantAsterisk}", restaurantAsterisk);
 
@@ -67,11 +67,23 @@ public class TwilioService : ITwilioService
 
         if (callStatus != PhoneCallStatus.Answered)
             await ProcessCallBackExceptionsAsync(restaurantAsterisk, cancellationToken).ConfigureAwait(false);
+
+        if (callStatus == PhoneCallStatus.Answered && restaurantAsterisk.PhonePathStatus == PhonePathStatus.Exception)
+        {
+            await SendWorkWechatRobotMessagesAsync($"✅✅已恢復正常", true, cancellationToken).ConfigureAwait(false);
+            
+            await UpdateAllDomainStatusAsync(restaurantAsterisk, PhonePathStatus.Running, cancellationToken).ConfigureAwait(false);
+        }
     }
     
     private async Task ProcessCallBackExceptionsAsync(RestaurantAsterisk restaurantAsterisk, CancellationToken cancellationToken)
     {
-        await SendWorkWechatRobotMessagesAsync($"🆘🆘 異常", true, cancellationToken).ConfigureAwait(false);
+        if (restaurantAsterisk.PhonePathStatus != PhonePathStatus.Exception)
+        {
+            await SendWorkWechatRobotMessagesAsync($"🆘🆘異常", true, cancellationToken).ConfigureAwait(false);
+            
+            await UpdateAllDomainStatusAsync(restaurantAsterisk, PhonePathStatus.Exception, cancellationToken).ConfigureAwait(false);
+        }
             
         var sipBackupServers = (await _sipServerDataProvider.GetAllSipHostServersAsync(restaurantAsterisk.HostId, [SipServerStatus.Pending, SipServerStatus.InProgress], cancellationToken).ConfigureAwait(false)).FirstOrDefault();
 
@@ -87,7 +99,7 @@ public class TwilioService : ITwilioService
         var updateDomainRecord = await _alidnsClient.UpdateDomainRecordAsync(restaurantAsterisk.DomainName, restaurantAsterisk.Endpoint, restaurantAsterisk.HostRecords, pendingIp.ServerIp, cancellationToken).ConfigureAwait(false);
             
         Log.Information("Phone CallBack updateDomainRecord: {@updateDomainRecord}", updateDomainRecord);
-            
+        
         pendingIp.Status = SipServerStatus.InProgress;
 
         var updateSipBackupServers = new List<SipBackupServer>{pendingIp};
@@ -99,6 +111,20 @@ public class TwilioService : ITwilioService
         }
             
         await _sipServerDataProvider.UpdateSipBackupServersAsync(updateSipBackupServers, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+    
+    private async Task UpdateAllDomainStatusAsync(RestaurantAsterisk restaurantAsterisk, PhonePathStatus phonePathStatus, CancellationToken cancellationToken)
+    {
+        var restaurantAsterisks = await _twilioServiceDataProvider.GetRestaurantAsteriskAsync(hostRecords: restaurantAsterisk.HostRecords, domainName: restaurantAsterisk.DomainName, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        restaurantAsterisks = restaurantAsterisks.Select(x =>
+        {
+            x.PhonePathStatus = phonePathStatus;
+
+            return x;
+        }).ToList();
+        
+        await _twilioServiceDataProvider.UpdateRestaurantAsterisksAsync(restaurantAsterisks, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
     private static PhoneCallStatus TryParsePhoneCallStatus(string disposition)
