@@ -289,13 +289,13 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             item = new
             {
                 type = "function_call_output",
-                call_id = jsonDocument.GetProperty("call_id").ToString(),
+                role = "system",
                 output = $"Repeat the order content to the customer and confirm whether the order content is correct. Here is teh current order:{context.OrderItemsJson}"
             }
         };
 
         await SendToWebSocketAsync(openAiWebSocket, confirmOrderMessage);
-        // await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
+        await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
     }
 
     private async Task ProcessRepeatOrderAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context, JsonElement jsonDocument)
@@ -306,7 +306,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             item = new
             {
                 type = "function_call_output",
-                call_id = jsonDocument.GetProperty("call_id").ToString(),
+                role = "system",
                 output = $"Repeat the order content to the customer. Here is teh current order:{context.OrderItemsJson}"
             }
         };
@@ -334,13 +334,13 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             item = new
             {
                 type = "function_call_output",
-                call_id = jsonDocument.GetProperty("call_id").ToString(),
+                role = "system",
                 output = "Tell the guest that you have recorded your information and ask the guest what he would like to eat today"
             }
         };
         
         await SendToWebSocketAsync(openAiWebSocket, customerInfoConfirmationMessage);
-        // await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
+        await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
     }
     
     
@@ -363,13 +363,13 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             item = new
             {
                 type = "function_call_output",
-                call_id = jsonDocument.GetProperty("call_id").ToString(),
+                role = "system",
                 output = "Tell the customer that I have recorded the order for you. Is there anything else you need?"
             }
         };
         
         await SendToWebSocketAsync(openAiWebSocket, orderConfirmationMessage);
-        // await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
+        await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
     }
     
     private async Task HandleSpeechStartedEventAsync(WebSocket twilioWebSocket, WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context)
