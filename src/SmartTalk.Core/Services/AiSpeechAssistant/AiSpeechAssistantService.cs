@@ -253,6 +253,12 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                                     case "update_order":
                                         await ProcessUpdateOrderAsync(openAiWebSocket, context, firstOutput);
                                         break;
+                                    case "repeat_order":
+                                        await ProcessRepeatOrderAsync(openAiWebSocket);
+                                        break;
+                                    case "order":
+                                        await ProcessOrderAsync(openAiWebSocket);
+                                        break;
                                 }
                             }
                         }
@@ -271,7 +277,39 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             Log.Information($"Send to Twilio error: {ex.Message}");
         }
     }
-    
+
+    private async Task ProcessOrderAsync(WebSocket openAiWebSocket)
+    {
+        var confirmOrderMessage = new
+        {
+            type = "conversation.item.create",
+            item = new
+            {
+                type = "message",
+                output = $"Repeat the order content to the customer and confirm whether the order content is correct"
+            }
+        };
+
+        await SendToWebSocketAsync(openAiWebSocket, confirmOrderMessage);
+        await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
+    }
+
+    private async Task ProcessRepeatOrderAsync(WebSocket openAiWebSocket)
+    {
+        var repeatOrderMessage = new
+        {
+            type = "conversation.item.create",
+            item = new
+            {
+                type = "message",
+                output = $"Repeat the order content to the customer"
+            }
+        };
+
+        await SendToWebSocketAsync(openAiWebSocket, repeatOrderMessage);
+        await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
+    }
+
     private async Task ProcessRecordCustomerInfoAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context, JsonElement jsonDocument)
     {
         Log.Information("Ai phone customer into: {@into}", jsonDocument.GetProperty("Parameters").ToString());
@@ -285,7 +323,19 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         context.LastPrompt = prompt;
         context.LastUserInfo = context.UserInfo;
         
+        var customerInfoConfirmationMessage = new
+        {
+            type = "conversation.item.create",
+            item = new
+            {
+                type = "message",
+                output = "Tell the guest that you have recorded your information and ask the guest what he would like to eat today"
+            }
+        };
+
         await SendSessionUpdateAsync(openAiWebSocket,prompt);
+        await SendToWebSocketAsync(openAiWebSocket, customerInfoConfirmationMessage);
+        await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
     }
     
     private async Task ProcessUpdateOrderAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context, JsonElement jsonDocument)
@@ -301,7 +351,19 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         context.LastPrompt = prompt;
         context.OrderItemsJson = orderItemsJson;
         
+        var orderConfirmationMessage = new
+        {
+            type = "conversation.item.create",
+            item = new
+            {
+                type = "message",
+                output = "Tell the customer that I have recorded the order for you. Is there anything else you need?"
+            }
+        };
+
         await SendSessionUpdateAsync(openAiWebSocket, prompt);
+        await SendToWebSocketAsync(openAiWebSocket, orderConfirmationMessage);
+        await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
     }
     
     private async Task HandleSpeechStartedEventAsync(WebSocket twilioWebSocket, WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context)
