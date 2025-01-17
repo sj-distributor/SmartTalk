@@ -248,21 +248,21 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
 
                             if (firstOutput.GetProperty("type").GetString() == "function_call")
                             {
-                                // switch (firstOutput.GetProperty("name").GetString())
-                                // {
-                                //     case "record_customer_info":
-                                //         await ProcessRecordCustomerInfoAsync(openAiWebSocket, context, firstOutput);
-                                //         break;
-                                //     case "update_order":
-                                //         await ProcessUpdateOrderAsync(openAiWebSocket, context, firstOutput);
-                                //         break;
-                                //     case "repeat_order":
-                                //         await ProcessRepeatOrderAsync(openAiWebSocket, context, firstOutput);
-                                //         break;
-                                //     case "order":
-                                //         await ProcessOrderAsync(openAiWebSocket, context, firstOutput);
-                                //         break;
-                                // }
+                                switch (firstOutput.GetProperty("name").GetString())
+                                {
+                                    case "record_customer_info":
+                                        await ProcessRecordCustomerInfoAsync(openAiWebSocket, context, firstOutput);
+                                        break;
+                                    case "update_order":
+                                        await ProcessUpdateOrderAsync(openAiWebSocket, context, firstOutput);
+                                        break;
+                                    case "repeat_order":
+                                        await ProcessRepeatOrderAsync(openAiWebSocket, context, firstOutput);
+                                        break;
+                                    case "order":
+                                        await ProcessOrderAsync(openAiWebSocket, context, firstOutput);
+                                        break;
+                                }
                             }
                         }
                     }
@@ -295,7 +295,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         };
 
         await SendToWebSocketAsync(openAiWebSocket, confirmOrderMessage);
-        await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
+        // await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
     }
 
     private async Task ProcessRepeatOrderAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context, JsonElement jsonDocument)
@@ -312,7 +312,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         };
 
         await SendToWebSocketAsync(openAiWebSocket, repeatOrderMessage);
-        await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
+        // await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
     }
 
     private async Task ProcessRecordCustomerInfoAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context, JsonElement jsonDocument)
@@ -340,7 +340,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         };
         
         await SendToWebSocketAsync(openAiWebSocket, customerInfoConfirmationMessage);
-        await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
+        // await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
     }
     
     
@@ -369,7 +369,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         };
         
         await SendToWebSocketAsync(openAiWebSocket, orderConfirmationMessage);
-        await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
+        // await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
     }
     
     private async Task HandleSpeechStartedEventAsync(WebSocket twilioWebSocket, WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context)
