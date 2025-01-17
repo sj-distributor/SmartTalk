@@ -1,3 +1,4 @@
+using Newtonsoft.Json;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 
 namespace SmartTalk.Messages.Dto.AiSpeechAssistant;
@@ -19,8 +20,14 @@ public class AiSpeechAssistantStreamContxtDto
     public bool ShowTimingMath { get; set; } = false;
     
     public AiSpeechAssistantUserInfoDto UserInfo { get; set; }
+    
+    public AiSpeechAssistantOrderDto OrderItems { get; set; }
 
-    public List<AiSpeechAssistantOrderItemDto> OrderItems { get; set; } = [];
+    public AiSpeechAssistantUserInfoDto LastUserInfo { get; set; }
+
+    public string OrderItemsJson { get; set; } = "No orders yet";
+
+    public string LastPrompt { get; set; }
 }
 
 public class AiSpeechAssistantUserInfoDto
@@ -28,8 +35,12 @@ public class AiSpeechAssistantUserInfoDto
     public string UserName { get; set; }
     
     public string PhoneNumber { get; set; }
-    
-    public string Address { get; set; }
+}
+
+public class AiSpeechAssistantOrderDto
+{
+    [JsonProperty("after_modified_order_items")]
+    public List<AiSpeechAssistantOrderItemDto> Order { get; set; }
 }
 
 public class AiSpeechAssistantOrderItemDto
