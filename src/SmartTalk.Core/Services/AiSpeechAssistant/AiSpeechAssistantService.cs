@@ -251,7 +251,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             type = "conversation.item.create",
             item = new
             {
-                type = "message",
+                type = "function_call_output",
                 output = $"Repeat the order content to the customer and confirm whether the order content is correct"
             }
         };
@@ -267,7 +267,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             type = "conversation.item.create",
             item = new
             {
-                type = "message",
+                type = "function_call_output",
                 output = $"Repeat the order content to the customer"
             }
         };
@@ -294,7 +294,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             type = "conversation.item.create",
             item = new
             {
-                type = "message",
+                type = "function_call_output",
                 output = "Tell the guest that you have recorded your information and ask the guest what he would like to eat today"
             }
         };
@@ -321,7 +321,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             type = "conversation.item.create",
             item = new
             {
-                type = "message",
+                type = "function_call_output",
                 output = "Tell the customer that I have recorded the order for you. Is there anything else you need?"
             }
         };
