@@ -229,7 +229,36 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                             await HandleSpeechStartedEventAsync(twilioWebSocket, openAiWebSocket, context);
                         }
                     }
+                    
+                    if (jsonDocument?.RootElement.GetProperty("type").GetString() == "response.done")
+                    {
+                        var response = jsonDocument.RootElement.GetProperty("response");
 
+                        if (response.TryGetProperty("output", out var output) && output.GetArrayLength() > 0)
+                        {
+                            var firstOutput = output[0];
+
+                            if (firstOutput.GetProperty("type").GetString() == "function_call")
+                            {
+                                switch (firstOutput.GetProperty("name").GetString())
+                                {
+                                    case "record_customer_info":
+                                        await ProcessRecordCustomerInfoAsync(openAiWebSocket, context, firstOutput);
+                                        break;
+                                    case "update_order":
+                                        await ProcessUpdateOrderAsync(openAiWebSocket, context, firstOutput);
+                                        break;
+                                    case "repeat_order":
+                                        await ProcessRepeatOrderAsync(openAiWebSocket, context);
+                                        break;
+                                    case "order":
+                                        await ProcessOrderAsync(openAiWebSocket, context);
+                                        break;
+                                }
+                            }
+                        }
+                    }
+                    
                     if (!context.InitialConversationSent)
                     {
                         await SendInitialConversationItem(openAiWebSocket);
@@ -243,8 +272,8 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             Log.Information($"Send to Twilio error: {ex.Message}");
         }
     }
-    
-    private async Task ProcessOrderAsync(WebSocket openAiWebSocket)
+
+    private async Task ProcessOrderAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context)
     {
         var confirmOrderMessage = new
         {
@@ -252,7 +281,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             item = new
             {
                 type = "function_call_output",
-                output = $"Repeat the order content to the customer and confirm whether the order content is correct"
+                output = $"Repeat the order content to the customer and confirm whether the order content is correct. Here is teh current order:{context.OrderItemsJson}"
             }
         };
 
@@ -260,7 +289,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
     }
 
-    private async Task ProcessRepeatOrderAsync(WebSocket openAiWebSocket)
+    private async Task ProcessRepeatOrderAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context)
     {
         var repeatOrderMessage = new
         {
@@ -268,7 +297,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             item = new
             {
                 type = "function_call_output",
-                output = $"Repeat the order content to the customer"
+                output = $"Repeat the order content to the customer. Here is teh current order:{context.OrderItemsJson}"
             }
         };
 
