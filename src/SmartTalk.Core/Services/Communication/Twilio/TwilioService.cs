@@ -78,7 +78,7 @@ public class TwilioService : ITwilioService
     
     private async Task ProcessCallBackExceptionsAsync(RestaurantAsterisk restaurantAsterisk, CancellationToken cancellationToken)
     {
-        if (restaurantAsterisk.PhonePathStatus == PhonePathStatus.Running)
+        if (restaurantAsterisk.PhonePathStatus != PhonePathStatus.Exception)
         {
             await SendWorkWechatRobotMessagesAsync($"🆘🆘異常", true, cancellationToken).ConfigureAwait(false);
             
