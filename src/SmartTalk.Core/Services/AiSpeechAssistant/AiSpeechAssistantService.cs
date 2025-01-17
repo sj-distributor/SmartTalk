@@ -471,12 +471,12 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                                                 description = "Specified item size, such as large, medium, and small"
                                             }
                                         }
-                                    },
-                                    total_price = new
-                                    {
-                                        type = "number",
-                                        description = "The total price of the customer order",
                                     }
+                                },
+                                total_price = new
+                                {
+                                    type = "number",
+                                    description = "The total price of the customer order",
                                 }
                             }
                         }
