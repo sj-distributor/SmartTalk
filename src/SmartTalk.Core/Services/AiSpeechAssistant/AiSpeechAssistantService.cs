@@ -101,7 +101,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         var finalPrompt = promptTemplate.Template
             .Replace("#{user_profile}", string.IsNullOrEmpty(userProfile?.ProfileJson) ? " " : userProfile.ProfileJson)
             .Replace("#{current_time}", currentTime)
-            .Replace("#{customer_phone}", from);
+            .Replace("#{customer_phone}", from.TrimStart('+'));
         
         Log.Information($"The final prompt: {finalPrompt}");
 
