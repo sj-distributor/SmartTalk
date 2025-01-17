@@ -11,6 +11,7 @@ using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.OpenAi;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
+using SmartTalk.Messages.Dto.OpenAi;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
 using Twilio.TwiML.Voice;
 using Twilio.Types;
@@ -88,7 +89,12 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
 
         if (assistant == null || promptTemplate == null || string.IsNullOrEmpty(promptTemplate.Template)) return string.Empty;
 
-        var finalPrompt = promptTemplate.Template.Replace("#{user_profile}", string.IsNullOrEmpty(userProfile?.ProfileJson) ? " " : userProfile.ProfileJson);
+        var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
+        var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
+        
+        var finalPrompt = promptTemplate.Template
+            .Replace("#{user_profile}", string.IsNullOrEmpty(userProfile?.ProfileJson) ? $"CallerNumber:{from}" : userProfile.ProfileJson)
+            .Replace("#{current_time}", currentTime);
         
         Log.Information($"The final prompt: {finalPrompt}");
 
@@ -334,7 +340,149 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                 voice = "alloy",
                 instructions = prompt,
                 modalities = new[] { "text", "audio" },
-                temperature = 0.8
+                temperature = 0.8,
+                tools = new[]
+                {
+                    new OpenAiRealtimeToolDto
+                    {
+                        Type = "function",
+                        Name = "record_customer_info",
+                        Description = "Record the customer's name and phone number.",
+                        Parameters = new OpenAiRealtimeToolParametersDto
+                        {
+                            Type = "object",
+                            Properties = new
+                            {
+                                customer_name = new
+                                {
+                                    type = "string",
+                                    description = "Name of the customer"
+                                },
+                                customer_phone = new
+                                {
+                                    type = "string",
+                                    description = "Phone number of the customer"
+                                }
+                            }
+                        }
+                    },
+                    new OpenAiRealtimeToolDto
+                    {
+                        Type = "function",
+                        Name = "update_order",
+                        Description = "When the customer modifies the items in the current order, such as adding or reducing items or modifying the notes or specifications of the items, a new order is updated based on the current order.",
+                        Parameters = new OpenAiRealtimeToolParametersDto
+                        {
+                            Type = "object",
+                            Properties = new
+                            {
+                                after_modified_order_items = new
+                                {
+                                    type = "array",
+                                    description = "The current complete order after the guest has modified the order",
+                                    items = new
+                                    {
+                                        type = "object",
+                                        properties = new
+                                        {
+                                            item_name = new
+                                            {
+                                                type = "string",
+                                                description = "Name of the item ordered"
+                                            },
+                                            quantity = new
+                                            {
+                                                type = "number",
+                                                description = "New quantity for the item"
+                                            },
+                                            price = new
+                                            {
+                                                type = "string",
+                                                description = "The price of the item multiplied by the quantity"
+                                            },
+                                            notes = new
+                                            {
+                                                type = "string",
+                                                description = "Additional notes or specifications for the item"
+                                            },
+                                            specification = new
+                                            {
+                                                type = "string",
+                                                description = "Specified item size, such as large, medium, and small"
+                                            }
+                                        }
+                                    }
+                                },
+                                total_price = new
+                                {
+                                    type = "number",
+                                    description = "The total price of the customer order",
+                                }
+                            }
+                        }
+                    },
+                    new OpenAiRealtimeToolDto
+                    {
+                        Type = "function",
+                        Name = "repeat_order",
+                        Description = "The customer needs to repeat the order."
+                    },
+                    new OpenAiRealtimeToolDto
+                    {
+                        Type = "function",
+                        Name = "order",
+                        Description = "When the customer says that's enough, or clearly says he wants to place an order, the rest are not the final order, but just recording the order.",
+                        Parameters = new OpenAiRealtimeToolParametersDto
+                        {
+                            Type = "object",
+                            Properties = new
+                            {
+                                ordered_items = new
+                                {
+                                    type = "array",
+                                    description = "List of items ordered by the customer",
+                                    items = new
+                                    {
+                                        type = "object",
+                                        properties = new
+                                        {
+                                            item_name = new
+                                            {
+                                                type = "string",
+                                                description = "Name of the item ordered"
+                                            },
+                                            count = new
+                                            {
+                                                type = "number",
+                                                description = "Quantity of the item ordered"
+                                            },
+                                            price = new
+                                            {
+                                                type = "string",
+                                                description = "The price of the item multiplied by the quantity"
+                                            },
+                                            comment = new
+                                            {
+                                                type = "string",
+                                                description = "Special requirements or comments regarding the item"
+                                            },
+                                            specification = new
+                                            {
+                                                type = "string",
+                                                description = "Specified item size, such as large, medium, and small"
+                                            }
+                                        }
+                                    }
+                                },
+                                total_price = new
+                                {
+                                    type = "number",
+                                    description = "The total price of the customer order",
+                                }
+                            }
+                        }
+                    },
+                }
             }
         };
 
