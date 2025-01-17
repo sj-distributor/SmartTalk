@@ -11,6 +11,7 @@ using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.OpenAi;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
+using SmartTalk.Messages.Dto.OpenAi;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
 using Twilio.TwiML.Voice;
 using Twilio.Types;
@@ -338,7 +339,83 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                 voice = "alloy",
                 instructions = prompt,
                 modalities = new[] { "text", "audio" },
-                temperature = 0.8
+                temperature = 0.8,
+                tools = new[]
+                {
+                    new OpenAiRealtimeToolDto
+                    {
+                        Type = "function",
+                        Name = "record_customer_info",
+                        Description = "Record the customer's name and phone number.",
+                        Parameters = new OpenAiRealtimeToolParametersDto
+                        {
+                            Type = "object",
+                            Properties = new
+                            {
+                                customer_name = new
+                                {
+                                    type = "string",
+                                    description = "Name of the customer"
+                                },
+                                customer_phone = new
+                                {
+                                    type = "string",
+                                    description = "Phone number of the customer"
+                                }
+                            }
+                        }
+                    },
+                    new OpenAiRealtimeToolDto
+                    {
+                        Type = "function",
+                        Name = "update_order",
+                        Description = "When the customer modifies the items in the current order, such as adding or reducing items or modifying the notes or specifications of the items, a new order is updated based on the current order.",
+                        Parameters = new OpenAiRealtimeToolParametersDto
+                        {
+                            Type = "object",
+                            Properties = new
+                            {
+                                after_modified_order_items = new
+                                {
+                                    type = "array",
+                                    description = "The current complete order after the guest has modified the order",
+                                    items = new
+                                    {
+                                        type = "object",
+                                        properties = new
+                                        {
+                                            item_name = new
+                                            {
+                                                type = "string",
+                                                description = "Name of the item ordered"
+                                            },
+                                            quantity = new
+                                            {
+                                                type = "number",
+                                                description = "New quantity for the item"
+                                            },
+                                            price = new
+                                            {
+                                                type = "string",
+                                                description = "The price of the item multiplied by the quantity"
+                                            },
+                                            notes = new
+                                            {
+                                                type = "string",
+                                                description = "Additional notes or specifications for the item"
+                                            },
+                                            specification = new
+                                            {
+                                                type = "string",
+                                                description = "Specified item size, such as large, medium, and small"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         };
 
