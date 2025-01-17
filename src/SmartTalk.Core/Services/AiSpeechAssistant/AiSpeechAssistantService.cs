@@ -6,6 +6,7 @@ using SmartTalk.Core.Ioc;
 using Twilio.AspNet.Core;
 using System.Net.WebSockets;
 using Microsoft.AspNetCore.Http;
+using Newtonsoft.Json;
 using Smarties.Messages.Extensions;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
@@ -15,6 +16,7 @@ using SmartTalk.Messages.Dto.OpenAi;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
 using Twilio.TwiML.Voice;
 using Twilio.Types;
+using JsonSerializer = System.Text.Json.JsonSerializer;
 using Stream = Twilio.TwiML.Voice.Stream;
 using Task = System.Threading.Tasks.Task;
 
@@ -323,7 +325,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
     
     private async Task SendToWebSocketAsync(WebSocket socket, object message)
     {
-        await socket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(message))), WebSocketMessageType.Text, true, CancellationToken.None);
+        await socket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(message))), WebSocketMessageType.Text, true, CancellationToken.None);
     }
     
     private async Task SendSessionUpdateAsync(WebSocket openAiWebSocket, string prompt)
