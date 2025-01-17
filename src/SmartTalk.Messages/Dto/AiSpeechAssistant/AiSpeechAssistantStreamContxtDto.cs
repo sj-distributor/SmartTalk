@@ -20,9 +20,9 @@ public class AiSpeechAssistantStreamContxtDto
     public bool ShowTimingMath { get; set; } = false;
     
     public AiSpeechAssistantUserInfoDto UserInfo { get; set; }
-
-    public List<AiSpeechAssistantOrderItemDto> OrderItems { get; set; } = [];
-
+    
+    public AiSpeechAssistantOrderDto OrderItems { get; set; }
+    
     public AiSpeechAssistantUserInfoDto LastUserInfo { get; set; }
 
     public string OrderItemsJson { get; set; } = "No orders yet";
@@ -37,7 +37,12 @@ public class AiSpeechAssistantUserInfoDto
     
     [JsonProperty("customer_phone")]
     public string PhoneNumber { get; set; }
-    
+}
+
+public class AiSpeechAssistantOrderDto
+{
+    [JsonProperty("after_modified_order_items")]
+    public List<AiSpeechAssistantOrderItemDto> Order { get; set; }
 }
 
 public class AiSpeechAssistantOrderItemDto
