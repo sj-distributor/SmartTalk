@@ -92,7 +92,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
         
         var finalPrompt = promptTemplate.Template
-            .Replace("#{user_profile}", string.IsNullOrEmpty(userProfile?.ProfileJson) ? $"CallerNumber:{from}" : userProfile.ProfileJson)
+            .Replace("#{user_profile}", string.IsNullOrEmpty(userProfile?.ProfileJson) ? $"CallerNumber:{from.TrimStart('+')}" : userProfile.ProfileJson)
             .Replace("#{current_time}", currentTime);
         
         Log.Information($"The final prompt: {finalPrompt}");
