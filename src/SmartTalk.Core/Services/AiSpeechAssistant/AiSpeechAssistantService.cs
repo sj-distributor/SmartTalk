@@ -411,10 +411,76 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                                             }
                                         }
                                     }
+                                },
+                                total_price = new
+                                {
+                                    type = "number",
+                                    description = "The total price of the customer order",
                                 }
                             }
                         }
-                    }
+                    },
+                    new OpenAiRealtimeToolDto
+                    {
+                        Type = "function",
+                        Name = "repeat_order",
+                        Description = "The customer needs to repeat the order."
+                    },
+                    new OpenAiRealtimeToolDto
+                    {
+                        Type = "function",
+                        Name = "order",
+                        Description = "When the customer says that's enough, or clearly says he wants to place an order, the rest are not the final order, but just recording the order.",
+                        Parameters = new OpenAiRealtimeToolParametersDto
+                        {
+                            Type = "object",
+                            Properties = new
+                            {
+                                ordered_items = new
+                                {
+                                    type = "array",
+                                    description = "List of items ordered by the customer",
+                                    items = new
+                                    {
+                                        type = "object",
+                                        properties = new
+                                        {
+                                            item_name = new
+                                            {
+                                                type = "string",
+                                                description = "Name of the item ordered"
+                                            },
+                                            count = new
+                                            {
+                                                type = "number",
+                                                description = "Quantity of the item ordered"
+                                            },
+                                            price = new
+                                            {
+                                                type = "string",
+                                                description = "The price of the item multiplied by the quantity"
+                                            },
+                                            comment = new
+                                            {
+                                                type = "string",
+                                                description = "Special requirements or comments regarding the item"
+                                            },
+                                            specification = new
+                                            {
+                                                type = "string",
+                                                description = "Specified item size, such as large, medium, and small"
+                                            }
+                                        }
+                                    }
+                                },
+                                total_price = new
+                                {
+                                    type = "number",
+                                    description = "The total price of the customer order",
+                                }
+                            }
+                        }
+                    },
                 }
             }
         };
