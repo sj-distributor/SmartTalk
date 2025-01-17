@@ -1,22 +1,20 @@
 using Serilog;
 using System.Text;
 using Twilio.TwiML;
+using Newtonsoft.Json;
 using System.Text.Json;
+using Twilio.TwiML.Voice;
 using SmartTalk.Core.Ioc;
 using Twilio.AspNet.Core;
 using System.Net.WebSockets;
 using Microsoft.AspNetCore.Http;
-using Newtonsoft.Json;
 using Smarties.Messages.Extensions;
 using SmartTalk.Core.Settings.OpenAi;
-using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.OpenAi;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
-using Twilio.TwiML.Voice;
-using Twilio.Types;
+using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using JsonSerializer = System.Text.Json.JsonSerializer;
-using Stream = Twilio.TwiML.Voice.Stream;
 using Task = System.Threading.Tasks.Task;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
