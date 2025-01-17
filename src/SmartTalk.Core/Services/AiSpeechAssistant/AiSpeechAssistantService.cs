@@ -237,11 +237,11 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                             await HandleSpeechStartedEventAsync(twilioWebSocket, openAiWebSocket, context);
                         }
                     }
-
+                    
                     if (jsonDocument?.RootElement.GetProperty("type").GetString() == "response.done")
                     {
                         var response = jsonDocument.RootElement.GetProperty("response");
-
+                        
                         if (response.TryGetProperty("output", out var output) && output.GetArrayLength() > 0)
                         {
                             var firstOutput = output[0];
@@ -257,10 +257,10 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                                         await ProcessUpdateOrderAsync(openAiWebSocket, context, firstOutput);
                                         break;
                                     case "repeat_order":
-                                        await ProcessRepeatOrderAsync(openAiWebSocket);
+                                        await ProcessRepeatOrderAsync(openAiWebSocket, context);
                                         break;
                                     case "order":
-                                        await ProcessOrderAsync(openAiWebSocket);
+                                        await ProcessOrderAsync(openAiWebSocket, context);
                                         break;
                                 }
                             }
@@ -280,8 +280,8 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             Log.Information($"Send to Twilio error: {ex.Message}");
         }
     }
-
-    private async Task ProcessOrderAsync(WebSocket openAiWebSocket)
+    
+    private async Task ProcessOrderAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context)
     {
         var confirmOrderMessage = new
         {
@@ -289,7 +289,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             item = new
             {
                 type = "function_call_output",
-                output = $"Repeat the order content to the customer and confirm whether the order content is correct"
+                output = $"Repeat the order content to the customer and confirm whether the order content is correct. Here is teh current order:{context.OrderItemsJson}"
             }
         };
 
@@ -297,7 +297,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
     }
 
-    private async Task ProcessRepeatOrderAsync(WebSocket openAiWebSocket)
+    private async Task ProcessRepeatOrderAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context)
     {
         var repeatOrderMessage = new
         {
@@ -305,7 +305,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             item = new
             {
                 type = "function_call_output",
-                output = $"Repeat the order content to the customer"
+                output = $"Repeat the order content to the customer. Here is teh current order:{context.OrderItemsJson}"
             }
         };
 
