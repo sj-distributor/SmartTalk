@@ -298,8 +298,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                 output = "Tell the guest that you have recorded your information and ask the guest what he would like to eat today"
             }
         };
-
-        await SendSessionUpdateAsync(openAiWebSocket,prompt);
+        
         await SendToWebSocketAsync(openAiWebSocket, customerInfoConfirmationMessage);
         await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
     }
@@ -326,8 +325,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                 output = "Tell the customer that I have recorded the order for you. Is there anything else you need?"
             }
         };
-
-        await SendSessionUpdateAsync(openAiWebSocket, prompt);
+        
         await SendToWebSocketAsync(openAiWebSocket, orderConfirmationMessage);
         await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
     }
