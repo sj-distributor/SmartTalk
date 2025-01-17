@@ -248,21 +248,21 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
 
                             if (firstOutput.GetProperty("type").GetString() == "function_call")
                             {
-                                switch (firstOutput.GetProperty("name").GetString())
-                                {
-                                    case "record_customer_info":
-                                        await ProcessRecordCustomerInfoAsync(openAiWebSocket, context, firstOutput);
-                                        break;
-                                    case "update_order":
-                                        await ProcessUpdateOrderAsync(openAiWebSocket, context, firstOutput);
-                                        break;
-                                    case "repeat_order":
-                                        await ProcessRepeatOrderAsync(openAiWebSocket, context, firstOutput);
-                                        break;
-                                    case "order":
-                                        await ProcessOrderAsync(openAiWebSocket, context, firstOutput);
-                                        break;
-                                }
+                                // switch (firstOutput.GetProperty("name").GetString())
+                                // {
+                                //     case "record_customer_info":
+                                //         await ProcessRecordCustomerInfoAsync(openAiWebSocket, context, firstOutput);
+                                //         break;
+                                //     case "update_order":
+                                //         await ProcessUpdateOrderAsync(openAiWebSocket, context, firstOutput);
+                                //         break;
+                                //     case "repeat_order":
+                                //         await ProcessRepeatOrderAsync(openAiWebSocket, context, firstOutput);
+                                //         break;
+                                //     case "order":
+                                //         await ProcessOrderAsync(openAiWebSocket, context, firstOutput);
+                                //         break;
+                                // }
                             }
                         }
                     }
