@@ -25,20 +25,19 @@ public class AiSpeechAssistantStreamContxtDto
 
     public AiSpeechAssistantUserInfoDto LastUserInfo { get; set; }
 
-    public List<AiSpeechAssistantOrderItemDto> LasterOrderItems { get; set; }
+    public string OrderItemsJson { get; set; } = "No orders yet";
 
-    public string OriginalPrompt { get; set; }
+    public string LastPrompt { get; set; }
 }
 
 public class AiSpeechAssistantUserInfoDto
 {
     [JsonProperty("customer_name")]
-    public string UserName { get; set; }
+    public string UserName { get; set; } = "Unknown yet";
     
     [JsonProperty("customer_phone")]
     public string PhoneNumber { get; set; }
     
-    public string Address { get; set; }
 }
 
 public class AiSpeechAssistantOrderItemDto
@@ -57,6 +56,4 @@ public class AiSpeechAssistantOrderItemDto
     
     [JsonProperty("specification")]
     public string Specification { get; set; }
-    
-    public AiSpeechAssistantOrderType OrderType { get; set; }
-}
+ }

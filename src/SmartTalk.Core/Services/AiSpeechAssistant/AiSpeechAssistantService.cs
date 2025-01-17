@@ -63,8 +63,14 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
 
         var openaiWebSocket = await ConnectOpenAiRealTimeSocketAsync(knowledgeBase, cancellationToken).ConfigureAwait(false);
         
-        var context = new AiSpeechAssistantStreamContxtDto();
-        context.OriginalPrompt = knowledgeBase;
+        var context = new AiSpeechAssistantStreamContxtDto
+        {
+            LastPrompt = knowledgeBase,
+            LastUserInfo = new AiSpeechAssistantUserInfoDto
+            {
+                PhoneNumber = command.From,
+            }
+        };
         
         var receiveFromTwilioTask = ReceiveFromTwilioAsync(command.TwilioWebSocket, openaiWebSocket, context);
         var sendToTwilioTask = SendToTwilioAsync(command.TwilioWebSocket, openaiWebSocket, context);
@@ -94,8 +100,9 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
         
         var finalPrompt = promptTemplate.Template
-            .Replace("#{user_profile}", string.IsNullOrEmpty(userProfile?.ProfileJson) ? $"CallerNumber:{from}" : userProfile.ProfileJson)
-            .Replace("#{current_time}", currentTime);
+            .Replace("#{user_profile}", string.IsNullOrEmpty(userProfile?.ProfileJson) ? " " : userProfile.ProfileJson)
+            .Replace("#{current_time}", currentTime)
+            .Replace("#{customer_phone}", from);
         
         Log.Information($"The final prompt: {finalPrompt}");
 
@@ -270,20 +277,32 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
     private async Task ProcessRecordCustomerInfoAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context, JsonElement jsonDocument)
     {
         Log.Information("Ai phone customer into: {@into}", jsonDocument.GetProperty("Parameters").ToString());
-        context.LastUserInfo = context.UserInfo;
+        
         context.UserInfo = JsonConvert.DeserializeObject<AiSpeechAssistantUserInfoDto>(jsonDocument.GetProperty("Parameters").ToString());
-        //todo 替换prompt
-        var prompt = "";
+
+        var prompt = context.LastPrompt
+            .Replace($"{context.LastUserInfo.UserName}", context.UserInfo.UserName)
+            .Replace($"{context.LastUserInfo.PhoneNumber}", context.UserInfo.PhoneNumber);
+        
+        context.LastPrompt = prompt;
+        context.LastUserInfo = context.UserInfo;
+        
         await SendSessionUpdateAsync(openAiWebSocket,prompt);
     }
     
     private async Task ProcessUpdateOrderAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context, JsonElement jsonDocument)
     {
         Log.Information("Ai phone order items: {@items}", jsonDocument.GetProperty("Parameters").ToString());
-        context.LasterOrderItems = context.OrderItems;
+        
         context.OrderItems = JsonConvert.DeserializeObject<List<AiSpeechAssistantOrderItemDto>>(jsonDocument.GetProperty("Parameters").ToString());
-        //todo 替换prompt
-        var prompt = "";
+        
+        var orderItemsJson = JsonConvert.SerializeObject(context.OrderItems);
+        
+        var prompt = context.LastPrompt.Replace($"{context.OrderItemsJson}", orderItemsJson);
+        
+        context.LastPrompt = prompt;
+        context.OrderItemsJson = orderItemsJson;
+        
         await SendSessionUpdateAsync(openAiWebSocket, prompt);
     }
     
