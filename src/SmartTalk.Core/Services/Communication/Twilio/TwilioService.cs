@@ -129,7 +129,7 @@ public class TwilioService : ITwilioService
 
     private static PhoneCallStatus TryParsePhoneCallStatus(string disposition)
     {
-        if (string.IsNullOrWhiteSpace(disposition))
+        if (string.IsNullOrEmpty(disposition))
             return PhoneCallStatus.Failed;
         
         return Enum.TryParse(disposition.Replace(" ", ""), true, out PhoneCallStatus status) ? status : PhoneCallStatus.Failed;
