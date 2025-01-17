@@ -1,21 +1,21 @@
 using Serilog;
 using System.Text;
 using Twilio.TwiML;
+using Newtonsoft.Json;
 using System.Text.Json;
+using Twilio.TwiML.Voice;
 using SmartTalk.Core.Ioc;
 using Twilio.AspNet.Core;
 using System.Net.WebSockets;
 using Microsoft.AspNetCore.Http;
 using Smarties.Messages.Extensions;
 using SmartTalk.Core.Settings.OpenAi;
-using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.OpenAi;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.OpenAi;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
-using Twilio.TwiML.Voice;
-using Twilio.Types;
-using Stream = Twilio.TwiML.Voice.Stream;
+using SmartTalk.Messages.Commands.AiSpeechAssistant;
+using JsonSerializer = System.Text.Json.JsonSerializer;
 using Task = System.Threading.Tasks.Task;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
@@ -63,7 +63,14 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
 
         var openaiWebSocket = await ConnectOpenAiRealTimeSocketAsync(knowledgeBase, cancellationToken).ConfigureAwait(false);
         
-        var context = new AiSpeechAssistantStreamContxtDto();
+        var context = new AiSpeechAssistantStreamContxtDto
+        {
+            LastPrompt = knowledgeBase,
+            LastUserInfo = new AiSpeechAssistantUserInfoDto
+            {
+                PhoneNumber = command.From,
+            }
+        };
         
         var receiveFromTwilioTask = ReceiveFromTwilioAsync(command.TwilioWebSocket, openaiWebSocket, context);
         var sendToTwilioTask = SendToTwilioAsync(command.TwilioWebSocket, openaiWebSocket, context);
@@ -93,8 +100,9 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
         
         var finalPrompt = promptTemplate.Template
-            .Replace("#{user_profile}", string.IsNullOrEmpty(userProfile?.ProfileJson) ? $"CallerNumber:{from}" : userProfile.ProfileJson)
-            .Replace("#{current_time}", currentTime);
+            .Replace("#{user_profile}", string.IsNullOrEmpty(userProfile?.ProfileJson) ? " " : userProfile.ProfileJson)
+            .Replace("#{current_time}", currentTime)
+            .Replace("#{customer_phone}", from);
         
         Log.Information($"The final prompt: {finalPrompt}");
 
@@ -229,6 +237,35 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                         }
                     }
 
+                    if (jsonDocument?.RootElement.GetProperty("type").GetString() == "response.done")
+                    {
+                        var response = jsonDocument.RootElement.GetProperty("response");
+
+                        if (response.TryGetProperty("output", out var output) && output.GetArrayLength() > 0)
+                        {
+                            var firstOutput = output[0];
+
+                            if (firstOutput.GetProperty("type").GetString() == "function_call")
+                            {
+                                switch (firstOutput.GetProperty("name").GetString())
+                                {
+                                    case "record_customer_info":
+                                        await ProcessRecordCustomerInfoAsync(openAiWebSocket, context, firstOutput);
+                                        break;
+                                    case "update_order":
+                                        await ProcessUpdateOrderAsync(openAiWebSocket, context, firstOutput);
+                                        break;
+                                    case "repeat_order":
+                                        await ProcessRepeatOrderAsync(openAiWebSocket);
+                                        break;
+                                    case "order":
+                                        await ProcessOrderAsync(openAiWebSocket);
+                                        break;
+                                }
+                            }
+                        }
+                    }
+
                     if (!context.InitialConversationSent)
                     {
                         await SendInitialConversationItem(openAiWebSocket);
@@ -241,6 +278,94 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         {
             Log.Information($"Send to Twilio error: {ex.Message}");
         }
+    }
+
+    private async Task ProcessOrderAsync(WebSocket openAiWebSocket)
+    {
+        var confirmOrderMessage = new
+        {
+            type = "conversation.item.create",
+            item = new
+            {
+                type = "message",
+                output = $"Repeat the order content to the customer and confirm whether the order content is correct"
+            }
+        };
+
+        await SendToWebSocketAsync(openAiWebSocket, confirmOrderMessage);
+        await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
+    }
+
+    private async Task ProcessRepeatOrderAsync(WebSocket openAiWebSocket)
+    {
+        var repeatOrderMessage = new
+        {
+            type = "conversation.item.create",
+            item = new
+            {
+                type = "message",
+                output = $"Repeat the order content to the customer"
+            }
+        };
+
+        await SendToWebSocketAsync(openAiWebSocket, repeatOrderMessage);
+        await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
+    }
+
+    private async Task ProcessRecordCustomerInfoAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context, JsonElement jsonDocument)
+    {
+        Log.Information("Ai phone customer into: {@into}", jsonDocument.GetProperty("Parameters").ToString());
+        
+        context.UserInfo = JsonConvert.DeserializeObject<AiSpeechAssistantUserInfoDto>(jsonDocument.GetProperty("Parameters").ToString());
+
+        var prompt = context.LastPrompt
+            .Replace($"{context.LastUserInfo.UserName}", context.UserInfo.UserName)
+            .Replace($"{context.LastUserInfo.PhoneNumber}", context.UserInfo.PhoneNumber);
+        
+        context.LastPrompt = prompt;
+        context.LastUserInfo = context.UserInfo;
+        
+        var customerInfoConfirmationMessage = new
+        {
+            type = "conversation.item.create",
+            item = new
+            {
+                type = "message",
+                output = "Tell the guest that you have recorded your information and ask the guest what he would like to eat today"
+            }
+        };
+
+        await SendSessionUpdateAsync(openAiWebSocket,prompt);
+        await SendToWebSocketAsync(openAiWebSocket, customerInfoConfirmationMessage);
+        await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
+    }
+    
+    private async Task ProcessUpdateOrderAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context, JsonElement jsonDocument)
+    {
+        Log.Information("Ai phone order items: {@items}", jsonDocument.GetProperty("Parameters").ToString());
+        
+        context.OrderItems = JsonConvert.DeserializeObject<List<AiSpeechAssistantOrderItemDto>>(jsonDocument.GetProperty("Parameters").ToString());
+        
+        var orderItemsJson = JsonConvert.SerializeObject(context.OrderItems);
+        
+        var prompt = context.LastPrompt.Replace($"{context.OrderItemsJson}", orderItemsJson);
+        
+        context.LastPrompt = prompt;
+        context.OrderItemsJson = orderItemsJson;
+        
+        var orderConfirmationMessage = new
+        {
+            type = "conversation.item.create",
+            item = new
+            {
+                type = "message",
+                output = "Tell the customer that I have recorded the order for you. Is there anything else you need?"
+            }
+        };
+
+        await SendSessionUpdateAsync(openAiWebSocket, prompt);
+        await SendToWebSocketAsync(openAiWebSocket, orderConfirmationMessage);
+        await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
     }
     
     private async Task HandleSpeechStartedEventAsync(WebSocket twilioWebSocket, WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context)
