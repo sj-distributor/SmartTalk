@@ -313,9 +313,9 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
 
     private async Task ProcessRecordCustomerInfoAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context, JsonElement jsonDocument)
     {
-        Log.Information("Ai phone customer into: {@into}", jsonDocument.GetProperty("Parameters").ToString());
+        Log.Information("Ai phone customer into: {@into}", jsonDocument.GetProperty("arguments").ToString());
         
-        context.UserInfo = JsonConvert.DeserializeObject<AiSpeechAssistantUserInfoDto>(jsonDocument.GetProperty("Parameters").ToString());
+        context.UserInfo = JsonConvert.DeserializeObject<AiSpeechAssistantUserInfoDto>(jsonDocument.GetProperty("arguments").ToString());
 
         var prompt = context.LastPrompt
             .Replace($"{context.LastUserInfo.UserName}", context.UserInfo.UserName)
@@ -341,9 +341,9 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
     
     private async Task ProcessUpdateOrderAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context, JsonElement jsonDocument)
     {
-        Log.Information("Ai phone order items: {@items}", jsonDocument.GetProperty("Parameters").ToString());
+        Log.Information("Ai phone order items: {@items}", jsonDocument.GetProperty("arguments").ToString());
         
-        context.OrderItems = JsonConvert.DeserializeObject<List<AiSpeechAssistantOrderItemDto>>(jsonDocument.GetProperty("Parameters").ToString());
+        context.OrderItems = JsonConvert.DeserializeObject<List<AiSpeechAssistantOrderItemDto>>(jsonDocument.GetProperty("arguments").ToString());
         
         var orderItemsJson = JsonConvert.SerializeObject(context.OrderItems);
         
