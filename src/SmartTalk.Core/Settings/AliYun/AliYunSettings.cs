@@ -11,6 +11,9 @@ public class AliYunSettings : IConfigurationSetting
         
         OssEndpoint = configuration.GetValue<string>("AliYun:Oss:Endpoint");
         OssBucketName = configuration.GetValue<string>("AliYun:Oss:BucketName");
+
+        DnsAccessKeyId = configuration.GetValue<string>("AliYun:Dns:AccessKeyId");
+        DnsAccessKeySecret = configuration.GetValue<string>("AliYun:Dns:AccessKeySecret");
     }
     
     public string AccessKeyId { get; set; }
@@ -18,4 +21,8 @@ public class AliYunSettings : IConfigurationSetting
     
     public string OssEndpoint { get; set; }
     public string OssBucketName { get; set; }
+
+    public string DnsAccessKeyId { get; set; }
+
+    public string DnsAccessKeySecret { get; set; }
 }

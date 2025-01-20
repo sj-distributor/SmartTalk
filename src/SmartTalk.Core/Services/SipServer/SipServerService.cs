@@ -32,7 +32,7 @@ public partial class SipServerService : ISipServerService
     
     public async Task BackupSipServerDataAsync(BackupSipServerDataCommand command, CancellationToken cancellationToken)
     {
-        var hostServers = await _sipServerDataProvider.GetAllSipHostServersAsync(cancellationToken).ConfigureAwait(false);
+        var hostServers = await _sipServerDataProvider.GetAllSipHostServersAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
 
         foreach (var hostServer in hostServers)
         {

@@ -7,7 +7,8 @@ namespace SmartTalk.Core.Services.Http.Clients;
 
 public interface IAlidnsClient : IScopedDependency
 {
-    Task<UpdateDomainRecordResponseBody> UpdateDomainRecordAsync(string describeDomain, string endpoint, string hostRecords, string value, CancellationToken cancellationToken);
+    Task<UpdateDomainRecordResponseBody> UpdateDomainRecordAsync(
+        string describeDomain, string endpoint, string hostRecords, string value, CancellationToken cancellationToken);
 }
 
 public class AlidnsClient : IAlidnsClient
@@ -23,15 +24,16 @@ public class AlidnsClient : IAlidnsClient
     {
         var config = new AlibabaCloud.OpenApiClient.Models.Config
         {
-            AccessKeyId = _aliYunSettings.AccessKeyId,
-            AccessKeySecret = _aliYunSettings.AccessKeySecret,
+            AccessKeyId = _aliYunSettings.DnsAccessKeyId,
+            AccessKeySecret = _aliYunSettings.DnsAccessKeySecret,
         };
 
         config.Endpoint = endpoint;
         return new AlibabaCloud.SDK.Alidns20150109.Client(config);
     }
 
-    public async Task<UpdateDomainRecordResponseBody> UpdateDomainRecordAsync(string describeDomain, string endpoint, string hostRecords, string value, CancellationToken cancellationToken)
+    public async Task<UpdateDomainRecordResponseBody> UpdateDomainRecordAsync(
+        string describeDomain, string endpoint, string hostRecords, string value, CancellationToken cancellationToken)
     {
         var client = CreateClient(endpoint);
 
