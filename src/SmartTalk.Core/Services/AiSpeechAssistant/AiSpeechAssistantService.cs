@@ -193,6 +193,9 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                     if (jsonDocument?.RootElement.GetProperty("type").GetString() == "error" && jsonDocument.RootElement.TryGetProperty("error", out var error))
                     {
                         Log.Information("Receive openai websocket error" + error.GetProperty("message").GetString());
+                        
+                        await SendToWebSocketAsync(openAiWebSocket, context.LastMessage);
+                        await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
                     }
 
                     if (jsonDocument?.RootElement.GetProperty("type").GetString() == "session.updated")
@@ -294,6 +297,8 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             }
         };
 
+        context.LastMessage = confirmOrderMessage;
+        
         await SendToWebSocketAsync(openAiWebSocket, confirmOrderMessage);
         await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
     }
@@ -311,6 +316,8 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             }
         };
 
+        context.LastMessage = repeatOrderMessage;
+        
         await SendToWebSocketAsync(openAiWebSocket, repeatOrderMessage);
         // await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
     }
@@ -338,6 +345,8 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                 output = "Tell the guest that you have recorded your information and ask the guest what he would like to eat today"
             }
         };
+
+        context.LastMessage = customerInfoConfirmationMessage;
         
         await SendToWebSocketAsync(openAiWebSocket, customerInfoConfirmationMessage);
         await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
@@ -367,6 +376,8 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                 output = "Tell the customer that I have recorded the order for you. Is there anything else you need?"
             }
         };
+        
+        context.LastMessage = orderConfirmationMessage;
         
         await SendToWebSocketAsync(openAiWebSocket, orderConfirmationMessage);
         await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });

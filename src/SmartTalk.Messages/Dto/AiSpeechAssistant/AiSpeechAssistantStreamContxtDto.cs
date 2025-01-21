@@ -28,6 +28,8 @@ public class AiSpeechAssistantStreamContxtDto
     public string OrderItemsJson { get; set; } = "No orders yet";
 
     public string LastPrompt { get; set; }
+
+    public object LastMessage { get; set; }
 }
 
 public class AiSpeechAssistantUserInfoDto
