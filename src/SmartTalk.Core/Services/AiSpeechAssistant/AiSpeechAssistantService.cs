@@ -58,11 +58,11 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
     {
         Log.Information($"The call from {command.From} to {command.To} is connected");
 
-        var knowledgeBase = await BuildingAiSpeechAssistantKnowledgeBaseAsync(command.From, command.To, cancellationToken).ConfigureAwait(false);
+        var (assistant, knowledgeBase) = await BuildingAiSpeechAssistantKnowledgeBaseAsync(command.From, command.To, cancellationToken).ConfigureAwait(false);
 
         if (string.IsNullOrEmpty(knowledgeBase)) return new AiSpeechAssistantConnectCloseEvent();
 
-        var openaiWebSocket = await ConnectOpenAiRealTimeSocketAsync(knowledgeBase, cancellationToken).ConfigureAwait(false);
+        var openaiWebSocket = await ConnectOpenAiRealTimeSocketAsync(assistant, knowledgeBase, cancellationToken).ConfigureAwait(false);
         
         var context = new AiSpeechAssistantStreamContxtDto
         {
@@ -88,14 +88,14 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         return new AiSpeechAssistantConnectCloseEvent();
     }
 
-    private async Task<string> BuildingAiSpeechAssistantKnowledgeBaseAsync(string from, string to, CancellationToken cancellationToken)
+    private async Task<(Domain.AISpeechAssistant.AiSpeechAssistant Assistant, string Prompt)> BuildingAiSpeechAssistantKnowledgeBaseAsync(string from, string to, CancellationToken cancellationToken)
     {
         var (assistant, promptTemplate, userProfile) = await _aiSpeechAssistantDataProvider
             .GetAiSpeechAssistantInfoByNumbersAsync(from, to, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Matching Ai speech assistant: {@Assistant}、{@PromptTemplate}、{@UserProfile}", assistant, promptTemplate, userProfile);
 
-        if (assistant == null || promptTemplate == null || string.IsNullOrEmpty(promptTemplate.Template)) return string.Empty;
+        if (assistant == null || promptTemplate == null || string.IsNullOrEmpty(promptTemplate.Template)) return (assistant, string.Empty);
 
         var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
@@ -107,16 +107,16 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         
         Log.Information($"The final prompt: {finalPrompt}");
 
-        return finalPrompt;
+        return (assistant, finalPrompt);
     }
 
-    private async Task<WebSocket> ConnectOpenAiRealTimeSocketAsync(string prompt, CancellationToken cancellationToken)
+    private async Task<WebSocket> ConnectOpenAiRealTimeSocketAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, string prompt, CancellationToken cancellationToken)
     {
         var openAiWebSocket = new ClientWebSocket();
         openAiWebSocket.Options.SetRequestHeader("Authorization", $"Bearer {_openAiSettings.ApiKey}");
         openAiWebSocket.Options.SetRequestHeader("OpenAI-Beta", "realtime=v1");
 
-        await openAiWebSocket.ConnectAsync(new Uri($"wss://api.openai.com/v1/realtime?model={OpenAiRealtimeModel.Gpt4o1217.GetDescription()}"), cancellationToken).ConfigureAwait(false);
+        await openAiWebSocket.ConnectAsync(new Uri(assistant.Url), cancellationToken).ConfigureAwait(false);
         await SendSessionUpdateAsync(openAiWebSocket, prompt).ConfigureAwait(false);
         return openAiWebSocket;
     }
