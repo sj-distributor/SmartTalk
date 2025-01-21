@@ -11,9 +11,13 @@ using Microsoft.AspNetCore.Http;
 using Newtonsoft.Json;
 using Smarties.Messages.Extensions;
 using SmartTalk.Core.Settings.OpenAi;
+using SmartTalk.Core.Settings.ZhiPuAi;
+using SmartTalk.Messages.Commands.AiSpeechAssistant;
+using SmartTalk.Messages.Constants;
 using SmartTalk.Messages.Enums.OpenAi;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.OpenAi;
+using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using JsonSerializer = System.Text.Json.JsonSerializer;
@@ -31,11 +35,13 @@ public interface IAiSpeechAssistantService : IScopedDependency
 public class AiSpeechAssistantService : IAiSpeechAssistantService
 {
     private readonly OpenAiSettings _openAiSettings;
+    private readonly ZhiPuAiSettings _zhiPuAiSettings;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
 
-    public AiSpeechAssistantService(OpenAiSettings openAiSettings, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
+    public AiSpeechAssistantService(OpenAiSettings openAiSettings, ZhiPuAiSettings zhiPuAiSettings, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
         _openAiSettings = openAiSettings;
+        _zhiPuAiSettings = zhiPuAiSettings;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
     }
 
@@ -113,12 +119,24 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
     private async Task<WebSocket> ConnectOpenAiRealTimeSocketAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, string prompt, CancellationToken cancellationToken)
     {
         var openAiWebSocket = new ClientWebSocket();
-        openAiWebSocket.Options.SetRequestHeader("Authorization", $"Bearer {_openAiSettings.ApiKey}");
+        openAiWebSocket.Options.SetRequestHeader("Authorization", GetAuthorizationHeader(assistant));
         openAiWebSocket.Options.SetRequestHeader("OpenAI-Beta", "realtime=v1");
 
-        await openAiWebSocket.ConnectAsync(new Uri(assistant.Url), cancellationToken).ConfigureAwait(false);
+        var url = string.IsNullOrEmpty(assistant.Url) ? AiSpeechAssistantStore.DefaultUrl : assistant.Url;
+
+        await openAiWebSocket.ConnectAsync(new Uri(url), cancellationToken).ConfigureAwait(false);
         await SendSessionUpdateAsync(openAiWebSocket, prompt).ConfigureAwait(false);
         return openAiWebSocket;
+    }
+
+    private string GetAuthorizationHeader(Domain.AISpeechAssistant.AiSpeechAssistant assistant)
+    {
+        return assistant.Provider switch
+        {
+            AiSpeechAssistantProvider.OpenAi => $"Bearer {_openAiSettings.ApiKey}",
+            AiSpeechAssistantProvider.ZhiPuAi => $"Bearer {_zhiPuAiSettings.ApiKey}",
+            _ => throw new NotSupportedException(nameof(assistant.Provider))
+        };
     }
     
     private async Task ReceiveFromTwilioAsync(WebSocket twilioWebSocket, WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context)
