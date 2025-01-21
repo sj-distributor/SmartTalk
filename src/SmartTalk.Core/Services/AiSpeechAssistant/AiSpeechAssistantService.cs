@@ -88,7 +88,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         
         Log.Information("Matching Ai speech assistant: {@Assistant}、{@PromptTemplate}、{@UserProfile}", assistant, promptTemplate, userProfile);
 
-        if (assistant == null || promptTemplate == null || string.IsNullOrEmpty(promptTemplate.Template)) return (null, string.Empty);
+        if (assistant == null || promptTemplate == null || string.IsNullOrEmpty(promptTemplate.Template)) return (assistant, string.Empty);
 
         var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
