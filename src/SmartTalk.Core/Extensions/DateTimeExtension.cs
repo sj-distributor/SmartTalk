@@ -45,11 +45,6 @@ public static class DateTimeExtension
             catch
             {
                 hasError = true;
-                //ignore
-                //error
-                //  The supplied DateTime represents an invalid time.  For example, when the clock is adjusted forward, any time in the period that is skipped is invalid. (Parameter 'dateTime')
-                //example
-                //  TimeZoneInfo.ConvertTimeToUtc(DateTimeOffset.Parse("2022/3/13 2:00:00").DateTime, TZConvert.GetTimeZoneInfo("Pacific Standard Time"))
             }
             i++;   
         }
@@ -78,13 +73,6 @@ public static class DateTimeExtension
             catch
             {
                 hasError = true;
-                //ignore
-
-                //0001/4/1 2:00:00 +00:00
-                //example
-                //  TimeZoneInfo.ConvertTimeToUtc(DateTimeOffset.Parse("0001/4/1 2:00:00").DateTime,TZConvert.GetTimeZoneInfo("Pacific Standard Time"));
-                //error
-                //  The supplied DateTime represents an invalid time.  For example, when the clock is adjusted forward, any time in the period that is skipped is invalid. (Parameter 'dateTime')
             }
             i++;   
         }
