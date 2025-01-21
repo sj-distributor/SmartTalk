@@ -337,7 +337,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         context.LastMessage = repeatOrderMessage;
         
         await SendToWebSocketAsync(openAiWebSocket, repeatOrderMessage);
-        // await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
+        await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
     }
 
     private async Task ProcessRecordCustomerInfoAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context, JsonElement jsonDocument)
@@ -528,7 +528,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                     {
                         Type = "function",
                         Name = "update_order",
-                        Description = "When the customer modifies the items in the current order, such as adding or reducing items or modifying the notes or specifications of the items, a new order is updated based on the current order.",
+                        Description = "When the customer modifies the dishes in the current order, for example, [I want a portion of Kung Pao scallops], [I don’t want the beef I just ordered], [I want ice in the Coke]",
                         Parameters = new OpenAiRealtimeToolParametersDto
                         {
                             Type = "object",
