@@ -28,4 +28,6 @@ public class PhoneOrderRecordDto
     public UserAccountDto UserAccount { get; set; }
     
     public string TranscriptionJobId { get; set; }
+    
+    public string LastModifiedByName { get; set; }
 }
