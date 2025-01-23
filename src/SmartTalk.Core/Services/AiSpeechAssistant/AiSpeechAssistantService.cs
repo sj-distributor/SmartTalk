@@ -311,7 +311,8 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             {
                 type = "function_call_output",
                 call_id = jsonDocument.GetProperty("call_id").GetString(),
-                output = $"Repeat the order content to the customer and confirm whether the order content is correct. Here is teh current order:{context.OrderItemsJson}"
+                output = $"Please confirm the order content with the customer. If this is the first time confirming, repeat the order details. Once the customer confirms, do not repeat the details again. " +
+                         $"Here is the current order: {{context.OrderItemsJson}}. If the order is confirmed, we will proceed with asking for the pickup time and will no longer repeat the order details."
             }
         };
 
@@ -369,7 +370,6 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         await SendToWebSocketAsync(openAiWebSocket, customerInfoConfirmationMessage);
         await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
     }
-    
     
     private async Task ProcessUpdateOrderAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context, JsonElement jsonDocument)
     {
