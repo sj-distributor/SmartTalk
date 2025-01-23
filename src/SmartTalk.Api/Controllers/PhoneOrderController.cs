@@ -1,6 +1,7 @@
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
+using System.Xml;
 using Mediator.Net;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
@@ -117,6 +118,25 @@ public class PhoneOrderController : ControllerBase
         var response = await _mediator.SendAsync<AddOrUpdateManualOrderCommand, AddOrUpdateManualOrderResponse>(command).ConfigureAwait(false);
 
         return Ok(response);
+    }
+    
+    [AllowAnonymous]
+    [HttpGet("transfer.xml")]
+    public IActionResult GetTransferTwiML()
+    {
+        var twiml = new StringBuilder();
+        using (var writer = XmlWriter.Create(twiml))
+        {
+            writer.WriteStartDocument();
+            writer.WriteStartElement("Response");
+            writer.WriteStartElement("Dial");
+            writer.WriteElementString("Number", "12134660868");
+            writer.WriteEndElement();
+            writer.WriteEndElement();
+            writer.WriteEndDocument();
+        }
+
+        return Content(twiml.ToString(), "text/xml");
     }
     
     [AllowAnonymous]
@@ -312,8 +332,8 @@ public class PhoneOrderController : ControllerBase
                                 await SendTransferringHuman(openAiWebSocket);
                                 TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
                                 
-                                var callResource = await CallResource.UpdateAsync(
-                                        twiml: new Twiml("<Response><Dial><Number>+12134660868</Number></Dial></Response>"),
+                                await CallResource.UpdateAsync(
+                                        url: new Uri($"https://{HttpContext.Request.Host.Host}/api/PhoneOrder/transfer.xml"),
                                         pathSid: context.CallSid).ConfigureAwait(false);
                             }
                         }
