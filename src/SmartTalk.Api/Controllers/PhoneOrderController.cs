@@ -122,18 +122,22 @@ public class PhoneOrderController : ControllerBase
     
     [AllowAnonymous]
     [HttpGet("transfer.xml")]
-    public IActionResult GetTransferTwiML()
+    public async Task<IActionResult> GetTransferTwiML()
     {
+        Log.Information("Getting transfer twiml");
+        
         var twiml = new StringBuilder();
-        using (var writer = XmlWriter.Create(twiml))
+        await using (var writer = XmlWriter.Create(twiml))
         {
-            writer.WriteStartDocument();
+            await writer.WriteStartDocumentAsync();
+            
             writer.WriteStartElement("Response");
             writer.WriteStartElement("Dial");
             writer.WriteElementString("Number", "+12134660868");
-            writer.WriteEndElement();
-            writer.WriteEndElement();
-            writer.WriteEndDocument();
+            
+            await writer.WriteEndElementAsync();
+            await writer.WriteEndElementAsync();
+            await writer.WriteEndDocumentAsync();
         }
 
         return Content(twiml.ToString(), "text/xml");
@@ -330,11 +334,17 @@ public class PhoneOrderController : ControllerBase
                             if (firstOutput.GetProperty("type").GetString() == "function_call" && firstOutput.GetProperty("name").GetString() == "transfer_to_human")
                             {
                                 await SendTransferringHuman(openAiWebSocket);
+                                Log.Information("Sent transfer audio to openai");
+                                
                                 TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
                                 
-                                await CallResource.UpdateAsync(
+                                Log.Information("Connected twilio client");
+                                
+                                var resource = await CallResource.UpdateAsync(
                                         url: new Uri($"https://{HttpContext.Request.Host.Host}/api/PhoneOrder/transfer.xml"),
                                         pathSid: context.CallSid).ConfigureAwait(false);
+                                
+                                Log.Information($"Transferred to another number, resource: {@resource}");
                             }
                         }
                     }
