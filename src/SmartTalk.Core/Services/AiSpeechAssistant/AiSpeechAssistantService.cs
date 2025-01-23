@@ -284,7 +284,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                 type = "function_call_output",
                 call_id = jsonDocument.GetProperty("call_id").ToString(),
                 output = $"Please confirm the order content with the customer. If this is the first time confirming, repeat the order details. Once the customer confirms, do not repeat the details again. " +
-                         $"Here is the current order: {{context.OrderItemsJson}}. If the order is confirmed, we will proceed with asking for the pickup time and will no longer repeat the order details."
+                         $"Here is the current order: {context.OrderItemsJson}. If the order is confirmed, we will proceed with asking for the pickup time and will no longer repeat the order details."
             }
         };
 
