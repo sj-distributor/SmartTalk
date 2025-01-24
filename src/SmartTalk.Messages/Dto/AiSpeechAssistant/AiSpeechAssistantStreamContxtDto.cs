@@ -63,4 +63,4 @@ public class AiSpeechAssistantOrderItemDto
     
     [JsonProperty("specification")]
     public string Specification { get; set; }
- }
+}

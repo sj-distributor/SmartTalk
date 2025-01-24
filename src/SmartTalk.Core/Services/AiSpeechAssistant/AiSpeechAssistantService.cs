@@ -271,9 +271,6 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                             {
                                 switch (firstOutput.GetProperty("name").GetString())
                                 {
-                                    case "record_customer_info":
-                                        await ProcessRecordCustomerInfoAsync(openAiWebSocket, context, firstOutput);
-                                        break;
                                     case "update_order":
                                         await ProcessUpdateOrderAsync(openAiWebSocket, context, firstOutput);
                                         break;
@@ -338,36 +335,6 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         context.LastMessage = repeatOrderMessage;
         
         await SendToWebSocketAsync(openAiWebSocket, repeatOrderMessage);
-        await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
-    }
-
-    private async Task ProcessRecordCustomerInfoAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context, JsonElement jsonDocument)
-    {
-        Log.Information("Ai phone customer into: {@into}", jsonDocument.GetProperty("arguments").ToString());
-        
-        context.UserInfo = JsonConvert.DeserializeObject<AiSpeechAssistantUserInfoDto>(jsonDocument.GetProperty("arguments").ToString());
-
-        var prompt = context.LastPrompt
-            .Replace($"{context.LastUserInfo.UserName}", context.UserInfo.UserName)
-            .Replace($"{context.LastUserInfo.PhoneNumber}", context.UserInfo.PhoneNumber);
-        
-        context.LastPrompt = prompt;
-        context.LastUserInfo = context.UserInfo;
-        
-        var customerInfoConfirmationMessage = new
-        {
-            type = "conversation.item.create",
-            item = new
-            {
-                type = "function_call_output",
-                role = "system",
-                output = "Tell the guest that you have recorded your information and ask the guest what he would like to eat today"
-            }
-        };
-
-        context.LastMessage = customerInfoConfirmationMessage;
-        
-        await SendToWebSocketAsync(openAiWebSocket, customerInfoConfirmationMessage);
         await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
     }
     
@@ -501,29 +468,6 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                 temperature = 0.8,
                 tools = new[]
                 {
-                    // new OpenAiRealtimeToolDto
-                    // {
-                    //     Type = "function",
-                    //     Name = "record_customer_info",
-                    //     Description = "Record the customer's name and phone number.",
-                    //     Parameters = new OpenAiRealtimeToolParametersDto
-                    //     {
-                    //         Type = "object",
-                    //         Properties = new
-                    //         {
-                    //             customer_name = new
-                    //             {
-                    //                 type = "string",
-                    //                 description = "Name of the customer"
-                    //             },
-                    //             customer_phone = new
-                    //             {
-                    //                 type = "string",
-                    //                 description = "Phone number of the customer"
-                    //             }
-                    //         }
-                    //     }
-                    // },
                     new OpenAiRealtimeToolDto
                     {
                         Type = "function",
