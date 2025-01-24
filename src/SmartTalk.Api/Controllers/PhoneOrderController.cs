@@ -127,7 +127,13 @@ public class PhoneOrderController : ControllerBase
         Log.Information("Getting transfer twiml");
         
         var twiml = new StringBuilder();
-        await using (var writer = XmlWriter.Create(twiml))
+        
+        var settings = new XmlWriterSettings
+        {
+            Async = true
+        };
+        
+        await using (var writer = XmlWriter.Create(twiml, settings))
         {
             await writer.WriteStartDocumentAsync();
             
