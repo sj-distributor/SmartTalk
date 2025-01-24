@@ -30,6 +30,10 @@ public class AiSpeechAssistantStreamContxtDto
     public string LastPrompt { get; set; }
 
     public object LastMessage { get; set; }
+    
+    public string CallSid { get; set; }
+    
+    public string HumanContactPhone { get; set; }
 }
 
 public class AiSpeechAssistantUserInfoDto
