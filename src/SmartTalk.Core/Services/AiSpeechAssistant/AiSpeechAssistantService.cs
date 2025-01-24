@@ -1,7 +1,9 @@
 using Serilog;
 using System.Text;
 using Twilio.TwiML;
+using Newtonsoft.Json;
 using System.Text.Json;
+using Twilio.TwiML.Voice;
 using SmartTalk.Core.Ioc;
 using Twilio.AspNet.Core;
 using System.Net.WebSockets;
@@ -17,10 +19,8 @@ using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.OpenAi;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
-using Twilio.TwiML.Voice;
-using Twilio.Types;
+using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using JsonSerializer = System.Text.Json.JsonSerializer;
-using Stream = Twilio.TwiML.Voice.Stream;
 using Task = System.Threading.Tasks.Task;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
@@ -69,7 +69,14 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
 
         var openaiWebSocket = await ConnectOpenAiRealTimeSocketAsync(assistant, knowledgeBase, cancellationToken).ConfigureAwait(false);
         
-        var context = new AiSpeechAssistantStreamContxtDto();
+        var context = new AiSpeechAssistantStreamContxtDto
+        {
+            LastPrompt = knowledgeBase,
+            LastUserInfo = new AiSpeechAssistantUserInfoDto
+            {
+                PhoneNumber = command.From,
+            }
+        };
         
         var receiveFromTwilioTask = ReceiveFromTwilioAsync(command.TwilioWebSocket, openaiWebSocket, context);
         var sendToTwilioTask = SendToTwilioAsync(command.TwilioWebSocket, openaiWebSocket, context);
@@ -99,8 +106,9 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
         
         var finalPrompt = promptTemplate.Template
-            .Replace("#{user_profile}", string.IsNullOrEmpty(userProfile?.ProfileJson) ? $"CallerNumber:{from}" : userProfile.ProfileJson)
-            .Replace("#{current_time}", currentTime);
+            .Replace("#{user_profile}", string.IsNullOrEmpty(userProfile?.ProfileJson) ? " " : userProfile.ProfileJson)
+            .Replace("#{current_time}", currentTime)
+            .Replace("#{customer_phone}", from.StartsWith("+1") ? from[2..] : from);
         
         Log.Information($"The final prompt: {finalPrompt}");
 
@@ -202,6 +210,9 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                     if (jsonDocument?.RootElement.GetProperty("type").GetString() == "error" && jsonDocument.RootElement.TryGetProperty("error", out var error))
                     {
                         Log.Information("Receive openai websocket error" + error.GetProperty("message").GetString());
+                        
+                        await SendToWebSocketAsync(openAiWebSocket, context.LastMessage);
+                        await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
                     }
 
                     if (jsonDocument?.RootElement.GetProperty("type").GetString() == "session.updated")
@@ -246,6 +257,32 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                             await HandleSpeechStartedEventAsync(twilioWebSocket, openAiWebSocket, context);
                         }
                     }
+                    
+                    if (jsonDocument?.RootElement.GetProperty("type").GetString() == "response.done")
+                    {
+                        var response = jsonDocument.RootElement.GetProperty("response");
+                        
+                        if (response.TryGetProperty("output", out var output) && output.GetArrayLength() > 0)
+                        {
+                            var firstOutput = output[0];
+
+                            if (firstOutput.GetProperty("type").GetString() == "function_call")
+                            {
+                                switch (firstOutput.GetProperty("name").GetString())
+                                {
+                                    case "update_order":
+                                        await ProcessUpdateOrderAsync(openAiWebSocket, context, firstOutput);
+                                        break;
+                                    case "repeat_order":
+                                        await ProcessRepeatOrderAsync(openAiWebSocket, context, firstOutput);
+                                        break;
+                                    case "order":
+                                        await ProcessOrderAsync(openAiWebSocket, context, firstOutput);
+                                        break;
+                                }
+                            }
+                        }
+                    }
 
                     if (!context.InitialConversationSent)
                     {
@@ -259,6 +296,75 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         {
             Log.Information($"Send to Twilio error: {ex.Message}");
         }
+    }
+    
+    private async Task ProcessOrderAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context, JsonElement jsonDocument)
+    {
+        var confirmOrderMessage = new
+        {
+            type = "conversation.item.create",
+            item = new
+            {
+                type = "function_call_output",
+                call_id = jsonDocument.GetProperty("call_id").GetString(),
+                output = $"Please confirm the order content with the customer. If this is the first time confirming, repeat the order details. Once the customer confirms, do not repeat the details again. " +
+                         $"Here is the current order: {{context.OrderItemsJson}}. If the order is confirmed, we will proceed with asking for the pickup time and will no longer repeat the order details."
+            }
+        };
+
+        context.LastMessage = confirmOrderMessage;
+        
+        await SendToWebSocketAsync(openAiWebSocket, confirmOrderMessage);
+        await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
+    }
+
+    private async Task ProcessRepeatOrderAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context, JsonElement jsonDocument)
+    {
+        var repeatOrderMessage = new
+        {
+            type = "conversation.item.create",
+            item = new
+            {
+                type = "function_call_output",
+                call_id = jsonDocument.GetProperty("call_id").GetString(),
+                output = $"Repeat the order content to the customer. Here is teh current order:{context.OrderItemsJson}"
+            }
+        };
+
+        context.LastMessage = repeatOrderMessage;
+        
+        await SendToWebSocketAsync(openAiWebSocket, repeatOrderMessage);
+        await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
+    }
+    
+    private async Task ProcessUpdateOrderAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context, JsonElement jsonDocument)
+    {
+        Log.Information("Ai phone order items: {@items}", jsonDocument.GetProperty("arguments").ToString());
+        
+        context.OrderItems = JsonConvert.DeserializeObject<AiSpeechAssistantOrderDto>(jsonDocument.GetProperty("arguments").ToString());
+        
+        var orderItemsJson = JsonConvert.SerializeObject(context.OrderItems).Replace("after_modified_order_items", "current_order");
+        
+        var prompt = context.LastPrompt.Replace($"{context.OrderItemsJson}", orderItemsJson);
+        
+        context.LastPrompt = prompt;
+        context.OrderItemsJson = orderItemsJson;
+        
+        var orderConfirmationMessage = new
+        {
+            type = "conversation.item.create",
+            item = new
+            {
+                type = "function_call_output",
+                call_id = jsonDocument.GetProperty("call_id").GetString(),
+                output = "Tell the customer that I have recorded the order for you. Is there anything else you need?"
+            }
+        };
+        
+        context.LastMessage = orderConfirmationMessage;
+        
+        await SendToWebSocketAsync(openAiWebSocket, orderConfirmationMessage);
+        await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
     }
     
     private async Task HandleSpeechStartedEventAsync(WebSocket twilioWebSocket, WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context)
@@ -364,31 +470,8 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                     new OpenAiRealtimeToolDto
                     {
                         Type = "function",
-                        Name = "record_customer_info",
-                        Description = "Record the customer's name and phone number.",
-                        Parameters = new OpenAiRealtimeToolParametersDto
-                        {
-                            Type = "object",
-                            Properties = new
-                            {
-                                customer_name = new
-                                {
-                                    type = "string",
-                                    description = "Name of the customer"
-                                },
-                                customer_phone = new
-                                {
-                                    type = "string",
-                                    description = "Phone number of the customer"
-                                }
-                            }
-                        }
-                    },
-                    new OpenAiRealtimeToolDto
-                    {
-                        Type = "function",
                         Name = "update_order",
-                        Description = "When the customer modifies the items in the current order, such as adding or reducing items or modifying the notes or specifications of the items, a new order is updated based on the current order.",
+                        Description = "When the customer modifies the dishes in the current order, for example, [I want a portion of Kung Pao scallops], [I don’t want the beef I just ordered], [I want ice in the Coke]",
                         Parameters = new OpenAiRealtimeToolParametersDto
                         {
                             Type = "object",
