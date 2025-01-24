@@ -193,7 +193,8 @@ public class PhoneOrderController : ControllerBase
         await SendSessionUpdateAsync(openAiWebSocket);
         Log.Information("SendSessionUpdateAsync is successful");
         var context = new StreamContext { CallSid = callSid };
-
+        Log.Information($"Receive request call sid: {context.CallSid}");
+        
         var receiveFromTwilioTask = ReceiveFromTwilioAsync(twilioWebSocket, openAiWebSocket, context);
         var sendToTwilioTask = SendToTwilioAsync(twilioWebSocket, openAiWebSocket, context);
 
@@ -233,10 +234,12 @@ public class PhoneOrderController : ControllerBase
                         case "connected":
                             break;
                         case "start":
+                            context.CallSid = jsonDocument?.RootElement.GetProperty("start").GetProperty("callSid").GetString() ?? context.CallSid;
                             context.StreamSid = jsonDocument?.RootElement.GetProperty("start").GetProperty("streamSid").GetString();
                             context.ResponseStartTimestampTwilio = null;
                             context.LatestMediaTimestamp = 0;
                             context.LastAssistantItem = null;
+                            Log.Information($"Receive start event call sid: {context.CallSid}");
                             break;
                         case "media":
                             var payload = jsonDocument?.RootElement.GetProperty("media").GetProperty("payload").GetString();
@@ -504,7 +507,7 @@ public class PhoneOrderController : ControllerBase
     public class StreamContext
     {
         public string? StreamSid { get; set; }
-
+        
         public int LatestMediaTimestamp { get; set; } = 0;
         
         public string? LastAssistantItem { get; set; }
