@@ -347,7 +347,7 @@ public class PhoneOrderController : ControllerBase
                                 Log.Information("Connected twilio client");
                                 
                                 var resource = await CallResource.UpdateAsync(
-                                        url: new Uri($"https://{HttpContext.Request.Host.Host}/api/PhoneOrder/transfer.xml"),
+                                        url: new Uri("https://demo.twilio.com/docs/voice.xml"),
                                         pathSid: context.CallSid).ConfigureAwait(false);
                                 
                                 Log.Information($"Transferred to another number, resource: {@resource}");
