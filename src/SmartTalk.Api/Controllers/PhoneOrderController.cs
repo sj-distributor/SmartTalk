@@ -121,7 +121,7 @@ public class PhoneOrderController : ControllerBase
     }
     
     [AllowAnonymous]
-    [HttpGet("transfer.xml")]
+    [Route("transfer.xml"), HttpPost, HttpGet]
     public async Task<IActionResult> GetTransferTwiML()
     {
         Log.Information("Getting transfer twiml");
@@ -351,7 +351,7 @@ public class PhoneOrderController : ControllerBase
                                 
                                 var call = await CallResource.UpdateAsync(
                                     pathSid: context.CallSid,
-                                    twiml: "<Response><Say>Ahoy there</Say></Response>"
+                                    twiml: new Twiml("<Response><Say>Ahoy there</Say></Response>")
                                 );
                             }
                         }
