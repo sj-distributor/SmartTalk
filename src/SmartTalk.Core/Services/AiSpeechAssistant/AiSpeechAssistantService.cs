@@ -10,6 +10,7 @@ using System.Net.WebSockets;
 using Microsoft.AspNetCore.Http;
 using Newtonsoft.Json;
 using Smarties.Messages.Extensions;
+using SmartTalk.Core.Constants;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Core.Settings.ZhiPuAi;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
@@ -270,14 +271,17 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                             {
                                 switch (firstOutput.GetProperty("name").GetString())
                                 {
-                                    case "update_order":
+                                    case OpenAiToolConstants.UpdateOrder:
                                         await ProcessUpdateOrderAsync(openAiWebSocket, context, firstOutput);
                                         break;
-                                    case "repeat_order":
+                                    case OpenAiToolConstants.RepeatOrder:
                                         await ProcessRepeatOrderAsync(openAiWebSocket, context, firstOutput);
                                         break;
-                                    case "order":
+                                    case OpenAiToolConstants.ConfirmOrder:
                                         await ProcessOrderAsync(openAiWebSocket, context, firstOutput);
+                                        break;
+                                    case OpenAiToolConstants.TransferCall:
+                                        
                                         break;
                                 }
                             }
@@ -470,7 +474,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                     new OpenAiRealtimeToolDto
                     {
                         Type = "function",
-                        Name = "update_order",
+                        Name = OpenAiToolConstants.UpdateOrder,
                         Description = "When the customer modifies the dishes in the current order, for example, [I want a portion of Kung Pao scallops], [I don’t want the beef I just ordered], [I want ice in the Coke]",
                         Parameters = new OpenAiRealtimeToolParametersDto
                         {
@@ -525,13 +529,19 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                     new OpenAiRealtimeToolDto
                     {
                         Type = "function",
-                        Name = "repeat_order",
+                        Name = OpenAiToolConstants.RepeatOrder,
                         Description = "The customer needs to repeat the order."
                     },
                     new OpenAiRealtimeToolDto
                     {
                         Type = "function",
-                        Name = "order",
+                        Name = OpenAiToolConstants.TransferCall,
+                        Description = "Triggered when the customer requests to transfer the call to a real person, or when the customer is not satisfied with the current answer and wants someone else to serve him/her"
+                    },
+                    new OpenAiRealtimeToolDto
+                    {
+                        Type = "function",
+                        Name = OpenAiToolConstants.ConfirmOrder,
                         Description = "When the customer says that's enough, or clearly says he wants to place an order, the rest are not the final order, but just recording the order.",
                         Parameters = new OpenAiRealtimeToolParametersDto
                         {
