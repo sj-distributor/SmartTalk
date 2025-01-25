@@ -383,11 +383,11 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             await SendToWebSocketAsync(openAiWebSocket, transferringHumanService);
             await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
 
-            _backgroundJobClient.Enqueue<IMediator>(x => x.SendAsync(new TransferHumanServiceCommand
+            _backgroundJobClient.Schedule<IMediator>(x => x.SendAsync(new TransferHumanServiceCommand
             {
                 CallSid = context.CallSid,
                 HumanPhone = context.HumanContactPhone
-            }, cancellationToken));
+            }, cancellationToken), TimeSpan.FromSeconds(6));
         }
     }
 
