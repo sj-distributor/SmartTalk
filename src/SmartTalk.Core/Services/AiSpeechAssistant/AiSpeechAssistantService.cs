@@ -387,7 +387,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             {
                 CallSid = context.CallSid,
                 HumanPhone = context.HumanContactPhone
-            }, cancellationToken), TimeSpan.FromSeconds(6));
+            }, cancellationToken), TimeSpan.FromSeconds(3));
         }
     }
 
