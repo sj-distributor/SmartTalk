@@ -360,7 +360,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                 {
                     type = "function_call_output",
                     call_id = jsonDocument.GetProperty("call_id").GetString(),
-                    output = "Sorry, there is no human service at the moment"
+                    output = "Reply in the guest's language: I'm Sorry, there is no human service at the moment"
                 }
             };
             
@@ -376,7 +376,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                 {
                     type = "function_call_output",
                     call_id = jsonDocument.GetProperty("call_id").GetString(),
-                    output = "Reply to customer: I'm transferring you to a human customer service representative."
+                    output = "Reply in the guest's language: I'm transferring you to a human customer service representative."
                 }
             };
             
