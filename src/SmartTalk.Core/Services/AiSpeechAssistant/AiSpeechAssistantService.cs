@@ -310,6 +310,10 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                                     case OpenAiToolConstants.TransferCall:
                                         await ProcessTransferCallAsync(openAiWebSocket, context, firstOutput, cancellationToken).ConfigureAwait(false);
                                         break;
+                                    case OpenAiToolConstants.HandlePhoneOrderIssues or OpenAiToolConstants.HandleThirdPartyDelayedDelivery or OpenAiToolConstants.HandleThirdPartyFoodQuality 
+                                        or OpenAiToolConstants.HandleThirdPartyUnexpectedIssues or OpenAiToolConstants.HandleThirdPartyPickupTimeChange:
+                                        await ProcessHandleOrderIssuesAsync(openAiWebSocket, context, firstOutput, cancellationToken).ConfigureAwait(false);
+                                        break;
                                 }
                             }
                         }
@@ -391,6 +395,48 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         }
     }
 
+    private async Task ProcessHandleOrderIssuesAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context, JsonElement jsonDocument, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(context.HumanContactPhone))
+        {
+            var nonHumanService = new
+            {
+                type = "conversation.item.create",
+                item = new
+                {
+                    type = "function_call_output",
+                    call_id = jsonDocument.GetProperty("call_id").GetString(),
+                    output = "Reply in the guest's language: I'm Sorry, there is no human service at the moment."
+                }
+            };
+            
+            await SendToWebSocketAsync(openAiWebSocket, nonHumanService);
+            await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
+        }
+        else
+        {
+            var transferringHumanService = new
+            {
+                type = "conversation.item.create",
+                item = new
+                {
+                    type = "function_call_output",
+                    call_id = jsonDocument.GetProperty("call_id").GetString(),
+                    output = "Reply in the guest's language: I apologize for the inconvenience. Let me transfer your call to the relevant team for further assistance."
+                }
+            };
+            
+            await SendToWebSocketAsync(openAiWebSocket, transferringHumanService);
+            await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
+
+            _backgroundJobClient.Schedule<IMediator>(x => x.SendAsync(new TransferHumanServiceCommand
+            {
+                CallSid = context.CallSid,
+                HumanPhone = context.HumanContactPhone
+            }, cancellationToken), TimeSpan.FromSeconds(1));
+        }
+    }
+    
     private async Task ProcessRepeatOrderAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context, JsonElement jsonDocument, CancellationToken cancellationToken)
     {
         var repeatOrderMessage = new
@@ -606,6 +652,36 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                         Type = "function",
                         Name = OpenAiToolConstants.TransferCall,
                         Description = "Triggered when the customer requests to transfer the call to a real person, or when the customer is not satisfied with the current answer and wants someone else to serve him/her"
+                    },
+                    new OpenAiRealtimeToolDto
+                    {
+                        Type = "function",
+                        Name = OpenAiToolConstants.HandlePhoneOrderIssues,
+                        Description = "Resolve inquiries or issues related to orders placed via phone."
+                    },
+                    new OpenAiRealtimeToolDto
+                    {
+                        Type = "function",
+                        Name = OpenAiToolConstants.HandleThirdPartyDelayedDelivery,
+                        Description = "Address delayed delivery issues for orders placed through third-party platforms."
+                    },
+                    new OpenAiRealtimeToolDto
+                    {
+                        Type = "function",
+                        Name = OpenAiToolConstants.HandleThirdPartyPickupTimeChange,
+                        Description = "Manage pickup time modification requests for orders placed through third-party platforms."
+                    },
+                    new OpenAiRealtimeToolDto
+                    {
+                        Type = "function",
+                        Name = OpenAiToolConstants.HandleThirdPartyFoodQuality,
+                        Description = "Resolve food quality or taste complaints for orders placed through third-party platforms."
+                    },
+                    new OpenAiRealtimeToolDto
+                    {
+                        Type = "function",
+                        Name = OpenAiToolConstants.HandleThirdPartyUnexpectedIssues,
+                        Description = "Handle undefined or unexpected issues with orders placed through third-party platforms."
                     },
                     new OpenAiRealtimeToolDto
                     {
