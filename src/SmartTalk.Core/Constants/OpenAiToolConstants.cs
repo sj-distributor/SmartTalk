@@ -12,4 +12,6 @@ public static class OpenAiToolConstants
     public const string HandleThirdPartyPickupTimeChange = "handle_third_party_pickup_time_change";
     public const string HandleThirdPartyFoodQuality = "handle_third_party_food_quality";
     public const string HandleThirdPartyUnexpectedIssues = "handle_third_party_unexpected_issues";
+    public const string HandlePromotionCalls = "handle_promotion_calls";
+    public const string CheckOrderStatus = "check_order_status";
 }
