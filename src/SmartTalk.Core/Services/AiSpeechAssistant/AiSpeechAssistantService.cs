@@ -397,7 +397,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             {
                 CallSid = context.CallSid,
                 HumanPhone = context.HumanContactPhone
-            }, cancellationToken), TimeSpan.FromSeconds(1));
+            }, cancellationToken), TimeSpan.FromSeconds(3));
         }
     }
 
@@ -439,7 +439,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             {
                 CallSid = context.CallSid,
                 HumanPhone = context.HumanContactPhone
-            }, cancellationToken), TimeSpan.FromSeconds(1));
+            }, cancellationToken), TimeSpan.FromSeconds(3));
         }
     }
     
