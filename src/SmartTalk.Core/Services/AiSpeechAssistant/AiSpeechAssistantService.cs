@@ -655,7 +655,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                     {
                         Type = "function",
                         Name = OpenAiToolConstants.HandlePromotionCalls,
-                        Description = "Identify and manage incoming calls related to advertising, sales promotions, or product marketing."
+                        Description = "Handles calls not related to the restaurant related to advertising, promotions, insurance or product marketing."
                     },
                     new OpenAiRealtimeToolDto
                     {
