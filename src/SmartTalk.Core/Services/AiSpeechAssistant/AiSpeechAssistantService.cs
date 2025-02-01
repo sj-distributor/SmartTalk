@@ -308,9 +308,13 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                                         await ProcessOrderAsync(openAiWebSocket, context, firstOutput, cancellationToken).ConfigureAwait(false);
                                         break;
                                     case OpenAiToolConstants.TransferCall:
-                                    case OpenAiToolConstants.HandlePhoneOrderIssues or OpenAiToolConstants.HandleThirdPartyDelayedDelivery
-                                        or OpenAiToolConstants.HandleThirdPartyFoodQuality or OpenAiToolConstants.HandleThirdPartyUnexpectedIssues
-                                        or OpenAiToolConstants.HandleThirdPartyPickupTimeChange or OpenAiToolConstants.HandlePromotionCalls or OpenAiToolConstants.CheckOrderStatus:
+                                    case OpenAiToolConstants.HandlePhoneOrderIssues:
+                                    case OpenAiToolConstants.HandleThirdPartyDelayedDelivery:
+                                    case OpenAiToolConstants.HandleThirdPartyFoodQuality:
+                                    case OpenAiToolConstants.HandleThirdPartyUnexpectedIssues:
+                                    case OpenAiToolConstants.HandleThirdPartyPickupTimeChange:
+                                    case OpenAiToolConstants.HandlePromotionCalls:
+                                    case OpenAiToolConstants.CheckOrderStatus:
                                         await ProcessTransferCallAsync(openAiWebSocket, context, firstOutput, cancellationToken).ConfigureAwait(false);
                                         break;
                                 }
@@ -375,7 +379,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             {
                 CallSid = context.CallSid,
                 HumanPhone = context.HumanContactPhone
-            }, cancellationToken), TimeSpan.FromSeconds(5));
+            }, cancellationToken), TimeSpan.FromSeconds(2));
             
             var transferringHumanService = new
             {
