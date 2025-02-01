@@ -308,16 +308,9 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                                         await ProcessOrderAsync(openAiWebSocket, context, firstOutput, cancellationToken).ConfigureAwait(false);
                                         break;
                                     case OpenAiToolConstants.TransferCall:
-                                        await ProcessTransferCallAsync(openAiWebSocket, context, firstOutput, cancellationToken).ConfigureAwait(false);
-                                        break;
-                                    case OpenAiToolConstants.HandlePhoneOrderIssues or OpenAiToolConstants.HandleThirdPartyDelayedDelivery or OpenAiToolConstants.HandleThirdPartyFoodQuality 
-                                        or OpenAiToolConstants.HandleThirdPartyUnexpectedIssues or OpenAiToolConstants.HandleThirdPartyPickupTimeChange:
-                                        await ProcessHandleOrderIssuesAsync(openAiWebSocket, context, firstOutput, cancellationToken).ConfigureAwait(false);
-                                        break;
-                                    case OpenAiToolConstants.HandlePromotionCalls:
-                                        await ProcessTransferCallAsync(openAiWebSocket, context, firstOutput, cancellationToken).ConfigureAwait(false);
-                                        break;
-                                    case OpenAiToolConstants.CheckOrderStatus:
+                                    case OpenAiToolConstants.HandlePhoneOrderIssues or OpenAiToolConstants.HandleThirdPartyDelayedDelivery
+                                        or OpenAiToolConstants.HandleThirdPartyFoodQuality or OpenAiToolConstants.HandleThirdPartyUnexpectedIssues
+                                        or OpenAiToolConstants.HandleThirdPartyPickupTimeChange or OpenAiToolConstants.HandlePromotionCalls or OpenAiToolConstants.CheckOrderStatus:
                                         await ProcessTransferCallAsync(openAiWebSocket, context, firstOutput, cancellationToken).ConfigureAwait(false);
                                         break;
                                 }
@@ -387,48 +380,6 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                     type = "function_call_output",
                     call_id = jsonDocument.GetProperty("call_id").GetString(),
                     output = "Reply in the guest's language: I'm transferring you to a human customer service representative."
-                }
-            };
-            
-            await SendToWebSocketAsync(openAiWebSocket, transferringHumanService);
-            await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
-
-            _backgroundJobClient.Schedule<IMediator>(x => x.SendAsync(new TransferHumanServiceCommand
-            {
-                CallSid = context.CallSid,
-                HumanPhone = context.HumanContactPhone
-            }, cancellationToken), TimeSpan.FromSeconds(3));
-        }
-    }
-
-    private async Task ProcessHandleOrderIssuesAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context, JsonElement jsonDocument, CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrEmpty(context.HumanContactPhone))
-        {
-            var nonHumanService = new
-            {
-                type = "conversation.item.create",
-                item = new
-                {
-                    type = "function_call_output",
-                    call_id = jsonDocument.GetProperty("call_id").GetString(),
-                    output = "Reply in the guest's language: I'm Sorry, there is no human service at the moment."
-                }
-            };
-            
-            await SendToWebSocketAsync(openAiWebSocket, nonHumanService);
-            await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
-        }
-        else
-        {
-            var transferringHumanService = new
-            {
-                type = "conversation.item.create",
-                item = new
-                {
-                    type = "function_call_output",
-                    call_id = jsonDocument.GetProperty("call_id").GetString(),
-                    output = "Reply in the guest's language: I apologize for the inconvenience. Let me transfer your call to the relevant team for further assistance."
                 }
             };
             
