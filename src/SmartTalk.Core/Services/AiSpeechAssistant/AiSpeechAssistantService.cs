@@ -313,6 +313,12 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                                         or OpenAiToolConstants.HandleThirdPartyUnexpectedIssues or OpenAiToolConstants.HandleThirdPartyPickupTimeChange:
                                         await ProcessHandleOrderIssuesAsync(openAiWebSocket, context, firstOutput, cancellationToken).ConfigureAwait(false);
                                         break;
+                                    case OpenAiToolConstants.HandlePromotionCalls:
+                                        await ProcessTransferCallAsync(openAiWebSocket, context, firstOutput, cancellationToken).ConfigureAwait(false);
+                                        break;
+                                    case OpenAiToolConstants.CheckOrderStatus:
+                                        await ProcessTransferCallAsync(openAiWebSocket, context, firstOutput, cancellationToken).ConfigureAwait(false);
+                                        break;
                                 }
                             }
                         }
@@ -681,6 +687,18 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                         Type = "function",
                         Name = OpenAiToolConstants.HandleThirdPartyUnexpectedIssues,
                         Description = "Handle undefined or unexpected issues with orders placed through third-party platforms."
+                    },
+                    new OpenAiRealtimeToolDto
+                    {
+                        Type = "function",
+                        Name = OpenAiToolConstants.HandlePromotionCalls,
+                        Description = "Identify and manage incoming calls related to advertising, sales promotions, or product marketing."
+                    },
+                    new OpenAiRealtimeToolDto
+                    {
+                        Type = "function",
+                        Name = OpenAiToolConstants.CheckOrderStatus,
+                        Description = "Check the status of a customer's order, including whether it is prepared and ready for pickup or delivery."
                     },
                     new OpenAiRealtimeToolDto
                     {
