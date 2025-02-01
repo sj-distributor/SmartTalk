@@ -379,10 +379,15 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             };
             
             await SendToWebSocketAsync(openAiWebSocket, nonHumanService);
-            await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
         }
         else
         {
+            _backgroundJobClient.Schedule<IMediator>(x => x.SendAsync(new TransferHumanServiceCommand
+            {
+                CallSid = context.CallSid,
+                HumanPhone = context.HumanContactPhone
+            }, cancellationToken), TimeSpan.FromSeconds(2));
+            
             var transferringHumanService = new
             {
                 type = "conversation.item.create",
@@ -395,14 +400,9 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             };
             
             await SendToWebSocketAsync(openAiWebSocket, transferringHumanService);
-            await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
-
-            _backgroundJobClient.Schedule<IMediator>(x => x.SendAsync(new TransferHumanServiceCommand
-            {
-                CallSid = context.CallSid,
-                HumanPhone = context.HumanContactPhone
-            }, cancellationToken), TimeSpan.FromSeconds(2));
         }
+
+        await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
     }
     
     private async Task ProcessRepeatOrderAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context, JsonElement jsonDocument, CancellationToken cancellationToken)
