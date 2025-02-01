@@ -288,34 +288,42 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                     if (jsonDocument?.RootElement.GetProperty("type").GetString() == "response.done")
                     {
                         var response = jsonDocument.RootElement.GetProperty("response");
-                        
+
                         if (response.TryGetProperty("output", out var output) && output.GetArrayLength() > 0)
                         {
-                            var firstOutput = output[0];
-
-                            if (firstOutput.GetProperty("type").GetString() == "function_call")
+                            foreach (var outputElement in output.EnumerateArray())
                             {
-                                switch (firstOutput.GetProperty("name").GetString())
+                                if (outputElement.GetProperty("type").GetString() == "function_call")
                                 {
-                                    case OpenAiToolConstants.UpdateOrder:
-                                        await ProcessUpdateOrderAsync(openAiWebSocket, context, firstOutput, cancellationToken).ConfigureAwait(false);
-                                        break;
-                                    case OpenAiToolConstants.RepeatOrder:
-                                        await ProcessRepeatOrderAsync(openAiWebSocket, context, firstOutput, cancellationToken).ConfigureAwait(false);
-                                        break;
-                                    case OpenAiToolConstants.ConfirmOrder:
-                                        await ProcessOrderAsync(openAiWebSocket, context, firstOutput, cancellationToken).ConfigureAwait(false);
-                                        break;
-                                    case OpenAiToolConstants.TransferCall:
-                                    case OpenAiToolConstants.HandlePhoneOrderIssues:
-                                    case OpenAiToolConstants.HandleThirdPartyDelayedDelivery:
-                                    case OpenAiToolConstants.HandleThirdPartyFoodQuality:
-                                    case OpenAiToolConstants.HandleThirdPartyUnexpectedIssues:
-                                    case OpenAiToolConstants.HandleThirdPartyPickupTimeChange:
-                                    case OpenAiToolConstants.HandlePromotionCalls:
-                                    case OpenAiToolConstants.CheckOrderStatus:
-                                        await ProcessTransferCallAsync(openAiWebSocket, context, firstOutput, cancellationToken).ConfigureAwait(false);
-                                        break;
+                                    var functionName = outputElement.GetProperty("name").GetString();
+
+                                    switch (functionName)
+                                    {
+                                        case OpenAiToolConstants.UpdateOrder:
+                                            await ProcessUpdateOrderAsync(openAiWebSocket, context, outputElement, cancellationToken).ConfigureAwait(false);
+                                            break;
+
+                                        case OpenAiToolConstants.RepeatOrder:
+                                            await ProcessRepeatOrderAsync(openAiWebSocket, context, outputElement, cancellationToken).ConfigureAwait(false);
+                                            break;
+
+                                        case OpenAiToolConstants.ConfirmOrder:
+                                            await ProcessOrderAsync(openAiWebSocket, context, outputElement, cancellationToken).ConfigureAwait(false);
+                                            break;
+
+                                        case OpenAiToolConstants.TransferCall:
+                                        case OpenAiToolConstants.HandlePhoneOrderIssues:
+                                        case OpenAiToolConstants.HandleThirdPartyDelayedDelivery:
+                                        case OpenAiToolConstants.HandleThirdPartyFoodQuality:
+                                        case OpenAiToolConstants.HandleThirdPartyUnexpectedIssues:
+                                        case OpenAiToolConstants.HandleThirdPartyPickupTimeChange:
+                                        case OpenAiToolConstants.HandlePromotionCalls:
+                                        case OpenAiToolConstants.CheckOrderStatus:
+                                            await ProcessTransferCallAsync(openAiWebSocket, context, outputElement, cancellationToken).ConfigureAwait(false);
+                                            break;
+                                    }
+
+                                    break;
                                 }
                             }
                         }
