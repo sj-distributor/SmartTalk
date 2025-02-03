@@ -320,7 +320,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                                         case OpenAiToolConstants.HandleThirdPartyPickupTimeChange:
                                         case OpenAiToolConstants.HandlePromotionCalls:
                                         case OpenAiToolConstants.CheckOrderStatus:
-                                            await ProcessTransferCallAsync(openAiWebSocket, context, outputElement, cancellationToken).ConfigureAwait(false);
+                                            await ProcessTransferCallAsync(openAiWebSocket, context, outputElement, functionName, cancellationToken).ConfigureAwait(false);
                                             break;
                                     }
 
@@ -364,7 +364,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
     }
 
-    private async Task ProcessTransferCallAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context, JsonElement jsonDocument, CancellationToken cancellationToken)
+    private async Task ProcessTransferCallAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context, JsonElement jsonDocument, string functionName, CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(context.HumanContactPhone))
         {
@@ -388,6 +388,15 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                 CallSid = context.CallSid,
                 HumanPhone = context.HumanContactPhone
             }, cancellationToken), TimeSpan.FromSeconds(2));
+
+            var reply = functionName switch
+            {
+                OpenAiToolConstants.TransferCall => "Reply in the guest's language: I'm transferring you to a human customer service representative.",
+                OpenAiToolConstants.HandleThirdPartyDelayedDelivery or OpenAiToolConstants.HandleThirdPartyFoodQuality or OpenAiToolConstants.HandleThirdPartyUnexpectedIssues 
+                    => "Reply in the guest's language: I am deeply sorry for the inconvenience caused to you. I will transfer you to the relevant personnel for processing. Please wait.",
+                OpenAiToolConstants.HandlePhoneOrderIssues or OpenAiToolConstants.CheckOrderStatus or OpenAiToolConstants.HandleThirdPartyPickupTimeChange
+                    => "Reply in the guest's language: OK, I will transfer you to the relevant person for processing. Please wait."
+            };
             
             var transferringHumanService = new
             {
@@ -396,7 +405,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                 {
                     type = "function_call_output",
                     call_id = jsonDocument.GetProperty("call_id").GetString(),
-                    output = "Reply in the guest's language: I'm transferring you to a human customer service representative."
+                    output = reply
                 }
             };
             
