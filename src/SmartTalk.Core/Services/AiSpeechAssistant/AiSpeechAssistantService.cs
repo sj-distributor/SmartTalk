@@ -383,23 +383,23 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         }
         else
         {
+            var (reply, replySeconds) = functionName switch
+            {
+                OpenAiToolConstants.TransferCall => ("Reply in the guest's language: I'm transferring you to a human customer service representative.", 2),
+                OpenAiToolConstants.HandleThirdPartyDelayedDelivery or OpenAiToolConstants.HandleThirdPartyFoodQuality or OpenAiToolConstants.HandleThirdPartyUnexpectedIssues 
+                    => ("Reply in the guest's language: I am deeply sorry for the inconvenience caused to you. I will transfer you to the relevant personnel for processing. Please wait.", 3),
+                OpenAiToolConstants.HandlePhoneOrderIssues or OpenAiToolConstants.CheckOrderStatus or OpenAiToolConstants.HandleThirdPartyPickupTimeChange or OpenAiToolConstants.RequestOrderDelivery
+                    => ("Reply in the guest's language: OK, I will transfer you to the relevant person for processing. Please wait.", 3),
+                OpenAiToolConstants.HandlePromotionCalls => ("Reply in the guest's language: I don't support business that is not related to the restaurant at the moment, and I will help you contact the relevant person for processing. Please wait.", 4),
+                _ => ("Reply in the guest's language: I'm transferring you to a human customer service representative.", 2)
+            };
+            
             _backgroundJobClient.Schedule<IMediator>(x => x.SendAsync(new TransferHumanServiceCommand
             {
                 CallSid = context.CallSid,
                 HumanPhone = context.HumanContactPhone
-            }, cancellationToken), TimeSpan.FromSeconds(3));
+            }, cancellationToken), TimeSpan.FromSeconds(replySeconds));
 
-            var reply = functionName switch
-            {
-                OpenAiToolConstants.TransferCall => "Reply in the guest's language: I'm transferring you to a human customer service representative.",
-                OpenAiToolConstants.HandleThirdPartyDelayedDelivery or OpenAiToolConstants.HandleThirdPartyFoodQuality or OpenAiToolConstants.HandleThirdPartyUnexpectedIssues 
-                    => "Reply in the guest's language: I am deeply sorry for the inconvenience caused to you. I will transfer you to the relevant personnel for processing. Please wait.",
-                OpenAiToolConstants.HandlePhoneOrderIssues or OpenAiToolConstants.CheckOrderStatus or OpenAiToolConstants.HandleThirdPartyPickupTimeChange or OpenAiToolConstants.RequestOrderDelivery
-                    => "Reply in the guest's language: OK, I will transfer you to the relevant person for processing. Please wait.",
-                OpenAiToolConstants.HandlePromotionCalls => "Reply in the guest's language: I don't support business that is not related to the restaurant at the moment, and I will help you contact the relevant person for processing. Please wait.",
-                _ => "Reply in the guest's language: I'm transferring you to a human customer service representative."
-            };
-            
             var transferringHumanService = new
             {
                 type = "conversation.item.create",
