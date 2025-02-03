@@ -387,7 +387,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             {
                 CallSid = context.CallSid,
                 HumanPhone = context.HumanContactPhone
-            }, cancellationToken), TimeSpan.FromMilliseconds(3500));
+            }, cancellationToken), TimeSpan.FromSeconds(3));
 
             var reply = functionName switch
             {
