@@ -14,4 +14,5 @@ public static class OpenAiToolConstants
     public const string HandleThirdPartyUnexpectedIssues = "handle_third_party_unexpected_issues";
     public const string HandlePromotionCalls = "handle_promotion_calls";
     public const string CheckOrderStatus = "check_order_status";
+    public const string RequestOrderDelivery = "request_order_delivery";
 }

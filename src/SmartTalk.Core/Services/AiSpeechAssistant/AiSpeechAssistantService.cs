@@ -393,7 +393,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                 OpenAiToolConstants.TransferCall => "Reply in the guest's language: I'm transferring you to a human customer service representative.",
                 OpenAiToolConstants.HandleThirdPartyDelayedDelivery or OpenAiToolConstants.HandleThirdPartyFoodQuality or OpenAiToolConstants.HandleThirdPartyUnexpectedIssues 
                     => "Reply in the guest's language: I am deeply sorry for the inconvenience caused to you. I will transfer you to the relevant personnel for processing. Please wait.",
-                OpenAiToolConstants.HandlePhoneOrderIssues or OpenAiToolConstants.CheckOrderStatus or OpenAiToolConstants.HandleThirdPartyPickupTimeChange
+                OpenAiToolConstants.HandlePhoneOrderIssues or OpenAiToolConstants.CheckOrderStatus or OpenAiToolConstants.HandleThirdPartyPickupTimeChange or OpenAiToolConstants.RequestOrderDelivery
                     => "Reply in the guest's language: OK, I will transfer you to the relevant person for processing. Please wait.",
                 OpenAiToolConstants.HandlePromotionCalls => "Reply in the guest's language: I don't support business that is not related to the restaurant at the moment, and I will help you contact the relevant person for processing. Please wait.",
                 _ => "Reply in the guest's language: I'm transferring you to a human customer service representative."
@@ -673,6 +673,12 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                         Type = "function",
                         Name = OpenAiToolConstants.CheckOrderStatus,
                         Description = "Check the status of a customer's order, including whether it is prepared and ready for pickup or delivery."
+                    },
+                    new OpenAiRealtimeToolDto
+                    {
+                        Type = "function",
+                        Name = OpenAiToolConstants.RequestOrderDelivery,
+                        Description = "When customers request delivery of their orders"
                     },
                     new OpenAiRealtimeToolDto
                     {
