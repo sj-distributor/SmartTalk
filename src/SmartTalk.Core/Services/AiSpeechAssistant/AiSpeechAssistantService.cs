@@ -61,6 +61,8 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
     public CallAiSpeechAssistantResponse CallAiSpeechAssistant(CallAiSpeechAssistantCommand command)
     {
         var response = new VoiceResponse();
+        response.Record();
+        
         var connect = new Connect();
 
         connect.Stream(url: $"wss://{command.Host}/api/AiSpeechAssistant/connect/{command.From}/{command.To}");
