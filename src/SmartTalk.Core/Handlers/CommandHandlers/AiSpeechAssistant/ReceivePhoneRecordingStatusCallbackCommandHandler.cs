@@ -16,6 +16,6 @@ public class ReceivePhoneRecordingStatusCallbackCommandHandler : ICommandHandler
 
     public async Task Handle(IReceiveContext<ReceivePhoneRecordingStatusCallbackCommand> context, CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
+        await _aiSpeechAssistantService.ReceivePhoneRecordingStatusCallbackAsync(context.Message, cancellationToken).ConfigureAwait(false);
     }
 }
