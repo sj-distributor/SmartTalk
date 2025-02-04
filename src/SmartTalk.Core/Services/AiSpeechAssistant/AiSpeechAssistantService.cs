@@ -23,6 +23,7 @@ using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
+using HttpMethod = Twilio.Http.HttpMethod;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
