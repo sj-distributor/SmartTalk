@@ -11,13 +11,15 @@ public class PhoneOrderRecordDto
     
     public PhoneOrderRecordStatus Status { get; set; }
 
-    public PhoneOrderRestaurant Restaurant { get; set; }
+    public PhoneOrderRestaurant? Restaurant { get; set; }
     
     public string Tips { get; set; }
 
     public string TranscriptionText { get; set; }
     
     public long? ManualOrderId { get; set; }
+    
+    public int AiSpeechAssistantId { get; set; }
     
     public string Url { get; set; }
     

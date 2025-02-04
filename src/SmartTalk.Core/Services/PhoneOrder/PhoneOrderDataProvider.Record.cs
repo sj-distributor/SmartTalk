@@ -89,8 +89,8 @@ public partial class PhoneOrderDataProvider
         DateTimeOffset dayShiftTime, DateTimeOffset nightShiftTime, DateTimeOffset endTime, CancellationToken cancellationToken)
     {
         return await _repository.Query<PhoneOrderRecord>()
-            .Where(x => x.Status == PhoneOrderRecordStatus.Sent)
-            .GroupBy(x => x.Restaurant)
+            .Where(x => x.Status == PhoneOrderRecordStatus.Sent && x.Restaurant.HasValue)
+            .GroupBy(x => x.Restaurant.Value)
             .Select(restaurantGroup => new GetPhoneOrderRecordsForRestaurantCountDto
             {
                 Restaurant = restaurantGroup.Key,

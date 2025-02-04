@@ -7,6 +7,8 @@ public class AiSpeechAssistantStreamContxtDto
 {
     public string StreamSid { get; set; }
 
+    public string Host { get; set; }
+    
     public int LatestMediaTimestamp { get; set; } = 0;
         
     public string LastAssistantItem { get; set; }

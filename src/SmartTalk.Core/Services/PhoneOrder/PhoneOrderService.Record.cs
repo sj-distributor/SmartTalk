@@ -483,7 +483,7 @@ public partial class PhoneOrderService
         return transcriptionResult.ToString();
     }
 
-    private string SelectPrompt(PhoneOrderRestaurant restaurant)
+    private string SelectPrompt(PhoneOrderRestaurant? restaurant)
     {
         return restaurant switch
         {

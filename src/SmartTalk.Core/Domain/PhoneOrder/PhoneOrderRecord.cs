@@ -19,9 +19,9 @@ public class PhoneOrderRecord : IEntity
 
     [Column("status")]
     public PhoneOrderRecordStatus Status { get; set; } = PhoneOrderRecordStatus.Recieved;
-    
+
     [Column("restaurant")]
-    public PhoneOrderRestaurant Restaurant { get; set; }
+    public PhoneOrderRestaurant? Restaurant { get; set; }
     
     [Column("tips")]
     public string Tips { get; set; }
@@ -37,6 +37,9 @@ public class PhoneOrderRecord : IEntity
     
     [Column("manual_order_id")]
     public long? ManualOrderId { get; set; }
+    
+    [Column("ai_speech_assistant_id")]
+    public int AiSpeechAssistantId { get; set; }
     
     [Column("last_modified_by")]
     public int? LastModifiedBy { get; set; }
