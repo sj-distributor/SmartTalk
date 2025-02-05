@@ -23,7 +23,9 @@ using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
+using SmartTalk.Messages.Commands.PhoneOrder;
 using JsonSerializer = System.Text.Json.JsonSerializer;
+using RecordingResource = Twilio.Rest.Api.V2010.Account.Call.RecordingResource;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
 
@@ -33,6 +35,10 @@ public interface IAiSpeechAssistantService : IScopedDependency
 
     Task<AiSpeechAssistantConnectCloseEvent> ConnectAiSpeechAssistantAsync(ConnectAiSpeechAssistantCommand command, CancellationToken cancellationToken);
 
+    Task RecordAiSpeechAssistantCallAsync(RecordAiSpeechAssistantCallCommand command, CancellationToken cancellationToken);
+
+    Task ReceivePhoneRecordingStatusCallbackAsync(ReceivePhoneRecordingStatusCallbackCommand command, CancellationToken cancellationToken);
+    
     Task TransferHumanServiceAsync(TransferHumanServiceCommand command, CancellationToken cancellationToken);
 }
 
@@ -86,6 +92,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         
         var context = new AiSpeechAssistantStreamContxtDto
         {
+            Host = command.Host,
             LastPrompt = knowledgeBase,
             HumanContactPhone = humanContact.HumanPhone,
             LastUserInfo = new AiSpeechAssistantUserInfoDto
@@ -107,6 +114,33 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         }
         
         return new AiSpeechAssistantConnectCloseEvent();
+    }
+
+    public async Task RecordAiSpeechAssistantCallAsync(RecordAiSpeechAssistantCallCommand command, CancellationToken cancellationToken)
+    {
+        TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
+        
+        await RecordingResource.CreateAsync(pathCallSid: command.CallSid, recordingStatusCallbackMethod: Twilio.Http.HttpMethod.Post,
+            recordingStatusCallback: new Uri($"https://{command.Host}/api/AiSpeechAssistant/recording/callback"));
+    }
+
+    public async Task ReceivePhoneRecordingStatusCallbackAsync(ReceivePhoneRecordingStatusCallbackCommand command, CancellationToken cancellationToken)
+    {
+        Log.Information($"Handling receive phone record: {@command}");
+        
+        TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
+        var callResource = await CallResource.FetchAsync(pathSid: command.CallSid).ConfigureAwait(false);
+        Log.Information($"Fetched call resource: {@callResource}");
+        
+        var aiSpeechAssistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByNumbersAsync(callResource.To, cancellationToken).ConfigureAwait(false);
+
+        if (aiSpeechAssistant == null) return;
+
+        _backgroundJobClient.Enqueue<IMediator>(x => x.SendAsync(new ReceivePhoneOrderRecordCommand
+        {
+            RecordUrl = command.RecordingUrl,
+            CreatedDate = callResource.StartTime.Value
+        }, cancellationToken));
     }
 
     public async Task TransferHumanServiceAsync(TransferHumanServiceCommand command, CancellationToken cancellationToken)
@@ -195,6 +229,11 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                             context.ResponseStartTimestampTwilio = null;
                             context.LatestMediaTimestamp = 0;
                             context.LastAssistantItem = null;
+                            
+                            _backgroundJobClient.Enqueue<IMediator>(x=> x.SendAsync(new RecordAiSpeechAssistantCallCommand
+                            {
+                                CallSid = context.CallSid, Host = context.Host
+                            }, CancellationToken.None));
                             break;
                         case "media":
                             var payload = jsonDocument?.RootElement.GetProperty("media").GetProperty("payload").GetString();

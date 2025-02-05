@@ -55,12 +55,19 @@ public partial class PhoneOrderService
 
     public async Task ReceivePhoneOrderRecordAsync(ReceivePhoneOrderRecordCommand command, CancellationToken cancellationToken)
     {
-        if (command.RecordName.IsNullOrEmpty()) return;
+        if (command.RecordName.IsNullOrEmpty() && command.RecordUrl.IsNullOrEmpty()) return;
+
+        PhoneOrderRecordInformationDto recordInfo = null;
         
-        var recordInfo = ExtractPhoneOrderRecordInfoFromRecordName(command.RecordName, command.Restaurant);
+        if (!string.IsNullOrEmpty(command.RecordName) && !string.IsNullOrEmpty(command.Restaurant))
+            recordInfo = ExtractPhoneOrderRecordInfoFromRecordName(command.RecordName, command.Restaurant);
+
+        if (command.CreatedDate.HasValue)
+            recordInfo = new PhoneOrderRecordInformationDto { OrderDate = command.CreatedDate.Value };
         
         Log.Information("Phone order record information: {@recordInfo}", recordInfo);
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
+                                   
+        if (recordInfo == null) return;
         if (await CheckOrderExistAsync(recordInfo.OrderDate.AddHours(-8), cancellationToken).ConfigureAwait(false)) return;
         
         var transcription = await _speechToTextService.SpeechToTextAsync(
@@ -79,7 +86,7 @@ public partial class PhoneOrderService
             return;
         }
         
-        record.Url = await UploadRecordFileAsync(command.RecordName, command.RecordContent, cancellationToken).ConfigureAwait(false);
+        record.Url = command.RecordUrl ?? await UploadRecordFileAsync(command.RecordName, command.RecordContent, cancellationToken).ConfigureAwait(false);
         
         Log.Information($"Phone order record file url: {record.Url}",  record.Url);
         
@@ -89,8 +96,8 @@ public partial class PhoneOrderService
             
             return;
         }
-
-        record.TranscriptionJobId = await CreateSpeechMaticsJobAsync(command.RecordContent, command.RecordName, detection.Language, cancellationToken).ConfigureAwait(false);
+        
+        record.TranscriptionJobId = await CreateSpeechMaticsJobAsync(command.RecordContent, command.RecordName ?? Guid.NewGuid().ToString("N") + ".wav", detection.Language, cancellationToken).ConfigureAwait(false);
         
         await AddPhoneOrderRecordAsync(record, PhoneOrderRecordStatus.Diarization, cancellationToken).ConfigureAwait(false);
     }
@@ -104,7 +111,7 @@ public partial class PhoneOrderService
     {
         return language switch
         {
-            "zh" => TranscriptionLanguage.Chinese,
+            "zh" or "zh-CN" or "zh-TW" => TranscriptionLanguage.Chinese,
             "en" => TranscriptionLanguage.English,
             _ => TranscriptionLanguage.English
         };
@@ -483,7 +490,7 @@ public partial class PhoneOrderService
         return transcriptionResult.ToString();
     }
 
-    private string SelectPrompt(PhoneOrderRestaurant restaurant)
+    private string SelectPrompt(PhoneOrderRestaurant? restaurant)
     {
         return restaurant switch
         {
@@ -526,11 +533,10 @@ public partial class PhoneOrderService
         {
             "en" => SpeechMaticsLanguageType.En,
             "zh" => SpeechMaticsLanguageType.Yue,
+            "zh-CN" or "zh-TW" => SpeechMaticsLanguageType.Cmn,
             _ => SpeechMaticsLanguageType.En
         };
     }
-    
-   
     
     private async Task<string> CreateSpeechMaticsJobAsync(byte[] recordContent, string recordName, string language, CancellationToken cancellationToken)
     {
