@@ -111,7 +111,7 @@ public partial class PhoneOrderService
     {
         return language switch
         {
-            "zh" => TranscriptionLanguage.Chinese,
+            "zh" or "zh-CN" or "zh-TW" => TranscriptionLanguage.Chinese,
             "en" => TranscriptionLanguage.English,
             _ => TranscriptionLanguage.English
         };
