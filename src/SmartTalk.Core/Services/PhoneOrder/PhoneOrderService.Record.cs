@@ -86,7 +86,7 @@ public partial class PhoneOrderService
             return;
         }
         
-        record.Url = await UploadRecordFileAsync(command.RecordName, command.RecordContent, cancellationToken).ConfigureAwait(false);
+        record.Url = command.RecordUrl ?? await UploadRecordFileAsync(command.RecordName, command.RecordContent, cancellationToken).ConfigureAwait(false);
         
         Log.Information($"Phone order record file url: {record.Url}",  record.Url);
         
@@ -96,8 +96,8 @@ public partial class PhoneOrderService
             
             return;
         }
-
-        record.TranscriptionJobId = await CreateSpeechMaticsJobAsync(command.RecordContent, command.RecordName, detection.Language, cancellationToken).ConfigureAwait(false);
+        
+        record.TranscriptionJobId = await CreateSpeechMaticsJobAsync(command.RecordContent, command.RecordName ?? Guid.NewGuid().ToString("N") + ".wav", detection.Language, cancellationToken).ConfigureAwait(false);
         
         await AddPhoneOrderRecordAsync(record, PhoneOrderRecordStatus.Diarization, cancellationToken).ConfigureAwait(false);
     }
