@@ -10,6 +10,8 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
 {
     Task<(Domain.AISpeechAssistant.AiSpeechAssistant, AiSpeechAssistantPromptTemplate, AiSpeechAssistantUserProfile)>
         GetAiSpeechAssistantInfoByNumbersAsync(string callerNumber, string didNumber, CancellationToken cancellationToken);
+    
+    Task<Domain.AISpeechAssistant.AiSpeechAssistant> GetAiSpeechAssistantByNumbersAsync(string didNumber, CancellationToken cancellationToken);
 
     Task<AiSpeechAssistantHumanContact> GetAiSpeechAssistantHumanContactByAssistantIdAsync(int assistantId, CancellationToken cancellationToken);
 }
@@ -43,6 +45,12 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
         var result = await assistantInfo.FirstOrDefaultAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
 
         return (result.assistant, result.promptTemplate, result.userProfile);
+    }
+
+    public async Task<Domain.AISpeechAssistant.AiSpeechAssistant> GetAiSpeechAssistantByNumbersAsync(string didNumber, CancellationToken cancellationToken)
+    {
+        return await _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>().Where(x => x.DidNumber == didNumber)
+            .FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<AiSpeechAssistantHumanContact> GetAiSpeechAssistantHumanContactByAssistantIdAsync(int assistantId, CancellationToken cancellationToken)

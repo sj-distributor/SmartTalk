@@ -19,7 +19,7 @@ public class PhoneOrderRecordDto
     
     public long? ManualOrderId { get; set; }
     
-    public int AiSpeechAssistantId { get; set; }
+    public int? AiSpeechAssistantId { get; set; }
     
     public string Url { get; set; }
     
