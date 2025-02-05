@@ -47,7 +47,7 @@ public partial class PhoneOrderDataProvider
         var query = from restaurant in _repository.Query<Restaurant>()
             join agent in _repository.Query<Agent>() on restaurant.Id equals agent.RelateId
             join record in _repository.Query<PhoneOrderRecord>() on agent.Id equals record.AgentId
-            where record.AgentId == restaurantId && record.Status == PhoneOrderRecordStatus.Sent
+            where restaurant.Id == restaurantId && record.Status == PhoneOrderRecordStatus.Sent
             select record;
 
         return await query.OrderByDescending(record => record.CreatedDate).ToListAsync(cancellationToken).ConfigureAwait(false);
