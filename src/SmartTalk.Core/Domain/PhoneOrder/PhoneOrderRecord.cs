@@ -23,9 +23,9 @@ public class PhoneOrderRecord : IEntity
 
     [Column("status")]
     public PhoneOrderRecordStatus Status { get; set; } = PhoneOrderRecordStatus.Recieved;
-    
+
     [Column("restaurant")]
-    public PhoneOrderRestaurant Restaurant { get; set; }
+    public PhoneOrderRestaurant? Restaurant { get; set; }
     
     [Column("tips")]
     public string Tips { get; set; }

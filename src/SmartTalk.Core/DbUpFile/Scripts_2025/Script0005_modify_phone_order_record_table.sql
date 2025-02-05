@@ -1,0 +1,1 @@
+ALTER TABLE `phone_order_record` MODIFY `restaurant` int null;

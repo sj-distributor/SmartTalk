@@ -11,7 +11,7 @@ public class PhoneOrderRecordDto
     
     public PhoneOrderRecordStatus Status { get; set; }
 
-    public PhoneOrderRestaurant Restaurant { get; set; }
+    public PhoneOrderRestaurant? Restaurant { get; set; }
     
     public string Tips { get; set; }
 
