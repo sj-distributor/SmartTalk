@@ -38,9 +38,6 @@ public class PhoneOrderRecord : IEntity
     [Column("manual_order_id")]
     public long? ManualOrderId { get; set; }
     
-    [Column("ai_speech_assistant_id")]
-    public int? AiSpeechAssistantId { get; set; }
-    
     [Column("last_modified_by")]
     public int? LastModifiedBy { get; set; }
     

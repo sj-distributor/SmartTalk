@@ -139,7 +139,6 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         _backgroundJobClient.Enqueue<IMediator>(x => x.SendAsync(new ReceivePhoneOrderRecordCommand
         {
             RecordUrl = command.RecordingUrl,
-            AiSpeechAssistantId = aiSpeechAssistant.Id,
             CreatedDate = callResource.StartTime.Value
         }, cancellationToken));
     }

@@ -14,6 +14,4 @@ public class ReceivePhoneOrderRecordCommand : ICommand
     public string RecordUrl { get; set; }
     
     public DateTimeOffset? CreatedDate { get; set; }
-    
-    public int? AiSpeechAssistantId { get; set; }
 }

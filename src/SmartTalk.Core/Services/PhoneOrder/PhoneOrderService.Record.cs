@@ -55,14 +55,14 @@ public partial class PhoneOrderService
 
     public async Task ReceivePhoneOrderRecordAsync(ReceivePhoneOrderRecordCommand command, CancellationToken cancellationToken)
     {
-        if (command.RecordName.IsNullOrEmpty() && !command.AiSpeechAssistantId.HasValue) return;
+        if (command.RecordName.IsNullOrEmpty() && command.RecordUrl.IsNullOrEmpty()) return;
 
         PhoneOrderRecordInformationDto recordInfo = null;
         
         if (!string.IsNullOrEmpty(command.RecordName) && !string.IsNullOrEmpty(command.Restaurant))
             recordInfo = ExtractPhoneOrderRecordInfoFromRecordName(command.RecordName, command.Restaurant);
 
-        if (command.AiSpeechAssistantId.HasValue && command.CreatedDate.HasValue)
+        if (command.CreatedDate.HasValue)
             recordInfo = new PhoneOrderRecordInformationDto { OrderDate = command.CreatedDate.Value };
         
         Log.Information("Phone order record information: {@recordInfo}", recordInfo);
