@@ -533,7 +533,7 @@ public partial class PhoneOrderService
         {
             "en" => SpeechMaticsLanguageType.En,
             "zh" => SpeechMaticsLanguageType.Yue,
-            "zh-CN" => SpeechMaticsLanguageType.Cmn,
+            "zh-CN" or "zh-TW" => SpeechMaticsLanguageType.Cmn,
             _ => SpeechMaticsLanguageType.En
         };
     }
