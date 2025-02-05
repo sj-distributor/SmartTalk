@@ -55,7 +55,7 @@ public partial class PhoneOrderService
 
     public async Task ReceivePhoneOrderRecordAsync(ReceivePhoneOrderRecordCommand command, CancellationToken cancellationToken)
     {
-        if (command.RecordName.IsNullOrEmpty() || !command.AiSpeechAssistantId.HasValue) return;
+        if (command.RecordName.IsNullOrEmpty() && !command.AiSpeechAssistantId.HasValue) return;
 
         PhoneOrderRecordInformationDto recordInfo = null;
         
