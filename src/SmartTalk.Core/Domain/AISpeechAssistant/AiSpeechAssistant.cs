@@ -24,8 +24,8 @@ public class AiSpeechAssistant : IEntity, IHasCreatedFields
     [Column("provider")]
     public AiSpeechAssistantProvider Provider { get; set; }
     
-    [Column("scenario")]
-    public AiSpeechAssistantScenario Scenario { get; set; }
+    [Column("agent_id")]
+    public int AgentId { get; set; }
     
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }

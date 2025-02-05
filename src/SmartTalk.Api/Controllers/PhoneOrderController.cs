@@ -60,7 +60,7 @@ public class PhoneOrderController : ControllerBase
 
     [HttpPost("record/receive")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> ReceivePhoneOrderRecordAsync([FromForm] IFormFile file, [FromForm] string restaurant)
+    public async Task<IActionResult> ReceivePhoneOrderRecordAsync([FromForm] IFormFile file, [FromForm] int agentId)
     {
         var ms = new MemoryStream();
 
@@ -68,7 +68,7 @@ public class PhoneOrderController : ControllerBase
 
         var fileContent = ms.ToArray();
         
-        await _mediator.SendAsync(new ReceivePhoneOrderRecordCommand { RecordName = file.FileName, RecordContent = fileContent, Restaurant = restaurant}).ConfigureAwait(false);
+        await _mediator.SendAsync(new ReceivePhoneOrderRecordCommand { RecordName = file.FileName, RecordContent = fileContent, AgentId = agentId }).ConfigureAwait(false);
         
         return Ok();
     }
