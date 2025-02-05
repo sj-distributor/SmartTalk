@@ -10,7 +10,7 @@ namespace SmartTalk.Messages.Requests.PhoneOrder;
 [SmartTalkAuthorize(Permissions = new[] { SecurityStore.Permissions.CanViewPhoneOrder })]
 public class GetPhoneOrderRecordsRequest : IRequest
 {
-    public PhoneOrderRestaurant Restaurant { get; set; }
+    public int RestaurantId { get; set; }
 }
 
 public class GetPhoneOrderRecordsResponse : SmartTalkResponse<List<PhoneOrderRecordDto>>

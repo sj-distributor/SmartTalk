@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Data;
 using SmartTalk.Core.Domain.Restaurants;
+using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Ioc;
 
 namespace SmartTalk.Core.Services.Restaurants;
@@ -16,6 +17,8 @@ public interface IRestaurantDataProvider : IScopedDependency
     Task<List<RestaurantMenuItem>> GetRestaurantMenuItemsAsync(int? restaurantId = null, CancellationToken cancellationToken = default);
     
     Task DeleteRestaurantMenuItemsAsync(List<RestaurantMenuItem> menuItems, bool forceSave = true, CancellationToken cancellationToken = default);
+
+    Task<Restaurant> GetRestaurantByAgentIdAsync(int agentId, CancellationToken cancellationToken);
 }
 
 public class RestaurantDataProvider : IRestaurantDataProvider
@@ -67,5 +70,15 @@ public class RestaurantDataProvider : IRestaurantDataProvider
         await _repository.DeleteAllAsync(menuItems, cancellationToken).ConfigureAwait(false);
 
         if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<Restaurant> GetRestaurantByAgentIdAsync(int agentId, CancellationToken cancellationToken)
+    {
+        var query = from agent in _repository.Query<Agent>()
+            join restaurant in _repository.Query<Restaurant>() on agent.RelateId equals restaurant.Id
+            where agent.Id == agentId
+            select restaurant;
+
+        return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 }

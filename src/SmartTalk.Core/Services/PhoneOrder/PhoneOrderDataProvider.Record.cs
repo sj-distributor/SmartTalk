@@ -1,10 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Domain.Account;
 using SmartTalk.Core.Domain.PhoneOrder;
-using SmartTalk.Core.Domain.SpeechMatics;
+using SmartTalk.Core.Domain.Restaurants;
+using SmartTalk.Core.Domain.System;
 using SmartTalk.Messages.Dto.PhoneOrder;
+using SmartTalk.Messages.Dto.Restaurant;
 using SmartTalk.Messages.Enums.PhoneOrder;
-using SmartTalk.Messages.Enums.SpeechMatics;
 
 namespace SmartTalk.Core.Services.PhoneOrder;
 
@@ -12,7 +13,7 @@ public partial interface IPhoneOrderDataProvider
 {
     Task AddPhoneOrderRecordsAsync(List<PhoneOrderRecord> phoneOrderRecords, bool forceSave = true, CancellationToken cancellationToken = default);
     
-    Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(PhoneOrderRestaurant restaurant, CancellationToken cancellationToken);
+    Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(int restaurantId, CancellationToken cancellationToken);
 
     Task AddPhoneOrderItemAsync(List<PhoneOrderOrderItem> phoneOrderOrderItems, bool forceSave = true, CancellationToken cancellationToken = default);
     
@@ -41,13 +42,15 @@ public partial class PhoneOrderDataProvider
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(PhoneOrderRestaurant restaurant, CancellationToken cancellationToken)
+    public async Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(int restaurantId, CancellationToken cancellationToken)
     {
-        var query = _repository.Query<PhoneOrderRecord>()
-            .Where(record => record.Restaurant == restaurant && record.Status == PhoneOrderRecordStatus.Sent)
-            .OrderByDescending(record => record.CreatedDate);
+        var query = from restaurant in _repository.Query<Restaurant>()
+            join agent in _repository.Query<Agent>() on restaurant.Id equals agent.RelateId
+            join record in _repository.Query<PhoneOrderRecord>() on agent.Id equals record.AgentId
+            where record.AgentId == restaurantId && record.Status == PhoneOrderRecordStatus.Sent
+            select record;
 
-        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+        return await query.OrderByDescending(record => record.CreatedDate).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task UpdatePhoneOrderRecordsAsync(PhoneOrderRecord record, bool forceSave = true, CancellationToken cancellationToken = default)
@@ -82,18 +85,44 @@ public partial class PhoneOrderDataProvider
     
     public async Task<PhoneOrderRecord> GetPhoneOrderRecordByTranscriptionJobIdAsync(string transcriptionJobId, CancellationToken cancellationToken = default)
     {
-        return await _repository.Query<PhoneOrderRecord>().Where(x => x.TranscriptionJobId == transcriptionJobId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        var query = from record in _repository.Query<PhoneOrderRecord>()
+            join agent in _repository.Query<Agent>() on record.AgentId equals agent.Id into agentGroups
+            from agent in agentGroups.DefaultIfEmpty()
+            join restaurant in _repository.Query<Restaurant>() on agent.RelateId equals restaurant.Id into restaurantGroups
+            from restaurant in restaurantGroups.DefaultIfEmpty()
+            where record.TranscriptionJobId == transcriptionJobId
+            select new { record, restaurant };
+
+        var result = await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+
+        result.record.RestaurantInfo = result.restaurant;
+        
+        return result.record;
     }
 
     public async Task<List<GetPhoneOrderRecordsForRestaurantCountDto>> GetPhoneOrderRecordsForRestaurantCountAsync(
         DateTimeOffset dayShiftTime, DateTimeOffset nightShiftTime, DateTimeOffset endTime, CancellationToken cancellationToken)
     {
-        return await _repository.Query<PhoneOrderRecord>()
-            .Where(x => x.Status == PhoneOrderRecordStatus.Sent)
-            .GroupBy(x => x.Restaurant)
+        var query = from record in _repository.Query<PhoneOrderRecord>()
+            join agent in _repository.Query<Agent>() on record.AgentId equals agent.Id into agentGroups
+            from agent in agentGroups.DefaultIfEmpty()
+            join restaurant in _repository.Query<Restaurant>() on agent.RelateId equals restaurant.Id into restaurantGroups
+            from restaurant in restaurantGroups.DefaultIfEmpty()
+            where record.Status == PhoneOrderRecordStatus.Sent
+            select new { record, restaurant };
+
+        var result = await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+
+        var records = result.Select(x =>
+        {
+            x.record.RestaurantInfo = x.restaurant;
+            return x.record;
+        });
+
+        return records.GroupBy(x => x.RestaurantInfo.Id)
             .Select(restaurantGroup => new GetPhoneOrderRecordsForRestaurantCountDto
             {
-                Restaurant = restaurantGroup.Key,
+                Restaurant = restaurantGroup.FirstOrDefault()?.RestaurantInfo != null ? _mapper.Map<RestaurantDto>(restaurantGroup.First().RestaurantInfo) : null,
                 Classes = new List<RestaurantCountDto>
                 {
                     new()
@@ -107,9 +136,7 @@ public partial class PhoneOrderDataProvider
                         Count = restaurantGroup.Count(x => x.CreatedDate >= nightShiftTime && x.CreatedDate < endTime)
                     }
                 }
-            })
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
+            }).ToList();
     }
 
     public async Task<List<GetPhoneOrderRecordsWithUserCountDto>> GetPhoneOrderRecordsWithUserCountAsync(

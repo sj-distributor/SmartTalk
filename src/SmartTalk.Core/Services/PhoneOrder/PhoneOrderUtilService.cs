@@ -90,7 +90,7 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
     private async Task<PhoneOrderDetailDto> GetSimilarRestaurantByRecordAsync(PhoneOrderRecord record, PhoneOrderDetailDto foods, CancellationToken cancellationToken)
     {
         var result = new PhoneOrderDetailDto { FoodDetails = new List<FoodDetailDto>() };
-        var restaurant = await _restaurantDataProvider.GetRestaurantByNameAsync(record.Restaurant.GetDescription(), cancellationToken).ConfigureAwait(false);
+        var restaurant = await _restaurantDataProvider.GetRestaurantByNameAsync(record.RestaurantInfo.Name, cancellationToken).ConfigureAwait(false);
 
         var tasks = foods.FoodDetails.Select(async foodDetail =>
         {
