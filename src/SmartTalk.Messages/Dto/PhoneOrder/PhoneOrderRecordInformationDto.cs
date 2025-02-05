@@ -1,10 +1,11 @@
-using SmartTalk.Messages.Enums.PhoneOrder;
+using SmartTalk.Messages.Dto.Agent;
+using SmartTalk.Messages.Dto.Restaurant;
 
 namespace SmartTalk.Messages.Dto.PhoneOrder;
 
 public class PhoneOrderRecordInformationDto
 {
-    public PhoneOrderRestaurant? Restaurant { get; set; }
+    public AgentDto Agent { get; set; }
     
     public DateTimeOffset OrderDate { get; set; }
 }

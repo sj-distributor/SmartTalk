@@ -22,6 +22,7 @@ using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Requests.PhoneOrder;
 using SmartTalk.Messages.Commands.Attachments;
 using SmartTalk.Messages.Constants;
+using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Restaurant;
 using SmartTalk.Messages.Dto.WeChat;
@@ -45,7 +46,7 @@ public partial class PhoneOrderService
 {
     public async Task<GetPhoneOrderRecordsResponse> GetPhoneOrderRecordsAsync(GetPhoneOrderRecordsRequest request, CancellationToken cancellationToken)
     {
-        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(request.Restaurant, cancellationToken).ConfigureAwait(false);
+        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(request.RestaurantId, cancellationToken).ConfigureAwait(false);
 
         return new GetPhoneOrderRecordsResponse
         {
@@ -60,7 +61,7 @@ public partial class PhoneOrderService
         PhoneOrderRecordInformationDto recordInfo = null;
         
         if (!string.IsNullOrEmpty(command.RecordName) && !string.IsNullOrEmpty(command.Restaurant))
-            recordInfo = ExtractPhoneOrderRecordInfoFromRecordName(command.RecordName, command.Restaurant);
+            recordInfo = await ExtractPhoneOrderRecordInfoFromRecordName(command.RecordName, command.Restaurant, cancellationToken).ConfigureAwait(false);
 
         if (command.CreatedDate.HasValue)
             recordInfo = new PhoneOrderRecordInformationDto { OrderDate = command.CreatedDate.Value };
@@ -77,7 +78,7 @@ public partial class PhoneOrderService
         
         Log.Information("Phone order record transcription detected language: {@detectionLanguage}", detection.Language);
         
-        var record = new PhoneOrderRecord { SessionId = Guid.NewGuid().ToString(), Restaurant = recordInfo.Restaurant, TranscriptionText = transcription, Language = SelectLanguageEnum(detection.Language), CreatedDate = recordInfo.OrderDate.AddHours(-8), Status = PhoneOrderRecordStatus.Recieved };
+        var record = new PhoneOrderRecord { SessionId = Guid.NewGuid().ToString(), AgentId = recordInfo.Agent.Id, TranscriptionText = transcription, Language = SelectLanguageEnum(detection.Language), CreatedDate = recordInfo.OrderDate.AddHours(-8), Status = PhoneOrderRecordStatus.Recieved };
 
         if (await CheckPhoneOrderRecordDurationAsync(command.RecordContent, cancellationToken).ConfigureAwait(false))
         {
@@ -437,7 +438,7 @@ public partial class PhoneOrderService
         return uploadResponse.Attachment.FileUrl;
     }
     
-    private PhoneOrderRecordInformationDto ExtractPhoneOrderRecordInfoFromRecordName(string recordName, string restaurant)
+    private async Task<PhoneOrderRecordInformationDto> ExtractPhoneOrderRecordInfoFromRecordName(string recordName, string restaurantName, CancellationToken cancellationToken)
     {
         var time = string.Empty;
 
@@ -447,10 +448,12 @@ public partial class PhoneOrderService
         if (match.Success)
             time = match.Groups[1].Value;
 
+        var agent = await _agentDataProvider.GetAgentAsync(AgentType.Restaurant, name: restaurantName, cancellationToken: cancellationToken).ConfigureAwait(false);
+
         return new PhoneOrderRecordInformationDto
         {
-            OrderDate = DateTimeOffset.FromUnixTimeSeconds(long.Parse(time)),
-            Restaurant = (PhoneOrderRestaurant)Enum.Parse(typeof(PhoneOrderRestaurant), restaurant, true)
+            Agent = _mapper.Map<AgentDto>(agent),
+            OrderDate = DateTimeOffset.FromUnixTimeSeconds(long.Parse(time))
         };
     }
     
@@ -480,7 +483,7 @@ public partial class PhoneOrderService
         {
             var transcriptionResponse = await _speechToTextService.SpeechToTextAsync(
                 reSplitAudio, record.Language, TranscriptionFileType.Wav, TranscriptionResponseFormat.Text, 
-                SelectPrompt(record.Restaurant), cancellationToken: cancellationToken).ConfigureAwait(false);
+                record.RestaurantInfo?.Message ?? string.Empty, cancellationToken: cancellationToken).ConfigureAwait(false);
             
             transcriptionResult.Append(transcriptionResponse);
         }
@@ -488,17 +491,6 @@ public partial class PhoneOrderService
         Log.Information("Transcription result {Transcription}", transcriptionResult.ToString());
         
         return transcriptionResult.ToString();
-    }
-
-    private string SelectPrompt(PhoneOrderRestaurant? restaurant)
-    {
-        return restaurant switch
-        {
-            PhoneOrderRestaurant.MoonHouse => "Moon, Hello Moon house, Moon house",
-            PhoneOrderRestaurant.XiangTanRenJia => "你好,湘里人家",
-            PhoneOrderRestaurant.JiangNanChun => "你好,江南春",
-            _ => ""
-        };
     }
     
     private async Task<string> CreateTranscriptionJobAsync(byte[] data, string fileName, string language, CancellationToken cancellationToken)

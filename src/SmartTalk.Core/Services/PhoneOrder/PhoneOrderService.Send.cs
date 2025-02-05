@@ -55,7 +55,7 @@ public partial class PhoneOrderService : IPhoneOrderService
     
         foreach (var restaurant in restaurantCount)
         {
-            stringBuilder.AppendLine($"{restaurant.Restaurant.GetDescription()}:");
+            stringBuilder.AppendLine($"{restaurant.Restaurant?.Name ?? string.Empty}:");
         
             var index = 1;
             
