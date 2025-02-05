@@ -10,7 +10,7 @@ namespace SmartTalk.Core.Services.Agents;
 
 public interface IAgentDataProvider : IScopedDependency
 {
-  Task<Domain.System.Agent> GetAgentAsync(AgentType type, int? relateId = null, string name = null, CancellationToken cancellationToken = default);
+  Task<Agent> GetAgentAsync(AgentType type, int? relateId = null, string name = null, CancellationToken cancellationToken = default);
 }
 
 public class AgentDataProvider : IAgentDataProvider
