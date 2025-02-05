@@ -533,11 +533,10 @@ public partial class PhoneOrderService
         {
             "en" => SpeechMaticsLanguageType.En,
             "zh" => SpeechMaticsLanguageType.Yue,
+            "zh-CN" => SpeechMaticsLanguageType.Cmn,
             _ => SpeechMaticsLanguageType.En
         };
     }
-    
-   
     
     private async Task<string> CreateSpeechMaticsJobAsync(byte[] recordContent, string recordName, string language, CancellationToken cancellationToken)
     {
