@@ -82,7 +82,7 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
                     Content = new CompletionsStringContent(
                         "你是一款高度理解语言的智能助手，根据所有对话提取Client的food_details和Client的client_phone_number" +
                         "--规则：1.根据全文帮我提取food_details，count是菜品的数量且为整数，如果你不清楚数量的时候，count默认为1，remark是对菜品的备注\n" +
-                        " 2.根据对话中Client的话为主，restaurant的话为辅，提取文中所提到的真正需要下单的food_details\n " +
+                        "2.根据对话中Client的话为主，restaurant的话为辅，提取文中所提到的真正需要下单的food_details\n " +
                         "3.不要出现重复菜品，如果有特殊的要求请标明数量，例如我要两份粥，一份要辣，则标注一份要辣注意用json格式\n " +
                         "返回；规则：{\"client_phone_number\":\"电话号码\",\"food_details\": [{\"food_name\": \"菜品名字\",\"count\":减少的数量（负数）, \"remark\":null}]}}\n " +
                         "-样本与输出：input: Restaurant: . Client:Hi, 我可以要一個外賣嗎? Restaurant:可以啊,要什麼? Client: 我要幾個特價午餐,要一個蒙古牛,要一個蛋花湯跟這個,再要一個椒鹽排骨蛋花湯,然後再要一個魚香肉絲,不要辣的蛋花湯。" +
