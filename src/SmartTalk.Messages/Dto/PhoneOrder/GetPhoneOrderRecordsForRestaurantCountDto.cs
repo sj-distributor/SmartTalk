@@ -1,10 +1,10 @@
-using SmartTalk.Messages.Enums.PhoneOrder;
+using SmartTalk.Messages.Dto.Restaurant;
 
 namespace SmartTalk.Messages.Dto.PhoneOrder;
 
 public class GetPhoneOrderRecordsForRestaurantCountDto
 {
-    public PhoneOrderRestaurant Restaurant { get; set; }
+    public RestaurantDto Restaurant { get; set; }
 
     public List<RestaurantCountDto> Classes { get; set; }
 }

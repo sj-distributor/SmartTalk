@@ -1,0 +1,1 @@
+alter table `phone_order_order_item` add column `menu_item_id` int null;

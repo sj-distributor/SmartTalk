@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using SmartTalk.Core.Domain.Account;
+using SmartTalk.Core.Domain.Restaurants;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.STT;
 
@@ -13,6 +14,9 @@ public class PhoneOrderRecord : IEntity
     [Column("id")]
     [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     public int Id { get; set; }
+    
+    [Column("agent_id")]
+    public int AgentId { get; set; }
     
     [Column("session_id")]
     public string SessionId { get; set; }
@@ -38,9 +42,6 @@ public class PhoneOrderRecord : IEntity
     [Column("manual_order_id")]
     public long? ManualOrderId { get; set; }
     
-    [Column("ai_speech_assistant_id")]
-    public int? AiSpeechAssistantId { get; set; }
-    
     [Column("last_modified_by")]
     public int? LastModifiedBy { get; set; }
     
@@ -58,4 +59,7 @@ public class PhoneOrderRecord : IEntity
     
     [Column("last_modified_by_name")]
     public string LastModifiedByName { get; set; }
+    
+    [NotMapped]
+    public Restaurant RestaurantInfo { get; set; }
 }

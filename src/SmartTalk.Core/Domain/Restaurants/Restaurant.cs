@@ -14,6 +14,9 @@ public class Restaurant : IEntity
     [Column("name"), StringLength(128)]
     public string Name { get; set; }
     
+    [Column("message"), StringLength(1024)]
+    public string Message { get; set; }
+    
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; } = DateTimeOffset.Now;
 }

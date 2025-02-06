@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Data;
 using SmartTalk.Core.Domain.Restaurants;
+using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Ioc;
 
 namespace SmartTalk.Core.Services.Restaurants;
@@ -13,9 +14,13 @@ public interface IRestaurantDataProvider : IScopedDependency
 
     Task<Restaurant> GetRestaurantByNameAsync(string name, CancellationToken cancellationToken);
 
-    Task<List<RestaurantMenuItem>> GetRestaurantMenuItemsAsync(int? restaurantId = null, CancellationToken cancellationToken = default);
+    Task<List<RestaurantMenuItem>> GetRestaurantMenuItemsAsync(int? restaurantId = null, int? pageIndex = null, int? pageSize = null, string keyword = null, List<int> ids = null, CancellationToken cancellationToken = default);
     
     Task DeleteRestaurantMenuItemsAsync(List<RestaurantMenuItem> menuItems, bool forceSave = true, CancellationToken cancellationToken = default);
+
+    Task<Restaurant> GetRestaurantByAgentIdAsync(int agentId, CancellationToken cancellationToken);
+
+    Task<List<Restaurant>> GetRestaurantsAsync(List<int> ids = null, CancellationToken cancellationToken = default);
 }
 
 public class RestaurantDataProvider : IRestaurantDataProvider
@@ -51,12 +56,21 @@ public class RestaurantDataProvider : IRestaurantDataProvider
         return await _repository.Query<Restaurant>(x => x.Name == name).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<RestaurantMenuItem>> GetRestaurantMenuItemsAsync(int? restaurantId = null, CancellationToken cancellationToken = default)
+    public async Task<List<RestaurantMenuItem>> GetRestaurantMenuItemsAsync(int? restaurantId = null, int? pageIndex = null, int? pageSize = null, string keyword = null, List<int> ids = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.QueryNoTracking<RestaurantMenuItem>();
 
         if (restaurantId.HasValue)
             query = query.Where(x => x.RestaurantId == restaurantId.Value);
+
+        if (!string.IsNullOrEmpty(keyword))
+            query = query.Where(x => x.Name.Contains(keyword));
+
+        if (ids is { Count: > 0 })
+            query = query.Where(x => ids.Contains(x.Id));
+
+        if (pageIndex.HasValue && pageSize.HasValue)
+            query = query.Skip((pageIndex.Value - 1) * pageSize.Value).Take(pageSize.Value);
         
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -67,5 +81,25 @@ public class RestaurantDataProvider : IRestaurantDataProvider
         await _repository.DeleteAllAsync(menuItems, cancellationToken).ConfigureAwait(false);
 
         if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<Restaurant> GetRestaurantByAgentIdAsync(int agentId, CancellationToken cancellationToken)
+    {
+        var query = from agent in _repository.Query<Agent>()
+            join restaurant in _repository.Query<Restaurant>() on agent.RelateId equals restaurant.Id
+            where agent.Id == agentId
+            select restaurant;
+
+        return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<Restaurant>> GetRestaurantsAsync(List<int> ids = null, CancellationToken cancellationToken = default)
+    {
+        var query = _repository.QueryNoTracking<Restaurant>();
+
+        if (ids is { Count: > 0 })
+            query = query.Where(x => ids.Contains(x.Id));
+        
+        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }

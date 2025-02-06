@@ -34,6 +34,8 @@ public partial class PhoneOrderService
         var conversations = await _phoneOrderDataProvider.AddPhoneOrderConversationsAsync(_mapper.Map<List<PhoneOrderConversation>>(command.Conversations), cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var record = (await _phoneOrderDataProvider.GetPhoneOrderRecordAsync(command.Conversations.First().RecordId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+
+        await EnrichPhoneOrderRecordAsync(record, cancellationToken).ConfigureAwait(false);
         
         if (_currentUser.Id.HasValue)
             await UpdatePhoneOrderRecordSpecificFieldsAsync(command.Conversations.First().RecordId, _currentUser.Id.Value, command.Conversations.First().Question, _currentUser.Name, cancellationToken).ConfigureAwait(false);
@@ -55,5 +57,16 @@ public partial class PhoneOrderService
         {
             Data = _mapper.Map<List<PhoneOrderConversationDto>>(conversations)
         };
+    }
+
+    private async Task EnrichPhoneOrderRecordAsync(PhoneOrderRecord record, CancellationToken cancellationToken)
+    {
+        if (record == null) return;
+
+        var restaurant = await _restaurantDataProvider.GetRestaurantByAgentIdAsync(record.AgentId, cancellationToken).ConfigureAwait(false);
+
+        if (restaurant == null) return;
+
+        record.RestaurantInfo = restaurant;
     }
 }
