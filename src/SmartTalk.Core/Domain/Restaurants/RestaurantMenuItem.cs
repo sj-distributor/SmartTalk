@@ -21,6 +21,12 @@ public class RestaurantMenuItem : IEntity
     [Column("name"), StringLength(256)]
     public string Name { get; set; }
 
+    [Column("product_id")]
+    public long ProductId { get; set; }
+
+    [Column("order_item_modifiers")]
+    public string OrderItemModifiers { get; set; }
+
     [Column("language")] 
     public RestaurantItemLanguage Language { get; set; }
     
