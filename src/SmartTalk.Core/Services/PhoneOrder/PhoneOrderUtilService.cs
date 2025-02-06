@@ -60,13 +60,13 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
     {
         try
         {
-            return await PerformQueryAsync(query, OpenAiModel.DeepSeekReasoner, cancellationToken);
+            return await PerformQueryAsync(query, OpenAiModel.DeepSeekReasoner, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception e)
         {
             Log.Error(e, "Error when GetOrderDetails with model {Model}, retrying with fallback model. Query: {Query}", OpenAiModel.DeepSeekChat, query);
 
-            return await PerformQueryAsync(query, OpenAiModel.Gpto1Preview, cancellationToken);
+            return await PerformQueryAsync(query, OpenAiModel.Gpto1Preview, cancellationToken).ConfigureAwait(false);
         }
     }
 
