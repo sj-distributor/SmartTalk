@@ -64,7 +64,7 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
         }
         catch (Exception e)
         {
-            Log.Error(e, "Error when GetOrderDetails with model {Model}, retrying with fallback model. Query: {Query}", OpenAiModel.DeepSeekChat, query);
+            Log.Error(e, "Error when GetOrderDetails with model {Model}, retrying with Gpto1Preview model.", OpenAiModel.DeepSeekChat);
 
             return await PerformQueryAsync(query, OpenAiModel.Gpto1Preview, cancellationToken).ConfigureAwait(false);
         }
