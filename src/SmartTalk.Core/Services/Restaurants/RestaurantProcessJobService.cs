@@ -45,19 +45,15 @@ public class RestaurantProcessJobService : IRestaurantProcessJobService
 
     public async Task SyncRestaurantMenusAsync(SchedulingSyncRestaurantMenuCommand command, CancellationToken cancellationToken)
     {
-        foreach (var restaurant in Enum.GetValues(typeof(PhoneOrderRestaurant)).Cast<PhoneOrderRestaurant>())
+        var restaurants = await _restaurantDataProvider.GetRestaurantsAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        foreach (var restaurant in restaurants)
             _smartTalkBackgroundJobClient.Enqueue(() => PersistRestaurantMenuItemsAsync(restaurant, cancellationToken), HangfireConstants.InternalHostingRestaurant);
     }
 
-    public async Task PersistRestaurantMenuItemsAsync(PhoneOrderRestaurant restaurantType, CancellationToken cancellationToken)
+    public async Task PersistRestaurantMenuItemsAsync(Restaurant restaurant, CancellationToken cancellationToken)
     {
-        var restaurant = await _restaurantDataProvider.GetRestaurantByNameAsync(restaurantType.GetDescription(), cancellationToken).ConfigureAwait(false);
-        
-        Log.Information("Get restaurant by restaurant type: {@Restaurant}, {RestaurantType}", restaurant, restaurantType);
-
-        if (restaurant == null) throw new Exception("Could not get the restaurant by restaurant tye name");
-        
-        var response = await _easyPosClient.GetEasyPosRestaurantMenusAsync(restaurantType, cancellationToken).ConfigureAwait(false);
+        var response = await _easyPosClient.GetEasyPosRestaurantMenusAsync(restaurant.Name, cancellationToken).ConfigureAwait(false);
 
         response.Data.Products = response.Data.Products.Where(x => x.IsIndependentSale).ToList();
         
