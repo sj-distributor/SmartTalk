@@ -19,6 +19,8 @@ public interface IRestaurantDataProvider : IScopedDependency
     Task DeleteRestaurantMenuItemsAsync(List<RestaurantMenuItem> menuItems, bool forceSave = true, CancellationToken cancellationToken = default);
 
     Task<Restaurant> GetRestaurantByAgentIdAsync(int agentId, CancellationToken cancellationToken);
+
+    Task<List<Restaurant>> GetRestaurantsAsync(List<int> ids = null, CancellationToken cancellationToken = default);
 }
 
 public class RestaurantDataProvider : IRestaurantDataProvider
@@ -80,5 +82,15 @@ public class RestaurantDataProvider : IRestaurantDataProvider
             select restaurant;
 
         return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<Restaurant>> GetRestaurantsAsync(List<int> ids = null, CancellationToken cancellationToken = default)
+    {
+        var query = _repository.QueryNoTracking<Restaurant>();
+
+        if (ids is { Count: > 0 })
+            query = query.Where(x => ids.Contains(x.Id));
+        
+        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }
