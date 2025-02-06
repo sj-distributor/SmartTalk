@@ -1,5 +1,6 @@
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Settings.EasyPos;
+using SmartTalk.Messages.Constants;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Enums.PhoneOrder;
 
@@ -7,9 +8,9 @@ namespace SmartTalk.Core.Services.Http.Clients;
 
 public interface IEasyPosClient : IScopedDependency
 {
-    Task<EasyPosResponseDto> GetEasyPosRestaurantMenusAsync(PhoneOrderRestaurant restaurant, CancellationToken cancellationToken);
+    Task<EasyPosResponseDto> GetEasyPosRestaurantMenusAsync(string restaurantName, CancellationToken cancellationToken);
 
-    Task<GetOrderResponse> GetOrderAsync(long id, PhoneOrderRestaurant restaurant, CancellationToken cancellationToken);
+    Task<GetOrderResponse> GetOrderAsync(long id, string restaurantName, CancellationToken cancellationToken);
     
     Task<PlaceOrderToEasyPosResponseDto> PlaceOrderToEasyPosAsync(PlaceOrderToEasyPosRequestDto request, CancellationToken cancellationToken);
 }
@@ -25,9 +26,9 @@ public class EasyPosClient : IEasyPosClient
         _httpClientFactory = httpClientFactory;
     }
     
-    public async Task<EasyPosResponseDto> GetEasyPosRestaurantMenusAsync(PhoneOrderRestaurant restaurant, CancellationToken cancellationToken)
+    public async Task<EasyPosResponseDto> GetEasyPosRestaurantMenusAsync(string restaurantName, CancellationToken cancellationToken)
     {
-        var (authorization, merchantId, companyId, merchantStaffId) = GetRestaurantAuthHeaders(restaurant);
+        var (authorization, merchantId, companyId, merchantStaffId) = GetRestaurantAuthHeaders(restaurantName);
         
         return await _httpClientFactory.GetAsync<EasyPosResponseDto>(
             requestUrl: $"{_easyPosSetting.BaseUrl}/api/merchant/resource", headers: new Dictionary<string, string>
@@ -39,9 +40,9 @@ public class EasyPosClient : IEasyPosClient
             }, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<GetOrderResponse> GetOrderAsync(long id, PhoneOrderRestaurant restaurant, CancellationToken cancellationToken)
+    public async Task<GetOrderResponse> GetOrderAsync(long id, string restaurantName, CancellationToken cancellationToken)
     {
-        var (authorization, merchantId, companyId, merchantStaffId) = GetRestaurantAuthHeaders(restaurant);
+        var (authorization, merchantId, companyId, merchantStaffId) = GetRestaurantAuthHeaders(restaurantName);
         
         return await _httpClientFactory.GetAsync<GetOrderResponse>(
             requestUrl: $"{_easyPosSetting.BaseUrl}/api/merchant/order?id={ id }", headers: new Dictionary<string, string>
@@ -67,13 +68,13 @@ public class EasyPosClient : IEasyPosClient
             $"{_easyPosSetting.BaseUrl}/api/merchant/order", request, cancellationToken, headers: headers).ConfigureAwait(false);
     }
 
-    public (string Authorization, string MerchantId, string CompanyId, string MerchantStaffId) GetRestaurantAuthHeaders(PhoneOrderRestaurant restaurant)
+    public (string Authorization, string MerchantId, string CompanyId, string MerchantStaffId) GetRestaurantAuthHeaders(string restaurantName)
     {
-        return restaurant switch
+        return restaurantName switch
         {
-            PhoneOrderRestaurant.MoonHouse =>
+            RestaurantStore.MoonHouse =>
                 (_easyPosSetting.MoonHouseAuthorization, _easyPosSetting.MoonHouseMerchantId, _easyPosSetting.MoonHouseCompanyId, _easyPosSetting.MoonHouseMerchantStaffId),
-            _ => throw new NotSupportedException(nameof(restaurant))
+            _ => throw new NotSupportedException(restaurantName)
         };
     }
 }
