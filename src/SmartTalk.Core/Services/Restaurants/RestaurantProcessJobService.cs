@@ -115,7 +115,7 @@ public class RestaurantProcessJobService : IRestaurantProcessJobService
         {
             var modifierGroup = product.ModifierGroups.First();
 
-            var orderItemModifiers = new PhoneCallOrderItemModifiers
+            var orderItemModifiers = new PhoneOrderOrderItemModifiers
             {
                 Quantity = 1,
                 ModifierId = modifierGroup.Id,

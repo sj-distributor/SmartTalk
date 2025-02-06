@@ -3,7 +3,7 @@ using SmartTalk.Messages.Dto.EasyPos;
 
 namespace SmartTalk.Messages.Dto.PhoneOrder;
 
-public class PhoneCallOrderItemModifiers
+public class PhoneOrderOrderItemModifiers
 {
     [JsonProperty("price")]
     public decimal Price { get; set; }

@@ -10,6 +10,9 @@ public class PhoneOrderDetailDto
 
 public class FoodDetailDto
 {
+    [JsonProperty("id")]
+    public int Id { get; set; }
+    
     [JsonProperty("food_name")]
     public string FoodName { get; set; }
     

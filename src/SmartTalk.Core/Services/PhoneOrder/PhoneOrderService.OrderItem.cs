@@ -1,3 +1,4 @@
+using Newtonsoft.Json;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Dto.EasyPos;
@@ -42,21 +43,22 @@ public partial class PhoneOrderService
 
         var orderItems = await _phoneOrderDataProvider.AddPhoneOrderItemAsync(_mapper.Map<List<PhoneOrderOrderItem>>(command.OrderItems), cancellationToken: cancellationToken).ConfigureAwait(false);
 
+        var menuItems = await _restaurantDataProvider.GetRestaurantMenuItemsAsync(
+            ids: orderItems.Select(x => x.MenuItemId).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
+
         var response = await _easyPosClient.PlaceOrderToEasyPosAsync(new PlaceOrderToEasyPosRequestDto
         {
-            Id = 0,
             Type = 9,
             IsTaxFree = true,
             Notes = string.Empty,
             OrderItems = orderItems.Select(x => new PhoneCallOrderItem
             {
-                Id = 0,
-                ProductId = 0,
-                Quantity = 0,
-                OriginalPrice = 0,
-                Price = 0,
-                Notes = null,
-                OrderItemModifiers = null
+                ProductId = menuItems.FirstOrDefault(m => m.Id == x.MenuItemId)?.ProductId ?? 0,
+                Quantity = x.Quantity,
+                OriginalPrice = x.Price,
+                Price = x.Price,
+                Notes = x.Note,
+                OrderItemModifiers = JsonConvert.DeserializeObject<List<PhoneCallOrderItemModifiers>>(menuItems.FirstOrDefault(m => m.Id == x.MenuItemId)?.OrderItemModifiers ?? string.Empty)
             }).ToList()
         }, cancellationToken).ConfigureAwait(false);
 
@@ -64,8 +66,7 @@ public partial class PhoneOrderService
         {
             Data = new PlaceOrderAndModifyItemResponseData
             {
-                OrderNumber = null,
-                PhoneNumber = null,
+                OrderNumber = response.Data.Order.OrderItems.First().OrderId.ToString(),
                 OrderItems = _mapper.Map<List<PhoneOrderOrderItemDto>>(orderItems)
             }
         };
