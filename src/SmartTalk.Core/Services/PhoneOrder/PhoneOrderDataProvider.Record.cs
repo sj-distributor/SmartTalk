@@ -16,7 +16,7 @@ public partial interface IPhoneOrderDataProvider
     
     Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(int agentId, CancellationToken cancellationToken);
 
-    Task AddPhoneOrderItemAsync(List<PhoneOrderOrderItem> phoneOrderOrderItems, bool forceSave = true, CancellationToken cancellationToken = default);
+    Task<List<PhoneOrderOrderItem>> AddPhoneOrderItemAsync(List<PhoneOrderOrderItem> phoneOrderOrderItems, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task UpdatePhoneOrderRecordsAsync(PhoneOrderRecord record, bool forceSave = true, CancellationToken cancellationToken = default);
 
@@ -74,13 +74,15 @@ public partial class PhoneOrderDataProvider
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task AddPhoneOrderItemAsync(
+    public async Task<List<PhoneOrderOrderItem>> AddPhoneOrderItemAsync(
         List<PhoneOrderOrderItem> phoneOrderOrderItems, bool forceSave = true, CancellationToken cancellationToken = default)
     {
         await _repository.InsertAllAsync(phoneOrderOrderItems, cancellationToken).ConfigureAwait(false);
 
         if (forceSave)
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        
+        return phoneOrderOrderItems;
     }
     
     public async Task<PhoneOrderRecord> GetPhoneOrderRecordByTranscriptionJobIdAsync(string transcriptionJobId, CancellationToken cancellationToken = default)
