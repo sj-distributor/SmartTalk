@@ -32,7 +32,7 @@ public class PhoneOrderOrderItem : IEntity, IHasCreatedFields
     public PhoneOrderOrderType OrderType { get; set; }
     
     [Column("menu_item_id")]
-    public int MenuItemId { get; set; }
+    public int? MenuItemId { get; set; }
     
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
