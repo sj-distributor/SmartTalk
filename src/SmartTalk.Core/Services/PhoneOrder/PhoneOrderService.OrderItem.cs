@@ -60,7 +60,7 @@ public partial class PhoneOrderService
                 Quantity = x.Quantity,
                 OriginalPrice = x.Price,
                 Price = x.Price,
-                Notes = x.Note,
+                Notes = string.IsNullOrEmpty(x.Note) ? string.Empty : x.Note,
                 OrderItemModifiers = JsonConvert.DeserializeObject<List<PhoneCallOrderItemModifiers>>(menuItems.FirstOrDefault(m => m.Id == x.MenuItemId)?.OrderItemModifiers ?? string.Empty) ?? []
             }).ToList()
         }, cancellationToken).ConfigureAwait(false);
