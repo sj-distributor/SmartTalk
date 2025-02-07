@@ -54,6 +54,9 @@ public class PhoneOrderRecord : IEntity
     [Column("transcription_job_id")]
     public string TranscriptionJobId { get; set; }
     
+    [Column("order_status")]
+    public PhoneOrderOrderStatus OrderStatus { get; set; } = PhoneOrderOrderStatus.Pendding;
+    
     [NotMapped]
     public UserAccount UserAccount { get; set; }
     
