@@ -61,11 +61,13 @@ public partial class PhoneOrderService
                 OriginalPrice = x.Price,
                 Price = x.Price,
                 Notes = x.Note,
-                OrderItemModifiers = JsonConvert.DeserializeObject<List<PhoneCallOrderItemModifiers>>(menuItems.FirstOrDefault(m => m.Id == x.MenuItemId)?.OrderItemModifiers ?? string.Empty)
+                OrderItemModifiers = JsonConvert.DeserializeObject<List<PhoneCallOrderItemModifiers>>(menuItems.FirstOrDefault(m => m.Id == x.MenuItemId)?.OrderItemModifiers ?? string.Empty) ?? []
             }).ToList()
         }, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Place order response: {@Response}", response);
+
+        if (response.Data == null || !response.Success) throw new Exception("Can not placing order.");
 
         return new PlaceOrderAndModifyItemResponse
         {
