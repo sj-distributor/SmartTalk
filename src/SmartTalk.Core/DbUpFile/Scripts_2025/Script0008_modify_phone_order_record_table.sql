@@ -24,7 +24,7 @@ UPDATE phone_order_record AS record
 SET record.agent_id = (
     SELECT A.id
     FROM agent AS A JOIN restaurant AS R ON A.relate_id = R.id
-    WHERE R.name = '湘潭人家'
+    WHERE R.name = '湘谭人家'
     LIMIT 1
 )
 WHERE record.restaurant = 2;
