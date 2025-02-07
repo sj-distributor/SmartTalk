@@ -49,6 +49,8 @@ public class RestaurantProcessJobService : IRestaurantProcessJobService
     {
         var restaurants = await _restaurantDataProvider.GetRestaurantsAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
         
+        Log.Information("Get all restaurants: {@Restaurants}", restaurants);
+        
         foreach (var restaurant in restaurants)
             _smartTalkBackgroundJobClient.Enqueue(() => PersistRestaurantMenuItemsAsync(restaurant, cancellationToken), HangfireConstants.InternalHostingRestaurant);
     }
