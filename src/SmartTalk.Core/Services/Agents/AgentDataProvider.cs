@@ -11,6 +11,8 @@ namespace SmartTalk.Core.Services.Agents;
 public interface IAgentDataProvider : IScopedDependency
 {
     Task<Agent> GetAgentAsync(int? id = null, AgentType? type = null, int? relateId = null, string name = null, CancellationToken cancellationToken = default);
+
+    Task<List<Agent>> GetAgentsAsync(AgentType type, CancellationToken cancellationToken);
 }
 
 public class AgentDataProvider : IAgentDataProvider
@@ -25,16 +27,14 @@ public class AgentDataProvider : IAgentDataProvider
         _repository = repository;
         _unitOfWork = unitOfWork;
     }
-
+  
     public async Task<Agent> GetAgentAsync(int? id = null, AgentType? type = null, int? relateId = null, string name = null, CancellationToken cancellationToken = default)
     {
         IQueryable<Agent> query = null; 
         var baseQuery = _repository.Query<Agent>();
 
-        if (id.HasValue)
-            query = baseQuery.Where(x => x.Id == id.Value);
-        
         if (type.HasValue)
+        {
             query = type switch
             {
                 AgentType.Restaurant => from agent in baseQuery
@@ -43,7 +43,13 @@ public class AgentDataProvider : IAgentDataProvider
                     select agent,
                 _ => throw new NotSupportedException(nameof(type))
             };
-        
+        }
+
         return query == null ? null : await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+    
+    public async Task<List<Agent>> GetAgentsAsync(AgentType type, CancellationToken cancellationToken)
+    {
+        return await _repository.Query<Agent>().Where(x => x.Type == type).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }

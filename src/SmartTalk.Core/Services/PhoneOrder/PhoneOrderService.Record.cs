@@ -39,7 +39,7 @@ public partial class PhoneOrderService
 {
     public async Task<GetPhoneOrderRecordsResponse> GetPhoneOrderRecordsAsync(GetPhoneOrderRecordsRequest request, CancellationToken cancellationToken)
     {
-        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(request.RestaurantId, cancellationToken).ConfigureAwait(false);
+        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(request.AgentId, cancellationToken).ConfigureAwait(false);
 
         return new GetPhoneOrderRecordsResponse
         {

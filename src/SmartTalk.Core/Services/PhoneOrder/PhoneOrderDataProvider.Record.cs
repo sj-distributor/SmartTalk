@@ -3,6 +3,7 @@ using SmartTalk.Core.Domain.Account;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Domain.Restaurants;
 using SmartTalk.Core.Domain.System;
+using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Dto.Restaurant;
 using SmartTalk.Messages.Enums.PhoneOrder;
@@ -13,7 +14,7 @@ public partial interface IPhoneOrderDataProvider
 {
     Task AddPhoneOrderRecordsAsync(List<PhoneOrderRecord> phoneOrderRecords, bool forceSave = true, CancellationToken cancellationToken = default);
     
-    Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(int restaurantId, CancellationToken cancellationToken);
+    Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(int agentId, CancellationToken cancellationToken);
 
     Task AddPhoneOrderItemAsync(List<PhoneOrderOrderItem> phoneOrderOrderItems, bool forceSave = true, CancellationToken cancellationToken = default);
     
@@ -42,14 +43,13 @@ public partial class PhoneOrderDataProvider
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(int restaurantId, CancellationToken cancellationToken)
+    public async Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(int agentId, CancellationToken cancellationToken)
     {
-        var query = from restaurant in _repository.Query<Restaurant>()
-            join agent in _repository.Query<Agent>() on restaurant.Id equals agent.RelateId
+        var query = from agent in _repository.Query<Agent>()
             join record in _repository.Query<PhoneOrderRecord>() on agent.Id equals record.AgentId
-            where record.AgentId == restaurantId && record.Status == PhoneOrderRecordStatus.Sent
+            where agent.Id == agentId && record.Status == PhoneOrderRecordStatus.Sent
             select record;
-
+        
         return await query.OrderByDescending(record => record.CreatedDate).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
