@@ -6,6 +6,9 @@ public class PhoneOrderDetailDto
 {
     [JsonProperty("food_details")]
     public List<FoodDetailDto> FoodDetails { get; set; } = new();
+    
+    [JsonProperty("client_phone_number")]
+    public string ClientPhoneNumber { get; set; }
 }
 
 public class FoodDetailDto
