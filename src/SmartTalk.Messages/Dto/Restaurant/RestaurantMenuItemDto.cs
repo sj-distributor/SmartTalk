@@ -14,5 +14,9 @@ public class RestaurantMenuItemDto
     
     public RestaurantItemLanguage Language { get; set; }
     
+    public long? ProductId { get; set; }
+
+    public string OrderItemModifiers { get; set; }
+    
     public DateTimeOffset CreatedDate { get; set; }
 }
