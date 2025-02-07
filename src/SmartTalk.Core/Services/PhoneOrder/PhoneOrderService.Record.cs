@@ -1,18 +1,16 @@
-using System.Net;
 using Serilog;
 using System.Text;
-using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using SmartTalk.Messages.Enums.STT;
 using Smarties.Messages.DTO.OpenAi;
+using SmartTalk.Messages.Dto.Agent;
+using SmartTalk.Messages.Dto.EasyPos;
+using SmartTalk.Messages.Dto.WeChat;
 using Microsoft.IdentityModel.Tokens;
 using Smarties.Messages.Enums.OpenAi;
 using Smarties.Messages.Requests.Ask;
 using System.Text.RegularExpressions;
 using SmartTalk.Core.Domain.PhoneOrder;
-using SmartTalk.Core.Domain.SpeechMatics;
-using SmartTalk.Core.Extensions;
-using SmartTalk.Messages.Dto.WebSocket;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Dto.Attachments;
 using SmartTalk.Messages.Enums.PhoneOrder;
@@ -21,11 +19,6 @@ using SmartTalk.Messages.Enums.SpeechMatics;
 using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Requests.PhoneOrder;
 using SmartTalk.Messages.Commands.Attachments;
-using SmartTalk.Messages.Constants;
-using SmartTalk.Messages.Dto.Agent;
-using SmartTalk.Messages.Dto.EasyPos;
-using SmartTalk.Messages.Dto.Restaurant;
-using SmartTalk.Messages.Dto.WeChat;
 using TranscriptionFileType = SmartTalk.Messages.Enums.STT.TranscriptionFileType;
 using TranscriptionResponseFormat = SmartTalk.Messages.Enums.STT.TranscriptionResponseFormat;
 
@@ -58,18 +51,12 @@ public partial class PhoneOrderService
     {
         if (command.RecordName.IsNullOrEmpty() && command.RecordUrl.IsNullOrEmpty()) return;
 
-        PhoneOrderRecordInformationDto recordInfo = null;
-        
-        if (!string.IsNullOrEmpty(command.RecordName) && !string.IsNullOrEmpty(command.Restaurant))
-            recordInfo = await ExtractPhoneOrderRecordInfoFromRecordName(command.RecordName, command.Restaurant, cancellationToken).ConfigureAwait(false);
-
-        if (command.CreatedDate.HasValue)
-            recordInfo = new PhoneOrderRecordInformationDto { OrderDate = command.CreatedDate.Value };
+        var recordInfo = await ExtractPhoneOrderRecordInfoAsync(command.RecordName, command.AgentId, command.CreatedDate, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Phone order record information: {@recordInfo}", recordInfo);
                                    
         if (recordInfo == null) return;
-        if (await CheckOrderExistAsync(recordInfo.OrderDate.AddHours(-8), cancellationToken).ConfigureAwait(false)) return;
+        if (await CheckOrderExistAsync(recordInfo.StartDate.AddHours(-8), cancellationToken).ConfigureAwait(false)) return;
         
         var transcription = await _speechToTextService.SpeechToTextAsync(
             command.RecordContent, fileType: TranscriptionFileType.Wav, responseFormat: TranscriptionResponseFormat.Text, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -78,7 +65,7 @@ public partial class PhoneOrderService
 
         Log.Information("Phone order record transcription detected language: {@detectionLanguage}", detection.Language);
         
-        var record = new PhoneOrderRecord { SessionId = Guid.NewGuid().ToString(), AgentId = recordInfo.Agent.Id, TranscriptionText = transcription, Language = SelectLanguageEnum(detection.Language), CreatedDate = recordInfo.OrderDate.AddHours(-8), Status = PhoneOrderRecordStatus.Recieved };
+        var record = new PhoneOrderRecord { SessionId = Guid.NewGuid().ToString(), AgentId = recordInfo.Agent.Id, TranscriptionText = transcription, Language = SelectLanguageEnum(detection.Language), CreatedDate = recordInfo.StartDate.AddHours(-8), Status = PhoneOrderRecordStatus.Recieved };
 
         if (await CheckPhoneOrderRecordDurationAsync(command.RecordContent, cancellationToken).ConfigureAwait(false))
         {
@@ -438,29 +425,35 @@ public partial class PhoneOrderService
         return uploadResponse.Attachment.FileUrl;
     }
     
-    private async Task<PhoneOrderRecordInformationDto> ExtractPhoneOrderRecordInfoFromRecordName(string recordName, string restaurantName, CancellationToken cancellationToken)
+    private async Task<PhoneOrderRecordInformationDto> ExtractPhoneOrderRecordInfoAsync(string recordName, int agentId, DateTimeOffset? startTime, CancellationToken cancellationToken)
+    {
+        var agent = await _agentDataProvider.GetAgentAsync(agentId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        return new PhoneOrderRecordInformationDto
+        {
+            Agent = _mapper.Map<AgentDto>(agent),
+            StartDate = startTime ?? ExtractPhoneOrderStartDateFromRecordName(recordName)
+        };
+    }
+
+    private DateTimeOffset ExtractPhoneOrderStartDateFromRecordName(string recordName)
     {
         var time = string.Empty;
 
         var regexInOut = new Regex(@"-(\d+)\.");
         var match = regexInOut.Match(recordName);
 
-        if (match.Success)
-            time = match.Groups[1].Value;
-
-        var agent = await _agentDataProvider.GetAgentAsync(AgentType.Restaurant, name: restaurantName, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        return new PhoneOrderRecordInformationDto
-        {
-            Agent = _mapper.Map<AgentDto>(agent),
-            OrderDate = DateTimeOffset.FromUnixTimeSeconds(long.Parse(time))
-        };
+        if (match.Success) time = match.Groups[1].Value;
+        
+        return DateTimeOffset.FromUnixTimeSeconds(long.Parse(time));
     }
     
     private async Task UpdatePhoneOrderRecordSpecificFieldsAsync(int recordId, int modifiedBy, string tips, string lastModifiedByName, CancellationToken cancellationToken)
     {
         var record = (await _phoneOrderDataProvider.GetPhoneOrderRecordAsync(recordId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
 
+        if (record == null) return;
+        
         record.Tips = tips;
         record.LastModifiedBy = modifiedBy;
         record.LastModifiedDate = DateTimeOffset.Now;

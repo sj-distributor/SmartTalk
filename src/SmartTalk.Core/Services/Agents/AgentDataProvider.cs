@@ -1,16 +1,16 @@
 using AutoMapper;
-using Microsoft.EntityFrameworkCore;
-using SmartTalk.Core.Data;
-using SmartTalk.Core.Domain.Restaurants;
-using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Ioc;
+using SmartTalk.Core.Data;
+using SmartTalk.Core.Domain.System;
 using SmartTalk.Messages.Dto.Agent;
+using Microsoft.EntityFrameworkCore;
+using SmartTalk.Core.Domain.Restaurants;
 
 namespace SmartTalk.Core.Services.Agents;
 
 public interface IAgentDataProvider : IScopedDependency
 {
-    Task<Agent> GetAgentAsync(AgentType type, int? relateId = null, string name = null, CancellationToken cancellationToken = default);
+    Task<Agent> GetAgentAsync(int? id = null, AgentType? type = null, int? relateId = null, string name = null, CancellationToken cancellationToken = default);
 
     Task<List<Agent>> GetAgentsAsync(AgentType type, CancellationToken cancellationToken);
 }
@@ -28,20 +28,24 @@ public class AgentDataProvider : IAgentDataProvider
         _unitOfWork = unitOfWork;
     }
   
-    public async Task<Agent> GetAgentAsync(AgentType type, int? relateId = null, string name = null, CancellationToken cancellationToken = default)
+    public async Task<Agent> GetAgentAsync(int? id = null, AgentType? type = null, int? relateId = null, string name = null, CancellationToken cancellationToken = default)
     {
+        IQueryable<Agent> query = null; 
         var baseQuery = _repository.Query<Agent>();
 
-        var query = type switch
+        if (type.HasValue)
         {
-            AgentType.Restaurant => from agent in baseQuery
-                join restaurant in _repository.Query<Restaurant>() on agent.RelateId equals restaurant.Id
-                where !string.IsNullOrEmpty(name) && restaurant.Name == name
-                select agent,
-            _ => throw new NotSupportedException(nameof(type))
-        };
+            query = type switch
+            {
+                AgentType.Restaurant => from agent in baseQuery
+                    join restaurant in _repository.Query<Restaurant>() on agent.RelateId equals restaurant.Id
+                    where !string.IsNullOrEmpty(name) && restaurant.Name == name
+                    select agent,
+                _ => throw new NotSupportedException(nameof(type))
+            };
+        }
 
-        return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        return query == null ? null : await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
     
     public async Task<List<Agent>> GetAgentsAsync(AgentType type, CancellationToken cancellationToken)
