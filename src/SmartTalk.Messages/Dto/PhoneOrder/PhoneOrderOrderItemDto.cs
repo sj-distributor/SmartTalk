@@ -24,7 +24,7 @@ public class PhoneOrderOrderItemDto
 
     public PhoneOrderOrderType OrderType { get; set; }
     
-    public int? MenuItemId { get; set; }
+    public long? ProductId { get; set; }
 
     public DateTimeOffset CreatedDate { get; set; }
 }
