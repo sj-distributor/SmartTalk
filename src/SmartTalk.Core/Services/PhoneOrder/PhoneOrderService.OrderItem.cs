@@ -49,21 +49,27 @@ public partial class PhoneOrderService
         var menuItems = await _restaurantDataProvider.GetRestaurantMenuItemsAsync(
             ids: orderItems.Where(x => x.MenuItemId.HasValue).Select(x => x.MenuItemId.Value).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        var response = await _easyPosClient.PlaceOrderToEasyPosAsync(new PlaceOrderToEasyPosRequestDto
+        var request = new PlaceOrderToEasyPosRequestDto
         {
             Type = 9,
             IsTaxFree = true,
             Notes = string.Empty,
-            OrderItems = orderItems.Select(x => new PhoneCallOrderItem
+            OrderItems = orderItems.Where(x => x.MenuItemId.HasValue).Select(x => new PhoneCallOrderItem
             {
                 ProductId = menuItems.FirstOrDefault(m => m.Id == x.MenuItemId)?.ProductId ?? 0,
                 Quantity = x.Quantity,
                 OriginalPrice = x.Price,
                 Price = x.Price,
                 Notes = string.IsNullOrEmpty(x.Note) ? string.Empty : x.Note,
-                OrderItemModifiers = JsonConvert.DeserializeObject<List<PhoneCallOrderItemModifiers>>(menuItems.FirstOrDefault(m => m.Id == x.MenuItemId)?.OrderItemModifiers ?? string.Empty) ?? []
+                OrderItemModifiers =
+                    JsonConvert.DeserializeObject<List<PhoneCallOrderItemModifiers>>(
+                        menuItems.FirstOrDefault(m => m.Id == x.MenuItemId)?.OrderItemModifiers ?? string.Empty) ?? []
             }).ToList()
-        }, cancellationToken).ConfigureAwait(false);
+        };
+        
+        Log.Information("Generate easy pos order request: {@Request}", request);
+        
+        var response = await _easyPosClient.PlaceOrderToEasyPosAsync(request, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Place order response: {@Response}", response);
 
