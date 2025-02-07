@@ -22,7 +22,7 @@ public class RestaurantMenuItem : IEntity
     public string Name { get; set; }
 
     [Column("product_id")]
-    public long ProductId { get; set; }
+    public long? ProductId { get; set; }
 
     [Column("order_item_modifiers")]
     public string OrderItemModifiers { get; set; }
