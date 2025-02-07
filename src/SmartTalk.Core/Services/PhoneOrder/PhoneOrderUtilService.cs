@@ -48,7 +48,7 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
             Quantity = int.TryParse(x.Count, out var parsedValue) ? parsedValue : 1,
             Price = x.Price,
             Note = x.Remark,
-            MenuItemId = x.Id
+            ProductId = x.ProductId
         }).ToList();
 
         if (items.Any())
@@ -104,9 +104,9 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
             
             if (string.IsNullOrEmpty(payload)) return null;
             
-            foodDetail.Id = JsonConvert.DeserializeObject<RestaurantPayloadDto>(payload).Id;
             foodDetail.FoodName = JsonConvert.DeserializeObject<RestaurantPayloadDto>(payload).Name;
             foodDetail.Price = (double)JsonConvert.DeserializeObject<RestaurantPayloadDto>(payload).Price;
+            foodDetail.ProductId = JsonConvert.DeserializeObject<RestaurantPayloadDto>(payload).ProductId;
             
             return foodDetail;
         }).ToList();

@@ -14,7 +14,7 @@ public interface IRestaurantDataProvider : IScopedDependency
 
     Task<Restaurant> GetRestaurantByNameAsync(string name, CancellationToken cancellationToken);
 
-    Task<List<RestaurantMenuItem>> GetRestaurantMenuItemsAsync(int? restaurantId = null, int? pageIndex = null, int? pageSize = null, string keyword = null, List<int> ids = null, CancellationToken cancellationToken = default);
+    Task<List<RestaurantMenuItem>> GetRestaurantMenuItemsAsync(int? restaurantId = null, int? pageIndex = null, int? pageSize = null, string keyword = null, List<long> productIds = null, CancellationToken cancellationToken = default);
     
     Task DeleteRestaurantMenuItemsAsync(List<RestaurantMenuItem> menuItems, bool forceSave = true, CancellationToken cancellationToken = default);
 
@@ -56,7 +56,7 @@ public class RestaurantDataProvider : IRestaurantDataProvider
         return await _repository.Query<Restaurant>(x => x.Name == name).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<RestaurantMenuItem>> GetRestaurantMenuItemsAsync(int? restaurantId = null, int? pageIndex = null, int? pageSize = null, string keyword = null, List<int> ids = null, CancellationToken cancellationToken = default)
+    public async Task<List<RestaurantMenuItem>> GetRestaurantMenuItemsAsync(int? restaurantId = null, int? pageIndex = null, int? pageSize = null, string keyword = null, List<long> productIds = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.QueryNoTracking<RestaurantMenuItem>();
 
@@ -66,8 +66,8 @@ public class RestaurantDataProvider : IRestaurantDataProvider
         if (!string.IsNullOrEmpty(keyword))
             query = query.Where(x => x.Name.Contains(keyword));
 
-        if (ids is { Count: > 0 })
-            query = query.Where(x => ids.Contains(x.Id));
+        if (productIds is { Count: > 0 })
+            query = query.Where(x => productIds.Contains(x.ProductId.Value));
 
         if (pageIndex.HasValue && pageSize.HasValue)
             query = query.Skip((pageIndex.Value - 1) * pageSize.Value).Take(pageSize.Value);

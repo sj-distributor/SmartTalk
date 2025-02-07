@@ -47,23 +47,23 @@ public partial class PhoneOrderService
         Log.Information("Add new order items: {@OrderItems}", orderItems);
         
         var menuItems = await _restaurantDataProvider.GetRestaurantMenuItemsAsync(
-            ids: orderItems.Where(x => x.MenuItemId.HasValue).Select(x => x.MenuItemId.Value).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
+            productIds: orderItems.Where(x => x.ProductId.HasValue).Select(x => x.ProductId.Value).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var request = new PlaceOrderToEasyPosRequestDto
         {
             Type = 9,
             IsTaxFree = true,
             Notes = string.Empty,
-            OrderItems = orderItems.Where(x => x.MenuItemId.HasValue).Select(x => new PhoneCallOrderItem
+            OrderItems = orderItems.Where(x => x.ProductId.HasValue).Select(x => new PhoneCallOrderItem
             {
-                ProductId = menuItems.FirstOrDefault(m => m.Id == x.MenuItemId)?.ProductId ?? 0,
+                ProductId = menuItems.FirstOrDefault(m => m.ProductId == x.ProductId)?.ProductId ?? 0,
                 Quantity = x.Quantity,
                 OriginalPrice = x.Price,
                 Price = x.Price,
                 Notes = string.IsNullOrEmpty(x.Note) ? string.Empty : x.Note,
                 OrderItemModifiers =
                     JsonConvert.DeserializeObject<List<PhoneCallOrderItemModifiers>>(
-                        menuItems.FirstOrDefault(m => m.Id == x.MenuItemId)?.OrderItemModifiers ?? string.Empty) ?? []
+                        menuItems.FirstOrDefault(m => m.ProductId == x.ProductId)?.OrderItemModifiers ?? string.Empty) ?? []
             }).ToList()
         };
         

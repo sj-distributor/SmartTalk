@@ -22,5 +22,9 @@ public class FoodDetailDto
     [JsonProperty("remark")]
     public string Remark { get; set; }
     
+    [JsonProperty("price")]
     public double Price { get; set; }
+    
+    [JsonProperty("product_id")]
+    public long? ProductId { get; set; }
 }
