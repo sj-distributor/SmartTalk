@@ -40,7 +40,7 @@ public class RestaurantService : IRestaurantService
     public async Task<GetRestaurantMenuItemsResponse> GetRestaurantMenuItemsAsync(GetRestaurantMenuItemsRequest request, CancellationToken cancellationToken)
     {
         var menuItems = await _restaurantDataProvider.GetRestaurantMenuItemsAsync(
-            pageIndex: request.PageIndex, pageSize: request.PageSize, keyword: request.Keyword, cancellationToken: cancellationToken).ConfigureAwait(false);
+            request.RestaurantId, request.PageIndex, request.PageSize, request.Keyword, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         return new GetRestaurantMenuItemsResponse
         {

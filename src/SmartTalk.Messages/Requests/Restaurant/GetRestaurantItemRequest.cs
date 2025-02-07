@@ -11,6 +11,8 @@ public class GetRestaurantMenuItemsRequest : IRequest
     public int? PageSize { get; set; }
     
     public string Keyword { get; set; }
+    
+    public int RestaurantId { get; set; }
 }
 
 public class GetRestaurantMenuItemsResponse : SmartTalkResponse<List<RestaurantMenuItemDto>>
