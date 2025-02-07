@@ -23,6 +23,8 @@ public class PhoneOrderOrderItemDto
     public string Note { get; set; }
 
     public PhoneOrderOrderType OrderType { get; set; }
+    
+    public int MenuItemId { get; set; }
 
     public DateTimeOffset CreatedDate { get; set; }
 }
