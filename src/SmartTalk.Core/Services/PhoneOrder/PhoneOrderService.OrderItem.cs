@@ -44,7 +44,7 @@ public partial class PhoneOrderService
         var orderItems = await _phoneOrderDataProvider.AddPhoneOrderItemAsync(_mapper.Map<List<PhoneOrderOrderItem>>(command.OrderItems), cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var menuItems = await _restaurantDataProvider.GetRestaurantMenuItemsAsync(
-            ids: orderItems.Select(x => x.MenuItemId).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
+            ids: orderItems.Where(x => x.MenuItemId.HasValue).Select(x => x.MenuItemId.Value).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var response = await _easyPosClient.PlaceOrderToEasyPosAsync(new PlaceOrderToEasyPosRequestDto
         {
