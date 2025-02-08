@@ -351,7 +351,11 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                                         case OpenAiToolConstants.ConfirmOrder:
                                             await ProcessOrderAsync(openAiWebSocket, context, outputElement, cancellationToken).ConfigureAwait(false);
                                             break;
-
+                                        
+                                        case OpenAiToolConstants.ConfirmCustomerInformation:
+                                            await ProcessRecordCustomerInformationAsync(openAiWebSocket, context, outputElement, cancellationToken).ConfigureAwait(false);
+                                            break;
+                                        
                                         case OpenAiToolConstants.TransferCall:
                                         case OpenAiToolConstants.HandlePhoneOrderIssues:
                                         case OpenAiToolConstants.HandleThirdPartyDelayedDelivery:
@@ -401,6 +405,25 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         context.LastMessage = confirmOrderMessage;
         
         await SendToWebSocketAsync(openAiWebSocket, confirmOrderMessage);
+        await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
+    }
+
+    private async Task ProcessRecordCustomerInformationAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context, JsonElement jsonDocument, CancellationToken cancellationToken)
+    {
+        var recordSuccess = new
+        {
+            type = "conversation.item.create",
+            item = new
+            {
+                type = "function_call_output",
+                call_id = jsonDocument.GetProperty("call_id").GetString(),
+                output = "Reply in the guest's language: OK, I've recorded it for you."
+            }
+        };
+        
+        context.UserInfo = JsonConvert.DeserializeObject<AiSpeechAssistantUserInfoDto>(jsonDocument.GetProperty("arguments").ToString());
+        
+        await SendToWebSocketAsync(openAiWebSocket, recordSuccess);
         await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
     }
 
@@ -781,6 +804,28 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                             }
                         }
                     },
+                    new OpenAiRealtimeToolDto
+                    {
+                        Name = OpenAiToolConstants.ConfirmCustomerInformation,
+                        Description = "When the customer confirms the order using their name and phone number, record this information.",
+                        Parameters = new OpenAiRealtimeToolParametersDto
+                        {
+                            Type = "object",
+                            Properties = new
+                            {
+                                customer_name = new
+                                {
+                                    type = "string",
+                                    description = "Name of the customer"
+                                },
+                                customer_phone = new
+                                {
+                                    type = "string",
+                                    description = "The phone number the customer used to place the pickup order"
+                                }
+                            }
+                        }
+                    }
                 }
             }
         };
