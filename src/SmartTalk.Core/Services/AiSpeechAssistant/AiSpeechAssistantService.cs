@@ -805,6 +805,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                     },
                     new OpenAiRealtimeToolDto
                     {
+                        Type = "function",
                         Name = OpenAiToolConstants.ConfirmCustomerInformation,
                         Description = "When the customer confirms the order using their name and phone number, record this information.",
                         Parameters = new OpenAiRealtimeToolParametersDto
