@@ -57,7 +57,7 @@ public partial class PhoneOrderService
             Notes = string.Empty,
             OrderItems = orderItems.Select(x => new PhoneCallOrderItem
             {
-                ProductId = x.ProductId ?? GetMenuItemByName(menuItems, x.FoodName).ProductId ?? 0,
+                ProductId = x.ProductId ?? GetMenuItemByName(menuItems, x.FoodName)?.ProductId ?? 0,
                 Quantity = x.Quantity,
                 OriginalPrice = x.Price,
                 Price = x.Price,
