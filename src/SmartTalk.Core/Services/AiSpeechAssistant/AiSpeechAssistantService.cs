@@ -162,7 +162,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         
         await CallResource.UpdateAsync(
             pathSid: callSid,
-            twiml: $"<Response>\n    <Hangup/>\n</Response>"
+            status: CallResource.UpdateStatusEnum.Completed
         );
     }
 
