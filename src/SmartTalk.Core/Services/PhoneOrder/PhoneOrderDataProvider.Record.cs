@@ -29,6 +29,8 @@ public partial interface IPhoneOrderDataProvider
 
     Task<List<GetPhoneOrderRecordsWithUserCountDto>> GetPhoneOrderRecordsWithUserCountAsync(
         DateTimeOffset startTime, DateTimeOffset endTime, CancellationToken cancellationToken);
+    
+    Task<PhoneOrderRecord> GetPhoneOrderRecordByIdAsync(int recordId, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderDataProvider
@@ -162,5 +164,10 @@ public partial class PhoneOrderDataProvider
             .OrderBy(x => x.UserName)
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    public async Task<PhoneOrderRecord> GetPhoneOrderRecordByIdAsync(int recordId, CancellationToken cancellationToken)
+    {
+        return await _repository.Query<PhoneOrderRecord>().Where(x => x.Id == recordId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 }

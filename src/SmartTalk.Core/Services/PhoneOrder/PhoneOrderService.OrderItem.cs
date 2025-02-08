@@ -73,7 +73,16 @@ public partial class PhoneOrderService
         
         Log.Information("Place order response: {@Response}", response);
 
-        if (response.Data == null || !response.Success) throw new Exception("Can not placing order.");
+        var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByIdAsync(command.RecordId, cancellationToken).ConfigureAwait(false);
+
+        if (response.Data == null || !response.Success)
+        {
+            await MarkPhoneOrderStatusAsSpecificAsync(record, PhoneOrderOrderStatus.Failed, cancellationToken).ConfigureAwait(false);
+            
+            throw new Exception("Can not place an order.");
+        }
+
+        await MarkPhoneOrderStatusAsSpecificAsync(record, PhoneOrderOrderStatus.Success, cancellationToken).ConfigureAwait(false);
 
         return new PlaceOrderAndModifyItemResponse
         {
@@ -83,5 +92,12 @@ public partial class PhoneOrderService
                 OrderItems = _mapper.Map<List<PhoneOrderOrderItemDto>>(orderItems)
             }
         };
+    }
+
+    private async Task MarkPhoneOrderStatusAsSpecificAsync(PhoneOrderRecord record, PhoneOrderOrderStatus status, CancellationToken cancellationToken)
+    {
+        record.OrderStatus = status;
+
+        await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 }

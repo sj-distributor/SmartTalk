@@ -26,4 +26,6 @@ public class PhoneOrderRecordDto
     public string TranscriptionJobId { get; set; }
     
     public string LastModifiedByName { get; set; }
+    
+    public PhoneOrderOrderStatus OrderStatus { get; set; }
 }
