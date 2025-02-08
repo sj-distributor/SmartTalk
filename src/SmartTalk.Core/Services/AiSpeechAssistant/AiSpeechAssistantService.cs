@@ -11,8 +11,10 @@ using Twilio.AspNet.Core;
 using System.Net.WebSockets;
 using SmartTalk.Core.Constants;
 using Microsoft.AspNetCore.Http;
+using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Messages.Constants;
 using SmartTalk.Core.Services.Jobs;
+using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Messages.Dto.OpenAi;
 using Twilio.Rest.Api.V2010.Account;
 using SmartTalk.Core.Settings.OpenAi;
@@ -24,6 +26,8 @@ using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.PhoneOrder;
+using SmartTalk.Messages.Enums.PhoneOrder;
+using SmartTalk.Messages.Enums.STT;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 using RecordingResource = Twilio.Rest.Api.V2010.Account.Call.RecordingResource;
 
@@ -47,6 +51,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly OpenAiSettings _openAiSettings;
     private readonly TwilioSettings _twilioSettings;
     private readonly ZhiPuAiSettings _zhiPuAiSettings;
+    private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
 
@@ -54,6 +59,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         OpenAiSettings openAiSettings,
         TwilioSettings twilioSettings,
         ZhiPuAiSettings zhiPuAiSettings,
+        IPhoneOrderDataProvider phoneOrderDataProvider,
         ISmartTalkBackgroundJobClient backgroundJobClient,
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
@@ -61,6 +67,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         _twilioSettings = twilioSettings;
         _zhiPuAiSettings = zhiPuAiSettings;
         _backgroundJobClient = backgroundJobClient;
+        _phoneOrderDataProvider = phoneOrderDataProvider;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
     }
 
@@ -101,7 +108,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             }
         };
         
-        var receiveFromTwilioTask = ReceiveFromTwilioAsync(command.TwilioWebSocket, openaiWebSocket, context);
+        var receiveFromTwilioTask = ReceiveFromTwilioAsync(command.TwilioWebSocket, openaiWebSocket, context, assistant);
         var sendToTwilioTask = SendToTwilioAsync(command.TwilioWebSocket, openaiWebSocket, context, cancellationToken);
 
         try
@@ -131,17 +138,15 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
         var callResource = await CallResource.FetchAsync(pathSid: command.CallSid).ConfigureAwait(false);
         Log.Information($"Fetched call resource: {@callResource}");
-        
-        var aiSpeechAssistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByNumbersAsync(callResource.To, cancellationToken).ConfigureAwait(false);
 
-        if (aiSpeechAssistant == null) return;
+        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordAsync(sessionId: command.CallSid, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        _backgroundJobClient.Enqueue<IMediator>(x => x.SendAsync(new ReceivePhoneOrderRecordCommand
+        if (records is { Count: > 0 } && records.FirstOrDefault() != null)
         {
-            RecordUrl = command.RecordingUrl,
-            AgentId = aiSpeechAssistant.AgentId,
-            CreatedDate = callResource.StartTime.Value
-        }, cancellationToken));
+            records.First().Url = command.RecordingUrl;
+
+            await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(records.First(), cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
     }
 
     public async Task TransferHumanServiceAsync(TransferHumanServiceCommand command, CancellationToken cancellationToken)
@@ -199,7 +204,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         };
     }
     
-    private async Task ReceiveFromTwilioAsync(WebSocket twilioWebSocket, WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context)
+    private async Task ReceiveFromTwilioAsync(WebSocket twilioWebSocket, WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context, Domain.AISpeechAssistant.AiSpeechAssistant assistant)
     {
         var buffer = new byte[1024 * 10];
         try
@@ -246,6 +251,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                             await SendToWebSocketAsync(openAiWebSocket, audioAppend);
                             break;
                         case "stop":
+                            await PersistAiSpeechOrderInfoAsync(context, assistant).ConfigureAwait(false);
                             break;
                     }
                 }
@@ -255,6 +261,30 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         {
             Log.Information($"Receive from Twilio error: {ex.Message}");
         }
+    }
+
+    private async Task PersistAiSpeechOrderInfoAsync(AiSpeechAssistantStreamContxtDto context, Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken = default)
+    {
+        var record = new PhoneOrderRecord
+        {
+            AgentId = assistant.AgentId,
+            SessionId = context.CallSid,
+            Language = TranscriptionLanguage.Chinese
+        };
+        
+        await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync([record], cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var orderItems = context.OrderItems.Order.Select(x => new PhoneOrderOrderItem
+        {
+            RecordId = record.Id,
+            FoodName = x.Name,
+            Quantity = x.Quantity,
+            Price = (double)x.Price,
+            Note = x.Comments,
+            OrderType = PhoneOrderOrderType.AIOrder
+        }).ToList();
+
+        await _phoneOrderDataProvider.AddPhoneOrderItemAsync(orderItems, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
     private async Task SendToTwilioAsync(WebSocket twilioWebSocket, WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context, CancellationToken cancellationToken)
