@@ -451,7 +451,8 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             item = new
             {
                 type = "function_call_output",
-                output = "Reply in the customer's language: Goodbye and have a nice day"
+                call_id = jsonDocument.GetProperty("call_id").GetString(),
+                output = "Say goodbye to the guests in their **language**"
             }
         };
         
