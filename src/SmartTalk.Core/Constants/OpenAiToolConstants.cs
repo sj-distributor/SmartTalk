@@ -15,4 +15,5 @@ public static class OpenAiToolConstants
     public const string HandlePromotionCalls = "handle_promotion_calls";
     public const string CheckOrderStatus = "check_order_status";
     public const string RequestOrderDelivery = "request_order_delivery";
+    public const string Hangup = "hangup";
 }
