@@ -1,6 +1,7 @@
 using Newtonsoft.Json;
 using Serilog;
 using SmartTalk.Core.Domain.PhoneOrder;
+using SmartTalk.Core.Domain.Restaurants;
 using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.PhoneOrder;
@@ -54,17 +55,15 @@ public partial class PhoneOrderService
             Type = 9,
             IsTaxFree = true,
             Notes = string.Empty,
-            OrderItems = orderItems.Where(x => x.ProductId.HasValue).Select(x => new PhoneCallOrderItem
+            OrderItems = orderItems.Select(x => new PhoneCallOrderItem
             {
-                ProductId = menuItems.FirstOrDefault(m => m.ProductId == x.ProductId)?.ProductId ?? 0,
+                ProductId = x.ProductId ?? GetMenuItemByName(menuItems, x.FoodName).ProductId ?? 0,
                 Quantity = x.Quantity,
                 OriginalPrice = x.Price,
                 Price = x.Price,
                 Notes = string.IsNullOrEmpty(x.Note) ? string.Empty : x.Note,
-                OrderItemModifiers =
-                    JsonConvert.DeserializeObject<List<PhoneCallOrderItemModifiers>>(
-                        menuItems.FirstOrDefault(m => m.ProductId == x.ProductId)?.OrderItemModifiers ?? string.Empty) ?? []
-            }).ToList()
+                OrderItemModifiers = HandleSpecialMenuItems(menuItems, x)
+            }).Where(x => x.ProductId != 0).ToList()
         };
         
         Log.Information("Generate easy pos order request: {@Request}", request);
@@ -92,6 +91,31 @@ public partial class PhoneOrderService
                 OrderItems = _mapper.Map<List<PhoneOrderOrderItemDto>>(orderItems)
             }
         };
+    }
+
+    private RestaurantMenuItem GetMenuItemByName(List<RestaurantMenuItem> menuItems, string foodName)
+    {
+        return menuItems.FirstOrDefault(x => x.Name == foodName) ?? menuItems.FirstOrDefault(x => foodName.Contains(x.Name));
+    }
+
+    private List<PhoneCallOrderItemModifiers> HandleSpecialMenuItems(List<RestaurantMenuItem> menuItems, PhoneOrderOrderItem orderItem)
+    {
+        var specialItems = menuItems.Where(x => x.ProductId.HasValue && x.ProductId == orderItem.ProductId).ToList();
+
+        if (specialItems.Count == 0)
+        {
+            var item = GetMenuItemByName(menuItems, orderItem.FoodName);
+
+            if (item == null || string.IsNullOrEmpty(item.OrderItemModifiers)) return [];
+
+            return JsonConvert.DeserializeObject<List<PhoneCallOrderItemModifiers>>(item.OrderItemModifiers);
+        }
+
+        if (specialItems.Count == 1) return [];
+        
+        var specificationItem = GetMenuItemByName(specialItems, orderItem.FoodName);
+
+        return JsonConvert.DeserializeObject<List<PhoneCallOrderItemModifiers>>(specificationItem?.OrderItemModifiers ?? string.Empty) ?? [];
     }
 
     private async Task MarkPhoneOrderStatusAsSpecificAsync(PhoneOrderRecord record, PhoneOrderOrderStatus status, CancellationToken cancellationToken)
