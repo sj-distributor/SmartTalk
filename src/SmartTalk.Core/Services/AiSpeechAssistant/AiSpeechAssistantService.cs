@@ -458,7 +458,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         await SendToWebSocketAsync(openAiWebSocket, goodbye);
         await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
         
-        _backgroundJobClient.Schedule<IAiSpeechAssistantService>(x => x.HangupCallAsync(jsonDocument.GetProperty("call_id").GetString(), cancellationToken), TimeSpan.FromSeconds(2));
+        _backgroundJobClient.Schedule<IAiSpeechAssistantService>(x => x.HangupCallAsync(context.CallSid, cancellationToken), TimeSpan.FromSeconds(2));
     }
     
     private async Task ProcessTransferCallAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context, JsonElement jsonDocument, string functionName, CancellationToken cancellationToken)
