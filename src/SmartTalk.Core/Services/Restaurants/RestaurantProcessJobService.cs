@@ -65,7 +65,7 @@ public class RestaurantProcessJobService : IRestaurantProcessJobService
         
         Log.Information("Get easy pos menu item response: {@Response}", response);
 
-        var allItems = await _restaurantDataProvider.GetRestaurantMenuItemsAsync(restaurant.Id, cancellationToken).ConfigureAwait(false);
+        var allItems = await _restaurantDataProvider.GetRestaurantMenuItemsAsync(restaurant.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         foreach (var item in allItems)
             await _vectorDb.DeleteAsync(restaurant.Id.ToString(), new VectorRecordDto { Id = item.Id.ToString() }, cancellationToken).ConfigureAwait(false);
@@ -115,7 +115,7 @@ public class RestaurantProcessJobService : IRestaurantProcessJobService
         {
             var modifierGroup = product.ModifierGroups.First();
 
-            var orderItemModifiers = new PhoneCallOrderItemModifiers
+            var orderItemModifiers = new PhoneOrderOrderItemModifiers
             {
                 Quantity = 1,
                 ModifierId = modifierGroup.Id,

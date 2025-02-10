@@ -31,6 +31,9 @@ public class PhoneOrderOrderItem : IEntity, IHasCreatedFields
     [Column("order_type")]
     public PhoneOrderOrderType OrderType { get; set; }
     
+    [Column("product_id")]
+    public long? ProductId { get; set; }
+    
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
 }

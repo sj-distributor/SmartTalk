@@ -10,6 +10,9 @@ public class PhoneOrderDetailDto
 
 public class FoodDetailDto
 {
+    [JsonProperty("id")]
+    public int Id { get; set; }
+    
     [JsonProperty("food_name")]
     public string FoodName { get; set; }
     
@@ -19,5 +22,9 @@ public class FoodDetailDto
     [JsonProperty("remark")]
     public string Remark { get; set; }
     
+    [JsonProperty("price")]
     public double Price { get; set; }
+    
+    [JsonProperty("product_id")]
+    public long? ProductId { get; set; }
 }
