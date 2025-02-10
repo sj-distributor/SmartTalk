@@ -52,7 +52,7 @@ public class PhoneOrderRecord : IEntity
     public string TranscriptionJobId { get; set; }
     
     [Column("order_status")]
-    public PhoneOrderOrderStatus OrderStatus { get; set; } = PhoneOrderOrderStatus.Pendding;
+    public PhoneOrderOrderStatus OrderStatus { get; set; } = PhoneOrderOrderStatus.Pending;
     
     [NotMapped]
     public UserAccount UserAccount { get; set; }
