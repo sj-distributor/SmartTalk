@@ -9,10 +9,12 @@ using Twilio.TwiML.Voice;
 using SmartTalk.Core.Ioc;
 using Twilio.AspNet.Core;
 using System.Net.WebSockets;
+using AutoMapper;
 using SmartTalk.Core.Constants;
 using Microsoft.AspNetCore.Http;
 using SmartTalk.Messages.Constants;
 using SmartTalk.Core.Services.Jobs;
+using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Messages.Dto.OpenAi;
 using Twilio.Rest.Api.V2010.Account;
 using SmartTalk.Core.Settings.OpenAi;
@@ -46,23 +48,29 @@ public interface IAiSpeechAssistantService : IScopedDependency
 
 public class AiSpeechAssistantService : IAiSpeechAssistantService
 {
+    private readonly IMapper _mapper;
     private readonly OpenAiSettings _openAiSettings;
     private readonly TwilioSettings _twilioSettings;
     private readonly ZhiPuAiSettings _zhiPuAiSettings;
+    private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
 
     public AiSpeechAssistantService(
+        IMapper mapper,
         OpenAiSettings openAiSettings,
         TwilioSettings twilioSettings,
         ZhiPuAiSettings zhiPuAiSettings,
+        IPhoneOrderDataProvider phoneOrderDataProvider,
         ISmartTalkBackgroundJobClient backgroundJobClient,
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
+        _mapper = mapper;
         _openAiSettings = openAiSettings;
         _twilioSettings = twilioSettings;
         _zhiPuAiSettings = zhiPuAiSettings;
         _backgroundJobClient = backgroundJobClient;
+        _phoneOrderDataProvider = phoneOrderDataProvider;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
     }
 
@@ -92,7 +100,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
 
         var openaiWebSocket = await ConnectOpenAiRealTimeSocketAsync(assistant, knowledgeBase, cancellationToken).ConfigureAwait(false);
         
-        var context = new AiSpeechAssistantStreamContxtDto
+        var context = new AiSpeechAssistantStreamContextDto
         {
             Host = command.Host,
             LastPrompt = knowledgeBase,
@@ -100,7 +108,8 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             LastUserInfo = new AiSpeechAssistantUserInfoDto
             {
                 PhoneNumber = command.From
-            }
+            },
+            Assistant = _mapper.Map<AiSpeechAssistantDto>(assistant)
         };
         
         var receiveFromTwilioTask = ReceiveFromTwilioAsync(command.TwilioWebSocket, openaiWebSocket, context);
@@ -128,22 +137,14 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
 
     public async Task ReceivePhoneRecordingStatusCallbackAsync(ReceivePhoneRecordingStatusCallbackCommand command, CancellationToken cancellationToken)
     {
-        Log.Information($"Handling receive phone record: {@command}");
-        
-        TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
-        var callResource = await CallResource.FetchAsync(pathSid: command.CallSid).ConfigureAwait(false);
-        Log.Information($"Fetched call resource: {@callResource}");
-        
-        var aiSpeechAssistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByNumbersAsync(callResource.To, cancellationToken).ConfigureAwait(false);
+        Log.Information("Handling receive phone record: {@command}", command);
 
-        if (aiSpeechAssistant == null) return;
+        var record = await _phoneOrderDataProvider.GetPhoneOrderRecordBySessionIdAsync(command.CallSid, cancellationToken).ConfigureAwait(false);
 
-        _backgroundJobClient.Enqueue<IMediator>(x => x.SendAsync(new ReceivePhoneOrderRecordCommand
-        {
-            RecordUrl = command.RecordingUrl,
-            AgentId = aiSpeechAssistant.AgentId,
-            CreatedDate = callResource.StartTime.Value
-        }, cancellationToken));
+        Log.Information("Get phone order record: {@record}", record);
+
+        record.Url = command.RecordingUrl;
+        await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
     public async Task TransferHumanServiceAsync(TransferHumanServiceCommand command, CancellationToken cancellationToken)
@@ -211,7 +212,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         };
     }
     
-    private async Task ReceiveFromTwilioAsync(WebSocket twilioWebSocket, WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context)
+    private async Task ReceiveFromTwilioAsync(WebSocket twilioWebSocket, WebSocket openAiWebSocket, AiSpeechAssistantStreamContextDto context)
     {
         var buffer = new byte[1024 * 10];
         try
@@ -258,6 +259,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                             await SendToWebSocketAsync(openAiWebSocket, audioAppend);
                             break;
                         case "stop":
+                            _backgroundJobClient.Enqueue<IAiSpeechAssistantProcessJobService>(x => x.RecordAiSpeechAssistantCallAsync(context, CancellationToken.None));
                             break;
                     }
                 }
@@ -269,7 +271,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         }
     }
 
-    private async Task SendToTwilioAsync(WebSocket twilioWebSocket, WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context, CancellationToken cancellationToken)
+    private async Task SendToTwilioAsync(WebSocket twilioWebSocket, WebSocket openAiWebSocket, AiSpeechAssistantStreamContextDto context, CancellationToken cancellationToken)
     {
         Log.Information("Sending to twilio.");
         var buffer = new byte[1024 * 30];
@@ -335,6 +337,18 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                             Log.Information($"Interrupting response with id: {context.LastAssistantItem}");
                             await HandleSpeechStartedEventAsync(twilioWebSocket, openAiWebSocket, context);
                         }
+                    }
+
+                    if (jsonDocument?.RootElement.GetProperty("type").GetString() == "conversation.item.input_audio_transcription.completed")
+                    {
+                        var response = jsonDocument.RootElement.GetProperty("transcript").ToString();
+                        context.ConversationTranscription.Add(AiSpeechAssistantSpeaker.User, response);
+                    }
+                    
+                    if (jsonDocument?.RootElement.GetProperty("type").GetString() == "response.audio_transcript.done")
+                    {
+                        var response = jsonDocument.RootElement.GetProperty("transcript").ToString();
+                        context.ConversationTranscription.Add(AiSpeechAssistantSpeaker.Ai, response);
                     }
                     
                     if (jsonDocument?.RootElement.GetProperty("type").GetString() == "response.done")
@@ -403,8 +417,10 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         }
     }
     
-    private async Task ProcessOrderAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context, JsonElement jsonDocument, CancellationToken cancellationToken)
+    private async Task ProcessOrderAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContextDto context, JsonElement jsonDocument, CancellationToken cancellationToken)
     {
+        context.OrderItems = JsonConvert.DeserializeObject<AiSpeechAssistantOrderDto>(jsonDocument.GetProperty("arguments").ToString());
+        
         var confirmOrderMessage = new
         {
             type = "conversation.item.create",
@@ -423,7 +439,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
     }
 
-    private async Task ProcessRecordCustomerInformationAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context, JsonElement jsonDocument, CancellationToken cancellationToken)
+    private async Task ProcessRecordCustomerInformationAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContextDto context, JsonElement jsonDocument, CancellationToken cancellationToken)
     {
         var recordSuccess = new
         {
@@ -442,7 +458,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
     }
         
-    private async Task ProcessHangupAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context, JsonElement jsonDocument, CancellationToken cancellationToken)
+    private async Task ProcessHangupAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContextDto context, JsonElement jsonDocument, CancellationToken cancellationToken)
     {
         var goodbye = new
         {
@@ -461,7 +477,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         _backgroundJobClient.Schedule<IAiSpeechAssistantService>(x => x.HangupCallAsync(context.CallSid, cancellationToken), TimeSpan.FromSeconds(2));
     }
     
-    private async Task ProcessTransferCallAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context, JsonElement jsonDocument, string functionName, CancellationToken cancellationToken)
+    private async Task ProcessTransferCallAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContextDto context, JsonElement jsonDocument, string functionName, CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(context.HumanContactPhone))
         {
@@ -519,7 +535,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         };
     }
     
-    private async Task ProcessRepeatOrderAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context, JsonElement jsonDocument, CancellationToken cancellationToken)
+    private async Task ProcessRepeatOrderAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContextDto context, JsonElement jsonDocument, CancellationToken cancellationToken)
     {
         var repeatOrderMessage = new
         {
@@ -538,13 +554,13 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
     }
     
-    private async Task ProcessUpdateOrderAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context, JsonElement jsonDocument, CancellationToken cancellationToken)
+    private async Task ProcessUpdateOrderAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContextDto context, JsonElement jsonDocument, CancellationToken cancellationToken)
     {
         Log.Information("Ai phone order items: {@items}", jsonDocument.GetProperty("arguments").ToString());
         
         context.OrderItems = JsonConvert.DeserializeObject<AiSpeechAssistantOrderDto>(jsonDocument.GetProperty("arguments").ToString());
         
-        var orderItemsJson = JsonConvert.SerializeObject(context.OrderItems).Replace("after_modified_order_items", "current_order");
+        var orderItemsJson = JsonConvert.SerializeObject(context.OrderItems).Replace("order_items", "current_order");
         
         var prompt = context.LastPrompt.Replace($"{context.OrderItemsJson}", orderItemsJson);
         
@@ -568,7 +584,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
     }
     
-    private async Task HandleSpeechStartedEventAsync(WebSocket twilioWebSocket, WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context)
+    private async Task HandleSpeechStartedEventAsync(WebSocket twilioWebSocket, WebSocket openAiWebSocket, AiSpeechAssistantStreamContextDto context)
     {
         Log.Information("Handling speech started event.");
         
@@ -632,7 +648,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         await SendToWebSocketAsync(openaiWebSocket, new { type = "response.create" });
     }
     
-    private async Task SendMark(WebSocket twilioWebSocket, AiSpeechAssistantStreamContxtDto context)
+    private async Task SendMark(WebSocket twilioWebSocket, AiSpeechAssistantStreamContextDto context)
     {
         if (!string.IsNullOrEmpty(context.StreamSid))
         {
@@ -666,6 +682,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                 instructions = prompt,
                 modalities = new[] { "text", "audio" },
                 temperature = 0.8,
+                input_audio_transcription = new { model = "whisper-1" },
                 tools = new[]
                 {
                     new OpenAiRealtimeToolDto
@@ -678,7 +695,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                             Type = "object",
                             Properties = new
                             {
-                                after_modified_order_items = new
+                                order_items = new
                                 {
                                     type = "array",
                                     description = "The current complete order after the guest has modified the order",
@@ -802,7 +819,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                                 ordered_items = new
                                 {
                                     type = "array",
-                                    description = "List of items ordered by the customer",
+                                    description = "The current complete order after the guest has modified the order",
                                     items = new
                                     {
                                         type = "object",
@@ -813,20 +830,20 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                                                 type = "string",
                                                 description = "Name of the item ordered"
                                             },
-                                            count = new
+                                            quantity = new
                                             {
                                                 type = "number",
-                                                description = "Quantity of the item ordered"
+                                                description = "New quantity for the item"
                                             },
                                             price = new
                                             {
                                                 type = "string",
                                                 description = "The price of the item multiplied by the quantity"
                                             },
-                                            comment = new
+                                            notes = new
                                             {
                                                 type = "string",
-                                                description = "Special requirements or comments regarding the item"
+                                                description = "Additional notes or specifications for the item"
                                             },
                                             specification = new
                                             {
