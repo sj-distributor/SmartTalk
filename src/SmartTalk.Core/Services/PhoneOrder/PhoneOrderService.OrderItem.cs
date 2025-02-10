@@ -95,7 +95,7 @@ public partial class PhoneOrderService
 
     private RestaurantMenuItem GetMenuItemByName(List<RestaurantMenuItem> menuItems, string foodName)
     {
-        return menuItems.FirstOrDefault(x => x.Name == foodName) ?? menuItems.FirstOrDefault(x => foodName.Contains(x.Name));
+        return menuItems.FirstOrDefault(x => x.Name == foodName || x.Name.Contains(foodName));
     }
 
     private List<PhoneCallOrderItemModifiers> HandleSpecialMenuItems(List<RestaurantMenuItem> menuItems, PhoneOrderOrderItem orderItem)
