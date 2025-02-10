@@ -12,5 +12,7 @@ public class RestaurantPayloadDto
     
     public string Name { get; set; }
     
+    public long? ProductId { get; set; }
+    
     public RestaurantItemLanguage Language { get; set; }
 }

@@ -96,4 +96,13 @@ public class PhoneOrderController : ControllerBase
 
         return Ok(response);
     }
+    
+    [Route("order/place"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(PlaceOrderAndModifyItemResponse))]
+    public async Task<IActionResult> PlaceOrderAndModifyItemsAsync([FromBody] PlaceOrderAndModifyItemCommand command)
+    {
+        var response = await _mediator.SendAsync<PlaceOrderAndModifyItemCommand, PlaceOrderAndModifyItemResponse>(command).ConfigureAwait(false);
+
+        return Ok(response);
+    }
 }

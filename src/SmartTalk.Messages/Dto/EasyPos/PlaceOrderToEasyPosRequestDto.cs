@@ -1,3 +1,4 @@
+using Newtonsoft.Json;
 using SmartTalk.Messages.Responses;
 
 namespace SmartTalk.Messages.Dto.EasyPos;
@@ -62,20 +63,31 @@ public class PhoneCallOrderItemModifierLocalization : PhoneCallOrderItemLocaliza
 
 public class PlaceOrderToEasyPosResponseDto : SmartTalkResponse<PlaceOrderToEasyPosResponseData>
 {
+    [JsonProperty("success")]
     public bool Success { get; set; }
 }
 
 public class PlaceOrderToEasyPosResponseData
 {
+    [JsonProperty("order")]
     public PlaceOrderToEasyPosResponseDataOrder Order { get; set; }
     
+    [JsonProperty("orderSnapshot")]
     public object OrderSnapshot { get; set; }
 }
 
 public class PlaceOrderToEasyPosResponseDataOrder
 {
+    [JsonProperty("status")]
     public int Status { get; set; }
     
-    public List<object> OrderItems { get; set; }
+    [JsonProperty("orderItems")]
+    public List<PlaceOrderToEasyPosResponseDataOrderItem> OrderItems { get; set; }
+}
+
+public class PlaceOrderToEasyPosResponseDataOrderItem
+{
+    [JsonProperty("orderId")]
+    public long OrderId { get; set; }
 }
 

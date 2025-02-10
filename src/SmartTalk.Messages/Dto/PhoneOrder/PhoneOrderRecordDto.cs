@@ -10,8 +10,6 @@ public class PhoneOrderRecordDto
     public string SessionId { get; set; }
     
     public PhoneOrderRecordStatus Status { get; set; }
-
-    public PhoneOrderRestaurant? Restaurant { get; set; }
     
     public string Tips { get; set; }
 
@@ -28,4 +26,6 @@ public class PhoneOrderRecordDto
     public string TranscriptionJobId { get; set; }
     
     public string LastModifiedByName { get; set; }
+    
+    public PhoneOrderOrderStatus OrderStatus { get; set; }
 }

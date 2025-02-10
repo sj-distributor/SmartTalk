@@ -23,9 +23,6 @@ public class PhoneOrderRecord : IEntity
 
     [Column("status")]
     public PhoneOrderRecordStatus Status { get; set; } = PhoneOrderRecordStatus.Recieved;
-
-    [Column("restaurant")]
-    public PhoneOrderRestaurant? Restaurant { get; set; }
     
     [Column("tips")]
     public string Tips { get; set; }
@@ -53,6 +50,9 @@ public class PhoneOrderRecord : IEntity
     
     [Column("transcription_job_id")]
     public string TranscriptionJobId { get; set; }
+    
+    [Column("order_status")]
+    public PhoneOrderOrderStatus OrderStatus { get; set; } = PhoneOrderOrderStatus.Pendding;
     
     [NotMapped]
     public UserAccount UserAccount { get; set; }

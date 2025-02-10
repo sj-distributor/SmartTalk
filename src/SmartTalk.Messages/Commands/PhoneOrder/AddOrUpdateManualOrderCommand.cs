@@ -11,7 +11,7 @@ public class AddOrUpdateManualOrderCommand : ICommand
     
     public int RecordId { get; set; }
 
-    public PhoneOrderRestaurant Restaurant { get; set; }
+    public string Restaurant { get; set; }
 }
 
 public class AddOrUpdateManualOrderResponse : SmartTalkResponse<List<PhoneOrderOrderItemDto>>
