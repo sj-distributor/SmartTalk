@@ -40,6 +40,8 @@ public interface IAiSpeechAssistantService : IScopedDependency
     Task ReceivePhoneRecordingStatusCallbackAsync(ReceivePhoneRecordingStatusCallbackCommand command, CancellationToken cancellationToken);
     
     Task TransferHumanServiceAsync(TransferHumanServiceCommand command, CancellationToken cancellationToken);
+
+    Task HangupCallAsync(string callSid, CancellationToken cancellationToken);
 }
 
 public class AiSpeechAssistantService : IAiSpeechAssistantService
@@ -151,6 +153,16 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         var call = await CallResource.UpdateAsync(
             pathSid: command.CallSid,
             twiml: $"<Response>\n    <Dial>\n      <Number>{command.HumanPhone}</Number>\n    </Dial>\n  </Response>"
+        );
+    }
+
+    public async Task HangupCallAsync(string callSid, CancellationToken cancellationToken)
+    {
+        TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
+        
+        await CallResource.UpdateAsync(
+            pathSid: callSid,
+            status: CallResource.UpdateStatusEnum.Completed
         );
     }
 
@@ -351,6 +363,10 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                                             await ProcessOrderAsync(openAiWebSocket, context, outputElement, cancellationToken).ConfigureAwait(false);
                                             break;
 
+                                        case OpenAiToolConstants.Hangup:
+                                            await ProcessHangupAsync(openAiWebSocket, context, outputElement, cancellationToken).ConfigureAwait(false);
+                                            break;
+                                        
                                         case OpenAiToolConstants.TransferCall:
                                         case OpenAiToolConstants.HandlePhoneOrderIssues:
                                         case OpenAiToolConstants.HandleThirdPartyDelayedDelivery:
@@ -403,6 +419,25 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
     }
 
+    private async Task ProcessHangupAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context, JsonElement jsonDocument, CancellationToken cancellationToken)
+    {
+        var goodbye = new
+        {
+            type = "conversation.item.create",
+            item = new
+            {
+                type = "function_call_output",
+                call_id = jsonDocument.GetProperty("call_id").GetString(),
+                output = "Say goodbye to the guests in their **language**"
+            }
+        };
+        
+        await SendToWebSocketAsync(openAiWebSocket, goodbye);
+        await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
+        
+        _backgroundJobClient.Schedule<IAiSpeechAssistantService>(x => x.HangupCallAsync(context.CallSid, cancellationToken), TimeSpan.FromSeconds(2));
+    }
+    
     private async Task ProcessTransferCallAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context, JsonElement jsonDocument, string functionName, CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(context.HumanContactPhone))
@@ -724,6 +759,12 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                         Type = "function",
                         Name = OpenAiToolConstants.RequestOrderDelivery,
                         Description = "When customers request delivery of their orders"
+                    },
+                    new OpenAiRealtimeToolDto
+                    {
+                        Type = "function",
+                        Name = OpenAiToolConstants.Hangup,
+                        Description = "When the customer says goodbye or something similar, hang up the phone"
                     },
                     new OpenAiRealtimeToolDto
                     {
