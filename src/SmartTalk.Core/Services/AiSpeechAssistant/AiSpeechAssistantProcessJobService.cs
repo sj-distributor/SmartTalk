@@ -94,8 +94,8 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         return conversationTranscription.Select(entry => new PhoneOrderConversation
             {
                 RecordId = recordId,
-                Question = entry.Item1 == AiSpeechAssistantSpeaker.Ai ? entry.Item2 : null,
-                Answer = entry.Item1 == AiSpeechAssistantSpeaker.User ? entry.Item2 : null,
+                Question = entry.Item1 == AiSpeechAssistantSpeaker.Ai ? entry.Item2 : string.Empty,
+                Answer = entry.Item1 == AiSpeechAssistantSpeaker.User ? entry.Item2 : string.Empty,
                 Order = order++
             }).ToList();
     }
