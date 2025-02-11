@@ -26,6 +26,7 @@ using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.PhoneOrder;
+using SmartTalk.Messages.Enums.PhoneOrder;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 using RecordingResource = Twilio.Rest.Api.V2010.Account.Call.RecordingResource;
 
@@ -145,6 +146,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         Log.Information("Get phone order record: {@record}", record);
 
         record.Url = command.RecordingUrl;
+        record.Status = PhoneOrderRecordStatus.Sent;
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
