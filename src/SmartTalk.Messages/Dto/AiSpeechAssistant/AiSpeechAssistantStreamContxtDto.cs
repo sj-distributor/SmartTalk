@@ -39,7 +39,7 @@ public class AiSpeechAssistantStreamContextDto
     
     public AiSpeechAssistantDto Assistant { get; set; }
 
-    public Dictionary<AiSpeechAssistantSpeaker, string> ConversationTranscription { get; set; } = new();
+    public List<(AiSpeechAssistantSpeaker, string)> ConversationTranscription { get; set; } = new();
 }
 
 public class AiSpeechAssistantUserInfoDto
