@@ -20,8 +20,4 @@ public class GetPhoneOrderOrderItemsData
     public List<PhoneOrderOrderItemDto> AIItems { get; set; }
 
     public string ManualOrderId { get; set; }
-    
-    public string CustomerName { get; set; }
-    
-    public string PhoneNumber { get; set; }
 }
