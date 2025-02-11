@@ -15,6 +15,13 @@ public class GetRestaurantMenuItemsRequest : IRequest
     public int RestaurantId { get; set; }
 }
 
-public class GetRestaurantMenuItemsResponse : SmartTalkResponse<List<RestaurantMenuItemDto>>
+public class GetRestaurantMenuItemsResponse : SmartTalkResponse<GetRestaurantMenuItemsResponseData>
 {
+}
+
+public class GetRestaurantMenuItemsResponseData
+{
+    public int Count { get; set; }
+    
+    public List<RestaurantMenuItemDto> MenuItems { get; set; }
 }
