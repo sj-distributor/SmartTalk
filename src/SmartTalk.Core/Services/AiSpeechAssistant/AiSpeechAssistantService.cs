@@ -818,7 +818,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                             Type = "object",
                             Properties = new
                             {
-                                ordered_items = new
+                                order_items = new
                                 {
                                     type = "array",
                                     description = "The current complete order after the guest has modified the order",
