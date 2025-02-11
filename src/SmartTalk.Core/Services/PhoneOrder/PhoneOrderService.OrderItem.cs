@@ -87,6 +87,8 @@ public partial class PhoneOrderService
         {
             Data = new PlaceOrderAndModifyItemResponseData
             {
+                CustomerName = record.CustomerName,
+                PhoneNumber = record.PhoneNumber,
                 OrderNumber = response.Data.Order.OrderItems.FirstOrDefault() != null ? response.Data.Order.OrderItems.First().OrderId.ToString() : string.Empty,
                 OrderItems = _mapper.Map<List<PhoneOrderOrderItemDto>>(orderItems)
             }

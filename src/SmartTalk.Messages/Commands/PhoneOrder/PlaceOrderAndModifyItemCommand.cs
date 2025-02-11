@@ -17,6 +17,8 @@ public class PlaceOrderAndModifyItemResponse : SmartTalkResponse<PlaceOrderAndMo
 
 public class PlaceOrderAndModifyItemResponseData
 {
+    public string CustomerName { get; set; }
+    
     public string OrderNumber { get; set; }
     
     public string PhoneNumber { get; set; }
