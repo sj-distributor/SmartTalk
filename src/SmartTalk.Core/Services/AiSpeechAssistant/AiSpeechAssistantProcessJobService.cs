@@ -70,6 +70,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
 
         await _phoneOrderDataProvider.AddPhoneOrderConversationsAsync(conversations, cancellationToken: cancellationToken).ConfigureAwait(false);
 
+        Log.Information("Adding ordered items: {@Items}", context.OrderItems);
         if (context.OrderItems != null)
             await OrderRestaurantItemsAsync(record, context.OrderItems, cancellationToken).ConfigureAwait(false);
     }

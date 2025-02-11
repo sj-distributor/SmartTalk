@@ -424,6 +424,8 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
     {
         context.OrderItems = JsonConvert.DeserializeObject<AiSpeechAssistantOrderDto>(jsonDocument.GetProperty("arguments").ToString());
         
+        Log.Information("Extract ordered items: {@Items}", context.OrderItems);
+        
         var confirmOrderMessage = new
         {
             type = "conversation.item.create",
