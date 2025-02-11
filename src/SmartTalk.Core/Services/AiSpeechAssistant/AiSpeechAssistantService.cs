@@ -422,9 +422,11 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
     
     private async Task ProcessOrderAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContextDto context, JsonElement jsonDocument, CancellationToken cancellationToken)
     {
+        Log.Information("Before extract ordered items: " + jsonDocument.GetProperty("arguments"));
+        
         context.OrderItems = JsonConvert.DeserializeObject<AiSpeechAssistantOrderDto>(jsonDocument.GetProperty("arguments").ToString());
         
-        Log.Information("Extract ordered items: {@Items}", context.OrderItems);
+        Log.Information("Extracted ordered items: {@Items}", context.OrderItems);
         
         var confirmOrderMessage = new
         {
