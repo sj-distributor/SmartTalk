@@ -57,7 +57,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             AgentId = context.Assistant.AgentId,
             SessionId = context.CallSid,
             Status = PhoneOrderRecordStatus.Transcription,
-            Tips = context.ConversationTranscription.FirstOrDefault().Value,
+            Tips = context.ConversationTranscription.FirstOrDefault().Item2,
             TranscriptionText = FormattedConversation(context.ConversationTranscription),
             Language = TranscriptionLanguage.Chinese,
             CreatedDate = callResource.StartTime ?? DateTimeOffset.Now,
@@ -74,28 +74,28 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             await OrderRestaurantItemsAsync(record, context.OrderItems, cancellationToken).ConfigureAwait(false);
     }
 
-    private static string FormattedConversation(Dictionary<AiSpeechAssistantSpeaker, string> conversationTranscription)
+    private static string FormattedConversation(List<(AiSpeechAssistantSpeaker, string)> conversationTranscription)
     {
         var formattedConversation = new StringBuilder();
 
         foreach (var entry in conversationTranscription)
         {
-            var speaker = entry.Key == AiSpeechAssistantSpeaker.Ai ? "Restaurant" : "Customer";
-            formattedConversation.AppendLine($"{speaker}: {entry.Value}");
+            var speaker = entry.Item1 == AiSpeechAssistantSpeaker.Ai ? "Restaurant" : "Customer";
+            formattedConversation.AppendLine($"{speaker}: {entry.Item2}");
         }
 
         return formattedConversation.ToString();
     }
 
-    private static List<PhoneOrderConversation> ConvertToPhoneOrderConversations(Dictionary<AiSpeechAssistantSpeaker, string> conversationTranscription, int recordId)
+    private static List<PhoneOrderConversation> ConvertToPhoneOrderConversations(List<(AiSpeechAssistantSpeaker, string)> conversationTranscription, int recordId)
     {
         var order = 0;
 
         return conversationTranscription.Select(entry => new PhoneOrderConversation
             {
                 RecordId = recordId,
-                Question = entry.Key == AiSpeechAssistantSpeaker.Ai ? entry.Value : null,
-                Answer = entry.Key == AiSpeechAssistantSpeaker.User ? entry.Value : null,
+                Question = entry.Item1 == AiSpeechAssistantSpeaker.Ai ? entry.Item2 : null,
+                Answer = entry.Item1 == AiSpeechAssistantSpeaker.User ? entry.Item2 : null,
                 Order = order++
             }).ToList();
     }

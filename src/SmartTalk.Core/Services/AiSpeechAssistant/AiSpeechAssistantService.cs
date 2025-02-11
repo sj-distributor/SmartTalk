@@ -343,13 +343,13 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                     if (jsonDocument?.RootElement.GetProperty("type").GetString() == "conversation.item.input_audio_transcription.completed")
                     {
                         var response = jsonDocument.RootElement.GetProperty("transcript").ToString();
-                        context.ConversationTranscription.Add(AiSpeechAssistantSpeaker.User, response);
+                        context.ConversationTranscription.Add(new ValueTuple<AiSpeechAssistantSpeaker, string>(AiSpeechAssistantSpeaker.User, response));
                     }
                     
                     if (jsonDocument?.RootElement.GetProperty("type").GetString() == "response.audio_transcript.done")
                     {
                         var response = jsonDocument.RootElement.GetProperty("transcript").ToString();
-                        context.ConversationTranscription.Add(AiSpeechAssistantSpeaker.Ai, response);
+                        context.ConversationTranscription.Add(new ValueTuple<AiSpeechAssistantSpeaker, string>(AiSpeechAssistantSpeaker.Ai, response));
                     }
                     
                     if (jsonDocument?.RootElement.GetProperty("type").GetString() == "response.done")
