@@ -93,49 +93,57 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
     {
         var conversations = new List<PhoneOrderConversation>();
         if (conversationTranscription == null || !conversationTranscription.Any()) return conversations;
-        
+
         var order = 0;
-        var currentSpeaker = conversationTranscription[0].Item1;
-        var currentText = conversationTranscription[0].Item2;
+        PhoneOrderConversation currentConversation = null;
 
-        var currentConversation = new PhoneOrderConversation
-        {
-            RecordId = recordId,
-            Question = currentSpeaker == AiSpeechAssistantSpeaker.Ai ? currentText : string.Empty,
-            Answer = currentSpeaker == AiSpeechAssistantSpeaker.User ? currentText : string.Empty,
-            Order = order++
-        };
-
-        for (var i = 1; i < conversationTranscription.Count; i++)
+        for (var i = 0; i < conversationTranscription.Count; i++)
         {
             var entry = conversationTranscription[i];
-            if (entry.Item1 == currentSpeaker)
+            var currentSpeaker = entry.Item1;
+            var currentText = entry.Item2;
+
+            if (currentConversation == null)
             {
                 if (currentSpeaker == AiSpeechAssistantSpeaker.Ai)
                 {
-                    currentConversation.Question += " " + entry.Item2;
-                }
-                else
-                {
-                    currentConversation.Answer += " " + entry.Item2;
+                    currentConversation = new PhoneOrderConversation
+                    {
+                        RecordId = recordId,
+                        Question = currentText,
+                        Answer = string.Empty,
+                        Order = order++
+                    };
                 }
             }
             else
             {
-                conversations.Add(currentConversation);
-
-                currentSpeaker = entry.Item1;
-                currentConversation = new PhoneOrderConversation
+                switch (currentSpeaker)
                 {
-                    RecordId = recordId,
-                    Question = currentSpeaker == AiSpeechAssistantSpeaker.Ai ? entry.Item2 : string.Empty,
-                    Answer = currentSpeaker == AiSpeechAssistantSpeaker.User ? entry.Item2 : string.Empty,
-                    Order = order++
-                };
+                    case AiSpeechAssistantSpeaker.User when conversationTranscription[i - 1].Item1 == AiSpeechAssistantSpeaker.Ai:
+                        currentConversation.Answer = currentText;
+                        break;
+                    case AiSpeechAssistantSpeaker.Ai when conversationTranscription[i - 1].Item1 == AiSpeechAssistantSpeaker.User:
+                        conversations.Add(currentConversation);
+                        currentConversation = new PhoneOrderConversation
+                        {
+                            RecordId = recordId,
+                            Question = currentText,
+                            Answer = string.Empty,
+                            Order = order++
+                        };
+                        break;
+                    case AiSpeechAssistantSpeaker.Ai:
+                        currentConversation.Question += " " + currentText;
+                        break;
+                    default:
+                        currentConversation.Answer += " " + currentText;
+                        break;
+                }
             }
         }
 
-        conversations.Add(currentConversation);
+        if (currentConversation != null) conversations.Add(currentConversation);
 
         return conversations;
     }
