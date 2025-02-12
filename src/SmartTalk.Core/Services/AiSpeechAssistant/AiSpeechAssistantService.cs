@@ -368,10 +368,6 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
 
                                     switch (functionName)
                                     {
-                                        case OpenAiToolConstants.RepeatOrder:
-                                            await ProcessRepeatOrderAsync(openAiWebSocket, context, outputElement, cancellationToken).ConfigureAwait(false);
-                                            break;
-
                                         case OpenAiToolConstants.ConfirmOrder:
                                             await ProcessOrderAsync(openAiWebSocket, context, outputElement, cancellationToken).ConfigureAwait(false);
                                             break;
@@ -688,12 +684,6 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                 input_audio_transcription = new { model = "whisper-1" },
                 tools = new[]
                 {
-                    new OpenAiRealtimeToolDto
-                    {
-                        Type = "function",
-                        Name = OpenAiToolConstants.RepeatOrder,
-                        Description = "The customer needs to repeat the order."
-                    },
                     new OpenAiRealtimeToolDto
                     {
                         Type = "function",
