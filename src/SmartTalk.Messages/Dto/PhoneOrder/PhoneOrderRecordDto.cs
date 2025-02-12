@@ -28,4 +28,8 @@ public class PhoneOrderRecordDto
     public string LastModifiedByName { get; set; }
     
     public PhoneOrderOrderStatus OrderStatus { get; set; }
+    
+    public string PhoneNumber { get; set; }
+    
+    public string CustomerName { get; set; }
 }

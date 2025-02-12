@@ -19,7 +19,5 @@ public class PlaceOrderAndModifyItemResponseData
 {
     public string OrderNumber { get; set; }
     
-    public string PhoneNumber { get; set; }
-    
     public List<PhoneOrderOrderItemDto> OrderItems { get; set; }
 }
