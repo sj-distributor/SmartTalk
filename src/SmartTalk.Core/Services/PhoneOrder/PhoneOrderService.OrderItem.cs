@@ -66,11 +66,7 @@ public partial class PhoneOrderService
                 Notes = string.IsNullOrEmpty(x.Note) ? string.Empty : x.Note,
                 OrderItemModifiers = HandleSpecialMenuItems(menuItems, x)
             }).Where(x => x.ProductId != 0).ToList(),
-            Customer = new PhoneCallOrderCustomer
-            {
-                Name = record.CustomerName,
-                Phone = record.PhoneNumber
-            }
+            Customer = GetOrderCustomerInfo(record)
         };
         
         Log.Information("Generate easy pos order request: {@Request}", request);
@@ -121,6 +117,17 @@ public partial class PhoneOrderService
         var specificationItem = GetMenuItemByName(specialItems, orderItem.FoodName);
 
         return JsonConvert.DeserializeObject<List<PhoneCallOrderItemModifiers>>(specificationItem?.OrderItemModifiers ?? string.Empty) ?? [];
+    }
+
+    private PhoneCallOrderCustomer GetOrderCustomerInfo(PhoneOrderRecord record)
+    {
+        if (record == null || string.IsNullOrEmpty(record.PhoneNumber)) return null;
+            
+        return new PhoneCallOrderCustomer
+        {
+            Name = record.CustomerName,
+            Phone = record.PhoneNumber
+        };
     }
 
     private async Task MarkPhoneOrderStatusAsSpecificAsync(PhoneOrderRecord record, PhoneOrderOrderStatus status, CancellationToken cancellationToken)
