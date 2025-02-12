@@ -43,7 +43,7 @@ public partial class PhoneOrderService
         var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByIdAsync(command.RecordId, cancellationToken).ConfigureAwait(false);
         
         record.CustomerName = command.CustomerName;
-        record.PhoneNumber = command.OrderPhonerNumber;
+        record.PhoneNumber = command.OrderPhoneNumber;
         
         var items = await _phoneOrderDataProvider
             .GetPhoneOrderOrderItemsAsync(command.RecordId, PhoneOrderOrderType.AIOrder, cancellationToken).ConfigureAwait(false);
@@ -79,7 +79,7 @@ public partial class PhoneOrderService
         var response = await _easyPosClient.PlaceOrderToEasyPosAsync(request, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Place order response: {@Response}", response);
-
+        
         if (response.Data == null || !response.Success)
         {
             await MarkPhoneOrderStatusAsSpecificAsync(record, PhoneOrderOrderStatus.Failed, cancellationToken).ConfigureAwait(false);

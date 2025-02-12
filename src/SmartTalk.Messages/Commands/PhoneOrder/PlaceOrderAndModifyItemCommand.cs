@@ -10,7 +10,7 @@ public class PlaceOrderAndModifyItemCommand : ICommand
     
     public string CustomerName { get; set; }
     
-    public string OrderPhonerNumber { get; set; }
+    public string OrderPhoneNumber { get; set; }
     
     public List<PhoneOrderOrderItemDto> OrderItems { get; set; }
 }
