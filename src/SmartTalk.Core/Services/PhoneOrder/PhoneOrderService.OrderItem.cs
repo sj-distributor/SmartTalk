@@ -29,7 +29,9 @@ public partial class PhoneOrderService
         {
             Data = new GetPhoneOrderOrderItemsData
             {
-                ManualOrderId = record.ManualOrderId.ToString(),
+                CustomerName = record?.CustomerName,
+                OrderPhoneNumber = record?.PhoneNumber,
+                ManualOrderId = record?.ManualOrderId.ToString(),
                 ManualItems = _mapper.Map<List<PhoneOrderOrderItemDto>>(orderItems.Where(x => x.OrderType == PhoneOrderOrderType.ManualOrder).ToList()),
                 AIItems = _mapper.Map<List<PhoneOrderOrderItemDto>>(orderItems.Where(x => x.OrderType == PhoneOrderOrderType.AIOrder).ToList())
             }
@@ -74,6 +76,9 @@ public partial class PhoneOrderService
 
         var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByIdAsync(command.RecordId, cancellationToken).ConfigureAwait(false);
 
+        record.CustomerName = command.CustomerName;
+        record.PhoneNumber = command.OrderPhonerNumber;
+        
         if (response.Data == null || !response.Success)
         {
             await MarkPhoneOrderStatusAsSpecificAsync(record, PhoneOrderOrderStatus.Failed, cancellationToken).ConfigureAwait(false);
