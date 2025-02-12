@@ -8,6 +8,10 @@ public class PlaceOrderAndModifyItemCommand : ICommand
 {
     public int RecordId { get; set; }
     
+    public string CustomerName { get; set; }
+    
+    public string OrderPhonerNumber { get; set; }
+    
     public List<PhoneOrderOrderItemDto> OrderItems { get; set; }
 }
 
