@@ -54,6 +54,12 @@ public class PhoneOrderRecord : IEntity
     [Column("order_status")]
     public PhoneOrderOrderStatus OrderStatus { get; set; } = PhoneOrderOrderStatus.Pendding;
     
+    [Column("phone_number"), StringLength(50)]
+    public string PhoneNumber { get; set; }
+    
+    [Column("customer_name"), StringLength(50)]
+    public string CustomerName { get; set; }
+    
     [NotMapped]
     public UserAccount UserAccount { get; set; }
     
