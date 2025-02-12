@@ -14,6 +14,8 @@ public class PlaceOrderToEasyPosRequestDto
     public string Notes { get; set; } = string.Empty;
 
     public List<PhoneCallOrderItem> OrderItems { get; set; } = [];
+    
+    public PhoneCallOrderCustomer Customer { get; set; }
 }
 
 public class PhoneCallOrderItem
@@ -55,6 +57,13 @@ public class PhoneCallOrderItemLocalization
     public string LanguageCode { get; set; }
     
     public string Value { get; set; }
+}
+
+public class PhoneCallOrderCustomer
+{
+    public string Name { get; set; }
+    
+    public string Phone { get; set; }
 }
 
 public class PhoneCallOrderItemModifierLocalization : PhoneCallOrderItemLocalization

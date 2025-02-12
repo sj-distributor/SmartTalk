@@ -38,6 +38,8 @@ public partial class PhoneOrderService
 
     public async Task<PlaceOrderAndModifyItemResponse> PlaceOrderAndModifyItemsAsync(PlaceOrderAndModifyItemCommand command, CancellationToken cancellationToken)
     {
+        var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByIdAsync(command.RecordId, cancellationToken).ConfigureAwait(false);
+        
         var items = await _phoneOrderDataProvider
             .GetPhoneOrderOrderItemsAsync(command.RecordId, PhoneOrderOrderType.AIOrder, cancellationToken).ConfigureAwait(false);
 
@@ -63,7 +65,12 @@ public partial class PhoneOrderService
                 Price = x.Price,
                 Notes = string.IsNullOrEmpty(x.Note) ? string.Empty : x.Note,
                 OrderItemModifiers = HandleSpecialMenuItems(menuItems, x)
-            }).Where(x => x.ProductId != 0).ToList()
+            }).Where(x => x.ProductId != 0).ToList(),
+            Customer = new PhoneCallOrderCustomer
+            {
+                Name = record.CustomerName,
+                Phone = record.PhoneNumber
+            }
         };
         
         Log.Information("Generate easy pos order request: {@Request}", request);
@@ -71,8 +78,6 @@ public partial class PhoneOrderService
         var response = await _easyPosClient.PlaceOrderToEasyPosAsync(request, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Place order response: {@Response}", response);
-
-        var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByIdAsync(command.RecordId, cancellationToken).ConfigureAwait(false);
 
         if (response.Data == null || !response.Success)
         {
