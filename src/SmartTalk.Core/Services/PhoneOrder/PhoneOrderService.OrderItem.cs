@@ -77,7 +77,7 @@ public partial class PhoneOrderService
         var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByIdAsync(command.RecordId, cancellationToken).ConfigureAwait(false);
 
         record.CustomerName = command.CustomerName;
-        record.PhoneNumber = command.OrderPhonerNumber;
+        record.PhoneNumber = command.OrderPhoneNumber;
         
         if (response.Data == null || !response.Success)
         {
