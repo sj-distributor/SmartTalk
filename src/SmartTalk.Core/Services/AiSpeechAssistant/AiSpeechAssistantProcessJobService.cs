@@ -89,15 +89,53 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
 
     private static List<PhoneOrderConversation> ConvertToPhoneOrderConversations(List<(AiSpeechAssistantSpeaker, string)> conversationTranscription, int recordId)
     {
+        var conversations = new List<PhoneOrderConversation>();
+        if (conversationTranscription == null || !conversationTranscription.Any()) return conversations;
+        
         var order = 0;
+        var currentSpeaker = conversationTranscription[0].Item1;
+        var currentText = conversationTranscription[0].Item2;
 
-        return conversationTranscription.Select(entry => new PhoneOrderConversation
+        var currentConversation = new PhoneOrderConversation
+        {
+            RecordId = recordId,
+            Question = currentSpeaker == AiSpeechAssistantSpeaker.Ai ? currentText : string.Empty,
+            Answer = currentSpeaker == AiSpeechAssistantSpeaker.User ? currentText : string.Empty,
+            Order = order++
+        };
+
+        for (var i = 1; i < conversationTranscription.Count; i++)
+        {
+            var entry = conversationTranscription[i];
+            if (entry.Item1 == currentSpeaker)
             {
-                RecordId = recordId,
-                Question = entry.Item1 == AiSpeechAssistantSpeaker.Ai ? entry.Item2 : string.Empty,
-                Answer = entry.Item1 == AiSpeechAssistantSpeaker.User ? entry.Item2 : string.Empty,
-                Order = order++
-            }).ToList();
+                if (currentSpeaker == AiSpeechAssistantSpeaker.Ai)
+                {
+                    currentConversation.Question += " " + entry.Item2;
+                }
+                else
+                {
+                    currentConversation.Answer += " " + entry.Item2;
+                }
+            }
+            else
+            {
+                conversations.Add(currentConversation);
+
+                currentSpeaker = entry.Item1;
+                currentConversation = new PhoneOrderConversation
+                {
+                    RecordId = recordId,
+                    Question = currentSpeaker == AiSpeechAssistantSpeaker.Ai ? entry.Item2 : string.Empty,
+                    Answer = currentSpeaker == AiSpeechAssistantSpeaker.User ? entry.Item2 : string.Empty,
+                    Order = order++
+                };
+            }
+        }
+
+        conversations.Add(currentConversation);
+
+        return conversations;
     }
 
     private async Task OrderRestaurantItemsAsync(PhoneOrderRecord record, AiSpeechAssistantOrderDto foods, CancellationToken cancellationToken)

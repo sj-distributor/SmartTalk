@@ -367,10 +367,6 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
 
                                     switch (functionName)
                                     {
-                                        case OpenAiToolConstants.UpdateOrder:
-                                            await ProcessUpdateOrderAsync(openAiWebSocket, context, outputElement, cancellationToken).ConfigureAwait(false);
-                                            break;
-
                                         case OpenAiToolConstants.RepeatOrder:
                                             await ProcessRepeatOrderAsync(openAiWebSocket, context, outputElement, cancellationToken).ConfigureAwait(false);
                                             break;
@@ -687,61 +683,6 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                 input_audio_transcription = new { model = "whisper-1" },
                 tools = new[]
                 {
-                    new OpenAiRealtimeToolDto
-                    {
-                        Type = "function",
-                        Name = OpenAiToolConstants.UpdateOrder,
-                        Description = "When the customer modifies the dishes in the current order, for example, [I want a portion of Kung Pao scallops], [I don’t want the beef I just ordered], [I want ice in the Coke]",
-                        Parameters = new OpenAiRealtimeToolParametersDto
-                        {
-                            Type = "object",
-                            Properties = new
-                            {
-                                order_items = new
-                                {
-                                    type = "array",
-                                    description = "The current complete order after the guest has modified the order",
-                                    items = new
-                                    {
-                                        type = "object",
-                                        properties = new
-                                        {
-                                            item_name = new
-                                            {
-                                                type = "string",
-                                                description = "Name of the item ordered"
-                                            },
-                                            quantity = new
-                                            {
-                                                type = "number",
-                                                description = "New quantity for the item"
-                                            },
-                                            price = new
-                                            {
-                                                type = "string",
-                                                description = "The price of the item multiplied by the quantity"
-                                            },
-                                            notes = new
-                                            {
-                                                type = "string",
-                                                description = "Additional notes or specifications for the item"
-                                            },
-                                            specification = new
-                                            {
-                                                type = "string",
-                                                description = "Specified item size, such as large, medium, and small"
-                                            }
-                                        }
-                                    }
-                                },
-                                total_price = new
-                                {
-                                    type = "number",
-                                    description = "The total price of the customer order",
-                                }
-                            }
-                        }
-                    },
                     new OpenAiRealtimeToolDto
                     {
                         Type = "function",
