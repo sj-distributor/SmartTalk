@@ -7,7 +7,7 @@ public class PlaceOrderToEasyPosRequestDto
 {
     public int Id { get; set; }
 
-    public int Type { get; set; } = 9;
+    public int Type { get; set; } = 1;
 
     public bool IsTaxFree { get; set; } = true;
     
