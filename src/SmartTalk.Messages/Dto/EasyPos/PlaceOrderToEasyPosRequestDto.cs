@@ -13,6 +13,8 @@ public class PlaceOrderToEasyPosRequestDto
     
     public string Notes { get; set; } = string.Empty;
 
+    public int SourceType { get; set; } = 3;
+
     public List<PhoneCallOrderItem> OrderItems { get; set; } = [];
     
     public PhoneCallOrderCustomer Customer { get; set; }
