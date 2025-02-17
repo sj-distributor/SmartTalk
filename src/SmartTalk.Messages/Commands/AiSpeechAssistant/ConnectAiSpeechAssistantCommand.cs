@@ -12,4 +12,6 @@ public class ConnectAiSpeechAssistantCommand : ICommand
     public string Host { get; set; }
     
     public WebSocket TwilioWebSocket { get; set; }
+    
+    public string Language { get; set; }
 }
