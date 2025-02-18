@@ -90,7 +90,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
 
         var humanContact = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantHumanContactByAssistantIdAsync(assistant.Id, cancellationToken).ConfigureAwait(false);
 
-        var openaiWebSocket = await ConnectOpenAiRealTimeSocketAsync(assistant, knowledgeBase, command.Language, cancellationToken).ConfigureAwait(false);
+        var openaiWebSocket = await ConnectOpenAiRealTimeSocketAsync(assistant, knowledgeBase, cancellationToken).ConfigureAwait(false);
         
         var context = new AiSpeechAssistantStreamContxtDto
         {
@@ -188,7 +188,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         return (assistant, finalPrompt);
     }
 
-    private async Task<WebSocket> ConnectOpenAiRealTimeSocketAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, string prompt, string language, CancellationToken cancellationToken)
+    private async Task<WebSocket> ConnectOpenAiRealTimeSocketAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, string prompt, CancellationToken cancellationToken)
     {
         var openAiWebSocket = new ClientWebSocket();
         openAiWebSocket.Options.SetRequestHeader("Authorization", GetAuthorizationHeader(assistant));
@@ -197,7 +197,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         var url = string.IsNullOrEmpty(assistant.Url) ? AiSpeechAssistantStore.DefaultUrl : assistant.Url;
 
         await openAiWebSocket.ConnectAsync(new Uri(url), cancellationToken).ConfigureAwait(false);
-        await SendSessionUpdateAsync(openAiWebSocket, prompt, language).ConfigureAwait(false);
+        await SendSessionUpdateAsync(openAiWebSocket, prompt, assistant.Language).ConfigureAwait(false);
         return openAiWebSocket;
     }
 
@@ -652,7 +652,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         await socket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(message))), WebSocketMessageType.Text, true, CancellationToken.None);
     }
     
-    private async Task SendSessionUpdateAsync(WebSocket openAiWebSocket, string prompt, string language = "zh")
+    private async Task SendSessionUpdateAsync(WebSocket openAiWebSocket, string prompt, string language)
     {
         var sessionUpdate = new
         {
@@ -666,7 +666,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                 instructions = prompt,
                 modalities = new[] { "text", "audio" },
                 temperature = 0.8,
-                input_audio_transcription = new { model = "whisper-1" , language},
+                input_audio_transcription = new { model = "whisper-1", language = GetLanguageAsync(language)},
                 tools = new[]
                 {
                     new OpenAiRealtimeToolDto
@@ -873,5 +873,15 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         };
 
         await SendToWebSocketAsync(openAiWebSocket, sessionUpdate);
+    }
+    
+    private string GetLanguageAsync(string language)
+    {
+        return language switch
+        {
+            "zh" => "zh",
+            "en" => "en",
+            _ => "zh" 
+        };
     }
 }
