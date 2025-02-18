@@ -197,7 +197,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         var url = string.IsNullOrEmpty(assistant.Url) ? AiSpeechAssistantStore.DefaultUrl : assistant.Url;
 
         await openAiWebSocket.ConnectAsync(new Uri(url), cancellationToken).ConfigureAwait(false);
-        await SendSessionUpdateAsync(openAiWebSocket, prompt).ConfigureAwait(false);
+        await SendSessionUpdateAsync(openAiWebSocket, prompt, assistant.Language).ConfigureAwait(false);
         return openAiWebSocket;
     }
 
@@ -652,7 +652,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         await socket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(message))), WebSocketMessageType.Text, true, CancellationToken.None);
     }
     
-    private async Task SendSessionUpdateAsync(WebSocket openAiWebSocket, string prompt)
+    private async Task SendSessionUpdateAsync(WebSocket openAiWebSocket, string prompt, string language)
     {
         var sessionUpdate = new
         {
@@ -666,6 +666,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                 instructions = prompt,
                 modalities = new[] { "text", "audio" },
                 temperature = 0.8,
+                input_audio_transcription = new { model = "whisper-1", language = GetLanguageAsync(language)},
                 tools = new[]
                 {
                     new OpenAiRealtimeToolDto
@@ -872,5 +873,15 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         };
 
         await SendToWebSocketAsync(openAiWebSocket, sessionUpdate);
+    }
+    
+    private string GetLanguageAsync(string language)
+    {
+        return language switch
+        {
+            "zh" => "zh",
+            "en" => "en",
+            _ => "zh" 
+        };
     }
 }
