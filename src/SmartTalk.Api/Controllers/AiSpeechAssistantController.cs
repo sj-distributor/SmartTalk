@@ -46,7 +46,7 @@ public class AiSpeechAssistantController : ControllerBase
         
         await CallResource.CreateAsync(to: new PhoneNumber(command.To), from: new PhoneNumber(command.From), twiml: new Twiml(response.ToString())).ConfigureAwait(false);
 
-        return Ok(Results.Extensions.TwiML(response));
+        return Ok();
     }
 
     [HttpGet("connect/{from}/{to}")]
