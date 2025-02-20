@@ -27,6 +27,7 @@ using SmartTalk.Messages.Events.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Enums.PhoneOrder;
+using Twilio.Types;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 using RecordingResource = Twilio.Rest.Api.V2010.Account.Call.RecordingResource;
 
@@ -35,6 +36,8 @@ namespace SmartTalk.Core.Services.AiSpeechAssistant;
 public interface IAiSpeechAssistantService : IScopedDependency
 {
     CallAiSpeechAssistantResponse CallAiSpeechAssistant(CallAiSpeechAssistantCommand command);
+
+    Task<OutboundCallFromAiSpeechAssistantResponse> OutboundCallFromAiSpeechAssistantAsync(OutboundCallFromAiSpeechAssistantCommand command, CancellationToken cancellationToken);
 
     Task<AiSpeechAssistantConnectCloseEvent> ConnectAiSpeechAssistantAsync(ConnectAiSpeechAssistantCommand command, CancellationToken cancellationToken);
 
@@ -88,6 +91,22 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         Log.Information("TwiMl result: {@TwiMlResult}", twiMlResult);
 
         return new CallAiSpeechAssistantResponse { Data = twiMlResult };
+    }
+
+    public async Task<OutboundCallFromAiSpeechAssistantResponse> OutboundCallFromAiSpeechAssistantAsync(OutboundCallFromAiSpeechAssistantCommand command, CancellationToken cancellationToken)
+    {
+        var connect = new Connect();
+        var response = new VoiceResponse();
+
+        connect.Stream(url: $"wss://{command.Host}/api/AiSpeechAssistant/connect/{command.From}/{command.To}");
+        
+        response.Append(connect);
+        
+        TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
+        
+        await CallResource.CreateAsync(to: new PhoneNumber(command.To), from: new PhoneNumber(command.From), twiml: new Twiml(response.ToString())).ConfigureAwait(false);
+
+        return new OutboundCallFromAiSpeechAssistantResponse();
     }
 
     public async Task<AiSpeechAssistantConnectCloseEvent> ConnectAiSpeechAssistantAsync(ConnectAiSpeechAssistantCommand command, CancellationToken cancellationToken)
