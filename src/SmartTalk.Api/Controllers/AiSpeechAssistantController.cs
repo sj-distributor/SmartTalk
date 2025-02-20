@@ -3,6 +3,7 @@ using Mediator.Net;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
+using Twilio;
 using Twilio.AspNet.Core;
 using Twilio.Rest.Api.V2010.Account;
 using Twilio.TwiML;
@@ -35,16 +36,10 @@ public class AiSpeechAssistantController : ControllerBase
 
     [Route("call/out"), HttpGet, HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> CallFromAiSpeechAssistantAsync([FromForm] CallAiSpeechAssistantCommand command)
+    public async Task<IActionResult> CallFromAiSpeechAssistantAsync([FromForm] OutboundCallFromAiSpeechAssistantCommand command)
     {
-        var connect = new Connect();
-        var response = new VoiceResponse();
-
-        connect.Stream(url: $"wss://{HttpContext.Request.Host.Host}/api/AiSpeechAssistant/connect/{command.From}/{command.To}");
-        
-        response.Append(connect);
-        
-        await CallResource.CreateAsync(to: new PhoneNumber(command.To), from: new PhoneNumber(command.From), twiml: new Twiml(response.ToString())).ConfigureAwait(false);
+        command.Host = HttpContext.Request.Host.Host;
+        await _mediator.SendAsync<OutboundCallFromAiSpeechAssistantCommand, OutboundCallFromAiSpeechAssistantResponse>(command);
 
         return Ok();
     }
