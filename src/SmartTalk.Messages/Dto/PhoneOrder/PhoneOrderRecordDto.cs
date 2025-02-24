@@ -32,4 +32,6 @@ public class PhoneOrderRecordDto
     public string PhoneNumber { get; set; }
     
     public string CustomerName { get; set; }
+    
+    public string Comments { get; set; }
 }

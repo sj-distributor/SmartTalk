@@ -17,4 +17,5 @@ public static class OpenAiToolConstants
     public const string CheckOrderStatus = "check_order_status";
     public const string RequestOrderDelivery = "request_order_delivery";
     public const string ConfirmCustomerInformation = "confirm_customer_information";
+    public const string ConfirmPickupTime = "confirm_pickup time";
 }

@@ -49,6 +49,9 @@ public class AiSpeechAssistantUserInfoDto
 
 public class AiSpeechAssistantOrderDto
 {
+    [JsonProperty("pickup_time")]
+    public string Comments { get; set; }
+    
     [JsonProperty("after_modified_order_items")]
     public List<AiSpeechAssistantOrderItemDto> Order { get; set; }
 }

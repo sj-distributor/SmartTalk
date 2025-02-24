@@ -60,6 +60,9 @@ public class PhoneOrderRecord : IEntity
     [Column("customer_name"), StringLength(50)]
     public string CustomerName { get; set; }
     
+    [Column("comments")]
+    public string Comments { get; set; }
+    
     [NotMapped]
     public UserAccount UserAccount { get; set; }
     
