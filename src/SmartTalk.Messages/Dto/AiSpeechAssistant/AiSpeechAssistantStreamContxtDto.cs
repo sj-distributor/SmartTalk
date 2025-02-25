@@ -3,7 +3,7 @@ using SmartTalk.Messages.Enums.AiSpeechAssistant;
 
 namespace SmartTalk.Messages.Dto.AiSpeechAssistant;
 
-public class AiSpeechAssistantStreamContxtDto
+public class AiSpeechAssistantStreamContextDto
 {
     public string StreamSid { get; set; }
 
@@ -37,6 +37,10 @@ public class AiSpeechAssistantStreamContxtDto
     
     public string HumanContactPhone { get; set; }
     
+    public AiSpeechAssistantDto Assistant { get; set; }
+
+    public List<(AiSpeechAssistantSpeaker, string)> ConversationTranscription { get; set; } = new();
+    
     public string Greetings { get; set; }
 }
 
@@ -51,7 +55,7 @@ public class AiSpeechAssistantUserInfoDto
 
 public class AiSpeechAssistantOrderDto
 {
-    [JsonProperty("after_modified_order_items")]
+    [JsonProperty("order_items")]
     public List<AiSpeechAssistantOrderItemDto> Order { get; set; }
 }
 

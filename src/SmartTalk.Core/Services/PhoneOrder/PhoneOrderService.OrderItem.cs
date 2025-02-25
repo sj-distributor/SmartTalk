@@ -29,7 +29,9 @@ public partial class PhoneOrderService
         {
             Data = new GetPhoneOrderOrderItemsData
             {
-                ManualOrderId = record.ManualOrderId.ToString(),
+                CustomerName = record?.CustomerName,
+                OrderPhoneNumber = record?.PhoneNumber,
+                ManualOrderId = record?.ManualOrderId.ToString(),
                 ManualItems = _mapper.Map<List<PhoneOrderOrderItemDto>>(orderItems.Where(x => x.OrderType == PhoneOrderOrderType.ManualOrder).ToList()),
                 AIItems = _mapper.Map<List<PhoneOrderOrderItemDto>>(orderItems.Where(x => x.OrderType == PhoneOrderOrderType.AIOrder).ToList())
             }
@@ -54,7 +56,7 @@ public partial class PhoneOrderService
 
         var request = new PlaceOrderToEasyPosRequestDto
         {
-            Type = 9,
+            Type = 1,
             IsTaxFree = true,
             Notes = string.Empty,
             OrderItems = orderItems.Select(x => new PhoneCallOrderItem
@@ -75,6 +77,11 @@ public partial class PhoneOrderService
         
         Log.Information("Place order response: {@Response}", response);
 
+        var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByIdAsync(command.RecordId, cancellationToken).ConfigureAwait(false);
+
+        record.CustomerName = command.CustomerName;
+        record.PhoneNumber = command.OrderPhoneNumber;
+        
         if (response.Data == null || !response.Success)
         {
             await MarkPhoneOrderStatusAsSpecificAsync(record, PhoneOrderOrderStatus.Failed, cancellationToken).ConfigureAwait(false);
