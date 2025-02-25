@@ -36,6 +36,8 @@ public class AiSpeechAssistantStreamContxtDto
     public string CallSid { get; set; }
     
     public string HumanContactPhone { get; set; }
+    
+    public string Greetings { get; set; }
 }
 
 public class AiSpeechAssistantUserInfoDto
