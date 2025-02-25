@@ -40,8 +40,6 @@ public partial class PhoneOrderService
 
     public async Task<PlaceOrderAndModifyItemResponse> PlaceOrderAndModifyItemsAsync(PlaceOrderAndModifyItemCommand command, CancellationToken cancellationToken)
     {
-        var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByIdAsync(command.RecordId, cancellationToken).ConfigureAwait(false);
-        
         var items = await _phoneOrderDataProvider
             .GetPhoneOrderOrderItemsAsync(command.RecordId, PhoneOrderOrderType.AIOrder, cancellationToken).ConfigureAwait(false);
 
@@ -68,7 +66,7 @@ public partial class PhoneOrderService
                 Notes = string.IsNullOrEmpty(x.Note) ? string.Empty : x.Note,
                 OrderItemModifiers = HandleSpecialMenuItems(menuItems, x)
             }).Where(x => x.ProductId != 0).ToList(),
-            Customer = GetOrderCustomerInfo(record)
+            Customer = GetOrderCustomerInfo(command)
         };
         
         Log.Information("Generate easy pos order request: {@Request}", request);
@@ -126,14 +124,14 @@ public partial class PhoneOrderService
         return JsonConvert.DeserializeObject<List<PhoneCallOrderItemModifiers>>(specificationItem?.OrderItemModifiers ?? string.Empty) ?? [];
     }
 
-    private PhoneCallOrderCustomer GetOrderCustomerInfo(PhoneOrderRecord record)
+    private PhoneCallOrderCustomer GetOrderCustomerInfo(PlaceOrderAndModifyItemCommand command)
     {
-        if (record == null || string.IsNullOrEmpty(record.PhoneNumber)) return null;
+        if (string.IsNullOrEmpty(command.OrderPhoneNumber)) return null;
             
         return new PhoneCallOrderCustomer
         {
-            Name = record.CustomerName,
-            Phone = record.PhoneNumber
+            Name = command.CustomerName,
+            Phone = command.OrderPhoneNumber
         };
     }
 

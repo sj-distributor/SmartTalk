@@ -16,5 +16,7 @@ public class AiSpeechAssistantDto
     
     public int AgentId { get; set; }
     
+    public string Greetings { get; set; }
+    
     public DateTimeOffset CreatedDate { get; set; }
 }
