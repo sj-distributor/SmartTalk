@@ -900,7 +900,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                             Type = "object",
                             Properties = new
                             {
-                                pickup_time = new
+                                comments = new
                                 {
                                     type = "string",
                                     description = "The customer's order pickup time"

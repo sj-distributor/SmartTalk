@@ -49,7 +49,7 @@ public class AiSpeechAssistantUserInfoDto
 
 public class AiSpeechAssistantOrderDto
 {
-    [JsonProperty("pickup_time")]
+    [JsonProperty("comments")]
     public string Comments { get; set; }
     
     [JsonProperty("after_modified_order_items")]
