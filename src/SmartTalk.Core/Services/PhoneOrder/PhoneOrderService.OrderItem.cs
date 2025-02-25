@@ -57,7 +57,7 @@ public partial class PhoneOrderService
         var request = new PlaceOrderToEasyPosRequestDto
         {
             Type = 1,
-            IsTaxFree = true,
+            IsTaxFree = false,
             Notes = string.Empty,
             OrderItems = orderItems.Select(x => new PhoneCallOrderItem
             {
