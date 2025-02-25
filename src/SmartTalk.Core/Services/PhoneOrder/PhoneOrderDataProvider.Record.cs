@@ -31,6 +31,8 @@ public partial interface IPhoneOrderDataProvider
         DateTimeOffset startTime, DateTimeOffset endTime, CancellationToken cancellationToken);
     
     Task<PhoneOrderRecord> GetPhoneOrderRecordByIdAsync(int recordId, CancellationToken cancellationToken);
+    
+    Task<PhoneOrderRecord> GetPhoneOrderRecordBySessionIdAsync(string sessionId, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderDataProvider
@@ -169,5 +171,10 @@ public partial class PhoneOrderDataProvider
     public async Task<PhoneOrderRecord> GetPhoneOrderRecordByIdAsync(int recordId, CancellationToken cancellationToken)
     {
         return await _repository.Query<PhoneOrderRecord>().Where(x => x.Id == recordId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<PhoneOrderRecord> GetPhoneOrderRecordBySessionIdAsync(string sessionId, CancellationToken cancellationToken)
+    {
+        return await _repository.Query<PhoneOrderRecord>().Where(x => x.SessionId == sessionId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 }
