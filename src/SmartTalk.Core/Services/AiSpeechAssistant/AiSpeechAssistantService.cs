@@ -456,7 +456,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
     }
 
-    private async Task ProcessRecordOrderPickupTimeAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContxtDto context, JsonElement jsonDocument, CancellationToken cancellationToken)
+    private async Task ProcessRecordOrderPickupTimeAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContextDto context, JsonElement jsonDocument, CancellationToken cancellationToken)
     {
         var recordSuccess = new
         {
