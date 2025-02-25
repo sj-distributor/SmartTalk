@@ -40,8 +40,6 @@ public class AiSpeechAssistantStreamContextDto
     public AiSpeechAssistantDto Assistant { get; set; }
 
     public List<(AiSpeechAssistantSpeaker, string)> ConversationTranscription { get; set; } = new();
-    
-    public string Greetings { get; set; }
 }
 
 public class AiSpeechAssistantUserInfoDto

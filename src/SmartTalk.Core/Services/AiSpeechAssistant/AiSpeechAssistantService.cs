@@ -110,8 +110,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             {
                 PhoneNumber = command.From
             },
-            Assistant = _mapper.Map<AiSpeechAssistantDto>(assistant),
-            Greetings = assistant.Greetings
+            Assistant = _mapper.Map<AiSpeechAssistantDto>(assistant)
         };
         
         var receiveFromTwilioTask = ReceiveFromTwilioAsync(command.TwilioWebSocket, openaiWebSocket, context);
@@ -633,7 +632,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                     new
                     {
                         type = "input_text",
-                        text = $"Greet the user with: '{context.Greetings}'"
+                        text = $"Greet the user with: '{context.Assistant.Greetings}'"
                     }
                 }
             }
