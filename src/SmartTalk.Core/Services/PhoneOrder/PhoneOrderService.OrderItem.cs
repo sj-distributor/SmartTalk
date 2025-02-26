@@ -126,7 +126,7 @@ public partial class PhoneOrderService
 
     private PhoneCallOrderCustomer GetOrderCustomerInfo(PhoneOrderRecord record)
     {
-        if (string.IsNullOrEmpty(record.PhoneNumber)) return null;
+        if (record == null || string.IsNullOrEmpty(record.PhoneNumber)) return null;
             
         return new PhoneCallOrderCustomer
         {
