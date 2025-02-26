@@ -27,6 +27,9 @@ public class AiSpeechAssistant : IEntity, IHasCreatedFields
     [Column("agent_id")]
     public int AgentId { get; set; }
     
+    [Column("greetings"), StringLength(1024)]
+    public string Greetings { get; set; }
+    
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
 }
