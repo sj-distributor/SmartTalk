@@ -55,8 +55,8 @@ public partial class PhoneOrderService
         var request = new PlaceOrderToEasyPosRequestDto
         {
             Type = 1,
-            IsTaxFree = true,
-            Notes = string.Empty,
+            IsTaxFree = false,
+            Notes = record.Comments,
             OrderItems = orderItems.Select(x => new PhoneCallOrderItem
             {
                 ProductId = x.ProductId ?? GetMenuItemByName(menuItems, x.FoodName)?.ProductId ?? 0,

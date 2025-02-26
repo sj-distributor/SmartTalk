@@ -53,6 +53,9 @@ public class AiSpeechAssistantUserInfoDto
 
 public class AiSpeechAssistantOrderDto
 {
+    [JsonProperty("comments")]
+    public string Comments { get; set; }
+    
     [JsonProperty("order_items")]
     public List<AiSpeechAssistantOrderItemDto> Order { get; set; }
 }
