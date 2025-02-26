@@ -40,6 +40,11 @@ public partial class PhoneOrderService
 
     public async Task<PlaceOrderAndModifyItemResponse> PlaceOrderAndModifyItemsAsync(PlaceOrderAndModifyItemCommand command, CancellationToken cancellationToken)
     {
+        var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByIdAsync(command.RecordId, cancellationToken).ConfigureAwait(false);
+
+        record.CustomerName = command.CustomerName;
+        record.PhoneNumber = command.OrderPhoneNumber;
+        
         var items = await _phoneOrderDataProvider
             .GetPhoneOrderOrderItemsAsync(command.RecordId, PhoneOrderOrderType.AIOrder, cancellationToken).ConfigureAwait(false);
 
@@ -66,7 +71,7 @@ public partial class PhoneOrderService
                 Notes = string.IsNullOrEmpty(x.Note) ? string.Empty : x.Note,
                 OrderItemModifiers = HandleSpecialMenuItems(menuItems, x)
             }).Where(x => x.ProductId != 0).ToList(),
-            Customer = GetOrderCustomerInfo(command)
+            Customer = GetOrderCustomerInfo(record)
         };
         
         Log.Information("Generate easy pos order request: {@Request}", request);
@@ -74,11 +79,6 @@ public partial class PhoneOrderService
         var response = await _easyPosClient.PlaceOrderToEasyPosAsync(request, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Place order response: {@Response}", response);
-
-        var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByIdAsync(command.RecordId, cancellationToken).ConfigureAwait(false);
-
-        record.CustomerName = command.CustomerName;
-        record.PhoneNumber = command.OrderPhoneNumber;
         
         if (response.Data == null || !response.Success)
         {
@@ -124,14 +124,14 @@ public partial class PhoneOrderService
         return JsonConvert.DeserializeObject<List<PhoneCallOrderItemModifiers>>(specificationItem?.OrderItemModifiers ?? string.Empty) ?? [];
     }
 
-    private PhoneCallOrderCustomer GetOrderCustomerInfo(PlaceOrderAndModifyItemCommand command)
+    private PhoneCallOrderCustomer GetOrderCustomerInfo(PhoneOrderRecord record)
     {
-        if (string.IsNullOrEmpty(command.OrderPhoneNumber)) return null;
+        if (string.IsNullOrEmpty(record.PhoneNumber)) return null;
             
         return new PhoneCallOrderCustomer
         {
-            Name = command.CustomerName,
-            Phone = command.OrderPhoneNumber
+            Name = record.CustomerName,
+            Phone = record.PhoneNumber
         };
     }
 
