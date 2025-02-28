@@ -51,6 +51,8 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
     {
         TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
         var callResource = await CallResource.FetchAsync(pathSid: context.CallSid).ConfigureAwait(false);
+        
+        Log.Information("Record ai speech assistant call context: {@Context}", context);
 
         var record = new PhoneOrderRecord
         {
