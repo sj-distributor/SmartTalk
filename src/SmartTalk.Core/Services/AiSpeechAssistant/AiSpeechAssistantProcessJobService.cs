@@ -62,11 +62,11 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             Tips = context.ConversationTranscription.FirstOrDefault().Item2,
             TranscriptionText = FormattedConversation(context.ConversationTranscription),
             Language = TranscriptionLanguage.Chinese,
-            CreatedDate = callResource.StartTime ?? DateTimeOffset.Now,
+            CreatedDate = callResource?.StartTime ?? DateTimeOffset.Now,
             OrderStatus = PhoneOrderOrderStatus.Pending,
-            CustomerName = context.UserInfo.UserName,
-            PhoneNumber = context.UserInfo.PhoneNumber,
-            Comments = context.OrderItems.Comments
+            Comments = context.OrderItems?.Comments,
+            CustomerName = context.UserInfo?.UserName,
+            PhoneNumber = context.UserInfo?.PhoneNumber
         };
 
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync([record], cancellationToken: cancellationToken).ConfigureAwait(false);
