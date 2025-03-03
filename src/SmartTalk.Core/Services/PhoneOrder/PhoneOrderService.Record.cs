@@ -56,7 +56,7 @@ public partial class PhoneOrderService
         Log.Information("Phone order record information: {@recordInfo}", recordInfo);
                                    
         if (recordInfo == null) return;
-        if (await CheckOrderExistAsync(recordInfo.StartDate.AddHours(-8), cancellationToken).ConfigureAwait(false)) return;
+        if (await CheckOrderExistAsync(recordInfo.StartDate, cancellationToken).ConfigureAwait(false)) return;
         
         var transcription = await _speechToTextService.SpeechToTextAsync(
             command.RecordContent, fileType: TranscriptionFileType.Wav, responseFormat: TranscriptionResponseFormat.Text, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -65,7 +65,7 @@ public partial class PhoneOrderService
         
         Log.Information("Phone order record transcription detected language: {@detectionLanguage}", detection.Language);
         
-        var record = new PhoneOrderRecord { SessionId = Guid.NewGuid().ToString(), AgentId = recordInfo.Agent.Id, TranscriptionText = transcription, Language = SelectLanguageEnum(detection.Language), CreatedDate = recordInfo.StartDate.AddHours(-8), Status = PhoneOrderRecordStatus.Recieved };
+        var record = new PhoneOrderRecord { SessionId = Guid.NewGuid().ToString(), AgentId = recordInfo.Agent.Id, TranscriptionText = transcription, Language = SelectLanguageEnum(detection.Language), CreatedDate = recordInfo.StartDate, Status = PhoneOrderRecordStatus.Recieved };
 
         if (await CheckPhoneOrderRecordDurationAsync(command.RecordContent, cancellationToken).ConfigureAwait(false))
         {
@@ -445,7 +445,9 @@ public partial class PhoneOrderService
 
         if (match.Success) time = match.Groups[1].Value;
         
-        return DateTimeOffset.FromUnixTimeSeconds(long.Parse(time));
+        var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeSeconds(long.Parse(time)), TimeZoneInfo.FindSystemTimeZoneById("America/Los_Angeles"));
+        
+        return pstTime;
     }
     
     private async Task UpdatePhoneOrderRecordSpecificFieldsAsync(int recordId, int modifiedBy, string tips, string lastModifiedByName, CancellationToken cancellationToken)
