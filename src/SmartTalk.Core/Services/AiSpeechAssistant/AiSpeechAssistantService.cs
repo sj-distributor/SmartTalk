@@ -399,7 +399,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
 
                     if (!context.InitialConversationSent)
                     {
-                        await SendInitialConversationItem(openAiWebSocket);
+                        await SendInitialConversationItem(openAiWebSocket, context);
                         context.InitialConversationSent = true;
                     }
                 }
@@ -618,7 +618,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         }
     }
 
-    private async Task SendInitialConversationItem(WebSocket openaiWebSocket)
+    private async Task SendInitialConversationItem(WebSocket openaiWebSocket, AiSpeechAssistantStreamContextDto context)
     {
         var initialConversationItem = new
         {
@@ -632,7 +632,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                     new
                     {
                         type = "input_text",
-                        text = "Greet the user with: 'Hello Moon house, Santa Monica.'"
+                        text = $"Greet the user with: '{context.Assistant.Greetings}'"
                     }
                 }
             }

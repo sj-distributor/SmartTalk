@@ -1,1 +1,1 @@
-alter table `ai_speech_assistant` add column `language` varchar(512) null;
+alter table `ai_speech_assistant` add column `greetings` varchar(1024) null;
