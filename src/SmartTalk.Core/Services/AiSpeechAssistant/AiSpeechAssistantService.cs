@@ -831,7 +831,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         {
             "zh" => "zh",
             "en" => "en",
-            _ => "zh" 
+            _ => null
         };
     }
 }
