@@ -76,60 +76,6 @@ public class SpeechMaticsService : ISpeechMaticsService
         }
     }
     
-    public async Task SendWorkWeChatRobotNotifyAsync(byte[] recordContent, string url, string transcription, CancellationToken cancellationToken)
-    {
-        await _weChatClient.SendWorkWechatRobotMessagesAsync(url,
-            new SendWorkWechatGroupRobotMessageDto
-            {
-                MsgType = "text",
-                Text = new SendWorkWechatGroupRobotTextDto
-                {
-                    Content = $"---------Start----------"
-                }
-            }, cancellationToken);
-        
-        var splitAudios = await ConvertAndSplitAudioAsync(recordContent, secondsPerAudio: 60, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        await SendMultiAudioMessagesAsync(splitAudios, url, cancellationToken).ConfigureAwait(false);
-
-        await _weChatClient.SendWorkWechatRobotMessagesAsync(
-            url, new SendWorkWechatGroupRobotMessageDto
-            {
-                MsgType = "text", Text = new SendWorkWechatGroupRobotTextDto { Content = transcription }
-            }, CancellationToken.None);
-        
-        await _weChatClient.SendWorkWechatRobotMessagesAsync(
-            url, new SendWorkWechatGroupRobotMessageDto
-            {
-                MsgType = "text", Text = new SendWorkWechatGroupRobotTextDto { Content = "-------------------------End-------------------------" }
-            }, CancellationToken.None);
-    }
-
-    private async Task<List<byte[]>> ConvertAndSplitAudioAsync(byte[] record, int secondsPerAudio, CancellationToken cancellationToken)
-    {
-        var amrAudio = await _ffmpegService.ConvertWavToAmrAsync(record, "", cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        return await _ffmpegService.SplitAudioAsync(amrAudio, secondsPerAudio, "amr", cancellationToken: cancellationToken).ConfigureAwait(false);
-    }
-    
-    private async Task SendMultiAudioMessagesAsync(List<byte[]> audios, string url, CancellationToken cancellationToken)
-    {
-        foreach (var audio in audios)
-        {
-            var uploadResponse = await _weChatClient.UploadWorkWechatTemporaryFileAsync(
-                url, Guid.NewGuid() + ".amr", UploadWorkWechatTemporaryFileType.Voice, audio, cancellationToken: cancellationToken).ConfigureAwait(false);
-            
-            if (string.IsNullOrEmpty(uploadResponse?.MediaId)) continue;
-            
-            await _weChatClient.SendWorkWechatRobotMessagesAsync(url,
-                new SendWorkWechatGroupRobotMessageDto
-                {
-                    MsgType = "voice",
-                    Voice = new SendWorkWechatGroupRobotFileDto { MediaId = uploadResponse.MediaId }
-                }, cancellationToken);
-        }
-    }
-    
     private List<SpeechMaticsSpeakInfoDto> StructureDiarizationResults(List<SpeechMaticsResultDto> results)
     {
         string currentSpeaker = null;
