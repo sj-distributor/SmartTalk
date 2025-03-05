@@ -12,11 +12,8 @@ public class Agent : IEntity
     [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     public int Id { get; set; }
     
-    [Column("wechat_robot_url"), StringLength(256)]
-    public string WechatRobotUrl { get; set; }
-    
-    [Column("wechat_robot_upload_url"), StringLength(256)]
-    public string WechatRobotUploadUrl { get; set; }
+    [Column("wechat_robot_key"), StringLength(256)]
+    public string WechatRobotKey { get; set; }
 
     [Column("relate_id")]
     public int RelateId { get; set; }
