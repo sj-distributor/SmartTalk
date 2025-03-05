@@ -43,7 +43,7 @@ public partial class PhoneOrderService : IPhoneOrderService
                 MsgType = "text",
                 Text = new SendWorkWechatGroupRobotTextDto
                 {
-                    Content = $"---------Start----------"
+                    Content = $"-------------------------Start-------------------------"
                 }
             }, cancellationToken);
         
