@@ -6,6 +6,8 @@ public class AgentDto
 
     public int RelateId { get; set; }
     
+    public string WechatRobotUrl { get; set; }
+    
     public AgentType Type { get; set; }
     
     public DateTimeOffset CreatedDate { get; set; }
