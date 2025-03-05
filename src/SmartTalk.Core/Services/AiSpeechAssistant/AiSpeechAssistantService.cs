@@ -676,7 +676,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                 instructions = prompt,
                 modalities = new[] { "text", "audio" },
                 temperature = 0.8,
-                input_audio_transcription = new { model = "whisper-1", language = GetLanguageAsync(language)},
+                input_audio_transcription = new { model = "whisper-1",  language },
 
                 tools = new[]
                 {
@@ -823,15 +823,5 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         };
 
         await SendToWebSocketAsync(openAiWebSocket, sessionUpdate);
-    }
-    
-    private string GetLanguageAsync(string language)
-    {
-        return language switch
-        {
-            "zh" => "zh",
-            "en" => "en",
-            _ => null
-        };
     }
 }
