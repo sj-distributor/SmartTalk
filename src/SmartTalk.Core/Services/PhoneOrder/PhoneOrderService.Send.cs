@@ -35,8 +35,10 @@ public partial class PhoneOrderService : IPhoneOrderService
         }
     }
     
-     public async Task SendWorkWeChatRobotNotifyAsync(byte[] recordContent, string robotUrl, string transcription, CancellationToken cancellationToken)
-    {
+     public async Task SendWorkWeChatRobotNotifyAsync(byte[] recordContent, string key, string transcription, CancellationToken cancellationToken)
+     {
+        var robotUrl = $"https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key={key}";
+        
         await _weChatClient.SendWorkWechatRobotMessagesAsync(robotUrl,
             new SendWorkWechatGroupRobotMessageDto
             {
@@ -49,7 +51,7 @@ public partial class PhoneOrderService : IPhoneOrderService
         
         var splitAudios = await ConvertAndSplitAudioAsync(recordContent, secondsPerAudio: 60, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        await SendMultiAudioMessagesAsync(splitAudios, robotUrl, cancellationToken).ConfigureAwait(false);
+        await SendMultiAudioMessagesAsync(splitAudios, key, cancellationToken).ConfigureAwait(false);
 
         await _weChatClient.SendWorkWechatRobotMessagesAsync(
             robotUrl, new SendWorkWechatGroupRobotMessageDto
@@ -71,16 +73,16 @@ public partial class PhoneOrderService : IPhoneOrderService
         return await _ffmpegService.SplitAudioAsync(amrAudio, secondsPerAudio, "amr", cancellationToken: cancellationToken).ConfigureAwait(false);
     }
     
-    private async Task SendMultiAudioMessagesAsync(List<byte[]> audios, string url, CancellationToken cancellationToken)
+    private async Task SendMultiAudioMessagesAsync(List<byte[]> audios, string key, CancellationToken cancellationToken)
     {
         foreach (var audio in audios)
         {
             var uploadResponse = await _weChatClient.UploadWorkWechatTemporaryFileAsync(
-                url, Guid.NewGuid() + ".amr", UploadWorkWechatTemporaryFileType.Voice, audio, cancellationToken: cancellationToken).ConfigureAwait(false);
+                $"https://qyapi.weixin.qq.com/cgi-bin/webhook/upload_media?key={key}&type=voice", Guid.NewGuid() + ".amr", UploadWorkWechatTemporaryFileType.Voice, audio, cancellationToken: cancellationToken).ConfigureAwait(false);
             
             if (string.IsNullOrEmpty(uploadResponse?.MediaId)) continue;
             
-            await _weChatClient.SendWorkWechatRobotMessagesAsync(url,
+            await _weChatClient.SendWorkWechatRobotMessagesAsync($"https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key={key}",
                 new SendWorkWechatGroupRobotMessageDto
                 {
                     MsgType = "voice",
