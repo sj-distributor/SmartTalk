@@ -220,7 +220,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         var url = string.IsNullOrEmpty(assistant.Url) ? AiSpeechAssistantStore.DefaultUrl : assistant.Url;
 
         await openAiWebSocket.ConnectAsync(new Uri(url), cancellationToken).ConfigureAwait(false);
-        await SendSessionUpdateAsync(openAiWebSocket, prompt).ConfigureAwait(false);
+        await SendSessionUpdateAsync(openAiWebSocket, assistant, prompt).ConfigureAwait(false);
         return openAiWebSocket;
     }
 
@@ -460,7 +460,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         await SendToWebSocketAsync(openAiWebSocket, confirmOrderMessage);
         await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
     }
-    
+
     private async Task ProcessRecordCustomerInformationAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContextDto context, JsonElement jsonDocument, CancellationToken cancellationToken)
     {
         var recordSuccess = new
@@ -709,8 +709,10 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         await socket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(message))), WebSocketMessageType.Text, true, CancellationToken.None);
     }
     
-    private async Task SendSessionUpdateAsync(WebSocket openAiWebSocket, string prompt)
+    private async Task SendSessionUpdateAsync(WebSocket openAiWebSocket, Domain.AISpeechAssistant.AiSpeechAssistant assistant, string prompt)
     {
+        var tools = await InitialSessionToolsAsync(assistant).ConfigureAwait(false);
+        
         var sessionUpdate = new
         {
             type = "session.update",
@@ -723,169 +725,18 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                 instructions = prompt,
                 modalities = new[] { "text", "audio" },
                 temperature = 0.8,
-                input_audio_transcription = new { model = "whisper-1" , language = "zh"},
-                tools = new[]
-                {
-                    new OpenAiRealtimeToolDto
-                    {
-                        Type = "function",
-                        Name = OpenAiToolConstants.TransferCall,
-                        Description = "Triggered when the customer requests to transfer the call to a real person, or when the customer is not satisfied with the current answer and wants someone else to serve him/her"
-                    },
-                    new OpenAiRealtimeToolDto
-                    {
-                        Type = "function",
-                        Name = OpenAiToolConstants.HandlePhoneOrderIssues,
-                        Description = "Resolve inquiries or issues related to orders placed via phone."
-                    },
-                    new OpenAiRealtimeToolDto
-                    {
-                        Type = "function",
-                        Name = OpenAiToolConstants.HandleThirdPartyDelayedDelivery,
-                        Description = "Address delayed delivery issues for orders placed through third-party platforms."
-                    },
-                    new OpenAiRealtimeToolDto
-                    {
-                        Type = "function",
-                        Name = OpenAiToolConstants.HandleThirdPartyPickupTimeChange,
-                        Description = "Manage pickup time modification requests for orders placed through third-party platforms."
-                    },
-                    new OpenAiRealtimeToolDto
-                    {
-                        Type = "function",
-                        Name = OpenAiToolConstants.HandleThirdPartyFoodQuality,
-                        Description = "Resolve food quality or taste complaints for orders placed through third-party platforms."
-                    },
-                    new OpenAiRealtimeToolDto
-                    {
-                        Type = "function",
-                        Name = OpenAiToolConstants.HandleThirdPartyUnexpectedIssues,
-                        Description = "Handle undefined or unexpected issues with orders placed through third-party platforms."
-                    },
-                    new OpenAiRealtimeToolDto
-                    {
-                        Type = "function",
-                        Name = OpenAiToolConstants.HandlePromotionCalls,
-                        Description = "Handles calls not related to the restaurant related to advertising, promotions, insurance or product marketing."
-                    },
-                    new OpenAiRealtimeToolDto
-                    {
-                        Type = "function",
-                        Name = OpenAiToolConstants.CheckOrderStatus,
-                        Description = "Check the status of a customer's order, including whether it is prepared and ready for pickup or delivery."
-                    },
-                    new OpenAiRealtimeToolDto
-                    {
-                        Type = "function",
-                        Name = OpenAiToolConstants.RequestOrderDelivery,
-                        Description = "When customers request delivery of their orders"
-                    },
-                    new OpenAiRealtimeToolDto
-                    {
-                        Type = "function",
-                        Name = OpenAiToolConstants.Hangup,
-                        Description = "When the customer says goodbye or something similar, hang up the phone"
-                    },
-                    new OpenAiRealtimeToolDto
-                    {
-                        Type = "function",
-                        Name = OpenAiToolConstants.ConfirmOrder,
-                        Description = "When the customer says that's enough, or clearly says he wants to place an order, the rest are not the final order, but just recording the order.",
-                        Parameters = new OpenAiRealtimeToolParametersDto
-                        {
-                            Type = "object",
-                            Properties = new
-                            {
-                                order_items = new
-                                {
-                                    type = "array",
-                                    description = "The current complete order after the guest has modified the order",
-                                    items = new
-                                    {
-                                        type = "object",
-                                        properties = new
-                                        {
-                                            item_name = new
-                                            {
-                                                type = "string",
-                                                description = "Name of the item ordered"
-                                            },
-                                            quantity = new
-                                            {
-                                                type = "number",
-                                                description = "New quantity for the item"
-                                            },
-                                            price = new
-                                            {
-                                                type = "string",
-                                                description = "The price of the item multiplied by the quantity"
-                                            },
-                                            notes = new
-                                            {
-                                                type = "string",
-                                                description = "Additional notes or specifications for the item"
-                                            },
-                                            specification = new
-                                            {
-                                                type = "string",
-                                                description = "Specified item size, such as large, medium, and small"
-                                            }
-                                        }
-                                    }
-                                },
-                                total_price = new
-                                {
-                                    type = "number",
-                                    description = "The total price of the customer order",
-                                }
-                            }
-                        }
-                    },
-                    new OpenAiRealtimeToolDto
-                    {
-                        Type = "function",
-                        Name = OpenAiToolConstants.ConfirmCustomerInformation,
-                        Description = "When the customer confirms the order using their name and phone number, record this information.",
-                        Parameters = new OpenAiRealtimeToolParametersDto
-                        {
-                            Type = "object",
-                            Properties = new
-                            {
-                                customer_name = new
-                                {
-                                    type = "string",
-                                    description = "Name of the customer"
-                                },
-                                customer_phone = new
-                                {
-                                    type = "string",
-                                    description = "The phone number the customer used to place the pickup order"
-                                }
-                            }
-                        }
-                    },
-                    new OpenAiRealtimeToolDto
-                    {
-                        Type = "function",
-                        Name = OpenAiToolConstants.ConfirmPickupTime,
-                        Description = "When the customer confirms the order pickup time, record this information.",
-                        Parameters = new OpenAiRealtimeToolParametersDto
-                        {
-                            Type = "object",
-                            Properties = new
-                            {
-                                comments = new
-                                {
-                                    type = "string",
-                                    description = "The customer's order pickup time"
-                                }
-                            }
-                        }
-                    }
-                }
+                input_audio_transcription = new { model = "whisper-1", language = "zh" },
+                tools = tools
             }
         };
 
         await SendToWebSocketAsync(openAiWebSocket, sessionUpdate);
+    }
+
+    private async Task<IEnumerable<OpenAiRealtimeToolDto>> InitialSessionToolsAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken = default)
+    {
+        var functions = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallByAssistantIdAsync(assistant.Id, cancellationToken).ConfigureAwait(false);
+
+        return functions.Count == 0 ? [] : functions.Where(x => !string.IsNullOrWhiteSpace(x.Content)).Select(x => JsonConvert.DeserializeObject<OpenAiRealtimeToolDto>(x.Content));
     }
 }
