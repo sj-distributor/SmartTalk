@@ -14,6 +14,9 @@ public class Agent : IEntity
     
     [Column("wechat_robot_url"), StringLength(256)]
     public string WechatRobotUrl { get; set; }
+    
+    [Column("wechat_robot_upload_url"), StringLength(256)]
+    public string WechatRobotUploadUrl { get; set; }
 
     [Column("relate_id")]
     public int RelateId { get; set; }

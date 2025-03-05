@@ -1,0 +1,1 @@
+alter table `agent` add column `wechat_robot_upload_url` varchar(256) null;
