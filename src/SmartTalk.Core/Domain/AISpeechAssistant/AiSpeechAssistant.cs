@@ -32,4 +32,7 @@ public class AiSpeechAssistant : IEntity, IHasCreatedFields
     
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
+    
+    [Column("language")]
+    public string Language { get; set; }
 }
