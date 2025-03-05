@@ -12,7 +12,6 @@
         <PackageReference Include="Autofac.Extensions.DependencyInjection" Version="8.0.0" />
         <PackageReference Include="AutoMapper" Version="12.0.1" />
         <PackageReference Include="AutoMapper.Contrib.Autofac.DependencyInjection" Version="7.1.0" />
-        <PackageReference Include="Betalgo.OpenAI" Version="8.5.1" />
         <PackageReference Include="dbup" Version="5.0.8" />
         <PackageReference Include="dbup-mysql" Version="5.0.10" />
         <PackageReference Include="Destructurama.JsonNet" Version="2.0.0" />
@@ -36,6 +35,7 @@
         <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="8.0.0" />
         <PackageReference Include="Microsoft.KernelMemory.AI.OpenAI" Version="0.35.240321.1" />
         <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+        <PackageReference Include="OpenAI" Version="2.2.0-beta.2" />
         <PackageReference Include="OpenCCNET" Version="1.0.2" />
         <PackageReference Include="NRedisStack" Version="0.12.0" />
         <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="7.0.0" />
