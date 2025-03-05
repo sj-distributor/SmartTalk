@@ -12,6 +12,9 @@ using System.Net.WebSockets;
 using AutoMapper;
 using SmartTalk.Core.Constants;
 using Microsoft.AspNetCore.Http;
+using OpenAI.Chat;
+using SmartTalk.Core.Services.Agents;
+using SmartTalk.Core.Services.Http;
 using SmartTalk.Messages.Constants;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.PhoneOrder;
@@ -26,6 +29,7 @@ using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.PhoneOrder;
+using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using Twilio.Types;
 using JsonSerializer = System.Text.Json.JsonSerializer;
@@ -56,6 +60,8 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly OpenAiSettings _openAiSettings;
     private readonly TwilioSettings _twilioSettings;
     private readonly ZhiPuAiSettings _zhiPuAiSettings;
+    private readonly IAgentDataProvider _agentDataProvider;
+    private readonly ISmartTalkHttpClientFactory _httpClientFactory;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
@@ -65,6 +71,8 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         OpenAiSettings openAiSettings,
         TwilioSettings twilioSettings,
         ZhiPuAiSettings zhiPuAiSettings,
+        IAgentDataProvider agentDataProvider,
+        ISmartTalkHttpClientFactory httpClientFactory,
         IPhoneOrderDataProvider phoneOrderDataProvider,
         ISmartTalkBackgroundJobClient backgroundJobClient,
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
@@ -73,6 +81,8 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         _openAiSettings = openAiSettings;
         _twilioSettings = twilioSettings;
         _zhiPuAiSettings = zhiPuAiSettings;
+        _agentDataProvider = agentDataProvider;
+        _httpClientFactory = httpClientFactory;
         _backgroundJobClient = backgroundJobClient;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
@@ -166,6 +176,27 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
 
         record.Url = command.RecordingUrl;
         record.Status = PhoneOrderRecordStatus.Sent;
+
+        var agent = await _agentDataProvider.GetAgentAsync(record.AgentId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (agent?.Type == AgentType.Sales)
+        {
+            ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
+            var audioFileRawBytes = await _httpClientFactory.GetAsync<byte[]>(record.Url, cancellationToken).ConfigureAwait(false);
+            var audioData = BinaryData.FromBytes(audioFileRawBytes);
+            List<ChatMessage> messages =
+            [
+                new SystemChatMessage("你是一名电话录音的分析员，通过听取录音内容和语气情绪作出精确分析，写出一份分析报告。\n\n分析报告的格式：交談主題：xxx\n\n 內容摘要:xxx \n\n 客人情感與情緒: xxx \n\n 客人下单内容：1. 牛肉(1箱)\n2.鸡腿肉(1箱)"),
+                new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
+                new UserChatMessage("帮我根据电话录音生成报告：")
+            ];
+            
+            ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
+
+            ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
+            Log.Information("sales record analyze report:" + completion.Content.FirstOrDefault()?.Text);
+            record.TranscriptionText = completion.Content.FirstOrDefault()?.Text;
+        }
+        
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 

@@ -1,5 +1,4 @@
 using Serilog;
-using OpenAI.Extensions;
 using SmartTalk.Messages;
 using Correlate.AspNetCore;
 using SmartTalk.Api.Filters;
@@ -41,8 +40,6 @@ public class Startup
         });
 
         services.AddHangfireInternal(Configuration);
-        services.AddOpenAIService(settings => { settings.ApiKey = new OpenAiSettings(Configuration).ApiKey; })
-            .ConfigureHttpClient(http => http.Timeout = TimeSpan.FromSeconds(6000));
     }
     
     public void Configure(IApplicationBuilder app, IWebHostEnvironment env)

@@ -4,7 +4,6 @@ using Microsoft.Extensions.Configuration;
 using MySql.Data.MySqlClient;
 using Newtonsoft.Json;
 using NSubstitute;
-using OpenAI.Interfaces;
 using Serilog;
 using SmartTalk.Core;
 using SmartTalk.Core.DbUpFile;
@@ -46,7 +45,6 @@ public partial class TestBase
             new SmartTalkModule(logger, configuration, typeof(SmartTalkModule).Assembly, typeof(TestBase).Assembly));
         
         containerBuilder.RegisterInstance(new TestCurrentUser()).As<ICurrentUser>();
-        containerBuilder.RegisterInstance(Substitute.For<IOpenAIService>()).AsImplementedInterfaces();
         containerBuilder.RegisterInstance(Substitute.For<IHttpContextAccessor>()).AsImplementedInterfaces();
         containerBuilder.RegisterInstance(Substitute.For<IAliYunOssService>()).AsImplementedInterfaces();
         containerBuilder.RegisterInstance(Substitute.For<IEasyPosClient>()).AsImplementedInterfaces();
