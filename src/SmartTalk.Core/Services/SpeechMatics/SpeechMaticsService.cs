@@ -84,7 +84,7 @@ public class SpeechMaticsService : ISpeechMaticsService
                 MsgType = "text",
                 Text = new SendWorkWechatGroupRobotTextDto
                 {
-                    Content = $"-----------PST----------"
+                    Content = $"---------Start----------"
                 }
             }, cancellationToken);
         
