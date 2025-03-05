@@ -677,7 +677,6 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                 modalities = new[] { "text", "audio" },
                 temperature = 0.8,
                 input_audio_transcription = new { model = "whisper-1",  language },
-
                 tools = new[]
                 {
                     new OpenAiRealtimeToolDto
