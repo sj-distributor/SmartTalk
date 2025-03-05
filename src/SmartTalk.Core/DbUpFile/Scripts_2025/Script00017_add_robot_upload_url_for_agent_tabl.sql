@@ -1,1 +1,1 @@
-alter table `agent` add column `wechat_robot_upload_url` varchar(256) null;
+ALTER TABLE `agent` CHANGE `wechat_robot_url` `wechat_robot_key` VARCHAR(255) null;

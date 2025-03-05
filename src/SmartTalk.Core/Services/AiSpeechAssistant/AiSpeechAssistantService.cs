@@ -178,8 +178,8 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         Log.Information("sales record analyze report:" + completion.Content.FirstOrDefault()?.Text);
         record.TranscriptionText = completion.Content.FirstOrDefault()?.Text;
 
-        if (!string.IsNullOrEmpty(agent.WechatRobotUrl))
-            await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(audioFileRawBytes, agent.WechatRobotUrl, "錄音分析報告：\n" + record.TranscriptionText, cancellationToken).ConfigureAwait(false);
+        if (!string.IsNullOrEmpty(agent.WechatRobotKey))
+            await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(audioFileRawBytes, agent.WechatRobotKey, "錄音分析報告：\n" + record.TranscriptionText, cancellationToken).ConfigureAwait(false);
 
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
