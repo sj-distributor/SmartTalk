@@ -690,6 +690,6 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
     {
         var functions = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallByAssistantIdAsync(assistant.Id, cancellationToken).ConfigureAwait(false);
 
-        return functions.Count == 0 ? [] : functions.Select(x => JsonConvert.DeserializeObject<OpenAiRealtimeToolDto>(x.Content));
+        return functions.Count == 0 ? [] : functions.Where(x => !string.IsNullOrWhiteSpace(x.Content)).Select(x => JsonConvert.DeserializeObject<OpenAiRealtimeToolDto>(x.Content));
     }
 }
