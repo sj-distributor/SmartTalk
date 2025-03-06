@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using SmartTalk.Messages.Enums.AiSpeechAssistant;
 
 namespace SmartTalk.Core.Domain.AIAssistant;
 
@@ -16,6 +17,9 @@ public class AiSpeechAssistantPromptTemplate : IEntity, IHasCreatedFields
     
     [Column("template")]
     public string Template { get; set; }
+    
+    [Column("call_type")]
+    public AiSpeechAssistantCallType CallType { get; set; }
     
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }

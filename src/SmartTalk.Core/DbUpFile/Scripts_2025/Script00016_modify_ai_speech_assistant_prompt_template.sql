@@ -1,0 +1,1 @@
+alter table `ai_speech_assistant_prompt_template` add column `call_type` int not null default 0;
