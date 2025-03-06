@@ -3,12 +3,6 @@ using Mediator.Net;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
-using Twilio;
-using Twilio.AspNet.Core;
-using Twilio.Rest.Api.V2010.Account;
-using Twilio.TwiML;
-using Twilio.TwiML.Voice;
-using Twilio.Types;
 using Task = System.Threading.Tasks.Task;
 
 namespace SmartTalk.Api.Controllers;
