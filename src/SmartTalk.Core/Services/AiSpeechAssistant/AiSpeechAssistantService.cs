@@ -374,6 +374,10 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                                         case OpenAiToolConstants.ConfirmCustomerInformation:
                                             await ProcessRecordCustomerInformationAsync(openAiWebSocket, context, outputElement, cancellationToken).ConfigureAwait(false);
                                             break;
+                                        
+                                        case OpenAiToolConstants.ConfirmPickupTime:
+                                            await ProcessRecordOrderPickupTimeAsync(openAiWebSocket, context, outputElement, cancellationToken).ConfigureAwait(false);
+                                            break;
 
                                         case OpenAiToolConstants.Hangup:
                                             await ProcessHangupAsync(openAiWebSocket, context, outputElement, cancellationToken).ConfigureAwait(false);
@@ -447,6 +451,25 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         };
         
         context.UserInfo = JsonConvert.DeserializeObject<AiSpeechAssistantUserInfoDto>(jsonDocument.GetProperty("arguments").ToString());
+        
+        await SendToWebSocketAsync(openAiWebSocket, recordSuccess);
+        await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
+    }
+
+    private async Task ProcessRecordOrderPickupTimeAsync(WebSocket openAiWebSocket, AiSpeechAssistantStreamContextDto context, JsonElement jsonDocument, CancellationToken cancellationToken)
+    {
+        var recordSuccess = new
+        {
+            type = "conversation.item.create",
+            item = new
+            {
+                type = "function_call_output",
+                call_id = jsonDocument.GetProperty("call_id").GetString(),
+                output = "Record the time when the customer pickup the order."
+            }
+        };
+        
+        context.OrderItems.Comments = JsonConvert.DeserializeObject<AiSpeechAssistantOrderDto>(jsonDocument.GetProperty("arguments").ToString())?.Comments ?? string.Empty;
         
         await SendToWebSocketAsync(openAiWebSocket, recordSuccess);
         await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });

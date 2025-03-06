@@ -1,0 +1,1 @@
+alter table `phone_order_record` add column `comments` varchar(1024) null;
