@@ -1,13 +1,15 @@
 ﻿using System.Text;
-using SmartTalk.Core.Extensions;
 using SmartTalk.Messages.Dto.WeChat;
 using SmartTalk.Messages.Commands.PhoneOrder;
+using SmartTalk.Messages.Enums.WeChat;
 
 namespace SmartTalk.Core.Services.PhoneOrder;
 
 public partial interface IPhoneOrderService
 {
-    Task DailyDataBroadcastAsync(SchedulingPhoneOrderDailyDataBroadcastCommand command, CancellationToken cancellationToken);   
+    Task DailyDataBroadcastAsync(SchedulingPhoneOrderDailyDataBroadcastCommand command, CancellationToken cancellationToken);
+    
+    Task SendWorkWeChatRobotNotifyAsync(byte[] recordContent, string robotUrl, string transcription, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderService : IPhoneOrderService
@@ -30,6 +32,62 @@ public partial class PhoneOrderService : IPhoneOrderService
                     Content = $"SMARTTALK AI每日數據播報:\n{yesterday:MM/dd/yyyy}\n1.平台錄音數量\n{dailyDataReport}\n2.AI素材校準量\n{assessmentPeriodReport}"
                 }
             }, cancellationToken).ConfigureAwait(false);
+        }
+    }
+    
+     public async Task SendWorkWeChatRobotNotifyAsync(byte[] recordContent, string key, string transcription, CancellationToken cancellationToken)
+     {
+        var robotUrl = $"https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key={key}";
+        
+        await _weChatClient.SendWorkWechatRobotMessagesAsync(robotUrl,
+            new SendWorkWechatGroupRobotMessageDto
+            {
+                MsgType = "text",
+                Text = new SendWorkWechatGroupRobotTextDto
+                {
+                    Content = $"-------------------------Start-------------------------"
+                }
+            }, cancellationToken);
+        
+        var splitAudios = await ConvertAndSplitAudioAsync(recordContent, secondsPerAudio: 60, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        await SendMultiAudioMessagesAsync(splitAudios, key, cancellationToken).ConfigureAwait(false);
+
+        await _weChatClient.SendWorkWechatRobotMessagesAsync(
+            robotUrl, new SendWorkWechatGroupRobotMessageDto
+            {
+                MsgType = "text", Text = new SendWorkWechatGroupRobotTextDto { Content = transcription }
+            }, CancellationToken.None);
+        
+        await _weChatClient.SendWorkWechatRobotMessagesAsync(
+            robotUrl, new SendWorkWechatGroupRobotMessageDto
+            {
+                MsgType = "text", Text = new SendWorkWechatGroupRobotTextDto { Content = "-------------------------End-------------------------" }
+            }, CancellationToken.None);
+    }
+
+    private async Task<List<byte[]>> ConvertAndSplitAudioAsync(byte[] record, int secondsPerAudio, CancellationToken cancellationToken)
+    {
+        var amrAudio = await _ffmpegService.ConvertWavToAmrAsync(record, "", cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return await _ffmpegService.SplitAudioAsync(amrAudio, secondsPerAudio, "amr", cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+    
+    private async Task SendMultiAudioMessagesAsync(List<byte[]> audios, string key, CancellationToken cancellationToken)
+    {
+        foreach (var audio in audios)
+        {
+            var uploadResponse = await _weChatClient.UploadWorkWechatTemporaryFileAsync(
+                $"https://qyapi.weixin.qq.com/cgi-bin/webhook/upload_media?key={key}&type=voice", Guid.NewGuid() + ".amr", UploadWorkWechatTemporaryFileType.Voice, audio, cancellationToken: cancellationToken).ConfigureAwait(false);
+            
+            if (string.IsNullOrEmpty(uploadResponse?.MediaId)) continue;
+            
+            await _weChatClient.SendWorkWechatRobotMessagesAsync($"https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key={key}",
+                new SendWorkWechatGroupRobotMessageDto
+                {
+                    MsgType = "voice",
+                    Voice = new SendWorkWechatGroupRobotFileDto { MediaId = uploadResponse.MediaId }
+                }, cancellationToken);
         }
     }
 
