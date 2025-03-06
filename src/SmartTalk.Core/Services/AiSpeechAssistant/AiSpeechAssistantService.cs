@@ -255,7 +255,9 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         var url = string.IsNullOrEmpty(assistant.Url) ? AiSpeechAssistantStore.DefaultUrl : assistant.Url;
 
         await openAiWebSocket.ConnectAsync(new Uri(url), cancellationToken).ConfigureAwait(false);
+
         await SendSessionUpdateAsync(openAiWebSocket, assistant, prompt).ConfigureAwait(false);
+
         return openAiWebSocket;
     }
 
@@ -756,7 +758,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                 turn_detection = new { type = "server_vad" },
                 input_audio_format = "g711_ulaw",
                 output_audio_format = "g711_ulaw",
-                voice = "alloy",
+                voice = string.IsNullOrEmpty(assistant.Voice) ? "alloy" : assistant.Voice,
                 instructions = prompt,
                 modalities = new[] { "text", "audio" },
                 temperature = 0.8,
