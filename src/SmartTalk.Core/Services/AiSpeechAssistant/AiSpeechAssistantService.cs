@@ -235,7 +235,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         var url = string.IsNullOrEmpty(assistant.Url) ? AiSpeechAssistantStore.DefaultUrl : assistant.Url;
 
         await openAiWebSocket.ConnectAsync(new Uri(url), cancellationToken).ConfigureAwait(false);
-        await SendSessionUpdateAsync(openAiWebSocket, prompt).ConfigureAwait(false);
+        await SendSessionUpdateAsync(openAiWebSocket, assistant.Voice, prompt).ConfigureAwait(false);
         return openAiWebSocket;
     }
 
@@ -697,7 +697,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         await socket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(message))), WebSocketMessageType.Text, true, CancellationToken.None);
     }
     
-    private async Task SendSessionUpdateAsync(WebSocket openAiWebSocket, string prompt)
+    private async Task SendSessionUpdateAsync(WebSocket openAiWebSocket, string voice, string prompt)
     {
         var sessionUpdate = new
         {
@@ -707,7 +707,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                 turn_detection = new { type = "server_vad" },
                 input_audio_format = "g711_ulaw",
                 output_audio_format = "g711_ulaw",
-                voice = "alloy",
+                voice = string.IsNullOrEmpty(voice) ? "alloy" : voice,
                 instructions = prompt,
                 modalities = new[] { "text", "audio" },
                 temperature = 0.8,
