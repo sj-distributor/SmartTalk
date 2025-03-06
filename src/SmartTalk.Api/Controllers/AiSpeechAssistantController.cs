@@ -3,7 +3,6 @@ using Mediator.Net;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
-using SmartTalk.Messages.Enums.AiSpeechAssistant;
 
 namespace SmartTalk.Api.Controllers;
 
@@ -48,8 +47,8 @@ public class AiSpeechAssistantController : ControllerBase
         }
     }
     
-    [HttpGet("outbound/connect/{from}/{to}")]
-    public async Task OutboundConnectAiSpeechAssistantAsync(string from, string to)
+    [HttpGet("outbound/connect/{from}/{to}/{id}")]
+    public async Task OutboundConnectAiSpeechAssistantAsync(string from, string to, int id)
     {
         if (HttpContext.WebSockets.IsWebSocketRequest)
         {
@@ -57,9 +56,9 @@ public class AiSpeechAssistantController : ControllerBase
             {
                 From = from,
                 To = to,
+                AssistantId = id,
                 Host = HttpContext.Request.Host.Host,
-                TwilioWebSocket = await HttpContext.WebSockets.AcceptWebSocketAsync(),
-                CallType = AiSpeechAssistantCallType.Outbound
+                TwilioWebSocket = await HttpContext.WebSockets.AcceptWebSocketAsync()
             };
             await _mediator.SendAsync(command);
         }

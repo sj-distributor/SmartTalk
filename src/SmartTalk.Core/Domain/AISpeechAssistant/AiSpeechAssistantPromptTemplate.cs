@@ -18,9 +18,6 @@ public class AiSpeechAssistantPromptTemplate : IEntity, IHasCreatedFields
     [Column("template")]
     public string Template { get; set; }
     
-    [Column("call_type")]
-    public AiSpeechAssistantCallType CallType { get; set; }
-    
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
 }

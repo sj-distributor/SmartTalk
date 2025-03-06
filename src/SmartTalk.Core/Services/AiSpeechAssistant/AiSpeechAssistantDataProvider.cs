@@ -3,14 +3,13 @@ using SmartTalk.Core.Data;
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Domain.AIAssistant;
 using SmartTalk.Core.Domain.AISpeechAssistant;
-using SmartTalk.Messages.Enums.AiSpeechAssistant;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
 
 public interface IAiSpeechAssistantDataProvider : IScopedDependency
 {
     Task<(Domain.AISpeechAssistant.AiSpeechAssistant, AiSpeechAssistantPromptTemplate, AiSpeechAssistantUserProfile)>
-        GetAiSpeechAssistantInfoByNumbersAsync(string callerNumber, string didNumber, AiSpeechAssistantCallType callType, CancellationToken cancellationToken);
+        GetAiSpeechAssistantInfoByNumbersAsync(string callerNumber, string didNumber, int? assistantId = null, CancellationToken cancellationToken = default);
     
     Task<Domain.AISpeechAssistant.AiSpeechAssistant> GetAiSpeechAssistantByNumbersAsync(string didNumber, CancellationToken cancellationToken);
 
@@ -29,7 +28,7 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
     }
 
     public async Task<(Domain.AISpeechAssistant.AiSpeechAssistant, AiSpeechAssistantPromptTemplate, AiSpeechAssistantUserProfile)>
-        GetAiSpeechAssistantInfoByNumbersAsync(string callerNumber, string didNumber, AiSpeechAssistantCallType callType, CancellationToken cancellationToken)
+        GetAiSpeechAssistantInfoByNumbersAsync(string callerNumber, string didNumber, int? assistantId = null, CancellationToken cancellationToken = default)
     {
         var assistantInfo =
             from assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>()
@@ -39,11 +38,12 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
             join userProfile in _repository.Query<AiSpeechAssistantUserProfile>().Where(x => x.CallerNumber == callerNumber) 
                 on assistant.Id equals userProfile.AssistantId into userProfileGroup
             from userProfile in userProfileGroup.DefaultIfEmpty()
-            where assistant.DidNumber == didNumber && promptTemplate.CallType == callType
             select new
             {
                 assistant, promptTemplate, userProfile
             };
+
+        assistantInfo = assistantInfo.Where(x => assistantId.HasValue ? x.assistant.Id == assistantId.Value : x.assistant.DidNumber == didNumber);
 
         var result = await assistantInfo.FirstOrDefaultAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
 
