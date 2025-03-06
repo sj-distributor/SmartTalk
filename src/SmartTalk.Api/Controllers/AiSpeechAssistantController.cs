@@ -64,6 +64,27 @@ public class AiSpeechAssistantController : ControllerBase
             HttpContext.Response.StatusCode = 400;
         }
     }
+    
+    [HttpGet("outbound/connect/{from}/{to}/{id}")]
+    public async Task OutboundConnectAiSpeechAssistantAsync(string from, string to, int id)
+    {
+        if (HttpContext.WebSockets.IsWebSocketRequest)
+        {
+            var command = new ConnectAiSpeechAssistantCommand
+            {
+                From = from,
+                To = to,
+                AssistantId = id,
+                Host = HttpContext.Request.Host.Host,
+                TwilioWebSocket = await HttpContext.WebSockets.AcceptWebSocketAsync()
+            };
+            await _mediator.SendAsync(command);
+        }
+        else
+        {
+            HttpContext.Response.StatusCode = 400;
+        }
+    }
 
     [Route("recording/callback"), HttpPost]
     public async Task<IActionResult> ReceivePhoneRecordingStatusCallBackAcyn()
