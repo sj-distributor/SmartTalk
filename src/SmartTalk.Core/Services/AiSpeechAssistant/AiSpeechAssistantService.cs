@@ -456,7 +456,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                         }
                     }
 
-                    if (!context.InitialConversationSent)
+                    if (!context.InitialConversationSent && !string.IsNullOrEmpty(context.Assistant.Greetings))
                     {
                         await SendInitialConversationItem(openAiWebSocket, context);
                         context.InitialConversationSent = true;
