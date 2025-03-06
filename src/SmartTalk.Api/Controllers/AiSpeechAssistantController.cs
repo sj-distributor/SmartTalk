@@ -29,7 +29,27 @@ public class AiSpeechAssistantController : ControllerBase
     }
 
     [HttpGet("connect/{from}/{to}")]
-    public async Task ConnectAiSpeechAssistantAsync(string from, string to, [FromQuery] AiSpeechAssistantCallType? callType)
+    public async Task ConnectAiSpeechAssistantAsync(string from, string to)
+    {
+        if (HttpContext.WebSockets.IsWebSocketRequest)
+        {
+            var command = new ConnectAiSpeechAssistantCommand
+            {
+                From = from,
+                To = to,
+                Host = HttpContext.Request.Host.Host,
+                TwilioWebSocket = await HttpContext.WebSockets.AcceptWebSocketAsync()
+            };
+            await _mediator.SendAsync(command);
+        }
+        else
+        {
+            HttpContext.Response.StatusCode = 400;
+        }
+    }
+    
+    [HttpGet("outbound/connect/{from}/{to}")]
+    public async Task OutboundConnectAiSpeechAssistantAsync(string from, string to)
     {
         if (HttpContext.WebSockets.IsWebSocketRequest)
         {
@@ -39,7 +59,7 @@ public class AiSpeechAssistantController : ControllerBase
                 To = to,
                 Host = HttpContext.Request.Host.Host,
                 TwilioWebSocket = await HttpContext.WebSockets.AcceptWebSocketAsync(),
-                CallType = callType ?? AiSpeechAssistantCallType.Inbound
+                CallType = AiSpeechAssistantCallType.Outbound
             };
             await _mediator.SendAsync(command);
         }
