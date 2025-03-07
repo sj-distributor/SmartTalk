@@ -47,6 +47,7 @@ public class AiSpeechAssistantController : ControllerBase
         }
     }
     
+    [HttpGet("outbound/connect")]
     [HttpGet("outbound/connect/{from}/{to}/{id}")]
     public async Task OutboundConnectAiSpeechAssistantAsync(string from, string to, int id)
     {
