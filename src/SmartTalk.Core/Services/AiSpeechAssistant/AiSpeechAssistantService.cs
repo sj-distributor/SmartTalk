@@ -12,6 +12,9 @@ using System.Net.WebSockets;
 using AutoMapper;
 using SmartTalk.Core.Constants;
 using Microsoft.AspNetCore.Http;
+using OpenAI.Chat;
+using SmartTalk.Core.Services.Agents;
+using SmartTalk.Core.Services.Http;
 using SmartTalk.Messages.Constants;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.PhoneOrder;
@@ -26,6 +29,7 @@ using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.PhoneOrder;
+using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 using RecordingResource = Twilio.Rest.Api.V2010.Account.Call.RecordingResource;
@@ -53,6 +57,9 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly OpenAiSettings _openAiSettings;
     private readonly TwilioSettings _twilioSettings;
     private readonly ZhiPuAiSettings _zhiPuAiSettings;
+    private readonly IAgentDataProvider _agentDataProvider;
+    private readonly IPhoneOrderService _phoneOrderService;
+    private readonly ISmartTalkHttpClientFactory _httpClientFactory;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
@@ -62,6 +69,9 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         OpenAiSettings openAiSettings,
         TwilioSettings twilioSettings,
         ZhiPuAiSettings zhiPuAiSettings,
+        IAgentDataProvider agentDataProvider,
+        IPhoneOrderService phoneOrderService,
+        ISmartTalkHttpClientFactory httpClientFactory,
         IPhoneOrderDataProvider phoneOrderDataProvider,
         ISmartTalkBackgroundJobClient backgroundJobClient,
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
@@ -70,6 +80,9 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         _openAiSettings = openAiSettings;
         _twilioSettings = twilioSettings;
         _zhiPuAiSettings = zhiPuAiSettings;
+        _phoneOrderService = phoneOrderService;
+        _agentDataProvider = agentDataProvider;
+        _httpClientFactory = httpClientFactory;
         _backgroundJobClient = backgroundJobClient;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
@@ -146,6 +159,28 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
 
         record.Url = command.RecordingUrl;
         record.Status = PhoneOrderRecordStatus.Sent;
+
+        var agent = await _agentDataProvider.GetAgentByIdAsync(record.AgentId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
+        var audioFileRawBytes = await _httpClientFactory.GetAsync<byte[]>(record.Url, cancellationToken).ConfigureAwait(false);
+        var audioData = BinaryData.FromBytes(audioFileRawBytes);
+        List<ChatMessage> messages =
+        [
+            new SystemChatMessage("你是一名電話錄音的分析員，通過聽取錄音內容和語氣情緒作出精確分析，冩出一份分析報告。\n\n分析報告的格式：交談主題：xxx\n\n 內容摘要:xxx \n\n 客人情感與情緒: xxx \n\n 待辦事件: \n1.xxx\n2.xxx \n\n 客人下單內容(如果沒有則忽略)：1. 牛肉(1箱)\n2.雞腿肉(1箱)"),
+            new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
+            new UserChatMessage("幫我根據錄音生成分析報告：")
+        ];
+        
+        ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
+
+        ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
+        Log.Information("sales record analyze report:" + completion.Content.FirstOrDefault()?.Text);
+        record.TranscriptionText = completion.Content.FirstOrDefault()?.Text;
+
+        if (!string.IsNullOrEmpty(agent.WechatRobotKey))
+            await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(audioFileRawBytes, agent.WechatRobotKey, "錄音分析報告：\n" + record.TranscriptionText, cancellationToken).ConfigureAwait(false);
+
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
@@ -200,7 +235,9 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         var url = string.IsNullOrEmpty(assistant.Url) ? AiSpeechAssistantStore.DefaultUrl : assistant.Url;
 
         await openAiWebSocket.ConnectAsync(new Uri(url), cancellationToken).ConfigureAwait(false);
+
         await SendSessionUpdateAsync(openAiWebSocket, assistant, prompt).ConfigureAwait(false);
+
         return openAiWebSocket;
     }
 
@@ -401,7 +438,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                         }
                     }
 
-                    if (!context.InitialConversationSent)
+                    if (!context.InitialConversationSent && !string.IsNullOrEmpty(context.Assistant.Greetings))
                     {
                         await SendInitialConversationItem(openAiWebSocket, context);
                         context.InitialConversationSent = true;
@@ -697,7 +734,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                 turn_detection = new { type = "server_vad" },
                 input_audio_format = "g711_ulaw",
                 output_audio_format = "g711_ulaw",
-                voice = "alloy",
+                voice = string.IsNullOrEmpty(assistant.Voice) ? "alloy" : assistant.Voice,
                 instructions = prompt,
                 modalities = new[] { "text", "audio" },
                 temperature = 0.8,

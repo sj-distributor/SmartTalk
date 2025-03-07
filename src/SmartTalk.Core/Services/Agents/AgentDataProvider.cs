@@ -11,6 +11,8 @@ namespace SmartTalk.Core.Services.Agents;
 public interface IAgentDataProvider : IScopedDependency
 {
     Task<Agent> GetAgentAsync(int? id = null, AgentType? type = null, int? relateId = null, string name = null, CancellationToken cancellationToken = default);
+    
+    Task<Agent> GetAgentByIdAsync(int id, CancellationToken cancellationToken);
 
     Task<List<Agent>> GetAgentsAsync(AgentType type, CancellationToken cancellationToken);
 }
@@ -47,7 +49,12 @@ public class AgentDataProvider : IAgentDataProvider
 
         return query == null ? null : await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
-    
+
+    public async Task<Agent> GetAgentByIdAsync(int id, CancellationToken cancellationToken)
+    {
+        return await _repository.Query<Agent>().Where(x => x.Id == id).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task<List<Agent>> GetAgentsAsync(AgentType type, CancellationToken cancellationToken)
     {
         return await _repository.Query<Agent>().Where(x => x.Type == type).ToListAsync(cancellationToken).ConfigureAwait(false);

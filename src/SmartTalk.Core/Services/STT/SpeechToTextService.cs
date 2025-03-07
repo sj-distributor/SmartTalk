@@ -1,15 +1,14 @@
 using Serilog;
 using AutoMapper;
 using System.Text;
-using OpenAI.Interfaces;
+using OpenAI.Audio;
 using SmartTalk.Core.Ioc;
-using OpenAI.ObjectModels;
 using SmartTalk.Core.Extensions;
 using SmartTalk.Messages.Dto.STT;
 using SmartTalk.Messages.Enums.STT;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Ffmpeg;
-using OpenAI.ObjectModels.RequestModels;
+using SmartTalk.Core.Settings.OpenAi;
 
 namespace SmartTalk.Core.Services.STT;
 
@@ -24,14 +23,14 @@ public class SpeechToTextService : ISpeechToTextService
 {
     private readonly IMapper _mapper;
     private readonly IFfmpegService _ffmpegService;
-    private readonly IOpenAIService _openAiService;
+    private readonly OpenAiSettings _openAiSettings;
     private readonly ISmartiesHttpClientFactory _httpClientFactory;
 
-    public SpeechToTextService(IMapper mapper, IFfmpegService ffmpegService, IOpenAIService openAiService, ISmartiesHttpClientFactory httpClientFactory)
+    public SpeechToTextService(IMapper mapper, IFfmpegService ffmpegService, OpenAiSettings openAiSettings, ISmartiesHttpClientFactory httpClientFactory)
     {
         _mapper = mapper;
         _ffmpegService = ffmpegService;
-        _openAiService = openAiService;
+        _openAiSettings = openAiSettings;
         _httpClientFactory = httpClientFactory;
     }
 
@@ -51,7 +50,7 @@ public class SpeechToTextService : ISpeechToTextService
         {
             var transcriptionResponse = await TranscriptionAsync(audio, language, fileType, responseFormat, prompt, cancellationToken).ConfigureAwait(false);
             
-            transcriptionResult.Append(transcriptionResponse.Text);
+            transcriptionResult.Append(transcriptionResponse);
         }
 
         Log.Information("Transcription result {Transcription}", transcriptionResult.ToString());
@@ -59,44 +58,37 @@ public class SpeechToTextService : ISpeechToTextService
         return transcriptionResult.ToString();
     }
     
-    public async Task<AudioTranscriptionResponseDto> TranscriptionAsync(
+    public async Task<string> TranscriptionAsync(
         byte[] file, TranscriptionLanguage? language, TranscriptionFileType fileType = TranscriptionFileType.Wav, 
         TranscriptionResponseFormat responseFormat = TranscriptionResponseFormat.Vtt, string prompt = null, CancellationToken cancellationToken = default)
     {
+        AudioClient client = new("whisper-1", _openAiSettings.ApiKey);
+        
         var filename = $"{Guid.NewGuid()}.{fileType.ToString().ToLower()}";
         
         var fileResponseFormat = responseFormat switch
         {
-            TranscriptionResponseFormat.Vtt => StaticValues.AudioStatics.ResponseFormat.Vtt,
-            TranscriptionResponseFormat.Srt => StaticValues.AudioStatics.ResponseFormat.Srt,
-            TranscriptionResponseFormat.Text => StaticValues.AudioStatics.ResponseFormat.Text,
-            TranscriptionResponseFormat.Json => StaticValues.AudioStatics.ResponseFormat.Json,
-            TranscriptionResponseFormat.VerboseJson => StaticValues.AudioStatics.ResponseFormat.Vtt
+            TranscriptionResponseFormat.Vtt => "vtt",
+            TranscriptionResponseFormat.Srt => "srt",
+            TranscriptionResponseFormat.Text => "text",
+            TranscriptionResponseFormat.Json => "json",
+            TranscriptionResponseFormat.VerboseJson => "verbose_json",
+            _ => "text"
         };
-
-        var transcriptionRequest = new AudioCreateTranscriptionRequest
-        {
-            File = file,
-            FileName = filename,
-            Model = Models.WhisperV1,
-            ResponseFormat = fileResponseFormat
-        };
-
-        if (language.HasValue) transcriptionRequest.Language = language.Value.GetDescription();
+        var stream = new MemoryStream(file);
         
-        var response = await _httpClientFactory.SafelyProcessRequestAsync(nameof(SpeechToTextAsync), async () =>
-            await _openAiService.Audio.CreateTranscription(new AudioCreateTranscriptionRequest
-            {
-                File = file,
-                FileName = filename,
-                Model = Models.WhisperV1,
-                ResponseFormat = fileResponseFormat,
-                Language = language?.GetDescription(),
-                Prompt = prompt
-            }, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+        AudioTranscriptionOptions options = new()
+        {
+            ResponseFormat = AudioTranscriptionFormat.Text,
+            Prompt = prompt
+        };
+        
+        if (language.HasValue) options.Language = language.Value.GetDescription();
+        
+        var response = await client.TranscribeAudioAsync(stream, "test.wav", options, cancellationToken);
 
         Log.Information("Transcription {FileName} response {@Response}", filename, response);
         
-        return _mapper.Map<AudioTranscriptionResponseDto>(response);
+        return response?.Value?.Text;
     }
 }

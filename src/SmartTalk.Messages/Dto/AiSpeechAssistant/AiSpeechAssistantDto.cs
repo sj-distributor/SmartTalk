@@ -12,6 +12,8 @@ public class AiSpeechAssistantDto
     
     public string Url { get; set; }
     
+    public string Voice { get; set; }
+    
     public AiSpeechAssistantProvider Provider { get; set; }
     
     public int AgentId { get; set; }

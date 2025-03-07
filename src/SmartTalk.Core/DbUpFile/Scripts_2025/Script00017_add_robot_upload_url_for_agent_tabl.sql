@@ -1,0 +1,1 @@
+ALTER TABLE `agent` CHANGE `wechat_robot_url` `wechat_robot_key` VARCHAR(255) null;
