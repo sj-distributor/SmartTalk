@@ -201,7 +201,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         record.TranscriptionText = completion.Content.FirstOrDefault()?.Text;
 
         if (agent.SourceSystem == AgentSourceSystem.Smarties)
-            await _smartiesClient.CallBackSmartiesAiSpeechAssistantRecordAsync(new AiSpeechAssistantCallBackRequestDto { CallSid = command.CallSid, RecordAnalyzeReport =  record.TranscriptionText }, cancellationToken).ConfigureAwait(false);
+            await _smartiesClient.CallBackSmartiesAiSpeechAssistantRecordAsync(new AiSpeechAssistantCallBackRequestDto { CallSid = command.CallSid, RecordUrl = record.Url, RecordAnalyzeReport =  record.TranscriptionText }, cancellationToken).ConfigureAwait(false);
         
         if (!string.IsNullOrEmpty(agent.WechatRobotKey))
             await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(audioFileRawBytes, agent.WechatRobotKey, "錄音分析報告：\n" + record.TranscriptionText, cancellationToken).ConfigureAwait(false);
