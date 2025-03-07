@@ -20,5 +20,7 @@ public class AiSpeechAssistantDto
     
     public string Greetings { get; set; }
     
+    public string CustomRecordAnalyzePrompt { get; set; }
+    
     public DateTimeOffset CreatedDate { get; set; }
 }

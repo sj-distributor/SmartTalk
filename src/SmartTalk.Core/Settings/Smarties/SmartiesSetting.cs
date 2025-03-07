@@ -9,9 +9,13 @@ public class SmartiesSetting : IConfigurationSetting
         BaseUrl = configuration.GetValue<string>("Smarties:BaseUrl");
         
         ApiKey = configuration.GetValue<string>("Smarties:ApiKey");
+
+        AiSpeechAssistantCallBackUrl = configuration.GetValue<string>("Smarties:AiSpeechAssistantCallBackUrl");
     }
     
     public string BaseUrl { get; set; }
     
     public string ApiKey { get; set; }
+    
+    public string AiSpeechAssistantCallBackUrl { get; set; }
 }
