@@ -33,6 +33,8 @@ public partial interface IPhoneOrderDataProvider
     Task<PhoneOrderRecord> GetPhoneOrderRecordByIdAsync(int recordId, CancellationToken cancellationToken);
     
     Task<PhoneOrderRecord> GetPhoneOrderRecordBySessionIdAsync(string sessionId, CancellationToken cancellationToken);
+    
+    Task<(PhoneOrderRecord, Agent, Domain.AISpeechAssistant.AiSpeechAssistant)> GetRecordWithAgentAndAssistantAsync(string sessionId, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderDataProvider
@@ -176,5 +178,20 @@ public partial class PhoneOrderDataProvider
     public async Task<PhoneOrderRecord> GetPhoneOrderRecordBySessionIdAsync(string sessionId, CancellationToken cancellationToken)
     {
         return await _repository.Query<PhoneOrderRecord>().Where(x => x.SessionId == sessionId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+    
+    public async Task<(PhoneOrderRecord, Agent, Domain.AISpeechAssistant.AiSpeechAssistant)> GetRecordWithAgentAndAssistantAsync(string sessionId, CancellationToken cancellationToken)
+    {
+        var result = await (
+            from record in _repository.Query<PhoneOrderRecord>()
+            where record.SessionId == sessionId
+            join agent in _repository.Query<Agent>() on record.AgentId equals agent.Id into agentGroup
+            from agent in agentGroup.DefaultIfEmpty()
+            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on record.AgentId equals assistant.AgentId into assistantGroup
+            from assistant in assistantGroup.DefaultIfEmpty()
+            select new { record, agent, assistant }
+        ).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+
+        return (result?.record, result?.agent, result?.assistant);
     }
 }

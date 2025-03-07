@@ -62,7 +62,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             Tips = context.ConversationTranscription.FirstOrDefault().Item2,
             TranscriptionText = FormattedConversation(context.ConversationTranscription),
             Language = TranscriptionLanguage.Chinese,
-            CreatedDate = callResource?.StartTime ?? DateTimeOffset.Now,
+            CreatedDate = callResource.StartTime ?? DateTimeOffset.Now,
             OrderStatus = PhoneOrderOrderStatus.Pending,
             Comments = context.OrderItems?.Comments,
             CustomerName = context.UserInfo?.UserName,
