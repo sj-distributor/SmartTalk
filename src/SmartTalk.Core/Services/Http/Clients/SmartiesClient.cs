@@ -2,6 +2,7 @@ using Serilog;
 using SmartTalk.Core.Ioc;
 using Smarties.Messages.Requests.Ask;
 using SmartTalk.Core.Settings.Smarties;
+using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Smarties;
 
 namespace SmartTalk.Core.Services.Http.Clients;
@@ -11,6 +12,8 @@ public interface ISmartiesClient : IScopedDependency
     Task<AskGptResponse> PerformQueryAsync(AskGptRequest request, CancellationToken cancellationToken);
     
     Task<AskGptEmbeddingResponseDto> GetEmbeddingAsync(AskGptEmbeddingRequestDto request, CancellationToken cancellationToken);
+
+    Task CallBackSmartiesAiSpeechAssistantRecordAsync(AiSpeechAssistantCallBackRequestDto request, CancellationToken cancellationToken);
 }
 
 public class SmartiesClient : ISmartiesClient
@@ -45,5 +48,10 @@ public class SmartiesClient : ISmartiesClient
         Log.Information("Ask gpt embedding response: {@Response}", response);
 
         return response;
+    }
+
+    public async Task CallBackSmartiesAiSpeechAssistantRecordAsync(AiSpeechAssistantCallBackRequestDto request, CancellationToken cancellationToken)
+    {
+        await _httpClientFactory.PostAsJsonAsync(_smartiesSettings.AiSpeechAssistantCallBackUrl, request, cancellationToken, headers: _headers).ConfigureAwait(false);
     }
 }

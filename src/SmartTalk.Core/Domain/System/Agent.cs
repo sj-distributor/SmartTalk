@@ -1,6 +1,7 @@
 using SmartTalk.Messages.Dto.Agent;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using SmartTalk.Messages.Enums.Agent;
 
 namespace SmartTalk.Core.Domain.System;
 
@@ -20,6 +21,9 @@ public class Agent : IEntity
 
     [Column("type")]
     public AgentType Type { get; set; }
+    
+    [Column("source_system")]
+    public AgentSourceSystem SourceSystem { get; set; }
     
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
