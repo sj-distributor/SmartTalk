@@ -120,7 +120,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         {
             Host = command.Host,
             LastPrompt = knowledgeBase,
-            HumanContactPhone = humanContact.HumanPhone,
+            HumanContactPhone = humanContact?.HumanPhone,
             LastUserInfo = new AiSpeechAssistantUserInfoDto
             {
                 PhoneNumber = command.From
