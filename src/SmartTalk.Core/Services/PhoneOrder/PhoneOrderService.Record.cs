@@ -427,7 +427,7 @@ public partial class PhoneOrderService
     
     private async Task<PhoneOrderRecordInformationDto> ExtractPhoneOrderRecordInfoAsync(string recordName, int agentId, DateTimeOffset? startTime, CancellationToken cancellationToken)
     {
-        var agent = await _agentDataProvider.GetAgentAsync(agentId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var agent = await _agentDataProvider.GetAgentByIdAsync(agentId, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         return new PhoneOrderRecordInformationDto
         {
