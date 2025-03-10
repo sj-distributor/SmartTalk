@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.Http;
 using OpenAI.Chat;
 using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.Http;
+using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Messages.Constants;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.PhoneOrder;
@@ -30,6 +31,7 @@ using SmartTalk.Messages.Events.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Dto.Agent;
+using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 using RecordingResource = Twilio.Rest.Api.V2010.Account.Call.RecordingResource;
@@ -56,8 +58,8 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly IMapper _mapper;
     private readonly OpenAiSettings _openAiSettings;
     private readonly TwilioSettings _twilioSettings;
+    private readonly ISmartiesClient _smartiesClient;
     private readonly ZhiPuAiSettings _zhiPuAiSettings;
-    private readonly IAgentDataProvider _agentDataProvider;
     private readonly IPhoneOrderService _phoneOrderService;
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
@@ -68,8 +70,8 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         IMapper mapper,
         OpenAiSettings openAiSettings,
         TwilioSettings twilioSettings,
+        ISmartiesClient smartiesClient,
         ZhiPuAiSettings zhiPuAiSettings,
-        IAgentDataProvider agentDataProvider,
         IPhoneOrderService phoneOrderService,
         ISmartTalkHttpClientFactory httpClientFactory,
         IPhoneOrderDataProvider phoneOrderDataProvider,
@@ -79,9 +81,9 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         _mapper = mapper;
         _openAiSettings = openAiSettings;
         _twilioSettings = twilioSettings;
+        _smartiesClient = smartiesClient;
         _zhiPuAiSettings = zhiPuAiSettings;
         _phoneOrderService = phoneOrderService;
-        _agentDataProvider = agentDataProvider;
         _httpClientFactory = httpClientFactory;
         _backgroundJobClient = backgroundJobClient;
         _phoneOrderDataProvider = phoneOrderDataProvider;
@@ -106,7 +108,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
     {
         Log.Information($"The call from {command.From} to {command.To} is connected");
 
-        var (assistant, knowledgeBase) = await BuildingAiSpeechAssistantKnowledgeBaseAsync(command.From, command.To, cancellationToken).ConfigureAwait(false);
+        var (assistant, knowledgeBase) = await BuildingAiSpeechAssistantKnowledgeBaseAsync(command.From, command.To, command.AssistantId, cancellationToken).ConfigureAwait(false);
 
         if (string.IsNullOrEmpty(knowledgeBase)) return new AiSpeechAssistantConnectCloseEvent();
 
@@ -153,21 +155,21 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
     {
         Log.Information("Handling receive phone record: {@command}", command);
 
-        var record = await _phoneOrderDataProvider.GetPhoneOrderRecordBySessionIdAsync(command.CallSid, cancellationToken).ConfigureAwait(false);
-
+        var (record, agent, aiSpeechAssistant) = await _phoneOrderDataProvider.GetRecordWithAgentAndAssistantAsync(command.CallSid, cancellationToken).ConfigureAwait(false);
+        
         Log.Information("Get phone order record: {@record}", record);
 
         record.Url = command.RecordingUrl;
         record.Status = PhoneOrderRecordStatus.Sent;
-
-        var agent = await _agentDataProvider.GetAgentByIdAsync(record.AgentId, cancellationToken: cancellationToken).ConfigureAwait(false);
-
+        
         ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
         var audioFileRawBytes = await _httpClientFactory.GetAsync<byte[]>(record.Url, cancellationToken).ConfigureAwait(false);
         var audioData = BinaryData.FromBytes(audioFileRawBytes);
         List<ChatMessage> messages =
         [
-            new SystemChatMessage("你是一名電話錄音的分析員，通過聽取錄音內容和語氣情緒作出精確分析，冩出一份分析報告。\n\n分析報告的格式：交談主題：xxx\n\n 內容摘要:xxx \n\n 客人情感與情緒: xxx \n\n 待辦事件: \n1.xxx\n2.xxx \n\n 客人下單內容(如果沒有則忽略)：1. 牛肉(1箱)\n2.雞腿肉(1箱)"),
+            new SystemChatMessage(string.IsNullOrEmpty(aiSpeechAssistant?.CustomRecordAnalyzePrompt)
+                ? "你是一名電話錄音的分析員，通過聽取錄音內容和語氣情緒作出精確分析，冩出一份分析報告。\n\n分析報告的格式：交談主題：xxx\n\n 內容摘要:xxx \n\n 客人情感與情緒: xxx \n\n 待辦事件: \n1.xxx\n2.xxx \n\n 客人下單內容(如果沒有則忽略)：1. 牛肉(1箱)\n2.雞腿肉(1箱)" 
+                : aiSpeechAssistant.CustomRecordAnalyzePrompt),
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
             new UserChatMessage("幫我根據錄音生成分析報告：")
         ];
@@ -178,6 +180,9 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         Log.Information("sales record analyze report:" + completion.Content.FirstOrDefault()?.Text);
         record.TranscriptionText = completion.Content.FirstOrDefault()?.Text;
 
+        if (agent.SourceSystem == AgentSourceSystem.Smarties)
+            await _smartiesClient.CallBackSmartiesAiSpeechAssistantRecordAsync(new AiSpeechAssistantCallBackRequestDto { CallSid = command.CallSid, RecordUrl = record.Url, RecordAnalyzeReport =  record.TranscriptionText }, cancellationToken).ConfigureAwait(false);
+        
         if (!string.IsNullOrEmpty(agent.WechatRobotKey))
             await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(audioFileRawBytes, agent.WechatRobotKey, "錄音分析報告：\n" + record.TranscriptionText, cancellationToken).ConfigureAwait(false);
 
@@ -204,10 +209,10 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         );
     }
 
-    private async Task<(Domain.AISpeechAssistant.AiSpeechAssistant Assistant, string Prompt)> BuildingAiSpeechAssistantKnowledgeBaseAsync(string from, string to, CancellationToken cancellationToken)
+    private async Task<(Domain.AISpeechAssistant.AiSpeechAssistant Assistant, string Prompt)> BuildingAiSpeechAssistantKnowledgeBaseAsync(string from, string to, int? assistantId, CancellationToken cancellationToken)
     {
         var (assistant, promptTemplate, userProfile) = await _aiSpeechAssistantDataProvider
-            .GetAiSpeechAssistantInfoByNumbersAsync(from, to, cancellationToken).ConfigureAwait(false);
+            .GetAiSpeechAssistantInfoByNumbersAsync(from, to, assistantId, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Matching Ai speech assistant: {@Assistant}、{@PromptTemplate}、{@UserProfile}", assistant, promptTemplate, userProfile);
 
