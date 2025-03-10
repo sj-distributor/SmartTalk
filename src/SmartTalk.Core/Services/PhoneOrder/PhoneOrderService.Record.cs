@@ -445,7 +445,7 @@ public partial class PhoneOrderService
 
         if (match.Success) time = match.Groups[1].Value;
         
-        return TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeSeconds(long.Parse(time)), TimeZoneInfo.FindSystemTimeZoneById("America/Los_Angeles"));
+        return DateTimeOffset.FromUnixTimeSeconds(long.Parse(time)).AddHours(-7);
     }
     
     private async Task UpdatePhoneOrderRecordSpecificFieldsAsync(int recordId, int modifiedBy, string tips, string lastModifiedByName, CancellationToken cancellationToken)

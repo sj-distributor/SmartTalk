@@ -10,10 +10,7 @@ public class PhoneOrderMapping : Profile
 {
     public PhoneOrderMapping()
     {
-        CreateMap<PhoneOrderRecord, PhoneOrderRecordDto>()
-            .ForMember(dest => dest.CreatedDate, opt => opt.MapFrom(src => TimeZoneInfo.ConvertTimeFromUtc(src.CreatedDate.UtcDateTime, TimeZoneInfo.FindSystemTimeZoneById("America/Los_Angeles"))));
-        
-        CreateMap<PhoneOrderRecordDto, PhoneOrderRecord>();
+        CreateMap<PhoneOrderRecord, PhoneOrderRecordDto>().ReverseMap();
         CreateMap<PhoneOrderConversation, PhoneOrderConversationDto>().ReverseMap();
         CreateMap<PhoneOrderOrderItem, PhoneOrderOrderItemDto>().ReverseMap();
         
