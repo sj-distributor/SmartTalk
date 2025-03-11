@@ -43,7 +43,7 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
                 assistant, promptTemplate, userProfile
             };
 
-        assistantInfo = assistantInfo.Where(x => assistantId.HasValue ? x.assistant.Id == assistantId.Value : x.assistant.DidNumber == didNumber);
+        assistantInfo = assistantInfo.Where(x => assistantId.HasValue ? x.assistant.Id == assistantId.Value : x.assistant.AnsweringNumber == didNumber);
 
         var result = await assistantInfo.FirstOrDefaultAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -52,7 +52,7 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
 
     public async Task<Domain.AISpeechAssistant.AiSpeechAssistant> GetAiSpeechAssistantByNumbersAsync(string didNumber, CancellationToken cancellationToken)
     {
-        return await _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>().Where(x => x.DidNumber == didNumber)
+        return await _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>().Where(x => x.AnsweringNumber == didNumber)
             .FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
