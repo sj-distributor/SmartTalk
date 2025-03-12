@@ -753,14 +753,14 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
     
     private async Task SendSessionUpdateAsync(WebSocket openAiWebSocket, Domain.AISpeechAssistant.AiSpeechAssistant assistant, string prompt)
     {
-        var tools = await InitialSessionToolsAsync(assistant).ConfigureAwait(false);
+        var configs = await InitialSessionConfigAsync(assistant).ConfigureAwait(false);
         
         var sessionUpdate = new
         {
             type = "session.update",
             session = new
             {
-                turn_detection = new { type = "server_vad" },
+                turn_detection = InitialSessionTurnDirection(configs),
                 input_audio_format = "g711_ulaw",
                 output_audio_format = "g711_ulaw",
                 voice = string.IsNullOrEmpty(assistant.Voice) ? "alloy" : assistant.Voice,
@@ -768,17 +768,24 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                 modalities = new[] { "text", "audio" },
                 temperature = 0.8,
                 input_audio_transcription = new { model = "whisper-1", language = "zh" },
-                tools = tools
+                tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool)
             }
         };
 
         await SendToWebSocketAsync(openAiWebSocket, sessionUpdate);
     }
 
-    private async Task<IEnumerable<OpenAiRealtimeToolDto>> InitialSessionToolsAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken = default)
+    private async Task<List<(AiSpeechAssistantSessionConfigType Type, object Config)>> InitialSessionConfigAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken = default)
     {
         var functions = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallByAssistantIdAsync(assistant.Id, cancellationToken).ConfigureAwait(false);
 
-        return functions.Count == 0 ? [] : functions.Where(x => !string.IsNullOrWhiteSpace(x.Content)).Select(x => JsonConvert.DeserializeObject<OpenAiRealtimeToolDto>(x.Content));
+        return functions.Count == 0 ? [] : functions.Where(x => !string.IsNullOrWhiteSpace(x.Content)).Select(x => (x.Type, JsonConvert.DeserializeObject<object>(x.Content))).ToList();
     }
+
+    private object InitialSessionTurnDirection(List<(AiSpeechAssistantSessionConfigType Type, object Config)> configs)
+    {
+        var turnDetection = configs.FirstOrDefault(x => x.Type == AiSpeechAssistantSessionConfigType.TurnDirection);
+
+        return turnDetection.Config ?? new { type = "server_vad" };
+    } 
 }
