@@ -26,6 +26,12 @@ public class AiSpeechAssistantKnowledge : IEntity, IHasCreatedFields
     [Column("is_active", TypeName = "tinyint(1)")]
     public bool IsActive { get; set; }
     
+    [Column("brief"), StringLength(128)]
+    public string Brief { get; set; }
+    
+    [Column("greetings"), StringLength(1024)]
+    public string Greetings { get; set; }
+    
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
     
