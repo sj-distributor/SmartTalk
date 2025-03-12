@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS ai_speech_assistant_knowledge(
     `json` LONGTEXT NULL,
     `prompt` TEXT NULL,
     `version` VARCHAR(128) NOT NULL,
-    `is_active` TINYINT(1) Default 1 NOT NULL,
+    `is_active` TINYINT(1) Default 0 NOT NULL,
     `created_date` DATETIME(3) NOT NULL,
     `created_by` VARCHAR(255) NOT NULL
     )CHARSET=utf8mb4;
