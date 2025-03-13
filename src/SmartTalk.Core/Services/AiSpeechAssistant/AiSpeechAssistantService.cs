@@ -13,7 +13,6 @@ using AutoMapper;
 using SmartTalk.Core.Constants;
 using Microsoft.AspNetCore.Http;
 using OpenAI.Chat;
-using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Messages.Constants;
@@ -29,8 +28,6 @@ using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
-using SmartTalk.Messages.Commands.PhoneOrder;
-using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using JsonSerializer = System.Text.Json.JsonSerializer;
@@ -157,6 +154,8 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
 
         var (record, agent, aiSpeechAssistant) = await _phoneOrderDataProvider.GetRecordWithAgentAndAssistantAsync(command.CallSid, cancellationToken).ConfigureAwait(false);
         
+        var knowledge = await _phoneOrderDataProvider.GetKnowledgePromptByAssistantIdAsync(aiSpeechAssistant.Id, cancellationToken).ConfigureAwait(false);
+        
         Log.Information("Get phone order record: {@record}", record);
 
         record.Url = command.RecordingUrl;
@@ -167,9 +166,9 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         var audioData = BinaryData.FromBytes(audioFileRawBytes);
         List<ChatMessage> messages =
         [
-            new SystemChatMessage(string.IsNullOrEmpty(aiSpeechAssistant?.CustomRecordAnalyzePrompt)
+            new SystemChatMessage(string.IsNullOrEmpty(knowledge?.Prompt)
                 ? "你是一名電話錄音的分析員，通過聽取錄音內容和語氣情緒作出精確分析，冩出一份分析報告。\n\n分析報告的格式：交談主題：xxx\n\n 內容摘要:xxx \n\n 客人情感與情緒: xxx \n\n 待辦事件: \n1.xxx\n2.xxx \n\n 客人下單內容(如果沒有則忽略)：1. 牛肉(1箱)\n2.雞腿肉(1箱)" 
-                : aiSpeechAssistant.CustomRecordAnalyzePrompt),
+                : knowledge.Prompt),
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
             new UserChatMessage("幫我根據錄音生成分析報告：")
         ];
@@ -237,7 +236,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         openAiWebSocket.Options.SetRequestHeader("Authorization", GetAuthorizationHeader(assistant));
         openAiWebSocket.Options.SetRequestHeader("OpenAI-Beta", "realtime=v1");
 
-        var url = string.IsNullOrEmpty(assistant.Url) ? AiSpeechAssistantStore.DefaultUrl : assistant.Url;
+        var url = string.IsNullOrEmpty(assistant.ModelUrl) ? AiSpeechAssistantStore.DefaultUrl : assistant.ModelUrl;
 
         await openAiWebSocket.ConnectAsync(new Uri(url), cancellationToken).ConfigureAwait(false);
 
@@ -248,11 +247,11 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
 
     private string GetAuthorizationHeader(Domain.AISpeechAssistant.AiSpeechAssistant assistant)
     {
-        return assistant.Provider switch
+        return assistant.ModelProvider switch
         {
             AiSpeechAssistantProvider.OpenAi => $"Bearer {_openAiSettings.ApiKey}",
             AiSpeechAssistantProvider.ZhiPuAi => $"Bearer {_zhiPuAiSettings.ApiKey}",
-            _ => throw new NotSupportedException(nameof(assistant.Provider))
+            _ => throw new NotSupportedException(nameof(assistant.ModelProvider))
         };
     }
     
@@ -739,7 +738,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                 turn_detection = InitialSessionTurnDirection(configs),
                 input_audio_format = "g711_ulaw",
                 output_audio_format = "g711_ulaw",
-                voice = string.IsNullOrEmpty(assistant.Voice) ? "alloy" : assistant.Voice,
+                voice = string.IsNullOrEmpty(assistant.ModelVoice) ? "alloy" : assistant.ModelVoice,
                 instructions = prompt,
                 modalities = new[] { "text", "audio" },
                 temperature = 0.8,
