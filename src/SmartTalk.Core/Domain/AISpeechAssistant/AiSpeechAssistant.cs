@@ -37,5 +37,5 @@ public class AiSpeechAssistant : IEntity, IHasCreatedFields
     public DateTimeOffset CreatedDate { get; set; }
     
     [Column("created_by")]
-    public string CreatedBy { get; set; }
+    public int CreatedBy { get; set; }
 }

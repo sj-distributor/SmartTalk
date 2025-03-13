@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Domain.Account;
 using SmartTalk.Core.Domain.AIKnowledgeBase;
+using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Domain.Restaurants;
 using SmartTalk.Core.Domain.System;
@@ -199,6 +200,6 @@ public partial class PhoneOrderDataProvider
 
     public async Task<AiSpeechAssistantKnowledge> GetKnowledgePromptByAssistantIdAsync(int assistantId, CancellationToken cancellationToken)
     {
-        return await _repository.Query<AiSpeechAssistantKnowledge>().Where(x=>x.AssistantId == assistantId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        return await _repository.Query<AiSpeechAssistantKnowledge>().Where(x=> x.AssistantId == assistantId && x.IsActive).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 }
