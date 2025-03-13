@@ -2,6 +2,7 @@ using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Data;
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Domain.AIAssistant;
+using SmartTalk.Core.Domain.AIKnowledgeBase;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
@@ -52,8 +53,13 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
 
     public async Task<Domain.AISpeechAssistant.AiSpeechAssistant> GetAiSpeechAssistantByNumbersAsync(string didNumber, CancellationToken cancellationToken)
     {
-        return await _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>().Where(x => x.AnsweringNumber == didNumber)
-            .FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        var query = from assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>()
+            join pool in _repository.Query<NumberPool>()
+                on assistant.AnsweringNumberId equals pool.Id
+            where pool.Number == didNumber
+            select assistant;
+
+        return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<AiSpeechAssistantHumanContact> GetAiSpeechAssistantHumanContactByAssistantIdAsync(int assistantId, CancellationToken cancellationToken)
