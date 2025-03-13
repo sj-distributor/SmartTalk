@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
-namespace SmartTalk.Core.Domain.AIKnowledgeBase;
+namespace SmartTalk.Core.Domain.AISpeechAssistant;
 
 [Table("number_pool")]
 public class NumberPool : IEntity, IHasCreatedFields

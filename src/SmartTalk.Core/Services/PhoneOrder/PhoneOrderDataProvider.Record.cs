@@ -1,6 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Domain.Account;
-using SmartTalk.Core.Domain.AIKnowledgeBase;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Domain.Restaurants;
