@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Requests.AiSpeechAssistant;
-using SmartTalk.Messages.Requests.PhoneOrder;
 
 namespace SmartTalk.Api.Controllers;
 
