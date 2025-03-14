@@ -760,15 +760,15 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             type = "session.update",
             session = new
             {
-                turn_detection = InitialSessionTurnDirection(configs),
+                turn_detection = new { type = "server_vad" },
                 input_audio_format = "g711_ulaw",
                 output_audio_format = "g711_ulaw",
                 voice = string.IsNullOrEmpty(assistant.Voice) ? "alloy" : assistant.Voice,
                 instructions = prompt,
                 modalities = new[] { "text", "audio" },
                 temperature = 0.8,
-                input_audio_transcription = new { model = "whisper-1", language = "zh" },
-                tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config)
+                input_audio_transcription = new { model = "whisper-1", language = "zh" }
+                // tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config)
             }
         };
 
