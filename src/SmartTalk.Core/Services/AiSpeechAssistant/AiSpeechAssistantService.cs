@@ -278,7 +278,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
     
     private async Task ReceiveFromTwilioAsync(WebSocket twilioWebSocket, WebSocket openAiWebSocket, AiSpeechAssistantStreamContextDto context)
     {
-        var buffer = new byte[1024 * 10];
+        var buffer = new byte[1024 * 30];
         try
         {
             while (twilioWebSocket.State == WebSocketState.Open)
