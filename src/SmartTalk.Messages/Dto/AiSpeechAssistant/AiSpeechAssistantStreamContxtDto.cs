@@ -38,6 +38,8 @@ public class AiSpeechAssistantStreamContextDto
     public string HumanContactPhone { get; set; }
     
     public AiSpeechAssistantDto Assistant { get; set; }
+    
+    public AiSpeechAssistantKnowledgeDto Knowledge { get; set; }
 
     public List<(AiSpeechAssistantSpeaker, string)> ConversationTranscription { get; set; } = new();
 }
