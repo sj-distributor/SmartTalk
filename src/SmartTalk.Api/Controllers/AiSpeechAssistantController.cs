@@ -147,4 +147,13 @@ public class AiSpeechAssistantController : ControllerBase
 
         return Ok(response);
     }
+    
+    [Route("knowledge/switch"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(SwitchAiSpeechAssistantKnowledgeVersionResponse))]
+    public async Task<IActionResult> SwitchAiSpeechAssistantKnowledgeVersionAsync([FromBody] SwitchAiSpeechAssistantKnowledgeVersionCommand command)
+    {
+        var response = await _mediator.SendAsync<SwitchAiSpeechAssistantKnowledgeVersionCommand, SwitchAiSpeechAssistantKnowledgeVersionResponse>(command).ConfigureAwait(false);
+
+        return Ok(response);
+    }
 }

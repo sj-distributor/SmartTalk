@@ -12,6 +12,8 @@ public partial interface IAiSpeechAssistantService
     Task<AddAiSpeechAssistantResponse> AddAiSpeechAssistantAsync(AddAiSpeechAssistantCommand command, CancellationToken cancellationToken);
 
     Task<AddAiSpeechAssistantKnowledgeResponse> AddAiSpeechAssistantKnowledgeAsync(AddAiSpeechAssistantKnowledgeCommand command, CancellationToken cancellationToken);
+
+    Task<SwitchAiSpeechAssistantKnowledgeVersionResponse> SwitchAiSpeechAssistantKnowledgeVersionAsync(SwitchAiSpeechAssistantKnowledgeVersionCommand command, CancellationToken cancellationToken);
 }
 
 public partial class AiSpeechAssistantService
@@ -32,7 +34,7 @@ public partial class AiSpeechAssistantService
 
     public async Task<AddAiSpeechAssistantKnowledgeResponse> AddAiSpeechAssistantKnowledgeAsync(AddAiSpeechAssistantKnowledgeCommand command, CancellationToken cancellationToken)
     {
-        var preKnowledge = await UpdatePreviousKnowledgeIfRequiredAsync(command.AssistantId, cancellationToken).ConfigureAwait(false);
+        var preKnowledge = await UpdatePreviousKnowledgeIfRequiredAsync(command.AssistantId, false, cancellationToken).ConfigureAwait(false);
 
         var latestKnowledge = _mapper.Map<AiSpeechAssistantKnowledge>(command);
 
@@ -43,6 +45,25 @@ public partial class AiSpeechAssistantService
         return new AddAiSpeechAssistantKnowledgeResponse
         {
             Data = _mapper.Map<AiSpeechAssistantKnowledgeDto>(latestKnowledge)
+        };
+    }
+
+    public async Task<SwitchAiSpeechAssistantKnowledgeVersionResponse> SwitchAiSpeechAssistantKnowledgeVersionAsync(SwitchAiSpeechAssistantKnowledgeVersionCommand command, CancellationToken cancellationToken)
+    {
+        var preKnowledge = await UpdatePreviousKnowledgeIfRequiredAsync(command.AssistantId, false, cancellationToken).ConfigureAwait(false);
+
+        if (preKnowledge == null) throw new Exception("Could not found the active knowledge!");
+
+        var currentKnowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(
+            command.AssistantId, command.KnowledgeId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (currentKnowledge == null) throw new Exception($"Could not found the knowledge by knowledge id: {command.KnowledgeId}!");
+
+        await UpdateKnowledgeStatusAsync(currentKnowledge, true, cancellationToken).ConfigureAwait(false);
+
+        return new SwitchAiSpeechAssistantKnowledgeVersionResponse
+        {
+            Data = _mapper.Map<AiSpeechAssistantKnowledgeDto>(currentKnowledge)
         };
     }
 
@@ -58,7 +79,7 @@ public partial class AiSpeechAssistantService
         return assistant;
     }
 
-    private async Task<AiSpeechAssistantKnowledge> UpdatePreviousKnowledgeIfRequiredAsync(int assistantId, CancellationToken cancellationToken)
+    private async Task<AiSpeechAssistantKnowledge> UpdatePreviousKnowledgeIfRequiredAsync(int assistantId, bool isActive, CancellationToken cancellationToken)
     {
         var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(assistantId, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -69,11 +90,16 @@ public partial class AiSpeechAssistantService
             return null;
         }
 
-        knowledge.IsActive = false;
-
-        await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync([knowledge], cancellationToken: cancellationToken).ConfigureAwait(false);
+        await UpdateKnowledgeStatusAsync(knowledge, isActive, cancellationToken).ConfigureAwait(false);
             
         return knowledge;
+    }
+
+    private async Task UpdateKnowledgeStatusAsync(AiSpeechAssistantKnowledge knowledge, bool isActive, CancellationToken cancellationToken)
+    {
+        knowledge.IsActive = isActive;
+
+        await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync([knowledge], cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
     private void InitialKnowledge(AiSpeechAssistantKnowledge preKnowledge, AiSpeechAssistantKnowledge latestKnowledge)
@@ -93,7 +119,7 @@ public partial class AiSpeechAssistantService
 
     private async Task UpdateNumberStatusAsync(int answeringNumberId, CancellationToken cancellationToken)
     {
-        var number =await _aiSpeechAssistantDataProvider.GetNumberAsync(answeringNumberId, cancellationToken).ConfigureAwait(false);
+        var number = await _aiSpeechAssistantDataProvider.GetNumberAsync(answeringNumberId, cancellationToken).ConfigureAwait(false);
 
         number.IsUsed = true;
 

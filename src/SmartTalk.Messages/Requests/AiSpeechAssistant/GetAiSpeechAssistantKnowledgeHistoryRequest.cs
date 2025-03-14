@@ -10,8 +10,6 @@ public class GetAiSpeechAssistantKnowledgeHistoryRequest : IRequest
     
     public int? PageSize { get; set; }
     
-    public string Version { get; set; }
-    
     public int AssistantId { get; set; }
 }
 

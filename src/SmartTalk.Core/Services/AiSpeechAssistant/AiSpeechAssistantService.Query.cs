@@ -61,7 +61,7 @@ public partial class AiSpeechAssistantService
     public async Task<GetAiSpeechAssistantKnowledgeHistoryResponse> GetAiSpeechAssistantKnowledgeHistoryAsync(GetAiSpeechAssistantKnowledgeHistoryRequest request, CancellationToken cancellationToken)
     {
         var (count, knowledges) = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgesAsync(
-            request.AssistantId, request.PageIndex, request.PageSize, request.Version, cancellationToken).ConfigureAwait(false);
+            request.AssistantId, request.PageIndex, request.PageSize, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         return new GetAiSpeechAssistantKnowledgeHistoryResponse
         {
