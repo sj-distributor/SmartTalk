@@ -14,5 +14,7 @@ public class AiSpeechAssistantMapping : Profile
             .ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.AssistantName));
 
         CreateMap<AddAiSpeechAssistantKnowledgeCommand, AiSpeechAssistantKnowledge>();
+        CreateMap<AiSpeechAssistantKnowledge, AiSpeechAssistantKnowledgeDto>().ReverseMap();
+        CreateMap<NumberPool, NumberPoolDto>().ReverseMap();
     }
 }
