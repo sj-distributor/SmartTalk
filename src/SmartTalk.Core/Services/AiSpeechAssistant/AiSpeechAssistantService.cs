@@ -301,6 +301,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                                 type = "input_audio_buffer.append",
                                 audio = payload
                             };
+                            context.LatestMediaTimestamp = (int)jsonDocument?.RootElement.GetProperty("media").GetProperty("timestamp").GetInt32();
                             await SendToWebSocketAsync(openAiWebSocket, audioAppend);
                             break;
                         case "stop":
@@ -668,6 +669,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                     content_index = 0,
                     audio_end_ms = elapsedTime
                 };
+                await SendToWebSocketAsync(openAiWebSocket, truncateEvent);
             }
             
             var clearEvent = new
