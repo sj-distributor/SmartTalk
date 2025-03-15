@@ -56,6 +56,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly OpenAiSettings _openAiSettings;
     private readonly TwilioSettings _twilioSettings;
     private readonly ISmartiesClient _smartiesClient;
+    private readonly ClientWebSocket _openaiWebSocket;
     private readonly ZhiPuAiSettings _zhiPuAiSettings;
     private readonly IPhoneOrderService _phoneOrderService;
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
@@ -85,6 +86,8 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         _backgroundJobClient = backgroundJobClient;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
+
+        _openaiWebSocket = new ClientWebSocket();
     }
 
     public CallAiSpeechAssistantResponse CallAiSpeechAssistant(CallAiSpeechAssistantCommand command)
@@ -111,7 +114,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
 
         var humanContact = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantHumanContactByAssistantIdAsync(assistant.Id, cancellationToken).ConfigureAwait(false);
 
-        var openaiWebSocket = await ConnectOpenAiRealTimeSocketAsync(assistant, knowledgeBase, cancellationToken).ConfigureAwait(false);
+        await ConnectOpenAiRealTimeSocketAsync(assistant, knowledgeBase, cancellationToken).ConfigureAwait(false);
         
         var context = new AiSpeechAssistantStreamContextDto
         {
@@ -125,8 +128,8 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             Assistant = _mapper.Map<AiSpeechAssistantDto>(assistant)
         };
         
-        var receiveFromTwilioTask = ReceiveFromTwilioAsync(command.TwilioWebSocket, openaiWebSocket, context);
-        var sendToTwilioTask = SendToTwilioAsync(command.TwilioWebSocket, openaiWebSocket, context, cancellationToken);
+        var receiveFromTwilioTask = ReceiveFromTwilioAsync(command.TwilioWebSocket, _openaiWebSocket, context);
+        var sendToTwilioTask = SendToTwilioAsync(command.TwilioWebSocket, _openaiWebSocket, context, cancellationToken);
 
         try
         {
@@ -230,19 +233,16 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         return (assistant, finalPrompt);
     }
 
-    private async Task<WebSocket> ConnectOpenAiRealTimeSocketAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, string prompt, CancellationToken cancellationToken)
+    private async Task ConnectOpenAiRealTimeSocketAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, string prompt, CancellationToken cancellationToken)
     {
-        var openAiWebSocket = new ClientWebSocket();
-        openAiWebSocket.Options.SetRequestHeader("Authorization", GetAuthorizationHeader(assistant));
-        openAiWebSocket.Options.SetRequestHeader("OpenAI-Beta", "realtime=v1");
+        _openaiWebSocket.Options.SetRequestHeader("Authorization", GetAuthorizationHeader(assistant));
+        _openaiWebSocket.Options.SetRequestHeader("OpenAI-Beta", "realtime=v1");
 
         var url = string.IsNullOrEmpty(assistant.ModelUrl) ? AiSpeechAssistantStore.DefaultUrl : assistant.ModelUrl;
 
-        await openAiWebSocket.ConnectAsync(new Uri(url), cancellationToken).ConfigureAwait(false);
+        await _openaiWebSocket.ConnectAsync(new Uri(url), cancellationToken).ConfigureAwait(false);
 
-        await SendSessionUpdateAsync(openAiWebSocket, assistant, prompt).ConfigureAwait(false);
-
-        return openAiWebSocket;
+        await SendSessionUpdateAsync(_openaiWebSocket, assistant, prompt).ConfigureAwait(false);
     }
 
     private string GetAuthorizationHeader(Domain.AISpeechAssistant.AiSpeechAssistant assistant)
@@ -323,26 +323,20 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             while (openAiWebSocket.State == WebSocketState.Open)
             {
                 var result = await openAiWebSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
-                Log.Information("ReceiveFromOpenAi result: {result}", Encoding.UTF8.GetString(buffer, 0, result.Count));
 
-                if (result.Count > 0)
+                if (result is { Count: > 0 })
                 {
+                    Log.Information("ReceiveFromOpenAi result: {@result}", JsonConvert.DeserializeObject<object>(Encoding.UTF8.GetString(buffer, 0, result.Count)));
+                    
                     var jsonDocument = JsonSerializer.Deserialize<JsonDocument>(buffer.AsSpan(0, result.Count));
 
                     Log.Information($"Received event: {jsonDocument?.RootElement.GetProperty("type").GetString()}");
                     
                     if (jsonDocument?.RootElement.GetProperty("type").GetString() == "error" && jsonDocument.RootElement.TryGetProperty("error", out var error))
-                    {
-                        Log.Information("Receive openai websocket error" + error.GetProperty("message").GetString());
-                        
-                        await SendToWebSocketAsync(openAiWebSocket, context.LastMessage);
-                        await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
-                    }
-
+                        Log.Error("Receive openai websocket error" + error.GetProperty("message").GetString());
+                    
                     if (jsonDocument?.RootElement.GetProperty("type").GetString() == "session.updated")
-                    {
                         Log.Information("Session updated successfully");
-                    }
 
                     if (jsonDocument?.RootElement.GetProperty("type").GetString() == "response.audio.delta" && jsonDocument.RootElement.TryGetProperty("delta", out var delta))
                     {
@@ -452,7 +446,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         }
         catch (WebSocketException ex)
         {
-            Log.Information($"Send to Twilio error: {ex.Message}");
+            Log.Information("WebSocketException: {ex}", ex);
         }
     }
     
@@ -652,22 +646,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             
             if (context.ShowTimingMath)
                 Log.Information($"Calculating elapsed time for truncation: {context.LatestMediaTimestamp} - {context.ResponseStartTimestampTwilio.Value} = {elapsedTime}ms");
-
-            if (!string.IsNullOrEmpty(context.LastAssistantItem))
-            {
-                if (context.ShowTimingMath)
-                    Log.Information($"Truncating item with ID: {context.LastAssistantItem}, Truncated at: {elapsedTime}ms");
-
-                var truncateEvent = new
-                {
-                    type = "conversation.item.truncate",
-                    item_id = context.LastAssistantItem,
-                    content_index = 0,
-                    audio_end_ms = elapsedTime
-                };
-                await SendToWebSocketAsync(openAiWebSocket, truncateEvent);
-            }
-
+            
             var clearEvent = new
             {
                 Event = "clear",
