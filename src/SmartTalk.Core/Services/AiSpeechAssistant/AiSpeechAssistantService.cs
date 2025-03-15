@@ -381,7 +381,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                         if (!string.IsNullOrEmpty(context.LastAssistantItem))
                         {
                             Log.Information($"Interrupting response with id: {context.LastAssistantItem}");
-                            // await HandleSpeechStartedEventAsync(twilioWebSocket, openAiWebSocket, context);
+                            await HandleSpeechStartedEventAsync(twilioWebSocket, openAiWebSocket, context, jsonDocument?.RootElement.GetProperty("event_id").GetString());
                         }
                     }
 
@@ -645,7 +645,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
     }
     
-    private async Task HandleSpeechStartedEventAsync(WebSocket twilioWebSocket, WebSocket openAiWebSocket, AiSpeechAssistantStreamContextDto context)
+    private async Task HandleSpeechStartedEventAsync(WebSocket twilioWebSocket, WebSocket openAiWebSocket, AiSpeechAssistantStreamContextDto context, string eventId)
     {
         Log.Information("Handling speech started event.");
         
@@ -660,6 +660,16 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             {
                 if (context.ShowTimingMath)
                     Log.Information($"Truncating item with ID: {context.LastAssistantItem}, Truncated at: {elapsedTime}ms");
+                
+                var truncateEvent = new
+                {
+                    type = "conversation.item.truncate",
+                    item_id = context.LastAssistantItem,
+                    event_id = eventId,
+                    content_index = 0,
+                    audio_end_ms = 1
+                };
+                await SendToWebSocketAsync(openAiWebSocket, truncateEvent);
             }
             
             var clearEvent = new
