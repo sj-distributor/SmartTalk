@@ -301,7 +301,6 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                                 type = "input_audio_buffer.append",
                                 audio = payload
                             };
-                            context.LatestMediaTimestamp = (int)jsonDocument?.RootElement.GetProperty("media").GetProperty("timestamp").GetInt32();
                             await SendToWebSocketAsync(openAiWebSocket, audioAppend);
                             break;
                         case "stop":
