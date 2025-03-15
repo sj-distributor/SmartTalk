@@ -41,7 +41,7 @@ using Timer = System.Timers.Timer;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
 
-public interface IAiSpeechAssistantService : IScopedDependency
+public interface IAiSpeechAssistantService : ISingletonDependency
 {
     CallAiSpeechAssistantResponse CallAiSpeechAssistant(CallAiSpeechAssistantCommand command);
 
