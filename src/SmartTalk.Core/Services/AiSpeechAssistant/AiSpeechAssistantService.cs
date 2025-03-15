@@ -446,7 +446,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         }
         catch (WebSocketException ex)
         {
-            Log.Information("WebSocketException: {ex}", ex);
+            Log.Error("WebSocketException: {ex}", ex);
         }
     }
     
