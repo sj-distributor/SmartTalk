@@ -381,7 +381,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                         if (!string.IsNullOrEmpty(context.LastAssistantItem))
                         {
                             Log.Information($"Interrupting response with id: {context.LastAssistantItem}");
-                            await HandleSpeechStartedEventAsync(twilioWebSocket, openAiWebSocket, context);
+                            // await HandleSpeechStartedEventAsync(twilioWebSocket, openAiWebSocket, context);
                         }
                     }
 
