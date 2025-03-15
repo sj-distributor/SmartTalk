@@ -656,6 +656,20 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             if (context.ShowTimingMath)
                 Log.Information($"Calculating elapsed time for truncation: {context.LatestMediaTimestamp} - {context.ResponseStartTimestampTwilio.Value} = {elapsedTime}ms");
 
+            if (!string.IsNullOrEmpty(context.LastAssistantItem))
+            {
+                if (context.ShowTimingMath)
+                    Log.Information($"Truncating item with ID: {context.LastAssistantItem}, Truncated at: {elapsedTime}ms");
+
+                var truncateEvent = new
+                {
+                    type = "conversation.item.truncate",
+                    item_id = context.LastAssistantItem,
+                    content_index = 0,
+                    audio_end_ms = elapsedTime
+                };
+            }
+            
             var clearEvent = new
             {
                 Event = "clear",
