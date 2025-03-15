@@ -5,6 +5,7 @@ using System.Xml;
 using Mediator.Net;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Serilog;
 using SmartTalk.Core.Settings.OpenAi;
@@ -18,6 +19,7 @@ using Twilio.AspNet.Core;
 using Twilio.Rest.Api.V2010.Account;
 using Twilio.TwiML;
 using Twilio.Types;
+using JsonSerializer = System.Text.Json.JsonSerializer;
 
 namespace SmartTalk.Api.Controllers;
 
@@ -285,7 +287,7 @@ public class PhoneOrderController : ControllerBase
             while (openAiWebSocket.State == WebSocketState.Open)
             {
                 var result = await openAiWebSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
-                Log.Information("ReceiveFromOpenAi result: {result}", Encoding.UTF8.GetString(buffer, 0, result.Count));
+                Log.Information("ReceiveFromOpenAi result: {@result}", JsonConvert.DeserializeObject<object>(Encoding.UTF8.GetString(buffer, 0, result.Count)));
 
                 if (result.Count > 0)
                 {
@@ -295,7 +297,7 @@ public class PhoneOrderController : ControllerBase
                     
                     if (jsonDocument?.RootElement.GetProperty("type").GetString() == "error" && jsonDocument.RootElement.TryGetProperty("error", out var error))
                     {
-                        Log.Information("Receive openai websocket error" + error.GetProperty("message").GetString());
+                        Log.Error("Receive openai websocket error" + error.GetProperty("message").GetString());
                     }
 
                     if (jsonDocument?.RootElement.GetProperty("type").GetString() == "session.updated")
