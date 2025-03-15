@@ -726,7 +726,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                     content_index = 0,
                     audio_end_ms = elapsedTime
                 };
-                await SendToWebSocketAsync(openAiWebSocket, truncateEvent);
+                // await SendToWebSocketAsync(openAiWebSocket, truncateEvent);
             }
 
             var clearEvent = new
