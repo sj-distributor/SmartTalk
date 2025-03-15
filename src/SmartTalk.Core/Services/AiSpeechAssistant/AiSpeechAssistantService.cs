@@ -742,7 +742,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             type = "session.update",
             session = new
             {
-                turn_detection = new { type = "server_vad" },
+                turn_detection = new { type = "server_vad", interrupt_response = true },
                 input_audio_format = "g711_ulaw",
                 output_audio_format = "g711_ulaw",
                 voice = string.IsNullOrEmpty(assistant.Voice) ? "alloy" : assistant.Voice,
