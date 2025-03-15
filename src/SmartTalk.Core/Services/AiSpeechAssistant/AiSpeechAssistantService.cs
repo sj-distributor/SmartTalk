@@ -374,8 +374,8 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                     {
                         Log.Error("Receive openai websocket error" + error.GetProperty("message").GetString());
                         
-                        await SendToWebSocketAsync(openAiWebSocket, context.LastMessage);
-                        await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
+                        // await SendToWebSocketAsync(openAiWebSocket, context.LastMessage);
+                        // await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
                     }
 
                     if (jsonDocument?.RootElement.GetProperty("type").GetString() == "session.updated")
