@@ -804,7 +804,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             type = "session.update",
             session = new
             {
-                turn_detection = new { type = "server_vad", silence_duration_ms = 500 },
+                // turn_detection = new { type = "server_vad", silence_duration_ms = 500 },
                 input_audio_format = "g711_ulaw",
                 output_audio_format = "g711_ulaw",
                 voice = "alloy",
