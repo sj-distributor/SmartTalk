@@ -364,7 +364,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                 var result = await openAiWebSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
                 Log.Information("ReceiveFromOpenAi result: {@result}", JsonConvert.DeserializeObject<object>(Encoding.UTF8.GetString(buffer, 0, result.Count)));
 
-                if (result.Count > 0)
+                if (result is { Count: > 0 })
                 {
                     var jsonDocument = JsonSerializer.Deserialize<JsonDocument>(buffer.AsSpan(0, result.Count));
 
