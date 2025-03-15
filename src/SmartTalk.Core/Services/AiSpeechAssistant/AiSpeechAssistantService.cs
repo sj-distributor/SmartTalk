@@ -365,16 +365,18 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
 
                 if (result is { Count: > 0 })
                 {
-                    Log.Information("ReceiveFromOpenAi result: {@result}", JsonConvert.DeserializeObject<object>(Encoding.UTF8.GetString(buffer, 0, result.Count)));
-                    
+                    Log.Information("ReceiveFromOpenAi result: {@result}",
+                        JsonConvert.DeserializeObject<object>(Encoding.UTF8.GetString(buffer, 0, result.Count)));
+
                     var jsonDocument = JsonSerializer.Deserialize<JsonDocument>(buffer.AsSpan(0, result.Count));
 
                     Log.Information($"Received event: {jsonDocument?.RootElement.GetProperty("type").GetString()}");
-                    
-                    if (jsonDocument?.RootElement.GetProperty("type").GetString() == "error" && jsonDocument.RootElement.TryGetProperty("error", out var error))
+
+                    if (jsonDocument?.RootElement.GetProperty("type").GetString() == "error" &&
+                        jsonDocument.RootElement.TryGetProperty("error", out var error))
                     {
                         Log.Error("Receive openai websocket error" + error.GetProperty("message").GetString());
-                        
+
                         // await SendToWebSocketAsync(openAiWebSocket, context.LastMessage);
                         // await SendToWebSocketAsync(openAiWebSocket, new { type = "response.create" });
                     }
@@ -384,7 +386,8 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                         Log.Information("Session updated successfully");
                     }
 
-                    if (jsonDocument?.RootElement.GetProperty("type").GetString() == "response.audio.delta" && jsonDocument.RootElement.TryGetProperty("delta", out var delta))
+                    if (jsonDocument?.RootElement.GetProperty("type").GetString() == "response.audio.delta" &&
+                        jsonDocument.RootElement.TryGetProperty("delta", out var delta))
                     {
                         var audioDelta = new
                         {
@@ -394,13 +397,14 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                         };
 
                         await SendToWebSocketAsync(twilioWebSocket, audioDelta);
-                        
+
                         if (context.ResponseStartTimestampTwilio == null)
                         {
                             context.ResponseStartTimestampTwilio = context.LatestMediaTimestamp;
                             if (context.ShowTimingMath)
                             {
-                                Log.Information($"Setting start timestamp for new response: {context.ResponseStartTimestampTwilio}ms");
+                                Log.Information(
+                                    $"Setting start timestamp for new response: {context.ResponseStartTimestampTwilio}ms");
                             }
                         }
 
@@ -411,8 +415,9 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
 
                         await SendMark(twilioWebSocket, context);
                     }
-                    
-                    if (jsonDocument?.RootElement.GetProperty("type").GetString() == "input_audio_buffer.speech_started")
+
+                    if (jsonDocument?.RootElement.GetProperty("type").GetString() ==
+                        "input_audio_buffer.speech_started")
                     {
                         Log.Information("Speech started detected.");
                         if (!string.IsNullOrEmpty(context.LastAssistantItem))
@@ -422,18 +427,21 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                         }
                     }
 
-                    if (jsonDocument?.RootElement.GetProperty("type").GetString() == "conversation.item.input_audio_transcription.completed")
+                    if (jsonDocument?.RootElement.GetProperty("type").GetString() ==
+                        "conversation.item.input_audio_transcription.completed")
                     {
                         var response = jsonDocument.RootElement.GetProperty("transcript").ToString();
-                        context.ConversationTranscription.Add(new ValueTuple<AiSpeechAssistantSpeaker, string>(AiSpeechAssistantSpeaker.User, response));
+                        context.ConversationTranscription.Add(
+                            new ValueTuple<AiSpeechAssistantSpeaker, string>(AiSpeechAssistantSpeaker.User, response));
                     }
-                    
+
                     if (jsonDocument?.RootElement.GetProperty("type").GetString() == "response.audio_transcript.done")
                     {
                         var response = jsonDocument.RootElement.GetProperty("transcript").ToString();
-                        context.ConversationTranscription.Add(new ValueTuple<AiSpeechAssistantSpeaker, string>(AiSpeechAssistantSpeaker.Ai, response));
+                        context.ConversationTranscription.Add(
+                            new ValueTuple<AiSpeechAssistantSpeaker, string>(AiSpeechAssistantSpeaker.Ai, response));
                     }
-                    
+
                     if (jsonDocument?.RootElement.GetProperty("type").GetString() == "response.done")
                     {
                         var response = jsonDocument.RootElement.GetProperty("response");
@@ -449,21 +457,25 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                                     switch (functionName)
                                     {
                                         case OpenAiToolConstants.ConfirmOrder:
-                                            await ProcessOrderAsync(openAiWebSocket, context, outputElement, cancellationToken).ConfigureAwait(false);
+                                            await ProcessOrderAsync(openAiWebSocket, context, outputElement,
+                                                cancellationToken).ConfigureAwait(false);
                                             break;
-                                        
+
                                         case OpenAiToolConstants.ConfirmCustomerInformation:
-                                            await ProcessRecordCustomerInformationAsync(openAiWebSocket, context, outputElement, cancellationToken).ConfigureAwait(false);
+                                            await ProcessRecordCustomerInformationAsync(openAiWebSocket, context,
+                                                outputElement, cancellationToken).ConfigureAwait(false);
                                             break;
-                                        
+
                                         case OpenAiToolConstants.ConfirmPickupTime:
-                                            await ProcessRecordOrderPickupTimeAsync(openAiWebSocket, context, outputElement, cancellationToken).ConfigureAwait(false);
+                                            await ProcessRecordOrderPickupTimeAsync(openAiWebSocket, context,
+                                                outputElement, cancellationToken).ConfigureAwait(false);
                                             break;
 
                                         case OpenAiToolConstants.Hangup:
-                                            await ProcessHangupAsync(openAiWebSocket, context, outputElement, cancellationToken).ConfigureAwait(false);
+                                            await ProcessHangupAsync(openAiWebSocket, context, outputElement,
+                                                cancellationToken).ConfigureAwait(false);
                                             break;
-                                        
+
                                         case OpenAiToolConstants.TransferCall:
                                         case OpenAiToolConstants.HandlePhoneOrderIssues:
                                         case OpenAiToolConstants.HandleThirdPartyDelayedDelivery:
@@ -472,7 +484,8 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                                         case OpenAiToolConstants.HandleThirdPartyPickupTimeChange:
                                         case OpenAiToolConstants.HandlePromotionCalls:
                                         case OpenAiToolConstants.CheckOrderStatus:
-                                            await ProcessTransferCallAsync(openAiWebSocket, context, outputElement, functionName, cancellationToken).ConfigureAwait(false);
+                                            await ProcessTransferCallAsync(openAiWebSocket, context, outputElement,
+                                                functionName, cancellationToken).ConfigureAwait(false);
                                             break;
                                     }
 
@@ -492,7 +505,11 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         }
         catch (WebSocketException ex)
         {
-            Log.Information($"Send to Twilio error: {ex.Message}");
+            Log.Error("Websocket error: {Ex}", ex);
+        }
+        catch (Exception e)
+        {
+            Log.Error("General error: {E}", e);
         }
     }
     
