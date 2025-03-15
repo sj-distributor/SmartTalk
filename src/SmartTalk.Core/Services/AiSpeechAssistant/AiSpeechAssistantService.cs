@@ -665,7 +665,6 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                 {
                     type = "conversation.item.truncate",
                     item_id = context.LastAssistantItem,
-                    event_id = eventId,
                     content_index = 0,
                     audio_end_ms = 1
                 };
