@@ -19,7 +19,7 @@ public class AiSpeechAssistantStreamContextDto
         
     public bool InitialConversationSent { get; set; } = false;
 
-    public bool ShowTimingMath { get; set; } = false;
+    public bool ShowTimingMath { get; set; } = true;
     
     public AiSpeechAssistantUserInfoDto UserInfo { get; set; }
     
