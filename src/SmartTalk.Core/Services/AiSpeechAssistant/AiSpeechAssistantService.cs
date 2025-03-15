@@ -100,7 +100,6 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         _timer = new Timer(5000); // Check every 5 seconds
         _timer.Elapsed += CheckWebSocketState;
         _timer.AutoReset = true; // Repeat the timer
-        _timer.Enabled = true; // Start the timer
         
         _openAiWebSocket = new ClientWebSocket();
     }
@@ -278,6 +277,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         var url = string.IsNullOrEmpty(assistant.Url) ? AiSpeechAssistantStore.DefaultUrl : assistant.Url;
 
         await _openAiWebSocket.ConnectAsync(new Uri(url), cancellationToken).ConfigureAwait(false);
+        _timer.Enabled = true;
 
         await SendSessionUpdateAsync(_openAiWebSocket, assistant, prompt).ConfigureAwait(false);
         
