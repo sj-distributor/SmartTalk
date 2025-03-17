@@ -306,7 +306,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                             else
                                 Log.Warning("Missing 'media' or 'timestamp' field in JSON message.");
                             
-                            Log.Information("Receive from twilio media event now, and LatestMediaTimestamp: {LatestMediaTimestamp}", context.LatestMediaTimestamp);
+                            Log.Information("Receive from twilio media event now, and LatestMediaTimestamp: {LatestMediaTimestamp}, and {ResponseStartTimestampTwilio}", context.LatestMediaTimestamp, context. ResponseStartTimestampTwilio);
                             
                             var payload = media.GetProperty("payload").GetString();
                             var audioAppend = new
