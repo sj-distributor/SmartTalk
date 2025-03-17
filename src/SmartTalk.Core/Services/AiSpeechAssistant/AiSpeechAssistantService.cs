@@ -690,7 +690,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             
             var clearEvent = new
             {
-                @event = "clear",
+                Event = "clear",
                 context.StreamSid
             };
             
