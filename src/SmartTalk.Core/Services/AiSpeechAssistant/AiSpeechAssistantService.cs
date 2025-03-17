@@ -13,6 +13,7 @@ using System.Runtime.CompilerServices;
 using AutoMapper;
 using SmartTalk.Core.Constants;
 using Microsoft.AspNetCore.Http;
+using Microsoft.IdentityModel.Tokens;
 using OpenAI.Chat;
 using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.Http;
@@ -45,7 +46,7 @@ public interface IAiSpeechAssistantService : IScopedDependency
 
     Task<AiSpeechAssistantConnectCloseEvent> ConnectAiSpeechAssistantAsync(ConnectAiSpeechAssistantCommand command, CancellationToken cancellationToken);
 
-    Task ConnectSpeechRealtimeAsync(CancellationToken cancellationToken);
+    Task ConnectSpeechRealtimeAsync(ConnectSpeechRealtimeCommand command, CancellationToken cancellationToken);
 
     Task RecordAiSpeechAssistantCallAsync(RecordAiSpeechAssistantCallCommand command, CancellationToken cancellationToken);
 
@@ -101,7 +102,10 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         var response = new VoiceResponse();
         var connect = new Connect();
 
-        connect.Stream(url: $"wss://{command.Host}/api/AiSpeechAssistant/connect/{command.From}/{command.To}");
+        if (command.From.IsNullOrEmpty() && command.To.IsNullOrEmpty())
+            connect.Stream(url: $"wss://{command.Host}/api/AiSpeechAssistant/connect/beta");
+        else
+            connect.Stream(url: $"wss://{command.Host}/api/AiSpeechAssistant/connect/{command.From}/{command.To}");
         
         response.Append(connect);
 

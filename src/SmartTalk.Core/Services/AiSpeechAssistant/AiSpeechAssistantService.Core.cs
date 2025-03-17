@@ -2,14 +2,16 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
+using Serilog;
+using SmartTalk.Messages.Commands.AiSpeechAssistant;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
 
 public partial class AiSpeechAssistantService
 {
-    public async Task ConnectSpeechRealtimeAsync(CancellationToken cancellationToken)
+    public async Task ConnectSpeechRealtimeAsync(ConnectSpeechRealtimeCommand command, CancellationToken cancellationToken)
     {
-        await HandleWebSocket();
+        await HandleWebSocket(command.HttpContext, cancellationToken);
     }
     
     private static readonly HashSet<string> LOG_EVENT_TYPES = new() 
@@ -21,10 +23,10 @@ public partial class AiSpeechAssistantService
     public async Task HandleWebSocket(HttpContext context, CancellationToken cancellationToken)
     {
         var webSocket = await context.WebSockets.AcceptWebSocketAsync();
-        Console.WriteLine("Client connected");
+        Log.Information("Client connected");
 
         using var openAiWs = new ClientWebSocket();
-        var openAiUri = new Uri("wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01");
+        var openAiUri = new Uri("wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17");
         
         openAiWs.Options.SetRequestHeader("Authorization", $"Bearer {_openAiSettings.ApiKey}");
         openAiWs.Options.SetRequestHeader("OpenAI-Beta", "realtime=v1");
@@ -49,8 +51,13 @@ public partial class AiSpeechAssistantService
             type = "session.update",
             session = new
             {
-                audio = new { codec = "pcm", sample_rate = 16000 },
-                transcript = new { format = "text" }
+                turn_detection = new { type = "server_vad", interrupt_response = true, create_response = true },
+                input_audio_format = "g711_ulaw",
+                output_audio_format = "g711_ulaw",
+                voice = "alloy",
+                instructions = "You are a Moon house restaurant assistant",
+                modalities = new[] { "text", "audio" },
+                temperature = 0.8
             }
         };
 
@@ -66,7 +73,7 @@ public partial class AiSpeechAssistantService
         Func<string> getStreamSid,
         Action<string> setStreamSid)
     {
-        var buffer = new byte[1024 * 4];
+        var buffer = new byte[1024 * 10];
         try
         {
             while (twilioWs.State == WebSocketState.Open && !ct.IsCancellationRequested)
@@ -96,14 +103,14 @@ public partial class AiSpeechAssistantService
                     {
                         var streamId = root.GetProperty("start").GetProperty("streamSid").GetString();
                         setStreamSid(streamId);
-                        Console.WriteLine($"Incoming stream started: {streamId}");
+                        Log.Information($"Incoming stream started: {streamId}");
                     }
                 }
             }
         }
         catch (WebSocketException)
         {
-            Console.WriteLine("Client disconnected");
+            Log.Information("Client disconnected");
             await openAiWs.CloseAsync(WebSocketCloseStatus.NormalClosure, "Client disconnected", ct);
         }
     }
@@ -114,7 +121,7 @@ public partial class AiSpeechAssistantService
         CancellationToken ct,
         Func<string> getStreamSid)
     {
-        var buffer = new byte[1024 * 4];
+        var buffer = new byte[1024 * 10];
         try
         {
             while (openAiWs.State == WebSocketState.Open && !ct.IsCancellationRequested)
@@ -127,10 +134,7 @@ public partial class AiSpeechAssistantService
 
                 if (root.TryGetProperty("type", out var type))
                 {
-                    if (LOG_EVENT_TYPES.Contains(type.GetString()))
-                    {
-                        Console.WriteLine($"Received event: {type.GetString()} - {message}");
-                    }
+                    Log.Information("Received event: {type.GetString()} - {@message}", type.GetString(), (object)message);
 
                     if (type.ValueEquals("response.audio.delta") && 
                        root.TryGetProperty("delta", out var delta))
@@ -153,7 +157,7 @@ public partial class AiSpeechAssistantService
                         }
                         catch (Exception ex)
                         {
-                            Console.WriteLine($"Error processing audio: {ex}");
+                            Log.Error($"Error processing audio: {ex}");
                         }
                     }
                 }
@@ -161,7 +165,7 @@ public partial class AiSpeechAssistantService
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error in SendToTwilio: {ex}");
+            Log.Error($"Error in SendToTwilio: {ex}");
         }
     }
 }

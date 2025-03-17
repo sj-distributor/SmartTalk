@@ -47,6 +47,23 @@ public class AiSpeechAssistantController : ControllerBase
         }
     }
     
+    [HttpGet("connect/beta")]
+    public async Task ConnectSpeechRealtimeAsync()
+    {
+        if (HttpContext.WebSockets.IsWebSocketRequest)
+        {
+            var command = new ConnectSpeechRealtimeCommand
+            {
+                HttpContext = HttpContext
+            };
+            await _mediator.SendAsync(command);
+        }
+        else
+        {
+            HttpContext.Response.StatusCode = 400;
+        }
+    }
+    
     [HttpGet("outbound/connect")]
     [HttpGet("outbound/connect/{from}/{to}/{id}")]
     public async Task OutboundConnectAiSpeechAssistantAsync(string from, string to, int id)
