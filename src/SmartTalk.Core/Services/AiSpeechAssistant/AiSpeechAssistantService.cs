@@ -318,7 +318,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
 
     private async Task SendToTwilioAsync(WebSocket twilioWebSocket, WebSocket openAiWebSocket, AiSpeechAssistantStreamContextDto context, CancellationToken cancellationToken)
     {
-        Log.Information("Receive buffer from openai, and Sending to twilio. The buffer length: 10");
+        Log.Information("Receive buffer from openai, and Sending to twilio. The buffer length: 20");
         var buffer = new byte[1024 * 20];
         try
         {
