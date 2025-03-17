@@ -349,6 +349,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
 
                     if (jsonDocument?.RootElement.GetProperty("type").GetString() == "response.audio.delta" && jsonDocument.RootElement.TryGetProperty("delta", out var delta))
                     {
+                        Log.Information("Sending openai response to twilio now");
                         var audioDelta = new
                         {
                             @event = "media",
