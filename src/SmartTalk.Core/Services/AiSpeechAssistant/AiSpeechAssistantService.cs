@@ -298,17 +298,19 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                             }, CancellationToken.None));
                             break;
                         case "media":
-                            var payload = jsonDocument.RootElement.GetProperty("media").GetProperty("payload").GetString();
+                            var media = jsonDocument.RootElement.GetProperty("media")
+                                
+                            var payload = media.GetProperty("payload").GetString();
                             var audioAppend = new
                             {
                                 type = "input_audio_buffer.append",
                                 audio = payload
                             };
                             await SendToWebSocketAsync(openAiWebSocket, audioAppend);
-                            
-                            if (jsonDocument.RootElement.TryGetProperty("media", out var media) &&
-                                media.TryGetProperty("timestamp", out var timestamp))
-                                context.LatestMediaTimestamp = timestamp.GetInt32();
+
+                            if (media.TryGetProperty("timestamp", out var timestamp) &&
+                                int.TryParse(timestamp.GetString(), out var timestampNumber))
+                                context.LatestMediaTimestamp = timestampNumber;   
                             else
                                 Log.Warning("Missing 'media' or 'timestamp' field in JSON message.");
                             break;
