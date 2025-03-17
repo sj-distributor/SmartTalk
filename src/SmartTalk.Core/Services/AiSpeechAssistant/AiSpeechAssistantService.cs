@@ -298,19 +298,19 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                             }, CancellationToken.None));
                             break;
                         case "media":
-                            if (jsonDocument.RootElement.TryGetProperty("media", out var media) &&
-                                media.TryGetProperty("timestamp", out var timestamp))
-                                context.LatestMediaTimestamp = timestamp.GetInt32();
-                            else
-                                Log.Warning("Missing 'media' or 'timestamp' field in JSON message.");
-                            
-                            var payload = media.GetProperty("payload").GetString();
+                            var payload = jsonDocument.RootElement.GetProperty("media").GetProperty("payload").GetString();
                             var audioAppend = new
                             {
                                 type = "input_audio_buffer.append",
                                 audio = payload
                             };
                             await SendToWebSocketAsync(openAiWebSocket, audioAppend);
+                            
+                            if (jsonDocument.RootElement.TryGetProperty("media", out var media) &&
+                                media.TryGetProperty("timestamp", out var timestamp))
+                                context.LatestMediaTimestamp = timestamp.GetInt32();
+                            else
+                                Log.Warning("Missing 'media' or 'timestamp' field in JSON message.");
                             break;
                         case "stop":
                             _backgroundJobClient.Enqueue<IAiSpeechAssistantProcessJobService>(x => x.RecordAiSpeechAssistantCallAsync(context, CancellationToken.None));
