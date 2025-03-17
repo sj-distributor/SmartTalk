@@ -47,6 +47,15 @@ public class AiSpeechAssistantController : ControllerBase
         }
     }
     
+    [Route("call/beta"), HttpGet, HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> CallSpeechRealtimeAsync()
+    {
+        var response = await _mediator.SendAsync<CallAiSpeechAssistantCommand, CallAiSpeechAssistantResponse>(new CallAiSpeechAssistantCommand { Host = HttpContext.Request.Host.Host });
+
+        return response.Data;
+    }
+    
     [HttpGet("connect/beta")]
     public async Task ConnectSpeechRealtimeAsync()
     {
