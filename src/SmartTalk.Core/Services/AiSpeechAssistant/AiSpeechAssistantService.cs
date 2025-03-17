@@ -673,7 +673,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                     type = "conversation.item.truncate",
                     item_id = context.LastAssistantItem,
                     content_index = 0,
-                    audio_end_ms = elapsedTime
+                    audio_end_ms = 1
                 };
                 await SendToWebSocketAsync(openAiWebSocket, truncateEvent);
             }
