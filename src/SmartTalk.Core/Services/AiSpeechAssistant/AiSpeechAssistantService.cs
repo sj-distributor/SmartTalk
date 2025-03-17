@@ -688,7 +688,14 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                     content_index = 0,
                     audio_end_ms = _openAiSettings.RealtimeReceiveBufferLength
                 };
+
+                var cancelEvent = new
+                {
+                    type = "response.cancel"
+                };
+                
                 await SendToWebSocketAsync(openAiWebSocket, truncateEvent);
+                await SendToWebSocketAsync(openAiWebSocket, cancelEvent);
             }
             
             var clearEvent = new
