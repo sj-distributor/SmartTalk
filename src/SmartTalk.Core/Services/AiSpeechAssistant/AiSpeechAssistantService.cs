@@ -298,6 +298,9 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                             }, CancellationToken.None));
                             break;
                         case "media":
+                            var media = jsonDocument.RootElement.GetProperty("media");
+                            context.LatestMediaTimestamp = media.GetProperty("timestamp").GetInt32();
+                            
                             var payload = jsonDocument?.RootElement.GetProperty("media").GetProperty("payload").GetString();
                             var audioAppend = new
                             {
