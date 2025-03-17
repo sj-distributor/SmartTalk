@@ -66,6 +66,8 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
 
+    private AiSpeechAssistantStreamContextDto _aiSpeechAssistantStreamContext;
+
     public AiSpeechAssistantService(
         IMapper mapper,
         OpenAiSettings openAiSettings,
@@ -88,6 +90,8 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         _backgroundJobClient = backgroundJobClient;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
+
+        _aiSpeechAssistantStreamContext = new AiSpeechAssistantStreamContextDto();
     }
 
     public CallAiSpeechAssistantResponse CallAiSpeechAssistant(CallAiSpeechAssistantCommand command)
@@ -116,7 +120,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
 
         var openaiWebSocket = await ConnectOpenAiRealTimeSocketAsync(assistant, knowledgeBase, cancellationToken).ConfigureAwait(false);
         
-        var context = new AiSpeechAssistantStreamContextDto
+        _aiSpeechAssistantStreamContext = new AiSpeechAssistantStreamContextDto
         {
             Host = command.Host,
             LastPrompt = knowledgeBase,
@@ -128,8 +132,8 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             Assistant = _mapper.Map<AiSpeechAssistantDto>(assistant)
         };
         
-        var receiveFromTwilioTask = ReceiveFromTwilioAsync(command.TwilioWebSocket, openaiWebSocket, context);
-        var sendToTwilioTask = SendToTwilioAsync(command.TwilioWebSocket, openaiWebSocket, context, cancellationToken);
+        var receiveFromTwilioTask = ReceiveFromTwilioAsync(command.TwilioWebSocket, openaiWebSocket, _aiSpeechAssistantStreamContext);
+        var sendToTwilioTask = SendToTwilioAsync(command.TwilioWebSocket, openaiWebSocket, _aiSpeechAssistantStreamContext, cancellationToken);
 
         try
         {
