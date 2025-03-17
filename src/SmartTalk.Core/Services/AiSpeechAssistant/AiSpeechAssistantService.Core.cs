@@ -2,8 +2,10 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
+using Newtonsoft.Json;
 using Serilog;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
+using JsonSerializer = System.Text.Json.JsonSerializer;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
 
@@ -134,7 +136,7 @@ public partial class AiSpeechAssistantService
 
                 if (root.TryGetProperty("type", out var type))
                 {
-                    Log.Information("Received event: {type.GetString()} - {@message}", type.GetString(), (object)message);
+                    Log.Information("Received event: {type} - {@message}", type.GetString(), JsonConvert.DeserializeObject<object>(message));
 
                     if (type.ValueEquals("response.audio.delta") && 
                        root.TryGetProperty("delta", out var delta))
