@@ -669,6 +669,14 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
     {
         Log.Information("Handling speech started event.");
         
+        var clearEvent = new
+        {
+            @event = "clear",
+            streamSid = context.StreamSid
+        };
+            
+        await SendToWebSocketAsync(twilioWebSocket, clearEvent);
+        
         if (context.MarkQueue.Count > 0 && context.ResponseStartTimestampTwilio.HasValue)
         {
             var elapsedTime = context.LatestMediaTimestamp - context.ResponseStartTimestampTwilio.Value;
@@ -688,23 +696,9 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                     content_index = 0,
                     audio_end_ms = _openAiSettings.RealtimeReceiveBufferLength
                 };
-
-                var cancelEvent = new
-                {
-                    type = "response.cancel"
-                };
                 
                 await SendToWebSocketAsync(openAiWebSocket, truncateEvent);
-                await SendToWebSocketAsync(openAiWebSocket, cancelEvent);
             }
-            
-            var clearEvent = new
-            {
-                @event = "clear",
-                streamSid = context.StreamSid
-            };
-            
-            await SendToWebSocketAsync(twilioWebSocket, clearEvent);
 
             context.MarkQueue.Clear();
             context.LastAssistantItem = null;
