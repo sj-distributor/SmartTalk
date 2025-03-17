@@ -727,7 +727,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
     
     private async Task SendToWebSocketAsync(WebSocket socket, object message)
     {
-        await socket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(message))), WebSocketMessageType.Text, true, CancellationToken.None);
+        await socket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(message))), WebSocketMessageType.Text, false, CancellationToken.None);
     }
     
     private async Task SendSessionUpdateAsync(WebSocket openAiWebSocket, Domain.AISpeechAssistant.AiSpeechAssistant assistant, string prompt)
