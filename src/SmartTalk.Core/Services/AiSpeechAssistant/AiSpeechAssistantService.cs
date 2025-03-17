@@ -286,12 +286,13 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                         case "connected":
                             break;
                         case "start":
-                            context.StreamSid = jsonDocument.RootElement.GetProperty("start").GetProperty("streamSid").GetString();
-                            context.CallSid = jsonDocument.RootElement.GetProperty("start").GetProperty("callSid").GetString();
-                            context.ResponseStartTimestampTwilio = null;
+                            context.MarkQueue.Clear();
                             context.LatestMediaTimestamp = 0;
                             context.LastAssistantItem = null;
-                            
+                            context.ResponseStartTimestampTwilio = null;
+                            context.CallSid = jsonDocument.RootElement.GetProperty("start").GetProperty("callSid").GetString();
+                            context.StreamSid = jsonDocument.RootElement.GetProperty("start").GetProperty("streamSid").GetString();
+
                             _backgroundJobClient.Enqueue<IMediator>(x=> x.SendAsync(new RecordAiSpeechAssistantCallCommand
                             {
                                 CallSid = context.CallSid, Host = context.Host
@@ -306,7 +307,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                             else
                                 Log.Warning("Missing 'media' or 'timestamp' field in JSON message.");
                             
-                            Log.Information("Receive from twilio media event now, and LatestMediaTimestamp: {LatestMediaTimestamp}, and {ResponseStartTimestampTwilio}", context.LatestMediaTimestamp, context. ResponseStartTimestampTwilio);
+                            Log.Information("Receive from twilio media event now, and LatestMediaTimestamp: {LatestMediaTimestamp}, and {ResponseStartTimestampTwilio}", context.LatestMediaTimestamp, context.ResponseStartTimestampTwilio);
                             
                             var payload = media.GetProperty("payload").GetString();
                             var audioAppend = new
@@ -374,7 +375,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
 
                         await SendToWebSocketAsync(twilioWebSocket, audioDelta);
                         
-                        if (context.ResponseStartTimestampTwilio == null)
+                        if (!context.ResponseStartTimestampTwilio.HasValue)
                         {
                             context.ResponseStartTimestampTwilio = context.LatestMediaTimestamp;
                             if (context.ShowTimingMath)
