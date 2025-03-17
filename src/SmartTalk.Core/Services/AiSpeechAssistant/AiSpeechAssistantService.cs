@@ -363,6 +363,9 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                         Log.Information("Session updated successfully");
                     }
 
+                    if (jsonDocument?.RootElement.GetProperty("type").GetString() == "response.audio.done")
+                        context.ResponseStartTimestampTwilio = null;
+                    
                     if (jsonDocument?.RootElement.GetProperty("type").GetString() == "response.audio.delta" && jsonDocument.RootElement.TryGetProperty("delta", out var delta))
                     {
                         Log.Information("Sending openai response to twilio now");
