@@ -373,7 +373,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                             context.LastAssistantItem = itemId.ToString();
                         }
 
-                        await SendMark(twilioWebSocket, context);
+                        // await SendMark(twilioWebSocket, context);
                     }
                     
                     if (jsonDocument?.RootElement.GetProperty("type").GetString() == "input_audio_buffer.speech_started")
