@@ -121,7 +121,7 @@ public partial class AiSpeechAssistantService
         CancellationToken ct,
         Func<string> getStreamSid)
     {
-        var buffer = new byte[1024 * 10];
+        var buffer = new byte[1024 * 30];
         try
         {
             while (openAiWs.State == WebSocketState.Open && !ct.IsCancellationRequested)
