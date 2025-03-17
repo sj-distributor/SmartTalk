@@ -398,6 +398,15 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                     if (jsonDocument?.RootElement.GetProperty("type").GetString() == "input_audio_buffer.speech_started")
                     {
                         Log.Information("Speech started detected.");
+                        
+                        var clearEvent = new
+                        {
+                            @event = "clear",
+                            streamSid = context.StreamSid
+                        };
+            
+                        await SendToWebSocketAsync(twilioWebSocket, clearEvent);
+                        
                         if (!string.IsNullOrEmpty(context.LastAssistantItem))
                         {
                             Log.Information($"Interrupting response with id: {context.LastAssistantItem}");
