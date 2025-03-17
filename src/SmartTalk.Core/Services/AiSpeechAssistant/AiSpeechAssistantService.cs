@@ -298,10 +298,13 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                             }, CancellationToken.None));
                             break;
                         case "media":
-                            var media = jsonDocument.RootElement.GetProperty("media");
-                            context.LatestMediaTimestamp = media.GetProperty("timestamp").GetInt32();
+                            if (jsonDocument.RootElement.TryGetProperty("media", out var media) &&
+                                media.TryGetProperty("timestamp", out var timestamp))
+                                context.LatestMediaTimestamp = timestamp.GetInt32();
+                            else
+                                Log.Warning("Missing 'media' or 'timestamp' field in JSON message.");
                             
-                            var payload = jsonDocument?.RootElement.GetProperty("media").GetProperty("payload").GetString();
+                            var payload = media.GetProperty("payload").GetString();
                             var audioAppend = new
                             {
                                 type = "input_audio_buffer.append",
