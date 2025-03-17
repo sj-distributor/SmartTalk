@@ -694,7 +694,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             var clearEvent = new
             {
                 @event = "clear",
-                context.StreamSid
+                streamSid = context.StreamSid
             };
             
             await SendToWebSocketAsync(twilioWebSocket, clearEvent);
