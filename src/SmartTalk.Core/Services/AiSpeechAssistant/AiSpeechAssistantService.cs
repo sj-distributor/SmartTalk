@@ -67,6 +67,8 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
 
+    private AiSpeechAssistantStreamContextDto _aiSpeechAssistantStreamContext;
+    
     public AiSpeechAssistantService(
         IMapper mapper,
         OpenAiSettings openAiSettings,
@@ -91,6 +93,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
         
         _openaiWebSocket = new ClientWebSocket();
+        _aiSpeechAssistantStreamContext = new AiSpeechAssistantStreamContextDto();
     }
 
     public CallAiSpeechAssistantResponse CallAiSpeechAssistant(CallAiSpeechAssistantCommand command)
@@ -119,7 +122,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
 
         await ConnectOpenAiRealTimeSocketAsync(assistant, knowledgeBase, cancellationToken).ConfigureAwait(false);
         
-        var context = new AiSpeechAssistantStreamContextDto
+        _aiSpeechAssistantStreamContext = new AiSpeechAssistantStreamContextDto
         {
             Host = command.Host,
             LastPrompt = knowledgeBase,
@@ -131,8 +134,8 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             Assistant = _mapper.Map<AiSpeechAssistantDto>(assistant)
         };
         
-        var receiveFromTwilioTask = ReceiveFromTwilioAsync(command.TwilioWebSocket, _openaiWebSocket, context);
-        var sendToTwilioTask = SendToTwilioAsync(command.TwilioWebSocket, _openaiWebSocket, context, cancellationToken);
+        var receiveFromTwilioTask = ReceiveFromTwilioAsync(command.TwilioWebSocket, _openaiWebSocket, _aiSpeechAssistantStreamContext);
+        var sendToTwilioTask = SendToTwilioAsync(command.TwilioWebSocket, _openaiWebSocket, _aiSpeechAssistantStreamContext, cancellationToken);
 
         try
         {
@@ -373,7 +376,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                             context.LastAssistantItem = itemId.ToString();
                         }
 
-                        // await SendMark(twilioWebSocket, context);
+                        await SendMark(twilioWebSocket, context);
                     }
                     
                     if (jsonDocument?.RootElement.GetProperty("type").GetString() == "input_audio_buffer.speech_started")
@@ -382,7 +385,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                         if (!string.IsNullOrEmpty(context.LastAssistantItem))
                         {
                             Log.Information($"Interrupting response with id: {context.LastAssistantItem}");
-                            // await HandleSpeechStartedEventAsync(twilioWebSocket, openAiWebSocket, context, jsonDocument?.RootElement.GetProperty("event_id").GetString());
+                            await HandleSpeechStartedEventAsync(twilioWebSocket, openAiWebSocket, context, jsonDocument?.RootElement.GetProperty("event_id").GetString());
                         }
                     }
 
@@ -667,7 +670,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                     type = "conversation.item.truncate",
                     item_id = context.LastAssistantItem,
                     content_index = 0,
-                    audio_end_ms = 1
+                    audio_end_ms = elapsedTime
                 };
                 await SendToWebSocketAsync(openAiWebSocket, truncateEvent);
             }
