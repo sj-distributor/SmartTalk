@@ -9,6 +9,7 @@ using Twilio.TwiML.Voice;
 using SmartTalk.Core.Ioc;
 using Twilio.AspNet.Core;
 using System.Net.WebSockets;
+using System.Runtime.CompilerServices;
 using AutoMapper;
 using SmartTalk.Core.Constants;
 using Microsoft.AspNetCore.Http;
@@ -44,6 +45,8 @@ public interface IAiSpeechAssistantService : IScopedDependency
 
     Task<AiSpeechAssistantConnectCloseEvent> ConnectAiSpeechAssistantAsync(ConnectAiSpeechAssistantCommand command, CancellationToken cancellationToken);
 
+    Task ConnectSpeechRealtimeAsync(CancellationToken cancellationToken);
+
     Task RecordAiSpeechAssistantCallAsync(RecordAiSpeechAssistantCallCommand command, CancellationToken cancellationToken);
 
     Task ReceivePhoneRecordingStatusCallbackAsync(ReceivePhoneRecordingStatusCallbackCommand command, CancellationToken cancellationToken);
@@ -53,7 +56,7 @@ public interface IAiSpeechAssistantService : IScopedDependency
     Task HangupCallAsync(string callSid, CancellationToken cancellationToken);
 }
 
-public class AiSpeechAssistantService : IAiSpeechAssistantService
+public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 {
     private readonly IMapper _mapper;
     private readonly OpenAiSettings _openAiSettings;
@@ -759,5 +762,39 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         var functions = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallByAssistantIdAsync(assistant.Id, cancellationToken).ConfigureAwait(false);
 
         return functions.Count == 0 ? [] : functions.Where(x => !string.IsNullOrWhiteSpace(x.Content)).Select(x => JsonConvert.DeserializeObject<OpenAiRealtimeToolDto>(x.Content));
+    }
+    
+    public async IAsyncEnumerable<string> ReceiveMessagesAsync(WebSocket webSocket, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var buffer = new byte[1024 * 4];
+        while (webSocket.State == WebSocketState.Open && !cancellationToken.IsCancellationRequested)
+        {
+            WebSocketReceiveResult result;
+            using var ms = new MemoryStream();
+            do
+            {
+                result = await webSocket.ReceiveAsync(buffer, cancellationToken);
+                ms.Write(buffer, 0, result.Count);
+            }
+            while (!result.EndOfMessage && !cancellationToken.IsCancellationRequested);
+
+            if (result.MessageType == WebSocketMessageType.Close)
+            {
+                await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closing", cancellationToken);
+                yield break;
+            }
+
+            if (result.MessageType == WebSocketMessageType.Text)
+            {
+                ms.Seek(0, SeekOrigin.Begin);
+                using var reader = new StreamReader(ms, Encoding.UTF8);
+                var message = await reader.ReadToEndAsync(cancellationToken);
+                yield return message;
+            }
+            else
+            {
+                // 忽略二进制消息或根据需要处理
+            }
+        }
     }
 }
