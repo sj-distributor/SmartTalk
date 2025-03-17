@@ -299,7 +299,13 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                             break;
                         case "media":
                             var media = jsonDocument.RootElement.GetProperty("media");
-                                
+                            
+                            if (media.TryGetProperty("timestamp", out var timestamp) &&
+                                int.TryParse(timestamp.GetString(), out var timestampNumber))
+                                context.LatestMediaTimestamp = timestampNumber;   
+                            else
+                                Log.Warning("Missing 'media' or 'timestamp' field in JSON message.");
+                            
                             var payload = media.GetProperty("payload").GetString();
                             var audioAppend = new
                             {
@@ -307,12 +313,9 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                                 audio = payload
                             };
                             await SendToWebSocketAsync(openAiWebSocket, audioAppend);
-
-                            if (media.TryGetProperty("timestamp", out var timestamp) &&
-                                int.TryParse(timestamp.GetString(), out var timestampNumber))
-                                context.LatestMediaTimestamp = timestampNumber;   
-                            else
-                                Log.Warning("Missing 'media' or 'timestamp' field in JSON message.");
+                            break;
+                        case "mark" when _aiSpeechAssistantStreamContext.MarkQueue.Count != 0:
+                            _aiSpeechAssistantStreamContext.MarkQueue.Dequeue();
                             break;
                         case "stop":
                             _backgroundJobClient.Enqueue<IAiSpeechAssistantProcessJobService>(x => x.RecordAiSpeechAssistantCallAsync(context, CancellationToken.None));
@@ -329,7 +332,6 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
 
     private async Task SendToTwilioAsync(WebSocket twilioWebSocket, WebSocket openAiWebSocket, AiSpeechAssistantStreamContextDto context, CancellationToken cancellationToken)
     {
-        Log.Information("Receive buffer from openai, and Sending to twilio. The buffer length: 20");
         var buffer = new byte[1024 * 30];
         try
         {
@@ -685,7 +687,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
             
             var clearEvent = new
             {
-                Event = "clear",
+                @event = "clear",
                 context.StreamSid
             };
             
