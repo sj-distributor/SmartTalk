@@ -19,6 +19,8 @@ public class AiSpeechAssistantDto
     public string ModelVoice { get; set; }
     public int AgentId { get; set; }
     
+    public string CustomRecordAnalyzePrompt { get; set; }
+    
     public DateTimeOffset CreatedDate { get; set; }
     
     public int CreatedBy { get; set; }
