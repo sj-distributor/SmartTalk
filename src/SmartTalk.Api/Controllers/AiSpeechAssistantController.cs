@@ -3,6 +3,7 @@ using Mediator.Net;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
+using SmartTalk.Messages.Requests.AiSpeechAssistant;
 
 namespace SmartTalk.Api.Controllers;
 
@@ -91,5 +92,68 @@ public class AiSpeechAssistantController : ControllerBase
         }
         
         return Ok();
+    }
+    
+    [Route("numbers"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetNumbersResponse))]
+    public async Task<IActionResult> GetNumbersAsync([FromQuery] GetNumbersRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetNumbersRequest, GetNumbersResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("assistants"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAiSpeechAssistantsResponse))]
+    public async Task<IActionResult> GetAiSpeechAssistantsAsync([FromQuery] GetAiSpeechAssistantsRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetAiSpeechAssistantsRequest, GetAiSpeechAssistantsResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("knowledge"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAiSpeechAssistantKnowledgeResponse))]
+    public async Task<IActionResult> GetGetAiSpeechAssistantKnowledgeAsync([FromQuery] GetAiSpeechAssistantKnowledgeRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetAiSpeechAssistantKnowledgeRequest, GetAiSpeechAssistantKnowledgeResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("knowledge/history"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAiSpeechAssistantKnowledgeHistoryResponse))]
+    public async Task<IActionResult> GetGetAiSpeechAssistantKnowledgeHistoryAsync([FromQuery] GetAiSpeechAssistantKnowledgeHistoryRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetAiSpeechAssistantKnowledgeHistoryRequest, GetAiSpeechAssistantKnowledgeHistoryResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("assistant/add"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(AddAiSpeechAssistantResponse))]
+    public async Task<IActionResult> AddAiSpeechAssistantAsync([FromBody] AddAiSpeechAssistantCommand command)
+    {
+        var response = await _mediator.SendAsync<AddAiSpeechAssistantCommand, AddAiSpeechAssistantResponse>(command).ConfigureAwait(false);
+
+        return Ok(response);
+    }
+    
+    [Route("knowledge/add"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(AddAiSpeechAssistantKnowledgeResponse))]
+    public async Task<IActionResult> AddAiSpeechAssistantKnowledgeAsync([FromBody] AddAiSpeechAssistantKnowledgeCommand command)
+    {
+        var response = await _mediator.SendAsync<AddAiSpeechAssistantKnowledgeCommand, AddAiSpeechAssistantKnowledgeResponse>(command).ConfigureAwait(false);
+
+        return Ok(response);
+    }
+    
+    [Route("knowledge/switch"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(SwitchAiSpeechAssistantKnowledgeVersionResponse))]
+    public async Task<IActionResult> SwitchAiSpeechAssistantKnowledgeVersionAsync([FromBody] SwitchAiSpeechAssistantKnowledgeVersionCommand command)
+    {
+        var response = await _mediator.SendAsync<SwitchAiSpeechAssistantKnowledgeVersionCommand, SwitchAiSpeechAssistantKnowledgeVersionResponse>(command).ConfigureAwait(false);
+
+        return Ok(response);
     }
 }
