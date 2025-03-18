@@ -66,7 +66,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
 
-    private ClientWebSocket _openaiClientWebSocket;
+    private readonly ClientWebSocket _openaiClientWebSocket;
     private AiSpeechAssistantStreamContextDto _aiSpeechAssistantStreamContext;
 
     public AiSpeechAssistantService(
@@ -679,7 +679,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                     content_index = 0,
                     audio_end_ms = 1
                 };
-                await SendToWebSocketAsync(_openaiClientWebSocket, truncateEvent, cancellationToken);
+                // await SendToWebSocketAsync(_openaiClientWebSocket, truncateEvent, cancellationToken);
             }
 
             _aiSpeechAssistantStreamContext.MarkQueue.Clear();
