@@ -320,7 +320,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                             Log.Information("Receive from twilio media event now, and LatestMediaTimestamp: {LatestMediaTimestamp}, and {ResponseStartTimestampTwilio}", _aiSpeechAssistantStreamContext.LatestMediaTimestamp, _aiSpeechAssistantStreamContext.ResponseStartTimestampTwilio);
                             
                             var payload = jsonDocument?.RootElement.GetProperty("media").GetProperty("payload").GetString();
-                            if (!string.IsNullOrEmpty(payload) && payload != "/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////w==")
+                            if (!string.IsNullOrEmpty(payload))
                             {
                                 Log.Information("Appending twilio audio payload: {Payload}", payload);
                                 _audioBuffer.Append(payload);
