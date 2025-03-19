@@ -480,6 +480,10 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                                             await ProcessHangupAsync(outputElement, cancellationToken).ConfigureAwait(false);
                                             break;
                                         
+                                        case OpenAiToolConstants.AddNewItemsToOrder:
+                                            await ProcessAddNewItemsToOrderAsync(outputElement, cancellationToken).ConfigureAwait(false);
+                                            break;
+                                        
                                         case OpenAiToolConstants.TransferCall:
                                         case OpenAiToolConstants.HandlePhoneOrderIssues:
                                         case OpenAiToolConstants.HandleThirdPartyDelayedDelivery:
@@ -589,6 +593,23 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         await SendToWebSocketAsync(_openaiClientWebSocket, new { type = "response.create" }, cancellationToken);
         
         _backgroundJobClient.Schedule<IAiSpeechAssistantService>(x => x.HangupCallAsync(_aiSpeechAssistantStreamContext.CallSid, cancellationToken), TimeSpan.FromSeconds(2));
+    }
+
+    private async Task ProcessAddNewItemsToOrderAsync(JsonElement jsonDocument, CancellationToken cancellationToken)
+    {
+        var recordSuccess = new
+        {
+            type = "conversation.item.create",
+            item = new
+            {
+                type = "function_call_output",
+                call_id = jsonDocument.GetProperty("call_id").GetString(),
+                output = jsonDocument.GetProperty("arguments").ToString()
+            }
+        };
+        
+        await SendToWebSocketAsync(_openaiClientWebSocket, recordSuccess, cancellationToken);
+        await SendToWebSocketAsync(_openaiClientWebSocket, new { type = "response.create" }, cancellationToken);
     }
     
     private async Task ProcessTransferCallAsync(JsonElement jsonDocument, string functionName, CancellationToken cancellationToken)
