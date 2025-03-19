@@ -68,7 +68,11 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
     
     private readonly ClientWebSocket _openaiClientWebSocket;
     private AiSpeechAssistantStreamContextDto _aiSpeechAssistantStreamContext;
-    
+
+    private int _payloadCount ;
+    private StringBuilder _audioBuffer;
+    private readonly int _bufferThreshold;
+
     public AiSpeechAssistantService(
         IMapper mapper,
         OpenAiSettings openAiSettings,
@@ -79,7 +83,8 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         ISmartTalkHttpClientFactory httpClientFactory,
         IPhoneOrderDataProvider phoneOrderDataProvider,
         ISmartTalkBackgroundJobClient backgroundJobClient,
-        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
+        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider,
+        int bufferThreshold = 30)
     {
         _mapper = mapper;
         _openAiSettings = openAiSettings;
@@ -94,6 +99,10 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
 
         _openaiClientWebSocket = new ClientWebSocket();
         _aiSpeechAssistantStreamContext = new AiSpeechAssistantStreamContextDto();
+
+        _payloadCount = 0;
+        _audioBuffer = new StringBuilder();
+        _bufferThreshold = bufferThreshold;
     }
 
     public CallAiSpeechAssistantResponse CallAiSpeechAssistant(CallAiSpeechAssistantCommand command)
@@ -310,13 +319,27 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                             
                             Log.Information("Receive from twilio media event now, and LatestMediaTimestamp: {LatestMediaTimestamp}, and {ResponseStartTimestampTwilio}", _aiSpeechAssistantStreamContext.LatestMediaTimestamp, _aiSpeechAssistantStreamContext.ResponseStartTimestampTwilio);
                             
-                            var payload = media.GetProperty("payload").GetString();
-                            var audioAppend = new
+                            var payload = jsonDocument?.RootElement.GetProperty("media").GetProperty("payload").GetString();
+                            if (!string.IsNullOrEmpty(payload) && payload != "/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////w==")
                             {
-                                type = "input_audio_buffer.append",
-                                audio = payload
-                            };
-                            await SendToWebSocketAsync(_openaiClientWebSocket, audioAppend, cancellationToken);
+                                Log.Information("Appending twilio audio payload: {Payload}", payload);
+                                _audioBuffer.Append(payload);
+                                _payloadCount++;
+
+                                if (_payloadCount >= _bufferThreshold)
+                                {
+                                    var audioAppend = new
+                                    {
+                                        type = "input_audio_buffer.append",
+                                        audio = payload
+                                    };
+                                    
+                                    Log.Information("Sending buffer to openai websocket, the payload is: {AudioAppend}", audioAppend);
+                                    await SendToWebSocketAsync(_openaiClientWebSocket, audioAppend, cancellationToken);
+                                    _audioBuffer.Clear();
+                                    _payloadCount = 0;
+                                }
+                            }
                             break;
                         case "mark" when _aiSpeechAssistantStreamContext.MarkQueue.Count != 0:
                             _aiSpeechAssistantStreamContext.MarkQueue.Dequeue();
