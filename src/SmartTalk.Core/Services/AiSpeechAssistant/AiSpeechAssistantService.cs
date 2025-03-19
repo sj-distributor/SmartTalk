@@ -74,6 +74,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
     public AiSpeechAssistantService(
         IMapper mapper,
+        ICurrentUser currentUser,
         OpenAiSettings openAiSettings,
         TwilioSettings twilioSettings,
         ISmartiesClient smartiesClient,
@@ -82,7 +83,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         ISmartTalkHttpClientFactory httpClientFactory,
         IPhoneOrderDataProvider phoneOrderDataProvider,
         ISmartTalkBackgroundJobClient backgroundJobClient,
-        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, ICurrentUser currentUser, int bufferThreshold = 10)
+        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider,
+        int bufferThreshold = 5)
     {
         _mapper = mapper;
         _currentUser = currentUser;
