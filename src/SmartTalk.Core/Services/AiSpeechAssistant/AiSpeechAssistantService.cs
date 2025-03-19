@@ -54,6 +54,7 @@ public partial interface IAiSpeechAssistantService : IScopedDependency
 public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 {
     private readonly IMapper _mapper;
+    private readonly ICurrentUser _currentUser;
     private readonly OpenAiSettings _openAiSettings;
     private readonly TwilioSettings _twilioSettings;
     private readonly ISmartiesClient _smartiesClient;
@@ -81,10 +82,10 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         ISmartTalkHttpClientFactory httpClientFactory,
         IPhoneOrderDataProvider phoneOrderDataProvider,
         ISmartTalkBackgroundJobClient backgroundJobClient,
-        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider,
-        int bufferThreshold = 30)
+        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, ICurrentUser currentUser, int bufferThreshold = 30)
     {
         _mapper = mapper;
+        _currentUser = currentUser;
         _openAiSettings = openAiSettings;
         _twilioSettings = twilioSettings;
         _smartiesClient = smartiesClient;
