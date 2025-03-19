@@ -19,6 +19,8 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
 
     Task<NumberPool> GetNumberAsync(int numberId, CancellationToken cancellationToken);
     
+    Task<List<NumberPool>> GetNumbersAsync(List<int> numberIds, CancellationToken cancellationToken);
+    
     Task<(int, List<NumberPool>)> GetNumbersAsync(int? pageIndex = null, int? pageSize = null, CancellationToken cancellationToken = default);
     
     Task UpdateNumberPoolAsync(List<NumberPool> numbers, bool forceSave = true, CancellationToken cancellationToken = default);
@@ -34,6 +36,12 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task UpdateAiSpeechAssistantKnowledgesAsync(List<AiSpeechAssistantKnowledge> knowledges, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task<(int, List<AiSpeechAssistantKnowledge>)> GetAiSpeechAssistantKnowledgesAsync(int assistantId, int? pageIndex = null, int? pageSize = null, string version = null, CancellationToken cancellationToken = default);
+
+    Task<List<Domain.AISpeechAssistant.AiSpeechAssistant>> DeleteAiSpeechAssistantsAsync(List<int> assistantIds, bool forceSave = true, CancellationToken cancellationToken = default);
+
+    Task<Domain.AISpeechAssistant.AiSpeechAssistant> GetAiSpeechAssistantAsync(int assistantId, CancellationToken cancellationToken);
+    
+    Task UpdateAiSpeechAssistantsAsync(List<Domain.AISpeechAssistant.AiSpeechAssistant> assistants, bool forceSave = true, CancellationToken cancellationToken = default);
 }
 
 public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
@@ -96,6 +104,12 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
     {
         return await _repository.Query<NumberPool>()
             .Where(x => x.Id == numberId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<NumberPool>> GetNumbersAsync(List<int> numberIds, CancellationToken cancellationToken)
+    {
+        return await _repository.Query<NumberPool>()
+            .Where(x => numberIds.Contains(x.Id)).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<(int, List<NumberPool>)> GetNumbersAsync(int? pageIndex = null, int? pageSize = null, CancellationToken cancellationToken = default)
@@ -184,5 +198,33 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
         var knowledges = await query.ToListAsync(cancellationToken).ConfigureAwait(false);
 
         return (count, knowledges);
+    }
+
+    public async Task<List<Domain.AISpeechAssistant.AiSpeechAssistant>> DeleteAiSpeechAssistantsAsync(
+        List<int> assistantIds, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        var assistants = await _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>()
+            .Where(x => assistantIds.Contains(x.Id)).ToListAsync(cancellationToken).ConfigureAwait(false);
+
+        if (assistants.Count == 0) return [];
+
+        await _repository.DeleteAllAsync(assistants, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        
+        return assistants;
+    }
+
+    public async Task<Domain.AISpeechAssistant.AiSpeechAssistant> GetAiSpeechAssistantAsync(int assistantId, CancellationToken cancellationToken)
+    {
+        return await _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>()
+            .Where(x => x.Id == assistantId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task UpdateAiSpeechAssistantsAsync(List<Domain.AISpeechAssistant.AiSpeechAssistant> assistants, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.UpdateAllAsync(assistants, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 }
