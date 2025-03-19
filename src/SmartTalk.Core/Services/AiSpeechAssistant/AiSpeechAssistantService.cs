@@ -103,7 +103,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
         _payloadCount = 0;
         _audioBuffer = new StringBuilder();
-        _bufferThreshold = bufferThreshold;
+        _bufferThreshold = _openAiSettings.RealtimeSendBuffLength;
     }
 
     public CallAiSpeechAssistantResponse CallAiSpeechAssistant(CallAiSpeechAssistantCommand command)
