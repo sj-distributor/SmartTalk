@@ -14,6 +14,10 @@ public partial interface IAiSpeechAssistantService
     Task<AddAiSpeechAssistantKnowledgeResponse> AddAiSpeechAssistantKnowledgeAsync(AddAiSpeechAssistantKnowledgeCommand command, CancellationToken cancellationToken);
 
     Task<SwitchAiSpeechAssistantKnowledgeVersionResponse> SwitchAiSpeechAssistantKnowledgeVersionAsync(SwitchAiSpeechAssistantKnowledgeVersionCommand command, CancellationToken cancellationToken);
+
+    Task<UpdateAiSpeechAssistantResponse> UpdateAiSpeechAssistantAsync(UpdateAiSpeechAssistantCommand command, CancellationToken cancellationToken);
+    
+    Task<DeleteAiSpeechAssistantResponse> DeleteAiSpeechAssistantAsync(DeleteAiSpeechAssistantCommand command, CancellationToken cancellationToken);
 }
 
 public partial class AiSpeechAssistantService
@@ -24,7 +28,7 @@ public partial class AiSpeechAssistantService
 
         await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantsAsync([assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        await UpdateNumberStatusAsync(command.AnsweringNumberId, cancellationToken).ConfigureAwait(false);
+        await UpdateNumbersStatusAsync([command.AnsweringNumberId], true, cancellationToken).ConfigureAwait(false);
 
         return new AddAiSpeechAssistantResponse
         {
@@ -64,6 +68,37 @@ public partial class AiSpeechAssistantService
         return new SwitchAiSpeechAssistantKnowledgeVersionResponse
         {
             Data = _mapper.Map<AiSpeechAssistantKnowledgeDto>(currentKnowledge)
+        };
+    }
+
+    public async Task<UpdateAiSpeechAssistantResponse> UpdateAiSpeechAssistantAsync(UpdateAiSpeechAssistantCommand command, CancellationToken cancellationToken)
+    {
+        var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantAsync(command.AssistantId, cancellationToken).ConfigureAwait(false);
+
+        await UpdateAssistantNumberIfRequiredAsync(assistant.AnsweringNumberId, command.AnsweringNumberId, cancellationToken).ConfigureAwait(false);
+        
+        _mapper.Map(command, assistant);
+
+        await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync([assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return new UpdateAiSpeechAssistantResponse
+        {
+            Data = _mapper.Map<AiSpeechAssistantDto>(assistant)
+        };
+    }
+
+    public async Task<DeleteAiSpeechAssistantResponse> DeleteAiSpeechAssistantAsync(DeleteAiSpeechAssistantCommand command, CancellationToken cancellationToken)
+    {
+        var assistants = await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantsAsync(
+                command.AssistantIds, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (assistants.Count == 0) throw new Exception("Delete assistants failed.");
+
+        await UpdateNumbersStatusAsync(assistants.Select(x => x.AnsweringNumberId).ToList(), false, cancellationToken).ConfigureAwait(false);
+
+        return new DeleteAiSpeechAssistantResponse
+        {
+            Data = _mapper.Map<List<AiSpeechAssistantDto>>(assistants)
         };
     }
 
@@ -117,12 +152,38 @@ public partial class AiSpeechAssistantService
         latestKnowledge.Version = (double.Parse(preKnowledge.Version) + 0.1).ToString("F1");
     }
 
-    private async Task UpdateNumberStatusAsync(int answeringNumberId, CancellationToken cancellationToken)
+    private async Task UpdateNumbersStatusAsync(List<int> answeringNumberIds, bool isUsed, CancellationToken cancellationToken)
     {
-        var number = await _aiSpeechAssistantDataProvider.GetNumberAsync(answeringNumberId, cancellationToken).ConfigureAwait(false);
+        var numbers = await _aiSpeechAssistantDataProvider.GetNumbersAsync(answeringNumberIds, cancellationToken).ConfigureAwait(false);
 
-        number.IsUsed = true;
+        numbers.ForEach(x => x.IsUsed = isUsed);
 
-        await _aiSpeechAssistantDataProvider.UpdateNumberPoolAsync([number], cancellationToken: cancellationToken).ConfigureAwait(false);
+        await _aiSpeechAssistantDataProvider.UpdateNumberPoolAsync(numbers, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task UpdateAssistantNumberIfRequiredAsync(int preNumberId, int currentNumberId, CancellationToken cancellationToken)
+    {
+        if (preNumberId == currentNumberId) return;
+
+        var numbers = await _aiSpeechAssistantDataProvider.GetNumbersAsync([preNumberId, currentNumberId], cancellationToken).ConfigureAwait(false);
+
+        var updateNumbers = numbers.Where(number =>
+        {
+            if (number != null && number.Id == preNumberId)
+            {
+                number.IsUsed = false;
+                return true;
+            }
+            
+            if (number != null && number.Id == currentNumberId)
+            {
+                number.IsUsed = true;
+                return true;
+            }
+
+            return false;
+        }).ToList();
+        
+        await _aiSpeechAssistantDataProvider.UpdateNumberPoolAsync(updateNumbers, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 }
