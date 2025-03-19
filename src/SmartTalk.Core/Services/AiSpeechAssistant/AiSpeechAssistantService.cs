@@ -331,7 +331,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                                     var audioAppend = new
                                     {
                                         type = "input_audio_buffer.append",
-                                        audio = payload
+                                        audio = _audioBuffer.ToString()
                                     };
                                     
                                     Log.Information("Sending buffer to openai websocket, the payload is: {AudioAppend}", audioAppend);
