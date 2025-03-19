@@ -82,7 +82,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         ISmartTalkHttpClientFactory httpClientFactory,
         IPhoneOrderDataProvider phoneOrderDataProvider,
         ISmartTalkBackgroundJobClient backgroundJobClient,
-        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, ICurrentUser currentUser, int bufferThreshold = 30)
+        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, ICurrentUser currentUser, int bufferThreshold = 10)
     {
         _mapper = mapper;
         _currentUser = currentUser;
