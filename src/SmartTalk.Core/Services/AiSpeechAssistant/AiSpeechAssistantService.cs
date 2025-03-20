@@ -484,6 +484,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                                             await ProcessAddNewItemsToOrderAsync(outputElement, cancellationToken).ConfigureAwait(false);
                                             break;
                                         
+                                        case OpenAiToolConstants.RepeatOrder:
+                                            await ProcessRepeatOrderAsync(outputElement, cancellationToken).ConfigureAwait(false);
+                                        
                                         case OpenAiToolConstants.TransferCall:
                                         case OpenAiToolConstants.HandlePhoneOrderIssues:
                                         case OpenAiToolConstants.HandleThirdPartyDelayedDelivery:
@@ -670,7 +673,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         };
     }
     
-    private async Task ProcessRepeatOrderAsync(AiSpeechAssistantStreamContextDto context, JsonElement jsonDocument, CancellationToken cancellationToken)
+    private async Task ProcessRepeatOrderAsync(JsonElement jsonDocument, CancellationToken cancellationToken)
     {
         var repeatOrderMessage = new
         {
@@ -679,11 +682,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             {
                 type = "function_call_output",
                 call_id = jsonDocument.GetProperty("call_id").GetString(),
-                output = $"Repeat the order content to the customer. Here is teh current order:{context.OrderItemsJson}"
+                output = jsonDocument.GetProperty("arguments").ToString()
             }
         };
-
-        context.LastMessage = repeatOrderMessage;
         
         await SendToWebSocketAsync(_openaiClientWebSocket, repeatOrderMessage, cancellationToken);
         await SendToWebSocketAsync(_openaiClientWebSocket, new { type = "response.create" }, cancellationToken);
