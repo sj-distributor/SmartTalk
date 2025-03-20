@@ -495,7 +495,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                                         
                                         case OpenAiToolConstants.RepeatOrder:
                                             await ProcessRepeatOrderAsync(outputElement, cancellationToken).ConfigureAwait(false);
-                                        
+                                            break;
+                                            
                                         case OpenAiToolConstants.TransferCall:
                                         case OpenAiToolConstants.HandlePhoneOrderIssues:
                                         case OpenAiToolConstants.HandleThirdPartyDelayedDelivery:
