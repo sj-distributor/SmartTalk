@@ -15,6 +15,8 @@ public interface IAgentDataProvider : IScopedDependency
     Task<Agent> GetAgentByIdAsync(int id, CancellationToken cancellationToken);
 
     Task<List<Agent>> GetAgentsAsync(AgentType type, CancellationToken cancellationToken);
+
+    Task AddAgentAsync(Agent agent, bool forceSave = true, CancellationToken cancellationToken = default);
 }
 
 public class AgentDataProvider : IAgentDataProvider
@@ -58,5 +60,12 @@ public class AgentDataProvider : IAgentDataProvider
     public async Task<List<Agent>> GetAgentsAsync(AgentType type, CancellationToken cancellationToken)
     {
         return await _repository.Query<Agent>().Where(x => x.Type == type).ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task AddAgentAsync(Agent agent, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.InsertAsync(agent, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 }
