@@ -1,0 +1,1 @@
+alter table `ai_speech_assistant` modify `answering_number_id` int null;

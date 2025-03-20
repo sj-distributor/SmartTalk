@@ -17,7 +17,7 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
     
     Task<List<AiSpeechAssistantFunctionCall>> GetAiSpeechAssistantFunctionCallByAssistantIdAsync(int assistantId, CancellationToken cancellationToken);
 
-    Task<NumberPool> GetNumberAsync(int numberId, CancellationToken cancellationToken);
+    Task<NumberPool> GetNumberAsync(int? numberId = null, bool? isUsed = null, CancellationToken cancellationToken = default);
     
     Task<List<NumberPool>> GetNumbersAsync(List<int> numberIds, CancellationToken cancellationToken);
     
@@ -100,10 +100,17 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
             .Where(x => x.AssistantId == assistantId).ToListAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<NumberPool> GetNumberAsync(int numberId, CancellationToken cancellationToken)
+    public async Task<NumberPool> GetNumberAsync(int? numberId = null, bool? isUsed = null, CancellationToken cancellationToken = default)
     {
-        return await _repository.Query<NumberPool>()
-            .Where(x => x.Id == numberId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        var query = _repository.Query<NumberPool>();
+
+        if (numberId.HasValue)
+            query = query.Where(x => x.Id == numberId.Value);
+
+        if (isUsed.HasValue)
+            query = query.Where(x => x.IsUsed == isUsed.Value);
+        
+        return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<List<NumberPool>> GetNumbersAsync(List<int> numberIds, CancellationToken cancellationToken)

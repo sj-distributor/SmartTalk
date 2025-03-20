@@ -10,7 +10,7 @@ public class UpdateAiSpeechAssistantCommand : ICommand
     
     public string AssistantName { get; set; }
     
-    public int AnsweringNumberId { get; set; }
+    public int? AnsweringNumberId { get; set; }
     
     public string AnsweringNumber { get; set; }
 }
