@@ -16,7 +16,7 @@ public class AiSpeechAssistant : IEntity, IHasCreatedFields
     public string Name { get; set; }
     
     [Column("answering_number_id")]
-    public int AnsweringNumberId { get; set; }
+    public int? AnsweringNumberId { get; set; }
     
     [Column("answering_number")]
     public string AnsweringNumber { get; set; }

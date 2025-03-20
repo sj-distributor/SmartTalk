@@ -1,8 +1,12 @@
 using Serilog;
 using SmartTalk.Core.Domain.AISpeechAssistant;
+using SmartTalk.Core.Domain.Restaurants;
+using SmartTalk.Core.Domain.System;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Constants;
+using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
+using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
@@ -24,11 +28,7 @@ public partial class AiSpeechAssistantService
 {
     public async Task<AddAiSpeechAssistantResponse> AddAiSpeechAssistantAsync(AddAiSpeechAssistantCommand command, CancellationToken cancellationToken)
     {
-        var assistant = InitialAiSpeechAssistant(command);
-
-        await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantsAsync([assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        await UpdateNumbersStatusAsync([command.AnsweringNumberId], true, cancellationToken).ConfigureAwait(false);
+        var assistant = await InitialAiSpeechAssistantAsync(command, cancellationToken).ConfigureAwait(false);
 
         return new AddAiSpeechAssistantResponse
         {
@@ -74,8 +74,6 @@ public partial class AiSpeechAssistantService
     public async Task<UpdateAiSpeechAssistantResponse> UpdateAiSpeechAssistantAsync(UpdateAiSpeechAssistantCommand command, CancellationToken cancellationToken)
     {
         var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantAsync(command.AssistantId, cancellationToken).ConfigureAwait(false);
-
-        await UpdateAssistantNumberIfRequiredAsync(assistant.AnsweringNumberId, command.AnsweringNumberId, cancellationToken).ConfigureAwait(false);
         
         _mapper.Map(command, assistant);
 
@@ -94,7 +92,7 @@ public partial class AiSpeechAssistantService
 
         if (assistants.Count == 0) throw new Exception("Delete assistants failed.");
 
-        await UpdateNumbersStatusAsync(assistants.Select(x => x.AnsweringNumberId).ToList(), false, cancellationToken).ConfigureAwait(false);
+        await UpdateNumbersStatusAsync(assistants.Where(x => x.AnsweringNumberId.HasValue).Select(x => x.AnsweringNumberId.Value).ToList(), false, cancellationToken).ConfigureAwait(false);
 
         return new DeleteAiSpeechAssistantResponse
         {
@@ -102,18 +100,63 @@ public partial class AiSpeechAssistantService
         };
     }
 
-    private Domain.AISpeechAssistant.AiSpeechAssistant InitialAiSpeechAssistant(AddAiSpeechAssistantCommand command)
+    private async Task<Domain.AISpeechAssistant.AiSpeechAssistant> InitialAiSpeechAssistantAsync(AddAiSpeechAssistantCommand command, CancellationToken cancellationToken)
     {
-        var assistant = _mapper.Map<Domain.AISpeechAssistant.AiSpeechAssistant>(command);
-
-        assistant.ModelVoice = "alloy";
-        assistant.CreatedBy = _currentUser.Id.Value;
-        assistant.ModelUrl = AiSpeechAssistantStore.DefaultUrl;
-        assistant.ModelProvider = AiSpeechAssistantProvider.OpenAi;
+        var (agent, number) = await InitialAssistantRelatedInfoAsync(command.AssistantName, cancellationToken).ConfigureAwait(false);
         
+        var assistant = new Domain.AISpeechAssistant.AiSpeechAssistant
+        {
+            AgentId = agent.Id,
+            ModelVoice = "alloy",
+            AnsweringNumberId = number?.Id,
+            AnsweringNumber = number?.Number,
+            CreatedBy = _currentUser.Id.Value,
+            ModelUrl = AiSpeechAssistantStore.DefaultUrl,
+            ModelProvider = AiSpeechAssistantProvider.OpenAi
+        };
+        
+        await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantsAsync([assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        await InitialAssistantKnowledgeAsync(command, assistant, cancellationToken).ConfigureAwait(false);
+
         return assistant;
     }
+    
+    private async Task<(Agent agent, NumberPool number)> InitialAssistantRelatedInfoAsync(string assistantName, CancellationToken cancellationToken)
+    {
+        var domain = new Restaurant { Name = assistantName };
 
+        await _restaurantDataProvider.AddRestaurantAsync(domain, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var agent = new Agent
+        {
+            RelateId = domain.Id,
+            Type = AgentType.Restaurant,
+            SourceSystem = AgentSourceSystem.Self
+        };
+
+        await _agentDataProvider.AddAgentAsync(agent, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var number = await _aiSpeechAssistantDataProvider.GetNumberAsync(isUsed: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        return (agent, number);
+    }
+
+    private async Task InitialAssistantKnowledgeAsync(AddAiSpeechAssistantCommand command, Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken)
+    {
+        var knowledge = new AiSpeechAssistantKnowledge
+        {
+            Version = "1.0",
+            IsActive = true,
+            Json = command.Json,
+            AssistantId = assistant.Id,
+            Greetings = command.Greetings,
+            CreatedBy = _currentUser.Id.Value
+        };
+
+        await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgesAsync([knowledge], cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+    
     private async Task<AiSpeechAssistantKnowledge> UpdatePreviousKnowledgeIfRequiredAsync(int assistantId, bool isActive, CancellationToken cancellationToken)
     {
         var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(assistantId, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -154,6 +197,8 @@ public partial class AiSpeechAssistantService
 
     private async Task UpdateNumbersStatusAsync(List<int> answeringNumberIds, bool isUsed, CancellationToken cancellationToken)
     {
+        if (answeringNumberIds.Count == 0) return;
+        
         var numbers = await _aiSpeechAssistantDataProvider.GetNumbersAsync(answeringNumberIds, cancellationToken).ConfigureAwait(false);
 
         numbers.ForEach(x => x.IsUsed = isUsed);
