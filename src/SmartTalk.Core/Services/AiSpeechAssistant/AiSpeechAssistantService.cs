@@ -480,7 +480,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                                             await ProcessHangupAsync(outputElement, cancellationToken).ConfigureAwait(false);
                                             break;
                                         
-                                        case OpenAiToolConstants.AddNewItemsToOrder:
+                                        case OpenAiToolConstants.AddItem:
                                             await ProcessAddNewItemsToOrderAsync(outputElement, cancellationToken).ConfigureAwait(false);
                                             break;
                                         
