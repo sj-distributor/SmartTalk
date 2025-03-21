@@ -1,6 +1,6 @@
 using Mediator.Net.Contracts;
-using Smarties.Messages.Responses;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
+using SmartTalk.Messages.Responses;
 
 namespace SmartTalk.Messages.Requests.AiSpeechAssistant;
 
@@ -13,7 +13,7 @@ public class GetAiSpeechAssistantKnowledgeHistoryRequest : IRequest
     public int AssistantId { get; set; }
 }
 
-public class GetAiSpeechAssistantKnowledgeHistoryResponse : SmartiesResponse<GetAiSpeechAssistantKnowledgeHistoryResponseData>
+public class GetAiSpeechAssistantKnowledgeHistoryResponse : SmartTalkResponse<GetAiSpeechAssistantKnowledgeHistoryResponseData>
 {
 }
 

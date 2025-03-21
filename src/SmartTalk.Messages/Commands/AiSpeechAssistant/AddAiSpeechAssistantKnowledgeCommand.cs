@@ -1,6 +1,6 @@
 using Mediator.Net.Contracts;
-using Smarties.Messages.Responses;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
+using SmartTalk.Messages.Responses;
 
 namespace SmartTalk.Messages.Commands.AiSpeechAssistant;
 
@@ -13,6 +13,6 @@ public class AddAiSpeechAssistantKnowledgeCommand : ICommand
     public string Json { get; set; }
 }
 
-public class AddAiSpeechAssistantKnowledgeResponse : SmartiesResponse<AiSpeechAssistantKnowledgeDto>
+public class AddAiSpeechAssistantKnowledgeResponse : SmartTalkResponse<AiSpeechAssistantKnowledgeDto>
 {
 }
