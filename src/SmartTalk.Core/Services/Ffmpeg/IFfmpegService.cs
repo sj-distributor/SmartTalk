@@ -458,8 +458,8 @@ public class FfmpegService : IFfmpegService
                     RedirectStandardError = true,
                     RedirectStandardOutput = true,
                     Arguments = samplingRate.HasValue
-                        ? $"-i {inputFileName} -acodec pcm_mulaw -ar {samplingRate.Value} {outputFileName}"
-                        : $"-i {inputFileName} -acodec pcm_mulaw {outputFileName}"
+                        ? $"-i {inputFileName} -af \"adelay=50|50\" -acodec pcm_mulaw -ar {samplingRate.Value} {outputFileName}"
+                        : $"-i {inputFileName} -af \"adelay=50|50\" -acodec pcm_mulaw {outputFileName}"
                 };
 
                 proc.OutputDataReceived += (_, e) => Log.Information("Converting WAV to ulaw, {@Output}", e);
