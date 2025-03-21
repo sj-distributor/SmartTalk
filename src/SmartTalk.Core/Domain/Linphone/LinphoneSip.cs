@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace SmartTalk.Core.Domain.Linphone;
 
 [Table("linphone_sip")]
-public class LinphoneSip : IEntity
+public class LinphoneSip : IEntity, IHasCreatedFields
 {
     [Key]
     [Column("id")]
