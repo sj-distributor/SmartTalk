@@ -24,6 +24,8 @@ public interface IFfmpegService: IScopedDependency
     Task<byte[]> ConvertFileFormatAsync(byte[] file, TranscriptionFileType fileType, CancellationToken cancellationToken);
     
     Task<List<byte[]>> SpiltAudioAsync(byte[] audioBytes, double startTime, double endTime, CancellationToken cancellationToken);
+
+    Task<byte[]> ConvertWavToULawAsync(byte[] wavBytes, int? samplingRate = null, CancellationToken cancellationToken = default);
 }
 
 public class FfmpegService : IFfmpegService
@@ -428,5 +430,67 @@ public class FfmpegService : IFfmpegService
         }
 
         return audioDataList;
+    }
+     
+     public async Task<byte[]> ConvertWavToULawAsync(byte[] wavBytes, int? samplingRate = null, CancellationToken cancellationToken = default)
+    {
+        var baseFileName = Guid.NewGuid().ToString();
+        var inputFileName = $"{baseFileName}.wav";
+        var outputFileName = $"{baseFileName}_ulaw.wav";
+
+        try
+        {
+            Log.Information("Converting WAV to ulaw, the WAV length is {Length}", wavBytes.Length);
+            
+            await File.WriteAllBytesAsync(inputFileName, wavBytes, cancellationToken).ConfigureAwait(false);
+
+            if (!File.Exists(inputFileName))
+            {
+                Log.Information("Converting WAV to ulaw, persisted WAV file failed");
+                return Array.Empty<byte>();
+            }
+            
+            using (var proc = new Process())
+            {
+                proc.StartInfo = new ProcessStartInfo
+                {
+                    FileName = "ffmpeg",
+                    RedirectStandardError = true,
+                    RedirectStandardOutput = true,
+                    Arguments = samplingRate.HasValue
+                        ? $"-i {inputFileName} -acodec pcm_mulaw -ar {samplingRate.Value} {outputFileName}"
+                        : $"-i {inputFileName} -acodec pcm_mulaw {outputFileName}"
+                };
+
+                proc.OutputDataReceived += (_, e) => Log.Information("Converting WAV to ulaw, {@Output}", e);
+                proc.ErrorDataReceived += (_, e) => Log.Error("Converting WAV to ulaw error: {@Error}", e);
+
+                proc.Start();
+                proc.BeginErrorReadLine();
+                proc.BeginOutputReadLine();
+
+                await proc.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            }
+            
+            if (File.Exists(outputFileName))
+            {
+                return await File.ReadAllBytesAsync(outputFileName, cancellationToken).ConfigureAwait(false);
+            }
+
+            Log.Information("Converting WAV to ulaw, failed to generate ulaw file");
+            return [];
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Converting WAV to ulaw error occurred");
+            return [];
+        }
+        finally
+        {
+            Log.Information("Converting WAV to ulaw finally deleting files");
+
+            if (File.Exists(inputFileName)) File.Delete(inputFileName);
+            if (File.Exists(outputFileName)) File.Delete(outputFileName);
+        }
     }
 }
