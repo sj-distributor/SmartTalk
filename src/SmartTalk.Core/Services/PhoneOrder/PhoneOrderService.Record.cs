@@ -11,6 +11,7 @@ using Smarties.Messages.Enums.OpenAi;
 using Smarties.Messages.Requests.Ask;
 using System.Text.RegularExpressions;
 using SmartTalk.Core.Domain.PhoneOrder;
+using SmartTalk.Core.Services.Linphone;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Dto.Attachments;
 using SmartTalk.Messages.Enums.PhoneOrder;
@@ -52,6 +53,8 @@ public partial class PhoneOrderService
         if (command.RecordName.IsNullOrEmpty() && command.RecordUrl.IsNullOrEmpty()) return;
 
         var recordInfo = await ExtractPhoneOrderRecordInfoAsync(command.RecordName, command.AgentId, command.CreatedDate, cancellationToken).ConfigureAwait(false);
+
+        _backgroundJobClient.Enqueue<ILinphoneService>(x => x.AddLinphoneCdrAsync(command.RecordName, cancellationToken));
         
         Log.Information("Phone order record information: {@recordInfo}", recordInfo);
                                    
