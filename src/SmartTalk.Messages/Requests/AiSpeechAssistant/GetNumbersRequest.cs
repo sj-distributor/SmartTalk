@@ -1,6 +1,6 @@
 using Mediator.Net.Contracts;
-using Smarties.Messages.Responses;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
+using SmartTalk.Messages.Responses;
 
 namespace SmartTalk.Messages.Requests.AiSpeechAssistant;
 
@@ -11,7 +11,7 @@ public class GetNumbersRequest : IRequest
     public int? PageSize { get; set; }
 }
 
-public class GetNumbersResponse : SmartiesResponse<GetNumbersResponseData>
+public class GetNumbersResponse : SmartTalkResponse<GetNumbersResponseData>
 {
 }
 
