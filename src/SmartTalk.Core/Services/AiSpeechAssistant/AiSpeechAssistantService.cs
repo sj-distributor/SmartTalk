@@ -721,6 +721,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             : "Please help me to repeat the goods ordered by the customer in English completely, quickly and naturally";
 
         var audioData = BinaryData.FromBytes(Convert.FromBase64String(_wholeAudioBuffer.ToString()));
+        Log.Information("Whole audio buffer: \n" + _wholeAudioBuffer);
+        
         ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
         List<ChatMessage> messages =
         [
@@ -736,6 +738,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         };
 
         ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
+        
+        Log.Information("Analyze record to repeat order: {@completion}", completion);
 
         var uLawAudio = await _ffmpegService.ConvertWavToULawAsync(completion.OutputAudio.AudioBytes.ToArray(), 8000, cancellationToken);
 
