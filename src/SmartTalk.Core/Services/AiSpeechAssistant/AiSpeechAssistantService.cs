@@ -96,7 +96,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         IPhoneOrderDataProvider phoneOrderDataProvider,
         ISmartTalkBackgroundJobClient backgroundJobClient,
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, 
-        int bufferThreshold = 15)
+        int bufferThreshold = 1)
     {
         _mapper = mapper;
         _currentUser = currentUser;
