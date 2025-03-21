@@ -76,9 +76,11 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private AiSpeechAssistantStreamContextDto _aiSpeechAssistantStreamContext;
 
     private int _payloadCount ;
+    private bool _IsAiSpeaking;
     private StringBuilder _audioBuffer;
     private readonly int _bufferThreshold;
-    
+    private StringBuilder _wholeAudioBuffer;
+
     public AiSpeechAssistantService(
         IMapper mapper,
         ICurrentUser currentUser,
@@ -94,7 +96,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         IPhoneOrderDataProvider phoneOrderDataProvider,
         ISmartTalkBackgroundJobClient backgroundJobClient,
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, 
-        int bufferThreshold = 5)
+        int bufferThreshold = 15)
     {
         _mapper = mapper;
         _currentUser = currentUser;
@@ -115,8 +117,10 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _aiSpeechAssistantStreamContext = new AiSpeechAssistantStreamContextDto();
 
         _payloadCount = 0;
+        _IsAiSpeaking = false;
         _audioBuffer = new StringBuilder();
-        _bufferThreshold = _openAiSettings.RealtimeSendBuffLength;
+        _bufferThreshold = bufferThreshold;
+        _wholeAudioBuffer = new StringBuilder();
     }
 
     public CallAiSpeechAssistantResponse CallAiSpeechAssistant(CallAiSpeechAssistantCommand command)
@@ -341,6 +345,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                                 _audioBuffer.Append(payload);
                                 _payloadCount++;
 
+                                if (!_IsAiSpeaking) _wholeAudioBuffer.Append(payload);
+                                
                                 if (_payloadCount >= _bufferThreshold)
                                 {
                                     var audioAppend = new
@@ -406,6 +412,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                     if (jsonDocument?.RootElement.GetProperty("type").GetString() == "response.audio.delta" && jsonDocument.RootElement.TryGetProperty("delta", out var delta))
                     {
                         Log.Information("Sending openai response to twilio now");
+                        _IsAiSpeaking = true;
+                        _wholeAudioBuffer.Append(delta.GetString());
+                        
                         var audioDelta = new
                         {
                             @event = "media",
@@ -435,7 +444,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                     if (jsonDocument?.RootElement.GetProperty("type").GetString() == "input_audio_buffer.speech_started")
                     {
                         Log.Information("Speech started detected.");
-
+                        _IsAiSpeaking = false;
                         var clearEvent = new
                         {
                             @event = "clear",
@@ -702,15 +711,22 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         };
 
         await SendToWebSocketAsync(twilioWebSocket, holdOnAudio, cancellationToken);
+
+        var systemPrompt = _aiSpeechAssistantStreamContext.Assistant.ModelVoice == "alloy"
+            ? "你是一名精通中文的电话录音分析师，你能准确完整地复述客人在需要订购的商品。\n\n以下是在售商品清单\n马蹄片罐头,鸡蛋,红萝卜,薯仔,九层塔,鲜姜,青葱,蒜子肉,蘑菇,虾仁21/25,牛霖,鸡骨,腰果,柠檬水,白胡椒粉,黄瓜,茄子,香茅,青椒,四季豆,芥兰,青江菜,西兰花,芽菜,鱿鱼筒,龙利鱼片,鸡脾肉_无皮,鸡全翼,素春卷,\n白醋,硬豆腐,黄洋葱,红椒,菠萝罐头,蚝油,食用盐,无头鸭,辣椒酱,墨椒,加工类（鸡）,蘑菇片罐头,中锤翼,去皮花生,芫荽,荷兰豆,紫洋葱,金鲳鱼,去肥西冷,玉米笋(切断)罐头,芥花籽油（炸油）,橙,薄荷叶,鸭胸,烧排骨,\n云吞皮,西芹,酱油,轻辣椒粉,椰菜,番茄,黄柠檬,炸蟹角,酱油包,炸粉,月历,笋丝罐头,龙口粉丝,日式面包糠,椰子,青木瓜,味精,鸡胸肉_双边,中青口,白芝麻,竹串,茄汁罐头,胶袋_11X14\n"
+            : "You are a telephone recording analyst who is fluent in Chinese and can accurately and completely repeat the items that customers need to order.\n\nThe following is a list of items on sale:\n\negg, carrot, potato, basil, ginger, green onion, peeled garlic, mushroom, p&d shrimp 21/25, beef peeled knuckle, chix bone, cashew nut, lemon juice, white pepper powder, cucumber, eggplant, lemon grass, green bell pepper, green bean, gai lan, shanghai bok choy, broccoli, bean sprout, squid tube, swai fillet, leg mt s/l chicken thigh meat skinless, whole wing, vegetable spring rolls, white vinegar, firm tofu, yellow onion, red bell pepper, canned pineapple, oyster sauce, salt, h/l duck headless duck, chili sauce, serrano pepper, processed food (chicken), canned mushroom slices , party wing , peanut kernel , cilantro , snow pea , red onion , golden pomfret , beef 100vl striploin fat removed , canned baby corn (cut) , canola fry oil , orange , mint leaf , duck breast , medium & light sparerib , won ton wrappers , celery , soy sauce , paprika , cabbage , tomato , lemon , crab rangoon , soy sauce pack , tempura batter mix , calendar , canned bamboo shoot strips , bean thread , japanese style panko , coconut  green papaya  msg  b/l s/l breast mt butterfly chicken breast double-sided,medium,mussel,white sesame seed,skewer,canned ketchup,produce bag";            
         
         var prompt = _aiSpeechAssistantStreamContext.Assistant.ModelVoice == "alloy"
-            ? "帮我用中文完整、快速、自然地复述订单："
-            : "Help me to repeat the order completely, quickly and naturally in English:";
-        
+            ? "帮我用中文完整、快速、自然地复述一下客人订购的商品"
+            : "Please help me to repeat the goods ordered by the customer in English completely, quickly and naturally";
+
+        var audioData = BinaryData.FromBytes(Convert.FromBase64String(_wholeAudioBuffer.ToString()));
         ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
         List<ChatMessage> messages =
         [
-            new UserChatMessage(prompt + jsonDocument.GetProperty("arguments"))
+            new SystemChatMessage(systemPrompt),
+            new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
+            new UserChatMessage(prompt)
         ];
         
         ChatCompletionOptions options = new()
