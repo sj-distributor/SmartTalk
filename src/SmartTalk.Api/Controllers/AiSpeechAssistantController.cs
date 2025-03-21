@@ -1,5 +1,6 @@
 using Serilog;
 using Mediator.Net;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
@@ -7,6 +8,7 @@ using SmartTalk.Messages.Requests.AiSpeechAssistant;
 
 namespace SmartTalk.Api.Controllers;
 
+[Authorize]
 [ApiController]
 [Route("api/[controller]")]
 public class AiSpeechAssistantController : ControllerBase
@@ -18,6 +20,7 @@ public class AiSpeechAssistantController : ControllerBase
         _mediator = mediator;
     }
 
+    [AllowAnonymous]
     [Route("call"), HttpGet, HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> CallAiSpeechAssistantAsync([FromForm] CallAiSpeechAssistantCommand command)
@@ -28,6 +31,7 @@ public class AiSpeechAssistantController : ControllerBase
         return response.Data;
     }
 
+    [AllowAnonymous]
     [HttpGet("connect/{from}/{to}")]
     public async Task ConnectAiSpeechAssistantAsync(string from, string to)
     {
@@ -48,6 +52,7 @@ public class AiSpeechAssistantController : ControllerBase
         }
     }
     
+    [AllowAnonymous]
     [HttpGet("outbound/connect")]
     [HttpGet("outbound/connect/{from}/{to}/{id}")]
     public async Task OutboundConnectAiSpeechAssistantAsync(string from, string to, int id)
@@ -70,6 +75,7 @@ public class AiSpeechAssistantController : ControllerBase
         }
     }
 
+    [AllowAnonymous]
     [Route("recording/callback"), HttpPost]
     public async Task<IActionResult> ReceivePhoneRecordingStatusCallBackAcyn()
     {
