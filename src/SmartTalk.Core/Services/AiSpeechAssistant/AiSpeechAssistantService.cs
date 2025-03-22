@@ -713,8 +713,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             : "You are a telephone recording analyst who is fluent in Chinese and can accurately and completely repeat the items that customers need to order.\n\nThe following is a list of items on sale:\n\negg, carrot, potato, basil, ginger, green onion, peeled garlic, mushroom, p&d shrimp 21/25, beef peeled knuckle, chix bone, cashew nut, lemon juice, white pepper powder, cucumber, eggplant, lemon grass, green bell pepper, green bean, gai lan, shanghai bok choy, broccoli, bean sprout, squid tube, swai fillet, leg mt s/l chicken thigh meat skinless, whole wing, vegetable spring rolls, white vinegar, firm tofu, yellow onion, red bell pepper, canned pineapple, oyster sauce, salt, h/l duck headless duck, chili sauce, serrano pepper, processed food (chicken), canned mushroom slices , party wing , peanut kernel , cilantro , snow pea , red onion , golden pomfret , beef 100vl striploin fat removed , canned baby corn (cut) , canola fry oil , orange , mint leaf , duck breast , medium & light sparerib , won ton wrappers , celery , soy sauce , paprika , cabbage , tomato , lemon , crab rangoon , soy sauce pack , tempura batter mix , calendar , canned bamboo shoot strips , bean thread , japanese style panko , coconut  green papaya  msg  b/l s/l breast mt butterfly chicken breast double-sided,medium,mussel,white sesame seed,skewer,canned ketchup,produce bag";            
         
         var prompt = _aiSpeechAssistantStreamContext.Assistant.ModelVoice == "alloy"
-            ? "Help me to repeat the order completely, quickly and naturally in English:"
-            : "帮我用中文完整、快速、自然地复述订单：";
+            ? "帮我用中文完整、快速、自然地复述订单："
+            : "Help me to repeat the order completely, quickly and naturally in English:";
 
         var audioData = BinaryData.FromBytes(_wholeAudioBufferBytes.ToArray());
         
