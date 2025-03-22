@@ -127,7 +127,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         var response = new VoiceResponse();
         var connect = new Connect();
 
-        connect.Stream(url: $"wss://{command.Host}/api/AiSpeechAssistant/connect/{command.From}/{command.To}", track: Stream.TrackEnum.BothTracks);
+        connect.Stream(url: $"wss://{command.Host}/api/AiSpeechAssistant/connect/{command.From}/{command.To}");
         
         response.Append(connect);
 
@@ -341,26 +341,23 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                             if (!string.IsNullOrEmpty(payload))
                             {
                                 _wholeAudioBufferBytes.AddRange(Convert.FromBase64String(payload));
-
-                                if (media.GetProperty("track").GetString() == "inbound")
-                                {
-                                    Log.Information("Appending twilio audio payload: {Payload}", payload);
-                                    _audioBuffer.Append(payload);
-                                    _payloadCount++;
                                 
-                                    if (_payloadCount >= _bufferThreshold)
+                                Log.Information("Appending twilio audio payload: {Payload}", payload);
+                                _audioBuffer.Append(payload);
+                                _payloadCount++;
+                            
+                                if (_payloadCount >= _bufferThreshold)
+                                {
+                                    var audioAppend = new
                                     {
-                                        var audioAppend = new
-                                        {
-                                            type = "input_audio_buffer.append",
-                                            audio = _audioBuffer.ToString()
-                                        };
-                                    
-                                        Log.Information("Sending buffer to openai websocket, the payload is: {AudioAppend}", audioAppend);
-                                        await SendToWebSocketAsync(_openaiClientWebSocket, audioAppend, cancellationToken);
-                                        _audioBuffer.Clear();
-                                        _payloadCount = 0;
-                                    }
+                                        type = "input_audio_buffer.append",
+                                        audio = _audioBuffer.ToString()
+                                    };
+                                
+                                    Log.Information("Sending buffer to openai websocket, the payload is: {AudioAppend}", audioAppend);
+                                    await SendToWebSocketAsync(_openaiClientWebSocket, audioAppend, cancellationToken);
+                                    _audioBuffer.Clear();
+                                    _payloadCount = 0;
                                 }
                             }
                             break;
