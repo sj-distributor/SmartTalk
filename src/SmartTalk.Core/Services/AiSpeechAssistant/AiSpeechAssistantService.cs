@@ -720,8 +720,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             ? "帮我用中文完整、快速、自然地复述一下客人订购的商品"
             : "Please help me to repeat the goods ordered by the customer in English completely, quickly and naturally";
 
-        var audioData = BinaryData.FromBytes(Convert.FromBase64String(_wholeAudioBuffer.ToString()));
         Log.Information("Whole audio buffer: \n" + _wholeAudioBuffer);
+        var audioData = BinaryData.FromBytes(Convert.FromBase64String(_wholeAudioBuffer.ToString()));
         
         ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
         List<ChatMessage> messages =
