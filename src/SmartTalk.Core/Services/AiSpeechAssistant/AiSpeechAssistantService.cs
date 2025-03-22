@@ -78,7 +78,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private int _payloadCount ;
     private StringBuilder _audioBuffer;
     private readonly int _bufferThreshold;
-    private StringBuilder _wholeAudioBuffer;
+    private List<byte> _wholeAudioBufferBytes;
 
     public AiSpeechAssistantService(
         IMapper mapper,
@@ -118,7 +118,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _payloadCount = 0;
         _audioBuffer = new StringBuilder();
         _bufferThreshold = bufferThreshold;
-        _wholeAudioBuffer = new StringBuilder();
+        _wholeAudioBufferBytes = [];
     }
 
     public CallAiSpeechAssistantResponse CallAiSpeechAssistant(CallAiSpeechAssistantCommand command)
@@ -341,7 +341,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                             {
                                 Log.Information("Appending twilio audio payload: {Payload}", payload);
                                 _audioBuffer.Append(payload);
-                                _wholeAudioBuffer.Append(payload);
+                                _wholeAudioBufferBytes.AddRange(Convert.FromBase64String(payload));
                                 _payloadCount++;
                                 
                                 if (_payloadCount >= _bufferThreshold)
@@ -714,8 +714,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             ? "帮我用中文完整、快速、自然地复述一下客人订购的商品"
             : "Please help me to repeat the goods ordered by the customer in English completely, quickly and naturally";
 
-        Log.Information("Whole audio buffer: \n" + _wholeAudioBuffer);
-        var audioData = BinaryData.FromBytes(Convert.FromBase64String(_wholeAudioBuffer.ToString()));
+        var audioData = BinaryData.FromBytes(_wholeAudioBufferBytes.ToArray());
         
         ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
         List<ChatMessage> messages =
