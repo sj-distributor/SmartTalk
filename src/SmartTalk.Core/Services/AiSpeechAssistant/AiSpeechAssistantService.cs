@@ -76,7 +76,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private AiSpeechAssistantStreamContextDto _aiSpeechAssistantStreamContext;
 
     private int _payloadCount ;
-    private bool _IsAiSpeaking;
     private StringBuilder _audioBuffer;
     private readonly int _bufferThreshold;
     private StringBuilder _wholeAudioBuffer;
@@ -117,7 +116,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _aiSpeechAssistantStreamContext = new AiSpeechAssistantStreamContextDto();
 
         _payloadCount = 0;
-        _IsAiSpeaking = false;
         _audioBuffer = new StringBuilder();
         _bufferThreshold = bufferThreshold;
         _wholeAudioBuffer = new StringBuilder();
@@ -343,9 +341,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                             {
                                 Log.Information("Appending twilio audio payload: {Payload}", payload);
                                 _audioBuffer.Append(payload);
+                                _wholeAudioBuffer.Append(payload);
                                 _payloadCount++;
-
-                                if (!_IsAiSpeaking) _wholeAudioBuffer.Append(payload);
                                 
                                 if (_payloadCount >= _bufferThreshold)
                                 {
@@ -412,8 +409,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                     if (jsonDocument?.RootElement.GetProperty("type").GetString() == "response.audio.delta" && jsonDocument.RootElement.TryGetProperty("delta", out var delta))
                     {
                         Log.Information("Sending openai response to twilio now");
-                        _IsAiSpeaking = true;
-                        _wholeAudioBuffer.Append(delta.GetString());
                         
                         var audioDelta = new
                         {
@@ -444,7 +439,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                     if (jsonDocument?.RootElement.GetProperty("type").GetString() == "input_audio_buffer.speech_started")
                     {
                         Log.Information("Speech started detected.");
-                        _IsAiSpeaking = false;
                         var clearEvent = new
                         {
                             @event = "clear",
