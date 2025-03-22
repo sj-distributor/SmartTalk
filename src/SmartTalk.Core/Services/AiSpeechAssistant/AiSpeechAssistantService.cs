@@ -717,6 +717,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             : "Help me to repeat the order completely, quickly and naturally in English:";
 
         var audioData = BinaryData.FromBytes(_wholeAudioBufferBytes.ToArray());
+        Log.Information("Whole audio base64: " + Convert.ToBase64String(_wholeAudioBufferBytes.ToArray()));
         
         ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
         List<ChatMessage> messages =
