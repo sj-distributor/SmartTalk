@@ -108,6 +108,7 @@ public partial class AiSpeechAssistantService
         {
             AgentId = agent.Id,
             ModelVoice = "alloy",
+            Name = command.AssistantName,
             AnsweringNumberId = number?.Id,
             AnsweringNumber = number?.Number,
             CreatedBy = _currentUser.Id.Value,
