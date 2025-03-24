@@ -189,4 +189,13 @@ public class AiSpeechAssistantController : ControllerBase
 
         return Ok(response);
     }
+    
+    [Route("assistant/number"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAssistantNumberResponse))]
+    public async Task<IActionResult> GetAssistantNumberAsync([FromBody] GetAssistantNumberRequest command)
+    {
+        var response = await _mediator.RequestAsync<GetAssistantNumberRequest, GetAssistantNumberResponse>(command).ConfigureAwait(false);
+
+        return Ok(response);
+    }
 }

@@ -13,6 +13,8 @@ public partial interface IAiSpeechAssistantService
     Task<GetAiSpeechAssistantKnowledgeResponse> GetAiSpeechAssistantKnowledgeAsync(GetAiSpeechAssistantKnowledgeRequest request, CancellationToken cancellationToken);
     
     Task<GetAiSpeechAssistantKnowledgeHistoryResponse> GetAiSpeechAssistantKnowledgeHistoryAsync(GetAiSpeechAssistantKnowledgeHistoryRequest request, CancellationToken cancellationToken);
+
+    Task<GetAssistantNumberResponse> GetAssistantNumberAsync(GetAssistantNumberRequest request, CancellationToken cancellationToken);
 }
 
 public partial class AiSpeechAssistantService
@@ -74,7 +76,19 @@ public partial class AiSpeechAssistantService
             }
         };
     }
-    
+
+    public async Task<GetAssistantNumberResponse> GetAssistantNumberAsync(GetAssistantNumberRequest request, CancellationToken cancellationToken)
+    {
+        var number = await _aiSpeechAssistantDataProvider.GetNumberAsync(request.NumberId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (number == null) throw new Exception("Could not found the number");
+        
+        return new GetAssistantNumberResponse
+        {
+            Data = _mapper.Map<NumberPoolDto>(number)
+        };
+    }
+
     private async Task EnrichAssistantsInfoAsycn(List<Domain.AISpeechAssistant.AiSpeechAssistant> assistants, CancellationToken cancellationToken)
     {
         var knowledges = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantActiveKnowledgesAsync(
