@@ -40,11 +40,11 @@ public partial class AiSpeechAssistantService
 
     public async Task<AddAiSpeechAssistantKnowledgeResponse> AddAiSpeechAssistantKnowledgeAsync(AddAiSpeechAssistantKnowledgeCommand command, CancellationToken cancellationToken)
     {
-        var preKnowledge = await UpdatePreviousKnowledgeIfRequiredAsync(command.AssistantId, false, cancellationToken).ConfigureAwait(false);
+        await UpdatePreviousKnowledgeIfRequiredAsync(command.AssistantId, false, cancellationToken).ConfigureAwait(false);
 
         var latestKnowledge = _mapper.Map<AiSpeechAssistantKnowledge>(command);
 
-        InitialKnowledge(preKnowledge, latestKnowledge);
+        await InitialKnowledgeAsync(latestKnowledge, cancellationToken).ConfigureAwait(false);
 
         await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgesAsync([latestKnowledge], cancellationToken: cancellationToken).ConfigureAwait(false);
         
@@ -203,19 +203,34 @@ public partial class AiSpeechAssistantService
         await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync([knowledge], cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
-    private void InitialKnowledge(AiSpeechAssistantKnowledge preKnowledge, AiSpeechAssistantKnowledge latestKnowledge)
+    private async Task InitialKnowledgeAsync(AiSpeechAssistantKnowledge latestKnowledge, CancellationToken cancellationToken)
     {
         latestKnowledge.IsActive = true;
         latestKnowledge.CreatedBy = _currentUser.Id.Value;
-        
-        if (preKnowledge == null)
-        {
-            latestKnowledge.Version = "1.0";
-            
-            return;
-        }
+        latestKnowledge.Version = await HandleKnowledgeVersionAsync(latestKnowledge, cancellationToken).ConfigureAwait(false);
+    }
 
-        latestKnowledge.Version = (double.Parse(preKnowledge.Version) + 0.1).ToString("F1");
+    private async Task<string> HandleKnowledgeVersionAsync(AiSpeechAssistantKnowledge latestKnowledge, CancellationToken cancellationToken)
+    {
+        var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeOrderByVersionAsync(latestKnowledge.AssistantId, cancellationToken).ConfigureAwait(false);
+        
+        if (knowledge == null) return "1.0";
+
+        var versionParts = knowledge.Version.Split('.');
+        if (versionParts.Length != 2 || !int.TryParse(versionParts[0], out var majorVersion) || !int.TryParse(versionParts[1], out var minorVersion))
+        {
+            return "1.0";
+        }
+        
+        if (minorVersion == 9)
+        {
+            majorVersion++;
+            minorVersion = 0;
+        }
+        else
+            minorVersion++;
+        
+        return $"{majorVersion}.{minorVersion}";
     }
 
     private async Task UpdateNumbersStatusAsync(List<int> answeringNumberIds, bool isUsed, CancellationToken cancellationToken)
