@@ -9,6 +9,6 @@ public class GetLinphoneHistoryDetailsRequest : IRequest
     public string Caller { get; set; }
 }
 
-public class GetLinphoneHistoryDetailsResponse : SmartTalkResponse<List<GetLinphoneHistoryDto>>
+public class GetLinphoneHistoryDetailsResponse : SmartTalkResponse<List<LinphoneHistoryDto>>
 {
 }

@@ -8,6 +8,6 @@ public class LinphoneMapping : Profile
 {
     public LinphoneMapping()
     {
-        CreateMap<LinphoneCdr, GetLinphoneHistoryDto>().ReverseMap();
+        CreateMap<LinphoneCdr, LinphoneHistoryDto>().ReverseMap();
     }
 }

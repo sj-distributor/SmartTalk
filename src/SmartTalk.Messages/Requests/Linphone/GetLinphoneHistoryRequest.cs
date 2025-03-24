@@ -7,8 +7,19 @@ namespace SmartTalk.Messages.Requests.Linphone;
 public class GetLinphoneHistoryRequest : IRequest
 {
     public List<int> AgentId { get; set; }
+
+    public int PageSize { get; set; } = 10;
+
+    public int PageIndex { get; set; } = 1;
 }
 
-public class GetLinphoneHistoryResponse : SmartTalkResponse<List<GetLinphoneHistoryDto>>
+public class GetLinphoneHistoryResponse : SmartTalkResponse<GetLinphoneHistoryDto>
 {
+}
+
+public class GetLinphoneHistoryDto
+{
+    public List<LinphoneHistoryDto> linphoneRecords { get; set; }
+
+    public int Count { get; set; }
 }
