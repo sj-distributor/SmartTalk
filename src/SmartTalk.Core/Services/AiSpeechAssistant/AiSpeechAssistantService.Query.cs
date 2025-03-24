@@ -79,9 +79,9 @@ public partial class AiSpeechAssistantService
 
     public async Task<GetAssistantNumberResponse> GetAssistantNumberAsync(GetAssistantNumberRequest request, CancellationToken cancellationToken)
     {
-        var number = await _aiSpeechAssistantDataProvider.GetNumberAsync(request.NumberId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var (assistant, number) = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantWithNumberAsync(request.AssistantId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        if (number == null) throw new Exception("Could not found the number");
+        if (assistant == null || number == null) throw new Exception($"Could not found the assistant: {assistant} and number: {number}");
         
         return new GetAssistantNumberResponse
         {
