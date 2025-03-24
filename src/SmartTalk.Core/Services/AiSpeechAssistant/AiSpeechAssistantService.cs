@@ -738,26 +738,15 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             }
             writer.Write(memoryStream.ToArray(), 0, _wholeAudioBufferBytes.Count);
         }
-
-        var fileContent = memoryStream.ToArray();
         
-        Log.Information("Whole audio base64: " +  Convert.ToBase64String(fileContent));
-
-        _backgroundJobClient.Enqueue<IAttachmentService>(x => x.UploadAttachmentAsync(new UploadAttachmentCommand
-        {
-            Attachment = new UploadAttachmentDto
-            {
-                FileContent = fileContent,
-                FileName = Guid.NewGuid() + ".wav"
-            }
-        }, CancellationToken.None));
-        
-        var audioData = BinaryData.FromBytes(fileContent);
+        var audioData = BinaryData.FromBytes(memoryStream.ToArray());
 
         ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
         List<ChatMessage> messages =
         [
-            new UserChatMessage(prompt + jsonDocument.GetProperty("arguments"))
+            new SystemChatMessage(systemPrompt),
+            new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
+            new UserChatMessage(prompt)
         ];
         
         ChatCompletionOptions options = new()
