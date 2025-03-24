@@ -42,6 +42,8 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task<Domain.AISpeechAssistant.AiSpeechAssistant> GetAiSpeechAssistantAsync(int assistantId, CancellationToken cancellationToken);
     
     Task UpdateAiSpeechAssistantsAsync(List<Domain.AISpeechAssistant.AiSpeechAssistant> assistants, bool forceSave = true, CancellationToken cancellationToken = default);
+
+    Task<List<AiSpeechAssistantKnowledge>> GetAiSpeechAssistantActiveKnowledgesAsync(List<int> assistantIds, CancellationToken cancellationToken);
 }
 
 public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
@@ -233,5 +235,11 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
         await _repository.UpdateAllAsync(assistants, cancellationToken).ConfigureAwait(false);
 
         if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<AiSpeechAssistantKnowledge>> GetAiSpeechAssistantActiveKnowledgesAsync(List<int> assistantIds, CancellationToken cancellationToken)
+    {
+        return await _repository.Query<AiSpeechAssistantKnowledge>()
+            .Where(x => assistantIds.Contains(x.Id) && x.IsActive).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }

@@ -41,4 +41,7 @@ public class AiSpeechAssistant : IEntity, IHasCreatedFields
     
     [Column("created_by")]
     public int CreatedBy { get; set; }
+    
+    [NotMapped]
+    public AiSpeechAssistantKnowledge Knowledge { get; set; }
 }

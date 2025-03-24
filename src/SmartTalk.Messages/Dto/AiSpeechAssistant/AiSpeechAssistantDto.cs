@@ -24,4 +24,6 @@ public class AiSpeechAssistantDto
     public DateTimeOffset CreatedDate { get; set; }
     
     public int CreatedBy { get; set; }
+    
+    public AiSpeechAssistantKnowledgeDto Knowledge { get; set; }
 }
