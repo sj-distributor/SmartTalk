@@ -244,7 +244,7 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
     public async Task<List<AiSpeechAssistantKnowledge>> GetAiSpeechAssistantActiveKnowledgesAsync(List<int> assistantIds, CancellationToken cancellationToken)
     {
         return await _repository.Query<AiSpeechAssistantKnowledge>()
-            .Where(x => assistantIds.Contains(x.Id) && x.IsActive).ToListAsync(cancellationToken).ConfigureAwait(false);
+            .Where(x => assistantIds.Contains(x.AssistantId) && x.IsActive).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<AiSpeechAssistantKnowledge> GetAiSpeechAssistantKnowledgeOrderByVersionAsync(int assistantId, CancellationToken cancellationToken)
