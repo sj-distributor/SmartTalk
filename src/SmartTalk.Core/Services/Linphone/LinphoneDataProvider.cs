@@ -17,7 +17,7 @@ public interface ILinphoneDataProvider : IScopedDependency
 
     Task<List<LinphoneSip>> GetLinphoneSipAsync(CancellationToken cancellationToken = default);
 
-    Task<(int, List<LinphoneHistoryDto>)> GetLinphoneHistoryAsync(List<int> agentIds = null, string caller = null,
+    Task<(int, List<LinphoneHistoryDto>)> GetLinphoneHistoryAsync(List<int> agentIds = null, string caller = null, string restaurantName = null,
         int? pageSize = 10, int? pageIndex = 1, CancellationToken cancellationToken = default);
 
     Task<List<GetAgentBySipDto>> GetAgentBySipAsync(List<string> sips, CancellationToken cancellationToken);
@@ -49,7 +49,7 @@ public class LinphoneDataProvider : ILinphoneDataProvider
         return await _repository.Query<LinphoneSip>().ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<(int, List<LinphoneHistoryDto>)> GetLinphoneHistoryAsync(List<int> agentIds = null, string caller = null,
+    public async Task<(int, List<LinphoneHistoryDto>)> GetLinphoneHistoryAsync(List<int> agentIds = null, string caller = null, string restaurantName = null,
         int? pageSize = 10, int? pageIndex = 1, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<LinphoneCdr>();
@@ -59,6 +59,13 @@ public class LinphoneDataProvider : ILinphoneDataProvider
 
         if (!string.IsNullOrEmpty(caller))
             query = query.Where(x => x.Caller == caller);
+
+        if (!string.IsNullOrEmpty(restaurantName))
+            query = from cdr in query
+                join agent in _repository.Query<Agent>() on cdr.AgentId equals agent.Id
+                join restaurant in _repository.Query<Restaurant>() on agent.RelateId equals restaurant.Id
+                where restaurant.Name.Contains(restaurantName)
+                select cdr;
 
         var count = await query.CountAsync(cancellationToken).ConfigureAwait(false);
         
