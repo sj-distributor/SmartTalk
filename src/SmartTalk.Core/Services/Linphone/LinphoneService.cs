@@ -66,7 +66,7 @@ public class LinphoneService : ILinphoneService
     public async Task<GetLinphoneHistoryResponse> GetLinphoneHistoryAsync(GetLinphoneHistoryRequest request, CancellationToken cancellationToken)
     {
         var (count, cdrs) = await _linphoneDataProvider.GetLinphoneHistoryAsync(
-            request.AgentId, pageSize: request.PageSize, pageIndex: request.PageIndex, cancellationToken: cancellationToken).ConfigureAwait(false);
+            request.AgentId, restaurantName: request.RestaurantName, pageSize: request.PageSize, pageIndex: request.PageIndex, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         return new GetLinphoneHistoryResponse
         {
