@@ -22,6 +22,8 @@ public partial interface IAiSpeechAssistantService
     Task<UpdateAiSpeechAssistantResponse> UpdateAiSpeechAssistantAsync(UpdateAiSpeechAssistantCommand command, CancellationToken cancellationToken);
     
     Task<DeleteAiSpeechAssistantResponse> DeleteAiSpeechAssistantAsync(DeleteAiSpeechAssistantCommand command, CancellationToken cancellationToken);
+
+    Task<UpdateAiSpeechAssistantNumberResponse> UpdateAiSpeechAssistantNumberAsync(UpdateAiSpeechAssistantNumberCommand command, CancellationToken cancellationToken);
 }
 
 public partial class AiSpeechAssistantService
@@ -102,6 +104,18 @@ public partial class AiSpeechAssistantService
         };
     }
 
+    public async Task<UpdateAiSpeechAssistantNumberResponse> UpdateAiSpeechAssistantNumberAsync(UpdateAiSpeechAssistantNumberCommand command, CancellationToken cancellationToken)
+    {
+        var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantAsync(command.AssistantId, cancellationToken).ConfigureAwait(false);
+
+        var number = await AssistantNumberSwitchAsync(assistant, cancellationToken).ConfigureAwait(false);
+        
+        return new UpdateAiSpeechAssistantNumberResponse
+        {
+            Data = _mapper.Map<NumberPoolDto>(number)
+        };
+    }
+
     private async Task<Domain.AISpeechAssistant.AiSpeechAssistant> InitialAiSpeechAssistantAsync(AddAiSpeechAssistantCommand command, CancellationToken cancellationToken)
     {
         var (agent, number) = await InitialAssistantRelatedInfoAsync(command.AssistantName, cancellationToken).ConfigureAwait(false);
@@ -141,6 +155,12 @@ public partial class AiSpeechAssistantService
         await _agentDataProvider.AddAgentAsync(agent, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var number = await _aiSpeechAssistantDataProvider.GetNumberAsync(isUsed: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (number != null)
+        {
+            number.IsUsed = true;
+            await _aiSpeechAssistantDataProvider.UpdateNumberPoolAsync([number], cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
         
         return (agent, number);
     }
@@ -230,5 +250,37 @@ public partial class AiSpeechAssistantService
         }
 
         await _aiSpeechAssistantDataProvider.UpdateNumberPoolAsync(numbers, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<NumberPool> AssistantNumberSwitchAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken)
+    {
+        var number = assistant.AnsweringNumberId.HasValue
+            ? await _aiSpeechAssistantDataProvider.GetNumberAsync(assistant.AnsweringNumberId.Value, cancellationToken: cancellationToken).ConfigureAwait(false)
+            : await _aiSpeechAssistantDataProvider.GetNumberAsync(isUsed: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        if (assistant.AnsweringNumberId.HasValue)
+        {
+            if (number == null) throw new Exception("Could not found the number");
+            
+            number.IsUsed = false;
+            await _aiSpeechAssistantDataProvider.UpdateNumberPoolAsync([number], cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            assistant.AnsweringNumberId = null;
+            assistant.AnsweringNumber = null;
+        }
+        else
+        {
+            if (number == null) throw new Exception("No available numbers.");
+            
+            number.IsUsed = true;
+            await _aiSpeechAssistantDataProvider.UpdateNumberPoolAsync([number], cancellationToken: cancellationToken).ConfigureAwait(false);
+            
+            assistant.AnsweringNumberId = number.Id;
+            assistant.AnsweringNumber = number.Number;
+        }
+        
+        await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync([assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        return number;
     }
 }
