@@ -37,6 +37,8 @@ public partial class AiSpeechAssistantService
         var (count, assistants) = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantsAsync(
             request.PageIndex, request.PageSize, cancellationToken).ConfigureAwait(false);
 
+        await EnrichAssistantsInfoAsycn(assistants, cancellationToken).ConfigureAwait(false);
+
         return new GetAiSpeechAssistantsResponse
         {
             Data = new GetAiSpeechAssistantsResponseData
@@ -71,5 +73,13 @@ public partial class AiSpeechAssistantService
                 Knowledges = _mapper.Map<List<AiSpeechAssistantKnowledgeDto>>(knowledges)
             }
         };
+    }
+    
+    private async Task EnrichAssistantsInfoAsycn(List<Domain.AISpeechAssistant.AiSpeechAssistant> assistants, CancellationToken cancellationToken)
+    {
+        var knowledges = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantActiveKnowledgesAsync(
+                assistants.Select(x => x.Id).ToList(), cancellationToken).ConfigureAwait(false);
+        
+        assistants.ForEach(x => x.Knowledge = knowledges.Where(k => k.AssistantId == x.Id).FirstOrDefault());
     }
 }
