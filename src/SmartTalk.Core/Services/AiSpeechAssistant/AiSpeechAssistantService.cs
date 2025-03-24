@@ -721,7 +721,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             : "Help me to repeat the order completely, quickly and naturally in English:";
         
         using var memoryStream = new MemoryStream();
-        await using (var writer = new WaveFileWriter(memoryStream, new WaveFormat(sampleRate: 8000, channels: 1)))
+        await using (var writer = new WaveFileWriter(memoryStream, new WaveFormat(8000, 8, channels: 1)))
         {
             writer.Write(_wholeAudioBufferBytes.ToArray(), 0, _wholeAudioBufferBytes.Count);
         }
