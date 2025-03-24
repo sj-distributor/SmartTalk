@@ -17,7 +17,7 @@ public interface ILinphoneDataProvider : IScopedDependency
 
     Task<List<LinphoneSip>> GetLinphoneSipAsync(CancellationToken cancellationToken = default);
 
-    Task<List<GetLinphoneHistoryDto>> GetLinphoneHistoryAsync(List<int> agentIds = null, string targgeter = null, CancellationToken cancellationToken = default);
+    Task<List<GetLinphoneHistoryDto>> GetLinphoneHistoryAsync(List<int> agentIds = null, string caller = null, CancellationToken cancellationToken = default);
 
     Task<List<GetAgentBySipDto>> GetAgentBySipAsync(List<string> sips, CancellationToken cancellationToken);
 }
@@ -48,15 +48,15 @@ public class LinphoneDataProvider : ILinphoneDataProvider
         return await _repository.Query<LinphoneSip>().ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<GetLinphoneHistoryDto>> GetLinphoneHistoryAsync(List<int> agentIds = null, string targgeter = null, CancellationToken cancellationToken = default)
+    public async Task<List<GetLinphoneHistoryDto>> GetLinphoneHistoryAsync(List<int> agentIds = null, string caller = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<LinphoneCdr>();
 
         if (agentIds is { Count: > 0 })
             query = query.Where(x => agentIds.Contains(x.AgentId));
 
-        if (!string.IsNullOrEmpty(targgeter))
-            query = query.Where(x => x.Targetter == targgeter);
+        if (!string.IsNullOrEmpty(caller))
+            query = query.Where(x => x.Caller == caller);
         
         return await query
             .OrderByDescending(x => x.CallDate)
@@ -70,14 +70,14 @@ public class LinphoneDataProvider : ILinphoneDataProvider
         if (sips is { Count: > 0 })
             query = query.Where(x => sips.Contains(x.Sip));
         
-        var agents = from sip in query
+        var agents = (from sip in query
             join agent in _repository.Query<Agent>() on sip.AgentId equals agent.Id
             join restaurant in _repository.Query<Restaurant>() on agent.RelateId equals restaurant.Id
             select new GetAgentBySipDto
             {
                 AgentId = agent.Id,
                 Restaurant = restaurant.Name
-            };
+            }).Distinct();
         
         return await agents.ToListAsync(cancellationToken).ConfigureAwait(false);
     }

@@ -84,7 +84,7 @@ public class LinphoneService : ILinphoneService
     {
         return new GetLinphoneHistoryDetailsResponse
         {
-            Data = await _linphoneDataProvider.GetLinphoneHistoryAsync(targgeter: request.Targetter, cancellationToken: cancellationToken).ConfigureAwait(false)
+            Data = await _linphoneDataProvider.GetLinphoneHistoryAsync(caller: request.Caller, cancellationToken: cancellationToken).ConfigureAwait(false)
         };
     }
 }
