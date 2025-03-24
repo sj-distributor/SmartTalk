@@ -16,6 +16,7 @@ using NAudio.Wave;
 using OpenAI.Chat;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Services.Agents;
+using SmartTalk.Core.Services.Attachments;
 using SmartTalk.Core.Services.Ffmpeg;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
@@ -34,6 +35,8 @@ using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
+using SmartTalk.Messages.Commands.Attachments;
+using SmartTalk.Messages.Dto.Attachments;
 using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using JsonSerializer = System.Text.Json.JsonSerializer;
@@ -722,10 +725,21 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         {
             writer.Write(_wholeAudioBufferBytes.ToArray(), 0, _wholeAudioBufferBytes.Count);
         }
+
+        var fileContent = memoryStream.ToArray();
         
-        Log.Information("Whole audio base64: " +  Convert.ToBase64String(memoryStream.ToArray()));
+        Log.Information("Whole audio base64: " +  Convert.ToBase64String(fileContent));
+
+        _backgroundJobClient.Enqueue<IAttachmentService>(x => x.UploadAttachmentAsync(new UploadAttachmentCommand
+        {
+            Attachment = new UploadAttachmentDto
+            {
+                FileContent = fileContent,
+                FileName = Guid.NewGuid() + ".wav"
+            }
+        }, CancellationToken.None));
         
-        var audioData = BinaryData.FromBytes(memoryStream.ToArray());
+        var audioData = BinaryData.FromBytes(fileContent);
 
         ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
         List<ChatMessage> messages =
