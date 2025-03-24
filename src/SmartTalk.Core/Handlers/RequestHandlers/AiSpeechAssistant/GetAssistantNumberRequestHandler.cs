@@ -5,7 +5,7 @@ using SmartTalk.Messages.Requests.AiSpeechAssistant;
 
 namespace SmartTalk.Core.Handlers.RequestHandlers.AiSpeechAssistant;
 
-public class GetAssistantNumberRequestHandler : IRequestHandler<GetAssistantNumberRequest, GetAssistantNumberResponse>
+public class GetAssistantNumberRequestHandler : IRequestHandler<GetAssistantByIdRequest, GetAssistantByIdResponse>
 {
     private readonly IAiSpeechAssistantService _assistantService;
 
@@ -14,7 +14,7 @@ public class GetAssistantNumberRequestHandler : IRequestHandler<GetAssistantNumb
         _assistantService = assistantService;
     }
 
-    public async Task<GetAssistantNumberResponse> Handle(IReceiveContext<GetAssistantNumberRequest> context, CancellationToken cancellationToken)
+    public async Task<GetAssistantByIdResponse> Handle(IReceiveContext<GetAssistantByIdRequest> context, CancellationToken cancellationToken)
     {
         return await _assistantService.GetAssistantNumberAsync(context.Message, cancellationToken).ConfigureAwait(false);
     }
