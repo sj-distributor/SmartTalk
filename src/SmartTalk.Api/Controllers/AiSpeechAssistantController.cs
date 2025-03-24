@@ -109,6 +109,15 @@ public class AiSpeechAssistantController : ControllerBase
         return Ok(response);
     }
     
+    [Route("assistant"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAssistantByIdResponse))]
+    public async Task<IActionResult> GetAssistantByIdAsync([FromBody] GetAssistantByIdRequest command)
+    {
+        var response = await _mediator.RequestAsync<GetAssistantByIdRequest, GetAssistantByIdResponse>(command).ConfigureAwait(false);
+
+        return Ok(response);
+    }
+    
     [Route("assistants"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAiSpeechAssistantsResponse))]
     public async Task<IActionResult> GetAiSpeechAssistantsAsync([FromQuery] GetAiSpeechAssistantsRequest request)
@@ -186,15 +195,6 @@ public class AiSpeechAssistantController : ControllerBase
     public async Task<IActionResult> UpdateAiSpeechAssistantNumberAsync([FromBody] UpdateAiSpeechAssistantNumberCommand command)
     {
         var response = await _mediator.SendAsync<UpdateAiSpeechAssistantNumberCommand, UpdateAiSpeechAssistantNumberResponse>(command).ConfigureAwait(false);
-
-        return Ok(response);
-    }
-    
-    [Route("assistant/info"), HttpGet]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAssistantNumberResponse))]
-    public async Task<IActionResult> GetAssistantNumberAsync([FromBody] GetAssistantNumberRequest command)
-    {
-        var response = await _mediator.RequestAsync<GetAssistantNumberRequest, GetAssistantNumberResponse>(command).ConfigureAwait(false);
 
         return Ok(response);
     }

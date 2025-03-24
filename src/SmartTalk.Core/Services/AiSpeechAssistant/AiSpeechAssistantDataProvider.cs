@@ -3,7 +3,6 @@ using SmartTalk.Core.Data;
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Domain.AIAssistant;
 using SmartTalk.Core.Domain.AISpeechAssistant;
-using SmartTalk.Messages.Dto.AiSpeechAssistant;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
 
@@ -48,7 +47,7 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
     
     Task<AiSpeechAssistantKnowledge> GetAiSpeechAssistantKnowledgeOrderByVersionAsync(int assistantId, CancellationToken cancellationToken);
     
-    Task<(Domain.AISpeechAssistant.AiSpeechAssistant Assistant, NumberPool Number)> GetAiSpeechAssistantWithNumberAsync(int assistantId, CancellationToken cancellationToken);
+    Task<Domain.AISpeechAssistant.AiSpeechAssistant> GetAiSpeechAssistantByIdAsync(int assistantId, CancellationToken cancellationToken);
 }
 
 public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
@@ -257,15 +256,9 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
             .FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<(Domain.AISpeechAssistant.AiSpeechAssistant Assistant, NumberPool Number)> GetAiSpeechAssistantWithNumberAsync(int assistantId, CancellationToken cancellationToken)
+    public async Task<Domain.AISpeechAssistant.AiSpeechAssistant> GetAiSpeechAssistantByIdAsync(int assistantId, CancellationToken cancellationToken)
     {
-        var query = from assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>()
-            join number in _repository.Query<NumberPool>() on assistant.AnsweringNumberId equals number.Id
-            where assistant.Id == assistantId
-            select new { assistant, number };
-
-        var result = await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
-
-        return (result?.assistant, result?.number);
+        return await _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>()
+            .Where(x => x.Id == assistantId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 }
