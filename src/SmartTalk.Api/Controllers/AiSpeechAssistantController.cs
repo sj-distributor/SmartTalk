@@ -111,9 +111,9 @@ public class AiSpeechAssistantController : ControllerBase
     
     [Route("assistant"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAiSpeechAssistantByIdResponse))]
-    public async Task<IActionResult> GetAssistantByIdAsync([FromBody] GetAiSpeechAssistantByIdRequest command)
+    public async Task<IActionResult> GetAiSpeechAssistantByIdAsync([FromQuery] GetAiSpeechAssistantByIdRequest request)
     {
-        var response = await _mediator.RequestAsync<GetAiSpeechAssistantByIdRequest, GetAiSpeechAssistantByIdResponse>(command).ConfigureAwait(false);
+        var response = await _mediator.RequestAsync<GetAiSpeechAssistantByIdRequest, GetAiSpeechAssistantByIdResponse>(request).ConfigureAwait(false);
 
         return Ok(response);
     }
