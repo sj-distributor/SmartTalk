@@ -17,7 +17,7 @@ public interface ILinphoneDataProvider : IScopedDependency
 
     Task<List<LinphoneSip>> GetLinphoneSipAsync(CancellationToken cancellationToken = default);
 
-    Task<List<GetLinphoneHistoryDto>> GetLinphoneHistoryAsync(List<int> agentIds, CancellationToken cancellationToken);
+    Task<List<GetLinphoneHistoryDto>> GetLinphoneHistoryAsync(List<int> agentIds = null, string targgeter = null, CancellationToken cancellationToken = default);
 
     Task<List<GetAgentBySipDto>> GetAgentBySipAsync(List<string> sips, CancellationToken cancellationToken);
 }
@@ -48,10 +48,17 @@ public class LinphoneDataProvider : ILinphoneDataProvider
         return await _repository.Query<LinphoneSip>().ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<GetLinphoneHistoryDto>> GetLinphoneHistoryAsync(List<int> agentIds, CancellationToken cancellationToken)
+    public async Task<List<GetLinphoneHistoryDto>> GetLinphoneHistoryAsync(List<int> agentIds = null, string targgeter = null, CancellationToken cancellationToken = default)
     {
-        return await _repository.Query<LinphoneCdr>()
-            .Where(x => agentIds.Contains(x.AgentId))
+        var query = _repository.Query<LinphoneCdr>();
+
+        if (agentIds != null && agentIds.Count > 0)
+            query = query.Where(x => agentIds.Contains(x.AgentId));
+
+        if (string.IsNullOrEmpty(targgeter))
+            query = query.Where(x => x.Targetter == targgeter);
+        
+        return await query
             .OrderByDescending(x => x.CallDate)
             .ProjectTo<GetLinphoneHistoryDto>(_mapper.ConfigurationProvider).ToListAsync(cancellationToken).ConfigureAwait(false);
     }

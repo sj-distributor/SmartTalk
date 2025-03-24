@@ -13,6 +13,8 @@ public interface ILinphoneService : IScopedDependency
     Task<GetLinphoneHistoryResponse> GetLinphoneHistoryAsync(GetLinphoneHistoryRequest request, CancellationToken cancellationToken);
 
     Task<GetAgentBySipResponse> GetAgentBySipAsync(GetAgentBySipRequest request, CancellationToken cancellationToken);
+
+    Task<GetLinphoneHistoryDetailsResponse> GetLinphoneHistoryDetailsAsync(GetLinphoneHistoryDetailsRequest request, CancellationToken cancellationToken);
 }
 
 public class LinphoneService : ILinphoneService
@@ -65,7 +67,7 @@ public class LinphoneService : ILinphoneService
     {
         return new GetLinphoneHistoryResponse
         {
-            Data = await _linphoneDataProvider.GetLinphoneHistoryAsync(request.AgentId, cancellationToken).ConfigureAwait(false)
+            Data = await _linphoneDataProvider.GetLinphoneHistoryAsync(request.AgentId, cancellationToken: cancellationToken).ConfigureAwait(false)
         };
     }
 
@@ -74,6 +76,15 @@ public class LinphoneService : ILinphoneService
         return new GetAgentBySipResponse
         {
             Data = await _linphoneDataProvider.GetAgentBySipAsync(request.Sips, cancellationToken).ConfigureAwait(false)
+        };
+    }
+
+    public async Task<GetLinphoneHistoryDetailsResponse> GetLinphoneHistoryDetailsAsync(
+        GetLinphoneHistoryDetailsRequest request, CancellationToken cancellationToken)
+    {
+        return new GetLinphoneHistoryDetailsResponse
+        {
+            Data = await _linphoneDataProvider.GetLinphoneHistoryAsync(targgeter: request.Targetter, cancellationToken: cancellationToken).ConfigureAwait(false)
         };
     }
 }
