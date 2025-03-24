@@ -75,6 +75,8 @@ public partial class AiSpeechAssistantService
     {
         var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantAsync(command.AssistantId, cancellationToken).ConfigureAwait(false);
         
+        await UpdateAssistantNumberIfRequiredAsync(assistant.AnsweringNumberId, command.AnsweringNumberId, cancellationToken).ConfigureAwait(false);
+        
         _mapper.Map(command, assistant);
 
         await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync([assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -207,29 +209,26 @@ public partial class AiSpeechAssistantService
         await _aiSpeechAssistantDataProvider.UpdateNumberPoolAsync(numbers, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task UpdateAssistantNumberIfRequiredAsync(int preNumberId, int currentNumberId, CancellationToken cancellationToken)
+    private async Task UpdateAssistantNumberIfRequiredAsync(int? preNumberId, int? currentNumberId, CancellationToken cancellationToken)
     {
         if (preNumberId == currentNumberId) return;
 
-        var numbers = await _aiSpeechAssistantDataProvider.GetNumbersAsync([preNumberId, currentNumberId], cancellationToken).ConfigureAwait(false);
+        var numberIds = new List<int>();
+        if (preNumberId.HasValue) numberIds.Add(preNumberId.Value);
+        if (currentNumberId.HasValue) numberIds.Add(currentNumberId.Value);
 
-        var updateNumbers = numbers.Where(number =>
+        if (numberIds.Count == 0) return;
+
+        var numbers = await _aiSpeechAssistantDataProvider.GetNumbersAsync(numberIds, cancellationToken).ConfigureAwait(false);
+    
+        if (numbers.Count == 0) return;
+
+        foreach (var number in numbers)
         {
-            if (number != null && number.Id == preNumberId)
-            {
-                number.IsUsed = false;
-                return true;
-            }
-            
-            if (number != null && number.Id == currentNumberId)
-            {
-                number.IsUsed = true;
-                return true;
-            }
+            if (number.Id == preNumberId) number.IsUsed = false;
+            if (number.Id == currentNumberId) number.IsUsed = true;
+        }
 
-            return false;
-        }).ToList();
-        
-        await _aiSpeechAssistantDataProvider.UpdateNumberPoolAsync(updateNumbers, cancellationToken: cancellationToken).ConfigureAwait(false);
+        await _aiSpeechAssistantDataProvider.UpdateNumberPoolAsync(numbers, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 }
