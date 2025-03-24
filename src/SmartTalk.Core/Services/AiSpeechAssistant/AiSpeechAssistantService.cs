@@ -12,6 +12,7 @@ using System.Net.WebSockets;
 using AutoMapper;
 using SmartTalk.Core.Constants;
 using Microsoft.AspNetCore.Http;
+using NAudio.Codecs;
 using NAudio.Wave;
 using OpenAI.Chat;
 using SmartTalk.Core.Domain.AISpeechAssistant;
@@ -83,7 +84,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private int _payloadCount ;
     private StringBuilder _audioBuffer;
     private readonly int _bufferThreshold;
-    private List<byte> _wholeAudioBufferBytes;
+    private List<byte[]> _wholeAudioBufferBytes;
 
     public AiSpeechAssistantService(
         IMapper mapper,
@@ -721,9 +722,19 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             : "Help me to repeat the order completely, quickly and naturally in English:";
         
         using var memoryStream = new MemoryStream();
-        await using (var writer = new WaveFileWriter(memoryStream, new WaveFormat(8000, 8, channels: 1)))
+        await using (var writer = new WaveFileWriter(memoryStream, new WaveFormat(8000, 16, channels: 1)))
         {
-            writer.Write(_wholeAudioBufferBytes.ToArray(), 0, _wholeAudioBufferBytes.Count);
+            foreach (var audio in _wholeAudioBufferBytes)
+            {
+                var index = 0;
+                for (; index < audio.Length; index++)
+                {
+                    var t = audio[index];
+                    var pcmSample = MuLawDecoder.MuLawToLinearSample(t);
+                    writer.WriteSample(pcmSample / 32768f);
+                }
+            }
+            writer.Write(memoryStream.ToArray(), 0, _wholeAudioBufferBytes.Count);
         }
 
         var fileContent = memoryStream.ToArray();
