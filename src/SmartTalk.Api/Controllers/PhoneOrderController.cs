@@ -3,15 +3,16 @@ using System.Text;
 using System.Text.Json;
 using System.Xml;
 using Mediator.Net;
+using Newtonsoft.Json.Linq;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
-using Newtonsoft.Json.Linq;
 using Serilog;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Core.Settings.Twilio;
+using SmartTalk.Messages.Commands.Linphone;
 using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Dto.SpeechMatics;
-using SmartTalk.Messages.Enums.PhoneOrder;
+using SmartTalk.Messages.Requests.Linphone;
 using SmartTalk.Messages.Requests.PhoneOrder;
 using Twilio;
 using Twilio.AspNet.Core;
@@ -535,4 +536,44 @@ public class PhoneOrderController : ControllerBase
     {
         public string CallSid { get; set; }
     }
+
+    #region Linphone
+    
+    [Route("linphone/add"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> AddLinphoneCdrAsync([FromBody] AddLinphoneCdrCommand command)
+    {
+        await _mediator.SendAsync(command).ConfigureAwait(false);
+
+        return Ok();
+    }
+    
+    [Route("linphone/get"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetLinphoneHistoryResponse))]
+    public async Task<IActionResult> GetLinphoneHistoryAsync([FromQuery] GetLinphoneHistoryRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetLinphoneHistoryRequest, GetLinphoneHistoryResponse>(request).ConfigureAwait(false);
+
+        return Ok(response);
+    }
+    
+    [Route("linphone/agent"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetLinphoneHistoryResponse))]
+    public async Task<IActionResult> GetAgentBySipAsync([FromQuery] GetAgentBySipRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetAgentBySipRequest, GetAgentBySipResponse>(request).ConfigureAwait(false);
+
+        return Ok(response);
+    }
+    
+    [Route("linphone/details"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetLinphoneHistoryDetailsResponse))]
+    public async Task<IActionResult> GetLinphoneHistoryDetailsAsync([FromQuery] GetLinphoneHistoryDetailsRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetLinphoneHistoryDetailsRequest, GetLinphoneHistoryDetailsResponse>(request).ConfigureAwait(false);
+
+        return Ok(response);
+    }
+    
+    #endregion
 }
