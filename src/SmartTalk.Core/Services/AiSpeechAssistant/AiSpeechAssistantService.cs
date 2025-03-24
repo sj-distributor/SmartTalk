@@ -345,7 +345,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                             var payload = media.GetProperty("payload").GetString();
                             if (!string.IsNullOrEmpty(payload))
                             {
-                                _wholeAudioBufferBytes.AddRange(Convert.FromBase64String(payload));
+                                var fromBase64String = Convert.FromBase64String(payload);
+                                
+                                _wholeAudioBufferBytes.AddRange([fromBase64String]);
                                 
                                 Log.Information("Appending twilio audio payload: {Payload}", payload);
                                 _audioBuffer.Append(payload);
