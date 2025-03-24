@@ -52,10 +52,10 @@ public class LinphoneDataProvider : ILinphoneDataProvider
     {
         var query = _repository.Query<LinphoneCdr>();
 
-        if (agentIds != null && agentIds.Count > 0)
+        if (agentIds is { Count: > 0 })
             query = query.Where(x => agentIds.Contains(x.AgentId));
 
-        if (string.IsNullOrEmpty(targgeter))
+        if (!string.IsNullOrEmpty(targgeter))
             query = query.Where(x => x.Targetter == targgeter);
         
         return await query
@@ -65,7 +65,12 @@ public class LinphoneDataProvider : ILinphoneDataProvider
     
     public async Task<List<GetAgentBySipDto>> GetAgentBySipAsync(List<string> sips, CancellationToken cancellationToken)
     {
-        var query = from sip in  _repository.Query<LinphoneSip>().Where(x => sips.Contains(x.Sip))
+        var query = _repository.Query<LinphoneSip>();
+
+        if (sips is { Count: > 0 })
+            query = query.Where(x => sips.Contains(x.Sip));
+        
+        var agents = from sip in query
             join agent in _repository.Query<Agent>() on sip.AgentId equals agent.Id
             join restaurant in _repository.Query<Restaurant>() on agent.RelateId equals restaurant.Id
             select new GetAgentBySipDto
@@ -74,6 +79,6 @@ public class LinphoneDataProvider : ILinphoneDataProvider
                 Restaurant = restaurant.Name
             };
         
-        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+        return await agents.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }
