@@ -65,9 +65,16 @@ public class LinphoneService : ILinphoneService
 
     public async Task<GetLinphoneHistoryResponse> GetLinphoneHistoryAsync(GetLinphoneHistoryRequest request, CancellationToken cancellationToken)
     {
+        var (count, cdrs) = await _linphoneDataProvider.GetLinphoneHistoryAsync(
+            request.AgentId, pageSize: request.PageSize, pageIndex: request.PageIndex, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
         return new GetLinphoneHistoryResponse
         {
-            Data = await _linphoneDataProvider.GetLinphoneHistoryAsync(request.AgentId, cancellationToken: cancellationToken).ConfigureAwait(false)
+            Data = new GetLinphoneHistoryDto
+            {
+                linphoneRecords = cdrs,
+                Count = count
+            }
         };
     }
 
@@ -84,7 +91,7 @@ public class LinphoneService : ILinphoneService
     {
         return new GetLinphoneHistoryDetailsResponse
         {
-            Data = await _linphoneDataProvider.GetLinphoneHistoryAsync(caller: request.Caller, cancellationToken: cancellationToken).ConfigureAwait(false)
+            Data = (await _linphoneDataProvider.GetLinphoneHistoryAsync(caller: request.Caller, cancellationToken: cancellationToken).ConfigureAwait(false)).Item2
         };
     }
 }

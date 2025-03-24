@@ -17,7 +17,8 @@ public interface ILinphoneDataProvider : IScopedDependency
 
     Task<List<LinphoneSip>> GetLinphoneSipAsync(CancellationToken cancellationToken = default);
 
-    Task<List<GetLinphoneHistoryDto>> GetLinphoneHistoryAsync(List<int> agentIds = null, string caller = null, CancellationToken cancellationToken = default);
+    Task<(int, List<LinphoneHistoryDto>)> GetLinphoneHistoryAsync(List<int> agentIds = null, string caller = null,
+        int? pageSize = 10, int? pageIndex = 1, CancellationToken cancellationToken = default);
 
     Task<List<GetAgentBySipDto>> GetAgentBySipAsync(List<string> sips, CancellationToken cancellationToken);
 }
@@ -48,7 +49,8 @@ public class LinphoneDataProvider : ILinphoneDataProvider
         return await _repository.Query<LinphoneSip>().ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<GetLinphoneHistoryDto>> GetLinphoneHistoryAsync(List<int> agentIds = null, string caller = null, CancellationToken cancellationToken = default)
+    public async Task<(int, List<LinphoneHistoryDto>)> GetLinphoneHistoryAsync(List<int> agentIds = null, string caller = null,
+        int? pageSize = 10, int? pageIndex = 1, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<LinphoneCdr>();
 
@@ -57,10 +59,15 @@ public class LinphoneDataProvider : ILinphoneDataProvider
 
         if (!string.IsNullOrEmpty(caller))
             query = query.Where(x => x.Caller == caller);
+
+        var count = await query.CountAsync(cancellationToken).ConfigureAwait(false);
         
-        return await query
+        if (pageSize.HasValue && pageIndex.HasValue)
+            query = query.Skip((pageIndex.Value - 1) * pageSize.Value).Take(pageSize.Value);
+        
+        return (count, await query
             .OrderByDescending(x => x.CallDate)
-            .ProjectTo<GetLinphoneHistoryDto>(_mapper.ConfigurationProvider).ToListAsync(cancellationToken).ConfigureAwait(false);
+            .ProjectTo<LinphoneHistoryDto>(_mapper.ConfigurationProvider).ToListAsync(cancellationToken).ConfigureAwait(false));
     }
     
     public async Task<List<GetAgentBySipDto>> GetAgentBySipAsync(List<string> sips, CancellationToken cancellationToken)
