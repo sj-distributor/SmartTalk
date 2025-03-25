@@ -769,7 +769,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         Log.Information("Analyze record to repeat order: {@completion}", completion);
 
-        var uLawAudio = await _ffmpegService.ConvertWavToULawAsync(completion.OutputAudio.AudioBytes.ToArray(), 8000, cancellationToken);
+        var uLawAudio = await _ffmpegService.ConvertWavToULawAsync(completion.OutputAudio.AudioBytes.ToArray(), cancellationToken);
 
         var repeatAudio = new
         {
