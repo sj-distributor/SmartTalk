@@ -65,10 +65,11 @@ public class LinphoneService : ILinphoneService
 
     public async Task<GetLinphoneHistoryResponse> GetLinphoneHistoryAsync(GetLinphoneHistoryRequest request, CancellationToken cancellationToken)
     {
-        var list = string.IsNullOrEmpty(request.AgentId) ? [] : request.AgentId.Split(',').Select(int.Parse).ToList();
+        var agentIds = string.IsNullOrEmpty(request.AgentId) ? [] : request.AgentId.Split(',').Select(int.Parse).ToList();
+        var status = string.IsNullOrEmpty(request.Status) ? [] : request.Status.Split(',').Select(Enum.Parse<LinphoneStatus>).ToList();
         
         var (count, cdrs) = await _linphoneDataProvider.GetLinphoneHistoryAsync(
-            list, restaurantName: request.RestaurantName, pageSize: request.PageSize, pageIndex: request.PageIndex, cancellationToken: cancellationToken).ConfigureAwait(false);
+            agentIds, restaurantName: request.RestaurantName, status: status, pageSize: request.PageSize, pageIndex: request.PageIndex, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         return new GetLinphoneHistoryResponse
         {
