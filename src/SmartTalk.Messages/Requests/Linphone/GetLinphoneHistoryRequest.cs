@@ -6,7 +6,7 @@ namespace SmartTalk.Messages.Requests.Linphone;
 
 public class GetLinphoneHistoryRequest : IRequest
 {
-    public List<int> AgentId { get; set; }
+    public string AgentId { get; set; }
 
     public string RestaurantName { get; set; }
 
