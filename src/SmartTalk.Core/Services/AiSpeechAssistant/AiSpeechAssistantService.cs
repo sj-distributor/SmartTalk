@@ -769,7 +769,18 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         Log.Information("Analyze record to repeat order: {@completion}", completion);
 
-        var uLawAudio = await _ffmpegService.ConvertWavToULawAsync(completion.OutputAudio.AudioBytes.ToArray(), cancellationToken);
+        var responseAudio = completion.OutputAudio.AudioBytes.ToArray();
+
+        _backgroundJobClient.Enqueue<IAttachmentService>(x => x.UploadAttachmentAsync(new UploadAttachmentCommand
+        {
+            Attachment = new UploadAttachmentDto
+            {
+                FileContent = responseAudio,
+                FileName = Guid.NewGuid() + ".wav"
+            }
+        }, CancellationToken.None));
+        
+        var uLawAudio = await _ffmpegService.ConvertWavToULawAsync(responseAudio, cancellationToken);
 
         var repeatAudio = new
         {
