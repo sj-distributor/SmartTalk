@@ -1,6 +1,7 @@
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using Serilog;
+using System.Text;
+using Newtonsoft.Json.Linq;
+using System.Globalization;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.Restaurants;
 using SmartTalk.Core.Domain.System;
@@ -215,41 +216,25 @@ public partial class AiSpeechAssistantService
 
     private string GenerateKnowledgePrompt(AiSpeechAssistantKnowledge latestKnowledge)
     {
-        var prompt = string.Empty;
-        
+        var prompt = new StringBuilder();
         var jsonData = JObject.Parse(latestKnowledge.Json);
+        var textInfo = CultureInfo.InvariantCulture.TextInfo;
 
-        if (jsonData.TryGetValue("brief", out var briefToken) && briefToken is JArray briefArray)
+        foreach (var property in jsonData.Properties())
         {
-            var briefList = briefArray.Select((item, index) => $"{index + 1}. {item.ToString()}").ToList();
-            prompt += "Brief：\n" + string.Join("\n", briefList) + "\n\n";
-        }
-            
-        if (jsonData.TryGetValue("location", out var locationToken) && locationToken is JArray locationArray)
-        {
-            var locationList = locationArray.Select((item, index) => $"{index + 1}. {item.ToString()}").ToList();
-            prompt += "Location：\n" + string.Join("\n", locationList) + "\n\n";
-        }
-            
-        if (jsonData.TryGetValue("noHaveLocation", out var noHaveLocationToken) && noHaveLocationToken is JArray noHaveLocationArray)
-        {
-            var noHaveLocationList = noHaveLocationArray.Select((item, index) => $"{index + 1}. {item.ToString()}").ToList();
-            prompt += "No Have Location：\n" + string.Join("\n", noHaveLocationList) + "\n\n";
-        }
-            
-        if (jsonData.TryGetValue("hours", out var hoursToken) && hoursToken is JArray hoursArray)
-        {
-            var hoursList = hoursArray.Select((item, index) => $"{index + 1}. {item.ToString()}").ToList();
-            prompt += "Hours：\n" + string.Join("\n", hoursList) + "\n\n";
-        }
-            
-        if (jsonData.TryGetValue("teachwords", out var teachwordsToken) && teachwordsToken is JArray teachwordsArray)
-        {
-            var teachwordsList = teachwordsArray.Select((item, index) => $"{index + 1}. {item.ToString()}").ToList();
-            prompt += "Teachwords：\n" + string.Join("\n", teachwordsList) + "\n\n";
+            var key = textInfo.ToTitleCase(property.Name);
+            var value = property.Value;
+
+            if (value is JArray array)
+            {
+                var list = array.Select((item, index) => $"{index + 1}. {item.ToString()}").ToList();
+                prompt.AppendLine($"{key}：\n{string.Join("\n", list)}\n");
+            }
+            else
+                prompt.AppendLine($"{key}： {value}\n");
         }
 
-        return prompt;
+        return prompt.ToString();
     }
 
     private async Task<string> HandleKnowledgeVersionAsync(AiSpeechAssistantKnowledge latestKnowledge, CancellationToken cancellationToken)
