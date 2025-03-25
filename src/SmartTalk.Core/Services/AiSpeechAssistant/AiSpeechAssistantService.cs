@@ -738,8 +738,18 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             }
             writer.Write(memoryStream.ToArray(), 0, _wholeAudioBufferBytes.Count);
         }
+
+        var fileContent = memoryStream.ToArray();
+        var audioData = BinaryData.FromBytes(fileContent);
         
-        var audioData = BinaryData.FromBytes(memoryStream.ToArray());
+        _backgroundJobClient.Enqueue<IAttachmentService>(x => x.UploadAttachmentAsync(new UploadAttachmentCommand
+        {
+            Attachment = new UploadAttachmentDto
+            {
+                FileContent = fileContent,
+                FileName = Guid.NewGuid() + ".wav"
+            }
+        }, CancellationToken.None));
 
         ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
         List<ChatMessage> messages =
