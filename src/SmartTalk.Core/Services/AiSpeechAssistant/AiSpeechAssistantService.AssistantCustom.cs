@@ -177,7 +177,8 @@ public partial class AiSpeechAssistantService
             Json = command.Json,
             AssistantId = assistant.Id,
             Greetings = command.Greetings,
-            CreatedBy = _currentUser.Id.Value
+            CreatedBy = _currentUser.Id.Value,
+            Prompt = GenerateKnowledgePrompt(command.Json)
         };
 
         await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgesAsync([knowledge], cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -210,14 +211,14 @@ public partial class AiSpeechAssistantService
     {
         latestKnowledge.IsActive = true;
         latestKnowledge.CreatedBy = _currentUser.Id.Value;
-        latestKnowledge.Prompt = GenerateKnowledgePrompt(latestKnowledge);
+        latestKnowledge.Prompt = GenerateKnowledgePrompt(latestKnowledge.Json);
         latestKnowledge.Version = await HandleKnowledgeVersionAsync(latestKnowledge, cancellationToken).ConfigureAwait(false);
     }
 
-    private string GenerateKnowledgePrompt(AiSpeechAssistantKnowledge latestKnowledge)
+    private string GenerateKnowledgePrompt(string json)
     {
         var prompt = new StringBuilder();
-        var jsonData = JObject.Parse(latestKnowledge.Json);
+        var jsonData = JObject.Parse(json);
         var textInfo = CultureInfo.InvariantCulture.TextInfo;
 
         foreach (var property in jsonData.Properties())
