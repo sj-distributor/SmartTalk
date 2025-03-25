@@ -10,6 +10,8 @@ public class LinphoneHistoryDto
 
     public string Caller { get; set; }
     
+    public string AnotherName { get; set; }
+    
     public string Targetter { get; set; }
 
     public LinphoneStatus Status { get; set; }

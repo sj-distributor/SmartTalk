@@ -7,6 +7,7 @@ using AutoMapper.QueryableExtensions;
 using SmartTalk.Core.Domain.Linphone;
 using SmartTalk.Messages.Dto.Linphone;
 using SmartTalk.Core.Domain.Restaurants;
+using SmartTalk.Messages.Enums.Linphone;
 using SmartTalk.Messages.Requests.Linphone;
 
 namespace SmartTalk.Core.Services.Linphone;
@@ -17,7 +18,7 @@ public interface ILinphoneDataProvider : IScopedDependency
 
     Task<List<LinphoneSip>> GetLinphoneSipAsync(CancellationToken cancellationToken = default);
 
-    Task<(int, List<LinphoneHistoryDto>)> GetLinphoneHistoryAsync(List<int> agentIds = null, string caller = null, string restaurantName = null,
+    Task<(int, List<LinphoneHistoryDto>)> GetLinphoneHistoryAsync(List<int> agentIds = null, string caller = null, string restaurantName = null, List<LinphoneStatus> status = null,
         int? pageSize = 10, int? pageIndex = 1, CancellationToken cancellationToken = default);
 
     Task<List<GetAgentBySipDto>> GetAgentBySipAsync(List<string> sips, CancellationToken cancellationToken);
@@ -49,32 +50,44 @@ public class LinphoneDataProvider : ILinphoneDataProvider
         return await _repository.Query<LinphoneSip>().ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<(int, List<LinphoneHistoryDto>)> GetLinphoneHistoryAsync(List<int> agentIds = null, string caller = null, string restaurantName = null,
-        int? pageSize = 10, int? pageIndex = 1, CancellationToken cancellationToken = default)
+    public async Task<(int, List<LinphoneHistoryDto>)> GetLinphoneHistoryAsync(List<int> agentIds = null, string caller = null,
+        string restaurantName = null, List<LinphoneStatus> status = null, int? pageSize = 10, int? pageIndex = 1, CancellationToken cancellationToken = default)
     {
-        var query = _repository.Query<LinphoneCdr>();
+        var originalQuery = _repository.Query<LinphoneCdr>();
 
         if (agentIds is { Count: > 0 })
-            query = query.Where(x => agentIds.Contains(x.AgentId));
+            originalQuery = originalQuery.Where(x => agentIds.Contains(x.AgentId));
 
         if (!string.IsNullOrEmpty(caller))
-            query = query.Where(x => x.Caller == caller);
+            originalQuery = originalQuery.Where(x => x.Caller == caller);
+
+        if (status is { Count: > 0 })
+            originalQuery = originalQuery.Where(x => status.Contains(x.Status));
+
+        var targetQuery = from cdr in originalQuery
+            join agent in _repository.Query<Agent>() on cdr.AgentId equals agent.Id
+            join restaurant in _repository.Query<Restaurant>() on agent.RelateId equals restaurant.Id
+            select new LinphoneHistoryDto
+            {
+                Id = cdr.Id,
+                CallDate = cdr.CallDate,
+                Caller = cdr.Caller,
+                AnotherName = restaurant.AnotherName,
+                Targetter = cdr.Targetter,
+                Status = cdr.Status
+            };
 
         if (!string.IsNullOrEmpty(restaurantName))
-            query = from cdr in query
-                join agent in _repository.Query<Agent>() on cdr.AgentId equals agent.Id
-                join restaurant in _repository.Query<Restaurant>() on agent.RelateId equals restaurant.Id
-                where restaurant.Name.Contains(restaurantName)
-                select cdr;
+            targetQuery = targetQuery.Where(x => x.AnotherName.Contains(restaurantName));
 
-        var count = await query.CountAsync(cancellationToken).ConfigureAwait(false);
+        var count = await targetQuery.CountAsync(cancellationToken).ConfigureAwait(false);
         
         if (pageSize.HasValue && pageIndex.HasValue)
-            query = query.Skip((pageIndex.Value - 1) * pageSize.Value).Take(pageSize.Value);
+            targetQuery = targetQuery.Skip((pageIndex.Value - 1) * pageSize.Value).Take(pageSize.Value);
         
-        return (count, await query
+        return (count, await targetQuery
             .OrderByDescending(x => x.CallDate)
-            .ProjectTo<LinphoneHistoryDto>(_mapper.ConfigurationProvider).ToListAsync(cancellationToken).ConfigureAwait(false));
+            .ToListAsync(cancellationToken).ConfigureAwait(false));
     }
     
     public async Task<List<GetAgentBySipDto>> GetAgentBySipAsync(List<string> sips, CancellationToken cancellationToken)

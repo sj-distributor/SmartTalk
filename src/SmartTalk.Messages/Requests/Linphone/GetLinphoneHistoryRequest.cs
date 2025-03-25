@@ -1,6 +1,7 @@
 using Mediator.Net.Contracts;
 using SmartTalk.Messages.Responses;
 using SmartTalk.Messages.Dto.Linphone;
+using SmartTalk.Messages.Enums.Linphone;
 
 namespace SmartTalk.Messages.Requests.Linphone;
 
@@ -9,6 +10,8 @@ public class GetLinphoneHistoryRequest : IRequest
     public string AgentId { get; set; }
 
     public string RestaurantName { get; set; }
+
+    public string Status { get; set; }
 
     public int PageSize { get; set; } = 10;
 

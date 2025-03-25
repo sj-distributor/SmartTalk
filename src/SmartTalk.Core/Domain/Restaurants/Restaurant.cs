@@ -13,6 +13,9 @@ public class Restaurant : IEntity
     
     [Column("name"), StringLength(128)]
     public string Name { get; set; }
+
+    [Column("another_name"), StringLength(128)]
+    public string AnotherName { get; set; }
     
     [Column("message"), StringLength(1024)]
     public string Message { get; set; }
