@@ -101,6 +101,8 @@ public partial class AiSpeechAssistantService
 
         await UpdateNumbersStatusAsync(assistants.Where(x => x.AnsweringNumberId.HasValue).Select(x => x.AnsweringNumberId.Value).ToList(), false, cancellationToken).ConfigureAwait(false);
 
+        await DeleteAssistantRelatedInfoAsync(assistants.Select(x => x.AgentId).ToList(), cancellationToken).ConfigureAwait(false);
+        
         return new DeleteAiSpeechAssistantResponse
         {
             Data = _mapper.Map<List<AiSpeechAssistantDto>>(assistants)
@@ -325,5 +327,20 @@ public partial class AiSpeechAssistantService
         await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync([assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
         
         return number;
+    }
+    
+    private async Task DeleteAssistantRelatedInfoAsync(List<int> agentIds, CancellationToken cancellationToken)
+    {
+        var agents = await _agentDataProvider.GetAgentsAsync(agentIds: agentIds, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (agents.Count == 0) return;
+
+        var domains = await _restaurantDataProvider.GetRestaurantsAsync(agents.Select(x => x.RelateId).ToList(), cancellationToken).ConfigureAwait(false);
+
+        await _agentDataProvider.DeleteAgentsAsync(agents, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (domains.Count == 0) return;
+
+        await _restaurantDataProvider.DeleteRestaurantsAsync(domains, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 }
