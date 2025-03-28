@@ -26,8 +26,8 @@ public interface IFfmpegService: IScopedDependency
     Task<byte[]> ConvertFileFormatAsync(byte[] file, TranscriptionFileType fileType, CancellationToken cancellationToken);
     
     Task<List<byte[]>> SpiltAudioAsync(byte[] audioBytes, double startTime, double endTime, CancellationToken cancellationToken);
-    
-    byte[] ConvertWavToULaw(byte[] wavBytes);
+
+    Task<byte[]> ConvertWavToULawAsync(byte[] wavBytes, CancellationToken cancellationToken);
 }
 
 public class FfmpegService : IFfmpegService
@@ -434,21 +434,50 @@ public class FfmpegService : IFfmpegService
         return audioDataList;
     }
      
+    public async Task<byte[]> ConvertWavToULawAsync(byte[] wavBytes, CancellationToken cancellationToken)
+    {
+        return await Task.Run(() => ConvertWavToULaw(wavBytes), cancellationToken);
+    }
+     
     public byte[] ConvertWavToULaw(byte[] wavBytes)
     {
-        using var inputStream = new MemoryStream(wavBytes);
-        using var reader = new WaveFileReader(inputStream);
+        if (wavBytes == null || wavBytes.Length == 0)
+            throw new ArgumentException("输入音频数据为空");
 
-        var resampledPcm = new WaveFormat(8000, 16, 1);
-        using var resampler = new MediaFoundationResampler(reader, resampledPcm);
+        try
+        {
+            using var inputStream = new MemoryStream(wavBytes);
+            using var reader = new WaveFileReader(inputStream);
+            
+            if (reader.WaveFormat.Encoding == WaveFormatEncoding.MuLaw && 
+                reader.WaveFormat.SampleRate == 8000)
+            {
+                return wavBytes;
+            }
 
-        var ulawFormat = WaveFormat.CreateMuLawFormat(8000, 1);
-        
-        using var conversionStream = new WaveFormatConversionProvider(ulawFormat, resampler);
-        using var outputStream = new MemoryStream();
-        
-        WaveFileWriter.WriteWavFileToStream(outputStream, conversionStream);
-        
-        return outputStream.ToArray();
+            var targetFormat = WaveFormat.CreateMuLawFormat(8000, 1);
+                
+            using var outputStream = new MemoryStream();
+            const int bufferSize = 4096;
+            using (var conversionStream = new WaveFormatConversionStream(targetFormat, reader))
+            {
+                byte[] buffer = new byte[bufferSize];
+                int bytesRead;
+                while ((bytesRead = conversionStream.Read(buffer, 0, buffer.Length)) > 0)
+                {
+                    outputStream.Write(buffer, 0, bytesRead);
+                }
+            }
+                    
+            return outputStream.ToArray();
+        }
+        catch (EndOfStreamException)
+        {
+            throw new InvalidDataException("WAV文件头损坏");
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException("音频处理失败: {@Ex}", ex);
+        }
     }
 }

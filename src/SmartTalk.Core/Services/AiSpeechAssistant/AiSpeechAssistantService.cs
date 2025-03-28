@@ -762,7 +762,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             }
         }, CancellationToken.None));
         
-        var uLawAudio = _ffmpegService.ConvertWavToULaw(responseAudio);
+        var uLawAudio = await _ffmpegService.ConvertWavToULawAsync(responseAudio, cancellationToken);
 
         var repeatAudio = new
         {
