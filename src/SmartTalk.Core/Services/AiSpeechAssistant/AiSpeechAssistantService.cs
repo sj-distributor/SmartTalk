@@ -145,7 +145,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         if (string.IsNullOrEmpty(prompt)) return new AiSpeechAssistantConnectCloseEvent();
 
         var humanContact = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantHumanContactByAssistantIdAsync(assistant.Id, cancellationToken).ConfigureAwait(false);
-        
+
         await ConnectOpenAiRealTimeSocketAsync(assistant, prompt, cancellationToken).ConfigureAwait(false);
         
         _aiSpeechAssistantStreamContext = new AiSpeechAssistantStreamContextDto
