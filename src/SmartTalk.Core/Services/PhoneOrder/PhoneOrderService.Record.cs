@@ -60,7 +60,7 @@ public partial class PhoneOrderService
         
         var record = new PhoneOrderRecord { SessionId = Guid.NewGuid().ToString(), AgentId = recordInfo.Agent.Id, Language = TranscriptionLanguage.Chinese, CreatedDate = recordInfo.StartDate };
         
-        await AddPhoneOrderRecordAsync(record, PhoneOrderRecordStatus.SavedUrl, cancellationToken).ConfigureAwait(false);
+        await AddPhoneOrderRecordAsync(record, PhoneOrderRecordStatus.Recieved, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Phone order record saved url:{@record}", record);
         
@@ -73,7 +73,6 @@ public partial class PhoneOrderService
         
         record.TranscriptionText = transcription;
         record.Language = SelectLanguageEnum(detection.Language);
-        await AddPhoneOrderRecordAsync(record, PhoneOrderRecordStatus.Recieved, cancellationToken).ConfigureAwait(false);
         
         if (await CheckPhoneOrderRecordDurationAsync(command.RecordContent, cancellationToken).ConfigureAwait(false))
         {
