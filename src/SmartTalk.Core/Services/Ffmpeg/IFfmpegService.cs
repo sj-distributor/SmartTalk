@@ -433,50 +433,70 @@ public class FfmpegService : IFfmpegService
 
         return audioDataList;
     }
-     
-    public async Task<byte[]> ConvertWavToULawAsync(byte[] wavBytes, CancellationToken cancellationToken)
+
+    public async Task<byte[]> ConvertWavToULawAsync(byte[] wavBytes, CancellationToken cancellationToken = default)
     {
         return await Task.Run(() => ConvertWavToULaw(wavBytes), cancellationToken);
     }
      
     public byte[] ConvertWavToULaw(byte[] wavBytes)
     {
-        try
+        using (var inputStream = new MemoryStream(wavBytes))
+        using (var reader = new WaveFileReader(inputStream))
         {
-            using var inputStream = new MemoryStream(wavBytes);
-            using var reader = new WaveFileReader(inputStream);
-            
-            if (reader.WaveFormat.Encoding == WaveFormatEncoding.MuLaw && 
-                reader.WaveFormat.SampleRate == 8000)
+            // Ensure the input is PCM format
+            WaveStream pcmStream = reader;
+            if (reader.WaveFormat.Encoding != WaveFormatEncoding.Pcm)
             {
-                return wavBytes;
+                pcmStream = WaveFormatConversionStream.CreatePcmStream(reader);
             }
 
-            var targetFormat = WaveFormat.CreateMuLawFormat(8000, 1);
-                
-            using var outputStream = new MemoryStream();
-            const int bufferSize = 4096;
-            using (var conversionStream = new WaveFormatConversionStream(targetFormat, reader))
+            // Resample to 8000 Hz if necessary
+            if (pcmStream.WaveFormat.SampleRate != 8000)
             {
-                var buffer = new byte[bufferSize];
-                int bytesRead;
-                while ((bytesRead = conversionStream.Read(buffer, 0, buffer.Length)) > 0)
-                {
-                    outputStream.Write(buffer, 0, bytesRead);
-                }
+                var resampler = new MediaFoundationResampler(pcmStream, new WaveFormat(8000, pcmStream.WaveFormat.BitsPerSample, pcmStream.WaveFormat.Channels));
+                resampler.ResamplerQuality = 60; // Quality from 1 to 60
+                pcmStream = new WaveProviderToWaveStream(resampler); // Wrap the resampler
             }
-                    
-            return outputStream.ToArray();
+
+            // Convert to μ-law
+            var ulawFormat = WaveFormat.CreateMuLawFormat(8000, pcmStream.WaveFormat.Channels);
+            using (var muLawStream = new WaveFormatConversionStream(ulawFormat, pcmStream))
+            using (var outputStream = new MemoryStream())
+            {
+                WaveFileWriter.WriteWavFileToStream(outputStream, muLawStream);
+                return outputStream.ToArray();
+            }
         }
-        catch (EndOfStreamException)
+    }
+    
+    public class WaveProviderToWaveStream : WaveStream
+    {
+        private readonly IWaveProvider sourceProvider;
+        private readonly WaveFormat waveFormat;
+        private long position;
+
+        public WaveProviderToWaveStream(IWaveProvider sourceProvider)
         {
-            Log.Error("WAV文件头损坏");
-        }
-        catch (Exception ex)
-        {
-            Log.Error("音频处理失败: {@Ex}", ex);
+            this.sourceProvider = sourceProvider ?? throw new ArgumentNullException(nameof(sourceProvider));
+            this.waveFormat = sourceProvider.WaveFormat ?? throw new ArgumentNullException(nameof(sourceProvider.WaveFormat));
         }
 
-        return null;
+        public override WaveFormat WaveFormat => waveFormat;
+
+        public override long Length => long.MaxValue; // Unknown length
+
+        public override long Position
+        {
+            get => position;
+            set => throw new NotSupportedException();
+        }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            var bytesRead = sourceProvider.Read(buffer, offset, count);
+            position += bytesRead;
+            return bytesRead;
+        }
     }
 }
