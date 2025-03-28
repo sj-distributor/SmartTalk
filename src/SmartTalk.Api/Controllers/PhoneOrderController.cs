@@ -118,6 +118,7 @@ public class PhoneOrderController : ControllerBase
         return Ok();
     }
     
+    [AllowAnonymous]
     [Route("linphone/get"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetLinphoneHistoryResponse))]
     public async Task<IActionResult> GetLinphoneHistoryAsync([FromQuery] GetLinphoneHistoryRequest request)
@@ -127,6 +128,7 @@ public class PhoneOrderController : ControllerBase
         return Ok(response);
     }
     
+    [AllowAnonymous]
     [Route("linphone/agent"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetLinphoneHistoryResponse))]
     public async Task<IActionResult> GetAgentBySipAsync([FromQuery] GetAgentBySipRequest request)
@@ -136,6 +138,7 @@ public class PhoneOrderController : ControllerBase
         return Ok(response);
     }
     
+    [AllowAnonymous]
     [Route("linphone/details"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetLinphoneHistoryDetailsResponse))]
     public async Task<IActionResult> GetLinphoneHistoryDetailsAsync([FromQuery] GetLinphoneHistoryDetailsRequest request)
