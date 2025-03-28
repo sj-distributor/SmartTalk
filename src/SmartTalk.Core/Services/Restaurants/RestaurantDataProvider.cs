@@ -24,6 +24,8 @@ public interface IRestaurantDataProvider : IScopedDependency
     
     Task<(int Count, List<RestaurantMenuItem> MenuItems)> GetRestaurantMenuItemsInPageAsync(
         int? pageIndex = null, int? pageSize = null, int? restaurantId = null, string keyword = null, CancellationToken cancellationToken = default);
+
+    Task DeleteRestaurantsAsync(List<Restaurant> restaurants, bool forceSave = true, CancellationToken cancellationToken = default);
 }
 
 public class RestaurantDataProvider : IRestaurantDataProvider
@@ -125,5 +127,12 @@ public class RestaurantDataProvider : IRestaurantDataProvider
         var menuItems = await query.ToListAsync(cancellationToken).ConfigureAwait(false);
 
         return (count, menuItems);
+    }
+    
+    public async Task DeleteRestaurantsAsync(List<Restaurant> restaurants, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.DeleteAllAsync(restaurants, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 }

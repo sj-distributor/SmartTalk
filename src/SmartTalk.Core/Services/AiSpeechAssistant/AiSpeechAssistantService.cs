@@ -13,11 +13,15 @@ using AutoMapper;
 using SmartTalk.Core.Constants;
 using Microsoft.AspNetCore.Http;
 using OpenAI.Chat;
+using SmartTalk.Core.Domain.AISpeechAssistant;
+using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
+using SmartTalk.Core.Services.Identity;
 using SmartTalk.Messages.Constants;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.PhoneOrder;
+using SmartTalk.Core.Services.Restaurants;
 using SmartTalk.Messages.Dto.OpenAi;
 using Twilio.Rest.Api.V2010.Account;
 using SmartTalk.Core.Settings.OpenAi;
@@ -35,7 +39,7 @@ using RecordingResource = Twilio.Rest.Api.V2010.Account.Call.RecordingResource;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
 
-public interface IAiSpeechAssistantService : IScopedDependency
+public partial interface IAiSpeechAssistantService : IScopedDependency
 {
     CallAiSpeechAssistantResponse CallAiSpeechAssistant(CallAiSpeechAssistantCommand command);
 
@@ -50,40 +54,49 @@ public interface IAiSpeechAssistantService : IScopedDependency
     Task HangupCallAsync(string callSid, CancellationToken cancellationToken);
 }
 
-public class AiSpeechAssistantService : IAiSpeechAssistantService
+public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 {
     private readonly IMapper _mapper;
+    private readonly ICurrentUser _currentUser;
     private readonly OpenAiSettings _openAiSettings;
     private readonly TwilioSettings _twilioSettings;
     private readonly ISmartiesClient _smartiesClient;
     private readonly ClientWebSocket _openaiWebSocket;
     private readonly ZhiPuAiSettings _zhiPuAiSettings;
     private readonly IPhoneOrderService _phoneOrderService;
+    private readonly IAgentDataProvider _agentDataProvider;
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
+    private readonly IRestaurantDataProvider _restaurantDataProvider;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
 
     public AiSpeechAssistantService(
         IMapper mapper,
+        ICurrentUser currentUser,
         OpenAiSettings openAiSettings,
         TwilioSettings twilioSettings,
         ISmartiesClient smartiesClient,
         ZhiPuAiSettings zhiPuAiSettings,
         IPhoneOrderService phoneOrderService,
+        IAgentDataProvider agentDataProvider,
         ISmartTalkHttpClientFactory httpClientFactory,
+        IRestaurantDataProvider restaurantDataProvider,
         IPhoneOrderDataProvider phoneOrderDataProvider,
         ISmartTalkBackgroundJobClient backgroundJobClient,
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
         _mapper = mapper;
+        _currentUser = currentUser;
         _openAiSettings = openAiSettings;
         _twilioSettings = twilioSettings;
         _smartiesClient = smartiesClient;
         _zhiPuAiSettings = zhiPuAiSettings;
+        _agentDataProvider = agentDataProvider;
         _phoneOrderService = phoneOrderService;
         _httpClientFactory = httpClientFactory;
         _backgroundJobClient = backgroundJobClient;
+        _restaurantDataProvider = restaurantDataProvider;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
 
@@ -108,24 +121,25 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
     {
         Log.Information($"The call from {command.From} to {command.To} is connected");
 
-        var (assistant, knowledgeBase) = await BuildingAiSpeechAssistantKnowledgeBaseAsync(command.From, command.To, command.AssistantId, cancellationToken).ConfigureAwait(false);
+        var (assistant, knowledge, prompt) = await BuildingAiSpeechAssistantKnowledgeBaseAsync(command.From, command.To, command.AssistantId, cancellationToken).ConfigureAwait(false);
 
-        if (string.IsNullOrEmpty(knowledgeBase)) return new AiSpeechAssistantConnectCloseEvent();
+        if (string.IsNullOrEmpty(prompt)) return new AiSpeechAssistantConnectCloseEvent();
 
         var humanContact = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantHumanContactByAssistantIdAsync(assistant.Id, cancellationToken).ConfigureAwait(false);
 
-        await ConnectOpenAiRealTimeSocketAsync(assistant, knowledgeBase, cancellationToken).ConfigureAwait(false);
+        await ConnectOpenAiRealTimeSocketAsync(assistant, prompt, cancellationToken).ConfigureAwait(false);
         
         var context = new AiSpeechAssistantStreamContextDto
         {
             Host = command.Host,
-            LastPrompt = knowledgeBase,
+            LastPrompt = prompt,
             HumanContactPhone = humanContact.HumanPhone,
             LastUserInfo = new AiSpeechAssistantUserInfoDto
             {
                 PhoneNumber = command.From
             },
-            Assistant = _mapper.Map<AiSpeechAssistantDto>(assistant)
+            Assistant = _mapper.Map<AiSpeechAssistantDto>(assistant),
+            Knowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge)
         };
         
         var receiveFromTwilioTask = ReceiveFromTwilioAsync(command.TwilioWebSocket, _openaiWebSocket, context);
@@ -157,8 +171,6 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
 
         var (record, agent, aiSpeechAssistant) = await _phoneOrderDataProvider.GetRecordWithAgentAndAssistantAsync(command.CallSid, cancellationToken).ConfigureAwait(false);
         
-        var knowledge = await _phoneOrderDataProvider.GetKnowledgePromptByAssistantIdAsync(aiSpeechAssistant.Id, cancellationToken).ConfigureAwait(false);
-        
         Log.Information("Get phone order record: {@record}", record);
 
         record.Url = command.RecordingUrl;
@@ -169,9 +181,9 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         var audioData = BinaryData.FromBytes(audioFileRawBytes);
         List<ChatMessage> messages =
         [
-            new SystemChatMessage(string.IsNullOrEmpty(knowledge?.Prompt)
+            new SystemChatMessage(string.IsNullOrEmpty(aiSpeechAssistant?.CustomRecordAnalyzePrompt)
                 ? "你是一名電話錄音的分析員，通過聽取錄音內容和語氣情緒作出精確分析，冩出一份分析報告。\n\n分析報告的格式：交談主題：xxx\n\n 內容摘要:xxx \n\n 客人情感與情緒: xxx \n\n 待辦事件: \n1.xxx\n2.xxx \n\n 客人下單內容(如果沒有則忽略)：1. 牛肉(1箱)\n2.雞腿肉(1箱)" 
-                : knowledge.Prompt),
+                : aiSpeechAssistant.CustomRecordAnalyzePrompt),
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
             new UserChatMessage("幫我根據錄音生成分析報告：")
         ];
@@ -211,26 +223,26 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
         );
     }
 
-    private async Task<(Domain.AISpeechAssistant.AiSpeechAssistant Assistant, string Prompt)> BuildingAiSpeechAssistantKnowledgeBaseAsync(string from, string to, int? assistantId, CancellationToken cancellationToken)
+    private async Task<(Domain.AISpeechAssistant.AiSpeechAssistant assistant, AiSpeechAssistantKnowledge knowledge, string finalPrompt)> BuildingAiSpeechAssistantKnowledgeBaseAsync(string from, string to, int? assistantId, CancellationToken cancellationToken)
     {
-        var (assistant, promptTemplate, userProfile) = await _aiSpeechAssistantDataProvider
+        var (assistant, knowledge, userProfile) = await _aiSpeechAssistantDataProvider
             .GetAiSpeechAssistantInfoByNumbersAsync(from, to, assistantId, cancellationToken).ConfigureAwait(false);
         
-        Log.Information("Matching Ai speech assistant: {@Assistant}、{@PromptTemplate}、{@UserProfile}", assistant, promptTemplate, userProfile);
+        Log.Information("Matching Ai speech assistant: {@Assistant}、{@Knowledge}、{@UserProfile}", assistant, knowledge, userProfile);
 
-        if (assistant == null || promptTemplate == null || string.IsNullOrEmpty(promptTemplate.Template)) return (assistant, string.Empty);
+        if (assistant == null || knowledge == null || string.IsNullOrEmpty(knowledge.Prompt)) return (assistant, knowledge, string.Empty);
 
         var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
         
-        var finalPrompt = promptTemplate.Template
+        var finalPrompt = knowledge.Prompt
             .Replace("#{user_profile}", string.IsNullOrEmpty(userProfile?.ProfileJson) ? " " : userProfile.ProfileJson)
             .Replace("#{current_time}", currentTime)
             .Replace("#{customer_phone}", from.StartsWith("+1") ? from[2..] : from);
         
         Log.Information($"The final prompt: {finalPrompt}");
 
-        return (assistant, finalPrompt);
+        return (assistant, knowledge, finalPrompt);
     }
 
     private async Task ConnectOpenAiRealTimeSocketAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, string prompt, CancellationToken cancellationToken)
@@ -436,7 +448,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                         }
                     }
 
-                    if (!context.InitialConversationSent && !string.IsNullOrEmpty(context.Assistant.Greetings))
+                    if (!context.InitialConversationSent && !string.IsNullOrEmpty(context.Knowledge.Greetings))
                     {
                         await SendInitialConversationItem(openAiWebSocket, context);
                         context.InitialConversationSent = true;
@@ -675,7 +687,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
                     new
                     {
                         type = "input_text",
-                        text = $"Greet the user with: '{context.Assistant.Greetings}'"
+                        text = $"Greet the user with: '{context.Knowledge.Greetings}'"
                     }
                 }
             }

@@ -16,7 +16,7 @@ public class AiSpeechAssistant : IEntity, IHasCreatedFields
     public string Name { get; set; }
     
     [Column("answering_number_id")]
-    public int AnsweringNumberId { get; set; }
+    public int? AnsweringNumberId { get; set; }
     
     [Column("answering_number")]
     public string AnsweringNumber { get; set; }
@@ -33,9 +33,15 @@ public class AiSpeechAssistant : IEntity, IHasCreatedFields
     [Column("agent_id")]
     public int AgentId { get; set; }
     
+    [Column("custom_record_analyze_prompt")]
+    public string CustomRecordAnalyzePrompt { get; set; }
+    
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
     
     [Column("created_by")]
     public int CreatedBy { get; set; }
+    
+    [NotMapped]
+    public AiSpeechAssistantKnowledge Knowledge { get; set; }
 }

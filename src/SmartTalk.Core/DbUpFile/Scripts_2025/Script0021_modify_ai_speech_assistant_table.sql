@@ -6,4 +6,4 @@ ALTER TABLE ai_speech_assistant
     ADD COLUMN answering_number_id INT NOT NULL,
     ADD COLUMN created_by INT NOT NULL;
 
-ALTER TABLE ai_speech_assistant DROP COLUMN greetings, DROP COLUMN custom_record_analyze_prompt;
+ALTER TABLE ai_speech_assistant DROP COLUMN greetings;
