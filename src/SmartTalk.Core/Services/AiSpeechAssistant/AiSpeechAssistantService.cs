@@ -900,7 +900,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                 voice = string.IsNullOrEmpty(assistant.ModelVoice) ? "alloy" : assistant.ModelVoice,
                 instructions = prompt,
                 modalities = new[] { "text", "audio" },
-                temperature = 0.8,
+                temperature = _openAiSettings.RealtimeTemperature,
                 input_audio_transcription = new { model = "whisper-1" },
                 tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config)
             }
