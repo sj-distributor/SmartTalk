@@ -16,6 +16,9 @@ public class LinphoneSip : IEntity, IHasCreatedFields
     [Column("sip")]
     public string Sip { get; set; }
 
+    [Column("related_agent_ids")]
+    public string RelatedAgentIds { get; set; }
+
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
 }
