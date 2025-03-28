@@ -97,15 +97,40 @@ public class LinphoneDataProvider : ILinphoneDataProvider
         if (sips is { Count: > 0 })
             query = query.Where(x => sips.Contains(x.Sip));
         
-        var agents = (from sip in query
-            join agent in _repository.Query<Agent>() on sip.AgentId equals agent.Id
-            join restaurant in _repository.Query<Restaurant>() on agent.RelateId equals restaurant.Id
-            select new GetAgentBySipDto
-            {
-                AgentId = agent.Id,
-                Restaurant = restaurant.Name
-            }).Distinct();
+        var sipData = await query
+            .Select(sip => new 
+            { 
+                sip.AgentId,
+                sip.RelatedAgentIds 
+            }).ToListAsync(cancellationToken);
         
-        return await agents.ToListAsync(cancellationToken).ConfigureAwait(false);
+        var agentIdSet = new HashSet<int>();
+        
+        foreach (var sip in sipData)
+        {
+            agentIdSet.Add(sip.AgentId);
+            foreach (var relatedId in sip.RelatedAgentIds.Split(',', StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (int.TryParse(relatedId.Trim(), out var id))
+                    agentIdSet.Add(id);
+            }
+        }
+
+        var validAgentIds = agentIdSet.ToList();
+        
+        var agents = await _repository.Query<Agent>()
+            .Where(agent => validAgentIds.Contains(agent.Id))
+            .Join(_repository.Query<Restaurant>(),
+                agent => agent.RelateId,
+                restaurant => restaurant.Id,
+                (agent, restaurant) => new GetAgentBySipDto
+                {
+                    AgentId = agent.Id,
+                    Restaurant = restaurant.Name
+                })
+            .Distinct()
+            .ToListAsync(cancellationToken);
+        
+        return agents;
     }
 }
