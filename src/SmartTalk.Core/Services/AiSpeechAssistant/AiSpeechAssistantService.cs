@@ -170,7 +170,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         }
         catch (Exception ex)
         {
-            Log.Information("Error in one of the tasks: " + ex.Message);
+            Log.Information("Error in one of the tasks {@Ex}", ex);
         }
         
         return new AiSpeechAssistantConnectCloseEvent();
