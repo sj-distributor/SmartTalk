@@ -107,7 +107,7 @@ public partial class EventHandlingService
 
     private async Task<string> GenerateKnowledgeChangeBriefAsync(string query, CancellationToken cancellationToken)
     {
-        var completionResult = await _smartiesClient.PerformQueryAsync( new AskGptRequest
+        var completionResult = await _smartiesClient.PerformQueryAsync(new AskGptRequest
         {
             Messages = new List<CompletionsRequestMessageDto>
             {
