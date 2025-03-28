@@ -436,67 +436,57 @@ public class FfmpegService : IFfmpegService
 
     public async Task<byte[]> ConvertWavToULawAsync(byte[] wavBytes, CancellationToken cancellationToken = default)
     {
-        return await Task.Run(() => ConvertWavToULaw(wavBytes), cancellationToken);
-    }
-     
-    public byte[] ConvertWavToULaw(byte[] wavBytes)
-    {
-        using (var inputStream = new MemoryStream(wavBytes))
-        using (var reader = new WaveFileReader(inputStream))
+        var baseFileName = Guid.NewGuid().ToString();
+        var inputFileName = $"{baseFileName}.wav";
+        var outputFileName = $"{baseFileName}_ulaw.wav";
+        
+        try
         {
-            // Ensure the input is PCM format
-            WaveStream pcmStream = reader;
-            if (reader.WaveFormat.Encoding != WaveFormatEncoding.Pcm)
+            await File.WriteAllBytesAsync(inputFileName, wavBytes, cancellationToken);
+        
+            using (var proc = new Process())
             {
-                pcmStream = WaveFormatConversionStream.CreatePcmStream(reader);
+                proc.StartInfo = new ProcessStartInfo
+                {
+                    FileName = "ffmpeg",
+                    Arguments = $"-y -i {inputFileName} -c:a pcm_mulaw -ar 8000 {outputFileName}",
+                    RedirectStandardError = true,
+                    RedirectStandardOutput = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+                
+                var errorBuilder = new StringBuilder();
+                proc.ErrorDataReceived += (_, e) =>
+                {
+                    if (string.IsNullOrEmpty(e.Data)) return;
+                    
+                    errorBuilder.AppendLine(e.Data);
+                    
+                    Log.Error("FFmpeg Error: {Error}", e.Data);
+                };
+
+                proc.Start();
+                proc.BeginErrorReadLine();
+                proc.BeginOutputReadLine();
+
+                await proc.WaitForExitAsync(cancellationToken);
+
+                if (proc.ExitCode != 0)
+                {
+                    Log.Error("FFmpeg exited with code {ExitCode}: {Error}", proc.ExitCode, errorBuilder.ToString());
+                    return [];
+                }
             }
 
-            // Resample to 8000 Hz if necessary
-            if (pcmStream.WaveFormat.SampleRate != 8000)
-            {
-                var resampler = new MediaFoundationResampler(pcmStream, new WaveFormat(8000, pcmStream.WaveFormat.BitsPerSample, pcmStream.WaveFormat.Channels));
-                resampler.ResamplerQuality = 60; // Quality from 1 to 60
-                pcmStream = new WaveProviderToWaveStream(resampler); // Wrap the resampler
-            }
-
-            // Convert to μ-law
-            var ulawFormat = WaveFormat.CreateMuLawFormat(8000, pcmStream.WaveFormat.Channels);
-            using (var muLawStream = new WaveFormatConversionStream(ulawFormat, pcmStream))
-            using (var outputStream = new MemoryStream())
-            {
-                WaveFileWriter.WriteWavFileToStream(outputStream, muLawStream);
-                return outputStream.ToArray();
-            }
+            return File.Exists(outputFileName) 
+                ? await File.ReadAllBytesAsync(outputFileName, cancellationToken) 
+                : [];
         }
-    }
-    
-    public class WaveProviderToWaveStream : WaveStream
-    {
-        private readonly IWaveProvider sourceProvider;
-        private readonly WaveFormat waveFormat;
-        private long position;
-
-        public WaveProviderToWaveStream(IWaveProvider sourceProvider)
+        finally
         {
-            this.sourceProvider = sourceProvider ?? throw new ArgumentNullException(nameof(sourceProvider));
-            this.waveFormat = sourceProvider.WaveFormat ?? throw new ArgumentNullException(nameof(sourceProvider.WaveFormat));
-        }
-
-        public override WaveFormat WaveFormat => waveFormat;
-
-        public override long Length => long.MaxValue; // Unknown length
-
-        public override long Position
-        {
-            get => position;
-            set => throw new NotSupportedException();
-        }
-
-        public override int Read(byte[] buffer, int offset, int count)
-        {
-            var bytesRead = sourceProvider.Read(buffer, offset, count);
-            position += bytesRead;
-            return bytesRead;
+            try { File.Delete(inputFileName); } catch { /* Ignore */ }
+            try { File.Delete(outputFileName); } catch { /* Ignore */ }
         }
     }
 }
