@@ -27,7 +27,7 @@ public class AiSpeechAssistantKnowledge : IEntity, IHasCreatedFields
     public bool IsActive { get; set; }
     
     [Column("brief"), StringLength(128)]
-    public string Brief { get; set; }
+    public string Brief { get; set; } = "未命名改動";
     
     [Column("greetings"), StringLength(1024)]
     public string Greetings { get; set; }
