@@ -16,6 +16,13 @@ public class AddAiSpeechAssistantKnowledgeCommandHandler : ICommandHandler<AddAi
 
     public async Task<AddAiSpeechAssistantKnowledgeResponse> Handle(IReceiveContext<AddAiSpeechAssistantKnowledgeCommand> context, CancellationToken cancellationToken)
     {
-        return await _aiSpeechAssistantService.AddAiSpeechAssistantKnowledgeAsync(context.Message, cancellationToken).ConfigureAwait(false);
+        var @event = await _aiSpeechAssistantService.AddAiSpeechAssistantKnowledgeAsync(context.Message, cancellationToken).ConfigureAwait(false);
+
+        await context.PublishAsync(@event, cancellationToken).ConfigureAwait(false);
+        
+        return new AddAiSpeechAssistantKnowledgeResponse
+        {
+            Data = @event.LatestKnowledge
+        };
     }
 }
