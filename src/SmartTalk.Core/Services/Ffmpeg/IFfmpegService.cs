@@ -441,9 +441,6 @@ public class FfmpegService : IFfmpegService
      
     public byte[] ConvertWavToULaw(byte[] wavBytes)
     {
-        if (wavBytes == null || wavBytes.Length == 0)
-            throw new ArgumentException("输入音频数据为空");
-
         try
         {
             using var inputStream = new MemoryStream(wavBytes);
@@ -461,7 +458,7 @@ public class FfmpegService : IFfmpegService
             const int bufferSize = 4096;
             using (var conversionStream = new WaveFormatConversionStream(targetFormat, reader))
             {
-                byte[] buffer = new byte[bufferSize];
+                var buffer = new byte[bufferSize];
                 int bytesRead;
                 while ((bytesRead = conversionStream.Read(buffer, 0, buffer.Length)) > 0)
                 {
@@ -473,11 +470,13 @@ public class FfmpegService : IFfmpegService
         }
         catch (EndOfStreamException)
         {
-            throw new InvalidDataException("WAV文件头损坏");
+            Log.Error("WAV文件头损坏");
         }
         catch (Exception ex)
         {
-            throw new InvalidOperationException("音频处理失败: {@Ex}", ex);
+            Log.Error("音频处理失败: {@Ex}", ex);
         }
+
+        return null;
     }
 }
