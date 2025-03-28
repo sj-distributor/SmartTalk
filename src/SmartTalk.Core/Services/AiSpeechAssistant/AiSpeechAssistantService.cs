@@ -433,9 +433,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                             @event = "clear",
                             streamSid = _aiSpeechAssistantStreamContext.StreamSid
                         };
-        
-                        await SendToWebSocketAsync(twilioWebSocket, clearEvent, cancellationToken);
-            
+
+                        if (_shouldSendBuffToOpenAi) 
+                            await SendToWebSocketAsync(twilioWebSocket, clearEvent, cancellationToken);
                         
                         if (!string.IsNullOrEmpty(_aiSpeechAssistantStreamContext.LastAssistantItem))
                         {
