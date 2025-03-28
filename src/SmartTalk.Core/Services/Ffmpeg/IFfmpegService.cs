@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Text;
 using SmartTalk.Core.Ioc;
 using System.Text.RegularExpressions;
+using NAudio.Wave;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Messages.Enums.STT;
 
@@ -25,8 +26,8 @@ public interface IFfmpegService: IScopedDependency
     Task<byte[]> ConvertFileFormatAsync(byte[] file, TranscriptionFileType fileType, CancellationToken cancellationToken);
     
     Task<List<byte[]>> SpiltAudioAsync(byte[] audioBytes, double startTime, double endTime, CancellationToken cancellationToken);
-
-    Task<byte[]> ConvertWavToULawAsync(byte[] wavBytes, CancellationToken cancellationToken = default);
+    
+    byte[] ConvertWavToULaw(byte[] wavBytes);
 }
 
 public class FfmpegService : IFfmpegService
@@ -433,59 +434,21 @@ public class FfmpegService : IFfmpegService
         return audioDataList;
     }
      
-    public async Task<byte[]> ConvertWavToULawAsync(byte[] wavBytes, CancellationToken cancellationToken = default)
+    public byte[] ConvertWavToULaw(byte[] wavBytes)
     {
-        var baseFileName = Guid.NewGuid().ToString();
-        var inputFileName = $"{baseFileName}.wav";
-        var outputFileName = $"{baseFileName}_ulaw.wav";
+        using var inputStream = new MemoryStream(wavBytes);
+        using var reader = new WaveFileReader(inputStream);
 
-        try
-        {
-            await File.WriteAllBytesAsync(inputFileName, wavBytes, cancellationToken);
+        var resampledPcm = new WaveFormat(8000, 16, 1);
+        using var resampler = new MediaFoundationResampler(reader, resampledPcm);
+
+        var ulawFormat = WaveFormat.CreateMuLawFormat(8000, 1);
         
-            using (var proc = new Process())
-            {
-                proc.StartInfo = new ProcessStartInfo
-                {
-                    FileName = "ffmpeg",
-                    Arguments = $"-y -i \"{inputFileName}\" -acodec pcm_mulaw -ar 8000 \"{outputFileName}\"",
-                    RedirectStandardError = true,
-                    RedirectStandardOutput = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                };
-
-                var errorBuilder = new StringBuilder();
-                proc.ErrorDataReceived += (_, e) =>
-                {
-                    if (string.IsNullOrEmpty(e.Data)) return;
-                    
-                    errorBuilder.AppendLine(e.Data);
-                    
-                    Log.Error("FFmpeg Error: {Error}", e.Data);
-                };
-
-                proc.Start();
-                proc.BeginErrorReadLine();
-                proc.BeginOutputReadLine();
-
-                await proc.WaitForExitAsync(cancellationToken);
-
-                if (proc.ExitCode != 0)
-                {
-                    Log.Error("FFmpeg exited with code {ExitCode}: {Error}", proc.ExitCode, errorBuilder.ToString());
-                    return [];
-                }
-            }
-
-            return File.Exists(outputFileName) 
-                ? await File.ReadAllBytesAsync(outputFileName, cancellationToken) 
-                : [];
-        }
-        finally
-        {
-            try { File.Delete(inputFileName); } catch { /* Ignore */ }
-            try { File.Delete(outputFileName); } catch { /* Ignore */ }
-        }
+        using var conversionStream = new WaveFormatConversionProvider(ulawFormat, resampler);
+        using var outputStream = new MemoryStream();
+        
+        WaveFileWriter.WriteWavFileToStream(outputStream, conversionStream);
+        
+        return outputStream.ToArray();
     }
 }
