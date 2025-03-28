@@ -333,8 +333,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                             if (!string.IsNullOrEmpty(payload))
                             {
                                 var fromBase64String = Convert.FromBase64String(payload);
-                                
-                                _wholeAudioBufferBytes.AddRange([fromBase64String]);
+
+                                if (_shouldSendBuffToOpenAi)
+                                    _wholeAudioBufferBytes.AddRange([fromBase64String]);
                                 
                                 var audioAppend = new
                                 {
@@ -706,24 +707,29 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             : "Help me to repeat the order completely, quickly and naturally in English:";
         
         using var memoryStream = new MemoryStream();
+
         await using (var writer = new WaveFileWriter(memoryStream, new WaveFormat(8000, 16, channels: 1)))
         {
-            lock(_wholeAudioBufferBytes)
+            List<byte[]> bufferBytesCopy;
+
+            lock (_wholeAudioBufferBytes)
             {
-                foreach (var audio in _wholeAudioBufferBytes)
+                // 创建集合的副本
+                bufferBytesCopy = _wholeAudioBufferBytes.ToList();
+            }
+
+            // 对副本进行枚举
+            foreach (var audio in bufferBytesCopy)
+            {
+                for (int index = 0; index < audio.Length; index++)
                 {
-                    var index = 0;
-                    for (; index < audio.Length; index++)
-                    {
-                        var t = audio[index];
-                        var pcmSample = MuLawDecoder.MuLawToLinearSample(t);
-                        writer.WriteSample(pcmSample / 32768f);
-                    }
+                    var t = audio[index];
+                    var pcmSample = MuLawDecoder.MuLawToLinearSample(t);
+                    writer.WriteSample(pcmSample / 32768f);
                 }
-                writer.Write(memoryStream.ToArray(), 0, _wholeAudioBufferBytes.Count);
             }
         }
-
+        
         var fileContent = memoryStream.ToArray();
         var audioData = BinaryData.FromBytes(fileContent);
         
