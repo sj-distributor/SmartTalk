@@ -708,17 +708,20 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         using var memoryStream = new MemoryStream();
         await using (var writer = new WaveFileWriter(memoryStream, new WaveFormat(8000, 16, channels: 1)))
         {
-            foreach (var audio in _wholeAudioBufferBytes)
+            lock(_wholeAudioBufferBytes)
             {
-                var index = 0;
-                for (; index < audio.Length; index++)
+                foreach (var audio in _wholeAudioBufferBytes)
                 {
-                    var t = audio[index];
-                    var pcmSample = MuLawDecoder.MuLawToLinearSample(t);
-                    writer.WriteSample(pcmSample / 32768f);
+                    var index = 0;
+                    for (; index < audio.Length; index++)
+                    {
+                        var t = audio[index];
+                        var pcmSample = MuLawDecoder.MuLawToLinearSample(t);
+                        writer.WriteSample(pcmSample / 32768f);
+                    }
                 }
+                writer.Write(memoryStream.ToArray(), 0, _wholeAudioBufferBytes.Count);
             }
-            writer.Write(memoryStream.ToArray(), 0, _wholeAudioBufferBytes.Count);
         }
 
         var fileContent = memoryStream.ToArray();
