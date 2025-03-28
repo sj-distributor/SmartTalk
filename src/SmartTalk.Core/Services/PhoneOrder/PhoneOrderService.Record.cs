@@ -58,6 +58,12 @@ public partial class PhoneOrderService
         if (recordInfo == null) return;
         if (await CheckOrderExistAsync(recordInfo.StartDate, cancellationToken).ConfigureAwait(false)) return;
         
+        var record = new PhoneOrderRecord { SessionId = Guid.NewGuid().ToString(), AgentId = recordInfo.Agent.Id, Language = TranscriptionLanguage.Chinese, CreatedDate = recordInfo.StartDate };
+        
+        await AddPhoneOrderRecordAsync(record, PhoneOrderRecordStatus.SavedUrl, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Phone order record saved url:{@record}", record);
+        
         var transcription = await _speechToTextService.SpeechToTextAsync(
             command.RecordContent, fileType: TranscriptionFileType.Wav, responseFormat: TranscriptionResponseFormat.Text, cancellationToken: cancellationToken).ConfigureAwait(false);
         
@@ -65,8 +71,10 @@ public partial class PhoneOrderService
         
         Log.Information("Phone order record transcription detected language: {@detectionLanguage}", detection.Language);
         
-        var record = new PhoneOrderRecord { SessionId = Guid.NewGuid().ToString(), AgentId = recordInfo.Agent.Id, TranscriptionText = transcription, Language = SelectLanguageEnum(detection.Language), CreatedDate = recordInfo.StartDate, Status = PhoneOrderRecordStatus.Recieved };
-
+        record.TranscriptionText = transcription;
+        record.Language = SelectLanguageEnum(detection.Language);
+        await AddPhoneOrderRecordAsync(record, PhoneOrderRecordStatus.Recieved, cancellationToken).ConfigureAwait(false);
+        
         if (await CheckPhoneOrderRecordDurationAsync(command.RecordContent, cancellationToken).ConfigureAwait(false))
         {
             await AddPhoneOrderRecordAsync(record, PhoneOrderRecordStatus.NoContent, cancellationToken).ConfigureAwait(false);

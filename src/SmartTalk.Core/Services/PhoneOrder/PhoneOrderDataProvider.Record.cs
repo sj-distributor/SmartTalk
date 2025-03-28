@@ -55,7 +55,7 @@ public partial class PhoneOrderDataProvider
     {
         var query = from agent in _repository.Query<Agent>()
             join record in _repository.Query<PhoneOrderRecord>() on agent.Id equals record.AgentId
-            where agent.Id == agentId && record.Status == PhoneOrderRecordStatus.Sent
+            where agent.Id == agentId && (record.Status == PhoneOrderRecordStatus.Sent || record.Status == PhoneOrderRecordStatus.Transcription)
             select record;
         
         return await query.OrderByDescending(record => record.CreatedDate).ToListAsync(cancellationToken).ConfigureAwait(false);
