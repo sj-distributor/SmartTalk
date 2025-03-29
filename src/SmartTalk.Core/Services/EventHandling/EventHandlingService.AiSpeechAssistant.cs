@@ -113,7 +113,7 @@ public partial class EventHandlingService
             {
                 new () {
                     Role = "system",
-                    Content = new CompletionsStringContent("你是一個善於分析數據的助手，專門用於對數據改動做出繁體中文的概括與總結。請根據提供的數據變更內容，生成一段簡潔明瞭的總結，強調變更的重點，例如新增、刪除或修改了哪些內容，以及這些變更可能帶來的影響。請以自然流暢的語言表達，不要逐條列舉，而是以摘要形式概括。")
+                    Content = new CompletionsStringContent("你是一個善於分析數據的助手，專門用於對數據變更進行簡要概括。請根據提供的數據變更內容，生成 10 字左右的簡短總結，只需點明變更重點，無需過多解釋。")
                 },
                 new ()
                 {
