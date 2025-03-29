@@ -1,9 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Domain.Account;
+using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Domain.Restaurants;
 using SmartTalk.Core.Domain.System;
-using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Dto.Restaurant;
 using SmartTalk.Messages.Enums.PhoneOrder;
@@ -35,6 +35,8 @@ public partial interface IPhoneOrderDataProvider
     Task<PhoneOrderRecord> GetPhoneOrderRecordBySessionIdAsync(string sessionId, CancellationToken cancellationToken);
     
     Task<(PhoneOrderRecord, Agent, Domain.AISpeechAssistant.AiSpeechAssistant)> GetRecordWithAgentAndAssistantAsync(string sessionId, CancellationToken cancellationToken);
+    
+    Task<AiSpeechAssistantKnowledge> GetKnowledgePromptByAssistantIdAsync(int assistantId, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderDataProvider
@@ -53,7 +55,7 @@ public partial class PhoneOrderDataProvider
     {
         var query = from agent in _repository.Query<Agent>()
             join record in _repository.Query<PhoneOrderRecord>() on agent.Id equals record.AgentId
-            where agent.Id == agentId && record.Status == PhoneOrderRecordStatus.Sent
+            where agent.Id == agentId && (record.Status == PhoneOrderRecordStatus.Sent || (!string.IsNullOrEmpty(record.Url) && record.Status != PhoneOrderRecordStatus.NoContent))
             select record;
         
         return await query.OrderByDescending(record => record.CreatedDate).ToListAsync(cancellationToken).ConfigureAwait(false);
@@ -193,5 +195,10 @@ public partial class PhoneOrderDataProvider
         ).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
 
         return (result?.record, result?.agent, result?.assistant);
+    }
+
+    public async Task<AiSpeechAssistantKnowledge> GetKnowledgePromptByAssistantIdAsync(int assistantId, CancellationToken cancellationToken)
+    {
+        return await _repository.Query<AiSpeechAssistantKnowledge>().Where(x=> x.AssistantId == assistantId && x.IsActive).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 }
