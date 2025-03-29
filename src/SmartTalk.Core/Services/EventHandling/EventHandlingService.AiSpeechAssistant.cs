@@ -19,7 +19,7 @@ public partial class EventHandlingService
         
         Log.Information($"Generate the knowledge chang brief: {brief}");
 
-        if (string.IsNullOrEmpty(brief))
+        if (!string.IsNullOrEmpty(brief))
         {
             var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(
                 @event.LatestKnowledge.AssistantId, @event.LatestKnowledge.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
