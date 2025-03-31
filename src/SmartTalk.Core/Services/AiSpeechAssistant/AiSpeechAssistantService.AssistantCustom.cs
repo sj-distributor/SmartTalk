@@ -28,6 +28,8 @@ public partial interface IAiSpeechAssistantService
     Task<DeleteAiSpeechAssistantResponse> DeleteAiSpeechAssistantAsync(DeleteAiSpeechAssistantCommand command, CancellationToken cancellationToken);
 
     Task<UpdateAiSpeechAssistantNumberResponse> UpdateAiSpeechAssistantNumberAsync(UpdateAiSpeechAssistantNumberCommand command, CancellationToken cancellationToken);
+    
+    Task<UpdateAiSpeechAssistantKnowledgeResponse> UpdateAiSpeechAssistantKnowledgeAsync(UpdateAiSpeechAssistantKnowledgeCommand command, CancellationToken cancellationToken);
 }
 
 public partial class AiSpeechAssistantService
@@ -120,6 +122,22 @@ public partial class AiSpeechAssistantService
         return new UpdateAiSpeechAssistantNumberResponse
         {
             Data = _mapper.Map<NumberPoolDto>(number)
+        };
+    }
+
+    public async Task<UpdateAiSpeechAssistantKnowledgeResponse> UpdateAiSpeechAssistantKnowledgeAsync(UpdateAiSpeechAssistantKnowledgeCommand command, CancellationToken cancellationToken)
+    {
+        var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(knowledgeId: command.KnowledgeId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (knowledge == null) throw new Exception("Could not found the knowledge by knowledge id");
+
+        knowledge.Brief = command.Brief;
+        
+        await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync([knowledge], cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        return new UpdateAiSpeechAssistantKnowledgeResponse
+        {
+            Data = null,
         };
     }
 

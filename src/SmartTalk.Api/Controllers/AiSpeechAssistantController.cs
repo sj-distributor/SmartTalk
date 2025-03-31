@@ -198,4 +198,13 @@ public class AiSpeechAssistantController : ControllerBase
 
         return Ok(response);
     }
+    
+    [Route("knowledge/update"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdateAiSpeechAssistantKnowledgeResponse))]
+    public async Task<IActionResult> UpdateAiSpeechAssistantKnowledgeAsync([FromBody] UpdateAiSpeechAssistantKnowledgeCommand command)
+    {
+        var response = await _mediator.SendAsync<UpdateAiSpeechAssistantKnowledgeCommand, UpdateAiSpeechAssistantKnowledgeResponse>(command).ConfigureAwait(false);
+
+        return Ok(response);
+    }
 }

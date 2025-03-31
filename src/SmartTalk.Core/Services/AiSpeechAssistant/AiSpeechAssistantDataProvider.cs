@@ -29,7 +29,7 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
 
     Task AddAiSpeechAssistantsAsync(List<Domain.AISpeechAssistant.AiSpeechAssistant> assistants, bool forceSave = true, CancellationToken cancellationToken = default);
 
-    Task<AiSpeechAssistantKnowledge> GetAiSpeechAssistantKnowledgeAsync(int assistantId, int? knowledgeId = null, bool? isActive = null, CancellationToken cancellationToken = default);
+    Task<AiSpeechAssistantKnowledge> GetAiSpeechAssistantKnowledgeAsync(int? assistantId = null, int? knowledgeId = null, bool? isActive = null, CancellationToken cancellationToken = default);
 
     Task AddAiSpeechAssistantKnowledgesAsync(List<AiSpeechAssistantKnowledge> knowledges, bool forceSave = true, CancellationToken cancellationToken = default);
     
@@ -168,9 +168,12 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
     }
 
     public async Task<AiSpeechAssistantKnowledge> GetAiSpeechAssistantKnowledgeAsync(
-        int assistantId, int? knowledgeId = null, bool? isActive = null, CancellationToken cancellationToken = default)
+        int? assistantId = null, int? knowledgeId = null, bool? isActive = null, CancellationToken cancellationToken = default)
     {
-        var query = _repository.Query<AiSpeechAssistantKnowledge>().Where(x => x.AssistantId == assistantId);
+        var query = _repository.Query<AiSpeechAssistantKnowledge>();
+
+        if (assistantId.HasValue)
+            query = query.Where(x => x.AssistantId == assistantId.Value);
 
         if (knowledgeId.HasValue)
             query = query.Where(x => x.Id == knowledgeId.Value);
