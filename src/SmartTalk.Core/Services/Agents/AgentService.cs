@@ -29,7 +29,7 @@ public class AgentService : IAgentService
 
     public async Task<GetAgentsResponse> GetAgentsAsync(GetAgentsRequest request, CancellationToken cancellationToken)
     {
-        var agents = await _agentDataProvider.GetAgentsAsync(request.AgentType, cancellationToken).ConfigureAwait(false);
+        var agents = await _agentDataProvider.GetAgentsAsync(type: request.AgentType, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         var data = request.AgentType switch
         {
