@@ -6,7 +6,7 @@ using SmartTalk.Messages.Enums.Agent;
 namespace SmartTalk.Core.Domain.System;
 
 [Table("agent")]
-public class Agent : IEntity
+public class Agent : IEntity, IHasCreatedFields
 {
     [Key]
     [Column("id")]

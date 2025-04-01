@@ -14,7 +14,11 @@ public interface IAgentDataProvider : IScopedDependency
     
     Task<Agent> GetAgentByIdAsync(int id, CancellationToken cancellationToken);
 
-    Task<List<Agent>> GetAgentsAsync(AgentType type, CancellationToken cancellationToken);
+    Task<List<Agent>> GetAgentsAsync(List<int> agentIds = null, AgentType? type = null, CancellationToken cancellationToken = default);
+
+    Task AddAgentAsync(Agent agent, bool forceSave = true, CancellationToken cancellationToken = default);
+    
+    Task DeleteAgentsAsync(List<Agent> agents, bool forceSave = true, CancellationToken cancellationToken = default);
 }
 
 public class AgentDataProvider : IAgentDataProvider
@@ -55,8 +59,30 @@ public class AgentDataProvider : IAgentDataProvider
         return await _repository.Query<Agent>().Where(x => x.Id == id).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<Agent>> GetAgentsAsync(AgentType type, CancellationToken cancellationToken)
+    public async Task<List<Agent>> GetAgentsAsync(List<int> agentIds = null, AgentType? type = null, CancellationToken cancellationToken = default)
     {
-        return await _repository.Query<Agent>().Where(x => x.Type == type).ToListAsync(cancellationToken).ConfigureAwait(false);
+        var query = _repository.Query<Agent>();
+
+        if (agentIds is { Count: > 0 })
+            query = query.Where(x => agentIds.Contains(x.Id));
+
+        if (type.HasValue)
+            query = query.Where(x => x.Type == type.Value);
+        
+        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task AddAgentAsync(Agent agent, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.InsertAsync(agent, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task DeleteAgentsAsync(List<Agent> agents, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.DeleteAllAsync(agents, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 }

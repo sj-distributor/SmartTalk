@@ -8,19 +8,22 @@ public class AiSpeechAssistantDto
     
     public string Name { get; set; }
     
-    public string DidNumber { get; set; }
+    public int AnsweringNumberId { get; set; }
     
-    public string Url { get; set; }
+    public string AnsweringNumber { get; set; }
     
-    public string Voice { get; set; }
+    public string ModelUrl { get; set; }
     
-    public AiSpeechAssistantProvider Provider { get; set; }
+    public AiSpeechAssistantProvider ModelProvider { get; set; }
     
+    public string ModelVoice { get; set; }
     public int AgentId { get; set; }
-    
-    public string Greetings { get; set; }
     
     public string CustomRecordAnalyzePrompt { get; set; }
     
     public DateTimeOffset CreatedDate { get; set; }
+    
+    public int CreatedBy { get; set; }
+    
+    public AiSpeechAssistantKnowledgeDto Knowledge { get; set; }
 }
