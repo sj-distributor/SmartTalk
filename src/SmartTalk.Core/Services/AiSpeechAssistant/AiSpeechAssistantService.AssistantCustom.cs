@@ -87,7 +87,7 @@ public partial class AiSpeechAssistantService
         await UpdateAssistantNumberIfRequiredAsync(assistant.AnsweringNumberId, command.AnsweringNumberId, cancellationToken).ConfigureAwait(false);
         
         _mapper.Map(command, assistant);
-        assistant.Channel = string.Join(",", command.Channels);
+        assistant.Channel = command.Channels == null ? null : string.Join(",", command.Channels);
 
         await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync([assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -156,7 +156,7 @@ public partial class AiSpeechAssistantService
             CreatedBy = _currentUser.Id.Value,
             ModelUrl = AiSpeechAssistantStore.DefaultUrl,
             ModelProvider = AiSpeechAssistantProvider.OpenAi,
-            Channel = string.Join(",", command.Channels ?? [])
+            Channel = command.Channels == null ? null : string.Join(",", command.Channels)
         };
         
         await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantsAsync([assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
