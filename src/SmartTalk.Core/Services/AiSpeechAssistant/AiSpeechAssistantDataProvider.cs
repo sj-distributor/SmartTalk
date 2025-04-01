@@ -43,7 +43,7 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
                 assistant, promptTemplate, userProfile
             };
 
-        assistantInfo = assistantInfo.Where(x => assistantId.HasValue ? x.assistant.Id == assistantId.Value : x.assistant.AnsweringNumber == didNumber);
+        assistantInfo = assistantInfo.Where(x => assistantId.HasValue ? x.assistant.Id == assistantId.Value : x.assistant.DidNumber == didNumber);
 
         var result = await assistantInfo.FirstOrDefaultAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -52,12 +52,8 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
 
     public async Task<Domain.AISpeechAssistant.AiSpeechAssistant> GetAiSpeechAssistantByNumbersAsync(string didNumber, CancellationToken cancellationToken)
     {
-        var query = from assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>()
-            join pool in _repository.Query<NumberPool>() on assistant.AnsweringNumberId equals pool.Id
-            where pool.Number == didNumber
-            select assistant;
-
-        return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        return await _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>().Where(x => x.DidNumber == didNumber)
+            .FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<AiSpeechAssistantHumanContact> GetAiSpeechAssistantHumanContactByAssistantIdAsync(int assistantId, CancellationToken cancellationToken)
