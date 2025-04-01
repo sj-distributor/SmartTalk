@@ -133,7 +133,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         {
             Host = command.Host,
             LastPrompt = prompt,
-            HumanContactPhone = humanContact.HumanPhone,
+            HumanContactPhone = humanContact?.HumanPhone,
             LastUserInfo = new AiSpeechAssistantUserInfoDto
             {
                 PhoneNumber = command.From
