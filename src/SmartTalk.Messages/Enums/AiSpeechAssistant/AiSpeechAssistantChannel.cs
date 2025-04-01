@@ -8,7 +8,7 @@ public enum AiSpeechAssistantChannel
    Text,
    
    [Description("電話")]
-   PhoneCall,
+   PhoneChat,
    
    [Description("實時聊天")]
    LiveChat
