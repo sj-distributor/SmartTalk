@@ -155,7 +155,8 @@ public partial class AiSpeechAssistantService
             AnsweringNumber = number?.Number,
             CreatedBy = _currentUser.Id.Value,
             ModelUrl = AiSpeechAssistantStore.DefaultUrl,
-            ModelProvider = AiSpeechAssistantProvider.OpenAi
+            ModelProvider = AiSpeechAssistantProvider.OpenAi,
+            Channel = string.Join(",", command.Channels ?? [])
         };
         
         await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantsAsync([assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
