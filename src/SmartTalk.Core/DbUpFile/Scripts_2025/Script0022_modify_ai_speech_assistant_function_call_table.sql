@@ -1,1 +1,0 @@
-alter table `ai_speech_assistant_function_call` add column `type` int not null default 0;
