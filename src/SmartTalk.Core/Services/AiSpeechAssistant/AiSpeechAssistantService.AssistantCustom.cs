@@ -137,7 +137,7 @@ public partial class AiSpeechAssistantService
         
         return new UpdateAiSpeechAssistantKnowledgeResponse
         {
-            Data = null,
+            Data = _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge),
         };
     }
 
