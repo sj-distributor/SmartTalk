@@ -15,7 +15,7 @@ public class UpdateAiSpeechAssistantCommand : ICommand
     
     public string AnsweringNumber { get; set; }
 
-    public List<AiSpeechAssistantChannel> Channels { get; set; } = [];
+    public List<AiSpeechAssistantChannel> Channels { get; set; }
 }
 
 public class UpdateAiSpeechAssistantResponse : SmartTalkResponse<AiSpeechAssistantDto>
