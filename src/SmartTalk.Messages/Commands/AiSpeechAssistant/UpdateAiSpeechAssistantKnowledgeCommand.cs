@@ -1,6 +1,6 @@
 using Mediator.Net.Contracts;
-using Smarties.Messages.Responses;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
+using SmartTalk.Messages.Responses;
 
 namespace SmartTalk.Messages.Commands.AiSpeechAssistant;
 
@@ -11,6 +11,6 @@ public class UpdateAiSpeechAssistantKnowledgeCommand : ICommand
     public int KnowledgeId { get; set; }
 }
 
-public class UpdateAiSpeechAssistantKnowledgeResponse : SmartiesResponse<AiSpeechAssistantKnowledgeDto>
+public class UpdateAiSpeechAssistantKnowledgeResponse : SmartTalkResponse<AiSpeechAssistantKnowledgeDto>
 {
 }
