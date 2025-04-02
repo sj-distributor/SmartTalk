@@ -29,6 +29,6 @@ public class AiSpeechAssistantDto
     
     public AiSpeechAssistantKnowledgeDto Knowledge { get; set; }
 
-    public List<AiSpeechAssistantChannel> Channels => 
-        string.IsNullOrWhiteSpace(Channel) ? [] : Channel.Split(",").Select(x => (AiSpeechAssistantChannel)int.Parse(x)).ToList();
+    // public List<AiSpeechAssistantChannel> Channels => 
+    //     string.IsNullOrWhiteSpace(Channel) ? [] : Channel.Split(",").Select(x => (AiSpeechAssistantChannel)int.Parse(x)).ToList();
 }
