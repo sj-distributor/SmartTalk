@@ -1,6 +1,5 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using SmartTalk.Messages.Enums.AiSpeechAssistant;
 
 namespace SmartTalk.Core.Domain.AISpeechAssistant;
 
@@ -20,9 +19,6 @@ public class AiSpeechAssistantFunctionCall : IEntity, IHasCreatedFields
     
     [Column("content")]
     public string Content { get; set; }
-    
-    [Column("type")]
-    public AiSpeechAssistantSessionConfigType Type { get; set; }
     
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
