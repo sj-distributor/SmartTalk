@@ -151,7 +151,7 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
     {
         var query = _repository.QueryNoTracking<Domain.AISpeechAssistant.AiSpeechAssistant>();
 
-        if (string.IsNullOrEmpty(channel))
+        if (!string.IsNullOrEmpty(channel))
             query = query.Where(x => x.Channel.Contains(channel));
 
         var count = await query.CountAsync(cancellationToken).ConfigureAwait(false);
