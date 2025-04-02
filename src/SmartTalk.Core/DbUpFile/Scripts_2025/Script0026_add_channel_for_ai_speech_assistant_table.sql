@@ -1,0 +1,1 @@
+alter table `ai_speech_assistant` add column `channel` varchar(36) null;
