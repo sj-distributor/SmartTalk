@@ -29,6 +29,7 @@ public class AiSpeechAssistantDto
     
     public AiSpeechAssistantKnowledgeDto Knowledge { get; set; }
 
-    public List<AiSpeechAssistantChannel> Channels => 
-        string.IsNullOrWhiteSpace(Channel) ? [] : Channel.Split(",").Select(x => (AiSpeechAssistantChannel)int.Parse(x)).ToList();
+    public List<AiSpeechAssistantChannel> Channels => string.IsNullOrWhiteSpace(Channel)
+        ? [] : Channel.Split(',').Select(x => int.TryParse(x, out var value)
+            ? (AiSpeechAssistantChannel)value : default).Where(x => Enum.IsDefined(typeof(AiSpeechAssistantChannel), x)).ToList();
 }
