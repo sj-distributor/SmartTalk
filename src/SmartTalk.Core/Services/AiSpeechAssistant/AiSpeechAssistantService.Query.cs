@@ -1,3 +1,4 @@
+using Serilog;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Requests.AiSpeechAssistant;
@@ -39,6 +40,8 @@ public partial class AiSpeechAssistantService
         var (count, assistants) = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantsAsync(
             request.PageIndex, request.PageSize, request.Channel.HasValue ? request.Channel.Value.ToString("D") : string.Empty, cancellationToken).ConfigureAwait(false);
 
+        Log.Information("Get ai speech assistants {@Assistants}", assistants);
+        
         await EnrichAssistantsInfoAsycn(assistants, cancellationToken).ConfigureAwait(false);
 
         return new GetAiSpeechAssistantsResponse
