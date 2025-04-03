@@ -6,6 +6,7 @@ public class OpenAiSettings : IConfigurationSetting
 {
     public OpenAiSettings(IConfiguration configuration)
     {
+        BaseUrl = configuration.GetValue<string>("OpenAi:BaseUrl");
         ApiKey = configuration.GetValue<string>("OpenAi:ApiKey");
         Organization = configuration.GetValue<string>("OpenAi:Organization");
         
@@ -13,6 +14,8 @@ public class OpenAiSettings : IConfigurationSetting
         RealtimeReceiveBufferLength = configuration.GetValue<int>("OpenAi:Realtime:ReceiveBufferLength");
         RealtimeTemperature = configuration.GetValue<float>("OpenAi:Realtime:Temperature");
     }
+    
+    public string BaseUrl { get; set; }
     
     public string ApiKey { get; set; }
     

@@ -65,6 +65,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 {
     private readonly IMapper _mapper;
     private readonly ICurrentUser _currentUser;
+    private readonly IOpenaiClient _openaiClient;
     private readonly IFfmpegService _ffmpegService;
     private readonly OpenAiSettings _openAiSettings;
     private readonly TwilioSettings _twilioSettings;
@@ -87,6 +88,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     public AiSpeechAssistantService(
         IMapper mapper,
         ICurrentUser currentUser,
+        IOpenaiClient openaiClient,
         IFfmpegService ffmpegService,
         OpenAiSettings openAiSettings,
         TwilioSettings twilioSettings,
@@ -102,6 +104,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     {
         _mapper = mapper;
         _currentUser = currentUser;
+        _openaiClient = openaiClient;
         _ffmpegService = ffmpegService;
         _openAiSettings = openAiSettings;
         _twilioSettings = twilioSettings;
