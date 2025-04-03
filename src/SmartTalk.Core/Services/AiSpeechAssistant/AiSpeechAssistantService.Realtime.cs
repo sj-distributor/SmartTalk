@@ -5,12 +5,12 @@ namespace SmartTalk.Core.Services.AiSpeechAssistant;
 
 public partial interface IAiSpeechAssistantService
 {
-    Task<CreateRTCConnectionResponse> CreateRTCConnectionAsync(CreateRTCConnectionCommand command, CancellationToken cancellationToken);
+    Task<CreateRealtimeConnectionResponse> CreateRealtimeConnectionAsync(CreateRealtimeConnectionCommand command, CancellationToken cancellationToken);
 }
 
 public partial class AiSpeechAssistantService
 {
-    public async Task<CreateRTCConnectionResponse> CreateRTCConnectionAsync(CreateRTCConnectionCommand command, CancellationToken cancellationToken)
+    public async Task<CreateRealtimeConnectionResponse> CreateRealtimeConnectionAsync(CreateRealtimeConnectionCommand command, CancellationToken cancellationToken)
     {
         var prompt = await GenerateFinalPromptAsync(command, cancellationToken).ConfigureAwait(false);
 
@@ -22,13 +22,13 @@ public partial class AiSpeechAssistantService
         
         Log.Information("Create rtc connection response: {@Response}" , sdpAnswer);
 
-        return new CreateRTCConnectionResponse
+        return new CreateRealtimeConnectionResponse
         {
             Data = sdpAnswer
         };
     }
 
-    private async Task<string> GenerateFinalPromptAsync(CreateRTCConnectionCommand command, CancellationToken cancellationToken)
+    private async Task<string> GenerateFinalPromptAsync(CreateRealtimeConnectionCommand command, CancellationToken cancellationToken)
     {
         var prompt = string.IsNullOrWhiteSpace(command.CustomPrompt) ? "You are a friendly assistant" : command.CustomPrompt;
 

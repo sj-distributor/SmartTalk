@@ -3,7 +3,7 @@ using Smarties.Messages.Responses;
 
 namespace SmartTalk.Messages.Commands.AiSpeechAssistant;
 
-public class CreateRTCConnectionCommand : ICommand
+public class CreateRealtimeConnectionCommand : ICommand
 {
     public string OfferSdp { get; set; }
     
@@ -12,4 +12,4 @@ public class CreateRTCConnectionCommand : ICommand
     public string CustomPrompt { get; set; }
 }
 
-public class CreateRTCConnectionResponse : SmartiesResponse<string>;
+public class CreateRealtimeConnectionResponse : SmartiesResponse<string>;

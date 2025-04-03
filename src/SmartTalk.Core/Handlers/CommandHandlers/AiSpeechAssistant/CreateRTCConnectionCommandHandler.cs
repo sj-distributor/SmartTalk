@@ -5,7 +5,7 @@ using SmartTalk.Messages.Commands.AiSpeechAssistant;
 
 namespace SmartTalk.Core.Handlers.CommandHandlers.AiSpeechAssistant;
 
-public class CreateRTCConnectionCommandHandler : ICommandHandler<CreateRTCConnectionCommand, CreateRTCConnectionResponse>
+public class CreateRTCConnectionCommandHandler : ICommandHandler<CreateRealtimeConnectionCommand, CreateRealtimeConnectionResponse>
 {
     private readonly IAiSpeechAssistantService _aiSpeechAssistantService;
 
@@ -14,8 +14,8 @@ public class CreateRTCConnectionCommandHandler : ICommandHandler<CreateRTCConnec
         _aiSpeechAssistantService = aiSpeechAssistantService;
     }
 
-    public async Task<CreateRTCConnectionResponse> Handle(IReceiveContext<CreateRTCConnectionCommand> context, CancellationToken cancellationToken)
+    public async Task<CreateRealtimeConnectionResponse> Handle(IReceiveContext<CreateRealtimeConnectionCommand> context, CancellationToken cancellationToken)
     {
-        return await _aiSpeechAssistantService.CreateRTCConnectionAsync(context.Message, cancellationToken).ConfigureAwait(false);
+        return await _aiSpeechAssistantService.CreateRealtimeConnectionAsync(context.Message, cancellationToken).ConfigureAwait(false);
     }
 }
