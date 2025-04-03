@@ -208,8 +208,7 @@ public class AiSpeechAssistantController : ControllerBase
         return Ok(response);
     }
     
-    [AllowAnonymous]
-    [Route("rtc/connect"), HttpPost]
+    [Route("realtime/connect"), HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(CreateRTCConnectionResponse))]
     public async Task<IActionResult> CreateRTCConnectionAsync([FromBody] CreateRTCConnectionCommand command)
     {
