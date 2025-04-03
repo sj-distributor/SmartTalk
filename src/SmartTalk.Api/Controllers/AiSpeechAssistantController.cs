@@ -207,4 +207,13 @@ public class AiSpeechAssistantController : ControllerBase
 
         return Ok(response);
     }
+    
+    [Route("realtime/connect"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(CreateRTCConnectionResponse))]
+    public async Task<IActionResult> CreateRTCConnectionAsync([FromBody] CreateRTCConnectionCommand command)
+    {
+        var response = await _mediator.SendAsync<CreateRTCConnectionCommand, CreateRTCConnectionResponse>(command).ConfigureAwait(false);
+
+        return Ok(response);
+    }
 }
