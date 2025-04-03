@@ -5,11 +5,11 @@ using SmartTalk.Messages.Commands.AiSpeechAssistant;
 
 namespace SmartTalk.Core.Handlers.CommandHandlers.AiSpeechAssistant;
 
-public class CreateRTCConnectionCommandHandler : ICommandHandler<CreateRealtimeConnectionCommand, CreateRealtimeConnectionResponse>
+public class CreateRealtimeConnectionCommandHandler : ICommandHandler<CreateRealtimeConnectionCommand, CreateRealtimeConnectionResponse>
 {
     private readonly IAiSpeechAssistantService _aiSpeechAssistantService;
 
-    public CreateRTCConnectionCommandHandler(IAiSpeechAssistantService aiSpeechAssistantService)
+    public CreateRealtimeConnectionCommandHandler(IAiSpeechAssistantService aiSpeechAssistantService)
     {
         _aiSpeechAssistantService = aiSpeechAssistantService;
     }
