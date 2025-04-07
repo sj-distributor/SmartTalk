@@ -67,12 +67,19 @@ public class OpenaiClient : IOpenaiClient
         {
             Log.Information("Start realtime redirect");
             
-            var redirectUrl = response.Headers.Location.ToString();
+            var redirectUri = response.Headers.Location;
+
+            if (redirectUri.Scheme == "http")
+            {
+                var builder = new UriBuilder(redirectUri) { Scheme = "https" };
+                
+                redirectUri = builder.Uri;
+            }
             
             var retryContent = new StringContent(sdp, Encoding.UTF8, "application/sdp");
 
             var retryResponse = await _smartTalkHttpClientFactory.PostAsync(
-                redirectUrl, retryContent, headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
+                redirectUri.ToString(), retryContent, headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
 
             return await retryResponse.Content.ReadAsStringAsync(cancellationToken);
         }
