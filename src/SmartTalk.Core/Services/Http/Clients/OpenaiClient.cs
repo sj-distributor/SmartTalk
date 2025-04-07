@@ -1,5 +1,4 @@
 using System.Text;
-using Newtonsoft.Json.Linq;
 using Serilog;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Settings.OpenAi;
@@ -51,6 +50,9 @@ public class OpenaiClient : IOpenaiClient
 
     public async Task<string> RealtimeChatAsync(string sdp, string ephemeralToken, CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(ephemeralToken)) 
+            throw new ArgumentException("Ephemeral token cannot be null or empty.");
+        
         var headers = new Dictionary<string, string>
         {
             { "Authorization", $"Bearer {ephemeralToken}" }
@@ -63,6 +65,8 @@ public class OpenaiClient : IOpenaiClient
         var response = await _smartTalkHttpClientFactory.PostAsync(
             requestUrl, requestContent, headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
         
+        Log.Information("Start realtime connection response: {@Response}", response);
+        
         if ((int)response.StatusCode == 307 && response.Headers.Location != null)
         {
             Log.Information("Start realtime redirect");
@@ -71,7 +75,7 @@ public class OpenaiClient : IOpenaiClient
 
             if (redirectUri.Scheme == "http")
             {
-                var builder = new UriBuilder(redirectUri) { Scheme = "https" };
+                var builder = new UriBuilder(redirectUri) { Scheme = "https", Port = 443 };
                 
                 redirectUri = builder.Uri;
             }
