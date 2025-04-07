@@ -1,5 +1,5 @@
 using Mediator.Net.Contracts;
-using Smarties.Messages.Responses;
+using SmartTalk.Messages.Responses;
 
 namespace SmartTalk.Messages.Commands.AiSpeechAssistant;
 
@@ -12,4 +12,4 @@ public class CreateRealtimeConnectionCommand : ICommand
     public string CustomPrompt { get; set; }
 }
 
-public class CreateRealtimeConnectionResponse : SmartiesResponse<string>;
+public class CreateRealtimeConnectionResponse : SmartTalkResponse<string>;
