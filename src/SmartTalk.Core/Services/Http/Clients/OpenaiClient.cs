@@ -59,7 +59,7 @@ public class OpenaiClient : IOpenaiClient
             { "User-Agent", "Chrome/122.0.0.0" }
         };
         
-        var requestUrl = $"{_openAiSettings.BaseUrl}/v1/realtime/?model=gpt-4o-realtime-preview-2024-12-17";
+        var requestUrl = $"{_openAiSettings.BaseUrl}/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17";
         
         var requestContent = new StringContent(sdp, Encoding.UTF8, "application/sdp");
         
