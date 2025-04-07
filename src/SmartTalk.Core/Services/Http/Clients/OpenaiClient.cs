@@ -1,6 +1,7 @@
 using System.Text;
 using Serilog;
 using SmartTalk.Core.Ioc;
+using System.Net.Http.Headers;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Messages.Dto.OpenAi;
 
@@ -60,7 +61,9 @@ public class OpenaiClient : IOpenaiClient
         
         var requestUrl = $"{_openAiSettings.BaseUrl}/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17";
         
-        var requestContent = new StringContent(sdp, Encoding.UTF8, "application/sdp");
+        var requestContent = new StringContent(sdp);
+        requestContent.Headers.Clear();
+        requestContent.Headers.ContentType = new MediaTypeHeaderValue("application/sdp");
 
         try
         {
