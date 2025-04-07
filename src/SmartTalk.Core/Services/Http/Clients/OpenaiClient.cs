@@ -1,4 +1,3 @@
-using System.Text;
 using Serilog;
 using SmartTalk.Core.Ioc;
 using System.Net.Http.Headers;
