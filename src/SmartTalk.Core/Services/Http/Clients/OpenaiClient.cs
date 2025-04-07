@@ -55,7 +55,8 @@ public class OpenaiClient : IOpenaiClient
         
         var headers = new Dictionary<string, string>
         {
-            { "Authorization", $"Bearer {ephemeralToken}" }
+            { "Authorization", $"Bearer {ephemeralToken}" },
+            { "Content-Type", "application/sdp" }
         };
         
         var requestUrl = $"{_openAiSettings.BaseUrl}/v1/realtime/?model=gpt-4o-realtime-preview-2024-12-17";
