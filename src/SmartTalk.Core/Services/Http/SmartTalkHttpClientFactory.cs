@@ -14,9 +14,6 @@ public interface ISmartTalkHttpClientFactory : IScopedDependency
     Task<T> PostAsync<T>(string requestUrl, HttpContent content, CancellationToken cancellationToken, 
         TimeSpan? timeout = null, bool beginScope = false, Dictionary<string, string> headers = null, bool isNeedToReadErrorContent = false);
     
-    Task<HttpResponseMessage> PostAsync(string requestUrl, HttpContent content, CancellationToken cancellationToken, 
-        TimeSpan? timeout = null, bool beginScope = false, Dictionary<string, string> headers = null, bool isNeedToReadErrorContent = false);
-
     Task<T> DeleteAsync<T>(string requestUrl, CancellationToken cancellationToken, TimeSpan? timeout = null,
         bool beginScope = false, Dictionary<string, string> headers = null, bool isNeedToReadErrorContent = false);
     
@@ -90,14 +87,6 @@ public class SmartTalkHttpClientFactory : ISmartTalkHttpClientFactory
             return await ReadAndLogResponseAsync<T>(requestUrl, HttpMethod.Post, response, cancellationToken, isNeedToReadErrorContent).ConfigureAwait(false);
             
         }, cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task<HttpResponseMessage> PostAsync(string requestUrl, HttpContent content, CancellationToken cancellationToken,
-        TimeSpan? timeout = null, bool beginScope = false, Dictionary<string, string> headers = null, bool isNeedToReadErrorContent = false)
-    {
-        return await SafelyProcessRequestAsync(requestUrl, async () =>
-            await CreateClient(timeout: timeout, beginScope: beginScope, headers: headers)
-                .PostAsync(requestUrl, content, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<T> DeleteAsync<T>(string requestUrl, CancellationToken cancellationToken, TimeSpan? timeout = null,

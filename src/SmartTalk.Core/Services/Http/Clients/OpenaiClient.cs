@@ -64,42 +64,8 @@ public class OpenaiClient : IOpenaiClient
         var requestContent = new StringContent(sdp);
         requestContent.Headers.Clear();
         requestContent.Headers.ContentType = new MediaTypeHeaderValue("application/sdp");
-
-        try
-        {
-            var response = await _smartTalkHttpClientFactory.PostAsync(
-                requestUrl, requestContent, headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-            Log.Information("Start realtime connection response: {@Response}", response);
-        
-            if ((int)response.StatusCode == 307 && response.Headers.Location != null)
-            {
-                Log.Information("Start realtime redirect");
-            
-                var redirectUri = response.Headers.Location;
-
-                if (redirectUri.Scheme == "http")
-                {
-                    var builder = new UriBuilder(redirectUri) { Scheme = "https", Port = 443 };
-                
-                    redirectUri = builder.Uri;
-                }
-            
-                var retryContent = new StringContent(sdp, Encoding.UTF8, "application/sdp");
-
-                var retryResponse = await _smartTalkHttpClientFactory.PostAsync(
-                    redirectUri.ToString(), retryContent, headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-                return await retryResponse.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-            }
-
-            return await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception e)
-        {
-            Log.Error("Exception message: {@Exception}", e);
-        }
-
-        return string.Empty;
+        return await _smartTalkHttpClientFactory.PostAsync<string>(
+            requestUrl, requestContent, headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 }
