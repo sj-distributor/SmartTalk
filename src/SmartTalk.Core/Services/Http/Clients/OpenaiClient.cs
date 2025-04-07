@@ -57,7 +57,7 @@ public class OpenaiClient : IOpenaiClient
         {
             { "Authorization", $"Bearer {ephemeralToken}" },
             { "Content-Type", "application/sdp" },
-            { "UserAgent", "Chrome/122.0.0.0" }
+            { "User-Agent", "Chrome/122.0.0.0" }
         };
         
         var requestUrl = $"{_openAiSettings.BaseUrl}/v1/realtime/?model=gpt-4o-realtime-preview-2024-12-17";
