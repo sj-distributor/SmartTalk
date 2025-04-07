@@ -56,7 +56,6 @@ public class OpenaiClient : IOpenaiClient
         var headers = new Dictionary<string, string>
         {
             { "Authorization", $"Bearer {ephemeralToken}" },
-            { "Content-Type", "application/sdp" },
             { "User-Agent", "Chrome/122.0.0.0" }
         };
         
