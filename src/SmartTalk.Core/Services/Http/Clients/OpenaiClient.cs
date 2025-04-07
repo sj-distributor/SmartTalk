@@ -1,7 +1,6 @@
-using System.Text;
-using Newtonsoft.Json.Linq;
 using Serilog;
 using SmartTalk.Core.Ioc;
+using System.Net.Http.Headers;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Messages.Dto.OpenAi;
 
@@ -51,39 +50,21 @@ public class OpenaiClient : IOpenaiClient
 
     public async Task<string> RealtimeChatAsync(string sdp, string ephemeralToken, CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(ephemeralToken)) 
+            throw new ArgumentException("Ephemeral token cannot be null or empty.");
+        
         var headers = new Dictionary<string, string>
         {
             { "Authorization", $"Bearer {ephemeralToken}" }
         };
         
-        var requestUrl = $"{_openAiSettings.BaseUrl}/v1/realtime/?model='gpt-4o-realtime-preview-2024-12-17'";
+        var requestUrl = $"{_openAiSettings.BaseUrl}/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17";
         
-        var requestContent = new StringContent(sdp, Encoding.UTF8, "application/sdp");
+        var requestContent = new StringContent(sdp);
+        requestContent.Headers.Clear();
+        requestContent.Headers.ContentType = new MediaTypeHeaderValue("application/sdp");
         
-        var response = await _smartTalkHttpClientFactory.PostAsync(
+        return await _smartTalkHttpClientFactory.PostAsync<string>(
             requestUrl, requestContent, headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        if ((int)response.StatusCode == 307 && response.Headers.Location != null)
-        {
-            Log.Information("Start realtime redirect");
-            
-            var redirectUri = response.Headers.Location;
-
-            if (redirectUri.Scheme == "http")
-            {
-                var builder = new UriBuilder(redirectUri) { Scheme = "https" };
-                
-                redirectUri = builder.Uri;
-            }
-            
-            var retryContent = new StringContent(sdp, Encoding.UTF8, "application/sdp");
-
-            var retryResponse = await _smartTalkHttpClientFactory.PostAsync(
-                redirectUri.ToString(), retryContent, headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-            return await retryResponse.Content.ReadAsStringAsync(cancellationToken);
-        }
-
-        return string.Empty;
     }
 }
