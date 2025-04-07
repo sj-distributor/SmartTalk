@@ -55,8 +55,7 @@ public class OpenaiClient : IOpenaiClient
         
         var headers = new Dictionary<string, string>
         {
-            { "Authorization", $"Bearer {ephemeralToken}" },
-            { "User-Agent", "Chrome/122.0.0.0" }
+            { "Authorization", $"Bearer {ephemeralToken}" }
         };
         
         var requestUrl = $"{_openAiSettings.BaseUrl}/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17";
@@ -86,9 +85,9 @@ public class OpenaiClient : IOpenaiClient
             var retryResponse = await _smartTalkHttpClientFactory.PostAsync(
                 redirectUri.ToString(), retryContent, headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-            return await retryResponse.Content.ReadAsStringAsync(cancellationToken);
+            return await retryResponse.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        return string.Empty;
+        return await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
     }
 }
