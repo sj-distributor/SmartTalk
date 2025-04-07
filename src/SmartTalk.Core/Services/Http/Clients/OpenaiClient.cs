@@ -61,33 +61,42 @@ public class OpenaiClient : IOpenaiClient
         var requestUrl = $"{_openAiSettings.BaseUrl}/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17";
         
         var requestContent = new StringContent(sdp, Encoding.UTF8, "application/sdp");
-        
-        var response = await _smartTalkHttpClientFactory.PostAsync(
-            requestUrl, requestContent, headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        Log.Information("Start realtime connection response: {@Response}", response);
-        
-        if ((int)response.StatusCode == 307 && response.Headers.Location != null)
+
+        try
         {
-            Log.Information("Start realtime redirect");
-            
-            var redirectUri = response.Headers.Location;
-
-            if (redirectUri.Scheme == "http")
+            var response = await _smartTalkHttpClientFactory.PostAsync(
+                requestUrl, requestContent, headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+            Log.Information("Start realtime connection response: {@Response}", response);
+        
+            if ((int)response.StatusCode == 307 && response.Headers.Location != null)
             {
-                var builder = new UriBuilder(redirectUri) { Scheme = "https", Port = 443 };
-                
-                redirectUri = builder.Uri;
-            }
+                Log.Information("Start realtime redirect");
             
-            var retryContent = new StringContent(sdp, Encoding.UTF8, "application/sdp");
+                var redirectUri = response.Headers.Location;
 
-            var retryResponse = await _smartTalkHttpClientFactory.PostAsync(
-                redirectUri.ToString(), retryContent, headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
+                if (redirectUri.Scheme == "http")
+                {
+                    var builder = new UriBuilder(redirectUri) { Scheme = "https", Port = 443 };
+                
+                    redirectUri = builder.Uri;
+                }
+            
+                var retryContent = new StringContent(sdp, Encoding.UTF8, "application/sdp");
 
-            return await retryResponse.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                var retryResponse = await _smartTalkHttpClientFactory.PostAsync(
+                    redirectUri.ToString(), retryContent, headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+                return await retryResponse.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            return await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception e)
+        {
+            Log.Error("Exception message: {@Exception}", e);
         }
 
-        return await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        return string.Empty;
     }
 }
