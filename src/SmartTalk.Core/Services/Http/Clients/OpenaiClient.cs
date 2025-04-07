@@ -56,7 +56,7 @@ public class OpenaiClient : IOpenaiClient
             { "Authorization", $"Bearer {ephemeralToken}" }
         };
         
-        var requestUrl = $"{_openAiSettings.BaseUrl}/v1/realtime/?model='gpt-4o-realtime-preview-2024-12-17'";
+        var requestUrl = $"{_openAiSettings.BaseUrl}/v1/realtime/?model=gpt-4o-realtime-preview-2024-12-17";
         
         var requestContent = new StringContent(sdp, Encoding.UTF8, "application/sdp");
         
