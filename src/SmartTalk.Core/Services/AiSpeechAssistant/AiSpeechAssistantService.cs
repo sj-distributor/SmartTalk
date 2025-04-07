@@ -740,6 +740,7 @@ public class AiSpeechAssistantService : IAiSpeechAssistantService
     {
         var turnDetection = configs.FirstOrDefault(x => x.Type == AiSpeechAssistantSessionConfigType.TurnDirection);
 
-        return turnDetection.Config ?? new { type = "server_vad" };
+        return turnDetection.Config ?? new
+            { type = "semantic_vad", eagerness = "low", create_response = true, interrupt_response = true };
     } 
 }
