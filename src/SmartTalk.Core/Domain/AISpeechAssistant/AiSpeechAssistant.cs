@@ -36,6 +36,9 @@ public class AiSpeechAssistant : IEntity, IHasCreatedFields
     [Column("custom_record_analyze_prompt")]
     public string CustomRecordAnalyzePrompt { get; set; }
     
+    [Column("channel"), StringLength(36)]
+    public string Channel { get; set; }
+    
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
     

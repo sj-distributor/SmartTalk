@@ -21,9 +21,16 @@ public class AiSpeechAssistantDto
     
     public string CustomRecordAnalyzePrompt { get; set; }
     
+    public string Channel { get; set; }
+    
     public DateTimeOffset CreatedDate { get; set; }
     
     public int CreatedBy { get; set; }
     
     public AiSpeechAssistantKnowledgeDto Knowledge { get; set; }
+
+    public List<AiSpeechAssistantChannel> Channels => string.IsNullOrWhiteSpace(Channel)
+        ? [] : Channel.Split(',').Select(x => Enum.TryParse(x, out AiSpeechAssistantChannel channel)
+                ? channel : (AiSpeechAssistantChannel?)null).Where(x => x.HasValue).Select(x => x!.Value).ToList();
+
 }
