@@ -14,7 +14,7 @@ public partial class AiSpeechAssistantService
 {
     public async Task<CreateRealtimeConnectionResponse> CreateRealtimeConnectionAsync(CreateRealtimeConnectionCommand command, CancellationToken cancellationToken)
     {
-        var ephemeralToken = await InitialRealtimeSessionsAsync(command, cancellationToken).ConfigureAwait(false);
+        var (ephemeralToken, turnDetection) = await InitialRealtimeSessionsAsync(command, cancellationToken).ConfigureAwait(false);
 
         if (string.IsNullOrWhiteSpace(ephemeralToken)) throw new Exception("Invalid ephemeral token");
         
@@ -24,11 +24,15 @@ public partial class AiSpeechAssistantService
 
         return new CreateRealtimeConnectionResponse
         {
-            Data = answerSdp
+            Data = new CreateRealtimeConnectionResponseData
+            {
+                AnswerSdp = answerSdp,
+                TurnDetection = turnDetection
+            }
         };
     }
 
-    private async Task<string> InitialRealtimeSessionsAsync(CreateRealtimeConnectionCommand command, CancellationToken cancellationToken)
+    private async Task<(string ephemeralToken, object turnDetection)> InitialRealtimeSessionsAsync(CreateRealtimeConnectionCommand command, CancellationToken cancellationToken)
     {
         var prompt = await GenerateFinalPromptAsync(command, cancellationToken).ConfigureAwait(false);
 
@@ -38,10 +42,12 @@ public partial class AiSpeechAssistantService
         
         var configs = assistant == null ? [] : await InitialSessionConfigAsync(assistant, cancellationToken).ConfigureAwait(false);
 
+        var turnDetection = InitialSessionTurnDirection(configs);
+
         var session = new OpenAiRealtimeSessionsInitialRequestDto
         {
             Model = string.IsNullOrEmpty(assistant?.ModelUrl) ? "gpt-4o-realtime-preview-2024-12-17" : assistant.ModelUrl,
-            TurnDetection = InitialSessionTurnDirection(configs),
+            TurnDetection = turnDetection,
             Voice = string.IsNullOrEmpty(assistant?.ModelVoice) ? "alloy" : assistant.ModelVoice,
             Instructions = prompt,
             Modalities = ["audio", "text"],
@@ -49,7 +55,9 @@ public partial class AiSpeechAssistantService
             Tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config).ToList()
         };
 
-        return await _openaiClient.InitialRealtimeSessionsAsync(session, cancellationToken).ConfigureAwait(false);
+        var ephemeralToken = await _openaiClient.InitialRealtimeSessionsAsync(session, cancellationToken).ConfigureAwait(false);
+
+        return (ephemeralToken, turnDetection);
     }
 
     private async Task<string> GenerateFinalPromptAsync(CreateRealtimeConnectionCommand command, CancellationToken cancellationToken)
