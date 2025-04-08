@@ -36,7 +36,7 @@ public partial class AiSpeechAssistantService
             ? await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantAsync(command.AssistantId.Value, cancellationToken).ConfigureAwait(false)
             : null;
         
-        var configs = await InitialSessionConfigAsync(assistant, cancellationToken).ConfigureAwait(false);
+        var configs = command.AssistantId.HasValue ? await InitialSessionConfigAsync(assistant, cancellationToken).ConfigureAwait(false) : [];
 
         var session = new OpenAiRealtimeSessionsInitialRequestDto
         {
