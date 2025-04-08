@@ -12,4 +12,11 @@ public class CreateRealtimeConnectionCommand : ICommand
     public string CustomPrompt { get; set; }
 }
 
-public class CreateRealtimeConnectionResponse : SmartTalkResponse<string>;
+public class CreateRealtimeConnectionResponse : SmartTalkResponse<CreateRealtimeConnectionResponseData>;
+
+public class CreateRealtimeConnectionResponseData
+{
+    public string AnswerSdp { get; set; }
+    
+    public object TurnDetection { get; set; }
+}
