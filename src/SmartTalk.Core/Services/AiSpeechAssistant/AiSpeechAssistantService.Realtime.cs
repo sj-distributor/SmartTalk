@@ -41,15 +41,15 @@ public partial class AiSpeechAssistantService
         var session = new OpenAiRealtimeSessionsInitialRequestDto
         {
             Model = string.IsNullOrEmpty(assistant?.ModelUrl) ? "gpt-4o-realtime-preview-2024-12-1" : assistant.ModelUrl,
-            TurnDetection = InitialSessionTurnDirection(configs),
+            // TurnDetection = InitialSessionTurnDirection(configs),
             // InputAudioFormat = "g711_ulaw",
             // OutputAudioFormat = "g711_ulaw",
             Voice = string.IsNullOrEmpty(assistant?.ModelVoice) ? "alloy" : assistant.ModelVoice,
             Instructions = prompt,
-            Modalities = ["text", "audio"],
-            Temperature = 0.8,
+            // Modalities = ["audio", "text"],
+            // Temperature = 0.8,
             InputAudioTranscription = new { model = "whisper-1" },
-            Tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config).ToList()
+            // Tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config).ToList()
         };
 
         return await _openaiClient.InitialRealtimeSessionsAsync(session, cancellationToken).ConfigureAwait(false);

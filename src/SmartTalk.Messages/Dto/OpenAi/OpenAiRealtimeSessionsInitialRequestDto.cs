@@ -7,8 +7,8 @@ public class OpenAiRealtimeSessionsInitialRequestDto
     [JsonProperty("model")]
     public string Model { get; set; }
     
-    [JsonProperty("turn_detection")]
-    public object TurnDetection { get; set; }
+    // [JsonProperty("turn_detection")]
+    // public object TurnDetection { get; set; }
 
     // [JsonProperty("input_audio_format")]
     // public string InputAudioFormat { get; set; }
@@ -22,15 +22,15 @@ public class OpenAiRealtimeSessionsInitialRequestDto
     [JsonProperty("instructions")]
     public string Instructions { get; set; }
 
-    [JsonProperty("modalities")]
-    public List<string> Modalities { get; set; }
+    // [JsonProperty("modalities")]
+    // public List<string> Modalities { get; set; }
 
-    [JsonProperty("temperature")]
-    public double Temperature { get; set; }
+    // [JsonProperty("temperature")]
+    // public double Temperature { get; set; }
 
     [JsonProperty("input_audio_transcription")]
     public object InputAudioTranscription { get; set; }
 
-    [JsonProperty("tools")]
-    public List<object> Tools { get; set; }
+    // [JsonProperty("tools")]
+    // public List<object> Tools { get; set; }
 }
