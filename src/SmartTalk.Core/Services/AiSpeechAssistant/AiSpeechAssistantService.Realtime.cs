@@ -32,7 +32,7 @@ public partial class AiSpeechAssistantService
         };
     }
 
-    private async Task<(string ephemeralToken, object turnDetection)> InitialRealtimeSessionsAsync(CreateRealtimeConnectionCommand command, CancellationToken cancellationToken)
+    private async Task<(string EphemeralToken, object TurnDetection)> InitialRealtimeSessionsAsync(CreateRealtimeConnectionCommand command, CancellationToken cancellationToken)
     {
         var prompt = await GenerateFinalPromptAsync(command, cancellationToken).ConfigureAwait(false);
 
