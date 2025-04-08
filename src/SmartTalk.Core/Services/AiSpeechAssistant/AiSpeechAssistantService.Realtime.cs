@@ -42,8 +42,8 @@ public partial class AiSpeechAssistantService
         {
             Model = string.IsNullOrEmpty(assistant?.ModelUrl) ? "gpt-4o-realtime-preview-2024-12-1" : assistant.ModelUrl,
             TurnDetection = InitialSessionTurnDirection(configs),
-            InputAudioFormat = "g711_ulaw",
-            OutputAudioFormat = "g711_ulaw",
+            // InputAudioFormat = "g711_ulaw",
+            // OutputAudioFormat = "g711_ulaw",
             Voice = string.IsNullOrEmpty(assistant?.ModelVoice) ? "alloy" : assistant.ModelVoice,
             Instructions = prompt,
             Modalities = ["text", "audio"],

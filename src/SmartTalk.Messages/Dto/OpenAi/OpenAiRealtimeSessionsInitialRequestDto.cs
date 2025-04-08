@@ -10,11 +10,11 @@ public class OpenAiRealtimeSessionsInitialRequestDto
     [JsonProperty("turn_detection")]
     public object TurnDetection { get; set; }
 
-    [JsonProperty("input_audio_format")]
-    public string InputAudioFormat { get; set; }
-
-    [JsonProperty("output_audio_format")]
-    public string OutputAudioFormat { get; set; }
+    // [JsonProperty("input_audio_format")]
+    // public string InputAudioFormat { get; set; }
+    //
+    // [JsonProperty("output_audio_format")]
+    // public string OutputAudioFormat { get; set; }
 
     [JsonProperty("voice")]
     public string Voice { get; set; }
