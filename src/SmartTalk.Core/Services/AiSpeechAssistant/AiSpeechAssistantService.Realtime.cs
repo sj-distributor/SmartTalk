@@ -20,7 +20,7 @@ public partial class AiSpeechAssistantService
         
         var answerSdp = await _openaiClient.RealtimeChatAsync(command.OfferSdp, ephemeralToken, cancellationToken).ConfigureAwait(false);
         
-        Log.Information("Create rtc connection response: {@Response}" , answerSdp);
+        Log.Information("Create realtime connection response: {@Response}" , answerSdp);
 
         return new CreateRealtimeConnectionResponse
         {
