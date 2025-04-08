@@ -18,13 +18,13 @@ public partial class AiSpeechAssistantService
 
         if (string.IsNullOrWhiteSpace(ephemeralToken)) throw new Exception("Invalid ephemeral token");
         
-        var sdpAnswer = await _openaiClient.RealtimeChatAsync(command.OfferSdp, ephemeralToken, cancellationToken).ConfigureAwait(false);
+        var answerSdp = await _openaiClient.RealtimeChatAsync(command.OfferSdp, ephemeralToken, cancellationToken).ConfigureAwait(false);
         
-        Log.Information("Create rtc connection response: {@Response}" , sdpAnswer);
+        Log.Information("Create rtc connection response: {@Response}" , answerSdp);
 
         return new CreateRealtimeConnectionResponse
         {
-            Data = sdpAnswer
+            Data = answerSdp
         };
     }
 
