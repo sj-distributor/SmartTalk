@@ -36,7 +36,7 @@ public class OpenaiClient : IOpenaiClient
         var response = await _smartTalkHttpClientFactory.PostAsJsonAsync<OpenAiRealtimeSessionsResponseDto>(
             requestUrl, request, headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        Log.Information("Get initial realtime session response: {@Response}", response);
+        Log.Information("Initial realtime session response: {@Response}", response);
         
         return response?.ClientSecret?.Value;
     }
