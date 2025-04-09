@@ -1,4 +1,5 @@
 using Mediator.Net.Contracts;
+using SmartTalk.Messages.Dto.OpenAi;
 using SmartTalk.Messages.Responses;
 
 namespace SmartTalk.Messages.Commands.AiSpeechAssistant;
@@ -18,5 +19,5 @@ public class CreateRealtimeConnectionResponseData
 {
     public string AnswerSdp { get; set; }
     
-    public object TurnDetection { get; set; }
+    public OpenAiRealtimeSessionsInitialRequestDto Session { get; set; }
 }
