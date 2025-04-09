@@ -2,7 +2,7 @@ using Newtonsoft.Json;
 
 namespace SmartTalk.Messages.Dto.OpenAi;
 
-public class OpenAiRealtimeSessionsInitialRequestDto
+public class OpenAiRealtimeSessionDto
 {
     [JsonProperty("model")]
     public string Model { get; set; }

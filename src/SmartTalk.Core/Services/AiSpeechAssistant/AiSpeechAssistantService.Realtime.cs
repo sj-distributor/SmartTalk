@@ -32,7 +32,7 @@ public partial class AiSpeechAssistantService
         };
     }
 
-    private async Task<(OpenAiRealtimeSessionsInitialRequestDto Session, string EphemeralToken)> InitialRealtimeSessionsAsync(CreateRealtimeConnectionCommand command, CancellationToken cancellationToken)
+    private async Task<(OpenAiRealtimeSessionDto Session, string EphemeralToken)> InitialRealtimeSessionsAsync(CreateRealtimeConnectionCommand command, CancellationToken cancellationToken)
     {
         var prompt = await GenerateFinalPromptAsync(command, cancellationToken).ConfigureAwait(false);
 
@@ -42,7 +42,7 @@ public partial class AiSpeechAssistantService
         
         var configs = assistant == null ? [] : await InitialSessionConfigAsync(assistant, cancellationToken).ConfigureAwait(false);
 
-        var session = new OpenAiRealtimeSessionsInitialRequestDto
+        var session = new OpenAiRealtimeSessionDto
         {
             Model = string.IsNullOrEmpty(assistant?.ModelUrl) ? "gpt-4o-realtime-preview-2024-12-17" : assistant.ModelUrl,
             TurnDetection = InitialSessionTurnDirection(configs),

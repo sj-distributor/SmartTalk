@@ -19,5 +19,5 @@ public class CreateRealtimeConnectionResponseData
 {
     public string AnswerSdp { get; set; }
     
-    public OpenAiRealtimeSessionsInitialRequestDto Session { get; set; }
+    public OpenAiRealtimeSessionDto Session { get; set; }
 }
