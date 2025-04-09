@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
-using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using System.ComponentModel.DataAnnotations.Schema;
+using SmartTalk.Messages.Enums.AiSpeechAssistant;
 
 namespace SmartTalk.Core.Domain.AISpeechAssistant;
 
@@ -15,27 +15,36 @@ public class AiSpeechAssistant : IEntity, IHasCreatedFields
     [Column("name"), StringLength(255)]
     public string Name { get; set; }
     
-    [Column("did_number"), StringLength(32)]
-    public string DidNumber { get; set; }
+    [Column("answering_number_id")]
+    public int? AnsweringNumberId { get; set; }
     
-    [Column("url"), StringLength(512)]
-    public string Url { get; set; }
+    [Column("answering_number")]
+    public string AnsweringNumber { get; set; }
     
-    [Column("voice"), StringLength(36)]
-    public string Voice { get; set; }
+    [Column("model_url")]
+    public string ModelUrl { get; set; }
     
-    [Column("provider")]
-    public AiSpeechAssistantProvider Provider { get; set; }
+    [Column("model_provider")]
+    public AiSpeechAssistantProvider ModelProvider { get; set; }
+    
+    [Column("model_voice")]
+    public string ModelVoice { get; set; }
     
     [Column("agent_id")]
     public int AgentId { get; set; }
     
-    [Column("greetings"), StringLength(1024)]
-    public string Greetings { get; set; }
-    
     [Column("custom_record_analyze_prompt")]
     public string CustomRecordAnalyzePrompt { get; set; }
     
+    [Column("channel"), StringLength(36)]
+    public string Channel { get; set; }
+    
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
+    
+    [Column("created_by")]
+    public int CreatedBy { get; set; }
+    
+    [NotMapped]
+    public AiSpeechAssistantKnowledge Knowledge { get; set; }
 }
