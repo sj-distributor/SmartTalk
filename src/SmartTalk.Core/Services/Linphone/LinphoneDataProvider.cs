@@ -83,10 +83,9 @@ public class LinphoneDataProvider : ILinphoneDataProvider
         var count = await targetQuery.CountAsync(cancellationToken).ConfigureAwait(false);
         
         if (pageSize.HasValue && pageIndex.HasValue)
-            targetQuery = targetQuery.Skip((pageIndex.Value - 1) * pageSize.Value).Take(pageSize.Value);
+            targetQuery = targetQuery.OrderByDescending(x => x.CallDate).Skip((pageIndex.Value - 1) * pageSize.Value).Take(pageSize.Value);
         
         return (count, await targetQuery
-            .OrderByDescending(x => x.CallDate)
             .ToListAsync(cancellationToken).ConfigureAwait(false));
     }
     
