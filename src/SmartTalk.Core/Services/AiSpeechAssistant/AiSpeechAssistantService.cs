@@ -927,7 +927,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
     private object InitialSessionParameters(List<(AiSpeechAssistantSessionConfigType Type, object Config)> configs, AiSpeechAssistantSessionConfigType type)
     {
-        var turnDetection = configs.FirstOrDefault(x => x.Type == AiSpeechAssistantSessionConfigType.TurnDirection);
+        var turnDetection = configs.FirstOrDefault(x => x.Type == type);
 
         return type switch
         {
