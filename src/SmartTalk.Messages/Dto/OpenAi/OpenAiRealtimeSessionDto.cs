@@ -32,7 +32,7 @@ public class OpenAiRealtimeSessionDto
     public object InputAudioTranscription { get; set; }
     
     [JsonProperty("input_audio_noise_reduction")]
-    public object InputAudioNoiseReduction { get; set; } = "near_field";
+    public object InputAudioNoiseReduction { get; set; } = new { type = "near_field" };
 
     [JsonProperty("tools")]
     public List<object> Tools { get; set; }
