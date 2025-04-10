@@ -8,7 +8,7 @@ namespace SmartTalk.Core.Services.Http.Clients;
 
 public interface IOpenaiClient : IScopedDependency
 {
-    Task<string> InitialRealtimeSessionsAsync(OpenAiRealtimeSessionsInitialRequestDto request, CancellationToken cancellationToken);
+    Task<string> InitialRealtimeSessionsAsync(OpenAiRealtimeSessionDto request, CancellationToken cancellationToken);
     
     Task<string> RealtimeChatAsync(string sdp,  string ephemeralToken, CancellationToken cancellationToken);
 }
@@ -24,7 +24,7 @@ public class OpenaiClient : IOpenaiClient
         _smartTalkHttpClientFactory = smartTalkHttpClientFactory;
     }
 
-    public async Task<string> InitialRealtimeSessionsAsync(OpenAiRealtimeSessionsInitialRequestDto request, CancellationToken cancellationToken)
+    public async Task<string> InitialRealtimeSessionsAsync(OpenAiRealtimeSessionDto request, CancellationToken cancellationToken)
     {
         var headers = new Dictionary<string, string>
         {
@@ -36,7 +36,7 @@ public class OpenaiClient : IOpenaiClient
         var response = await _smartTalkHttpClientFactory.PostAsJsonAsync<OpenAiRealtimeSessionsResponseDto>(
             requestUrl, request, headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        Log.Information("Get initial realtime session response: {@Response}", response);
+        Log.Information("Initial realtime session response: {@Response}", response);
         
         return response?.ClientSecret?.Value;
     }
