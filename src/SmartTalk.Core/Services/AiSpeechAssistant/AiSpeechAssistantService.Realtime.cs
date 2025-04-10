@@ -50,6 +50,7 @@ public partial class AiSpeechAssistantService
             Instructions = prompt,
             Modalities = ["audio", "text"],
             InputAudioTranscription = new { model = "whisper-1" },
+            InputAudioNoiseReduction = configs.FirstOrDefault(x => x.Type == AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction),
             Tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config).ToList()
         };
 

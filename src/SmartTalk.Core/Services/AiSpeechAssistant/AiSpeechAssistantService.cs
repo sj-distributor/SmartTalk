@@ -764,6 +764,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                 modalities = new[] { "text", "audio" },
                 temperature = 0.8,
                 input_audio_transcription = new { model = "whisper-1" },
+                input_audio_noise_reduction = configs.FirstOrDefault(x => x.Type == AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction),
                 tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config)
             }
         };
@@ -783,5 +784,5 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         var turnDetection = configs.FirstOrDefault(x => x.Type == AiSpeechAssistantSessionConfigType.TurnDirection);
 
         return turnDetection.Config ?? new { type = "server_vad" };
-    } 
+    }
 }
