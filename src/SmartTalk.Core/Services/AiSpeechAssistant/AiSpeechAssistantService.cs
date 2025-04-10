@@ -931,7 +931,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
         return type switch
         {
-            AiSpeechAssistantSessionConfigType.TurnDirection => turnDetection.Config ?? new { type = "server_vad" },
+            AiSpeechAssistantSessionConfigType.TurnDirection => turnDetection.Config ?? new { type = "server_vad", interrupt_response = true, create_response = true },
             AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction => turnDetection.Config ?? new { type = "near_field" },
             _ => throw new NotSupportedException(nameof(type))
         };
