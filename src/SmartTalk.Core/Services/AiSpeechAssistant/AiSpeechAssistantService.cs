@@ -756,7 +756,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             type = "session.update",
             session = new
             {
-                turn_detection = InitialSessionTurnDirection(configs),
+                turn_detection = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection),
                 input_audio_format = "g711_ulaw",
                 output_audio_format = "g711_ulaw",
                 voice = string.IsNullOrEmpty(assistant.ModelVoice) ? "alloy" : assistant.ModelVoice,
@@ -764,7 +764,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                 modalities = new[] { "text", "audio" },
                 temperature = 0.8,
                 input_audio_transcription = new { model = "whisper-1" },
-                input_audio_noise_reduction = configs.FirstOrDefault(x => x.Type == AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction),
+                input_audio_noise_reduction = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction),
                 tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config)
             }
         };
@@ -779,10 +779,15 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         return functions.Count == 0 ? [] : functions.Where(x => !string.IsNullOrWhiteSpace(x.Content)).Select(x => (x.Type, JsonConvert.DeserializeObject<object>(x.Content))).ToList();
     }
 
-    private object InitialSessionTurnDirection(List<(AiSpeechAssistantSessionConfigType Type, object Config)> configs)
+    private object InitialSessionParameters(List<(AiSpeechAssistantSessionConfigType Type, object Config)> configs, AiSpeechAssistantSessionConfigType type)
     {
         var turnDetection = configs.FirstOrDefault(x => x.Type == AiSpeechAssistantSessionConfigType.TurnDirection);
 
-        return turnDetection.Config ?? new { type = "server_vad" };
+        return type switch
+        {
+            AiSpeechAssistantSessionConfigType.TurnDirection => turnDetection.Config ?? new { type = "server_vad" },
+            AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction => turnDetection.Config ?? new { type = "near_field" },
+            _ => throw new NotSupportedException(nameof(type))
+        };
     }
 }
