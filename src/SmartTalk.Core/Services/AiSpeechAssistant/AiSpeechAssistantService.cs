@@ -927,12 +927,13 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
     private object InitialSessionParameters(List<(AiSpeechAssistantSessionConfigType Type, object Config)> configs, AiSpeechAssistantSessionConfigType type)
     {
-        var turnDetection = configs.FirstOrDefault(x => x.Type == type);
+        var config = configs.FirstOrDefault(x => x.Type == type);
 
         return type switch
         {
-            AiSpeechAssistantSessionConfigType.TurnDirection => turnDetection.Config ?? new { type = "server_vad", interrupt_response = true, create_response = true },
-            AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction => turnDetection.Config ?? new { type = "near_field" },
+
+            AiSpeechAssistantSessionConfigType.TurnDirection => config.Config ?? new { type = "server_vad", interrupt_response = true, create_response = true },
+            AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction => config.Config ?? new { type = "near_field" },
             _ => throw new NotSupportedException(nameof(type))
         };
     }
