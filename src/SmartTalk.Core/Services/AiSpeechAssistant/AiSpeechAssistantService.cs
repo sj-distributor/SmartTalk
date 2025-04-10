@@ -84,7 +84,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
     private bool _shouldSendBuffToOpenAi;
     private readonly List<byte[]> _wholeAudioBufferBytes;
-
     public AiSpeechAssistantService(
         IMapper mapper,
         ICurrentUser currentUser,
@@ -148,7 +147,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         if (string.IsNullOrEmpty(prompt)) return new AiSpeechAssistantConnectCloseEvent();
 
         var humanContact = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantHumanContactByAssistantIdAsync(assistant.Id, cancellationToken).ConfigureAwait(false);
-
+        
         await ConnectOpenAiRealTimeSocketAsync(assistant, prompt, cancellationToken).ConfigureAwait(false);
         
         _aiSpeechAssistantStreamContext = new AiSpeechAssistantStreamContextDto
@@ -896,7 +895,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     
     private async Task SendSessionUpdateAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, string prompt, CancellationToken cancellationToken)
     {
-        var configs = await InitialSessionConfigAsync(assistant).ConfigureAwait(false);
+        var configs = await InitialSessionConfigAsync(assistant, cancellationToken).ConfigureAwait(false);
         
         var sessionUpdate = new
         {
@@ -911,6 +910,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                 modalities = new[] { "text", "audio" },
                 temperature = _openAiSettings.RealtimeTemperature,
                 input_audio_transcription = new { model = "whisper-1" },
+                input_audio_noise_reduction = configs.FirstOrDefault(x => x.Type == AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction),
                 tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config)
             }
         };

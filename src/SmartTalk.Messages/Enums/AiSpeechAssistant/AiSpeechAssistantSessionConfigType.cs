@@ -3,5 +3,6 @@ namespace SmartTalk.Messages.Enums.AiSpeechAssistant;
 public enum AiSpeechAssistantSessionConfigType
 {
     Tool,
-    TurnDirection
+    TurnDirection,
+    InputAudioNoiseReduction
 }
