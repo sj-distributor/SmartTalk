@@ -219,7 +219,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             await _smartiesClient.CallBackSmartiesAiSpeechAssistantRecordAsync(new AiSpeechAssistantCallBackRequestDto { CallSid = command.CallSid, RecordUrl = record.Url, RecordAnalyzeReport =  record.TranscriptionText }, cancellationToken).ConfigureAwait(false);
         
         if (!string.IsNullOrEmpty(agent.WechatRobotKey))
-            await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(audioFileRawBytes, agent.WechatRobotKey, "錄音分析報告：\n" + record.TranscriptionText, cancellationToken).ConfigureAwait(false);
+            await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(audioFileRawBytes, agent.WechatRobotKey, "Smartalk來電提醒\n您的客人有新來電，請留意打開後臺查看：\nhttps://phoneorder.wiltechs.com/", cancellationToken).ConfigureAwait(false);
 
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
