@@ -87,7 +87,7 @@ public partial class AiSpeechAssistantService
         await UpdateAssistantNumberIfRequiredAsync(assistant.AnsweringNumberId, command.AnsweringNumberId, cancellationToken).ConfigureAwait(false);
         
         _mapper.Map(command, assistant);
-        assistant.Channel = command.Channels == null ? null : string.Join(",", command.Channels);
+        assistant.Channel = command.Channels == null ? null : string.Join(",", command.Channels.Select(x => ((int)x).ToString()));
 
         await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync([assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
 
