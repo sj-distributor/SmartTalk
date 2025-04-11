@@ -39,19 +39,19 @@ public partial class PhoneOrderService : IPhoneOrderService
      {
         var robotUrl = $"https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key={key}";
         
-        await _weChatClient.SendWorkWechatRobotMessagesAsync(robotUrl,
-            new SendWorkWechatGroupRobotMessageDto
-            {
-                MsgType = "text",
-                Text = new SendWorkWechatGroupRobotTextDto
-                {
-                    Content = $"-------------------------Start-------------------------"
-                }
-            }, cancellationToken);
+        // await _weChatClient.SendWorkWechatRobotMessagesAsync(robotUrl,
+        //     new SendWorkWechatGroupRobotMessageDto
+        //     {
+        //         MsgType = "text",
+        //         Text = new SendWorkWechatGroupRobotTextDto
+        //         {
+        //             Content = $"-------------------------Start-------------------------"
+        //         }
+        //     }, cancellationToken);
         
         var splitAudios = await ConvertAndSplitAudioAsync(recordContent, secondsPerAudio: 60, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        await SendMultiAudioMessagesAsync(splitAudios, key, cancellationToken).ConfigureAwait(false);
+        // await SendMultiAudioMessagesAsync(splitAudios, key, cancellationToken).ConfigureAwait(false);
 
         await _weChatClient.SendWorkWechatRobotMessagesAsync(
             robotUrl, new SendWorkWechatGroupRobotMessageDto
@@ -59,11 +59,11 @@ public partial class PhoneOrderService : IPhoneOrderService
                 MsgType = "text", Text = new SendWorkWechatGroupRobotTextDto { Content = transcription }
             }, CancellationToken.None);
         
-        await _weChatClient.SendWorkWechatRobotMessagesAsync(
-            robotUrl, new SendWorkWechatGroupRobotMessageDto
-            {
-                MsgType = "text", Text = new SendWorkWechatGroupRobotTextDto { Content = "-------------------------End-------------------------" }
-            }, CancellationToken.None);
+        // await _weChatClient.SendWorkWechatRobotMessagesAsync(
+        //     robotUrl, new SendWorkWechatGroupRobotMessageDto
+        //     {
+        //         MsgType = "text", Text = new SendWorkWechatGroupRobotTextDto { Content = "-------------------------End-------------------------" }
+        //     }, CancellationToken.None);
     }
 
     private async Task<List<byte[]>> ConvertAndSplitAudioAsync(byte[] record, int secondsPerAudio, CancellationToken cancellationToken)
