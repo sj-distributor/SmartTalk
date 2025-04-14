@@ -53,8 +53,6 @@ public partial class PhoneOrderService
         if (command.RecordName.IsNullOrEmpty() && command.RecordUrl.IsNullOrEmpty()) return;
 
         var recordInfo = await ExtractPhoneOrderRecordInfoAsync(command.RecordName, command.AgentId, command.CreatedDate, cancellationToken).ConfigureAwait(false);
-
-        _backgroundJobClient.Enqueue<ILinphoneService>(x => x.AddLinphoneCdrAsync(command.RecordName, cancellationToken));
         
         Log.Information("Phone order record information: {@recordInfo}", recordInfo);
                                    
