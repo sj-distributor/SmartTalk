@@ -1,3 +1,4 @@
+using System.Text;
 using AutoMapper;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Domain.Restaurants;
@@ -13,6 +14,8 @@ public interface IRestaurantService : IScopedDependency
     Task AddRestaurantAsync(AddRestaurantCommand command, CancellationToken cancellationToken);
 
     Task<GetRestaurantMenuItemsResponse> GetRestaurantMenuItemsAsync(GetRestaurantMenuItemsRequest request, CancellationToken cancellationToken);
+    
+    Task<GetModifierProductsPromptResponse> GetModifierProductsPromptAsync(GetModifierProductsPromptRequest request, CancellationToken cancellationToken);
 }
 
 public class RestaurantService : IRestaurantService
@@ -50,5 +53,64 @@ public class RestaurantService : IRestaurantService
                 MenuItems = _mapper.Map<List<RestaurantMenuItemDto>>(menuItems)
             }
         };
+    }
+
+    public async Task<GetModifierProductsPromptResponse> GetModifierProductsPromptAsync(GetModifierProductsPromptRequest request, CancellationToken cancellationToken) 
+    { 
+        var groups = await _restaurantDataProvider.GetModifierProductsGroupsAsync(request.RestaurantName, cancellationToken).ConfigureAwait(false);
+        
+        var promptDict = new Dictionary<string, StringBuilder>();
+        
+        foreach (var group in groups) 
+        { 
+            if (!promptDict.ContainsKey(group.LanguageCode)) 
+                promptDict[group.LanguageCode] = new StringBuilder();
+            
+            var stringBuilder = promptDict[group.LanguageCode];
+            
+            if (group.ModifierItems.Count > 0 && group.MinimumSelect > 0) 
+            { 
+                var sides = string.Join(", ", group.ModifierItems.Select(i => i.Name)); 
+                stringBuilder.AppendLine($"{group.GroupName}, priced at {group.ItemPrice} dollar, served with your choice of {group.MinimumSelect} sides: {sides}. Choose exactly {group.MinimumSelect}."); 
+                stringBuilder.AppendLine(); 
+            }
+            
+            foreach (var item in group.ModifierItems.Where(i => i.Price > 0)) 
+            { 
+                if (item.OriginalPrice.HasValue && item.OriginalPrice.Value > item.Price) 
+                { 
+                    stringBuilder.AppendLine($"{group.GroupName}, priced at {group.ItemPrice} dollar, available with sides: {item.Name} (original price {item.OriginalPrice.Value} dollar, current add-on {item.Price} dollar)."); 
+                }
+                else 
+                { 
+                    stringBuilder.AppendLine($"{group.GroupName}, priced at {group.ItemPrice} dollar, available with sides: {item.Name} (add-on {item.Price} dollar)."); 
+                } 
+                stringBuilder.AppendLine(); 
+            }
+            
+            var sizeVariants = group.ModifierItems
+                .Where(i => !string.IsNullOrEmpty(i.Size))
+                .GroupBy(i => i.Size)
+                .Select(g => $"{g.Key} {g.First().Price} dollar")
+                .ToList();
+            
+            if (sizeVariants.Any()) 
+            { 
+                stringBuilder.AppendLine($"{group.GroupName} (Size): {string.Join(", ", sizeVariants)}."); 
+                stringBuilder.AppendLine(); 
+            } 
+        }
+        
+        var result = promptDict
+            .Select(kv => new LocalizedPrompt 
+            { 
+                LanguageCode = kv.Key, 
+                Prompt = kv.Value.ToString().Trim() 
+            }).ToList();
+        
+        return new GetModifierProductsPromptResponse 
+        { 
+            Prompts = result 
+        }; 
     }
 }

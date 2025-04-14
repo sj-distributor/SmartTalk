@@ -34,4 +34,13 @@ public class RestaurantController : ControllerBase
         
         return Ok(response);
     }
+    
+    [Route("menuModifierProductsPrompt"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(string))]
+    public async Task<IActionResult> GetModifierProductsPromptAsync([FromQuery] GetModifierProductsPromptRequest request, CancellationToken cancellationToken)
+    { 
+        var response = await _mediator.RequestAsync<GetModifierProductsPromptRequest, GetModifierProductsPromptResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
 }

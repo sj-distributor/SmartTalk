@@ -57,6 +57,15 @@ public class EasyPosResponseModifierGroups
 {
     [JsonProperty("id")]
     public long Id { get; set; }
+    
+    [JsonProperty("minimumSelect")]
+    public int MinimumSelect { get; set; }
+    
+    [JsonProperty("maximumSelect")]
+    public int MaximumSelect { get; set; }
+    
+    [JsonProperty("MaximumRepetition")]
+    public int MaximumRepetition { get; set; }
 
     [JsonProperty("localizations")]
     public List<EasyPosResponseLocalization> Localizations { get; set; }
