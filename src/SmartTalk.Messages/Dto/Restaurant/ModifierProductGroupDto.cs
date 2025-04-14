@@ -7,6 +7,7 @@ public class ModifierProductGroupDto
     public string GroupName { get; set; }
     
     public decimal ItemPrice { get; set; }
+    
     public int MinimumSelect { get; set; }
     
     public int MaximumSelect { get; set; }
