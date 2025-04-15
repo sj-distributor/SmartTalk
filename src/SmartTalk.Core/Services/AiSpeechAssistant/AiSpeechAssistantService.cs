@@ -62,7 +62,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly OpenAiSettings _openAiSettings;
     private readonly TwilioSettings _twilioSettings;
     private readonly ISmartiesClient _smartiesClient;
-    private readonly ClientWebSocket _openaiWebSocket;
     private readonly ZhiPuAiSettings _zhiPuAiSettings;
     private readonly IPhoneOrderService _phoneOrderService;
     private readonly IAgentDataProvider _agentDataProvider;
@@ -254,8 +253,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     
     private async Task ConnectOpenAiRealTimeSocketAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, string prompt, CancellationToken cancellationToken)
     {
-        _openaiWebSocket.Options.SetRequestHeader("Authorization", GetAuthorizationHeader(assistant));
-        _openaiWebSocket.Options.SetRequestHeader("OpenAI-Beta", "realtime=v1");
+        _openaiClientWebSocket.Options.SetRequestHeader("Authorization", GetAuthorizationHeader(assistant));
+        _openaiClientWebSocket.Options.SetRequestHeader("OpenAI-Beta", "realtime=v1");
 
         var url = string.IsNullOrEmpty(assistant.ModelUrl) ? AiSpeechAssistantStore.DefaultUrl : assistant.ModelUrl;
         
