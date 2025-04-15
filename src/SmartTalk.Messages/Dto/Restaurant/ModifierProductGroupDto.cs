@@ -1,3 +1,5 @@
+using SmartTalk.Messages.Dto.EasyPos;
+
 namespace SmartTalk.Messages.Dto.Restaurant;
 
 public class ModifierProductGroupDto
@@ -13,6 +15,8 @@ public class ModifierProductGroupDto
     public int MaximumSelect { get; set; }
     
     public int MaximumRepetition { get; set; }
+    
+    public List<EasyPosResponseTimePeriods> TimePeriods { get; set; }
     
     public List<ModifierPromptItemDto> ModifierItems { get; set; } = new();
 }

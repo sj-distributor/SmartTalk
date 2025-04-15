@@ -21,6 +21,12 @@ public class EasyPosResponseData
 {
     [JsonProperty("products")]
     public List<EasyPosResponseProduct> Products { get; set; }
+    
+    [JsonProperty("timePeriods")]
+    public List<EasyPosResponseTimePeriods> TimePeriods { get; set; }
+    
+    [JsonProperty("menus")]
+    public List<EasyPosResponseMenu> Menus { get; set; }
 }
 
 public class EasyPosResponseProduct
@@ -30,6 +36,9 @@ public class EasyPosResponseProduct
 
     [JsonProperty("price")]
     public decimal Price { get; set; }
+    
+    [JsonProperty("menuIds")]
+    public List<long> MenuIds { get; set; } 
 
     [JsonProperty("isIndependentSale")]
     public bool IsIndependentSale { get; set; }
@@ -84,4 +93,29 @@ public class EasyPosResponseModifierProducts
     
     [JsonProperty("localizations")]
     public List<EasyPosResponseLocalization> Localizations { get; set; }
+}
+
+public class EasyPosResponseTimePeriods
+{
+    [JsonProperty("id")]
+    public long Id { get; set; }
+
+    [JsonProperty("name")]
+    public string Name { get; set; }
+
+    [JsonProperty("dayOfWeeks")]
+    public List<int> DayOfWeeks { get; set; }
+
+    [JsonProperty("startTime")]
+    public string StartTime { get; set; }
+
+    [JsonProperty("endTime")]
+    public string EndTime { get; set; }
+}
+
+public class EasyPosResponseMenu
+{
+    public long MenuId { get; set; }
+    
+    public List<EasyPosResponseTimePeriods> TimePeriods { get; set; }
 }

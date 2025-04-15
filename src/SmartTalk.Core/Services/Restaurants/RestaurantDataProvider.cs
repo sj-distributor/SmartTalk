@@ -146,14 +146,16 @@ public class RestaurantDataProvider : IRestaurantDataProvider
     public async Task<List<ModifierProductGroupDto>> GetModifierProductsGroupsAsync(string restaurantName, CancellationToken cancellationToken)
     {
         var posResponse = await _easyPosClient.GetEasyPosRestaurantMenusAsync(restaurantName, cancellationToken);
-
-        if (posResponse?.Data?.Products == null) return new List<ModifierProductGroupDto>();
-
+        
+        var products = posResponse?.Data?.Products; 
+        var timePeriods = posResponse?.Data?.TimePeriods; 
+        if (products == null || !products.Any()) return new List<ModifierProductGroupDto>();
+        
         var result = new List<ModifierProductGroupDto>();
-
-        foreach (var product in posResponse.Data.Products)
-        {
-            foreach (var modifierGroup in product.ModifierGroups ?? Enumerable.Empty<EasyPosResponseModifierGroups>())
+        
+        foreach (var product in products) 
+        { 
+            foreach (var modifierGroup in product.ModifierGroups ?? Enumerable.Empty<EasyPosResponseModifierGroups>()) 
             {
                 foreach (var loc in modifierGroup.Localizations ?? Enumerable.Empty<EasyPosResponseLocalization>())
                 {
@@ -162,6 +164,8 @@ public class RestaurantDataProvider : IRestaurantDataProvider
                             .Where(l => l.LanguageCode == loc.LanguageCode)
                             .Select(l => l.Value) ?? Enumerable.Empty<string>())
                         .ToList() ?? new List<string>();
+                    
+                    var productTimePeriods = timePeriods;
 
                     result.Add(new ModifierProductGroupDto
                     {
@@ -170,7 +174,8 @@ public class RestaurantDataProvider : IRestaurantDataProvider
                         MinimumSelect = modifierGroup.MinimumSelect,
                         MaximumSelect = modifierGroup.MaximumSelect,
                         MaximumRepetition = modifierGroup.MaximumRepetition,
-                        ModifierItems = modifiers.Select(name => new ModifierPromptItemDto { Name = name }).ToList()
+                        ModifierItems = modifiers.Select(name => new ModifierPromptItemDto { Name = name }).ToList(),
+                        TimePeriods = productTimePeriods
                     });
                 }
             }

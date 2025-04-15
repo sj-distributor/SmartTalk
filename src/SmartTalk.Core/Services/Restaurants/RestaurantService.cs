@@ -63,8 +63,14 @@ public class RestaurantService : IRestaurantService
         
         foreach (var group in groups) 
         { 
-            if (!promptDict.ContainsKey(group.LanguageCode)) 
-                promptDict[group.LanguageCode] = new StringBuilder();
+            var validTimePeriods = group.TimePeriods?
+                .Where(tp => tp.DayOfWeeks.Contains((int)DateTime.UtcNow.DayOfWeek))
+                .Where(tp => IsWithinTimeRange(tp.StartTime, tp.EndTime))
+                .ToList();
+
+            if (validTimePeriods == null || !validTimePeriods.Any()) continue; 
+            
+            if (!promptDict.ContainsKey(group.LanguageCode)) promptDict[group.LanguageCode] = new StringBuilder();
             
             var stringBuilder = promptDict[group.LanguageCode];
             
@@ -99,6 +105,13 @@ public class RestaurantService : IRestaurantService
                 stringBuilder.AppendLine($"{group.GroupName} (Size): {string.Join(", ", sizeVariants)}."); 
                 stringBuilder.AppendLine(); 
             } 
+            
+            if (validTimePeriods.Any())
+            {
+                var timePeriodPrompt = string.Join(", ", validTimePeriods.Select(tp => $"{tp.Name} ({tp.StartTime} - {tp.EndTime})"));
+                stringBuilder.AppendLine($"Available during: {timePeriodPrompt}");
+                stringBuilder.AppendLine();
+            }
         }
         
         var result = promptDict
@@ -112,5 +125,17 @@ public class RestaurantService : IRestaurantService
         { 
             Prompts = result 
         }; 
+    }
+    
+    private bool IsWithinTimeRange(string startTime, string endTime)
+    {
+        if (!TimeSpan.TryParse(startTime, out var start) || !TimeSpan.TryParse(endTime, out var end))
+            return false;
+
+        var now = DateTime.UtcNow.TimeOfDay;
+
+        return start <= end
+            ? now >= start && now <= end
+            : now >= start || now <= end;
     }
 }

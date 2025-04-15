@@ -35,7 +35,7 @@ public class RestaurantController : ControllerBase
         return Ok(response);
     }
     
-    [Route("menuModifierProductsPrompt"), HttpGet]
+    [Route("modifierProducts/Prompt"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(string))]
     public async Task<IActionResult> GetModifierProductsPromptAsync([FromQuery] GetModifierProductsPromptRequest request, CancellationToken cancellationToken)
     { 
