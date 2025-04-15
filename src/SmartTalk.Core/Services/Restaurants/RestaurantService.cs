@@ -61,57 +61,17 @@ public class RestaurantService : IRestaurantService
         
         var promptDict = new Dictionary<string, StringBuilder>();
         
-        foreach (var group in groups) 
-        { 
-            var validTimePeriods = group.TimePeriods?
-                .Where(tp => tp.DayOfWeeks.Contains((int)DateTime.UtcNow.DayOfWeek))
-                .Where(tp => IsWithinTimeRange(tp.StartTime, tp.EndTime))
-                .ToList();
+        foreach (var group in groups)
+        {
+            if (!promptDict.ContainsKey(group.LanguageCode))
+                promptDict[group.LanguageCode] = new StringBuilder();
 
-            if (validTimePeriods == null || !validTimePeriods.Any()) continue; 
-            
-            if (!promptDict.ContainsKey(group.LanguageCode)) promptDict[group.LanguageCode] = new StringBuilder();
-            
             var stringBuilder = promptDict[group.LanguageCode];
             
-            if (group.ModifierItems.Count > 0 && group.MinimumSelect > 0) 
-            { 
-                var sides = string.Join(", ", group.ModifierItems.Select(i => i.Name)); 
-                stringBuilder.AppendLine($"{group.GroupName}, priced at {group.ItemPrice} dollar, served with your choice of {group.MinimumSelect} sides: {sides}. Choose exactly {group.MinimumSelect}."); 
-                stringBuilder.AppendLine(); 
-            }
-            
-            foreach (var item in group.ModifierItems.Where(i => i.Price > 0)) 
-            { 
-                if (item.OriginalPrice.HasValue && item.OriginalPrice.Value > item.Price) 
-                { 
-                    stringBuilder.AppendLine($"{group.GroupName}, priced at {group.ItemPrice} dollar, available with sides: {item.Name} (original price {item.OriginalPrice.Value} dollar, current add-on {item.Price} dollar)."); 
-                }
-                else 
-                { 
-                    stringBuilder.AppendLine($"{group.GroupName}, priced at {group.ItemPrice} dollar, available with sides: {item.Name} (add-on {item.Price} dollar)."); 
-                } 
-                stringBuilder.AppendLine(); 
-            }
-            
-            var sizeVariants = group.ModifierItems
-                .Where(i => !string.IsNullOrEmpty(i.Size))
-                .GroupBy(i => i.Size)
-                .Select(g => $"{g.Key} {g.First().Price} dollar")
-                .ToList();
-            
-            if (sizeVariants.Any()) 
-            { 
-                stringBuilder.AppendLine($"{group.GroupName} (Size): {string.Join(", ", sizeVariants)}."); 
-                stringBuilder.AppendLine(); 
-            } 
-            
-            if (validTimePeriods.Any())
-            {
-                var timePeriodPrompt = string.Join(", ", validTimePeriods.Select(tp => $"{tp.Name} ({tp.StartTime} - {tp.EndTime})"));
-                stringBuilder.AppendLine($"Available during: {timePeriodPrompt}");
-                stringBuilder.AppendLine();
-            }
+            AppendGroupDescription(group, stringBuilder);
+            AppendItemDescription(group, stringBuilder);
+            AppendSizeVariants(group, stringBuilder);
+            AppendTimePeriod(group, stringBuilder);
         }
         
         var result = promptDict
@@ -127,15 +87,87 @@ public class RestaurantService : IRestaurantService
         }; 
     }
     
-    private bool IsWithinTimeRange(string startTime, string endTime)
+    private void AppendGroupDescription(ModifierProductGroupDto group, StringBuilder stringBuilder)
     {
-        if (!TimeSpan.TryParse(startTime, out var start) || !TimeSpan.TryParse(endTime, out var end))
-            return false;
+        if (group.ModifierItems.Count > 0 && group.MinimumSelect > 0)
+        {
+            var sides = string.Join(", ", group.ModifierItems.Select(i => i.Name));
+            stringBuilder.AppendLine($"{group.GroupName}, priced at {group.ItemPrice} dollar, served with your choice of {group.MinimumSelect} sides: {sides}. Choose exactly {group.MinimumSelect}.");
+            
+            if (group.MaximumRepetition == 1)
+            {
+                stringBuilder.AppendLine("Each item can only be selected once.");
+            }
+            else if (group.MaximumRepetition == 0)
+            {
+                stringBuilder.AppendLine("Items can be selected multiple times.");
+            }
 
-        var now = DateTime.UtcNow.TimeOfDay;
+            AppendTimePeriod(group, stringBuilder);
+            stringBuilder.AppendLine();
+        }
+    }
 
-        return start <= end
-            ? now >= start && now <= end
-            : now >= start || now <= end;
+    private void AppendItemDescription(ModifierProductGroupDto group, StringBuilder stringBuilder)
+    {
+        foreach (var item in group.ModifierItems.Where(i => i.Price > 0))
+        {
+            if (item.OriginalPrice.HasValue && item.OriginalPrice.Value > item.Price)
+            {
+                stringBuilder.AppendLine($"{group.GroupName}, priced at {group.ItemPrice} dollar, available with sides: {item.Name} (original price {item.OriginalPrice.Value} dollar, current add-on {item.Price} dollar).");
+            }
+            else
+            {
+                stringBuilder.AppendLine($"{group.GroupName}, priced at {group.ItemPrice} dollar, available with sides: {item.Name} (add-on {item.Price} dollar).");
+            }
+            AppendTimePeriod(group, stringBuilder);
+            stringBuilder.AppendLine();
+        }
+    }
+
+    private void AppendSizeVariants(ModifierProductGroupDto group, StringBuilder stringBuilder)
+    {
+        var sizeVariants = group.ModifierItems
+            .Where(i => !string.IsNullOrEmpty(i.Size))
+            .GroupBy(i => i.Size)
+            .Select(g => $"{g.Key} {g.First().Price} dollar")
+            .ToList();
+
+        if (sizeVariants.Any())
+        {
+            stringBuilder.AppendLine($"{group.GroupName} (Size): {string.Join(", ", sizeVariants)}.");
+            AppendTimePeriod(group, stringBuilder);
+            stringBuilder.AppendLine();
+        }
+    }
+
+    private void AppendTimePeriod(ModifierProductGroupDto group, StringBuilder stringBuilder)
+    {
+        if (group.TimePeriods != null && group.TimePeriods.Any())
+        {
+            var timePeriodDescriptions = group.TimePeriods.Select(tp =>
+            {
+                var days = string.Join(", ", tp.DayOfWeeks.Select(ConvertDayOfWeekToName));
+                return $"{tp.Name} ({tp.StartTime} - {tp.EndTime}, Days: {days})";
+            });
+
+            stringBuilder.AppendLine($"Available during: {string.Join("; ", timePeriodDescriptions)}");
+            stringBuilder.AppendLine();
+        }
+    }
+    
+    private string ConvertDayOfWeekToName(int day)
+    {
+        return day switch
+        {
+            0 => "Sunday",
+            1 => "Monday",
+            2 => "Tuesday",
+            3 => "Wednesday",
+            4 => "Thursday",
+            5 => "Friday",
+            6 => "Saturday",
+            _ => $"Unknown({day})"
+        };
     }
 }
