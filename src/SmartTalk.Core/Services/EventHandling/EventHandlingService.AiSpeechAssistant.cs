@@ -15,17 +15,24 @@ public partial class EventHandlingService
         
         Log.Information("Generate the compare result: {@Diff}", diff);
 
-        var brief = await GenerateKnowledgeChangeBriefAsync(diff.ToString(), cancellationToken).ConfigureAwait(false);
-        
-        Log.Information($"Generate the knowledge chang brief: {brief}");
-
-        if (!string.IsNullOrEmpty(brief))
+        try
         {
-            var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(
-                @event.LatestKnowledge.AssistantId, @event.LatestKnowledge.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
+            var brief = await GenerateKnowledgeChangeBriefAsync(diff.ToString(), cancellationToken).ConfigureAwait(false);
+        
+            Log.Information($"Generate the knowledge chang brief: {brief}");
 
-            knowledge.Brief = brief;
-            await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync([knowledge], cancellationToken: cancellationToken).ConfigureAwait(false);
+            if (!string.IsNullOrEmpty(brief))
+            {
+                var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(
+                    @event.LatestKnowledge.AssistantId, @event.LatestKnowledge.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+                knowledge.Brief = brief;
+                await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync([knowledge], cancellationToken: cancellationToken).ConfigureAwait(false);
+            }
+        }
+        catch (Exception e)
+        {
+            Log.Error("Generate the knowledge brief error: {@Message}", e.Message);
         }
     }
     
@@ -113,7 +120,7 @@ public partial class EventHandlingService
             {
                 new () {
                     Role = "system",
-                    Content = new CompletionsStringContent("你是一個善於分析數據的助手，專門用於對數據變更進行簡要概括。請根據提供的數據變更內容，生成不超过 10 字的簡短總結，只需點明變更重點，無需過多解釋。")
+                    Content = new CompletionsStringContent("你是一個善於分析數據的助手，專門用於對內容變更進行簡要概括。請根據提供的變更內容，生成不超过 10 字的簡短總結，只需點明變更重點，無需過多解釋。")
                 },
                 new ()
                 {
@@ -124,6 +131,6 @@ public partial class EventHandlingService
             Model = OpenAiModel.Gpt4oMini
         }, cancellationToken).ConfigureAwait(false);
         
-        return completionResult.Data.Response;
+        return completionResult?.Data?.Response;
     }
 }
