@@ -453,13 +453,14 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             while (_openaiClientWebSocket.State == WebSocketState.Open)
             {
                 var result = await _openaiClientWebSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
-                Log.Information("ReceiveFromOpenAi result: {result}", Encoding.UTF8.GetString(buffer, 0, result.Count));
+                var value = Encoding.UTF8.GetString(buffer, 0, result.Count);
+                Log.Information("ReceiveFromOpenAi result: {result}", value);
 
                 if (result is { Count: > 0 })
                 {
                     try
                     {
-                        JsonSerializer.Deserialize<JsonDocument>(_openaiEvent.Length > 0 ? _openaiEvent + Encoding.UTF8.GetString(buffer, 0, result.Count) : buffer.AsSpan(0, result.Count).ToString());
+                        JsonSerializer.Deserialize<JsonDocument>(_openaiEvent.Length > 0 ? _openaiEvent + value : value);
                     }
                     catch (Exception)
                     {
@@ -467,7 +468,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                         continue;
                     }
                     
-                    var jsonDocument = JsonSerializer.Deserialize<JsonDocument>(_openaiEvent.Length > 0 ? _openaiEvent + Encoding.UTF8.GetString(buffer, 0, result.Count) : buffer.AsSpan(0, result.Count).ToString());
+                    var jsonDocument = JsonSerializer.Deserialize<JsonDocument>(_openaiEvent.Length > 0 ? _openaiEvent + value : value);
                     
                     _openaiEvent.Clear();
                     
