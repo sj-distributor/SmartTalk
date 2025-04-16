@@ -280,23 +280,24 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private async Task ConnectOpenAiRealTimeSocketAsync(
         Domain.AISpeechAssistant.AiSpeechAssistant assistant, string prompt, CancellationToken cancellationToken)
     {
-        var apikey = await GetAuthorizationHeader(assistant, cancellationToken).ConfigureAwait(false);
-        _openaiClientWebSocket.Options.SetRequestHeader("Authorization", apikey);
+        // var apikey = await GetAuthorizationHeader(assistant, cancellationToken).ConfigureAwait(false);
+        // _openaiClientWebSocket.Options.SetRequestHeader("Authorization", apikey);
         _openaiClientWebSocket.Options.SetRequestHeader("OpenAI-Beta", "realtime=v1");
         _openaiClientWebSocket.Options.SetRequestHeader("api-key", _azureSetting.ApiKey);
 
         var url = string.IsNullOrEmpty(assistant.ModelUrl) ? AiSpeechAssistantStore.DefaultUrl : assistant.ModelUrl;
 
-        try
-        {
-            await _openaiClientWebSocket.ConnectAsync(new Uri(url), cancellationToken).ConfigureAwait(false);
-        }
-        catch
-        {
-            await ReduceOpenAiApiKeyUsingNumberAsync(cancellationToken);
-
-            throw;
-        }
+        await _openaiClientWebSocket.ConnectAsync(new Uri(url), cancellationToken).ConfigureAwait(false);
+        // try
+        // {
+        //     
+        // }
+        // catch
+        // {
+        //     await ReduceOpenAiApiKeyUsingNumberAsync(cancellationToken);
+        //
+        //     throw;
+        // }
 
         await SendSessionUpdateAsync(assistant, prompt, cancellationToken).ConfigureAwait(false);
     }
