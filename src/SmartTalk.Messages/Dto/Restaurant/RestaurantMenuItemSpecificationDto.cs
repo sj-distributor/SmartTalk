@@ -2,7 +2,7 @@ using SmartTalk.Messages.Dto.EasyPos;
 
 namespace SmartTalk.Messages.Dto.Restaurant;
 
-public class ModifierProductGroupDto
+public class RestaurantMenuItemSpecificationDto
 {
     public string LanguageCode { get; set; }
     

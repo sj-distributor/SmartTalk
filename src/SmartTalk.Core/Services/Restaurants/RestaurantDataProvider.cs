@@ -30,7 +30,7 @@ public interface IRestaurantDataProvider : IScopedDependency
 
     Task DeleteRestaurantsAsync(List<Restaurant> restaurants, bool forceSave = true, CancellationToken cancellationToken = default);
 
-    Task<List<ModifierProductGroupDto>> GetModifierProductsGroupsAsync(string restaurantName, CancellationToken cancellationToken);
+    Task<List<RestaurantMenuItemSpecificationDto>> GetRestaurantMenuItemSpecificationAsync(string restaurantName, CancellationToken cancellationToken);
 }
 
 public class RestaurantDataProvider : IRestaurantDataProvider
@@ -143,15 +143,15 @@ public class RestaurantDataProvider : IRestaurantDataProvider
         if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<ModifierProductGroupDto>> GetModifierProductsGroupsAsync(string restaurantName, CancellationToken cancellationToken)
+    public async Task<List<RestaurantMenuItemSpecificationDto>> GetRestaurantMenuItemSpecificationAsync(string restaurantName, CancellationToken cancellationToken)
     {
         var posResponse = await _easyPosClient.GetEasyPosRestaurantMenusAsync(restaurantName, cancellationToken);
         
         var products = posResponse?.Data?.Products; 
         var timePeriods = posResponse?.Data?.TimePeriods; 
-        if (products == null || !products.Any()) return new List<ModifierProductGroupDto>();
+        if (products == null || !products.Any()) return new List<RestaurantMenuItemSpecificationDto>();
         
-        var result = new List<ModifierProductGroupDto>();
+        var result = new List<RestaurantMenuItemSpecificationDto>();
         
         foreach (var product in products) 
         { 
@@ -167,7 +167,7 @@ public class RestaurantDataProvider : IRestaurantDataProvider
                     
                     var productTimePeriods = timePeriods;
 
-                    result.Add(new ModifierProductGroupDto
+                    result.Add(new RestaurantMenuItemSpecificationDto
                     {
                         LanguageCode = loc.LanguageCode,
                         GroupName = loc.Value,

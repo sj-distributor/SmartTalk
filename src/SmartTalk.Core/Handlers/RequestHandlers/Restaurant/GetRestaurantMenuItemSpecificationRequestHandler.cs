@@ -5,11 +5,11 @@ using SmartTalk.Messages.Requests.Restaurant;
 
 namespace SmartTalk.Core.Handlers.RequestHandlers.Restaurant;
 
-public class GetModifierProductsPromptRequestHandler : IRequestHandler<GetRestaurantMenuItemSpecificationRequest, GetRestaurantMenuItemSpecificationResponse>
+public class GetRestaurantMenuItemSpecificationRequestHandler : IRequestHandler<GetRestaurantMenuItemSpecificationRequest, GetRestaurantMenuItemSpecificationResponse>
 {
     private readonly IRestaurantService _restaurantService;
 
-    public GetModifierProductsPromptRequestHandler(IRestaurantService restaurantService)
+    public GetRestaurantMenuItemSpecificationRequestHandler(IRestaurantService restaurantService)
     {
         _restaurantService = restaurantService;
     }

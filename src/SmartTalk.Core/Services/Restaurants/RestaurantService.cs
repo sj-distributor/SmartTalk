@@ -57,7 +57,7 @@ public class RestaurantService : IRestaurantService
 
     public async Task<GetRestaurantMenuItemSpecificationResponse> GetRestaurantMenuItemSpecificationAsync(GetRestaurantMenuItemSpecificationRequest request, CancellationToken cancellationToken) 
     { 
-        var groups = await _restaurantDataProvider.GetModifierProductsGroupsAsync(request.RestaurantName, cancellationToken).ConfigureAwait(false);
+        var groups = await _restaurantDataProvider.GetRestaurantMenuItemSpecificationAsync(request.RestaurantName, cancellationToken).ConfigureAwait(false);
         
         var promptDict = new Dictionary<string, StringBuilder>();
         
@@ -87,7 +87,7 @@ public class RestaurantService : IRestaurantService
         }; 
     }
     
-    private void AppendGroupDescription(ModifierProductGroupDto group, StringBuilder stringBuilder)
+    private void AppendGroupDescription(RestaurantMenuItemSpecificationDto group, StringBuilder stringBuilder)
     {
         if (group.ModifierItems.Count > 0 && group.MinimumSelect > 0)
         {
@@ -108,7 +108,7 @@ public class RestaurantService : IRestaurantService
         }
     }
 
-    private void AppendItemDescription(ModifierProductGroupDto group, StringBuilder stringBuilder)
+    private void AppendItemDescription(RestaurantMenuItemSpecificationDto group, StringBuilder stringBuilder)
     {
         foreach (var item in group.ModifierItems.Where(i => i.Price > 0))
         {
@@ -125,7 +125,7 @@ public class RestaurantService : IRestaurantService
         }
     }
 
-    private void AppendSizeVariants(ModifierProductGroupDto group, StringBuilder stringBuilder)
+    private void AppendSizeVariants(RestaurantMenuItemSpecificationDto group, StringBuilder stringBuilder)
     {
         var sizeVariants = group.ModifierItems
             .Where(i => !string.IsNullOrEmpty(i.Size))
@@ -141,7 +141,7 @@ public class RestaurantService : IRestaurantService
         }
     }
 
-    private void AppendTimePeriod(ModifierProductGroupDto group, StringBuilder stringBuilder)
+    private void AppendTimePeriod(RestaurantMenuItemSpecificationDto group, StringBuilder stringBuilder)
     {
         if (group.TimePeriods != null && group.TimePeriods.Any())
         {
