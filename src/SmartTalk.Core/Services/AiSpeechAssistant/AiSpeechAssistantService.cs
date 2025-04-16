@@ -461,16 +461,18 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
                     try
                     {
-                        JsonSerializer.Deserialize<JsonDocument>(buffer.AsSpan(0, result.Count));
+                        JsonSerializer.Deserialize<JsonDocument>(_openaiEvent.Length > 0 ? _openaiEvent + Encoding.UTF8.GetString(buffer, 0, result.Count) : buffer.AsSpan(0, result.Count).ToString());
                     }
-                    catch (Exception e)
+                    catch (Exception)
                     {
                         _openaiEvent.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
                         continue;
                     }
                     
-                    var jsonDocument = JsonSerializer.Deserialize<JsonDocument>(buffer.AsSpan(0, result.Count));
-
+                    var jsonDocument = JsonSerializer.Deserialize<JsonDocument>(_openaiEvent.Length > 0 ? _openaiEvent + Encoding.UTF8.GetString(buffer, 0, result.Count) : buffer.AsSpan(0, result.Count).ToString());
+                    
+                    _openaiEvent.Clear();
+                    
                     Log.Information($"Received event: {jsonDocument?.RootElement.GetProperty("type").GetString()}");
                     
                     if (jsonDocument?.RootElement.GetProperty("type").GetString() == "error" && jsonDocument.RootElement.TryGetProperty("error", out var error))
