@@ -7,9 +7,9 @@ namespace SmartTalk.Core.Services.OpenAi;
 
 public interface IOpenAiDataProvider : IScopedDependency
 {
-    Task AddOpenAiApiKeyUsageStatusAsync(OpenAiApiKeyUsageStatus status, CancellationToken cancellationToken);
+    Task AddOpenAiApiKeyUsageStatusAsync(List<OpenAiApiKeyUsageStatus> statusList, CancellationToken cancellationToken);
 
-    Task<List<OpenAiApiKeyUsageStatus>> GetOpenAiApiKeyUsageStatusAsync(int? id = null, int? count = null, CancellationToken cancellationToken = default);
+    Task<List<OpenAiApiKeyUsageStatus>> GetOpenAiApiKeyUsageStatusAsync(int? id = null, CancellationToken cancellationToken = default);
 
     Task UpdateOpenAiApiKeyUsageStatusAsync(OpenAiApiKeyUsageStatus status, CancellationToken cancellationToken);
 }
@@ -25,21 +25,18 @@ public class OpenAiDataProvider : IOpenAiDataProvider
         _repository = repository;
     }
 
-    public async Task AddOpenAiApiKeyUsageStatusAsync(OpenAiApiKeyUsageStatus status, CancellationToken cancellationToken)
+    public async Task AddOpenAiApiKeyUsageStatusAsync(List<OpenAiApiKeyUsageStatus> statusList, CancellationToken cancellationToken)
     {
-        await _repository.InsertAsync(status, cancellationToken).ConfigureAwait(false);
+        await _repository.InsertAllAsync(statusList, cancellationToken).ConfigureAwait(false);
         await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<OpenAiApiKeyUsageStatus>> GetOpenAiApiKeyUsageStatusAsync(int? id = null, int? count = null, CancellationToken cancellationToken = default)
+    public async Task<List<OpenAiApiKeyUsageStatus>> GetOpenAiApiKeyUsageStatusAsync(int? id = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<OpenAiApiKeyUsageStatus>();
 
         if (id.HasValue)
             query = query.Where(x => x.Id == id.Value);
-        
-        if (count.HasValue)
-            query = query.Take(count.Value);
 
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }

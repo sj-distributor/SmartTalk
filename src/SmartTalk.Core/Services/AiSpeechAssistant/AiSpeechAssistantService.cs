@@ -305,9 +305,11 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     {
         var apiKeys = _openAiSettings.RealTimeApiKeys;
 
-        var status = await _openAiDataProvider.GetOpenAiApiKeyUsageStatusAsync(count: apiKeys.Count, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var statusList = await _openAiDataProvider.GetOpenAiApiKeyUsageStatusAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        var minUsingNumberStatus = status.MinBy(x => x.UsingNumber);
+        await CheckStatusCountEnoughOrAddingAsync(cancellationToken, statusList, apiKeys);
+        
+        var minUsingNumberStatus = statusList.Take(apiKeys.Count).MinBy(x => x.UsingNumber);
 
         minUsingNumberStatus.UsingNumber += 1;
 
@@ -316,6 +318,27 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         await _openAiDataProvider.UpdateOpenAiApiKeyUsageStatusAsync(minUsingNumberStatus, cancellationToken).ConfigureAwait(false);
 
         return apiKeys[minUsingNumberStatus.Index];
+    }
+
+    private async Task CheckStatusCountEnoughOrAddingAsync(CancellationToken cancellationToken, List<OpenAiApiKeyUsageStatus> statusList, List<string> apiKeys)
+    {
+        if (statusList.Count < apiKeys.Count)
+        {
+            var newStatusList = new List<OpenAiApiKeyUsageStatus>();
+            var number = apiKeys.Count - statusList.Count;
+            var LastIndex = statusList.MaxBy(x => x.Index)?.Index ?? 0;
+
+            for (var i = 0; i < number; i++)
+            {
+                newStatusList.Add(new OpenAiApiKeyUsageStatus { Index = LastIndex, UsingNumber = 0 });
+
+                LastIndex++;
+            }
+            
+            await _openAiDataProvider.AddOpenAiApiKeyUsageStatusAsync(newStatusList, cancellationToken).ConfigureAwait(false);
+            
+            statusList.AddRange(newStatusList);
+        }
     }
 
     private async Task ReceiveFromTwilioAsync(WebSocket twilioWebSocket, CancellationToken cancellationToken)
