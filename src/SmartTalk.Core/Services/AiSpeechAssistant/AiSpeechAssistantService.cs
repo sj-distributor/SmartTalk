@@ -28,6 +28,7 @@ using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.OpenAi;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.Restaurants;
+using SmartTalk.Core.Settings.Azure;
 using SmartTalk.Messages.Dto.OpenAi;
 using Twilio.Rest.Api.V2010.Account;
 using SmartTalk.Core.Settings.OpenAi;
@@ -67,6 +68,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 {
     private readonly IMapper _mapper;
     private readonly ICurrentUser _currentUser;
+    private readonly AzureSetting _azureSetting;
     private readonly IOpenaiClient _openaiClient;
     private readonly IFfmpegService _ffmpegService;
     private readonly OpenAiSettings _openAiSettings;
@@ -92,6 +94,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     public AiSpeechAssistantService(
         IMapper mapper,
         ICurrentUser currentUser,
+        AzureSetting azureSetting,
         IOpenaiClient openaiClient,
         IFfmpegService ffmpegService,
         OpenAiSettings openAiSettings,
@@ -110,6 +113,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _mapper = mapper;
         _currentUser = currentUser;
         _openaiClient = openaiClient;
+        _azureSetting = azureSetting;
         _ffmpegService = ffmpegService;
         _openAiSettings = openAiSettings;
         _twilioSettings = twilioSettings;
@@ -279,6 +283,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         var apikey = await GetAuthorizationHeader(assistant, cancellationToken).ConfigureAwait(false);
         _openaiClientWebSocket.Options.SetRequestHeader("Authorization", apikey);
         _openaiClientWebSocket.Options.SetRequestHeader("OpenAI-Beta", "realtime=v1");
+        _openaiClientWebSocket.Options.SetRequestHeader("api-key", _azureSetting.ApiKey);
 
         var url = string.IsNullOrEmpty(assistant.ModelUrl) ? AiSpeechAssistantStore.DefaultUrl : assistant.ModelUrl;
 
