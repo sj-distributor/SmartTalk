@@ -749,12 +749,24 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     
     private async Task SendSessionUpdateAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, string prompt, CancellationToken cancellationToken)
     {
-        var configs = await InitialSessionConfigAsync(assistant, cancellationToken).ConfigureAwait(false);
+        var session = await InitialSessionAsync(assistant, prompt, cancellationToken).ConfigureAwait(false);
         
         var sessionUpdate = new
         {
             type = "session.update",
-            session = new
+            session = session
+        };
+
+        await SendToWebSocketAsync(_openaiClientWebSocket, sessionUpdate, cancellationToken);
+    }
+
+    private async Task<object> InitialSessionAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, string prompt, CancellationToken cancellationToken)
+    {
+        var configs = await InitialSessionConfigAsync(assistant, cancellationToken).ConfigureAwait(false);
+        
+        return assistant.ModelProvider switch
+        {
+            AiSpeechAssistantProvider.OpenAi => new
             {
                 turn_detection = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection),
                 input_audio_format = "g711_ulaw",
@@ -766,10 +778,21 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                 input_audio_transcription = new { model = "whisper-1" },
                 input_audio_noise_reduction = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction),
                 tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config)
-            }
+            },
+            AiSpeechAssistantProvider.Azure => new
+            {
+                turn_detection = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection),
+                input_audio_format = "g711_ulaw",
+                output_audio_format = "g711_ulaw",
+                voice = string.IsNullOrEmpty(assistant.ModelVoice) ? "alloy" : assistant.ModelVoice,
+                instructions = prompt,
+                modalities = new[] { "text", "audio" },
+                temperature = 0.8,
+                input_audio_transcription = new { model = "whisper-1" },
+                tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config)
+            },
+            _ => throw new NotSupportedException(nameof(assistant.ModelProvider))
         };
-
-        await SendToWebSocketAsync(_openaiClientWebSocket, sessionUpdate, cancellationToken);
     }
 
     private async Task<List<(AiSpeechAssistantSessionConfigType Type, object Config)>> InitialSessionConfigAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken = default)
