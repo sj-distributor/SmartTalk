@@ -15,7 +15,7 @@ public interface IRestaurantService : IScopedDependency
 
     Task<GetRestaurantMenuItemsResponse> GetRestaurantMenuItemsAsync(GetRestaurantMenuItemsRequest request, CancellationToken cancellationToken);
     
-    Task<GetRestaurantMenuItemSpecificationResponse> GetModifierProductsPromptAsync(GetRestaurantMenuItemSpecificationRequest request, CancellationToken cancellationToken);
+    Task<GetRestaurantMenuItemSpecificationResponse> GetRestaurantMenuItemSpecificationAsync(GetRestaurantMenuItemSpecificationRequest request, CancellationToken cancellationToken);
 }
 
 public class RestaurantService : IRestaurantService
@@ -55,7 +55,7 @@ public class RestaurantService : IRestaurantService
         };
     }
 
-    public async Task<GetRestaurantMenuItemSpecificationResponse> GetModifierProductsPromptAsync(GetRestaurantMenuItemSpecificationRequest request, CancellationToken cancellationToken) 
+    public async Task<GetRestaurantMenuItemSpecificationResponse> GetRestaurantMenuItemSpecificationAsync(GetRestaurantMenuItemSpecificationRequest request, CancellationToken cancellationToken) 
     { 
         var groups = await _restaurantDataProvider.GetModifierProductsGroupsAsync(request.RestaurantName, cancellationToken).ConfigureAwait(false);
         

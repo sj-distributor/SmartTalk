@@ -16,6 +16,6 @@ public class GetModifierProductsPromptRequestHandler : IRequestHandler<GetRestau
     
     public async Task<GetRestaurantMenuItemSpecificationResponse> Handle(IReceiveContext<GetRestaurantMenuItemSpecificationRequest> context, CancellationToken cancellationToken)
     {
-        return await _restaurantService.GetModifierProductsPromptAsync(context.Message, cancellationToken).ConfigureAwait(false);
+        return await _restaurantService.GetRestaurantMenuItemSpecificationAsync(context.Message, cancellationToken).ConfigureAwait(false);
     }
 }
