@@ -41,9 +41,9 @@ public class PhoneOrderController : ControllerBase
         return Ok(response);
     }
     
-    [Route("conversations/{id}"), HttpGet]
+    [Route("conversations/{restaurant}/{id}"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPhoneOrderConversationsResponse))]
-    public async Task<IActionResult> GetPhoneOrderConversationsAsync(int id)
+    public async Task<IActionResult> GetPhoneOrderConversationsAsync(int restaurant, int id)
     {
         var response = await _mediator.RequestAsync<GetPhoneOrderConversationsRequest, GetPhoneOrderConversationsResponse>(new GetPhoneOrderConversationsRequest { RecordId = id }).ConfigureAwait(false);
         
