@@ -90,7 +90,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly List<byte[]> _wholeAudioBufferBytes;
     private OpenAiApiKeyUsageStatus _status;
     private readonly IOpenAiDataProvider _openAiDataProvider;
-
+    private StringBuilder _openaiEvent;
+    
     public AiSpeechAssistantService(
         IMapper mapper,
         ICurrentUser currentUser,
@@ -133,6 +134,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
         _shouldSendBuffToOpenAi = true;
         _wholeAudioBufferBytes = [];
+
+        _openaiEvent = new StringBuilder();
     }
 
     public CallAiSpeechAssistantResponse CallAiSpeechAssistant(CallAiSpeechAssistantCommand command)
@@ -456,6 +459,16 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                 {
                     Log.Information("ReceiveFromOpenAi result: {@result}", JsonConvert.DeserializeObject<object>(Encoding.UTF8.GetString(buffer, 0, result.Count)));
 
+                    try
+                    {
+                        JsonSerializer.Deserialize<JsonDocument>(buffer.AsSpan(0, result.Count));
+                    }
+                    catch (Exception e)
+                    {
+                        _openaiEvent.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
+                        continue;
+                    }
+                    
                     var jsonDocument = JsonSerializer.Deserialize<JsonDocument>(buffer.AsSpan(0, result.Count));
 
                     Log.Information($"Received event: {jsonDocument?.RootElement.GetProperty("type").GetString()}");
