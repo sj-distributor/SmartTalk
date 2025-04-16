@@ -13,6 +13,7 @@ public class OpenAiSettings : IConfigurationSetting
         RealtimeSendBuffLength = configuration.GetValue<int>("OpenAi:Realtime:RealtimeSendBuffLength");
         RealtimeReceiveBufferLength = configuration.GetValue<int>("OpenAi:Realtime:ReceiveBufferLength");
         RealtimeTemperature = configuration.GetValue<float>("OpenAi:Realtime:Temperature");
+        RealTimeApiKeys = configuration.GetValue<string>("OpenAi:RealTimeApiKeys").Split(',').Where(x => !string.IsNullOrEmpty(x)).ToList();
     }
     
     public string BaseUrl { get; set; }
@@ -26,4 +27,6 @@ public class OpenAiSettings : IConfigurationSetting
     public int RealtimeReceiveBufferLength { get; set; }
     
     public float RealtimeTemperature { get; set; }
+    
+    public List<string> RealTimeApiKeys { get; set; }
 }
