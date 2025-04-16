@@ -809,7 +809,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         return type switch
         {
             AiSpeechAssistantSessionConfigType.TurnDirection => config.Config ?? new { type = "server_vad" },
-            AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction => config.Config ?? new { type = "near_field" },
+            AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction => config.Config,
             _ => throw new NotSupportedException(nameof(type))
         };
     }
