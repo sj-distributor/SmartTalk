@@ -457,8 +457,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
                 if (result is { Count: > 0 })
                 {
-                    Log.Information("ReceiveFromOpenAi result: {@result}", JsonConvert.DeserializeObject<object>(Encoding.UTF8.GetString(buffer, 0, result.Count)));
-
                     try
                     {
                         JsonSerializer.Deserialize<JsonDocument>(_openaiEvent.Length > 0 ? _openaiEvent + Encoding.UTF8.GetString(buffer, 0, result.Count) : buffer.AsSpan(0, result.Count).ToString());
