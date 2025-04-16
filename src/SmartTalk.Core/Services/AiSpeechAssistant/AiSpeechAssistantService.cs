@@ -985,7 +985,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                 modalities = new[] { "text", "audio" },
                 temperature = _openAiSettings.RealtimeTemperature,
                 input_audio_transcription = new { model = "whisper-1" },
-                input_audio_noise_reduction = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction),
                 tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config)
             }
         };
