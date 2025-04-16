@@ -5,7 +5,7 @@ using SmartTalk.Messages.Requests.Restaurant;
 
 namespace SmartTalk.Core.Handlers.RequestHandlers.Restaurant;
 
-public class GetModifierProductsPromptRequestHandler : IRequestHandler<GetModifierProductsPromptRequest, GetModifierProductsPromptResponse>
+public class GetModifierProductsPromptRequestHandler : IRequestHandler<GetRestaurantMenuItemSpecificationRequest, GetRestaurantMenuItemSpecificationResponse>
 {
     private readonly IRestaurantService _restaurantService;
 
@@ -14,7 +14,7 @@ public class GetModifierProductsPromptRequestHandler : IRequestHandler<GetModifi
         _restaurantService = restaurantService;
     }
     
-    public async Task<GetModifierProductsPromptResponse> Handle(IReceiveContext<GetModifierProductsPromptRequest> context, CancellationToken cancellationToken)
+    public async Task<GetRestaurantMenuItemSpecificationResponse> Handle(IReceiveContext<GetRestaurantMenuItemSpecificationRequest> context, CancellationToken cancellationToken)
     {
         return await _restaurantService.GetModifierProductsPromptAsync(context.Message, cancellationToken).ConfigureAwait(false);
     }

@@ -2,7 +2,7 @@ using Mediator.Net.Contracts;
 
 namespace SmartTalk.Messages.Requests.Restaurant;
 
-public class GetModifierProductsPromptRequest : IRequest
+public class GetRestaurantMenuItemSpecificationRequest : IRequest
 {
     public string RestaurantName{ get; set; }
     
@@ -11,7 +11,7 @@ public class GetModifierProductsPromptRequest : IRequest
     public DateTime CurrentTime { get; set; }
 }
 
-public class GetModifierProductsPromptResponse : IResponse
+public class GetRestaurantMenuItemSpecificationResponse : IResponse
 {
     public List<LocalizedPrompt> Prompts { get; set; }
 }
