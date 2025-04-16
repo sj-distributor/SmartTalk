@@ -9,6 +9,7 @@ public class OpenAiSettings : IConfigurationSetting
         BaseUrl = configuration.GetValue<string>("OpenAi:BaseUrl");
         ApiKey = configuration.GetValue<string>("OpenAi:ApiKey");
         Organization = configuration.GetValue<string>("OpenAi:Organization");
+        RealTimeApiKeys = configuration.GetValue<string>("OpenAi:RealTimeApiKeys").Split(',').Where(x => !string.IsNullOrEmpty(x)).ToList();
     }
     
     public string BaseUrl { get; set; }
@@ -16,4 +17,6 @@ public class OpenAiSettings : IConfigurationSetting
     public string ApiKey { get; set; }
     
     public string Organization { get; set; }
+    
+    public List<string> RealTimeApiKeys { get; set; }
 }
