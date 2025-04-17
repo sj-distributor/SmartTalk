@@ -163,14 +163,17 @@ public class RestaurantDataProvider : IRestaurantDataProvider
                         .SelectMany(mp => mp.Localizations?
                             .Where(l => l.LanguageCode == loc.LanguageCode)
                             .Select(l => l.Value) ?? Enumerable.Empty<string>())
-                        .ToList() ?? new List<string>();
+                        .Distinct().ToList() ?? new List<string>();
                     
                     var productTimePeriods = timePeriods;
+                    
+                    var productPrice = product.Price;
 
                     result.Add(new RestaurantMenuItemSpecificationDto
                     {
                         LanguageCode = loc.LanguageCode,
                         GroupName = loc.Value,
+                        ItemPrice = productPrice,
                         MinimumSelect = modifierGroup.MinimumSelect,
                         MaximumSelect = modifierGroup.MaximumSelect,
                         MaximumRepetition = modifierGroup.MaximumRepetition,

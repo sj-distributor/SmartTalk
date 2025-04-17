@@ -59,6 +59,9 @@ public class RestaurantService : IRestaurantService
     { 
         var groups = await _restaurantDataProvider.GetRestaurantMenuItemSpecificationAsync(request.RestaurantName, cancellationToken).ConfigureAwait(false);
         
+        if (!string.IsNullOrEmpty(request.LanguageCode))
+                groups = groups.Where(g => g.LanguageCode == request.LanguageCode).ToList();
+        
         var promptDict = new Dictionary<string, StringBuilder>();
         
         foreach (var group in groups)
