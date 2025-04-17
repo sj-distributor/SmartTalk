@@ -7,8 +7,6 @@ public class GetRestaurantMenuItemSpecificationRequest : IRequest
     public string RestaurantName{ get; set; }
     
     public string LanguageCode { get; set; }
-    
-    public DateTime CurrentTime { get; set; }
 }
 
 public class GetRestaurantMenuItemSpecificationResponse : IResponse

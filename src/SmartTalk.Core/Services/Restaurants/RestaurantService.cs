@@ -59,6 +59,9 @@ public class RestaurantService : IRestaurantService
     { 
         var groups = await _restaurantDataProvider.GetRestaurantMenuItemSpecificationAsync(request.RestaurantName, cancellationToken).ConfigureAwait(false);
         
+        if (!string.IsNullOrEmpty(request.LanguageCode))
+                groups = groups.Where(g => g.LanguageCode == request.LanguageCode).ToList();
+        
         var promptDict = new Dictionary<string, StringBuilder>();
         
         foreach (var group in groups)
@@ -71,7 +74,6 @@ public class RestaurantService : IRestaurantService
             AppendGroupDescription(group, stringBuilder);
             AppendItemDescription(group, stringBuilder);
             AppendSizeVariants(group, stringBuilder);
-            AppendTimePeriod(group, stringBuilder);
         }
         
         var result = promptDict
@@ -92,19 +94,24 @@ public class RestaurantService : IRestaurantService
         if (group.ModifierItems.Count > 0 && group.MinimumSelect > 0)
         {
             var sides = string.Join(", ", group.ModifierItems.Select(i => i.Name));
-            stringBuilder.AppendLine($"{group.GroupName}, priced at {group.ItemPrice} dollar, served with your choice of {group.MinimumSelect} sides: {sides}. Choose exactly {group.MinimumSelect}.");
+            
+            stringBuilder.Append($"{group.GroupName}, priced at {group.ItemPrice} dollar, served with your choice of {group.MinimumSelect} sides: {sides}. Choose exactly {group.MinimumSelect}. ");
             
             if (group.MaximumRepetition == 1)
             {
-                stringBuilder.AppendLine("Each item can only be selected once.");
+                stringBuilder.Append("Each item can only be selected once. ");
             }
             else if (group.MaximumRepetition == 0)
             {
-                stringBuilder.AppendLine("Items can be selected multiple times.");
+                stringBuilder.Append("Items can be selected multiple times. ");
             }
-
-            AppendTimePeriod(group, stringBuilder);
-            stringBuilder.AppendLine();
+            
+            if (group.TimePeriods != null && group.TimePeriods.Any())
+            {
+                var selectedTimePeriod = group.TimePeriods.First();
+                var days = string.Join(", ", selectedTimePeriod.DayOfWeeks.Select(ConvertDayOfWeekToName));
+                stringBuilder.Append($"{selectedTimePeriod.Name} ({selectedTimePeriod.StartTime} - {selectedTimePeriod.EndTime}, Days: {days})");
+            }
         }
     }
 
@@ -114,14 +121,12 @@ public class RestaurantService : IRestaurantService
         {
             if (item.OriginalPrice.HasValue && item.OriginalPrice.Value > item.Price)
             {
-                stringBuilder.AppendLine($"{group.GroupName}, priced at {group.ItemPrice} dollar, available with sides: {item.Name} (original price {item.OriginalPrice.Value} dollar, current add-on {item.Price} dollar).");
+                stringBuilder.AppendLine($"{item.Name} (original price {item.OriginalPrice.Value} dollar, now {item.Price} dollar)");
             }
             else
             {
-                stringBuilder.AppendLine($"{group.GroupName}, priced at {group.ItemPrice} dollar, available with sides: {item.Name} (add-on {item.Price} dollar).");
+                 stringBuilder.AppendLine($"{item.Name} (add-on {item.Price} dollar)");
             }
-            AppendTimePeriod(group, stringBuilder);
-            stringBuilder.AppendLine();
         }
     }
 
@@ -136,23 +141,6 @@ public class RestaurantService : IRestaurantService
         if (sizeVariants.Any())
         {
             stringBuilder.AppendLine($"{group.GroupName} (Size): {string.Join(", ", sizeVariants)}.");
-            AppendTimePeriod(group, stringBuilder);
-            stringBuilder.AppendLine();
-        }
-    }
-
-    private void AppendTimePeriod(RestaurantMenuItemSpecificationDto group, StringBuilder stringBuilder)
-    {
-        if (group.TimePeriods != null && group.TimePeriods.Any())
-        {
-            var timePeriodDescriptions = group.TimePeriods.Select(tp =>
-            {
-                var days = string.Join(", ", tp.DayOfWeeks.Select(ConvertDayOfWeekToName));
-                return $"{tp.Name} ({tp.StartTime} - {tp.EndTime}, Days: {days})";
-            });
-
-            stringBuilder.AppendLine($"Available during: {string.Join("; ", timePeriodDescriptions)}");
-            stringBuilder.AppendLine();
         }
     }
     
