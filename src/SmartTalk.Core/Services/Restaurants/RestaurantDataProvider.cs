@@ -175,14 +175,12 @@ public class RestaurantDataProvider : IRestaurantDataProvider
                                 Price = mp.Price
                             }) ?? Enumerable.Empty<ModifierPromptItemDto>())
                         .ToList() ?? new List<ModifierPromptItemDto>();
-                    
-                    var totalPrice = product.Price + modifiers.Sum(m => m.Price);
 
                     result.Add(new RestaurantMenuItemSpecificationDto
                     {
                         LanguageCode = loc.LanguageCode,
                         GroupName = loc.Value,
-                        ItemPrice = totalPrice,
+                        ItemPrice = product.Price,
                         MinimumSelect = modifierGroup.MinimumSelect,
                         MaximumSelect = modifierGroup.MaximumSelect,
                         MaximumRepetition = modifierGroup.MaximumRepetition,
