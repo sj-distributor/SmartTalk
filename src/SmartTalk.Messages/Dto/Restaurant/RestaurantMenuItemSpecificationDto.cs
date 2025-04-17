@@ -27,7 +27,5 @@ public class ModifierPromptItemDto
     
     public decimal Price { get; set; }
     
-    public decimal? OriginalPrice { get; set; }
-    
     public string Size { get; set; }
 }

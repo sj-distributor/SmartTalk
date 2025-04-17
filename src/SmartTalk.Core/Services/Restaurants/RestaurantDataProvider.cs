@@ -163,24 +163,30 @@ public class RestaurantDataProvider : IRestaurantDataProvider
 
             foreach (var modifierGroup in product.ModifierGroups ?? Enumerable.Empty<EasyPosResponseModifierGroups>())
             {
-                foreach (var loc in modifierGroup.Localizations ?? Enumerable.Empty<EasyPosResponseLocalization>())
+                foreach (var loc in (modifierGroup.Localizations ?? Enumerable.Empty<EasyPosResponseLocalization>())
+                         .Where(l => l.Field == "name"))
                 {
                     var modifiers = modifierGroup.ModifierProducts?
                         .SelectMany(mp => mp.Localizations?
-                            .Where(l => l.LanguageCode == loc.LanguageCode)
-                            .Select(l => l.Value) ?? Enumerable.Empty<string>())
-                        .Distinct()
-                        .ToList() ?? new List<string>();
+                            .Where(l => l.LanguageCode == loc.LanguageCode && l.Field == "name")
+                            .Select(l => new ModifierPromptItemDto
+                            {
+                                Name = l.Value,
+                                Price = mp.Price
+                            }) ?? Enumerable.Empty<ModifierPromptItemDto>())
+                        .ToList() ?? new List<ModifierPromptItemDto>();
+                    
+                    var totalPrice = product.Price + modifiers.Sum(m => m.Price);
 
                     result.Add(new RestaurantMenuItemSpecificationDto
                     {
                         LanguageCode = loc.LanguageCode,
                         GroupName = loc.Value,
-                        ItemPrice = product.Price,
+                        ItemPrice = totalPrice,
                         MinimumSelect = modifierGroup.MinimumSelect,
                         MaximumSelect = modifierGroup.MaximumSelect,
                         MaximumRepetition = modifierGroup.MaximumRepetition,
-                        ModifierItems = modifiers.Select(name => new ModifierPromptItemDto { Name = name }).ToList(),
+                        ModifierItems = modifiers,
                         TimePeriods = productTimePeriods
                     });
                 }

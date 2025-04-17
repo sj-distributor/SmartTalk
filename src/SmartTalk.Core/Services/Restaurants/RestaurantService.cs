@@ -64,7 +64,7 @@ public class RestaurantService : IRestaurantService
         
         var promptDict = new Dictionary<string, StringBuilder>();
         
-        foreach (var group in groups)
+        foreach (var group in groups.DistinctBy(g => g.GroupName))
         {
             if (!promptDict.ContainsKey(group.LanguageCode))
                 promptDict[group.LanguageCode] = new StringBuilder();
@@ -119,13 +119,13 @@ public class RestaurantService : IRestaurantService
     {
         foreach (var item in group.ModifierItems.Where(i => i.Price > 0))
         {
-            if (item.OriginalPrice.HasValue && item.OriginalPrice.Value > item.Price)
+            if (item.Price > 0)
             {
-                stringBuilder.AppendLine($"{item.Name} (original price {item.OriginalPrice.Value} dollar, now {item.Price} dollar)");
+                stringBuilder.AppendLine($"{item.Name} (add-on {item.Price} dollar)");
             }
             else
             {
-                 stringBuilder.AppendLine($"{item.Name} (add-on {item.Price} dollar)");
+                stringBuilder.AppendLine($"{item.Name} (included)");
             }
         }
     }
