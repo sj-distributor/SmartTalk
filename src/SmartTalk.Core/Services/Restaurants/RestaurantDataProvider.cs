@@ -148,14 +148,20 @@ public class RestaurantDataProvider : IRestaurantDataProvider
         var posResponse = await _easyPosClient.GetEasyPosRestaurantMenusAsync(restaurantName, cancellationToken);
         
         var products = posResponse?.Data?.Products; 
-        var timePeriods = posResponse?.Data?.TimePeriods; 
+        var menus = posResponse?.Data?.Menus; 
         if (products == null || !products.Any()) return new List<RestaurantMenuItemSpecificationDto>();
         
         var result = new List<RestaurantMenuItemSpecificationDto>();
         
-        foreach (var product in products) 
-        { 
-            foreach (var modifierGroup in product.ModifierGroups ?? Enumerable.Empty<EasyPosResponseModifierGroups>()) 
+        foreach (var product in products)
+        {
+            var productMenus = menus?.Where(menu => product.MenuIds != null && product.MenuIds.Contains(menu.MenuId)).ToList();
+            
+            var productTimePeriods = productMenus?
+                .SelectMany(menu => menu.TimePeriods ?? new List<EasyPosResponseTimePeriods>())
+                .DistinctBy(tp => tp.Id).ToList() ?? new List<EasyPosResponseTimePeriods>();
+
+            foreach (var modifierGroup in product.ModifierGroups ?? Enumerable.Empty<EasyPosResponseModifierGroups>())
             {
                 foreach (var loc in modifierGroup.Localizations ?? Enumerable.Empty<EasyPosResponseLocalization>())
                 {
@@ -163,17 +169,14 @@ public class RestaurantDataProvider : IRestaurantDataProvider
                         .SelectMany(mp => mp.Localizations?
                             .Where(l => l.LanguageCode == loc.LanguageCode)
                             .Select(l => l.Value) ?? Enumerable.Empty<string>())
-                        .Distinct().ToList() ?? new List<string>();
-                    
-                    var productTimePeriods = timePeriods;
-                    
-                    var productPrice = product.Price;
+                        .Distinct()
+                        .ToList() ?? new List<string>();
 
                     result.Add(new RestaurantMenuItemSpecificationDto
                     {
                         LanguageCode = loc.LanguageCode,
                         GroupName = loc.Value,
-                        ItemPrice = productPrice,
+                        ItemPrice = product.Price,
                         MinimumSelect = modifierGroup.MinimumSelect,
                         MaximumSelect = modifierGroup.MaximumSelect,
                         MaximumRepetition = modifierGroup.MaximumRepetition,
