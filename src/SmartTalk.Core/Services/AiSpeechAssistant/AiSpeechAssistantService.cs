@@ -764,14 +764,39 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     
     private async Task SendSessionUpdateAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, string prompt, CancellationToken cancellationToken)
     {
-        var configs = await InitialSessionConfigAsync(assistant, cancellationToken).ConfigureAwait(false);
+        var session = await InitialSessionAsync(assistant, prompt, cancellationToken).ConfigureAwait(false);
         
         var sessionUpdate = new
         {
             type = "session.update",
-            session = new
+            session = session
+        };
+
+        await SendToWebSocketAsync(_openaiClientWebSocket, sessionUpdate, cancellationToken);
+    }
+
+    private async Task<object> InitialSessionAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, string prompt, CancellationToken cancellationToken)
+    {
+        var configs = await InitialSessionConfigAsync(assistant, cancellationToken).ConfigureAwait(false);
+        
+        return assistant.ModelProvider switch
+        {
+            AiSpeechAssistantProvider.OpenAi => new
             {
-                turn_detection = InitialSessionTurnDirection(configs),
+                turn_detection = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection),
+                input_audio_format = "g711_ulaw",
+                output_audio_format = "g711_ulaw",
+                voice = string.IsNullOrEmpty(assistant.ModelVoice) ? "alloy" : assistant.ModelVoice,
+                instructions = prompt,
+                modalities = new[] { "text", "audio" },
+                temperature = 0.8,
+                input_audio_transcription = new { model = "whisper-1" },
+                input_audio_noise_reduction = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction),
+                tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config)
+            },
+            AiSpeechAssistantProvider.Azure => new
+            {
+                turn_detection = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection),
                 input_audio_format = "g711_ulaw",
                 output_audio_format = "g711_ulaw",
                 voice = string.IsNullOrEmpty(assistant.ModelVoice) ? "alloy" : assistant.ModelVoice,
@@ -780,10 +805,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                 temperature = 0.8,
                 input_audio_transcription = new { model = "whisper-1" },
                 tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config)
-            }
+            },
+            _ => throw new NotSupportedException(nameof(assistant.ModelProvider))
         };
-
-        await SendToWebSocketAsync(_openaiClientWebSocket, sessionUpdate, cancellationToken);
     }
 
     private async Task<List<(AiSpeechAssistantSessionConfigType Type, object Config)>> InitialSessionConfigAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken = default)
@@ -793,10 +817,15 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         return functions.Count == 0 ? [] : functions.Where(x => !string.IsNullOrWhiteSpace(x.Content)).Select(x => (x.Type, JsonConvert.DeserializeObject<object>(x.Content))).ToList();
     }
 
-    private object InitialSessionTurnDirection(List<(AiSpeechAssistantSessionConfigType Type, object Config)> configs)
+    private object InitialSessionParameters(List<(AiSpeechAssistantSessionConfigType Type, object Config)> configs, AiSpeechAssistantSessionConfigType type)
     {
-        var turnDetection = configs.FirstOrDefault(x => x.Type == AiSpeechAssistantSessionConfigType.TurnDirection);
+        var config = configs.FirstOrDefault(x => x.Type == type);
 
-        return turnDetection.Config ?? new { type = "server_vad" };
-    } 
+        return type switch
+        {
+            AiSpeechAssistantSessionConfigType.TurnDirection => config.Config ?? new { type = "server_vad" },
+            AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction => config.Config,
+            _ => throw new NotSupportedException(nameof(type))
+        };
+    }
 }
