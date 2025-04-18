@@ -108,9 +108,11 @@ public class RestaurantService : IRestaurantService
             
             if (group.TimePeriods != null && group.TimePeriods.Any())
             {
-                var selectedTimePeriod = group.TimePeriods.First();
-                var days = string.Join(", ", selectedTimePeriod.DayOfWeeks.Select(ConvertDayOfWeekToName));
-                stringBuilder.Append($"{selectedTimePeriod.Name} ({selectedTimePeriod.StartTime} - {selectedTimePeriod.EndTime}, Days: {days})");
+                foreach (var selectedTimePeriod in group.TimePeriods)
+                {
+                    var days = string.Join(", ", selectedTimePeriod.DayOfWeeks.Select(ConvertDayOfWeekToName));
+                    stringBuilder.Append($"{selectedTimePeriod.Name} ({selectedTimePeriod.StartTime} - {selectedTimePeriod.EndTime}, Days: {days}) ");
+                }
             }
         }
     }
