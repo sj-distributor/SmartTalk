@@ -115,7 +115,9 @@ public class EasyPosResponseTimePeriods
 
 public class EasyPosResponseMenu
 {
+    [JsonProperty("menuId")]
     public long MenuId { get; set; }
     
+    [JsonProperty("timePeriods")]
     public List<EasyPosResponseTimePeriods> TimePeriods { get; set; }
 }
