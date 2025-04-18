@@ -4,6 +4,7 @@ using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Domain.Restaurants;
 using SmartTalk.Messages.Commands.Restaurants;
 using SmartTalk.Core.Services.RetrievalDb.VectorDb;
+using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Restaurant;
 using SmartTalk.Messages.Requests.Restaurant;
 
@@ -74,6 +75,7 @@ public class RestaurantService : IRestaurantService
             AppendGroupDescription(group, stringBuilder);
             AppendItemDescription(group, stringBuilder);
             AppendSizeVariants(group, stringBuilder);
+            AppendTimePeriodDescription(group.TimePeriods, stringBuilder);
         }
         
         var result = promptDict
@@ -105,30 +107,17 @@ public class RestaurantService : IRestaurantService
             {
                 stringBuilder.Append("Items can be selected multiple times. ");
             }
-            
-            if (group.TimePeriods != null && group.TimePeriods.Any())
-            {
-                foreach (var selectedTimePeriod in group.TimePeriods)
-                {
-                    var days = string.Join(", ", selectedTimePeriod.DayOfWeeks.Select(ConvertDayOfWeekToName));
-                    stringBuilder.Append($"{selectedTimePeriod.Name} ({selectedTimePeriod.StartTime} - {selectedTimePeriod.EndTime}, Days: {days}) ");
-                }
-            }
         }
     }
 
     private void AppendItemDescription(RestaurantMenuItemSpecificationDto group, StringBuilder stringBuilder)
     {
-        foreach (var item in group.ModifierItems.Where(i => i.Price > 0))
+        foreach (var item in group.ModifierItems)
         {
-            if (item.Price > 0)
-            {
-                stringBuilder.AppendLine($"{item.Name} (add-on {item.Price} dollar)");
-            }
-            else
-            {
-                stringBuilder.AppendLine($"{item.Name} (included)");
-            }
+            var desc = item.Price > 0 
+                ? $"{item.Name} (add-on {item.Price} dollar)" 
+                : $"{item.Name} (included)";
+            stringBuilder.AppendLine(desc);
         }
     }
 
@@ -143,6 +132,17 @@ public class RestaurantService : IRestaurantService
         if (sizeVariants.Any())
         {
             stringBuilder.AppendLine($"{group.GroupName} (Size): {string.Join(", ", sizeVariants)}.");
+        }
+    }
+    
+    private void AppendTimePeriodDescription(List<EasyPosResponseTimePeriods> timePeriods, StringBuilder stringBuilder)
+    {
+        if (timePeriods == null || !timePeriods.Any()) return;
+
+        foreach (var period in timePeriods)
+        {
+            var days = string.Join(", ", period.DayOfWeeks.Select(ConvertDayOfWeekToName));
+            stringBuilder.AppendLine($"{period.Name} ({period.StartTime} - {period.EndTime}, Days: {days}) ");
         }
     }
     
