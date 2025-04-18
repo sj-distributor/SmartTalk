@@ -22,6 +22,7 @@ using SmartTalk.Messages.Constants;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.Restaurants;
+using SmartTalk.Core.Settings.Azure;
 using SmartTalk.Messages.Dto.OpenAi;
 using Twilio.Rest.Api.V2010.Account;
 using SmartTalk.Core.Settings.OpenAi;
@@ -58,11 +59,11 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 {
     private readonly IMapper _mapper;
     private readonly ICurrentUser _currentUser;
+    private readonly AzureSetting _azureSetting;
     private readonly IOpenaiClient _openaiClient;
     private readonly OpenAiSettings _openAiSettings;
     private readonly TwilioSettings _twilioSettings;
     private readonly ISmartiesClient _smartiesClient;
-    private readonly ClientWebSocket _openaiWebSocket;
     private readonly ZhiPuAiSettings _zhiPuAiSettings;
     private readonly IPhoneOrderService _phoneOrderService;
     private readonly IAgentDataProvider _agentDataProvider;
@@ -72,12 +73,14 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
 
+    private StringBuilder _openaiEvent;
     private readonly ClientWebSocket _openaiClientWebSocket;
     private AiSpeechAssistantStreamContextDto _aiSpeechAssistantStreamContext;
 
     public AiSpeechAssistantService(
         IMapper mapper,
         ICurrentUser currentUser,
+        AzureSetting azureSetting,
         IOpenaiClient openaiClient,
         OpenAiSettings openAiSettings,
         TwilioSettings twilioSettings,
@@ -94,6 +97,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _mapper = mapper;
         _currentUser = currentUser;
         _openaiClient = openaiClient;
+        _azureSetting = azureSetting;
         _openAiSettings = openAiSettings;
         _twilioSettings = twilioSettings;
         _smartiesClient = smartiesClient;
@@ -105,7 +109,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _restaurantDataProvider = restaurantDataProvider;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
-        
+
+        _openaiEvent = new StringBuilder();
         _openaiClientWebSocket = new ClientWebSocket();
         _aiSpeechAssistantStreamContext = new AiSpeechAssistantStreamContextDto();
     }
@@ -254,8 +259,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     
     private async Task ConnectOpenAiRealTimeSocketAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, string prompt, CancellationToken cancellationToken)
     {
-        _openaiWebSocket.Options.SetRequestHeader("Authorization", GetAuthorizationHeader(assistant));
-        _openaiWebSocket.Options.SetRequestHeader("OpenAI-Beta", "realtime=v1");
+        _openaiClientWebSocket.Options.SetRequestHeader("Authorization", GetAuthorizationHeader(assistant));
+        _openaiClientWebSocket.Options.SetRequestHeader("OpenAI-Beta", "realtime=v1");
+        _openaiClientWebSocket.Options.SetRequestHeader("api-key", _azureSetting.ApiKey);
 
         var url = string.IsNullOrEmpty(assistant.ModelUrl) ? AiSpeechAssistantStore.DefaultUrl : assistant.ModelUrl;
         
@@ -342,13 +348,24 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             while (_openaiClientWebSocket.State == WebSocketState.Open)
             {
                 var result = await _openaiClientWebSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
-                Log.Information("ReceiveFromOpenAi result: {result}", Encoding.UTF8.GetString(buffer, 0, result.Count));
+                var value = Encoding.UTF8.GetString(buffer, 0, result.Count);
+                Log.Information("ReceiveFromOpenAi result: {result}", value);
 
                 if (result is { Count: > 0 })
                 {
-                    Log.Information("ReceiveFromOpenAi result: {@result}", JsonConvert.DeserializeObject<object>(Encoding.UTF8.GetString(buffer, 0, result.Count)));
+                    try
+                    {
+                        JsonSerializer.Deserialize<JsonDocument>(_openaiEvent.Length > 0 ? _openaiEvent + value : value);
+                    }
+                    catch (Exception)
+                    {
+                        _openaiEvent.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
+                        continue;
+                    }
                     
-                    var jsonDocument = JsonSerializer.Deserialize<JsonDocument>(buffer.AsSpan(0, result.Count));
+                    var jsonDocument = JsonSerializer.Deserialize<JsonDocument>(_openaiEvent.Length > 0 ? _openaiEvent + value : value);
+                    
+                    _openaiEvent.Clear();
 
                     Log.Information($"Received event: {jsonDocument?.RootElement.GetProperty("type").GetString()}");
                     
@@ -356,8 +373,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                     {
                         Log.Information("Receive openai websocket error" + error.GetProperty("message").GetString());
                         
-                        await SendToWebSocketAsync(_openaiClientWebSocket, _aiSpeechAssistantStreamContext.LastMessage, cancellationToken);
-                        await SendToWebSocketAsync(_openaiClientWebSocket, new { type = "response.create" }, cancellationToken);
                     }
                     
                     if (jsonDocument?.RootElement.GetProperty("type").GetString() == "session.updated")
