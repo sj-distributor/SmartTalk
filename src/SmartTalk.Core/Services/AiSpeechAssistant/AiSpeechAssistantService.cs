@@ -282,10 +282,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private async Task ConnectOpenAiRealTimeSocketAsync(
         Domain.AISpeechAssistant.AiSpeechAssistant assistant, string prompt, CancellationToken cancellationToken)
     {
-        var apikey = await GetAuthorizationHeader(assistant, cancellationToken).ConfigureAwait(false);
-        _openaiClientWebSocket.Options.SetRequestHeader("Authorization", apikey);
-        _openaiClientWebSocket.Options.SetRequestHeader("OpenAI-Beta", "realtime=v1");
-        _openaiClientWebSocket.Options.SetRequestHeader("api-key", _azureSetting.ApiKey);
+        await ConfigAuthorizationHeader(assistant, cancellationToken).ConfigureAwait(false);
 
         var url = string.IsNullOrEmpty(assistant.ModelUrl) ? AiSpeechAssistantStore.DefaultUrl : assistant.ModelUrl;
         
@@ -303,6 +300,27 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         await SendSessionUpdateAsync(assistant, prompt, cancellationToken).ConfigureAwait(false);
     }
 
+    private async Task ConfigAuthorizationHeader(Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken)
+    {
+        var apikey = await GetIdleOpenAiApiKeyAsync(cancellationToken).ConfigureAwait(false);
+        switch (assistant.ModelProvider)
+        {
+            case AiSpeechAssistantProvider.OpenAi:
+                _openaiClientWebSocket.Options.SetRequestHeader("Authorization", $"Bearer {apikey}");
+                _openaiClientWebSocket.Options.SetRequestHeader("OpenAI-Beta", "realtime=v1");
+                break;
+            case AiSpeechAssistantProvider.ZhiPuAi:
+                _openaiClientWebSocket.Options.SetRequestHeader("Authorization", $"Bearer {_zhiPuAiSettings.ApiKey}");
+                _openaiClientWebSocket.Options.SetRequestHeader("OpenAI-Beta", "realtime=v1");
+                break;
+            case AiSpeechAssistantProvider.Azure:
+                _openaiClientWebSocket.Options.SetRequestHeader("api-key", _azureSetting.ApiKey);
+                break;
+            default:
+                throw new NotSupportedException(nameof(assistant.ModelProvider));
+        }
+    }
+    
     private async Task ReduceOpenAiApiKeyUsingNumberAsync(CancellationToken cancellationToken)
     {
         var statusList = await _openAiDataProvider.GetOpenAiApiKeyUsageStatusAsync(id: _status.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -311,17 +329,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         status.UsingNumber -= 1;
         
         await _openAiDataProvider.UpdateOpenAiApiKeyUsageStatusAsync(status, cancellationToken).ConfigureAwait(false);
-    }
-
-    private async Task<string> GetAuthorizationHeader(Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken)
-    {
-        var openaiApiKey = await GetIdleOpenAiApiKeyAsync(cancellationToken);
-        return assistant.ModelProvider switch
-        {
-            AiSpeechAssistantProvider.OpenAi => $"Bearer {openaiApiKey}",
-            AiSpeechAssistantProvider.ZhiPuAi => $"Bearer {_zhiPuAiSettings.ApiKey}",
-            _ => throw new NotSupportedException(nameof(assistant.ModelProvider))
-        };
     }
 
     private async Task<string> GetIdleOpenAiApiKeyAsync(CancellationToken cancellationToken)
