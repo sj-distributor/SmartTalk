@@ -10,6 +10,8 @@ public class AgentDto
     
     public string WechatRobotKey { get; set; }
     
+    public string WechatRobotMessage { get; set; }
+    
     public AgentType Type { get; set; }
     
     public AgentSourceSystem SourceSystem { get; set; }
