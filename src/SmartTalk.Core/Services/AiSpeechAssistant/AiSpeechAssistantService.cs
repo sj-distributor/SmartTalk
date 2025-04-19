@@ -208,9 +208,12 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
         if (agent.SourceSystem == AgentSourceSystem.Smarties)
             await _smartiesClient.CallBackSmartiesAiSpeechAssistantRecordAsync(new AiSpeechAssistantCallBackRequestDto { CallSid = command.CallSid, RecordUrl = record.Url, RecordAnalyzeReport =  record.TranscriptionText }, cancellationToken).ConfigureAwait(false);
-        
-        if (!string.IsNullOrEmpty(agent.WechatRobotKey))
-            await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(audioFileRawBytes, agent.WechatRobotKey, "錄音分析報告：\n" + record.TranscriptionText, cancellationToken).ConfigureAwait(false);
+
+        if (!string.IsNullOrEmpty(agent.WechatRobotKey) && !string.IsNullOrEmpty(agent.WechatRobotMessage))
+        {
+            var message = agent.WechatRobotMessage.Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString());
+            await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(audioFileRawBytes, agent.WechatRobotKey, message, cancellationToken).ConfigureAwait(false);
+        }
 
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
