@@ -230,9 +230,12 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
         if (agent.SourceSystem == AgentSourceSystem.Smarties)
             await _smartiesClient.CallBackSmartiesAiSpeechAssistantRecordAsync(new AiSpeechAssistantCallBackRequestDto { CallSid = command.CallSid, RecordUrl = record.Url, RecordAnalyzeReport =  record.TranscriptionText }, cancellationToken).ConfigureAwait(false);
-        
-        if (!string.IsNullOrEmpty(agent.WechatRobotKey))
-            await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(audioFileRawBytes, agent.WechatRobotKey, $"Smartalk來電提醒\n您的客人有新來電，請留意打開後臺查看：\nhttps://phoneorder.wiltechs.com?assistantId={agent.Id}&recordId={record.Id}", cancellationToken).ConfigureAwait(false);
+
+        if (!string.IsNullOrEmpty(agent.WechatRobotKey) && !string.IsNullOrEmpty(agent.WechatRobotMessage))
+        {
+            var message = agent.WechatRobotMessage.Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString());
+            await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(audioFileRawBytes, agent.WechatRobotKey, message, cancellationToken).ConfigureAwait(false);
+        }
 
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
     }

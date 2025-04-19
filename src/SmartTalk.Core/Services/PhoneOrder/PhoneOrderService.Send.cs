@@ -35,8 +35,8 @@ public partial class PhoneOrderService : IPhoneOrderService
         }
     }
     
-     public async Task SendWorkWeChatRobotNotifyAsync(byte[] recordContent, string key, string transcription, CancellationToken cancellationToken)
-     {
+    public async Task SendWorkWeChatRobotNotifyAsync(byte[] recordContent, string key, string transcription, CancellationToken cancellationToken)
+    {
         var robotUrl = $"https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key={key}";
         
         // await _weChatClient.SendWorkWechatRobotMessagesAsync(robotUrl,
@@ -49,7 +49,7 @@ public partial class PhoneOrderService : IPhoneOrderService
         //         }
         //     }, cancellationToken);
         
-        var splitAudios = await ConvertAndSplitAudioAsync(recordContent, secondsPerAudio: 60, cancellationToken: cancellationToken).ConfigureAwait(false);
+        // var splitAudios = await ConvertAndSplitAudioAsync(recordContent, secondsPerAudio: 60, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         // await SendMultiAudioMessagesAsync(splitAudios, key, cancellationToken).ConfigureAwait(false);
 

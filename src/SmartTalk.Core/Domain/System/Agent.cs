@@ -15,6 +15,9 @@ public class Agent : IEntity, IHasCreatedFields
     
     [Column("wechat_robot_key"), StringLength(256)]
     public string WechatRobotKey { get; set; }
+    
+    [Column("wechat_robot_message")]
+    public string WechatRobotMessage { get; set; }
 
     [Column("relate_id")]
     public int RelateId { get; set; }
