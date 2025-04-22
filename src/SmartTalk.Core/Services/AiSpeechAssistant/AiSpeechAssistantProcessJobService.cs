@@ -209,7 +209,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
 
     public async Task OpenAiAccountTrainingAsync(OpenAiAccountTrainingCommand command, CancellationToken cancellationToken)
     {
-        var prompt = "生成5000字历史类论文，不要生成框架，要一篇完整的满6000字的论文";
+        var prompt = "生成6000字历史类论文，不要生成框架，要一篇完整的满6000字的论文";
 
         var client = new ChatClient("gpt-4o", _openAiTrainingSettings.ApiKey);
         var anotherClient = new ChatClient("gpt-4o", _openAiAccountTrainingSettings.ApiKey);
