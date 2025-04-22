@@ -5,7 +5,7 @@ namespace SmartTalk.Core.Services.VoiceAi.PosManagement;
 public interface IPosManagementService : IScopedDependency
 {
 }
- 
+
 public class PosManagementService : IPosManagementService
 {
 }
