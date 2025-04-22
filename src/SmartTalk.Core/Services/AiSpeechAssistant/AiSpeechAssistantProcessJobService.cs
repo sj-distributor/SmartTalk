@@ -38,6 +38,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
     private readonly OpenAiTrainingSettings _openAiTrainingSettings;
     private readonly IRestaurantDataProvider _restaurantDataProvider;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
+    private readonly OpenAiAccountTrainingSettings _openAiAccountTrainingSettings;
 
     public AiSpeechAssistantProcessJobService(
         IMapper mapper,
@@ -45,7 +46,8 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         TwilioSettings twilioSettings,
         IRestaurantDataProvider restaurantDataProvider,
         IPhoneOrderDataProvider phoneOrderDataProvider, 
-        OpenAiTrainingSettings openAiTrainingSettings)
+        OpenAiTrainingSettings openAiTrainingSettings, 
+        OpenAiAccountTrainingSettings openAiAccountTrainingSettings)
     {
         _mapper = mapper;
         _vectorDb = vectorDb;
@@ -53,6 +55,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _openAiTrainingSettings = openAiTrainingSettings;
         _restaurantDataProvider = restaurantDataProvider;
+        _openAiAccountTrainingSettings = openAiAccountTrainingSettings;
     }
 
     public async Task RecordAiSpeechAssistantCallAsync(AiSpeechAssistantStreamContextDto context, CancellationToken cancellationToken)
@@ -203,17 +206,29 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             ProductId = x.ProductId
         }).ToList();
     }
-    
+
     public async Task OpenAiAccountTrainingAsync(OpenAiAccountTrainingCommand command, CancellationToken cancellationToken)
     {
-        ChatClient client = new("gpt-4o", _openAiTrainingSettings.ApiKey);
+        var prompt = "生成6000字历史类论文，不要生成框架，要一篇完整的满6000字的论文";
 
-        var result = await client.CompleteChatAsync("生成5000字历史类论文,不要框架，就要满5000字的论文").ConfigureAwait(false);
-        
-        var content = result.Value.Content.FirstOrDefault()?.Text ?? string.Empty;
+        var client = new ChatClient("gpt-4o", _openAiTrainingSettings.ApiKey);
+        var anotherClient = new ChatClient("gpt-4o", _openAiAccountTrainingSettings.ApiKey);
 
-        var preview = content.Length > 50 ? content.Substring(0, 50) : content;
+        var result = await client.CompleteChatAsync(prompt).ConfigureAwait(false);
+        var anotherResult = await anotherClient.CompleteChatAsync(prompt).ConfigureAwait(false);
 
-        Log.Information("OpenAiAccountTrainingAsync (前50字): {Preview}（长度: {content}）", preview, content.Length);
+        var content = result?.Value?.Content?.FirstOrDefault()?.Text ?? string.Empty;
+        var anotherContent = anotherResult?.Value?.Content?.FirstOrDefault()?.Text ?? string.Empty;
+
+        var preview = string.IsNullOrEmpty(content) 
+            ? "[内容为空]" 
+            : content.Length > 50 ? content.Substring(0, 50) + "..." : content;
+
+        var anotherPreview = string.IsNullOrEmpty(anotherContent) 
+            ? "[内容为空]" 
+            : anotherContent.Length > 50 ? anotherContent.Substring(0, 50) + "..." : anotherContent;
+
+        Log.Information("主账号返回 (前50字): {Preview}（总长度: {Length}）", preview, content?.Length ?? 0);
+        Log.Information("备用账号返回 (前50字): {Preview}（总长度: {Length}）", anotherPreview, anotherContent?.Length ?? 0);
     }
 }
