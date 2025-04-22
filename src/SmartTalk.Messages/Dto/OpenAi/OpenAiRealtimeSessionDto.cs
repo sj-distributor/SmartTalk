@@ -10,6 +10,12 @@ public class OpenAiRealtimeSessionDto
     [JsonProperty("turn_detection")]
     public object TurnDetection { get; set; }
 
+    [JsonProperty("input_audio_format")]
+    public object InputAudioFormat { get; set; } = "pcm16";
+    
+    [JsonProperty("output_audio_format")]
+    public object OutputAudioFormat { get; set; } = "pcm16";
+
     [JsonProperty("voice")]
     public string Voice { get; set; }
 
@@ -18,6 +24,9 @@ public class OpenAiRealtimeSessionDto
 
     [JsonProperty("modalities")]
     public List<string> Modalities { get; set; }
+
+    [JsonProperty("temperature")]
+    public double Temperature { get; set; } = 0.8;
 
     [JsonProperty("input_audio_transcription")]
     public object InputAudioTranscription { get; set; }
