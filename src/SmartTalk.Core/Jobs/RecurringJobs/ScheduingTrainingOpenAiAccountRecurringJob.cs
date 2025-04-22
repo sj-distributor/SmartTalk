@@ -1,3 +1,4 @@
+using Hangfire;
 using Mediator.Net;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
@@ -23,5 +24,5 @@ public class ScheduingTrainingOpenAiAccountRecurringJob: IRecurringJob
 
     public string JobId => nameof(ScheduingTrainingOpenAiAccountRecurringJob);
 
-    public string CronExpression => _openAiAccountTrainingSettings.OpenAiTrainingCronExpression;
+    public string CronExpression => Cron.Never();
 }

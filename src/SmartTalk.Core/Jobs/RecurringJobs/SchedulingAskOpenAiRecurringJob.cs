@@ -26,5 +26,5 @@ public class SchedulingAskOpenAiRecurringJob : IRecurringJob
 
     public string JobId => nameof(SchedulingAskOpenAiRecurringJob);
 
-    public string CronExpression => _openAiTrainingSettings.OpenAiTrainingCronExpression;
+    public string CronExpression => Cron.Never();
 }
