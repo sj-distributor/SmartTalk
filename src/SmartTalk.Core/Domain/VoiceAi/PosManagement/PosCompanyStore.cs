@@ -1,10 +1,10 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
-namespace SmartTalk.Core.Domain.PosManagement;
+namespace SmartTalk.Core.Domain.VoiceAi.PosManagement;
 
 [Table("pos_company_store")]
-public class PosCompanyStore : IEntity, IHasCreatedFields
+public class PosCompanyStore : IEntity, IHasCreatedFields, IHasModifiedFields
 {
     [Key]
     [Column("id")]
@@ -29,7 +29,7 @@ public class PosCompanyStore : IEntity, IHasCreatedFields
     [Column("phone_nums"), StringLength(64)]
     public string PhoneNums { get; set; }
     
-    [Column("logo"), StringLength(2014)]
+    [Column("logo"), StringLength(1024)]
     public string Logo { get; set; }
     
     [Column("address"), StringLength(512)]
@@ -41,8 +41,8 @@ public class PosCompanyStore : IEntity, IHasCreatedFields
     [Column("longitude"), StringLength(16)]
     public string Longitude { get; set; }
     
-    [Column("pos_url"), StringLength(512)]
-    public string PosUrl { get; set; }
+    [Column("link"), StringLength(512)]
+    public string Link { get; set; }
     
     [Column("apple_id"), StringLength(128)]
     public string AppleId { get; set; }
@@ -50,6 +50,15 @@ public class PosCompanyStore : IEntity, IHasCreatedFields
     [Column("app_secret"), StringLength(512)]
     public string AppSecret { get; set; }
     
+    [Column("created_by")]
+    public int CreatedBy { get; set; }
+    
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
+    
+    [Column("last_modified_by")]
+    public int? LastModifiedBy { get; set; }
+    
+    [Column("last_modified_date")]
+    public DateTimeOffset? LastModifiedDate { get; set; }
 }

@@ -60,5 +60,10 @@
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </Content>
     </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="Domain\VoiceAi\" />
+      <Folder Include="Services\VoiceAi\" />
+    </ItemGroup>
     
 </Project>

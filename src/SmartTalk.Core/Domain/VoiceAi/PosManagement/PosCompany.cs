@@ -1,10 +1,10 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
-namespace SmartTalk.Core.Domain.PosManagement;
+namespace SmartTalk.Core.Domain.VoiceAi.PosManagement;
 
 [Table("pos_company")]
-public class PosCompany : IEntity, IHasCreatedFields
+public class PosCompany : IEntity, IHasCreatedFields, IHasModifiedFields
 {
     [Key]
     [Column("id")]
@@ -23,6 +23,15 @@ public class PosCompany : IEntity, IHasCreatedFields
     [Column("status")]
     public bool Status { get; set; }
     
+    [Column("created_by")]
+    public int CreatedBy { get; set; }
+    
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
+    
+    [Column("last_modified_by")]
+    public int? LastModifiedBy { get; set; }
+    
+    [Column("last_modified_date")]
+    public DateTimeOffset? LastModifiedDate { get; set; }
 }

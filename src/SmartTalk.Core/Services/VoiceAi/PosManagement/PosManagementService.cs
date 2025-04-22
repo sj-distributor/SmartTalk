@@ -1,6 +1,6 @@
 using SmartTalk.Core.Ioc;
 
-namespace SmartTalk.Core.Services.PosManagement;
+namespace SmartTalk.Core.Services.VoiceAi.PosManagement;
 
 public interface IPosManagementService : IScopedDependency
 {

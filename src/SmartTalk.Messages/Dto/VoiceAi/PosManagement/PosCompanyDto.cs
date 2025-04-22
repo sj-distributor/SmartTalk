@@ -1,4 +1,4 @@
-namespace SmartTalk.Messages.Dto.PosManagement;
+namespace SmartTalk.Messages.Dto.VoiceAi.PosManagement;
 
 public class PosCompanyDto
 {
@@ -12,5 +12,11 @@ public class PosCompanyDto
     
     public bool Status { get; set; }
     
+    public int CreatedBy { get; set; }
+    
     public DateTimeOffset CreatedDate { get; set; }
+    
+    public int? LastModifiedBy { get; set; }
+    
+    public DateTimeOffset? LastModifiedDate { get; set; }
 }
