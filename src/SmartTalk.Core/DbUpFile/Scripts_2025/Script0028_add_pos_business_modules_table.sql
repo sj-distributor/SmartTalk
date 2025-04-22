@@ -33,7 +33,7 @@ create table if not exists `pos_company_store`
     `last_modified_date` datetime(3) not null
 )charset=utf8mb4;
 
-create table if not exists `pos_company_store_user`
+create table if not exists `pos_store_user`
 (
     `id` int primary key auto_increment,
     `user_id` int not null,

@@ -3,8 +3,8 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace SmartTalk.Core.Domain.VoiceAi.PosManagement;
 
-[Table("pos_company_store_user")]
-public class PosCompanyStoreUser : IEntity, IHasCreatedFields, IHasModifiedFields
+[Table("pos_store_user")]
+public class PosStoreUser : IEntity, IHasCreatedFields, IHasModifiedFields
 {
     [Key]
     [Column("id")]

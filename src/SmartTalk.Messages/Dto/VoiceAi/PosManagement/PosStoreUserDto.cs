@@ -1,6 +1,6 @@
 namespace SmartTalk.Messages.Dto.VoiceAi.PosManagement;
 
-public class PosCompanyStoreUserDto
+public class PosStoreUserDto
 {
     public int Id { get; set; }
     
