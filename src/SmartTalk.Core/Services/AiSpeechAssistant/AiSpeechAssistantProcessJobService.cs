@@ -1,13 +1,16 @@
 using System.Text;
 using AutoMapper;
 using Newtonsoft.Json;
+using OpenAI.Chat;
 using Serilog;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.Restaurants;
 using SmartTalk.Core.Services.RetrievalDb.VectorDb;
+using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Core.Settings.Twilio;
+using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Constants;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Restaurant;
@@ -23,6 +26,8 @@ namespace SmartTalk.Core.Services.AiSpeechAssistant;
 public interface IAiSpeechAssistantProcessJobService : IScopedDependency
 {
     Task RecordAiSpeechAssistantCallAsync(AiSpeechAssistantStreamContextDto context, CancellationToken cancellationToken);
+    
+    Task OpenAiAccountTrainingAsync(OpenAiAccountTrainingCommand command, CancellationToken cancellationToken);
 }
 
 public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobService
@@ -30,6 +35,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
     private readonly IMapper _mapper;
     private readonly IVectorDb _vectorDb;
     private readonly TwilioSettings _twilioSettings;
+    private readonly OpenAiTrainingSettings _openAiTrainingSettings;
     private readonly IRestaurantDataProvider _restaurantDataProvider;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
 
@@ -38,12 +44,14 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         IVectorDb vectorDb,
         TwilioSettings twilioSettings,
         IRestaurantDataProvider restaurantDataProvider,
-        IPhoneOrderDataProvider phoneOrderDataProvider)
+        IPhoneOrderDataProvider phoneOrderDataProvider, 
+        OpenAiTrainingSettings openAiTrainingSettings)
     {
         _mapper = mapper;
         _vectorDb = vectorDb;
         _twilioSettings = twilioSettings;
         _phoneOrderDataProvider = phoneOrderDataProvider;
+        _openAiTrainingSettings = openAiTrainingSettings;
         _restaurantDataProvider = restaurantDataProvider;
     }
 
@@ -194,5 +202,12 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             Note = x.Remark,
             ProductId = x.ProductId
         }).ToList();
+    }
+    
+    public async Task OpenAiAccountTrainingAsync(OpenAiAccountTrainingCommand command, CancellationToken cancellationToken)
+    {
+        ChatClient client = new("gpt-4o", _openAiTrainingSettings.ApiKey);
+        
+        await client.CompleteChatAsync("生成5000字历史类论文");
     }
 }
