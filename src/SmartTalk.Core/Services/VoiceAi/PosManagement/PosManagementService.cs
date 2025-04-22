@@ -10,6 +10,8 @@ namespace SmartTalk.Core.Services.VoiceAi.PosManagement;
 
 public interface IPosManagementService : IScopedDependency
 {
+    Task<GetPosCompanyWithStoresResponse> GetPosCompanyWithStoresAsync(GetPosCompanyWithStoresRequest request, CancellationToken cancellationToken);
+    
     Task<GetPosCompanyStoreDetailResponse> GetPosCompanyStoreDetailAsync(GetPosCompanyStoreDetailRequest request, CancellationToken cancellationToken);
     
     Task<CreatePosCompanyStoreResponse> CreatePosCompanyStoreAsync(CreatePosCompanyStoreCommand command,CancellationToken cancellationToken);
@@ -32,6 +34,23 @@ public class PosManagementService : IPosManagementService
         _posManagementDataProvider = posManagementDataProvider;
     }
     
+    public async Task<GetPosCompanyWithStoresResponse> GetPosCompanyWithStoresAsync(GetPosCompanyWithStoresRequest request, CancellationToken cancellationToken)
+    {
+        var (count, companies) = await _posManagementDataProvider.GetPosCompaniesAsync(
+            request.PageIndex, request.PageSize, keyword: request.Keyword, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var result = _mapper.Map<List<PosCompanyDto>>(companies);
+        
+        return new GetPosCompanyWithStoresResponse
+        {
+            Data = new GetPosCompanyWithStoresResponseData
+            {
+                Count = count,
+                Data = await EnrichPosCompaniesAsync(result, cancellationToken).ConfigureAwait(false)
+            }
+        };
+    }
+
     public async Task<GetPosCompanyStoreDetailResponse> GetPosCompanyStoreDetailAsync(GetPosCompanyStoreDetailRequest request, CancellationToken cancellationToken)
     {
         var store = await _posManagementDataProvider.GetPosCompanyStoreDetailAsync(request.StoreId, cancellationToken).ConfigureAwait(false);
@@ -72,7 +91,7 @@ public class PosManagementService : IPosManagementService
 
     public async Task<DeletePosCompanyStoreResponse> DeletePosCompanyStoreAsync(DeletePosCompanyStoreCommand command, CancellationToken cancellationToken)
     {
-        var stores = await _posManagementDataProvider.GetPosCompanyStoresAsync([command.StoreId], cancellationToken).ConfigureAwait(false);
+        var stores = await _posManagementDataProvider.GetPosCompanyStoresAsync([command.StoreId], cancellationToken:cancellationToken).ConfigureAwait(false);
 
         if (stores.Count == 0) throw new Exception("Could not found any stores");
 
@@ -82,5 +101,28 @@ public class PosManagementService : IPosManagementService
         {
             Data = _mapper.Map<List<PosCompanyStoreDto>>(stores)
         };
+    }
+
+    private async Task<List<GetPosCompanyWithStoresData>> EnrichPosCompaniesAsync(List<PosCompanyDto> companies, CancellationToken cancellationToken)
+    {
+        var stores = await _posManagementDataProvider.GetPosCompanyStoresAsync(
+            companyIds: companies.Select(x => x.Id).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var storeGroups = stores.GroupBy(x => x.CompanyId).ToDictionary(kp => kp.Key, kp => kp.ToList());
+
+        return companies.Select(x => new GetPosCompanyWithStoresData
+        {
+            Count = storeGroups.TryGetValue(x.Id, out var group) ? group.Count : 0,
+            Company = EnrichCompanyStores(x, storeGroups)
+        }).ToList();
+    }
+
+    private PosCompanyDto EnrichCompanyStores(PosCompanyDto company, Dictionary<int,List<PosCompanyStore>> storeGroups)
+    {
+        var stores = storeGroups.TryGetValue(company.Id, out var group) ? group : [];
+        
+        company.Stores = _mapper.Map<List<PosCompanyStoreDto>>(stores);
+        
+        return company;
     }
 }

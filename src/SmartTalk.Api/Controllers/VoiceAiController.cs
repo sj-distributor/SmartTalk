@@ -17,6 +17,15 @@ public class VoiceAiController : ControllerBase
     {
         _mediator = mediator;
     }
+        
+    [Route("pos/companies"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPosCompanyWithStoresResponse))]
+    public async Task<IActionResult> GetPosCompanyWithStoresAsync([FromQuery] GetPosCompanyWithStoresRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetPosCompanyWithStoresRequest, GetPosCompanyWithStoresResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
     
     [Route("pos/company/store/detail"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPosCompanyStoreDetailResponse))]

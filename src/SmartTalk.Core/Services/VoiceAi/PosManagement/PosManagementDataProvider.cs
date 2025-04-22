@@ -9,11 +9,14 @@ namespace SmartTalk.Core.Services.VoiceAi.PosManagement;
 
 public interface IPosManagementDataProvider : IScopedDependency
 {
+    Task<(int Count, List<PosCompany> Companies)> GetPosCompaniesAsync(
+        int? pageIndex = null, int? pageSize = null, List<int> companyIds = null, string keyword = null, CancellationToken cancellationToken = default);
+        
     Task<PosCompanyStore> GetPosCompanyStoreAsync(int? id = null, CancellationToken cancellationToken = default);
     
     Task<PosCompanyStoreDto> GetPosCompanyStoreDetailAsync(int? id = null, CancellationToken cancellationToken = default);
     
-    Task<List<PosCompanyStore>> GetPosCompanyStoresAsync(List<int> ids = null, CancellationToken cancellationToken = default);
+    Task<List<PosCompanyStore>> GetPosCompanyStoresAsync(List<int> ids = null, List<int> companyIds = null, CancellationToken cancellationToken = default);
     
     Task AddPosCompanyStoresAsync(List<PosCompanyStore> stores, bool forceSave = true, CancellationToken cancellationToken = default);
     
@@ -33,6 +36,27 @@ public class PosManagementDataProvider : IPosManagementDataProvider
         _mapper = mapper;
         _repository = repository;
         _unitOfWork = unitOfWork;
+    }
+
+    public async Task<(int Count, List<PosCompany> Companies)> GetPosCompaniesAsync(
+        int? pageIndex = null, int? pageSize = null, List<int> companyIds = null, string keyword = null, CancellationToken cancellationToken = default)
+    {
+        var query = _repository.Query<PosCompany>();
+
+        if (companyIds != null && companyIds.Count != 0)
+            query = query.Where(x => companyIds.Contains(x.Id));
+
+        if (!string.IsNullOrEmpty(keyword))
+            query = query.Where(x => x.Name.Contains(keyword));
+
+        var count = await query.CountAsync(cancellationToken).ConfigureAwait(false);
+
+        if (pageIndex.HasValue && pageSize.HasValue)
+            query = query.Skip((pageIndex.Value - 1) * pageSize.Value).Take(pageSize.Value);
+        
+        var companies = await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+
+        return (count, companies);
     }
 
     public async Task<PosCompanyStore> GetPosCompanyStoreAsync(int? id = null, CancellationToken cancellationToken = default)
@@ -78,12 +102,15 @@ public class PosManagementDataProvider : IPosManagementDataProvider
         return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<PosCompanyStore>> GetPosCompanyStoresAsync(List<int> ids = null, CancellationToken cancellationToken = default)
+    public async Task<List<PosCompanyStore>> GetPosCompanyStoresAsync(List<int> ids = null, List<int> companyIds = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<PosCompanyStore>();
 
         if (ids != null && ids.Count != 0)
             query = query.Where(x => ids.Contains(x.Id));
+        
+        if (companyIds != null && companyIds.Count != 0)
+            query = query.Where(x => companyIds.Contains(x.CompanyId));
 
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
