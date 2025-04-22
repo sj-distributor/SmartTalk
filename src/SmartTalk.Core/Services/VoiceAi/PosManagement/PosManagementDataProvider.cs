@@ -112,7 +112,7 @@ public class PosManagementDataProvider : IPosManagementDataProvider
         if (companyIds != null && companyIds.Count != 0)
             query = query.Where(x => companyIds.Contains(x.CompanyId));
 
-        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+        return await query.OrderByDescending(x => x.CreatedDate).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task AddPosCompanyStoresAsync(List<PosCompanyStore> stores, bool forceSave = true, CancellationToken cancellationToken = default)
