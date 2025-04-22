@@ -207,9 +207,12 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
     public async Task OpenAiAccountTrainingAsync(OpenAiAccountTrainingCommand command, CancellationToken cancellationToken)
     {
         ChatClient client = new("gpt-4o", _openAiTrainingSettings.ApiKey);
-        
-        var result = await client.CompleteChatAsync("生成5000字历史类论文").ConfigureAwait(false);
 
-        Log.Information("OpenAiAccountTrainingAsync:{@result} ", result.Value.Content.ToString());
+        var result = await client.CompleteChatAsync("生成5000字历史类论文").ConfigureAwait(false);
+        var content = result.Value.Content?.ToString() ?? string.Empty;
+
+        var preview = content.Length > 50 ? content.Substring(0, 50) : content;
+
+        Log.Information("OpenAiAccountTrainingAsync (前50字): {Preview}", preview);
     }
 }
