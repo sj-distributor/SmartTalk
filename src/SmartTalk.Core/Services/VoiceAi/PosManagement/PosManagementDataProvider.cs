@@ -1,11 +1,25 @@
 using AutoMapper;
-using SmartTalk.Core.Data;
 using SmartTalk.Core.Ioc;
+using SmartTalk.Core.Data;
+using Microsoft.EntityFrameworkCore;
+using SmartTalk.Core.Domain.VoiceAi.PosManagement;
+using SmartTalk.Messages.Dto.VoiceAi.PosManagement;
 
 namespace SmartTalk.Core.Services.VoiceAi.PosManagement;
 
 public interface IPosManagementDataProvider : IScopedDependency
 {
+    Task<PosCompanyStore> GetPosCompanyStoreAsync(int? id = null, CancellationToken cancellationToken = default);
+    
+    Task<PosCompanyStoreDto> GetPosCompanyStoreDetailAsync(int? id = null, CancellationToken cancellationToken = default);
+    
+    Task<List<PosCompanyStore>> GetPosCompanyStoresAsync(List<int> ids = null, CancellationToken cancellationToken = default);
+    
+    Task AddPosCompanyStoresAsync(List<PosCompanyStore> stores, bool forceSave = true, CancellationToken cancellationToken = default);
+    
+    Task UpdatePosCompanyStoresAsync(List<PosCompanyStore> stores, bool forceSave = true, CancellationToken cancellationToken = default);
+    
+    Task DeletePosCompanyStoresAsync(List<PosCompanyStore> stores, bool forceSave = true, CancellationToken cancellationToken = default);
 }
 
 public class PosManagementDataProvider : IPosManagementDataProvider
@@ -13,11 +27,86 @@ public class PosManagementDataProvider : IPosManagementDataProvider
     private readonly IMapper _mapper;
     private readonly IRepository _repository;
     private readonly IUnitOfWork _unitOfWork;
+    private IPosManagementDataProvider _posManagementDataProviderImplementation;
 
     public PosManagementDataProvider(IMapper mapper, IRepository repository, IUnitOfWork unitOfWork)
     {
         _mapper = mapper;
         _repository = repository;
         _unitOfWork = unitOfWork;
+    }
+
+    public async Task<PosCompanyStore> GetPosCompanyStoreAsync(int? id = null, CancellationToken cancellationToken = default)
+    {
+        var query = _repository.Query<PosCompanyStore>();
+
+        if (id.HasValue)
+            query = query.Where(x => x.Id == id.Value);
+
+        return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<PosCompanyStoreDto> GetPosCompanyStoreDetailAsync(int? id = null, CancellationToken cancellationToken = default)
+    {
+        var query = from company in _repository.Query<PosCompany>()
+            join store in _repository.Query<PosCompanyStore>() on company.Id equals store.CompanyId
+            select new PosCompanyStoreDto
+            {
+                Id = store.Id,
+                CompanyId = company.Id,
+                EnName = store.EnName,
+                ZhName = store.ZhName,
+                Description = store.Description,
+                CompanyDescription = company.Description,
+                Status = store.Status,
+                PhoneNums = store.PhoneNums,
+                Logo = store.Logo,
+                Address = store.Address,
+                Latitude = store.Latitude,
+                Longitude = store.Longitude,
+                Link = store.Link,
+                AppleId = store.AppleId,
+                AppSecret = store.AppSecret,
+                CreatedBy = store.CreatedBy,
+                CreatedDate = store.CreatedDate,
+                LastModifiedBy = store.LastModifiedBy,
+                LastModifiedDate = store.LastModifiedDate
+            };
+
+        if (id.HasValue)
+            query = query.Where(x => x.Id == id.Value);
+
+        return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<PosCompanyStore>> GetPosCompanyStoresAsync(List<int> ids = null, CancellationToken cancellationToken = default)
+    {
+        var query = _repository.Query<PosCompanyStore>();
+
+        if (ids != null && ids.Count != 0)
+            query = query.Where(x => ids.Contains(x.Id));
+
+        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task AddPosCompanyStoresAsync(List<PosCompanyStore> stores, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.InsertAllAsync(stores, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task UpdatePosCompanyStoresAsync(List<PosCompanyStore> stores, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.UpdateAllAsync(stores, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task DeletePosCompanyStoresAsync(List<PosCompanyStore> stores, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.DeleteAllAsync(stores, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 }

@@ -1,0 +1,18 @@
+using AutoMapper;
+using SmartTalk.Core.Domain.VoiceAi.PosManagement;
+using SmartTalk.Messages.Commands.VoiceAi.PosManagement;
+using SmartTalk.Messages.Dto.VoiceAi.PosManagement;
+
+namespace SmartTalk.Core.Mappings;
+
+public class VoiceAiMapping : Profile
+{
+    public VoiceAiMapping()
+    {
+        CreateMap<PosCompanyStoreDto, PosCompanyStore>().ReverseMap();
+        CreateMap<CreatePosCompanyStoreCommand, PosCompanyStoreDto>()
+            .ForMember(dest => dest.PhoneNums, opt => opt.MapFrom(x => string.Join(",", x.PhoneNumbers)));
+        CreateMap<UpdatePosCompanyStoreCommand, PosCompanyStoreDto>()
+            .ForMember(dest => dest.PhoneNums, opt => opt.MapFrom(x => string.Join(",", x.PhoneNumbers)));
+    }
+}
