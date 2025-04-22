@@ -212,8 +212,8 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         
         var content = result.Value.Content.FirstOrDefault()?.Text ?? string.Empty;
 
-        var preview = content.Length > 100 ? content.Substring(0, 100) : content;
+        var preview = content.Length > 50 ? content.Substring(0, 50) : content;
 
-        Log.Information("OpenAiAccountTrainingAsync (前50字): {Preview}", preview);
+        Log.Information("OpenAiAccountTrainingAsync (前50字): {Preview}（长度: {Length}）", preview, preview.Length);
     }
 }
