@@ -62,4 +62,13 @@ public class VoiceAiController : ControllerBase
         
         return Ok(response);
     }
+    
+    [Route("pos/store/status/update"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdatePosCompanyStoreStatusResponse))]
+    public async Task<IActionResult> UpdatePosCompanyStoreStatusAsync([FromBody] UpdatePosCompanyStoreStatusCommand command)
+    {
+        var response = await _mediator.SendAsync<UpdatePosCompanyStoreStatusCommand, UpdatePosCompanyStoreStatusResponse>(command).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
 }

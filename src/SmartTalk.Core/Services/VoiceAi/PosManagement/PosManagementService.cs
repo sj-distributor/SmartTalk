@@ -19,6 +19,8 @@ public interface IPosManagementService : IScopedDependency
     Task<UpdatePosCompanyStoreResponse> UpdatePosCompanyStoreAsync(UpdatePosCompanyStoreCommand command,CancellationToken cancellationToken);
     
     Task<DeletePosCompanyStoreResponse> DeletePosCompanyStoreAsync(DeletePosCompanyStoreCommand command,CancellationToken cancellationToken);
+    
+    Task<UpdatePosCompanyStoreStatusResponse> UpdatePosCompanyStoreStatusAsync(UpdatePosCompanyStoreStatusCommand command,CancellationToken cancellationToken);
 }
 
 public class PosManagementService : IPosManagementService
@@ -100,6 +102,22 @@ public class PosManagementService : IPosManagementService
         return new DeletePosCompanyStoreResponse
         {
             Data = _mapper.Map<List<PosCompanyStoreDto>>(stores)
+        };
+    }
+
+    public async Task<UpdatePosCompanyStoreStatusResponse> UpdatePosCompanyStoreStatusAsync(UpdatePosCompanyStoreStatusCommand command, CancellationToken cancellationToken)
+    {
+        var store = await _posManagementDataProvider.GetPosCompanyStoreAsync(id: command.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (store == null) throw new Exception("Could not found the store");
+        
+        store.Status = command.Status;
+
+        await _posManagementDataProvider.UpdatePosCompanyStoresAsync([store], cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return new UpdatePosCompanyStoreStatusResponse
+        {
+            Data = _mapper.Map<PosCompanyStoreDto>(store)
         };
     }
 
