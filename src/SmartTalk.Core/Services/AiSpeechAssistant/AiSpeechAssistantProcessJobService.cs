@@ -208,6 +208,8 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
     {
         ChatClient client = new("gpt-4o", _openAiTrainingSettings.ApiKey);
         
-        await client.CompleteChatAsync("生成5000字历史类论文");
+        var result = await client.CompleteChatAsync("生成5000字历史类论文").ConfigureAwait(false);
+
+        Log.Information(result.Value.Content.ToString());
     }
 }
