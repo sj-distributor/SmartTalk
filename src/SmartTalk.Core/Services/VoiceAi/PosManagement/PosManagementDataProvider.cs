@@ -27,7 +27,6 @@ public class PosManagementDataProvider : IPosManagementDataProvider
     private readonly IMapper _mapper;
     private readonly IRepository _repository;
     private readonly IUnitOfWork _unitOfWork;
-    private IPosManagementDataProvider _posManagementDataProviderImplementation;
 
     public PosManagementDataProvider(IMapper mapper, IRepository repository, IUnitOfWork unitOfWork)
     {
