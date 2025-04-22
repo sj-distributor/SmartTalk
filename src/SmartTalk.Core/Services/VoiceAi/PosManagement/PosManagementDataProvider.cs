@@ -4,11 +4,11 @@ using SmartTalk.Core.Ioc;
 
 namespace SmartTalk.Core.Services.VoiceAi.PosManagement;
 
-public interface IPosManagementDataProvider : IScopedDependency
+public partial interface IPosManagementDataProvider : IScopedDependency
 {
 }
 
-public class PosManagementDataProvider : IPosManagementDataProvider
+public partial class PosManagementDataProvider : IPosManagementDataProvider
 {
     private readonly IMapper _mapper;
     private readonly IRepository _repository;
