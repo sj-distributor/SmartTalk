@@ -8,8 +8,6 @@ public class PosCompanyDto
     
     public string Description { get; set; }
     
-    public string Address { get; set; }
-    
     public bool Status { get; set; }
     
     public int CreatedBy { get; set; }

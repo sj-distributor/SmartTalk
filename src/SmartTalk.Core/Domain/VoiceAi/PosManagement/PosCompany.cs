@@ -17,9 +17,6 @@ public class PosCompany : IEntity, IHasCreatedFields, IHasModifiedFields
     [Column("description"), StringLength(512)]
     public string Description { get; set; }
     
-    [Column("address"), StringLength(512)]
-    public string Address { get; set; }
-    
     [Column("status")]
     public bool Status { get; set; }
     

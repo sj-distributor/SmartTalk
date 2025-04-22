@@ -3,7 +3,6 @@ create table if not exists `pos_company`
     `id` int primary key auto_increment,
     `name` varchar(64) not null,
     `description` varchar(512) null,
-    `address` varchar(512) null,
     `status` tinyint(1) not null default 0,
     `created_by` int not null,
     `created_date` datetime(3) not null,
