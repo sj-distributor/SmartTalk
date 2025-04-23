@@ -75,7 +75,8 @@ public partial class PosManagementService : IPosManagementService
         
         await _posManagementDataProvider.DeletePosCompanyAsync(company, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        // todo delete stores
+        var stores = await _posManagementDataProvider.GetPosCompanyStoresAsync(companyIds: [company.Id], cancellationToken: cancellationToken).ConfigureAwait(false);
+        await _posManagementDataProvider.DeletePosCompanyStoresAsync(stores: stores, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         return new PosCompanyDeletedEvent
         {
