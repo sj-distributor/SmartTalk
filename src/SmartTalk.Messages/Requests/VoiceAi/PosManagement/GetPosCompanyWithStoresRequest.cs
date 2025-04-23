@@ -27,4 +27,6 @@ public class GetPosCompanyWithStoresData
     public int Count { get; set; }
     
     public PosCompanyDto Company { get; set; }
+    
+    public List<PosCompanyStoreDto> Stores { get; set; }
 }

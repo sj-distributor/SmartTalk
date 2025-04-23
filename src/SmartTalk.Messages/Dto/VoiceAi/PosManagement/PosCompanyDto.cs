@@ -17,6 +17,4 @@ public class PosCompanyDto
     public int? LastModifiedBy { get; set; }
     
     public DateTimeOffset? LastModifiedDate { get; set; }
-    
-    public List<PosCompanyStoreDto> Stores { get; set; }
 }

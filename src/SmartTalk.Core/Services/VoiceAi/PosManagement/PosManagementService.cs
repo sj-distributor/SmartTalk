@@ -126,21 +126,20 @@ public class PosManagementService : IPosManagementService
         var stores = await _posManagementDataProvider.GetPosCompanyStoresAsync(
             companyIds: companies.Select(x => x.Id).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        var storeGroups = stores.GroupBy(x => x.CompanyId).ToDictionary(kp => kp.Key, kp => kp.ToList());
+        var storeGroups = stores.GroupBy(x => x.CompanyId).ToDictionary(kvp => kvp.Key, kvp => kvp.ToList());
 
         return companies.Select(x => new GetPosCompanyWithStoresData
         {
-            Count = storeGroups.TryGetValue(x.Id, out var group) ? group.Count : 0,
-            Company = EnrichCompanyStores(x, storeGroups)
+            Company = x,
+            Stores = EnrichCompanyStores(x, storeGroups),
+            Count = storeGroups.TryGetValue(x.Id, out var group) ? group.Count : 0
         }).ToList();
     }
 
-    private PosCompanyDto EnrichCompanyStores(PosCompanyDto company, Dictionary<int,List<PosCompanyStore>> storeGroups)
+    private List<PosCompanyStoreDto> EnrichCompanyStores(PosCompanyDto company, Dictionary<int,List<PosCompanyStore>> storeGroups)
     {
         var stores = storeGroups.TryGetValue(company.Id, out var group) ? group : [];
         
-        company.Stores = _mapper.Map<List<PosCompanyStoreDto>>(stores);
-        
-        return company;
+        return _mapper.Map<List<PosCompanyStoreDto>>(stores);
     }
 }
