@@ -12,6 +12,8 @@ public class PosCompanyStoreDto
     
     public string Description { get; set; }
     
+    public string CompanyDescription { get; set; }
+    
     public bool Status { get; set; }
     
     public string PhoneNums { get; set; }
