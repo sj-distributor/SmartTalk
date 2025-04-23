@@ -209,7 +209,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
 
     public async Task OpenAiAccountTrainingAsync(OpenAiAccountTrainingCommand command, CancellationToken cancellationToken)
     {
-        var prompt = "生成6000字历史类论文，不要生成框架，要一篇完整的满6000字的论文";
+        var prompt = "生成3000字历史类论文，不要生成框架，要一篇完整的满3000字的论文";
 
         var client = new ChatClient("gpt-4o", _openAiTrainingSettings.ApiKey);
         var anotherClient = new ChatClient("gpt-4o", _openAiAccountTrainingSettings.ApiKey);
@@ -228,7 +228,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             ? "[内容为空]" 
             : anotherContent.Length > 50 ? anotherContent.Substring(0, 50) + "..." : anotherContent;
 
-        Log.Information("主账号返回 (前50字): {Preview}（总长度: {Length}）", preview, content?.Length ?? 0);
-        Log.Information("备用账号返回 (前50字): {Preview}（总长度: {Length}）", anotherPreview, anotherContent?.Length ?? 0);
+        Log.Information("OpenAiAccountTraining 主账号返回 (前50字): {Preview}（总长度: {Length}）", preview, content?.Length ?? 0);
+        Log.Information("OpenAiAccountTraining 备用账号返回 (前50字): {Preview}（总长度: {Length}）", anotherPreview, anotherContent?.Length ?? 0);
     }
 }
