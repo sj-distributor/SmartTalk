@@ -85,8 +85,6 @@ public class PosManagementService : IPosManagementService
 
         var existingUrlStore = await _posManagementDataProvider.GetPosCompanyStoreAsync(command.Link, null, cancellationToken).ConfigureAwait(false);
 
-        if (store.IsLink) throw new Exception("PosUrl is currently bound to the store, please unbind it first and try again");
-
         if (existingUrlStore != null) throw new Exception("PosUrl is currently bound to the store, please enter another posUrl and try again");
 
         store.IsLink = true;

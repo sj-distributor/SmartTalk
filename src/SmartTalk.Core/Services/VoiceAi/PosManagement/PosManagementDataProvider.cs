@@ -67,7 +67,7 @@ public class PosManagementDataProvider : IPosManagementDataProvider
             query = query.Where(x => x.Id == id.Value);
 
         if (!string.IsNullOrEmpty(link))
-            query = query.Where(x => x.Link == link && x.IsLink == true);
+            query = query.Where(x => x.Link == link);
 
         return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
