@@ -53,7 +53,7 @@ public class PosCompanyStore : IEntity, IHasCreatedFields, IHasModifiedFields
     [Column("pos_name"), StringLength(128)]
     public string PosName { get; set; }
     
-    [Column("pos_id"), StringLength(128)]
+    [Column("pos_id"), StringLength(512)]
     public string PosId { get; set; }
     
     [Column("is_link")]
