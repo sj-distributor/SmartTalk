@@ -9,6 +9,8 @@ public class VoiceAiMapping : Profile
 {
     public VoiceAiMapping()
     {
+        CreateMap<PosCompanyDto, PosCompany>().ReverseMap();
+
         CreateMap<PosCompanyStoreDto, PosCompanyStore>().ReverseMap();
         CreateMap<CreatePosCompanyStoreCommand, PosCompanyStoreDto>()
             .ForMember(dest => dest.PhoneNums, opt => opt.MapFrom(x => string.Join(",", x.PhoneNumbers)));
