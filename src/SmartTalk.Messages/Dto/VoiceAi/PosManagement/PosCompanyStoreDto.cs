@@ -32,6 +32,12 @@ public class PosCompanyStoreDto
     
     public string AppSecret { get; set; }
     
+    public string PosDisPlay { get; set; }
+    
+    public string PosId { get; set; }
+    
+    public bool IsLink { get; set; }
+    
     public int CreatedBy { get; set; }
     
     public DateTimeOffset CreatedDate { get; set; }
