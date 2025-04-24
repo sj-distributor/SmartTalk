@@ -26,6 +26,8 @@ public class UpdatePosCompanyStoreCommand : ICommand
     
     public string AppSecret { get; set; }
     
+    public bool IsLink { get; set; }
+    
     public List<string> PhoneNumbers { get; set; }
 }
 

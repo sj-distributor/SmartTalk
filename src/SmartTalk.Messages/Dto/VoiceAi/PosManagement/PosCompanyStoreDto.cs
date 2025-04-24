@@ -32,7 +32,7 @@ public class PosCompanyStoreDto
     
     public string AppSecret { get; set; }
     
-    public string PosDisPlay { get; set; }
+    public string PosName { get; set; }
     
     public string PosId { get; set; }
     
