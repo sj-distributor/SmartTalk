@@ -71,4 +71,13 @@ public class VoiceAiController : ControllerBase
         
         return Ok(response);
     }
+    
+    [Route("pos/store/unbind"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UnbindPosCompanyStoreResponse))]
+    public async Task<IActionResult> UnbindPosCompanyStoreAsync([FromBody] UnbindPosCompanyStoreCommand command)
+    {
+        var response = await _mediator.SendAsync<UnbindPosCompanyStoreCommand, UnbindPosCompanyStoreResponse>(command).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
 }
