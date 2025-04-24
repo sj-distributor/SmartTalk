@@ -50,10 +50,10 @@ public class PosCompanyStore : IEntity, IHasCreatedFields, IHasModifiedFields
     [Column("app_secret"), StringLength(512)]
     public string AppSecret { get; set; }
     
-    [Column("pos_name"), StringLength(128)]
+    [Column("pos_name"), StringLength(64)]
     public string PosName { get; set; }
     
-    [Column("pos_id"), StringLength(512)]
+    [Column("pos_id"), StringLength(64)]
     public string PosId { get; set; }
     
     [Column("is_link")]
