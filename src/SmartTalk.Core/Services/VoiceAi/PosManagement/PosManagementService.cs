@@ -8,7 +8,7 @@ using SmartTalk.Messages.Requests.VoiceAi.PosManagement;
 
 namespace SmartTalk.Core.Services.VoiceAi.PosManagement;
 
-public interface IPosManagementService : IScopedDependency
+public partial interface IPosManagementService : IScopedDependency
 {
     Task<GetPosCompanyWithStoresResponse> GetPosCompanyWithStoresAsync(GetPosCompanyWithStoresRequest request, CancellationToken cancellationToken);
     
@@ -25,7 +25,7 @@ public interface IPosManagementService : IScopedDependency
     Task<BindPosCompanyStoreAccountsResponse> BindPosCompanyStoreAccountAsync(BindPosCompanyStoreAccountsCommand command, CancellationToken cancellationToken);
 }
 
-public class PosManagementService : IPosManagementService
+public partial class PosManagementService : IPosManagementService
 {
     private readonly IMapper _mapper;
     private readonly ICurrentUser _currentUser;
