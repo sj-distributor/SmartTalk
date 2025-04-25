@@ -21,6 +21,8 @@ public interface IPosManagementService : IScopedDependency
     Task<DeletePosCompanyStoreResponse> DeletePosCompanyStoreAsync(DeletePosCompanyStoreCommand command,CancellationToken cancellationToken);
     
     Task<UpdatePosCompanyStoreStatusResponse> UpdatePosCompanyStoreStatusAsync(UpdatePosCompanyStoreStatusCommand command,CancellationToken cancellationToken);
+
+    Task<BindPosCompanyStoreAccountsResponse> BindPosCompanyStoreAccountAsync(BindPosCompanyStoreAccountsCommand command, CancellationToken cancellationToken);
 }
 
 public class PosManagementService : IPosManagementService
@@ -118,6 +120,38 @@ public class PosManagementService : IPosManagementService
         return new UpdatePosCompanyStoreStatusResponse
         {
             Data = _mapper.Map<PosCompanyStoreDto>(store)
+        };
+    }
+
+    public async Task<BindPosCompanyStoreAccountsResponse> BindPosCompanyStoreAccountAsync(BindPosCompanyStoreAccountsCommand command, CancellationToken cancellationToken)
+    {
+        command.UserIds ??= new List<int>();
+
+        var existingBindings = await _posManagementDataProvider.GetPosStoreUsersAsync(command.StoreId, cancellationToken).ConfigureAwait(false);
+
+        if (existingBindings.Any())
+        {
+            await _posManagementDataProvider.DeletePosStoreUsersAsync(existingBindings, cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+
+        List<PosStoreUser> newBindings = new();
+    
+        if (command.UserIds.Any())
+        {
+            newBindings = command.UserIds.Select(userId => new PosStoreUser
+                {
+                    UserId = userId,
+                    StoreId = command.StoreId,
+                    CreatedBy = _currentUser.Id!.Value,
+                    CreatedDate = DateTimeOffset.UtcNow
+                }).ToList();
+
+            await _posManagementDataProvider.CreatePosStoreUserAsync(newBindings, cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+
+        return new BindPosCompanyStoreAccountsResponse 
+        {
+            Data = _mapper.Map<List<PosStoreUserDto>>(newBindings)
         };
     }
 

@@ -23,6 +23,12 @@ public interface IPosManagementDataProvider : IScopedDependency
     Task UpdatePosCompanyStoresAsync(List<PosCompanyStore> stores, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task DeletePosCompanyStoresAsync(List<PosCompanyStore> stores, bool forceSave = true, CancellationToken cancellationToken = default);
+
+    Task CreatePosStoreUserAsync(List<PosStoreUser> posStoreUsers, bool forceSave = true, CancellationToken cancellationToken = default);
+    
+    Task DeletePosStoreUsersAsync(List<PosStoreUser> posStoreUsers, bool forceSave = true, CancellationToken cancellationToken = default);
+    
+    Task<List<PosStoreUser>> GetPosStoreUsersAsync(int storeId, CancellationToken cancellationToken = default);
 }
 
 public class PosManagementDataProvider : IPosManagementDataProvider
@@ -134,5 +140,24 @@ public class PosManagementDataProvider : IPosManagementDataProvider
         await _repository.DeleteAllAsync(stores, cancellationToken).ConfigureAwait(false);
 
         if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task CreatePosStoreUserAsync(List<PosStoreUser> posStoreUsers, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.InsertAllAsync(posStoreUsers, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task DeletePosStoreUsersAsync(List<PosStoreUser> posStoreUsers, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.DeleteAllAsync(posStoreUsers, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<PosStoreUser>> GetPosStoreUsersAsync(int storeId, CancellationToken cancellationToken = default)
+    {
+        return await _repository.Query<PosStoreUser>().Where(x => x.StoreId == storeId).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }

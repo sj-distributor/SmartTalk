@@ -71,4 +71,13 @@ public class VoiceAiController : ControllerBase
         
         return Ok(response);
     }
+    
+    [Route("pos/store/account/bind"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(BindPosCompanyStoreAccountsResponse))]
+    public async Task<IActionResult> BindPosCompanyStoreAccountsAsync([FromBody] BindPosCompanyStoreAccountsCommand command)
+    {
+        var response = await _mediator.SendAsync<BindPosCompanyStoreAccountsCommand, BindPosCompanyStoreAccountsResponse>(command).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
 }
