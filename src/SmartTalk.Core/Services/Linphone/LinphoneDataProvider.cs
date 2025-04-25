@@ -4,6 +4,7 @@ using SmartTalk.Core.Data;
 using SmartTalk.Core.Domain.System;
 using Microsoft.EntityFrameworkCore;
 using AutoMapper.QueryableExtensions;
+using SmartTalk.Core.Domain.Asterisk;
 using SmartTalk.Core.Domain.Linphone;
 using SmartTalk.Messages.Dto.Linphone;
 using SmartTalk.Core.Domain.Restaurants;
@@ -26,6 +27,10 @@ public interface ILinphoneDataProvider : IScopedDependency
     Task<LinphoneCdr> GetLinphoneCdrAsync(CancellationToken cancellationToken);
 
     Task UpdateLinphoneCdrAsync(LinphoneCdr linphoneCdr, bool foreSave = true, CancellationToken cancellationToken = default);
+
+    Task AddCdrAsync(List<Cdr> cdrs, bool foreSave = true, CancellationToken cancellationToken = default);
+
+    Task<List<Restaurant>> GetRestaurantPhoneNumberAsync(string toRestaurantName = null, CancellationToken cancellationToken = default);
 }
 
 public class LinphoneDataProvider : ILinphoneDataProvider
@@ -150,5 +155,23 @@ public class LinphoneDataProvider : ILinphoneDataProvider
 
         if (foreSave)
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task AddCdrAsync(List<Cdr> cdrs, bool foreSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.InsertAllAsync(cdrs, cancellationToken).ConfigureAwait(false);
+
+        if (foreSave)
+            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<Restaurant>> GetRestaurantPhoneNumberAsync(string toRestaurantName = null, CancellationToken cancellationToken = default)
+    {
+        var query = _repository.QueryNoTracking<Restaurant>();
+
+        if (!string.IsNullOrEmpty(toRestaurantName))
+            query = query.Where(x => x.AnotherName == toRestaurantName);
+
+        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }
