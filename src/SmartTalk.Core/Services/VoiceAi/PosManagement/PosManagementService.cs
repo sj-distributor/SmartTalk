@@ -1,7 +1,9 @@
 using AutoMapper;
+using SmartTalk.Core.Domain.Account;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Identity;
 using SmartTalk.Core.Domain.VoiceAi.PosManagement;
+using SmartTalk.Core.Services.Account;
 using SmartTalk.Messages.Commands.VoiceAi.PosManagement;
 using SmartTalk.Messages.Dto.VoiceAi.PosManagement;
 using SmartTalk.Messages.Requests.VoiceAi.PosManagement;
@@ -23,6 +25,8 @@ public partial interface IPosManagementService : IScopedDependency
     Task<UpdatePosCompanyStoreStatusResponse> UpdatePosCompanyStoreStatusAsync(UpdatePosCompanyStoreStatusCommand command,CancellationToken cancellationToken);
 
     Task<BindPosCompanyStoreAccountsResponse> BindPosCompanyStoreAccountAsync(BindPosCompanyStoreAccountsCommand command, CancellationToken cancellationToken);
+
+    Task<GetPosStoreUsersResponse> GetPosStoreUsersAsync(GetPosStoreUsersRequest request, CancellationToken cancellationToken);
 }
 
 public partial class PosManagementService : IPosManagementService
@@ -30,12 +34,14 @@ public partial class PosManagementService : IPosManagementService
     private readonly IMapper _mapper;
     private readonly ICurrentUser _currentUser;
     private readonly IPosManagementDataProvider _posManagementDataProvider;
+    private readonly IAccountDataProvider _accountDataProvider;
 
-    public PosManagementService(IMapper mapper, ICurrentUser currentUser, IPosManagementDataProvider posManagementDataProvider)
+    public PosManagementService(IMapper mapper, ICurrentUser currentUser, IPosManagementDataProvider posManagementDataProvider, IAccountDataProvider accountDataProvider)
     {
         _mapper = mapper;
         _currentUser = currentUser;
         _posManagementDataProvider = posManagementDataProvider;
+        _accountDataProvider = accountDataProvider;
     }
     
     public async Task<GetPosCompanyWithStoresResponse> GetPosCompanyWithStoresAsync(GetPosCompanyWithStoresRequest request, CancellationToken cancellationToken)
@@ -152,6 +158,43 @@ public partial class PosManagementService : IPosManagementService
         return new BindPosCompanyStoreAccountsResponse 
         {
             Data = _mapper.Map<List<PosStoreUserDto>>(newBindings)
+        };
+    }
+
+    public async Task<GetPosStoreUsersResponse> GetPosStoreUsersAsync(GetPosStoreUsersRequest request, CancellationToken cancellationToken)
+    {
+        var posStoreUsers = await _posManagementDataProvider.GetPosStoreUsersAsync(request.StoreId, cancellationToken).ConfigureAwait(false);
+
+        if (!posStoreUsers.Any())
+            return new GetPosStoreUsersResponse
+            {
+                Data = new List<PosStoreUserDto>()
+            };
+        
+        var posStoreUserDtos = new List<PosStoreUserDto>();
+
+        foreach (var posStoreUser in posStoreUsers)
+        {
+            var (_, userAccounts) = await _accountDataProvider.GetUserAccountAsync(id: posStoreUser.UserId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            var userAccount = userAccounts?.FirstOrDefault();
+
+            posStoreUserDtos.Add(new PosStoreUserDto
+            {
+                Id = posStoreUser.Id,
+                UserId = posStoreUser.UserId,
+                UserName = userAccount?.UserName ?? $"用户{posStoreUser.UserId}",
+                StoreId = posStoreUser.StoreId,
+                CreatedBy = posStoreUser.CreatedBy,
+                CreatedDate = posStoreUser.CreatedDate,
+                LastModifiedBy = posStoreUser.LastModifiedBy,
+                LastModifiedDate = posStoreUser.LastModifiedDate
+            });
+        }
+
+        return new GetPosStoreUsersResponse
+        {
+            Data = posStoreUserDtos
         };
     }
 

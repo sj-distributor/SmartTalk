@@ -125,4 +125,13 @@ public class VoiceAiController : ControllerBase
         
         return Ok(response);
     }
+    
+    [Route("pos/store/accounts"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPosStoreUsersResponse))]
+    public async Task<IActionResult> GetPosStoreUsersAsync([FromQuery] GetPosStoreUsersRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetPosStoreUsersRequest, GetPosStoreUsersResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
 }
