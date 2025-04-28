@@ -1,11 +1,15 @@
+using AutoMapper;
 using Serilog;
+using SmartTalk.Core.Domain.Asterisk;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Domain.Linphone;
-using SmartTalk.Core.Extensions;
+using SmartTalk.Core.Services.Caching;
 using SmartTalk.Core.Services.Communication.Twilio;
 using SmartTalk.Core.Services.Http.Clients;
+using SmartTalk.Messages.Dto.Linphone;
 using SmartTalk.Messages.Enums.Linphone;
 using SmartTalk.Messages.Requests.Linphone;
+using SmartTalk.Messages.Requests.PhoneOrder;
 
 namespace SmartTalk.Core.Services.Linphone;
 
@@ -20,16 +24,22 @@ public interface ILinphoneService : IScopedDependency
     Task<GetLinphoneHistoryDetailsResponse> GetLinphoneHistoryDetailsAsync(GetLinphoneHistoryDetailsRequest request, CancellationToken cancellationToken);
     
     Task AutoGetLinphoneCdrRecordAsync(CancellationToken cancellationToken);
+
+    Task<GetLinphoneRestaurantNumberResponse> GetLinphoneRestaurantNumberAsync(GetLinphoneRestaurantNumberRequest request, CancellationToken cancellationToken);
 }
 
 public class LinphoneService : ILinphoneService
 {
+    private readonly IMapper _mapper;
+    private readonly ICacheManager _cacheManager;
     private readonly IAsteriskClient _asteriskClient;
     private readonly ILinphoneDataProvider _linphoneDataProvider;
     private readonly ITwilioServiceDataProvider _twilioServiceDataProvider;
 
-    public LinphoneService(IAsteriskClient asteriskClient, ILinphoneDataProvider linphoneDataProvider, ITwilioServiceDataProvider twilioServiceDataProvider)
+    public LinphoneService(IMapper mapper, ICacheManager cacheManager, IAsteriskClient asteriskClient, ILinphoneDataProvider linphoneDataProvider, ITwilioServiceDataProvider twilioServiceDataProvider)
     {
+        _mapper = mapper;
+        _cacheManager = cacheManager;
         _asteriskClient = asteriskClient;
         _linphoneDataProvider = linphoneDataProvider;
         _twilioServiceDataProvider = twilioServiceDataProvider;
@@ -71,7 +81,7 @@ public class LinphoneService : ILinphoneService
         await _linphoneDataProvider.AddLinphoneCdrAsync([linphoneCdr], cancellationToken: cancellationToken).ConfigureAwait(false);
     }
     
-    public async Task<LinphoneCdr> AddLinphoneCdrsAsync(string recordName, List<LinphoneSip> linphoneSips, LinphoneStatus? linphoneStatus = null, CancellationToken cancellationToken = default)
+    public async Task<LinphoneCdr> AddLinphoneCdrsAsync(string recordName, List<LinphoneCdrDto> cdrs, List<LinphoneSip> linphoneSips, LinphoneStatus? linphoneStatus = null, CancellationToken cancellationToken = default)
     {
         Log.Information($"Add cdr record parameter: {recordName}", recordName);
         
@@ -85,16 +95,31 @@ public class LinphoneService : ILinphoneService
         var recipient = parts[1];
         var caller = parts[2];
     
-        if ((callType != "in" && callType != "out") || !linphoneSips.Exists(x => callType == "in" ? x.Sip == recipient : x.Sip == caller)) return null;
+        if ((callType != "in" && callType != "out" && callType != "rg") || !linphoneSips.Exists(x => callType switch
+            {
+                "in" => x.Sip == recipient,
+                "rg" => cdrs.Exists(s => s.Did == x.Sip),
+                "out" => x.Sip == caller
+            })) return null;
     
         if (!long.TryParse(parts[5], out var callTimestamp)) return null;
     
-        var agentId = linphoneSips.First(x => callType == "in" ? x.Sip == recipient : x.Sip == caller).AgentId;
+        var agentId = linphoneSips.First(x => callType switch
+        {
+            "in" => x.Sip == recipient,
+            "rg" => cdrs.Exists(s => s.Did == x.Sip),
+            "out" => x.Sip == caller
+        }).AgentId;
     
         var linphoneCdr = new LinphoneCdr
         {
             Caller = caller,
-            Status = linphoneStatus ?? (callType == "in" ? LinphoneStatus.InComing : LinphoneStatus.OutGoing),
+            Status = linphoneStatus ?? callType switch
+            {
+                "in" => LinphoneStatus.InComing,
+                "rg" => LinphoneStatus.InComing,
+                "out" => LinphoneStatus.OutGoing
+            },
             AgentId = agentId,
             Targetter = recipient,
             CallDate = callTimestamp
@@ -140,21 +165,41 @@ public class LinphoneService : ILinphoneService
         };
     }
 
-    public async Task AutoGetLinphoneCdrRecordAsync(CancellationToken cancellationToken) 
-    {
+    public async Task AutoGetLinphoneCdrRecordAsync(CancellationToken cancellationToken)
+    { 
         Log.Information("Start auto get linphone cdr record");
         
         var localLinphoneCdrs = await _linphoneDataProvider.GetLinphoneCdrAsync(cancellationToken).ConfigureAwait(false);
 
         var lastTime = localLinphoneCdrs?.CallDate ?? DateTimeOffset.Now.AddMinutes(-1).ToUnixTimeSeconds();
         
-        var externalLinphoneCdrs =  await _asteriskClient.GetLinphoneCdrAsync(lastTime.ToString(), cancellationToken).ConfigureAwait(false);
+        var externalLinphoneCdrs = await _asteriskClient.GetLinphoneCdrAsync(lastTime.ToString(), cancellationToken).ConfigureAwait(false);
 
         Log.Information("LinphoneCdrs: {@linphoneCdrs}", externalLinphoneCdrs);
+
+        if (externalLinphoneCdrs == null) return;
+
+        var redisKey = $"cdr-{lastTime.ToString()}";
+        
+        Log.Information("rediskey:{@redisKey}", redisKey);
+        
+        var externalLinphoneCdrsLast = await _cacheManager.GetAsync<List<LinphoneCdrDto>>(redisKey, new RedisCachingSetting(), cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("LinphoneCdrs cache: {@linphoneCdrs}", externalLinphoneCdrsLast);
+
+        if (externalLinphoneCdrsLast is { Count: > 0 })
+            externalLinphoneCdrs.Cdrs = externalLinphoneCdrs.Cdrs.Where(x => !externalLinphoneCdrsLast.Select(y => y.Uniqueid).Contains(x.Uniqueid)).ToList();
+        
+        await _linphoneDataProvider.AddCdrAsync(_mapper.Map<List<Cdr>>(externalLinphoneCdrs.Cdrs), cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (externalLinphoneCdrs.Cdrs.Count > 0)
+            await _cacheManager.SetAsync(redisKey, externalLinphoneCdrs.Cdrs, new RedisCachingSetting(expiry: TimeSpan.FromHours(1)), cancellationToken);
         
         var linphoneSips = await _linphoneDataProvider.GetLinphoneSipAsync(cancellationToken).ConfigureAwait(false);
 
         var newLinphoneCdrs = new List<LinphoneCdr>();
+
+        externalLinphoneCdrs.Cdrs = externalLinphoneCdrs.Cdrs.Where(x => !string.IsNullOrEmpty(x.RecordingFile)).ToList();
         
         var externalLinphoneGroupedCdrs = externalLinphoneCdrs.Cdrs.GroupBy(x => x.RecordingFile);
 
@@ -165,9 +210,9 @@ public class LinphoneService : ILinphoneService
             LinphoneCdr linphoneCdr;
             
             if (group.Any(s => s.Disposition == "ANSWERED"))
-                linphoneCdr = await AddLinphoneCdrsAsync(group.Key, linphoneSips, cancellationToken: cancellationToken);
+                linphoneCdr = await AddLinphoneCdrsAsync(group.Key, group.ToList(), linphoneSips, cancellationToken: cancellationToken);
             else
-                linphoneCdr = await AddLinphoneCdrsAsync(group.Key, linphoneSips, LinphoneStatus.Missed, cancellationToken);
+                linphoneCdr = await AddLinphoneCdrsAsync(group.Key, group.ToList(), linphoneSips, LinphoneStatus.Missed, cancellationToken);
 
             return linphoneCdr;
         });
@@ -179,7 +224,7 @@ public class LinphoneService : ILinphoneService
         newLinphoneCdrs.RemoveAll(x => x == null);
 
         var alreadyExistsCdr = newLinphoneCdrs.FirstOrDefault(x => x.Caller == localLinphoneCdrs.Caller && x.Targetter == localLinphoneCdrs.Targetter && x.CallDate == localLinphoneCdrs.CallDate);
-        
+         
         if (alreadyExistsCdr != null)
         {
             if (alreadyExistsCdr.Status == localLinphoneCdrs.Status)
@@ -194,5 +239,18 @@ public class LinphoneService : ILinphoneService
 
         if (newLinphoneCdrs.Count > 0)
             await _linphoneDataProvider.AddLinphoneCdrAsync(newLinphoneCdrs, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<GetLinphoneRestaurantNumberResponse> GetLinphoneRestaurantNumberAsync(
+        GetLinphoneRestaurantNumberRequest request, CancellationToken cancellationToken)
+    {
+        var restaurant = await _linphoneDataProvider.GetRestaurantPhoneNumberAsync(cancellationToken: cancellationToken);
+
+        var restaurantPhoneNumbers = restaurant.Where(x => x.AnotherName != null).FirstOrDefault(x => request.ToRestaurant.Contains(x.AnotherName));
+        
+        return new GetLinphoneRestaurantNumberResponse
+        {
+            Data = restaurantPhoneNumbers?.PhoneNumber.Split(',').ToList()
+        };
     }
 }

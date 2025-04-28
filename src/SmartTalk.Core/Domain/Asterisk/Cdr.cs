@@ -1,90 +1,93 @@
-using Newtonsoft.Json;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
-namespace SmartTalk.Messages.Dto.Linphone;
+namespace SmartTalk.Core.Domain.Asterisk;
 
-public class GetLinphoneCdrResponseDto
+[Table("cdr")]
+public class Cdr : IEntity, IHasCreatedFields
 {
-    [JsonProperty("data")]
-    public List<LinphoneCdrDto> Cdrs { get; set; }
-}
+    [Key]
+    [Column("id")]
+    public int Id { get; set; }
 
-public class LinphoneCdrDto
-{
-    [JsonProperty("calldate")]
+    [Column("call_date")]
     public string CallDate { get; set; }
 
-    [JsonProperty("clid")]
+    [Column("clid")]
     public string ClId { get; set; }
 
-    [JsonProperty("src")]
+    [Column("src")]
     public string Src { get; set; }
 
-    [JsonProperty("dst")]
+    [Column("dst")]
     public string Dst { get; set; }
 
-    [JsonProperty("dcontext")]
+    [Column("dcontext")]
     public string Dcontext { get; set; }
 
-    [JsonProperty("channel")]
+    [Column("channel")]
     public string Channel { get; set; }
 
-    [JsonProperty("dstchannel")]
+    [Column("dstchannel")]
     public string Dstchannel { get; set; }
 
-    [JsonProperty("lastapp")]
+    [Column("lastapp")]
     public string LastApp { get; set; }
 
-    [JsonProperty("lastdata")]
+    [Column("lastdata")]
     public string LastData { get; set; }
 
-    [JsonProperty("duration")]
+    [Column("duration")]
     public string Duration { get; set; }
 
-    [JsonProperty("billsec")]
+    [Column("billsec")]
     public string BillSec { get; set; }
 
-    [JsonProperty("disposition")]
+    [Column("disposition")]
     public string Disposition { get; set; }
 
-    [JsonProperty("amaflags")]
+    [Column("amaflags")]
     public string Amaflags { get; set; }
 
-    [JsonProperty("accountcode")]
+    [Column("accountcode")]
     public string Accountcode { get; set; }
     
-    [JsonProperty("uniqueid")]
+    [Column("uniqueid")]
     public string Uniqueid { get; set; }
 
-    [JsonProperty("userfield")]
+    [Column("userfield")]
     public string Userfield { get; set; }
 
-    [JsonProperty("did")]
+    [Column("did")]
     public string Did { get; set; }
     
-    [JsonProperty("recordingfile")]
+    [Column("recordingfile")]
     public string RecordingFile { get; set; }
     
-    [JsonProperty("cnum")] 
+    [Column("cnum")] 
     public string Cnum { get; set; }
     
-    [JsonProperty("cnam")] 
+    [Column("cnam")] 
     public string Cname { get; set; }
 
-    [JsonProperty("outbound_cnum")]
+    [Column("outbound_cnum")]
     public string OutBoundCnum { get; set; }
 
-    [JsonProperty("outbound_cnam")]
+    [Column("outbound_cnam")]
     public string OutboundCnam { get; set; }
 
-    [JsonProperty("dst_cnam")]
+    [Column("dst_cnam")]
     public string DstCnam { get; set; }
 
-    [JsonProperty("linkedid")]
+    [Column("linkedid")]
     public string Linkedid { get; set; }
 
-    [JsonProperty("peeraccount")]
+    [Column("peeraccount")]
     public string PeerAccount { get; set; }
 
-    [JsonProperty("sequence")]
+    [Column("sequence")]
     public string Sequence { get; set; }
+    
+    [Column("created_date")]
+    public DateTimeOffset CreatedDate { get; set; }
 }
