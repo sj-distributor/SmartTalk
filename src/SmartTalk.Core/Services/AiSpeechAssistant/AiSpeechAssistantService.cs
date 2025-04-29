@@ -467,19 +467,19 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
                 if (result is { Count: > 0 })
                 {
-                    try
-                    {
-                        JsonSerializer.Deserialize<JsonDocument>(_openaiEvent.Length > 0 ? _openaiEvent + value : value);
-                    }
-                    catch (Exception)
-                    {
-                        _openaiEvent.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
-                        continue;
-                    }
+                    // try
+                    // {
+                    //     JsonSerializer.Deserialize<JsonDocument>(_openaiEvent.Length > 0 ? _openaiEvent + value : value);
+                    // }
+                    // catch (Exception)
+                    // {
+                    //     _openaiEvent.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
+                    //     continue;
+                    // }
                     
-                    var jsonDocument = JsonSerializer.Deserialize<JsonDocument>(_openaiEvent.Length > 0 ? _openaiEvent + value : value);
+                    var jsonDocument = JsonSerializer.Deserialize<JsonDocument>(value);
                     
-                    _openaiEvent.Clear();
+                    // _openaiEvent.Clear();
                     
                     Log.Information($"Received event: {jsonDocument?.RootElement.GetProperty("type").GetString()}");
                     
