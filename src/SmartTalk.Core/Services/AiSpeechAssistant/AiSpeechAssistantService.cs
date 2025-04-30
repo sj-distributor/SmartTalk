@@ -211,7 +211,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
         if (!string.IsNullOrEmpty(agent.WechatRobotKey) && !string.IsNullOrEmpty(agent.WechatRobotMessage))
         {
-            var message = agent.WechatRobotMessage.Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString());
+            var message = agent.WechatRobotMessage.Replace("#{assistant_name}", aiSpeechAssistant?.Name).Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString());
             await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(audioFileRawBytes, agent.WechatRobotKey, message, cancellationToken).ConfigureAwait(false);
         }
 
