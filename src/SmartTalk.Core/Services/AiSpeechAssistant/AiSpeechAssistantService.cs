@@ -273,12 +273,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
     private void ConfigWebSocketRequestHeader(Domain.AISpeechAssistant.AiSpeechAssistant assistant)
     {
-        switch (assistant.ModelProvider)
+        switch (assistant?.ModelProvider)
         {
-            case AiSpeechAssistantProvider.OpenAi:
-                _openaiClientWebSocket.Options.SetRequestHeader("OpenAI-Beta", "realtime=v1");
-                _openaiClientWebSocket.Options.SetRequestHeader("Authorization", $"Bearer {_openAiSettings.ApiKey}");
-                break;
             case AiSpeechAssistantProvider.ZhiPuAi:
                 _openaiClientWebSocket.Options.SetRequestHeader("OpenAI-Beta", "realtime=v1");
                 _openaiClientWebSocket.Options.SetRequestHeader("Authorization", $"Bearer {_zhiPuAiSettings.ApiKey}");
@@ -287,7 +283,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                 _openaiClientWebSocket.Options.SetRequestHeader("api-key", _azureSetting.ApiKey);
                 break;
             default:
-                throw new NotSupportedException(nameof(assistant.ModelProvider));
+                _openaiClientWebSocket.Options.SetRequestHeader("OpenAI-Beta", "realtime=v1");
+                _openaiClientWebSocket.Options.SetRequestHeader("Authorization", $"Bearer {_openAiSettings.ApiKey}");
+                break;
         }
     }
     

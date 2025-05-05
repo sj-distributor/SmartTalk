@@ -216,4 +216,13 @@ public class AiSpeechAssistantController : ControllerBase
 
         return Ok(response);
     }
+        
+    [Route("realtime/socket/connect"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(ConnectRealtimeWebSocketResponse))]
+    public async Task<IActionResult> ConnectRealtimeWebSocketAsync([FromBody] ConnectRealtimeWebSocketCommand command)
+    {
+        var response = await _mediator.SendAsync<ConnectRealtimeWebSocketCommand, ConnectRealtimeWebSocketResponse>(command).ConfigureAwait(false);
+
+        return Ok(response);
+    }
 }
