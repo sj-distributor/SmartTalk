@@ -1,13 +1,16 @@
 using System.Text;
 using AutoMapper;
 using Newtonsoft.Json;
+using OpenAI.Chat;
 using Serilog;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.Restaurants;
 using SmartTalk.Core.Services.RetrievalDb.VectorDb;
+using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Core.Settings.Twilio;
+using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Constants;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Restaurant;
@@ -23,6 +26,8 @@ namespace SmartTalk.Core.Services.AiSpeechAssistant;
 public interface IAiSpeechAssistantProcessJobService : IScopedDependency
 {
     Task RecordAiSpeechAssistantCallAsync(AiSpeechAssistantStreamContextDto context, CancellationToken cancellationToken);
+    
+    Task OpenAiAccountTrainingAsync(OpenAiAccountTrainingCommand command, CancellationToken cancellationToken);
 }
 
 public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobService
@@ -30,21 +35,27 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
     private readonly IMapper _mapper;
     private readonly IVectorDb _vectorDb;
     private readonly TwilioSettings _twilioSettings;
+    private readonly OpenAiTrainingSettings _openAiTrainingSettings;
     private readonly IRestaurantDataProvider _restaurantDataProvider;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
+    private readonly OpenAiAccountTrainingSettings _openAiAccountTrainingSettings;
 
     public AiSpeechAssistantProcessJobService(
         IMapper mapper,
         IVectorDb vectorDb,
         TwilioSettings twilioSettings,
         IRestaurantDataProvider restaurantDataProvider,
-        IPhoneOrderDataProvider phoneOrderDataProvider)
+        IPhoneOrderDataProvider phoneOrderDataProvider, 
+        OpenAiTrainingSettings openAiTrainingSettings, 
+        OpenAiAccountTrainingSettings openAiAccountTrainingSettings)
     {
         _mapper = mapper;
         _vectorDb = vectorDb;
         _twilioSettings = twilioSettings;
         _phoneOrderDataProvider = phoneOrderDataProvider;
+        _openAiTrainingSettings = openAiTrainingSettings;
         _restaurantDataProvider = restaurantDataProvider;
+        _openAiAccountTrainingSettings = openAiAccountTrainingSettings;
     }
 
     public async Task RecordAiSpeechAssistantCallAsync(AiSpeechAssistantStreamContextDto context, CancellationToken cancellationToken)
@@ -194,5 +205,30 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             Note = x.Remark,
             ProductId = x.ProductId
         }).ToList();
+    }
+
+    public async Task OpenAiAccountTrainingAsync(OpenAiAccountTrainingCommand command, CancellationToken cancellationToken)
+    {
+        var prompt = "生成3000字历史类论文，不要生成框架，要一篇完整的满3000字的论文";
+
+        var client = new ChatClient("gpt-4o", _openAiTrainingSettings.ApiKey);
+        var anotherClient = new ChatClient("gpt-4o", _openAiAccountTrainingSettings.ApiKey);
+
+        var result = await client.CompleteChatAsync(prompt).ConfigureAwait(false);
+        var anotherResult = await anotherClient.CompleteChatAsync(prompt).ConfigureAwait(false);
+
+        var content = result?.Value?.Content?.FirstOrDefault()?.Text ?? string.Empty;
+        var anotherContent = anotherResult?.Value?.Content?.FirstOrDefault()?.Text ?? string.Empty;
+
+        var preview = string.IsNullOrEmpty(content) 
+            ? "[内容为空]" 
+            : content.Length > 50 ? content.Substring(0, 50) + "..." : content;
+
+        var anotherPreview = string.IsNullOrEmpty(anotherContent) 
+            ? "[内容为空]" 
+            : anotherContent.Length > 50 ? anotherContent.Substring(0, 50) + "..." : anotherContent;
+
+        Log.Information("OpenAiAccountTraining 主账号返回 (前50字): {Preview}（总长度: {Length}）", preview, content?.Length ?? 0);
+        Log.Information("OpenAiAccountTraining 备用账号返回 (前50字): {Preview}（总长度: {Length}）", anotherPreview, anotherContent?.Length ?? 0);
     }
 }
