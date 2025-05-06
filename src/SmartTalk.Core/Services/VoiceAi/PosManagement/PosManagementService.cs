@@ -24,7 +24,7 @@ public partial interface IPosManagementService : IScopedDependency
     
     Task<UpdatePosCompanyStoreStatusResponse> UpdatePosCompanyStoreStatusAsync(UpdatePosCompanyStoreStatusCommand command,CancellationToken cancellationToken);
 
-    Task<BindPosCompanyStoreAccountsResponse> BindPosCompanyStoreAccountAsync(BindPosCompanyStoreAccountsCommand command, CancellationToken cancellationToken);
+    Task<ManagePosCompanyStoreAccountsResponse> ManagePosCompanyStoreAccountAsync(ManagePosCompanyStoreAccountsCommand command, CancellationToken cancellationToken);
 
     Task<GetPosStoreUsersResponse> GetPosStoreUsersAsync(GetPosStoreUsersRequest request, CancellationToken cancellationToken);
 }
@@ -129,22 +129,22 @@ public partial class PosManagementService : IPosManagementService
         };
     }
 
-    public async Task<BindPosCompanyStoreAccountsResponse> BindPosCompanyStoreAccountAsync(BindPosCompanyStoreAccountsCommand command, CancellationToken cancellationToken)
+    public async Task<ManagePosCompanyStoreAccountsResponse> ManagePosCompanyStoreAccountAsync(ManagePosCompanyStoreAccountsCommand command, CancellationToken cancellationToken)
     {
         command.UserIds ??= new List<int>();
 
-        var existingBindings = await _posManagementDataProvider.GetPosStoreUsersAsync(command.StoreId, cancellationToken).ConfigureAwait(false);
+        var existingAccounts = await _posManagementDataProvider.GetPosStoreUsersAsync(command.StoreId, cancellationToken).ConfigureAwait(false);
 
-        if (existingBindings.Any())
+        if (existingAccounts.Any())
         {
-            await _posManagementDataProvider.DeletePosStoreUsersAsync(existingBindings, cancellationToken: cancellationToken).ConfigureAwait(false);
+            await _posManagementDataProvider.DeletePosStoreUsersAsync(existingAccounts, cancellationToken: cancellationToken).ConfigureAwait(false);
         }
 
-        List<PosStoreUser> newBindings = new();
+        List<PosStoreUser> newAccounts = new();
     
         if (command.UserIds.Any())
         {
-            newBindings = command.UserIds.Select(userId => new PosStoreUser
+            newAccounts = command.UserIds.Select(userId => new PosStoreUser
                 {
                     UserId = userId,
                     StoreId = command.StoreId,
@@ -152,12 +152,12 @@ public partial class PosManagementService : IPosManagementService
                     CreatedDate = DateTimeOffset.UtcNow
                 }).ToList();
 
-            await _posManagementDataProvider.CreatePosStoreUserAsync(newBindings, cancellationToken: cancellationToken).ConfigureAwait(false);
+            await _posManagementDataProvider.CreatePosStoreUserAsync(newAccounts, cancellationToken: cancellationToken).ConfigureAwait(false);
         }
 
-        return new BindPosCompanyStoreAccountsResponse 
+        return new ManagePosCompanyStoreAccountsResponse 
         {
-            Data = _mapper.Map<List<PosStoreUserDto>>(newBindings)
+            Data = _mapper.Map<List<PosStoreUserDto>>(newAccounts)
         };
     }
 

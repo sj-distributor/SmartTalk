@@ -4,13 +4,13 @@ using SmartTalk.Messages.Dto.VoiceAi.PosManagement;
 
 namespace SmartTalk.Messages.Commands.VoiceAi.PosManagement;
 
-public class BindPosCompanyStoreAccountsCommand : ICommand
+public class ManagePosCompanyStoreAccountsCommand : ICommand
 {
     public List<int> UserIds { get; set; }
     
     public int StoreId { get; set; }
 }
 
-public class BindPosCompanyStoreAccountsResponse : SmartiesResponse<List<PosStoreUserDto>>
+public class ManagePosCompanyStoreAccountsResponse : SmartiesResponse<List<PosStoreUserDto>>
 {
 }
