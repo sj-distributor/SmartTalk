@@ -1,3 +1,4 @@
+using System.Net.WebSockets;
 using Serilog;
 using Mediator.Net;
 using Microsoft.AspNetCore.Authorization;
@@ -14,10 +15,12 @@ namespace SmartTalk.Api.Controllers;
 public class AiSpeechAssistantController : ControllerBase
 {
     private readonly IMediator _mediator;
+    private readonly IConfiguration _configuration;
 
-    public AiSpeechAssistantController(IMediator mediator)
+    public AiSpeechAssistantController(IMediator mediator, IConfiguration configuration)
     {
         _mediator = mediator;
+        _configuration = configuration;
     }
 
     [AllowAnonymous]
@@ -215,5 +218,25 @@ public class AiSpeechAssistantController : ControllerBase
         var response = await _mediator.SendAsync<CreateRealtimeConnectionCommand, CreateRealtimeConnectionResponse>(command).ConfigureAwait(false);
 
         return Ok(response);
+    }
+
+    [Route("google/live"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> ConnectGoogleLiveAsync()
+    {
+        var url = $"wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key={_configuration["Google:ApiKey"]}";
+
+        var clientWebSocket = new ClientWebSocket();
+        try
+        {
+            await clientWebSocket.ConnectAsync(new Uri(url), CancellationToken.None);
+            Log.Information("Connect succeeded");
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Connect failed");
+        }
+        
+        return Ok(clientWebSocket);
     }
 }
