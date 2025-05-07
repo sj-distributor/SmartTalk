@@ -47,7 +47,7 @@ create table if not exists `pos_product`
     `pos_name_zh` varchar(36) not null,
     `pos_name_en` varchar(36) not null,
     `price` varchar(16) not null,
-    `tax` varchar(8) not null,
+    `tax_id` int null,
     `category_ids` varchar(512) not null,
     `category_names_zh` varchar(1024) not null,
     `category_names_en` varchar(1024) not null,
@@ -57,6 +57,19 @@ create table if not exists `pos_product`
     `modifier_names_en` varchar(1024) not null,
     `status` tinyint(1) not null,
     `sort_order` int not null default 1,
+    `created_by` int null,
+    `created_date` datetime(3) not null,
+    `last_modified_by` int null,
+    `last_modified_date` datetime(3) not null
+)charset=utf8mb4;
+
+create table if not exists `pos_tax`
+(
+    `id` int primary key auto_increment,
+    `name` varchar(36) not null,
+    `isPercentage` tinyint(1)  not null,
+    `value` decimal(8,3) not null,
+    `isSelectedByDefault` tinyint(1)  not null,
     `created_by` int null,
     `created_date` datetime(3) not null,
     `last_modified_by` int null,
