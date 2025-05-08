@@ -1,7 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using System.Text.Json;
-using SmartTalk.Messages.Dto.VoiceAi.PosManagement;
+using SmartTalk.Messages.Enums.VoiceAi;
 
 namespace SmartTalk.Core.Domain.VoiceAi.PosManagement;
 
@@ -38,7 +37,7 @@ public class PosOrder : IEntity, IHasCreatedFields, IHasModifiedFields
     public string OrderNum { get; set; }
 
     [Column("status")]
-    public int Status { get; set; } = 10;
+    public PosOrderStatus Status { get; set; }
 
     [Column("count")]
     public int Count { get; set; }
@@ -56,15 +55,7 @@ public class PosOrder : IEntity, IHasCreatedFields, IHasModifiedFields
     public int Type { get; set; }
 
     [Column("items")]
-    public string ItemsJson { get; set; }
-    
-    public List<PosOrderDto> Items
-    {
-        get => string.IsNullOrWhiteSpace(ItemsJson)
-            ? new List<PosOrderDto>()
-            : JsonSerializer.Deserialize<List<PosOrderDto>>(ItemsJson);
-        set => ItemsJson = JsonSerializer.Serialize(value);
-    }
+    public string Items { get; set; }
 
     [Column("note"), StringLength(128)]
     public string Note { get; set; }

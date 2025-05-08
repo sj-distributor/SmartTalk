@@ -10,7 +10,7 @@ public class PosCompanyDto
     
     public bool Status { get; set; }
     
-    public int CreatedBy { get; set; }
+    public int? CreatedBy { get; set; }
     
     public DateTimeOffset CreatedDate { get; set; }
     

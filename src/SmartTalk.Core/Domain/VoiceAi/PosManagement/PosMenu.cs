@@ -1,7 +1,5 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using System.Text.Json;
-using SmartTalk.Messages.Dto.VoiceAi.PosManagement;
 
 namespace SmartTalk.Core.Domain.VoiceAi.PosManagement;
 
@@ -20,26 +18,10 @@ public class PosMenu : IEntity, IHasCreatedFields, IHasModifiedFields
     public string MenuId { get; set; }
 
     [Column("names")]
-    public string NamesJson { get; set; }
-    
-    public Dictionary<string, string> Names
-    {
-        get => string.IsNullOrWhiteSpace(NamesJson)
-            ? new Dictionary<string, string>()
-            : JsonSerializer.Deserialize<Dictionary<string, string>>(NamesJson);
-        set => NamesJson = JsonSerializer.Serialize(value);
-    }
+    public string Names { get; set; }
 
     [Column("time_period")]
-    public string TimePeriodJson { get; set; }
-    
-    public List<PosTimePeriodDto> TimePeriods
-    {
-        get => string.IsNullOrWhiteSpace(TimePeriodJson)
-            ? new List<PosTimePeriodDto>()
-            : JsonSerializer.Deserialize<List<PosTimePeriodDto>>(TimePeriodJson);
-        set => TimePeriodJson = JsonSerializer.Serialize(value);
-    }
+    public string TimePeriod { get; set; }
 
     [Column("category_ids"), StringLength(512)]
     public string CategoryIds { get; set; }
@@ -48,7 +30,7 @@ public class PosMenu : IEntity, IHasCreatedFields, IHasModifiedFields
     public bool Status { get; set; }
 
     [Column("created_by")]
-    public int CreatedBy { get; set; }
+    public int? CreatedBy { get; set; }
 
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }

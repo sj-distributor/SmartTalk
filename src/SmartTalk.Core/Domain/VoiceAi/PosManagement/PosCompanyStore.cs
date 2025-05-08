@@ -51,7 +51,7 @@ public class PosCompanyStore : IEntity, IHasCreatedFields, IHasModifiedFields
     public string AppSecret { get; set; }
     
     [Column("created_by")]
-    public int CreatedBy { get; set; }
+    public int? CreatedBy { get; set; }
     
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }

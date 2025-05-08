@@ -1,7 +1,5 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using System.Text.Json;
-using SmartTalk.Messages.Dto.VoiceAi.PosManagement;
 
 namespace SmartTalk.Core.Domain.VoiceAi.PosManagement;
 
@@ -20,15 +18,7 @@ public class PosProduct : IEntity, IHasCreatedFields, IHasModifiedFields
     public string ProductId { get; set; }
 
     [Column("names")]
-    public string NamesJson { get; set; }
-    
-    public Dictionary<string, string> Names
-    {
-        get => string.IsNullOrWhiteSpace(NamesJson)
-            ? new Dictionary<string, string>()
-            : JsonSerializer.Deserialize<Dictionary<string, string>>(NamesJson);
-        set => NamesJson = JsonSerializer.Serialize(value);
-    }
+    public string Names { get; set; }
 
     [Column("price")]
     public decimal Price { get; set; }
@@ -36,27 +26,11 @@ public class PosProduct : IEntity, IHasCreatedFields, IHasModifiedFields
     [Column("tax")]
     public string TaxJson { get; set; }
     
-    public List<PosTaxDto> Tax
-    {
-        get => string.IsNullOrWhiteSpace(TaxJson)
-            ? new List<PosTaxDto>()
-            : JsonSerializer.Deserialize<List<PosTaxDto>>(TaxJson);
-        set => TaxJson = JsonSerializer.Serialize(value);
-    }
-
     [Column("category_ids"), StringLength(512)]
     public string CategoryIds { get; set; }
 
     [Column("modifiers")]
-    public string ModifiersJson { get; set; }
-    
-    public List<PosProductModifierDto> Modifiers
-    {
-        get => string.IsNullOrWhiteSpace(ModifiersJson)
-            ? new List<PosProductModifierDto>()
-            : JsonSerializer.Deserialize<List<PosProductModifierDto>>(ModifiersJson);
-        set => ModifiersJson = JsonSerializer.Serialize(value);
-    }
+    public string Modifiers { get; set; }
 
     [Column("status")]
     public bool Status { get; set; }

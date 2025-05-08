@@ -1,6 +1,5 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using System.Text.Json;
 
 namespace SmartTalk.Core.Domain.VoiceAi.PosManagement;
 
@@ -19,15 +18,7 @@ public class PosCategory : IEntity, IHasCreatedFields, IHasModifiedFields
     public string CategoryId { get; set; }
     
     [Column("names"), Required]
-    public string NamesJson { get; set; }
-    
-    public Dictionary<string, string> Names
-    { 
-        get => string.IsNullOrWhiteSpace(NamesJson) 
-            ? new Dictionary<string, string>()
-            : JsonSerializer.Deserialize<Dictionary<string, string>>(NamesJson);
-        set => NamesJson = JsonSerializer.Serialize(value);
-    }
+    public string Names { get; set; }
 
     [Column("menu_ids"), Required]
     public string MenuIds { get; set; }
@@ -39,7 +30,7 @@ public class PosCategory : IEntity, IHasCreatedFields, IHasModifiedFields
     public int? SortOrder { get; set; }
 
     [Column("created_by")] 
-    public int CreatedBy { get; set; }
+    public int? CreatedBy { get; set; }
 
     [Column("created_date")] 
     public DateTimeOffset CreatedDate { get; set; }
