@@ -455,7 +455,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private async Task SendToTwilioAsync(WebSocket twilioWebSocket, CancellationToken cancellationToken)
     {
         Log.Information("Sending to twilio.");
-        var buffer = new byte[1024 * 100];
+        var buffer = new byte[1024 * 40];
 
         try
         {
