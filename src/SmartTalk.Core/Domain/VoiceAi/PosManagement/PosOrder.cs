@@ -52,7 +52,7 @@ public class PosOrder : IEntity, IHasCreatedFields, IHasModifiedFields
     public decimal Total { get; set; }
 
     [Column("type")]
-    public int Type { get; set; }
+    public PosOrderReceiveType Type { get; set; }
 
     [Column("items")]
     public string Items { get; set; }
