@@ -35,7 +35,7 @@ create table if not exists `pos_product`
     `product_id` varchar(36) not null,
     `names` text not null,
     `price` decimal not null,
-    `tax_name` text not null,
+    `tax` text not null,
     `category_ids` varchar(512) not null,
     `modifiers` longtext not null,
     `status` tinyint(1) not null,
