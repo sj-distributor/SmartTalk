@@ -44,11 +44,14 @@ public class PosCompanyStore : IEntity, IHasCreatedFields, IHasModifiedFields
     [Column("link"), StringLength(512)]
     public string Link { get; set; }
     
-    [Column("apple_id"), StringLength(128)]
-    public string AppleId { get; set; }
+    [Column("app_id"), StringLength(128)]
+    public string AppId { get; set; }
     
     [Column("app_secret"), StringLength(512)]
     public string AppSecret { get; set; }
+    
+    [Column("time_period")]
+    public string TimePeriod { get; set; }
     
     [Column("created_by")]
     public int? CreatedBy { get; set; }

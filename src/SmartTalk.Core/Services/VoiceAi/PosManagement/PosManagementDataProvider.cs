@@ -88,7 +88,7 @@ public partial class PosManagementDataProvider : IPosManagementDataProvider
                 Latitude = store.Latitude,
                 Longitude = store.Longitude,
                 Link = store.Link,
-                AppleId = store.AppleId,
+                AppId = store.AppId,
                 AppSecret = store.AppSecret,
                 CreatedBy = store.CreatedBy,
                 CreatedDate = store.CreatedDate,
