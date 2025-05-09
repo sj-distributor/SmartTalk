@@ -24,7 +24,7 @@ public class PosProduct : IEntity, IHasCreatedFields, IHasModifiedFields
     public decimal Price { get; set; }
 
     [Column("tax")]
-    public string TaxJson { get; set; }
+    public string Tax { get; set; }
     
     [Column("category_ids"), StringLength(512)]
     public string CategoryIds { get; set; }
