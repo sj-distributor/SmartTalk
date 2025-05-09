@@ -2,6 +2,7 @@ using AutoMapper;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Data;
 using Microsoft.EntityFrameworkCore;
+using SmartTalk.Core.Domain.Account;
 using SmartTalk.Core.Domain.VoiceAi.PosManagement;
 using SmartTalk.Messages.Dto.VoiceAi.PosManagement;
 
@@ -28,7 +29,7 @@ public partial interface IPosManagementDataProvider : IScopedDependency
     
     Task DeletePosStoreUsersAsync(List<PosStoreUser> posStoreUsers, bool forceSave = true, CancellationToken cancellationToken = default);
     
-    Task<List<PosStoreUser>> GetPosStoreUsersAsync(int storeId, CancellationToken cancellationToken = default);
+    Task<List<PosStoreUserDto>> GetPosStoreUsersAsync(int storeId, CancellationToken cancellationToken = default);
 }
 
 public partial class PosManagementDataProvider : IPosManagementDataProvider
@@ -156,8 +157,24 @@ public partial class PosManagementDataProvider : IPosManagementDataProvider
         if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<PosStoreUser>> GetPosStoreUsersAsync(int storeId, CancellationToken cancellationToken = default)
+    public async Task<List<PosStoreUserDto>> GetPosStoreUsersAsync(int storeId, CancellationToken cancellationToken = default)
     {
-        return await _repository.Query<PosStoreUser>().Where(x => x.StoreId == storeId).ToListAsync(cancellationToken).ConfigureAwait(false);
+        var query = from storeUser in _repository.Query<PosStoreUser>()
+            join userAccount in _repository.Query<UserAccount>() on storeUser.UserId equals userAccount.Id into userAccounts
+            from userAccount in userAccounts.DefaultIfEmpty()
+            where storeUser.StoreId == storeId
+            select new PosStoreUserDto()
+            {
+                Id = storeUser.Id,
+                UserId = storeUser.UserId,
+                StoreId = storeUser.StoreId,
+                CreatedBy = storeUser.CreatedBy,
+                CreatedDate = storeUser.CreatedDate,
+                LastModifiedBy = storeUser.LastModifiedBy,
+                LastModifiedDate = storeUser.LastModifiedDate,
+                UserName = userAccount != null ? userAccount.UserName : $"用户{storeUser.UserId}"
+            };
+
+        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }

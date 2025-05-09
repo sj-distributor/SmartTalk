@@ -137,7 +137,7 @@ public partial class PosManagementService : IPosManagementService
 
         if (existingAccounts.Any())
         {
-            await _posManagementDataProvider.DeletePosStoreUsersAsync(existingAccounts, cancellationToken: cancellationToken).ConfigureAwait(false);
+            await _posManagementDataProvider.DeletePosStoreUsersAsync(_mapper.Map<List<PosStoreUser>>(existingAccounts), cancellationToken: cancellationToken).ConfigureAwait(false);
         }
 
         List<PosStoreUser> newAccounts = new();
@@ -170,31 +170,10 @@ public partial class PosManagementService : IPosManagementService
             {
                 Data = new List<PosStoreUserDto>()
             };
-        
-        var posStoreUserDtos = new List<PosStoreUserDto>();
-
-        foreach (var posStoreUser in posStoreUsers)
-        {
-            var (_, userAccounts) = await _accountDataProvider.GetUserAccountAsync(id: posStoreUser.UserId, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-            var userAccount = userAccounts?.FirstOrDefault();
-
-            posStoreUserDtos.Add(new PosStoreUserDto
-            {
-                Id = posStoreUser.Id,
-                UserId = posStoreUser.UserId,
-                UserName = userAccount?.UserName ?? $"用户{posStoreUser.UserId}",
-                StoreId = posStoreUser.StoreId,
-                CreatedBy = posStoreUser.CreatedBy,
-                CreatedDate = posStoreUser.CreatedDate,
-                LastModifiedBy = posStoreUser.LastModifiedBy,
-                LastModifiedDate = posStoreUser.LastModifiedDate
-            });
-        }
 
         return new GetPosStoreUsersResponse
         {
-            Data = posStoreUserDtos
+            Data = posStoreUsers
         };
     }
 
