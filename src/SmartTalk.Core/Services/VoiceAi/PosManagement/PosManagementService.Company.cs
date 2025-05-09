@@ -1,4 +1,4 @@
-using AutoMapper;
+using Aliyun.OSS;
 using SmartTalk.Core.Domain.VoiceAi.PosManagement;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Messages.Commands.VoiceAi.PosManagement;
@@ -19,6 +19,12 @@ public partial interface IPosManagementService : IScopedDependency
     Task<PosCompanyDeletedEvent> DeletePosCompanyAsync(DeletePosCompanyCommand command, CancellationToken cancellationToken);
 
     Task<GetPosCompanyDetailResponse> GetPosCompanyDetailAsync(GetPosCompanyDetailRequest request, CancellationToken cancellationToken);
+
+    Task<GetPosMenusListResponse> GetPosMenusListAsync(GetPosMenusListRequest request, CancellationToken cancellationToken);
+
+    Task<UpdatePosMenuResponse> UpdatePosMenuAsync(UpdatePosMenuCommand command, CancellationToken cancellationToken);
+
+    Task<GetPosMenuPreviewResponse> GetPosMenuPreviewAsync(GetPosMenuPrviewRequest request, CancellationToken cancellationToken);
 }
 
 public partial class PosManagementService : IPosManagementService
@@ -93,6 +99,61 @@ public partial class PosManagementService : IPosManagementService
         return new GetPosCompanyDetailResponse
         {
             Data = _mapper.Map<PosCompanyDto>(company)
+        };
+    }
+
+    public async Task<GetPosMenusListResponse> GetPosMenusListAsync(GetPosMenusListRequest request, CancellationToken cancellationToken)
+    {
+        var menus = await _posManagementDataProvider.GetPosMenusAsync(request.StoreId, cancellationToken).ConfigureAwait(false);
+        
+        if (menus == null) throw new Exception("Can't find menus with id:" + request.StoreId);
+
+        return new GetPosMenusListResponse()
+        {
+            Data = _mapper.Map<List<PosMenuDto>>(menus)
+        };
+    }
+
+    public async Task<UpdatePosMenuResponse> UpdatePosMenuAsync(UpdatePosMenuCommand command, CancellationToken cancellationToken)
+    {
+        var menu = await _posManagementDataProvider.GetPosMenuAsync(command.MenuId, null, cancellationToken).ConfigureAwait(false);
+
+        menu.Status = command.Status;
+        menu.TimePeriod = command.TimePeriod;
+
+        await _posManagementDataProvider.UpdatePosMenuAsync(menu, true, cancellationToken).ConfigureAwait(false);
+
+        return new UpdatePosMenuResponse()
+        {
+            Data = _mapper.Map<PosMenuDto>(menu)
+        };
+    }
+
+    public async Task<GetPosMenuPreviewResponse> GetPosMenuPreviewAsync(GetPosMenuPrviewRequest request, CancellationToken cancellationToken)
+    {
+        var menu = await _posManagementDataProvider.GetPosMenuAsync(null, request.MenuId, cancellationToken).ConfigureAwait(false);
+
+        var categories = await _posManagementDataProvider.GetPosCategoriesAsync(menu.Id, cancellationToken).ConfigureAwait(false);
+
+        var categoryTasks = categories.Select(async category =>
+        {
+            var products = await _posManagementDataProvider.GetPosProductsAsync(category.Id, cancellationToken).ConfigureAwait(false);
+
+            return new PosCategoryWithProduct
+            {
+                Category = _mapper.Map<PosCategoryDto>(category),
+                Products = _mapper.Map<List<PosProductDto>>(products)
+            };
+        });
+
+        var categoryWithProducts = await Task.WhenAll(categoryTasks);
+
+        return new GetPosMenuPreviewResponse
+        {
+            Data = new PosMenuPreviewData
+            {
+                CategoryWithProduct = categoryWithProducts.ToList()
+            }
         };
     }
 }
