@@ -21,7 +21,7 @@ public class PosCompany : IEntity, IHasCreatedFields, IHasModifiedFields
     public bool Status { get; set; }
     
     [Column("created_by")]
-    public int CreatedBy { get; set; }
+    public int? CreatedBy { get; set; }
     
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }

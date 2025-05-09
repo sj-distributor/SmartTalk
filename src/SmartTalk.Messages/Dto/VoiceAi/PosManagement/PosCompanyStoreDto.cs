@@ -32,7 +32,7 @@ public class PosCompanyStoreDto
     
     public string AppSecret { get; set; }
     
-    public int CreatedBy { get; set; }
+    public int? CreatedBy { get; set; }
     
     public DateTimeOffset CreatedDate { get; set; }
     
