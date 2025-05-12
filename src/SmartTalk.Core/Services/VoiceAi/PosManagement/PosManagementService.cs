@@ -136,7 +136,7 @@ public partial class PosManagementService : IPosManagementService
         store.IsLink = false;
         store.Link = null;
         store.AppSecret = null;
-        store.AppleId = null;
+        store.AppId = null;
         store.PosId = null;
         store.PosName = null;
         
