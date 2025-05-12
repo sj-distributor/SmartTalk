@@ -21,6 +21,8 @@ public partial interface IPosManagementService : IScopedDependency
     Task<DeletePosCompanyStoreResponse> DeletePosCompanyStoreAsync(DeletePosCompanyStoreCommand command,CancellationToken cancellationToken);
     
     Task<UpdatePosCompanyStoreStatusResponse> UpdatePosCompanyStoreStatusAsync(UpdatePosCompanyStoreStatusCommand command,CancellationToken cancellationToken);
+
+    Task<UnbindPosCompanyStoreResponse> UnbindPosCompanyStoreAsync(UnbindPosCompanyStoreCommand command, CancellationToken cancellationToken);
 }
 
 public partial class PosManagementService : IPosManagementService
@@ -79,8 +81,12 @@ public partial class PosManagementService : IPosManagementService
 
     public async Task<UpdatePosCompanyStoreResponse> UpdatePosCompanyStoreAsync(UpdatePosCompanyStoreCommand command, CancellationToken cancellationToken)
     {
-        var store = await _posManagementDataProvider.GetPosCompanyStoreAsync(command.Id, cancellationToken).ConfigureAwait(false);
-            
+        var store = await _posManagementDataProvider.GetPosCompanyStoreAsync(id: command.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var existingUrlStore = await _posManagementDataProvider.GetPosCompanyStoreAsync(link: command.Link, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (existingUrlStore != null) throw new Exception("PosUrl is currently bound to the store, please enter another posUrl and try again");
+        
         _mapper.Map(command, store);
 
         await _posManagementDataProvider.UpdatePosCompanyStoresAsync([store], cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -116,6 +122,27 @@ public partial class PosManagementService : IPosManagementService
         await _posManagementDataProvider.UpdatePosCompanyStoresAsync([store], cancellationToken: cancellationToken).ConfigureAwait(false);
 
         return new UpdatePosCompanyStoreStatusResponse
+        {
+            Data = _mapper.Map<PosCompanyStoreDto>(store)
+        };
+    }
+
+    public async Task<UnbindPosCompanyStoreResponse> UnbindPosCompanyStoreAsync(UnbindPosCompanyStoreCommand command, CancellationToken cancellationToken)
+    {
+        var store = await _posManagementDataProvider.GetPosCompanyStoreAsync(id: command.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        if (store == null) throw new Exception("Could not found the store");
+
+        store.IsLink = false;
+        store.Link = null;
+        store.AppSecret = null;
+        store.AppId = null;
+        store.PosId = null;
+        store.PosName = null;
+        
+        await _posManagementDataProvider.UpdatePosCompanyStoresAsync([store], cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return new UnbindPosCompanyStoreResponse
         {
             Data = _mapper.Map<PosCompanyStoreDto>(store)
         };
