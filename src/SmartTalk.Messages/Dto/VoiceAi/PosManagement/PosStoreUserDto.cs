@@ -8,7 +8,7 @@ public class PosStoreUserDto
     
     public int StoreId { get; set; }
     
-    public int CreatedBy { get; set; }
+    public int? CreatedBy { get; set; }
     
     public DateTimeOffset CreatedDate { get; set; }
     

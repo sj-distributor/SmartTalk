@@ -7,7 +7,7 @@ using SmartTalk.Messages.Dto.VoiceAi.PosManagement;
 
 namespace SmartTalk.Core.Services.VoiceAi.PosManagement;
 
-public interface IPosManagementDataProvider : IScopedDependency
+public partial interface IPosManagementDataProvider : IScopedDependency
 {
     Task<(int Count, List<PosCompany> Companies)> GetPosCompaniesAsync(
         int? pageIndex = null, int? pageSize = null, List<int> companyIds = null, string keyword = null, CancellationToken cancellationToken = default);
@@ -25,7 +25,7 @@ public interface IPosManagementDataProvider : IScopedDependency
     Task DeletePosCompanyStoresAsync(List<PosCompanyStore> stores, bool forceSave = true, CancellationToken cancellationToken = default);
 }
 
-public class PosManagementDataProvider : IPosManagementDataProvider
+public partial class PosManagementDataProvider : IPosManagementDataProvider
 {
     private readonly IMapper _mapper;
     private readonly IRepository _repository;
@@ -91,7 +91,7 @@ public class PosManagementDataProvider : IPosManagementDataProvider
                 Latitude = store.Latitude,
                 Longitude = store.Longitude,
                 Link = store.Link,
-                AppleId = store.AppleId,
+                AppId = store.AppId,
                 AppSecret = store.AppSecret,
                 IsLink = store.IsLink,
                 PosId = store.PosId,

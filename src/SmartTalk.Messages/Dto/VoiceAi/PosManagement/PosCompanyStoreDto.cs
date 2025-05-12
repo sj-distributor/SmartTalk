@@ -28,17 +28,19 @@ public class PosCompanyStoreDto
     
     public string Link { get; set; }
     
-    public string AppleId { get; set; }
+    public string AppId { get; set; }
     
     public string AppSecret { get; set; }
+    
+    public string TimePeriod { get; set; }
+    
+    public int? CreatedBy { get; set; }
     
     public string PosName { get; set; }
     
     public string PosId { get; set; }
     
     public bool IsLink { get; set; }
-    
-    public int CreatedBy { get; set; }
     
     public DateTimeOffset CreatedDate { get; set; }
     
