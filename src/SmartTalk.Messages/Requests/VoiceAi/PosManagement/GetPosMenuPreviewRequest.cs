@@ -4,9 +4,11 @@ using SmartTalk.Messages.Responses;
 
 namespace SmartTalk.Messages.Requests.VoiceAi.PosManagement;
 
-public class GetPosMenuPrviewRequest : IRequest
+public class GetPosMenuPreviewRequest : IRequest
 {
-    public int MenuId { get; set; }
+    public string ProductName { get; set; }
+    
+    public int StoreId { get; set; }
 }
 
 public class GetPosMenuPreviewResponse : SmartTalkResponse<PosMenuPreviewData>
@@ -16,7 +18,14 @@ public class GetPosMenuPreviewResponse : SmartTalkResponse<PosMenuPreviewData>
 
 public class PosMenuPreviewData
 {
-    public List<PosCategoryWithProduct> CategoryWithProduct { get; set; }
+    public List<PosMenuWithCategories> MenuWithCategories { get; set; }
+}
+
+public class PosMenuWithCategories
+{
+    public PosMenuDto Menu { get; set; }
+    
+    public List<PosCategoryWithProduct> PosCategoryWithProduct { get; set; }
 }
 
 public class PosCategoryWithProduct
