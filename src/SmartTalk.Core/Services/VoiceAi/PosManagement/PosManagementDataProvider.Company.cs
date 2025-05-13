@@ -19,11 +19,11 @@ public partial interface IPosManagementDataProvider : IScopedDependency
 
     Task UpdatePosMenuAsync(PosMenu menu, bool isForceSave = true, CancellationToken cancellationToken = default);
 
-    Task<PosMenu> GetPosMenuAsync(string menuId, int? id, CancellationToken cancellationToken);
+    Task<PosMenu> GetPosMenuAsync(string menuId, int? id = null, CancellationToken cancellationToken = default);
 
-    Task<List<PosCategory>> GetPosCategoriesAsync(int? menuId, int? id, CancellationToken cancellationToken);
+    Task<List<PosCategory>> GetPosCategoriesAsync(int? menuId, int? id = null, CancellationToken cancellationToken = default);
 
-    Task<List<PosProduct>> GetPosProductsAsync(int? categoryId, int? id, string name, CancellationToken cancellationToken);
+    Task<List<PosProduct>> GetPosProductsAsync(int? categoryId, string name, int? id = null, CancellationToken cancellationToken = default);
 
     Task UpdateCategoriesAsync(List<PosCategory> categories, bool isForceSave = true, CancellationToken cancellationToken = default);
 
@@ -70,7 +70,7 @@ public partial class PosManagementDataProvider : IPosManagementDataProvider
         if (isForceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<PosMenu> GetPosMenuAsync(string menuId, int? id,  CancellationToken cancellationToken)
+    public async Task<PosMenu> GetPosMenuAsync(string menuId, int? id = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<PosMenu>();
 
@@ -83,12 +83,12 @@ public partial class PosManagementDataProvider : IPosManagementDataProvider
         return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<PosCategory>> GetPosCategoriesAsync(int? menuId, int? id, CancellationToken cancellationToken)
+    public async Task<List<PosCategory>> GetPosCategoriesAsync(int? menuId, int? id = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<PosCategory>();
 
         if (menuId.HasValue)
-            query = query.Where(x => x.MenuId == menuId);
+            query = query.Where(x => x.MenuId == menuId.Value);
 
         if (id.HasValue)
             query = query.Where(x => x.Id == id);
@@ -96,7 +96,7 @@ public partial class PosManagementDataProvider : IPosManagementDataProvider
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<PosProduct>> GetPosProductsAsync(int? categoryId, int? id, string name,  CancellationToken cancellationToken)
+    public async Task<List<PosProduct>> GetPosProductsAsync(int? categoryId, string name, int? id = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<PosProduct>();
 

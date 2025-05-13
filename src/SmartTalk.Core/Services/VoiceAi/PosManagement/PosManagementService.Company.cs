@@ -149,7 +149,7 @@ public partial class PosManagementService : IPosManagementService
 
             var categoryWithProducts = await Task.WhenAll(categories.Select(async category =>
             {
-                var products = await _posManagementDataProvider.GetPosProductsAsync(category.Id, null, request.ProductName, cancellationToken).ConfigureAwait(false);
+                var products = await _posManagementDataProvider.GetPosProductsAsync(category.Id, request.ProductName, null, cancellationToken).ConfigureAwait(false);
                 return new PosCategoryWithProduct
                 {
                     Category = _mapper.Map<PosCategoryDto>(category),
@@ -199,7 +199,7 @@ public partial class PosManagementService : IPosManagementService
 
     public async Task<GetPosProductResponse> GetPosProductAsync(GetPosProductRequest request, CancellationToken cancellationToken)
     {
-        var product = await _posManagementDataProvider.GetPosProductsAsync(null, request.Id, null, cancellationToken).ConfigureAwait(false);
+        var product = await _posManagementDataProvider.GetPosProductsAsync(null, null, request.Id, cancellationToken).ConfigureAwait(false);
         
         if (product == null) throw new Exception("Can't find product with id:" + request.Id);
 
@@ -212,6 +212,8 @@ public partial class PosManagementService : IPosManagementService
     public async Task<UpdatePosCategoryResponse> UpdatePosCategoryAsync(UpdatePosCategoryCommand command, CancellationToken cancellationToken)
     {
         var categories = await _posManagementDataProvider.GetPosCategoriesAsync(null, command.Id, cancellationToken).ConfigureAwait(false);
+        
+        if (categories == null || !categories.Any()) throw new InvalidOperationException("No category found with the specified ID.");
 
         categories.First().Names = command.Names;
 
@@ -225,8 +227,10 @@ public partial class PosManagementService : IPosManagementService
 
     public async Task<UpdatePosProductResponse> UpdatePosProductAsync(UpdatePosProductCommand command, CancellationToken cancellationToken)
     {
-        var products = await _posManagementDataProvider.GetPosProductsAsync(null, command.Id, null, cancellationToken).ConfigureAwait(false);
+        var products = await _posManagementDataProvider.GetPosProductsAsync(null,  null, command.Id, cancellationToken).ConfigureAwait(false);
 
+        if (products == null || !products.Any()) throw new InvalidOperationException("No product found with the specified ID.");
+        
         products.First().Names = command.Names;
 
         await _posManagementDataProvider.UpdateProductsAsync(products, true, cancellationToken).ConfigureAwait(false);
