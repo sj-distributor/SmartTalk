@@ -3,6 +3,7 @@ using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Identity;
 using SmartTalk.Core.Domain.VoiceAi.PosManagement;
 using SmartTalk.Core.Services.Http.Clients;
+using SmartTalk.Core.Services.Account;
 using SmartTalk.Messages.Commands.VoiceAi.PosManagement;
 using SmartTalk.Messages.Dto.VoiceAi.PosManagement;
 using SmartTalk.Messages.Requests.VoiceAi.PosManagement;
@@ -22,6 +23,10 @@ public partial interface IPosManagementService : IScopedDependency
     Task<DeletePosCompanyStoreResponse> DeletePosCompanyStoreAsync(DeletePosCompanyStoreCommand command,CancellationToken cancellationToken);
     
     Task<UpdatePosCompanyStoreStatusResponse> UpdatePosCompanyStoreStatusAsync(UpdatePosCompanyStoreStatusCommand command,CancellationToken cancellationToken);
+
+    Task<ManagePosCompanyStoreAccountsResponse> ManagePosCompanyStoreAccountAsync(ManagePosCompanyStoreAccountsCommand command, CancellationToken cancellationToken);
+
+    Task<GetPosStoreUsersResponse> GetPosStoreUsersAsync(GetPosStoreUsersRequest request, CancellationToken cancellationToken);
 }
 
 public partial class PosManagementService : IPosManagementService
@@ -30,13 +35,15 @@ public partial class PosManagementService : IPosManagementService
     private readonly ICurrentUser _currentUser;
     private readonly IEasyPosClient _easyPosClient;
     private readonly IPosManagementDataProvider _posManagementDataProvider;
-
-    public PosManagementService(IMapper mapper, ICurrentUser currentUser, IEasyPosClient easyPosClient, IPosManagementDataProvider posManagementDataProvider)
+    private readonly IAccountDataProvider _accountDataProvider;
+    
+    public PosManagementService(IMapper mapper, ICurrentUser currentUser, IEasyPosClient easyPosClient, IPosManagementDataProvider posManagementDataProvider, IAccountDataProvider accountDataProvider)
     {
         _mapper = mapper;
         _currentUser = currentUser;
         _easyPosClient = easyPosClient;
         _posManagementDataProvider = posManagementDataProvider;
+        _accountDataProvider = accountDataProvider;
     }
     
     public async Task<GetPosCompanyWithStoresResponse> GetPosCompanyWithStoresAsync(GetPosCompanyWithStoresRequest request, CancellationToken cancellationToken)
@@ -121,6 +128,54 @@ public partial class PosManagementService : IPosManagementService
         return new UpdatePosCompanyStoreStatusResponse
         {
             Data = _mapper.Map<PosCompanyStoreDto>(store)
+        };
+    }
+
+    public async Task<ManagePosCompanyStoreAccountsResponse> ManagePosCompanyStoreAccountAsync(ManagePosCompanyStoreAccountsCommand command, CancellationToken cancellationToken)
+    {
+        command.UserIds ??= new List<int>();
+
+        var existingAccounts = await _posManagementDataProvider.GetPosStoreUsersAsync(command.StoreId, cancellationToken).ConfigureAwait(false);
+
+        if (existingAccounts.Any())
+        {
+            await _posManagementDataProvider.DeletePosStoreUsersAsync(_mapper.Map<List<PosStoreUser>>(existingAccounts), cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+
+        List<PosStoreUser> newAccounts = new();
+    
+        if (command.UserIds.Any())
+        {
+            newAccounts = command.UserIds.Select(userId => new PosStoreUser
+                {
+                    UserId = userId,
+                    StoreId = command.StoreId,
+                    CreatedBy = _currentUser.Id!.Value,
+                    CreatedDate = DateTimeOffset.UtcNow
+                }).ToList();
+
+            await _posManagementDataProvider.CreatePosStoreUserAsync(newAccounts, cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+
+        return new ManagePosCompanyStoreAccountsResponse 
+        {
+            Data = _mapper.Map<List<PosStoreUserDto>>(newAccounts)
+        };
+    }
+
+    public async Task<GetPosStoreUsersResponse> GetPosStoreUsersAsync(GetPosStoreUsersRequest request, CancellationToken cancellationToken)
+    {
+        var posStoreUsers = await _posManagementDataProvider.GetPosStoreUsersAsync(request.StoreId, cancellationToken).ConfigureAwait(false);
+
+        if (!posStoreUsers.Any())
+            return new GetPosStoreUsersResponse
+            {
+                Data = new List<PosStoreUserDto>()
+            };
+
+        return new GetPosStoreUsersResponse
+        {
+            Data = posStoreUsers
         };
     }
 
