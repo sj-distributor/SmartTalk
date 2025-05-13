@@ -30,6 +30,7 @@ public partial class PosManagementDataProvider
         store.TimePeriod = timePeriodsJson;
         
         await _repository.UpdateAsync(store, cancellationToken).ConfigureAwait(false);
+        
         await _unitOfWork.SaveChangesAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
@@ -120,6 +121,7 @@ public partial class PosManagementDataProvider
         }).ToList();
 
         await _repository.InsertAllAsync(newProducts, cancellationToken).ConfigureAwait(false);
+        
         await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 }
