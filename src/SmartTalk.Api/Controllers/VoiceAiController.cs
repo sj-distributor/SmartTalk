@@ -116,4 +116,76 @@ public class VoiceAiController : ControllerBase
         
         return Ok(response);
     }
+    
+    [Route("company/menu/detail"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPosMenuDetailResponse))]
+    public async Task<IActionResult> GetPosMenuDetailRequest([FromQuery] GetPosMenuDetailRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetPosMenuDetailRequest, GetPosMenuDetailResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("company/menu/preview"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPosMenuPreviewResponse))]
+    public async Task<IActionResult> GetPosMenuPreviewRequest([FromQuery] GetPosMenuPreviewRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetPosMenuPreviewRequest, GetPosMenuPreviewResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("company/menu/list"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPosMenusListResponse))]
+    public async Task<IActionResult> GetPosMenusListRequest([FromQuery] GetPosMenusListRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetPosMenusListRequest, GetPosMenusListResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("company/menu/category"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPosCategoryResponse))]
+    public async Task<IActionResult> GetPosCategoryRequest([FromQuery] GetPosCategoryRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetPosCategoryRequest, GetPosCategoryResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("company/menu/product"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPosProductResponse))]
+    public async Task<IActionResult> GetPosProductRequest([FromQuery] GetPosProductRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetPosProductRequest, GetPosProductResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("company/menu/update"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdatePosMenuResponse))]
+    public async Task<IActionResult> UpdatePosMenuAsync([FromBody] UpdatePosMenuCommand command)
+    {
+        var response = await _mediator.SendAsync<UpdatePosMenuCommand, UpdatePosMenuResponse>(command).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("company/menu/category/update"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdatePosCategoryResponse))]
+    public async Task<IActionResult> UpdatePosCategoryAsync([FromBody] UpdatePosCategoryCommand command)
+    {
+        var response = await _mediator.SendAsync<UpdatePosCategoryCommand, UpdatePosCategoryResponse>(command).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("company/menu/product/update"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdatePosProductResponse))]
+    public async Task<IActionResult> UpdatePosProductAsync([FromBody] UpdatePosProductCommand command)
+    {
+        var response = await _mediator.SendAsync<UpdatePosProductCommand, UpdatePosProductResponse>(command).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
 }
