@@ -60,9 +60,5 @@
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </Content>
     </ItemGroup>
-
-    <ItemGroup>
-      <Folder Include="Services\RealtimeAi\wss\Google\" />
-    </ItemGroup>
     
 </Project>
