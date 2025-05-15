@@ -417,13 +417,7 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
             }
         }
     }
-
-    private bool IsTerminalFinishReason(string reason)
-    {
-        if (string.IsNullOrEmpty(reason)) return false;
-        return reason == "STOP" || reason == "MAX_TOKENS" || reason == "SAFETY" || reason == "RECITATION";
-    }
-
+    
     // Ensure this method correctly uses Newtonsoft.Json (as in the previous version)
     private async Task<List<(AiSpeechAssistantSessionConfigType Type, object Config)>> InitialSessionConfigAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken = default)
     {

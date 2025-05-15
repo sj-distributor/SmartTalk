@@ -1,112 +1,105 @@
 using System.Net.WebSockets;
 using System.Text;
 using Newtonsoft.Json;
+using Serilog;
 
-namespace SmartTalk.Core.Services.RealtimeAi.wss.Google;
-
-public class GoogleRealtimeAiWssClient : IRealtimeAiWssClient
+namespace SmartTalk.Core.Services.RealtimeAi.wss.Google
 {
-    private ClientWebSocket _webSocket;
-    private CancellationTokenSource _receiveLoopCts;
-    private Task _receiveLoopTask;
-
-    public Uri EndpointUri { get; private set; }
-    public WebSocketState CurrentState => _webSocket?.State ?? WebSocketState.None;
-
-    public event Func<string, Task> MessageReceivedAsync;
-    public event Func<Exception, Task> ErrorOccurredAsync;
-    public event Func<WebSocketState, string, Task> StateChangedAsync;
-
-    public async Task ConnectAsync(Uri endpointUri, Dictionary<string, string> customHeaders, CancellationToken cancellationToken)
+    public class GoogleRealtimeAiWssClient : IRealtimeAiWssClient
     {
-        if (_webSocket != null && (_webSocket.State == WebSocketState.Open || _webSocket.State == WebSocketState.Connecting))
-        {
-            // Notify error if already connected or connecting
-            await OnErrorOccurredAsync(new InvalidOperationException("WebSocket is already connected or connecting.")).ConfigureAwait(false);
-            return;
-        }
+        private ClientWebSocket _webSocket;
+        private CancellationTokenSource _receiveLoopCts;
+        private Task _receiveLoopTask;
+        private readonly object _lock = new();
 
-        EndpointUri = endpointUri ?? throw new ArgumentNullException(nameof(endpointUri));
-        _webSocket = new ClientWebSocket();
+        public Uri EndpointUri { get; private set; }
+        public WebSocketState CurrentState => _webSocket?.State ?? WebSocketState.None;
 
-        // Set custom headers, e.g., API key or authentication token
-        // Consult the "Live API" documentation for specific header requirements
-        if (customHeaders != null)
+        public event Func<string, Task> MessageReceivedAsync;
+        public event Func<Exception, Task> ErrorOccurredAsync;
+        public event Func<WebSocketState, string, Task> StateChangedAsync;
+
+        public async Task ConnectAsync(Uri endpointUri, Dictionary<string, string> customHeaders, CancellationToken cancellationToken)
         {
-            foreach (var header in customHeaders)
+            lock (_lock)
             {
-                if (!string.IsNullOrEmpty(header.Key) && header.Value != null)
+                if (_webSocket != null && _webSocket.State != WebSocketState.Closed && _webSocket.State != WebSocketState.Aborted && _webSocket.State != WebSocketState.None)
                 {
-                    _webSocket.Options.SetRequestHeader(header.Key, header.Value);
+                    Log.Warning("Google Realtime Wss Client: Attempting to connect while already in state {State}. Consider disconnecting first.", _webSocket.State);
                 }
             }
-        }
-        // Add a specific WebSocket subprotocol if required by the "Live API"
-        // _webSocket.Options.AddSubProtocol("your-api-specific-protocol");
 
-        await OnStateChangedAsync(WebSocketState.Connecting, "Attempting to connect...").ConfigureAwait(false);
+            await CleanUpCurrentConnectionAsync("Preparing for new connection.");
 
-        try
-        {
-            await _webSocket.ConnectAsync(EndpointUri, cancellationToken).ConfigureAwait(false);
-            await OnStateChangedAsync(_webSocket.State, "已连接").ConfigureAwait(false);
+            EndpointUri = endpointUri ?? throw new ArgumentNullException(nameof(endpointUri));
+            _webSocket = new ClientWebSocket();
 
-            var setupMessagePayload = new
+            if (customHeaders != null)
             {
-                model = "gemini-1.5-pro-latest",
-            };
-            string setupMessageJson = JsonConvert.SerializeObject(setupMessagePayload);
-
-            await SendMessageAsync(setupMessageJson, cancellationToken).ConfigureAwait(false);
-            await OnStateChangedAsync(_webSocket.State, "已发送 BidiGenerateContentSetup 消息").ConfigureAwait(false);
+                foreach (var header in customHeaders)
+                {
+                    if (!string.IsNullOrEmpty(header.Key) && header.Value != null)
+                    {
+                        _webSocket.Options.SetRequestHeader(header.Key, header.Value);
+                    }
+                }
+            }
 
             _receiveLoopCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            _receiveLoopTask = Task.Run(() => ReceiveLoopAsync(_receiveLoopCts.Token));
-        }
-        catch (Exception ex)
-        {
-            await OnErrorOccurredAsync(ex).ConfigureAwait(false);
-            await OnStateChangedAsync(_webSocket?.State ?? WebSocketState.Closed, $"连接失败: {ex.Message}").ConfigureAwait(false);
-            DisposeWebSocket();
-            throw;
-        }
-    }
 
-    private async Task ReceiveLoopAsync(CancellationToken cancellationToken)
-    {
-        var buffer = new ArraySegment<byte>(new byte[8192 * 2]);
-        bool isSetupCompleteReceived = false; // Flag to indicate if SetupComplete message has been received
-
-        try
-        {
-            while (_webSocket.State == WebSocketState.Open && !cancellationToken.IsCancellationRequested)
+            try
             {
-                using (var ms = new MemoryStream())
+                Log.Information("Google Realtime Wss Client: Connecting to {EndpointUri}...", EndpointUri);
+                await _webSocket.ConnectAsync(EndpointUri, _receiveLoopCts.Token).ConfigureAwait(false);
+                Log.Information("Google Realtime Wss Client: Successfully connected to {EndpointUri}. State: {State}", EndpointUri, _webSocket.State);
+                await (StateChangedAsync?.Invoke(_webSocket.State, "已连接") ?? Task.CompletedTask).ConfigureAwait(false);
+
+                // 发送 Gemini 特定的设置消息
+                var setupMessagePayload = new
+                {
+                    model = "gemini-1.5-pro-latest", // 根据实际 Gemini API 要求设置
+                    // 可以添加其他 Gemini 特有的配置参数
+                };
+                string setupMessageJson = JsonConvert.SerializeObject(setupMessagePayload);
+
+                await SendMessageAsync(setupMessageJson, cancellationToken).ConfigureAwait(false);
+                await (StateChangedAsync?.Invoke(_webSocket.State, "已发送 Gemini BidiGenerateContentSetup 消息") ?? Task.CompletedTask).ConfigureAwait(false);
+
+                _receiveLoopTask = Task.Run(() => ReceiveMessagesAsync(_receiveLoopCts.Token), cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Google Realtime Wss Client: Failed to connect to {EndpointUri}.", EndpointUri);
+                await (ErrorOccurredAsync?.Invoke(ex) ?? Task.CompletedTask).ConfigureAwait(false);
+                await (StateChangedAsync?.Invoke(_webSocket?.State ?? WebSocketState.Closed, $"连接失败: {ex.Message}") ?? Task.CompletedTask).ConfigureAwait(false);
+                await CleanUpCurrentConnectionAsync("Google Realtime Wss Connection failed.");
+                throw;
+            }
+        }
+
+        private async Task ReceiveMessagesAsync(CancellationToken token)
+        {
+            var buffer = new ArraySegment<byte>(new byte[8192 * 2]);
+            bool isSetupCompleteReceived = false; // Flag to indicate if SetupComplete message has been received
+
+            try
+            {
+                while (_webSocket.State == WebSocketState.Open && !token.IsCancellationRequested)
                 {
                     WebSocketReceiveResult result;
+                    using var ms = new MemoryStream();
                     do
                     {
-                        if (cancellationToken.IsCancellationRequested)
-                        {
-                            await OnStateChangedAsync(_webSocket.State, "Receive loop cancellation requested during message read.").ConfigureAwait(false);
-                            return;
-                        }
-
-                        result = await _webSocket.ReceiveAsync(buffer, cancellationToken).ConfigureAwait(false);
+                        result = await _webSocket.ReceiveAsync(buffer, token).ConfigureAwait(false);
 
                         if (result.MessageType == WebSocketMessageType.Close)
                         {
-                            await OnStateChangedAsync(WebSocketState.CloseReceived,
-                                result.CloseStatusDescription ?? "Server closed the connection").ConfigureAwait(false);
-                            if (_webSocket.State == WebSocketState.CloseReceived &&
-                                _webSocket.CloseStatus.HasValue &&
-                                !cancellationToken.IsCancellationRequested)
+                            Log.Information("Google Realtime Client: WebSocket close message received. Status: {Status}, Description: {Description}", result.CloseStatus, result.CloseStatusDescription);
+                            if (_webSocket.State == WebSocketState.CloseReceived && _webSocket.CloseStatus.HasValue)
                             {
-                                await _webSocket.CloseAsync(result.CloseStatus.Value, result.CloseStatusDescription,
-                                    CancellationToken.None).ConfigureAwait(false);
-                                await OnStateChangedAsync(_webSocket.State, "Server closure acknowledged").ConfigureAwait(false);
+                                await _webSocket.CloseAsync(result.CloseStatus.Value, result.CloseStatusDescription, CancellationToken.None).ConfigureAwait(false);
                             }
-
+                            await (StateChangedAsync?.Invoke(WebSocketState.Closed, $"Closed by remote: {result.CloseStatusDescription}") ?? Task.CompletedTask).ConfigureAwait(false);
                             return;
                         }
 
@@ -122,213 +115,165 @@ public class GoogleRealtimeAiWssClient : IRealtimeAiWssClient
                     {
                         var message = Encoding.UTF8.GetString(ms.ToArray());
 
-                        // Check if it is the BidiGenerateContentSetupComplete message (empty JSON or empty string)
+                        // 检查是否是 Gemini 特定的 SetupComplete 消息 (根据 Gemini API 文档调整)
                         if (string.IsNullOrWhiteSpace(message) || message == "{}")
                         {
                             isSetupCompleteReceived = true;
-                            await OnStateChangedAsync(_webSocket.State, "Received BidiGenerateContentSetupComplete message, session established.")
-                                .ConfigureAwait(false);
-                            // You can trigger an event or set a state here to notify that the session is established
-                            continue; // Continue receiving subsequent messages
+                            Log.Information("Google Realtime Client: Received Gemini BidiGenerateContentSetupComplete message, session established.");
+                            await (StateChangedAsync?.Invoke(_webSocket.State, "Received Gemini BidiGenerateContentSetupComplete message, session established.") ?? Task.CompletedTask).ConfigureAwait(false);
+                            continue;
                         }
 
-                        // If it's not the SetupComplete message, pass it to the MessageReceivedAsync event handler
-                        await OnMessageReceivedAsync(message).ConfigureAwait(false);
+                        await (MessageReceivedAsync?.Invoke(message) ?? Task.CompletedTask).ConfigureAwait(false);
                     }
-                    // You can add handling for Binary message type if the Gemini API sends it
+                    // 如果 Gemini API 返回二进制数据，需要在此处添加处理逻辑
                 }
             }
-        }
-        catch (WebSocketException ex) when (ex.WebSocketErrorCode == WebSocketError.ConnectionClosedPrematurely ||
-                                            ex.InnerException is ObjectDisposedException)
-        {
-            await OnStateChangedAsync(_webSocket?.State ?? WebSocketState.Aborted, $"Receive loop ended: {ex.Message}")
-                .ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            await OnStateChangedAsync(_webSocket?.State ?? WebSocketState.Aborted, "Receive loop cancelled.").ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            await OnErrorOccurredAsync(ex).ConfigureAwait(false);
-            await OnStateChangedAsync(_webSocket?.State ?? WebSocketState.Aborted, $"Receive loop error: {ex.Message}")
-                .ConfigureAwait(false);
-        }
-        finally
-        {
-            if (_webSocket != null && _webSocket.State != WebSocketState.Closed &&
-                _webSocket.State != WebSocketState.Aborted)
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
             {
-                if (cancellationToken.IsCancellationRequested && _webSocket.State == WebSocketState.Open)
+                Log.Information("Google Realtime Client: Receive loop for {EndpointUri} was canceled.", EndpointUri);
+                await (StateChangedAsync?.Invoke(_webSocket.State, "Receive loop canceled by client") ?? Task.CompletedTask).ConfigureAwait(false);
+            }
+            catch (WebSocketException ex)
+            {
+                Log.Error(ex, "Google Realtime Client: WebSocketException in receive loop for {EndpointUri}.", EndpointUri);
+                await (ErrorOccurredAsync?.Invoke(ex) ?? Task.CompletedTask).ConfigureAwait(false);
+                await (StateChangedAsync?.Invoke(_webSocket.State, $"WebSocketException: {ex.Message}") ?? Task.CompletedTask).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Google Realtime Client: Unexpected error in receive loop for {EndpointUri}.", EndpointUri);
+                await (ErrorOccurredAsync?.Invoke(ex) ?? Task.CompletedTask).ConfigureAwait(false);
+                await (StateChangedAsync?.Invoke(_webSocket.State, $"Unexpected error: {ex.Message}") ?? Task.CompletedTask).ConfigureAwait(false);
+            }
+            finally
+            {
+                Log.Debug("Google Realtime Client: Receive loop for {EndpointUri} ended. Final WebSocket state: {State}", EndpointUri, _webSocket?.State);
+                if (_webSocket?.State != WebSocketState.Closed && _webSocket?.State != WebSocketState.Aborted)
                 {
-                    await OnStateChangedAsync(WebSocketState.Aborted, "Receive loop stopped while connection was open due to cancellation.").ConfigureAwait(false);
-                }
-                else
-                {
-                    await OnStateChangedAsync(_webSocket.State, "Receive loop finished.").ConfigureAwait(false);
+                    Log.Warning("Google Realtime Client: Receive loop ended for {EndpointUri} but socket state is {State}.", EndpointUri, _webSocket?.State);
                 }
             }
         }
-    }
 
-    public async Task SendMessageAsync(string message, CancellationToken cancellationToken)
-    {
-        if (_webSocket == null || _webSocket.State != WebSocketState.Open)
+        public async Task SendMessageAsync(string message, CancellationToken cancellationToken)
         {
-            var ex = new InvalidOperationException("WebSocket is not connected.");
-            await OnErrorOccurredAsync(ex).ConfigureAwait(false);
-            throw ex;
-        }
-
-        if (string.IsNullOrEmpty(message))
-        {
-            var ex = new ArgumentNullException(nameof(message));
-            await OnErrorOccurredAsync(ex).ConfigureAwait(false);
-            throw ex;
-        }
-
-        // Ensure the `message` is a string formatted according to the "Live API" specification (usually JSON)
-        var messageBuffer = Encoding.UTF8.GetBytes(message);
-        var segment = new ArraySegment<byte>(messageBuffer);
-
-        try
-        {
-            // Send the text message to the "Live API"
-            await _webSocket.SendAsync(segment, WebSocketMessageType.Text, true, cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            await OnErrorOccurredAsync(ex).ConfigureAwait(false);
-            await OnStateChangedAsync(_webSocket.State, $"Failed to send message: {ex.Message}").ConfigureAwait(false);
-            throw;
-        }
-    }
-
-    public async Task DisconnectAsync(WebSocketCloseStatus closeStatus, string statusDescription, CancellationToken cancellationToken)
-    {
-        if (_webSocket == null || _webSocket.State == WebSocketState.None || _webSocket.State == WebSocketState.Closed)
-        {
-            await OnStateChangedAsync(_webSocket?.State ?? WebSocketState.Closed, "Already disconnected or not connected.").ConfigureAwait(false);
-            return;
-        }
-
-        // Notify the receive loop to stop
-        _receiveLoopCts?.Cancel();
-
-        try
-        {
-            if (_webSocket.State == WebSocketState.Open || _webSocket.State == WebSocketState.CloseReceived)
+            if (_webSocket?.State != WebSocketState.Open)
             {
-                await OnStateChangedAsync(WebSocketState.CloseSent, statusDescription ?? "Client initiated disconnection").ConfigureAwait(false);
-                // Initiate closure of the connection with the "Live API"
-                await _webSocket.CloseAsync(closeStatus, statusDescription, cancellationToken).ConfigureAwait(false);
+                var ex = new InvalidOperationException($"Google Realtime Client: WebSocket is not open for sending. Current state: {_webSocket?.State}");
+                Log.Error(ex, "Google Realtime Client: Failed to send message to {EndpointUri}.", EndpointUri);
+                await (ErrorOccurredAsync?.Invoke(ex) ?? Task.CompletedTask).ConfigureAwait(false);
+                throw ex;
             }
-            else if (_webSocket.State == WebSocketState.Connecting)
+
+            if (string.IsNullOrEmpty(message))
             {
-                 // Abort the connection attempt if still connecting
-                _webSocket.Abort();
-                await OnStateChangedAsync(WebSocketState.Aborted, "Connection attempt aborted during disconnection.").ConfigureAwait(false);
+                var ex = new ArgumentNullException(nameof(message));
+                Log.Error(ex, "Google Realtime Client: Message cannot be null or empty.");
+                await (ErrorOccurredAsync?.Invoke(ex) ?? Task.CompletedTask).ConfigureAwait(false);
+                throw ex;
             }
+
+            var messageBytes = Encoding.UTF8.GetBytes(message);
+            await _webSocket.SendAsync(new ArraySegment<byte>(messageBytes), WebSocketMessageType.Text, true, cancellationToken).ConfigureAwait(false);
+            // Log.Verbose("Google Realtime Client: Sent message to {EndpointUri}: {Message}", EndpointUri, message);
         }
-        catch (OperationCanceledException ex)
+
+        public async Task DisconnectAsync(WebSocketCloseStatus closeStatus, string statusDescription, CancellationToken cancellationToken)
         {
-            _webSocket?.Abort(); // Ensure the socket enters the aborted state
-            await OnErrorOccurredAsync(ex).ConfigureAwait(false);
-            await OnStateChangedAsync(_webSocket?.State ?? WebSocketState.Aborted, $"Disconnection operation cancelled: {ex.Message}").ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            _webSocket?.Abort(); // Abort on failure to ensure aborted state
-            await OnErrorOccurredAsync(ex).ConfigureAwait(false);
-            await OnStateChangedAsync(_webSocket?.State ?? WebSocketState.Aborted, $"Disconnection failed: {ex.Message}").ConfigureAwait(false);
-        }
-        finally
-        {
-            // Wait for the receive loop task to complete
-            if (_receiveLoopTask != null && !_receiveLoopTask.IsCompleted)
+            if (_webSocket == null)
+            {
+                Log.Information("Google Realtime Client: Disconnect called but WebSocket is null (not connected or already disposed).");
+                return;
+            }
+            Log.Information("Google Realtime Client: Disconnecting from {EndpointUri}. Reason: {Reason}", EndpointUri, statusDescription);
+
+            _receiveLoopCts?.Cancel();
+
+            if (_webSocket.State is WebSocketState.Open or WebSocketState.CloseReceived)
             {
                 try
                 {
-                    // Give the receive loop a moment to close gracefully after cancellation
-                    await Task.WhenAny(_receiveLoopTask, Task.Delay(TimeSpan.FromSeconds(5), cancellationToken)).ConfigureAwait(false);
-                    if (!_receiveLoopTask.IsCompleted)
-                    {
-                        await OnErrorOccurredAsync(new TimeoutException("Receive loop did not complete in time during disconnection.")).ConfigureAwait(false);
-                    }
+                    using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                    cts.CancelAfter(TimeSpan.FromSeconds(5));
+                    await _webSocket.CloseOutputAsync(closeStatus, statusDescription, cts.Token).ConfigureAwait(false);
+                    Log.Information("Google Realtime Client: CloseOutputAsync completed for {EndpointUri}.", EndpointUri);
                 }
-                catch (OperationCanceledException) { /* Expected if the external token is cancelled */ }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    Log.Warning("Google Realtime Client: DisconnectAsync was cancelled by caller token during CloseOutputAsync for {EndpointUri}.", EndpointUri);
+                }
+                catch (OperationCanceledException ex)
+                {
+                    Log.Warning(ex, "Google Realtime Client: Timeout or cancellation during CloseOutputAsync for {EndpointUri}.", EndpointUri);
+                }
                 catch (Exception ex)
                 {
-                    await OnErrorOccurredAsync(ex).ConfigureAwait(false); // Log errors occurring while waiting for the receive loop
+                    Log.Error(ex, "Google Realtime Client: Error during WebSocket CloseOutputAsync for {EndpointUri}.", EndpointUri);
                 }
             }
-            DisposeWebSocket(); // Clean up WebSocket resources
-            await OnStateChangedAsync(WebSocketState.Closed, statusDescription ?? "Disconnected").ConfigureAwait(false);
-        }
-    }
-    
-    private void DisposeWebSocket()
-    {
-        _receiveLoopCts?.Cancel(); // Ensure cancellation
-        _webSocket?.Dispose();
-        _webSocket = null;
-        _receiveLoopCts?.Dispose();
-        _receiveLoopCts = null;
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        if (_webSocket != null)
-        {
-            // Use a new CancellationToken for dispose, as the original might be released or cancelled
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            await DisconnectAsync(WebSocketCloseStatus.NormalClosure, "Client disposed", cts.Token).ConfigureAwait(false);
-        }
-        DisposeWebSocket(); // Ensure resource disposal even if DisconnectAsync has issues or is not needed
-        
-        GC.SuppressFinalize(this); // Prevent the garbage collector from calling the finalizer of this object
-        await OnStateChangedAsync(WebSocketState.Closed, "Disposed").ConfigureAwait(false);
-    }
-
-    // Helper method to safely invoke the MessageReceivedAsync event
-    private async Task OnMessageReceivedAsync(string message)
-    {
-        if (MessageReceivedAsync != null)
-        {
-            try
+            else
             {
-                await MessageReceivedAsync.Invoke(message).ConfigureAwait(false);
+                Log.Information("Google Realtime Client: WebSocket for {EndpointUri} not in Open/CloseReceived state ({State}), skipping CloseOutputAsync.", EndpointUri, _webSocket.State);
             }
-            catch(Exception handlerEx)
+
+            if (_receiveLoopTask is { IsCompleted: false })
             {
-                // Consider reporting this internal handler error via ErrorOccurredAsync as well
-                 _ = OnErrorOccurredAsync(new Exception("Exception occurred in MessageReceivedAsync handler.", handlerEx));
+                try
+                {
+                    await Task.WhenAny(_receiveLoopTask, Task.Delay(TimeSpan.FromSeconds(2), CancellationToken.None)).ConfigureAwait(false);
+                    if (!_receiveLoopTask.IsCompleted)
+                    {
+                        Log.Warning("Google Realtime Client: Receive loop for {EndpointUri} did not complete after DisconnectAsync.", EndpointUri);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning(ex, "Google Realtime Client: Exception while waiting for receive loop to complete during disconnect of {EndpointUri}.", EndpointUri);
+                }
             }
-        }
-    }
 
-    private async Task OnErrorOccurredAsync(Exception exception)
-    {
-        if (ErrorOccurredAsync != null)
-        {
-            await ErrorOccurredAsync.Invoke(exception).ConfigureAwait(false);
-            
+            await (StateChangedAsync?.Invoke(_webSocket.State, statusDescription) ?? Task.CompletedTask).ConfigureAwait(false);
+            // Final cleanup is handled by DisposeAsync or when a new connection is made.
         }
-    }
 
-    private async Task OnStateChangedAsync(WebSocketState state, string reason)
-    {
-        if (StateChangedAsync != null)
+        private async Task CleanUpCurrentConnectionAsync(string reason)
         {
-             try
-             {
-                 await StateChangedAsync.Invoke(state, reason).ConfigureAwait(false);
-             }
-             catch(Exception handlerEx)
-             {
-                 _ = OnErrorOccurredAsync(new Exception($"Exception occurred in StateChangedAsync handler (State: {state}, Reason: {reason}).", handlerEx));
-             }
+            Log.Debug("Google Realtime Client: Cleaning up current connection. Reason: {Reason}", reason);
+
+            if (_receiveLoopCts is { IsCancellationRequested: false }) await _receiveLoopCts.CancelAsync().ConfigureAwait(false);
+
+            if (_receiveLoopTask is { IsCompleted: false })
+            {
+                Log.Debug("Google Realtime Client: Waiting for previous receive loop to complete during cleanup.");
+                try { await Task.WhenAny(_receiveLoopTask, Task.Delay(1000)).ConfigureAwait(false); } catch { /* ignore */ }
+            }
+            _receiveLoopTask = null;
+
+            if (_webSocket != null)
+            {
+                if (_webSocket.State == WebSocketState.Open || _webSocket.State == WebSocketState.CloseReceived)
+                {
+                    try { await _webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, $"Cleaning up: {reason}", CancellationToken.None).ConfigureAwait(false); } catch { /* ignore */ }
+                }
+                _webSocket.Dispose();
+            }
+            _webSocket = null;
+
+            if (_receiveLoopCts != null)
+            {
+                _receiveLoopCts.Dispose();
+                _receiveLoopCts = null;
+            }
+            Log.Debug("Google Realtime Client: Cleanup complete.");
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            Log.Information("Google Realtime Client: Disposing client for {EndpointUri}.", EndpointUri);
+            await DisconnectAsync(WebSocketCloseStatus.NormalClosure, "Client disposing", CancellationToken.None).ConfigureAwait(false);
+            await CleanUpCurrentConnectionAsync("Disposing client.");
+            GC.SuppressFinalize(this);
         }
     }
 }
