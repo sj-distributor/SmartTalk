@@ -184,6 +184,13 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         var (record, agent, aiSpeechAssistant) = await _phoneOrderDataProvider.GetRecordWithAgentAndAssistantAsync(command.CallSid, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Get phone order record: {@record}", record);
+        
+        TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
+        
+        var call = await CallResource.FetchAsync(command.CallSid);
+        var callFrom = call?.From;
+
+        Log.Information("Fetched incoming phone number from Twilio: {callFrom}", callFrom);
 
         record.Url = command.RecordingUrl;
         record.Status = PhoneOrderRecordStatus.Sent;
@@ -204,7 +211,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
         ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
         Log.Information("sales record analyze report:" + completion.Content.FirstOrDefault()?.Text);
-        record.TranscriptionText = completion.Content.FirstOrDefault()?.Text;
+        record.TranscriptionText = "來電號碼: "+ callFrom + "\n" + completion.Content.FirstOrDefault()?.Text;
 
         if (agent.SourceSystem == AgentSourceSystem.Smarties)
             await _smartiesClient.CallBackSmartiesAiSpeechAssistantRecordAsync(new AiSpeechAssistantCallBackRequestDto { CallSid = command.CallSid, RecordUrl = record.Url, RecordAnalyzeReport =  record.TranscriptionText }, cancellationToken).ConfigureAwait(false);
