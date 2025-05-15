@@ -1,0 +1,1 @@
+alter table `agent` add column `wechat_robot_message` text null;

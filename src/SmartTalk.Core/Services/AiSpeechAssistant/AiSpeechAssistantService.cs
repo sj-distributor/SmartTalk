@@ -22,6 +22,7 @@ using SmartTalk.Messages.Constants;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.Restaurants;
+using SmartTalk.Core.Settings.Azure;
 using SmartTalk.Messages.Dto.OpenAi;
 using Twilio.Rest.Api.V2010.Account;
 using SmartTalk.Core.Settings.OpenAi;
@@ -58,11 +59,11 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 {
     private readonly IMapper _mapper;
     private readonly ICurrentUser _currentUser;
+    private readonly AzureSetting _azureSetting;
     private readonly IOpenaiClient _openaiClient;
     private readonly OpenAiSettings _openAiSettings;
     private readonly TwilioSettings _twilioSettings;
     private readonly ISmartiesClient _smartiesClient;
-    private readonly ClientWebSocket _openaiWebSocket;
     private readonly ZhiPuAiSettings _zhiPuAiSettings;
     private readonly IPhoneOrderService _phoneOrderService;
     private readonly IAgentDataProvider _agentDataProvider;
@@ -72,12 +73,14 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
 
+    private StringBuilder _openaiEvent;
     private readonly ClientWebSocket _openaiClientWebSocket;
     private AiSpeechAssistantStreamContextDto _aiSpeechAssistantStreamContext;
 
     public AiSpeechAssistantService(
         IMapper mapper,
         ICurrentUser currentUser,
+        AzureSetting azureSetting,
         IOpenaiClient openaiClient,
         OpenAiSettings openAiSettings,
         TwilioSettings twilioSettings,
@@ -94,6 +97,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _mapper = mapper;
         _currentUser = currentUser;
         _openaiClient = openaiClient;
+        _azureSetting = azureSetting;
         _openAiSettings = openAiSettings;
         _twilioSettings = twilioSettings;
         _smartiesClient = smartiesClient;
@@ -105,7 +109,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _restaurantDataProvider = restaurantDataProvider;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
-        
+
+        _openaiEvent = new StringBuilder();
         _openaiClientWebSocket = new ClientWebSocket();
         _aiSpeechAssistantStreamContext = new AiSpeechAssistantStreamContextDto();
     }
@@ -203,9 +208,12 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
         if (agent.SourceSystem == AgentSourceSystem.Smarties)
             await _smartiesClient.CallBackSmartiesAiSpeechAssistantRecordAsync(new AiSpeechAssistantCallBackRequestDto { CallSid = command.CallSid, RecordUrl = record.Url, RecordAnalyzeReport =  record.TranscriptionText }, cancellationToken).ConfigureAwait(false);
-        
-        if (!string.IsNullOrEmpty(agent.WechatRobotKey))
-            await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(audioFileRawBytes, agent.WechatRobotKey, "錄音分析報告：\n" + record.TranscriptionText, cancellationToken).ConfigureAwait(false);
+
+        if (!string.IsNullOrEmpty(agent.WechatRobotKey) && !string.IsNullOrEmpty(agent.WechatRobotMessage))
+        {
+            var message = agent.WechatRobotMessage.Replace("#{assistant_name}", aiSpeechAssistant?.Name).Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString());
+            await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(audioFileRawBytes, agent.WechatRobotKey, message, cancellationToken).ConfigureAwait(false);
+        }
 
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
@@ -254,8 +262,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     
     private async Task ConnectOpenAiRealTimeSocketAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, string prompt, CancellationToken cancellationToken)
     {
-        _openaiWebSocket.Options.SetRequestHeader("Authorization", GetAuthorizationHeader(assistant));
-        _openaiWebSocket.Options.SetRequestHeader("OpenAI-Beta", "realtime=v1");
+        ConfigWebSocketRequestHeader(assistant);
 
         var url = string.IsNullOrEmpty(assistant.ModelUrl) ? AiSpeechAssistantStore.DefaultUrl : assistant.ModelUrl;
         
@@ -264,14 +271,24 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         await SendSessionUpdateAsync(assistant, prompt, cancellationToken).ConfigureAwait(false);
     }
 
-    private string GetAuthorizationHeader(Domain.AISpeechAssistant.AiSpeechAssistant assistant)
+    private void ConfigWebSocketRequestHeader(Domain.AISpeechAssistant.AiSpeechAssistant assistant)
     {
-        return assistant.ModelProvider switch
+        switch (assistant.ModelProvider)
         {
-            AiSpeechAssistantProvider.OpenAi => $"Bearer {_openAiSettings.ApiKey}",
-            AiSpeechAssistantProvider.ZhiPuAi => $"Bearer {_zhiPuAiSettings.ApiKey}",
-            _ => throw new NotSupportedException(nameof(assistant.ModelProvider))
-        };
+            case AiSpeechAssistantProvider.OpenAi:
+                _openaiClientWebSocket.Options.SetRequestHeader("OpenAI-Beta", "realtime=v1");
+                _openaiClientWebSocket.Options.SetRequestHeader("Authorization", $"Bearer {_openAiSettings.ApiKey}");
+                break;
+            case AiSpeechAssistantProvider.ZhiPuAi:
+                _openaiClientWebSocket.Options.SetRequestHeader("OpenAI-Beta", "realtime=v1");
+                _openaiClientWebSocket.Options.SetRequestHeader("Authorization", $"Bearer {_zhiPuAiSettings.ApiKey}");
+                break;
+            case AiSpeechAssistantProvider.Azure:
+                _openaiClientWebSocket.Options.SetRequestHeader("api-key", _azureSetting.ApiKey);
+                break;
+            default:
+                throw new NotSupportedException(nameof(assistant.ModelProvider));
+        }
     }
     
     private async Task ReceiveFromTwilioAsync(WebSocket twilioWebSocket, CancellationToken cancellationToken)
@@ -342,13 +359,24 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             while (_openaiClientWebSocket.State == WebSocketState.Open)
             {
                 var result = await _openaiClientWebSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
-                Log.Information("ReceiveFromOpenAi result: {result}", Encoding.UTF8.GetString(buffer, 0, result.Count));
+                var value = Encoding.UTF8.GetString(buffer, 0, result.Count);
+                Log.Information("ReceiveFromOpenAi result: {result}", value);
 
                 if (result is { Count: > 0 })
                 {
-                    Log.Information("ReceiveFromOpenAi result: {@result}", JsonConvert.DeserializeObject<object>(Encoding.UTF8.GetString(buffer, 0, result.Count)));
+                    try
+                    {
+                        JsonSerializer.Deserialize<JsonDocument>(_openaiEvent.Length > 0 ? _openaiEvent + value : value);
+                    }
+                    catch (Exception)
+                    {
+                        _openaiEvent.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
+                        continue;
+                    }
                     
-                    var jsonDocument = JsonSerializer.Deserialize<JsonDocument>(buffer.AsSpan(0, result.Count));
+                    var jsonDocument = JsonSerializer.Deserialize<JsonDocument>(_openaiEvent.Length > 0 ? _openaiEvent + value : value);
+                    
+                    _openaiEvent.Clear();
 
                     Log.Information($"Received event: {jsonDocument?.RootElement.GetProperty("type").GetString()}");
                     
@@ -356,8 +384,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                     {
                         Log.Information("Receive openai websocket error" + error.GetProperty("message").GetString());
                         
-                        await SendToWebSocketAsync(_openaiClientWebSocket, _aiSpeechAssistantStreamContext.LastMessage, cancellationToken);
-                        await SendToWebSocketAsync(_openaiClientWebSocket, new { type = "response.create" }, cancellationToken);
                     }
                     
                     if (jsonDocument?.RootElement.GetProperty("type").GetString() == "session.updated")
@@ -749,14 +775,39 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     
     private async Task SendSessionUpdateAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, string prompt, CancellationToken cancellationToken)
     {
-        var configs = await InitialSessionConfigAsync(assistant, cancellationToken).ConfigureAwait(false);
+        var session = await InitialSessionAsync(assistant, prompt, cancellationToken).ConfigureAwait(false);
         
         var sessionUpdate = new
         {
             type = "session.update",
-            session = new
+            session = session
+        };
+
+        await SendToWebSocketAsync(_openaiClientWebSocket, sessionUpdate, cancellationToken);
+    }
+
+    private async Task<object> InitialSessionAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, string prompt, CancellationToken cancellationToken)
+    {
+        var configs = await InitialSessionConfigAsync(assistant, cancellationToken).ConfigureAwait(false);
+        
+        return assistant.ModelProvider switch
+        {
+            AiSpeechAssistantProvider.OpenAi => new
             {
-                turn_detection = InitialSessionTurnDirection(configs),
+                turn_detection = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection),
+                input_audio_format = "g711_ulaw",
+                output_audio_format = "g711_ulaw",
+                voice = string.IsNullOrEmpty(assistant.ModelVoice) ? "alloy" : assistant.ModelVoice,
+                instructions = prompt,
+                modalities = new[] { "text", "audio" },
+                temperature = 0.8,
+                input_audio_transcription = new { model = "whisper-1" },
+                input_audio_noise_reduction = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction),
+                tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config)
+            },
+            AiSpeechAssistantProvider.Azure => new
+            {
+                turn_detection = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection),
                 input_audio_format = "g711_ulaw",
                 output_audio_format = "g711_ulaw",
                 voice = string.IsNullOrEmpty(assistant.ModelVoice) ? "alloy" : assistant.ModelVoice,
@@ -765,10 +816,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                 temperature = 0.8,
                 input_audio_transcription = new { model = "whisper-1" },
                 tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config)
-            }
+            },
+            _ => throw new NotSupportedException(nameof(assistant.ModelProvider))
         };
-
-        await SendToWebSocketAsync(_openaiClientWebSocket, sessionUpdate, cancellationToken);
     }
 
     private async Task<List<(AiSpeechAssistantSessionConfigType Type, object Config)>> InitialSessionConfigAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken = default)
@@ -778,10 +828,15 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         return functions.Count == 0 ? [] : functions.Where(x => !string.IsNullOrWhiteSpace(x.Content)).Select(x => (x.Type, JsonConvert.DeserializeObject<object>(x.Content))).ToList();
     }
 
-    private object InitialSessionTurnDirection(List<(AiSpeechAssistantSessionConfigType Type, object Config)> configs)
+    private object InitialSessionParameters(List<(AiSpeechAssistantSessionConfigType Type, object Config)> configs, AiSpeechAssistantSessionConfigType type)
     {
-        var turnDetection = configs.FirstOrDefault(x => x.Type == AiSpeechAssistantSessionConfigType.TurnDirection);
+        var config = configs.FirstOrDefault(x => x.Type == type);
 
-        return turnDetection.Config ?? new { type = "server_vad" };
-    } 
+        return type switch
+        {
+            AiSpeechAssistantSessionConfigType.TurnDirection => config.Config ?? new { type = "server_vad" },
+            AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction => config.Config,
+            _ => throw new NotSupportedException(nameof(type))
+        };
+    }
 }

@@ -44,8 +44,8 @@ public partial class AiSpeechAssistantService
 
         var session = new OpenAiRealtimeSessionDto
         {
-            Model = string.IsNullOrEmpty(assistant?.ModelUrl) ? "gpt-4o-realtime-preview-2024-12-17" : assistant.ModelUrl,
-            TurnDetection = InitialSessionTurnDirection(configs),
+            Model = "gpt-4o-realtime-preview-2024-12-17",
+            TurnDetection = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection),
             Voice = string.IsNullOrEmpty(assistant?.ModelVoice) ? "alloy" : assistant.ModelVoice,
             Instructions = prompt,
             Modalities = ["audio", "text"],
