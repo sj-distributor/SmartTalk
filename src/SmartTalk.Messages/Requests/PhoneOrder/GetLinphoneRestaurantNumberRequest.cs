@@ -8,6 +8,6 @@ public class GetLinphoneRestaurantNumberRequest : IRequest
     public string ToRestaurant { get; set; }
 }
 
-public class GetLinphoneRestaurantNumberResponse : SmartTalkResponse<List<string>>
+public class GetLinphoneRestaurantNumberResponse : SmartTalkResponse<string>
 {
 }

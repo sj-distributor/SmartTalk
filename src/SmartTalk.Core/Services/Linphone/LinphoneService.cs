@@ -244,13 +244,13 @@ public class LinphoneService : ILinphoneService
     public async Task<GetLinphoneRestaurantNumberResponse> GetLinphoneRestaurantNumberAsync(
         GetLinphoneRestaurantNumberRequest request, CancellationToken cancellationToken)
     {
-        var restaurant = await _linphoneDataProvider.GetRestaurantPhoneNumberAsync(cancellationToken: cancellationToken);
+        var restaurant = await _linphoneDataProvider.GetRestaurantPhoneNumberAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var restaurantPhoneNumbers = restaurant.Where(x => x.AnotherName != null).FirstOrDefault(x => request.ToRestaurant.Contains(x.AnotherName));
         
         return new GetLinphoneRestaurantNumberResponse
         {
-            Data = restaurantPhoneNumbers?.PhoneNumber.Split(',').ToList()
+            Data = restaurantPhoneNumbers?.PhoneNumber
         };
     }
 }
