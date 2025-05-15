@@ -188,7 +188,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
         
         var call = await CallResource.FetchAsync(command.CallSid);
-        var callFrom = call.From;
+        var callFrom = call?.From ?? "unknown";
 
         Log.Information("Fetched incoming phone number from Twilio: {callFrom}", callFrom);
 
@@ -201,7 +201,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         List<ChatMessage> messages =
         [
             new SystemChatMessage(string.IsNullOrEmpty(aiSpeechAssistant?.CustomRecordAnalyzePrompt)
-                ? $"你是一名電話錄音的分析員，通過聽取錄音內容和語氣情緒作出精確分析，冩出一份分析報告。\n\n來電號碼：{callFrom}\n\n分析報告的格式：交談主題：xxx\n\n 內容摘要:xxx \n\n 客人情感與情緒: xxx \n\n 待辦事件: \n1.xxx\n2.xxx \n\n 客人下單內容(如果沒有則忽略)：1. 牛肉(1箱)\n2.雞腿肉(1箱)" 
+                ? "你是一名電話錄音的分析員，通過聽取錄音內容和語氣情緒作出精確分析，冩出一份分析報告。\n\n分析報告的格式：交談主題：xxx\n\n 內容摘要:xxx \n\n 客人情感與情緒: xxx \n\n 待辦事件: \n1.xxx\n2.xxx \n\n 客人下單內容(如果沒有則忽略)：1. 牛肉(1箱)\n2.雞腿肉(1箱)" 
                 : aiSpeechAssistant.CustomRecordAnalyzePrompt),
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
             new UserChatMessage("幫我根據錄音生成分析報告：")
