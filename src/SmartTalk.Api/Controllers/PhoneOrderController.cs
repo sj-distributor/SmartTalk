@@ -156,6 +156,16 @@ public class PhoneOrderController : ControllerBase
 
         return Ok(response);
     }
-    
+
+    [AllowAnonymous]
+    [Route("linphone/restaurant"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetLinphoneRestaurantNumberResponse))]
+    public async Task<IActionResult> GetLinphoneRestaurantNumberAsync([FromQuery] GetLinphoneRestaurantNumberRequest query)
+    {
+        var response = await _mediator.RequestAsync<GetLinphoneRestaurantNumberRequest, GetLinphoneRestaurantNumberResponse>(query).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+
     #endregion
 }
