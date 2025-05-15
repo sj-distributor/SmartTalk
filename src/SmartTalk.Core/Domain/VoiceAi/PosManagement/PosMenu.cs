@@ -40,4 +40,16 @@ public class PosMenu : IEntity, IHasCreatedFields, IHasModifiedFields
 
     [Column("last_modified_date")]
     public DateTimeOffset? LastModifiedDate { get; set; }
+    
+    [NotMapped]
+    public List<string> CategoryIdList
+    {
+        get => string.IsNullOrWhiteSpace(CategoryIds)
+            ? new List<string>()
+            : CategoryIds.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList();
+
+        set => CategoryIds = value == null
+            ? string.Empty
+            : string.Join(",", value);
+    }
 }
