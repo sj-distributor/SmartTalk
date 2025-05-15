@@ -54,11 +54,9 @@ namespace SmartTalk.Core.Services.RealtimeAi.wss.Google
                 Log.Information("Google Realtime Wss Client: Successfully connected to {EndpointUri}. State: {State}", EndpointUri, _webSocket.State);
                 await (StateChangedAsync?.Invoke(_webSocket.State, "已连接") ?? Task.CompletedTask).ConfigureAwait(false);
 
-                // 发送 Gemini 特定的设置消息
                 var setupMessagePayload = new
                 {
-                    model = "gemini-1.5-pro-latest", // 根据实际 Gemini API 要求设置
-                    // 可以添加其他 Gemini 特有的配置参数
+                    model = "gemini-1.5-pro-latest"
                 };
                 string setupMessageJson = JsonConvert.SerializeObject(setupMessagePayload);
 
@@ -115,7 +113,6 @@ namespace SmartTalk.Core.Services.RealtimeAi.wss.Google
                     {
                         var message = Encoding.UTF8.GetString(ms.ToArray());
 
-                        // 检查是否是 Gemini 特定的 SetupComplete 消息 (根据 Gemini API 文档调整)
                         if (string.IsNullOrWhiteSpace(message) || message == "{}")
                         {
                             isSetupCompleteReceived = true;
@@ -126,7 +123,6 @@ namespace SmartTalk.Core.Services.RealtimeAi.wss.Google
 
                         await (MessageReceivedAsync?.Invoke(message) ?? Task.CompletedTask).ConfigureAwait(false);
                     }
-                    // 如果 Gemini API 返回二进制数据，需要在此处添加处理逻辑
                 }
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested)

@@ -166,7 +166,7 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
             else if (root.TryGetProperty("serverContent", out var serverContentProp))
             {
                 // 将 JsonElement 传递给新的 ParseServerContent 方法
-                ParseServerContentIntoEvent(serverContentProp, parsedEvent);
+                ParseServerContentIntoEvent(serverContentProp);
             }
             else if (root.TryGetProperty("toolCall", out var toolCallProp))
             {
@@ -261,164 +261,158 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
         }
     }
 
-    private void ParseServerContentIntoEvent(JsonElement serverContentJson, ParsedRealtimeAiProviderEvent eventToPopulate)
+    private ParsedRealtimeAiProviderEvent ParseServerContentIntoEvent(JsonElement serverContentJson)
     {
+        var parsedEvent = new ParsedRealtimeAiProviderEvent { RawJson = serverContentJson.GetRawText() };
+
         if (serverContentJson.TryGetProperty("generationComplete", out var generationCompleteProp) &&
             generationCompleteProp.GetBoolean())
         {
-            if (eventToPopulate.Type == RealtimeAiWssEventType.ResponseTextDelta)
-            {
-                eventToPopulate.Type = RealtimeAiWssEventType.TranscriptionCompleted;
-            }
-            else if (eventToPopulate.Type == RealtimeAiWssEventType.ResponseAudioDelta)
-            {
-                eventToPopulate.Type = RealtimeAiWssEventType.ResponseAudioDone;
-            }
-            else if (eventToPopulate.Type == RealtimeAiWssEventType.FunctionCallSuggested)
-            {
-                eventToPopulate.Type = RealtimeAiWssEventType.ResponseTurnCompleted;
-            }
-            else if (eventToPopulate.Type == RealtimeAiWssEventType.Unknown &&
-                     serverContentJson.ValueKind == JsonValueKind.Object && serverContentJson.EnumerateObject().Any())
-            {
-                eventToPopulate.Type = RealtimeAiWssEventType.ResponseTurnCompleted;
-            }
+            parsedEvent.Type = RealtimeAiWssEventType.ResponseTurnCompleted; // 模型生成完毕，视为一个 Turn 完成
+        }
+        else if (serverContentJson.TryGetProperty("turnComplete", out var turnCompleteProp) &&
+                 turnCompleteProp.GetBoolean())
+        {
+            parsedEvent.Type = RealtimeAiWssEventType.ResponseTurnCompleted; // 模型完成其回合
         }
         else if (serverContentJson.TryGetProperty("interrupted", out var interruptedProp) &&
                  interruptedProp.GetBoolean())
         {
-            eventToPopulate.Type = RealtimeAiWssEventType.Error;
-            eventToPopulate.Data = new RealtimeAiErrorData
-                { Message = "模型生成被中断", IsCritical = false, Code = "GENERATION_INTERRUPTED" };
+            parsedEvent.Type = RealtimeAiWssEventType.Error;
+            parsedEvent.Data = new RealtimeAiErrorData
+            {
+                Message = "模型生成被中断",
+                IsCritical = false,
+                Code = "GENERATION_INTERRUPTED"
+            };
         }
-        else if (serverContentJson.TryGetProperty("modelTurnContent", out var modelTurnContentProp) &&
-                 modelTurnContentProp.ValueKind == JsonValueKind.Object)
+        else if (serverContentJson.TryGetProperty("inputTranscription", out var inputTranscriptionProp) &&
+                 inputTranscriptionProp.ValueKind == JsonValueKind.Object)
         {
-            if (modelTurnContentProp.TryGetProperty("parts", out var partsArray) &&
-                partsArray.ValueKind == JsonValueKind.Array)
+            parsedEvent.Type = RealtimeAiWssEventType.TranscriptionPartial;
+            try
             {
-                StringBuilder accumulatedText = new StringBuilder();
-                bool textPartFound = false;
-                bool functionCallProcessed = false;
-                bool audioPartFound = false;
+                var text = inputTranscriptionProp.TryGetProperty("text", out var textProp)
+                    ? textProp.GetString()
+                    : null;
+                parsedEvent.Data = new RealtimeAiWssTranscriptionData
+                    { Transcript = text, Speaker = AiSpeechAssistantSpeaker.User };
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "GoogleAdapter: Failed to parse input transcription: {Json}",
+                    inputTranscriptionProp.GetRawText());
+            }
+        }
+        else if (serverContentJson.TryGetProperty("outputTranscription", out var outputTranscriptionProp) &&
+                 outputTranscriptionProp.ValueKind == JsonValueKind.Object)
+        {
+            parsedEvent.Type = RealtimeAiWssEventType.ResponseTextDelta;
+            try
+            {
+                var text = outputTranscriptionProp.TryGetProperty("text", out var textProp)
+                    ? textProp.GetString()
+                    : null;
+                parsedEvent.Data = new RealtimeAiWssTranscriptionData
+                    { Transcript = text, Speaker = AiSpeechAssistantSpeaker.Ai };
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "GoogleAdapter: Failed to parse output transcription: {Json}",
+                    outputTranscriptionProp.GetRawText());
+            }
+        }
+        else if (serverContentJson.TryGetProperty("modelTurn", out var modelTurnProp) && modelTurnProp.ValueKind == JsonValueKind.Object)
+        {
+            ParseModelTurnContent(modelTurnProp, parsedEvent);
+        }
+        else if (serverContentJson.ValueKind == JsonValueKind.Object && serverContentJson.EnumerateObject().Any())
+        {
+            Log.Warning("GoogleAdapter: Unhandled fields in serverContent: {ServerContentJson}",
+                serverContentJson.GetRawText());
+            parsedEvent.Type = RealtimeAiWssEventType.Unknown;
+        }
+        else
+        {
+            parsedEvent.Type = RealtimeAiWssEventType.Unknown;
+        }
 
-                foreach (var partElement in partsArray.EnumerateArray())
+        return parsedEvent;
+    }
+
+    private void ParseModelTurnContent(JsonElement modelTurnJson, ParsedRealtimeAiProviderEvent eventToPopulate)
+    {
+        if (modelTurnJson.TryGetProperty("parts", out var partsArray) && partsArray.ValueKind == JsonValueKind.Array)
+        {
+            StringBuilder accumulatedText = new StringBuilder();
+            bool textPartFound = false;
+            bool functionCallProcessed = false;
+            bool audioPartFound = false;
+
+            foreach (var partElement in partsArray.EnumerateArray())
+            {
+                if (partElement.ValueKind == JsonValueKind.Object)
                 {
-                    if (partElement.ValueKind == JsonValueKind.Object)
+                    if (partElement.TryGetProperty("functionCall", out var functionCallProp) &&
+                        functionCallProp.ValueKind == JsonValueKind.Object)
                     {
-                        if (partElement.TryGetProperty("functionCall", out var functionCallProp) &&
-                            functionCallProp.ValueKind == JsonValueKind.Object)
+                        eventToPopulate.Type = RealtimeAiWssEventType.FunctionCallSuggested;
+                        try
                         {
-                            eventToPopulate.Type = RealtimeAiWssEventType.FunctionCallSuggested;
-                            try
-                            {
-                                var functionName = functionCallProp.TryGetProperty("name", out var nameProp)
-                                    ? nameProp.GetString()
-                                    : null;
-                                var argumentsJson = functionCallProp.TryGetProperty("args", out var argsProp)
-                                    ? argsProp.GetRawText()
-                                    : null;
-                                eventToPopulate.Data = new RealtimeAiWssFunctionCallData
-                                    { FunctionName = functionName, ArgumentsJson = argumentsJson };
-                                functionCallProcessed = true;
-                                break;
-                            }
-                            catch (Exception ex)
-                            {
-                                Log.Error(ex, "GoogleAdapter: Failed to parse function call in serverContent: {Json}",
-                                    functionCallProp.GetRawText());
-                            }
+                            var functionName = functionCallProp.TryGetProperty("name", out var nameProp)
+                                ? nameProp.GetString()
+                                : null;
+                            var argumentsJson = functionCallProp.TryGetProperty("args", out var argsProp)
+                                ? argsProp.GetRawText()
+                                : null;
+                            eventToPopulate.Data = new RealtimeAiWssFunctionCallData
+                                { FunctionName = functionName, ArgumentsJson = argumentsJson };
+                            functionCallProcessed = true;
+                            break;
                         }
-                        else if (partElement.TryGetProperty("inlineData", out var inlineDataProp) &&
-                                 inlineDataProp.ValueKind == JsonValueKind.Object &&
-                                 inlineDataProp.TryGetProperty("mimeType", out var mimeTypeProp) &&
-                                 mimeTypeProp.ValueKind == JsonValueKind.String &&
-                                 inlineDataProp.TryGetProperty("data", out var dataProp) &&
-                                 dataProp.ValueKind == JsonValueKind.String)
+                        catch (Exception ex)
                         {
-                            string mimeType = mimeTypeProp.GetString();
-                            string base64Data = dataProp.GetString();
-                            if (mimeType != null && mimeType.StartsWith("audio/", StringComparison.OrdinalIgnoreCase) &&
-                                !string.IsNullOrEmpty(base64Data))
-                            {
-                                eventToPopulate.Type = RealtimeAiWssEventType.ResponseAudioDelta;
-                                eventToPopulate.Data = new RealtimeAiWssAudioData { Base64Payload = base64Data };
-                                audioPartFound = true;
-                            }
-                        }
-                        else if (partElement.TryGetProperty("text", out var textProp) &&
-                                 textProp.ValueKind == JsonValueKind.String)
-                        {
-                            accumulatedText.Append(textProp.GetString());
-                            textPartFound = true;
-                            eventToPopulate.Type = RealtimeAiWssEventType.ResponseTextDelta;
-                            eventToPopulate.Data = new RealtimeAiWssTranscriptionData
-                                { Transcript = accumulatedText.ToString(), Speaker = AiSpeechAssistantSpeaker.Ai };
+                            Log.Error(ex, "GoogleAdapter: Failed to parse function call in modelTurn: {Json}",
+                                functionCallProp.GetRawText());
                         }
                     }
-                }
-
-                if (!functionCallProcessed && textPartFound && eventToPopulate.Type == RealtimeAiWssEventType.Unknown)
-                {
-                    eventToPopulate.Type = RealtimeAiWssEventType.ResponseTextDelta;
-                    eventToPopulate.Data = new RealtimeAiWssTranscriptionData
-                        { Transcript = accumulatedText.ToString(), Speaker = AiSpeechAssistantSpeaker.Ai };
-                }
-                else if (!functionCallProcessed && audioPartFound &&
-                         eventToPopulate.Type == RealtimeAiWssEventType.Unknown)
-                {
-                    eventToPopulate.Type = RealtimeAiWssEventType.ResponseAudioDelta;
-                    if (eventToPopulate.Data is RealtimeAiWssAudioData audioData)
+                    else if (partElement.TryGetProperty("inlineData", out var inlineDataProp) &&
+                             inlineDataProp.ValueKind == JsonValueKind.Object)
                     {
-                        eventToPopulate.Data = new RealtimeAiWssAudioData { Base64Payload = audioData.Base64Payload };
+                        if (inlineDataProp.TryGetProperty("mimeType", out var mimeTypeProp) && mimeTypeProp.GetString()
+                                ?.StartsWith("audio/", StringComparison.OrdinalIgnoreCase) == true &&
+                            inlineDataProp.TryGetProperty("data", out var dataProp) && dataProp.GetString() != null)
+                        {
+                            eventToPopulate.Type = RealtimeAiWssEventType.ResponseAudioDelta;
+                            eventToPopulate.Data = new RealtimeAiWssAudioData { Base64Payload = dataProp.GetString() };
+                            audioPartFound = true;
+                        }
+                    }
+                    else if (partElement.TryGetProperty("text", out var textProp) &&
+                             textProp.ValueKind == JsonValueKind.String)
+                    {
+                        accumulatedText.Append(textProp.GetString());
+                        textPartFound = true;
+                        eventToPopulate.Type = RealtimeAiWssEventType.ResponseTextDelta;
+                        eventToPopulate.Data = new RealtimeAiWssTranscriptionData
+                            { Transcript = accumulatedText.ToString(), Speaker = AiSpeechAssistantSpeaker.Ai };
                     }
                 }
             }
-            else if (serverContentJson.TryGetProperty("inputTranscription", out var inputTranscriptionProp) &&
-                     inputTranscriptionProp.ValueKind == JsonValueKind.Object)
-            {
-                eventToPopulate.Type = RealtimeAiWssEventType.TranscriptionPartial;
-                try
-                {
-                    var text = inputTranscriptionProp.TryGetProperty("text", out var textProp)
-                        ? textProp.GetString()
-                        : null;
-                    eventToPopulate.Data = new RealtimeAiWssTranscriptionData
-                        { Transcript = text, Speaker = AiSpeechAssistantSpeaker.User };
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "GoogleAdapter: Failed to parse input transcription: {Json}",
-                        inputTranscriptionProp.GetRawText());
-                }
-            }
-            else if (serverContentJson.TryGetProperty("outputTranscription", out var outputTranscriptionProp) &&
-                     outputTranscriptionProp.ValueKind == JsonValueKind.Object)
+
+            if (!functionCallProcessed && textPartFound && eventToPopulate.Type == RealtimeAiWssEventType.Unknown)
             {
                 eventToPopulate.Type = RealtimeAiWssEventType.ResponseTextDelta;
-                try
-                {
-                    var text = outputTranscriptionProp.TryGetProperty("text", out var textProp)
-                        ? textProp.GetString()
-                        : null;
-                    eventToPopulate.Data = new RealtimeAiWssTranscriptionData
-                        { Transcript = text, Speaker = AiSpeechAssistantSpeaker.Ai };
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "GoogleAdapter: Failed to parse output transcription: {Json}",
-                        outputTranscriptionProp.GetRawText());
-                }
+                eventToPopulate.Data = new RealtimeAiWssTranscriptionData
+                    { Transcript = accumulatedText.ToString(), Speaker = AiSpeechAssistantSpeaker.Ai };
             }
-            else if (serverContentJson.ValueKind == JsonValueKind.Object && serverContentJson.EnumerateObject().Any())
+            else if (!functionCallProcessed && audioPartFound && eventToPopulate.Type == RealtimeAiWssEventType.Unknown)
             {
-                Log.Warning("GoogleAdapter: Unhandled fields in serverContent: {ServerContentJson}",
-                    serverContentJson.GetRawText());
+                eventToPopulate.Type = RealtimeAiWssEventType.ResponseAudioDelta;
             }
         }
     }
     
-    // Ensure this method correctly uses Newtonsoft.Json (as in the previous version)
     private async Task<List<(AiSpeechAssistantSessionConfigType Type, object Config)>> InitialSessionConfigAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken = default)
     {
         var functions = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallByAssistantIdAsync(assistant.Id, cancellationToken).ConfigureAwait(false);
