@@ -188,7 +188,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
         
         var call = await CallResource.FetchAsync(command.CallSid);
-        var callFrom = call?.From ?? "unknown";
+        var callFrom = call?.From;
 
         Log.Information("Fetched incoming phone number from Twilio: {callFrom}", callFrom);
 
