@@ -31,7 +31,7 @@ create table if not exists `pos_category`
 create table if not exists `pos_product`
 (
     `id` int primary key auto_increment,
-    `category_id` int not null,
+    `category_id` varchar(36) not null,
     `product_id` varchar(36) not null,
     `names` text not null,
     `price` decimal not null,

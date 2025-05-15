@@ -41,10 +41,10 @@ public class EasyPosResponseProduct
     public long Id { get; set; }
     
     [JsonProperty("menuId")]
-    public int MenuId { get; set; }
+    public long MenuId { get; set; }
     
     [JsonProperty("categoryId")]
-    public int CategoryId { get; set; }
+    public long CategoryId { get; set; }
 
     [JsonProperty("price")]
     public decimal Price { get; set; }
@@ -52,8 +52,8 @@ public class EasyPosResponseProduct
     [JsonProperty("taxes")]
     public List<EasyPosResponseTax> Taxes { get; set; }
     
-    [JsonProperty("sort_order")]
-    public int? SortOrder { get; set; }
+    [JsonProperty("sort")]
+    public int? Sort { get; set; }
     
     [JsonProperty("status")]
     public bool Status { get; set; }
@@ -146,13 +146,13 @@ public class EasyPosResponseTax
 public class EasyPosResponseMenu
 {
     [JsonProperty("id")]
-    public string Id { get; set; }
+    public long Id { get; set; }
     
     [JsonProperty("timePeriods")]
     public List<EasyPosResponseTimePeriod> TimePeriods { get; set; }
     
     [JsonProperty("categoryIds")]
-    public string CategoryIds { get; set; }
+    public List<string> CategoryIds { get; set; }
     
     [JsonProperty("status")]
     public bool Status { get; set; }
@@ -164,7 +164,7 @@ public class EasyPosResponseMenu
 public class EasyPosResponseCategory
 {
     [JsonProperty("id")]
-    public string Id { get; set; }
+    public long Id { get; set; }
     
     [JsonProperty("localizations")]
     public List<EasyPosResponseLocalization> Localizations { get; set; }
@@ -173,5 +173,5 @@ public class EasyPosResponseCategory
     public List<EasyPosResponseProduct> Products { get; set; }
     
     [JsonProperty("menuIds")]
-    public string MenuIds { get; set; }
+    public List<string> MenuIds { get; set; }
 }

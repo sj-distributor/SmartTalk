@@ -12,7 +12,7 @@ public class PosProduct : IEntity, IHasCreatedFields, IHasModifiedFields
     public int Id { get; set; }
 
     [Column("category_id")]
-    public int CategoryId { get; set; }
+    public string CategoryId { get; set; }
 
     [Column("product_id"), StringLength(36)]
     public string ProductId { get; set; }
