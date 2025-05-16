@@ -218,7 +218,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
         if (!string.IsNullOrEmpty(agent.WechatRobotKey) && !string.IsNullOrEmpty(agent.WechatRobotMessage))
         {
-            var message = agent.WechatRobotMessage.Replace("#{assistant_name}", aiSpeechAssistant?.Name).Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString());
+            var messageNumber = await SendAgentMessageRecordAsync(agent.Id, record.Id, cancellationToken);
+            var message = $"【第{messageNumber}條】\n" + agent.WechatRobotMessage.Replace("#{assistant_name}", aiSpeechAssistant?.Name).Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString());
             await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(audioFileRawBytes, agent.WechatRobotKey, message, cancellationToken).ConfigureAwait(false);
         }
 
@@ -243,6 +244,30 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             pathSid: callSid,
             status: CallResource.UpdateStatusEnum.Completed
         );
+    }
+
+    private async Task<int> SendAgentMessageRecordAsync(int agentId, int recordId, CancellationToken cancellationToken)
+    {
+        var now = DateTimeOffset.Now;
+        var today = now.Date;
+        
+        var existingCount = await _aiSpeechAssistantDataProvider.GetMessageCountByAgentAndDateAsync(agentId, today, cancellationToken);
+        
+        var messageNumber = existingCount + 1;
+        
+        var newRecord = new AgentMessageRecord
+        {
+            AgentId = agentId,
+            RecordId = recordId,
+            MessageDate = now,
+            MessageNumber = messageNumber,
+            CreatedDate = now,
+            LastModifiedDate = now
+        };
+        
+        await _aiSpeechAssistantDataProvider.AddAgentMessageRecordAsync(newRecord, cancellationToken);
+        
+        return messageNumber;
     }
 
     private async Task<(Domain.AISpeechAssistant.AiSpeechAssistant assistant, AiSpeechAssistantKnowledge knowledge, string finalPrompt)> BuildingAiSpeechAssistantKnowledgeBaseAsync(string from, string to, int? assistantId, CancellationToken cancellationToken)
