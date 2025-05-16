@@ -1,5 +1,6 @@
 using Serilog;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
+using SmartTalk.Messages.Constants;
 using SmartTalk.Messages.Dto.OpenAi;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 
@@ -8,14 +9,18 @@ namespace SmartTalk.Core.Services.AiSpeechAssistant;
 public partial interface IAiSpeechAssistantService
 {
     Task<CreateRealtimeConnectionResponse> CreateRealtimeConnectionAsync(CreateRealtimeConnectionCommand command, CancellationToken cancellationToken);
+
+    Task<ConnectRealtimeWebSocketResponse> ConnectRealTimeWebSocketAsync(ConnectRealtimeWebSocketCommand command, CancellationToken cancellationToken);
 }
 
 public partial class AiSpeechAssistantService
 {
     public async Task<CreateRealtimeConnectionResponse> CreateRealtimeConnectionAsync(CreateRealtimeConnectionCommand command, CancellationToken cancellationToken)
     {
-        var (session, ephemeralToken) = await InitialRealtimeSessionsAsync(command, cancellationToken).ConfigureAwait(false);
+        var (_, session) = await InitialRealtimeSessionsAsync(command.AssistantId, command.CustomPrompt, cancellationToken).ConfigureAwait(false);
 
+        var ephemeralToken = await _openaiClient.InitialRealtimeSessionsAsync(session, cancellationToken).ConfigureAwait(false);
+        
         if (string.IsNullOrWhiteSpace(ephemeralToken)) throw new Exception("Invalid ephemeral token");
         
         var answerSdp = await _openaiClient.RealtimeChatAsync(command.OfferSdp, ephemeralToken, cancellationToken).ConfigureAwait(false);
@@ -32,12 +37,27 @@ public partial class AiSpeechAssistantService
         };
     }
 
-    private async Task<(OpenAiRealtimeSessionDto Session, string EphemeralToken)> InitialRealtimeSessionsAsync(CreateRealtimeConnectionCommand command, CancellationToken cancellationToken)
+    public async Task<ConnectRealtimeWebSocketResponse> ConnectRealTimeWebSocketAsync(ConnectRealtimeWebSocketCommand command, CancellationToken cancellationToken)
     {
-        var prompt = await GenerateFinalPromptAsync(command, cancellationToken).ConfigureAwait(false);
+        var (assistant, session) = await InitialRealtimeSessionsAsync(command.AssistantId, command.CustomPrompt, cancellationToken).ConfigureAwait(false);
+        
+        ConfigWebSocketRequestHeader(assistant);
 
-        var assistant = command.AssistantId.HasValue
-            ? await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantAsync(command.AssistantId.Value, cancellationToken).ConfigureAwait(false)
+        var url = string.IsNullOrEmpty(assistant?.ModelUrl) ? AiSpeechAssistantStore.DefaultUrl : assistant.ModelUrl;
+        
+        await _openaiClientWebSocket.ConnectAsync(new Uri(url), cancellationToken).ConfigureAwait(false);
+        
+        await SendToWebSocketAsync(_openaiClientWebSocket, new { type = "session.update", session = session }, cancellationToken).ConfigureAwait(false);
+        
+        return new ConnectRealtimeWebSocketResponse { Data = session };
+    }
+
+    private async Task<(Domain.AISpeechAssistant.AiSpeechAssistant Assistant, OpenAiRealtimeSessionDto Session)> InitialRealtimeSessionsAsync(int? assistantId, string customPrompt, CancellationToken cancellationToken = default)
+    {
+        var prompt = await GenerateFinalPromptAsync(assistantId, customPrompt, cancellationToken).ConfigureAwait(false);
+
+        var assistant = assistantId.HasValue
+            ? await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantAsync(assistantId.Value, cancellationToken).ConfigureAwait(false)
             : null;
         
         var configs = assistant == null ? [] : await InitialSessionConfigAsync(assistant, cancellationToken).ConfigureAwait(false);
@@ -53,24 +73,22 @@ public partial class AiSpeechAssistantService
             Tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config).ToList()
         };
 
-        var ephemeralToken = await _openaiClient.InitialRealtimeSessionsAsync(session, cancellationToken).ConfigureAwait(false);
-
-        return (session, ephemeralToken);
+        return (assistant, session);
     }
 
-    private async Task<string> GenerateFinalPromptAsync(CreateRealtimeConnectionCommand command, CancellationToken cancellationToken)
+    private async Task<string> GenerateFinalPromptAsync(int? assistantId, string customPrompt, CancellationToken cancellationToken = default)
     {
-        var prompt = string.IsNullOrWhiteSpace(command.CustomPrompt) ? "You are a friendly assistant" : command.CustomPrompt;
+        var prompt = string.IsNullOrWhiteSpace(customPrompt) ? "You are a friendly assistant" : customPrompt;
 
-        if (!command.AssistantId.HasValue) return prompt;
+        if (!assistantId.HasValue) return prompt;
         
         var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(
-            assistantId: command.AssistantId.Value, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+            assistantId: assistantId.Value, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (knowledge == null) 
-            throw new Exception($"Could not found the knowledge by id: {command.AssistantId.Value}");
+            throw new Exception($"Could not found the knowledge by id: {assistantId.Value}");
 
-        if (!string.IsNullOrWhiteSpace(command.CustomPrompt) && !string.IsNullOrWhiteSpace(knowledge.Prompt))
+        if (!string.IsNullOrWhiteSpace(customPrompt) && !string.IsNullOrWhiteSpace(knowledge.Prompt))
             prompt += $"\n\n{knowledge.Prompt}";
         else
             prompt = knowledge.Prompt;
