@@ -28,6 +28,9 @@ public class Agent : IEntity, IHasCreatedFields
     [Column("source_system")]
     public AgentSourceSystem SourceSystem { get; set; }
     
+    [Column("is_wecom_message_order")]
+    public bool IsWecomMessageOrder { get; set; } = false;
+    
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
 }
