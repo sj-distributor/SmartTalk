@@ -23,6 +23,9 @@ public class AgentMessageRecord : IEntity
     [Column("message_number")]
     public int MessageNumber { get; set; }
     
+    [Column("is_wecom_message_order")]
+    public bool IsWeComMessageOrder { get; set; }
+    
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; } = DateTimeOffset.Now;
     

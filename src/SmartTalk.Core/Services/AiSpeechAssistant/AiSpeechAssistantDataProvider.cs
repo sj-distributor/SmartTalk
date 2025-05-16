@@ -275,10 +275,7 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
 
     public async Task<int> GetMessageCountByAgentAndDateAsync(int agentId, DateTimeOffset date, CancellationToken cancellationToken)
     {
-        var dayStart = date.Date;
-        var dayEnd = dayStart.AddDays(1);
-
-        return await _repository.Query<AgentMessageRecord>().Where(x => x.AgentId == agentId && x.MessageDate >= dayStart && x.MessageDate < dayEnd)
+        return await _repository.Query<AgentMessageRecord>().Where(x => x.AgentId == agentId && x.MessageDate >= date && x.MessageDate < date.AddDays(1))
             .CountAsync(cancellationToken).ConfigureAwait(false);
     }
 

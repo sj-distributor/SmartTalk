@@ -9,6 +9,7 @@ using Twilio.TwiML.Voice;
 using SmartTalk.Core.Ioc;
 using Twilio.AspNet.Core;
 using System.Net.WebSockets;
+using System.Runtime.InteropServices;
 using AutoMapper;
 using SmartTalk.Core.Constants;
 using Microsoft.AspNetCore.Http;
@@ -218,8 +219,14 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
         if (!string.IsNullOrEmpty(agent.WechatRobotKey) && !string.IsNullOrEmpty(agent.WechatRobotMessage))
         {
-            var messageNumber = await SendAgentMessageRecordAsync(agent.Id, record.Id, cancellationToken);
-            var message = $"【第{messageNumber}條】\n" + agent.WechatRobotMessage.Replace("#{assistant_name}", aiSpeechAssistant?.Name).Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString());
+            var message = agent.WechatRobotMessage.Replace("#{assistant_name}", aiSpeechAssistant?.Name).Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString());
+            
+            if (agent.IsWecomMessageOrder)
+            {
+                var messageNumber = await SendAgentMessageRecordAsync(agent.Id, record.Id, cancellationToken);
+                message = $"【第{messageNumber}條】\n" + message;
+            }
+            
             await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(audioFileRawBytes, agent.WechatRobotKey, message, cancellationToken).ConfigureAwait(false);
         }
 
@@ -248,10 +255,10 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
     private async Task<int> SendAgentMessageRecordAsync(int agentId, int recordId, CancellationToken cancellationToken)
     {
-        var now = DateTimeOffset.Now;
+        var now = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Asia/Shanghai"));
         var today = now.Date;
         
-        var existingCount = await _aiSpeechAssistantDataProvider.GetMessageCountByAgentAndDateAsync(agentId, today, cancellationToken);
+        var existingCount = await _aiSpeechAssistantDataProvider.GetMessageCountByAgentAndDateAsync(agentId, today, cancellationToken).ConfigureAwait(false);
         
         var messageNumber = existingCount + 1;
         
@@ -265,7 +272,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             LastModifiedDate = now
         };
         
-        await _aiSpeechAssistantDataProvider.AddAgentMessageRecordAsync(newRecord, cancellationToken);
+        await _aiSpeechAssistantDataProvider.AddAgentMessageRecordAsync(newRecord, cancellationToken).ConfigureAwait(false);
         
         return messageNumber;
     }
