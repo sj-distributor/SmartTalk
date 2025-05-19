@@ -51,10 +51,7 @@ public class EasyPosResponseProduct
     
     [JsonProperty("taxes")]
     public List<EasyPosResponseTax> Taxes { get; set; }
-    
-    [JsonProperty("sort")]
-    public int? Sort { get; set; }
-    
+
     [JsonProperty("status")]
     public bool Status { get; set; }
     

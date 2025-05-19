@@ -37,11 +37,7 @@ public partial class PosManagementService
             Names = JsonConvert.SerializeObject(GetLocalizedNames(menu.Localizations)),
             TimePeriod = JsonConvert.SerializeObject(menu.TimePeriods),
             CategoryIds = menu.CategoryIds == null ? string.Empty : string.Join(",", menu.CategoryIds),
-            Status = menu.Status,
-            CreatedBy = command.UserId,
-            CreatedDate = DateTimeOffset.UtcNow,
-            LastModifiedBy = command.UserId,
-            LastModifiedDate = DateTimeOffset.UtcNow
+            Status = menu.Status
         }).ToList();
     
         await _posManagementDataProvider.UpdateStoreMenusAsync(menus, cancellationToken).ConfigureAwait(false);
@@ -55,12 +51,7 @@ public partial class PosManagementService
                     MenuId = menu.Id.ToString(),
                     CategoryId = category.Id.ToString(),
                     Names = JsonConvert.SerializeObject(GetLocalizedNames(category.Localizations)),
-                    MenuIds = string.Join(",", category.MenuIds),
-                    SortOrder = 0,
-                    CreatedBy = command.UserId,
-                    CreatedDate = DateTimeOffset.UtcNow,
-                    LastModifiedBy = command.UserId,
-                    LastModifiedDate = DateTimeOffset.UtcNow
+                    MenuIds = string.Join(",", category.MenuIds)
                 }).ToList();
 
             await _posManagementDataProvider.UpdateStoreCategoriesAsync(categories, cancellationToken).ConfigureAwait(false);
@@ -75,14 +66,9 @@ public partial class PosManagementService
                         CategoryId = product.CategoryId.ToString(),
                         Price = product.Price,
                         Status = true,
-                        SortOrder = product.Sort,
                         Names = JsonConvert.SerializeObject(GetLocalizedNames(product.Localizations)),
                         Modifiers = product.ModifierGroups != null ? JsonConvert.SerializeObject(product.ModifierGroups) : null,
-                        Tax = product.Taxes != null ? JsonConvert.SerializeObject(product.Taxes) : null,
-                        CreatedBy = command.UserId,
-                        CreatedDate = DateTimeOffset.UtcNow,
-                        LastModifiedBy = command.UserId,
-                        LastModifiedDate = DateTimeOffset.UtcNow
+                        Tax = product.Taxes != null ? JsonConvert.SerializeObject(product.Taxes) : null
                     }).ToList();
                 
                 await _posManagementDataProvider.UpdateStoreProductsAsync(products, cancellationToken).ConfigureAwait(false);
@@ -97,12 +83,44 @@ public partial class PosManagementService
     
     private Dictionary<string, Dictionary<string, string>> GetLocalizedNames(IEnumerable<EasyPosResponseLocalization> localizations)
     {
+        var languageMap = new Dictionary<string, string>
+        {
+            ["cn"] = "简体中文",
+            ["en"] = "English",
+            ["pt"] = "Português",
+            ["tw"] = "繁體中文",
+            ["da"] = "Dansk",
+            ["jp"] = "日本語",
+            ["ko"] = "한국어",
+            ["id"] = "Indonesia",
+            ["fr"] = "Français",
+            ["es"] = "Español",
+            ["it"] = "Italiano",
+            ["tr"] = "Türkçe",
+            ["de"] = "Deutsch",
+            ["vi"] = "Tiếng Việt",
+            ["ru"] = "Русский",
+            ["cs"] = "Čeština",
+            ["no"] = "Nynorsk",
+            ["ar"] = "العربية",
+            ["bn"] = "বাংলা",
+            ["sk"] = "Slovensky"
+        };
+
         return localizations
             .Where(loc => !string.IsNullOrWhiteSpace(loc.LanguageCode) && !string.IsNullOrWhiteSpace(loc.Field))
-            .GroupBy(loc => loc.LanguageCode.Substring(0, 2).ToLower())
+            .Select(loc => new
+            {
+                LangKey = loc.LanguageCode.Substring(0, 2).ToLower(),
+                loc.Field,
+                loc.Value
+            })
+            .Where(x => languageMap.ContainsKey(x.LangKey))
+            .GroupBy(x => languageMap[x.LangKey])
             .ToDictionary(
                 g => g.Key,
-                g => g.ToDictionary(loc => loc.Field, loc => loc.Value)
+                g => g.ToDictionary(x => x.Field, x => x.Value)
             );
     }
+
 }
