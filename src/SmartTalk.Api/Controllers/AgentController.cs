@@ -11,7 +11,6 @@ namespace SmartTalk.Api.Controllers;
 public class AgentController : ControllerBase
 {
     private readonly IMediator _mediator;
-
     public AgentController(IMediator mediator)
     {
         _mediator = mediator;
