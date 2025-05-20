@@ -1,6 +1,7 @@
 using Newtonsoft.Json;
 using Serilog;
 using SmartTalk.Core.Domain.VoiceAi.PosManagement;
+using SmartTalk.Core.Extensions;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Messages.Commands.VoiceAi.PosManagement;
 using SmartTalk.Messages.Dto.EasyPos;
@@ -28,7 +29,7 @@ public partial class PosManagementService
         
         store.TimePeriod = timePeriodsJson;
         
-        await _posManagementDataProvider.UpdateStoreAsync(store, cancellationToken).ConfigureAwait(false);
+        await _posManagementDataProvider.UpdateStoreAsync(store, true, cancellationToken).ConfigureAwait(false);
         
         var menus = posConfiguration.Data.Menus.Select(menu => new PosMenu
         {
@@ -37,10 +38,11 @@ public partial class PosManagementService
             Names = JsonConvert.SerializeObject(GetLocalizedNames(menu.Localizations)),
             TimePeriod = JsonConvert.SerializeObject(menu.TimePeriods),
             CategoryIds = menu.CategoryIds == null ? string.Empty : string.Join(",", menu.CategoryIds),
-            Status = menu.Status
+            Status = menu.Status,
+            CreatedBy = _currentUser.Id
         }).ToList();
     
-        await _posManagementDataProvider.UpdateStoreMenusAsync(menus, cancellationToken).ConfigureAwait(false);
+        await _posManagementDataProvider.UpdateStoreMenusAsync(menus, true, cancellationToken).ConfigureAwait(false);
 
         foreach (var menu in posConfiguration.Data.Menus)
         {
@@ -54,7 +56,7 @@ public partial class PosManagementService
                     MenuIds = string.Join(",", category.MenuIds)
                 }).ToList();
 
-            await _posManagementDataProvider.UpdateStoreCategoriesAsync(categories, cancellationToken).ConfigureAwait(false);
+            await _posManagementDataProvider.UpdateStoreCategoriesAsync(categories, true, cancellationToken).ConfigureAwait(false);
             
             foreach (var category in categories)
             {
@@ -71,7 +73,7 @@ public partial class PosManagementService
                         Tax = product.Taxes != null ? JsonConvert.SerializeObject(product.Taxes) : null
                     }).ToList();
                 
-                await _posManagementDataProvider.UpdateStoreProductsAsync(products, cancellationToken).ConfigureAwait(false);
+                await _posManagementDataProvider.UpdateStoreProductsAsync(products, true, cancellationToken).ConfigureAwait(false);
             }
         }
 
@@ -83,44 +85,19 @@ public partial class PosManagementService
     
     private Dictionary<string, Dictionary<string, string>> GetLocalizedNames(IEnumerable<EasyPosResponseLocalization> localizations)
     {
-        var languageMap = new Dictionary<string, string>
+        var languageCodeMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
-            ["cn"] = "简体中文",
-            ["en"] = "English",
-            ["pt"] = "Português",
-            ["tw"] = "繁體中文",
-            ["da"] = "Dansk",
-            ["jp"] = "日本語",
-            ["ko"] = "한국어",
-            ["id"] = "Indonesia",
-            ["fr"] = "Français",
-            ["es"] = "Español",
-            ["it"] = "Italiano",
-            ["tr"] = "Türkçe",
-            ["de"] = "Deutsch",
-            ["vi"] = "Tiếng Việt",
-            ["ru"] = "Русский",
-            ["cs"] = "Čeština",
-            ["no"] = "Nynorsk",
-            ["ar"] = "العربية",
-            ["bn"] = "বাংলা",
-            ["sk"] = "Slovensky"
+            ["zh_CN"] = "cn",
+            ["en_US"] = "en"
         };
 
         return localizations
             .Where(loc => !string.IsNullOrWhiteSpace(loc.LanguageCode) && !string.IsNullOrWhiteSpace(loc.Field))
-            .Select(loc => new
-            {
-                LangKey = loc.LanguageCode.Substring(0, 2).ToLower(),
-                loc.Field,
-                loc.Value
-            })
-            .Where(x => languageMap.ContainsKey(x.LangKey))
-            .GroupBy(x => languageMap[x.LangKey])
+            .GroupBy(loc => loc.LanguageCode)
+            .Where(g => languageCodeMap.ContainsKey(g.Key))
             .ToDictionary(
-                g => g.Key,
+                g => languageCodeMap[g.Key],
                 g => g.ToDictionary(x => x.Field, x => x.Value)
             );
     }
-
 }
