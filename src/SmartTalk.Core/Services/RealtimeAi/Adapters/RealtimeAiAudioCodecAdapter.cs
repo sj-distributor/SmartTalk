@@ -5,7 +5,7 @@ using Serilog;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.RealtimeAi;
 
-namespace SmartTalk.Core.Services.RealtimeAi.Tools;
+namespace SmartTalk.Core.Services.RealtimeAi.Adapters;
 
 public class RealtimeAiAudioCodecAdapter : IRealtimeAiAudioCodecAdapter
 {

@@ -5,9 +5,9 @@ using System.Text.Json;
 using SmartTalk.Core.Ioc;
 using System.Net.WebSockets;
 using SmartTalk.Messages.Dto.RealtimeAi;
-using SmartTalk.Core.Services.RealtimeAi.Engine;
-using SmartTalk.Core.Services.RealtimeAi.Tools;
+using SmartTalk.Core.Services.RealtimeAi.Wss;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
+using SmartTalk.Core.Services.RealtimeAi.Adapters;
 using JsonException = System.Text.Json.JsonException;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 
@@ -15,7 +15,7 @@ namespace SmartTalk.Core.Services.RealtimeAi.Services;
 
 public interface IRealtimeAiService : IScopedDependency
 {
-    Task RealtimeAiConnectAsync(ClientWebSocket webSocket, Domain.AISpeechAssistant.AiSpeechAssistant assistant, string initialPrompt, CancellationToken cancellationToken);
+    Task RealtimeAiConnectAsync(WebSocket webSocket, Domain.AISpeechAssistant.AiSpeechAssistant assistant, string initialPrompt, CancellationToken cancellationToken);
 }
 
 public class RealtimeAiService : IRealtimeAiService
@@ -24,7 +24,7 @@ public class RealtimeAiService : IRealtimeAiService
     private readonly IRealtimeAiAudioCodecAdapter _audioCodecAdapter;
 
     private string _streamSid;
-    private ClientWebSocket _webSocket;
+    private WebSocket _webSocket;
     private CancellationTokenSource _realtimeAiCts;
     private IRealtimeAiConversationEngine _conversationEngine;
     private Domain.AISpeechAssistant.AiSpeechAssistant _currentAssistant;
@@ -35,13 +35,13 @@ public class RealtimeAiService : IRealtimeAiService
         _audioCodecAdapter = audioCodecAdapter;
     }
 
-    public async Task RealtimeAiConnectAsync(ClientWebSocket webSocket, Domain.AISpeechAssistant.AiSpeechAssistant assistant, string initialPrompt, CancellationToken cancellationToken)
+    public async Task RealtimeAiConnectAsync(WebSocket webSocket, Domain.AISpeechAssistant.AiSpeechAssistant assistant, string initialPrompt, CancellationToken cancellationToken)
     {
         _webSocket = webSocket;
         _currentAssistant = assistant;
         _streamSid = Guid.NewGuid().ToString("N");
         _realtimeAiCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        // var codecAdapter = _realtimeAiSwitcher.AudioCodecAdapter(AiSpeechAssistantProvider.OpenAi);
+        
         BuildConversationEngine(assistant.ModelProvider);
         
         await _conversationEngine.StartSessionAsync(assistant, initialPrompt, cancellationToken).ConfigureAwait(false);

@@ -6,7 +6,7 @@ using SmartTalk.Core.Services.RealtimeAi.wss;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.RealtimeAi;
 
-namespace SmartTalk.Core.Services.RealtimeAi.Engine;
+namespace SmartTalk.Core.Services.RealtimeAi.Wss;
 
 public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
 {
@@ -78,6 +78,7 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
             var initialMessageJson = JsonSerializer.Serialize(initialPayload, new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull });
             
             await _realtimeAiClient.SendMessageAsync(initialMessageJson, _sessionCts.Token);
+            
             Log.Information("AiConversationEngine: 已发送初始会话消息。会话 ID: {SessionId}", _sessionId); // AiConversationEngine: Initial session message sent. Session ID: {SessionId}
         }
         catch (OperationCanceledException) when (_sessionCts.IsCancellationRequested)

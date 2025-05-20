@@ -1,9 +1,10 @@
+using SmartTalk.Core.Ioc;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.RealtimeAi;
 
-namespace SmartTalk.Core.Services.RealtimeAi.Engine;
+namespace SmartTalk.Core.Services.RealtimeAi.Wss;
 
-public interface IRealtimeAiConversationEngine : IAsyncDisposable
+public interface IRealtimeAiConversationEngine : IAsyncDisposable, IScopedDependency
 {
     string CurrentSessionId { get; }
     event Func<RealtimeAiWssEventType, object, Task> SessionStatusChangedAsync;

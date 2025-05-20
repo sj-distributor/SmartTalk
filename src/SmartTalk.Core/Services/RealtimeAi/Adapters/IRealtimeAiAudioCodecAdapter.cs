@@ -1,10 +1,9 @@
 using SmartTalk.Core.Ioc;
-using SmartTalk.Core.Services.RealtimeAi.wss;
 using SmartTalk.Messages.Enums.RealtimeAi;
 
-namespace SmartTalk.Core.Services.RealtimeAi.Tools;
+namespace SmartTalk.Core.Services.RealtimeAi.Adapters;
 
-public interface IRealtimeAiAudioCodecAdapter : IScopedDependency, IRealtimeAiProvider
+public interface IRealtimeAiAudioCodecAdapter : IScopedDependency
 {
     bool IsConversionSupported(RealtimeAiAudioCodec inputCodec, int inputSampleRate, RealtimeAiAudioCodec outputCodec, int outputSampleRate);
     

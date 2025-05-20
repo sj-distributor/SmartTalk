@@ -1,10 +1,8 @@
-using SmartTalk.Core.Ioc;
 using SmartTalk.Messages.Dto.RealtimeAi;
-using SmartTalk.Messages.Enums.AiSpeechAssistant;
 
 namespace SmartTalk.Core.Services.RealtimeAi.wss;
 
-public interface IRealtimeAiProviderAdapter : IScopedDependency, IRealtimeAiProvider
+public interface IRealtimeAiProviderAdapter : IRealtimeAiProvider
 {
     Dictionary<string, string> GetHeaders();
     

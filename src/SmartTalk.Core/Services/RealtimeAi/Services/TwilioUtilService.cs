@@ -1,13 +1,13 @@
-using System.Net.WebSockets;
+using Serilog;
 using System.Text;
 using Newtonsoft.Json;
-using Serilog;
 using SmartTalk.Core.Ioc;
-using SmartTalk.Core.Services.RealtimeAi.Engine;
-using SmartTalk.Core.Services.RealtimeAi.Tools;
+using System.Net.WebSockets;
 using SmartTalk.Messages.Dto.RealtimeAi;
-using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.RealtimeAi;
+using SmartTalk.Core.Services.RealtimeAi.Wss;
+using SmartTalk.Messages.Enums.AiSpeechAssistant;
+using SmartTalk.Core.Services.RealtimeAi.Adapters;
 
 namespace SmartTalk.Core.Services.RealtimeAi.Services;
 

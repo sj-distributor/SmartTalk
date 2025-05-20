@@ -2,7 +2,7 @@ using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.RealtimeAi.wss;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 
-namespace SmartTalk.Core.Services.RealtimeAi.Tools;
+namespace SmartTalk.Core.Services.RealtimeAi.Adapters;
 
 public interface IRealtimeAiSwitcher : IScopedDependency
 {
