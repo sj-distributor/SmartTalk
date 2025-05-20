@@ -65,7 +65,7 @@ public class OpenAiRealtimeAiWssClient : IRealtimeAiWssClient
     
     private ClientWebSocket GetClient(Dictionary<string, string> customHeaders)
     {
-        var websocket = new ClientWebSocket()
+        var websocket = new ClientWebSocket
         {
             Options =
             {
@@ -77,7 +77,7 @@ public class OpenAiRealtimeAiWssClient : IRealtimeAiWssClient
         {
             foreach (var header in customHeaders)
             {
-                _webSocket.Options.SetRequestHeader(header.Key, header.Value);
+                websocket.Options.SetRequestHeader(header.Key, header.Value);
             }
         }
 
