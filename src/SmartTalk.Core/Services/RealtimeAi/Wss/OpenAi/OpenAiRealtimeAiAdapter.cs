@@ -2,6 +2,7 @@ using System.Text.Json;
 using Newtonsoft.Json;
 using Serilog;
 using SmartTalk.Core.Services.AiSpeechAssistant;
+using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.RealtimeAi;
@@ -12,11 +13,22 @@ namespace SmartTalk.Core.Services.RealtimeAi.wss.OpenAi;
 
 public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
 {
+    private readonly OpenAiSettings _openAiSettings;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
 
-    public OpenAiRealtimeAiAdapter(IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
+    public OpenAiRealtimeAiAdapter(OpenAiSettings openAiSettings, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
+        _openAiSettings = openAiSettings;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
+    }
+
+    public Dictionary<string, string> GetHeaders()
+    {
+        return new Dictionary<string, string>
+        {
+            { "OpenAI-Beta", "realtime=v1" },
+            { "Authorization", $"Bearer {_openAiSettings.ApiKey}" }
+        };
     }
 
     public async Task<object> GetInitialSessionPayloadAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistantProfile, string initialUserPrompt, string sessionId, CancellationToken cancellationToken)
@@ -69,6 +81,23 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
             session_id = sessionId
         };
         return JsonSerializer.Serialize(message);
+    }
+    
+    public object BuildInterruptMessage(string lastAssistantItemIdToInterrupt)
+    {
+        // ... (同前) (... (Same as before))
+        if (!string.IsNullOrEmpty(lastAssistantItemIdToInterrupt))
+        {
+            var message = new
+            {
+                type = "conversation.interrupt", // 假设的事件类型 (Assumed event type)
+                item_id_to_interrupt = lastAssistantItemIdToInterrupt
+            };
+            Log.Information("OpenAIAdapter: 构建打断消息，目标 item_id: {ItemId}", lastAssistantItemIdToInterrupt); // OpenAIAdapter: Building interrupt message, target item_id: {ItemId}
+            return message; // 返回对象，由 Engine 序列化 (Return object, serialized by Engine)
+        }
+        Log.Warning("OpenAIAdapter: 尝试构建打断消息但未提供 lastAssistantItemIdToInterrupt。"); // OpenAIAdapter: Attempting to build interrupt message but lastAssistantItemIdToInterrupt was not provided.
+        return null;
     }
 
     public ParsedRealtimeAiProviderEvent ParseMessage(string rawMessage)
@@ -155,4 +184,6 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
             _ => throw new NotSupportedException(nameof(type))
         };
     }
+
+    public AiSpeechAssistantProvider Provider => AiSpeechAssistantProvider.OpenAi;
 }

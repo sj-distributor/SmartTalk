@@ -62,7 +62,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <Folder Include="Services\RealtimeAi\wss\Google\" />
+      <Folder Include="Services\RealtimeAi\Wss\Google\" />
     </ItemGroup>
     
 </Project>
