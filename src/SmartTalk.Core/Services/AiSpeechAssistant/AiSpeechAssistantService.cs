@@ -212,7 +212,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
         ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
         Log.Information("sales record analyze report:" + completion.Content.FirstOrDefault()?.Text);
-        record.TranscriptionText = "來電號碼: "+ callFrom + "\n" + completion.Content.FirstOrDefault()?.Text;
+        var rawText = completion.Content.FirstOrDefault()?.Text ?? "";
+        record.TranscriptionText = rawText.Replace("#{call_from}", callFrom ?? "");
 
         if (agent.SourceSystem == AgentSourceSystem.Smarties)
             await _smartiesClient.CallBackSmartiesAiSpeechAssistantRecordAsync(new AiSpeechAssistantCallBackRequestDto { CallSid = command.CallSid, RecordUrl = record.Url, RecordAnalyzeReport =  record.TranscriptionText }, cancellationToken).ConfigureAwait(false);
