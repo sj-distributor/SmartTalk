@@ -4,6 +4,7 @@ using Websocket.Client;
 using System.Reactive.Linq;
 using System.Net.WebSockets;
 using System.Reactive.Concurrency;
+using Newtonsoft.Json;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Core.Services.RealtimeAi.Adapters;
 
@@ -124,7 +125,7 @@ public class OpenAiRealtimeAiWssClient : IRealtimeAiWssClient
 
         try
         {
-            _websocketClient.Send(message);
+            await _websocketClient?.NativeClient.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(message))), WebSocketMessageType.Text, true, cancellationToken);
         }
         catch (Exception ex)
         {
