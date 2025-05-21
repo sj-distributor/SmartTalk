@@ -29,10 +29,14 @@ public class RealtimeAiService : IRealtimeAiService
     private IRealtimeAiConversationEngine _conversationEngine;
     private Domain.AISpeechAssistant.AiSpeechAssistant _currentAssistant;
 
-    public RealtimeAiService(IRealtimeAiSwitcher realtimeAiSwitcher, IRealtimeAiAudioCodecAdapter audioCodecAdapter)
+    public RealtimeAiService(IRealtimeAiSwitcher realtimeAiSwitcher, IRealtimeAiAudioCodecAdapter audioCodecAdapter, IRealtimeAiConversationEngine conversationEngine)
     {
         _realtimeAiSwitcher = realtimeAiSwitcher;
         _audioCodecAdapter = audioCodecAdapter;
+        _conversationEngine = conversationEngine;
+
+        _webSocket = null;
+        _currentAssistant = new Domain.AISpeechAssistant.AiSpeechAssistant();
     }
 
     public async Task RealtimeAiConnectAsync(WebSocket webSocket, Domain.AISpeechAssistant.AiSpeechAssistant assistant, string initialPrompt, CancellationToken cancellationToken)
@@ -46,7 +50,7 @@ public class RealtimeAiService : IRealtimeAiService
         
         await _conversationEngine.StartSessionAsync(assistant, initialPrompt, cancellationToken).ConfigureAwait(false);
         
-        await ReceiveFromWebSocketClientAsync(cancellationToken).ConfigureAwait(false);
+        // await ReceiveFromWebSocketClientAsync(cancellationToken).ConfigureAwait(false);
     }
 
     private void BuildConversationEngine(AiSpeechAssistantProvider provider)

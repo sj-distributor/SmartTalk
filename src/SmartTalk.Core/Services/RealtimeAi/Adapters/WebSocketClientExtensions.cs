@@ -12,8 +12,8 @@ public static class WebSocketClientExtensions
     {
         var client = new WebsocketClient(new Uri(url), () => webSocketClient)
         {
-            IsReconnectionEnabled = true,
-            ReconnectTimeout = TimeSpan.FromSeconds(30)
+            // IsReconnectionEnabled = true,
+            // ReconnectTimeout = TimeSpan.FromSeconds(30)
         };
 
         return client;
