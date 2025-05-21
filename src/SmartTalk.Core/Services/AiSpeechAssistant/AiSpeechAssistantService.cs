@@ -9,6 +9,7 @@ using Twilio.TwiML.Voice;
 using SmartTalk.Core.Ioc;
 using Twilio.AspNet.Core;
 using System.Net.WebSockets;
+using System.Runtime.InteropServices;
 using AutoMapper;
 using SmartTalk.Core.Constants;
 using Microsoft.AspNetCore.Http;
@@ -206,6 +207,13 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         var (record, agent, aiSpeechAssistant) = await _phoneOrderDataProvider.GetRecordWithAgentAndAssistantAsync(command.CallSid, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Get phone order record: {@record}", record);
+        
+        TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
+        
+        var call = await CallResource.FetchAsync(command.CallSid);
+        var callFrom = call?.From;
+
+        Log.Information("Fetched incoming phone number from Twilio: {callFrom}", callFrom);
 
         record.Url = command.RecordingUrl;
         record.Status = PhoneOrderRecordStatus.Sent;
@@ -226,7 +234,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
         ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
         Log.Information("sales record analyze report:" + completion.Content.FirstOrDefault()?.Text);
-        record.TranscriptionText = completion.Content.FirstOrDefault()?.Text;
+        var rawText = completion.Content.FirstOrDefault()?.Text ?? "";
+        record.TranscriptionText = rawText.Replace("#{call_from}", callFrom ?? "");
 
         if (agent.SourceSystem == AgentSourceSystem.Smarties)
             await _smartiesClient.CallBackSmartiesAiSpeechAssistantRecordAsync(new AiSpeechAssistantCallBackRequestDto { CallSid = command.CallSid, RecordUrl = record.Url, RecordAnalyzeReport =  record.TranscriptionText }, cancellationToken).ConfigureAwait(false);
@@ -234,6 +243,13 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         if (!string.IsNullOrEmpty(agent.WechatRobotKey) && !string.IsNullOrEmpty(agent.WechatRobotMessage))
         {
             var message = agent.WechatRobotMessage.Replace("#{assistant_name}", aiSpeechAssistant?.Name).Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString());
+            
+            if (agent.IsWecomMessageOrder)
+            {
+                var messageNumber = await SendAgentMessageRecordAsync(agent.Id, record.Id, cancellationToken);
+                message = $"【第{messageNumber}條】\n" + message;
+            }
+            
             await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(audioFileRawBytes, agent.WechatRobotKey, message, cancellationToken).ConfigureAwait(false);
         }
 
@@ -259,8 +275,32 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             status: CallResource.UpdateStatusEnum.Completed
         );
     }
+    
+    private async Task<int> SendAgentMessageRecordAsync(int agentId, int recordId, CancellationToken cancellationToken)
+    {
+        var now = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Asia/Shanghai"));
+        var today = now.Date;
+        
+        var existingCount = await _aiSpeechAssistantDataProvider.GetMessageCountByAgentAndDateAsync(agentId, today, cancellationToken).ConfigureAwait(false);
+        
+        var messageNumber = existingCount + 1;
+        
+        var newRecord = new AgentMessageRecord
+        {
+            AgentId = agentId,
+            RecordId = recordId,
+            MessageDate = now,
+            MessageNumber = messageNumber,
+            CreatedDate = now,
+            LastModifiedDate = now
+        };
+        
+        await _aiSpeechAssistantDataProvider.AddAgentMessageRecordAsync(newRecord, cancellationToken).ConfigureAwait(false);
+        
+        return messageNumber;
+    }
 
-    private async Task<(Domain.AISpeechAssistant.AiSpeechAssistant Assistant, AiSpeechAssistantKnowledge Knowledge, string Prompt)> BuildingAiSpeechAssistantKnowledgeBaseAsync(string from, string to, int? assistantId, CancellationToken cancellationToken)
+    private async Task<(Domain.AISpeechAssistant.AiSpeechAssistant assistant, AiSpeechAssistantKnowledge knowledge, string finalPrompt)> BuildingAiSpeechAssistantKnowledgeBaseAsync(string from, string to, int? assistantId, CancellationToken cancellationToken)
     {
         var (assistant, knowledge, userProfile) = await _aiSpeechAssistantDataProvider
             .GetAiSpeechAssistantInfoByNumbersAsync(from, to, assistantId, cancellationToken).ConfigureAwait(false);
