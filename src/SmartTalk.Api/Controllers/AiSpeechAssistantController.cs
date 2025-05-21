@@ -246,7 +246,7 @@ public class AiSpeechAssistantController : ControllerBase
     }
     
     [AllowAnonymous]
-    [Route("realtime/connect/test"), HttpPost]
+    [Route("realtime/connect/test")]
     public async Task<IActionResult> RealtimeConnectAsync()
     {
         var assistant = new AiSpeechAssistant
