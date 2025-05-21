@@ -15,6 +15,11 @@ public class OpenAiRealtimeAiWssClient : IRealtimeAiWssClient
     private string _connectionId;
     private IWebsocketClient _websocketClient;
 
+    public OpenAiRealtimeAiWssClient(IWebsocketClient websocketClient)
+    {
+        _websocketClient = websocketClient;
+    }
+
     public Uri EndpointUri { get; private set; }
     public AiSpeechAssistantProvider Provider => AiSpeechAssistantProvider.OpenAi;
     public WebSocketState CurrentState => _websocketClient?.IsRunning == true ? _websocketClient.NativeClient?.State ?? WebSocketState.None : WebSocketState.Closed;
