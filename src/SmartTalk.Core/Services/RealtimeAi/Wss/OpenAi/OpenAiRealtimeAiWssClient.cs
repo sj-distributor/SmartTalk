@@ -15,9 +15,9 @@ public class OpenAiRealtimeAiWssClient : IRealtimeAiWssClient
     private string _connectionId;
     private IWebsocketClient _websocketClient;
 
-    public OpenAiRealtimeAiWssClient(IWebsocketClient websocketClient)
+    public OpenAiRealtimeAiWssClient()
     {
-        _websocketClient = websocketClient;
+        _websocketClient = null;
     }
 
     public Uri EndpointUri { get; private set; }
@@ -34,6 +34,7 @@ public class OpenAiRealtimeAiWssClient : IRealtimeAiWssClient
         _connectionId = Guid.NewGuid().ToString("N");
         
         await CleanUpCurrentConnectionAsync("Preparing for new connection.");
+        
         _websocketClient = GetClient(customHeaders).WithReconnect(endpointUri.ToString());
 
         RegisterWebsocketEvents();
