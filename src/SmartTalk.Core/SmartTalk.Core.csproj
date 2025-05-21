@@ -49,6 +49,7 @@
         <PackageReference Include="Smarties.Messages" Version="3.86.1" />
         <PackageReference Include="System.Net.Http" Version="4.3.4" />
         <PackageReference Include="Twilio.AspNet.Core" Version="8.1.1" />
+        <PackageReference Include="Websocket.Client" Version="5.1.2" />
         <PackageReference Include="WebSocketSharp-netstandard" Version="1.0.1" />
     </ItemGroup>
 
@@ -60,6 +61,10 @@
         <Content Include="DbUpFile\*\*.sql">
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </Content>
+    </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="Services\RealtimeAi\Wss\Google\" />
     </ItemGroup>
     
 </Project>

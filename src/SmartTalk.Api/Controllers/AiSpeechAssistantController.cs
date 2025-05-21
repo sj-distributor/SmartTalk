@@ -4,7 +4,10 @@ using Mediator.Net;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
+using SmartTalk.Core.Domain.AISpeechAssistant;
+using SmartTalk.Core.Services.RealtimeAi.Services;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
+using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Requests.AiSpeechAssistant;
 
 namespace SmartTalk.Api.Controllers;
@@ -16,11 +19,13 @@ public class AiSpeechAssistantController : ControllerBase
 {
     private readonly IMediator _mediator;
     private readonly IConfiguration _configuration;
+    private readonly IRealtimeAiService _realtimeAiService;
 
-    public AiSpeechAssistantController(IMediator mediator, IConfiguration configuration)
+    public AiSpeechAssistantController(IMediator mediator, IConfiguration configuration, IRealtimeAiService realtimeAiService)
     {
         _mediator = mediator;
         _configuration = configuration;
+        _realtimeAiService = realtimeAiService;
     }
 
     [AllowAnonymous]
@@ -238,5 +243,26 @@ public class AiSpeechAssistantController : ControllerBase
         }
         
         return Ok(clientWebSocket);
+    }
+    
+    [AllowAnonymous]
+    [Route("realtime/connect/test"), HttpPost]
+    public async Task<IActionResult> RealtimeConnectAsync()
+    {
+        var assistant = new AiSpeechAssistant
+        {
+            Id = 1,
+            Name = "test assistant",
+            ModelUrl = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17",
+            ModelProvider = AiSpeechAssistantProvider.OpenAi,
+            ModelVoice = "alloy"
+        };
+        
+        if (HttpContext.WebSockets.IsWebSocketRequest)
+        {
+            await _realtimeAiService.RealtimeAiConnectAsync(await HttpContext.WebSockets.AcceptWebSocketAsync(), assistant, "You are a friendly assistant", CancellationToken.None).ConfigureAwait(false);
+        }
+        
+        return Ok();
     }
 }
