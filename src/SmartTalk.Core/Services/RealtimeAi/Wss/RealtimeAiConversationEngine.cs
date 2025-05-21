@@ -77,7 +77,7 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
             var initialPayload = await _aiAdapter.GetInitialSessionPayloadAsync(_currentAssistantProfile, initialUserPrompt, _sessionId, _sessionCts.Token);
             var initialMessageJson = JsonSerializer.Serialize(initialPayload, new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull });
             
-            await _realtimeAiClient.SendMessageAsync(initialMessageJson, _sessionCts.Token);
+            // await _realtimeAiClient.SendMessageAsync(initialMessageJson, _sessionCts.Token);
             
             Log.Information("AiConversationEngine: 已发送初始会话消息。会话 ID: {SessionId}", _sessionId); // AiConversationEngine: Initial session message sent. Session ID: {SessionId}
         }
