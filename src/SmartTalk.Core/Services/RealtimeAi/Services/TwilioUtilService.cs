@@ -173,7 +173,7 @@ public class TwilioUtilUtilService : ITwilioUtilService
                 audioBytesForTwilio = await _codecAdapter.ConvertAsync(
                     aiAudioBytes,
                     RealtimeAiAudioCodec.PCM16,
-                    8000,
+                    24000,
                     TwilioOutputCodec,
                     TwilioOutputSampleRate,
                     CancellationToken.None); // 使用合适的 CancellationToken (Use appropriate CancellationToken)
