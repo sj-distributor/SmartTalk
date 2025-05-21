@@ -42,10 +42,10 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
             session = new
             {
                 turn_detection = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection),
-                input_audio_format = "g711_ulaw",
-                output_audio_format = "g711_ulaw",
+                input_audio_format = "pcm16",
+                output_audio_format = "pcm16",
                 voice = string.IsNullOrEmpty(assistantProfile.ModelVoice) ? "alloy" : assistantProfile.ModelVoice,
-                instructions = knowledge?.Prompt ?? string.Empty,
+                instructions = knowledge?.Prompt ?? initialUserPrompt,
                 modalities = new[] { "text", "audio" },
                 temperature = 0.8,
                 input_audio_transcription = new { model = "whisper-1" },

@@ -120,7 +120,7 @@ public class RealtimeAiService : IRealtimeAiService
     {
         if (aiAudioData == null || string.IsNullOrEmpty(aiAudioData.Base64Payload)) return;
 
-        Log.Information("Realtime output 准备发送。");
+        Log.Information("Realtime output: {@Output} 准备发送。", aiAudioData);
         
         var audioDelta = new
         {
