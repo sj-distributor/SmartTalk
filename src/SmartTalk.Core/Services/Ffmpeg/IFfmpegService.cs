@@ -1,6 +1,5 @@
 using Serilog;
 using System.Diagnostics;
-using System.Text;
 using SmartTalk.Core.Ioc;
 using System.Text.RegularExpressions;
 using SmartTalk.Core.Services.Http;
@@ -25,8 +24,6 @@ public interface IFfmpegService: IScopedDependency
     Task<byte[]> ConvertFileFormatAsync(byte[] file, TranscriptionFileType fileType, CancellationToken cancellationToken);
     
     Task<List<byte[]>> SpiltAudioAsync(byte[] audioBytes, double startTime, double endTime, CancellationToken cancellationToken);
-
-    Task<byte[]> ConvertAsync(byte[] inputAudioBytes, string inputCodec, int inputSampleRate, string outputCodec, int outputSampleRate, CancellationToken cancellationToken);
 }
 
 public class FfmpegService : IFfmpegService
@@ -431,72 +428,5 @@ public class FfmpegService : IFfmpegService
         }
 
         return audioDataList;
-    }
-     
-     public async Task<byte[]> ConvertAsync(byte[] inputAudioBytes, string inputCodec, int inputSampleRate, string outputCodec, int outputSampleRate, CancellationToken cancellationToken)
-     {
-        if (inputCodec == outputCodec && inputSampleRate == outputSampleRate) return inputAudioBytes;
-        
-        var arguments = $"-f {inputCodec} -ar {inputSampleRate} -ac 1 -i pipe:0 " +
-                        $"-f {outputCodec} -ar {outputSampleRate} -ac 1 -loglevel error pipe:1";
-
-        Log.Information("Ffmpeg convert arguments: " + arguments);
-        
-        var processStartInfo = new ProcessStartInfo
-        {
-            FileName = "ffmpeg",
-            Arguments = arguments,
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-
-        using var process = new Process();
-        process.StartInfo = processStartInfo;
-        using var outputMs = new MemoryStream();
-        var errorOutput = new StringBuilder();
-
-        try
-        {
-            process.Start();
-            
-            var inputStream = process.StandardInput.BaseStream;
-            await inputStream.WriteAsync(inputAudioBytes, cancellationToken);
-            await inputStream.FlushAsync(cancellationToken);
-            process.StandardInput.Close();
-            
-            var outputTask = process.StandardOutput.BaseStream.CopyToAsync(outputMs, cancellationToken);
-            var errorTask = ReadStreamAsync(process.StandardError, errorOutput, cancellationToken);
-            
-            await Task.WhenAll(outputTask, errorTask);
-
-            if (process.ExitCode != 0)
-            {
-                Log.Error("FFmpeg 执行失败。退出代码: {ExitCode}。错误输出: {ErrorOutput}", process.ExitCode, errorOutput.ToString());
-                throw new InvalidOperationException($"FFmpeg 执行失败 (退出代码: {process.ExitCode}): {errorOutput}");
-            }
-
-            Log.Debug("FFmpegAudioCodecAdapter: FFmpeg 转换成功，输入 {InputLength} 字节，输出 {OutputLength} 字节。", inputAudioBytes.Length, outputMs.Length);
-            return outputMs.ToArray();
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "FFmpegAudioCodecAdapter: 执行 FFmpeg 时发生错误。错误输出: {ErrorOutput}", errorOutput.ToString());
-             try { if (!process.HasExited) process.Kill(); } catch { /* Ignore */ }
-            throw new InvalidOperationException($"FFmpeg 执行时出错: {ex.Message}. FFmpeg 错误: {errorOutput}", ex);
-        }
-     }
-     
-    private async Task ReadStreamAsync(StreamReader reader, StringBuilder output, CancellationToken cancellationToken)
-    {
-        var buffer = new char[1024];
-        int charsRead;
-        while ((charsRead = await reader.ReadAsync(buffer, 0, buffer.Length/*, cancellationToken*/)) > 0) // ReadAsync with CancellationToken might not be available on StreamReader directly depending on .NET version
-        {
-             cancellationToken.ThrowIfCancellationRequested();
-             output.Append(buffer, 0, charsRead);
-        }
     }
 }
