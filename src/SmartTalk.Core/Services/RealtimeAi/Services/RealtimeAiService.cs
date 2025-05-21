@@ -8,6 +8,7 @@ using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Core.Services.RealtimeAi.Wss;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Core.Services.RealtimeAi.Adapters;
+using SmartTalk.Messages.Enums.RealtimeAi;
 using JsonException = System.Text.Json.JsonException;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 
@@ -34,6 +35,9 @@ public class RealtimeAiService : IRealtimeAiService
         _realtimeAiSwitcher = realtimeAiSwitcher;
         _audioCodecAdapter = audioCodecAdapter;
         _conversationEngine = conversationEngine;
+        
+        _conversationEngine.SessionStatusChangedAsync += OnAiSessionStatusChangedAsync;
+        _conversationEngine.AiAudioOutputReadyAsync += OnAiAudioOutputReadyAsync;
 
         _webSocket = null;
         _currentAssistant = new Domain.AISpeechAssistant.AiSpeechAssistant();
@@ -134,5 +138,19 @@ public class RealtimeAiService : IRealtimeAiService
         };
 
         await _webSocket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(audioDelta))), WebSocketMessageType.Text, true, CancellationToken.None);
+    }
+    
+    private Task OnAiSessionStatusChangedAsync(RealtimeAiWssEventType type, object data)
+    {
+        // ... (同前) ...
+        if (type == RealtimeAiWssEventType.SessionInitialized)
+        {
+            Log.Information("TwilioHandler: AI 会话已成功初始化，可以开始双向通信。"); // TwilioHandler: AI session successfully initialized, bidirectional communication can begin.
+        }
+        else if (type == RealtimeAiWssEventType.SessionUpdateFailed)
+        {
+            Log.Error("TwilioHandler: AI 会话初始化或更新失败: {@EventData}", data); // TwilioHandler: AI session initialization or update failed: {@EventData}
+        }
+        return Task.CompletedTask;
     }
 }
