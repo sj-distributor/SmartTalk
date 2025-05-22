@@ -51,9 +51,11 @@ public class RealtimeAiService : IRealtimeAiService
         
         BuildConversationEngine(assistant.ModelProvider);
         
-        await _conversationEngine.StartSessionAsync(assistant, initialPrompt, cancellationToken).ConfigureAwait(false);
+        var server = _conversationEngine.StartSessionAsync(assistant, initialPrompt, cancellationToken);
         
-        // await ReceiveFromWebSocketClientAsync(cancellationToken).ConfigureAwait(false);
+        var client = ReceiveFromWebSocketClientAsync(cancellationToken);
+        
+        await Task.WhenAll(server, client);
     }
 
     private void BuildConversationEngine(AiSpeechAssistantProvider provider)
