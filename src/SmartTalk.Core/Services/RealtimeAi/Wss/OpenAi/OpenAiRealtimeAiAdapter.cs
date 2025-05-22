@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Newtonsoft.Json;
 using Serilog;
+using SmartTalk.Core.Extensions;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Messages.Dto.RealtimeAi;
@@ -31,7 +32,9 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
         };
     }
 
-    public async Task<object> GetInitialSessionPayloadAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistantProfile, string initialUserPrompt, string sessionId, CancellationToken cancellationToken)
+    public async Task<object> GetInitialSessionPayloadAsync(
+        Domain.AISpeechAssistant.AiSpeechAssistant assistantProfile, string initialUserPrompt, string sessionId,
+        RealtimeAiAudioCodec inputFormat, RealtimeAiAudioCodec outputFormat, CancellationToken cancellationToken)
     {
         var configs = await InitialSessionConfigAsync(assistantProfile, cancellationToken).ConfigureAwait(false);
         var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(assistantProfile.Id, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -42,10 +45,10 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
             session = new
             {
                 turn_detection = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection),
-                input_audio_format = "g711_ulaw",
-                output_audio_format = "g711_ulaw",
+                input_audio_format = inputFormat.GetDescription(),
+                output_audio_format = outputFormat.GetDescription(),
                 voice = string.IsNullOrEmpty(assistantProfile.ModelVoice) ? "alloy" : assistantProfile.ModelVoice,
-                instructions = knowledge?.Prompt ?? string.Empty,
+                instructions = knowledge?.Prompt ?? initialUserPrompt,
                 modalities = new[] { "text", "audio" },
                 temperature = 0.8,
                 input_audio_transcription = new { model = "whisper-1" },
@@ -59,13 +62,35 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
         return sessionPayload;
     }
 
+    public string BuildGreetingMessage(string greeting)
+    {
+        var message = new
+        {
+            type = "conversation.item.create",
+            item = new
+            {
+                type = "message",
+                role = "user",
+                content = new[]
+                {
+                    new
+                    {
+                        type = "input_text",
+                        text = $"Greet the user with: '{greeting}'"
+                    }
+                }
+            }
+        };
+            
+        return JsonSerializer.Serialize(message);
+    }
+
     public string BuildAudioAppendMessage(RealtimeAiWssAudioData audioData)
     {
         var message = new
         {
             type = "input_audio_buffer.append",
-            audio = audioData.Base64Payload,
-            item_id = audioData.ItemId ?? Guid.NewGuid().ToString()
+            audio = audioData.Base64Payload
         };
         var json = JsonSerializer.Serialize(message);
         return json;
@@ -114,9 +139,7 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
                 Log.Warning("OpenAIAdapter: 消息中缺少 'type' 字段: {RawMessage}", rawMessage);
                 return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.Unknown, RawJson = rawMessage };
             }
-
-            // 这是一个非常简化的映射，实际的 OpenAI 事件会更复杂
-            // This is a very simplified mapping, actual OpenAI events will be more complex
+            
             switch (eventTypeString)
             {
                 case "session.updated":
@@ -132,9 +155,21 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
                 case "input_audio_buffer.speech_started":
                     return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.SpeechDetected, RawJson = rawMessage, ItemId = itemId };
                 
+                case "conversation.item.input_audio_transcription.delta":
+                    var userTranscriptDelta = root.TryGetProperty("delta", out var delta) ? delta.GetString() : null;
+                    return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.InputAudioTranscriptionPartial, Data = new RealtimeAiWssTranscriptionData { Transcript = userTranscriptDelta, Speaker = AiSpeechAssistantSpeaker.User }, RawJson = rawMessage };
+                
+                case "conversation.item.input_audio_transcription.completed":
+                    var userTranscript = root.TryGetProperty("transcript", out var transcript) ? transcript.GetString() : null;
+                    return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.InputAudioTranscriptionCompleted, Data = new RealtimeAiWssTranscriptionData { Transcript = userTranscript, Speaker = AiSpeechAssistantSpeaker.User }, RawJson = rawMessage };
+                
+                case "response.audio_transcript.delta":
+                    var aiTranscriptDelta = root.TryGetProperty("delta", out var aiDelta) ? aiDelta.GetString() : null;
+                    return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.OutputAudioTranscriptionPartial, Data = new RealtimeAiWssTranscriptionData { Transcript = aiTranscriptDelta, Speaker = AiSpeechAssistantSpeaker.Ai }, RawJson = rawMessage };
+                
                 case "response.audio_transcript.done":
-                    var aiTranscript = root.TryGetProperty("transcript", out var atProp) ? atProp.GetString() : null;
-                    return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.TranscriptionCompleted, Data = new RealtimeAiWssTranscriptionData { Transcript = aiTranscript, Speaker = AiSpeechAssistantSpeaker.Ai }, RawJson = rawMessage };
+                    var aiTranscription = root.TryGetProperty("transcript", out var aiTranscript) ? aiTranscript.GetString() : null;
+                    return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.OutputAudioTranscriptionCompleted, Data = new RealtimeAiWssTranscriptionData { Transcript = aiTranscription, Speaker = AiSpeechAssistantSpeaker.Ai }, RawJson = rawMessage };
 
                 case "response.done":
                      return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.ResponseTurnCompleted, RawJson = rawMessage, ItemId = itemId };
@@ -150,7 +185,7 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
                     return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.Error, Data = new  { Message = errorMessage, IsCritical = true }, RawJson = rawMessage, ItemId = itemId };
                 
                 default:
-                    Log.Warning("OpenAIAdapter: 未知或未处理的 OpenAI 事件类型 '{EventTypeString}': {RawMessage}", eventTypeString, rawMessage);
+                    Log.Information("OpenAIAdapter: 未知或未处理的 OpenAI 事件类型 '{EventTypeString}': {RawMessage}", eventTypeString, rawMessage);
                     return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.Unknown, Data = eventTypeString, RawJson = rawMessage, ItemId = itemId };
             }
         }

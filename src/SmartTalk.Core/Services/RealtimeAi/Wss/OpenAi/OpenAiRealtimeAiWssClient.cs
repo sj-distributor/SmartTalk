@@ -9,9 +9,6 @@ public class OpenAiRealtimeAiWssClient : IRealtimeAiWssClient
 {
     private Task _receiveLoopTask;
     private ClientWebSocket _webSocket;
-    private CancellationTokenSource _receiveLoopCts;
-    
-    private readonly object _lock = new();
 
     public Uri EndpointUri { get; private set; }
     public AiSpeechAssistantProvider Provider => AiSpeechAssistantProvider.OpenAi;
@@ -21,20 +18,13 @@ public class OpenAiRealtimeAiWssClient : IRealtimeAiWssClient
     public event Func<Exception, Task> ErrorOccurredAsync;
     public event Func<WebSocketState, string, Task> StateChangedAsync;
 
+    public OpenAiRealtimeAiWssClient()
+    {
+        _webSocket = new ClientWebSocket();
+    }
+
     public async Task ConnectAsync(Uri endpointUri, Dictionary<string, string> customHeaders, CancellationToken cancellationToken)
     {
-        lock (_lock)
-        {
-            if (_webSocket != null && _webSocket.State != WebSocketState.Closed && _webSocket.State != WebSocketState.Aborted && _webSocket.State != WebSocketState.None)
-            {
-                Log.Warning("OpenAi Realtime wss Client: Attempting to connect while already in state {State}. Consider disconnecting first.", _webSocket.State);
-            }
-        }
-
-        // Dispose previous CTS and WebSocket if any, to ensure clean state for new connection
-        await CleanUpCurrentConnectionAsync("Preparing for new connection.");
-
-        _webSocket = new ClientWebSocket();
         EndpointUri = endpointUri;
 
         if (customHeaders != null)
@@ -44,18 +34,15 @@ public class OpenAiRealtimeAiWssClient : IRealtimeAiWssClient
                 _webSocket.Options.SetRequestHeader(header.Key, header.Value);
             }
         }
-        // Example: _webSocket.Options.KeepAliveInterval = TimeSpan.FromSeconds(60);
-
-        _receiveLoopCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
         try
         {
             Log.Information("OpenAi Realtime Wss Client: Connecting to {EndpointUri}...", EndpointUri);
-            await _webSocket.ConnectAsync(EndpointUri, _receiveLoopCts.Token);
+            await _webSocket.ConnectAsync(EndpointUri, cancellationToken).ConfigureAwait(false);
             Log.Information("OpenAi Realtime Wss Client: Successfully connected to {EndpointUri}. State: {State}", EndpointUri, _webSocket.State);
             await (StateChangedAsync?.Invoke(_webSocket.State, "Connected") ?? Task.CompletedTask);
 
-            _receiveLoopTask = Task.Run(() => ReceiveMessagesAsync(_receiveLoopCts.Token), cancellationToken);
+            _receiveLoopTask = Task.Run(() => ReceiveMessagesAsync(cancellationToken), cancellationToken);
         }
         catch (Exception ex)
         {
@@ -63,7 +50,7 @@ public class OpenAiRealtimeAiWssClient : IRealtimeAiWssClient
             await (ErrorOccurredAsync?.Invoke(ex) ?? Task.CompletedTask);
             await (StateChangedAsync?.Invoke(_webSocket?.State ?? WebSocketState.Closed, $"OpenAi Realtime Wss Connection failed: {ex.Message}") ?? Task.CompletedTask);
             await CleanUpCurrentConnectionAsync("OpenAi Realtime Wss Connection failed."); // Ensure resources are cleaned up on failure
-            throw; // Re-throw to signal connection failure to caller
+            throw;
         }
     }
 
@@ -72,7 +59,7 @@ public class OpenAiRealtimeAiWssClient : IRealtimeAiWssClient
         var buffer = new ArraySegment<byte>(new byte[8192]); // 8KB buffer
         try
         {
-            while (_webSocket.State == WebSocketState.Open && !token.IsCancellationRequested)
+            while (_webSocket.State == WebSocketState.Open)
             {
                 WebSocketReceiveResult result;
                 using var ms = new MemoryStream();
@@ -95,7 +82,7 @@ public class OpenAiRealtimeAiWssClient : IRealtimeAiWssClient
 
                 ms.Seek(0, SeekOrigin.Begin);
                 var message = Encoding.UTF8.GetString(ms.ToArray());
-                // Log.Verbose("RealtimeClient: Message received from {EndpointUri}: {Message}", EndpointUri, message);
+                Log.Information("RealtimeClient: Message received from {EndpointUri}: {Message}", EndpointUri, message);
                 await (MessageReceivedAsync?.Invoke(message) ?? Task.CompletedTask);
             }
         }
@@ -152,8 +139,6 @@ public class OpenAiRealtimeAiWssClient : IRealtimeAiWssClient
         }
         Log.Information("RealtimeClient: Disconnecting from {EndpointUri}. Reason: {Reason}", EndpointUri, statusDescription);
 
-        _receiveLoopCts?.Cancel(); // Signal the receive loop to terminate
-
         if (_webSocket.State is WebSocketState.Open or WebSocketState.CloseReceived)
         {
             try
@@ -202,8 +187,6 @@ public class OpenAiRealtimeAiWssClient : IRealtimeAiWssClient
     {
         Log.Debug("RealtimeClient: Cleaning up current connection. Reason: {Reason}", reason);
         
-        if (_receiveLoopCts is { IsCancellationRequested: false }) await _receiveLoopCts.CancelAsync();
-        
         if (_receiveLoopTask is { IsCompleted: false })
         {
             Log.Debug("RealtimeClient: Waiting for previous receive loop to complete during cleanup.");
@@ -220,12 +203,7 @@ public class OpenAiRealtimeAiWssClient : IRealtimeAiWssClient
             _webSocket.Dispose();
         }
         _webSocket = null; // Ensure it's null so a new one is created on next ConnectAsync
-
-        if (_receiveLoopCts != null)
-        {
-            _receiveLoopCts.Dispose();
-            _receiveLoopCts = null;
-        }
+        
         Log.Debug("RealtimeClient: Cleanup complete.");
     }
 
