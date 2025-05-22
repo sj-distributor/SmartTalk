@@ -96,7 +96,7 @@ public class OpenAiRealtimeAiWssClient : IRealtimeAiWssClient
 
                 ms.Seek(0, SeekOrigin.Begin);
                 var message = Encoding.UTF8.GetString(ms.ToArray());
-                // Log.Verbose("RealtimeClient: Message received from {EndpointUri}: {Message}", EndpointUri, message);
+                Log.Information("RealtimeClient: Message received from {EndpointUri}: {Message}", EndpointUri, message);
                 await (MessageReceivedAsync?.Invoke(message) ?? Task.CompletedTask);
             }
         }
