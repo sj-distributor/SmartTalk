@@ -38,6 +38,7 @@ public class OpenAiRealtimeAiWssClient : IRealtimeAiWssClient
         try
         {
             Log.Information("OpenAi Realtime Wss Client: Connecting to {EndpointUri}...", EndpointUri);
+            await _webSocket.ConnectAsync(EndpointUri, cancellationToken).ConfigureAwait(false);
             Log.Information("OpenAi Realtime Wss Client: Successfully connected to {EndpointUri}. State: {State}", EndpointUri, _webSocket.State);
             await (StateChangedAsync?.Invoke(_webSocket.State, "Connected") ?? Task.CompletedTask);
 
@@ -58,7 +59,7 @@ public class OpenAiRealtimeAiWssClient : IRealtimeAiWssClient
         var buffer = new ArraySegment<byte>(new byte[8192]); // 8KB buffer
         try
         {
-            while (_webSocket.State == WebSocketState.Open && !token.IsCancellationRequested)
+            while (_webSocket.State == WebSocketState.Open)
             {
                 WebSocketReceiveResult result;
                 using var ms = new MemoryStream();
