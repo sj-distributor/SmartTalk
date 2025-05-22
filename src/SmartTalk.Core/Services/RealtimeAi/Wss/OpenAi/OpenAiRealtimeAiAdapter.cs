@@ -64,8 +64,7 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
         var message = new
         {
             type = "input_audio_buffer.append",
-            audio = audioData.Base64Payload,
-            item_id = audioData.ItemId ?? Guid.NewGuid().ToString()
+            audio = audioData.Base64Payload
         };
         var json = JsonSerializer.Serialize(message);
         return json;
