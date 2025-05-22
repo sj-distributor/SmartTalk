@@ -84,7 +84,6 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
             
         var json = JsonSerializer.Serialize(message);
         return json;
-        // await _realtimeAiClient.SendMessageAsync(JsonSerializer.Serialize(initialConversationItem, new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull }), _sessionCts.Token);
     }
 
     public string BuildAudioAppendMessage(RealtimeAiWssAudioData audioData)

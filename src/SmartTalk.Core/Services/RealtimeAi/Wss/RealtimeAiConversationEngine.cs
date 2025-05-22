@@ -85,9 +85,9 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
 
             if (!string.IsNullOrEmpty(assistantProfile?.Knowledge?.Greetings))
             {
-                Log.Information("AiConversationEngine: 发送初始会话问候消息。会话 ID: {SessionId}", _sessionId); // AiConversationEngine: Initial session message sent. Session ID: {SessionId}
+                Log.Information("AiConversationEngine: 发送初始会话问候消息。会话 ID: {SessionId}", _sessionId);
                 var greetingJson = JsonSerializer.Serialize(_aiAdapter.BuildGreetingMessage(assistantProfile.Knowledge.Greetings), new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull });
-                await _realtimeAiClient.SendMessageAsync(greetingJson, _sessionCts.Token);
+                await _realtimeAiClient.SendMessageAsync(_aiAdapter.BuildGreetingMessage(assistantProfile.Knowledge.Greetings), _sessionCts.Token);
             }
             
             Log.Information("AiConversationEngine: 已发送初始会话消息。会话 ID: {SessionId}", _sessionId); // AiConversationEngine: Initial session message sent. Session ID: {SessionId}
