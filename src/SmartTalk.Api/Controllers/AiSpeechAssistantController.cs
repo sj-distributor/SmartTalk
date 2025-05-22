@@ -247,7 +247,7 @@ public class AiSpeechAssistantController : ControllerBase
     
     [AllowAnonymous]
     [Route("realtime/connect/test"), HttpGet]
-    public async Task<IActionResult> RealtimeConnectAsync()
+    public async Task RealtimeConnectAsync()
     {
         var assistant = new AiSpeechAssistant
         {
@@ -261,8 +261,9 @@ public class AiSpeechAssistantController : ControllerBase
         if (HttpContext.WebSockets.IsWebSocketRequest)
         {
             await _realtimeAiService.RealtimeAiConnectAsync(await HttpContext.WebSockets.AcceptWebSocketAsync(), assistant, "You are a friendly assistant", CancellationToken.None).ConfigureAwait(false);
+        }else
+        {
+            HttpContext.Response.StatusCode = 400;
         }
-        
-        return Ok();
     }
 }
