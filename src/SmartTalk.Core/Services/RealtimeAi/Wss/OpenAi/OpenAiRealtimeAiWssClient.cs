@@ -12,7 +12,7 @@ public class OpenAiRealtimeAiWssClient : IRealtimeAiWssClient
 
     public Uri EndpointUri { get; private set; }
     public AiSpeechAssistantProvider Provider => AiSpeechAssistantProvider.OpenAi;
-    public WebSocketState CurrentState => _webSocket.State;
+    public WebSocketState CurrentState => _webSocket?.State ?? WebSocketState.None;
 
     public event Func<string, Task> MessageReceivedAsync;
     public event Func<Exception, Task> ErrorOccurredAsync;
@@ -38,7 +38,7 @@ public class OpenAiRealtimeAiWssClient : IRealtimeAiWssClient
         try
         {
             Log.Information("OpenAi Realtime Wss Client: Connecting to {EndpointUri}...", EndpointUri);
-            await _webSocket.ConnectAsync(EndpointUri, cancellationToken);
+            await _webSocket.ConnectAsync(EndpointUri, cancellationToken).ConfigureAwait(false);
             Log.Information("OpenAi Realtime Wss Client: Successfully connected to {EndpointUri}. State: {State}", EndpointUri, _webSocket.State);
             await (StateChangedAsync?.Invoke(_webSocket.State, "Connected") ?? Task.CompletedTask);
 
@@ -202,7 +202,7 @@ public class OpenAiRealtimeAiWssClient : IRealtimeAiWssClient
             }
             _webSocket.Dispose();
         }
-        _webSocket = new ClientWebSocket(); // Ensure it's null so a new one is created on next ConnectAsync
+        _webSocket = null; // Ensure it's null so a new one is created on next ConnectAsync
         
         Log.Debug("RealtimeClient: Cleanup complete.");
     }
