@@ -13,7 +13,9 @@ namespace SmartTalk.Core.Services.RealtimeAi.Services;
 
 public interface ITwilioUtilService : IScopedDependency
 {
-    Task OnCallStartedAsync(ClientWebSocket webSocket, string callSid, Domain.AISpeechAssistant.AiSpeechAssistant assistantProfile, string initialPrompt);
+    Task OnCallStartedAsync(
+        ClientWebSocket webSocket, string callSid, Domain.AISpeechAssistant.AiSpeechAssistant assistantProfile,
+        string initialPrompt, RealtimeAiAudioCodec inputFormat, RealtimeAiAudioCodec outputFormat);
 }
 
 public class TwilioUtilUtilService : ITwilioUtilService
@@ -46,7 +48,9 @@ public class TwilioUtilUtilService : ITwilioUtilService
         // _aiEngine.AiRawMessageReceivedAsync += OnAiRawMessageReceivedAsync;
     }
     
-    public async Task OnCallStartedAsync(ClientWebSocket webSocket, string callSid, Domain.AISpeechAssistant.AiSpeechAssistant assistantProfile, string initialPrompt)
+    public async Task OnCallStartedAsync(
+        ClientWebSocket webSocket, string callSid, Domain.AISpeechAssistant.AiSpeechAssistant assistantProfile, 
+        string initialPrompt, RealtimeAiAudioCodec inputFormat, RealtimeAiAudioCodec outputFormat)
     {
         // ... (同前) ...
         _webSocket = webSocket;
@@ -55,7 +59,7 @@ public class TwilioUtilUtilService : ITwilioUtilService
         Log.Information("TwilioHandler: 电话呼叫开始 CallSid: {CallSid}。准备启动 AI 会话。", callSid); // TwilioHandler: Call started CallSid: {CallSid}. Preparing to start AI session.
         try
         {
-            await _aiEngine.StartSessionAsync(assistantProfile, initialPrompt, CancellationToken.None); // 传入合适的 CancellationToken (Pass appropriate CancellationToken)
+            await _aiEngine.StartSessionAsync(assistantProfile, initialPrompt, inputFormat, outputFormat, CancellationToken.None); // 传入合适的 CancellationToken (Pass appropriate CancellationToken)
         }
         catch (Exception ex)
         {

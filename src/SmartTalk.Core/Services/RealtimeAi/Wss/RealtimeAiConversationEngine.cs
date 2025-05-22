@@ -38,7 +38,8 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
         _realtimeAiClient.ErrorOccurredAsync += OnClientErrorOccurredAsync;
     }
 
-    public async Task StartSessionAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistantProfile, string initialUserPrompt, CancellationToken cancellationToken)
+    public async Task StartSessionAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistantProfile,
+        string initialUserPrompt, RealtimeAiAudioCodec inputFormat, RealtimeAiAudioCodec outputFormat, CancellationToken cancellationToken)
     {
         // ... (启动逻辑同前) ...
         // ... (Startup logic same as before) ...
@@ -74,10 +75,17 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
                 throw new InvalidOperationException("无法连接到底层 Realtime AI Client。"); // Cannot connect to underlying Realtime AI Client.
             }
 
-            var initialPayload = await _aiAdapter.GetInitialSessionPayloadAsync(_currentAssistantProfile, initialUserPrompt, _sessionId, _sessionCts.Token);
+            var initialPayload = await _aiAdapter.GetInitialSessionPayloadAsync(_currentAssistantProfile, initialUserPrompt, _sessionId, inputFormat, outputFormat, _sessionCts.Token);
             var initialMessageJson = JsonSerializer.Serialize(initialPayload, new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull });
             
             await _realtimeAiClient.SendMessageAsync(initialMessageJson, _sessionCts.Token);
+
+            if (!string.IsNullOrEmpty(assistantProfile?.Knowledge?.Greetings))
+            {
+                Log.Information("AiConversationEngine: 发送初始会话问候消息。会话 ID: {SessionId}", _sessionId); // AiConversationEngine: Initial session message sent. Session ID: {SessionId}
+                var greetingJson = JsonSerializer.Serialize(_aiAdapter.BuildGreetingMessage(assistantProfile.Knowledge.Greetings), new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull });
+                await _realtimeAiClient.SendMessageAsync(greetingJson, _sessionCts.Token);
+            }
             
             Log.Information("AiConversationEngine: 已发送初始会话消息。会话 ID: {SessionId}", _sessionId); // AiConversationEngine: Initial session message sent. Session ID: {SessionId}
         }
