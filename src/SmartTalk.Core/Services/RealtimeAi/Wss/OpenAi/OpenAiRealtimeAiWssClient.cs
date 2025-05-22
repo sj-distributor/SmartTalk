@@ -91,6 +91,8 @@ public class OpenAiRealtimeAiWssClient : IRealtimeAiWssClient
             {
                 var message = msg.Text ?? (msg.Binary != null ? Encoding.UTF8.GetString(msg.Binary) : null);
 
+                Log.Information("Message received: {Message}", message);
+                
                 if (!string.IsNullOrWhiteSpace(message))
                 {
                     await (MessageReceivedAsync?.Invoke(message) ?? Task.CompletedTask);
