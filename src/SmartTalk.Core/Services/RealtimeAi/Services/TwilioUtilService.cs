@@ -39,7 +39,6 @@ public class TwilioUtilUtilService : ITwilioUtilService
         
         _aiEngine.SessionStatusChangedAsync += OnAiSessionStatusChangedAsync;
         _aiEngine.AiAudioOutputReadyAsync += OnAiAudioOutputReadyAsync;
-        _aiEngine.TranscriptionReadyAsync += OnAiTranscriptionReadyAsync;
         _aiEngine.ErrorOccurredAsync += OnAiErrorOccurredAsync;
         // _aiEngine.AiDetectedUserSpeechAsync += OnAiDetectedUserSpeechAsync;
         // _aiEngine.AiResponseInterruptedAsync += OnAiResponseInterruptedAsync;

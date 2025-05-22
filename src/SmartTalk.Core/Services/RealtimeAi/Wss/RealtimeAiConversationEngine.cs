@@ -20,7 +20,10 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
     
     public event Func<RealtimeAiWssEventType, object, Task> SessionStatusChangedAsync;
     public event Func<RealtimeAiWssAudioData, Task> AiAudioOutputReadyAsync;
-    public event Func<RealtimeAiWssTranscriptionData, Task> TranscriptionReadyAsync;
+    public event Func<RealtimeAiWssTranscriptionData, Task> InputAudioTranscriptionPartialAsync;
+    public event Func<RealtimeAiWssTranscriptionData, Task> OutputAudioTranscriptionPartialAsync;
+    public event Func<RealtimeAiWssTranscriptionData, Task> InputAudioTranscriptionCompletedAsync;
+    public event Func<RealtimeAiWssTranscriptionData, Task> OutputAudioTranscriptionCompletedyAsync;
     public event Func<RealtimeAiErrorData, Task> ErrorOccurredAsync;
     public event Func<Task> AiDetectedUserSpeechAsync;
     public event Func<string, Task> AiResponseInterruptedAsync;
@@ -127,9 +130,21 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
                      if (parsedEvent.Data is RealtimeAiWssAudioData audioData)
                          await (AiAudioOutputReadyAsync?.Invoke(audioData) ?? Task.CompletedTask);
                      break;
-                 case RealtimeAiWssEventType.TranscriptionCompleted:
-                     if (parsedEvent.Data is RealtimeAiWssTranscriptionData txData)
-                         await (TranscriptionReadyAsync?.Invoke(txData) ?? Task.CompletedTask);
+                 case RealtimeAiWssEventType.InputAudioTranscriptionPartial:
+                     if (parsedEvent.Data is RealtimeAiWssTranscriptionData inputTranscriptionPartialData)
+                         await (InputAudioTranscriptionPartialAsync?.Invoke(inputTranscriptionPartialData) ?? Task.CompletedTask);
+                     break;
+                 case RealtimeAiWssEventType.InputAudioTranscriptionCompleted:
+                     if (parsedEvent.Data is RealtimeAiWssTranscriptionData inputTranscriptionCompletedData)
+                         await (InputAudioTranscriptionCompletedAsync?.Invoke(inputTranscriptionCompletedData) ?? Task.CompletedTask);
+                     break;
+                 case RealtimeAiWssEventType.OutputAudioTranscriptionPartial:
+                     if (parsedEvent.Data is RealtimeAiWssTranscriptionData outputTranscriptionPartialData)
+                         await (InputAudioTranscriptionPartialAsync?.Invoke(outputTranscriptionPartialData) ?? Task.CompletedTask);
+                     break;
+                 case RealtimeAiWssEventType.OutputAudioTranscriptionCompleted:
+                     if (parsedEvent.Data is RealtimeAiWssTranscriptionData outputTranscriptionCompletedData)
+                         await (InputAudioTranscriptionPartialAsync?.Invoke(outputTranscriptionCompletedData) ?? Task.CompletedTask);
                      break;
                  case RealtimeAiWssEventType.SpeechDetected:
                      await (AiDetectedUserSpeechAsync?.Invoke() ?? Task.CompletedTask);

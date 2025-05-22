@@ -142,9 +142,7 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
                 Log.Warning("OpenAIAdapter: 消息中缺少 'type' 字段: {RawMessage}", rawMessage);
                 return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.Unknown, RawJson = rawMessage };
             }
-
-            // 这是一个非常简化的映射，实际的 OpenAI 事件会更复杂
-            // This is a very simplified mapping, actual OpenAI events will be more complex
+            
             switch (eventTypeString)
             {
                 case "session.updated":
@@ -160,9 +158,21 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
                 case "input_audio_buffer.speech_started":
                     return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.SpeechDetected, RawJson = rawMessage, ItemId = itemId };
                 
+                case "conversation.item.input_audio_transcription.delta":
+                    var userTranscriptDelta = root.TryGetProperty("delta", out var delta) ? delta.GetString() : null;
+                    return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.InputAudioTranscriptionPartial, Data = new RealtimeAiWssTranscriptionData { Transcript = userTranscriptDelta, Speaker = AiSpeechAssistantSpeaker.User }, RawJson = rawMessage };
+                
+                case "conversation.item.input_audio_transcription.completed":
+                    var userTranscript = root.TryGetProperty("transcript", out var transcript) ? transcript.GetString() : null;
+                    return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.InputAudioTranscriptionCompleted, Data = new RealtimeAiWssTranscriptionData { Transcript = userTranscript, Speaker = AiSpeechAssistantSpeaker.User }, RawJson = rawMessage };
+                
+                case "response.audio_transcript.delta":
+                    var aiTranscriptDelta = root.TryGetProperty("delta", out var aiDelta) ? aiDelta.GetString() : null;
+                    return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.OutputAudioTranscriptionPartial, Data = new RealtimeAiWssTranscriptionData { Transcript = aiTranscriptDelta, Speaker = AiSpeechAssistantSpeaker.Ai }, RawJson = rawMessage };
+                
                 case "response.audio_transcript.done":
-                    var aiTranscript = root.TryGetProperty("transcript", out var atProp) ? atProp.GetString() : null;
-                    return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.TranscriptionCompleted, Data = new RealtimeAiWssTranscriptionData { Transcript = aiTranscript, Speaker = AiSpeechAssistantSpeaker.Ai }, RawJson = rawMessage };
+                    var aiTranscription = root.TryGetProperty("transcript", out var aiTranscript) ? aiTranscript.GetString() : null;
+                    return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.OutputAudioTranscriptionCompleted, Data = new RealtimeAiWssTranscriptionData { Transcript = aiTranscription, Speaker = AiSpeechAssistantSpeaker.Ai }, RawJson = rawMessage };
 
                 case "response.done":
                      return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.ResponseTurnCompleted, RawJson = rawMessage, ItemId = itemId };
@@ -178,7 +188,7 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
                     return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.Error, Data = new  { Message = errorMessage, IsCritical = true }, RawJson = rawMessage, ItemId = itemId };
                 
                 default:
-                    Log.Warning("OpenAIAdapter: 未知或未处理的 OpenAI 事件类型 '{EventTypeString}': {RawMessage}", eventTypeString, rawMessage);
+                    Log.Information("OpenAIAdapter: 未知或未处理的 OpenAI 事件类型 '{EventTypeString}': {RawMessage}", eventTypeString, rawMessage);
                     return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.Unknown, Data = eventTypeString, RawJson = rawMessage, ItemId = itemId };
             }
         }

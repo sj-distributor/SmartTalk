@@ -9,8 +9,10 @@ public enum RealtimeAiWssEventType
     AudioInputAppend,       // (此类型更多是 Engine 的一个动作，不一定作为事件对外)
     SpeechDetected,         // AI 服务商检测到用户开始说话
     SpeechEnded,            // AI 服务商检测到用户结束说话 (如果支持)
-    TranscriptionPartial,   // 中间转录结果
-    TranscriptionCompleted, // 最终转录结果
+    InputAudioTranscriptionPartial,
+    OutputAudioTranscriptionPartial,
+    InputAudioTranscriptionCompleted,
+    OutputAudioTranscriptionCompleted,
     ResponseAudioDelta,     // AI 的音频响应片段
     ResponseAudioDone,      // AI 的音频响应结束
     ResponseTextDelta,      // (如果适用) AI 的文本响应片段
