@@ -99,7 +99,7 @@ public class TwilioUtilUtilService : ITwilioUtilService
                     TwilioInputCodec,
                     TwilioInputSampleRate,
                     RealtimeAiAudioCodec.PCM16,
-                    16000,
+                    8000,
                     CancellationToken.None); // 使用合适的 CancellationToken (Use appropriate CancellationToken)
             }
 
