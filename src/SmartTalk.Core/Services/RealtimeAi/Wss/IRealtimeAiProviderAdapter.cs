@@ -10,8 +10,6 @@ public interface IRealtimeAiProviderAdapter : IRealtimeAiProvider
     Task<object> GetInitialSessionPayloadAsync(
         Domain.AISpeechAssistant.AiSpeechAssistant assistantProfile, string initialUserPrompt = null, string sessionId = null,
         RealtimeAiAudioCodec inputFormat = RealtimeAiAudioCodec.PCM16, RealtimeAiAudioCodec outputFormat = RealtimeAiAudioCodec.PCM16, CancellationToken cancellationToken = default);
-
-    string BuildGreetingMessage(string greeting);
     
     string BuildAudioAppendMessage(RealtimeAiWssAudioData audioData);
     

@@ -86,8 +86,8 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
             if (!string.IsNullOrEmpty(assistantProfile?.Knowledge?.Greetings))
             {
                 Log.Information("AiConversationEngine: 发送初始会话问候消息。会话 ID: {SessionId}", _sessionId);
-                var greetingJson = JsonSerializer.Serialize(_aiAdapter.BuildGreetingMessage(assistantProfile.Knowledge.Greetings), new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull });
-                await _realtimeAiClient.SendMessageAsync(_aiAdapter.BuildGreetingMessage(assistantProfile.Knowledge.Greetings), _sessionCts.Token);
+                
+                await _realtimeAiClient.SendMessageAsync(BuildGreetingMessage(assistantProfile.Knowledge.Greetings), _sessionCts.Token);
             }
             
             Log.Information("AiConversationEngine: 已发送初始会话消息。会话 ID: {SessionId}", _sessionId); // AiConversationEngine: Initial session message sent. Session ID: {SessionId}
@@ -105,6 +105,29 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
             await OnSessionStatusChangedAsync(RealtimeAiWssEventType.SessionUpdateFailed, ex.Message);
             await CleanupSessionAsync($"启动失败: {ex.Message}"); // Startup failed:
         }
+    }
+    
+    private string BuildGreetingMessage(string greeting)
+    {
+        var message = new
+        {
+            type = "conversation.item.create",
+            item = new
+            {
+                type = "message",
+                role = "user",
+                content = new[]
+                {
+                    new
+                    {
+                        type = "input_text",
+                        text = $"Greet the user with: '{greeting}'"
+                    }
+                }
+            }
+        };
+            
+        return JsonSerializer.Serialize(message);
     }
     
     private async Task OnClientMessageReceivedAsync(string rawMessage)

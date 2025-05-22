@@ -9,12 +9,8 @@ namespace SmartTalk.Core.Services.RealtimeAi.Wss.Google;
 
 public class GoogleRealtimeAiWssClient : IRealtimeAiWssClient
 {
-    private string _connectionId;
     private Task _receiveLoopTask;
     private ClientWebSocket _webSocket;
-    private CancellationTokenSource _receiveLoopCts;
-    
-    private readonly object _lock = new();
 
     public Uri EndpointUri { get; private set; }
     public AiSpeechAssistantProvider Provider => AiSpeechAssistantProvider.Google;
@@ -24,20 +20,13 @@ public class GoogleRealtimeAiWssClient : IRealtimeAiWssClient
     public event Func<Exception, Task> ErrorOccurredAsync;
     public event Func<WebSocketState, string, Task> StateChangedAsync;
 
+    public GoogleRealtimeAiWssClient()
+    {
+        _webSocket = new ClientWebSocket();
+    }
+
     public async Task ConnectAsync(Uri endpointUri, Dictionary<string, string> customHeaders, CancellationToken cancellationToken)
     {
-        lock (_lock)
-        {
-            if (_webSocket != null && CurrentState != WebSocketState.Closed && CurrentState != WebSocketState.Aborted && CurrentState != WebSocketState.None)
-            {
-                Log.Warning("Google Realtime wss Client: Attempting to connect while already in state {State}. Consider disconnecting first.", CurrentState);
-            }
-        }
-
-        // Dispose previous CTS and WebSocket if any, to ensure clean state for new connection
-        await CleanUpCurrentConnectionAsync("Preparing for new connection.");
-
-        _webSocket = new ClientWebSocket();
         EndpointUri = endpointUri;
 
         if (customHeaders != null)
@@ -48,16 +37,14 @@ public class GoogleRealtimeAiWssClient : IRealtimeAiWssClient
             }
         }
 
-        _receiveLoopCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-
         try
         {
             Log.Information("Google Realtime Wss Client: Connecting to {EndpointUri}...", EndpointUri);
-            await _webSocket.ConnectAsync(EndpointUri, _receiveLoopCts.Token);
+            await _webSocket.ConnectAsync(EndpointUri, cancellationToken).ConfigureAwait(false);
             Log.Information("Google Realtime Wss Client: Successfully connected to {EndpointUri}. State: {State}", EndpointUri, CurrentState);
             await (StateChangedAsync?.Invoke(CurrentState, "Connected") ?? Task.CompletedTask);
 
-            _receiveLoopTask = Task.Run(() => ReceiveMessagesAsync(_receiveLoopCts.Token), cancellationToken);
+            _receiveLoopTask = Task.Run(() => ReceiveMessagesAsync(cancellationToken), cancellationToken);
         }
         catch (Exception ex)
         {
@@ -65,7 +52,7 @@ public class GoogleRealtimeAiWssClient : IRealtimeAiWssClient
             await (ErrorOccurredAsync?.Invoke(ex) ?? Task.CompletedTask);
             await (StateChangedAsync?.Invoke(_webSocket?.State ?? WebSocketState.Closed, $"Google Realtime Wss Connection failed: {ex.Message}") ?? Task.CompletedTask);
             await CleanUpCurrentConnectionAsync("Google Realtime Wss Connection failed."); // Ensure resources are cleaned up on failure
-            throw; // Re-throw to signal connection failure to caller
+            throw;
         }
     }
 
@@ -74,7 +61,7 @@ public class GoogleRealtimeAiWssClient : IRealtimeAiWssClient
         var buffer = new ArraySegment<byte>(new byte[8192]); // 8KB buffer
         try
         {
-            while (CurrentState == WebSocketState.Open && !token.IsCancellationRequested)
+            while (CurrentState == WebSocketState.Open)
             {
                 WebSocketReceiveResult result;
                 using var ms = new MemoryStream();
@@ -97,7 +84,7 @@ public class GoogleRealtimeAiWssClient : IRealtimeAiWssClient
 
                 ms.Seek(0, SeekOrigin.Begin);
                 var message = Encoding.UTF8.GetString(ms.ToArray());
-                // Log.Verbose("RealtimeClient: Message received from {EndpointUri}: {Message}", EndpointUri, message);
+                Log.Information("RealtimeClient: Message received from {EndpointUri}: {Message}", EndpointUri, message);
                 await (MessageReceivedAsync?.Invoke(message) ?? Task.CompletedTask);
             }
         }
@@ -154,8 +141,6 @@ public class GoogleRealtimeAiWssClient : IRealtimeAiWssClient
         }
         Log.Information("RealtimeClient: Disconnecting from {EndpointUri}. Reason: {Reason}", EndpointUri, statusDescription);
 
-        _receiveLoopCts?.Cancel(); // Signal the receive loop to terminate
-
         if (CurrentState is WebSocketState.Open or WebSocketState.CloseReceived)
         {
             try
@@ -204,8 +189,6 @@ public class GoogleRealtimeAiWssClient : IRealtimeAiWssClient
     {
         Log.Debug("RealtimeClient: Cleaning up current connection. Reason: {Reason}", reason);
         
-        if (_receiveLoopCts is { IsCancellationRequested: false }) await _receiveLoopCts.CancelAsync();
-        
         if (_receiveLoopTask is { IsCompleted: false })
         {
             Log.Debug("RealtimeClient: Waiting for previous receive loop to complete during cleanup.");
@@ -222,12 +205,7 @@ public class GoogleRealtimeAiWssClient : IRealtimeAiWssClient
             _webSocket.Dispose();
         }
         _webSocket = null; // Ensure it's null so a new one is created on next ConnectAsync
-
-        if (_receiveLoopCts != null)
-        {
-            _receiveLoopCts.Dispose();
-            _receiveLoopCts = null;
-        }
+        
         Log.Debug("RealtimeClient: Cleanup complete.");
     }
 

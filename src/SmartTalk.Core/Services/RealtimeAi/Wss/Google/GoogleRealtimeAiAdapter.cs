@@ -31,7 +31,9 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
         };
     }
 
-    public async Task<object> GetInitialSessionPayloadAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistantProfile, string initialUserPrompt, string sessionId, CancellationToken cancellationToken)
+    public async Task<object> GetInitialSessionPayloadAsync(
+        Domain.AISpeechAssistant.AiSpeechAssistant assistantProfile, string initialUserPrompt = null, string sessionId = null,
+        RealtimeAiAudioCodec inputFormat = RealtimeAiAudioCodec.PCM16, RealtimeAiAudioCodec outputFormat = RealtimeAiAudioCodec.PCM16, CancellationToken cancellationToken = default)
     {
         var configs = await InitialSessionConfigAsync(assistantProfile, cancellationToken).ConfigureAwait(false);
         var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(assistantProfile.Id, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -46,7 +48,6 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
                     responseModalities =  new[] { "audio" },
                     speechConfig = new
                     {
-                        languageCode = "",
                         voiceConfig = new { prebuiltVoiceConfig = new { voiceName = "Aoede" } }
                     }
                 },
@@ -64,7 +65,7 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
     {
         var message = new
         {
-            audio = new[] { new { Data = audioData.Base64Payload, MimeType = "audio/pcm; rate=24000" } }
+            audio = new[] { new { Data = audioData.Base64Payload, MimeType = "audio/pcm; rate=8000" } }
         };
         var json = JsonSerializer.Serialize(message);
         return json;

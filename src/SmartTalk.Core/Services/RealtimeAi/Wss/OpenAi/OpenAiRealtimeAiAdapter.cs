@@ -62,29 +62,6 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
         return sessionPayload;
     }
 
-    public string BuildGreetingMessage(string greeting)
-    {
-        var message = new
-        {
-            type = "conversation.item.create",
-            item = new
-            {
-                type = "message",
-                role = "user",
-                content = new[]
-                {
-                    new
-                    {
-                        type = "input_text",
-                        text = $"Greet the user with: '{greeting}'"
-                    }
-                }
-            }
-        };
-            
-        return JsonSerializer.Serialize(message);
-    }
-
     public string BuildAudioAppendMessage(RealtimeAiWssAudioData audioData)
     {
         var message = new
