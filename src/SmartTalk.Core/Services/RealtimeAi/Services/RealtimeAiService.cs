@@ -46,7 +46,8 @@ public class RealtimeAiService : IRealtimeAiService
         
         await _conversationEngine.StartSessionAsync(assistant, initialPrompt, inputFormat, outputFormat, cancellationToken).ConfigureAwait(false);
         
-        await ReceiveFromWebSocketClientAsync(cancellationToken).ConfigureAwait(false);
+        await ReceiveFromWebSocketClientAsync(
+            new RealtimeAiEngineContext { InitialPrompt = initialPrompt, InputFormat = inputFormat, OutputFormat = outputFormat }, cancellationToken).ConfigureAwait(false);
     }
 
     private void BuildConversationEngine(AiSpeechAssistantProvider provider)
@@ -58,7 +59,7 @@ public class RealtimeAiService : IRealtimeAiService
         _conversationEngine.AiAudioOutputReadyAsync += OnAiAudioOutputReadyAsync;
     }
     
-    private async Task ReceiveFromWebSocketClientAsync(CancellationToken cancellationToken)
+    private async Task ReceiveFromWebSocketClientAsync(RealtimeAiEngineContext context, CancellationToken cancellationToken)
     {
         var buffer = new byte[8192];
         try
@@ -96,7 +97,11 @@ public class RealtimeAiService : IRealtimeAiService
                     {
                         await _conversationEngine.SendAudioChunkAsync(new RealtimeAiWssAudioData
                         {
-                            Base64Payload = payload
+                            Base64Payload = payload,
+                            CustomProperties = new Dictionary<string, object>
+                            {
+                                { nameof(context.InputFormat), context.InputFormat }
+                            }
                         }).ConfigureAwait(false);
                     }
                     else

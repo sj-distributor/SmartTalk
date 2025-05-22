@@ -1,3 +1,4 @@
+using SmartTalk.Core.Services.RealtimeAi.Wss;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.RealtimeAi;
 
@@ -8,8 +9,7 @@ public interface IRealtimeAiProviderAdapter : IRealtimeAiProvider
     Dictionary<string, string> GetHeaders();
     
     Task<object> GetInitialSessionPayloadAsync(
-        Domain.AISpeechAssistant.AiSpeechAssistant assistantProfile, string initialUserPrompt = null, string sessionId = null,
-        RealtimeAiAudioCodec inputFormat = RealtimeAiAudioCodec.PCM16, RealtimeAiAudioCodec outputFormat = RealtimeAiAudioCodec.PCM16, CancellationToken cancellationToken = default);
+        Domain.AISpeechAssistant.AiSpeechAssistant assistantProfile, RealtimeAiEngineContext context, string sessionId = null, CancellationToken cancellationToken = default);
     
     string BuildAudioAppendMessage(RealtimeAiWssAudioData audioData);
     
