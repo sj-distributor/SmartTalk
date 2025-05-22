@@ -8,6 +8,7 @@ using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Services.RealtimeAi.Services;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
+using SmartTalk.Messages.Enums.RealtimeAi;
 using SmartTalk.Messages.Requests.AiSpeechAssistant;
 
 namespace SmartTalk.Api.Controllers;
@@ -260,7 +261,7 @@ public class AiSpeechAssistantController : ControllerBase
         
         if (HttpContext.WebSockets.IsWebSocketRequest)
         {
-            await _realtimeAiService.RealtimeAiConnectAsync(await HttpContext.WebSockets.AcceptWebSocketAsync(), assistant, "You are a friendly assistant", CancellationToken.None).ConfigureAwait(false);
+            await _realtimeAiService.RealtimeAiConnectAsync(await HttpContext.WebSockets.AcceptWebSocketAsync(), assistant, "You are a friendly assistant", RealtimeAiAudioCodec.PCM16, RealtimeAiAudioCodec.PCM16, CancellationToken.None).ConfigureAwait(false);
         }else
         {
             HttpContext.Response.StatusCode = 400;
