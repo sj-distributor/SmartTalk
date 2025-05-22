@@ -70,34 +70,28 @@ public class OpenAiRealtimeAiWssClient : IRealtimeAiWssClient
 
     private async Task ReceiveMessagesAsync(CancellationToken token)
     {
-        var buffer = new ArraySegment<byte>(new byte[8192]); // 8KB buffer
+        var buffer = new byte[1024 * 40]; // 8KB buffer
         try
         {
             while (_webSocket.State == WebSocketState.Open)
             {
-                WebSocketReceiveResult result;
-                using var ms = new MemoryStream();
-                do
+                var result = await _webSocket.ReceiveAsync(buffer, token);
+                var value = Encoding.UTF8.GetString(buffer, 0, result.Count);
+                
+                Log.Information("RealtimeClient: Message received from {EndpointUri}: {Message}", EndpointUri, value);
+                
+                if (result.MessageType == WebSocketMessageType.Close)
                 {
-                    result = await _webSocket.ReceiveAsync(buffer, token);
-                    if (result.MessageType == WebSocketMessageType.Close)
-                    {
-                        Log.Information("RealtimeClient: WebSocket close message received. Status: {Status}, Description: {Description}", result.CloseStatus, result.CloseStatusDescription);
-                        // If initiated by a server, we should try to close from our side too if state allows.
-                        if (_webSocket.State == WebSocketState.CloseReceived) {
-                            await _webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Acknowledging server close", CancellationToken.None);
-                        }
-                        await (StateChangedAsync?.Invoke(WebSocketState.Closed, $"Closed by remote: {result.CloseStatusDescription}") ?? Task.CompletedTask);
-                        return; // Exit loop
+                    Log.Information("RealtimeClient: WebSocket close message received. Status: {Status}, Description: {Description}", result.CloseStatus, result.CloseStatusDescription);
+                    // If initiated by a server, we should try to close from our side too if state allows.
+                    if (_webSocket.State == WebSocketState.CloseReceived) {
+                        await _webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Acknowledging server close", CancellationToken.None);
                     }
-
-                    if (buffer.Array != null) ms.Write(buffer.Array, buffer.Offset, result.Count);
-                } while (!result.EndOfMessage);
-
-                ms.Seek(0, SeekOrigin.Begin);
-                var message = Encoding.UTF8.GetString(ms.ToArray());
-                Log.Information("RealtimeClient: Message received from {EndpointUri}: {Message}", EndpointUri, message);
-                await (MessageReceivedAsync?.Invoke(message) ?? Task.CompletedTask);
+                    await (StateChangedAsync?.Invoke(WebSocketState.Closed, $"Closed by remote: {result.CloseStatusDescription}") ?? Task.CompletedTask);
+                    return; // Exit loop
+                }
+                
+                await (MessageReceivedAsync?.Invoke(value) ?? Task.CompletedTask);
             }
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
