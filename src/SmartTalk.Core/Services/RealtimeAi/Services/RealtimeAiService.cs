@@ -35,9 +35,6 @@ public class RealtimeAiService : IRealtimeAiService
         _realtimeAiSwitcher = realtimeAiSwitcher;
         _audioCodecAdapter = audioCodecAdapter;
         _conversationEngine = conversationEngine;
-        
-        _conversationEngine.SessionStatusChangedAsync += OnAiSessionStatusChangedAsync;
-        _conversationEngine.AiAudioOutputReadyAsync += OnAiAudioOutputReadyAsync;
 
         _webSocket = null;
         _currentAssistant = new Domain.AISpeechAssistant.AiSpeechAssistant();
@@ -49,6 +46,8 @@ public class RealtimeAiService : IRealtimeAiService
         _currentAssistant = assistant;
         _streamSid = Guid.NewGuid().ToString("N");
         _realtimeAiCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        
+        _conversationEngine.SessionStatusChangedAsync += OnAiSessionStatusChangedAsync;
         
         BuildConversationEngine(assistant.ModelProvider);
         
