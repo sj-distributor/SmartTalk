@@ -82,8 +82,7 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
             }
         };
             
-        var json = JsonSerializer.Serialize(message);
-        return json;
+        return JsonSerializer.Serialize(message);
     }
 
     public string BuildAudioAppendMessage(RealtimeAiWssAudioData audioData)
