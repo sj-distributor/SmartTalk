@@ -20,7 +20,7 @@ public class OpenAiRealtimeAiWssClient : IRealtimeAiWssClient
 
     public Uri EndpointUri { get; private set; }
     public AiSpeechAssistantProvider Provider => AiSpeechAssistantProvider.OpenAi;
-    public WebSocketState CurrentState => _webSocket?.State ?? WebSocketState.None;
+    public WebSocketState CurrentState => _webSocket.State;
 
     public event Func<string, Task> MessageReceivedAsync;
     public event Func<Exception, Task> ErrorOccurredAsync;
@@ -28,16 +28,16 @@ public class OpenAiRealtimeAiWssClient : IRealtimeAiWssClient
 
     public async Task ConnectAsync(Uri endpointUri, Dictionary<string, string> customHeaders, CancellationToken cancellationToken)
     {
-        lock (_lock)
-        {
-            if (_webSocket != null && _webSocket.State != WebSocketState.Closed && _webSocket.State != WebSocketState.Aborted && _webSocket.State != WebSocketState.None)
-            {
-                Log.Warning("OpenAi Realtime wss Client: Attempting to connect while already in state {State}. Consider disconnecting first.", _webSocket.State);
-            }
-        }
+        // lock (_lock)
+        // {
+        //     if (_webSocket != null && _webSocket.State != WebSocketState.Closed && _webSocket.State != WebSocketState.Aborted && _webSocket.State != WebSocketState.None)
+        //     {
+        //         Log.Warning("OpenAi Realtime wss Client: Attempting to connect while already in state {State}. Consider disconnecting first.", _webSocket.State);
+        //     }
+        // }
 
         // Dispose previous CTS and WebSocket if any, to ensure clean state for new connection
-        await CleanUpCurrentConnectionAsync("Preparing for new connection.");
+        // await CleanUpCurrentConnectionAsync("Preparing for new connection.");
         
         EndpointUri = endpointUri;
 
@@ -45,7 +45,7 @@ public class OpenAiRealtimeAiWssClient : IRealtimeAiWssClient
         {
             foreach (var header in customHeaders)
             {
-                _webSocket?.Options.SetRequestHeader(header.Key, header.Value);
+                _webSocket.Options.SetRequestHeader(header.Key, header.Value);
             }
         }
         // Example: _webSocket.Options.KeepAliveInterval = TimeSpan.FromSeconds(60);
@@ -223,7 +223,7 @@ public class OpenAiRealtimeAiWssClient : IRealtimeAiWssClient
             }
             _webSocket.Dispose();
         }
-        _webSocket = null; // Ensure it's null so a new one is created on next ConnectAsync
+        _webSocket = new ClientWebSocket(); // Ensure it's null so a new one is created on next ConnectAsync
 
         if (_receiveLoopCts != null)
         {
