@@ -13,6 +13,11 @@ public class OpenAiRealtimeAiWssClient : IRealtimeAiWssClient
     
     private readonly object _lock = new();
 
+    public OpenAiRealtimeAiWssClient()
+    {
+        _webSocket = new ClientWebSocket();
+    }
+
     public Uri EndpointUri { get; private set; }
     public AiSpeechAssistantProvider Provider => AiSpeechAssistantProvider.OpenAi;
     public WebSocketState CurrentState => _webSocket?.State ?? WebSocketState.None;
@@ -33,15 +38,14 @@ public class OpenAiRealtimeAiWssClient : IRealtimeAiWssClient
 
         // Dispose previous CTS and WebSocket if any, to ensure clean state for new connection
         await CleanUpCurrentConnectionAsync("Preparing for new connection.");
-
-        _webSocket = new ClientWebSocket();
+        
         EndpointUri = endpointUri;
 
         if (customHeaders != null)
         {
             foreach (var header in customHeaders)
             {
-                _webSocket.Options.SetRequestHeader(header.Key, header.Value);
+                _webSocket?.Options.SetRequestHeader(header.Key, header.Value);
             }
         }
         // Example: _webSocket.Options.KeepAliveInterval = TimeSpan.FromSeconds(60);
