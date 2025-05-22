@@ -100,6 +100,8 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
             await _realtimeAiClient.SendMessageAsync(JsonSerializer.Serialize(initialConversationItem, new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull }), _sessionCts.Token);
             
             Log.Information("AiConversationEngine: 已发送初始会话消息。会话 ID: {SessionId}", _sessionId); // AiConversationEngine: Initial session message sent. Session ID: {SessionId}
+
+            await Task.Delay(5000, cancellationToken);
         }
         catch (OperationCanceledException) when (_sessionCts.IsCancellationRequested)
         {
