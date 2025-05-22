@@ -133,7 +133,7 @@ public class OpenAiRealtimeAiWssClient : IRealtimeAiWssClient
 
         try
         {
-            await _websocketClient?.NativeClient.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(message))), WebSocketMessageType.Text, true, cancellationToken);
+            await _websocketClient?.NativeClient.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(message)), WebSocketMessageType.Text, true, cancellationToken);
         }
         catch (Exception ex)
         {
