@@ -254,9 +254,10 @@ public class AiSpeechAssistantController : ControllerBase
         {
             Id = 1,
             Name = "test assistant",
-            ModelUrl = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17",
-            ModelProvider = AiSpeechAssistantProvider.OpenAi,
-            ModelVoice = "alloy"
+            // ModelUrl = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17",
+            ModelUrl = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent",
+            ModelProvider = AiSpeechAssistantProvider.Google,
+            // ModelVoice = "alloy"
         };
         
         if (HttpContext.WebSockets.IsWebSocketRequest)
