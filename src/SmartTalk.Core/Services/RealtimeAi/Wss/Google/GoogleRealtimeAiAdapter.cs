@@ -55,7 +55,9 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
                     }
                 },
                 tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config),
-                realtimeInputConfig = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection)
+                realtimeInputConfig = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection),
+                inputAudioTranscription = new {},
+                outputAudioTranscription = new {}
             }
         };
         
@@ -148,10 +150,28 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
                     {
                         return new ParsedRealtimeAiProviderEvent {
                             Type = RealtimeAiWssEventType.ResponseTextDelta,
-                            Data = null, //todo
+                            Data = text,
                             RawJson = rawMessage
                         };
                     }
+                }
+
+                if (serverContent.TryGetProperty("inputTranscription", out var inputTranscription) && inputTranscription.TryGetProperty("text", out var inputText))
+                {
+                    return new ParsedRealtimeAiProviderEvent {
+                        Type = RealtimeAiWssEventType.InputAudioTranscriptionPartial,
+                        Data = inputText,
+                        RawJson = rawMessage
+                    };
+                }
+
+                if (serverContent.TryGetProperty("outputTranscription", out var outputTranscription) && outputTranscription.TryGetProperty("text", out var outputText))
+                {
+                    return new ParsedRealtimeAiProviderEvent {
+                        Type = RealtimeAiWssEventType.OutputAudioTranscriptionPartial,
+                        Data = outputText,
+                        RawJson = rawMessage
+                    };
                 }
             }
             
