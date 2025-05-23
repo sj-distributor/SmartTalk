@@ -174,7 +174,7 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
 
         return type switch
         {
-            AiSpeechAssistantSessionConfigType.TurnDirection => config.Config ?? new { turnCoverage = "TURN_INCLUDES_ONLY_ACTIVITY" },
+            AiSpeechAssistantSessionConfigType.TurnDirection => config.Config ?? null,
             _ => throw new NotSupportedException(nameof(type))
         };
     }
