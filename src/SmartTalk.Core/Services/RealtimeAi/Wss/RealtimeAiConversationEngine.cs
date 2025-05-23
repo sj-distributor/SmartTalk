@@ -91,26 +91,6 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
                 await _realtimeAiClient.SendMessageAsync(BuildGreetingMessage(assistantProfile.Knowledge.Greetings), _sessionCts.Token);
             }
             
-            var initialConversationItem = new
-            {
-                type = "conversation.item.create",
-                item = new
-                {
-                    type = "message",
-                    role = "user",
-                    content = new[]
-                    {
-                        new
-                        {
-                            type = "input_text",
-                            text = $"Greet the user with: 'Hello, Moon House on Santa Monica Boulevard, how can I help you?\n'"
-                        }
-                    }
-                }
-            };
-            
-            await _realtimeAiClient.SendMessageAsync(JsonSerializer.Serialize(initialConversationItem, new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull }), _sessionCts.Token);
-            
             Log.Information("AiConversationEngine: 已发送初始会话消息。会话 ID: {SessionId}", _sessionId); // AiConversationEngine: Initial session message sent. Session ID: {SessionId}
 
             await Task.Delay(5000, cancellationToken);
