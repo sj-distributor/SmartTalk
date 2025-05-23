@@ -20,27 +20,31 @@ public partial class PosManagementDataProvider
     {
         await _repository.UpdateAsync(store, cancellationToken).ConfigureAwait(false);
         
-        await _unitOfWork.SaveChangesAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (forceSave) 
+            await _unitOfWork.SaveChangesAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
     public async Task UpdateStoreMenusAsync(List<PosMenu> menus, bool forceSave = true, CancellationToken cancellationToken = default)
     {
         await _repository.UpdateAllAsync(menus, cancellationToken).ConfigureAwait(false);
         
-        await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        if (forceSave) 
+            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task UpdateStoreCategoriesAsync(List<PosCategory> categories, bool forceSave = true, CancellationToken cancellationToken = default)
     {
         await _repository.UpdateAllAsync(categories, cancellationToken).ConfigureAwait(false);
         
-        await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        if (forceSave) 
+            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task UpdateStoreProductsAsync(List<PosProduct> products, bool forceSave = true, CancellationToken cancellationToken = default)
     {
         await _repository.UpdateAllAsync(products, cancellationToken).ConfigureAwait(false);
         
-        await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        if (forceSave) 
+            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 }

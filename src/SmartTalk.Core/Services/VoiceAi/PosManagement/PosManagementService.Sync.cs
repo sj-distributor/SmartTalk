@@ -25,13 +25,44 @@ public partial class PosManagementService
 
         Log.Information("获取到 POS 配置数据: {@posConfiguration}", posConfiguration);
         
-        var timePeriodsJson= JsonConvert.SerializeObject(posConfiguration.Data.TimePeriods);
+        var storeOpeningHours = posConfiguration.Data.TimePeriods; 
+        await UpdateStoreBusinessTimePeriodsAsync(store, storeOpeningHours, cancellationToken);
         
-        store.TimePeriod = timePeriodsJson;
+        await SyncMenuDataAsync(store, posConfiguration.Data, cancellationToken);
         
+        return new SyncPosConfigurationResponse
+        {
+            Data = posConfiguration
+        };
+    }
+    
+    private async Task UpdateStoreBusinessTimePeriodsAsync(PosCompanyStore store, List<EasyPosResponseTimePeriod> timePeriods, CancellationToken cancellationToken)
+    {
+        store.TimePeriod = JsonConvert.SerializeObject(timePeriods);
         await _posManagementDataProvider.UpdateStoreAsync(store, true, cancellationToken).ConfigureAwait(false);
-        
-        var menus = posConfiguration.Data.Menus.Select(menu => new PosMenu
+    }
+
+    private async Task SyncMenuDataAsync(PosCompanyStore store, EasyPosResponseData data, CancellationToken cancellationToken)
+    {
+        var menus = GenerateMenusFromResponse(store, data.Menus);
+        await _posManagementDataProvider.UpdateStoreMenusAsync(menus, true, cancellationToken);
+
+        foreach (var menu in data.Menus)
+        {
+            var categories = GenerateCategoriesForMenu(menu, data.Categories);
+            await _posManagementDataProvider.UpdateStoreCategoriesAsync(categories, true, cancellationToken);
+
+            foreach (var category in categories)
+            {
+                var products = GenerateProductsForCategory(category, data.Products);
+                await _posManagementDataProvider.UpdateStoreProductsAsync(products, true, cancellationToken);
+            }
+        }
+    }
+    
+    private List<PosMenu> GenerateMenusFromResponse(PosCompanyStore store, List<EasyPosResponseMenu> menus)
+    {
+        return menus.Select(menu => new PosMenu
         {
             StoreId = store.Id,
             MenuId = menu.Id.ToString(),
@@ -41,46 +72,35 @@ public partial class PosManagementService
             Status = menu.Status,
             CreatedBy = _currentUser.Id
         }).ToList();
+    }
     
-        await _posManagementDataProvider.UpdateStoreMenusAsync(menus, true, cancellationToken).ConfigureAwait(false);
-
-        foreach (var menu in posConfiguration.Data.Menus)
-        {
-            var categories = posConfiguration.Data.Categories
-                .Where(c => c.MenuIds.Contains(menu.Id.ToString()))
-                .Select(category => new PosCategory
-                {
-                    MenuId = menu.Id.ToString(),
-                    CategoryId = category.Id.ToString(),
-                    Names = JsonConvert.SerializeObject(GetLocalizedNames(category.Localizations)),
-                    MenuIds = string.Join(",", category.MenuIds)
-                }).ToList();
-
-            await _posManagementDataProvider.UpdateStoreCategoriesAsync(categories, true, cancellationToken).ConfigureAwait(false);
-            
-            foreach (var category in categories)
+    private List<PosCategory> GenerateCategoriesForMenu(EasyPosResponseMenu menu, List<EasyPosResponseCategory> allCategories)
+    {
+        return allCategories
+            .Where(c => c.MenuIds.Contains(menu.Id.ToString()))
+            .Select(category => new PosCategory
             {
-                var products = posConfiguration.Data.Products
-                    .Where(p => p.CategoryId.ToString() == category.CategoryId)
-                    .Select(product => new PosProduct
-                    {
-                        ProductId = product.Id.ToString(),
-                        CategoryId = product.CategoryId.ToString(),
-                        Price = product.Price,
-                        Status = true,
-                        Names = JsonConvert.SerializeObject(GetLocalizedNames(product.Localizations)),
-                        Modifiers = product.ModifierGroups != null ? JsonConvert.SerializeObject(product.ModifierGroups) : null,
-                        Tax = product.Taxes != null ? JsonConvert.SerializeObject(product.Taxes) : null
-                    }).ToList();
-                
-                await _posManagementDataProvider.UpdateStoreProductsAsync(products, true, cancellationToken).ConfigureAwait(false);
-            }
-        }
-
-        return new SyncPosConfigurationResponse
-        {
-            Data = posConfiguration
-        };
+                MenuId = menu.Id.ToString(),
+                CategoryId = category.Id.ToString(),
+                Names = JsonConvert.SerializeObject(GetLocalizedNames(category.Localizations)),
+                MenuIds = string.Join(",", category.MenuIds)
+            }).ToList();
+    }
+    
+    private List<PosProduct> GenerateProductsForCategory(PosCategory category, List<EasyPosResponseProduct> allProducts)
+    {
+        return allProducts
+            .Where(p => p.CategoryId.ToString() == category.CategoryId)
+            .Select(product => new PosProduct
+            {
+                ProductId = product.Id.ToString(),
+                CategoryId = product.CategoryId.ToString(),
+                Price = product.Price,
+                Status = true,
+                Names = JsonConvert.SerializeObject(GetLocalizedNames(product.Localizations)),
+                Modifiers = product.ModifierGroups != null ? JsonConvert.SerializeObject(product.ModifierGroups) : null,
+                Tax = product.Taxes != null ? JsonConvert.SerializeObject(product.Taxes) : null
+            }).ToList();
     }
     
     private Dictionary<string, Dictionary<string, string>> GetLocalizedNames(IEnumerable<EasyPosResponseLocalization> localizations)
