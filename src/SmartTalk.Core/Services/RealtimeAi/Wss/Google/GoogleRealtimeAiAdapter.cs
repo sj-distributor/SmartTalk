@@ -49,7 +49,6 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
                 },
                 systemInstruction = new
                 {
-                    role = "model",
                     parts = new[]
                     {
                         new { text = knowledge?.Prompt ?? string.Empty }
