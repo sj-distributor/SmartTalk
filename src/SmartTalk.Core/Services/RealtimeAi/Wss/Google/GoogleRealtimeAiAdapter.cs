@@ -41,17 +41,18 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
         {
             setup = new
             {
-                model = "models/gemini-2.0-flash-live-001",
+                model = assistantProfile.ModelUrl,
                 generationConfig = new {
                     temperature = 0.8,
                     responseModalities =  new[] { "audio" },
                     speechConfig = new
                     {
-                        voiceConfig = new { prebuiltVoiceConfig = new { voiceName = "Aoede" } }
+                        voiceConfig = new { prebuiltVoiceConfig = new { voiceName = string.IsNullOrEmpty(assistantProfile.ModelVoice) ? "Aoede" : assistantProfile.ModelVoice } }
                     }
                 },
                 systemInstruction = knowledge?.Prompt ?? string.Empty,
-                tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config)
+                tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config),
+                realtimeInputConfig = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection)
             }
         };
         
@@ -122,6 +123,11 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
                     return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.ResponseTurnCompleted, RawJson = rawMessage };
                 }
 
+                if (serverContent.TryGetProperty("interrupted", out var interrupted) && bool.Parse(interrupted.ToString()))
+                {
+                    return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.SpeechDetected, RawJson = rawMessage };
+                }
+
                 if (serverContent.TryGetProperty("modelTurn", out var modelTurn) && modelTurn.TryGetProperty("parts", out var parts))
                 {
                     if (parts.TryGetProperty("inlineData", out var inlineData) && inlineData.TryGetProperty("data", out var data))
@@ -157,9 +163,21 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
     
     private async Task<List<(AiSpeechAssistantSessionConfigType Type, object Config)>> InitialSessionConfigAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken = default)
     {
-        var functions = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallByAssistantIdAsync(assistant.Id, cancellationToken).ConfigureAwait(false);
+        var functions = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallByAssistantIdAsync(assistant.Id, assistant.ModelProvider, cancellationToken).ConfigureAwait(false);
 
         return functions.Count == 0 ? [] : functions.Where(x => !string.IsNullOrWhiteSpace(x.Content)).Select(x => (x.Type, JsonConvert.DeserializeObject<object>(x.Content))).ToList();
+    }
+    
+    private object InitialSessionParameters(List<(AiSpeechAssistantSessionConfigType Type, object Config)> configs, AiSpeechAssistantSessionConfigType type)
+    {
+        var config = configs.FirstOrDefault(x => x.Type == type);
+
+        return type switch
+        {
+            AiSpeechAssistantSessionConfigType.TurnDirection => config.Config ?? new { type = "server_vad" },
+            AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction => config.Config,
+            _ => throw new NotSupportedException(nameof(type))
+        };
     }
 
     public AiSpeechAssistantProvider Provider => AiSpeechAssistantProvider.Google;
