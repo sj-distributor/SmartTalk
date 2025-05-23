@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using Serilog;
 using SmartTalk.Core.Services.RealtimeAi.wss;
 using SmartTalk.Messages.Dto.RealtimeAi;
+using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.RealtimeAi;
 
 namespace SmartTalk.Core.Services.RealtimeAi.Wss;
@@ -84,7 +85,7 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
             
             await _realtimeAiClient.SendMessageAsync(initialMessageJson, _sessionCts.Token);
 
-            if (!string.IsNullOrEmpty(assistantProfile?.Knowledge?.Greetings))
+            if (!string.IsNullOrEmpty(assistantProfile?.Knowledge?.Greetings) && assistantProfile.ModelProvider != AiSpeechAssistantProvider.Google)
             {
                 Log.Information("AiConversationEngine: 发送初始会话问候消息。会话 ID: {SessionId}", _sessionId);
                 
