@@ -53,6 +53,8 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task<int> GetMessageCountByAgentAndDateAsync(int agentId, DateTimeOffset date, CancellationToken cancellationToken);
     
     Task AddAgentMessageRecordAsync(AgentMessageRecord messageRecord, CancellationToken cancellationToken = default);
+    
+    Task<Domain.AISpeechAssistant.AiSpeechAssistant> GetAiSpeechAssistantWithKnowledgeAsync(int assistantId, CancellationToken cancellationToken);
 }
 
 public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
@@ -285,5 +287,22 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
         await _repository.InsertAsync(messageRecord, cancellationToken).ConfigureAwait(false);
         
         await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<Domain.AISpeechAssistant.AiSpeechAssistant> GetAiSpeechAssistantWithKnowledgeAsync(int assistantId, CancellationToken cancellationToken)
+    {
+        var query = from a in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>()
+            join k in _repository.Query<AiSpeechAssistantKnowledge>() on a.Id equals k.Id into knowledgeGroup
+            from k in knowledgeGroup.DefaultIfEmpty()
+            select new { Assistant = a, Knowledge = k };
+        
+        var assistant = await query.Select(x => x.Assistant).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        
+        if (assistant == null) return null;
+            
+        var knowledge = await query.Select(x => x.Knowledge).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        
+        assistant.Knowledge = knowledge;
+        return assistant;
     }
 }
