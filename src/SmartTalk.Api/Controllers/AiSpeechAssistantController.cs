@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.WebUtilities;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Services.RealtimeAi.Services;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
+using SmartTalk.Messages.Commands.RealtimeAi;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.RealtimeAi;
 using SmartTalk.Messages.Requests.AiSpeechAssistant;
@@ -250,19 +251,16 @@ public class AiSpeechAssistantController : ControllerBase
     [Route("realtime/connect/test"), HttpGet]
     public async Task RealtimeConnectAsync()
     {
-        var assistant = new AiSpeechAssistant
-        {
-            Id = 1,
-            Name = "test assistant",
-            // ModelUrl = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17",
-            ModelUrl = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent",
-            ModelProvider = AiSpeechAssistantProvider.Google,
-            // ModelVoice = "alloy"
-        };
-        
         if (HttpContext.WebSockets.IsWebSocketRequest)
         {
-            await _realtimeAiService.RealtimeAiConnectAsync(await HttpContext.WebSockets.AcceptWebSocketAsync(), assistant, "You are a friendly assistant", RealtimeAiAudioCodec.PCM16, RealtimeAiAudioCodec.PCM16, CancellationToken.None).ConfigureAwait(false);
+            // await _realtimeAiService.RealtimeAiConnectAsync(, assistant, "You are a friendly assistant", RealtimeAiAudioCodec.PCM16, RealtimeAiAudioCodec.PCM16, CancellationToken.None).ConfigureAwait(false);
+            await _mediator.SendAsync(new RealtimeAiConnectCommand
+            {
+                AssistantId = 1,
+                WebSocket = await HttpContext.WebSockets.AcceptWebSocketAsync(),
+                InputFormat = RealtimeAiAudioCodec.PCM16,
+                OutputFormat = RealtimeAiAudioCodec.PCM16
+            });
         }else
         {
             HttpContext.Response.StatusCode = 400;
