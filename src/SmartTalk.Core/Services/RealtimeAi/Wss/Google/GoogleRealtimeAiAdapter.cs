@@ -71,10 +71,13 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
             RealtimeAiAudioCodec.PCM16 => "audio/pcm;rate=8000",
             _ => throw new NotSupportedException("mimeType")
         };
-        
+
         var message = new
         {
-            audio = new { Data = audioData.Base64Payload, MimeType = mimeType }
+            realtimeInput = new
+            {
+                audio = new { Data = audioData.Base64Payload, MimeType = mimeType }
+            }
         };
         var json = JsonSerializer.Serialize(message);
         return json;
@@ -84,8 +87,11 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
     {
         var message = new
         {
-            turnComplete = true,
-            turns = new[] { new { parts = new[] { new { text } }, role = "user" } }
+            clientContent = new
+            {
+                turnComplete = true,
+                turns = new[] { new { parts = new[] { new { text } }, role = "user" } }
+            }
         };
         return JsonSerializer.Serialize(message);
     }
