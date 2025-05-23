@@ -134,4 +134,13 @@ public class VoiceAiController : ControllerBase
         
         return Ok(response);
     }
+
+    [Route("pos/configuration/sync"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(SyncPosConfigurationResponse))]
+    public async Task<IActionResult> SyncPosConfigurationAsync([FromBody] SyncPosConfigurationCommand command)
+    {
+        var response = await _mediator.SendAsync<SyncPosConfigurationCommand, SyncPosConfigurationResponse>(command).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
 }
