@@ -74,7 +74,7 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
         
         var message = new
         {
-            audio = new[] { new { Data = audioData.Base64Payload, MimeType = mimeType } }
+            audio = new { Data = audioData.Base64Payload, MimeType = mimeType }
         };
         var json = JsonSerializer.Serialize(message);
         return json;
