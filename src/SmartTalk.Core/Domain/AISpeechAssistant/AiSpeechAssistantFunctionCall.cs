@@ -24,6 +24,9 @@ public class AiSpeechAssistantFunctionCall : IEntity, IHasCreatedFields
     [Column("type")]
     public AiSpeechAssistantSessionConfigType Type { get; set; }
     
+    [Column("model_provider")]
+    public AiSpeechAssistantProvider ModelProvider { get; set; }
+    
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
 }
