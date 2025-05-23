@@ -25,10 +25,7 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
 
     public Dictionary<string, string> GetHeaders()
     {
-        return new Dictionary<string, string>
-        {
-            { "Authorization", $"Bearer {_googleSettings.ApiKey}" }
-        };
+        return new Dictionary<string, string>();
     }
 
     public async Task<object> GetInitialSessionPayloadAsync(
@@ -41,7 +38,7 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
         {
             setup = new
             {
-                model = assistantProfile.ModelUrl,
+                model = assistantProfile.ModelName,
                 generationConfig = new {
                     temperature = 0.8,
                     responseModalities =  new[] { "audio" },
