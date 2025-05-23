@@ -174,7 +174,7 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
 
         return type switch
         {
-            AiSpeechAssistantSessionConfigType.TurnDirection => config.Config ?? null,
+            AiSpeechAssistantSessionConfigType.TurnDirection => config.Config,
             _ => throw new NotSupportedException(nameof(type))
         };
     }
