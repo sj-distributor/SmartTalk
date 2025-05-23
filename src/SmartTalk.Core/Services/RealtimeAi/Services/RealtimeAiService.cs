@@ -7,8 +7,10 @@ using System.Net.WebSockets;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.RealtimeAi;
 using SmartTalk.Core.Services.RealtimeAi.Wss;
+using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Core.Services.RealtimeAi.Adapters;
+using SmartTalk.Messages.Commands.RealtimeAi;
 using JsonException = System.Text.Json.JsonException;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 
@@ -16,27 +18,38 @@ namespace SmartTalk.Core.Services.RealtimeAi.Services;
 
 public interface IRealtimeAiService : IScopedDependency
 {
-    Task RealtimeAiConnectAsync(WebSocket webSocket, Domain.AISpeechAssistant.AiSpeechAssistant assistant,
-        string initialPrompt, RealtimeAiAudioCodec inputFormat, RealtimeAiAudioCodec outputFormat, CancellationToken cancellationToken);
+    Task RealtimeAiConnectAsync(RealtimeAiConnectCommand command, CancellationToken cancellationToken);
 }
 
 public class RealtimeAiService : IRealtimeAiService
 {
     private readonly IRealtimeAiSwitcher _realtimeAiSwitcher;
+    private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
 
     private string _streamSid;
     private WebSocket _webSocket;
     private IRealtimeAiConversationEngine _conversationEngine;
 
-    public RealtimeAiService(IRealtimeAiSwitcher realtimeAiSwitcher, IRealtimeAiConversationEngine conversationEngine)
+    public RealtimeAiService(IRealtimeAiSwitcher realtimeAiSwitcher, IRealtimeAiConversationEngine conversationEngine, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
         _realtimeAiSwitcher = realtimeAiSwitcher;
         _conversationEngine = conversationEngine;
+        _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
 
         _webSocket = null;
     }
+    
+    public async Task RealtimeAiConnectAsync(RealtimeAiConnectCommand command, CancellationToken cancellationToken)
+    {
+        var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantWithKnowledgeAsync(command.AssistantId, cancellationToken).ConfigureAwait(false);
+        
+        if (assistant == null) throw new Exception($"Could not find a assistant by id: {command.AssistantId}");
+        
+        await RealtimeAiConnectInternalAsync(command.WebSocket, assistant, 
+            "You are a friendly assistant", command.InputFormat, command.OutputFormat, cancellationToken).ConfigureAwait(false);
+    }
 
-    public async Task RealtimeAiConnectAsync(WebSocket webSocket, Domain.AISpeechAssistant.AiSpeechAssistant assistant,
+    private async Task RealtimeAiConnectInternalAsync(WebSocket webSocket, Domain.AISpeechAssistant.AiSpeechAssistant assistant,
         string initialPrompt, RealtimeAiAudioCodec inputFormat, RealtimeAiAudioCodec outputFormat, CancellationToken cancellationToken)
     {
         _webSocket = webSocket;
