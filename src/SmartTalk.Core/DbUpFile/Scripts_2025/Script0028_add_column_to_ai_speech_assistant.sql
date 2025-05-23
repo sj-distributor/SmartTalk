@@ -1,0 +1,1 @@
+alter table `ai_speech_assistant` add column `model_name` varchar(255) null;

@@ -3,6 +3,7 @@ using System.Text;
 using Serilog;
 using SmartTalk.Core.Services.RealtimeAi.Adapters;
 using SmartTalk.Core.Services.RealtimeAi.wss;
+using SmartTalk.Core.Settings.Google;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 
 namespace SmartTalk.Core.Services.RealtimeAi.Wss.Google;
@@ -11,6 +12,7 @@ public class GoogleRealtimeAiWssClient : IRealtimeAiWssClient
 {
     private Task _receiveLoopTask;
     private ClientWebSocket _webSocket;
+    private readonly GoogleSettings _googleSettings;
 
     public Uri EndpointUri { get; private set; }
     public AiSpeechAssistantProvider Provider => AiSpeechAssistantProvider.Google;
@@ -20,22 +22,15 @@ public class GoogleRealtimeAiWssClient : IRealtimeAiWssClient
     public event Func<Exception, Task> ErrorOccurredAsync;
     public event Func<WebSocketState, string, Task> StateChangedAsync;
 
-    public GoogleRealtimeAiWssClient()
+    public GoogleRealtimeAiWssClient(GoogleSettings googleSettings)
     {
+        _googleSettings = googleSettings;
         _webSocket = new ClientWebSocket();
     }
 
     public async Task ConnectAsync(Uri endpointUri, Dictionary<string, string> customHeaders, CancellationToken cancellationToken)
     {
-        EndpointUri = endpointUri;
-
-        if (customHeaders != null)
-        {
-            foreach (var header in customHeaders)
-            {
-                _webSocket.Options.SetRequestHeader(header.Key, header.Value);
-            }
-        }
+        EndpointUri = new Uri($"{endpointUri}?key={_googleSettings.ApiKey}");
 
         try
         {
