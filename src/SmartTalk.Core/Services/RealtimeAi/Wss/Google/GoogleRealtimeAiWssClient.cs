@@ -122,6 +122,7 @@ public class GoogleRealtimeAiWssClient : IRealtimeAiWssClient
             await (ErrorOccurredAsync?.Invoke(ex) ?? Task.CompletedTask);
             throw ex;
         }
+        Log.Information("准备发送信息: {@Message}", message);
         // Log.Verbose("RealtimeClient: Sending message to {EndpointUri}: {Message}", EndpointUri, message);
         var messageBytes = Encoding.UTF8.GetBytes(message);
         await _webSocket.SendAsync(new ArraySegment<byte>(messageBytes), WebSocketMessageType.Text, true, cancellationToken);
