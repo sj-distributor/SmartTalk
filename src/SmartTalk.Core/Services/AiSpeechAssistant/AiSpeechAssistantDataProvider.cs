@@ -3,6 +3,7 @@ using SmartTalk.Core.Data;
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Domain.AIAssistant;
 using SmartTalk.Core.Domain.AISpeechAssistant;
+using SmartTalk.Messages.Enums.AiSpeechAssistant;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
 
@@ -15,7 +16,7 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
 
     Task<AiSpeechAssistantHumanContact> GetAiSpeechAssistantHumanContactByAssistantIdAsync(int assistantId, CancellationToken cancellationToken);
     
-    Task<List<AiSpeechAssistantFunctionCall>> GetAiSpeechAssistantFunctionCallByAssistantIdAsync(int assistantId, CancellationToken cancellationToken);
+    Task<List<AiSpeechAssistantFunctionCall>> GetAiSpeechAssistantFunctionCallByAssistantIdAsync(int assistantId, AiSpeechAssistantProvider provider, CancellationToken cancellationToken);
 
     Task<NumberPool> GetNumberAsync(int? numberId = null, bool? isUsed = null, CancellationToken cancellationToken = default);
     
@@ -104,10 +105,10 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
             .FirstOrDefaultAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<AiSpeechAssistantFunctionCall>> GetAiSpeechAssistantFunctionCallByAssistantIdAsync(int assistantId, CancellationToken cancellationToken)
+    public async Task<List<AiSpeechAssistantFunctionCall>> GetAiSpeechAssistantFunctionCallByAssistantIdAsync(int assistantId, AiSpeechAssistantProvider provider, CancellationToken cancellationToken)
     {
         return await _repository.QueryNoTracking<AiSpeechAssistantFunctionCall>()
-            .Where(x => x.AssistantId == assistantId).ToListAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+            .Where(x => x.AssistantId == assistantId && x.ModelProvider == provider).ToListAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<NumberPool> GetNumberAsync(int? numberId = null, bool? isUsed = null, CancellationToken cancellationToken = default)

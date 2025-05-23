@@ -3,6 +3,7 @@ using Newtonsoft.Json;
 using Serilog;
 using SmartTalk.Core.Extensions;
 using SmartTalk.Core.Services.AiSpeechAssistant;
+using SmartTalk.Core.Services.RealtimeAi.Wss;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
@@ -33,8 +34,7 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
     }
 
     public async Task<object> GetInitialSessionPayloadAsync(
-        Domain.AISpeechAssistant.AiSpeechAssistant assistantProfile, string initialUserPrompt, string sessionId,
-        RealtimeAiAudioCodec inputFormat, RealtimeAiAudioCodec outputFormat, CancellationToken cancellationToken)
+        Domain.AISpeechAssistant.AiSpeechAssistant assistantProfile, RealtimeAiEngineContext context, string sessionId, CancellationToken cancellationToken)
     {
         var configs = await InitialSessionConfigAsync(assistantProfile, cancellationToken).ConfigureAwait(false);
         var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(assistantProfile.Id, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -45,10 +45,10 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
             session = new
             {
                 turn_detection = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection),
-                input_audio_format = inputFormat.GetDescription(),
-                output_audio_format = outputFormat.GetDescription(),
+                input_audio_format = context.InputFormat.GetDescription(),
+                output_audio_format = context.OutputFormat.GetDescription(),
                 voice = string.IsNullOrEmpty(assistantProfile.ModelVoice) ? "alloy" : assistantProfile.ModelVoice,
-                instructions = knowledge?.Prompt ?? initialUserPrompt,
+                instructions = knowledge?.Prompt ?? context.InitialPrompt,
                 modalities = new[] { "text", "audio" },
                 temperature = 0.8,
                 input_audio_transcription = new { model = "whisper-1" },
@@ -60,29 +60,6 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
         Log.Information("OpenAIAdapter: 构建初始会话负载: {@Payload}", sessionPayload);
         
         return sessionPayload;
-    }
-
-    public string BuildGreetingMessage(string greeting)
-    {
-        var message = new
-        {
-            type = "conversation.item.create",
-            item = new
-            {
-                type = "message",
-                role = "user",
-                content = new[]
-                {
-                    new
-                    {
-                        type = "input_text",
-                        text = $"Greet the user with: '{greeting}'"
-                    }
-                }
-            }
-        };
-            
-        return JsonSerializer.Serialize(message);
     }
 
     public string BuildAudioAppendMessage(RealtimeAiWssAudioData audioData)
@@ -203,7 +180,7 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
     
     private async Task<List<(AiSpeechAssistantSessionConfigType Type, object Config)>> InitialSessionConfigAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken = default)
     {
-        var functions = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallByAssistantIdAsync(assistant.Id, cancellationToken).ConfigureAwait(false);
+        var functions = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallByAssistantIdAsync(assistant.Id, assistant.ModelProvider, cancellationToken).ConfigureAwait(false);
 
         return functions.Count == 0 ? [] : functions.Where(x => !string.IsNullOrWhiteSpace(x.Content)).Select(x => (x.Type, JsonConvert.DeserializeObject<object>(x.Content))).ToList();
     }

@@ -78,7 +78,8 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
                 throw new InvalidOperationException("无法连接到底层 Realtime AI Client。"); // Cannot connect to underlying Realtime AI Client.
             }
 
-            var initialPayload = await _aiAdapter.GetInitialSessionPayloadAsync(_currentAssistantProfile, initialUserPrompt, _sessionId, inputFormat, outputFormat, _sessionCts.Token);
+            var initialPayload = await _aiAdapter.GetInitialSessionPayloadAsync(_currentAssistantProfile, 
+                new RealtimeAiEngineContext { InitialPrompt = initialUserPrompt, InputFormat = inputFormat, OutputFormat = outputFormat }, _sessionId, _sessionCts.Token);
             var initialMessageJson = JsonSerializer.Serialize(initialPayload, new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull });
             
             await _realtimeAiClient.SendMessageAsync(initialMessageJson, _sessionCts.Token);
@@ -86,8 +87,8 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
             if (!string.IsNullOrEmpty(assistantProfile?.Knowledge?.Greetings))
             {
                 Log.Information("AiConversationEngine: 发送初始会话问候消息。会话 ID: {SessionId}", _sessionId);
-                var greetingJson = JsonSerializer.Serialize(_aiAdapter.BuildGreetingMessage(assistantProfile.Knowledge.Greetings), new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull });
-                await _realtimeAiClient.SendMessageAsync(_aiAdapter.BuildGreetingMessage(assistantProfile.Knowledge.Greetings), _sessionCts.Token);
+                
+                await _realtimeAiClient.SendMessageAsync(BuildGreetingMessage(assistantProfile.Knowledge.Greetings), _sessionCts.Token);
             }
             
             var initialConversationItem = new
@@ -127,6 +128,29 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
             await OnSessionStatusChangedAsync(RealtimeAiWssEventType.SessionUpdateFailed, ex.Message);
             await CleanupSessionAsync($"启动失败: {ex.Message}"); // Startup failed:
         }
+    }
+    
+    private string BuildGreetingMessage(string greeting)
+    {
+        var message = new
+        {
+            type = "conversation.item.create",
+            item = new
+            {
+                type = "message",
+                role = "user",
+                content = new[]
+                {
+                    new
+                    {
+                        type = "input_text",
+                        text = $"Greet the user with: '{greeting}'"
+                    }
+                }
+            }
+        };
+            
+        return JsonSerializer.Serialize(message);
     }
     
     private async Task OnClientMessageReceivedAsync(string rawMessage)
