@@ -139,12 +139,12 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
 
                 if (serverContent.TryGetProperty("modelTurn", out var modelTurn) && modelTurn.TryGetProperty("parts", out var parts))
                 {
-                    if (parts.TryGetProperty("inlineData", out var inlineData) && inlineData.TryGetProperty("data", out var data))
+                    if (parts[0].TryGetProperty("inlineData", out var inlineData) && inlineData.TryGetProperty("data", out var data))
                     {
                         return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.ResponseAudioDelta, Data = new RealtimeAiWssAudioData { Base64Payload = data.ToString() }, RawJson = rawMessage };
                     }
 
-                    if (parts.TryGetProperty("text", out var text))
+                    if (parts[0].TryGetProperty("text", out var text))
                     {
                         return new ParsedRealtimeAiProviderEvent {
                             Type = RealtimeAiWssEventType.ResponseTextDelta,
