@@ -19,5 +19,7 @@ public class AiSpeechAssistantMapping : Profile
 
         CreateMap<UpdateAiSpeechAssistantCommand, AiSpeechAssistant>()
             .ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.AssistantName));
+        
+        CreateMap<AiSpeechAssistantSession, AiSpeechAssistantSessionDto>().ReverseMap();
     }
 }
