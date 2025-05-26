@@ -10,7 +10,13 @@
 
 ## 连接
 
-- **端点 (Endpoint)**: `ws://your-websocket-server-address` 
+- **端点 (Endpoint)**: `ws://{smarttalk domian}/api/Realtime/connect/{assistantId}` 
+- Query Parameters: 
+  - smarttalk domian 測試：smarttalktest.yamimeal.ca、PRD：smarttalk.yamimeal.ca
+  - assistantId：選擇需要對話的助手
+- Hearders: 
+  - X-API-KEY：諮詢開發獲取權限
+  - InputFormat、OutputFormat：輸入輸出音頻格式，目前支持`g711_ulaw`、`g711_ulaw`、`pcm16`，輸入其他會報錯
 
 ------
 

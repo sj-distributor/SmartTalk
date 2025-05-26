@@ -42,7 +42,7 @@ public class RealtimeAiController : ControllerBase
             var command = new RealtimeAiConnectCommand
             {
                 AssistantId = assistantId,
-                InputFormat = inputFormat ,
+                InputFormat = inputFormat,
                 OutputFormat = outputFormat,
                 WebSocket = await HttpContext.WebSockets.AcceptWebSocketAsync()
             };
