@@ -1,5 +1,4 @@
 using Serilog;
-using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Requests.AiSpeechAssistant;
 
@@ -16,6 +15,8 @@ public partial interface IAiSpeechAssistantService
     Task<GetAiSpeechAssistantKnowledgeHistoryResponse> GetAiSpeechAssistantKnowledgeHistoryAsync(GetAiSpeechAssistantKnowledgeHistoryRequest request, CancellationToken cancellationToken);
 
     Task<GetAiSpeechAssistantByIdResponse> GetAiSpeechAssistantByIdAsync(GetAiSpeechAssistantByIdRequest request, CancellationToken cancellationToken);
+    
+    Task<GetAiSpeechAssistantSessionResponse> GetAiSpeechAssistantSessionAsync(GetAiSpeechAssistantSessionRequest request, CancellationToken cancellationToken);
 }
 
 public partial class AiSpeechAssistantService
@@ -89,6 +90,18 @@ public partial class AiSpeechAssistantService
         return new GetAiSpeechAssistantByIdResponse
         {
             Data = _mapper.Map<AiSpeechAssistantDto>(assistant)
+        };
+    }
+
+    public async Task<GetAiSpeechAssistantSessionResponse> GetAiSpeechAssistantSessionAsync(GetAiSpeechAssistantSessionRequest request, CancellationToken cancellationToken)
+    {
+        var session = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantSessionBySessionIdAsync(request.SessionId, cancellationToken).ConfigureAwait(false);
+
+        if (session == null) throw new Exception("Could not found the session");
+
+        return new GetAiSpeechAssistantSessionResponse
+        {
+            Data = _mapper.Map<AiSpeechAssistantSessionDto>(session)
         };
     }
 

@@ -18,7 +18,6 @@ public class RealtimeAiController : ControllerBase
         _mediator = mediator;
     }
     
-    [AllowAnonymous]
     [HttpGet("connect/{assistantId}")]
     public async Task RealtimeAiConnectAsync(int assistantId)
     {
@@ -43,7 +42,7 @@ public class RealtimeAiController : ControllerBase
             var command = new RealtimeAiConnectCommand
             {
                 AssistantId = assistantId,
-                InputFormat = inputFormat ,
+                InputFormat = inputFormat,
                 OutputFormat = outputFormat,
                 WebSocket = await HttpContext.WebSockets.AcceptWebSocketAsync()
             };

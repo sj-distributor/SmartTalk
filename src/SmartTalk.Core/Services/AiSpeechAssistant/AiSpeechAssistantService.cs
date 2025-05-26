@@ -21,6 +21,7 @@ using SmartTalk.Core.Domain.OpenAi;
 using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.Attachments;
 using SmartTalk.Core.Services.Ffmpeg;
+using SmartTalk.Core.Services.Caching.Redis;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Identity;
@@ -76,6 +77,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly TwilioSettings _twilioSettings;
     private readonly ISmartiesClient _smartiesClient;
     private readonly ZhiPuAiSettings _zhiPuAiSettings;
+    private readonly IRedisSafeRunner _redisSafeRunner;
     private readonly IPhoneOrderService _phoneOrderService;
     private readonly IAgentDataProvider _agentDataProvider;
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
@@ -103,6 +105,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         TwilioSettings twilioSettings,
         ISmartiesClient smartiesClient,
         ZhiPuAiSettings zhiPuAiSettings,
+        IRedisSafeRunner redisSafeRunner,
         IPhoneOrderService phoneOrderService,
         IAgentDataProvider agentDataProvider,
         IOpenAiDataProvider openAiDataProvider,
@@ -121,6 +124,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _twilioSettings = twilioSettings;
         _smartiesClient = smartiesClient;
         _zhiPuAiSettings = zhiPuAiSettings;
+        _redisSafeRunner = redisSafeRunner;
         _agentDataProvider = agentDataProvider;
         _phoneOrderService = phoneOrderService;
         _httpClientFactory = httpClientFactory;
