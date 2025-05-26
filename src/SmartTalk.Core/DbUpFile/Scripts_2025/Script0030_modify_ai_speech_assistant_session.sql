@@ -1,0 +1,1 @@
+alter table `ai_speech_assistant_session` modify column `session_id` char(36) not null;
