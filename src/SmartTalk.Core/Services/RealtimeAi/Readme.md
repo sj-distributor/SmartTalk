@@ -112,7 +112,7 @@ JSON
   "Data": {
     "Base64Payload": "string"
   },
-  "session_id": "string" // 建议也将 session_id 放在顶层，与您的其他事件保持一致
+  "session_id": "string"
 }
 ```
 
