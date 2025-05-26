@@ -18,17 +18,19 @@ public partial class PosManagementService
     public async Task<SyncPosConfigurationResponse> SyncPosConfigurationAsync(SyncPosConfigurationCommand command, CancellationToken cancellationToken)
     {
         var store = await _posManagementDataProvider.GetPosCompanyStoreAsync(command.StoreId, cancellationToken).ConfigureAwait(false);
-
-        if (store == null) Log.Information("获取到门店信息: {@store}", store);
+        
+        if (store == null) throw new InvalidOperationException($"无法获取门店信息，StoreId: {command.StoreId}");
+        
+        Log.Information("获取到门店信息: {@store}", store);
 
         var posConfiguration = await _easyPosClient.GetEasyPosRestaurantMenusAsync(store.EnName, cancellationToken).ConfigureAwait(false);
 
         Log.Information("获取到 POS 配置数据: {@posConfiguration}", posConfiguration);
         
-        var storeOpeningHours = posConfiguration.Data.TimePeriods; 
-        await UpdateStoreBusinessTimePeriodsAsync(store, storeOpeningHours, cancellationToken);
+        var storeOpeningHours = posConfiguration?.Data?.TimePeriods; 
+        await UpdateStoreBusinessTimePeriodsAsync(store, storeOpeningHours, cancellationToken).ConfigureAwait(false);
         
-        await SyncMenuDataAsync(store, posConfiguration.Data, cancellationToken);
+        await SyncMenuDataAsync(store, posConfiguration?.Data, cancellationToken).ConfigureAwait(false);
         
         return new SyncPosConfigurationResponse
         {
@@ -45,17 +47,17 @@ public partial class PosManagementService
     private async Task SyncMenuDataAsync(PosCompanyStore store, EasyPosResponseData data, CancellationToken cancellationToken)
     {
         var menus = GenerateMenusFromResponse(store, data.Menus);
-        await _posManagementDataProvider.UpdateStoreMenusAsync(menus, true, cancellationToken);
+        await _posManagementDataProvider.UpdateStoreMenusAsync(menus, true, cancellationToken).ConfigureAwait(false);
 
         foreach (var menu in data.Menus)
         {
             var categories = GenerateCategoriesForMenu(menu, data.Categories);
-            await _posManagementDataProvider.UpdateStoreCategoriesAsync(categories, true, cancellationToken);
+            await _posManagementDataProvider.UpdateStoreCategoriesAsync(categories, true, cancellationToken).ConfigureAwait(false);
 
             foreach (var category in categories)
             {
                 var products = GenerateProductsForCategory(category, data.Products);
-                await _posManagementDataProvider.UpdateStoreProductsAsync(products, true, cancellationToken);
+                await _posManagementDataProvider.UpdateStoreProductsAsync(products, true, cancellationToken).ConfigureAwait(false);
             }
         }
     }
