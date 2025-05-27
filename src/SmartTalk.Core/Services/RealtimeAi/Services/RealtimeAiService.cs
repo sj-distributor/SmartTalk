@@ -72,6 +72,7 @@ public class RealtimeAiService : IRealtimeAiService
         
         _conversationEngine = new RealtimeAiConversationEngine(adapter, client);
         _conversationEngine.AiAudioOutputReadyAsync += OnAiAudioOutputReadyAsync;
+        _conversationEngine.AiDetectedUserSpeechAsync += OnAiDetectedUserSpeechAsync;
     }
     
     private async Task ReceiveFromWebSocketClientAsync(RealtimeAiEngineContext context, CancellationToken cancellationToken)
@@ -144,25 +145,41 @@ public class RealtimeAiService : IRealtimeAiService
         
         var audioDelta = new
         {
-            @event = "media",
-            streamSid = _streamSid,
-            media = new { payload = aiAudioData.Base64Payload }
+            type = "ResponseAudioDelta",
+            Data = new
+            { 
+                aiAudioData.Base64Payload
+            },
+            session_id = _streamSid
         };
 
         await _webSocket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(audioDelta))), WebSocketMessageType.Text, true, CancellationToken.None);
     }
-    
+
     private Task OnAiSessionStatusChangedAsync(RealtimeAiWssEventType type, object data)
     {
-        // ... (同前) ...
-        if (type == RealtimeAiWssEventType.SessionInitialized)
+        switch (type)
         {
-            Log.Information("TwilioHandler: AI 会话已成功初始化，可以开始双向通信。"); // TwilioHandler: AI session successfully initialized, bidirectional communication can begin.
+            case RealtimeAiWssEventType.SessionInitialized:
+                Log.Information(
+                    "TwilioHandler: AI 会话已成功初始化，可以开始双向通信。"); // TwilioHandler: AI session successfully initialized, bidirectional communication can begin.
+                break;
+            case RealtimeAiWssEventType.SessionUpdateFailed:
+                Log.Error("TwilioHandler: AI 会话初始化或更新失败: {@EventData}", data); // TwilioHandler: AI session initialization or update failed: {@EventData}
+                break;
         }
-        else if (type == RealtimeAiWssEventType.SessionUpdateFailed)
-        {
-            Log.Error("TwilioHandler: AI 会话初始化或更新失败: {@EventData}", data); // TwilioHandler: AI session initialization or update failed: {@EventData}
-        }
+
         return Task.CompletedTask;
+    }
+
+    private async Task OnAiDetectedUserSpeechAsync()
+    {
+        var speechDetected = new
+        {
+            type = "SpeechDetected",
+            session_id = _streamSid
+        };
+
+        await _webSocket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(speechDetected))), WebSocketMessageType.Text, true, CancellationToken.None);
     }
 }
