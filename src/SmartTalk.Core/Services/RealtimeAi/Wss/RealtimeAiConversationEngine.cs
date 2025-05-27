@@ -151,6 +151,7 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
                          Log.Information("AiConversationEngine: 发送初始会话问候消息。会话 ID: {SessionId}", _sessionId);
                 
                          await _realtimeAiClient.SendMessageAsync(BuildGreetingMessage(_greetings), _sessionCts.Token);
+                         await _realtimeAiClient.SendMessageAsync(JsonSerializer.Serialize(new { type = "response.create" }), _sessionCts.Token);
                      }
                      await OnSessionStatusChangedAsync(RealtimeAiWssEventType.SessionInitialized, parsedEvent.Data ?? _sessionId);
                      break;
