@@ -23,16 +23,16 @@ public class RealtimeAiController : ControllerBase
     {
         if (HttpContext.WebSockets.IsWebSocketRequest)
         {
-            var headers = HttpContext.Request.Headers;
-
-            if (!Enum.TryParse<RealtimeAiAudioCodec>(headers["InputFormat"], ignoreCase: true, out var inputFormat))
+            var requested = HttpContext.WebSockets.WebSocketRequestedProtocols;
+            
+            if (!Enum.TryParse<RealtimeAiAudioCodec>(requested.FirstOrDefault(x => x.StartsWith("InputFormat")), ignoreCase: true, out var inputFormat))
             {
                 HttpContext.Response.StatusCode = 400;
                 await HttpContext.Response.WriteAsync("Invalid InputFormat enum value");
                 return;
             }
 
-            if (!Enum.TryParse<RealtimeAiAudioCodec>(headers["OutputFormat"], ignoreCase: true, out var outputFormat))
+            if (!Enum.TryParse<RealtimeAiAudioCodec>(requested.FirstOrDefault(x => x.StartsWith("OutputFormat")), ignoreCase: true, out var outputFormat))
             {
                 HttpContext.Response.StatusCode = 400;
                 await HttpContext.Response.WriteAsync("Invalid OutputFormat enum value");
