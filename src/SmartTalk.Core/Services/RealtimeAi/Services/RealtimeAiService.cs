@@ -70,6 +70,7 @@ public class RealtimeAiService : IRealtimeAiService
         
         _conversationEngine = new RealtimeAiConversationEngine(adapter, client);
         _conversationEngine.AiAudioOutputReadyAsync += OnAiAudioOutputReadyAsync;
+        _conversationEngine.AiDetectedUserSpeechAsync += OnAiDetectedUserSpeechAsync;
     }
     
     private async Task ReceiveFromWebSocketClientAsync(RealtimeAiEngineContext context, CancellationToken cancellationToken)
@@ -142,11 +143,25 @@ public class RealtimeAiService : IRealtimeAiService
         
         var audioDelta = new
         {
-            @event = "media",
-            streamSid = _streamSid,
-            media = new { payload = aiAudioData.Base64Payload }
+            type = "ResponseAudioDelta",
+            Data = new
+            { 
+                aiAudioData.Base64Payload
+            },
+            session_id = _streamSid
         };
 
         await _webSocket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(audioDelta))), WebSocketMessageType.Text, true, CancellationToken.None);
+    }
+
+    private async Task OnAiDetectedUserSpeechAsync()
+    {
+        var speechDetected = new
+        {
+            type = "SpeechDetected",
+            session_id = _streamSid
+        };
+
+        await _webSocket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(speechDetected))), WebSocketMessageType.Text, true, CancellationToken.None);
     }
 }
