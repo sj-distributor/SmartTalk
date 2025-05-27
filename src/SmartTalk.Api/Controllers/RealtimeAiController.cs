@@ -19,7 +19,7 @@ public class RealtimeAiController : ControllerBase
         _mediator = mediator;
     }
     
-    [AllowAnonymous]
+    // [AllowAnonymous]
     [HttpGet("connect/{assistantId}")]
     public async Task RealtimeAiConnectAsync(int assistantId)
     {
@@ -27,21 +27,21 @@ public class RealtimeAiController : ControllerBase
         {
             var requested = HttpContext.WebSockets.WebSocketRequestedProtocols;
             
-            // if (!Enum.TryParse<RealtimeAiAudioCodec>(requested.FirstOrDefault(x => x.StartsWith("InputFormat."))?.Replace("InputFormat.", ""), ignoreCase: true, out var inputFormat))
-            // {
-            //     HttpContext.Response.StatusCode = 400;
-            //     await HttpContext.Response.WriteAsync("Invalid InputFormat enum value");
-            //     return;
-            // }
-            //
-            // if (!Enum.TryParse<RealtimeAiAudioCodec>(requested.FirstOrDefault(x => x.StartsWith("OutputFormat."))?.Replace("OutputFormat.", ""), ignoreCase: true, out var outputFormat))
-            // {
-            //     HttpContext.Response.StatusCode = 400;
-            //     await HttpContext.Response.WriteAsync("Invalid OutputFormat enum value");
-            //     return;
-            // }
+            if (!Enum.TryParse<RealtimeAiAudioCodec>(requested.FirstOrDefault(x => x.StartsWith("InputFormat."))?.Replace("InputFormat.", ""), ignoreCase: true, out var inputFormat))
+            {
+                HttpContext.Response.StatusCode = 400;
+                await HttpContext.Response.WriteAsync("Invalid InputFormat enum value");
+                return;
+            }
             
-            // Log.Information("Realtime Api AssistantId: {AssistantId}, InputFormat: {RealtimeAiAudioCodec}, OutputFormat: {OutputFormat}", assistantId, inputFormat, outputFormat);
+            if (!Enum.TryParse<RealtimeAiAudioCodec>(requested.FirstOrDefault(x => x.StartsWith("OutputFormat."))?.Replace("OutputFormat.", ""), ignoreCase: true, out var outputFormat))
+            {
+                HttpContext.Response.StatusCode = 400;
+                await HttpContext.Response.WriteAsync("Invalid OutputFormat enum value");
+                return;
+            }
+            
+            Log.Information("Realtime Api AssistantId: {AssistantId}, InputFormat: {RealtimeAiAudioCodec}, OutputFormat: {OutputFormat}", assistantId, inputFormat, outputFormat);
             
             var command = new RealtimeAiConnectCommand
             {
