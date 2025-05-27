@@ -27,7 +27,7 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<ApiKeyAuthentic
         if (!Request.Headers.ContainsKey("X-API-KEY") && !Context.WebSockets.WebSocketRequestedProtocols.Any(x => x.StartsWith("X-API-KEY.")))
             return AuthenticateResult.NoResult();
         
-        var apiKey = Context.WebSockets.IsWebSocketRequest
+        var apiKey = string.IsNullOrWhiteSpace(Context.Request.Headers["X-API-KEY"])
             ? Context.WebSockets.WebSocketRequestedProtocols.FirstOrDefault(x => x.StartsWith("X-API-KEY."))?.Replace("X-API-KEY.", "")
             : Context.Request.Headers["X-API-KEY"].ToString();
         
