@@ -230,6 +230,11 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                 message = $"【第{messageNumber}條】\n" + message;
             }
             
+            if (agent.IsSendAnalysisReportToWechat && !string.IsNullOrEmpty(record.TranscriptionText))
+            {
+                message += "\n\n" + record.TranscriptionText;
+            }
+            
             await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(audioFileRawBytes, agent.WechatRobotKey, message, cancellationToken).ConfigureAwait(false);
         }
 
