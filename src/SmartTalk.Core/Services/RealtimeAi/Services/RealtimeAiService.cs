@@ -43,6 +43,8 @@ public class RealtimeAiService : IRealtimeAiService
     {
         var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantWithKnowledgeAsync(command.AssistantId, cancellationToken).ConfigureAwait(false);
         
+        Log.Information("Get assistant and knowledge: {@Assistant}", assistant);
+        
         if (assistant == null) throw new Exception($"Could not find a assistant by id: {command.AssistantId}");
         
         await RealtimeAiConnectInternalAsync(command.WebSocket, assistant, 
