@@ -23,11 +23,11 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<ApiKeyAuthentic
     
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
-        if (!Request.Headers.ContainsKey("X-API-KEY") || (Context.WebSockets.IsWebSocketRequest && Context.WebSockets.WebSocketRequestedProtocols.Contains("X-API-KEY")))
+        if (!Request.Headers.ContainsKey("X-API-KEY") || (Context.WebSockets.IsWebSocketRequest && Context.WebSockets.WebSocketRequestedProtocols.Contains("X-API-KEY.")))
             return AuthenticateResult.NoResult();
         
         var apiKey = Context.WebSockets.IsWebSocketRequest
-            ? Context.WebSockets.WebSocketRequestedProtocols.FirstOrDefault(x => x.StartsWith("X-API-KEY"))
+            ? Context.WebSockets.WebSocketRequestedProtocols.FirstOrDefault(x => x.StartsWith("X-API-KEY."))?.Replace("X-API-KEY.", "")
             : Context.Request.Headers["X-API-KEY"].ToString();
         
         if (string.IsNullOrWhiteSpace(apiKey))
