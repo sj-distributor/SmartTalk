@@ -300,6 +300,7 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
         var query = from a in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>()
             join k in _repository.Query<AiSpeechAssistantKnowledge>().Where(x => x.IsActive) on a.Id equals k.AssistantId into knowledgeGroup
             from k in knowledgeGroup.DefaultIfEmpty()
+            where a.Id == assistantId
             select new { Assistant = a, Knowledge = k };
         
         var assistant = await query.Select(x => x.Assistant).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
