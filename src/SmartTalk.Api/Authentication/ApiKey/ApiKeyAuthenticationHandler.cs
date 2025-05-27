@@ -6,6 +6,7 @@ using SmartTalk.Core.Services.Account;
 using SmartTalk.Core.Services.Caching;
 using SmartTalk.Messages.Enums.Caching;
 using Microsoft.AspNetCore.Authentication;
+using Serilog;
 
 namespace SmartTalk.Api.Authentication.ApiKey;
 
@@ -29,6 +30,8 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<ApiKeyAuthentic
         var apiKey = Context.WebSockets.IsWebSocketRequest
             ? Context.WebSockets.WebSocketRequestedProtocols.FirstOrDefault(x => x.StartsWith("X-API-KEY"))
             : Context.Request.Headers["X-API-KEY"].ToString();
+        
+        Log.Information("X-API-KEY: {ApiKey}", apiKey);
         
         if (string.IsNullOrWhiteSpace(apiKey))
             return AuthenticateResult.NoResult();

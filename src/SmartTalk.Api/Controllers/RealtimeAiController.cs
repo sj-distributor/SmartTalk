@@ -1,6 +1,7 @@
 using Mediator.Net;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Serilog;
 using SmartTalk.Messages.Commands.RealtimeAi;
 using SmartTalk.Messages.Enums.RealtimeAi;
 
@@ -38,6 +39,8 @@ public class RealtimeAiController : ControllerBase
                 await HttpContext.Response.WriteAsync("Invalid OutputFormat enum value");
                 return;
             }
+            
+            Log.Information("Realtime Api AssistantId: {AssistantId}, InputFormat: {RealtimeAiAudioCodec}, OutputFormat: {OutputFormat}", assistantId, inputFormat, outputFormat);
             
             var command = new RealtimeAiConnectCommand
             {
