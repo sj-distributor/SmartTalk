@@ -15,6 +15,7 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
     private readonly IRealtimeAiWssClient _realtimeAiClient;
 
     private string _sessionId;
+    private string _greetings;
     public string CurrentSessionId { get; }
     private CancellationTokenSource _sessionCts; // 用于控制当前会话的生命周期 (For controlling the lifecycle of the current session)
     private Domain.AISpeechAssistant.AiSpeechAssistant _currentAssistantProfile; // 保存当前会话的助手配置 (Store current session's assistant profile)
@@ -34,6 +35,7 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
     
     public RealtimeAiConversationEngine(IRealtimeAiProviderAdapter aiAdapter, IRealtimeAiWssClient realtimeAiClient)
     {
+        _greetings = string.Empty;
         _aiAdapter = aiAdapter ?? throw new ArgumentNullException(nameof(aiAdapter));
         _realtimeAiClient = realtimeAiClient ?? throw new ArgumentNullException(nameof(realtimeAiClient));
 
@@ -85,12 +87,8 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
             
             await _realtimeAiClient.SendMessageAsync(initialMessageJson, _sessionCts.Token);
 
-            if (!string.IsNullOrEmpty(assistantProfile?.Knowledge?.Greetings) && assistantProfile.ModelProvider != AiSpeechAssistantProvider.Google)
-            {
-                Log.Information("AiConversationEngine: 发送初始会话问候消息。会话 ID: {SessionId}", _sessionId);
-                
-                await _realtimeAiClient.SendMessageAsync(BuildGreetingMessage(assistantProfile.Knowledge.Greetings), _sessionCts.Token);
-            }
+            if (!string.IsNullOrEmpty(assistantProfile.Knowledge?.Greetings) && assistantProfile.ModelProvider != AiSpeechAssistantProvider.Google)
+                _greetings = assistantProfile.Knowledge?.Greetings;
             
             Log.Information("AiConversationEngine: 已发送初始会话消息。会话 ID: {SessionId}", _sessionId); // AiConversationEngine: Initial session message sent. Session ID: {SessionId}
 
@@ -149,6 +147,13 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
             {
                  case RealtimeAiWssEventType.SessionInitialized:
                      Log.Information("AiConversationEngine: AI 服务商确认会话 (ID: {SessionId}) 已初始化/更新。", _sessionId); // AiConversationEngine: AI service provider confirmed session (ID: {SessionId}) initialized/updated.
+                     
+                     if (!string.IsNullOrEmpty(_greetings))
+                     {
+                         Log.Information("AiConversationEngine: 发送初始会话问候消息。会话 ID: {SessionId}", _sessionId);
+                
+                         await _realtimeAiClient.SendMessageAsync(BuildGreetingMessage(_greetings), _sessionCts.Token);
+                     }
                      await OnSessionStatusChangedAsync(RealtimeAiWssEventType.SessionInitialized, parsedEvent.Data ?? _sessionId);
                      break;
                  case RealtimeAiWssEventType.ResponseAudioDelta:
