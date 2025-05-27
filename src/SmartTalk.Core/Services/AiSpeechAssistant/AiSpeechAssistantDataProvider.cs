@@ -281,7 +281,7 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
     public async Task<Domain.AISpeechAssistant.AiSpeechAssistant> GetAiSpeechAssistantWithKnowledgeAsync(int assistantId, CancellationToken cancellationToken)
     {
         var query = from a in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>()
-            join k in _repository.Query<AiSpeechAssistantKnowledge>() on a.Id equals k.AssistantId into knowledgeGroup
+            join k in _repository.Query<AiSpeechAssistantKnowledge>().Where(x => x.IsActive) on a.Id equals k.AssistantId into knowledgeGroup
             from k in knowledgeGroup.DefaultIfEmpty()
             select new { Assistant = a, Knowledge = k };
         
