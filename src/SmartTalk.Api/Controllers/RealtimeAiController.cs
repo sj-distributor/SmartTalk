@@ -19,6 +19,7 @@ public class RealtimeAiController : ControllerBase
         _mediator = mediator;
     }
     
+    [AllowAnonymous]
     [HttpGet("connect/{assistantId}")]
     public async Task RealtimeAiConnectAsync(int assistantId)
     {
