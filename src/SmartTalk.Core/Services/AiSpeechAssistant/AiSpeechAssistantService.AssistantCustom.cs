@@ -171,7 +171,7 @@ public partial class AiSpeechAssistantService
         var assistant = new Domain.AISpeechAssistant.AiSpeechAssistant
         {
             AgentId = agent.Id,
-            ModelVoice = "alloy",
+            ModelVoice = ModelVoiceMapping(command.VoiceType),
             Name = command.AssistantName,
             AnsweringNumberId = number?.Id,
             AnsweringNumber = number?.Number,
@@ -186,6 +186,18 @@ public partial class AiSpeechAssistantService
         await InitialAssistantKnowledgeAsync(command, assistant, cancellationToken).ConfigureAwait(false);
 
         return assistant;
+    }
+
+    private string ModelVoiceMapping(AiKidVoiceType? voiceType)
+    {
+        if (!voiceType.HasValue) return "alloy";
+        
+        return voiceType.Value switch
+        {
+            AiKidVoiceType.Male => "ash",
+            AiKidVoiceType.Female => "alloy",
+            _ => "alloy"
+        };
     }
     
     private async Task<(Agent agent, NumberPool number)> InitialAssistantRelatedInfoAsync(AddAiSpeechAssistantCommand command, CancellationToken cancellationToken)
