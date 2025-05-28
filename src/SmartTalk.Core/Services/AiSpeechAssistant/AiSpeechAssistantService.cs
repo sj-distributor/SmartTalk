@@ -307,6 +307,30 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         return messageNumber;
     }
 
+    private async Task<int> SendAgentMessageRecordAsync(int agentId, int recordId, CancellationToken cancellationToken)
+    {
+        var shanghaiTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Asia/Shanghai");
+        var nowShanghai = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, shanghaiTimeZone);
+
+        var utcDate = nowShanghai.Date.ToUniversalTime();
+        
+        var existingCount = await _aiSpeechAssistantDataProvider.GetMessageCountByAgentAndDateAsync(agentId, utcDate, cancellationToken).ConfigureAwait(false);
+        
+        var messageNumber = existingCount + 1;
+        
+        var newRecord = new AgentMessageRecord
+        {
+            AgentId = agentId,
+            RecordId = recordId,
+            MessageNumber = messageNumber
+        };
+        
+        await _aiSpeechAssistantDataProvider.AddAgentMessageRecordAsync(newRecord, cancellationToken).ConfigureAwait(false);
+        
+        return messageNumber;
+    }
+
+    private async Task<(Domain.AISpeechAssistant.AiSpeechAssistant assistant, AiSpeechAssistantKnowledge knowledge, string finalPrompt)> BuildingAiSpeechAssistantKnowledgeBaseAsync(string from, string to, int? assistantId, CancellationToken cancellationToken)
     public async Task<(Domain.AISpeechAssistant.AiSpeechAssistant assistant, AiSpeechAssistantKnowledge knowledge, string finalPrompt)> BuildingAiSpeechAssistantKnowledgeBaseAsync(string from, string to, int? assistantId, CancellationToken cancellationToken)
     {
         var (assistant, knowledge, userProfile) = await _aiSpeechAssistantDataProvider

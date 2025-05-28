@@ -133,11 +133,23 @@ public partial class AiSpeechAssistantService
 
     public async Task<UpdateAiSpeechAssistantKnowledgeResponse> UpdateAiSpeechAssistantKnowledgeAsync(UpdateAiSpeechAssistantKnowledgeCommand command, CancellationToken cancellationToken)
     {
-        var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(knowledgeId: command.KnowledgeId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var knowledgeId = command.KnowledgeId ?? (command.AssistantId.HasValue
+            ? (await GetAiSpeechAssistantKnowledgeAsync(command.AssistantId.Value, cancellationToken).ConfigureAwait(false))?.Id : null);
+        
+        Log.Information("Initial knowledge id if required, original:{OriginalKnowledgeId}, {knowledgeId}, {AssistantId}", command.KnowledgeId, knowledgeId, command.AssistantId);
+
+        if (knowledgeId == null)
+            throw new Exception("Could not find the knowledge id!");
+        
+        var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(knowledgeId: knowledgeId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (knowledge == null) throw new Exception("Could not found the knowledge by knowledge id");
 
-        knowledge.Brief = command.Brief;
+        if(!string.IsNullOrWhiteSpace(command.Brief))
+            knowledge.Brief = command.Brief;
+        
+        if (!string.IsNullOrWhiteSpace(command.Greetings))
+            command.Greetings = command.Greetings;
         
         await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync([knowledge], cancellationToken: cancellationToken).ConfigureAwait(false);
         
@@ -182,9 +194,19 @@ public partial class AiSpeechAssistantService
         };
     }
 
+    private async Task<AiSpeechAssistantKnowledge> GetAiSpeechAssistantKnowledgeAsync(int assistantId, CancellationToken cancellationToken)
+    {
+        var knowledge = await _aiSpeechAssistantDataProvider
+            .GetAiSpeechAssistantKnowledgeAsync(assistantId: assistantId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Get knowledge by assistant when update the knowledge: {@Knowledge}", knowledge);
+        
+        return knowledge;
+    }
+
     private async Task<Domain.AISpeechAssistant.AiSpeechAssistant> InitialAiSpeechAssistantAsync(AddAiSpeechAssistantCommand command, CancellationToken cancellationToken)
     {
-        var (agent, number) = await InitialAssistantRelatedInfoAsync(command.AssistantName, cancellationToken).ConfigureAwait(false);
+        var (agent, number) = await InitialAssistantRelatedInfoAsync(command , cancellationToken).ConfigureAwait(false);
         
         var assistant = new Domain.AISpeechAssistant.AiSpeechAssistant
         {
@@ -206,21 +228,30 @@ public partial class AiSpeechAssistantService
         return assistant;
     }
     
-    private async Task<(Agent agent, NumberPool number)> InitialAssistantRelatedInfoAsync(string assistantName, CancellationToken cancellationToken)
+    private async Task<(Agent agent, NumberPool number)> InitialAssistantRelatedInfoAsync(AddAiSpeechAssistantCommand command, CancellationToken cancellationToken)
     {
-        var domain = new Restaurant { Name = assistantName };
+        var domain = new Restaurant { Name = command.AssistantName };
 
         await _restaurantDataProvider.AddRestaurantAsync(domain, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var agent = new Agent
         {
             RelateId = domain.Id,
-            Type = AgentType.Restaurant,
-            SourceSystem = AgentSourceSystem.Self
+            Type = command.AgentType,
+            SourceSystem = command.SourceSystem
         };
 
         await _agentDataProvider.AddAgentAsync(agent, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        if (command.AgentType == AgentType.AiKid && command.Uuid.HasValue)
+            await _aiSpeechAssistantDataProvider.AddAiKidAsync(new AiKid
+            {
+                AgentId = agent.Id,
+                KidUuid = command.Uuid.Value
+            }, cancellationToken: cancellationToken).ConfigureAwait(false);
 
+        if (!command.IsDisplay) return (agent, null);
+        
         var number = await _aiSpeechAssistantDataProvider.GetNumberAsync(isUsed: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (number != null)

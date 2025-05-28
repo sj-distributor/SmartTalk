@@ -8,7 +8,11 @@ public class UpdateAiSpeechAssistantKnowledgeCommand : ICommand
 {
     public string Brief { get; set; }
     
-    public int KnowledgeId { get; set; }
+    public int? KnowledgeId { get; set; }
+    
+    public int? AssistantId { get; set; }
+    
+    public string Greetings { get; set; }
 }
 
 public class UpdateAiSpeechAssistantKnowledgeResponse : SmartTalkResponse<AiSpeechAssistantKnowledgeDto>
