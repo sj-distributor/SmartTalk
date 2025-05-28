@@ -261,11 +261,11 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         var shanghaiTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Asia/Shanghai");
         var nowShanghai = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, shanghaiTimeZone);
         
-        var localTodayStart = new DateTimeOffset(nowShanghai.Date, shanghaiTimeZone.GetUtcOffset(nowShanghai.Date));
-        var localTomorrowStart = localTodayStart.AddDays(1);
+        var todayStart = new DateTimeOffset(nowShanghai.Date, shanghaiTimeZone.GetUtcOffset(nowShanghai.Date));
+        var tomorrowStart = todayStart.AddDays(1);
 
-        var utcStart = localTodayStart.UtcDateTime;
-        var utcEnd = localTomorrowStart.UtcDateTime;
+        var utcStart = todayStart.ToUniversalTime();
+        var utcEnd = tomorrowStart.ToUniversalTime();
         
         var existingCount = await _aiSpeechAssistantDataProvider.GetMessageCountByAgentAndDateAsync(agentId, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
         
