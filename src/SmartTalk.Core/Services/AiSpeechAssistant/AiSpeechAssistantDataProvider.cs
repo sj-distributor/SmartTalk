@@ -49,7 +49,7 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
     
     Task<Domain.AISpeechAssistant.AiSpeechAssistant> GetAiSpeechAssistantByIdAsync(int assistantId, CancellationToken cancellationToken);
     
-    Task<int> GetMessageCountByAgentAndDateAsync(int agentId, DateTimeOffset date,  CancellationToken cancellationToken);
+    Task<int> GetMessageCountByAgentAndDateAsync(int agentId, DateTimeOffset date, CancellationToken cancellationToken);
     
     Task AddAgentMessageRecordAsync(AgentMessageRecord messageRecord, CancellationToken cancellationToken = default);
 }

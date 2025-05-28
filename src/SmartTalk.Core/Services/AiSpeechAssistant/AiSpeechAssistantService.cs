@@ -271,10 +271,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         {
             AgentId = agentId,
             RecordId = recordId,
-            MessageDate = DateTimeOffset.UtcNow,
-            MessageNumber = messageNumber,
-            CreatedDate = DateTimeOffset.UtcNow,
-            LastModifiedDate = DateTimeOffset.UtcNow
+            MessageNumber = messageNumber
         };
         
         await _aiSpeechAssistantDataProvider.AddAgentMessageRecordAsync(newRecord, cancellationToken).ConfigureAwait(false);
