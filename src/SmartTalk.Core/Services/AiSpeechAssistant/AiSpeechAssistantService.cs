@@ -258,10 +258,12 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
     private async Task<int> SendAgentMessageRecordAsync(int agentId, int recordId, CancellationToken cancellationToken)
     {
-        var now = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Asia/Shanghai"));
-        var today = now.Date;
+        var shanghaiTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Asia/Shanghai");
+        var nowShanghai = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, shanghaiTimeZone);
+
+        var utcDate = nowShanghai.Date.ToUniversalTime();
         
-        var existingCount = await _aiSpeechAssistantDataProvider.GetMessageCountByAgentAndDateAsync(agentId, today, cancellationToken).ConfigureAwait(false);
+        var existingCount = await _aiSpeechAssistantDataProvider.GetMessageCountByAgentAndDateAsync(agentId, utcDate, cancellationToken).ConfigureAwait(false);
         
         var messageNumber = existingCount + 1;
         
@@ -269,10 +271,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         {
             AgentId = agentId,
             RecordId = recordId,
-            MessageDate = now,
-            MessageNumber = messageNumber,
-            CreatedDate = now,
-            LastModifiedDate = now
+            MessageNumber = messageNumber
         };
         
         await _aiSpeechAssistantDataProvider.AddAgentMessageRecordAsync(newRecord, cancellationToken).ConfigureAwait(false);
