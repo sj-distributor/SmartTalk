@@ -87,7 +87,7 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
             
             await _realtimeAiClient.SendMessageAsync(initialMessageJson, _sessionCts.Token);
 
-            if (!string.IsNullOrEmpty(assistantProfile.Knowledge?.Greetings) && assistantProfile.ModelProvider != AiSpeechAssistantProvider.Google)
+            if (!string.IsNullOrEmpty(assistantProfile.Knowledge?.Greetings))
                 _greetings = assistantProfile.Knowledge?.Greetings;
             
             Log.Information("AiConversationEngine: 已发送初始会话消息。会话 ID: {SessionId}", _sessionId); // AiConversationEngine: Initial session message sent. Session ID: {SessionId}
@@ -151,9 +151,10 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
                      if (!string.IsNullOrEmpty(_greetings))
                      {
                          Log.Information("AiConversationEngine: 发送初始会话问候消息。会话 ID: {SessionId}", _sessionId);
-                
-                         await _realtimeAiClient.SendMessageAsync(BuildGreetingMessage(_greetings), _sessionCts.Token);
-                         await _realtimeAiClient.SendMessageAsync(JsonSerializer.Serialize(new { type = "response.create" }), _sessionCts.Token);
+
+                         await SendTextAsync($"Greet the user with: {_greetings}");
+                         if (_currentAssistantProfile.ModelProvider == AiSpeechAssistantProvider.OpenAi)
+                             await _realtimeAiClient.SendMessageAsync(JsonSerializer.Serialize(new { type = "response.create" }), _sessionCts.Token);
                      }
                      await OnSessionStatusChangedAsync(RealtimeAiWssEventType.SessionInitialized, parsedEvent.Data ?? _sessionId);
                      break;
@@ -255,9 +256,6 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
 
     public async Task SendTextAsync(string text)
     {
-        // ... (同前) ...
-        if (!IsSessionActive("发送文本消息")) return; // Send text message
-
         Log.Information("AiConversationEngine: 准备发送文本消息: '{Text}'. 会话 ID: {SessionId}", text, _sessionId); // AiConversationEngine: Preparing to send text message: '{Text}'. Session ID: {SessionId}
         var messageJson = _aiAdapter.BuildTextUserMessage(text, _sessionId);
         await _realtimeAiClient.SendMessageAsync(messageJson, _sessionCts.Token);
