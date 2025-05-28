@@ -285,30 +285,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     
     private async Task<int> SendAgentMessageRecordAsync(int agentId, int recordId, CancellationToken cancellationToken)
     {
-        var now = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Asia/Shanghai"));
-        var today = now.Date;
-        
-        var existingCount = await _aiSpeechAssistantDataProvider.GetMessageCountByAgentAndDateAsync(agentId, today, cancellationToken).ConfigureAwait(false);
-        
-        var messageNumber = existingCount + 1;
-        
-        var newRecord = new AgentMessageRecord
-        {
-            AgentId = agentId,
-            RecordId = recordId,
-            MessageDate = now,
-            MessageNumber = messageNumber,
-            CreatedDate = now,
-            LastModifiedDate = now
-        };
-        
-        await _aiSpeechAssistantDataProvider.AddAgentMessageRecordAsync(newRecord, cancellationToken).ConfigureAwait(false);
-        
-        return messageNumber;
-    }
-
-    private async Task<int> SendAgentMessageRecordAsync(int agentId, int recordId, CancellationToken cancellationToken)
-    {
         var shanghaiTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Asia/Shanghai");
         var nowShanghai = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, shanghaiTimeZone);
 
@@ -330,7 +306,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         return messageNumber;
     }
 
-    private async Task<(Domain.AISpeechAssistant.AiSpeechAssistant assistant, AiSpeechAssistantKnowledge knowledge, string finalPrompt)> BuildingAiSpeechAssistantKnowledgeBaseAsync(string from, string to, int? assistantId, CancellationToken cancellationToken)
     public async Task<(Domain.AISpeechAssistant.AiSpeechAssistant assistant, AiSpeechAssistantKnowledge knowledge, string finalPrompt)> BuildingAiSpeechAssistantKnowledgeBaseAsync(string from, string to, int? assistantId, CancellationToken cancellationToken)
     {
         var (assistant, knowledge, userProfile) = await _aiSpeechAssistantDataProvider
