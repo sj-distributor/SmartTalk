@@ -78,9 +78,18 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
         var message = new
         {
             type = "conversation.item.create", // 假设的事件类型 (Assumed event type)
-            role = "user",
-            content = text,
-            session_id = sessionId
+            item = new
+            {
+                type = "message",
+                role = "user",
+                content = new[]
+                {
+                    new
+                    {
+                        type = "input_text", text
+                    }
+                }
+            }
         };
         return JsonSerializer.Serialize(message);
     }
