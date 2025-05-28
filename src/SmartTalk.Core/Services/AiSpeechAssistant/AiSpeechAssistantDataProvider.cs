@@ -49,7 +49,7 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
     
     Task<Domain.AISpeechAssistant.AiSpeechAssistant> GetAiSpeechAssistantByIdAsync(int assistantId, CancellationToken cancellationToken);
     
-    Task<int> GetMessageCountByAgentAndDateAsync(int agentId, DateTimeOffset dateStart, DateTimeOffset dateEnd,  CancellationToken cancellationToken);
+    Task<int> GetMessageCountByAgentAndDateAsync(int agentId, DateTimeOffset date,  CancellationToken cancellationToken);
     
     Task AddAgentMessageRecordAsync(AgentMessageRecord messageRecord, CancellationToken cancellationToken = default);
 }
@@ -273,9 +273,9 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
             .Where(x => x.Id == assistantId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<int> GetMessageCountByAgentAndDateAsync(int agentId, DateTimeOffset dateStart, DateTimeOffset dateEnd,  CancellationToken cancellationToken)
+    public async Task<int> GetMessageCountByAgentAndDateAsync(int agentId, DateTimeOffset date, CancellationToken cancellationToken)
     {
-        return await _repository.Query<AgentMessageRecord>().Where(x => x.AgentId == agentId && x.MessageDate >= dateStart && x.MessageDate < dateEnd)
+        return await _repository.Query<AgentMessageRecord>().Where(x => x.AgentId == agentId && x.MessageDate >= date)
             .CountAsync(cancellationToken).ConfigureAwait(false);
     }
 
