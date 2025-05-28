@@ -68,7 +68,7 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
     {
         var mimeType = audioData.CustomProperties.GetValueOrDefault(nameof(RealtimeAiEngineContext.InputFormat)) switch
         {
-            RealtimeAiAudioCodec.PCM16 => "audio/pcm;rate=8000",
+            RealtimeAiAudioCodec.PCM16 => "audio/pcm;rate=24000",
             _ => throw new NotSupportedException("mimeType")
         };
 
