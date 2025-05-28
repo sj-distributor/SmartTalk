@@ -54,8 +54,8 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
                         new { text = knowledge?.Prompt ?? string.Empty }
                     }
                 },
-                tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config),
-                realtimeInputConfig = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection)
+                // tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config),
+                // realtimeInputConfig = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection)
             }
         };
         
