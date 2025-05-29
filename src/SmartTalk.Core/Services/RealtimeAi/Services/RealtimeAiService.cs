@@ -207,6 +207,14 @@ public class RealtimeAiService : IRealtimeAiService
     private async Task OnAiTurnCompletedAsync(object data)
     {
         _isAiSpeaking = false;
+        
+        var audioDelta = new
+        {
+            type = "AiTurnCompleted",
+            session_id = _streamSid
+        };
+
+        await _webSocket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(audioDelta))), WebSocketMessageType.Text, true, CancellationToken.None);
         Log.Information("Realtime turn completed, {@data}", data);
     }
 }
