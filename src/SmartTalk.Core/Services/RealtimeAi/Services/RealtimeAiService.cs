@@ -4,6 +4,7 @@ using Newtonsoft.Json;
 using System.Text.Json;
 using SmartTalk.Core.Ioc;
 using System.Net.WebSockets;
+using NAudio.Wave;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.RealtimeAi;
 using SmartTalk.Core.Services.RealtimeAi.Wss;
@@ -106,13 +107,23 @@ public class RealtimeAiService : IRealtimeAiService
                     
                     if (result.MessageType == WebSocketMessageType.Close)
                     {
-                        if (_wholeAudioBuffer != null)
+                        if (_wholeAudioBuffer is { Length: > 0 })
                         {
-                            var audio = await _attachmentService.UploadAttachmentAsync(new UploadAttachmentCommand { Attachment = new UploadAttachmentDto { FileName = Guid.NewGuid() + ".wav", FileContent = _wholeAudioBuffer.ToArray(), } }, cancellationToken).ConfigureAwait(false);
+                            var waveFormat = new WaveFormat(24000, 16, 1);
+                            using (var wavStream = new MemoryStream())
+                            await using (var writer = new WaveFileWriter(wavStream, waveFormat))
+                            {
+                                writer.Write(_wholeAudioBuffer.ToArray(), 0, (int)_wholeAudioBuffer.Length);
+                                writer.Flush();
+                                var audio = await _attachmentService.UploadAttachmentAsync(new UploadAttachmentCommand { Attachment = new UploadAttachmentDto { FileName = Guid.NewGuid() + ".wav", FileContent = wavStream.ToArray(), } }, cancellationToken).ConfigureAwait(false);
                             
-                            Log.Information("audio uploaded, url: {Url}", audio?.Attachment?.FileUrl);
+                                Log.Information("audio uploaded, url: {Url}", audio?.Attachment?.FileUrl);
+                            }
+                            
+                            await _wholeAudioBuffer.DisposeAsync();
+                            _wholeAudioBuffer = null;
                         }
-                            
+                        
                         await _conversationEngine.EndSessionAsync("Disconnect From RealtimeAi");
                         await _webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Client acknowledges close", CancellationToken.None);
                         return;
