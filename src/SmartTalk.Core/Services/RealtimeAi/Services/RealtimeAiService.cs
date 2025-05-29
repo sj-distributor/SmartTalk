@@ -228,13 +228,13 @@ public class RealtimeAiService : IRealtimeAiService
     {
         _isAiSpeaking = false;
         
-        var audioDelta = new
+        var turnCompleted = new
         {
             type = "AiTurnCompleted",
             session_id = _streamSid
         };
 
-        await _webSocket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(audioDelta))), WebSocketMessageType.Text, true, CancellationToken.None);
+        await _webSocket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(turnCompleted))), WebSocketMessageType.Text, true, CancellationToken.None);
         Log.Information("Realtime turn completed, {@data}", data);
     }
 }

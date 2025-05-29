@@ -16,7 +16,7 @@
   - assistantId：選擇需要對話的助手
 - Hearders: 
   - X-API-KEY：諮詢開發獲取權限
-  - InputFormat、OutputFormat：輸入輸出音頻格式，目前支持`g711_ulaw`、`g711_ulaw`、`pcm16`，輸入其他會報錯
+  - InputFormat、OutputFormat：輸入輸出音頻格式，目前支持`g711_ulaw`、`g711_alaw`、`pcm16`，輸入其他會報錯
 
 ------
 
