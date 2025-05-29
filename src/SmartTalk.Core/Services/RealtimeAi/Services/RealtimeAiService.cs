@@ -8,9 +8,12 @@ using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.RealtimeAi;
 using SmartTalk.Core.Services.RealtimeAi.Wss;
 using SmartTalk.Core.Services.AiSpeechAssistant;
+using SmartTalk.Core.Services.Attachments;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Core.Services.RealtimeAi.Adapters;
+using SmartTalk.Messages.Commands.Attachments;
 using SmartTalk.Messages.Commands.RealtimeAi;
+using SmartTalk.Messages.Dto.Attachments;
 using JsonException = System.Text.Json.JsonException;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 
@@ -23,20 +26,26 @@ public interface IRealtimeAiService : IScopedDependency
 
 public class RealtimeAiService : IRealtimeAiService
 {
+    private readonly IAttachmentService _attachmentService;
     private readonly IRealtimeAiSwitcher _realtimeAiSwitcher;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
 
     private string _streamSid;
     private WebSocket _webSocket;
     private IRealtimeAiConversationEngine _conversationEngine;
+    
+    private volatile bool _isAiSpeaking;
+    private MemoryStream _wholeAudioBuffer;
 
-    public RealtimeAiService(IRealtimeAiSwitcher realtimeAiSwitcher, IRealtimeAiConversationEngine conversationEngine, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
+    public RealtimeAiService(IAttachmentService attachmentService, IRealtimeAiSwitcher realtimeAiSwitcher, IRealtimeAiConversationEngine conversationEngine, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
+        _attachmentService = attachmentService;
         _realtimeAiSwitcher = realtimeAiSwitcher;
         _conversationEngine = conversationEngine;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
 
         _webSocket = null;
+        _isAiSpeaking = false;
     }
     
     public async Task RealtimeAiConnectAsync(RealtimeAiConnectCommand command, CancellationToken cancellationToken)
@@ -58,6 +67,9 @@ public class RealtimeAiService : IRealtimeAiService
         _streamSid = Guid.NewGuid().ToString("N");
         
         _conversationEngine.SessionStatusChangedAsync += OnAiSessionStatusChangedAsync;
+
+        _isAiSpeaking = false; 
+        _wholeAudioBuffer = new MemoryStream();
         
         BuildConversationEngine(assistant.ModelProvider);
         
@@ -75,6 +87,7 @@ public class RealtimeAiService : IRealtimeAiService
         _conversationEngine = new RealtimeAiConversationEngine(adapter, client);
         _conversationEngine.AiAudioOutputReadyAsync += OnAiAudioOutputReadyAsync;
         _conversationEngine.AiDetectedUserSpeechAsync += OnAiDetectedUserSpeechAsync;
+        _conversationEngine.AiTurnCompletedAsync += OnAiTurnCompletedAsync;
     }
     
     private async Task ReceiveFromWebSocketClientAsync(RealtimeAiEngineContext context, CancellationToken cancellationToken)
@@ -93,6 +106,13 @@ public class RealtimeAiService : IRealtimeAiService
                     
                     if (result.MessageType == WebSocketMessageType.Close)
                     {
+                        if (_wholeAudioBuffer != null)
+                        {
+                            var audio = await _attachmentService.UploadAttachmentAsync(new UploadAttachmentCommand { Attachment = new UploadAttachmentDto { FileName = Guid.NewGuid() + ".wav", FileContent = _wholeAudioBuffer.ToArray(), } }, cancellationToken).ConfigureAwait(false);
+                            
+                            Log.Information("audio uploaded, url: {Url}", audio?.Attachment?.FileUrl);
+                        }
+                            
                         await _conversationEngine.EndSessionAsync("Disconnect From RealtimeAi");
                         await _webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Client acknowledges close", CancellationToken.None);
                         return;
@@ -110,9 +130,12 @@ public class RealtimeAiService : IRealtimeAiService
                 {
                     using var jsonDocument = JsonSerializer.Deserialize<JsonDocument>(rawMessage);
                     var payload = jsonDocument?.RootElement.GetProperty("media").GetProperty("payload").GetString();
-        
+                    
                     if (!string.IsNullOrWhiteSpace(payload))
                     {
+                        if (!_isAiSpeaking && _wholeAudioBuffer != null)
+                            await _wholeAudioBuffer.WriteAsync(Convert.FromBase64String(payload), cancellationToken).ConfigureAwait(false);
+                        
                         await _conversationEngine.SendAudioChunkAsync(new RealtimeAiWssAudioData
                         {
                             Base64Payload = payload,
@@ -144,6 +167,11 @@ public class RealtimeAiService : IRealtimeAiService
         if (aiAudioData == null || string.IsNullOrEmpty(aiAudioData.Base64Payload)) return;
 
         Log.Information("Realtime output: {@Output} 准备发送。", aiAudioData);
+        
+        _isAiSpeaking = true;
+        var aiAudioBytes = Convert.FromBase64String(aiAudioData.Base64Payload);
+        if (_wholeAudioBuffer != null)
+            await _wholeAudioBuffer.WriteAsync(aiAudioBytes, CancellationToken.None).ConfigureAwait(false);
         
         var audioDelta = new
         {
@@ -183,5 +211,11 @@ public class RealtimeAiService : IRealtimeAiService
         };
 
         await _webSocket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(speechDetected))), WebSocketMessageType.Text, true, CancellationToken.None);
+    }
+
+    private async Task OnAiTurnCompletedAsync(object data)
+    {
+        _isAiSpeaking = false;
+        Log.Information("Realtime turn completed, {@data}", data);
     }
 }
