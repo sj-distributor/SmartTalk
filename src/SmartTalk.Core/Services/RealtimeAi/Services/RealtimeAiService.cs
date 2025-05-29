@@ -234,6 +234,7 @@ public class RealtimeAiService : IRealtimeAiService
             session_id = _streamSid
         };
 
+        Log.Information("Realtime turn completed, {@turnCompleted}", turnCompleted);
         await _webSocket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(turnCompleted))), WebSocketMessageType.Text, true, CancellationToken.None);
         Log.Information("Realtime turn completed, {@data}", data);
     }
