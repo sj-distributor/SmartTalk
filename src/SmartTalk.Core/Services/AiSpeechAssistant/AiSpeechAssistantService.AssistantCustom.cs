@@ -203,13 +203,18 @@ public partial class AiSpeechAssistantService
     
     private async Task<(Agent agent, NumberPool number)> InitialAssistantRelatedInfoAsync(AddAiSpeechAssistantCommand command, CancellationToken cancellationToken)
     {
-        var domain = new Restaurant { Name = command.AssistantName };
+        Restaurant domain = null;
+        
+        if (command.AgentType != AgentType.AiKid)
+        {
+            domain = new Restaurant { Name = command.AssistantName };
 
-        await _restaurantDataProvider.AddRestaurantAsync(domain, cancellationToken: cancellationToken).ConfigureAwait(false);
+            await _restaurantDataProvider.AddRestaurantAsync(domain, cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
 
         var agent = new Agent
         {
-            RelateId = domain.Id,
+            RelateId = domain?.Id ?? 0,
             Type = command.AgentType,
             SourceSystem = command.SourceSystem
         };
