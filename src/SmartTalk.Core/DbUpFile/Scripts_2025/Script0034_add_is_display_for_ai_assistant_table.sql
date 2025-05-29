@@ -1,0 +1,1 @@
+alter table `ai_speech_assistant` add column `is_display` int not null default 1;

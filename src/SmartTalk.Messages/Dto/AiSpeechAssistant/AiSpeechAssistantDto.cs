@@ -23,6 +23,8 @@ public class AiSpeechAssistantDto
     
     public string Channel { get; set; }
     
+    public bool IsDisplay { get; set; }
+    
     public DateTimeOffset CreatedDate { get; set; }
     
     public int CreatedBy { get; set; }

@@ -155,7 +155,7 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
     public async Task<(int, List<Domain.AISpeechAssistant.AiSpeechAssistant>)> GetAiSpeechAssistantsAsync(
         int? pageIndex = null, int? pageSize = null, string channel = null, CancellationToken cancellationToken = default)
     {
-        var query = _repository.QueryNoTracking<Domain.AISpeechAssistant.AiSpeechAssistant>();
+        var query = _repository.QueryNoTracking<Domain.AISpeechAssistant.AiSpeechAssistant>().Where(x => x.IsDisplay);
 
         if (!string.IsNullOrEmpty(channel))
             query = query.Where(x => x.Channel.Contains(channel));
