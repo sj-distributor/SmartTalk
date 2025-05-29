@@ -53,6 +53,15 @@ public class PosCompanyStore : IEntity, IHasCreatedFields, IHasModifiedFields
     [Column("time_period")]
     public string TimePeriod { get; set; }
     
+    [Column("pos_name"), StringLength(64)]
+    public string PosName { get; set; }
+    
+    [Column("pos_id"), StringLength(64)]
+    public string PosId { get; set; }
+    
+    [Column("is_link")]
+    public bool IsLink { get; set; }
+    
     [Column("created_by")]
     public int? CreatedBy { get; set; }
     

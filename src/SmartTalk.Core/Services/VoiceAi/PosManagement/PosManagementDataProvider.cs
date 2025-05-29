@@ -13,7 +13,7 @@ public partial interface IPosManagementDataProvider : IScopedDependency
     Task<(int Count, List<PosCompany> Companies)> GetPosCompaniesAsync(
         int? pageIndex = null, int? pageSize = null, List<int> companyIds = null, string keyword = null, CancellationToken cancellationToken = default);
         
-    Task<PosCompanyStore> GetPosCompanyStoreAsync(int? id = null, CancellationToken cancellationToken = default);
+    Task<PosCompanyStore> GetPosCompanyStoreAsync(string link = null, int? id = null, CancellationToken cancellationToken = default);
     
     Task<PosCompanyStoreDto> GetPosCompanyStoreDetailAsync(int? id = null, CancellationToken cancellationToken = default);
     
@@ -66,12 +66,15 @@ public partial class PosManagementDataProvider : IPosManagementDataProvider
         return (count, companies);
     }
 
-    public async Task<PosCompanyStore> GetPosCompanyStoreAsync(int? id = null, CancellationToken cancellationToken = default)
+    public async Task<PosCompanyStore> GetPosCompanyStoreAsync(string link = null, int? id = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<PosCompanyStore>();
 
         if (id.HasValue)
             query = query.Where(x => x.Id == id.Value);
+
+        if (!string.IsNullOrEmpty(link))
+            query = query.Where(x => x.Link == link);
 
         return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -97,6 +100,9 @@ public partial class PosManagementDataProvider : IPosManagementDataProvider
                 Link = store.Link,
                 AppId = store.AppId,
                 AppSecret = store.AppSecret,
+                IsLink = store.IsLink,
+                PosId = store.PosId,
+                PosName = store.PosName,
                 CreatedBy = store.CreatedBy,
                 CreatedDate = store.CreatedDate,
                 LastModifiedBy = store.LastModifiedBy,
