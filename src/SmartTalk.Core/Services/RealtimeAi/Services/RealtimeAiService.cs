@@ -102,13 +102,15 @@ public class RealtimeAiService : IRealtimeAiService
                     
                     if (result.MessageType == WebSocketMessageType.Close)
                     {
-                        if (_wholeAudioBuffer != null)
+                        if (_wholeAudioBuffer is { Length: > 0 })
                         {
                             var audio = await _attachmentService.UploadAttachmentAsync(new UploadAttachmentCommand { Attachment = new UploadAttachmentDto { FileName = Guid.NewGuid() + ".wav", FileContent = _wholeAudioBuffer.ToArray(), } }, cancellationToken).ConfigureAwait(false);
                             
                             Log.Information("audio uploaded, url: {Url}", audio?.Attachment?.FileUrl);
+                            await _wholeAudioBuffer.DisposeAsync();
+                            _wholeAudioBuffer = null;
                         }
-                            
+                        
                         await _conversationEngine.EndSessionAsync("Disconnect From RealtimeAi");
                         await _webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Client acknowledges close", CancellationToken.None);
                         return;
