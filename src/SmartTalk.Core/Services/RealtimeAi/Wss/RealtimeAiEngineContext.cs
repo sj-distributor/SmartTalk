@@ -4,6 +4,8 @@ namespace SmartTalk.Core.Services.RealtimeAi.Wss;
 
 public class RealtimeAiEngineContext
 {
+    public int AgentId { get; set; }
+    
     public string InitialPrompt { get; set; }
 
     public RealtimeAiAudioCodec InputFormat { get; set; } = RealtimeAiAudioCodec.PCM16;
