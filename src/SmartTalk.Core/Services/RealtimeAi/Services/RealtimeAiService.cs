@@ -10,6 +10,7 @@ using SmartTalk.Messages.Enums.RealtimeAi;
 using SmartTalk.Core.Services.RealtimeAi.Wss;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Attachments;
+using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Core.Services.RealtimeAi.Adapters;
 using SmartTalk.Messages.Commands.Attachments;
@@ -29,6 +30,7 @@ public class RealtimeAiService : IRealtimeAiService
 {
     private readonly IAttachmentService _attachmentService;
     private readonly IRealtimeAiSwitcher _realtimeAiSwitcher;
+    private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
 
     private string _streamSid;
@@ -38,11 +40,17 @@ public class RealtimeAiService : IRealtimeAiService
     private volatile bool _isAiSpeaking;
     private MemoryStream _wholeAudioBuffer;
 
-    public RealtimeAiService(IAttachmentService attachmentService, IRealtimeAiSwitcher realtimeAiSwitcher, IRealtimeAiConversationEngine conversationEngine, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
+    public RealtimeAiService(
+        IAttachmentService attachmentService,
+        IRealtimeAiSwitcher realtimeAiSwitcher,
+        IRealtimeAiConversationEngine conversationEngine,
+        ISmartTalkBackgroundJobClient backgroundJobClient,
+        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
         _attachmentService = attachmentService;
         _realtimeAiSwitcher = realtimeAiSwitcher;
         _conversationEngine = conversationEngine;
+        _backgroundJobClient = backgroundJobClient;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
 
         _webSocket = null;
@@ -77,7 +85,7 @@ public class RealtimeAiService : IRealtimeAiService
         await _conversationEngine.StartSessionAsync(assistant, initialPrompt, inputFormat, outputFormat, cancellationToken).ConfigureAwait(false);
         
         await ReceiveFromWebSocketClientAsync(
-            new RealtimeAiEngineContext { InitialPrompt = initialPrompt, InputFormat = inputFormat, OutputFormat = outputFormat }, cancellationToken).ConfigureAwait(false);
+            new RealtimeAiEngineContext { AgentId = assistant.AgentId, InitialPrompt = initialPrompt, InputFormat = inputFormat, OutputFormat = outputFormat }, cancellationToken).ConfigureAwait(false);
     }
 
     private void BuildConversationEngine(AiSpeechAssistantProvider provider)
@@ -118,6 +126,7 @@ public class RealtimeAiService : IRealtimeAiService
                                 var audio = await _attachmentService.UploadAttachmentAsync(new UploadAttachmentCommand { Attachment = new UploadAttachmentDto { FileName = Guid.NewGuid() + ".wav", FileContent = wavStream.ToArray(), } }, cancellationToken).ConfigureAwait(false);
                             
                                 Log.Information("audio uploaded, url: {Url}", audio?.Attachment?.FileUrl);
+                                _backgroundJobClient.Enqueue<IRealtimeProcessJobService>(x => x.RecordingRealtimeAiAsync(audio.Attachment.FileUrl, context.AgentId, cancellationToken));
                             }
                             
                             await _wholeAudioBuffer.DisposeAsync();
