@@ -19,13 +19,13 @@ public partial class PosManagementService
     {
         var store = await _posManagementDataProvider.GetPosCompanyStoreAsync(command.StoreId, cancellationToken).ConfigureAwait(false);
         
-        if (store == null) throw new InvalidOperationException($"无法获取门店信息，StoreId: {command.StoreId}");
+        if (store == null) throw new Exception($"Can't find store with id：，StoreId: {command.StoreId}");
         
-        Log.Information("获取到门店信息: {@store}", store);
+        Log.Information("Get the store info: {@store}", store);
 
         var posConfiguration = await _easyPosClient.GetEasyPosRestaurantMenusAsync(store.EnName, cancellationToken).ConfigureAwait(false);
 
-        Log.Information("获取到 POS 配置数据: {@posConfiguration}", posConfiguration);
+        Log.Information("Get the pos configuration: {@posConfiguration}", posConfiguration);
         
         var storeOpeningHours = posConfiguration?.Data?.TimePeriods; 
         await UpdateStoreBusinessTimePeriodsAsync(store, storeOpeningHours, cancellationToken).ConfigureAwait(false);
@@ -40,7 +40,7 @@ public partial class PosManagementService
     
     private async Task UpdateStoreBusinessTimePeriodsAsync(PosCompanyStore store, List<EasyPosResponseTimePeriod> timePeriods, CancellationToken cancellationToken)
     {
-        store.TimePeriod = JsonConvert.SerializeObject(timePeriods);
+        store.TimePeriod = !string.IsNullOrEmpty(timePeriods.ToString()) ? JsonConvert.SerializeObject(timePeriods) : string.Empty;
         await _posManagementDataProvider.UpdateStoreAsync(store, true, cancellationToken).ConfigureAwait(false);
     }
 
