@@ -16,7 +16,8 @@ create table if not exists `pos_menu`
 create table if not exists `pos_category`
 (
     `id` int primary key auto_increment,
-    `menu_id` varchar(36) not null,
+    `store_id` int not null,
+    `menu_id` int not null,
     `category_id` varchar(36) not null,
     `names` text not null,
     `menu_ids` varchar(512) not null,
@@ -31,7 +32,8 @@ create table if not exists `pos_category`
 create table if not exists `pos_product`
 (
     `id` int primary key auto_increment,
-    `category_id` varchar(36) not null,
+    `store_id` int not null,
+    `category_id` int not null,
     `product_id` varchar(36) not null,
     `names` text not null,
     `price` decimal not null,

@@ -3,6 +3,8 @@ namespace SmartTalk.Messages.Dto.VoiceAi.PosManagement;
 public class PosProductDto
 {
     public int Id { get; set; }
+    
+    public int StoreId { get; set; }
 
     public int CategoryId { get; set; }
 

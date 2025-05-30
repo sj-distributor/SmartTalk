@@ -41,69 +41,102 @@ public partial class PosManagementService
     
     private async Task UpdateStoreBusinessTimePeriodsAsync(PosCompanyStore store, List<EasyPosResponseTimePeriod> timePeriods, CancellationToken cancellationToken)
     {
-        store.TimePeriod = !string.IsNullOrEmpty(timePeriods.ToString()) ? JsonConvert.SerializeObject(timePeriods) : string.Empty;
+        store.TimePeriod = timePeriods != null && timePeriods.Count != 0 ? JsonConvert.SerializeObject(timePeriods.First()) : string.Empty;
         await _posManagementDataProvider.UpdateStoreAsync(store, true, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task SyncMenuDataAsync(PosCompanyStore store, EasyPosResponseData data, CancellationToken cancellationToken)
     {
-        var menus = GenerateMenusFromResponse(store, data.Menus);
-        await _posManagementDataProvider.UpdateStoreMenusAsync(menus, true, cancellationToken).ConfigureAwait(false);
+        await _posManagementDataProvider.DeletePosMenuInfosAsync(store.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        foreach (var menu in data.Menus)
-        {
-            var categories = GenerateCategoriesForMenu(menu, data.Categories);
-            await _posManagementDataProvider.UpdateStoreCategoriesAsync(categories, true, cancellationToken).ConfigureAwait(false);
-
-            foreach (var category in categories)
-            {
-                var products = GenerateProductsForCategory(category, data.Products);
-                await _posManagementDataProvider.UpdateStoreProductsAsync(products, true, cancellationToken).ConfigureAwait(false);
-            }
-        }
+        var menuMap = await AddPosMenusAsync(data.Menus, store.Id, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Sync menu data: {@MenuMap}", menuMap);
+        
+        var categoriesMap = await AddPosCategoriesAsync(data, menuMap, store.Id, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Sync categories data: {@CategoriesMap}", categoriesMap);
+        
+        await AddPosProductsAsync(data, categoriesMap, store.Id, cancellationToken).ConfigureAwait(false);
     }
     
-    private List<PosMenu> GenerateMenusFromResponse(PosCompanyStore store, List<EasyPosResponseMenu> menus)
+    private async Task<Dictionary<string, int>> AddPosMenusAsync(List<EasyPosResponseMenu> menus, int storeId, CancellationToken cancellationToken)
     {
-        return menus.Select(menu => new PosMenu
+        var posMenus = menus.Select(x => new PosMenu
         {
-            StoreId = store.Id,
-            MenuId = menu.Id.ToString(),
-            Names = JsonConvert.SerializeObject(GetLocalizedNames(menu.Localizations)),
-            TimePeriod = JsonConvert.SerializeObject(menu.TimePeriods),
-            CategoryIds = menu.CategoryIds == null ? string.Empty : string.Join(",", menu.CategoryIds),
-            Status = menu.Status,
+            StoreId = storeId,
+            MenuId = x.Id.ToString(),
+            Names = JsonConvert.SerializeObject(GetLocalizedNames(x.Localizations)),
+            TimePeriod = JsonConvert.SerializeObject(x.TimePeriods),
+            CategoryIds = x.CategoryIds == null ? string.Empty : string.Join(",", x.CategoryIds),
+            Status = x.Status,
             CreatedBy = _currentUser.Id
         }).ToList();
+        
+        await _posManagementDataProvider.AddPosMenusAsync(posMenus, true, cancellationToken).ConfigureAwait(false);
+        
+        return posMenus.ToDictionary(m => m.MenuId, m => m.Id);
     }
     
-    private List<PosCategory> GenerateCategoriesForMenu(EasyPosResponseMenu menu, List<EasyPosResponseCategory> allCategories)
+    private async Task<Dictionary<long, Dictionary<string, int>>> AddPosCategoriesAsync(EasyPosResponseData data, Dictionary<string, int> menuMap, int storeId, CancellationToken cancellationToken)
     {
-        return allCategories
-            .Where(c => c.MenuIds.Contains(menu.Id.ToString()))
-            .Select(category => new PosCategory
+        var posCategories = new List<PosCategory>();
+        var mapping = new Dictionary<long, Dictionary<string, int>>();
+        
+        foreach (var menu in data.Menus)
+        {
+            if (!menuMap.TryGetValue(menu.Id.ToString(), out var posMenuId))
+                continue;
+
+            var categories = menu.Categories.Where(c => c.MenuIds.Contains(menu.Id)).Select(x => new PosCategory
             {
-                MenuId = menu.Id.ToString(),
-                CategoryId = category.Id.ToString(),
-                Names = JsonConvert.SerializeObject(GetLocalizedNames(category.Localizations)),
-                MenuIds = string.Join(",", category.MenuIds)
+                MenuId = posMenuId,
+                StoreId = storeId,
+                CategoryId = x.Id.ToString(),
+                Names = JsonConvert.SerializeObject(GetLocalizedNames(x.Localizations)),
+                MenuIds = string.Join(",", x.MenuIds)
             }).ToList();
+            
+            posCategories.AddRange(categories);
+            mapping[menu.Id] = categories.ToDictionary(c => c.CategoryId, c => c.Id);
+        }
+        
+        await _posManagementDataProvider.AddPosCategoriesAsync(posCategories, true, cancellationToken).ConfigureAwait(false);
+
+        return mapping;
     }
     
-    private List<PosProduct> GenerateProductsForCategory(PosCategory category, List<EasyPosResponseProduct> allProducts)
+    private async Task AddPosProductsAsync(EasyPosResponseData data, Dictionary<long, Dictionary<string, int>> categoriesMap, int storeId, CancellationToken cancellationToken)
     {
-        return allProducts
-            .Where(p => p.CategoryId.ToString() == category.CategoryId)
-            .Select(product => new PosProduct
+        var posProducts = new List<PosProduct>();
+        
+        foreach (var menu in data.Menus)
+        {
+            foreach (var category in menu.Categories.Where(c => c.MenuIds.Contains(menu.Id)))
             {
-                ProductId = product.Id.ToString(),
-                CategoryId = product.CategoryId.ToString(),
-                Price = product.Price,
-                Status = true,
-                Names = JsonConvert.SerializeObject(GetLocalizedNames(product.Localizations)),
-                Modifiers = product.ModifierGroups != null ? JsonConvert.SerializeObject(product.ModifierGroups) : null,
-                Tax = product.Taxes != null ? JsonConvert.SerializeObject(product.Taxes) : null
-            }).ToList();
+                if (categoriesMap.TryGetValue(menu.Id, out var categoryMap) && categoryMap.TryGetValue(category.Id.ToString(), out var posCategoryId))
+                {
+                    var products = category.Products.Where(p => p.CategoryIds.Contains(category.Id))
+                        .Select(product => new PosProduct
+                        {
+                            StoreId = storeId,
+                            ProductId = product.Id.ToString(),
+                            CategoryId = posCategoryId,
+                            Price = product.Price,
+                            Status = true,
+                            Names = JsonConvert.SerializeObject(GetLocalizedNames(product.Localizations)),
+                            Modifiers = product.ModifierGroups != null ? JsonConvert.SerializeObject(product.ModifierGroups) : null,
+                            Tax = product.Taxes != null ? JsonConvert.SerializeObject(product.Taxes) : null
+                        }).ToList();
+                
+                    posProducts.AddRange(products);
+                }
+            }
+        }
+        
+        await _posManagementDataProvider.AddPosProductsAsync(posProducts, true, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Sync products data: {@ProductsMap}", posProducts.ToDictionary(p => p.ProductId, p => p.Id));
     }
     
     private Dictionary<string, Dictionary<string, string>> GetLocalizedNames(IEnumerable<EasyPosResponseLocalization> localizations)
