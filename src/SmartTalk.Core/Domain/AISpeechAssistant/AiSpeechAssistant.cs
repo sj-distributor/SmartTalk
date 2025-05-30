@@ -39,6 +39,9 @@ public class AiSpeechAssistant : IEntity, IHasCreatedFields
     [Column("channel"), StringLength(36)]
     public string Channel { get; set; }
     
+    [Column("is_display")]
+    public bool IsDisplay { get; set; }
+    
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
     
