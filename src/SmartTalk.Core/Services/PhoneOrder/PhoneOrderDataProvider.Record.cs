@@ -37,8 +37,6 @@ public partial interface IPhoneOrderDataProvider
     Task<(PhoneOrderRecord, Agent, Domain.AISpeechAssistant.AiSpeechAssistant)> GetRecordWithAgentAndAssistantAsync(string sessionId, CancellationToken cancellationToken);
     
     Task<AiSpeechAssistantKnowledge> GetKnowledgePromptByAssistantIdAsync(int assistantId, CancellationToken cancellationToken);
-    
-    Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(int? recordId = null, int? agentId = null, DateTimeOffset? createdDate = null, CancellationToken cancellationToken = default);
 }
 
 public partial class PhoneOrderDataProvider
@@ -202,21 +200,5 @@ public partial class PhoneOrderDataProvider
     public async Task<AiSpeechAssistantKnowledge> GetKnowledgePromptByAssistantIdAsync(int assistantId, CancellationToken cancellationToken)
     {
         return await _repository.Query<AiSpeechAssistantKnowledge>().Where(x=> x.AssistantId == assistantId && x.IsActive).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(int? recordId = null, int? agentId = null, DateTimeOffset? createdDate = null, CancellationToken cancellationToken = default)
-    {
-        var query = _repository.Query<PhoneOrderRecord>();
-
-        if (recordId.HasValue)
-            query = query.Where(x => x.Id == recordId.Value);
-
-        if (agentId.HasValue)
-            query = query.Where(x => x.AgentId == agentId.Value);
-
-        if (createdDate.HasValue)
-            query = query.Where(x => x.CreatedDate == createdDate.Value);
-
-        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }

@@ -1,1 +1,0 @@
-ALTER TABLE `agent` ADD COLUMN `is_send_analysis_report_to_wechat` TINYINT(1) NOT NULL DEFAULT 0;

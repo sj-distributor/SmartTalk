@@ -156,7 +156,7 @@ public partial class AiSpeechAssistantService
             CreatedBy = _currentUser.Id.Value,
             ModelUrl = AiSpeechAssistantStore.DefaultUrl,
             ModelProvider = AiSpeechAssistantProvider.OpenAi,
-            Channel = command.Channels == null ? null : string.Join(",", command.Channels.Select(x => (int)x))
+            Channel = command.Channels == null ? null : string.Join(",", command.Channels)
         };
         
         await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantsAsync([assistant], cancellationToken: cancellationToken).ConfigureAwait(false);

@@ -4,7 +4,6 @@ using SmartTalk.Core.Data;
 using SmartTalk.Core.Domain.System;
 using Microsoft.EntityFrameworkCore;
 using AutoMapper.QueryableExtensions;
-using SmartTalk.Core.Domain.Asterisk;
 using SmartTalk.Core.Domain.Linphone;
 using SmartTalk.Messages.Dto.Linphone;
 using SmartTalk.Core.Domain.Restaurants;
@@ -23,14 +22,6 @@ public interface ILinphoneDataProvider : IScopedDependency
         int? pageSize = 10, int? pageIndex = 1, CancellationToken cancellationToken = default);
 
     Task<List<GetAgentBySipDto>> GetAgentBySipAsync(List<string> sips, CancellationToken cancellationToken);
-
-    Task<LinphoneCdr> GetLinphoneCdrAsync(CancellationToken cancellationToken);
-
-    Task UpdateLinphoneCdrAsync(LinphoneCdr linphoneCdr, bool foreSave = true, CancellationToken cancellationToken = default);
-
-    Task AddCdrAsync(List<Cdr> cdrs, bool foreSave = true, CancellationToken cancellationToken = default);
-
-    Task<List<Restaurant>> GetRestaurantPhoneNumberAsync(string toRestaurantName = null, CancellationToken cancellationToken = default);
 }
 
 public class LinphoneDataProvider : ILinphoneDataProvider
@@ -140,38 +131,5 @@ public class LinphoneDataProvider : ILinphoneDataProvider
             .ToListAsync(cancellationToken);
         
         return agents;
-    }
-
-    public async Task<LinphoneCdr> GetLinphoneCdrAsync(CancellationToken cancellationToken)
-    {
-        return await _repository.Query<LinphoneCdr>()
-            .OrderByDescending(x => x.CallDate)
-            .FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task UpdateLinphoneCdrAsync(LinphoneCdr linphoneCdr, bool foreSave = true, CancellationToken cancellationToken = default)
-    {
-        await _repository.UpdateAsync(linphoneCdr, cancellationToken).ConfigureAwait(false);
-
-        if (foreSave)
-            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task AddCdrAsync(List<Cdr> cdrs, bool foreSave = true, CancellationToken cancellationToken = default)
-    {
-        await _repository.InsertAllAsync(cdrs, cancellationToken).ConfigureAwait(false);
-
-        if (foreSave)
-            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task<List<Restaurant>> GetRestaurantPhoneNumberAsync(string toRestaurantName = null, CancellationToken cancellationToken = default)
-    {
-        var query = _repository.QueryNoTracking<Restaurant>();
-
-        if (!string.IsNullOrEmpty(toRestaurantName))
-            query = query.Where(x => x.AnotherName == toRestaurantName);
-
-        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }
