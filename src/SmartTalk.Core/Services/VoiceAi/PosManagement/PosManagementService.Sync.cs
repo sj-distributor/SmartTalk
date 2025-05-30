@@ -22,8 +22,9 @@ public partial class PosManagementService
         if (store == null) throw new Exception($"Can't find store with id：，StoreId: {command.StoreId}");
         
         Log.Information("Get the store info: {@store}", store);
-
-        var posConfiguration = await _easyPosClient.GetEasyPosRestaurantMenusAsync(store.EnName, cancellationToken).ConfigureAwait(false);
+        
+        var posConfiguration = await _easyPosClient.GetPosCompanyStoreMenusAsync(
+            new EasyPosTokenRequestDto { AppId = store.AppId, AppSecret = store.AppSecret }, cancellationToken).ConfigureAwait(false);
 
         Log.Information("Get the pos configuration: {@posConfiguration}", posConfiguration);
         
