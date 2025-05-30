@@ -47,6 +47,8 @@ public partial class PosManagementService
 
     private async Task SyncMenuDataAsync(PosCompanyStore store, EasyPosResponseData data, CancellationToken cancellationToken)
     {
+        if (data?.Menus == null) throw new NullReferenceException("Pos Resource Data or Menus is null");
+        
         await _posManagementDataProvider.DeletePosMenuInfosAsync(store.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var menuMap = await AddPosMenusAsync(data.Menus, store.Id, cancellationToken).ConfigureAwait(false);
