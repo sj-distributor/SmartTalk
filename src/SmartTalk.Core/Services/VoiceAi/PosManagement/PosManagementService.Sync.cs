@@ -83,7 +83,7 @@ public partial class PosManagementService
     private async Task<Dictionary<long, Dictionary<string, int>>> AddPosCategoriesAsync(EasyPosResponseData data, Dictionary<string, int> menuMap, int storeId, CancellationToken cancellationToken)
     {
         var posCategories = new List<PosCategory>();
-        var mapping = new Dictionary<long, Dictionary<string, int>>();
+        var mapping = new Dictionary<long, List<PosCategory>>();
         
         foreach (var menu in data.Menus)
         {
@@ -96,15 +96,29 @@ public partial class PosManagementService
                 StoreId = storeId,
                 CategoryId = x.Id.ToString(),
                 Names = JsonConvert.SerializeObject(GetLocalizedNames(x.Localizations)),
-                MenuIds = string.Join(",", x.MenuIds)
+                MenuIds = string.Join(",", x.MenuIds ?? []),
+                MenuNames = JsonConvert.SerializeObject(GetLocalizedNames(menu.Localizations)),
+                CreatedBy = _currentUser.Id
             }).ToList();
             
             posCategories.AddRange(categories);
-            mapping[menu.Id] = categories.ToDictionary(c => c.CategoryId, c => c.Id);
+            mapping[menu.Id] = categories;
         }
         
         await _posManagementDataProvider.AddPosCategoriesAsync(posCategories, true, cancellationToken).ConfigureAwait(false);
 
+        return BuildMenuToCategoriesMapping(mapping);
+    }
+
+    private Dictionary<long, Dictionary<string, int>> BuildMenuToCategoriesMapping(Dictionary<long, List<PosCategory>> menuToCategoriesMap)
+    {
+        var mapping = new Dictionary<long, Dictionary<string, int>>();
+
+        foreach (var (menuId, originalCategories) in menuToCategoriesMap)
+        {
+            mapping[menuId] = originalCategories.ToDictionary(c => c.CategoryId, c => c.Id);
+        }
+        
         return mapping;
     }
     
@@ -128,7 +142,9 @@ public partial class PosManagementService
                             Status = true,
                             Names = JsonConvert.SerializeObject(GetLocalizedNames(product.Localizations)),
                             Modifiers = product.ModifierGroups != null ? JsonConvert.SerializeObject(product.ModifierGroups) : null,
-                            Tax = product.Taxes != null ? JsonConvert.SerializeObject(product.Taxes) : null
+                            Tax = product.Taxes != null ? JsonConvert.SerializeObject(product.Taxes) : null,
+                            CategoryIds = string.Join(",", product.CategoryIds ?? []),
+                            CreatedBy = _currentUser.Id
                         }).ToList();
                 
                     posProducts.AddRange(products);
