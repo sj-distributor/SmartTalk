@@ -29,6 +29,8 @@ public partial interface IPosManagementService : IScopedDependency
     Task<GetPosStoreUsersResponse> GetPosStoreUsersAsync(GetPosStoreUsersRequest request, CancellationToken cancellationToken);
 
     Task<UnbindPosCompanyStoreResponse> UnbindPosCompanyStoreAsync(UnbindPosCompanyStoreCommand command, CancellationToken cancellationToken);
+
+    Task<GetCompanyStorePosResponse> GetCompanyStorePosAsync(GetCompanyStorePosRequest request, CancellationToken cancellationToken);
 }
 
 public partial class PosManagementService : IPosManagementService
@@ -151,6 +153,22 @@ public partial class PosManagementService : IPosManagementService
         await _posManagementDataProvider.UpdatePosCompanyStoresAsync([store], cancellationToken: cancellationToken).ConfigureAwait(false);
 
         return new UnbindPosCompanyStoreResponse
+        {
+            Data = _mapper.Map<PosCompanyStoreDto>(store)
+        };
+    }
+
+    public async Task<GetCompanyStorePosResponse> GetCompanyStorePosAsync(GetCompanyStorePosRequest request, CancellationToken cancellationToken)
+    {
+        var store = await _posManagementDataProvider.GetPosCompanyStoreAsync(id: request.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (store.IsLink)
+        {
+            store.AppSecret = store.PosName;
+            store.Link = store.PosId;
+        }
+
+        return new GetCompanyStorePosResponse()
         {
             Data = _mapper.Map<PosCompanyStoreDto>(store)
         };
