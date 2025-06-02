@@ -1,4 +1,5 @@
 using AutoMapper;
+using Serilog;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Identity;
 using SmartTalk.Core.Domain.VoiceAi.PosManagement;
@@ -163,12 +164,6 @@ public partial class PosManagementService : IPosManagementService
     {
         var store = await _posManagementDataProvider.GetPosCompanyStoreAsync(id: request.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        if (store.IsLink)
-        {
-            store.AppSecret = store.PosName;
-            store.Link = store.PosId;
-        }
-
         return new GetCompanyStorePosResponse()
         {
             Data = _mapper.Map<PosCompanyStoreDto>(store)
@@ -183,18 +178,20 @@ public partial class PosManagementService : IPosManagementService
 
         if (existingUrlStore != null) throw new Exception("PosUrl is currently bound to the store, please enter another posUrl and try again");
 
-        var EasyPosMerchant = await _easyPosClient.GetPosCompanyStoreMessageAsync(new EasyPosTokenRequestDto()
+        var easyPosMerchant = await _easyPosClient.GetPosCompanyStoreMessageAsync(new EasyPosTokenRequestDto()
         {
             AppId = command.AppId,
             AppSecret = command.AppSecret
         }, cancellationToken).ConfigureAwait(false);
         
+        Log.Information("Get the store info: {@store}", easyPosMerchant);
+        
         store.Link = command.Link;
         store.AppId = command.AppId;
         store.AppSecret = command.AppSecret;
         store.IsLink = true;
-        store.PosId = EasyPosMerchant.Data.Id.ToString();
-        store.PosName = EasyPosMerchant.Data.ShortName;
+        store.PosId = easyPosMerchant?.Data?.Id.ToString() ?? string.Empty;
+        store.PosName = easyPosMerchant?.Data?.ShortName ?? string.Empty;
 
         await _posManagementDataProvider.UpdatePosCompanyStoresAsync([store], cancellationToken: cancellationToken).ConfigureAwait(false);
 
