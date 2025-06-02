@@ -1,8 +1,8 @@
 using AutoMapper;
-using SmartTalk.Core.Domain.Account;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Identity;
 using SmartTalk.Core.Domain.VoiceAi.PosManagement;
+using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Account;
 using SmartTalk.Messages.Commands.VoiceAi.PosManagement;
 using SmartTalk.Messages.Dto.VoiceAi.PosManagement;
@@ -33,13 +33,15 @@ public partial class PosManagementService : IPosManagementService
 {
     private readonly IMapper _mapper;
     private readonly ICurrentUser _currentUser;
+    private readonly IEasyPosClient _easyPosClient;
     private readonly IPosManagementDataProvider _posManagementDataProvider;
     private readonly IAccountDataProvider _accountDataProvider;
-
-    public PosManagementService(IMapper mapper, ICurrentUser currentUser, IPosManagementDataProvider posManagementDataProvider, IAccountDataProvider accountDataProvider)
+    
+    public PosManagementService(IMapper mapper, ICurrentUser currentUser, IEasyPosClient easyPosClient, IPosManagementDataProvider posManagementDataProvider, IAccountDataProvider accountDataProvider)
     {
         _mapper = mapper;
         _currentUser = currentUser;
+        _easyPosClient = easyPosClient;
         _posManagementDataProvider = posManagementDataProvider;
         _accountDataProvider = accountDataProvider;
     }

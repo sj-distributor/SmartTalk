@@ -10,6 +10,9 @@ public class PosProduct : IEntity, IHasCreatedFields, IHasModifiedFields
     [Column("id")]
     [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     public int Id { get; set; }
+    
+    [Column("store_id")]
+    public int StoreId { get; set; }
 
     [Column("category_id")]
     public int CategoryId { get; set; }
