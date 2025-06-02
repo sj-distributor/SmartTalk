@@ -172,7 +172,7 @@ public partial class PosManagementService : IPosManagementService
             AppSecret = command.AppSecret
         }, cancellationToken).ConfigureAwait(false);
         
-        Log.Information("Get the store info: {@store}", easyPosMerchant);
+        Log.Information("Get the merchant info: {@merchant}", easyPosMerchant);
         
         store.Link = command.Link;
         store.AppId = command.AppId;
