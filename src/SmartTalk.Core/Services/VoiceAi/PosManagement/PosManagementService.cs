@@ -1,10 +1,12 @@
 using AutoMapper;
+using Serilog;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Identity;
 using SmartTalk.Core.Domain.VoiceAi.PosManagement;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Account;
 using SmartTalk.Messages.Commands.VoiceAi.PosManagement;
+using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.VoiceAi.PosManagement;
 using SmartTalk.Messages.Requests.VoiceAi.PosManagement;
 
@@ -27,6 +29,10 @@ public partial interface IPosManagementService : IScopedDependency
     Task<ManagePosCompanyStoreAccountsResponse> ManagePosCompanyStoreAccountAsync(ManagePosCompanyStoreAccountsCommand command, CancellationToken cancellationToken);
 
     Task<GetPosStoreUsersResponse> GetPosStoreUsersAsync(GetPosStoreUsersRequest request, CancellationToken cancellationToken);
+
+    Task<UnbindPosCompanyStoreResponse> UnbindPosCompanyStoreAsync(UnbindPosCompanyStoreCommand command, CancellationToken cancellationToken);
+
+    Task<BindPosCompanyStoreResponse> BindPosCompanyStoreAsync(BindPosCompanyStoreCommand command, CancellationToken cancellationToken);
 }
 
 public partial class PosManagementService : IPosManagementService
@@ -89,8 +95,8 @@ public partial class PosManagementService : IPosManagementService
 
     public async Task<UpdatePosCompanyStoreResponse> UpdatePosCompanyStoreAsync(UpdatePosCompanyStoreCommand command, CancellationToken cancellationToken)
     {
-        var store = await _posManagementDataProvider.GetPosCompanyStoreAsync(command.Id, cancellationToken).ConfigureAwait(false);
-            
+        var store = await _posManagementDataProvider.GetPosCompanyStoreAsync(id: command.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
         _mapper.Map(command, store);
 
         await _posManagementDataProvider.UpdatePosCompanyStoresAsync([store], cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -126,6 +132,58 @@ public partial class PosManagementService : IPosManagementService
         await _posManagementDataProvider.UpdatePosCompanyStoresAsync([store], cancellationToken: cancellationToken).ConfigureAwait(false);
 
         return new UpdatePosCompanyStoreStatusResponse
+        {
+            Data = _mapper.Map<PosCompanyStoreDto>(store)
+        };
+    }
+
+    public async Task<UnbindPosCompanyStoreResponse> UnbindPosCompanyStoreAsync(UnbindPosCompanyStoreCommand command, CancellationToken cancellationToken)
+    {
+        var store = await _posManagementDataProvider.GetPosCompanyStoreAsync(id: command.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        if (store == null) throw new Exception("Could not found the store");
+
+        store.IsLink = false;
+        store.Link = null;
+        store.AppSecret = null;
+        store.AppId = null;
+        store.PosId = null;
+        store.PosName = null;
+        
+        await _posManagementDataProvider.UpdatePosCompanyStoresAsync([store], cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return new UnbindPosCompanyStoreResponse
+        {
+            Data = _mapper.Map<PosCompanyStoreDto>(store)
+        };
+    }
+
+    public async Task<BindPosCompanyStoreResponse> BindPosCompanyStoreAsync(BindPosCompanyStoreCommand command, CancellationToken cancellationToken)
+    {
+        var store = await _posManagementDataProvider.GetPosCompanyStoreAsync(id: command.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var existingUrlStore = await _posManagementDataProvider.GetPosCompanyStoreAsync(link: command.Link, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (existingUrlStore != null) throw new Exception("PosUrl is currently bound to the store, please enter another posUrl and try again");
+
+        var easyPosMerchant = await _easyPosClient.GetPosCompanyStoreMessageAsync(new EasyPosTokenRequestDto()
+        {
+            AppId = command.AppId,
+            AppSecret = command.AppSecret
+        }, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Get the merchant info: {@merchant}", easyPosMerchant);
+        
+        store.Link = command.Link;
+        store.AppId = command.AppId;
+        store.AppSecret = command.AppSecret;
+        store.IsLink = true;
+        store.PosId = easyPosMerchant?.Data?.Id.ToString() ?? string.Empty;
+        store.PosName = easyPosMerchant?.Data?.ShortName ?? string.Empty;
+
+        await _posManagementDataProvider.UpdatePosCompanyStoresAsync([store], cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return new BindPosCompanyStoreResponse()
         {
             Data = _mapper.Map<PosCompanyStoreDto>(store)
         };
