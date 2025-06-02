@@ -27,6 +27,9 @@ public class AiSpeechAssistant : IEntity, IHasCreatedFields
     [Column("model_name"), StringLength(255)]
     public string ModelName { get; set; }
     
+    [Column("model_language"), StringLength(255)]
+    public string ModelLanguage { get; set; }
+    
     [Column("model_provider")]
     public AiSpeechAssistantProvider ModelProvider { get; set; }
     
