@@ -36,6 +36,12 @@ public class PosCompanyStoreDto
     
     public int? CreatedBy { get; set; }
     
+    public string PosName { get; set; }
+    
+    public string PosId { get; set; }
+    
+    public bool IsLink { get; set; }
+    
     public DateTimeOffset CreatedDate { get; set; }
     
     public int? LastModifiedBy { get; set; }

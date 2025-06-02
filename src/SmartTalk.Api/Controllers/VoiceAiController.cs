@@ -18,7 +18,7 @@ public class VoiceAiController : ControllerBase
         _mediator = mediator;
     }
         
-    [Route("pos/companies"), HttpGet]
+    [Route("companies"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPosCompanyWithStoresResponse))]
     public async Task<IActionResult> GetPosCompanyWithStoresAsync([FromQuery] GetPosCompanyWithStoresRequest request)
     {
@@ -27,7 +27,7 @@ public class VoiceAiController : ControllerBase
         return Ok(response);
     }
     
-    [Route("pos/company/store/detail"), HttpGet]
+    [Route("company/store/detail"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPosCompanyStoreDetailResponse))]
     public async Task<IActionResult> GetPosCompanyStoreDetailAsync([FromQuery] GetPosCompanyStoreDetailRequest request)
     {
@@ -36,7 +36,7 @@ public class VoiceAiController : ControllerBase
         return Ok(response);
     }
     
-    [Route("pos/company/store/create"), HttpPost]
+    [Route("company/store/create"), HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(CreatePosCompanyStoreCommand))]
     public async Task<IActionResult> CreatePosCompanyStoreAsync([FromBody] CreatePosCompanyStoreCommand command)
     {
@@ -45,7 +45,7 @@ public class VoiceAiController : ControllerBase
         return Ok(response);
     }
     
-    [Route("pos/company/store/update"), HttpPost]
+    [Route("company/store/update"), HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdatePosCompanyStoreCommand))]
     public async Task<IActionResult> UpdatePosCompanyStoreAsync([FromBody] UpdatePosCompanyStoreCommand command)
     {
@@ -54,7 +54,7 @@ public class VoiceAiController : ControllerBase
         return Ok(response);
     }
     
-    [Route("pos/company/store/delete"), HttpPost]
+    [Route("company/store/delete"), HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(DeletePosCompanyStoreCommand))]
     public async Task<IActionResult> DeletePosCompanyStoreAsync([FromBody] DeletePosCompanyStoreCommand command)
     {
@@ -63,7 +63,7 @@ public class VoiceAiController : ControllerBase
         return Ok(response);
     }
     
-    [Route("pos/store/status/update"), HttpPost]
+    [Route("store/status/update"), HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdatePosCompanyStoreStatusResponse))]
     public async Task<IActionResult> UpdatePosCompanyStoreStatusAsync([FromBody] UpdatePosCompanyStoreStatusCommand command)
     {
@@ -113,6 +113,51 @@ public class VoiceAiController : ControllerBase
     public async Task<IActionResult> GetPosCompanyDetailRequest([FromQuery] GetPosCompanyDetailRequest request)
     {
         var response = await _mediator.RequestAsync<GetPosCompanyDetailRequest, GetPosCompanyDetailResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("store/account/manage"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(ManagePosCompanyStoreAccountsResponse))]
+    public async Task<IActionResult> ManagePosCompanyStoreAccountsAsync([FromBody] ManagePosCompanyStoreAccountsCommand command)
+    {
+        var response = await _mediator.SendAsync<ManagePosCompanyStoreAccountsCommand, ManagePosCompanyStoreAccountsResponse>(command).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("store/accounts"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPosStoreUsersResponse))]
+    public async Task<IActionResult> GetPosStoreUsersAsync([FromQuery] GetPosStoreUsersRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetPosStoreUsersRequest, GetPosStoreUsersResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+
+    [Route("pos/configuration/sync"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(SyncPosConfigurationResponse))]
+    public async Task<IActionResult> SyncPosConfigurationAsync([FromBody] SyncPosConfigurationCommand command)
+    {
+        var response = await _mediator.SendAsync<SyncPosConfigurationCommand, SyncPosConfigurationResponse>(command).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("pos/store/unbind"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UnbindPosCompanyStoreResponse))]
+    public async Task<IActionResult> UnbindPosCompanyStoreAsync([FromBody] UnbindPosCompanyStoreCommand command)
+    {
+        var response = await _mediator.SendAsync<UnbindPosCompanyStoreCommand, UnbindPosCompanyStoreResponse>(command).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("pos/store/bind"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(BindPosCompanyStoreResponse))]
+    public async Task<IActionResult> BindPosCompanyStoreAsync([FromBody] BindPosCompanyStoreCommand command)
+    {
+        var response = await _mediator.SendAsync<BindPosCompanyStoreCommand, BindPosCompanyStoreResponse>(command).ConfigureAwait(false);
         
         return Ok(response);
     }
