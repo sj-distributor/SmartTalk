@@ -31,6 +31,8 @@ public partial interface IPosManagementService : IScopedDependency
     Task<UnbindPosCompanyStoreResponse> UnbindPosCompanyStoreAsync(UnbindPosCompanyStoreCommand command, CancellationToken cancellationToken);
 
     Task<GetCompanyStorePosResponse> GetCompanyStorePosAsync(GetCompanyStorePosRequest request, CancellationToken cancellationToken);
+
+    Task<BindPosCompanyStoreResponse> BindPosCompanyStoreAsync(BindPosCompanyStoreCommand command, CancellationToken cancellationToken);
 }
 
 public partial class PosManagementService : IPosManagementService
@@ -92,10 +94,6 @@ public partial class PosManagementService : IPosManagementService
     public async Task<UpdatePosCompanyStoreResponse> UpdatePosCompanyStoreAsync(UpdatePosCompanyStoreCommand command, CancellationToken cancellationToken)
     {
         var store = await _posManagementDataProvider.GetPosCompanyStoreAsync(id: command.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        var existingUrlStore = await _posManagementDataProvider.GetPosCompanyStoreAsync(link: command.Link, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        if (existingUrlStore != null) throw new Exception("PosUrl is currently bound to the store, please enter another posUrl and try again");
         
         _mapper.Map(command, store);
 
@@ -169,6 +167,27 @@ public partial class PosManagementService : IPosManagementService
         }
 
         return new GetCompanyStorePosResponse()
+        {
+            Data = _mapper.Map<PosCompanyStoreDto>(store)
+        };
+    }
+
+    public async Task<BindPosCompanyStoreResponse> BindPosCompanyStoreAsync(BindPosCompanyStoreCommand command, CancellationToken cancellationToken)
+    {
+        var store = await _posManagementDataProvider.GetPosCompanyStoreAsync(id: command.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var existingUrlStore = await _posManagementDataProvider.GetPosCompanyStoreAsync(link: command.Link, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (existingUrlStore != null) throw new Exception("PosUrl is currently bound to the store, please enter another posUrl and try again");
+
+        store.Link = command.Link;
+        store.AppId = command.AppId;
+        store.AppSecret = command.AppSecret;
+        store.IsLink = true;
+
+        await _posManagementDataProvider.UpdatePosCompanyStoresAsync([store], cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return new BindPosCompanyStoreResponse()
         {
             Data = _mapper.Map<PosCompanyStoreDto>(store)
         };

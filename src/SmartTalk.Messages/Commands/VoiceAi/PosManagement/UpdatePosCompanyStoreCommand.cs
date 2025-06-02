@@ -20,14 +20,6 @@ public class UpdatePosCompanyStoreCommand : ICommand
     
     public string Longitude { get; set; }
     
-    public string Link { get; set; }
-    
-    public string AppId { get; set; }
-    
-    public string AppSecret { get; set; }
-    
-    public bool IsLink { get; set; }
-    
     public List<string> PhoneNumbers { get; set; }
 }
 
