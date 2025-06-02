@@ -17,7 +17,7 @@ public partial class PosManagementService
 {
     public async Task<SyncPosConfigurationResponse> SyncPosConfigurationAsync(SyncPosConfigurationCommand command, CancellationToken cancellationToken)
     {
-        var store = await _posManagementDataProvider.GetPosCompanyStoreAsync(command.StoreId, cancellationToken).ConfigureAwait(false);
+        var store = await _posManagementDataProvider.GetPosCompanyStoreAsync(id: command.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         if (store == null) throw new Exception($"Can't find store with id：，StoreId: {command.StoreId}");
         
