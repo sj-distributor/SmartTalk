@@ -5,6 +5,7 @@ using SmartTalk.Core.Domain.VoiceAi.PosManagement;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Account;
 using SmartTalk.Messages.Commands.VoiceAi.PosManagement;
+using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.VoiceAi.PosManagement;
 using SmartTalk.Messages.Requests.VoiceAi.PosManagement;
 
@@ -182,10 +183,18 @@ public partial class PosManagementService : IPosManagementService
 
         if (existingUrlStore != null) throw new Exception("PosUrl is currently bound to the store, please enter another posUrl and try again");
 
+        var EasyPosMerchant = await _easyPosClient.GetPosCompanyStoreMessageAsync(new EasyPosTokenRequestDto()
+        {
+            AppId = command.AppId,
+            AppSecret = command.AppSecret
+        }, cancellationToken).ConfigureAwait(false);
+        
         store.Link = command.Link;
         store.AppId = command.AppId;
         store.AppSecret = command.AppSecret;
         store.IsLink = true;
+        store.PosId = EasyPosMerchant.Data.Id.ToString();
+        store.PosName = EasyPosMerchant.Data.ShortName;
 
         await _posManagementDataProvider.UpdatePosCompanyStoresAsync([store], cancellationToken: cancellationToken).ConfigureAwait(false);
 

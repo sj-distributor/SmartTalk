@@ -22,6 +22,9 @@ public class StoreInfoData
 
     [JsonPropertyName("companyId")]
     public int CompanyId { get; set; }
+    
+    [JsonPropertyName("short_name")]
+    public string ShortName { get; set; }
 
     [JsonPropertyName("timePeriods")]
     public List<StoreTimePeriod> TimePeriods { get; set; }
