@@ -14,8 +14,7 @@ create table if not exists `pos_company_store`
 (
     `id` int primary key auto_increment,
     `company_id` int not null,
-    `en_name` varchar(64) not null,
-    `zh_name` varchar(64) null,
+    `names` text not null,
     `description` varchar(512) null,
     `status` tinyint(1) not null default 0,
     `phone_nums` varchar(64) not null,
@@ -27,6 +26,7 @@ create table if not exists `pos_company_store`
     `app_id` varchar(128) null,
     `app_secret` varchar(512) null,
     `time_period` text null,
+    `timezone` varchar(64) null,
     `created_by` int null,
     `created_date` datetime(3) not null,
     `last_modified_by` int null,

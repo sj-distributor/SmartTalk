@@ -36,7 +36,7 @@ public class PosOrderDto
 
     public string Items { get; set; }
 
-    public string Note { get; set; }
+    public string Notes { get; set; }
 
     public int? CreatedBy { get; set; }
 

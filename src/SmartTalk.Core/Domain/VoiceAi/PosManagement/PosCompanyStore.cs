@@ -14,11 +14,8 @@ public class PosCompanyStore : IEntity, IHasCreatedFields, IHasModifiedFields
     [Column("company_id")]
     public int CompanyId { get; set; }
     
-    [Column("en_name"), StringLength(64)]
-    public string EnName { get; set; }
-    
-    [Column("zh_name"), StringLength(64)]
-    public string ZhName { get; set; }
+    [Column("names")]
+    public string Names { get; set; }
     
     [Column("description"), StringLength(512)]
     public string Description { get; set; }
@@ -61,6 +58,9 @@ public class PosCompanyStore : IEntity, IHasCreatedFields, IHasModifiedFields
     
     [Column("is_link")]
     public bool IsLink { get; set; }
+    
+    [Column("timezone"), StringLength(64)]
+    public string Timezone { get; set; }
     
     [Column("created_by")]
     public int? CreatedBy { get; set; }

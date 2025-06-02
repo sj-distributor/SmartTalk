@@ -12,7 +12,7 @@ public interface IEasyPosClient : IScopedDependency
 
     Task<GetOrderResponse> GetOrderAsync(long id, string restaurantName, CancellationToken cancellationToken);
     
-    Task<PlaceOrderToEasyPosResponseDto> PlaceOrderToEasyPosAsync(PlaceOrderToEasyPosRequestDto request, CancellationToken cancellationToken);
+    Task<PlaceOrderToEasyPosResponseDto> PlaceOrderToEasyPosAsync(PlaceOrderToEasyPosRequestDto request, TimeSpan? timeout = null, CancellationToken cancellationToken = default);
 
     Task<EasyPosTokenResponseDto> GetEasyPosTokenAsync(EasyPosTokenRequestDto request, CancellationToken cancellationToken);
     
@@ -60,7 +60,7 @@ public class EasyPosClient : IEasyPosClient
             }, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
     
-    public async Task<PlaceOrderToEasyPosResponseDto> PlaceOrderToEasyPosAsync(PlaceOrderToEasyPosRequestDto request, CancellationToken cancellationToken)
+    public async Task<PlaceOrderToEasyPosResponseDto> PlaceOrderToEasyPosAsync(PlaceOrderToEasyPosRequestDto request, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
     {
         var headers = new Dictionary<string, string>
         {
@@ -71,7 +71,7 @@ public class EasyPosClient : IEasyPosClient
         };
 
         return await _httpClientFactory.PostAsJsonAsync<PlaceOrderToEasyPosResponseDto>(
-            $"{_easyPosSetting.BaseUrl}/api/merchant/order", request, cancellationToken, headers: headers).ConfigureAwait(false);
+            $"{_easyPosSetting.BaseUrl}/api/merchant/order", request, cancellationToken, headers: headers, timeout: timeout).ConfigureAwait(false);
     }
 
     public async Task<EasyPosTokenResponseDto> GetEasyPosTokenAsync(EasyPosTokenRequestDto request, CancellationToken cancellationToken)

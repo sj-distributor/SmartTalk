@@ -33,8 +33,11 @@ public class PosOrder : IEntity, IHasCreatedFields, IHasModifiedFields
     [Column("room"), StringLength(64)]
     public string Room { get; set; }
 
-    [Column("order_num"), StringLength(16)]
-    public string OrderNum { get; set; }
+    [Column("order_no"), StringLength(16)]
+    public string OrderNo { get; set; }
+    
+    [Column("order_id"), StringLength(32)]
+    public string OrderId { get; set; }
 
     [Column("status")]
     public PosOrderStatus Status { get; set; }
@@ -57,8 +60,8 @@ public class PosOrder : IEntity, IHasCreatedFields, IHasModifiedFields
     [Column("items")]
     public string Items { get; set; }
 
-    [Column("note"), StringLength(128)]
-    public string Note { get; set; }
+    [Column("notes"), StringLength(128)]
+    public string Notes { get; set; }
 
     [Column("created_by")]
     public int? CreatedBy { get; set; }

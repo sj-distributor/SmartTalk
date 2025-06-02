@@ -6,9 +6,7 @@ public class PosCompanyStoreDto
     
     public int CompanyId { get; set; }
     
-    public string EnName { get; set; }
-    
-    public string ZhName { get; set; }
+    public string Names { get; set; }
     
     public string Description { get; set; }
     
@@ -34,6 +32,8 @@ public class PosCompanyStoreDto
     
     public string TimePeriod { get; set; }
     
+    public string Timezone { get; set; }
+    
     public int? CreatedBy { get; set; }
     
     public string PosName { get; set; }
@@ -47,4 +47,6 @@ public class PosCompanyStoreDto
     public int? LastModifiedBy { get; set; }
     
     public DateTimeOffset? LastModifiedDate { get; set; }
+
+    public int Count { get; set; } = 0;
 }

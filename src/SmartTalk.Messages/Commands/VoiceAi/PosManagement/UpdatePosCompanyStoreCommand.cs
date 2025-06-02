@@ -1,6 +1,6 @@
 using Mediator.Net.Contracts;
-using Smarties.Messages.Responses;
 using SmartTalk.Messages.Dto.VoiceAi.PosManagement;
+using SmartTalk.Messages.Responses;
 
 namespace SmartTalk.Messages.Commands.VoiceAi.PosManagement;
 
@@ -10,9 +10,7 @@ public class UpdatePosCompanyStoreCommand : ICommand
     
     public string Logo { get; set; }
     
-    public string EnName { get; set; }
-    
-    public string ZhName { get; set; }
+    public string Names { get; set; }
     
     public string Address { get; set; }
     
@@ -23,4 +21,4 @@ public class UpdatePosCompanyStoreCommand : ICommand
     public List<string> PhoneNumbers { get; set; }
 }
 
-public class UpdatePosCompanyStoreResponse : SmartiesResponse<PosCompanyStoreDto>;
+public class UpdatePosCompanyStoreResponse : SmartTalkResponse<PosCompanyStoreDto>;

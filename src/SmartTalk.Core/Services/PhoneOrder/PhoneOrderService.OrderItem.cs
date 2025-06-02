@@ -76,7 +76,7 @@ public partial class PhoneOrderService
         
         Log.Information("Generate easy pos order request: {@Request}", request);
         
-        var response = await _easyPosClient.PlaceOrderToEasyPosAsync(request, cancellationToken).ConfigureAwait(false);
+        var response = await _easyPosClient.PlaceOrderToEasyPosAsync(request, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         Log.Information("Place order response: {@Response}", response);
         

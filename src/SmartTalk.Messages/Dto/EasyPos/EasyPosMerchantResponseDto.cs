@@ -1,97 +1,100 @@
-using System.Text.Json.Serialization;
+using Newtonsoft.Json;
 
 public class EasyPosMerchantResponseDto
 {
-    [JsonPropertyName("code")]
+    [JsonProperty("code")]
     public int Code { get; set; }
 
-    [JsonPropertyName("msg")]
+    [JsonProperty("msg")]
     public string Msg { get; set; }
 
-    [JsonPropertyName("data")]
+    [JsonProperty("data")]
     public StoreInfoData Data { get; set; }
 
-    [JsonPropertyName("success")]
+    [JsonProperty("success")]
     public bool Success { get; set; }
 }
 
 public class StoreInfoData
 {
-    [JsonPropertyName("id")]
+    [JsonProperty("id")]
     public int Id { get; set; }
 
-    [JsonPropertyName("companyId")]
+    [JsonProperty("companyId")]
     public int CompanyId { get; set; }
     
-    [JsonPropertyName("short_name")]
+    [JsonProperty("short_name")]
     public string ShortName { get; set; }
 
-    [JsonPropertyName("timePeriods")]
+    [JsonProperty("timePeriods")]
     public List<StoreTimePeriod> TimePeriods { get; set; }
+    
+    [JsonProperty("timezoneId")]
+    public string TimeZoneId { get; set; }
 }
 
 public class StoreTimePeriod
 {
-    [JsonPropertyName("id")]
+    [JsonProperty("id")]
     public int Id { get; set; }
 
-    [JsonPropertyName("name")]
+    [JsonProperty("name")]
     public string Name { get; set; }
 
-    [JsonPropertyName("dayOfWeeks")]
+    [JsonProperty("dayOfWeeks")]
     public List<int> DayOfWeeks { get; set; }
 
-    [JsonPropertyName("startTime")]
+    [JsonProperty("startTime")]
     public StoreTimeSpanInfo StartTime { get; set; }
 
-    [JsonPropertyName("endTime")]
+    [JsonProperty("endTime")]
     public StoreTimeSpanInfo EndTime { get; set; }
 }
 
 public class StoreTimeSpanInfo
 {
-    [JsonPropertyName("ticks")]
+    [JsonProperty("ticks")]
     public long Ticks { get; set; }
 
-    [JsonPropertyName("days")]
+    [JsonProperty("days")]
     public int Days { get; set; }
 
-    [JsonPropertyName("hours")]
+    [JsonProperty("hours")]
     public int Hours { get; set; }
 
-    [JsonPropertyName("milliseconds")]
+    [JsonProperty("milliseconds")]
     public int Milliseconds { get; set; }
 
-    [JsonPropertyName("microseconds")]
+    [JsonProperty("microseconds")]
     public int Microseconds { get; set; }
     
-    [JsonPropertyName("nanoseconds")]
+    [JsonProperty("nanoseconds")]
     public int Nanoseconds { get; set; }
 
-    [JsonPropertyName("minutes")]
+    [JsonProperty("minutes")]
     public int Minutes { get; set; }
 
-    [JsonPropertyName("seconds")]
+    [JsonProperty("seconds")]
     public int Seconds { get; set; }
 
-    [JsonPropertyName("totalDays")]
+    [JsonProperty("totalDays")]
     public double TotalDays { get; set; }
 
-    [JsonPropertyName("totalHours")]
+    [JsonProperty("totalHours")]
     public double TotalHours { get; set; }
 
-    [JsonPropertyName("totalMilliseconds")]
+    [JsonProperty("totalMilliseconds")]
     public double TotalMilliseconds { get; set; }
 
-    [JsonPropertyName("totalMicroseconds")]
+    [JsonProperty("totalMicroseconds")]
     public double TotalMicroseconds { get; set; }
 
-    [JsonPropertyName("totalNanoseconds")]
+    [JsonProperty("totalNanoseconds")]
     public double TotalNanoseconds { get; set; }
 
-    [JsonPropertyName("totalMinutes")]
+    [JsonProperty("totalMinutes")]
     public double TotalMinutes { get; set; }
 
-    [JsonPropertyName("totalSeconds")]
+    [JsonProperty("totalSeconds")]
     public double TotalSeconds { get; set; }
 }

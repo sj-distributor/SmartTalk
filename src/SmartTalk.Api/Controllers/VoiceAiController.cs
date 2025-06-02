@@ -161,4 +161,31 @@ public class VoiceAiController : ControllerBase
         
         return Ok(response);
     }
+    
+    [Route("stores"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPosStoresResponse))]
+    public async Task<IActionResult> GetPosStoresAsync([FromQuery] GetPosStoresRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetPosStoresRequest, GetPosStoresResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("orders"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPosStoreOrdersResponse))]
+    public async Task<IActionResult> GetPosStoreOrdersAsync([FromQuery] GetPosStoreOrdersRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetPosStoreOrdersRequest, GetPosStoreOrdersResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("order/place"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(PlacePosOrderResponse))]
+    public async Task<IActionResult> PlacePosOrderAsync([FromBody] PlacePosOrderCommand command)
+    {
+        var response = await _mediator.SendAsync<PlacePosOrderCommand, PlacePosOrderResponse>(command).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
 }
