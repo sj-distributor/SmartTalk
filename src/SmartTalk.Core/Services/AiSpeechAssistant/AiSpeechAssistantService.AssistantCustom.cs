@@ -151,8 +151,8 @@ public partial class AiSpeechAssistantService
         if (!string.IsNullOrWhiteSpace(command.Greetings))
             knowledge.Greetings = command.Greetings;
 
-        if (command.Voice.HasValue)
-            await UpdateAssistantVoiceIfRequiredAsync(knowledge.AssistantId, command.Voice.Value, cancellationToken).ConfigureAwait(false);
+        if (command.VoiceType.HasValue)
+            await UpdateAssistantVoiceIfRequiredAsync(knowledge.AssistantId, command.VoiceType.Value, cancellationToken).ConfigureAwait(false);
         
         await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync([knowledge], cancellationToken: cancellationToken).ConfigureAwait(false);
         

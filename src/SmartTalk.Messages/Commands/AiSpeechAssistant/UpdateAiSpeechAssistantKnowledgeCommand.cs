@@ -15,7 +15,7 @@ public class UpdateAiSpeechAssistantKnowledgeCommand : ICommand
     
     public string Greetings { get; set; }
     
-    public AiKidVoiceType? Voice { get; set; }
+    public AiKidVoiceType? VoiceType { get; set; }
 }
 
 public class UpdateAiSpeechAssistantKnowledgeResponse : SmartTalkResponse<AiSpeechAssistantKnowledgeDto>
