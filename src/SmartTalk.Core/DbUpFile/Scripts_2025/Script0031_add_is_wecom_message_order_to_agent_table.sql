@@ -1,0 +1,1 @@
+ALTER TABLE `agent` ADD COLUMN `is_wecom_message_order` TINYINT(1) NOT NULL DEFAULT 0;
