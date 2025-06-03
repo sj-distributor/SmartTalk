@@ -144,7 +144,10 @@ public partial class AiSpeechAssistantService
             knowledge.Brief = command.Brief;
         
         if (!string.IsNullOrWhiteSpace(command.Greetings))
-            command.Greetings = command.Greetings;
+            knowledge.Greetings = command.Greetings;
+
+        if (command.Voice.HasValue)
+            await UpdateAssistantVoiceIfRequiredAsync(knowledge.AssistantId, command.Voice.Value, cancellationToken).ConfigureAwait(false);
         
         await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync([knowledge], cancellationToken: cancellationToken).ConfigureAwait(false);
         
@@ -152,6 +155,20 @@ public partial class AiSpeechAssistantService
         {
             Data = _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge),
         };
+    }
+
+    private async Task UpdateAssistantVoiceIfRequiredAsync(int assistantId, AiKidVoiceType voiceType, CancellationToken cancellationToken)
+    {
+        var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantAsync(assistantId, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Get assistant for update model voice: {@Assistant}", assistant);
+
+        if (assistant != null)
+        {
+            assistant.ModelVoice = ModelVoiceMapping(voiceType);
+                
+            await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync([assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
     }
 
     private async Task<AiSpeechAssistantKnowledge> GetAiSpeechAssistantKnowledgeAsync(int assistantId, CancellationToken cancellationToken)
