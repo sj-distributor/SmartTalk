@@ -83,7 +83,7 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
 
             var initialPayload = await _aiAdapter.GetInitialSessionPayloadAsync(_currentAssistantProfile, 
                 new RealtimeAiEngineContext { InitialPrompt = initialUserPrompt, InputFormat = inputFormat, OutputFormat = outputFormat }, _sessionId, _sessionCts.Token);
-            var initialMessageJson = JsonSerializer.Serialize(initialPayload, new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull });
+            var initialMessageJson = JsonSerializer.Serialize(initialPayload);
             
             await _realtimeAiClient.SendMessageAsync(initialMessageJson, _sessionCts.Token);
 
