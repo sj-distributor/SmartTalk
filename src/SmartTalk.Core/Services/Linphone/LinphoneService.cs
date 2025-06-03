@@ -90,7 +90,7 @@ public class LinphoneService : ILinphoneService
         var parts = recordName.Split('.')[0].Split('-');
     
         if (parts.Length < 6) return null;
-
+    
         var callType = parts[0];
         var recipient = parts[1];
         var caller = parts[2];
@@ -147,7 +147,7 @@ public class LinphoneService : ILinphoneService
             }
         };
     }
-    
+
     public async Task<GetAgentBySipResponse> GetAgentBySipAsync(GetAgentBySipRequest request, CancellationToken cancellationToken)
     {
         return new GetAgentBySipResponse
@@ -156,14 +156,15 @@ public class LinphoneService : ILinphoneService
         };
     }
     
-    public async Task<GetLinphoneHistoryDetailsResponse> GetLinphoneHistoryDetailsAsync(GetLinphoneHistoryDetailsRequest request, CancellationToken cancellationToken)
+    public async Task<GetLinphoneHistoryDetailsResponse> GetLinphoneHistoryDetailsAsync(
+        GetLinphoneHistoryDetailsRequest request, CancellationToken cancellationToken)
     {
         return new GetLinphoneHistoryDetailsResponse
         {
             Data = (await _linphoneDataProvider.GetLinphoneHistoryAsync(caller: request.Caller, cancellationToken: cancellationToken).ConfigureAwait(false)).Item2
         };
     }
-    
+
     public async Task AutoGetLinphoneCdrRecordAsync(CancellationToken cancellationToken)
     { 
         Log.Information("Start auto get linphone cdr record");
@@ -244,9 +245,9 @@ public class LinphoneService : ILinphoneService
         GetLinphoneRestaurantNumberRequest request, CancellationToken cancellationToken)
     {
         var restaurant = await _linphoneDataProvider.GetRestaurantPhoneNumberAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        var restaurantPhoneNumbers = restaurant.Where(x => x.AnotherName != null).FirstOrDefault(x => request.ToRestaurant.Contains(x.AnotherName));
 
+        var restaurantPhoneNumbers = restaurant.Where(x => x.AnotherName != null).FirstOrDefault(x => request.ToRestaurant.Contains(x.AnotherName));
+        
         return new GetLinphoneRestaurantNumberResponse
         {
             Data = restaurantPhoneNumbers?.PhoneNumber
