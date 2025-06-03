@@ -1,4 +1,3 @@
-using Aliyun.OSS;
 using SmartTalk.Core.Domain.VoiceAi.PosManagement;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Messages.Commands.VoiceAi.PosManagement;
@@ -126,10 +125,11 @@ public partial class PosManagementService : IPosManagementService
 
     public async Task<UpdatePosMenuResponse> UpdatePosMenuAsync(UpdatePosMenuCommand command, CancellationToken cancellationToken)
     {
-        var menu = await _posManagementDataProvider.GetPosMenuAsync(null, command.Id, cancellationToken).ConfigureAwait(false);
+        var menu = await _posManagementDataProvider.GetPosMenuAsync( id: command.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         menu.Status = command.Status;
-        menu.TimePeriod = command.TimePeriod;
+        if (!string.IsNullOrEmpty(command.TimePeriod))
+            menu.TimePeriod = command.TimePeriod;
 
         await _posManagementDataProvider.UpdatePosMenuAsync(menu, true, cancellationToken).ConfigureAwait(false);
 
@@ -175,7 +175,7 @@ public partial class PosManagementService : IPosManagementService
 
     public async Task<GetPosMenuDetailResponse> GetPosMenuDetailAsync(GetPosMenuDetailRequest request, CancellationToken cancellationToken)
     {
-        var menu = await _posManagementDataProvider.GetPosMenuAsync(null, request.Id, cancellationToken).ConfigureAwait(false);
+        var menu = await _posManagementDataProvider.GetPosMenuAsync(id: request.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         if (menu == null) throw new Exception("Can't find menu with id:" + request.Id);
 

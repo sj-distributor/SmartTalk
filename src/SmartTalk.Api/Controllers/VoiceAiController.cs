@@ -180,7 +180,7 @@ public class VoiceAiController : ControllerBase
         return Ok(response);
     }
     
-    [Route("company/menu/list"), HttpGet]
+    [Route("company/menus"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPosMenusListResponse))]
     public async Task<IActionResult> GetPosMenusListRequest([FromQuery] GetPosMenusListRequest request)
     {
