@@ -5,6 +5,7 @@ using SmartTalk.Core.Services.Identity;
 using SmartTalk.Core.Domain.VoiceAi.PosManagement;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Account;
+using SmartTalk.Core.Services.Caching.Redis;
 using SmartTalk.Messages.Commands.VoiceAi.PosManagement;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.VoiceAi.PosManagement;
@@ -33,6 +34,8 @@ public partial interface IPosManagementService : IScopedDependency
     Task<UnbindPosCompanyStoreResponse> UnbindPosCompanyStoreAsync(UnbindPosCompanyStoreCommand command, CancellationToken cancellationToken);
 
     Task<BindPosCompanyStoreResponse> BindPosCompanyStoreAsync(BindPosCompanyStoreCommand command, CancellationToken cancellationToken);
+    
+    Task<GetPosStoresResponse> GetPosStoresAsync(GetPosStoresRequest request, CancellationToken cancellationToken);
 }
 
 public partial class PosManagementService : IPosManagementService
@@ -40,14 +43,16 @@ public partial class PosManagementService : IPosManagementService
     private readonly IMapper _mapper;
     private readonly ICurrentUser _currentUser;
     private readonly IEasyPosClient _easyPosClient;
+    private readonly IRedisSafeRunner _redisSafeRunner;
     private readonly IPosManagementDataProvider _posManagementDataProvider;
     private readonly IAccountDataProvider _accountDataProvider;
     
-    public PosManagementService(IMapper mapper, ICurrentUser currentUser, IEasyPosClient easyPosClient, IPosManagementDataProvider posManagementDataProvider, IAccountDataProvider accountDataProvider)
+    public PosManagementService(IMapper mapper, ICurrentUser currentUser, IEasyPosClient easyPosClient, IRedisSafeRunner redisSafeRunner, IPosManagementDataProvider posManagementDataProvider, IAccountDataProvider accountDataProvider)
     {
         _mapper = mapper;
         _currentUser = currentUser;
         _easyPosClient = easyPosClient;
+        _redisSafeRunner = redisSafeRunner;
         _posManagementDataProvider = posManagementDataProvider;
         _accountDataProvider = accountDataProvider;
     }
@@ -180,6 +185,7 @@ public partial class PosManagementService : IPosManagementService
         store.IsLink = true;
         store.PosId = easyPosMerchant?.Data?.Id.ToString() ?? string.Empty;
         store.PosName = easyPosMerchant?.Data?.ShortName ?? string.Empty;
+        store.Timezone = easyPosMerchant?.Data?.TimeZoneId ?? string.Empty;
 
         await _posManagementDataProvider.UpdatePosCompanyStoresAsync([store], cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -234,6 +240,22 @@ public partial class PosManagementService : IPosManagementService
         return new GetPosStoreUsersResponse
         {
             Data = posStoreUsers
+        };
+    }
+
+    public async Task<GetPosStoresResponse> GetPosStoresAsync(GetPosStoresRequest request, CancellationToken cancellationToken)
+    {
+        var storeUsers = request.AuthorizedFilter
+            ? await _posManagementDataProvider.GetPosStoreUsersByUserIdAsync(_currentUser.Id.Value, cancellationToken).ConfigureAwait(false)
+            : null;
+            
+        var stores = await _posManagementDataProvider.GetPosCompanyStoresWithSortingAsync(
+            storeUsers?.Select(x => x.StoreId).ToList(),
+            request.CompanyId, request.Keyword, request.IsNormalSort, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return new GetPosStoresResponse
+        {
+            Data = _mapper.Map<List<PosCompanyStoreDto>>(stores)
         };
     }
 

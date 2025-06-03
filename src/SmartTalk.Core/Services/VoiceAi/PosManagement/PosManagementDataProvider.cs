@@ -30,6 +30,11 @@ public partial interface IPosManagementDataProvider : IScopedDependency
     Task DeletePosStoreUsersAsync(List<PosStoreUser> posStoreUsers, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task<List<PosStoreUserDto>> GetPosStoreUsersAsync(int storeId, CancellationToken cancellationToken = default);
+    
+    Task<List<PosCompanyStoreDto>> GetPosCompanyStoresWithSortingAsync(List<int> storeIds = null,
+        int? companyId = null, string keyword = null, bool isNormalSort = false, CancellationToken cancellationToken = default);
+
+    Task<List<PosStoreUser>> GetPosStoreUsersByUserIdAsync(int userId, CancellationToken cancellationToken);
 }
 
 public partial class PosManagementDataProvider : IPosManagementDataProvider
@@ -87,8 +92,7 @@ public partial class PosManagementDataProvider : IPosManagementDataProvider
             {
                 Id = store.Id,
                 CompanyId = company.Id,
-                EnName = store.EnName,
-                ZhName = store.ZhName,
+                Names = store.Names,
                 Description = store.Description,
                 CompanyDescription = company.Description,
                 Status = store.Status,
@@ -103,6 +107,8 @@ public partial class PosManagementDataProvider : IPosManagementDataProvider
                 IsLink = store.IsLink,
                 PosId = store.PosId,
                 PosName = store.PosName,
+                TimePeriod = store.TimePeriod,
+                Timezone = store.Timezone,
                 CreatedBy = store.CreatedBy,
                 CreatedDate = store.CreatedDate,
                 LastModifiedBy = store.LastModifiedBy,
@@ -182,5 +188,65 @@ public partial class PosManagementDataProvider : IPosManagementDataProvider
             };
 
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<PosCompanyStoreDto>> GetPosCompanyStoresWithSortingAsync(
+        List<int> storeIds = null, int? companyId = null, string keyword = null, bool isNormalSort = false, CancellationToken cancellationToken = default)
+    {
+        var query = from store in _repository.Query<PosCompanyStore>()
+            join order in _repository.Query<PosOrder>() on store.Id equals order.StoreId into orderGroup
+            select new
+            {
+                Store = store,
+                OrderCount = orderGroup.Count()
+            };
+        
+        if (storeIds != null && storeIds.Count != 0)
+            query = query.Where(x => storeIds.Contains(x.Store.Id));
+
+        if (companyId.HasValue)
+            query = query.Where(x => x.Store.CompanyId == companyId.Value);
+
+        if (!string.IsNullOrWhiteSpace(keyword))
+            query = query.Where(x => x.Store.Names.Contains(keyword) || x.Store.PhoneNums.Contains(keyword));
+
+        query = isNormalSort
+            ? query.OrderByDescending(x => x.Store.CreatedDate)
+            : query.OrderByDescending(x => x.OrderCount).ThenByDescending(x => x.Store.CreatedDate);
+
+        var result = await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+
+        var stores = result.Select(x => new PosCompanyStoreDto
+        {
+            Id = x.Store.Id,
+            CompanyId = x.Store.CompanyId,
+            Names = x.Store.Names,
+            Description = x.Store.Description,
+            Status = x.Store.Status,
+            PhoneNums = x.Store.PhoneNums,
+            Logo = x.Store.Logo,
+            Address = x.Store.Address,
+            Latitude = x.Store.Latitude,
+            Longitude = x.Store.Longitude,
+            Link = x.Store.Link,
+            AppId = x.Store.AppId,
+            AppSecret = x.Store.AppSecret,
+            PosName = x.Store.PosName,
+            PosId = x.Store.PosId,
+            IsLink = x.Store.IsLink,
+            TimePeriod = x.Store.TimePeriod,
+            CreatedBy = x.Store.CreatedBy,
+            CreatedDate = x.Store.CreatedDate,
+            LastModifiedBy = x.Store.LastModifiedBy,
+            LastModifiedDate = x.Store.LastModifiedDate,
+            Count = x.OrderCount
+        }).ToList();
+
+        return stores;
+    }
+    
+    public async Task<List<PosStoreUser>> GetPosStoreUsersByUserIdAsync(int userId, CancellationToken cancellationToken)
+    {
+        return await _repository.Query<PosStoreUser>().Where(x => x.UserId == userId).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }

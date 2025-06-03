@@ -20,7 +20,9 @@ public class PosOrderDto
 
     public string Room { get; set; }
 
-    public string OrderNum { get; set; }
+    public string OrderNo { get; set; }
+    
+    public string OrderId { get; set; }
 
     public PosOrderStatus Status { get; set; }
 
@@ -36,7 +38,7 @@ public class PosOrderDto
 
     public string Items { get; set; }
 
-    public string Note { get; set; }
+    public string Notes { get; set; }
 
     public int? CreatedBy { get; set; }
 
