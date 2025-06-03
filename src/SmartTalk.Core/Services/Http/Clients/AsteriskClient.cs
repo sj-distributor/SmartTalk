@@ -19,6 +19,7 @@ public class AsteriskClient : IAsteriskClient
 
     public AsteriskClient(LinphoneSetting linphoneSetting, ISmartTalkHttpClientFactory smartTalkHttpClientFactory)
     {
+        _linphoneSetting = linphoneSetting;
         _smartTalkHttpClientFactory = smartTalkHttpClientFactory;
     }
 

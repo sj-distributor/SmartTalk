@@ -12,7 +12,7 @@ public interface IEasyPosClient : IScopedDependency
 
     Task<GetOrderResponse> GetOrderAsync(long id, string restaurantName, CancellationToken cancellationToken);
     
-    Task<PlaceOrderToEasyPosResponseDto> PlaceOrderToEasyPosAsync(PlaceOrderToEasyPosRequestDto request, CancellationToken cancellationToken = default);
+    Task<PlaceOrderToEasyPosResponseDto> PlaceOrderToEasyPosAsync(PlaceOrderToEasyPosRequestDto request, CancellationToken cancellationToken);
 
     Task<EasyPosTokenResponseDto> GetEasyPosTokenAsync(EasyPosTokenRequestDto request, CancellationToken cancellationToken);
     

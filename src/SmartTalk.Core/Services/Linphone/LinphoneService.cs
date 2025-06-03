@@ -155,7 +155,7 @@ public class LinphoneService : ILinphoneService
             Data = await _linphoneDataProvider.GetAgentBySipAsync(request.Sips, cancellationToken).ConfigureAwait(false)
         };
     }
-    
+
     public async Task<GetLinphoneHistoryDetailsResponse> GetLinphoneHistoryDetailsAsync(
         GetLinphoneHistoryDetailsRequest request, CancellationToken cancellationToken)
     {
