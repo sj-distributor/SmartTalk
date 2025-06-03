@@ -156,7 +156,7 @@ public class PhoneOrderController : ControllerBase
 
         return Ok(response);
     }
-    
+
     [AllowAnonymous]
     [Route("linphone/restaurant"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetLinphoneRestaurantNumberResponse))]
