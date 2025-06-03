@@ -20,7 +20,9 @@ public class PosOrderDto
 
     public string Room { get; set; }
 
-    public string OrderNum { get; set; }
+    public string OrderNo { get; set; }
+    
+    public string OrderId { get; set; }
 
     public PosOrderStatus Status { get; set; }
 
