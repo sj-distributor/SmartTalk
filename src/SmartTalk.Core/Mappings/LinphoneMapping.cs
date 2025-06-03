@@ -10,7 +10,7 @@ public class LinphoneMapping : Profile
     public LinphoneMapping()
     {
         CreateMap<LinphoneCdr, LinphoneHistoryDto>().ReverseMap();
-        
+
         CreateMap<LinphoneCdr, LinphoneCdrDto>().ReverseMap();
 
         CreateMap<LinphoneCdrDto, Cdr>();

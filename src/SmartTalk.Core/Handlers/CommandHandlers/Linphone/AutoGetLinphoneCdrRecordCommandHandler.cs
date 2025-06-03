@@ -13,7 +13,7 @@ public class AutoGetLinphoneCdrRecordCommandHandler : ICommandHandler<Scheduling
     {
         _linphoneService = linphoneService;
     }
-
+    
     public async Task Handle(IReceiveContext<SchedulingAutoGetLinphoneCdrRecordCommand> context, CancellationToken cancellationToken)
     {
         await _linphoneService.AutoGetLinphoneCdrRecordAsync(cancellationToken).ConfigureAwait(false);

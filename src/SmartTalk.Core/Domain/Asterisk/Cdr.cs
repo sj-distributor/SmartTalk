@@ -51,7 +51,7 @@ public class Cdr : IEntity, IHasCreatedFields
 
     [Column("accountcode")]
     public string Accountcode { get; set; }
-
+    
     [Column("uniqueid")]
     public string Uniqueid { get; set; }
 
@@ -60,13 +60,13 @@ public class Cdr : IEntity, IHasCreatedFields
 
     [Column("did")]
     public string Did { get; set; }
-
+    
     [Column("recordingfile")]
     public string RecordingFile { get; set; }
-
+    
     [Column("cnum")] 
     public string Cnum { get; set; }
-
+    
     [Column("cnam")] 
     public string Cname { get; set; }
 
@@ -87,7 +87,7 @@ public class Cdr : IEntity, IHasCreatedFields
 
     [Column("sequence")]
     public string Sequence { get; set; }
-
+    
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
 }
