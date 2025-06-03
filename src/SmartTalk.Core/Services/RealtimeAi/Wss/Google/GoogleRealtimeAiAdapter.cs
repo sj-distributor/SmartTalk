@@ -35,8 +35,6 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
         var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(assistantProfile.Id, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
         var tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config).ToList();
         
-        Log.Information("Got initial session config: {@Config}", configs);
-        
         var sessionPayload = new
         {
             setup = new
