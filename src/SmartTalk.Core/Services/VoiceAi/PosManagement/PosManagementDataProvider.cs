@@ -222,7 +222,7 @@ public partial class PosManagementDataProvider : IPosManagementDataProvider
             CompanyId = x.Store.CompanyId,
             Names = x.Store.Names,
             Description = x.Store.Description,
-            Status = false,
+            Status = x.Store.Status,
             PhoneNums = x.Store.PhoneNums,
             Logo = x.Store.Logo,
             Address = x.Store.Address,
