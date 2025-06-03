@@ -16,6 +16,6 @@ public class GetLinphoneRestaurantNumberRequestHandler : IRequestHandler<GetLinp
     
     public async Task<GetLinphoneRestaurantNumberResponse> Handle(IReceiveContext<GetLinphoneRestaurantNumberRequest> context, CancellationToken cancellationToken)
     {
-        return await _linphoneService.GetLinphoneRestaurantNumberAsync(context.Message, cancellationToken).ConfigureAwait(false);
+         return await _linphoneService.GetLinphoneRestaurantNumberAsync(context.Message, cancellationToken).ConfigureAwait(false);
     }
 }

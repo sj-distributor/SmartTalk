@@ -8,6 +8,6 @@ public class LinphoneSetting : IConfigurationSetting
     {
         BaseUrl = configuration.GetValue<string>("Linphone:BaseUrl");
     }
-
+    
     public string BaseUrl { get; set; }
 }

@@ -203,7 +203,7 @@ public partial class PhoneOrderDataProvider
     {
         return await _repository.Query<AiSpeechAssistantKnowledge>().Where(x=> x.AssistantId == assistantId && x.IsActive).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
-    
+
     public async Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(int? recordId = null, int? agentId = null, DateTimeOffset? createdDate = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<PhoneOrderRecord>();
