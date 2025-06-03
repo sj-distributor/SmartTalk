@@ -125,7 +125,7 @@ public partial class PosManagementService : IPosManagementService
 
     public async Task<UpdatePosMenuResponse> UpdatePosMenuAsync(UpdatePosMenuCommand command, CancellationToken cancellationToken)
     {
-        var menu = await _posManagementDataProvider.GetPosMenuAsync( id: command.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var menu = await _posManagementDataProvider.GetPosMenuAsync(id: command.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         menu.Status = command.Status;
         if (!string.IsNullOrEmpty(command.TimePeriod))
@@ -142,33 +142,38 @@ public partial class PosManagementService : IPosManagementService
     public async Task<GetPosMenuPreviewResponse> GetPosMenuPreviewAsync(GetPosMenuPreviewRequest request, CancellationToken cancellationToken)
     {
         var menus = await _posManagementDataProvider.GetPosMenusAsync(request.StoreId, cancellationToken).ConfigureAwait(false);
+        
+        var categories = await _posManagementDataProvider.GetPosCategoriesAsync( storeId: request.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var products = await _posManagementDataProvider.GetPosProductsAsync(storeId: request.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        var menuWithCategoriesList = await Task.WhenAll(menus.Select(async menu =>
+        var menuWithCategoriesList = menus.Select(menu =>
         {
-            var categories = await _posManagementDataProvider.GetPosCategoriesAsync(menu.Id, null, cancellationToken).ConfigureAwait(false);
+            var menuCategories = categories.Where(c => c.MenuId == menu.Id).ToList();
 
-            var categoryWithProducts = await Task.WhenAll(categories.Select(async category =>
+            var categoryWithProducts = menuCategories.Select(category =>
             {
-                var products = await _posManagementDataProvider.GetPosProductsAsync(category.Id, request.ProductName, null, cancellationToken).ConfigureAwait(false);
+                var categoryProducts = products.Where(p => p.CategoryId == category.Id).ToList();
+
                 return new PosCategoryWithProduct
                 {
                     Category = _mapper.Map<PosCategoryDto>(category),
-                    Products = _mapper.Map<List<PosProductDto>>(products)
+                    Products = _mapper.Map<List<PosProductDto>>(categoryProducts)
                 };
-            }));
+            }).ToList();
 
             return new PosMenuWithCategories
             {
                 Menu = _mapper.Map<PosMenuDto>(menu),
-                PosCategoryWithProduct = categoryWithProducts.ToList()
+                PosCategoryWithProduct = categoryWithProducts
             };
-        }));
+        }).ToList();
 
         return new GetPosMenuPreviewResponse
         {
             Data = new PosMenuPreviewData
             {
-                MenuWithCategories = menuWithCategoriesList.ToList()
+                MenuWithCategories = menuWithCategoriesList
             }
         };
     }
@@ -187,7 +192,7 @@ public partial class PosManagementService : IPosManagementService
 
     public async Task<GetPosCategoryResponse> GetPosCategoryAsync(GetPosCategoryRequest request, CancellationToken cancellationToken)
     {
-        var category = await _posManagementDataProvider.GetPosCategoriesAsync(null, request.Id, cancellationToken).ConfigureAwait(false);
+        var category = await _posManagementDataProvider.GetPosCategoriesAsync(id: request.Id,  cancellationToken: cancellationToken).ConfigureAwait(false);
         
         if (category == null) throw new Exception("Can't find category with id:" + request.Id);
 
@@ -199,7 +204,7 @@ public partial class PosManagementService : IPosManagementService
 
     public async Task<GetPosProductResponse> GetPosProductAsync(GetPosProductRequest request, CancellationToken cancellationToken)
     {
-        var product = await _posManagementDataProvider.GetPosProductsAsync(null, null, request.Id, cancellationToken).ConfigureAwait(false);
+        var product = await _posManagementDataProvider.GetPosProductsAsync(id: request.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         if (product == null) throw new Exception("Can't find product with id:" + request.Id);
 
@@ -211,7 +216,7 @@ public partial class PosManagementService : IPosManagementService
 
     public async Task<UpdatePosCategoryResponse> UpdatePosCategoryAsync(UpdatePosCategoryCommand command, CancellationToken cancellationToken)
     {
-        var categories = await _posManagementDataProvider.GetPosCategoriesAsync(null, command.Id, cancellationToken).ConfigureAwait(false);
+        var categories = await _posManagementDataProvider.GetPosCategoriesAsync(id: command.Id,  cancellationToken: cancellationToken).ConfigureAwait(false);
         
         if (categories == null || !categories.Any()) throw new InvalidOperationException("No category found with the specified ID.");
 
@@ -227,7 +232,7 @@ public partial class PosManagementService : IPosManagementService
 
     public async Task<UpdatePosProductResponse> UpdatePosProductAsync(UpdatePosProductCommand command, CancellationToken cancellationToken)
     {
-        var products = await _posManagementDataProvider.GetPosProductsAsync(null,  null, command.Id, cancellationToken).ConfigureAwait(false);
+        var products = await _posManagementDataProvider.GetPosProductsAsync(id: command.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (products == null || !products.Any()) throw new InvalidOperationException("No product found with the specified ID.");
         
