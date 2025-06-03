@@ -51,7 +51,7 @@ public class LinphoneCdrDto
 
     [JsonProperty("accountcode")]
     public string Accountcode { get; set; }
-
+    
     [JsonProperty("uniqueid")]
     public string Uniqueid { get; set; }
 
@@ -60,13 +60,13 @@ public class LinphoneCdrDto
 
     [JsonProperty("did")]
     public string Did { get; set; }
-
+    
     [JsonProperty("recordingfile")]
     public string RecordingFile { get; set; }
-
+    
     [JsonProperty("cnum")] 
     public string Cnum { get; set; }
-
+    
     [JsonProperty("cnam")] 
     public string Cname { get; set; }
 
