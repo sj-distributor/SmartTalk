@@ -33,6 +33,7 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
     {
         var configs = await InitialSessionConfigAsync(assistantProfile, cancellationToken).ConfigureAwait(false);
         var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(assistantProfile.Id, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config).ToList();
         
         var sessionPayload = new
         {
@@ -54,7 +55,9 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
                     {
                         new { text = knowledge?.Prompt ?? string.Empty }
                     }
-                }
+                },
+                tools = tools.Any() ? tools : null,
+                realtimeInputConfig = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection)
             }
         };
         
