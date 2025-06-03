@@ -56,8 +56,8 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
                         new { text = knowledge?.Prompt ?? string.Empty }
                     }
                 },
-                tools = tools.Any() ? tools : null,
-                realtimeInputConfig = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection)
+                tools = tools.Any() ? tools : new List<object>(),
+                realtimeInputConfig = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection) ?? new {}
             }
         };
         
