@@ -90,6 +90,7 @@ public class LinphoneService : ILinphoneService
         var parts = recordName.Split('.')[0].Split('-');
     
         if (parts.Length < 6) return null;
+
         var callType = parts[0];
         var recipient = parts[1];
         var caller = parts[2];
@@ -128,22 +129,6 @@ public class LinphoneService : ILinphoneService
 
         return linphoneCdr;
     }
-    
-    public async Task<GetAgentBySipResponse> GetAgentBySipAsync(GetAgentBySipRequest request, CancellationToken cancellationToken)
-    {
-        return new GetAgentBySipResponse
-        {
-            Data = await _linphoneDataProvider.GetAgentBySipAsync(request.Sips, cancellationToken).ConfigureAwait(false)
-        };
-    }
-    
-    public async Task<GetLinphoneHistoryDetailsResponse> GetLinphoneHistoryDetailsAsync(GetLinphoneHistoryDetailsRequest request, CancellationToken cancellationToken)
-    {
-        return new GetLinphoneHistoryDetailsResponse
-        {
-            Data = (await _linphoneDataProvider.GetLinphoneHistoryAsync(caller: request.Caller, cancellationToken: cancellationToken).ConfigureAwait(false)).Item2
-        };
-    }
 
     public async Task<GetLinphoneHistoryResponse> GetLinphoneHistoryAsync(GetLinphoneHistoryRequest request, CancellationToken cancellationToken)
     {
@@ -160,6 +145,22 @@ public class LinphoneService : ILinphoneService
                 linphoneRecords = cdrs,
                 Count = count
             }
+        };
+    }
+    
+    public async Task<GetAgentBySipResponse> GetAgentBySipAsync(GetAgentBySipRequest request, CancellationToken cancellationToken)
+    {
+        return new GetAgentBySipResponse
+        {
+            Data = await _linphoneDataProvider.GetAgentBySipAsync(request.Sips, cancellationToken).ConfigureAwait(false)
+        };
+    }
+    
+    public async Task<GetLinphoneHistoryDetailsResponse> GetLinphoneHistoryDetailsAsync(GetLinphoneHistoryDetailsRequest request, CancellationToken cancellationToken)
+    {
+        return new GetLinphoneHistoryDetailsResponse
+        {
+            Data = (await _linphoneDataProvider.GetLinphoneHistoryAsync(caller: request.Caller, cancellationToken: cancellationToken).ConfigureAwait(false)).Item2
         };
     }
     
@@ -192,7 +193,7 @@ public class LinphoneService : ILinphoneService
 
         if (externalLinphoneCdrs.Cdrs.Count > 0)
             await _cacheManager.SetAsync(redisKey, externalLinphoneCdrs.Cdrs, new RedisCachingSetting(expiry: TimeSpan.FromHours(1)), cancellationToken);
-
+        
         var linphoneSips = await _linphoneDataProvider.GetLinphoneSipAsync(cancellationToken).ConfigureAwait(false);
 
         var newLinphoneCdrs = new List<LinphoneCdr>();
@@ -222,7 +223,7 @@ public class LinphoneService : ILinphoneService
         newLinphoneCdrs.RemoveAll(x => x == null);
 
         var alreadyExistsCdr = newLinphoneCdrs.FirstOrDefault(x => x.Caller == localLinphoneCdrs.Caller && x.Targetter == localLinphoneCdrs.Targetter && x.CallDate == localLinphoneCdrs.CallDate);
-        
+         
         if (alreadyExistsCdr != null)
         {
             if (alreadyExistsCdr.Status == localLinphoneCdrs.Status)

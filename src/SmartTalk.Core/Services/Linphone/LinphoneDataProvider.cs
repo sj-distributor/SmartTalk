@@ -23,7 +23,7 @@ public interface ILinphoneDataProvider : IScopedDependency
         int? pageSize = 10, int? pageIndex = 1, CancellationToken cancellationToken = default);
 
     Task<List<GetAgentBySipDto>> GetAgentBySipAsync(List<string> sips, CancellationToken cancellationToken);
-    
+
     Task<LinphoneCdr> GetLinphoneCdrAsync(CancellationToken cancellationToken);
 
     Task UpdateLinphoneCdrAsync(LinphoneCdr linphoneCdr, bool foreSave = true, CancellationToken cancellationToken = default);
@@ -141,7 +141,7 @@ public class LinphoneDataProvider : ILinphoneDataProvider
         
         return agents;
     }
-    
+
     public async Task<LinphoneCdr> GetLinphoneCdrAsync(CancellationToken cancellationToken)
     {
         return await _repository.Query<LinphoneCdr>()

@@ -93,7 +93,7 @@ public partial class PhoneOrderService
 
     private async Task<bool> CheckOrderExistAsync(int agentId, DateTimeOffset createdDate, CancellationToken cancellationToken)
     {
-        return (await _phoneOrderDataProvider.GetPhoneOrderRecordAsync(createdDate: createdDate, cancellationToken: cancellationToken).ConfigureAwait(false)).Any();
+        return (await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentId: agentId, createdDate: createdDate, cancellationToken: cancellationToken).ConfigureAwait(false)).Any();
     }
 
     public TranscriptionLanguage SelectLanguageEnum(string language)
