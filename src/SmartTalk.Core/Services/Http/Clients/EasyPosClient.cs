@@ -62,7 +62,7 @@ public class EasyPosClient : IEasyPosClient
             }, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
     
-    public async Task<PlaceOrderToEasyPosResponseDto> PlaceOrderToEasyPosAsync(PlaceOrderToEasyPosRequestDto request, CancellationToken cancellationToken = default)
+    public async Task<PlaceOrderToEasyPosResponseDto> PlaceOrderToEasyPosAsync(PlaceOrderToEasyPosRequestDto request, CancellationToken cancellationToken)
     {
         var headers = new Dictionary<string, string>
         {

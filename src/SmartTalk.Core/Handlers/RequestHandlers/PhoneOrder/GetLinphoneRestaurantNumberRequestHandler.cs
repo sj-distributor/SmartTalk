@@ -8,7 +8,7 @@ namespace SmartTalk.Core.Handlers.RequestHandlers.PhoneOrder;
 public class GetLinphoneRestaurantNumberRequestHandler : IRequestHandler<GetLinphoneRestaurantNumberRequest, GetLinphoneRestaurantNumberResponse>
 {
     private readonly ILinphoneService _linphoneService;
-
+    
     public GetLinphoneRestaurantNumberRequestHandler(ILinphoneService linphoneService)
     {
         _linphoneService = linphoneService;
