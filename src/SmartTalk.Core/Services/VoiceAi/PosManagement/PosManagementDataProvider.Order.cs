@@ -29,10 +29,10 @@ public partial class PosManagementDataProvider
             query = query.Where(x => x.OrderNo.Contains(keyword) || x.Phone.Contains(keyword));
 
         if (startDate.HasValue)
-            query = query.Where(x => x.CreatedDate >= startDate);
+            query = query.Where(x => x.CreatedDate >= startDate.Value);
         
         if (endDate.HasValue)
-            query = query.Where(x => x.CreatedDate <= endDate);
+            query = query.Where(x => x.CreatedDate <= endDate.Value);
         
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
