@@ -23,23 +23,38 @@ public class EasyPosResponseData
     public List<EasyPosResponseProduct> Products { get; set; }
     
     [JsonProperty("timePeriods")]
-    public List<EasyPosResponseTimePeriods> TimePeriods { get; set; }
+    public List<EasyPosResponseTimePeriod> TimePeriods { get; set; }
+    
+    [JsonProperty("taxes")]
+    public List<EasyPosResponseTax> Taxes { get; set; }
     
     [JsonProperty("menus")]
     public List<EasyPosResponseMenu> Menus { get; set; }
+
+    [JsonProperty("categories")]
+    public List<EasyPosResponseCategory> Categories { get; set; }
 }
 
 public class EasyPosResponseProduct
 {
     [JsonProperty("id")]
     public long Id { get; set; }
+    
+    [JsonProperty("menuIds")]
+    public List<long> MenuIds { get; set; }
+    
+    [JsonProperty("categoryIds")]
+    public List<long> CategoryIds { get; set; }
 
     [JsonProperty("price")]
     public decimal Price { get; set; }
     
-    [JsonProperty("menuIds")]
-    public List<long> MenuIds { get; set; } 
+    [JsonProperty("taxes")]
+    public List<EasyPosResponseTax> Taxes { get; set; }
 
+    [JsonProperty("status")]
+    public bool Status { get; set; }
+    
     [JsonProperty("isIndependentSale")]
     public bool IsIndependentSale { get; set; }
 
@@ -75,6 +90,9 @@ public class EasyPosResponseModifierGroups
     
     [JsonProperty("MaximumRepetition")]
     public int MaximumRepetition { get; set; }
+    
+    [JsonProperty("taxes")]
+    public List<EasyPosResponseTax> Taxes { get; set; }
 
     [JsonProperty("localizations")]
     public List<EasyPosResponseLocalization> Localizations { get; set; }
@@ -95,27 +113,74 @@ public class EasyPosResponseModifierProducts
     public List<EasyPosResponseLocalization> Localizations { get; set; }
 }
 
-public class EasyPosResponseTimePeriods
+public class EasyPosResponseTimePeriod
 {
     [JsonProperty("id")]
     public long Id { get; set; }
-
+    
     [JsonProperty("name")]
     public string Name { get; set; }
-
+    
     [JsonProperty("dayOfWeeks")]
     public List<int> DayOfWeeks { get; set; }
-
+    
     [JsonProperty("startTime")]
     public string StartTime { get; set; }
-
+    
     [JsonProperty("endTime")]
     public string EndTime { get; set; }
 }
 
+public class EasyPosResponseTax
+{
+    [JsonProperty("id")]
+    public long Id { get; set; }
+    
+    [JsonProperty("name")]
+    public string Name { get; set; }
+    
+    [JsonProperty("isPercentage")]
+    public bool IsPercentage { get; set; }
+    
+    [JsonProperty("isSelectedByDefault")]
+    public bool IsSelectedByDefault { get; set; }
+    
+    [JsonProperty("value")]
+    public decimal Value { get; set; }
+}
+
 public class EasyPosResponseMenu
 {
-    public long MenuId { get; set; }
+    [JsonProperty("id")]
+    public long Id { get; set; }
     
-    public List<EasyPosResponseTimePeriods> TimePeriods { get; set; }
+    [JsonProperty("timePeriods")]
+    public List<EasyPosResponseTimePeriod> TimePeriods { get; set; }
+    
+    [JsonProperty("categoryIds")]
+    public List<long> CategoryIds { get; set; }
+    
+    [JsonProperty("status")]
+    public bool Status { get; set; }
+    
+    [JsonProperty("localizations")]
+    public List<EasyPosResponseLocalization> Localizations { get; set; }
+    
+    [JsonProperty("categories")]
+    public List<EasyPosResponseCategory> Categories { get; set; }
+}
+
+public class EasyPosResponseCategory
+{
+    [JsonProperty("id")]
+    public long Id { get; set; }
+    
+    [JsonProperty("localizations")]
+    public List<EasyPosResponseLocalization> Localizations { get; set; }
+    
+    [JsonProperty("products")]
+    public List<EasyPosResponseProduct> Products { get; set; }
+    
+    [JsonProperty("menuIds")]
+    public List<long> MenuIds { get; set; }
 }
