@@ -1,6 +1,6 @@
 using Mediator.Net.Contracts;
-using Smarties.Messages.Responses;
 using SmartTalk.Messages.Dto.Pos;
+using SmartTalk.Messages.Responses;
 
 namespace SmartTalk.Messages.Commands.Pos;
 
@@ -9,6 +9,6 @@ public class UnbindPosCompanyStoreCommand : ICommand
     public int StoreId { get; set; }
 }
 
-public class UnbindPosCompanyStoreResponse : SmartiesResponse<PosCompanyStoreDto>
+public class UnbindPosCompanyStoreResponse : SmartTalkResponse<PosCompanyStoreDto>
 {
 }
