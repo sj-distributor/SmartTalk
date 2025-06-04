@@ -155,11 +155,11 @@ public class RestaurantDataProvider : IRestaurantDataProvider
         
         foreach (var product in products)
         {
-            var productMenus = menus?.Where(menu => product.MenuIds != null && product.MenuIds.Contains(menu.MenuId)).ToList();
+            var productMenus = menus?.Where(menu => product.MenuIds != null && product.MenuIds.Contains(menu.Id)).ToList();
             
             var productTimePeriods = productMenus?
-                .SelectMany(menu => menu.TimePeriods ?? new List<EasyPosResponseTimePeriods>())
-                .DistinctBy(tp => tp.Id).ToList() ?? new List<EasyPosResponseTimePeriods>();
+                .SelectMany(menu => menu.TimePeriods ?? new List<EasyPosResponseTimePeriod>())
+                .DistinctBy(tp => tp.Id).ToList() ?? new List<EasyPosResponseTimePeriod>();
 
             foreach (var modifierGroup in product.ModifierGroups ?? Enumerable.Empty<EasyPosResponseModifierGroups>())
             {

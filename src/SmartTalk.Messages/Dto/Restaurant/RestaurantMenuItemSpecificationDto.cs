@@ -16,7 +16,7 @@ public class RestaurantMenuItemSpecificationDto
     
     public int MaximumRepetition { get; set; }
     
-    public List<EasyPosResponseTimePeriods> TimePeriods { get; set; }
+    public List<EasyPosResponseTimePeriod> TimePeriods { get; set; }
     
     public List<ModifierPromptItemDto> ModifierItems { get; set; } = new();
 }

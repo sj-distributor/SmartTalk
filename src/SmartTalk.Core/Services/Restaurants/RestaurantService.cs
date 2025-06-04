@@ -135,7 +135,7 @@ public class RestaurantService : IRestaurantService
         }
     }
     
-    private void AppendTimePeriodDescription(List<EasyPosResponseTimePeriods> timePeriods, StringBuilder stringBuilder)
+    private void AppendTimePeriodDescription(List<EasyPosResponseTimePeriod> timePeriods, StringBuilder stringBuilder)
     {
         if (timePeriods == null || !timePeriods.Any()) return;
 
