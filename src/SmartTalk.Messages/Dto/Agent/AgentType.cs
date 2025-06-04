@@ -4,5 +4,7 @@ public enum AgentType
 {
     Restaurant,
     Warehouse,
-    Sales
+    Sales,
+    Assistant,
+    PosCompanyStore
 }

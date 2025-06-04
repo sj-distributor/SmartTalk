@@ -1,14 +1,18 @@
 using AutoMapper;
 using Serilog;
 using SmartTalk.Core.Domain.Pos;
+using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Account;
+using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.Caching.Redis;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Identity;
 using SmartTalk.Messages.Commands.Pos;
+using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Pos;
+using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Requests.Pos;
 
 namespace SmartTalk.Core.Services.Pos;
@@ -44,16 +48,18 @@ public partial class PosService : IPosService
     private readonly ICurrentUser _currentUser;
     private readonly IEasyPosClient _easyPosClient;
     private readonly IRedisSafeRunner _redisSafeRunner;
-    private readonly Pos.IPosDataProvider _posDataProvider;
+    private readonly IPosDataProvider _posDataProvider;
+    private readonly IAgentDataProvider _agentDataProvider;
     private readonly IAccountDataProvider _accountDataProvider;
     
-    public PosService(IMapper mapper, ICurrentUser currentUser, IEasyPosClient easyPosClient, IRedisSafeRunner redisSafeRunner, Pos.IPosDataProvider posDataProvider, IAccountDataProvider accountDataProvider)
+    public PosService(IMapper mapper, ICurrentUser currentUser, IEasyPosClient easyPosClient, IRedisSafeRunner redisSafeRunner, IPosDataProvider posDataProvider, IAgentDataProvider agentDataProvider, IAccountDataProvider accountDataProvider)
     {
         _mapper = mapper;
         _currentUser = currentUser;
         _easyPosClient = easyPosClient;
         _redisSafeRunner = redisSafeRunner;
         _posDataProvider = posDataProvider;
+        _agentDataProvider = agentDataProvider;
         _accountDataProvider = accountDataProvider;
     }
     
@@ -91,6 +97,8 @@ public partial class PosService : IPosService
         store.CreatedBy = _currentUser.Id.Value;
 
         await _posDataProvider.AddPosCompanyStoresAsync([store], cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        await InitialAgentAsync(store.Id, cancellationToken).ConfigureAwait(false);
 
         return new CreatePosCompanyStoreResponse
         {
@@ -279,5 +287,17 @@ public partial class PosService : IPosService
         var stores = storeGroups.TryGetValue(company.Id, out var group) ? group : [];
         
         return _mapper.Map<List<PosCompanyStoreDto>>(stores);
+    }
+
+    private async Task InitialAgentAsync(int storeId, CancellationToken cancellationToken)
+    {
+        var agent = new Agent
+        {
+            RelateId = storeId,
+            Type = AgentType.PosCompanyStore,
+            SourceSystem = AgentSourceSystem.Self
+        };
+        
+        await _agentDataProvider.AddAgentAsync(agent, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 }
