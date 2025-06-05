@@ -153,7 +153,7 @@ public partial class PosService
         
         await _posDataProvider.AddPosProductsAsync(posProducts, true, cancellationToken).ConfigureAwait(false);
         
-        Log.Information("Sync products data: {@ProductsMap}", posProducts.ToDictionary(p => p.ProductId, p => p.Id));
+        Log.Information("Sync products data completed");
     }
     
     private Dictionary<string, Dictionary<string, string>> GetLocalizedNames(IEnumerable<EasyPosResponseLocalization> localizations)
