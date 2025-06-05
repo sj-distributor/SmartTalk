@@ -17,6 +17,9 @@ public class EasyPosMerchantResponseDto
 
 public class StoreInfoData
 {
+    [JsonProperty("id")]
+    public int Id { get; set; }
+    
     [JsonProperty("companyId")]
     public int CompanyId { get; set; }
     
