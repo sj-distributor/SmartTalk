@@ -5,6 +5,7 @@ public enum AgentType
     Restaurant,
     Warehouse,
     Sales,
+    AiKid,
     Assistant,
     PosCompanyStore
 }
