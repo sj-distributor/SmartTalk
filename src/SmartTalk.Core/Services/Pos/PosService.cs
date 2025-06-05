@@ -1,4 +1,5 @@
 using AutoMapper;
+using Newtonsoft.Json;
 using Serilog;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.System;
@@ -194,6 +195,7 @@ public partial class PosService : IPosService
         store.PosId = easyPosMerchant?.Data?.Id.ToString() ?? string.Empty;
         store.PosName = easyPosMerchant?.Data?.ShortName ?? string.Empty;
         store.Timezone = easyPosMerchant?.Data?.TimeZoneId ?? string.Empty;
+        store.TimePeriod = JsonConvert.SerializeObject(easyPosMerchant?.Data?.TimePeriods);
 
         await _posDataProvider.UpdatePosCompanyStoresAsync([store], cancellationToken: cancellationToken).ConfigureAwait(false);
 
