@@ -57,7 +57,8 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
                     }
                 },
                 tools = tools.Any() ? tools : null,
-                realtimeInputConfig = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection)
+                realtimeInputConfig = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection),
+                contextWindowCompression = new { slidingWindow = new {} }
             }
         };
         
