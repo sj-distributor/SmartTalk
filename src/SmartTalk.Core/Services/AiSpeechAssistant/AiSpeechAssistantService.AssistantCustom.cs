@@ -253,8 +253,8 @@ public partial class AiSpeechAssistantService
         return voiceType.Value switch
         {
             AiKidVoiceType.Male => "ash",
-            AiKidVoiceType.Female => "alloy",
-            _ => "alloy"
+            AiKidVoiceType.Female => "sage",
+            _ => "sage"
         };
     }
     
