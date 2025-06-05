@@ -18,10 +18,10 @@ public class EasyPosMerchantResponseDto
 public class StoreInfoData
 {
     [JsonProperty("id")]
-    public int Id { get; set; }
+    public long Id { get; set; }
     
     [JsonProperty("companyId")]
-    public int CompanyId { get; set; }
+    public long CompanyId { get; set; }
     
     [JsonProperty("shortName")]
     public string ShortName { get; set; }
