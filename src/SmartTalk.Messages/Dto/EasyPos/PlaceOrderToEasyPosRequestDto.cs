@@ -87,6 +87,9 @@ public class PlaceOrderToEasyPosResponseData
 
 public class PlaceOrderToEasyPosResponseDataOrder
 {
+    [JsonProperty("id")]
+    public long Id { get; set; }
+    
     [JsonProperty("status")]
     public int Status { get; set; }
     
