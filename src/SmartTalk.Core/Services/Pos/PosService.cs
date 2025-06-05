@@ -293,8 +293,9 @@ public partial class PosService : IPosService
     {
         var agent = new Agent
         {
-            RelateId = storeId,
-            Type = AgentType.PosCompanyStore,
+            IsDisplay = true,
+            DomainId = storeId,
+            Type = AgentType.Assistant,
             SourceSystem = AgentSourceSystem.Self
         };
         
