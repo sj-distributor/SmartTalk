@@ -17,13 +17,10 @@ public class EasyPosMerchantResponseDto
 
 public class StoreInfoData
 {
-    [JsonProperty("id")]
-    public int Id { get; set; }
-
     [JsonProperty("companyId")]
     public int CompanyId { get; set; }
     
-    [JsonProperty("short_name")]
+    [JsonProperty("shortName")]
     public string ShortName { get; set; }
 
     [JsonProperty("timePeriods")]
@@ -49,6 +46,18 @@ public class StoreTimePeriod
 
     [JsonProperty("endTime")]
     public StoreTimeSpanInfo EndTime { get; set; }
+    
+    [JsonProperty("duration")]
+    public StoreTimeSpanInfo Duration { get; set; }
+    
+    [JsonProperty("updateAt")]
+    public DateTimeOffset UpdateAt { get; set; }
+    
+    [JsonProperty("associatedId")]
+    public int AssociatedId { get; set; }
+    
+    [JsonProperty("associatedType")]
+    public int AssociatedType { get; set; }
 }
 
 public class StoreTimeSpanInfo
