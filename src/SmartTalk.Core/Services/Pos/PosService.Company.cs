@@ -198,7 +198,7 @@ public partial class PosService : IPosService
 
         return new GetPosCategoryResponse()
         {
-            Data = _mapper.Map<PosCategoryDto>(category)
+            Data = _mapper.Map<List<PosCategoryDto>>(category)
         };
     }
 
