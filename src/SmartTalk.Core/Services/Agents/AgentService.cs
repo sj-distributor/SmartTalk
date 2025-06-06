@@ -33,7 +33,7 @@ public class AgentService : IAgentService
         
         var agentInfo = await GetAllAgentsAsync(agentTypes, cancellationToken).ConfigureAwait(false);
         
-        return new GetAgentsResponse { Data = agentInfo.OrderByDescending(x => x.CreatedDate).ToList() };
+        return new GetAgentsResponse { Data = agentInfo.OrderBy(x => x.CreatedDate).ToList() };
     }
 
     private async Task<List<AgentPreviewDto>> GetAllAgentsAsync(List<AgentType> agentTypes, CancellationToken cancellationToken)
