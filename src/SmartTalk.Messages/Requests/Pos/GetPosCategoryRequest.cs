@@ -9,6 +9,6 @@ public class GetPosCategoryRequest : IRequest
     public int Id { get; set; }
 }
 
-public class GetPosCategoryResponse : SmartTalkResponse<PosCategoryDto>
+public class GetPosCategoryResponse : SmartTalkResponse<List<PosCategoryDto>>
 {
 }
