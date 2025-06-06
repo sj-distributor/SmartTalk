@@ -12,9 +12,9 @@ public class PosMapping : Profile
         CreateMap<PosCompanyDto, PosCompany>().ReverseMap();
 
         CreateMap<PosCompanyStoreDto, PosCompanyStore>().ReverseMap();
-        CreateMap<CreatePosCompanyStoreCommand, PosCompanyStoreDto>()
+        CreateMap<CreatePosCompanyStoreCommand, PosCompanyStore>()
             .ForMember(dest => dest.PhoneNums, opt => opt.MapFrom(x => string.Join(",", x.PhoneNumbers)));
-        CreateMap<UpdatePosCompanyStoreCommand, PosCompanyStoreDto>()
+        CreateMap<UpdatePosCompanyStoreCommand, PosCompanyStore>()
             .ForMember(dest => dest.PhoneNums, opt => opt.MapFrom(x => string.Join(",", x.PhoneNumbers)));
         CreateMap<PosStoreUser, PosStoreUserDto>().ReverseMap();
 
