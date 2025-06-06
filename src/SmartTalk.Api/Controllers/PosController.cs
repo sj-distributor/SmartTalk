@@ -110,7 +110,7 @@ public class PosController : ControllerBase
     
     [Route("company/detail"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPosCompanyDetailResponse))]
-    public async Task<IActionResult> GetPosCompanyDetailRequest([FromQuery] GetPosCompanyDetailRequest request)
+    public async Task<IActionResult> GetPosCompanyDetailAsync([FromQuery] GetPosCompanyDetailRequest request)
     {
         var response = await _mediator.RequestAsync<GetPosCompanyDetailRequest, GetPosCompanyDetailResponse>(request).ConfigureAwait(false);
         
@@ -164,7 +164,7 @@ public class PosController : ControllerBase
     
     [Route("company/menu/detail"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPosMenuDetailResponse))]
-    public async Task<IActionResult> GetPosMenuDetailRequest([FromQuery] GetPosMenuDetailRequest request)
+    public async Task<IActionResult> GetPosMenuDetailAsync([FromQuery] GetPosMenuDetailRequest request)
     {
         var response = await _mediator.RequestAsync<GetPosMenuDetailRequest, GetPosMenuDetailResponse>(request).ConfigureAwait(false);
         
@@ -173,7 +173,7 @@ public class PosController : ControllerBase
     
     [Route("company/menu/preview"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPosMenuPreviewResponse))]
-    public async Task<IActionResult> GetPosMenuPreviewRequest([FromQuery] GetPosMenuPreviewRequest request)
+    public async Task<IActionResult> GetPosMenuPreviewAsync([FromQuery] GetPosMenuPreviewRequest request)
     {
         var response = await _mediator.RequestAsync<GetPosMenuPreviewRequest, GetPosMenuPreviewResponse>(request).ConfigureAwait(false);
         
@@ -182,7 +182,7 @@ public class PosController : ControllerBase
     
     [Route("company/menus"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPosMenusListResponse))]
-    public async Task<IActionResult> GetPosMenusListRequest([FromQuery] GetPosMenusListRequest request)
+    public async Task<IActionResult> GetPosMenusListAsync([FromQuery] GetPosMenusListRequest request)
     {
         var response = await _mediator.RequestAsync<GetPosMenusListRequest, GetPosMenusListResponse>(request).ConfigureAwait(false);
         
@@ -191,7 +191,7 @@ public class PosController : ControllerBase
     
     [Route("company/menu/category"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPosCategoryResponse))]
-    public async Task<IActionResult> GetPosCategoryRequest([FromQuery] GetPosCategoryRequest request)
+    public async Task<IActionResult> GetPosCategoryAsync([FromQuery] GetPosCategoryRequest request)
     {
         var response = await _mediator.RequestAsync<GetPosCategoryRequest, GetPosCategoryResponse>(request).ConfigureAwait(false);
         
@@ -200,7 +200,7 @@ public class PosController : ControllerBase
     
     [Route("company/menu/product"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPosProductResponse))]
-    public async Task<IActionResult> GetPosProductRequest([FromQuery] GetPosProductRequest request)
+    public async Task<IActionResult> GetPosProductAsync([FromQuery] GetPosProductRequest request)
     {
         var response = await _mediator.RequestAsync<GetPosProductRequest, GetPosProductResponse>(request).ConfigureAwait(false);
         
