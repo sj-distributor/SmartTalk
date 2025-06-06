@@ -21,9 +21,6 @@ public class Agent : IEntity, IHasCreatedFields
 
     [Column("relate_id")]
     public int? RelateId { get; set; }
-    
-    [Column("domain_id")]
-    public int? DomainId { get; set; }
 
     [Column("type")]
     public AgentType Type { get; set; }
