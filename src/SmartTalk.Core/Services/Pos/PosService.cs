@@ -315,11 +315,19 @@ public partial class PosService : IPosService
     {
         var agent = new Agent
         {
-            RelateId = storeId,
-            Type = AgentType.PosCompanyStore,
+            IsDisplay = true,
+            Type = AgentType.Assistant,
             SourceSystem = AgentSourceSystem.Self
         };
         
         await _agentDataProvider.AddAgentAsync(agent, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var posAgent = new PosAgent
+        {
+            StoreId = storeId,
+            AgentId = agent.Id
+        };
+        
+        await _posDataProvider.AddPosAgentsAsync([posAgent], cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 }
