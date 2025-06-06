@@ -1,6 +1,6 @@
 namespace SmartTalk.Messages.Dto.Pos;
 
-public class PosProductPlayloadDto
+public class PosProductPayloadDto
 {
     public int Id { get; set; }
 
@@ -11,4 +11,6 @@ public class PosProductPlayloadDto
     public string Names { get; set; }
     
     public string ProductId { get; set; }
+    
+    public string LanguageCode { get; set; }
 }

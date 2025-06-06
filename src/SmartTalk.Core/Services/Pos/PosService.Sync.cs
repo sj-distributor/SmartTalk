@@ -231,7 +231,10 @@ public partial class PosService
         
         record.Vector = new EmbeddingDto(response.Data.Data.First().Embedding.ToArray());
 
-        record.Payload[VectorDbStore.ReservedPosProductPayload] = _mapper.Map<PosProductPlayloadDto>(product);
+        var payload = _mapper.Map<PosProductPayloadDto>(product);
+        payload.LanguageCode = languageCode;
+
+        record.Payload[VectorDbStore.ReservedPosProductPayload] = payload;
         
         await _vectorDb.UpsertAsync($"pos-{store.Id}", record, cancellationToken).ConfigureAwait(false);
     }
