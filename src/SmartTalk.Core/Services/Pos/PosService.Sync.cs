@@ -186,11 +186,21 @@ public partial class PosService
 
     public async Task PosProductsVectorizationAsync(List<PosProduct> products, PosCompanyStore store, CancellationToken cancellationToken)
     {
+        await CheckIndexIfExistsAsync(store, cancellationToken).ConfigureAwait(false);
+        
         foreach (var product in products)
             await DeleteInternalAsync(store, product, cancellationToken).ConfigureAwait(false);
         
         foreach (var product in products)
             _smartTalkBackgroundJobClient.Enqueue(() => StoreAsync(store, product, cancellationToken), HangfireConstants.InternalHostingPosProduct);
+    }
+
+    public async Task CheckIndexIfExistsAsync(PosCompanyStore store, CancellationToken cancellationToken)
+    {
+        var indexes = await _vectorDb.GetIndexesAsync(cancellationToken).ConfigureAwait(false);
+        
+        if (!indexes.Any(x => x == $"pos-{store.Id}"))
+            await _vectorDb.CreateIndexAsync($"pos-{store.Id}", 3072, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task DeleteInternalAsync(PosCompanyStore store, PosProduct product, CancellationToken cancellationToken)
@@ -200,7 +210,7 @@ public partial class PosService
         var languageCodes = productNames.Where(name => !string.IsNullOrWhiteSpace(name.Value)).Select(x => x.Key).ToList();
             
         foreach (var languageCode in languageCodes)
-            await _vectorDb.DeleteAsync(store.Id.ToString(), new VectorRecordDto { Id = $"{languageCode}{product.Id}" }, cancellationToken).ConfigureAwait(false);
+            await _vectorDb.DeleteAsync($"pos-{store.Id}", new VectorRecordDto { Id = $"{languageCode}{product.Id}" }, cancellationToken).ConfigureAwait(false);
     }
     
     public async Task StoreAsync(PosCompanyStore store, PosProduct product, CancellationToken cancellationToken)
@@ -223,10 +233,10 @@ public partial class PosService
 
         record.Payload[VectorDbStore.ReservedPosProductPayload] = _mapper.Map<PosProductPlayloadDto>(product);
         
-        await _vectorDb.UpsertAsync(store.Id.ToString(), record, cancellationToken).ConfigureAwait(false);
+        await _vectorDb.UpsertAsync($"pos-{store.Id}", record, cancellationToken).ConfigureAwait(false);
     }
     
-    private Dictionary<string, string> ParseProductNames(string namesJson)
+    public Dictionary<string, string> ParseProductNames(string namesJson)
     {
         if (string.IsNullOrWhiteSpace(namesJson)) return new Dictionary<string, string>();
 
