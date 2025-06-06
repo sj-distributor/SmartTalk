@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Data;
 using SmartTalk.Core.Domain.Account;
 using SmartTalk.Core.Domain.Pos;
+using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Messages.Dto.Pos;
 
@@ -37,6 +38,8 @@ public partial interface IPosDataProvider : IScopedDependency
     Task<List<PosStoreUser>> GetPosStoreUsersByUserIdAsync(int userId, CancellationToken cancellationToken);
     
     Task AddPosAgentsAsync(List<PosAgent> agents, bool forceSave = true, CancellationToken cancellationToken = default);
+    
+    Task<PosCompanyStore> GetPosStoreByAgentIdAsync(int agentId, CancellationToken cancellationToken = default);
 }
 
 public partial class PosDataProvider : IPosDataProvider
@@ -257,5 +260,16 @@ public partial class PosDataProvider : IPosDataProvider
         await _repository.InsertAllAsync(agents, cancellationToken).ConfigureAwait(false);
 
         if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<PosCompanyStore> GetPosStoreByAgentIdAsync(int agentId, CancellationToken cancellationToken = default)
+    {
+        var query = from agent in _repository.Query<Agent>()
+            join posAgent in _repository.Query<PosAgent>() on agent.Id equals posAgent.AgentId
+            join store in _repository.Query<PosCompanyStore>() on posAgent.StoreId equals store.Id
+            where agent.Id == agentId
+            select store;
+        
+        return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 }

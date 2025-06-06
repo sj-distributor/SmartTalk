@@ -23,6 +23,8 @@ public class VectorDbStore
     
     public const string ReservedRestaurantPayload = $"{ReservedTagsPrefix}restaurant_payload";
     
+    public const string ReservedPosProductPayload = $"{ReservedTagsPrefix}pos_product_payload";
+    
     public const string VectorAlgorithm = "HNSW";
 
     public static readonly Dictionary<string, char?> Tags = new()

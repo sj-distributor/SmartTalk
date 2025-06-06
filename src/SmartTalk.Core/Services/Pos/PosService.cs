@@ -9,6 +9,8 @@ using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.Caching.Redis;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Identity;
+using SmartTalk.Core.Services.Jobs;
+using SmartTalk.Core.Services.RetrievalDb.VectorDb;
 using SmartTalk.Messages.Commands.Pos;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.EasyPos;
@@ -46,22 +48,38 @@ public partial interface IPosService : IScopedDependency
 public partial class PosService : IPosService
 {
     private readonly IMapper _mapper;
+    private readonly IVectorDb _vectorDb;
     private readonly ICurrentUser _currentUser;
     private readonly IEasyPosClient _easyPosClient;
+    private readonly ISmartiesClient _smartiesClient;
     private readonly IRedisSafeRunner _redisSafeRunner;
     private readonly IPosDataProvider _posDataProvider;
     private readonly IAgentDataProvider _agentDataProvider;
     private readonly IAccountDataProvider _accountDataProvider;
+    private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
     
-    public PosService(IMapper mapper, ICurrentUser currentUser, IEasyPosClient easyPosClient, IRedisSafeRunner redisSafeRunner, IPosDataProvider posDataProvider, IAgentDataProvider agentDataProvider, IAccountDataProvider accountDataProvider)
+    public PosService(
+        IMapper mapper,
+        IVectorDb vectorDb,
+        ICurrentUser currentUser,
+        IEasyPosClient easyPosClient,
+        ISmartiesClient smartiesClient,
+        IRedisSafeRunner redisSafeRunner,
+        IPosDataProvider posDataProvider,
+        IAgentDataProvider agentDataProvider,
+        IAccountDataProvider accountDataProvider,
+        ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient)
     {
         _mapper = mapper;
+        _vectorDb = vectorDb;
         _currentUser = currentUser;
         _easyPosClient = easyPosClient;
+        _smartiesClient = smartiesClient;
         _redisSafeRunner = redisSafeRunner;
         _posDataProvider = posDataProvider;
         _agentDataProvider = agentDataProvider;
         _accountDataProvider = accountDataProvider;
+        _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
     }
     
     public async Task<GetPosCompanyWithStoresResponse> GetPosCompanyWithStoresAsync(GetPosCompanyWithStoresRequest request, CancellationToken cancellationToken)
@@ -100,6 +118,8 @@ public partial class PosService : IPosService
         await _posDataProvider.AddPosCompanyStoresAsync([store], cancellationToken: cancellationToken).ConfigureAwait(false);
         
         await InitialAgentAsync(store.Id, cancellationToken).ConfigureAwait(false);
+        
+        await _vectorDb.CreateIndexAsync($"pos-{store.Id}", 3072, cancellationToken).ConfigureAwait(false);
 
         return new CreatePosCompanyStoreResponse
         {

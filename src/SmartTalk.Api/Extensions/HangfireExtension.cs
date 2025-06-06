@@ -31,7 +31,8 @@ public static class HangfireExtension
             opt.Queues = new[]
             {
                 HangfireConstants.DefaultQueue,
-                HangfireConstants.InternalHostingRestaurant
+                HangfireConstants.InternalHostingRestaurant,
+                HangfireConstants.InternalHostingPosProduct
             };
         });
         
