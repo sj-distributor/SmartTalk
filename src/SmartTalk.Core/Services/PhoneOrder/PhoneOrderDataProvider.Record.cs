@@ -14,7 +14,7 @@ public partial interface IPhoneOrderDataProvider
 {
     Task AddPhoneOrderRecordsAsync(List<PhoneOrderRecord> phoneOrderRecords, bool forceSave = true, CancellationToken cancellationToken = default);
     
-    Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(int agentId, DateTimeOffset datetime,  CancellationToken cancellationToken);
+    Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(int agentId, DateTimeOffset date,  CancellationToken cancellationToken);
 
     Task<List<PhoneOrderOrderItem>> AddPhoneOrderItemAsync(List<PhoneOrderOrderItem> phoneOrderOrderItems, bool forceSave = true, CancellationToken cancellationToken = default);
     
