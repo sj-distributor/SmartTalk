@@ -135,7 +135,7 @@ public class PosController : ControllerBase
         return Ok(response);
     }
 
-    [Route("pos/configuration/sync"), HttpPost]
+    [Route("configuration/sync"), HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(SyncPosConfigurationResponse))]
     public async Task<IActionResult> SyncPosConfigurationAsync([FromBody] SyncPosConfigurationCommand command)
     {
@@ -144,7 +144,7 @@ public class PosController : ControllerBase
         return Ok(response);
     }
     
-    [Route("pos/store/unbind"), HttpPost]
+    [Route("store/unbind"), HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UnbindPosCompanyStoreResponse))]
     public async Task<IActionResult> UnbindPosCompanyStoreAsync([FromBody] UnbindPosCompanyStoreCommand command)
     {
@@ -153,7 +153,7 @@ public class PosController : ControllerBase
         return Ok(response);
     }
     
-    [Route("pos/store/bind"), HttpPost]
+    [Route("store/bind"), HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(BindPosCompanyStoreResponse))]
     public async Task<IActionResult> BindPosCompanyStoreAsync([FromBody] BindPosCompanyStoreCommand command)
     {
