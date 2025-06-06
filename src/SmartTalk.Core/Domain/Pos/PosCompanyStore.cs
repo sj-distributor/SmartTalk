@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace SmartTalk.Core.Domain.Pos;
 
 [Table("pos_company_store")]
-public class PosCompanyStore : IEntity, IHasCreatedFields, IHasModifiedFields
+public class PosCompanyStore : IEntity<int>, IAgent, IHasCreatedFields, IHasModifiedFields
 {
     [Key]
     [Column("id")]

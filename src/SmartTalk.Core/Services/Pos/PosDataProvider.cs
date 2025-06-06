@@ -35,6 +35,8 @@ public partial interface IPosDataProvider : IScopedDependency
         int? companyId = null, string keyword = null, bool isNormalSort = false, CancellationToken cancellationToken = default);
 
     Task<List<PosStoreUser>> GetPosStoreUsersByUserIdAsync(int userId, CancellationToken cancellationToken);
+    
+    Task AddPosAgentsAsync(List<PosAgent> agents, bool forceSave = true, CancellationToken cancellationToken = default);
 }
 
 public partial class PosDataProvider : IPosDataProvider
@@ -248,5 +250,12 @@ public partial class PosDataProvider : IPosDataProvider
     public async Task<List<PosStoreUser>> GetPosStoreUsersByUserIdAsync(int userId, CancellationToken cancellationToken)
     {
         return await _repository.Query<PosStoreUser>().Where(x => x.UserId == userId).ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task AddPosAgentsAsync(List<PosAgent> agents, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.InsertAllAsync(agents, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 }

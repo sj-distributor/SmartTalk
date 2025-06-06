@@ -6,7 +6,9 @@ public class AgentDto
 {
     public int Id { get; set; }
 
-    public int RelateId { get; set; }
+    public int? RelateId { get; set; }
+    
+    public bool IsDisplay { get; set; }
     
     public string WechatRobotKey { get; set; }
     
