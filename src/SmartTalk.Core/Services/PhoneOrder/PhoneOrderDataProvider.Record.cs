@@ -14,7 +14,7 @@ public partial interface IPhoneOrderDataProvider
 {
     Task AddPhoneOrderRecordsAsync(List<PhoneOrderRecord> phoneOrderRecords, bool forceSave = true, CancellationToken cancellationToken = default);
     
-    Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(int agentId, DateTimeOffset date,  CancellationToken cancellationToken);
+    Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(int agentId, DateTimeOffset date, CancellationToken cancellationToken);
 
     Task<List<PhoneOrderOrderItem>> AddPhoneOrderItemAsync(List<PhoneOrderOrderItem> phoneOrderOrderItems, bool forceSave = true, CancellationToken cancellationToken = default);
     
@@ -57,9 +57,7 @@ public partial class PhoneOrderDataProvider
     {
         var query = from agent in _repository.Query<Agent>()
             join record in _repository.Query<PhoneOrderRecord>() on agent.Id equals record.AgentId
-            where agent.Id == agentId 
-                  && record.Status == PhoneOrderRecordStatus.Sent
-                  && record.CreatedDate.Date == date.Date
+            where agent.Id == agentId && record.Status == PhoneOrderRecordStatus.Sent && record.CreatedDate.Date == date.Date
             select record;
         
         return await query.OrderByDescending(record => record.CreatedDate).ToListAsync(cancellationToken).ConfigureAwait(false);
