@@ -87,9 +87,10 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
 
         if (context.OrderItems != null)
         {
-            await OrderRestaurantItemsAsync(record, context.OrderItems, cancellationToken).ConfigureAwait(false);
+            var items = await GenerateOrderItemsAsync(record, context.OrderItems, cancellationToken).ConfigureAwait(false);
             
-            await OrderPosProductsAsync(record, context.OrderItems, cancellationToken).ConfigureAwait(false);
+            if (items.Count != 0)
+                await _phoneOrderDataProvider.AddPhoneOrderItemAsync(items, true, cancellationToken).ConfigureAwait(false);
         }
     }
 
@@ -165,24 +166,37 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         return conversations;
     }
 
-    private async Task OrderRestaurantItemsAsync(PhoneOrderRecord record, AiSpeechAssistantOrderDto foods, CancellationToken cancellationToken)
+    private async Task<List<PhoneOrderOrderItem>> GenerateOrderItemsAsync(PhoneOrderRecord record, AiSpeechAssistantOrderDto foods, CancellationToken cancellationToken)
     {
-        var items = await MatchSimilarRestaurantItemsAsync(record, foods, cancellationToken).ConfigureAwait(false);
+        var orderItems = new List<PhoneOrderOrderItem>();
         
-        Log.Information("Matched similar restaurant items: {@items}", items);
+        try
+        {
+            var restaurantItems = await MatchSimilarRestaurantItemsAsync(record, foods, cancellationToken).ConfigureAwait(false);
         
-        if (items.Count != 0)
-            await _phoneOrderDataProvider.AddPhoneOrderItemAsync(items, true, cancellationToken).ConfigureAwait(false);
-    }
-    
-    private async Task OrderPosProductsAsync(PhoneOrderRecord record, AiSpeechAssistantOrderDto foods, CancellationToken cancellationToken)
-    {
-        var items = await MatchSimilarProductsAsync(record, foods, cancellationToken).ConfigureAwait(false);
+            Log.Information("Matched similar restaurant items: {@RestaurantItems}", restaurantItems);
+            
+            orderItems = restaurantItems != null && restaurantItems.Count != 0 ? restaurantItems : orderItems;
+        }
+        catch (Exception e)
+        {
+            Log.Warning("Matched similar restaurant items failed: {@Exception}", e);
+        }
+
+        try
+        {
+            var posItems = await MatchSimilarProductsAsync(record, foods, cancellationToken).ConfigureAwait(false);
         
-        Log.Information("Matched similar pos product items: {@items}", items);
+            Log.Information("Matched similar pos product items: {@PosItems}", posItems);
+            
+            orderItems = posItems != null && posItems.Count != 0 ? posItems : orderItems;
+        }
+        catch (Exception e)
+        {
+            Log.Warning("Matched similar pos product items failed: {@Exception}", e);
+        }
         
-        if (items.Count != 0)
-            await _phoneOrderDataProvider.AddPhoneOrderItemAsync(items, true, cancellationToken).ConfigureAwait(false);
+        return orderItems.Where(x => !string.IsNullOrWhiteSpace(x.FoodName)).ToList();
     }
     
     private async Task<List<PhoneOrderOrderItem>> MatchSimilarRestaurantItemsAsync(PhoneOrderRecord record, AiSpeechAssistantOrderDto foods, CancellationToken cancellationToken)
@@ -236,11 +250,11 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             var similarFoodsResponse = await _vectorDb.GetSimilarListAsync(
                 $"pos-{store.Id}", foodDetail.FoodName, minRelevance: 0.4, cancellationToken: cancellationToken).ToListAsync(cancellationToken);
 
-            if (similarFoodsResponse.Count == 0) return new SimilarResult();
+            if (similarFoodsResponse.Count == 0) return null;
             
             var payload = similarFoodsResponse.First().Item1.Payload[VectorDbStore.ReservedPosProductPayload].ToString();
             
-            if (string.IsNullOrEmpty(payload)) return new SimilarResult();
+            if (string.IsNullOrEmpty(payload)) return null;
 
             var productPayload = JsonConvert.DeserializeObject<PosProductPayloadDto>(payload);
             foodDetail.FoodName = productPayload.Names;
@@ -257,7 +271,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
 
         var completedTasks = await Task.WhenAll(tasks);
 
-        var results = completedTasks.Where(x => x.Id != 0).ToList();
+        var results = completedTasks.Where(x => x != null && x.Id != 0).ToList();
         
         await BuildPosOrderAsync(record, store, results, cancellationToken).ConfigureAwait(false);
         
@@ -277,6 +291,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         var products = await _posDataProvider.GetPosProductsAsync(
             ids: similarResults.Select(x => x.Id).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
 
+        var taxes = GetOrderItemTaxes(products);
         var orderNo = await GenerateOrderNumberAsync(store, cancellationToken).ConfigureAwait(false);
         
         var order = new PosOrder
@@ -287,9 +302,9 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             OrderNo = orderNo,
             Status = PosOrderStatus.Pending,
             Count = products.Count,
-            Tax = 0,
-            SubTotal = products.Sum(p => p.Price),
+            Tax = taxes,
             Total = products.Sum(p => p.Price),
+            SubTotal = products.Sum(p => p.Price) + taxes,
             Type = PosOrderReceiveType.Pickup,
             Items = BuildPosOrderItems(products, similarResults),
             Notes = record.Comments
@@ -312,6 +327,22 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             
             return rs.ToString("D4");
         }, wait: TimeSpan.FromSeconds(10), retry: TimeSpan.FromSeconds(1), server: RedisServer.System).ConfigureAwait(false);
+    }
+
+    private decimal GetOrderItemTaxes(List<PosProduct> products)
+    {
+        decimal taxes = 0;
+        
+        foreach (var product in products)
+        {
+            var productTaxes = JsonConvert.DeserializeObject<List<EasyPosResponseTax>>(product.Tax);
+
+            var productTax = productTaxes?.FirstOrDefault(x => x.IsSelectedByDefault)?.Value ?? productTaxes?.FirstOrDefault()?.Value;
+
+            taxes += productTax ?? 0;
+        }
+        
+        return taxes;
     }
 
     private string BuildPosOrderItems(List<PosProduct> products, List<SimilarResult> similarResults)
@@ -341,16 +372,20 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
 
     private List<PhoneCallOrderItemModifiers> HandleSpecialItems(PosProduct product, string quantity)
     {
-        var result = JsonConvert.DeserializeObject<EasyPosResponseModifierGroups>(product.Modifiers);
-        var modifierProduct = result.ModifierProducts.FirstOrDefault();
+        var result = JsonConvert.DeserializeObject<List<EasyPosResponseModifierGroups>>(product.Modifiers);
+        var modifierGroup = result.FirstOrDefault();
+        
+        if (modifierGroup == null) return [];
+        
+        var modifierProduct = modifierGroup.ModifierProducts.FirstOrDefault();
             
         var orderItemModifier = new PhoneCallOrderItemModifiers
         {
             Price = (double)(modifierProduct?.Price ?? 0),
             Quantity = int.TryParse(quantity, out var parsedValue) ? parsedValue : 1,
-            ModifierId = result.Id,
+            ModifierId = modifierGroup.Id,
             ModifierProductId = modifierProduct?.Id ?? 0,
-            Localizations = _mapper.Map<List<PhoneCallOrderItemLocalization>>(result.Localizations ?? []),
+            Localizations = _mapper.Map<List<PhoneCallOrderItemLocalization>>(modifierGroup.Localizations ?? []),
             ModifierLocalizations = _mapper.Map<List<PhoneCallOrderItemModifierLocalization>>(modifierProduct?.Localizations ?? [])
         };
         
