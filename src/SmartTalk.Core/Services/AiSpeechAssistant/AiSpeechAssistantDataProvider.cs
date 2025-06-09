@@ -3,6 +3,7 @@ using SmartTalk.Core.Data;
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Domain.AIAssistant;
 using SmartTalk.Core.Domain.AISpeechAssistant;
+using SmartTalk.Core.Domain.System;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
 
@@ -54,6 +55,8 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task AddAgentMessageRecordAsync(AgentMessageRecord messageRecord, CancellationToken cancellationToken = default);
     
     Task AddAiKidAsync(AiKid kid, bool forceSave = true, CancellationToken cancellationToken = default);
+    
+    Task<Domain.AISpeechAssistant.AiSpeechAssistant> GetAiSpeechAssistantByAgentIdAsync(int agentId, CancellationToken cancellationToken);
 }
 
 public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
@@ -293,5 +296,14 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
         await _repository.InsertAsync(kid, cancellationToken).ConfigureAwait(false);
         
         if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<Domain.AISpeechAssistant.AiSpeechAssistant> GetAiSpeechAssistantByAgentIdAsync(int agentId, CancellationToken cancellationToken)
+    {
+        var query = from agent in _repository.Query<Agent>()
+            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agent.Id equals assistant.AgentId
+            select assistant;
+        
+        return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 }

@@ -1,20 +1,21 @@
+using Twilio;
 using Serilog;
-using AutoMapper;
+using OpenAI.Chat;
 using SmartTalk.Core.Ioc;
 using Microsoft.IdentityModel.Tokens;
+using Twilio.Rest.Api.V2010.Account;
 using SmartTalk.Core.Domain.PhoneOrder;
-using SmartTalk.Core.Extensions;
+using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Ffmpeg;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
-using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Core.Services.PhoneOrder;
+using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Core.Settings.PhoneOrder;
+using SmartTalk.Core.Settings.Twilio;
 using SmartTalk.Messages.Dto.SpeechMatics;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Commands.PhoneOrder;
-using SmartTalk.Messages.Dto.WeChat;
-using SmartTalk.Messages.Enums.WeChat;
 
 namespace SmartTalk.Core.Services.SpeechMatics;
 
@@ -25,21 +26,36 @@ public interface ISpeechMaticsService : IScopedDependency
 
 public class SpeechMaticsService : ISpeechMaticsService
 {
-    private readonly  IWeChatClient _weChatClient;
-    private  readonly IFfmpegService _ffmpegService;
+    private readonly IWeChatClient _weChatClient;
+    private readonly IFfmpegService _ffmpegService;
+    private readonly OpenAiSettings _openAiSettings;
+    private readonly TwilioSettings _twilioSettings;
     private readonly PhoneOrderSetting _phoneOrderSetting;
     private readonly IPhoneOrderService _phoneOrderService;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly ISmartTalkHttpClientFactory _smartTalkHttpClientFactory;
+    private readonly IAiSpeechAssistantDataProvider _speechAssistantDataProvider;
     
-    public SpeechMaticsService(IWeChatClient weChatClient, IFfmpegService ffmpegService, PhoneOrderSetting phoneOrderSetting, IPhoneOrderService phoneOrderService, IPhoneOrderDataProvider phoneOrderDataProvider, ISmartTalkHttpClientFactory smartTalkHttpClientFactory)
+    public SpeechMaticsService(
+        IWeChatClient weChatClient,
+        IFfmpegService ffmpegService,
+        OpenAiSettings openAiSettings,
+        TwilioSettings twilioSettings,
+        PhoneOrderSetting phoneOrderSetting,
+        IPhoneOrderService phoneOrderService,
+        IPhoneOrderDataProvider phoneOrderDataProvider,
+        ISmartTalkHttpClientFactory smartTalkHttpClientFactory,
+        IAiSpeechAssistantDataProvider speechAssistantDataProvider)
     {
         _weChatClient = weChatClient;
         _ffmpegService = ffmpegService;
+        _openAiSettings = openAiSettings;
+        _twilioSettings = twilioSettings;
         _phoneOrderSetting = phoneOrderSetting;
         _phoneOrderService = phoneOrderService;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _smartTalkHttpClientFactory = smartTalkHttpClientFactory;
+        _speechAssistantDataProvider = speechAssistantDataProvider;
     }
 
     public async Task HandleTranscriptionCallbackAsync(HandleTranscriptionCallbackCommand command, CancellationToken cancellationToken)
@@ -65,6 +81,10 @@ public class SpeechMaticsService : ISpeechMaticsService
             var audioContent = await _smartTalkHttpClientFactory.GetAsync<byte[]>(record.Url, cancellationToken).ConfigureAwait(false);
             
             await _phoneOrderService.ExtractPhoneOrderRecordAiMenuAsync(speakInfos, record, audioContent, cancellationToken).ConfigureAwait(false);
+            
+            await SummarizeConversationContentAsync(record, audioContent, cancellationToken).ConfigureAwait(false);
+            
+            await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
         }
         catch (Exception e)
         {
@@ -74,6 +94,45 @@ public class SpeechMaticsService : ISpeechMaticsService
 
             Log.Warning(e.Message);
         }
+    }
+    
+    private async Task SummarizeConversationContentAsync(PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken)
+    {
+        var aiSpeechAssistant = await _speechAssistantDataProvider.GetAiSpeechAssistantByAgentIdAsync(record.AgentId, cancellationToken).ConfigureAwait(false);
+
+        if (aiSpeechAssistant == null)
+        {
+            record.TranscriptionText = string.Empty;
+
+            return;
+        }
+        
+        TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
+        
+        var call = await CallResource.FetchAsync(record.SessionId);
+        var callFrom = call?.From;
+        
+        var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
+        var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
+        
+        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
+        
+        var audioData = BinaryData.FromBytes(audioContent);
+        List<ChatMessage> messages =
+        [
+            new SystemChatMessage(string.IsNullOrEmpty(aiSpeechAssistant?.CustomRecordAnalyzePrompt)
+                ? "你是一名電話錄音的分析員，通過聽取錄音內容和語氣情緒作出精確分析，冩出一份分析報告。\n\n分析報告的格式：交談主題：xxx\n\n 來電號碼：#{call_from}\n\n 內容摘要:xxx \n\n 客人情感與情緒: xxx \n\n 待辦事件: \n1.xxx\n2.xxx \n\n 客人下單內容(如果沒有則忽略)：1. 牛肉(1箱)\n2.雞腿肉(1箱)".Replace("#{call_from}", callFrom ?? "")
+                : aiSpeechAssistant.CustomRecordAnalyzePrompt.Replace("#{call_from}", string.IsNullOrWhiteSpace(record.PhoneNumber) ? "" : record.PhoneNumber).Replace("#{current_time}", currentTime)),
+            new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
+            new UserChatMessage("幫我根據錄音生成分析報告：")
+        ];
+        
+        ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
+
+        ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
+        Log.Information("sales record analyze report:" + completion.Content.FirstOrDefault()?.Text);
+        
+        record.TranscriptionText = completion.Content.FirstOrDefault()?.Text ?? "";
     }
     
     private List<SpeechMaticsSpeakInfoDto> StructureDiarizationResults(List<SpeechMaticsResultDto> results)
