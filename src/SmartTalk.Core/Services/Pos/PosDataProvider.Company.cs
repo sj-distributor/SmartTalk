@@ -22,7 +22,8 @@ public partial interface IPosDataProvider : IScopedDependency
 
     Task<List<PosCategory>> GetPosCategoriesAsync(int? menuId = null, int? id = null, int? storeId = null, CancellationToken cancellationToken = default);
 
-    Task<List<PosProduct>> GetPosProductsAsync(int? categoryId = null, string name = null, int? id = null, int? storeId = null, CancellationToken cancellationToken = default);
+    Task<List<PosProduct>> GetPosProductsAsync(
+        int? categoryId = null, string name = null, int? id = null, int? storeId = null, List<int> ids = null, CancellationToken cancellationToken = default);
 
     Task UpdateCategoriesAsync(List<PosCategory> categories, bool isForceSave = true, CancellationToken cancellationToken = default);
 
@@ -98,7 +99,8 @@ public partial class PosDataProvider
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<PosProduct>> GetPosProductsAsync(int? categoryId = null, string name = null, int? id = null, int? storeId = null, CancellationToken cancellationToken = default)
+    public async Task<List<PosProduct>> GetPosProductsAsync(
+        int? categoryId = null, string name = null, int? id = null, int? storeId = null, List<int> ids = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<PosProduct>();
 
@@ -113,6 +115,9 @@ public partial class PosDataProvider
         
         if (storeId.HasValue)
             query = query.Where(x => x.StoreId == storeId.Value);
+
+        if (ids != null && ids.Count != 0)
+            query = query.Where(x => ids.Contains(x.Id));
 
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }

@@ -21,5 +21,6 @@ public class PosMapping : Profile
         CreateMap<PosProductDto, PosProduct>().ReverseMap();
         CreateMap<PosCategoryDto, PosCategory>().ReverseMap();
         CreateMap<PosMenuDto, PosMenu>().ReverseMap();
+        CreateMap<PosProduct, PosProductPayloadDto>();
     }
 }
