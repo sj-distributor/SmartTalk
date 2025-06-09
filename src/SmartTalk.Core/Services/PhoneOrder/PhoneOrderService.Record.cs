@@ -40,18 +40,7 @@ public partial class PhoneOrderService
 {
     public async Task<GetPhoneOrderRecordsResponse> GetPhoneOrderRecordsAsync(GetPhoneOrderRecordsRequest request, CancellationToken cancellationToken)
     {
-        DateTimeOffset? utcStart = null, utcEnd = null;
-
-        if (request.Date.HasValue)
-        {
-            var pstTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
-            var pstDate = request.Date.Value.Date;
-            
-            var pstStart = new DateTimeOffset(pstDate, pstTimeZone.GetUtcOffset(pstDate));
-            
-            utcStart = pstStart.ToUniversalTime();
-            utcEnd = utcStart.Value.AddDays(1);
-        }
+        var (utcStart, utcEnd) = ConvertPstDateToUtcRange(request.Date);
 
         var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(request.AgentId, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
 
@@ -594,5 +583,20 @@ public partial class PhoneOrderService
 
             Log.Information("Retrying Create Speech Matics Job Attempts remaining: {RetryCount}", retryCount);
         }
+    }
+    
+    private (DateTimeOffset? UtcStart, DateTimeOffset? UtcEnd) ConvertPstDateToUtcRange(DateTimeOffset? inputDate)
+    {
+        if (!inputDate.HasValue) return (null, null);
+
+        var pstTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+
+        var pstDate = inputDate.Value.Date;
+        var pstStart = new DateTimeOffset(pstDate, pstTimeZone.GetUtcOffset(pstDate));
+
+        var utcStart = pstStart.ToUniversalTime();
+        var utcEnd = utcStart.AddDays(1);
+
+        return (utcStart, utcEnd);
     }
 }
