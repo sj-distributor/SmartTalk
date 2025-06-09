@@ -99,13 +99,6 @@ public class SpeechMaticsService : ISpeechMaticsService
     private async Task SummarizeConversationContentAsync(PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken)
     {
         var aiSpeechAssistant = await _speechAssistantDataProvider.GetAiSpeechAssistantByAgentIdAsync(record.AgentId, cancellationToken).ConfigureAwait(false);
-
-        if (aiSpeechAssistant == null)
-        {
-            record.TranscriptionText = string.Empty;
-
-            return;
-        }
         
         TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
         
