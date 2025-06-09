@@ -192,7 +192,7 @@ public partial class PosService
             await DeleteInternalAsync(store, product, cancellationToken).ConfigureAwait(false);
         
         foreach (var product in products)
-            _smartTalkBackgroundJobClient.Enqueue(() => StoreAsync(store, product, cancellationToken), HangfireConstants.InternalHostingPosProduct);
+            _smartTalkBackgroundJobClient.Enqueue(() => StoreAsync(store, product, cancellationToken), HangfireConstants.InternalHostingRestaurant);
     }
 
     public async Task CheckIndexIfExistsAsync(PosCompanyStore store, CancellationToken cancellationToken)
@@ -218,7 +218,7 @@ public partial class PosService
         var productNames = ParseProductNames(product.Names);
         
         foreach (var productName in productNames.Where(name => !string.IsNullOrWhiteSpace(name.Value)))
-            _smartTalkBackgroundJobClient.Enqueue(() => StoreInternalAsync(store, product, productName.Key, productName.Value, cancellationToken), HangfireConstants.InternalHostingPosProduct);
+            _smartTalkBackgroundJobClient.Enqueue(() => StoreInternalAsync(store, product, productName.Key, productName.Value, cancellationToken), HangfireConstants.InternalHostingRestaurant);
     }
 
     public async Task StoreInternalAsync(PosCompanyStore store, PosProduct product, string languageCode, string productName, CancellationToken cancellationToken)
