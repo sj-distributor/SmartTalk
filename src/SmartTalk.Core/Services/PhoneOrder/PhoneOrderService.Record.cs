@@ -44,12 +44,12 @@ public partial class PhoneOrderService
 
         if (request.Date.HasValue)
         {
-            var shanghaiTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Asia/Shanghai");
-            var shanghaiDate = request.Date.Value.Date;
+            var pstTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+            var pstDate = request.Date.Value.Date;
             
-            var shanghaiStart = new DateTimeOffset(shanghaiDate, shanghaiTimeZone.GetUtcOffset(shanghaiDate));
+            var pstStart = new DateTimeOffset(pstDate, pstTimeZone.GetUtcOffset(pstDate));
             
-            utcStart = shanghaiStart.ToUniversalTime();
+            utcStart = pstStart.ToUniversalTime();
             utcEnd = utcStart.Value.AddDays(1);
         }
 
