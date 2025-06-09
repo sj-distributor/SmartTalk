@@ -40,7 +40,20 @@ public partial class PhoneOrderService
 {
     public async Task<GetPhoneOrderRecordsResponse> GetPhoneOrderRecordsAsync(GetPhoneOrderRecordsRequest request, CancellationToken cancellationToken)
     {
-        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(request.AgentId, request.Date, cancellationToken).ConfigureAwait(false);
+        DateTimeOffset? utcStart = null, utcEnd = null;
+
+        if (request.Date.HasValue)
+        {
+            var shanghaiTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Asia/Shanghai");
+            var shanghaiDate = request.Date.Value.Date;
+            
+            var shanghaiStart = new DateTimeOffset(shanghaiDate, shanghaiTimeZone.GetUtcOffset(shanghaiDate));
+            
+            utcStart = shanghaiStart.ToUniversalTime();
+            utcEnd = utcStart.Value.AddDays(1);
+        }
+
+        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(request.AgentId, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
 
         return new GetPhoneOrderRecordsResponse
         {
