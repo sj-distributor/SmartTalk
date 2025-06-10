@@ -2,6 +2,7 @@ using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Messages.Commands.Pos;
 using SmartTalk.Messages.Dto.Pos;
+using SmartTalk.Messages.Enums.Pos;
 using SmartTalk.Messages.Events.Pos;
 using SmartTalk.Messages.Requests.Pos;
 
@@ -34,6 +35,8 @@ public partial interface IPosService : IScopedDependency
     Task<UpdatePosCategoryResponse> UpdatePosCategoryAsync(UpdatePosCategoryCommand command, CancellationToken cancellationToken);
     
     Task<UpdatePosProductResponse> UpdatePosProductAsync(UpdatePosProductCommand command, CancellationToken cancellationToken);
+
+    Task<AdjustPosMenuContentSortResponse> AdjustPosMenuContentSortAsync(AdjustPosMenuContentSortCommand command, CancellationToken cancellationToken);
 }
 
 public partial class PosService : IPosService
@@ -147,25 +150,25 @@ public partial class PosService : IPosService
         
         var products = await _posDataProvider.GetPosProductsAsync(storeId: request.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        var menuWithCategoriesList = Enumerable.Select<PosMenu, PosMenuWithCategories>(menus, menu =>
+        var menuWithCategoriesList = menus.Select(menu =>
         {
-            var menuCategories = Enumerable.Where<PosCategory>(categories, c => c.MenuId == menu.Id).ToList();
+            var menuCategories = categories.Where(c => c.MenuId == menu.Id).ToList();
 
             var categoryWithProducts = menuCategories.Select(category =>
             {
-                var categoryProducts = Enumerable.Where<PosProduct>(products, p => p.CategoryId == category.Id).ToList();
+                var categoryProducts = products.Where(p => p.CategoryId == category.Id).ToList();
 
                 return new PosCategoryWithProduct
                 {
                     Category = _mapper.Map<PosCategoryDto>(category),
-                    Products = _mapper.Map<List<PosProductDto>>(categoryProducts)
+                    Products = _mapper.Map<List<PosProductDto>>(categoryProducts.OrderByDescending(x => x.SortOrder))
                 };
             }).ToList();
 
             return new PosMenuWithCategories
             {
                 Menu = _mapper.Map<PosMenuDto>(menu),
-                PosCategoryWithProduct = categoryWithProducts
+                PosCategoryWithProduct = categoryWithProducts.OrderByDescending(x => x.Category.SortOrder).ToList()
             };
         }).ToList();
 
@@ -244,5 +247,26 @@ public partial class PosService : IPosService
         {
             Data = _mapper.Map<List<PosProductDto>>(products)
         };
+    }
+    
+    public async Task<AdjustPosMenuContentSortResponse> AdjustPosMenuContentSortAsync(AdjustPosMenuContentSortCommand command, CancellationToken cancellationToken)
+    {
+        switch (command.Type)
+        {
+            case PosMenuContentType.Category:
+                var category = await _posDataProvider.GetPosCategoryAsync(command.Id, cancellationToken).ConfigureAwait(false);
+                category.SortOrder = command.Sort;
+                await _posDataProvider.UpdateCategoriesAsync([category], cancellationToken: cancellationToken).ConfigureAwait(false);
+                break;
+            case PosMenuContentType.Product:
+                var product = await _posDataProvider.GetPosProductAsync(command.Id, cancellationToken).ConfigureAwait(false);
+                product.SortOrder = command.Sort;
+                await _posDataProvider.UpdateProductsAsync([product], cancellationToken: cancellationToken).ConfigureAwait(false);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException();
+        }
+
+        return new AdjustPosMenuContentSortResponse();
     }
 }

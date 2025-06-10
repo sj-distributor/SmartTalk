@@ -28,6 +28,10 @@ public partial interface IPosDataProvider : IScopedDependency
     Task UpdateCategoriesAsync(List<PosCategory> categories, bool isForceSave = true, CancellationToken cancellationToken = default);
 
     Task UpdateProductsAsync(List<PosProduct> products, bool isForceSave = true, CancellationToken cancellationToken = default);
+    
+    Task<PosCategory> GetPosCategoryAsync(int id, CancellationToken cancellationToken);
+    
+    Task<PosProduct> GetPosProductAsync(int id, CancellationToken cancellationToken);
 }
 
 public partial class PosDataProvider
@@ -144,5 +148,15 @@ public partial class PosDataProvider
         await _repository.UpdateAllAsync(products, cancellationToken).ConfigureAwait(false);
         
         if (isForceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<PosCategory> GetPosCategoryAsync(int id, CancellationToken cancellationToken)
+    {
+        return await _repository.Query<PosCategory>(x => x.Id == id).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<PosProduct> GetPosProductAsync(int id, CancellationToken cancellationToken)
+    {
+        return await _repository.Query<PosProduct>(x => x.Id == id).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 }
