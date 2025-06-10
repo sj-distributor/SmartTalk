@@ -265,13 +265,14 @@ public partial class PosService : IPosService
     {
         var products = await _posDataProvider.GetPosProductsAsync(id: command.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        if (products == null || !Enumerable.Any<PosProduct>(products)) throw new InvalidOperationException("No product found with the specified ID.");
+        if (products == null || products.Count == 0) throw new InvalidOperationException("No product found with the specified ID.");
         
-        Enumerable.First<PosProduct>(products).Names = command.Names;
+        products.First().Names = command.Names;
+        products.First().Status = command.Status;
 
         await _posDataProvider.UpdateProductsAsync(products, true, cancellationToken).ConfigureAwait(false);
 
-        return new UpdatePosProductResponse()
+        return new UpdatePosProductResponse
         {
             Data = _mapper.Map<List<PosProductDto>>(products)
         };
