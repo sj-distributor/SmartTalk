@@ -4,10 +4,12 @@ using Newtonsoft.Json;
 using Serilog;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Ioc;
+using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.Restaurants;
 using SmartTalk.Core.Services.RetrievalDb.VectorDb;
 using SmartTalk.Core.Settings.Twilio;
+using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Constants;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Restaurant;
@@ -32,19 +34,25 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
     private readonly TwilioSettings _twilioSettings;
     private readonly IRestaurantDataProvider _restaurantDataProvider;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
+    private readonly ISmartTalkHttpClientFactory _httpClientFactory;
+    private readonly IPhoneOrderService _phoneOrderService;
 
     public AiSpeechAssistantProcessJobService(
         IMapper mapper,
         IVectorDb vectorDb,
         TwilioSettings twilioSettings,
         IRestaurantDataProvider restaurantDataProvider,
-        IPhoneOrderDataProvider phoneOrderDataProvider)
+        IPhoneOrderDataProvider phoneOrderDataProvider,
+        ISmartTalkHttpClientFactory httpClientFactory,
+        IPhoneOrderService phoneOrderService)
     {
         _mapper = mapper;
         _vectorDb = vectorDb;
         _twilioSettings = twilioSettings;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _restaurantDataProvider = restaurantDataProvider;
+        _httpClientFactory = httpClientFactory;
+        _phoneOrderService = phoneOrderService;
     }
 
     public async Task RecordAiSpeechAssistantCallAsync(AiSpeechAssistantStreamContextDto context, CancellationToken cancellationToken)
@@ -67,10 +75,6 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         };
 
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync([record], cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        var conversations = ConvertToPhoneOrderConversations(context.ConversationTranscription, record.Id);
-
-        await _phoneOrderDataProvider.AddPhoneOrderConversationsAsync(conversations, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (context.OrderItems != null)
             await OrderRestaurantItemsAsync(record, context.OrderItems, cancellationToken).ConfigureAwait(false);

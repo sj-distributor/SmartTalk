@@ -11,8 +11,10 @@ using Twilio.AspNet.Core;
 using System.Net.WebSockets;
 using System.Runtime.InteropServices;
 using AutoMapper;
+using Google.Cloud.Translation.V2;
 using SmartTalk.Core.Constants;
 using Microsoft.AspNetCore.Http;
+using Newtonsoft.Json.Linq;
 using OpenAI.Chat;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Services.Agents;
@@ -23,10 +25,14 @@ using SmartTalk.Messages.Constants;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.Restaurants;
+using SmartTalk.Core.Services.SpeechMatics;
+using SmartTalk.Core.Services.STT;
 using SmartTalk.Core.Settings.Azure;
 using SmartTalk.Messages.Dto.OpenAi;
 using Twilio.Rest.Api.V2010.Account;
 using SmartTalk.Core.Settings.OpenAi;
+using SmartTalk.Core.Settings.PhoneOrder;
+using SmartTalk.Core.Settings.SpeechMatics;
 using SmartTalk.Core.Settings.Twilio;
 using SmartTalk.Core.Settings.ZhiPuAi;
 using Task = System.Threading.Tasks.Task;
@@ -34,8 +40,12 @@ using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
+using SmartTalk.Messages.Dto.SpeechMatics;
+using SmartTalk.Messages.Dto.WeChat;
 using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Enums.PhoneOrder;
+using SmartTalk.Messages.Enums.SpeechMatics;
+using SmartTalk.Messages.Enums.STT;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 using RecordingResource = Twilio.Rest.Api.V2010.Account.Call.RecordingResource;
 
@@ -73,6 +83,13 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
+    private readonly ISpeechToTextService _speechToTextService;
+    private readonly TranslationClient _translationClient;
+    private readonly ISpeechMaticsClient _speechMaticsClient;
+    private readonly ISpeechMaticsDataProvider _speechMaticsDataProvider;
+    private readonly TranscriptionCallbackSetting _transcriptionCallbackSetting;
+    private readonly SpeechMaticsKeySetting _speechMaticsKeySetting;
+    private readonly WeChatClient _weChatClient;
 
     private StringBuilder _openaiEvent;
     private readonly ClientWebSocket _openaiClientWebSocket;
@@ -93,7 +110,14 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         IRestaurantDataProvider restaurantDataProvider,
         IPhoneOrderDataProvider phoneOrderDataProvider,
         ISmartTalkBackgroundJobClient backgroundJobClient,
-        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
+        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider,
+        ISpeechToTextService speechToTextService,
+        TranslationClient translationClient,
+        ISpeechMaticsClient speechMaticsClient,
+        ISpeechMaticsDataProvider speechMaticsDataProvider,
+        TranscriptionCallbackSetting transcriptionCallbackSetting,
+        SpeechMaticsKeySetting speechMaticsKeySetting,
+        WeChatClient weChatClient)
     {
         _mapper = mapper;
         _currentUser = currentUser;
@@ -110,6 +134,13 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _restaurantDataProvider = restaurantDataProvider;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
+        _speechToTextService = speechToTextService;
+        _translationClient = translationClient;
+        _speechMaticsClient = speechMaticsClient;
+        _speechMaticsDataProvider = speechMaticsDataProvider;
+        _transcriptionCallbackSetting = transcriptionCallbackSetting;
+        _speechMaticsKeySetting = speechMaticsKeySetting;
+        _weChatClient = weChatClient;
 
         _openaiEvent = new StringBuilder();
         _openaiClientWebSocket = new ClientWebSocket();
@@ -238,9 +269,111 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(audioFileRawBytes, agent.WechatRobotKey, message, cancellationToken).ConfigureAwait(false);
         }
 
+        var transcription = await _speechToTextService.SpeechToTextAsync(
+            audioFileRawBytes, fileType: TranscriptionFileType.Wav, responseFormat: TranscriptionResponseFormat.Text, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var detection = await _translationClient.DetectLanguageAsync(transcription, cancellationToken).ConfigureAwait(false);
+        
+        record.TranscriptionJobId = await CreateSpeechMaticsJobAsync(audioFileRawBytes, Guid.NewGuid().ToString("N") + ".wav", detection.Language, cancellationToken).ConfigureAwait(false);
+        
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
+    private async Task<string> CreateSpeechMaticsJobAsync(byte[] recordContent, string recordName, string language, CancellationToken cancellationToken)
+    {
+        var retryCount = 2;
+        
+        while (true)
+        {
+            var transcriptionJobIdJObject = JObject.Parse(await CreateTranscriptionJobAsync(recordContent, recordName, language, cancellationToken).ConfigureAwait(false));
 
+            var transcriptionJobId = transcriptionJobIdJObject["id"]?.ToString();
+
+            Log.Information("Phone order record transcriptionJobId: {@transcriptionJobId}", transcriptionJobId);
+
+            if (transcriptionJobId != null)
+                return transcriptionJobId;
+
+            Log.Information("Create speechMatics job abnormal, start replacement key");
+
+            var keys = await _speechMaticsDataProvider.GetSpeechMaticsKeysAsync(
+                [SpeechMaticsKeyStatus.Active, SpeechMaticsKeyStatus.NotEnabled], cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            Log.Information("Get speechMatics keys：{@keys}", keys);
+
+            var activeKey = keys.FirstOrDefault(x => x.Status == SpeechMaticsKeyStatus.Active);
+
+            var notEnabledKey = keys.FirstOrDefault(x => x.Status == SpeechMaticsKeyStatus.NotEnabled);
+
+            if (notEnabledKey != null && activeKey != null)
+            {
+                notEnabledKey.Status = SpeechMaticsKeyStatus.Active;
+                notEnabledKey.LastModifiedDate = DateTimeOffset.Now;
+                activeKey.Status = SpeechMaticsKeyStatus.Discard;
+            }
+
+            Log.Information("Update speechMatics keys：{@keys}", keys);
+            
+            await _speechMaticsDataProvider.UpdateSpeechMaticsKeysAsync([notEnabledKey, activeKey], cancellationToken: cancellationToken).ConfigureAwait(false);
+            
+            retryCount--;
+
+            if (retryCount <= 0)
+            {
+                await _weChatClient.SendWorkWechatRobotMessagesAsync(
+                    _speechMaticsKeySetting.SpeechMaticsKeyEarlyWarningRobotUrl,
+                    new SendWorkWechatGroupRobotMessageDto
+                    {
+                        MsgType = "text",
+                        Text = new SendWorkWechatGroupRobotTextDto
+                        {
+                            Content = $"SMT Speech Matics Key Error"
+                        }
+                    }, cancellationToken).ConfigureAwait(false);
+
+                return null;
+            }
+
+            Log.Information("Retrying Create Speech Matics Job Attempts remaining: {RetryCount}", retryCount);
+        }
+    }
+    
+    private async Task<string> CreateTranscriptionJobAsync(byte[] data, string fileName, string language, CancellationToken cancellationToken)
+    {
+        var createTranscriptionDto = new SpeechMaticsCreateTranscriptionDto { Data = data, FileName = fileName };
+        
+        var jobConfigDto = new SpeechMaticsJobConfigDto
+        {
+            Type = SpeechMaticsJobType.Transcription,
+            TranscriptionConfig = new SpeechMaticsTranscriptionConfigDto
+            {
+                Language = SelectSpeechMetisLanguageType(language),
+                Diarization = SpeechMaticsDiarizationType.Speaker,
+                OperatingPoint = SpeechMaticsOperatingPointType.Enhanced
+            },
+            NotificationConfig = new List<SpeechMaticsNotificationConfigDto>
+            {
+                new SpeechMaticsNotificationConfigDto{
+                    AuthHeaders = _transcriptionCallbackSetting.AuthHeaders,
+                    Contents = new List<string> { "transcript" },
+                    Url = _transcriptionCallbackSetting.Url
+                }
+            }
+        };
+        
+        return await _speechMaticsClient.CreateJobAsync(new SpeechMaticsCreateJobRequestDto { JobConfig = jobConfigDto }, createTranscriptionDto, cancellationToken).ConfigureAwait(false);
+    }
+    
+    private SpeechMaticsLanguageType SelectSpeechMetisLanguageType(string language)
+    {
+        return language switch
+        {
+            "en" => SpeechMaticsLanguageType.En,
+            "zh" => SpeechMaticsLanguageType.Yue,
+            "zh-CN" or "zh-TW" => SpeechMaticsLanguageType.Cmn,
+            _ => SpeechMaticsLanguageType.En
+        };
+    }
+    
     public async Task TransferHumanServiceAsync(TransferHumanServiceCommand command, CancellationToken cancellationToken)
     {
         TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
