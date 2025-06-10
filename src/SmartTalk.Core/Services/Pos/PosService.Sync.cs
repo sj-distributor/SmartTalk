@@ -17,7 +17,7 @@ public partial interface IPosService : IScopedDependency
 {
     Task<SyncPosConfigurationResponse> SyncPosConfigurationAsync(SyncPosConfigurationCommand command, CancellationToken cancellationToken);
     
-    Task ModifyPosConfigurationAsync(ModifyPosConfigurationCommand command, CancellationToken cancellationToken);
+    Task ModifyPosMenuAsync(ModifyPosMenuCommand command, CancellationToken cancellationToken);
 }
 
 public partial class PosService 
@@ -48,7 +48,7 @@ public partial class PosService
         };
     }
 
-    public async Task ModifyPosConfigurationAsync(ModifyPosConfigurationCommand command, CancellationToken cancellationToken)
+    public async Task ModifyPosMenuAsync(ModifyPosMenuCommand command, CancellationToken cancellationToken)
     {
         Log.Information("Modify the pos menu contents: {@Command}", command);
         

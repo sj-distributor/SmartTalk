@@ -3,7 +3,7 @@ using SmartTalk.Messages.Dto.Pos;
 
 namespace SmartTalk.Messages.Commands.Pos;
 
-public class ModifyPosConfigurationCommand : ICommand
+public class ModifyPosMenuCommand : ICommand
 {
     public long PosId { get; set; }
 
