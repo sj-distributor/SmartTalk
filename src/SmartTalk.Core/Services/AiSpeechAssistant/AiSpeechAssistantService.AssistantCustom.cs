@@ -193,7 +193,7 @@ public partial class AiSpeechAssistantService
             AnsweringNumberId = number?.Id,
             AnsweringNumber = number?.Number,
             CreatedBy = _currentUser.Id.Value,
-            ModelUrl = AiSpeechAssistantStore.DefaultUrl,
+            ModelUrl = command.AgentType == AgentType.AiKid ? AiSpeechAssistantStore.AiKidDefaultUrl : AiSpeechAssistantStore.DefaultUrl,
             ModelProvider = AiSpeechAssistantProvider.OpenAi,
             Channel = command.Channels == null ? null : string.Join(",", command.Channels.Select(x => (int)x)),
             IsDisplay = command.IsDisplay
@@ -213,8 +213,8 @@ public partial class AiSpeechAssistantService
         return voiceType.Value switch
         {
             AiKidVoiceType.Male => "ash",
-            AiKidVoiceType.Female => "alloy",
-            _ => "alloy"
+            AiKidVoiceType.Female => "sage",
+            _ => "sage"
         };
     }
     
