@@ -260,4 +260,13 @@ public class PosController : ControllerBase
         
         return Ok(response);
     }
+    
+    [Route("menu/sort"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(AdjustPosMenuContentSortResponse))]
+    public async Task<IActionResult> AdjustPosMenuContentSortAsync([FromBody] AdjustPosMenuContentSortCommand command)
+    {
+        var response = await _mediator.SendAsync<AdjustPosMenuContentSortCommand, AdjustPosMenuContentSortResponse>(command).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
 }
