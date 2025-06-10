@@ -16,6 +16,8 @@ namespace SmartTalk.Core.Services.Pos;
 public partial interface IPosService : IScopedDependency
 {
     Task<SyncPosConfigurationResponse> SyncPosConfigurationAsync(SyncPosConfigurationCommand command, CancellationToken cancellationToken);
+    
+    Task ModifyPosConfigurationAsync(ModifyPosConfigurationCommand command, CancellationToken cancellationToken);
 }
 
 public partial class PosService 
@@ -45,7 +47,14 @@ public partial class PosService
             Data = _mapper.Map<List<PosProductDto>>(products)
         };
     }
-    
+
+    public async Task ModifyPosConfigurationAsync(ModifyPosConfigurationCommand command, CancellationToken cancellationToken)
+    {
+        Log.Information("Modify the pos menu contents: {@Command}", command);
+        
+        return;
+    }
+
     private async Task UpdateStoreBusinessTimePeriodsAsync(PosCompanyStore store, List<EasyPosResponseTimePeriod> timePeriods, CancellationToken cancellationToken)
     {
         store.TimePeriod = timePeriods != null && timePeriods.Count != 0 ? JsonConvert.SerializeObject(timePeriods.First()) : string.Empty;
