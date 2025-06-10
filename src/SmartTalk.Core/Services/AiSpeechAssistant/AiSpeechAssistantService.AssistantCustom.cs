@@ -229,18 +229,6 @@ public partial class AiSpeechAssistantService
 
         return assistant;
     }
-
-    private string ModelVoiceMapping(AiKidVoiceType? voiceType)
-    {
-        if (!voiceType.HasValue) return "alloy";
-        
-        return voiceType.Value switch
-        {
-            AiKidVoiceType.Male => "ash",
-            AiKidVoiceType.Female => "sage",
-            _ => "sage"
-        };
-    }
     
     private async Task<Domain.AISpeechAssistant.AiSpeechAssistant> InitialAssistantRelatedInfoAsync(AddAiSpeechAssistantCommand command, CancellationToken cancellationToken)
     {
@@ -261,7 +249,7 @@ public partial class AiSpeechAssistantService
             AnsweringNumberId = number?.Id,
             AnsweringNumber = number?.Number,
             CreatedBy = _currentUser.Id.Value,
-            ModelUrl = AiSpeechAssistantStore.DefaultUrl,
+            ModelUrl = command.AgentType == AgentType.AiKid ? AiSpeechAssistantStore.AiKidDefaultUrl : AiSpeechAssistantStore.DefaultUrl,
             ModelProvider = AiSpeechAssistantProvider.OpenAi,
             Channel = command.Channels == null ? null : string.Join(",", command.Channels.Select(x => (int)x)),
             IsDisplay = command.IsDisplay
@@ -273,6 +261,18 @@ public partial class AiSpeechAssistantService
         
         return assistant;
     }
+    
+    private string ModelVoiceMapping(AiKidVoiceType? voiceType)
+        {
+            if (!voiceType.HasValue) return "alloy";
+            
+            return voiceType.Value switch
+            {
+                AiKidVoiceType.Male => "ash",
+                AiKidVoiceType.Female => "sage",
+                _ => "sage"
+            };
+        }
 
     private async Task<Agent> AddAgentAsync(int? relateId, AgentType type, AgentSourceSystem sourceSystem, bool isDisplay, CancellationToken cancellationToken)
     {
