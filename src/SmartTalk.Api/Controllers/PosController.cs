@@ -287,4 +287,13 @@ public class PosController : ControllerBase
         
         return Ok(response);
     }
+    
+    [Route("configuration/modify"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> ModifyPosConfigurationAsync([FromBody] ModifyPosConfigurationCommand command)
+    {
+        await _mediator.SendAsync(command).ConfigureAwait(false);
+        
+        return Ok();
+    }
 }
