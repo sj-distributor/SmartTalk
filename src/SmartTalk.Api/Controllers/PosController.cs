@@ -198,11 +198,29 @@ public class PosController : ControllerBase
         return Ok(response);
     }
     
+    [Route("company/menu/categories"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPosCategoriesResponse))]
+    public async Task<IActionResult> GetPosCategoriesAsync([FromQuery] GetPosCategoriesRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetPosCategoriesRequest, GetPosCategoriesResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
     [Route("company/menu/product"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPosProductResponse))]
     public async Task<IActionResult> GetPosProductAsync([FromQuery] GetPosProductRequest request)
     {
         var response = await _mediator.RequestAsync<GetPosProductRequest, GetPosProductResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("company/menu/products"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPosProductsResponse))]
+    public async Task<IActionResult> GetPosProductsAsync([FromQuery] GetPosProductsRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetPosProductsRequest, GetPosProductsResponse>(request).ConfigureAwait(false);
         
         return Ok(response);
     }

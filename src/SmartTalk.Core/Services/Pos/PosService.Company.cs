@@ -30,7 +30,11 @@ public partial interface IPosService : IScopedDependency
 
     Task<GetPosCategoryResponse> GetPosCategoryAsync(GetPosCategoryRequest request, CancellationToken cancellationToken);
     
+    Task<GetPosCategoriesResponse> GetPosCategoriesAsync(GetPosCategoriesRequest request, CancellationToken cancellationToken);
+    
     Task<GetPosProductResponse> GetPosProductAsync(GetPosProductRequest request, CancellationToken cancellationToken);
+    
+    Task<GetPosProductsResponse> GetPosProductsAsync(GetPosProductsRequest request, CancellationToken cancellationToken);
 
     Task<UpdatePosCategoryResponse> UpdatePosCategoryAsync(UpdatePosCategoryCommand command, CancellationToken cancellationToken);
     
@@ -195,25 +199,49 @@ public partial class PosService : IPosService
 
     public async Task<GetPosCategoryResponse> GetPosCategoryAsync(GetPosCategoryRequest request, CancellationToken cancellationToken)
     {
-        var category = await _posDataProvider.GetPosCategoriesAsync(id: request.Id,  cancellationToken: cancellationToken).ConfigureAwait(false);
+        var category = await _posDataProvider.GetPosCategoryAsync(id: request.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         if (category == null) throw new Exception("Can't find category with id:" + request.Id);
 
-        return new GetPosCategoryResponse()
+        return new GetPosCategoryResponse
         {
-            Data = _mapper.Map<List<PosCategoryDto>>(category)
+            Data = _mapper.Map<PosCategoryDto>(category)
+        };
+    }
+    
+    public async Task<GetPosCategoriesResponse> GetPosCategoriesAsync(GetPosCategoriesRequest request, CancellationToken cancellationToken)
+    {
+        var categories = await _posDataProvider.GetPosCategoriesAsync(menuId: request.MenuId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        if (categories == null || categories.Count == 0) throw new Exception("Can't find categories with menu id:" + request.MenuId);
+
+        return new GetPosCategoriesResponse
+        {
+            Data = _mapper.Map<List<PosCategoryDto>>(categories)
         };
     }
 
     public async Task<GetPosProductResponse> GetPosProductAsync(GetPosProductRequest request, CancellationToken cancellationToken)
     {
-        var product = await _posDataProvider.GetPosProductsAsync(id: request.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var product = await _posDataProvider.GetPosProductAsync(id: request.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         if (product == null) throw new Exception("Can't find product with id:" + request.Id);
 
-        return new GetPosProductResponse()
+        return new GetPosProductResponse
         {
             Data = _mapper.Map<PosProductDto>(product)
+        };
+    }
+    
+    public async Task<GetPosProductsResponse> GetPosProductsAsync(GetPosProductsRequest request, CancellationToken cancellationToken)
+    {
+        var products = await _posDataProvider.GetPosProductsAsync(categoryId: request.CategoryId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        if (products == null || products.Count == 0) throw new Exception("Can't find products with  category id:" + request.CategoryId);
+
+        return new GetPosProductsResponse
+        {
+            Data = _mapper.Map<List<PosProductDto>>(products)
         };
     }
 
@@ -221,9 +249,9 @@ public partial class PosService : IPosService
     {
         var categories = await _posDataProvider.GetPosCategoriesAsync(id: command.Id,  cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        if (categories == null || !Enumerable.Any<PosCategory>(categories)) throw new InvalidOperationException("No category found with the specified ID.");
+        if (categories == null || categories.Count == 0) throw new InvalidOperationException("No category found with the specified ID.");
 
-        Enumerable.First<PosCategory>(categories).Names = command.Names;
+        categories.First().Names = command.Names;
 
         await _posDataProvider.UpdateCategoriesAsync(categories, true, cancellationToken).ConfigureAwait(false);
 
