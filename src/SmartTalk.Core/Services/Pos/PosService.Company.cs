@@ -235,9 +235,9 @@ public partial class PosService : IPosService
     
     public async Task<GetPosProductsResponse> GetPosProductsAsync(GetPosProductsRequest request, CancellationToken cancellationToken)
     {
-        var products = await _posDataProvider.GetPosProductsAsync(categoryId: request.CategoryId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var products = await _posDataProvider.GetPosProductsAsync(categoryId: request.CategoryId, keyWord: request.KeyWord, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        if (products == null || products.Count == 0) throw new Exception("Can't find products with  category id:" + request.CategoryId);
+        if (products == null || products.Count == 0) throw new Exception("Can't find products with category id:" + request.CategoryId);
 
         return new GetPosProductsResponse
         {
