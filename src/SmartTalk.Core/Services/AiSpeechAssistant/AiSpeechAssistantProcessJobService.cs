@@ -7,6 +7,7 @@ using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Caching.Redis;
+using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Services.Restaurants;
@@ -14,6 +15,7 @@ using SmartTalk.Core.Services.RetrievalDb.VectorDb;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Core.Settings.Twilio;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
+using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Constants;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.EasyPos;
@@ -48,6 +50,8 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
     private readonly IRestaurantDataProvider _restaurantDataProvider;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly OpenAiAccountTrainingSettings _openAiAccountTrainingSettings;
+    private readonly ISmartTalkHttpClientFactory _httpClientFactory;
+    private readonly IPhoneOrderService _phoneOrderService;
 
     public AiSpeechAssistantProcessJobService(
         IMapper mapper,
@@ -58,7 +62,9 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         IRestaurantDataProvider restaurantDataProvider,
         IPhoneOrderDataProvider phoneOrderDataProvider, 
         OpenAiTrainingSettings openAiTrainingSettings, 
-        OpenAiAccountTrainingSettings openAiAccountTrainingSettings)
+        OpenAiAccountTrainingSettings openAiAccountTrainingSettings,
+        ISmartTalkHttpClientFactory httpClientFactory,
+        IPhoneOrderService phoneOrderService)
     {
         _mapper = mapper;
         _vectorDb = vectorDb;
@@ -68,6 +74,8 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _openAiTrainingSettings = openAiTrainingSettings;
         _restaurantDataProvider = restaurantDataProvider;
+        _httpClientFactory = httpClientFactory;
+        _phoneOrderService = phoneOrderService;
         _openAiAccountTrainingSettings = openAiAccountTrainingSettings;
     }
 
@@ -91,10 +99,6 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         };
 
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync([record], cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        var conversations = ConvertToPhoneOrderConversations(context.ConversationTranscription, record.Id);
-
-        await _phoneOrderDataProvider.AddPhoneOrderConversationsAsync(conversations, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (context.OrderItems != null)
         {
