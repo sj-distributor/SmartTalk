@@ -23,7 +23,7 @@ public partial interface IPosDataProvider : IScopedDependency
     Task<List<PosCategory>> GetPosCategoriesAsync(int? menuId = null, int? id = null, int? storeId = null, CancellationToken cancellationToken = default);
 
     Task<List<PosProduct>> GetPosProductsAsync(
-        int? categoryId = null, string name = null, int? id = null, int? storeId = null, List<int> ids = null, CancellationToken cancellationToken = default);
+        int? categoryId = null, string name = null, int? id = null, int? storeId = null, List<int> ids = null, string keyWord = null, CancellationToken cancellationToken = default);
 
     Task UpdateCategoriesAsync(List<PosCategory> categories, bool isForceSave = true, CancellationToken cancellationToken = default);
 
@@ -104,7 +104,7 @@ public partial class PosDataProvider
     }
 
     public async Task<List<PosProduct>> GetPosProductsAsync(
-        int? categoryId = null, string name = null, int? id = null, int? storeId = null, List<int> ids = null, CancellationToken cancellationToken = default)
+        int? categoryId = null, string name = null, int? id = null, int? storeId = null, List<int> ids = null, string keyWord = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<PosProduct>();
 
@@ -122,6 +122,9 @@ public partial class PosDataProvider
 
         if (ids != null && ids.Count != 0)
             query = query.Where(x => ids.Contains(x.Id));
+
+        if (!string.IsNullOrEmpty(keyWord))
+            query = query.Where(x => x.Names.Contains(keyWord) || x.Modifiers.Contains(keyWord));
 
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
