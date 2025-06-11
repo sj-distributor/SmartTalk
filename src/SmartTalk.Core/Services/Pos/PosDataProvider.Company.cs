@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Ioc;
 
@@ -124,7 +123,7 @@ public partial class PosDataProvider
         if (ids != null && ids.Count != 0)
             query = query.Where(x => ids.Contains(x.Id));
 
-        if (!keyWord.IsNullOrEmpty())
+        if (!string.IsNullOrEmpty(keyWord))
             query = query.Where(x => x.Names.Contains(keyWord) || x.Modifiers.Contains(keyWord));
 
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
