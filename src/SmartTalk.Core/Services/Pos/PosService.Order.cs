@@ -157,9 +157,10 @@ public partial class PosService
 
     private async Task<string> SafetyPlaceOrderIfRequiredAsync(PosOrder order, string token, CancellationToken cancellationToken)
     {
+        Log.Information("Convert items json: {@Items}", order.Items);
         try
         {
-            var response = await _easyPosClient.PlaceOrderAsync(new PlaceOrderToEasyPosRequestDto
+            var request = new PlaceOrderToEasyPosRequestDto
             {
                 Type = 1,
                 IsTaxFree = false,
@@ -170,7 +171,11 @@ public partial class PosService
                     Name = order.Name,
                     Phone = order.Phone
                 }
-            }, token, TimeSpan.FromSeconds(10), cancellationToken).ConfigureAwait(false);
+            };
+            
+            Log.Information("Get complete request: {@Request}", request);
+            
+            var response = await _easyPosClient.PlaceOrderAsync(request, token, cancellationToken: cancellationToken).ConfigureAwait(false);
 
             Log.Information("Place order: {@Order} and response is: {@Response}", order, response);
 
