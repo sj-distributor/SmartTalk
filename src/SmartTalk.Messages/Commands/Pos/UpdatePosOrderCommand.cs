@@ -4,5 +4,5 @@ namespace SmartTalk.Messages.Commands.Pos;
 
 public class UpdatePosOrderCommand : ICommand
 {
-    public string OrderId { get; set; }
+    public long OrderId { get; set; }
 }
