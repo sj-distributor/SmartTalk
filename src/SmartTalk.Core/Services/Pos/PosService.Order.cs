@@ -50,7 +50,7 @@ public partial class PosService
 
     public async Task UpdatePosOrderAsync(UpdatePosOrderCommand command, CancellationToken cancellationToken)
     {
-        var order = await _posDataProvider.GetPosOrderByIdAsync(posOrderId: command.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var order = await _posDataProvider.GetPosOrderByIdAsync(posOrderId: command.OrderId.ToString(), cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var response = new GetOrderResponseDto();  // need to replace to pos api to get order
         
