@@ -26,9 +26,9 @@ public class PhoneCallOrderItem
     
     public int Quantity { get; set; }
     
-    public double OriginalPrice { get; set; }
+    public decimal OriginalPrice { get; set; }
     
-    public double Price { get; set; }
+    public decimal Price { get; set; }
 
     public string Notes { get; set; } = string.Empty;
     

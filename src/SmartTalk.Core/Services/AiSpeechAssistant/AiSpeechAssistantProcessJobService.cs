@@ -393,8 +393,8 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         {
             ProductId = x.Product.ProductId,
             Quantity = int.TryParse(x.FoodDetail.Count, out var parsedValue) ? parsedValue : 1,
-            OriginalPrice = (double)x.Product.Price,
-            Price = (double)x.Product.Price,
+            OriginalPrice = x.Product.Price,
+            Price = x.Product.Price,
             Notes = string.IsNullOrWhiteSpace(x.FoodDetail?.Remark) ? string.Empty : x.FoodDetail?.Remark,
             OrderItemModifiers = HandleSpecialItems(x.Product, x.FoodDetail?.Count)
         }).Where(x => x.ProductId != 0).ToList();
