@@ -8,7 +8,7 @@ public class PosProductDto
 
     public int CategoryId { get; set; }
 
-    public string ProductId { get; set; }
+    public long ProductId { get; set; }
 
     public string Names { get; set; }
 
