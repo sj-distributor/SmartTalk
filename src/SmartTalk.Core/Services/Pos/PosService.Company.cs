@@ -165,14 +165,14 @@ public partial class PosService : IPosService
                 return new PosCategoryWithProduct
                 {
                     Category = _mapper.Map<PosCategoryDto>(category),
-                    Products = _mapper.Map<List<PosProductDto>>(categoryProducts.OrderByDescending(x => x.SortOrder))
+                    Products = _mapper.Map<List<PosProductDto>>(categoryProducts.OrderBy(x => x.SortOrder))
                 };
             }).ToList();
 
             return new PosMenuWithCategories
             {
                 Menu = _mapper.Map<PosMenuDto>(menu),
-                PosCategoryWithProduct = categoryWithProducts.OrderByDescending(x => x.Category.SortOrder).ToList()
+                PosCategoryWithProduct = categoryWithProducts.OrderBy(x => x.Category.SortOrder).ToList()
             };
         }).ToList();
 
