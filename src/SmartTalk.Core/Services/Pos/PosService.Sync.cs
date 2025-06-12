@@ -106,7 +106,7 @@ public partial class PosService
             if (!menuMap.TryGetValue(menu.Id.ToString(), out var posMenuId))
                 continue;
 
-            var categories = menu.Categories.Where(c => c.MenuIds.Contains(menu.Id)).Select(x => new PosCategory
+            var categories = menu.Categories.Where(c => c.MenuIds.Contains(menu.Id)).Select((x, index) => new PosCategory
             {
                 MenuId = posMenuId,
                 StoreId = storeId,
@@ -114,6 +114,7 @@ public partial class PosService
                 Names = JsonConvert.SerializeObject(GetLocalizedNames(x.Localizations)),
                 MenuIds = string.Join(",", x.MenuIds ?? []),
                 MenuNames = JsonConvert.SerializeObject(GetLocalizedNames(menu.Localizations)),
+                SortOrder = index,
                 CreatedBy = _currentUser.Id
             }).ToList();
             
@@ -149,7 +150,7 @@ public partial class PosService
                 if (categoriesMap.TryGetValue(menu.Id, out var categoryMap) && categoryMap.TryGetValue(category.Id.ToString(), out var posCategoryId))
                 {
                     var products = category.Products.Where(p => p.CategoryIds.Contains(category.Id) && p.IsIndependentSale)
-                        .Select(product => new PosProduct
+                        .Select((product, index) => new PosProduct
                         {
                             StoreId = storeId,
                             ProductId = product.Id.ToString(),
@@ -160,6 +161,7 @@ public partial class PosService
                             Modifiers = product.ModifierGroups != null ? JsonConvert.SerializeObject(product.ModifierGroups) : null,
                             Tax = product.Taxes != null ? JsonConvert.SerializeObject(product.Taxes) : null,
                             CategoryIds = string.Join(",", product.CategoryIds ?? []),
+                            SortOrder = index,
                             CreatedBy = _currentUser.Id
                         }).ToList();
                 
