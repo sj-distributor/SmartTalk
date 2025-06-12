@@ -288,9 +288,9 @@ public class PosController : ControllerBase
         return Ok(response);
     }
     
-    [Route("menu/modify"), HttpPost]
+    [Route("order/update"), HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> ModifyPosMenuAsync([FromBody] ModifyPosMenuCommand command)
+    public async Task<IActionResult> UpdatePosOrderAsync([FromBody] UpdatePosOrderCommand command)
     {
         await _mediator.SendAsync(command).ConfigureAwait(false);
         

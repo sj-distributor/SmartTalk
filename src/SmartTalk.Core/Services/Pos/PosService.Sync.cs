@@ -16,8 +16,6 @@ namespace SmartTalk.Core.Services.Pos;
 public partial interface IPosService : IScopedDependency
 {
     Task<SyncPosConfigurationResponse> SyncPosConfigurationAsync(SyncPosConfigurationCommand command, CancellationToken cancellationToken);
-    
-    Task ModifyPosMenuAsync(ModifyPosMenuCommand command, CancellationToken cancellationToken);
 }
 
 public partial class PosService 
@@ -46,13 +44,6 @@ public partial class PosService
         {
             Data = _mapper.Map<List<PosProductDto>>(products)
         };
-    }
-
-    public async Task ModifyPosMenuAsync(ModifyPosMenuCommand command, CancellationToken cancellationToken)
-    {
-        Log.Information("Modify the pos menu contents: {@Command}", command);
-        
-        return;
     }
 
     private async Task UpdateStoreBusinessTimePeriodsAsync(PosCompanyStore store, List<EasyPosResponseTimePeriod> timePeriods, CancellationToken cancellationToken)
