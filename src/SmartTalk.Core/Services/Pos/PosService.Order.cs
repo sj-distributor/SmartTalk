@@ -163,7 +163,7 @@ public partial class PosService
             {
                 Type = 1,
                 IsTaxFree = false,
-                Notes = order.Notes,
+                Notes = string.IsNullOrEmpty(order.Notes) ? string.Empty : order.Notes,
                 OrderItems = JsonConvert.DeserializeObject<List<PhoneCallOrderItem>>(order.Items),
                 Customer = new PhoneCallOrderCustomer
                 {
