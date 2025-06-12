@@ -34,6 +34,8 @@ public partial interface IPhoneOrderService
     Task ExtractPhoneOrderRecordAiMenuAsync(List<SpeechMaticsSpeakInfoDto> phoneOrderInfo, PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken);
 
     Task<AddOrUpdateManualOrderResponse> AddOrUpdateManualOrderAsync(AddOrUpdateManualOrderCommand command, CancellationToken cancellationToken);
+
+    Task<string> CreateSpeechMaticsJobAsync(byte[] recordContent, string recordName, string language, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderService
@@ -241,7 +243,7 @@ public partial class PhoneOrderService
                     : PhoneOrderRole.Client.ToString()) + ": " + originText);
 
                 if (speakDetail.Role == PhoneOrderRole.Restaurant)
-                    conversations.Add(new PhoneOrderConversation { RecordId = record.Id, Question = originText, Order = conversationIndex });
+                    conversations.Add(new PhoneOrderConversation { RecordId = record.Id, Question = originText, Order = conversationIndex, StartTime = speakDetail.StartTime, EndTime = speakDetail.EndTime});
                 else
                 {
                     conversations[conversationIndex].Answer = originText;
@@ -267,7 +269,9 @@ public partial class PhoneOrderService
                     Order = 0,
                     Answer = "",
                     Question = "",
-                    RecordId = record.Id
+                    RecordId = record.Id,
+                    StartTime = phoneOrderInfo.FirstOrDefault()?.StartTime ?? 0,
+                    EndTime = phoneOrderInfo.FirstOrDefault()?.EndTime ?? 0
                 });
             }
 
@@ -383,12 +387,16 @@ public partial class PhoneOrderService
             currentConversation.Question = currentConversation.Answer;
             currentConversation.Answer = nextConversation.Question;
             currentConversation.Order = i;
+            currentConversation.StartTime = currentConversation.EndTime;
+            currentConversation.EndTime = nextConversation.StartTime;
         }
         
         var lastConversation = conversations[^1];
         lastConversation.Question = lastConversation.Answer;
         lastConversation.Answer = null;
         lastConversation.Order = conversations.Count - 1;
+        lastConversation.StartTime = lastConversation.EndTime;
+        lastConversation.EndTime = null;
         
         Log.Information("After shift conversations: {@conversations}", conversations);
     }
@@ -523,7 +531,7 @@ public partial class PhoneOrderService
         };
     }
     
-    private async Task<string> CreateSpeechMaticsJobAsync(byte[] recordContent, string recordName, string language, CancellationToken cancellationToken)
+    public async Task<string> CreateSpeechMaticsJobAsync(byte[] recordContent, string recordName, string language, CancellationToken cancellationToken)
     {
         var retryCount = 2;
         

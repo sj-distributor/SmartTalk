@@ -20,13 +20,18 @@ public partial interface IPosDataProvider : IScopedDependency
 
     Task<PosMenu> GetPosMenuAsync(int? id = null, string menuId = null, CancellationToken cancellationToken = default);
 
-    Task<List<PosCategory>> GetPosCategoriesAsync(int? menuId = null, int? id = null, int? storeId = null, CancellationToken cancellationToken = default);
+    Task<List<PosCategory>> GetPosCategoriesAsync(int? menuId = null, int? id = null, int? storeId = null, List<int> ids = null, CancellationToken cancellationToken = default);
 
-    Task<List<PosProduct>> GetPosProductsAsync(int? categoryId = null, string name = null, int? id = null, int? storeId = null, CancellationToken cancellationToken = default);
+    Task<List<PosProduct>> GetPosProductsAsync(
+        int? categoryId = null, string name = null, int? id = null, int? storeId = null, List<int> ids = null, string keyWord = null, CancellationToken cancellationToken = default);
 
     Task UpdateCategoriesAsync(List<PosCategory> categories, bool isForceSave = true, CancellationToken cancellationToken = default);
 
     Task UpdateProductsAsync(List<PosProduct> products, bool isForceSave = true, CancellationToken cancellationToken = default);
+    
+    Task<PosCategory> GetPosCategoryAsync(int id, CancellationToken cancellationToken);
+    
+    Task<PosProduct> GetPosProductAsync(int id, CancellationToken cancellationToken);
 }
 
 public partial class PosDataProvider
@@ -82,7 +87,7 @@ public partial class PosDataProvider
         return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<PosCategory>> GetPosCategoriesAsync(int? menuId = null, int? id = null, int? storeId = null, CancellationToken cancellationToken = default)
+    public async Task<List<PosCategory>> GetPosCategoriesAsync(int? menuId = null, int? id = null, int? storeId = null, List<int> ids = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<PosCategory>();
 
@@ -95,10 +100,14 @@ public partial class PosDataProvider
         if (storeId.HasValue)
             query = query.Where(x => x.StoreId == storeId.Value);
 
+        if (ids != null && ids.Count != 0)
+            query = query.Where(x => ids.Contains(x.Id));
+
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<PosProduct>> GetPosProductsAsync(int? categoryId = null, string name = null, int? id = null, int? storeId = null, CancellationToken cancellationToken = default)
+    public async Task<List<PosProduct>> GetPosProductsAsync(
+        int? categoryId = null, string name = null, int? id = null, int? storeId = null, List<int> ids = null, string keyWord = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<PosProduct>();
 
@@ -113,6 +122,12 @@ public partial class PosDataProvider
         
         if (storeId.HasValue)
             query = query.Where(x => x.StoreId == storeId.Value);
+
+        if (ids != null && ids.Count != 0)
+            query = query.Where(x => ids.Contains(x.Id));
+
+        if (!string.IsNullOrEmpty(keyWord))
+            query = query.Where(x => x.Names.Contains(keyWord) || x.Modifiers.Contains(keyWord));
 
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -139,5 +154,15 @@ public partial class PosDataProvider
         await _repository.UpdateAllAsync(products, cancellationToken).ConfigureAwait(false);
         
         if (isForceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<PosCategory> GetPosCategoryAsync(int id, CancellationToken cancellationToken)
+    {
+        return await _repository.Query<PosCategory>(x => x.Id == id).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<PosProduct> GetPosProductAsync(int id, CancellationToken cancellationToken)
+    {
+        return await _repository.Query<PosProduct>(x => x.Id == id).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 }

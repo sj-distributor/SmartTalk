@@ -198,11 +198,29 @@ public class PosController : ControllerBase
         return Ok(response);
     }
     
+    [Route("company/menu/categories"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPosCategoriesResponse))]
+    public async Task<IActionResult> GetPosCategoriesAsync([FromQuery] GetPosCategoriesRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetPosCategoriesRequest, GetPosCategoriesResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
     [Route("company/menu/product"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPosProductResponse))]
     public async Task<IActionResult> GetPosProductAsync([FromQuery] GetPosProductRequest request)
     {
         var response = await _mediator.RequestAsync<GetPosProductRequest, GetPosProductResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("company/menu/products"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPosProductsResponse))]
+    public async Task<IActionResult> GetPosProductsAsync([FromQuery] GetPosProductsRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetPosProductsRequest, GetPosProductsResponse>(request).ConfigureAwait(false);
         
         return Ok(response);
     }
@@ -259,5 +277,23 @@ public class PosController : ControllerBase
         var response = await _mediator.SendAsync<PlacePosOrderCommand, PlacePosOrderResponse>(command).ConfigureAwait(false);
         
         return Ok(response);
+    }
+    
+    [Route("menu/sort"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(AdjustPosMenuContentSortResponse))]
+    public async Task<IActionResult> AdjustPosMenuContentSortAsync([FromBody] AdjustPosMenuContentSortCommand command)
+    {
+        var response = await _mediator.SendAsync<AdjustPosMenuContentSortCommand, AdjustPosMenuContentSortResponse>(command).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("menu/modify"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> ModifyPosMenuAsync([FromBody] ModifyPosMenuCommand command)
+    {
+        await _mediator.SendAsync(command).ConfigureAwait(false);
+        
+        return Ok();
     }
 }

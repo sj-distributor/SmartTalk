@@ -9,6 +9,8 @@ public class UpdatePosProductCommand : ICommand
     public int Id { get; set; }
     
     public string Names { get; set; }
+    
+    public bool Status { get; set; }
 }
 
 public class UpdatePosProductResponse : SmartTalkResponse<List<PosProductDto>>

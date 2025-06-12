@@ -11,6 +11,10 @@ public partial interface IPosDataProvider
         int storeId, string keyword= null, DateTimeOffset? startDate = null, DateTimeOffset? endDate = null, CancellationToken cancellationToken = default);
     
     Task UpdatePosOrdersAsync(List<PosOrder> orders, bool forceSave = true, CancellationToken cancellationToken = default);
+    
+    Task AddPosOrdersAsync(List<PosOrder> orders, bool forceSave = true, CancellationToken cancellationToken = default);
+
+    Task<PosOrder> GetPosOrderSortByOrderNoAsync(int storeId, CancellationToken cancellationToken);
 }
 
 public partial class PosDataProvider
@@ -42,5 +46,18 @@ public partial class PosDataProvider
         await _repository.UpdateAllAsync(orders, cancellationToken).ConfigureAwait(false);
 
         if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task AddPosOrdersAsync(List<PosOrder> orders, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.InsertAllAsync(orders, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+    
+    public async Task<PosOrder> GetPosOrderSortByOrderNoAsync(int storeId, CancellationToken cancellationToken)
+    {
+        return await _repository.Query<PosOrder>(x => x.StoreId == storeId)
+            .OrderByDescending(x => x.OrderNo).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 }
