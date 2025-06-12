@@ -10,7 +10,7 @@ public class PosProductPayloadDto
     
     public string Names { get; set; }
     
-    public string ProductId { get; set; }
+    public long ProductId { get; set; }
     
     public string LanguageCode { get; set; }
 }

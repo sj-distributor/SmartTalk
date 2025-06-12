@@ -299,7 +299,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             var productPayload = JsonConvert.DeserializeObject<PosProductPayloadDto>(payload);
             foodDetail.FoodName = productPayload.Names;
             foodDetail.Price = (double)productPayload.Price;
-            foodDetail.ProductId = Convert.ToInt64(productPayload.ProductId);
+            foodDetail.ProductId = productPayload.ProductId;
             
             return new SimilarResult
             {
@@ -391,7 +391,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         
         var orderItems = similarResults.Where(x => x.Product != null).Select(x => new PhoneCallOrderItem
         {
-            ProductId = Convert.ToInt64(x.Product.ProductId),
+            ProductId = x.Product.ProductId,
             Quantity = int.TryParse(x.FoodDetail.Count, out var parsedValue) ? parsedValue : 1,
             OriginalPrice = (double)x.Product.Price,
             Price = (double)x.Product.Price,
