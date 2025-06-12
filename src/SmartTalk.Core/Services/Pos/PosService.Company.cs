@@ -290,7 +290,8 @@ public partial class PosService : IPosService
 
                 if (activeCategory != null && passiveCategory != null)
                 {
-                    (activeCategory.SortOrder, passiveCategory.SortOrder) = (passiveCategory.SortOrder, activeCategory.SortOrder);
+                    (activeCategory.SortOrder, passiveCategory.SortOrder) = 
+                        (passiveCategory.SortOrder, activeCategory.SortOrder);
 
                     await _posDataProvider.UpdateCategoriesAsync([activeCategory, passiveCategory], cancellationToken: cancellationToken).ConfigureAwait(false);
                 }
@@ -303,7 +304,8 @@ public partial class PosService : IPosService
 
                 if (activeProduct != null && passiveProduct != null)
                 {
-                    (activeProduct.SortOrder, passiveProduct.SortOrder) = (passiveProduct.SortOrder, activeProduct.SortOrder);
+                    (activeProduct.SortOrder, passiveProduct.SortOrder) = 
+                        (passiveProduct.SortOrder, activeProduct.SortOrder);
 
                     await _posDataProvider.UpdateProductsAsync([activeProduct, passiveProduct], cancellationToken: cancellationToken).ConfigureAwait(false);
                 }
