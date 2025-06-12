@@ -218,62 +218,13 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     {
         Log.Information("Handling receive phone record: {@command}", command);
 
-        var (record, agent, aiSpeechAssistant) = await _phoneOrderDataProvider.GetRecordWithAgentAndAssistantAsync(command.CallSid, cancellationToken).ConfigureAwait(false);
+        var (record, _, _) = await _phoneOrderDataProvider.GetRecordWithAgentAndAssistantAsync(command.CallSid, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Get phone order record: {@record}", record);
         
-        TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
-        
-        var call = await CallResource.FetchAsync(command.CallSid);
-        var callFrom = call?.From;
-
-        Log.Information("Fetched incoming phone number from Twilio: {callFrom}", callFrom);
-        
-        var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
-        var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
-
         record.Url = command.RecordingUrl;
-        record.Status = PhoneOrderRecordStatus.Sent;
         
-        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
         var audioFileRawBytes = await _httpClientFactory.GetAsync<byte[]>(record.Url, cancellationToken).ConfigureAwait(false);
-        var audioData = BinaryData.FromBytes(audioFileRawBytes);
-        List<ChatMessage> messages =
-        [
-            new SystemChatMessage(string.IsNullOrEmpty(aiSpeechAssistant?.CustomRecordAnalyzePrompt)
-                ? "你是一名電話錄音的分析員，通過聽取錄音內容和語氣情緒作出精確分析，冩出一份分析報告。\n\n分析報告的格式：交談主題：xxx\n\n 來電號碼：#{call_from}\n\n 內容摘要:xxx \n\n 客人情感與情緒: xxx \n\n 待辦事件: \n1.xxx\n2.xxx \n\n 客人下單內容(如果沒有則忽略)：1. 牛肉(1箱)\n2.雞腿肉(1箱)".Replace("#{call_from}", callFrom ?? "")
-                : aiSpeechAssistant.CustomRecordAnalyzePrompt.Replace("#{call_from}", callFrom ?? "").Replace("#{current_time}", currentTime)),
-            new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
-            new UserChatMessage("幫我根據錄音生成分析報告：")
-        ];
-        
-        ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
-
-        ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
-        Log.Information("sales record analyze report:" + completion.Content.FirstOrDefault()?.Text);
-
-        record.TranscriptionText = completion.Content.FirstOrDefault()?.Text ?? "";
-
-        if (agent.SourceSystem == AgentSourceSystem.Smarties)
-            await _smartiesClient.CallBackSmartiesAiSpeechAssistantRecordAsync(new AiSpeechAssistantCallBackRequestDto { CallSid = command.CallSid, RecordUrl = record.Url, RecordAnalyzeReport =  record.TranscriptionText }, cancellationToken).ConfigureAwait(false);
-
-        if (!string.IsNullOrEmpty(agent.WechatRobotKey) && !string.IsNullOrEmpty(agent.WechatRobotMessage))
-        {
-            var message = agent.WechatRobotMessage.Replace("#{assistant_name}", aiSpeechAssistant?.Name).Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString());
-            
-            if (agent.IsWecomMessageOrder)
-            {
-                var messageNumber = await SendAgentMessageRecordAsync(agent.Id, record.Id, cancellationToken);
-                message = $"【第{messageNumber}條】\n" + message;
-            }
-            
-            if (agent.IsSendAnalysisReportToWechat && !string.IsNullOrEmpty(record.TranscriptionText))
-            {
-                message += "\n\n" + record.TranscriptionText;
-            }
-            
-            await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(audioFileRawBytes, agent.WechatRobotKey, message, cancellationToken).ConfigureAwait(false);
-        }
 
         var transcription = await _speechToTextService.SpeechToTextAsync(
             audioFileRawBytes, fileType: TranscriptionFileType.Wav, responseFormat: TranscriptionResponseFormat.Text, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -327,8 +278,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         return messageNumber;
     }
-
-    public async Task<(Domain.AISpeechAssistant.AiSpeechAssistant assistant, AiSpeechAssistantKnowledge knowledge, string finalPrompt)> BuildingAiSpeechAssistantKnowledgeBaseAsync(string from, string to, int? assistantId, CancellationToken cancellationToken)
+    
+    private async Task<(Domain.AISpeechAssistant.AiSpeechAssistant assistant, AiSpeechAssistantKnowledge knowledge, string finalPrompt)> BuildingAiSpeechAssistantKnowledgeBaseAsync(string from, string to, int? assistantId, CancellationToken cancellationToken)
     {
         var (assistant, knowledge, userProfile) = await _aiSpeechAssistantDataProvider
             .GetAiSpeechAssistantInfoByNumbersAsync(from, to, assistantId, cancellationToken).ConfigureAwait(false);

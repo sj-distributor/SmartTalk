@@ -132,9 +132,6 @@ public partial class PhoneOrderService
         
         record.Tips = tip;
         record.Status = PhoneOrderRecordStatus.Sent;
-        record.TranscriptionText = goalText;
-        
-        await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<AddOrUpdateManualOrderResponse> AddOrUpdateManualOrderAsync(AddOrUpdateManualOrderCommand command, CancellationToken cancellationToken)
