@@ -27,6 +27,9 @@ public class PhoneOrderRecord : IEntity
     [Column("tips")]
     public string Tips { get; set; }
     
+    [Column("analysis_report")]
+    public string AnalysisReport { get; set; }
+    
     [Column("transcription_text")]
     public string TranscriptionText { get; set; }
     

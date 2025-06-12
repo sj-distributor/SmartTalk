@@ -225,10 +225,11 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
         ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
         Log.Information("sales record analyze report:" + completion.Content.FirstOrDefault()?.Text);
-        record.TranscriptionText = completion.Content.FirstOrDefault()?.Text ?? "";
+
+        record.AnalysisReport = completion.Content.FirstOrDefault()?.Text ?? "";
 
         if (agent.SourceSystem == AgentSourceSystem.Smarties)
-            await _smartiesClient.CallBackSmartiesAiSpeechAssistantRecordAsync(new AiSpeechAssistantCallBackRequestDto { CallSid = command.CallSid, RecordUrl = record.Url, RecordAnalyzeReport =  record.TranscriptionText }, cancellationToken).ConfigureAwait(false);
+            await _smartiesClient.CallBackSmartiesAiSpeechAssistantRecordAsync(new AiSpeechAssistantCallBackRequestDto { CallSid = command.CallSid, RecordUrl = record.Url, RecordAnalyzeReport =  record.AnalysisReport }, cancellationToken).ConfigureAwait(false);
 
         if (!string.IsNullOrEmpty(agent.WechatRobotKey) && !string.IsNullOrEmpty(agent.WechatRobotMessage))
         {
@@ -242,7 +243,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             
             if (agent.IsSendAnalysisReportToWechat && !string.IsNullOrEmpty(record.TranscriptionText))
             {
-                message += "\n\n" + record.TranscriptionText;
+                message += "\n\n" + record.AnalysisReport;
             }
             
             await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(audioFileRawBytes, agent.WechatRobotKey, message, cancellationToken).ConfigureAwait(false);
