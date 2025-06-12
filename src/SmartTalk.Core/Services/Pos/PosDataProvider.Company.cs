@@ -18,7 +18,7 @@ public partial interface IPosDataProvider : IScopedDependency
 
     Task UpdatePosMenuAsync(PosMenu menu, bool isForceSave = true, CancellationToken cancellationToken = default);
 
-    Task<PosMenu> GetPosMenuAsync(int? id = null, string menuId = null, CancellationToken cancellationToken = default);
+    Task<PosMenu> GetPosMenuAsync(int? id = null, long? menuId = null, CancellationToken cancellationToken = default);
 
     Task<List<PosCategory>> GetPosCategoriesAsync(int? menuId = null, int? id = null, int? storeId = null, List<int> ids = null, CancellationToken cancellationToken = default);
 
@@ -74,11 +74,11 @@ public partial class PosDataProvider
         if (isForceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<PosMenu> GetPosMenuAsync(int? id = null, string menuId = null, CancellationToken cancellationToken = default)
+    public async Task<PosMenu> GetPosMenuAsync(int? id = null, long? menuId = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<PosMenu>();
 
-        if (!string.IsNullOrEmpty(menuId))
+        if (menuId.HasValue)
             query = query.Where(x => x.MenuId == menuId);
 
         if (id.HasValue)

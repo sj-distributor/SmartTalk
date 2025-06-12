@@ -69,12 +69,12 @@ public partial class PosService
         return await AddPosProductsAsync(data, categoriesMap, store.Id, cancellationToken).ConfigureAwait(false);
     }
     
-    private async Task<Dictionary<string, int>> AddPosMenusAsync(List<EasyPosResponseMenu> menus, int storeId, CancellationToken cancellationToken)
+    private async Task<Dictionary<long, int>> AddPosMenusAsync(List<EasyPosResponseMenu> menus, int storeId, CancellationToken cancellationToken)
     {
         var posMenus = menus.Select(x => new PosMenu
         {
             StoreId = storeId,
-            MenuId = x.Id.ToString(),
+            MenuId = x.Id,
             Names = JsonConvert.SerializeObject(GetLocalizedNames(x.Localizations)),
             TimePeriod = JsonConvert.SerializeObject(x.TimePeriods),
             CategoryIds = x.CategoryIds == null ? string.Empty : string.Join(",", x.CategoryIds),
@@ -87,21 +87,21 @@ public partial class PosService
         return posMenus.ToDictionary(m => m.MenuId, m => m.Id);
     }
     
-    private async Task<Dictionary<long, Dictionary<string, int>>> AddPosCategoriesAsync(EasyPosResponseData data, Dictionary<string, int> menuMap, int storeId, CancellationToken cancellationToken)
+    private async Task<Dictionary<long, Dictionary<long, int>>> AddPosCategoriesAsync(EasyPosResponseData data, Dictionary<long, int> menuMap, int storeId, CancellationToken cancellationToken)
     {
         var posCategories = new List<PosCategory>();
         var mapping = new Dictionary<long, List<PosCategory>>();
         
         foreach (var menu in data.Menus)
         {
-            if (!menuMap.TryGetValue(menu.Id.ToString(), out var posMenuId))
+            if (!menuMap.TryGetValue(menu.Id, out var posMenuId))
                 continue;
 
             var categories = menu.Categories.Where(c => c.MenuIds.Contains(menu.Id)).Select((x, index) => new PosCategory
             {
                 MenuId = posMenuId,
                 StoreId = storeId,
-                CategoryId = x.Id.ToString(),
+                CategoryId = x.Id,
                 Names = JsonConvert.SerializeObject(GetLocalizedNames(x.Localizations)),
                 MenuIds = string.Join(",", x.MenuIds ?? []),
                 MenuNames = JsonConvert.SerializeObject(GetLocalizedNames(menu.Localizations)),
@@ -118,9 +118,9 @@ public partial class PosService
         return BuildMenuToCategoriesMapping(mapping);
     }
 
-    private Dictionary<long, Dictionary<string, int>> BuildMenuToCategoriesMapping(Dictionary<long, List<PosCategory>> menuToCategoriesMap)
+    private Dictionary<long, Dictionary<long, int>> BuildMenuToCategoriesMapping(Dictionary<long, List<PosCategory>> menuToCategoriesMap)
     {
-        var mapping = new Dictionary<long, Dictionary<string, int>>();
+        var mapping = new Dictionary<long, Dictionary<long, int>>();
 
         foreach (var (menuId, originalCategories) in menuToCategoriesMap)
         {
@@ -130,7 +130,7 @@ public partial class PosService
         return mapping;
     }
     
-    private async Task<List<PosProduct>> AddPosProductsAsync(EasyPosResponseData data, Dictionary<long, Dictionary<string, int>> categoriesMap, int storeId, CancellationToken cancellationToken)
+    private async Task<List<PosProduct>> AddPosProductsAsync(EasyPosResponseData data, Dictionary<long, Dictionary<long, int>> categoriesMap, int storeId, CancellationToken cancellationToken)
     {
         var posProducts = new List<PosProduct>();
         
@@ -138,13 +138,13 @@ public partial class PosService
         {
             foreach (var category in menu.Categories.Where(c => c.MenuIds.Contains(menu.Id)))
             {
-                if (categoriesMap.TryGetValue(menu.Id, out var categoryMap) && categoryMap.TryGetValue(category.Id.ToString(), out var posCategoryId))
+                if (categoriesMap.TryGetValue(menu.Id, out var categoryMap) && categoryMap.TryGetValue(category.Id, out var posCategoryId))
                 {
                     var products = category.Products.Where(p => p.CategoryIds.Contains(category.Id) && p.IsIndependentSale)
                         .Select((product, index) => new PosProduct
                         {
                             StoreId = storeId,
-                            ProductId = product.Id.ToString(),
+                            ProductId = product.Id,
                             CategoryId = posCategoryId,
                             Price = product.Price,
                             Status = true,
