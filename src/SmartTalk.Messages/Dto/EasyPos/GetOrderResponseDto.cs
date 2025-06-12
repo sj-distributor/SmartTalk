@@ -31,6 +31,12 @@ public class EasyPosOrderDto
 
     [JsonProperty("createAt")]
     public DateTimeOffset CreateAt { get; set; }
+    
+    [JsonProperty("type")]
+    public int Type { get; set; }
+    
+    [JsonProperty("notes")]
+    public string Notes { get; set; }
 }
 
 public class EasyPosOrderItemDto

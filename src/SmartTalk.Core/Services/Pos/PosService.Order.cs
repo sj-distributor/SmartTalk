@@ -15,6 +15,8 @@ public partial interface IPosService
     Task<GetPosStoreOrdersResponse> GetPosStoreOrdersAsync(GetPosStoreOrdersRequest request, CancellationToken cancellationToken = default);
     
     Task<PlacePosOrderResponse> PlacePosStoreOrdersAsync(PlacePosOrderCommand command, CancellationToken cancellationToken = default);
+    
+    Task UpdatePosOrderAsync(UpdatePosOrderCommand command, CancellationToken cancellationToken);
 }
 
 public partial class PosService
@@ -32,7 +34,7 @@ public partial class PosService
 
     public async Task<PlacePosOrderResponse> PlacePosStoreOrdersAsync(PlacePosOrderCommand command, CancellationToken cancellationToken = default)
     {
-        var order = await _posDataProvider.GetPosOrderByIdAsync(command.OrderId, cancellationToken).ConfigureAwait(false);
+        var order = await _posDataProvider.GetPosOrderByIdAsync(orderId: command.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (order == null) throw new Exception("Order could not be found.");
         
@@ -44,6 +46,15 @@ public partial class PosService
         {
             Data = _mapper.Map<PosOrderDto>(order)
         };
+    }
+
+    public async Task UpdatePosOrderAsync(UpdatePosOrderCommand command, CancellationToken cancellationToken)
+    {
+        var order = await _posDataProvider.GetPosOrderByIdAsync(posOrderId: command.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var response = new GetOrderResponseDto();  // need to replace to pos api to get order
+        
+        // order.Phone = response.Order
     }
 
     private async Task<string> GetPosTokenAsync(int storeId, CancellationToken cancellationToken)
