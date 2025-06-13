@@ -11,6 +11,7 @@ using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
+using SmartTalk.Messages.Enums.Caching;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
@@ -30,6 +31,10 @@ public partial interface IAiSpeechAssistantService
     Task<UpdateAiSpeechAssistantNumberResponse> UpdateAiSpeechAssistantNumberAsync(UpdateAiSpeechAssistantNumberCommand command, CancellationToken cancellationToken);
     
     Task<UpdateAiSpeechAssistantKnowledgeResponse> UpdateAiSpeechAssistantKnowledgeAsync(UpdateAiSpeechAssistantKnowledgeCommand command, CancellationToken cancellationToken);
+    
+    Task<UpdateAiSpeechAssistantSessionResponse> UpdateAiSpeechAssistantSessionAsync(UpdateAiSpeechAssistantSessionCommand command, CancellationToken cancellationToken);
+    
+    Task<AddAiSpeechAssistantSessionResponse> AddAiSpeechAssistantSessionAsync(AddAiSpeechAssistantSessionCommand command, CancellationToken cancellationToken);
 }
 
 public partial class AiSpeechAssistantService
@@ -154,6 +159,41 @@ public partial class AiSpeechAssistantService
         return new UpdateAiSpeechAssistantKnowledgeResponse
         {
             Data = _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge),
+        };
+    }
+    
+    public async Task<AddAiSpeechAssistantSessionResponse> AddAiSpeechAssistantSessionAsync(AddAiSpeechAssistantSessionCommand command, CancellationToken cancellationToken)
+    {
+        var sessionId = Guid.NewGuid();
+
+        var session = new AiSpeechAssistantSession
+        {
+            AssistantId = command.AssistantId,
+            SessionId = sessionId,
+            Count = 0
+        };
+        
+        await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantSessionAsync(session, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return new AddAiSpeechAssistantSessionResponse { Data = sessionId };
+    }
+
+    public async Task<UpdateAiSpeechAssistantSessionResponse> UpdateAiSpeechAssistantSessionAsync(UpdateAiSpeechAssistantSessionCommand command, CancellationToken cancellationToken)
+    {
+        var session = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantSessionBySessionIdAsync(command.SessionId, cancellationToken).ConfigureAwait(false);
+
+        if (session == null) throw new Exception($"Could not found the session by session id: {command.SessionId}!");
+        
+        await _redisSafeRunner.ExecuteWithLockAsync($"session-update-{command.SessionId}", async () =>
+        {
+            session.Count++;
+            
+            await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantSessionAsync(session, true, cancellationToken).ConfigureAwait(false);
+        }, wait: TimeSpan.FromSeconds(10), retry: TimeSpan.FromSeconds(1), server: RedisServer.System).ConfigureAwait(false);
+        
+        return new UpdateAiSpeechAssistantSessionResponse
+        {
+            Data = _mapper.Map<AiSpeechAssistantSessionDto>(session)
         };
     }
 
