@@ -8,7 +8,7 @@ public class PosCategoryDto
 
     public int MenuId { get; set; }
 
-    public long CategoryId { get; set; }
+    public string CategoryId { get; set; }
 
     public string Names { get; set; }
 

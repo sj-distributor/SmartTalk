@@ -14,8 +14,8 @@ public class PosMenu : IEntity, IHasCreatedFields, IHasModifiedFields
     [Column("store_id")]
     public int StoreId { get; set; }
 
-    [Column("menu_id")]
-    public long MenuId { get; set; }
+    [Column("menu_id"), StringLength(36)]
+    public string MenuId { get; set; }
 
     [Column("names")]
     public string Names { get; set; }

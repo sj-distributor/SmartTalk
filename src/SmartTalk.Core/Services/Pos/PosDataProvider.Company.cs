@@ -18,12 +18,12 @@ public partial interface IPosDataProvider : IScopedDependency
 
     Task UpdatePosMenuAsync(PosMenu menu, bool isForceSave = true, CancellationToken cancellationToken = default);
 
-    Task<PosMenu> GetPosMenuAsync(int? id = null, long? menuId = null, CancellationToken cancellationToken = default);
+    Task<PosMenu> GetPosMenuAsync(int? id = null, string menuId = null, CancellationToken cancellationToken = default);
 
     Task<List<PosCategory>> GetPosCategoriesAsync(int? menuId = null, int? id = null, int? storeId = null, List<int> ids = null, CancellationToken cancellationToken = default);
 
     Task<List<PosProduct>> GetPosProductsAsync(
-        int? categoryId = null, string name = null, int? id = null, int? storeId = null, List<int> ids = null, string keyWord = null, CancellationToken cancellationToken = default);
+        int? categoryId = null, string name = null, int? id = null, int? storeId = null, List<int> ids = null, List<string> productIds = null, string keyWord = null, CancellationToken cancellationToken = default);
 
     Task UpdateCategoriesAsync(List<PosCategory> categories, bool isForceSave = true, CancellationToken cancellationToken = default);
 
@@ -74,11 +74,11 @@ public partial class PosDataProvider
         if (isForceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<PosMenu> GetPosMenuAsync(int? id = null, long? menuId = null, CancellationToken cancellationToken = default)
+    public async Task<PosMenu> GetPosMenuAsync(int? id = null, string menuId = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<PosMenu>();
 
-        if (menuId.HasValue)
+        if (!string.IsNullOrEmpty(menuId))
             query = query.Where(x => x.MenuId == menuId);
 
         if (id.HasValue)
@@ -107,7 +107,7 @@ public partial class PosDataProvider
     }
 
     public async Task<List<PosProduct>> GetPosProductsAsync(
-        int? categoryId = null, string name = null, int? id = null, int? storeId = null, List<int> ids = null, string keyWord = null, CancellationToken cancellationToken = default)
+        int? categoryId = null, string name = null, int? id = null, int? storeId = null, List<int> ids = null, List<string> productIds = null, string keyWord = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<PosProduct>();
 
@@ -128,6 +128,9 @@ public partial class PosDataProvider
 
         if (!string.IsNullOrEmpty(keyWord))
             query = query.Where(x => x.Names.Contains(keyWord) || x.Modifiers.Contains(keyWord));
+
+        if (productIds != null && productIds.Count != 0)
+            query = query.Where(x => productIds.Contains(x.ProductId));
 
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
