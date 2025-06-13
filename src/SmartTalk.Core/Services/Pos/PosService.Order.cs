@@ -224,8 +224,6 @@ public partial class PosService
                             {
                                 FullAddress = string.IsNullOrEmpty(order.Address) ? string.Empty : order.Address,
                                 Room = string.IsNullOrEmpty(order.Room) ? string.Empty : order.Room,
-                                AssociatedId = string.Empty,
-                                AddressType = 1,
                                 AddressImg = string.Empty,
                                 City = string.Empty,
                                 State = string.Empty,
@@ -295,8 +293,6 @@ public partial class PosService
                         {
                             FullAddress = string.IsNullOrEmpty(order.Address) ? string.Empty : order.Address,
                             Room = string.IsNullOrEmpty(order.Room) ? string.Empty : order.Room,
-                            AssociatedId = string.Empty,
-                            AddressType = 1,
                             AddressImg = string.Empty,
                             City = string.Empty,
                             State = string.Empty,

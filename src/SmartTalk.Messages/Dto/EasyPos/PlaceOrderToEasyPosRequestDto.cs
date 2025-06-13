@@ -79,11 +79,11 @@ public class PhoneCallOrderCustomerAddress
     [JsonProperty("room")]
     public string Room { get; set; }
     
-    [JsonProperty("associatedId")]
-    public string AssociatedId { get; set; }
+    // [JsonProperty("associatedId")]
+    // public long AssociatedId { get; set; }
     
-    [JsonProperty("addressType")]
-    public int AddressType { get; set; }
+    // [JsonProperty("addressType")]
+    // public int AddressType { get; set; }
     
     [JsonProperty("addressImg")]
     public string AddressImg { get; set; }
