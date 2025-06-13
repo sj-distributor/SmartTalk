@@ -1,7 +1,15 @@
 using Newtonsoft.Json;
-using SmartTalk.Messages.Enums.PhoneOrder;
 
 namespace SmartTalk.Messages.Dto.EasyPos;
+
+public class GetOrderRequestDto
+{
+    public string AppId { get; set; }
+    
+    public string AppSecret { get; set; }
+    
+    public long OrderId { get; set; }
+}
 
 public class GetOrderResponse
 {
@@ -26,6 +34,9 @@ public class GetOrderResponseDto
 
 public class EasyPosOrderDto
 {
+    [JsonProperty("id")]
+    public long Id { get; set; }
+    
     [JsonProperty("orderItems")]
     public List<EasyPosOrderItemDto> OrderItems { get; set; }
 
@@ -37,12 +48,96 @@ public class EasyPosOrderDto
     
     [JsonProperty("notes")]
     public string Notes { get; set; }
+    
+    [JsonProperty("isTaxFree")]
+    public bool IsTaxFree { get; set; }
+    
+    [JsonProperty("customer")]
+    public EasyPosOrderCustomerDto Customer { get; set; }
+}
+
+public class EasyPosOrderCustomerDto
+{
+    [JsonProperty("id")]
+    public long Id { get; set; }
+    
+    [JsonProperty("name")]
+    public string Name { get; set; }
+    
+    [JsonProperty("phone")]
+    public string Phone { get; set; }
+    
+    [JsonProperty("notes")]
+    public string Notes { get; set; }
+    
+    [JsonProperty("addresses")]
+    public List<EasyPosOrderCustomerAddressDto> Addresses { get; set; }
+}
+
+public class EasyPosOrderCustomerAddressDto
+{
+    [JsonProperty("id")]
+    public long Id { get; set; }
+    
+    [JsonProperty("fullAddress")]
+    public string FullAddress { get; set; }
+    
+    [JsonProperty("room")]
+    public string Room { get; set; }
+    
+    [JsonProperty("associatedId")]
+    public string AssociatedId { get; set; }
+    
+    [JsonProperty("addressType")]
+    public int AddressType { get; set; }
+    
+    [JsonProperty("addressImg")]
+    public string AddressImg { get; set; }
+    
+    [JsonProperty("city")]
+    public string City { get; set; }
+    
+    [JsonProperty("state")]
+    public string State { get; set; }
+    
+    [JsonProperty("postalCode")]
+    public string PostalCode { get; set; }
+    
+    [JsonProperty("country")]
+    public string Country { get; set; }
+    
+    [JsonProperty("line1")]
+    public string Line1 { get; set; }
+    
+    [JsonProperty("line2")]
+    public string Line2 { get; set; }
+    
+    [JsonProperty("lat")]
+    public double Lat { get; set; }
+    
+    [JsonProperty("lng")]
+    public double Lng { get; set; }
 }
 
 public class EasyPosOrderItemDto
 {
+    [JsonProperty("id")]
+    public long Id { get; set; }
+    
     [JsonProperty("orderId")]
     public long OrderId { get; set; }
+    
+    [JsonProperty("productId")]
+    public long ProductId { get; set; }
+    
+    [JsonProperty("originalPrice")]
+    public decimal OriginalPrice { get; set; }
+    
+    [JsonProperty("notes")]
+    public string Notes { get; set; }
+    
+    [JsonProperty("price")]
+    public decimal Price { get; set; }
     
     [JsonProperty("menuId")]
     public long MenuId { get; set; }
@@ -58,6 +153,51 @@ public class EasyPosOrderItemDto
 
     [JsonProperty("localizations")]
     public List<EasyPosLocalizationsDto> Localizations { get; set; }
+    
+    [JsonProperty("condiments")]
+    public List<EasyPosCondimentsDto> Condiments { get; set; }
+    
+    [JsonProperty("orderItemModifiers")]
+    public List<EasyPosOrderItemModifiersDto> OrderItemModifiers { get; set; }
+}
+
+public class EasyPosOrderItemModifiersDto
+{
+    [JsonProperty("id")]
+    public long Id { get; set; }
+    
+    [JsonProperty("orderId")]
+    public long OrderId { get; set; }
+    
+    [JsonProperty("orderItemId")]
+    public long OrderItemId { get; set; }
+    
+    [JsonProperty("modifierId")]
+    public long ModifierId { get; set; }
+    
+    [JsonProperty("modifierProductId")]
+    public long ModifierProductId { get; set; }
+    
+    [JsonProperty("productId")]
+    public long ProductId { get; set; }
+    
+    [JsonProperty("quantity")]
+    public int Quantity { get; set; }
+    
+    [JsonProperty("price")]
+    public decimal Price { get; set; }
+    
+    [JsonProperty("notes")]
+    public string Notes { get; set; }
+    
+    [JsonProperty("sort")]
+    public int Sort { get; set; }
+    
+    [JsonProperty("localizations")]
+    public List<EasyPosLocalizationsDto> Localizations { get; set; }
+    
+    [JsonProperty("modifierLocalizations")]
+    public List<EasyPosLocalizationsDto> ModifierLocalizations { get; set; }
     
     [JsonProperty("condiments")]
     public List<EasyPosCondimentsDto> Condiments { get; set; }

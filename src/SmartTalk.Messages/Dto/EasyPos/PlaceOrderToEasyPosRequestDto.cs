@@ -20,7 +20,7 @@ public class PlaceOrderToEasyPosRequestDto
 
 public class PhoneCallOrderItem
 {
-    public int Id { get; set; }
+    public long Id { get; set; }
     
     public long ProductId { get; set; }
     
@@ -37,7 +37,7 @@ public class PhoneCallOrderItem
 
 public class PhoneCallOrderItemModifiers
 {
-    public double Price { get; set; }
+    public decimal Price { get; set; }
     
     public int Quantity { get; set; }
     
@@ -64,6 +64,53 @@ public class PhoneCallOrderCustomer
     public string Name { get; set; }
     
     public string Phone { get; set; }
+    
+    public List<PhoneCallOrderCustomerAddress> Addresses { get; set; }
+}
+
+public class PhoneCallOrderCustomerAddress
+{
+    [JsonProperty("id")]
+    public long Id { get; set; }
+    
+    [JsonProperty("fullAddress")]
+    public string FullAddress { get; set; }
+    
+    [JsonProperty("room")]
+    public string Room { get; set; }
+    
+    [JsonProperty("associatedId")]
+    public string AssociatedId { get; set; }
+    
+    [JsonProperty("addressType")]
+    public int AddressType { get; set; }
+    
+    [JsonProperty("addressImg")]
+    public string AddressImg { get; set; }
+    
+    [JsonProperty("city")]
+    public string City { get; set; }
+    
+    [JsonProperty("state")]
+    public string State { get; set; }
+    
+    [JsonProperty("postalCode")]
+    public string PostalCode { get; set; }
+    
+    [JsonProperty("country")]
+    public string Country { get; set; }
+    
+    [JsonProperty("line1")]
+    public string Line1 { get; set; }
+    
+    [JsonProperty("line2")]
+    public string Line2 { get; set; }
+    
+    [JsonProperty("lat")]
+    public double Lat { get; set; }
+    
+    [JsonProperty("lng")]
+    public double Lng { get; set; }
 }
 
 public class PhoneCallOrderItemModifierLocalization : PhoneCallOrderItemLocalization

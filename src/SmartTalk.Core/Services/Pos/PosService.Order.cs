@@ -1,5 +1,6 @@
-using Newtonsoft.Json;
 using Serilog;
+using Newtonsoft.Json;
+using System.Globalization;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Messages.Commands.Pos;
 using SmartTalk.Messages.Dto.EasyPos;
@@ -38,6 +39,8 @@ public partial class PosService
 
         if (order == null) throw new Exception("Order could not be found.");
         
+        _mapper.Map(command, order);
+        
         var token = await GetPosTokenAsync(order.StoreId, cancellationToken).ConfigureAwait(false);
         
         await SafetyPlaceOrderAsync(order, token, command.OrderItems, command.IsWithRetry, cancellationToken).ConfigureAwait(false);
@@ -52,9 +55,77 @@ public partial class PosService
     {
         var order = await _posDataProvider.GetPosOrderByIdAsync(posOrderId: command.OrderId.ToString(), cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        var response = new GetOrderResponseDto();  // need to replace to pos api to get order
+        if (order == null)
+        {
+            Log.Error("Order could not be found.");
+            return;
+        }
+    
+        var store = await _posDataProvider.GetPosCompanyStoreAsync(id: order.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (store == null || string.IsNullOrEmpty(store.AppId) || string.IsNullOrEmpty(store.AppSecret))
+        {
+            Log.Error("Store could not be found or app id could not be found.");
+            return;
+        }
+    
+        var response = await _easyPosClient.GetPosOrderAsync(new GetOrderRequestDto
+        {
+            AppId = store.AppId,
+            AppSecret = store.AppSecret,
+            OrderId = command.OrderId,
+        }, cancellationToken).ConfigureAwait(false);
+
+        if (response?.Data.Order == null || response.Success == false)
+            throw new Exception($"Order {command.OrderId} could not be found.");
+
+        var address = response.Data.Order.Customer.Addresses.FirstOrDefault();
+
+        order.Notes = response.Data.Order.Notes;
+        order.Name = response.Data.Order.Customer.Name;
+        order.Phone = response.Data.Order.Customer.Phone;
+        order.Address = string.IsNullOrEmpty(address?.FullAddress) ? order.Address : address.FullAddress;
+        order.Latitude = address?.Lat.ToString(CultureInfo.InvariantCulture);
+        order.Longitude = address?.Lng.ToString(CultureInfo.InvariantCulture);
+        order.Room = string.IsNullOrEmpty(address?.Room) ? string.Empty : address.Room;
+
+        var itemStatus = BuildPosOrderItemStatus(response.Data.Order.OrderItems, order.Items);
         
-        // order.Phone = response.Order
+        var items = response.Data.Order.OrderItems.Select(item => new PosOrderItemDto
+        {
+            Id = item.Id,
+            ProductId = item.ProductId,
+            Quantity = item.Quantity,
+            OriginalPrice = item.OriginalPrice,
+            Price = item.Price,
+            Notes = string.IsNullOrEmpty(item.Notes) ? string.Empty : item.Notes,
+            OrderItemModifiers = _mapper.Map<List<PhoneCallOrderItemModifiers>>(item.OrderItemModifiers),
+            Status = itemStatus.Where(kv => kv.Value.Contains(item.ProductId)).Select(kv => (PosOrderItemStatus?)kv.Key).FirstOrDefault()
+        }).ToList();
+        
+        var itemJson = JsonConvert.SerializeObject(items);
+        order.Items = itemJson;
+        
+        await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    private Dictionary<PosOrderItemStatus, List<long>> BuildPosOrderItemStatus(List<EasyPosOrderItemDto> orderItems, string originalItemJson)
+    {
+        var originalItems = JsonConvert.DeserializeObject<List<PhoneCallOrderItem>>(originalItemJson);
+
+        var newProductIds = orderItems.Select(o => o.ProductId).ToHashSet();
+        var oldProductIds = originalItems.Select(o => o.ProductId).ToHashSet();
+
+        var added = newProductIds.Except(oldProductIds).ToList();
+        var missed = oldProductIds.Except(newProductIds).ToList();
+        var normal = newProductIds.Intersect(oldProductIds).ToList();
+
+        return new Dictionary<PosOrderItemStatus, List<long>>
+        {
+            [PosOrderItemStatus.Added] = added,
+            [PosOrderItemStatus.Missed] = missed,
+            [PosOrderItemStatus.Normal] = normal
+        };
     }
 
     private async Task<string> GetPosTokenAsync(int storeId, CancellationToken cancellationToken)
@@ -116,7 +187,26 @@ public partial class PosService
                     Customer = new PhoneCallOrderCustomer
                     {
                         Name = order.Name,
-                        Phone = order.Phone
+                        Phone = order.Phone,
+                        Addresses =
+                        [
+                            new PhoneCallOrderCustomerAddress
+                            {
+                                FullAddress = string.IsNullOrEmpty(order.Address) ? string.Empty : order.Address,
+                                Room = string.IsNullOrEmpty(order.Room) ? string.Empty : order.Room,
+                                AssociatedId = string.Empty,
+                                AddressType = 1,
+                                AddressImg = string.Empty,
+                                City = string.Empty,
+                                State = string.Empty,
+                                PostalCode = string.Empty,
+                                Country = string.Empty,
+                                Line1 = string.Empty,
+                                Line2 = string.Empty,
+                                Lat = string.IsNullOrEmpty(order.Latitude) ? 0 : double.Parse("0.01", CultureInfo.InvariantCulture),
+                                Lng = string.IsNullOrEmpty(order.Longitude) ? 0 : double.Parse("0.01", CultureInfo.InvariantCulture)
+                            }
+                        ]
                     }
                 }, token, attempt == 1 ? TimeSpan.FromSeconds(10) : TimeSpan.FromSeconds(30), cancellationToken).ConfigureAwait(false);
 
@@ -158,24 +248,44 @@ public partial class PosService
     private async Task<string> SafetyPlaceOrderIfRequiredAsync(PosOrder order, string token, CancellationToken cancellationToken)
     {
         Log.Information("Convert items json: {@Items}", order.Items);
+        
         try
         {
-            var request = new PlaceOrderToEasyPosRequestDto
+            var orderItems = JsonConvert.DeserializeObject<List<PhoneCallOrderItem>>(order.Items);
+            
+            order.Count = orderItems.Count;
+            
+            var response = await _easyPosClient.PlaceOrderAsync(new PlaceOrderToEasyPosRequestDto
             {
                 Type = 1,
                 IsTaxFree = false,
                 Notes = string.IsNullOrEmpty(order.Notes) ? string.Empty : order.Notes,
-                OrderItems = JsonConvert.DeserializeObject<List<PhoneCallOrderItem>>(order.Items),
+                OrderItems = orderItems,
                 Customer = new PhoneCallOrderCustomer
                 {
                     Name = order.Name,
-                    Phone = order.Phone
+                    Phone = order.Phone,
+                    Addresses =
+                    [
+                        new PhoneCallOrderCustomerAddress
+                        {
+                            FullAddress = string.IsNullOrEmpty(order.Address) ? string.Empty : order.Address,
+                            Room = string.IsNullOrEmpty(order.Room) ? string.Empty : order.Room,
+                            AssociatedId = string.Empty,
+                            AddressType = 1,
+                            AddressImg = string.Empty,
+                            City = string.Empty,
+                            State = string.Empty,
+                            PostalCode = string.Empty,
+                            Country = string.Empty,
+                            Line1 = string.Empty,
+                            Line2 = string.Empty,
+                            Lat = string.IsNullOrEmpty(order.Latitude) ? 0 : double.Parse(order.Latitude, CultureInfo.InvariantCulture),
+                            Lng = string.IsNullOrEmpty(order.Longitude) ? 0 : double.Parse(order.Longitude, CultureInfo.InvariantCulture)
+                        }
+                    ]
                 }
-            };
-            
-            Log.Information("Get complete request: {@Request}", request);
-            
-            var response = await _easyPosClient.PlaceOrderAsync(request, token, cancellationToken: cancellationToken).ConfigureAwait(false);
+            }, token, TimeSpan.FromSeconds(10), cancellationToken).ConfigureAwait(false);
 
             Log.Information("Place order: {@Order} and response is: {@Response}", order, response);
 

@@ -421,7 +421,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             
         var orderItemModifier = new PhoneCallOrderItemModifiers
         {
-            Price = (double)(modifierProduct?.Price ?? 0),
+            Price = modifierProduct?.Price ?? 0,
             Quantity = int.TryParse(quantity, out var parsedValue) ? parsedValue : 1,
             ModifierId = modifierGroup.Id,
             ModifierProductId = modifierProduct?.Id ?? 0,
