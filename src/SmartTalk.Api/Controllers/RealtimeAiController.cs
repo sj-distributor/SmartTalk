@@ -18,32 +18,33 @@ public class RealtimeAiController : ControllerBase
         _mediator = mediator;
     }
     
+    [AllowAnonymous]
     [HttpGet("connect/{assistantId}")]
     public async Task RealtimeAiConnectAsync(int assistantId)
     {
         if (HttpContext.WebSockets.IsWebSocketRequest)
         {
-            var requested = HttpContext.WebSockets.WebSocketRequestedProtocols;
-            
-            if (!Enum.TryParse<RealtimeAiAudioCodec>(requested.FirstOrDefault(x => x.StartsWith("InputFormat."))?.Replace("InputFormat.", ""), ignoreCase: true, out var inputFormat))
-            {
-                HttpContext.Response.StatusCode = 400;
-                await HttpContext.Response.WriteAsync("Invalid InputFormat enum value");
-                return;
-            }
-
-            if (!Enum.TryParse<RealtimeAiAudioCodec>(requested.FirstOrDefault(x => x.StartsWith("OutputFormat."))?.Replace("OutputFormat.", ""), ignoreCase: true, out var outputFormat))
-            {
-                HttpContext.Response.StatusCode = 400;
-                await HttpContext.Response.WriteAsync("Invalid OutputFormat enum value");
-                return;
-            }
+            // var requested = HttpContext.WebSockets.WebSocketRequestedProtocols;
+            //
+            // if (!Enum.TryParse<RealtimeAiAudioCodec>(requested.FirstOrDefault(x => x.StartsWith("InputFormat."))?.Replace("InputFormat.", ""), ignoreCase: true, out var inputFormat))
+            // {
+            //     HttpContext.Response.StatusCode = 400;
+            //     await HttpContext.Response.WriteAsync("Invalid InputFormat enum value");
+            //     return;
+            // }
+            //
+            // if (!Enum.TryParse<RealtimeAiAudioCodec>(requested.FirstOrDefault(x => x.StartsWith("OutputFormat."))?.Replace("OutputFormat.", ""), ignoreCase: true, out var outputFormat))
+            // {
+            //     HttpContext.Response.StatusCode = 400;
+            //     await HttpContext.Response.WriteAsync("Invalid OutputFormat enum value");
+            //     return;
+            // }
             
             var command = new RealtimeAiConnectCommand
             {
                 AssistantId = assistantId,
-                InputFormat = inputFormat,
-                OutputFormat = outputFormat,
+                InputFormat = RealtimeAiAudioCodec.PCM16,
+                OutputFormat = RealtimeAiAudioCodec.PCM16,
                 WebSocket = await HttpContext.WebSockets.AcceptWebSocketAsync()
             };
             
