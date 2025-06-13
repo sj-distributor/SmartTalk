@@ -210,9 +210,10 @@ public partial class PosService
             {
                 var response = await _easyPosClient.PlaceOrderAsync(new PlaceOrderToEasyPosRequestDto
                 {
-                    Type = 1,
+                    Type = order.Type == PosOrderReceiveType.Pickup ? 1 : 3,
                     IsTaxFree = false,
                     Notes = order.Notes,
+                    SourceType = 3,
                     OrderItems = JsonConvert.DeserializeObject<List<PhoneCallOrderItem>>(order.Items),
                     Customer = new PhoneCallOrderCustomer
                     {
