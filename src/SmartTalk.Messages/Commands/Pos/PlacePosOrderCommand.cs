@@ -30,6 +30,8 @@ public class PlacePosOrderCommand : ICommand
     public decimal SubTotal { get; set; }
     
     public PosOrderReceiveType Type { get; set; }
+    
+    public int Count { get; set; }
 }
 
 public class PlacePosOrderResponse : SmartTalkResponse<PosOrderDto>;

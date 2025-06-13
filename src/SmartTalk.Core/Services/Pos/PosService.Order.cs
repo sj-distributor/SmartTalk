@@ -249,16 +249,12 @@ public partial class PosService
     {
         try
         {
-            var orderItems = JsonConvert.DeserializeObject<List<PhoneCallOrderItem>>(order.Items);
-            
-            order.Count = orderItems.Count;
-            
             var response = await _easyPosClient.PlaceOrderAsync(new PlaceOrderToEasyPosRequestDto
             {
                 Type = 1,
                 IsTaxFree = false,
                 Notes = string.IsNullOrEmpty(order.Notes) ? string.Empty : order.Notes,
-                OrderItems = orderItems,
+                OrderItems = JsonConvert.DeserializeObject<List<PhoneCallOrderItem>>(order.Items),
                 Customer = new PhoneCallOrderCustomer
                 {
                     Name = order.Name,
