@@ -133,8 +133,8 @@ public partial class PosService
             return new GetPosOrderProductsResponseData
             {
                 Menu = result.Menu == null ? null : _mapper.Map<PosMenuDto>(result.Menu),
-                Category = result.Menu == null ? null : _mapper.Map<PosCategoryDto>(result.Menu),
-                Product = result.Menu == null ? null : _mapper.Map<PosProductDto>(result.Menu),
+                Category = result.Menu == null ? null : _mapper.Map<PosCategoryDto>(result.Category),
+                Product = result.Menu == null ? null : _mapper.Map<PosProductDto>(product),
             };
         }).ToList();
     }
