@@ -16,6 +16,6 @@ public class AddLinphoneCdrCommandHandler : ICommandHandler<AddLinphoneCdrComman
      
     public async Task Handle(IReceiveContext<AddLinphoneCdrCommand> context, CancellationToken cancellationToken)
     {
-        await _linphoneService.AddLinphoneCdrAsync(context.Message.RecordName, cancellationToken).ConfigureAwait(false);
+        await _linphoneService.AddLinphoneCdrAsync(context.Message.RecordName, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 }

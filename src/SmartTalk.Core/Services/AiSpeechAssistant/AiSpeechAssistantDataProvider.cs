@@ -50,6 +50,12 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
     
     Task<Domain.AISpeechAssistant.AiSpeechAssistant> GetAiSpeechAssistantByIdAsync(int assistantId, CancellationToken cancellationToken);
     
+    Task<int> GetMessageCountByAgentAndDateAsync(int agentId, DateTimeOffset date, CancellationToken cancellationToken);
+    
+    Task AddAgentMessageRecordAsync(AgentMessageRecord messageRecord, CancellationToken cancellationToken = default);
+    
+    Task AddAiKidAsync(AiKid kid, bool forceSave = true, CancellationToken cancellationToken = default);
+    
     Task<Domain.AISpeechAssistant.AiSpeechAssistant> GetAiSpeechAssistantWithKnowledgeAsync(int assistantId, CancellationToken cancellationToken);
 
     Task AddAiSpeechAssistantSessionAsync(AiSpeechAssistantSession session, bool forceSave = true, CancellationToken cancellationToken = default);
@@ -158,7 +164,7 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
     public async Task<(int, List<Domain.AISpeechAssistant.AiSpeechAssistant>)> GetAiSpeechAssistantsAsync(
         int? pageIndex = null, int? pageSize = null, string channel = null, CancellationToken cancellationToken = default)
     {
-        var query = _repository.QueryNoTracking<Domain.AISpeechAssistant.AiSpeechAssistant>();
+        var query = _repository.QueryNoTracking<Domain.AISpeechAssistant.AiSpeechAssistant>().Where(x => x.IsDisplay);
 
         if (!string.IsNullOrEmpty(channel))
             query = query.Where(x => x.Channel.Contains(channel));
@@ -276,6 +282,26 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
     {
         return await _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>()
             .Where(x => x.Id == assistantId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<int> GetMessageCountByAgentAndDateAsync(int agentId, DateTimeOffset date, CancellationToken cancellationToken)
+    {
+        return await _repository.Query<AgentMessageRecord>().Where(x => x.AgentId == agentId && x.MessageDate >= date)
+            .CountAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task AddAgentMessageRecordAsync(AgentMessageRecord messageRecord, CancellationToken cancellationToken = default)
+    {
+        await _repository.InsertAsync(messageRecord, cancellationToken).ConfigureAwait(false);
+        
+        await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task AddAiKidAsync(AiKid kid, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.InsertAsync(kid, cancellationToken).ConfigureAwait(false);
+        
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<Domain.AISpeechAssistant.AiSpeechAssistant> GetAiSpeechAssistantWithKnowledgeAsync(int assistantId, CancellationToken cancellationToken)
