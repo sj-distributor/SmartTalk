@@ -21,6 +21,8 @@ public interface IEasyPosClient : IScopedDependency
     Task<EasyPosMerchantResponseDto> GetPosCompanyStoreMessageAsync(EasyPosTokenRequestDto request, CancellationToken cancellationToken);
     
     Task<PlaceOrderToEasyPosResponseDto> PlaceOrderAsync(PlaceOrderToEasyPosRequestDto request, string token, TimeSpan? timeout = null, CancellationToken cancellationToken = default);
+
+    Task<GetOrderResponse> GetPosOrderAsync(GetOrderRequestDto request, CancellationToken cancellationToken);
 }
 
 public class EasyPosClient : IEasyPosClient
@@ -126,6 +128,28 @@ public class EasyPosClient : IEasyPosClient
             {
                 { "Authorization", $"Bearer {token}" }
             }, timeout: timeout).ConfigureAwait(false);
+    }
+    
+    public async Task<GetOrderResponse> GetPosOrderAsync(GetOrderRequestDto request, CancellationToken cancellationToken)
+    {
+        var authorization = await GetEasyPosTokenAsync(new EasyPosTokenRequestDto
+        {
+            AppId = request.AppId,
+            AppSecret = request.AppSecret
+        }, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Getting the store pos token");
+
+        if (authorization == null || string.IsNullOrEmpty(authorization.Data) || !authorization.Success)
+        {
+            throw new Exception("Failed to get token");
+        }
+        
+        return await _httpClientFactory.GetAsync<GetOrderResponse>(
+            requestUrl: $"{_easyPosSetting.BaseUrl}/api/merchant/order?id={request.OrderId}", headers: new Dictionary<string, string>
+            {
+                { "Authorization", $"Bearer {authorization.Data}"}
+            }, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
     public (string Authorization, string MerchantId, string CompanyId, string MerchantStaffId) GetRestaurantAuthHeaders(string restaurantName)
