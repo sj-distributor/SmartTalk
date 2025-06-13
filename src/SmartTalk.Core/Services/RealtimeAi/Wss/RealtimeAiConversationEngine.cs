@@ -1,11 +1,12 @@
 using System.Net.WebSockets;
-using System.Text.Json;
 using System.Text.Json.Serialization;
+using Newtonsoft.Json;
 using Serilog;
 using SmartTalk.Core.Services.RealtimeAi.wss;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.RealtimeAi;
+using JsonSerializer = System.Text.Json.JsonSerializer;
 
 namespace SmartTalk.Core.Services.RealtimeAi.Wss;
 
@@ -83,7 +84,7 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
 
             var initialPayload = await _aiAdapter.GetInitialSessionPayloadAsync(_currentAssistantProfile, 
                 new RealtimeAiEngineContext { InitialPrompt = initialUserPrompt, InputFormat = inputFormat, OutputFormat = outputFormat }, _sessionId, _sessionCts.Token);
-            var initialMessageJson = JsonSerializer.Serialize(initialPayload, new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull });
+            var initialMessageJson = JsonConvert.SerializeObject(initialPayload, new JsonSerializerSettings() { NullValueHandling = NullValueHandling.Ignore });
             
             await _realtimeAiClient.SendMessageAsync(initialMessageJson, _sessionCts.Token);
 
