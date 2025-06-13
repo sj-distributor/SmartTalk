@@ -355,7 +355,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         
         var orderItems = similarResults.Where(x => x.Product != null).Select(x => new PhoneCallOrderItem
         {
-            ProductId = x.Product.ProductId,
+            ProductId = Convert.ToInt64(x.Product.ProductId),
             Quantity = int.TryParse(x.FoodDetail.Count, out var parsedValue) ? parsedValue : 1,
             OriginalPrice = x.Product.Price,
             Price = x.Product.Price,

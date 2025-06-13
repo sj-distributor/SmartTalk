@@ -18,6 +18,8 @@ public partial interface IPosService
     Task<PlacePosOrderResponse> PlacePosStoreOrdersAsync(PlacePosOrderCommand command, CancellationToken cancellationToken = default);
     
     Task UpdatePosOrderAsync(UpdatePosOrderCommand command, CancellationToken cancellationToken);
+    
+    Task<GetPosOrderProductsResponse> GetPosOrderProductsAsync(GetPosOrderProductsRequest request, CancellationToken cancellationToken);
 }
 
 public partial class PosService
@@ -107,6 +109,34 @@ public partial class PosService
         order.Items = itemJson;
         
         await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<GetPosOrderProductsResponse> GetPosOrderProductsAsync(GetPosOrderProductsRequest request, CancellationToken cancellationToken)
+    {
+        var products = await _posDataProvider.GetPosProductsAsync(
+            storeId: request.StoreId, productIds: request.ProductIds, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var menuWithCategories = await _posDataProvider.GetPosMenuInfosAsync(request.StoreId, products.Select(x => x.CategoryId).ToList(), cancellationToken).ConfigureAwait(false);
+        
+        return new GetPosOrderProductsResponse
+        {
+            Data = BuildPosOrderProductsData(products, menuWithCategories)
+        };
+    }
+
+    private List<GetPosOrderProductsResponseData> BuildPosOrderProductsData(List<PosProduct> products, List<(PosMenu Menu, PosCategory Category)> menuWithCategories)
+    {
+        return products.Select(product =>
+        {
+            var result = menuWithCategories.Where(x => x.Category.Id == product.CategoryId).FirstOrDefault();
+            
+            return new GetPosOrderProductsResponseData
+            {
+                Menu = result.Menu == null ? null : _mapper.Map<PosMenuDto>(result.Menu),
+                Category = result.Menu == null ? null : _mapper.Map<PosCategoryDto>(result.Menu),
+                Product = result.Menu == null ? null : _mapper.Map<PosProductDto>(result.Menu),
+            };
+        }).ToList();
     }
 
     private Dictionary<PosOrderItemStatus, List<long>> BuildPosOrderItemStatus(List<EasyPosOrderItemDto> orderItems, string originalItemJson)

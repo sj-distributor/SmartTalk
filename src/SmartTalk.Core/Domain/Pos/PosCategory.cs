@@ -17,8 +17,8 @@ public class PosCategory : IEntity, IHasCreatedFields, IHasModifiedFields
     [Column("menu_id")]
     public int MenuId { get; set; }
 
-    [Column("category_id")]
-    public long CategoryId { get; set; }
+    [Column("category_id"), StringLength(36)]
+    public string CategoryId { get; set; }
     
     [Column("names"), Required]
     public string Names { get; set; }

@@ -15,6 +15,8 @@ public partial interface IPosDataProvider : IScopedDependency
     Task AddPosProductsAsync(List<PosProduct> products, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task DeletePosMenuInfosAsync(int storeId, bool forceSave = true, CancellationToken cancellationToken = default);
+    
+    Task<List<(PosMenu Menu, PosCategory Category)>> GetPosMenuInfosAsync(int storeId, List<int> categoryIds, CancellationToken cancellationToken = default);
 }
 
 public partial class PosDataProvider
@@ -57,7 +59,19 @@ public partial class PosDataProvider
         await DeletePosCategoriesAsync(storeId, forceSave, cancellationToken).ConfigureAwait(false);
         await DeletePosProductsAsync(storeId, forceSave, cancellationToken).ConfigureAwait(false);
     }
-    
+
+    public async Task<List<(PosMenu Menu, PosCategory Category)>> GetPosMenuInfosAsync(int storeId, List<int> categoryIds, CancellationToken cancellationToken = default)
+    {
+        var query = from category in _repository.Query<PosCategory>()
+            join menu in _repository.Query<PosMenu>() on category.MenuId equals menu.Id
+            where menu.StoreId == storeId && categoryIds.Contains(category.Id)
+            select new { menu, category };
+        
+        var result = await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+
+        return result.Select(x => (x.menu, x.category)).ToList();
+    }
+
     public async Task DeletePosMenusAsync(int storeId, bool forceSave = true, CancellationToken cancellationToken = default)
     {
         var menus = await _repository.Query<PosMenu>().Where(x => x.StoreId == storeId).ToListAsync(cancellationToken).ConfigureAwait(false);
