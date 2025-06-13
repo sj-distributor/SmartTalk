@@ -12,6 +12,8 @@ public class PlaceOrderToEasyPosRequestDto
     public bool IsTaxFree { get; set; } = true;
     
     public string Notes { get; set; } = string.Empty;
+    
+    public int SourceType { get; set; } = 3;
 
     public List<PhoneCallOrderItem> OrderItems { get; set; } = [];
     
@@ -78,12 +80,6 @@ public class PhoneCallOrderCustomerAddress
     
     [JsonProperty("room")]
     public string Room { get; set; }
-
-    [JsonProperty("associatedId")]
-    public long AssociatedId { get; set; } = 1;
-
-    [JsonProperty("addressType")]
-    public int AddressType { get; set; } = 1;
     
     [JsonProperty("addressImg")]
     public string AddressImg { get; set; }
