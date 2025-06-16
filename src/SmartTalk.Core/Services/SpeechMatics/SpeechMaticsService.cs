@@ -105,21 +105,21 @@ public class SpeechMaticsService : ISpeechMaticsService
     private async Task SummarizeConversationContentAsync(PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken)
     {
         var (aiSpeechAssistant, agent) = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByAgentIdAsync(record.AgentId, cancellationToken).ConfigureAwait(false);
-        
+
         TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
-        
+
         var call = await CallResource.FetchAsync(record.SessionId);
         var callFrom = call?.From;
-        
+
         Log.Information("Fetched incoming phone number from Twilio: {callFrom}", callFrom);
-        
+
         var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
-        
+
         record.Status = PhoneOrderRecordStatus.Sent;
-        
+
         ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
-        
+
         var audioData = BinaryData.FromBytes(audioContent);
         List<ChatMessage> messages =
         [
@@ -129,56 +129,56 @@ public class SpeechMaticsService : ISpeechMaticsService
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
             new UserChatMessage("幫我根據錄音生成分析報告：")
         ];
-        
+
         ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
 
         ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
         Log.Information("sales record analyze report:" + completion.Content.FirstOrDefault()?.Text);
         
         record.TranscriptionText = completion.Content.FirstOrDefault()?.Text ?? "";
-        
+
         if (agent.SourceSystem == AgentSourceSystem.Smarties)
             await _smartiesClient.CallBackSmartiesAiSpeechAssistantRecordAsync(new AiSpeechAssistantCallBackRequestDto { CallSid = record.SessionId, RecordUrl = record.Url, RecordAnalyzeReport =  record.TranscriptionText }, cancellationToken).ConfigureAwait(false);
 
         if (!string.IsNullOrEmpty(agent.WechatRobotKey) && !string.IsNullOrEmpty(agent.WechatRobotMessage))
         {
             var message = agent.WechatRobotMessage.Replace("#{assistant_name}", aiSpeechAssistant?.Name).Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString());
-            
+
             if (agent.IsWecomMessageOrder)
             {
                 var messageNumber = await SendAgentMessageRecordAsync(agent.Id, record.Id, cancellationToken);
                 message = $"【第{messageNumber}條】\n" + message;
             }
-            
+
             if (agent.IsSendAnalysisReportToWechat && !string.IsNullOrEmpty(record.TranscriptionText))
             {
                 message += "\n\n" + record.TranscriptionText;
             }
-            
+
             await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(audioContent, agent.WechatRobotKey, message, cancellationToken).ConfigureAwait(false);
         }
     }
-    
+
     private async Task<int> SendAgentMessageRecordAsync(int agentId, int recordId, CancellationToken cancellationToken)
     {
         var shanghaiTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Asia/Shanghai");
         var nowShanghai = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, shanghaiTimeZone);
-        
+
         var utcDate = TimeZoneInfo.ConvertTimeToUtc(nowShanghai.Date, shanghaiTimeZone);
-        
+
         var existingCount = await _aiSpeechAssistantDataProvider.GetMessageCountByAgentAndDateAsync(agentId, utcDate, cancellationToken).ConfigureAwait(false);
-        
+
         var messageNumber = existingCount + 1;
-        
+
         var newRecord = new AgentMessageRecord
         {
             AgentId = agentId,
             RecordId = recordId,
             MessageNumber = messageNumber
         };
-        
+
         await _aiSpeechAssistantDataProvider.AddAgentMessageRecordAsync(newRecord, cancellationToken).ConfigureAwait(false);
-        
+
         return messageNumber;
     }
     

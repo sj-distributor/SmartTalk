@@ -55,6 +55,8 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
     
     Task AddAgentMessageRecordAsync(AgentMessageRecord messageRecord, CancellationToken cancellationToken = default);
     
+    Task AddAiKidAsync(AiKid kid, bool forceSave = true, CancellationToken cancellationToken = default);
+    
     Task<Domain.AISpeechAssistant.AiSpeechAssistant> GetAiSpeechAssistantWithKnowledgeAsync(int assistantId, CancellationToken cancellationToken);
 
     Task AddAiSpeechAssistantSessionAsync(AiSpeechAssistantSession session, bool forceSave = true, CancellationToken cancellationToken = default);
@@ -62,9 +64,7 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task UpdateAiSpeechAssistantSessionAsync(AiSpeechAssistantSession session, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task<AiSpeechAssistantSession> GetAiSpeechAssistantSessionBySessionIdAsync(Guid sessionId, CancellationToken cancellationToken);
-    
-    Task AddAiKidAsync(AiKid kid, bool forceSave = true, CancellationToken cancellationToken = default);
-    
+
     Task<(Domain.AISpeechAssistant.AiSpeechAssistant Assistant, Agent Agent)> GetAiSpeechAssistantByAgentIdAsync(int agentId, CancellationToken cancellationToken);
 }
 
@@ -300,6 +300,13 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
         await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task AddAiKidAsync(AiKid kid, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.InsertAsync(kid, cancellationToken).ConfigureAwait(false);
+        
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task<Domain.AISpeechAssistant.AiSpeechAssistant> GetAiSpeechAssistantWithKnowledgeAsync(int assistantId, CancellationToken cancellationToken)
     {
         var query = from a in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>()
@@ -338,21 +345,14 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
             .Where(x => x.SessionId == sessionId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
     
-    public async Task AddAiKidAsync(AiKid kid, bool forceSave = true, CancellationToken cancellationToken = default)
-    {
-        await _repository.InsertAsync(kid, cancellationToken).ConfigureAwait(false);
-        
-        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-    }
-
     public async Task<(Domain.AISpeechAssistant.AiSpeechAssistant Assistant, Agent Agent)> GetAiSpeechAssistantByAgentIdAsync(int agentId, CancellationToken cancellationToken)
     {
         var query = from agent in _repository.Query<Agent>()
-                join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agent.Id equals assistant.AgentId
-                select new { assistant, agent };
-        
+            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agent.Id equals assistant.AgentId
+            select new { assistant, agent };
+
         var result = await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
-        
+
         return (result.assistant, result.agent);
     }
 }

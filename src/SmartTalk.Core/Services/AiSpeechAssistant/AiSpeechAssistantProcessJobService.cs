@@ -15,7 +15,6 @@ using SmartTalk.Core.Services.RetrievalDb.VectorDb;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Core.Settings.Twilio;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
-using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Constants;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.EasyPos;
@@ -90,7 +89,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             SessionId = context.CallSid,
             Status = PhoneOrderRecordStatus.Transcription,
             Tips = context.ConversationTranscription.FirstOrDefault().Item2,
-            TranscriptionText = FormattedConversation(context.ConversationTranscription),
+            TranscriptionText = string.Empty,
             Language = TranscriptionLanguage.Chinese,
             CreatedDate = callResource.StartTime ?? DateTimeOffset.Now,
             OrderStatus = PhoneOrderOrderStatus.Pending,
@@ -99,14 +98,8 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         };
 
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync([record], cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        if (context.OrderItems != null)
-        {
-            var items = await GenerateOrderItemsAsync(record, context.OrderItems, cancellationToken).ConfigureAwait(false);
-            
-            if (items.Count != 0)
-                await _phoneOrderDataProvider.AddPhoneOrderItemAsync(items, true, cancellationToken).ConfigureAwait(false);
-        }
+        
+        await GenerateOrderItemsAsync(record, context.OrderItems, cancellationToken).ConfigureAwait(false);
     }
 
     private static string FormattedConversation(List<(AiSpeechAssistantSpeaker, string)> conversationTranscription)
@@ -181,37 +174,18 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         return conversations;
     }
 
-    private async Task<List<PhoneOrderOrderItem>> GenerateOrderItemsAsync(PhoneOrderRecord record, AiSpeechAssistantOrderDto foods, CancellationToken cancellationToken)
+    private async Task GenerateOrderItemsAsync(PhoneOrderRecord record, AiSpeechAssistantOrderDto foods, CancellationToken cancellationToken)
     {
-        var orderItems = new List<PhoneOrderOrderItem>();
-        
-        try
-        {
-            var restaurantItems = await MatchSimilarRestaurantItemsAsync(record, foods, cancellationToken).ConfigureAwait(false);
-        
-            Log.Information("Matched similar restaurant items: {@RestaurantItems}", restaurantItems);
-            
-            orderItems = restaurantItems != null && restaurantItems.Count != 0 ? restaurantItems : orderItems;
-        }
-        catch (Exception e)
-        {
-            Log.Warning("Matched similar restaurant items failed: {@Exception}", e);
-        }
-
         try
         {
             var posItems = await MatchSimilarProductsAsync(record, foods, cancellationToken).ConfigureAwait(false);
         
             Log.Information("Matched similar pos product items: {@PosItems}", posItems);
-            
-            orderItems = posItems != null && posItems.Count != 0 ? posItems : orderItems;
         }
         catch (Exception e)
         {
             Log.Warning("Matched similar pos product items failed: {@Exception}", e);
         }
-        
-        return orderItems.Where(x => !string.IsNullOrWhiteSpace(x.FoodName)).ToList();
     }
     
     private async Task<List<PhoneOrderOrderItem>> MatchSimilarRestaurantItemsAsync(PhoneOrderRecord record, AiSpeechAssistantOrderDto foods, CancellationToken cancellationToken)

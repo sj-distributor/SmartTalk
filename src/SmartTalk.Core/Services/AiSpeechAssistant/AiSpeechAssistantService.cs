@@ -16,7 +16,6 @@ using SmartTalk.Core.Constants;
 using Microsoft.AspNetCore.Http;
 using NAudio.Codecs;
 using NAudio.Wave;
-using Newtonsoft.Json.Linq;
 using OpenAI.Chat;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.OpenAi;
@@ -51,7 +50,6 @@ using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.STT;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 using RecordingResource = Twilio.Rest.Api.V2010.Account.Call.RecordingResource;
-using Stream = Twilio.TwiML.Voice.Stream;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
 
@@ -82,15 +80,15 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly ISmartiesClient _smartiesClient;
     private readonly ZhiPuAiSettings _zhiPuAiSettings;
     private readonly IRedisSafeRunner _redisSafeRunner;
+    private readonly TranslationClient _translationClient;
     private readonly IPhoneOrderService _phoneOrderService;
     private readonly IAgentDataProvider _agentDataProvider;
+    private readonly ISpeechToTextService _speechToTextService;
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
     private readonly IRestaurantDataProvider _restaurantDataProvider;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
-    private readonly ISpeechToTextService _speechToTextService;
-    private readonly TranslationClient _translationClient;
 
     private StringBuilder _openaiEvent;
     private readonly ClientWebSocket _openaiClientWebSocket;
@@ -112,16 +110,16 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         ISmartiesClient smartiesClient,
         ZhiPuAiSettings zhiPuAiSettings,
         IRedisSafeRunner redisSafeRunner,
+        TranslationClient translationClient,
         IPhoneOrderService phoneOrderService,
         IAgentDataProvider agentDataProvider,
         IOpenAiDataProvider openAiDataProvider,
+        ISpeechToTextService speechToTextService,
         ISmartTalkHttpClientFactory httpClientFactory,
         IRestaurantDataProvider restaurantDataProvider,
         IPhoneOrderDataProvider phoneOrderDataProvider,
         ISmartTalkBackgroundJobClient backgroundJobClient,
-        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider,
-        ISpeechToTextService speechToTextService,
-        TranslationClient translationClient)
+        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
         _mapper = mapper;
         _currentUser = currentUser;
@@ -136,7 +134,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _agentDataProvider = agentDataProvider;
         _phoneOrderService = phoneOrderService;
         _httpClientFactory = httpClientFactory;
+        _translationClient = translationClient;
         _openAiDataProvider = openAiDataProvider;
+        _speechToTextService = speechToTextService;
         _backgroundJobClient = backgroundJobClient;
         _restaurantDataProvider = restaurantDataProvider;
         _phoneOrderDataProvider = phoneOrderDataProvider;
@@ -225,7 +225,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         record.Url = command.RecordingUrl;
         
         var audioFileRawBytes = await _httpClientFactory.GetAsync<byte[]>(record.Url, cancellationToken).ConfigureAwait(false);
-
+        
         var transcription = await _speechToTextService.SpeechToTextAsync(
             audioFileRawBytes, fileType: TranscriptionFileType.Wav, responseFormat: TranscriptionResponseFormat.Text, cancellationToken: cancellationToken).ConfigureAwait(false);
         
@@ -235,7 +235,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
-    
+
     public async Task TransferHumanServiceAsync(TransferHumanServiceCommand command, CancellationToken cancellationToken)
     {
         TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
@@ -255,30 +255,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             status: CallResource.UpdateStatusEnum.Completed
         );
     }
-    
-    private async Task<int> SendAgentMessageRecordAsync(int agentId, int recordId, CancellationToken cancellationToken)
-    {
-        var shanghaiTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Asia/Shanghai");
-        var nowShanghai = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, shanghaiTimeZone);
-        
-        var utcDate = TimeZoneInfo.ConvertTimeToUtc(nowShanghai.Date, shanghaiTimeZone);
-        
-        var existingCount = await _aiSpeechAssistantDataProvider.GetMessageCountByAgentAndDateAsync(agentId, utcDate, cancellationToken).ConfigureAwait(false);
-        
-        var messageNumber = existingCount + 1;
-        
-        var newRecord = new AgentMessageRecord
-        {
-            AgentId = agentId,
-            RecordId = recordId,
-            MessageNumber = messageNumber
-        };
-        
-        await _aiSpeechAssistantDataProvider.AddAgentMessageRecordAsync(newRecord, cancellationToken).ConfigureAwait(false);
-        
-        return messageNumber;
-    }
-    
+
     private async Task<(Domain.AISpeechAssistant.AiSpeechAssistant assistant, AiSpeechAssistantKnowledge knowledge, string finalPrompt)> BuildingAiSpeechAssistantKnowledgeBaseAsync(string from, string to, int? assistantId, CancellationToken cancellationToken)
     {
         var (assistant, knowledge, userProfile) = await _aiSpeechAssistantDataProvider
