@@ -23,6 +23,8 @@ public interface IEasyPosClient : IScopedDependency
     Task<PlaceOrderToEasyPosResponseDto> PlaceOrderAsync(PlaceOrderToEasyPosRequestDto request, string token, TimeSpan? timeout = null, CancellationToken cancellationToken = default);
 
     Task<GetOrderResponse> GetPosOrderAsync(GetOrderRequestDto request, CancellationToken cancellationToken);
+    
+    Task<ValidatePosProductResponseDto> ValidatePosProductsAsync(ValidatePosProductRequestDto request, string token, CancellationToken cancellationToken);
 }
 
 public class EasyPosClient : IEasyPosClient
@@ -149,6 +151,15 @@ public class EasyPosClient : IEasyPosClient
             requestUrl: $"{_easyPosSetting.BaseUrl}/api/merchant/order?id={request.OrderId}", headers: new Dictionary<string, string>
             {
                 { "Authorization", $"Bearer {authorization.Data}"}
+            }, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<ValidatePosProductResponseDto> ValidatePosProductsAsync(ValidatePosProductRequestDto request, string token, CancellationToken cancellationToken)
+    {
+        return await _httpClientFactory.PostAsJsonAsync<ValidatePosProductResponseDto>(
+            requestUrl: $"{_easyPosSetting.BaseUrl}/api/merchant/order/order-item/product/validate", request, headers: new Dictionary<string, string>
+            {
+                { "Authorization", $"Bearer {token}"}
             }, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 

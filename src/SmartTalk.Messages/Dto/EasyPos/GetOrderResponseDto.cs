@@ -4,10 +4,13 @@ namespace SmartTalk.Messages.Dto.EasyPos;
 
 public class GetOrderRequestDto
 {
+    [JsonProperty("appId")]
     public string AppId { get; set; }
     
+    [JsonProperty("appSecret")]
     public string AppSecret { get; set; }
     
+    [JsonProperty("orderId")]
     public long OrderId { get; set; }
 }
 
