@@ -347,7 +347,8 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             SubTotal = products.Sum(p => p.Price) + taxes,
             Type = PosOrderReceiveType.Pickup,
             Items = BuildPosOrderItems(products, similarResults),
-            Notes = record.Comments
+            Notes = record.Comments,
+            RecordId = record.Id
         };
         
         await _posDataProvider.AddPosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);

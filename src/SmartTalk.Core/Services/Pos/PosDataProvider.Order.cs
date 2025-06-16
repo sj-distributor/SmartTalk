@@ -5,7 +5,7 @@ namespace SmartTalk.Core.Services.Pos;
 
 public partial interface IPosDataProvider
 {
-    Task<PosOrder> GetPosOrderByIdAsync(int? orderId = null, string posOrderId = null, CancellationToken cancellationToken = default);
+    Task<PosOrder> GetPosOrderByIdAsync(int? orderId = null, string posOrderId = null, int? recordId = null, CancellationToken cancellationToken = default);
     
     Task<List<PosOrder>> GetPosOrdersAsync(
         int storeId, string keyword= null, DateTimeOffset? startDate = null, DateTimeOffset? endDate = null, CancellationToken cancellationToken = default);
@@ -19,15 +19,18 @@ public partial interface IPosDataProvider
 
 public partial class PosDataProvider
 {
-    public async Task<PosOrder> GetPosOrderByIdAsync(int? orderId = null, string posOrderId = null, CancellationToken cancellationToken = default)
+    public async Task<PosOrder> GetPosOrderByIdAsync(int? orderId = null, string posOrderId = null, int? recordId = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<PosOrder>();
 
         if (orderId.HasValue)
-            query = query.Where(x => x.Id == orderId);
+            query = query.Where(x => x.Id == orderId.Value);
         
         if (!string.IsNullOrEmpty(posOrderId))
             query = query.Where(x => x.OrderId == posOrderId);
+        
+        if (recordId.HasValue)
+            query = query.Where(x => x.RecordId == recordId.Value);
         
         return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }

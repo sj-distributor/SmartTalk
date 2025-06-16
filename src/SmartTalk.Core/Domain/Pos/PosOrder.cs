@@ -14,6 +14,9 @@ public class PosOrder : IEntity, IHasCreatedFields, IHasModifiedFields
 
     [Column("store_id")]
     public int StoreId { get; set; }
+    
+    [Column("record_id")]
+    public int? RecordId { get; set; }
 
     [Column("name"), StringLength(64)]
     public string Name { get; set; }

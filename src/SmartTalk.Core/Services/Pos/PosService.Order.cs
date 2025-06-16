@@ -20,6 +20,8 @@ public partial interface IPosService
     Task UpdatePosOrderAsync(UpdatePosOrderCommand command, CancellationToken cancellationToken);
     
     Task<GetPosOrderProductsResponse> GetPosOrderProductsAsync(GetPosOrderProductsRequest request, CancellationToken cancellationToken);
+    
+    Task<GetPosStoreOrderResponse> GetPosStoreOrderAsync(GetPosStoreOrderRequest request, CancellationToken cancellationToken);
 }
 
 public partial class PosService
@@ -124,6 +126,19 @@ public partial class PosService
         };
     }
 
+    public async Task<GetPosStoreOrderResponse> GetPosStoreOrderAsync(GetPosStoreOrderRequest request, CancellationToken cancellationToken)
+    {
+        var order = await _posDataProvider.GetPosOrderByIdAsync(orderId: request.OrderId, recordId: request.RecordId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (order == null)
+            throw new Exception($"Order could not be found by orderId: {request.OrderId} or recordId: {request.RecordId}.");
+
+        return new GetPosStoreOrderResponse
+        {
+            Data = _mapper.Map<PosOrderDto>(order)
+        };
+    }
+
     private List<GetPosOrderProductsResponseData> BuildPosOrderProductsData(List<PosProduct> products, List<(PosMenu Menu, PosCategory Category)> menuWithCategories)
     {
         return products.Select(product =>
@@ -134,7 +149,7 @@ public partial class PosService
             {
                 Menu = result.Menu == null ? null : _mapper.Map<PosMenuDto>(result.Menu),
                 Category = result.Menu == null ? null : _mapper.Map<PosCategoryDto>(result.Category),
-                Product = result.Menu == null ? null : _mapper.Map<PosProductDto>(product),
+                Product = result.Menu == null ? null : _mapper.Map<PosProductDto>(product)
             };
         }).ToList();
     }

@@ -7,6 +7,8 @@ public class PosOrderDto
     public int Id { get; set; }
 
     public int StoreId { get; set; }
+    
+    public int? RecordId { get; set; }
 
     public string Name { get; set; }
 
