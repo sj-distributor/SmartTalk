@@ -141,8 +141,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _restaurantDataProvider = restaurantDataProvider;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
-        _speechToTextService = speechToTextService;
-        _translationClient = translationClient;
 
         _openaiEvent = new StringBuilder();
         _openaiClientWebSocket = new ClientWebSocket();
