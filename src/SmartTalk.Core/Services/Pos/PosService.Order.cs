@@ -180,12 +180,60 @@ public partial class PosService
         return authorization.Data;
     }
 
+    private async Task<bool> ValidatePosProductsAsync(PosOrder order, string token, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var items = JsonConvert.DeserializeObject<List<PosOrderItemDto>>(order.Items);
+
+            var response = await _easyPosClient.ValidatePosProductsAsync(new ValidatePosProductRequestDto
+            {
+                ProductIds = items.Select(x => x.ProductId).ToList(),
+            }, token, cancellationToken).ConfigureAwait(false);
+        
+            Log.Information("Validating pos products response: {@Response}", response);
+
+            if (response?.Data == null)
+            {
+                Log.Error("Failed to get pos products");
+                return false;
+            }
+
+            if (response.Data.Count == 0) return true;
+        
+            foreach (var item in items)
+            {
+                var result = response.Data.Any(x => x == item.ProductId);
+
+                if (!result) continue;
+
+                item.Status = PosOrderItemStatus.Missed;
+            }
+        
+            order.Items = JsonConvert.SerializeObject(items);
+        
+            return false;
+        }
+        catch (Exception e)
+        {
+            throw new Exception($"Failed to validate pos products: {e.Message}");
+        }
+    }
+
     private async Task SafetyPlaceOrderAsync(PosOrder order, string token, string orderItems, bool isWithRetry, CancellationToken cancellationToken)
     {
         var lockKey = $"place-order-key-{order.Id}";
         await _redisSafeRunner.ExecuteWithLockAsync(lockKey, async () =>
         {
             if(order.Status == PosOrderStatus.Sent) throw new Exception("Order is already sent.");
+
+            var result = await ValidatePosProductsAsync(order, token, cancellationToken).ConfigureAwait(false);
+
+            if (!result)
+            {
+                await MarkOrderAsSpecificStatusAsync(order, PosOrderStatus.Modified, cancellationToken).ConfigureAwait(false);
+                return;
+            }
         
             order.Items = orderItems;
 
@@ -232,8 +280,8 @@ public partial class PosService
                                 Country = string.Empty,
                                 Line1 = string.Empty,
                                 Line2 = string.Empty,
-                                Lat = string.IsNullOrEmpty(order.Latitude) ? 0 : double.Parse("0.01", CultureInfo.InvariantCulture),
-                                Lng = string.IsNullOrEmpty(order.Longitude) ? 0 : double.Parse("0.01", CultureInfo.InvariantCulture)
+                                Lat = string.IsNullOrEmpty(order.Latitude) ? 0 : double.Parse(order.Latitude, CultureInfo.InvariantCulture),
+                                Lng = string.IsNullOrEmpty(order.Longitude) ? 0 : double.Parse(order.Longitude, CultureInfo.InvariantCulture)
                             }
                         ]
                     }

@@ -19,6 +19,10 @@ public class PlacePosOrderCommand : ICommand
     
     public string Address { get; set; }
     
+    public string Latitude { get; set; }
+    
+    public string Longitude { get; set; }
+    
     public string Room { get; set; }
     
     public string Notes { get; set; }
