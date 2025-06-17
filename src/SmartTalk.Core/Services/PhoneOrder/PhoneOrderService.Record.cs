@@ -11,6 +11,7 @@ using Smarties.Messages.Enums.OpenAi;
 using Smarties.Messages.Requests.Ask;
 using System.Text.RegularExpressions;
 using SmartTalk.Core.Domain.PhoneOrder;
+using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Services.Linphone;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Dto.Attachments;
@@ -36,6 +37,8 @@ public partial interface IPhoneOrderService
     Task<AddOrUpdateManualOrderResponse> AddOrUpdateManualOrderAsync(AddOrUpdateManualOrderCommand command, CancellationToken cancellationToken);
 
     Task<string> CreateSpeechMaticsJobAsync(byte[] recordContent, string recordName, string language, CancellationToken cancellationToken);
+
+    Task<GetPhoneOrderRecordsUnreadCountsResponse> GetPhoneOrderRecordsUnreadCountsAsync(GetPhoneOrderRecordsUnreadCountsRequest request, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderService
@@ -45,6 +48,20 @@ public partial class PhoneOrderService
         var (utcStart, utcEnd) = ConvertPstDateToUtcRange(request.Date);
 
         var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(request.AgentId, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
+        
+        var store = await _posDataProvider.GetPosStoreByAgentIdAsync(request.AgentId, cancellationToken).ConfigureAwait(false);
+
+        var posStoreUsers = await _posDataProvider.GetPosStoreUsersByUserIdAsync(userId: _currentUser.Id.Value, storeId: store.Id, cancellationToken).ConfigureAwait(false);
+
+        foreach (var record in records)
+        {
+            var recordUnread = await _phoneOrderDataProvider.GetPhoneOrderRecordsUnreadAsync(recordId: record.Id, posStoreUserId: posStoreUsers.FirstOrDefault().Id, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            if (recordUnread == null)
+            {
+                record.IsRead = true;
+            }
+        }
 
         return new GetPhoneOrderRecordsResponse
         {
@@ -72,9 +89,13 @@ public partial class PhoneOrderService
         
         var record = new PhoneOrderRecord { SessionId = Guid.NewGuid().ToString(), AgentId = recordInfo.Agent.Id, TranscriptionText = transcription, Language = SelectLanguageEnum(detection.Language), CreatedDate = recordInfo.StartDate, Status = PhoneOrderRecordStatus.Recieved };
 
+        var store = await _posDataProvider.GetPosStoreByAgentIdAsync(record.AgentId, cancellationToken).ConfigureAwait(false);
+
+        var posStoreUsers = await _posDataProvider.GetPosStoreUsersByStoreIdAsync(store.Id, cancellationToken).ConfigureAwait(false);
+
         if (await CheckPhoneOrderRecordDurationAsync(command.RecordContent, cancellationToken).ConfigureAwait(false))
         {
-            await AddPhoneOrderRecordAsync(record, PhoneOrderRecordStatus.NoContent, cancellationToken).ConfigureAwait(false);
+            await AddPhoneOrderRecordAsync(record, posStoreUsers, PhoneOrderRecordStatus.NoContent, cancellationToken).ConfigureAwait(false);
             
             return;
         }
@@ -85,14 +106,15 @@ public partial class PhoneOrderService
         
         if (string.IsNullOrEmpty(record.Url))
         {
-            await AddPhoneOrderRecordAsync(record, PhoneOrderRecordStatus.NoContent, cancellationToken).ConfigureAwait(false);
+            await AddPhoneOrderRecordAsync(record, posStoreUsers, PhoneOrderRecordStatus.NoContent, cancellationToken).ConfigureAwait(false);
             
             return;
         }
         
         record.TranscriptionJobId = await CreateSpeechMaticsJobAsync(command.RecordContent, command.RecordName ?? Guid.NewGuid().ToString("N") + ".wav", detection.Language, cancellationToken).ConfigureAwait(false);
         
-        await AddPhoneOrderRecordAsync(record, PhoneOrderRecordStatus.Diarization, cancellationToken).ConfigureAwait(false);
+        await AddPhoneOrderRecordAsync(record, posStoreUsers, PhoneOrderRecordStatus.Diarization, cancellationToken).ConfigureAwait(false);
+        
     }
 
     private async Task<bool> CheckOrderExistAsync(int agentId, DateTimeOffset createdDate, CancellationToken cancellationToken)
@@ -404,11 +426,19 @@ public partial class PhoneOrderService
         Log.Information("After shift conversations: {@conversations}", conversations);
     }
 
-    private async Task AddPhoneOrderRecordAsync(PhoneOrderRecord record, PhoneOrderRecordStatus status, CancellationToken cancellationToken)
+    private async Task AddPhoneOrderRecordAsync(PhoneOrderRecord record, List<PosStoreUser> posStoreUsers, PhoneOrderRecordStatus status, CancellationToken cancellationToken)
     {
         record.Status = status;
         
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync(new List<PhoneOrderRecord> { record }, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var phoneOrderRecordsUnread = posStoreUsers.Select(u => new PhoneOrderRecordUnread 
+        {
+            RecordId = record.Id,
+            PosStoreUserId=u.UserId
+        }).ToList();
+        
+        await _phoneOrderDataProvider.AddPhoneOrderRecordsUnreadAsync(phoneOrderRecordsUnread, true, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<bool> CheckPhoneOrderRecordDurationAsync(byte[] recordContent, CancellationToken cancellationToken)
@@ -592,7 +622,17 @@ public partial class PhoneOrderService
             Log.Information("Retrying Create Speech Matics Job Attempts remaining: {RetryCount}", retryCount);
         }
     }
-    
+
+    public async Task<GetPhoneOrderRecordsUnreadCountsResponse> GetPhoneOrderRecordsUnreadCountsAsync(GetPhoneOrderRecordsUnreadCountsRequest request, CancellationToken cancellationToken)
+    {
+        var counts = await _phoneOrderDataProvider.GetUnreadOrderCountAsync(_currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
+
+        return new GetPhoneOrderRecordsUnreadCountsResponse()
+        {
+            Data = counts
+        };
+    }
+
     private (DateTimeOffset? UtcStart, DateTimeOffset? UtcEnd) ConvertPstDateToUtcRange(DateTimeOffset? inputDate)
     {
         if (!inputDate.HasValue) return (null, null);

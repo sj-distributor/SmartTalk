@@ -1,3 +1,4 @@
+using Serilog;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Commands.PhoneOrder;
@@ -17,7 +18,25 @@ public partial class PhoneOrderService
     public async Task<GetPhoneOrderConversationsResponse> GetPhoneOrderConversationsAsync(GetPhoneOrderConversationsRequest request, CancellationToken cancellationToken)
     {
         var conversations = await _phoneOrderDataProvider.GetPhoneOrderConversationsAsync(request.RecordId, cancellationToken).ConfigureAwait(false);
+        
+        var store = await _posDataProvider.GetPosStoreByAgentIdAsync(request.AgentId, cancellationToken).ConfigureAwait(false);
 
+        if (store != null)
+        {
+            var posStoreUsers = await _posDataProvider.GetPosStoreUsersByUserIdAsync(userId: _currentUser.Id.Value, storeId: store.Id, cancellationToken).ConfigureAwait(false);
+            
+            if (posStoreUsers != null)
+            {
+                var phoneOrderRecordsUnread = await _phoneOrderDataProvider.GetPhoneOrderRecordsUnreadAsync(request.RecordId, posStoreUsers.FirstOrDefault().Id, cancellationToken).ConfigureAwait(false);
+
+                await _phoneOrderDataProvider.DeletePhoneOrderRecordUnreadAsync(phoneOrderRecordsUnread, true, cancellationToken).ConfigureAwait(false);
+            }
+            
+            Log.Information("The posStoreUser could not be found");
+        }
+        
+        Log.Information("The store has no agent bound yet");
+        
         return new GetPhoneOrderConversationsResponse
         {
             Data = _mapper.Map<List<PhoneOrderConversationDto>>(conversations)

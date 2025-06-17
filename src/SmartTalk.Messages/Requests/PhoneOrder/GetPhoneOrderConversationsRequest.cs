@@ -7,6 +7,8 @@ namespace SmartTalk.Messages.Requests.PhoneOrder;
 public class GetPhoneOrderConversationsRequest : IRequest
 {
     public int RecordId { get; set; }
+    
+    public int AgentId { get; set; }
 }
 
 public class GetPhoneOrderConversationsResponse : SmartTalkResponse<List<PhoneOrderConversationDto>>

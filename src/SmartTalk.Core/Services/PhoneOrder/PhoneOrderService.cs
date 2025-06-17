@@ -7,6 +7,7 @@ using SmartTalk.Core.Services.Ffmpeg;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Identity;
 using SmartTalk.Core.Services.Jobs;
+using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Services.Restaurants;
 using SmartTalk.Core.Services.RetrievalDb.VectorDb;
 using SmartTalk.Core.Services.SpeechMatics;
@@ -42,6 +43,7 @@ public partial class PhoneOrderService : IPhoneOrderService
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
     private readonly ISpeechMaticsDataProvider _speechMaticsDataProvider;
     private readonly TranscriptionCallbackSetting _transcriptionCallbackSetting;
+    private readonly IPosDataProvider _posDataProvider;
 
     public PhoneOrderService(
         IMapper mapper,
@@ -63,7 +65,8 @@ public partial class PhoneOrderService : IPhoneOrderService
         IPhoneOrderDataProvider phoneOrderDataProvider,
         ISmartTalkBackgroundJobClient backgroundJobClient,
         ISpeechMaticsDataProvider speechMaticsDataProvider,
-        TranscriptionCallbackSetting transcriptionCallbackSetting)
+        TranscriptionCallbackSetting transcriptionCallbackSetting,
+        IPosDataProvider posDataProvider)
     {
         _mapper = mapper;
         _vectorDb = vectorDb;
@@ -85,5 +88,6 @@ public partial class PhoneOrderService : IPhoneOrderService
         _restaurantDataProvider = restaurantDataProvider;
         _speechMaticsDataProvider = speechMaticsDataProvider;
         _transcriptionCallbackSetting = transcriptionCallbackSetting;
+        _posDataProvider = posDataProvider;
     }
 }
