@@ -88,7 +88,7 @@ public class EasyPosResponseModifierGroups
     [JsonProperty("maximumSelect")]
     public int MaximumSelect { get; set; }
     
-    [JsonProperty("MaximumRepetition")]
+    [JsonProperty("maximumRepetition")]
     public int MaximumRepetition { get; set; }
     
     [JsonProperty("taxes")]
