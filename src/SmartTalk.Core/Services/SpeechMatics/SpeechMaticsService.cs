@@ -111,10 +111,20 @@ public class SpeechMaticsService : ISpeechMaticsService
     {
         var (aiSpeechAssistant, agent) = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByAgentIdAsync(record.AgentId, cancellationToken).ConfigureAwait(false);
 
-        TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
+        var callFrom = string.Empty;
+        try
+        {
+            TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
 
-        var call = await CallResource.FetchAsync(record.SessionId);
-        var callFrom = call?.From;
+            var call = await CallResource.FetchAsync(record.SessionId);
+            callFrom = call?.From;
+            
+            Log.Information("Fetched incoming phone number from Twilio: {callFrom}", callFrom);
+        }
+        catch (Exception e)
+        {
+            Log.Warning("Fetched incoming phone number from Twilio failed: {Message}", e.Message);
+        }
 
         Log.Information("Fetched incoming phone number from Twilio: {callFrom}", callFrom);
 
