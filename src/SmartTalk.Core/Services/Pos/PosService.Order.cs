@@ -92,6 +92,9 @@ public partial class PosService
         order.Latitude = address?.Lat.ToString(CultureInfo.InvariantCulture);
         order.Longitude = address?.Lng.ToString(CultureInfo.InvariantCulture);
         order.Room = string.IsNullOrEmpty(address?.Room) ? string.Empty : address.Room;
+        order.Total = response.Data.Order.TotalAmount;
+        order.Tax = response.Data.Order.TotalTaxAmount;
+        order.SubTotal = response.Data.Order.SubTotalAmount;
 
         var items = BuildMergedOrderItemsWithStatus(response.Data.Order.OrderItems, order.Items);
         

@@ -55,6 +55,15 @@ public class EasyPosOrderDto
     [JsonProperty("isTaxFree")]
     public bool IsTaxFree { get; set; }
     
+    [JsonProperty("totalAmount")]
+    public decimal TotalAmount { get; set; }
+    
+    [JsonProperty("subTotalAmount")]
+    public decimal SubTotalAmount { get; set; }
+    
+    [JsonProperty("totalTaxAmount")]
+    public decimal TotalTaxAmount { get; set; }
+    
     [JsonProperty("customer")]
     public EasyPosOrderCustomerDto Customer { get; set; }
 }
