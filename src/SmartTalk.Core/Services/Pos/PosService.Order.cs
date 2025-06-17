@@ -93,23 +93,10 @@ public partial class PosService
         order.Longitude = address?.Lng.ToString(CultureInfo.InvariantCulture);
         order.Room = string.IsNullOrEmpty(address?.Room) ? string.Empty : address.Room;
 
-        var itemStatus = BuildPosOrderItemStatus(response.Data.Order.OrderItems, order.Items);
+        var items = BuildMergedOrderItemsWithStatus(response.Data.Order.OrderItems, order.Items);
         
-        var items = response.Data.Order.OrderItems.Select(item => new PosOrderItemDto
-        {
-            Id = item.Id,
-            ProductId = item.ProductId,
-            Quantity = item.Quantity,
-            OriginalPrice = item.OriginalPrice,
-            Price = item.Price,
-            Notes = string.IsNullOrEmpty(item.Notes) ? string.Empty : item.Notes,
-            OrderItemModifiers = _mapper.Map<List<PhoneCallOrderItemModifiers>>(item.OrderItemModifiers),
-            Status = itemStatus.Where(kv => kv.Value.Contains(item.ProductId)).Select(kv => (PosOrderItemStatus?)kv.Key).FirstOrDefault()
-        }).ToList();
-        
-        var itemJson = JsonConvert.SerializeObject(items);
-        order.Items = itemJson;
         order.Status = PosOrderStatus.Modified;
+        order.Items = JsonConvert.SerializeObject(items);
         
         await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
     }
@@ -155,23 +142,38 @@ public partial class PosService
         }).ToList();
     }
 
-    private Dictionary<PosOrderItemStatus, List<long>> BuildPosOrderItemStatus(List<EasyPosOrderItemDto> orderItems, string originalItemJson)
+    private List<PosOrderItemDto> BuildMergedOrderItemsWithStatus(List<EasyPosOrderItemDto> orderItems, string originalItemJson)
     {
-        var originalItems = JsonConvert.DeserializeObject<List<PhoneCallOrderItem>>(originalItemJson);
-
-        var newProductIds = orderItems.Select(o => o.ProductId).ToHashSet();
-        var oldProductIds = originalItems.Select(o => o.ProductId).ToHashSet();
-
-        var added = newProductIds.Except(oldProductIds).ToList();
-        var missed = oldProductIds.Except(newProductIds).ToList();
-        var normal = newProductIds.Intersect(oldProductIds).ToList();
-
-        return new Dictionary<PosOrderItemStatus, List<long>>
+        var originalItems = JsonConvert.DeserializeObject<List<PosOrderItemDto>>(originalItemJson);
+        var originalItemDict = originalItems.Select(item =>
+            {
+                item.Status = PosOrderItemStatus.Missed;
+                return item;
+            }).ToDictionary(x => x.ProductId, x => x);
+        
+        var newItems = orderItems.Select(item =>
         {
-            [PosOrderItemStatus.Added] = added,
-            [PosOrderItemStatus.Missed] = missed,
-            [PosOrderItemStatus.Normal] = normal
-        };
+            var status = originalItemDict.ContainsKey(item.ProductId) ? PosOrderItemStatus.Normal : PosOrderItemStatus.Added;
+
+            return new PosOrderItemDto
+            {
+                Id = item.Id,
+                ProductId = item.ProductId,
+                Quantity = item.Quantity,
+                OriginalPrice = item.OriginalPrice,
+                Price = item.Price,
+                Notes = string.IsNullOrEmpty(item.Notes) ? string.Empty : item.Notes,
+                OrderItemModifiers = _mapper.Map<List<PhoneCallOrderItemModifiers>>(item.OrderItemModifiers),
+                Status = status
+            };
+        });
+
+        foreach (var item in newItems)
+        {
+            originalItemDict[item.ProductId] = item;
+        }
+
+        return originalItemDict.Values.ToList();
     }
 
     private async Task<string> GetPosTokenAsync(int storeId, CancellationToken cancellationToken)
