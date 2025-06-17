@@ -11,6 +11,7 @@ using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Services.Restaurants;
 using SmartTalk.Core.Services.RetrievalDb.VectorDb;
+using SmartTalk.Core.Services.Security;
 using SmartTalk.Core.Settings.Twilio;
 using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Constants;
@@ -45,6 +46,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
     private readonly IPhoneOrderService _phoneOrderService;
+    private readonly ISecurityDataProvider _securityDataProvider;
 
     public AiSpeechAssistantProcessJobService(
         IMapper mapper,
@@ -55,7 +57,8 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         IRestaurantDataProvider restaurantDataProvider,
         IPhoneOrderDataProvider phoneOrderDataProvider,
         ISmartTalkHttpClientFactory httpClientFactory,
-        IPhoneOrderService phoneOrderService)
+        IPhoneOrderService phoneOrderService,
+        ISecurityDataProvider securityDataProvider)
     {
         _mapper = mapper;
         _vectorDb = vectorDb;
@@ -66,6 +69,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         _restaurantDataProvider = restaurantDataProvider;
         _httpClientFactory = httpClientFactory;
         _phoneOrderService = phoneOrderService;
+        _securityDataProvider = securityDataProvider;
     }
 
     public async Task RecordAiSpeechAssistantCallAsync(AiSpeechAssistantStreamContextDto context, CancellationToken cancellationToken)
@@ -89,14 +93,12 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
 
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync([record], cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        var store = await _posDataProvider.GetPosStoreByAgentIdAsync(record.AgentId, cancellationToken).ConfigureAwait(false);
-
-        var posStoreUsers = await _posDataProvider.GetPosStoreUsersByStoreIdAsync(store.Id, cancellationToken).ConfigureAwait(false);
+        var roleUsers = await _securityDataProvider.GetRoleUsersAsync(roleId: 1, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        var phoneOrderRecordsUnread = posStoreUsers.Select(u => new PhoneOrderRecordUnread 
+        var phoneOrderRecordsUnread = roleUsers.Select(u => new PhoneOrderRecordUnread 
         {
             RecordId = record.Id,
-            PosStoreUserId=u.UserId
+            UserId = u.UserId
         }).ToList();
         
         await _phoneOrderDataProvider.AddPhoneOrderRecordsUnreadAsync(phoneOrderRecordsUnread, true, cancellationToken).ConfigureAwait(false);

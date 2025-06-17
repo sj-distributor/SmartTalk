@@ -14,8 +14,8 @@ public class PhoneOrderRecordUnread : IEntity, IHasCreatedFields, IHasModifiedFi
     [Column("record_id")]
     public int RecordId { get; set; }
     
-    [Column("pos_store_user_id")]
-    public int PosStoreUserId { get; set; }
+    [Column("user_id")]
+    public int UserId { get; set; }
 
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }

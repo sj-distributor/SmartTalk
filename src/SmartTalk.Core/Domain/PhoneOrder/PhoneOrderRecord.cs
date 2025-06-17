@@ -71,7 +71,4 @@ public class PhoneOrderRecord : IEntity
     
     [NotMapped]
     public Restaurant RestaurantInfo { get; set; }
-
-    [Column("is_read")] 
-    public bool IsRead { get; set; } = false;
 }

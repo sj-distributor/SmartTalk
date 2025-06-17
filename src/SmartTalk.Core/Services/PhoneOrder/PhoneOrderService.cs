@@ -10,6 +10,7 @@ using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Services.Restaurants;
 using SmartTalk.Core.Services.RetrievalDb.VectorDb;
+using SmartTalk.Core.Services.Security;
 using SmartTalk.Core.Services.SpeechMatics;
 using SmartTalk.Core.Services.STT;
 using SmartTalk.Core.Settings.PhoneOrder;
@@ -44,6 +45,7 @@ public partial class PhoneOrderService : IPhoneOrderService
     private readonly ISpeechMaticsDataProvider _speechMaticsDataProvider;
     private readonly TranscriptionCallbackSetting _transcriptionCallbackSetting;
     private readonly IPosDataProvider _posDataProvider;
+    private readonly ISecurityDataProvider _securityDataProvider;
 
     public PhoneOrderService(
         IMapper mapper,
@@ -66,7 +68,8 @@ public partial class PhoneOrderService : IPhoneOrderService
         ISmartTalkBackgroundJobClient backgroundJobClient,
         ISpeechMaticsDataProvider speechMaticsDataProvider,
         TranscriptionCallbackSetting transcriptionCallbackSetting,
-        IPosDataProvider posDataProvider)
+        IPosDataProvider posDataProvider,
+        ISecurityDataProvider securityDataProvider)
     {
         _mapper = mapper;
         _vectorDb = vectorDb;
@@ -89,5 +92,6 @@ public partial class PhoneOrderService : IPhoneOrderService
         _speechMaticsDataProvider = speechMaticsDataProvider;
         _transcriptionCallbackSetting = transcriptionCallbackSetting;
         _posDataProvider = posDataProvider;
+        _securityDataProvider = securityDataProvider;
     }
 }

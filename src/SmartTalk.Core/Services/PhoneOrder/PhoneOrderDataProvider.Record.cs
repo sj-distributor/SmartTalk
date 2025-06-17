@@ -45,7 +45,7 @@ public partial interface IPhoneOrderDataProvider
 
     Task DeletePhoneOrderRecordUnreadAsync(List<PhoneOrderRecordUnread> phoneOrderRecordsUnread, bool forceSave = true, CancellationToken cancellationToken = default);
 
-    Task<List<PhoneOrderRecordUnread>> GetPhoneOrderRecordsUnreadAsync(int? recordId = null, int? posStoreUserId = null, CancellationToken cancellationToken = default);
+    Task<List<PhoneOrderRecordUnread>> GetPhoneOrderRecordsUnreadAsync(int? recordId = null, int? userId = null, CancellationToken cancellationToken = default);
 
     Task<int> GetUnreadOrderCountAsync(int userId, CancellationToken cancellationToken = default);
 }
@@ -250,15 +250,15 @@ public partial class PhoneOrderDataProvider
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<PhoneOrderRecordUnread>> GetPhoneOrderRecordsUnreadAsync(int? recordId = null, int? posStoreUserId = null, CancellationToken cancellationToken = default)
+    public async Task<List<PhoneOrderRecordUnread>> GetPhoneOrderRecordsUnreadAsync(int? recordId = null, int? userId = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<PhoneOrderRecordUnread>();
 
         if (recordId.HasValue)
             query = query.Where(x => x.RecordId == recordId.Value);
 
-        if (posStoreUserId.HasValue)
-            query = query.Where(x => x.PosStoreUserId == posStoreUserId.Value);
+        if (userId.HasValue)
+            query = query.Where(x => x.UserId == userId.Value);
 
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -270,6 +270,6 @@ public partial class PhoneOrderDataProvider
         if (!storeUserIds.Any())
             return 0;
 
-        return await _repository.Query<PhoneOrderRecordUnread>().Where(unread => storeUserIds.Contains(unread.PosStoreUserId)).CountAsync(cancellationToken);
+        return await _repository.Query<PhoneOrderRecordUnread>().Where(unread => storeUserIds.Contains(unread.UserId)).CountAsync(cancellationToken);
     }
 }

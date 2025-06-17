@@ -19,23 +19,12 @@ public partial class PhoneOrderService
     {
         var conversations = await _phoneOrderDataProvider.GetPhoneOrderConversationsAsync(request.RecordId, cancellationToken).ConfigureAwait(false);
         
-        var store = await _posDataProvider.GetPosStoreByAgentIdAsync(request.AgentId, cancellationToken).ConfigureAwait(false);
+        var phoneOrderRecordsUnread = await _phoneOrderDataProvider.GetPhoneOrderRecordsUnreadAsync(request.RecordId, _currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
 
-        if (store != null)
-        {
-            var posStoreUsers = await _posDataProvider.GetPosStoreUsersByUserIdAsync(userId: _currentUser.Id.Value, storeId: store.Id, cancellationToken).ConfigureAwait(false);
-            
-            if (posStoreUsers != null)
-            {
-                var phoneOrderRecordsUnread = await _phoneOrderDataProvider.GetPhoneOrderRecordsUnreadAsync(request.RecordId, posStoreUsers.FirstOrDefault().Id, cancellationToken).ConfigureAwait(false);
+        if (phoneOrderRecordsUnread == null)
+            Log.Information("The UserUnreadRecord could not be found");
 
-                await _phoneOrderDataProvider.DeletePhoneOrderRecordUnreadAsync(phoneOrderRecordsUnread, true, cancellationToken).ConfigureAwait(false);
-            }
-            
-            Log.Information("The posStoreUser could not be found");
-        }
-        
-        Log.Information("The store has no agent bound yet");
+        await _phoneOrderDataProvider.DeletePhoneOrderRecordUnreadAsync(phoneOrderRecordsUnread, true, cancellationToken).ConfigureAwait(false);
         
         return new GetPhoneOrderConversationsResponse
         {
