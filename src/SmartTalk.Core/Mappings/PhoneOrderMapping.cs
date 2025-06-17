@@ -28,8 +28,10 @@ public class PhoneOrderMapping : Profile
             .ForMember(dest => dest.Price, opt => opt.MapFrom(src => (double)src.Price))
             .ForMember(dest => dest.ProductId, opt => opt.Ignore());
         
-        CreateMap<EasyPosResponseLocalization, PhoneCallOrderItemLocalization>();
-        CreateMap<EasyPosResponseLocalization, PhoneCallOrderItemModifierLocalization>();
+        CreateMap<EasyPosResponseLocalization, PhoneCallOrderItemLocalization>().ReverseMap();
+        CreateMap<EasyPosResponseLocalization, PhoneCallOrderItemModifierLocalization>().ReverseMap();
         CreateMap<PhoneCallOrderItemModifiers, EasyPosOrderItemModifiersDto>().ReverseMap();
+        CreateMap<EasyPosLocalizationsDto, PhoneCallOrderItemLocalization>().ReverseMap();
+        CreateMap<EasyPosLocalizationsDto, PhoneCallOrderItemModifierLocalization>().ReverseMap();
     }
 }
