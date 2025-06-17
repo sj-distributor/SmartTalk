@@ -22,42 +22,58 @@ public class PlaceOrderToEasyPosRequestDto
 
 public class PhoneCallOrderItem
 {
+    [JsonProperty("id")]
     public long Id { get; set; }
     
+    [JsonProperty("productId")]
     public long ProductId { get; set; }
     
+    [JsonProperty("quantity")]
     public int Quantity { get; set; }
     
+    [JsonProperty("originalPrice")]
     public decimal OriginalPrice { get; set; }
     
+    [JsonProperty("price")]
     public decimal Price { get; set; }
 
+    [JsonProperty("notes")]
     public string Notes { get; set; } = string.Empty;
     
+    [JsonProperty("orderItemModifiers")]
     public List<PhoneCallOrderItemModifiers> OrderItemModifiers { get; set; }
 }
 
 public class PhoneCallOrderItemModifiers
 {
+    [JsonProperty("price")]
     public decimal Price { get; set; }
     
+    [JsonProperty("quantity")]
     public int Quantity { get; set; }
     
+    [JsonProperty("modifierId")]
     public long ModifierId { get; set; }
     
+    [JsonProperty("modifierProductId")]
     public long ModifierProductId { get; set; }
     
+    [JsonProperty("localizations")]
     public List<PhoneCallOrderItemLocalization> Localizations { get; set; }
     
+    [JsonProperty("modifierLocalizations")]
     public List<PhoneCallOrderItemModifierLocalization> ModifierLocalizations { get; set; }
 }
 
 public class PhoneCallOrderItemLocalization
 {
+    [JsonProperty("field")]
     public string Field { get; set; }
     
+    [JsonProperty("languageCode")]
     public string LanguageCode { get; set; }
     
+    [JsonProperty("value")]
     public string Value { get; set; }
 }
 
