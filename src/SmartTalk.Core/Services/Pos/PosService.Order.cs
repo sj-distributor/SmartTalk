@@ -96,7 +96,7 @@ public partial class PosService
         var items = BuildMergedOrderItemsWithStatus(response.Data.Order.OrderItems, order.Items);
         
         order.Status = PosOrderStatus.Modified;
-        order.Items = JsonConvert.SerializeObject(items);
+        order.ModifiedItems = JsonConvert.SerializeObject(items);
         
         await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
     }
@@ -400,6 +400,8 @@ public partial class PosService
     private async Task MarkOrderAsSpecificStatusAsync(PosOrder order, PosOrderStatus status, CancellationToken cancellationToken)
     {
         order.Status = status;
+        
+        if(status == PosOrderStatus.Sent) order.IsPush = true;
         
         await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
     }

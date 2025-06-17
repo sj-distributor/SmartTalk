@@ -39,6 +39,10 @@ public class PosOrderDto
     public PosOrderReceiveType Type { get; set; }
 
     public string Items { get; set; }
+    
+    public string ModifiedItems { get; set; }
+    
+    public bool IsPush { get; set; }
 
     public string Notes { get; set; }
 

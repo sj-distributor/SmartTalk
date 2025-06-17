@@ -62,6 +62,12 @@ public class PosOrder : IEntity, IHasCreatedFields, IHasModifiedFields
 
     [Column("items")]
     public string Items { get; set; }
+    
+    [Column("modified_items")]
+    public string ModifiedItems { get; set; }
+    
+    [Column("is_push")]
+    public bool IsPush { get; set; }
 
     [Column("notes"), StringLength(128)]
     public string Notes { get; set; }
