@@ -109,6 +109,7 @@ public partial class PosService
         
         var itemJson = JsonConvert.SerializeObject(items);
         order.Items = itemJson;
+        order.Status = PosOrderStatus.Modified;
         
         await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
     }

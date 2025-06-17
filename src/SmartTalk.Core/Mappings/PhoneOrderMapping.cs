@@ -30,6 +30,6 @@ public class PhoneOrderMapping : Profile
         
         CreateMap<EasyPosResponseLocalization, PhoneCallOrderItemLocalization>();
         CreateMap<EasyPosResponseLocalization, PhoneCallOrderItemModifierLocalization>();
-        CreateMap<PhoneCallOrderItemModifiers, EasyPosOrderItemModifiersDto>();
+        CreateMap<PhoneCallOrderItemModifiers, EasyPosOrderItemModifiersDto>().ReverseMap();
     }
 }
