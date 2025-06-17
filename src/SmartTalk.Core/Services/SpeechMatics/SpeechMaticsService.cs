@@ -108,12 +108,20 @@ public class SpeechMaticsService : ISpeechMaticsService
     {
         var (aiSpeechAssistant, agent) = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByAgentIdAsync(record.AgentId, cancellationToken).ConfigureAwait(false);
 
-        TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
+        var callFrom = string.Empty;
+        try
+        {
+            TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
 
-        var call = await CallResource.FetchAsync(record.SessionId);
-        var callFrom = call?.From;
-
-        Log.Information("Fetched incoming phone number from Twilio: {callFrom}", callFrom);
+            var call = await CallResource.FetchAsync(record.SessionId);
+            callFrom = call?.From;
+            
+            Log.Information("Fetched incoming phone number from Twilio: {callFrom}", callFrom);
+        }
+        catch (Exception e)
+        {
+            Log.Warning("Fetched incoming phone number from Twilio failed: {Message}", e.Message);
+        }
 
         var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
