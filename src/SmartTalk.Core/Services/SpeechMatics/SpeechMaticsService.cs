@@ -126,8 +126,6 @@ public class SpeechMaticsService : ISpeechMaticsService
             Log.Warning("Fetched incoming phone number from Twilio failed: {Message}", e.Message);
         }
 
-        Log.Information("Fetched incoming phone number from Twilio: {callFrom}", callFrom);
-
         var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
 
