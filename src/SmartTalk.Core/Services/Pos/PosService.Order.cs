@@ -228,7 +228,7 @@ public partial class PosService
                 item.Status = PosOrderItemStatus.Missed;
             }
         
-            order.Items = JsonConvert.SerializeObject(items);
+            order.ModifiedItems = JsonConvert.SerializeObject(items);
         
             return false;
         }
