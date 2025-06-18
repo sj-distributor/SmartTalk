@@ -276,7 +276,7 @@ public partial class PosService : IPosService
     public async Task<GetPosStoresResponse> GetPosStoresAsync(GetPosStoresRequest request, CancellationToken cancellationToken)
     {
         var storeUsers = request.AuthorizedFilter
-            ? await _posDataProvider.GetPosStoreUsersByUserIdAsync(userId: _currentUser.Id.Value,  cancellationToken: cancellationToken).ConfigureAwait(false)
+            ? await _posDataProvider.GetPosStoreUsersByUserIdAsync(_currentUser.Id.Value, cancellationToken: cancellationToken).ConfigureAwait(false)
             : null;
             
         var stores = await _posDataProvider.GetPosCompanyStoresWithSortingAsync(

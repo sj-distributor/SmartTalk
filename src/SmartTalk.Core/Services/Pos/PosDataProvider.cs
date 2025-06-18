@@ -35,13 +35,11 @@ public partial interface IPosDataProvider : IScopedDependency
     Task<List<PosCompanyStoreDto>> GetPosCompanyStoresWithSortingAsync(List<int> storeIds = null,
         int? companyId = null, string keyword = null, bool isNormalSort = false, CancellationToken cancellationToken = default);
 
-    Task<List<PosStoreUser>> GetPosStoreUsersByUserIdAsync(int? userId = null, int? storeId = null, CancellationToken cancellationToken = default);
+    Task<List<PosStoreUser>> GetPosStoreUsersByUserIdAsync(int? userId = null, CancellationToken cancellationToken = default);
     
     Task AddPosAgentsAsync(List<PosAgent> agents, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task<PosCompanyStore> GetPosStoreByAgentIdAsync(int agentId, CancellationToken cancellationToken = default);
-    
-    Task<List<PosStoreUser>> GetPosStoreUsersByStoreIdAsync(int storeId, CancellationToken cancellationToken = default);
 }
 
 public partial class PosDataProvider : IPosDataProvider
@@ -252,15 +250,12 @@ public partial class PosDataProvider : IPosDataProvider
         return stores;
     }
     
-    public async Task<List<PosStoreUser>> GetPosStoreUsersByUserIdAsync(int? userId = null, int? storeId = null, CancellationToken cancellationToken = default)
+    public async Task<List<PosStoreUser>> GetPosStoreUsersByUserIdAsync(int? userId = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<PosStoreUser>();
 
         if (userId.HasValue)
             query = query.Where(x => x.UserId == userId.Value);
-
-        if (storeId.HasValue)
-            query = query.Where(x => x.StoreId == storeId.Value);
 
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -281,10 +276,5 @@ public partial class PosDataProvider : IPosDataProvider
             select store;
         
         return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task<List<PosStoreUser>> GetPosStoreUsersByStoreIdAsync(int storeId, CancellationToken cancellationToken = default)
-    {
-        return await _repository.Query<PosStoreUser>().Where(x => x.StoreId == storeId).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }

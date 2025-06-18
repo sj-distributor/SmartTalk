@@ -41,11 +41,11 @@ public partial interface IPhoneOrderDataProvider
     
     Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(int? recordId = null, int? agentId = null, DateTimeOffset? createdDate = null, CancellationToken cancellationToken = default);
 
-    Task AddPhoneOrderRecordsUnreadAsync(List<PhoneOrderRecordUnread> phoneOrderRecordsUnread, bool forceSave = true, CancellationToken cancellationToken = default);
+    Task AddPhoneOrderRecordsUnreadAsync(List<MessageReadRecord> phoneOrderRecordsUnread, bool forceSave = true, CancellationToken cancellationToken = default);
 
-    Task DeletePhoneOrderRecordUnreadAsync(List<PhoneOrderRecordUnread> phoneOrderRecordsUnread, bool forceSave = true, CancellationToken cancellationToken = default);
+    Task DeletePhoneOrderRecordUnreadAsync(List<MessageReadRecord> phoneOrderRecordsUnread, bool forceSave = true, CancellationToken cancellationToken = default);
 
-    Task<List<PhoneOrderRecordUnread>> GetPhoneOrderRecordsUnreadAsync(int? recordId = null, int? userId = null, CancellationToken cancellationToken = default);
+    Task<List<MessageReadRecord>> GetPhoneOrderRecordsUnreadAsync(int? recordId = null, int? userId = null, CancellationToken cancellationToken = default);
 
     Task<int> GetUnreadOrderCountAsync(int userId, CancellationToken cancellationToken = default);
 }
@@ -232,7 +232,7 @@ public partial class PhoneOrderDataProvider
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task AddPhoneOrderRecordsUnreadAsync(List<PhoneOrderRecordUnread> phoneOrderRecordsUnread, bool forceSave = true, CancellationToken cancellationToken = default)
+    public async Task AddPhoneOrderRecordsUnreadAsync(List<MessageReadRecord> phoneOrderRecordsUnread, bool forceSave = true, CancellationToken cancellationToken = default)
     {
         if (phoneOrderRecordsUnread == null || phoneOrderRecordsUnread.Count == 0) return;
 
@@ -242,7 +242,7 @@ public partial class PhoneOrderDataProvider
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task DeletePhoneOrderRecordUnreadAsync(List<PhoneOrderRecordUnread> phoneOrderRecordsUnread, bool forceSave = true, CancellationToken cancellationToken = default)
+    public async Task DeletePhoneOrderRecordUnreadAsync(List<MessageReadRecord> phoneOrderRecordsUnread, bool forceSave = true, CancellationToken cancellationToken = default)
     {
        await _repository.DeleteAllAsync(phoneOrderRecordsUnread, cancellationToken).ConfigureAwait(false);
         
@@ -250,9 +250,9 @@ public partial class PhoneOrderDataProvider
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<PhoneOrderRecordUnread>> GetPhoneOrderRecordsUnreadAsync(int? recordId = null, int? userId = null, CancellationToken cancellationToken = default)
+    public async Task<List<MessageReadRecord>> GetPhoneOrderRecordsUnreadAsync(int? recordId = null, int? userId = null, CancellationToken cancellationToken = default)
     {
-        var query = _repository.Query<PhoneOrderRecordUnread>();
+        var query = _repository.Query<MessageReadRecord>();
 
         if (recordId.HasValue)
             query = query.Where(x => x.RecordId == recordId.Value);
@@ -270,6 +270,6 @@ public partial class PhoneOrderDataProvider
         if (!storeUserIds.Any())
             return 0;
 
-        return await _repository.Query<PhoneOrderRecordUnread>().Where(unread => storeUserIds.Contains(unread.UserId)).CountAsync(cancellationToken);
+        return await _repository.Query<MessageReadRecord>().Where(unread => storeUserIds.Contains(unread.UserId)).CountAsync(cancellationToken);
     }
 }

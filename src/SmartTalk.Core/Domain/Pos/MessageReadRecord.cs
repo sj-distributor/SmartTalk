@@ -3,8 +3,8 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace SmartTalk.Core.Domain.Pos;
 
-[Table("pos_order_record_unread")]
-public class PhoneOrderRecordUnread : IEntity, IHasCreatedFields, IHasModifiedFields
+[Table("message_read_record")]
+public class MessageReadRecord : IEntity, IHasCreatedFields, IHasModifiedFields
 {
     [Key]
     [Column("id")]

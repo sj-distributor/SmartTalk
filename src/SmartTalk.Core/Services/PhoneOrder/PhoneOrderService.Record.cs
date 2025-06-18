@@ -10,9 +10,10 @@ using Microsoft.IdentityModel.Tokens;
 using Smarties.Messages.Enums.OpenAi;
 using Smarties.Messages.Requests.Ask;
 using System.Text.RegularExpressions;
-using SmartTalk.Messages.DTO.Security;
+using SmartTalk.Messages.Constants;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Domain.Pos;
+using SmartTalk.Core.Domain.Security;
 using SmartTalk.Core.Services.Linphone;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Dto.Attachments;
@@ -50,21 +51,23 @@ public partial class PhoneOrderService
 
         var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(request.AgentId, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
 
-        var recordsDto = _mapper.Map<List<PhoneOrderRecordDto>>(records);
+        var enrichedRecords = _mapper.Map<List<PhoneOrderRecordDto>>(records);
 
-        foreach (var record in recordsDto)
+        var recordUnread = await _phoneOrderDataProvider.GetPhoneOrderRecordsUnreadAsync(userId: _currentUser.Id.Value, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var unreadRecordIds = new HashSet<int>(recordUnread.Select(r => r.RecordId));
+
+        foreach (var record in enrichedRecords)
         {
-            var recordUnread = await _phoneOrderDataProvider.GetPhoneOrderRecordsUnreadAsync(recordId: record.Id, userId: _currentUser.Id.Value, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-            if (recordUnread == null)
+            if (unreadRecordIds.Contains(record.Id))
             {
-                record.IsRead = true;
+                record.IsRead = false;
             }
         }
 
         return new GetPhoneOrderRecordsResponse
         {
-            Data = recordsDto
+            Data = enrichedRecords
         };
     }
 
@@ -88,7 +91,7 @@ public partial class PhoneOrderService
         
         var record = new PhoneOrderRecord { SessionId = Guid.NewGuid().ToString(), AgentId = recordInfo.Agent.Id, TranscriptionText = transcription, Language = SelectLanguageEnum(detection.Language), CreatedDate = recordInfo.StartDate, Status = PhoneOrderRecordStatus.Recieved };
 
-        var roleUsers = await _securityDataProvider.GetRoleUsersAsync(roleId: 1, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var roleUsers = await _securityDataProvider.GetRoleUserByPermissionNameAsync(permissionName: SecurityStore.Permissions.CanViewPhoneOrder, cancellationToken).ConfigureAwait(false);
         
         record.Url = command.RecordUrl ?? await UploadRecordFileAsync(command.RecordName, command.RecordContent, cancellationToken).ConfigureAwait(false);
         
@@ -416,13 +419,13 @@ public partial class PhoneOrderService
         Log.Information("After shift conversations: {@conversations}", conversations);
     }
 
-    private async Task AddPhoneOrderRecordAsync(PhoneOrderRecord record, List<RoleUserDto> roleUsers, PhoneOrderRecordStatus status, CancellationToken cancellationToken)
+    private async Task AddPhoneOrderRecordAsync(PhoneOrderRecord record, List<RoleUser> roleUsers, PhoneOrderRecordStatus status, CancellationToken cancellationToken)
     {
         record.Status = status;
         
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync(new List<PhoneOrderRecord> { record }, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        var phoneOrderRecordsUnread = roleUsers.Select(u => new PhoneOrderRecordUnread 
+        var phoneOrderRecordsUnread = roleUsers.Select(u => new MessageReadRecord 
         {
             RecordId = record.Id,
             UserId = u.UserId

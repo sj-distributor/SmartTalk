@@ -43,9 +43,8 @@ public partial class PhoneOrderService : IPhoneOrderService
     private readonly IRestaurantDataProvider _restaurantDataProvider;
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
     private readonly ISpeechMaticsDataProvider _speechMaticsDataProvider;
-    private readonly TranscriptionCallbackSetting _transcriptionCallbackSetting;
-    private readonly IPosDataProvider _posDataProvider;
     private readonly ISecurityDataProvider _securityDataProvider;
+    private readonly TranscriptionCallbackSetting _transcriptionCallbackSetting;
 
     public PhoneOrderService(
         IMapper mapper,
@@ -67,9 +66,8 @@ public partial class PhoneOrderService : IPhoneOrderService
         IPhoneOrderDataProvider phoneOrderDataProvider,
         ISmartTalkBackgroundJobClient backgroundJobClient,
         ISpeechMaticsDataProvider speechMaticsDataProvider,
-        TranscriptionCallbackSetting transcriptionCallbackSetting,
-        IPosDataProvider posDataProvider,
-        ISecurityDataProvider securityDataProvider)
+        ISecurityDataProvider securityDataProvider,
+        TranscriptionCallbackSetting transcriptionCallbackSetting)
     {
         _mapper = mapper;
         _vectorDb = vectorDb;
@@ -90,8 +88,7 @@ public partial class PhoneOrderService : IPhoneOrderService
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _restaurantDataProvider = restaurantDataProvider;
         _speechMaticsDataProvider = speechMaticsDataProvider;
-        _transcriptionCallbackSetting = transcriptionCallbackSetting;
-        _posDataProvider = posDataProvider;
         _securityDataProvider = securityDataProvider;
+        _transcriptionCallbackSetting = transcriptionCallbackSetting;
     }
 }

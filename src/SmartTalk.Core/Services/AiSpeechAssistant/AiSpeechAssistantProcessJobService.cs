@@ -13,7 +13,6 @@ using SmartTalk.Core.Services.Restaurants;
 using SmartTalk.Core.Services.RetrievalDb.VectorDb;
 using SmartTalk.Core.Services.Security;
 using SmartTalk.Core.Settings.Twilio;
-using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Constants;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.EasyPos;
@@ -27,6 +26,7 @@ using SmartTalk.Messages.Enums.Pos;
 using SmartTalk.Messages.Enums.STT;
 using Twilio;
 using Twilio.Rest.Api.V2010.Account;
+using MessageReadRecord = SmartTalk.Core.Domain.Pos.MessageReadRecord;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
 
@@ -44,8 +44,8 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
     private readonly IRedisSafeRunner _redisSafeRunner;
     private readonly IRestaurantDataProvider _restaurantDataProvider;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
-    private readonly ISmartTalkHttpClientFactory _httpClientFactory;
     private readonly IPhoneOrderService _phoneOrderService;
+    private readonly ISmartTalkHttpClientFactory _httpClientFactory;
     private readonly ISecurityDataProvider _securityDataProvider;
 
     public AiSpeechAssistantProcessJobService(
@@ -56,8 +56,8 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         IRedisSafeRunner redisSafeRunner,
         IRestaurantDataProvider restaurantDataProvider,
         IPhoneOrderDataProvider phoneOrderDataProvider,
-        ISmartTalkHttpClientFactory httpClientFactory,
         IPhoneOrderService phoneOrderService,
+        ISmartTalkHttpClientFactory httpClientFactory,
         ISecurityDataProvider securityDataProvider)
     {
         _mapper = mapper;
@@ -67,8 +67,8 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         _redisSafeRunner = redisSafeRunner;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _restaurantDataProvider = restaurantDataProvider;
-        _httpClientFactory = httpClientFactory;
         _phoneOrderService = phoneOrderService;
+        _httpClientFactory = httpClientFactory;
         _securityDataProvider = securityDataProvider;
     }
 
@@ -93,9 +93,9 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
 
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync([record], cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        var roleUsers = await _securityDataProvider.GetRoleUsersAsync(roleId: 1, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var roleUsers = await _securityDataProvider.GetRoleUserByPermissionNameAsync(permissionName: SecurityStore.Permissions.CanViewPhoneOrder, cancellationToken).ConfigureAwait(false);
         
-        var phoneOrderRecordsUnread = roleUsers.Select(u => new PhoneOrderRecordUnread 
+        var phoneOrderRecordsUnread = roleUsers.Select(u => new MessageReadRecord()
         {
             RecordId = record.Id,
             UserId = u.UserId

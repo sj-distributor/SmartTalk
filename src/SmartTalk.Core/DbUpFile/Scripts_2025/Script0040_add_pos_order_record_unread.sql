@@ -1,4 +1,4 @@
-create table if not exists `pos_order_record_unread`
+create table if not exists `message_read_record`
 (
     `id` int primary key auto_increment,
     `record_id` int not null,
