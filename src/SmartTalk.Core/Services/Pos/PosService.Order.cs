@@ -22,6 +22,8 @@ public partial interface IPosService
     Task<GetPosOrderProductsResponse> GetPosOrderProductsAsync(GetPosOrderProductsRequest request, CancellationToken cancellationToken);
     
     Task<GetPosStoreOrderResponse> GetPosStoreOrderAsync(GetPosStoreOrderRequest request, CancellationToken cancellationToken);
+    
+    Task<GetPosCustomerInfoResponse> GetPosCustomerInfosAsync(GetPosCustomerInfoRequest request, CancellationToken cancellationToken);
 }
 
 public partial class PosService
@@ -128,6 +130,13 @@ public partial class PosService
         {
             Data = _mapper.Map<PosOrderDto>(order)
         };
+    }
+
+    public async Task<GetPosCustomerInfoResponse> GetPosCustomerInfosAsync(GetPosCustomerInfoRequest request, CancellationToken cancellationToken)
+    {
+        var customerInfos = await _posDataProvider.GetPosCustomerInfosAsync(request.Phone, cancellationToken).ConfigureAwait(false);
+
+        return new GetPosCustomerInfoResponse { Data = customerInfos };
     }
 
     private List<GetPosOrderProductsResponseData> BuildPosOrderProductsData(List<PosProduct> products, List<(PosMenu Menu, PosCategory Category)> menuWithCategories)
