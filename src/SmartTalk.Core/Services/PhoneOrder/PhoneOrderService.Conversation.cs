@@ -1,3 +1,4 @@
+using Serilog;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Commands.PhoneOrder;
@@ -17,7 +18,14 @@ public partial class PhoneOrderService
     public async Task<GetPhoneOrderConversationsResponse> GetPhoneOrderConversationsAsync(GetPhoneOrderConversationsRequest request, CancellationToken cancellationToken)
     {
         var conversations = await _phoneOrderDataProvider.GetPhoneOrderConversationsAsync(request.RecordId, cancellationToken).ConfigureAwait(false);
+        
+        var phoneOrderRecordsUnread = await _phoneOrderDataProvider.GetMessageReadRecordsAsync(request.RecordId, _currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
 
+        if (phoneOrderRecordsUnread == null)
+            Log.Information("The UserUnreadRecord could not be found");
+
+        await _phoneOrderDataProvider.DeleteMessageReadRecordAsync(phoneOrderRecordsUnread, true, cancellationToken).ConfigureAwait(false);
+        
         return new GetPhoneOrderConversationsResponse
         {
             Data = _mapper.Map<List<PhoneOrderConversationDto>>(conversations)
