@@ -13,6 +13,7 @@ using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Services.Restaurants;
 using SmartTalk.Core.Services.RetrievalDb.VectorDb;
 using SmartTalk.Core.Settings.OpenAi;
+using SmartTalk.Core.Services.Security;
 using SmartTalk.Core.Settings.Twilio;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Constants;
@@ -28,6 +29,7 @@ using SmartTalk.Messages.Enums.Pos;
 using SmartTalk.Messages.Enums.STT;
 using Twilio;
 using Twilio.Rest.Api.V2010.Account;
+using MessageReadRecord = SmartTalk.Core.Domain.Pos.MessageReadRecord;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
 
@@ -51,6 +53,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
     private readonly OpenAiAccountTrainingSettings _openAiAccountTrainingSettings;
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
     private readonly IPhoneOrderService _phoneOrderService;
+    private readonly ISecurityDataProvider _securityDataProvider;
 
     public AiSpeechAssistantProcessJobService(
         IMapper mapper,
@@ -59,11 +62,12 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         IPosDataProvider posDataProvider,
         IRedisSafeRunner redisSafeRunner,
         IRestaurantDataProvider restaurantDataProvider,
-        IPhoneOrderDataProvider phoneOrderDataProvider, 
         OpenAiTrainingSettings openAiTrainingSettings, 
         OpenAiAccountTrainingSettings openAiAccountTrainingSettings,
+        IPhoneOrderDataProvider phoneOrderDataProvider,
+        IPhoneOrderService phoneOrderService,
         ISmartTalkHttpClientFactory httpClientFactory,
-        IPhoneOrderService phoneOrderService)
+        ISecurityDataProvider securityDataProvider)
     {
         _mapper = mapper;
         _vectorDb = vectorDb;
@@ -73,9 +77,10 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _openAiTrainingSettings = openAiTrainingSettings;
         _restaurantDataProvider = restaurantDataProvider;
-        _httpClientFactory = httpClientFactory;
         _phoneOrderService = phoneOrderService;
         _openAiAccountTrainingSettings = openAiAccountTrainingSettings;
+        _httpClientFactory = httpClientFactory;
+        _securityDataProvider = securityDataProvider;
     }
 
     public async Task RecordAiSpeechAssistantCallAsync(AiSpeechAssistantStreamContextDto context, CancellationToken cancellationToken)
@@ -100,6 +105,16 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync([record], cancellationToken: cancellationToken).ConfigureAwait(false);
         
         await GenerateOrderItemsAsync(record, context.OrderItems, cancellationToken).ConfigureAwait(false);
+        
+        var roleUsers = await _securityDataProvider.GetRoleUserByPermissionNameAsync(permissionName: SecurityStore.Permissions.CanViewPhoneOrder, cancellationToken).ConfigureAwait(false);
+        
+        var messageReadRecords = roleUsers.Select(u => new MessageReadRecord()
+        {
+            RecordId = record.Id,
+            UserId = u.UserId
+        }).ToList();
+        
+        await _phoneOrderDataProvider.AddMessageReadRecordsAsync(messageReadRecords, true, cancellationToken).ConfigureAwait(false);
     }
 
     private static string FormattedConversation(List<(AiSpeechAssistantSpeaker, string)> conversationTranscription)

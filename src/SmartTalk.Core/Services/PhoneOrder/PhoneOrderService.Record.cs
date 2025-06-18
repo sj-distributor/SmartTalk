@@ -10,7 +10,10 @@ using Microsoft.IdentityModel.Tokens;
 using Smarties.Messages.Enums.OpenAi;
 using Smarties.Messages.Requests.Ask;
 using System.Text.RegularExpressions;
+using SmartTalk.Messages.Constants;
 using SmartTalk.Core.Domain.PhoneOrder;
+using SmartTalk.Core.Domain.Pos;
+using SmartTalk.Core.Domain.Security;
 using SmartTalk.Core.Services.Linphone;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Dto.Attachments;
@@ -36,6 +39,8 @@ public partial interface IPhoneOrderService
     Task<AddOrUpdateManualOrderResponse> AddOrUpdateManualOrderAsync(AddOrUpdateManualOrderCommand command, CancellationToken cancellationToken);
 
     Task<string> CreateSpeechMaticsJobAsync(byte[] recordContent, string recordName, string language, CancellationToken cancellationToken);
+
+    Task<GetMessageReadRecordCountsResponse> GetMessageReadRecordCountsAsync(GetMessageReadRecordCountsRequest request, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderService
@@ -46,9 +51,23 @@ public partial class PhoneOrderService
 
         var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(request.AgentId, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
 
+        var enrichedRecords = _mapper.Map<List<PhoneOrderRecordDto>>(records);
+
+        var unreadRecords = await _phoneOrderDataProvider.GetMessageReadRecordsAsync(userId: _currentUser.Id.Value, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var unreadRecordIds = new HashSet<int>(unreadRecords.Select(r => r.RecordId));
+
+        foreach (var record in enrichedRecords)
+        {
+            if (unreadRecordIds.Contains(record.Id))
+            {
+                record.IsRead = false;
+            }
+        }
+
         return new GetPhoneOrderRecordsResponse
         {
-            Data = _mapper.Map<List<PhoneOrderRecordDto>>(records)
+            Data = enrichedRecords
         };
     }
 
@@ -63,12 +82,6 @@ public partial class PhoneOrderService
         if (recordInfo == null) return;
         if (await CheckOrderExistAsync(command.AgentId, recordInfo.StartDate, cancellationToken).ConfigureAwait(false)) return;
         
-        var record = new PhoneOrderRecord { SessionId = Guid.NewGuid().ToString(), AgentId = recordInfo.Agent.Id, Language = TranscriptionLanguage.Chinese, CreatedDate = recordInfo.StartDate, Status = PhoneOrderRecordStatus.Recieved};
-        
-        await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync([record], cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        Log.Information("Phone order record saved url:{@record}", record);
-        
         var transcription = await _speechToTextService.SpeechToTextAsync(
             command.RecordContent, fileType: TranscriptionFileType.Wav, responseFormat: TranscriptionResponseFormat.Text, cancellationToken: cancellationToken).ConfigureAwait(false);
         
@@ -76,13 +89,14 @@ public partial class PhoneOrderService
         
         Log.Information("Phone order record transcription detected language: {@detectionLanguage}", detection.Language);
         
-        record.TranscriptionText = transcription;
-        record.Language = SelectLanguageEnum(detection.Language);
+        var record = new PhoneOrderRecord { SessionId = Guid.NewGuid().ToString(), AgentId = recordInfo.Agent.Id, TranscriptionText = transcription, Language = SelectLanguageEnum(detection.Language), CreatedDate = recordInfo.StartDate, Status = PhoneOrderRecordStatus.Recieved };
+        
+        var roleUsers = await _securityDataProvider.GetRoleUserByPermissionNameAsync(permissionName: SecurityStore.Permissions.CanViewPhoneOrder, cancellationToken).ConfigureAwait(false);
         
         if (await CheckPhoneOrderRecordDurationAsync(command.RecordContent, cancellationToken).ConfigureAwait(false))
         {
-            await UpdatePhoneOrderRecordAsync(record, PhoneOrderRecordStatus.NoContent, cancellationToken).ConfigureAwait(false);
-            
+            await AddPhoneOrderRecordAsync(record, roleUsers, PhoneOrderRecordStatus.NoContent, cancellationToken).ConfigureAwait(false);
+
             return;
         }
         
@@ -92,14 +106,14 @@ public partial class PhoneOrderService
         
         if (string.IsNullOrEmpty(record.Url))
         {
-            await UpdatePhoneOrderRecordAsync(record, PhoneOrderRecordStatus.NoContent, cancellationToken).ConfigureAwait(false);
+            await AddPhoneOrderRecordAsync(record, roleUsers, PhoneOrderRecordStatus.NoContent, cancellationToken).ConfigureAwait(false);
             
             return;
         }
         
         record.TranscriptionJobId = await CreateSpeechMaticsJobAsync(command.RecordContent, command.RecordName ?? Guid.NewGuid().ToString("N") + ".wav", detection.Language, cancellationToken).ConfigureAwait(false);
         
-        await UpdatePhoneOrderRecordAsync(record, PhoneOrderRecordStatus.Diarization, cancellationToken).ConfigureAwait(false);
+        await AddPhoneOrderRecordAsync(record, roleUsers, PhoneOrderRecordStatus.Diarization, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<bool> CheckOrderExistAsync(int agentId, DateTimeOffset createdDate, CancellationToken cancellationToken)
@@ -407,11 +421,19 @@ public partial class PhoneOrderService
         Log.Information("After shift conversations: {@conversations}", conversations);
     }
 
-    private async Task UpdatePhoneOrderRecordAsync(PhoneOrderRecord record, PhoneOrderRecordStatus status, CancellationToken cancellationToken)
+    private async Task AddPhoneOrderRecordAsync(PhoneOrderRecord record, List<RoleUser> roleUsers, PhoneOrderRecordStatus status, CancellationToken cancellationToken)
     {
         record.Status = status;
         
-        await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record , cancellationToken: cancellationToken).ConfigureAwait(false);
+        await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync(new List<PhoneOrderRecord> { record }, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var phoneOrderRecordsUnread = roleUsers.Select(u => new MessageReadRecord 
+        {
+            RecordId = record.Id,
+            UserId = u.UserId
+        }).ToList();
+        
+        await _phoneOrderDataProvider.AddMessageReadRecordsAsync(phoneOrderRecordsUnread, true, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<bool> CheckPhoneOrderRecordDurationAsync(byte[] recordContent, CancellationToken cancellationToken)
@@ -595,7 +617,17 @@ public partial class PhoneOrderService
             Log.Information("Retrying Create Speech Matics Job Attempts remaining: {RetryCount}", retryCount);
         }
     }
-    
+
+    public async Task<GetMessageReadRecordCountsResponse> GetMessageReadRecordCountsAsync(GetMessageReadRecordCountsRequest request, CancellationToken cancellationToken)
+    {
+        var counts = await _phoneOrderDataProvider.GetMessageReadRecordCountAsync(_currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
+
+        return new GetMessageReadRecordCountsResponse()
+        {
+            Data = counts
+        };
+    }
+
     private (DateTimeOffset? UtcStart, DateTimeOffset? UtcEnd) ConvertPstDateToUtcRange(DateTimeOffset? inputDate)
     {
         if (!inputDate.HasValue) return (null, null);
