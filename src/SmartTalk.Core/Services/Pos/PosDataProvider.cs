@@ -35,7 +35,7 @@ public partial interface IPosDataProvider : IScopedDependency
     Task<List<PosCompanyStoreDto>> GetPosCompanyStoresWithSortingAsync(List<int> storeIds = null,
         int? companyId = null, string keyword = null, bool isNormalSort = false, CancellationToken cancellationToken = default);
 
-    Task<List<PosStoreUser>> GetPosStoreUsersByUserIdAsync(int? userId = null, CancellationToken cancellationToken = default);
+    Task<List<PosStoreUser>> GetPosStoreUsersByUserIdAsync(int userId, CancellationToken cancellationToken);
     
     Task AddPosAgentsAsync(List<PosAgent> agents, bool forceSave = true, CancellationToken cancellationToken = default);
     
@@ -250,14 +250,9 @@ public partial class PosDataProvider : IPosDataProvider
         return stores;
     }
     
-    public async Task<List<PosStoreUser>> GetPosStoreUsersByUserIdAsync(int? userId = null, CancellationToken cancellationToken = default)
+    public async Task<List<PosStoreUser>> GetPosStoreUsersByUserIdAsync(int userId, CancellationToken cancellationToken)
     {
-        var query = _repository.Query<PosStoreUser>();
-
-        if (userId.HasValue)
-            query = query.Where(x => x.UserId == userId.Value);
-
-        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+        return await _repository.Query<PosStoreUser>().Where(x => x.UserId == userId).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task AddPosAgentsAsync(List<PosAgent> agents, bool forceSave = true, CancellationToken cancellationToken = default)

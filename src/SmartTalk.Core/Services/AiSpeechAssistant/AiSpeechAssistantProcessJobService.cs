@@ -101,7 +101,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             UserId = u.UserId
         }).ToList();
         
-        await _phoneOrderDataProvider.AddPhoneOrderRecordsUnreadAsync(phoneOrderRecordsUnread, true, cancellationToken).ConfigureAwait(false);
+        await _phoneOrderDataProvider.AddMessageReadRecordsAsync(phoneOrderRecordsUnread, true, cancellationToken).ConfigureAwait(false);
 
         if (context.OrderItems != null)
         {

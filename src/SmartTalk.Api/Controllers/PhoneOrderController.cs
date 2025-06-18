@@ -167,11 +167,11 @@ public class PhoneOrderController : ControllerBase
         return Ok(response);
     }
     
-    [Route("records/unreadCounts"), HttpGet]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPhoneOrderRecordsUnreadCountsResponse))]
-    public async Task<IActionResult> GetPhoneOrderRecordsUnreadCountsAsync([FromQuery] GetPhoneOrderRecordsUnreadCountsRequest request)
+    [Route("records/unread/Counts"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetMessageReadRecordCountsResponse))]
+    public async Task<IActionResult> GetMessageReadRecordCountsAsync([FromQuery] GetMessageReadRecordCountsRequest request)
     {
-        var response = await _mediator.RequestAsync<GetPhoneOrderRecordsUnreadCountsRequest, GetPhoneOrderRecordsUnreadCountsResponse>(request).ConfigureAwait(false);
+        var response = await _mediator.RequestAsync<GetMessageReadRecordCountsRequest, GetMessageReadRecordCountsResponse>(request).ConfigureAwait(false);
         
         return Ok(response);
     }

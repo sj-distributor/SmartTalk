@@ -19,12 +19,12 @@ public partial class PhoneOrderService
     {
         var conversations = await _phoneOrderDataProvider.GetPhoneOrderConversationsAsync(request.RecordId, cancellationToken).ConfigureAwait(false);
         
-        var phoneOrderRecordsUnread = await _phoneOrderDataProvider.GetPhoneOrderRecordsUnreadAsync(request.RecordId, _currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
+        var phoneOrderRecordsUnread = await _phoneOrderDataProvider.GetMessageReadRecordsAsync(request.RecordId, _currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
 
         if (phoneOrderRecordsUnread == null)
             Log.Information("The UserUnreadRecord could not be found");
 
-        await _phoneOrderDataProvider.DeletePhoneOrderRecordUnreadAsync(phoneOrderRecordsUnread, true, cancellationToken).ConfigureAwait(false);
+        await _phoneOrderDataProvider.DeleteMessageReadRecordAsync(phoneOrderRecordsUnread, true, cancellationToken).ConfigureAwait(false);
         
         return new GetPhoneOrderConversationsResponse
         {

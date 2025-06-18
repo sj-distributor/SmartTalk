@@ -40,7 +40,7 @@ public partial interface IPhoneOrderService
 
     Task<string> CreateSpeechMaticsJobAsync(byte[] recordContent, string recordName, string language, CancellationToken cancellationToken);
 
-    Task<GetPhoneOrderRecordsUnreadCountsResponse> GetPhoneOrderRecordsUnreadCountsAsync(GetPhoneOrderRecordsUnreadCountsRequest request, CancellationToken cancellationToken);
+    Task<GetMessageReadRecordCountsResponse> GetMessageReadRecordCountsAsync(GetMessageReadRecordCountsRequest request, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderService
@@ -53,9 +53,9 @@ public partial class PhoneOrderService
 
         var enrichedRecords = _mapper.Map<List<PhoneOrderRecordDto>>(records);
 
-        var recordUnread = await _phoneOrderDataProvider.GetPhoneOrderRecordsUnreadAsync(userId: _currentUser.Id.Value, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var unreadRecords = await _phoneOrderDataProvider.GetMessageReadRecordsAsync(userId: _currentUser.Id.Value, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        var unreadRecordIds = new HashSet<int>(recordUnread.Select(r => r.RecordId));
+        var unreadRecordIds = new HashSet<int>(unreadRecords.Select(r => r.RecordId));
 
         foreach (var record in enrichedRecords)
         {
@@ -431,7 +431,7 @@ public partial class PhoneOrderService
             UserId = u.UserId
         }).ToList();
         
-        await _phoneOrderDataProvider.AddPhoneOrderRecordsUnreadAsync(phoneOrderRecordsUnread, true, cancellationToken).ConfigureAwait(false);
+        await _phoneOrderDataProvider.AddMessageReadRecordsAsync(phoneOrderRecordsUnread, true, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<bool> CheckPhoneOrderRecordDurationAsync(byte[] recordContent, CancellationToken cancellationToken)
@@ -616,11 +616,11 @@ public partial class PhoneOrderService
         }
     }
 
-    public async Task<GetPhoneOrderRecordsUnreadCountsResponse> GetPhoneOrderRecordsUnreadCountsAsync(GetPhoneOrderRecordsUnreadCountsRequest request, CancellationToken cancellationToken)
+    public async Task<GetMessageReadRecordCountsResponse> GetMessageReadRecordCountsAsync(GetMessageReadRecordCountsRequest request, CancellationToken cancellationToken)
     {
-        var counts = await _phoneOrderDataProvider.GetUnreadOrderCountAsync(_currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
+        var counts = await _phoneOrderDataProvider.GetMessageReadRecordCountAsync(_currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
 
-        return new GetPhoneOrderRecordsUnreadCountsResponse()
+        return new GetMessageReadRecordCountsResponse()
         {
             Data = counts
         };

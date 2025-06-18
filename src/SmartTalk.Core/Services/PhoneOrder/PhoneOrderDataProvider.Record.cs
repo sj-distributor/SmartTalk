@@ -41,13 +41,13 @@ public partial interface IPhoneOrderDataProvider
     
     Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(int? recordId = null, int? agentId = null, DateTimeOffset? createdDate = null, CancellationToken cancellationToken = default);
 
-    Task AddPhoneOrderRecordsUnreadAsync(List<MessageReadRecord> phoneOrderRecordsUnread, bool forceSave = true, CancellationToken cancellationToken = default);
+    Task AddMessageReadRecordsAsync(List<MessageReadRecord> messageReadRecords, bool forceSave = true, CancellationToken cancellationToken = default);
 
-    Task DeletePhoneOrderRecordUnreadAsync(List<MessageReadRecord> phoneOrderRecordsUnread, bool forceSave = true, CancellationToken cancellationToken = default);
+    Task DeleteMessageReadRecordAsync(List<MessageReadRecord> messageReadRecords, bool forceSave = true, CancellationToken cancellationToken = default);
 
-    Task<List<MessageReadRecord>> GetPhoneOrderRecordsUnreadAsync(int? recordId = null, int? userId = null, CancellationToken cancellationToken = default);
+    Task<List<MessageReadRecord>> GetMessageReadRecordsAsync(int? recordId = null, int? userId = null, CancellationToken cancellationToken = default);
 
-    Task<int> GetUnreadOrderCountAsync(int userId, CancellationToken cancellationToken = default);
+    Task<int> GetMessageReadRecordCountAsync(int userId, CancellationToken cancellationToken = default);
 }
 
 public partial class PhoneOrderDataProvider
@@ -232,25 +232,25 @@ public partial class PhoneOrderDataProvider
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task AddPhoneOrderRecordsUnreadAsync(List<MessageReadRecord> phoneOrderRecordsUnread, bool forceSave = true, CancellationToken cancellationToken = default)
+    public async Task AddMessageReadRecordsAsync(List<MessageReadRecord> messageReadRecords, bool forceSave = true, CancellationToken cancellationToken = default)
     {
-        if (phoneOrderRecordsUnread == null || phoneOrderRecordsUnread.Count == 0) return;
+        if (messageReadRecords == null || messageReadRecords.Count == 0) return;
 
-        await _repository.InsertAllAsync(phoneOrderRecordsUnread, cancellationToken).ConfigureAwait(false);
+        await _repository.InsertAllAsync(messageReadRecords, cancellationToken).ConfigureAwait(false);
 
         if (forceSave)
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task DeletePhoneOrderRecordUnreadAsync(List<MessageReadRecord> phoneOrderRecordsUnread, bool forceSave = true, CancellationToken cancellationToken = default)
+    public async Task DeleteMessageReadRecordAsync(List<MessageReadRecord> messageReadRecords, bool forceSave = true, CancellationToken cancellationToken = default)
     {
-       await _repository.DeleteAllAsync(phoneOrderRecordsUnread, cancellationToken).ConfigureAwait(false);
+       await _repository.DeleteAllAsync(messageReadRecords, cancellationToken).ConfigureAwait(false);
         
         if (forceSave)
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<MessageReadRecord>> GetPhoneOrderRecordsUnreadAsync(int? recordId = null, int? userId = null, CancellationToken cancellationToken = default)
+    public async Task<List<MessageReadRecord>> GetMessageReadRecordsAsync(int? recordId = null, int? userId = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<MessageReadRecord>();
 
@@ -263,7 +263,7 @@ public partial class PhoneOrderDataProvider
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<int> GetUnreadOrderCountAsync(int userId, CancellationToken cancellationToken = default)
+    public async Task<int> GetMessageReadRecordCountAsync(int userId, CancellationToken cancellationToken = default)
     {
         var storeUserIds = await _repository.Query<PosStoreUser>().Where(user => user.UserId == userId).Select(user => user.Id).ToListAsync(cancellationToken);
 
