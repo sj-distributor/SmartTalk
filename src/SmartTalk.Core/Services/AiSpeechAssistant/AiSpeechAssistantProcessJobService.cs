@@ -259,7 +259,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         
         if (store == null) return [];
 
-        var tasks = _mapper.Map<PhoneOrderDetailDto>(foods).FoodDetails.Select(async foodDetail =>
+        var tasks = _mapper.Map<PhoneOrderDetailDto>(foods).FoodDetails.Where(x => !string.IsNullOrWhiteSpace(x.FoodName)).Select(async foodDetail =>
         {
             var similarFoodsResponse = await _vectorDb.GetSimilarListAsync(
                 $"pos-{store.Id}", foodDetail.FoodName, minRelevance: 0.4, cancellationToken: cancellationToken).ToListAsync(cancellationToken);
