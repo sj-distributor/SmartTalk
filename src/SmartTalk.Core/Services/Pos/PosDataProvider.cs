@@ -198,7 +198,8 @@ public partial class PosDataProvider : IPosDataProvider
     public async Task<List<PosCompanyStoreDto>> GetPosCompanyStoresWithSortingAsync(
         List<int> storeIds = null, int? companyId = null, string keyword = null, bool isNormalSort = false, CancellationToken cancellationToken = default)
     {
-        var query = from store in _repository.Query<PosCompanyStore>()
+        var query = from company in _repository.Query<PosCompany>().Where(x => x.Status)
+            join store in _repository.Query<PosCompanyStore>().Where(x => x.Status) on company.Id equals store.CompanyId
             join order in _repository.Query<PosOrder>() on store.Id equals order.StoreId into orderGroup
             select new
             {

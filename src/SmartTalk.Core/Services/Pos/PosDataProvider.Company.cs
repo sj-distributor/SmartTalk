@@ -14,7 +14,7 @@ public partial interface IPosDataProvider : IScopedDependency
 
     Task<PosCompany> GetPosCompanyAsync(int id, CancellationToken cancellationToken);
 
-    Task<List<PosMenu>> GetPosMenusAsync(int storeId, CancellationToken cancellationToken);
+    Task<List<PosMenu>> GetPosMenusAsync(int storeId, bool? IsActive = null, CancellationToken cancellationToken = default);
 
     Task UpdatePosMenuAsync(PosMenu menu, bool isForceSave = true, CancellationToken cancellationToken = default);
 
@@ -64,9 +64,14 @@ public partial class PosDataProvider
         return await _repository.Query<PosCompany>(x => x.Id == id).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<PosMenu>> GetPosMenusAsync(int storeId, CancellationToken cancellationToken)
+    public async Task<List<PosMenu>> GetPosMenusAsync(int storeId, bool? IsActive = null, CancellationToken cancellationToken = default)
     {
-        return await _repository.Query<PosMenu>(x => x.StoreId == storeId).ToListAsync(cancellationToken).ConfigureAwait(false);
+        var query = _repository.Query<PosMenu>(x => x.StoreId == storeId);
+        
+        if (IsActive.HasValue)
+            query = query.Where(x => x.Status == IsActive.Value);
+        
+        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task UpdatePosMenuAsync(PosMenu menu, bool isForceSave = true, CancellationToken cancellationToken = default)

@@ -8,6 +8,8 @@ namespace SmartTalk.Messages.Requests.Pos;
 public class GetPosMenusListRequest : IRequest
 {
     public int StoreId { get; set; }
+    
+    public bool? IsActive { get; set; }
 }
 
 public class GetPosMenusListResponse : SmartTalkResponse<List<PosMenuDto>>
