@@ -1,5 +1,8 @@
+using AutoMapper.QueryableExtensions;
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Domain.Pos;
+using SmartTalk.Messages.Dto.Pos;
+using SmartTalk.Messages.Requests.Pos;
 
 namespace SmartTalk.Core.Services.Pos;
 
@@ -15,6 +18,8 @@ public partial interface IPosDataProvider
     Task AddPosOrdersAsync(List<PosOrder> orders, bool forceSave = true, CancellationToken cancellationToken = default);
 
     Task<PosOrder> GetPosOrderSortByOrderNoAsync(int storeId, CancellationToken cancellationToken);
+    
+    Task<List<PosCustomerInfoDto>> GetPosCustomerInfosAsync(string phone, CancellationToken cancellationToken);
 }
 
 public partial class PosDataProvider
@@ -70,5 +75,11 @@ public partial class PosDataProvider
     {
         return await _repository.Query<PosOrder>(x => x.StoreId == storeId)
             .OrderByDescending(x => x.OrderNo).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<PosCustomerInfoDto>> GetPosCustomerInfosAsync(string phone, CancellationToken cancellationToken)
+    {
+        return await _repository.QueryNoTracking<PosOrder>().Where(x => x.Phone.Contains(phone))
+            .ProjectTo<PosCustomerInfoDto>(_mapper.ConfigurationProvider).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }

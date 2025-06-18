@@ -314,4 +314,13 @@ public class PosController : ControllerBase
         
         return Ok();
     }
+    
+    [Route("customer/info/match"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPosCustomerInfoResponse))]
+    public async Task<IActionResult> GetPosCustomerInfosAsync([FromQuery] GetPosCustomerInfoRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetPosCustomerInfoRequest, GetPosCustomerInfoResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
 }
