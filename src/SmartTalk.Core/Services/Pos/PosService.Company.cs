@@ -41,6 +41,8 @@ public partial interface IPosService : IScopedDependency
     Task<UpdatePosProductResponse> UpdatePosProductAsync(UpdatePosProductCommand command, CancellationToken cancellationToken);
 
     Task<AdjustPosMenuContentSortResponse> AdjustPosMenuContentSortAsync(AdjustPosMenuContentSortCommand command, CancellationToken cancellationToken);
+    
+    Task<CheckPosCompanyResponse> CheckPosCompanyAsync(CheckPosCompanyRequest request, CancellationToken cancellationToken);
 }
 
 public partial class PosService : IPosService
@@ -313,5 +315,21 @@ public partial class PosService : IPosService
         }
 
         return new AdjustPosMenuContentSortResponse();
+    }
+
+    public async Task<CheckPosCompanyResponse> CheckPosCompanyAsync(CheckPosCompanyRequest request, CancellationToken cancellationToken)
+    {
+        var orders = await _posDataProvider.GetPosOrdersByCompanyIdAsync(request.ComapnyId, cancellationToken).ConfigureAwait(false);
+
+        var isAllow = orders == null || orders.Count == 0;
+        
+        return new CheckPosCompanyResponse
+        {
+            Data = new CheckPosCompanyResponseData
+            {
+                IsAllow = isAllow,
+                Message = isAllow ? string.Empty : "Company with existing order data cannot be deleted."
+            }
+        };
     }
 }

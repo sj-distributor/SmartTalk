@@ -90,6 +90,15 @@ public class PosController : ControllerBase
         return Ok(response);
     }
     
+    [Route("company/check"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(CheckPosCompanyResponse))]
+    public async Task<IActionResult> CheckPosCompanyAsync([FromQuery] CheckPosCompanyRequest request)
+    {
+        var response = await _mediator.RequestAsync<CheckPosCompanyRequest, CheckPosCompanyResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
     [Route("company/delete"), HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(DeletePosCompanyResponse))]
     public async Task<IActionResult> DeletePosCompanyAsync([FromBody] DeletePosCompanyCommand command)
