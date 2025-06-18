@@ -131,7 +131,6 @@ public partial class PhoneOrderService
         await _phoneOrderUtilService.ExtractPhoneOrderShoppingCartAsync(goalText, record, cancellationToken).ConfigureAwait(false);
         
         record.Tips = tip;
-        record.Status = PhoneOrderRecordStatus.Sent;
     }
 
     public async Task<AddOrUpdateManualOrderResponse> AddOrUpdateManualOrderAsync(AddOrUpdateManualOrderCommand command, CancellationToken cancellationToken)
