@@ -122,7 +122,7 @@ public partial class PosService : IPosService
 
     public async Task<GetPosMenusListResponse> GetPosMenusListAsync(GetPosMenusListRequest request, CancellationToken cancellationToken)
     {
-        var menus = await _posDataProvider.GetPosMenusAsync(request.StoreId, cancellationToken).ConfigureAwait(false);
+        var menus = await _posDataProvider.GetPosMenusAsync(request.StoreId, request.IsActive, cancellationToken).ConfigureAwait(false);
         
         if (menus == null) throw new Exception("Can't find menus with id:" + request.StoreId);
 
@@ -150,7 +150,7 @@ public partial class PosService : IPosService
 
     public async Task<GetPosMenuPreviewResponse> GetPosMenuPreviewAsync(GetPosMenuPreviewRequest request, CancellationToken cancellationToken)
     {
-        var menus = await _posDataProvider.GetPosMenusAsync(request.StoreId, cancellationToken).ConfigureAwait(false);
+        var menus = await _posDataProvider.GetPosMenusAsync(request.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         var categories = await _posDataProvider.GetPosCategoriesAsync(storeId: request.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
         
