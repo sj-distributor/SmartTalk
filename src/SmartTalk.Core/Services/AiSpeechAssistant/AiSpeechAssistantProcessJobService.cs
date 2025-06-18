@@ -95,13 +95,13 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         
         var roleUsers = await _securityDataProvider.GetRoleUserByPermissionNameAsync(permissionName: SecurityStore.Permissions.CanViewPhoneOrder, cancellationToken).ConfigureAwait(false);
         
-        var phoneOrderRecordsUnread = roleUsers.Select(u => new MessageReadRecord()
+        var messageReadRecords = roleUsers.Select(u => new MessageReadRecord()
         {
             RecordId = record.Id,
             UserId = u.UserId
         }).ToList();
         
-        await _phoneOrderDataProvider.AddMessageReadRecordsAsync(phoneOrderRecordsUnread, true, cancellationToken).ConfigureAwait(false);
+        await _phoneOrderDataProvider.AddMessageReadRecordsAsync(messageReadRecords, true, cancellationToken).ConfigureAwait(false);
 
         if (context.OrderItems != null)
         {

@@ -114,7 +114,6 @@ public partial class PhoneOrderService
         record.TranscriptionJobId = await CreateSpeechMaticsJobAsync(command.RecordContent, command.RecordName ?? Guid.NewGuid().ToString("N") + ".wav", detection.Language, cancellationToken).ConfigureAwait(false);
         
         await AddPhoneOrderRecordAsync(record, roleUsers, PhoneOrderRecordStatus.Diarization, cancellationToken).ConfigureAwait(false);
-        
     }
 
     private async Task<bool> CheckOrderExistAsync(int agentId, DateTimeOffset createdDate, CancellationToken cancellationToken)
