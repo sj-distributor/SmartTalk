@@ -89,7 +89,7 @@ public partial class PhoneOrderService
         
         Log.Information("Phone order record transcription detected language: {@detectionLanguage}", detection.Language);
         
-        var record = new PhoneOrderRecord { SessionId = Guid.NewGuid().ToString(), AgentId = recordInfo.Agent.Id, TranscriptionText = transcription, Language = SelectLanguageEnum(detection.Language), CreatedDate = recordInfo.StartDate, Status = PhoneOrderRecordStatus.Recieved };
+        var record = new PhoneOrderRecord { SessionId = Guid.NewGuid().ToString(), AgentId = recordInfo.Agent.Id, Language = SelectLanguageEnum(detection.Language), CreatedDate = recordInfo.StartDate, Status = PhoneOrderRecordStatus.Recieved };
         
         var roleUsers = await _securityDataProvider.GetRoleUserByPermissionNameAsync(permissionName: SecurityStore.Permissions.CanViewPhoneOrder, cancellationToken).ConfigureAwait(false);
         
