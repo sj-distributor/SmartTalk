@@ -13,6 +13,9 @@ public class AgentMessageRecord : IEntity
     
     [Column("agent_id")]
     public int AgentId { get; set; }
+    
+    [Column("group_key")]
+    public int? GroupKey { get; set; }
 
     [Column("record_id")]
     public int RecordId { get; set; }
