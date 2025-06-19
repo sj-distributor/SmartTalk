@@ -154,7 +154,7 @@ public partial class PosService : IPosService
         
         var categories = await _posDataProvider.GetPosCategoriesAsync(storeId: request.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        var products = await _posDataProvider.GetPosProductsAsync(storeId: request.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var products = await _posDataProvider.GetPosProductsAsync(storeId: request.StoreId, name: request.ProductName, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var menuWithCategoriesList = menus.Select(menu =>
         {
