@@ -431,13 +431,13 @@ public partial class PhoneOrderService
         
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync(new List<PhoneOrderRecord> { record }, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        var phoneOrderRecordsUnread = roleUsers.Select(u => new MessageReadRecord 
+        var messageReadRecords = roleUsers.Select(u => new MessageReadRecord 
         {
             RecordId = record.Id,
             UserId = u.UserId
         }).ToList();
         
-        await _phoneOrderDataProvider.AddMessageReadRecordsAsync(phoneOrderRecordsUnread, true, cancellationToken).ConfigureAwait(false);
+        await _phoneOrderDataProvider.AddMessageReadRecordsAsync(messageReadRecords, true, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<bool> CheckPhoneOrderRecordDurationAsync(byte[] recordContent, CancellationToken cancellationToken)
