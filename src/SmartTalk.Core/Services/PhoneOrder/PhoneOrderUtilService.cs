@@ -93,7 +93,7 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
         var result = new PhoneOrderDetailDto { FoodDetails = new List<FoodDetailDto>() };
         var restaurant = await _restaurantDataProvider.GetRestaurantByNameAsync(record.RestaurantInfo.Name, cancellationToken).ConfigureAwait(false);
 
-        var tasks = foods.FoodDetails.Select(async foodDetail =>
+        var tasks = foods.FoodDetails.Where(x => !string.IsNullOrWhiteSpace(x.FoodName)).Select(async foodDetail =>
         {
             var similarFoodsResponse = await _vectorDb.GetSimilarListAsync(
                 restaurant.Id.ToString(), foodDetail.FoodName, minRelevance: 0.4, cancellationToken: cancellationToken).ToListAsync(cancellationToken);
