@@ -320,57 +320,76 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         var products = await _posDataProvider.GetPosProductsAsync(
             ids: similarResults.Select(x => x.Id).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        var taxes = GetOrderItemTaxes(products);
-        var orderNo = await GenerateOrderNumberAsync(store, cancellationToken).ConfigureAwait(false);
+        var taxes = GetOrderItemTaxes(products, similarResults);
         
-        var order = new PosOrder
+        await _redisSafeRunner.ExecuteWithLockAsync($"generate-order-number-{store.Id}", async() =>
         {
-            StoreId = store.Id,
-            Name = record.CustomerName,
-            Phone = record.PhoneNumber,
-            OrderNo = orderNo,
-            Status = PosOrderStatus.Pending,
-            Count = products.Count,
-            Tax = taxes,
-            Total = products.Sum(p => p.Price),
-            SubTotal = products.Sum(p => p.Price) + taxes,
-            Type = PosOrderReceiveType.Pickup,
-            Items = BuildPosOrderItems(products, similarResults),
-            Notes = record.Comments,
-            RecordId = record.Id
-        };
+            var orderNo = await GenerateOrderNumberAsync(store, cancellationToken).ConfigureAwait(false);
+            
+            var order = new PosOrder
+            {
+                StoreId = store.Id,
+                Name = record.CustomerName,
+                Phone = record.PhoneNumber,
+                OrderNo = orderNo,
+                Status = PosOrderStatus.Pending,
+                Count = products.Count,
+                Tax = taxes,
+                Total = products.Sum(p => p.Price),
+                SubTotal = products.Sum(p => p.Price) + taxes,
+                Type = PosOrderReceiveType.Pickup,
+                Items = BuildPosOrderItems(products, similarResults),
+                Notes = record.Comments,
+                RecordId = record.Id
+            };
+            
+            Log.Information("Generate complete order: {@Order}", order);
         
-        await _posDataProvider.AddPosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
+            await _posDataProvider.AddPosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
+        }, wait: TimeSpan.FromSeconds(10), retry: TimeSpan.FromSeconds(1), server: RedisServer.System).ConfigureAwait(false);
     }
 
     private async Task<string> GenerateOrderNumberAsync(PosCompanyStore store, CancellationToken cancellationToken)
     {
-        return await _redisSafeRunner.ExecuteWithLockAsync($"generate-order-number-{store.Id}", async() =>
-        {
-            var preOrder = await _posDataProvider.GetPosOrderSortByOrderNoAsync(store.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
-            
-            if (preOrder == null) return "0001";
+        var preOrder = await _posDataProvider.GetPosOrderSortByOrderNoAsync(store.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        if (preOrder == null) return "0001";
 
-            var rs = Convert.ToInt32(preOrder.OrderNo);
-            
-            rs++;
-            
-            return rs.ToString("D4");
-        }, wait: TimeSpan.FromSeconds(10), retry: TimeSpan.FromSeconds(1), server: RedisServer.System).ConfigureAwait(false);
+        var rs = Convert.ToInt32(preOrder.OrderNo);
+        
+        rs++;
+        
+        return rs.ToString("D4");
     }
 
-    private decimal GetOrderItemTaxes(List<PosProduct> products)
+    private decimal GetOrderItemTaxes(List<PosProduct> products, List<SimilarResult> similarResults)
     {
         decimal taxes = 0;
+        var productMap = new Dictionary<PosProduct, int>();
         
         foreach (var product in products)
         {
-            var productTaxes = JsonConvert.DeserializeObject<List<EasyPosResponseTax>>(product.Tax);
+            var result = similarResults.Where(x => x.Id == product.Id).FirstOrDefault();
 
-            var productTax = productTaxes?.FirstOrDefault(x => x.IsSelectedByDefault)?.Value ?? productTaxes?.FirstOrDefault()?.Value;
-
-            taxes += productTax ?? 0;
+            if (result == null ) continue;
+            
+            productMap.Add(product, int.TryParse(result.FoodDetail.Count, out var parsedValue) ? parsedValue : 1);
         }
+        
+        foreach (var (product, quantity) in productMap)
+        {
+            var productTaxes = JsonConvert.DeserializeObject<List<EasyPosResponseTax>>(product.Tax);
+            
+            var productTax = productTaxes?.FirstOrDefault()?.Value;
+
+            taxes += productTax.HasValue ? product.Price * quantity * (productTax.Value / 100) : 0;
+            
+            var modifiers = !string.IsNullOrEmpty(product.Modifiers) ? JsonConvert.DeserializeObject<List<EasyPosResponseModifierGroups>>(product.Modifiers) : [];
+
+            taxes += modifiers.Sum(modifier => modifier.ModifierProducts.Sum(x => (x?.Price ?? 0) * ((modifier.Taxes?.FirstOrDefault()?.Value ?? 0) / 100)));
+        }
+        
+        Log.Information("Calculate order item taxes: {Taxes}", taxes);
         
         return taxes;
     }
@@ -386,8 +405,10 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             OriginalPrice = x.Product.Price,
             Price = x.Product.Price,
             Notes = string.IsNullOrWhiteSpace(x.FoodDetail?.Remark) ? string.Empty : x.FoodDetail?.Remark,
-            OrderItemModifiers = HandleSpecialItems(x.Product, x.FoodDetail?.Count)
+            OrderItemModifiers = HandleSpecialItems(x.Product)
         }).Where(x => x.ProductId != 0).ToList();
+        
+        Log.Information("Generate order items: {@orderItems}", orderItems);
             
         return JsonConvert.SerializeObject(orderItems);
     }
@@ -400,26 +421,32 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         }
     }
 
-    private List<PhoneCallOrderItemModifiers> HandleSpecialItems(PosProduct product, string quantity)
+    private List<PhoneCallOrderItemModifiers> HandleSpecialItems(PosProduct product)
     {
-        var result = JsonConvert.DeserializeObject<List<EasyPosResponseModifierGroups>>(product.Modifiers);
-        var modifierGroup = result.FirstOrDefault();
+        var result = !string.IsNullOrWhiteSpace(product?.Modifiers) ? JsonConvert.DeserializeObject<List<EasyPosResponseModifierGroups>>(product.Modifiers) : [];
+
+        if (result == null || result.Count == 0) return [];
         
-        if (modifierGroup == null) return [];
+        var orderItemModifiers = new List<PhoneCallOrderItemModifiers>();
         
-        var modifierProduct = modifierGroup.ModifierProducts.FirstOrDefault();
-            
-        var orderItemModifier = new PhoneCallOrderItemModifiers
+        foreach (var modifierItem in result)
         {
-            Price = modifierProduct?.Price ?? 0,
-            Quantity = int.TryParse(quantity, out var parsedValue) ? parsedValue : 1,
-            ModifierId = modifierGroup.Id,
-            ModifierProductId = modifierProduct?.Id ?? 0,
-            Localizations = _mapper.Map<List<PhoneCallOrderItemLocalization>>(modifierGroup.Localizations ?? []),
-            ModifierLocalizations = _mapper.Map<List<PhoneCallOrderItemModifierLocalization>>(modifierProduct?.Localizations ?? [])
-        };
+            var items = modifierItem.ModifierProducts.Select(x => new PhoneCallOrderItemModifiers
+            {
+                Price = x?.Price ?? 0,
+                Quantity = 1,
+                ModifierId = modifierItem.Id,
+                ModifierProductId = x?.Id ?? 0,
+                Localizations = _mapper.Map<List<PhoneCallOrderItemLocalization>>(modifierItem.Localizations ?? []),
+                ModifierLocalizations = _mapper.Map<List<PhoneCallOrderItemModifierLocalization>>(x?.Localizations ?? [])
+            });
+            
+            orderItemModifiers.AddRange(items);
+        }
         
-        return [orderItemModifier];
+        Log.Information("Generate order item: {@Product} modifiers: {@OrderItemModifiers}", product, orderItemModifiers);
+        
+        return orderItemModifiers;
     }
 }
 
