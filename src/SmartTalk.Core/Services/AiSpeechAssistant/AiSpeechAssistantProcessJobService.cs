@@ -355,10 +355,10 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         foreach (var product in products)
         {
             var productTaxes = JsonConvert.DeserializeObject<List<EasyPosResponseTax>>(product.Tax);
+            
+            var productTax = productTaxes?.FirstOrDefault()?.Value;
 
-            var productTax = productTaxes?.FirstOrDefault(x => x.IsSelectedByDefault)?.Value ?? productTaxes?.FirstOrDefault()?.Value;
-
-            taxes += productTax ?? 0;
+            taxes += productTax.HasValue ? product.Price * (productTax.Value / 100) : 0;
         }
         
         return taxes;
