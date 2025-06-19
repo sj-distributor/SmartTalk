@@ -216,4 +216,31 @@ public class AiSpeechAssistantController : ControllerBase
 
         return Ok(response);
     }
+    
+    [Route("session"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAiSpeechAssistantSessionResponse))]
+    public async Task<IActionResult> GetAiSpeechAssistantSessionAsync([FromQuery] GetAiSpeechAssistantSessionRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetAiSpeechAssistantSessionRequest, GetAiSpeechAssistantSessionResponse>(request).ConfigureAwait(false);
+
+        return Ok(response);
+    }
+    
+    [Route("session/add"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(AddAiSpeechAssistantSessionResponse))]
+    public async Task<IActionResult> AddAiSpeechAssistantSessionAsync([FromBody] AddAiSpeechAssistantSessionCommand command)
+    {
+        var response = await _mediator.SendAsync<AddAiSpeechAssistantSessionCommand, AddAiSpeechAssistantSessionResponse>(command).ConfigureAwait(false);
+
+        return Ok(response);
+    }
+    
+    [Route("session/update"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdateAiSpeechAssistantSessionResponse))]
+    public async Task<IActionResult> UpdateAiSpeechAssistantSessionAsync([FromBody] UpdateAiSpeechAssistantSessionCommand command)
+    {
+        var response = await _mediator.SendAsync<UpdateAiSpeechAssistantSessionCommand, UpdateAiSpeechAssistantSessionResponse>(command).ConfigureAwait(false);
+
+        return Ok(response);
+    }
 }
