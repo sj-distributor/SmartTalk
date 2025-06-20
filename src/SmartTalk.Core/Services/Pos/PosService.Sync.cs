@@ -56,7 +56,7 @@ public partial class PosService
     {
         if (data?.Menus == null) throw new NullReferenceException("Pos Resource Data or Menus is null");
         
-        await _posDataProvider.DeletePosMenuInfosAsync(store.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
+        await DeletePosMenuDataAsync(store, cancellationToken).ConfigureAwait(false);
 
         var menuMap = await AddPosMenusAsync(data.Menus, store.Id, cancellationToken).ConfigureAwait(false);
         
@@ -67,6 +67,14 @@ public partial class PosService
         Log.Information("Sync categories data: {@CategoriesMap}", categoriesMap);
         
         return await AddPosProductsAsync(data, categoriesMap, store.Id, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task DeletePosMenuDataAsync(PosCompanyStore store, CancellationToken cancellationToken)
+    {
+        var products = await _posDataProvider.DeletePosMenuInfosAsync(store.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        foreach (var product in products)
+            await DeleteInternalAsync(store, product, cancellationToken).ConfigureAwait(false);
     }
     
     private async Task<Dictionary<string, int>> AddPosMenusAsync(List<EasyPosResponseMenu> menus, int storeId, CancellationToken cancellationToken)
@@ -189,9 +197,6 @@ public partial class PosService
     public async Task PosProductsVectorizationAsync(List<PosProduct> products, PosCompanyStore store, CancellationToken cancellationToken)
     {
         await CheckIndexIfExistsAsync(store, cancellationToken).ConfigureAwait(false);
-        
-        foreach (var product in products)
-            await DeleteInternalAsync(store, product, cancellationToken).ConfigureAwait(false);
         
         foreach (var product in products)
             _smartTalkBackgroundJobClient.Enqueue(() => StoreAsync(store, product, cancellationToken), HangfireConstants.InternalHostingRestaurant);

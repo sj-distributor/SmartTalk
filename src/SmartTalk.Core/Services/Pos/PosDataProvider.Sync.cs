@@ -14,7 +14,7 @@ public partial interface IPosDataProvider : IScopedDependency
 
     Task AddPosProductsAsync(List<PosProduct> products, bool forceSave = true, CancellationToken cancellationToken = default);
     
-    Task DeletePosMenuInfosAsync(int storeId, bool forceSave = true, CancellationToken cancellationToken = default);
+    Task<List<PosProduct>> DeletePosMenuInfosAsync(int storeId, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task<List<(PosMenu Menu, PosCategory Category)>> GetPosMenuInfosAsync(int storeId, List<int> categoryIds, CancellationToken cancellationToken = default);
 }
@@ -53,11 +53,11 @@ public partial class PosDataProvider
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task DeletePosMenuInfosAsync(int storeId, bool forceSave = true, CancellationToken cancellationToken = default)
+    public async Task<List<PosProduct>> DeletePosMenuInfosAsync(int storeId, bool forceSave = true, CancellationToken cancellationToken = default)
     {
         await DeletePosMenusAsync(storeId, forceSave, cancellationToken).ConfigureAwait(false);
         await DeletePosCategoriesAsync(storeId, forceSave, cancellationToken).ConfigureAwait(false);
-        await DeletePosProductsAsync(storeId, forceSave, cancellationToken).ConfigureAwait(false);
+        return await DeletePosProductsAsync(storeId, forceSave, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<List<(PosMenu Menu, PosCategory Category)>> GetPosMenuInfosAsync(int storeId, List<int> categoryIds, CancellationToken cancellationToken = default)
@@ -96,7 +96,7 @@ public partial class PosDataProvider
         }
     }
 
-    public async Task DeletePosProductsAsync(int storeId, bool forceSave = true, CancellationToken cancellationToken = default)
+    public async Task<List<PosProduct>> DeletePosProductsAsync(int storeId, bool forceSave = true, CancellationToken cancellationToken = default)
     {
         var products = await _repository.Query<PosProduct>().Where(x => x.StoreId == storeId).ToListAsync(cancellationToken).ConfigureAwait(false);
         
@@ -105,6 +105,10 @@ public partial class PosDataProvider
             await _repository.DeleteAllAsync(products, cancellationToken).ConfigureAwait(false);
             
             if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            
+            return products;
         }
+        
+        return [];
     }
 }
