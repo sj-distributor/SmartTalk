@@ -268,13 +268,15 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
     
     private async Task<List<PhoneOrderOrderItem>> MatchSimilarProductsAsync(PhoneOrderRecord record, AiSpeechAssistantOrderDto foods, CancellationToken cancellationToken)
     {
+        Log.Information("All ai order items: {@OrderItems}", foods);
+        
         var store = await _posDataProvider.GetPosStoreByAgentIdAsync(record.AgentId, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Generate pos order for store: {@Store} by agentId: {AgentId}", store, record.AgentId);
         
         if (store == null) return [];
 
-        var tasks = _mapper.Map<PhoneOrderDetailDto>(foods).FoodDetails.Where(x => !string.IsNullOrWhiteSpace(x.FoodName)).Select(async foodDetail =>
+        var tasks = _mapper.Map<PhoneOrderDetailDto>(foods).FoodDetails.Where(x => !string.IsNullOrWhiteSpace(x?.FoodName)).Select(async foodDetail =>
         {
             var similarFoodsResponse = await _vectorDb.GetSimilarListAsync(
                 $"pos-{store.Id}", foodDetail.FoodName, minRelevance: 0.4, cancellationToken: cancellationToken).ToListAsync(cancellationToken);
@@ -286,6 +288,8 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             if (string.IsNullOrEmpty(payload)) return null;
 
             var productPayload = JsonConvert.DeserializeObject<PosProductPayloadDto>(payload);
+            Log.Information("{FoodName}-similar product payload: {@Payload} ", foodDetail.FoodName, productPayload);
+            
             foodDetail.FoodName = productPayload.Names;
             foodDetail.Price = (double)productPayload.Price;
             foodDetail.ProductId = productPayload.ProductId;
@@ -299,6 +303,8 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         }).ToList();
 
         var completedTasks = await Task.WhenAll(tasks);
+        
+        Log.Information("All similar results: {@Results}", completedTasks);
 
         var results = completedTasks.Where(x => x != null && x.Id != 0).ToList();
         
@@ -307,7 +313,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         return results.Select(x => new PhoneOrderOrderItem
         {
             RecordId = record.Id,
-            FoodName = JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(x.FoodDetail.FoodName)?.GetValueOrDefault(x.LanguageCode)?.GetValueOrDefault("posName"),
+            FoodName = x.FoodDetail.FoodName,
             Quantity = int.TryParse(x.FoodDetail.Count, out var parsedValue) ? parsedValue : 1,
             Price = x.FoodDetail.Price,
             Note = x.FoodDetail.Remark,
