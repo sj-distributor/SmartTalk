@@ -15,7 +15,7 @@ public class AgentMessageRecord : IEntity
     public int AgentId { get; set; }
     
     [Column("group_key")]
-    public int? GroupKey { get; set; }
+    public int GroupKey { get; set; }
 
     [Column("record_id")]
     public int RecordId { get; set; }
