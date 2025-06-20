@@ -265,11 +265,6 @@ public partial class PhoneOrderDataProvider
 
     public async Task<int> GetMessageReadRecordCountAsync(int userId, CancellationToken cancellationToken = default)
     {
-        var storeUserIds = await _repository.Query<PosStoreUser>().Where(user => user.UserId == userId).Select(user => user.Id).ToListAsync(cancellationToken);
-
-        if (!storeUserIds.Any())
-            return 0;
-
-        return await _repository.Query<MessageReadRecord>().Where(unread => storeUserIds.Contains(unread.UserId)).CountAsync(cancellationToken);
+        return await _repository.Query<MessageReadRecord>().Where(unread => unread.UserId == userId).CountAsync(cancellationToken);
     }
 }
