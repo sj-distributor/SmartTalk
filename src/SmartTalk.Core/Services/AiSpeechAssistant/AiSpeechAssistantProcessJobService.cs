@@ -191,16 +191,9 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
 
     private async Task GenerateOrderItemsAsync(PhoneOrderRecord record, AiSpeechAssistantOrderDto foods, CancellationToken cancellationToken)
     {
-        try
-        {
-            var posItems = await MatchSimilarProductsAsync(record, foods, cancellationToken).ConfigureAwait(false);
-        
-            Log.Information("Matched similar pos product items: {@PosItems}", posItems);
-        }
-        catch (Exception e)
-        {
-            Log.Warning("Matched similar pos product items failed: {@Exception}", e);
-        }
+        var posItems = await MatchSimilarProductsAsync(record, foods, cancellationToken).ConfigureAwait(false);
+    
+        Log.Information("Matched similar pos product items: {@PosItems}", posItems);
     }
     
     private async Task<List<PhoneOrderOrderItem>> MatchSimilarRestaurantItemsAsync(PhoneOrderRecord record, AiSpeechAssistantOrderDto foods, CancellationToken cancellationToken)
