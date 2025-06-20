@@ -26,10 +26,6 @@ public class PosCompanyStoreDto
     
     public string Link { get; set; }
     
-    public string AppId { get; set; }
-    
-    public string AppSecret { get; set; }
-    
     public string TimePeriod { get; set; }
     
     public string Timezone { get; set; }
