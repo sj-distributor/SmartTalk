@@ -318,8 +318,8 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             var order = new PosOrder
             {
                 StoreId = store.Id,
-                Name = record.CustomerName,
-                Phone = record.PhoneNumber,
+                Name = record?.CustomerName ?? "Unknown",
+                Phone = record?.PhoneNumber ?? "Unknown",
                 OrderNo = orderNo,
                 Status = PosOrderStatus.Pending,
                 Count = products.Count,
@@ -328,8 +328,8 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
                 SubTotal = products.Sum(p => p.Price) + taxes,
                 Type = PosOrderReceiveType.Pickup,
                 Items = BuildPosOrderItems(products, similarResults),
-                Notes = record.Comments,
-                RecordId = record.Id
+                Notes = record?.Comments ?? string.Empty,
+                RecordId = record!.Id
             };
             
             Log.Information("Generate complete order: {@Order}", order);
