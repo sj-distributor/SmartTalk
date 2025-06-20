@@ -272,9 +272,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         var utcDate = TimeZoneInfo.ConvertTimeToUtc(nowShanghai.Date, shanghaiTimeZone);
         
-        var maxMessageNumber = await _aiSpeechAssistantDataProvider.GetMaxMessageNumberByGroupKeyAndDateAsync(groupKey, utcDate, cancellationToken).ConfigureAwait(false);
+        var existingCount = await _aiSpeechAssistantDataProvider.GetMessageCountByAgentAndDateAsync(groupKey, utcDate, cancellationToken).ConfigureAwait(false);
         
-        var messageNumber = maxMessageNumber + 1;
+        var messageNumber = existingCount + 1;
         
         var newRecord = new AgentMessageRecord
         {
