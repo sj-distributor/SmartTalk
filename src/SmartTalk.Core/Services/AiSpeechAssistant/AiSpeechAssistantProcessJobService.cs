@@ -296,7 +296,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         return results.Select(x => new PhoneOrderOrderItem
         {
             RecordId = record.Id,
-            FoodName = JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(x.FoodDetail.FoodName)?.GetValueOrDefault(x.LanguageCode)?.GetValueOrDefault("posName"),
+            FoodName = x.FoodDetail.FoodName,
             Quantity = int.TryParse(x.FoodDetail.Count, out var parsedValue) ? parsedValue : 1,
             Price = x.FoodDetail.Price,
             Note = x.FoodDetail.Remark,
