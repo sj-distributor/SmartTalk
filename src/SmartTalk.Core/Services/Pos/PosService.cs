@@ -85,7 +85,7 @@ public partial class PosService : IPosService
     public async Task<GetPosCompanyWithStoresResponse> GetPosCompanyWithStoresAsync(GetPosCompanyWithStoresRequest request, CancellationToken cancellationToken)
     {
         var (count, companies) = await _posDataProvider.GetPosCompaniesAsync(
-            request.PageIndex, request.PageSize, keyword: request.Keyword, cancellationToken: cancellationToken).ConfigureAwait(false);
+            request.PageIndex, request.PageSize, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var result = _mapper.Map<List<PosCompanyDto>>(companies);
         
