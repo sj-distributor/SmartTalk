@@ -196,9 +196,9 @@ public partial class PosService : IPosService
     {
         var store = await _posDataProvider.GetPosCompanyStoreAsync(id: command.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        var existingUrlStore = await _posDataProvider.GetPosCompanyStoreAsync(link: command.Link, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var existingUrlStore = await _posDataProvider.GetPosCompanyStoreAsync(appId: command.AppId, appSecret: command.AppSecret, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        if (existingUrlStore != null) throw new Exception("PosUrl is currently bound to the store, please enter another posUrl and try again");
+        if (existingUrlStore != null) throw new Exception("The store has been bound.");
 
         var easyPosMerchant = await _easyPosClient.GetPosCompanyStoreMessageAsync(new EasyPosTokenRequestDto()
         {
