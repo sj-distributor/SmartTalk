@@ -307,7 +307,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
     private async Task BuildPosOrderAsync(PhoneOrderRecord record, PosCompanyStore store, List<SimilarResult> similarResults, CancellationToken cancellationToken)
     {
         var products = await _posDataProvider.GetPosProductsAsync(
-            ids: similarResults.Select(x => x.Id).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
+            storeId: store.Id, ids: similarResults.Select(x => x.Id).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var taxes = GetOrderItemTaxes(products, similarResults);
         
