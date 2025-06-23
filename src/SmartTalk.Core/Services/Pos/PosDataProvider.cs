@@ -69,7 +69,7 @@ public partial class PosDataProvider : IPosDataProvider
         var count = await query.CountAsync(cancellationToken).ConfigureAwait(false);
 
         if (pageIndex.HasValue && pageSize.HasValue)
-            query = query.Skip((pageIndex.Value - 1) * pageSize.Value).Take(pageSize.Value);
+            query = query.OrderByDescending(x => x.CreatedDate).Skip((pageIndex.Value - 1) * pageSize.Value).Take(pageSize.Value);
         
         var companies = await query.ToListAsync(cancellationToken).ConfigureAwait(false);
 
