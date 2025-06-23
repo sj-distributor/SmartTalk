@@ -18,7 +18,7 @@ public partial interface IPosDataProvider : IScopedDependency
     
     Task<PosCompanyStoreDto> GetPosCompanyStoreDetailAsync(int? id = null, CancellationToken cancellationToken = default);
     
-    Task<List<PosCompanyStore>> GetPosCompanyStoresAsync(List<int> ids = null, List<int> companyIds = null, CancellationToken cancellationToken = default);
+    Task<List<PosCompanyStore>> GetPosCompanyStoresAsync(List<int> ids = null, List<int> companyIds = null, string keyword = null, CancellationToken cancellationToken = default);
     
     Task AddPosCompanyStoresAsync(List<PosCompanyStore> stores, bool forceSave = true, CancellationToken cancellationToken = default);
     
@@ -125,7 +125,7 @@ public partial class PosDataProvider : IPosDataProvider
         return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<PosCompanyStore>> GetPosCompanyStoresAsync(List<int> ids = null, List<int> companyIds = null, CancellationToken cancellationToken = default)
+    public async Task<List<PosCompanyStore>> GetPosCompanyStoresAsync(List<int> ids = null, List<int> companyIds = null, string keyword = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<PosCompanyStore>();
 
@@ -134,6 +134,9 @@ public partial class PosDataProvider : IPosDataProvider
         
         if (companyIds != null && companyIds.Count != 0)
             query = query.Where(x => companyIds.Contains(x.CompanyId));
+        
+        if (!string.IsNullOrEmpty(keyword))
+            query = query.Where(x => x.Names.Contains(keyword));
 
         return await query.OrderByDescending(x => x.CreatedDate).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
