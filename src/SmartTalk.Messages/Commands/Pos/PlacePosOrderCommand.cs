@@ -7,7 +7,7 @@ namespace SmartTalk.Messages.Commands.Pos;
 
 public class PlacePosOrderCommand : ICommand
 {
-    public int OrderId { get; set; }
+    public int? OrderId { get; set; }
     
     public string OrderItems { get; set; }
 
