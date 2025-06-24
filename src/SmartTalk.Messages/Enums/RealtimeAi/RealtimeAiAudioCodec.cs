@@ -11,5 +11,8 @@ public enum RealtimeAiAudioCodec
     ALAW,
     
     [Description("pcm16")]
-    PCM16
+    PCM16,
+    
+    [Description("image")]
+    IMAGE
 }
