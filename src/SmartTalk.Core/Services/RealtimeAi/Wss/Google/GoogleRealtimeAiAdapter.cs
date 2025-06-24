@@ -68,21 +68,26 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
 
     public string BuildAudioAppendMessage(RealtimeAiWssAudioData audioData)
     {
-        var mimeType = audioData.CustomProperties.GetValueOrDefault(nameof(RealtimeAiEngineContext.InputFormat)) switch
+        object message = audioData.CustomProperties.GetValueOrDefault(nameof(RealtimeAiEngineContext.InputFormat)) switch
         {
-            RealtimeAiAudioCodec.PCM16 => "audio/pcm;rate=24000",
-            RealtimeAiAudioCodec.IMAGE => "image/jpeg",
+            RealtimeAiAudioCodec.PCM16 => new
+            {
+                realtimeInput = new
+                {
+                    audio = new { data = audioData.Base64Payload, mimeType = "audio/pcm;rate=24000" }
+                }
+            },
+            RealtimeAiAudioCodec.IMAGE => new
+            {
+                realtimeInput = new
+                {
+                    video = new { data = audioData.Base64Payload, mimeType = "image/jpeg" }
+                }
+            },
             _ => throw new NotSupportedException("mimeType")
         };
-
-        var message = new
-        {
-            realtimeInput = new
-            {
-                audio = new { data = audioData.Base64Payload, mimeType = mimeType }
-            }
-        };
-        var json = JsonSerializer.Serialize(message);
+        
+        var json = JsonConvert.SerializeObject(message);
         return json;
     }
     
