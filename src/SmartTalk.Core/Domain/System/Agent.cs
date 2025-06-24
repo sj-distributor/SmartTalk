@@ -34,9 +34,6 @@ public class Agent : IEntity, IHasCreatedFields
     [Column("is_send_analysis_report_to_wechat")]
     public bool IsSendAnalysisReportToWechat { get; set; } = false;
     
-    [Column("file_type")]
-    public AgentFileType FileType { get; set; }
-    
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
 }
