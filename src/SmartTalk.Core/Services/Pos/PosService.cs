@@ -303,6 +303,8 @@ public partial class PosService : IPosService
             Count = storeGroups.TryGetValue(x.Id, out var group) ? group.Count : 0
         }).ToList();
         
+        if (string.IsNullOrWhiteSpace(keyword)) return data;
+        
         return data.Where(x =>
                 (x.Company.Name?.Contains(keyword, StringComparison.OrdinalIgnoreCase) ?? false) ||
                 x.Stores.Any(s => s.Names?.Contains(keyword, StringComparison.OrdinalIgnoreCase) ?? false)).ToList();
