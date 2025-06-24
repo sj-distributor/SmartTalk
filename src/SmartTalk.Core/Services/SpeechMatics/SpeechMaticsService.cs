@@ -183,6 +183,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         var newRecord = new AgentMessageRecord
         {
             AgentId = agentId,
+            GroupKey = groupKey,
             RecordId = recordId,
             MessageNumber = messageNumber
         };
