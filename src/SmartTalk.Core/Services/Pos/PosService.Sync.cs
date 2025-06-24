@@ -155,7 +155,7 @@ public partial class PosService
                             ProductId = product.Id.ToString(),
                             CategoryId = posCategoryId,
                             Price = product.Price,
-                            Status = true,
+                            Status = product.Status,
                             Names = JsonConvert.SerializeObject(GetLocalizedNames(product.Localizations)),
                             Modifiers = product.ModifierGroups != null ? JsonConvert.SerializeObject(product.ModifierGroups) : null,
                             Tax = product.Taxes != null ? JsonConvert.SerializeObject(product.Taxes) : null,
