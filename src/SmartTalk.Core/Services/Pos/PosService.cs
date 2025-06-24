@@ -292,7 +292,7 @@ public partial class PosService : IPosService
     private async Task<List<GetPosCompanyWithStoresData>> EnrichPosCompaniesAsync(List<PosCompanyDto> companies, string keyword, CancellationToken cancellationToken)
     {
         var stores = await _posDataProvider.GetPosCompanyStoresAsync(
-            companyIds: companies.Select(x => x.Id).ToList(), keyword: keyword, cancellationToken: cancellationToken).ConfigureAwait(false);
+            companyIds: companies.Select(x => x.Id).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var storeGroups = stores.GroupBy(x => x.CompanyId).ToDictionary(kvp => kvp.Key, kvp => kvp.ToList());
 
@@ -303,7 +303,9 @@ public partial class PosService : IPosService
             Count = storeGroups.TryGetValue(x.Id, out var group) ? group.Count : 0
         }).ToList();
         
-        return data.Where(x => x.Count > 0).ToList();
+        return data.Where(x =>
+                (x.Company.Name?.Contains(keyword, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                x.Stores.Any(s => s.Names?.Contains(keyword, StringComparison.OrdinalIgnoreCase) ?? false)).ToList();
     }
 
     private List<PosCompanyStoreDto> EnrichCompanyStores(PosCompanyDto company, Dictionary<int,List<PosCompanyStore>> storeGroups)
