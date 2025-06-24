@@ -16,5 +16,7 @@ public class AgentDto
     
     public AgentSourceSystem SourceSystem { get; set; }
     
+    public AgentFileType FileType { get; set; }
+    
     public DateTimeOffset CreatedDate { get; set; }
 }

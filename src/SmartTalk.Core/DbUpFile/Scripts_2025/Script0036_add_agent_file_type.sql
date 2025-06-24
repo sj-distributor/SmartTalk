@@ -1,0 +1,1 @@
+alter table `agent` add column `file_type` int not null;
