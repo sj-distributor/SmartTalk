@@ -144,7 +144,7 @@ public class RealtimeAiService : IRealtimeAiService
                 ms.Seek(0, SeekOrigin.Begin);
                 var rawMessage = Encoding.UTF8.GetString(ms.ToArray());
         
-                Log.Debug("ReceiveFromRealtimeClientAsync raw message: {@Message}", rawMessage);
+                Log.Information("ReceiveFromRealtimeClientAsync raw message: {@Message}", rawMessage);
         
                 try
                 {
