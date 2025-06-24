@@ -41,12 +41,8 @@ public partial class PosService
 
     public async Task<PlacePosOrderResponse> PlacePosStoreOrdersAsync(PlacePosOrderCommand command, CancellationToken cancellationToken = default)
     {
-        var order = await _posDataProvider.GetPosOrderByIdAsync(orderId: command.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var order = await GetOrAddPosOrderAsync(command, cancellationToken).ConfigureAwait(false);
 
-        if (order == null) throw new Exception("Order could not be found.");
-        
-        _mapper.Map(command, order);
-        
         var token = await GetPosTokenAsync(order.StoreId, cancellationToken).ConfigureAwait(false);
         
         await SafetyPlaceOrderAsync(order, token, command.OrderItems, command.IsWithRetry, cancellationToken).ConfigureAwait(false);
@@ -188,6 +184,28 @@ public partial class PosService
         return originalItemDict.Values.ToList();
     }
 
+    private async Task<PosOrder> GetOrAddPosOrderAsync(PlacePosOrderCommand command, CancellationToken cancellationToken)
+    {
+        PosOrder order;
+
+        if (command.OrderId.HasValue)
+        {
+            order = await _posDataProvider.GetPosOrderByIdAsync(orderId: command.OrderId.Value, cancellationToken: cancellationToken).ConfigureAwait(false);
+            
+            if (order == null) throw new Exception("Order could not be found.");
+            
+            _mapper.Map(command, order);
+        }
+        else
+        {
+            order = _mapper.Map<PosOrder>(command);
+            
+            await _posDataProvider.AddPosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+        
+        return order;
+    }
+    
     private async Task<string> GetPosTokenAsync(int storeId, CancellationToken cancellationToken)
     {
         var store = await _posDataProvider.GetPosCompanyStoreAsync(id: storeId, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -264,8 +282,6 @@ public partial class PosService
                 await MarkOrderAsSpecificStatusAsync(order, PosOrderStatus.Modified, cancellationToken).ConfigureAwait(false);
                 return;
             }
-        
-            order.Items = orderItems;
 
             var orderId = isWithRetry
                 ? await SafetyPlaceOrderWithRetryIfRequiredAsync(order, token, cancellationToken).ConfigureAwait(false)
