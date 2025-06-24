@@ -145,7 +145,6 @@ public class RealtimeAiService : IRealtimeAiService
                 try
                 {
                     using var jsonDocument = JsonSerializer.Deserialize<JsonDocument>(rawMessage);
-                    var type = jsonDocument?.RootElement.GetProperty("media").GetProperty("type").GetString();
                     var payload = jsonDocument?.RootElement.GetProperty("media").GetProperty("payload").GetString();
                     
                     if (!string.IsNullOrWhiteSpace(payload))
@@ -153,12 +152,14 @@ public class RealtimeAiService : IRealtimeAiService
                         if (!_isAiSpeaking && _wholeAudioBuffer != null)
                             await _wholeAudioBuffer.WriteAsync(Convert.FromBase64String(payload), cancellationToken).ConfigureAwait(false);
 
-                        var inputFormat = type switch
-                        {
-                            "audio" => context.InputFormat,
-                            "video" => RealtimeAiAudioCodec.IMAGE,
-                            _ => context.InputFormat
-                        };
+                        var inputFormat = context.InputFormat;
+                        if (jsonDocument.RootElement.TryGetProperty("media", out var mediaElement) && mediaElement.TryGetProperty("type", out var typeElement))
+                            inputFormat = typeElement.GetString() switch
+                            {
+                                "audio" => context.InputFormat,
+                                "video" => RealtimeAiAudioCodec.IMAGE,
+                                _ => context.InputFormat
+                            };
                         
                         await _conversationEngine.SendAudioChunkAsync(new RealtimeAiWssAudioData
                         {
