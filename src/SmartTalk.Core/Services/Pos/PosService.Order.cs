@@ -200,10 +200,25 @@ public partial class PosService
         {
             order = _mapper.Map<PosOrder>(command);
             
+            order.OrderNo = await GenerateOrderNumberAsync(order.StoreId, cancellationToken).ConfigureAwait(false);
+            
             await _posDataProvider.AddPosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
         }
         
         return order;
+    }
+    
+    private async Task<string> GenerateOrderNumberAsync(int storeId, CancellationToken cancellationToken)
+    {
+        var preOrder = await _posDataProvider.GetPosOrderSortByOrderNoAsync(storeId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        if (preOrder == null) return "0001";
+
+        var rs = Convert.ToInt32(preOrder.OrderNo);
+        
+        rs++;
+        
+        return rs.ToString("D4");
     }
     
     private async Task<string> GetPosTokenAsync(int storeId, CancellationToken cancellationToken)
