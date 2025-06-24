@@ -156,7 +156,7 @@ public class SpeechMaticsService : ISpeechMaticsService
 
             if (agent.IsWecomMessageOrder)
             {
-                var messageNumber = await SendAgentMessageRecordAsync(agent.Id, record.Id, cancellationToken);
+                var messageNumber = await SendAgentMessageRecordAsync(agent.Id, record.Id, aiSpeechAssistant.GroupKey, cancellationToken);
                 message = $"【第{messageNumber}條】\n" + message;
             }
 
@@ -169,14 +169,14 @@ public class SpeechMaticsService : ISpeechMaticsService
         }
     }
 
-    private async Task<int> SendAgentMessageRecordAsync(int agentId, int recordId, CancellationToken cancellationToken)
+    private async Task<int> SendAgentMessageRecordAsync(int agentId, int recordId, int groupKey, CancellationToken cancellationToken)
     {
         var shanghaiTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Asia/Shanghai");
         var nowShanghai = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, shanghaiTimeZone);
 
         var utcDate = TimeZoneInfo.ConvertTimeToUtc(nowShanghai.Date, shanghaiTimeZone);
 
-        var existingCount = await _aiSpeechAssistantDataProvider.GetMessageCountByAgentAndDateAsync(agentId, utcDate, cancellationToken).ConfigureAwait(false);
+        var existingCount = await _aiSpeechAssistantDataProvider.GetMessageCountByAgentAndDateAsync(groupKey, utcDate, cancellationToken).ConfigureAwait(false);
 
         var messageNumber = existingCount + 1;
 
