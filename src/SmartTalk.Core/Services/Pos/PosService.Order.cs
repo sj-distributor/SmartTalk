@@ -210,15 +210,18 @@ public partial class PosService
     
     private async Task<string> GenerateOrderNumberAsync(int storeId, CancellationToken cancellationToken)
     {
-        var preOrder = await _posDataProvider.GetPosOrderSortByOrderNoAsync(storeId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        return await _redisSafeRunner.ExecuteWithLockAsync($"generate-order-number-{storeId}", async() =>
+        {
+            var preOrder = await _posDataProvider.GetPosOrderSortByOrderNoAsync(storeId, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        if (preOrder == null) return "0001";
+            if (preOrder == null) return "0001";
 
-        var rs = Convert.ToInt32(preOrder.OrderNo);
+            var rs = Convert.ToInt32(preOrder.OrderNo);
         
-        rs++;
+            rs++;
         
-        return rs.ToString("D4");
+            return rs.ToString("D4");
+        }, wait: TimeSpan.FromSeconds(10), retry: TimeSpan.FromSeconds(1), server: RedisServer.System).ConfigureAwait(false);
     }
     
     private async Task<string> GetPosTokenAsync(int storeId, CancellationToken cancellationToken)
