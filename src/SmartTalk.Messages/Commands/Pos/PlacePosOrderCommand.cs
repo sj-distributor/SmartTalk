@@ -9,6 +9,8 @@ public class PlacePosOrderCommand : ICommand
 {
     public int? OrderId { get; set; }
     
+    public int StoreId { get; set; }
+    
     public string OrderItems { get; set; }
 
     public bool IsWithRetry { get; set; } = true;
