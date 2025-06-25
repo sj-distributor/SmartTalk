@@ -79,9 +79,11 @@ public partial class PosDataProvider
 
     public async Task<List<PosCustomerInfoDto>> GetPosCustomerInfosAsync(string phone, CancellationToken cancellationToken)
     {
-        return await _repository.QueryNoTracking<PosOrder>()
+        var latestOrders = await _repository.QueryNoTracking<PosOrder>()
             .Where(x => x.Phone.Contains(phone) && !string.IsNullOrEmpty(x.Phone))
             .GroupBy(x => x.Phone).Select(g => g.OrderByDescending(x => x.CreatedDate).First())
-            .ProjectTo<PosCustomerInfoDto>(_mapper.ConfigurationProvider).ToListAsync(cancellationToken);
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+
+        return _mapper.Map<List<PosCustomerInfoDto>>(latestOrders);
     }
 }
