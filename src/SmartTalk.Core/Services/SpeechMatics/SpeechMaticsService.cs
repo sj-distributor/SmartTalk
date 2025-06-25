@@ -150,6 +150,8 @@ public class SpeechMaticsService : ISpeechMaticsService
         
         record.Status = PhoneOrderRecordStatus.Sent;
         record.TranscriptionText = completion.Content.FirstOrDefault()?.Text ?? "";
+        
+        Log.Information("Handle Smarties callback if required: {@Agent}、{@Record}", agent, record);
 
         if (agent.SourceSystem == AgentSourceSystem.Smarties)
             await CallBackSmartiesRecordAsync(agent, record, cancellationToken).ConfigureAwait(false);
@@ -175,8 +177,12 @@ public class SpeechMaticsService : ISpeechMaticsService
 
     private async Task CallBackSmartiesRecordAsync(Agent agent, PhoneOrderRecord record, CancellationToken cancellationToken = default)
     {
+        Log.Information("CallBackSmartiesRecordAsync: {@Agent}、{@Record}", agent, record);
+        
         if (agent.Type == AgentType.AiKid)
         {
+            Log.Information("Ready send ai kid record !!!");
+            
             var aiKid = await _aiSpeechAssistantDataProvider.GetAiKidAsync(agentId: agent.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
         
             Log.Information("Get ai kid: {@Kid} by agentId: {AgentId}", aiKid, agent.Id);
