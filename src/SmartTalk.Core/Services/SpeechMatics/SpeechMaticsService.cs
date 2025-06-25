@@ -5,6 +5,7 @@ using Microsoft.IdentityModel.Tokens;
 using OpenAI.Chat;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.PhoneOrder;
+using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Extensions;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Ffmpeg;
@@ -160,7 +161,7 @@ public class SpeechMaticsService : ISpeechMaticsService
 
             if (agent.IsWecomMessageOrder && aiSpeechAssistant != null)
             {
-                var messageNumber = await SendAgentMessageRecordAsync(agent.Id, record.Id, aiSpeechAssistant.GroupKey, cancellationToken);
+                var messageNumber = await SendAgentMessageRecordAsync(agent, record.Id, aiSpeechAssistant.GroupKey, cancellationToken);
                 message = $"【第{messageNumber}條】\n" + message;
             }
 
@@ -173,12 +174,12 @@ public class SpeechMaticsService : ISpeechMaticsService
         }
     }
 
-    private async Task<int> SendAgentMessageRecordAsync(int agentId, int recordId, int groupKey, CancellationToken cancellationToken)
+    private async Task<int> SendAgentMessageRecordAsync(Agent agent, int recordId, int groupKey, CancellationToken cancellationToken)
     {
-        var shanghaiTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Asia/Shanghai");
-        var nowShanghai = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, shanghaiTimeZone);
+        var timezone = !string.IsNullOrWhiteSpace(agent.Timezone) ? TimeZoneInfo.FindSystemTimeZoneById(agent.Timezone) : TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+        var nowDate = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, timezone);
 
-        var utcDate = TimeZoneInfo.ConvertTimeToUtc(nowShanghai.Date, shanghaiTimeZone);
+        var utcDate = TimeZoneInfo.ConvertTimeToUtc(nowDate.Date, timezone);
 
         var existingCount = await _aiSpeechAssistantDataProvider.GetMessageCountByAgentAndDateAsync(groupKey, utcDate, cancellationToken).ConfigureAwait(false);
 
@@ -186,7 +187,7 @@ public class SpeechMaticsService : ISpeechMaticsService
 
         var newRecord = new AgentMessageRecord
         {
-            AgentId = agentId,
+            AgentId = agent.Id,
             GroupKey = groupKey,
             RecordId = recordId,
             MessageNumber = messageNumber
