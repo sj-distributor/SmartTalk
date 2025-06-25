@@ -54,7 +54,7 @@ public partial class PosDataProvider
         if (endDate.HasValue)
             query = query.Where(x => x.CreatedDate <= endDate.Value);
         
-        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+        return await query.OrderByDescending(x => x.CreatedDate).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task UpdatePosOrdersAsync(List<PosOrder> orders, bool forceSave = true, CancellationToken cancellationToken = default)
@@ -79,7 +79,9 @@ public partial class PosDataProvider
 
     public async Task<List<PosCustomerInfoDto>> GetPosCustomerInfosAsync(string phone, CancellationToken cancellationToken)
     {
-        return await _repository.QueryNoTracking<PosOrder>().Where(x => x.Phone.Contains(phone))
-            .ProjectTo<PosCustomerInfoDto>(_mapper.ConfigurationProvider).ToListAsync(cancellationToken).ConfigureAwait(false);
+        return await _repository.QueryNoTracking<PosOrder>()
+            .Where(x => x.Phone.Contains(phone) && !string.IsNullOrEmpty(x.Phone))
+            .GroupBy(x => x.Phone).Select(g => g.OrderByDescending(x => x.CreatedDate).First())
+            .ProjectTo<PosCustomerInfoDto>(_mapper.ConfigurationProvider).ToListAsync(cancellationToken);
     }
 }
