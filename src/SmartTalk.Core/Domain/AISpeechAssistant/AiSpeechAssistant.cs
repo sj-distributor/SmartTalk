@@ -48,6 +48,9 @@ public class AiSpeechAssistant : IEntity, IHasCreatedFields
     [Column("is_display")]
     public bool IsDisplay { get; set; }
     
+    [Column("group_key")]
+    public int GroupKey { get; set; }
+    
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
     
