@@ -55,6 +55,8 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
     
     Task AddAgentMessageRecordAsync(AgentMessageRecord messageRecord, CancellationToken cancellationToken = default);
     
+    Task<AiKid> GetAiKidAsync(int? agentId = null, CancellationToken cancellationToken = default);
+    
     Task AddAiKidAsync(AiKid kid, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task<Domain.AISpeechAssistant.AiSpeechAssistant> GetAiSpeechAssistantWithKnowledgeAsync(int assistantId, CancellationToken cancellationToken);
@@ -298,6 +300,16 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
         await _repository.InsertAsync(messageRecord, cancellationToken).ConfigureAwait(false);
         
         await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<AiKid> GetAiKidAsync(int? agentId = null, CancellationToken cancellationToken = default)
+    {
+        var query = _repository.Query<AiKid>();
+
+        if (agentId.HasValue)
+            query = query.Where(x => x.AgentId == agentId.Value);
+        
+        return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task AddAiKidAsync(AiKid kid, bool forceSave = true, CancellationToken cancellationToken = default)
