@@ -34,6 +34,9 @@ public class Agent : IEntity, IHasCreatedFields
     [Column("is_send_analysis_report_to_wechat")]
     public bool IsSendAnalysisReportToWechat { get; set; } = false;
     
+    [Column("timezone")]
+    public string Timezone { get; set; }
+    
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
 }
