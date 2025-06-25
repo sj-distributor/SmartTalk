@@ -361,6 +361,7 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
     {
         var query = from agent in _repository.Query<Agent>()
             join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agent.Id equals assistant.AgentId
+            where agent.Id == agentId
             select new { assistant, agent };
 
         var result = await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
