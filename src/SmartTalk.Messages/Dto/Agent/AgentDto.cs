@@ -18,5 +18,7 @@ public class AgentDto
     
     public AgentSourceSystem SourceSystem { get; set; }
     
+    public string Timezone { get; set; }
+    
     public DateTimeOffset CreatedDate { get; set; }
 }

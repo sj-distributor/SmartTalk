@@ -1,0 +1,1 @@
+alter table `agent` add column `timezone` varchar(48) null;

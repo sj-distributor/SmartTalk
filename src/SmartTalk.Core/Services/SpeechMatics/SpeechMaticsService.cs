@@ -6,6 +6,8 @@ using Microsoft.IdentityModel.Tokens;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using Twilio.Rest.Api.V2010.Account;
 using SmartTalk.Core.Domain.PhoneOrder;
+using SmartTalk.Core.Domain.System;
+using SmartTalk.Core.Extensions;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Ffmpeg;
 using SmartTalk.Core.Services.Http;
@@ -17,6 +19,7 @@ using SmartTalk.Core.Settings.Twilio;
 using SmartTalk.Messages.Dto.SpeechMatics;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Commands.PhoneOrder;
+using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.Agent;
 
@@ -145,18 +148,19 @@ public class SpeechMaticsService : ISpeechMaticsService
         ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
         Log.Information("sales record analyze report:" + completion.Content.FirstOrDefault()?.Text);
         
+        record.Status = PhoneOrderRecordStatus.Sent;
         record.TranscriptionText = completion.Content.FirstOrDefault()?.Text ?? "";
 
         if (agent.SourceSystem == AgentSourceSystem.Smarties)
-            await _smartiesClient.CallBackSmartiesAiSpeechAssistantRecordAsync(new AiSpeechAssistantCallBackRequestDto { CallSid = record.SessionId, RecordUrl = record.Url, RecordAnalyzeReport =  record.TranscriptionText }, cancellationToken).ConfigureAwait(false);
+            await CallBackSmartiesRecordAsync(agent, record, cancellationToken).ConfigureAwait(false);
 
         if (!string.IsNullOrEmpty(agent.WechatRobotKey) && !string.IsNullOrEmpty(agent.WechatRobotMessage))
         {
-            var message = agent.WechatRobotMessage.Replace("#{assistant_name}", aiSpeechAssistant?.Name).Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString());
+            var message = agent.WechatRobotMessage.Replace("#{assistant_name}", aiSpeechAssistant?.Name).Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString()).Replace("#{assistant_file_url}", record.Url);
 
-            if (agent.IsWecomMessageOrder)
+            if (agent.IsWecomMessageOrder && aiSpeechAssistant != null)
             {
-                var messageNumber = await SendAgentMessageRecordAsync(agent.Id, record.Id, aiSpeechAssistant.GroupKey, cancellationToken);
+                var messageNumber = await SendAgentMessageRecordAsync(agent, record.Id, aiSpeechAssistant.GroupKey, cancellationToken);
                 message = $"【第{messageNumber}條】\n" + message;
             }
 
@@ -169,12 +173,33 @@ public class SpeechMaticsService : ISpeechMaticsService
         }
     }
 
-    private async Task<int> SendAgentMessageRecordAsync(int agentId, int recordId, int groupKey, CancellationToken cancellationToken)
+    private async Task CallBackSmartiesRecordAsync(Agent agent, PhoneOrderRecord record, CancellationToken cancellationToken = default)
     {
-        var shanghaiTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Asia/Shanghai");
-        var nowShanghai = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, shanghaiTimeZone);
+        if (agent.Type == AgentType.AiKid)
+        {
+            var aiKid = await _aiSpeechAssistantDataProvider.GetAiKidAsync(agentId: agent.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+            Log.Information("Get ai kid: {@Kid} by agentId: {AgentId}", aiKid, agent.Id);
 
-        var utcDate = TimeZoneInfo.ConvertTimeToUtc(nowShanghai.Date, shanghaiTimeZone);
+            if (aiKid == null)throw new Exception($"Could not found ai kid by agentId: {agent.Id}");
+        
+            await _smartiesClient.CallBackSmartiesAiKidRecordAsync(new AiKidCallBackRequestDto
+            {
+                Url = record.Url,
+                Uuid = aiKid.KidUuid,
+                SessionId = record.SessionId
+            }, cancellationToken).ConfigureAwait(false);
+        }
+        else
+            await _smartiesClient.CallBackSmartiesAiSpeechAssistantRecordAsync(new AiSpeechAssistantCallBackRequestDto { CallSid = record.SessionId, RecordUrl = record.Url, RecordAnalyzeReport =  record.TranscriptionText }, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<int> SendAgentMessageRecordAsync(Agent agent, int recordId, int groupKey, CancellationToken cancellationToken)
+    {
+        var timezone = !string.IsNullOrWhiteSpace(agent.Timezone) ? TimeZoneInfo.FindSystemTimeZoneById(agent.Timezone) : TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+        var nowDate = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, timezone);
+
+        var utcDate = TimeZoneInfo.ConvertTimeToUtc(nowDate.Date, timezone);
 
         var existingCount = await _aiSpeechAssistantDataProvider.GetMessageCountByAgentAndDateAsync(groupKey, utcDate, cancellationToken).ConfigureAwait(false);
 
@@ -182,7 +207,7 @@ public class SpeechMaticsService : ISpeechMaticsService
 
         var newRecord = new AgentMessageRecord
         {
-            AgentId = agentId,
+            AgentId = agent.Id,
             GroupKey = groupKey,
             RecordId = recordId,
             MessageNumber = messageNumber
