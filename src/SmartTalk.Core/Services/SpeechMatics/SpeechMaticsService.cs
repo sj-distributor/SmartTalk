@@ -158,10 +158,13 @@ public class SpeechMaticsService : ISpeechMaticsService
 
         if (!string.IsNullOrEmpty(agent.WechatRobotKey) && !string.IsNullOrEmpty(agent.WechatRobotMessage))
         {
+            Log.Information("Ready send message to wechat.");
+            
             var message = agent.WechatRobotMessage.Replace("#{assistant_name}", aiSpeechAssistant?.Name).Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString()).Replace("#{assistant_file_url}", record.Url);
 
             if (agent.IsWecomMessageOrder && aiSpeechAssistant != null)
             {
+                Log.Information("Agent: {@Agent} and Record: {Record}", agent, record);
                 var messageNumber = await SendAgentMessageRecordAsync(agent, record.Id, aiSpeechAssistant.GroupKey, cancellationToken);
                 message = $"【第{messageNumber}條】\n" + message;
             }
@@ -170,6 +173,8 @@ public class SpeechMaticsService : ISpeechMaticsService
             {
                 message += "\n\n" + record.TranscriptionText;
             }
+            
+            Log.Information("Send analysis report to wechat: {@Message}", message);
 
             await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(audioContent, agent.WechatRobotKey, message, cancellationToken).ConfigureAwait(false);
         }
@@ -202,10 +207,13 @@ public class SpeechMaticsService : ISpeechMaticsService
 
     private async Task<int> SendAgentMessageRecordAsync(Agent agent, int recordId, int groupKey, CancellationToken cancellationToken)
     {
+        Log.Information("Agent: {@Agent} with groupKey: {GroupKey} and recordId: {RecordId}", agent, groupKey, recordId);
         var timezone = !string.IsNullOrWhiteSpace(agent.Timezone) ? TimeZoneInfo.FindSystemTimeZoneById(agent.Timezone) : TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
         var nowDate = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, timezone);
 
         var utcDate = TimeZoneInfo.ConvertTimeToUtc(nowDate.Date, timezone);
+        
+        Log.Information("Timezone: {Timezone}、NowDate: {NowDate}、UtcDate: {UtcDate}", timezone, nowDate, utcDate);
 
         var existingCount = await _aiSpeechAssistantDataProvider.GetMessageCountByAgentAndDateAsync(groupKey, utcDate, cancellationToken).ConfigureAwait(false);
 
