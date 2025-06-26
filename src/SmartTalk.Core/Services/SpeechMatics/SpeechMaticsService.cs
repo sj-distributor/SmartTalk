@@ -162,19 +162,24 @@ public class SpeechMaticsService : ISpeechMaticsService
             
             var message = agent.WechatRobotMessage.Replace("#{assistant_name}", aiSpeechAssistant?.Name).Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString()).Replace("#{assistant_file_url}", record.Url);
 
+            Log.Information("Before send {@Message}", message);
             if (agent.IsWecomMessageOrder && aiSpeechAssistant != null)
             {
                 Log.Information("Agent: {@Agent} and Record: {Record}", agent, record);
                 var messageNumber = await SendAgentMessageRecordAsync(agent, record.Id, aiSpeechAssistant.GroupKey, cancellationToken);
+                Log.Information("Get message number: {MessageNumber}", messageNumber);
                 message = $"【第{messageNumber}條】\n" + message;
+                Log.Information("After append {@Message}", message);
             }
 
             if (agent.IsSendAnalysisReportToWechat && !string.IsNullOrEmpty(record.TranscriptionText))
             {
+                Log.Information("With analysis report to wechat: {@Message}", message);
                 message += "\n\n" + record.TranscriptionText;
+                Log.Information("After append analysis report to wechat: {@Message}", message);
             }
             
-            Log.Information("Send analysis report to wechat: {@Message}", message);
+            Log.Information("Send complete text to wechat: {@Message}", message);
 
             await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(audioContent, agent.WechatRobotKey, message, cancellationToken).ConfigureAwait(false);
         }
@@ -217,6 +222,8 @@ public class SpeechMaticsService : ISpeechMaticsService
 
         var existingCount = await _aiSpeechAssistantDataProvider.GetMessageCountByAgentAndDateAsync(groupKey, utcDate, cancellationToken).ConfigureAwait(false);
 
+        Log.Information("Get exist count: {ExistingCount}", existingCount);
+        
         var messageNumber = existingCount + 1;
 
         var newRecord = new AgentMessageRecord
@@ -226,9 +233,13 @@ public class SpeechMaticsService : ISpeechMaticsService
             RecordId = recordId,
             MessageNumber = messageNumber
         };
+        
+        Log.Information("Generate new agent message record: {@MessageRecord}", newRecord);
 
         await _aiSpeechAssistantDataProvider.AddAgentMessageRecordAsync(newRecord, cancellationToken).ConfigureAwait(false);
 
+        Log.Information("Get new agent message record after persist: {@MessageRecord}", newRecord);
+        
         return messageNumber;
     }
     
