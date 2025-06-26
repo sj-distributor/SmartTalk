@@ -3,6 +3,9 @@ using SmartTalk.Core.Data;
 using SmartTalk.Core.Domain.Restaurants;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Ioc;
+using SmartTalk.Core.Services.Http.Clients;
+using SmartTalk.Messages.Dto.EasyPos;
+using SmartTalk.Messages.Dto.Restaurant;
 
 namespace SmartTalk.Core.Services.Restaurants;
 
@@ -26,17 +29,21 @@ public interface IRestaurantDataProvider : IScopedDependency
         int? pageIndex = null, int? pageSize = null, int? restaurantId = null, string keyword = null, CancellationToken cancellationToken = default);
 
     Task DeleteRestaurantsAsync(List<Restaurant> restaurants, bool forceSave = true, CancellationToken cancellationToken = default);
+
+    Task<List<RestaurantMenuItemSpecificationDto>> GetRestaurantMenuItemSpecificationAsync(string restaurantName, CancellationToken cancellationToken);
 }
 
 public class RestaurantDataProvider : IRestaurantDataProvider
 {
     private readonly IRepository _repository;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IEasyPosClient _easyPosClient;
 
-    public RestaurantDataProvider(IUnitOfWork unitOfWork, IRepository repository)
+    public RestaurantDataProvider(IUnitOfWork unitOfWork, IRepository repository, IEasyPosClient easyPosClient)
     {
         _unitOfWork = unitOfWork;
         _repository = repository;
+        _easyPosClient = easyPosClient;
     }
 
     public async Task AddRestaurantAsync(Restaurant restaurant, bool forceSave = true, CancellationToken cancellationToken = default)
@@ -134,5 +141,56 @@ public class RestaurantDataProvider : IRestaurantDataProvider
         await _repository.DeleteAllAsync(restaurants, cancellationToken).ConfigureAwait(false);
 
         if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<RestaurantMenuItemSpecificationDto>> GetRestaurantMenuItemSpecificationAsync(string restaurantName, CancellationToken cancellationToken)
+    {
+        var posResponse = await _easyPosClient.GetEasyPosRestaurantMenusAsync(restaurantName, cancellationToken);
+        
+        var products = posResponse?.Data?.Products; 
+        var menus = posResponse?.Data?.Menus; 
+        if (products == null || !products.Any()) return new List<RestaurantMenuItemSpecificationDto>();
+        
+        var result = new List<RestaurantMenuItemSpecificationDto>();
+        
+        foreach (var product in products)
+        {
+            var productMenus = menus?.Where(menu => product.MenuIds != null && product.MenuIds.Contains(menu.MenuId)).ToList();
+            
+            var productTimePeriods = productMenus?
+                .SelectMany(menu => menu.TimePeriods ?? new List<EasyPosResponseTimePeriods>())
+                .DistinctBy(tp => tp.Id).ToList() ?? new List<EasyPosResponseTimePeriods>();
+
+            foreach (var modifierGroup in product.ModifierGroups ?? Enumerable.Empty<EasyPosResponseModifierGroups>())
+            {
+                foreach (var loc in (modifierGroup.Localizations ?? Enumerable.Empty<EasyPosResponseLocalization>())
+                         .Where(l => l.Field == "name"))
+                {
+                    var modifiers = modifierGroup.ModifierProducts?
+                        .SelectMany(mp => mp.Localizations?
+                            .Where(l => l.LanguageCode == loc.LanguageCode && l.Field == "name")
+                            .Select(l => new ModifierPromptItemDto
+                            {
+                                Name = l.Value,
+                                Price = mp.Price
+                            }) ?? Enumerable.Empty<ModifierPromptItemDto>())
+                        .ToList() ?? new List<ModifierPromptItemDto>();
+
+                    result.Add(new RestaurantMenuItemSpecificationDto
+                    {
+                        LanguageCode = loc.LanguageCode,
+                        GroupName = loc.Value,
+                        ItemPrice = product.Price,
+                        MinimumSelect = modifierGroup.MinimumSelect,
+                        MaximumSelect = modifierGroup.MaximumSelect,
+                        MaximumRepetition = modifierGroup.MaximumRepetition,
+                        ModifierItems = modifiers,
+                        TimePeriods = productTimePeriods
+                    });
+                }
+            }
+        }
+
+        return result;
     }
 }
