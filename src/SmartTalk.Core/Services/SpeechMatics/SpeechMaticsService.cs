@@ -19,6 +19,7 @@ using SmartTalk.Core.Settings.Twilio;
 using SmartTalk.Messages.Dto.SpeechMatics;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Commands.PhoneOrder;
+using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.WeChat;
 using SmartTalk.Messages.Enums.Agent;
@@ -153,11 +154,11 @@ public class SpeechMaticsService : ISpeechMaticsService
         record.TranscriptionText = completion.Content.FirstOrDefault()?.Text ?? "";
 
         if (agent.SourceSystem == AgentSourceSystem.Smarties)
-            await _smartiesClient.CallBackSmartiesAiSpeechAssistantRecordAsync(new AiSpeechAssistantCallBackRequestDto { CallSid = record.SessionId, RecordUrl = record.Url, RecordAnalyzeReport =  record.TranscriptionText }, cancellationToken).ConfigureAwait(false);
+            await CallBackSmartiesRecordAsync(agent, record, cancellationToken).ConfigureAwait(false);
 
         if (!string.IsNullOrEmpty(agent.WechatRobotKey) && !string.IsNullOrEmpty(agent.WechatRobotMessage))
         {
-            var message = agent.WechatRobotMessage.Replace("#{assistant_name}", aiSpeechAssistant?.Name).Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString()).Replace("#{assistant_file_url}",record.Url);
+            var message = agent.WechatRobotMessage.Replace("#{assistant_name}", aiSpeechAssistant?.Name).Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString()).Replace("#{assistant_file_url}", record.Url);
 
             if (agent.IsWecomMessageOrder && aiSpeechAssistant != null)
             {
@@ -172,6 +173,27 @@ public class SpeechMaticsService : ISpeechMaticsService
 
             await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(audioContent, agent.WechatRobotKey, message, cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    private async Task CallBackSmartiesRecordAsync(Agent agent, PhoneOrderRecord record, CancellationToken cancellationToken = default)
+    {
+        if (agent.Type == AgentType.AiKid)
+        {
+            var aiKid = await _aiSpeechAssistantDataProvider.GetAiKidAsync(agentId: agent.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+            Log.Information("Get ai kid: {@Kid} by agentId: {AgentId}", aiKid, agent.Id);
+
+            if (aiKid == null)throw new Exception($"Could not found ai kid by agentId: {agent.Id}");
+        
+            await _smartiesClient.CallBackSmartiesAiKidRecordAsync(new AiKidCallBackRequestDto
+            {
+                Url = record.Url,
+                Uuid = aiKid.KidUuid,
+                SessionId = record.SessionId
+            }, cancellationToken).ConfigureAwait(false);
+        }
+        else
+            await _smartiesClient.CallBackSmartiesAiSpeechAssistantRecordAsync(new AiSpeechAssistantCallBackRequestDto { CallSid = record.SessionId, RecordUrl = record.Url, RecordAnalyzeReport =  record.TranscriptionText }, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<int> SendAgentMessageRecordAsync(Agent agent, int recordId, int groupKey, CancellationToken cancellationToken)
