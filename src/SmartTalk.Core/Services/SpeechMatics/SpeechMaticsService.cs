@@ -165,7 +165,7 @@ public class SpeechMaticsService : ISpeechMaticsService
             Log.Information("Before send {@Message}", message);
             if (agent.IsWecomMessageOrder && aiSpeechAssistant != null)
             {
-                Log.Information("Agent: {@Agent} and Record: {Record}", agent, record);
+                Log.Information("Agent: {@Agent} and Record: {@Record}", agent, record);
                 var messageNumber = await SendAgentMessageRecordAsync(agent, record.Id, aiSpeechAssistant.GroupKey, cancellationToken);
                 Log.Information("Get message number: {MessageNumber}", messageNumber);
                 message = $"【第{messageNumber}條】\n" + message;

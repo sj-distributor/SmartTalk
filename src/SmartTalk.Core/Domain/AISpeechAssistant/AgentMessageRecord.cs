@@ -21,13 +21,10 @@ public class AgentMessageRecord : IEntity
     public int RecordId { get; set; }
 
     [Column("message_date")]
-    public DateTimeOffset MessageDate { get; set; }
+    public DateTimeOffset MessageDate { get; set; } = DateTimeOffset.Now;
 
     [Column("message_number")]
     public int MessageNumber { get; set; }
-    
-    [Column("is_wecom_message_order")]
-    public bool IsWeComMessageOrder { get; set; }
     
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; } = DateTimeOffset.Now;
