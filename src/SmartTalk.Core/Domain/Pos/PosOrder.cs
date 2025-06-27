@@ -43,7 +43,7 @@ public class PosOrder : IEntity, IHasCreatedFields, IHasModifiedFields
     public string OrderId { get; set; }
 
     [Column("status")]
-    public PosOrderStatus Status { get; set; }
+    public PosOrderStatus Status { get; set; } = PosOrderStatus.Pending;
 
     [Column("count")]
     public int Count { get; set; }
