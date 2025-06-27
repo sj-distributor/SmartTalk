@@ -261,18 +261,17 @@ public partial class AiSpeechAssistantService
         
         return assistant;
     }
-    
+
     private string ModelVoiceMapping(AiKidVoiceType? voiceType)
+    {
+        if (!voiceType.HasValue) return "alloy";
+        
+        return voiceType.Value switch
         {
-            if (!voiceType.HasValue) return "alloy";
-            
-            return voiceType.Value switch
-            {
-                AiKidVoiceType.Male => "ash",
-                AiKidVoiceType.Female => "sage",
-                _ => "sage"
-            };
-        }
+            AiKidVoiceType.Male => "ash",
+            _ => "alloy"
+        };
+    }
 
     private async Task<Agent> AddAgentAsync(int? relateId, AgentType type, AgentSourceSystem sourceSystem, bool isDisplay, CancellationToken cancellationToken)
     {
