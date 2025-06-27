@@ -270,7 +270,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             .Replace("#{user_profile}", string.IsNullOrEmpty(userProfile?.ProfileJson) ? " " : userProfile.ProfileJson)
             .Replace("#{current_time}", currentTime)
             .Replace("#{customer_phone}", from.StartsWith("+1") ? from[2..] : from)
-            .Replace("#{pst_date}", $"{pstTime.Date}-{pstTime.DayOfWeek}");
+            .Replace("#{pst_date}", $"{pstTime.Date:yyyy-MM-dd} {pstTime.DayOfWeek}");
         
         Log.Information($"The final prompt: {finalPrompt}");
 
