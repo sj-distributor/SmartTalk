@@ -199,6 +199,7 @@ public partial class PosService
         else
         {
             order = _mapper.Map<PosOrder>(command);
+            order.Status = PosOrderStatus.Pending;
             
             order.OrderNo = await GenerateOrderNumberAsync(order.StoreId, cancellationToken).ConfigureAwait(false);
             
