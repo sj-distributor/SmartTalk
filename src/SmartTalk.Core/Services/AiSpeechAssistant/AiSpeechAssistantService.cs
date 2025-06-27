@@ -269,7 +269,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         var finalPrompt = knowledge.Prompt
             .Replace("#{user_profile}", string.IsNullOrEmpty(userProfile?.ProfileJson) ? " " : userProfile.ProfileJson)
             .Replace("#{current_time}", currentTime)
-            .Replace("#{customer_phone}", from.StartsWith("+1") ? from[2..] : from);
+            .Replace("#{customer_phone}", from.StartsWith("+1") ? from[2..] : from)
+            .Replace("#{pst_weekday}", pstTime.DayOfWeek.ToString());
         
         Log.Information($"The final prompt: {finalPrompt}");
 
@@ -442,6 +443,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         }
         catch (WebSocketException ex)
         {
+            _backgroundJobClient.Enqueue<IAiSpeechAssistantProcessJobService>(x => x.RecordAiSpeechAssistantCallAsync(_aiSpeechAssistantStreamContext, CancellationToken.None));
             Log.Error("Receive from Twilio error: {@ex}", ex);
         }
     }
