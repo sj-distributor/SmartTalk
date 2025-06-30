@@ -213,8 +213,16 @@ public partial class PosService
     {
         return await _redisSafeRunner.ExecuteWithLockAsync($"generate-order-number-{storeId}", async() =>
         {
-            var preOrder = await _posDataProvider.GetPosOrderSortByOrderNoAsync(storeId, cancellationToken: cancellationToken).ConfigureAwait(false);
+            var store = await _posDataProvider.GetPosCompanyStoreAsync(id: storeId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            if (store == null) throw new Exception("Store could not be found.");
+
+            var (utcStart,utcEnd) = GetUtcMidnightForTimeZone(DateTimeOffset.UtcNow, store.Timezone);
+            
+            var preOrder = await _posDataProvider.GetPosOrderSortByOrderNoAsync(storeId, utcStart, utcEnd, cancellationToken: cancellationToken).ConfigureAwait(false);
         
+            Log.Information("Get store pre order: {@Order} by store id: {storeId}", preOrder, storeId);
+            
             if (preOrder == null) return "0001";
 
             var rs = Convert.ToInt32(preOrder.OrderNo);
@@ -223,6 +231,28 @@ public partial class PosService
         
             return rs.ToString("D4");
         }, wait: TimeSpan.FromSeconds(10), retry: TimeSpan.FromSeconds(1), server: RedisServer.System).ConfigureAwait(false);
+    }
+
+    private string TimezoneMapping(string timezone)
+    {
+        if (string.IsNullOrEmpty(timezone)) return "Pacific Standard Time";
+        
+        return timezone.Trim() switch
+        {
+            "America/Los_Angeles" => "Pacific Standard Time",
+            _ => timezone.Trim()
+        };
+    }
+    
+    private (DateTimeOffset utcStart, DateTimeOffset utcEnd) GetUtcMidnightForTimeZone(DateTimeOffset utcNow, string timezone)
+    {
+        var windowsId = TimezoneMapping(timezone);
+        var tz = TimeZoneInfo.FindSystemTimeZoneById(windowsId);
+        var localTime = TimeZoneInfo.ConvertTime(utcNow, tz);
+        var localMidnight = new DateTimeOffset(localTime.Date, tz.GetUtcOffset(localTime.Date));
+        var utcStart = localMidnight.ToUniversalTime();
+        var utcEnd = utcStart.AddDays(1);
+        return (utcStart, utcEnd);
     }
     
     private async Task<string> GetPosTokenAsync(int storeId, CancellationToken cancellationToken)
