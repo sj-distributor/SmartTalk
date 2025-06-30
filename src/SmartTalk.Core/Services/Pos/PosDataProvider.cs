@@ -228,7 +228,7 @@ public partial class PosDataProvider : IPosDataProvider
 
         query = isNormalSort
             ? query.OrderByDescending(x => x.Store.CreatedDate)
-            : query.OrderByDescending(x => x.OrderCount).ThenByDescending(x => x.Store.CreatedDate);
+            : query.OrderByDescending(x => x.OrderCount).ThenBy(x => x.Store.CreatedDate);
 
         var result = await query.ToListAsync(cancellationToken).ConfigureAwait(false);
 
