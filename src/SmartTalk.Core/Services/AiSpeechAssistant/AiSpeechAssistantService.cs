@@ -265,16 +265,40 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
         var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
+        var sundayDates = GetSundayDates(pstTime);
         
         var finalPrompt = knowledge.Prompt
             .Replace("#{user_profile}", string.IsNullOrEmpty(userProfile?.ProfileJson) ? " " : userProfile.ProfileJson)
             .Replace("#{current_time}", currentTime)
             .Replace("#{customer_phone}", from.StartsWith("+1") ? from[2..] : from)
-            .Replace("#{pst_date}", $"{pstTime.Date:yyyy-MM-dd} {pstTime.DayOfWeek}");
+            .Replace("#{pst_date}", $"{pstTime.Date:yyyy-MM-dd} {pstTime.DayOfWeek}")
+            .Replace("#{sunday_dates}", sundayDates);
         
         Log.Information($"The final prompt: {finalPrompt}");
 
         return (assistant, knowledge, finalPrompt);
+    }
+
+    private string GetSundayDates(DateTimeOffset dateTime)
+    {
+        var sb = new StringBuilder();
+        var date = new DateTime(dateTime.Year, 1, 1);
+        
+        while (date.DayOfWeek != DayOfWeek.Sunday)
+        {
+            date = date.AddDays(1);
+        }
+        
+        while (date.Year == dateTime.Year)
+        {
+            sb.Append(date.ToString("yyyy-MM-dd")).Append(' ');
+            date = date.AddDays(7);
+        }
+        
+        if (sb.Length > 0)
+            sb.Length -= 1;
+
+        return sb.ToString();
     }
     
     private async Task ConnectOpenAiRealTimeSocketAsync(
