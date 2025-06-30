@@ -17,7 +17,7 @@ public partial interface IPosDataProvider
     
     Task AddPosOrdersAsync(List<PosOrder> orders, bool forceSave = true, CancellationToken cancellationToken = default);
 
-    Task<PosOrder> GetPosOrderSortByOrderNoAsync(int storeId, CancellationToken cancellationToken);
+    Task<PosOrder> GetPosOrderSortByOrderNoAsync(int storeId, DateTimeOffset utcStart, DateTimeOffset utcEnd, CancellationToken cancellationToken);
     
     Task<List<PosCustomerInfoDto>> GetPosCustomerInfosAsync(string phone, CancellationToken cancellationToken);
 }
@@ -71,9 +71,10 @@ public partial class PosDataProvider
         if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
     
-    public async Task<PosOrder> GetPosOrderSortByOrderNoAsync(int storeId, CancellationToken cancellationToken)
+    public async Task<PosOrder> GetPosOrderSortByOrderNoAsync(int storeId, DateTimeOffset utcStart, DateTimeOffset utcEnd, CancellationToken cancellationToken)
     {
-        return await _repository.Query<PosOrder>(x => x.StoreId == storeId)
+        return await _repository.Query<PosOrder>()
+            .Where(x => x.StoreId == storeId && x.CreatedDate >= utcStart && x.CreatedDate < utcEnd)
             .OrderByDescending(x => x.OrderNo).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 

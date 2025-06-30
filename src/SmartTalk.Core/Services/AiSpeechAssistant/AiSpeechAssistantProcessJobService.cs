@@ -340,7 +340,9 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
 
     private async Task<string> GenerateOrderNumberAsync(PosCompanyStore store, CancellationToken cancellationToken)
     {
-        var preOrder = await _posDataProvider.GetPosOrderSortByOrderNoAsync(store.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var (utcStart,utcEnd) = GetUtcMidnightForTimeZone(DateTimeOffset.UtcNow, store.Timezone);
+        
+        var preOrder = await _posDataProvider.GetPosOrderSortByOrderNoAsync(store.Id, utcStart, utcEnd, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         if (preOrder == null) return "0001";
 
@@ -349,6 +351,28 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         rs++;
         
         return rs.ToString("D4");
+    }
+    
+    private string TimezoneMapping(string timezone)
+    {
+        if (string.IsNullOrEmpty(timezone)) return "Pacific Standard Time";
+        
+        return timezone.Trim() switch
+        {
+            "America/Los_Angeles" => "Pacific Standard Time",
+            _ => timezone.Trim()
+        };
+    }
+    
+    private (DateTimeOffset utcStart, DateTimeOffset utcEnd) GetUtcMidnightForTimeZone(DateTimeOffset utcNow, string timezone)
+    {
+        var windowsId = TimezoneMapping(timezone);
+        var tz = TimeZoneInfo.FindSystemTimeZoneById(windowsId);
+        var localTime = TimeZoneInfo.ConvertTime(utcNow, tz);
+        var localMidnight = new DateTimeOffset(localTime.Date, tz.GetUtcOffset(localTime.Date));
+        var utcStart = localMidnight.ToUniversalTime();
+        var utcEnd = utcStart.AddDays(1);
+        return (utcStart, utcEnd);
     }
 
     private decimal GetOrderItemTaxes(List<PosProduct> products, List<SimilarResult> similarResults)
