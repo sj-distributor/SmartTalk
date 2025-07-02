@@ -6,6 +6,7 @@ using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Account;
 using SmartTalk.Core.Services.Agents;
+using SmartTalk.Core.Services.Caching;
 using SmartTalk.Core.Services.Caching.Redis;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Identity;
@@ -50,6 +51,7 @@ public partial class PosService : IPosService
     private readonly IMapper _mapper;
     private readonly IVectorDb _vectorDb;
     private readonly ICurrentUser _currentUser;
+    private readonly ICacheManager _cacheManager;
     private readonly IEasyPosClient _easyPosClient;
     private readonly ISmartiesClient _smartiesClient;
     private readonly IRedisSafeRunner _redisSafeRunner;
@@ -62,6 +64,7 @@ public partial class PosService : IPosService
         IMapper mapper,
         IVectorDb vectorDb,
         ICurrentUser currentUser,
+        ICacheManager cacheManager,
         IEasyPosClient easyPosClient,
         ISmartiesClient smartiesClient,
         IRedisSafeRunner redisSafeRunner,
@@ -73,6 +76,7 @@ public partial class PosService : IPosService
         _mapper = mapper;
         _vectorDb = vectorDb;
         _currentUser = currentUser;
+        _cacheManager = cacheManager;
         _easyPosClient = easyPosClient;
         _smartiesClient = smartiesClient;
         _redisSafeRunner = redisSafeRunner;

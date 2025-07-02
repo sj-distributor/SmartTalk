@@ -1,7 +1,9 @@
 using Serilog;
 using Newtonsoft.Json;
 using System.Globalization;
+using SmartTalk.Core.Constants;
 using SmartTalk.Core.Domain.Pos;
+using SmartTalk.Core.Services.Caching;
 using SmartTalk.Messages.Commands.Pos;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Pos;
@@ -45,7 +47,7 @@ public partial class PosService
 
         var token = await GetPosTokenAsync(order.StoreId, cancellationToken).ConfigureAwait(false);
         
-        await SafetyPlaceOrderAsync(order, token, command.OrderItems, command.IsWithRetry, cancellationToken).ConfigureAwait(false);
+        await SafetyPlaceOrderAsync(order, token, command.IsWithRetry, cancellationToken).ConfigureAwait(false);
 
         return new PlacePosOrderResponse
         {
@@ -317,7 +319,7 @@ public partial class PosService
         }
     }
 
-    private async Task SafetyPlaceOrderAsync(PosOrder order, string token, string orderItems, bool isWithRetry, CancellationToken cancellationToken)
+    private async Task SafetyPlaceOrderAsync(PosOrder order, string token, bool isWithRetry, CancellationToken cancellationToken)
     {
         var lockKey = $"place-order-key-{order.Id}";
         await _redisSafeRunner.ExecuteWithLockAsync(lockKey, async () =>
@@ -331,147 +333,105 @@ public partial class PosService
                 await MarkOrderAsSpecificStatusAsync(order, PosOrderStatus.Modified, cancellationToken).ConfigureAwait(false);
                 return;
             }
-
-            var orderId = isWithRetry
-                ? await SafetyPlaceOrderWithRetryIfRequiredAsync(order, token, cancellationToken).ConfigureAwait(false)
-                : await SafetyPlaceOrderIfRequiredAsync(order, token, cancellationToken).ConfigureAwait(false);
-        
-            order.OrderId = orderId;
+            
+            order.OrderId = await SafetyPlaceOrderWithRetryAsync(order, token, isWithRetry, cancellationToken).ConfigureAwait(false);
             
             await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
         }, wait: TimeSpan.FromSeconds(10), retry: TimeSpan.FromSeconds(1), server: RedisServer.System).ConfigureAwait(false);
     }
 
-    private async Task<string> SafetyPlaceOrderWithRetryIfRequiredAsync(PosOrder order, string token, CancellationToken cancellationToken)
+    private async Task<PlaceOrderToEasyPosResponseDto> PlaceOrderAsync(PosOrder order, string token, TimeSpan? timeout, CancellationToken cancellationToken)
     {
-        const int maxRetries = 4;
-        var orderId = string.Empty;
-        
-        for (var attempt = 1; attempt <= maxRetries; attempt++)
+        var response = await _easyPosClient.PlaceOrderAsync(new PlaceOrderToEasyPosRequestDto
         {
-            try
+            Type = order.Type == PosOrderReceiveType.Pickup ? 1 : 3,
+            IsTaxFree = false,
+            Notes = string.IsNullOrEmpty(order.Notes) ? string.Empty : order.Notes,
+            SourceType = 3,
+            OrderItems = JsonConvert.DeserializeObject<List<PhoneCallOrderItem>>(order.Items),
+            Customer = new PhoneCallOrderCustomer
             {
-                var response = await _easyPosClient.PlaceOrderAsync(new PlaceOrderToEasyPosRequestDto
-                {
-                    Type = order.Type == PosOrderReceiveType.Pickup ? 1 : 3,
-                    IsTaxFree = false,
-                    Notes = order.Notes,
-                    SourceType = 3,
-                    OrderItems = JsonConvert.DeserializeObject<List<PhoneCallOrderItem>>(order.Items),
-                    Customer = new PhoneCallOrderCustomer
+                Name = order.Name,
+                Phone = order.Phone,
+                Addresses =
+                [
+                    new PhoneCallOrderCustomerAddress
                     {
-                        Name = order.Name,
-                        Phone = order.Phone,
-                        Addresses =
-                        [
-                            new PhoneCallOrderCustomerAddress
-                            {
-                                FullAddress = string.IsNullOrEmpty(order.Address) ? string.Empty : order.Address,
-                                Room = string.IsNullOrEmpty(order.Room) ? string.Empty : order.Room,
-                                AddressImg = string.Empty,
-                                City = string.Empty,
-                                State = string.Empty,
-                                PostalCode = string.Empty,
-                                Country = string.Empty,
-                                Line1 = string.Empty,
-                                Line2 = string.Empty,
-                                Lat = string.IsNullOrEmpty(order.Latitude) ? 0 : double.Parse(order.Latitude, CultureInfo.InvariantCulture),
-                                Lng = string.IsNullOrEmpty(order.Longitude) ? 0 : double.Parse(order.Longitude, CultureInfo.InvariantCulture)
-                            }
-                        ]
+                        FullAddress = string.IsNullOrEmpty(order.Address) ? string.Empty : order.Address,
+                        Room = string.IsNullOrEmpty(order.Room) ? string.Empty : order.Room,
+                        AddressImg = string.Empty,
+                        City = string.Empty,
+                        State = string.Empty,
+                        PostalCode = string.Empty,
+                        Country = string.Empty,
+                        Line1 = string.Empty,
+                        Line2 = string.Empty,
+                        Lat = string.IsNullOrEmpty(order.Latitude) ? 0 : double.Parse(order.Latitude, CultureInfo.InvariantCulture),
+                        Lng = string.IsNullOrEmpty(order.Longitude) ? 0 : double.Parse(order.Longitude, CultureInfo.InvariantCulture)
                     }
-                }, token, attempt == 1 ? TimeSpan.FromSeconds(10) : TimeSpan.FromSeconds(30), cancellationToken).ConfigureAwait(false);
-
-                Log.Information("Place order: {@Order} at attempt {attempt} and response is: {@Response}", order, attempt, response);
-
-                if (response is { Success: true })
-                {
-                    await MarkOrderAsSpecificStatusAsync(order, PosOrderStatus.Sent, cancellationToken).ConfigureAwait(false);
-
-                    orderId = response.Data?.Order?.Id.ToString() ?? string.Empty;
-                    
-                    break;
-                }
-
-                if (order.Status != PosOrderStatus.Error)
-                    await MarkOrderAsSpecificStatusAsync(order, PosOrderStatus.Error, cancellationToken).ConfigureAwait(false);
-
-                if (attempt < maxRetries)
-                    await Task.Delay(TimeSpan.FromSeconds(30), cancellationToken);
+                ]
             }
-            catch (Exception ex)
-            {
-                if (order.Status != PosOrderStatus.Error)
-                    await MarkOrderAsSpecificStatusAsync(order, PosOrderStatus.Error, cancellationToken).ConfigureAwait(false);
+        }, token, timeout, cancellationToken).ConfigureAwait(false);
 
-                if (attempt < maxRetries)
-                {
-                    await Task.Delay(TimeSpan.FromSeconds(30), cancellationToken);
-                    continue;
-                }
-
-                Log.Information("Place order {@Order}: All auto retry failed", order);
-            }
-        }
+        Log.Information("Place order: {@Order} and response is: {@Response}", order, response);
         
-        return orderId;
+        return response;
     }
 
-    private async Task<string> SafetyPlaceOrderIfRequiredAsync(PosOrder order, string token, CancellationToken cancellationToken)
+    private async Task<string> SafetyPlaceOrderWithRetryAsync(PosOrder order, string token, bool isRetry, CancellationToken cancellationToken)
     {
+        const int maxRetries = 4;
+        var retryKey = $"pos-order-retry-count-{order.Id}";
+        
+        var result = await _cacheManager.GetOrAddAsync(retryKey,
+            () => Task.FromResult(new Dictionary<string, int> { { "count", 1 } }), new RedisCachingSetting(), cancellationToken).ConfigureAwait(false);
+        
+        if (isRetry && result["count"] >= maxRetries) return string.Empty;
+        
         try
         {
-            var response = await _easyPosClient.PlaceOrderAsync(new PlaceOrderToEasyPosRequestDto
-            {
-                Type = 1,
-                IsTaxFree = false,
-                Notes = string.IsNullOrEmpty(order.Notes) ? string.Empty : order.Notes,
-                OrderItems = JsonConvert.DeserializeObject<List<PhoneCallOrderItem>>(order.Items),
-                Customer = new PhoneCallOrderCustomer
-                {
-                    Name = order.Name,
-                    Phone = order.Phone,
-                    Addresses =
-                    [
-                        new PhoneCallOrderCustomerAddress
-                        {
-                            FullAddress = string.IsNullOrEmpty(order.Address) ? string.Empty : order.Address,
-                            Room = string.IsNullOrEmpty(order.Room) ? string.Empty : order.Room,
-                            AddressImg = string.Empty,
-                            City = string.Empty,
-                            State = string.Empty,
-                            PostalCode = string.Empty,
-                            Country = string.Empty,
-                            Line1 = string.Empty,
-                            Line2 = string.Empty,
-                            Lat = string.IsNullOrEmpty(order.Latitude) ? 0 : double.Parse(order.Latitude, CultureInfo.InvariantCulture),
-                            Lng = string.IsNullOrEmpty(order.Longitude) ? 0 : double.Parse(order.Longitude, CultureInfo.InvariantCulture)
-                        }
-                    ]
-                }
-            }, token, TimeSpan.FromSeconds(10), cancellationToken).ConfigureAwait(false);
-
-            Log.Information("Place order: {@Order} and response is: {@Response}", order, response);
+            Log.Information("Start trying to place an order for the {RetryCount}th time and isRetry is {IsRetry}", result["count"], isRetry);
+                
+            var response = await PlaceOrderAsync(order, token, result["count"] <= 1 ? TimeSpan.FromSeconds(10) : null, cancellationToken).ConfigureAwait(false);
 
             if (response is { Success: true })
             {
-                await MarkOrderAsSpecificStatusAsync(order, PosOrderStatus.Sent, cancellationToken).ConfigureAwait(false);
+                await _cacheManager.RemoveAsync(retryKey, new RedisCachingSetting(), cancellationToken).ConfigureAwait(false);
                 
+                await MarkOrderAsSpecificStatusAsync(order, PosOrderStatus.Sent, cancellationToken).ConfigureAwait(false);
+
                 return response.Data?.Order?.Id.ToString() ?? string.Empty;
             }
 
             if (order.Status != PosOrderStatus.Error)
                 await MarkOrderAsSpecificStatusAsync(order, PosOrderStatus.Error, cancellationToken).ConfigureAwait(false);
+
+            await HandleRetryOrCleanupAsync(isRetry, result, retryKey, order, token, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             if (order.Status != PosOrderStatus.Error)
                 await MarkOrderAsSpecificStatusAsync(order, PosOrderStatus.Error, cancellationToken).ConfigureAwait(false);
+            
+            await HandleRetryOrCleanupAsync(isRetry, result, retryKey, order, token, cancellationToken).ConfigureAwait(false);
 
-            Log.Information("Place order {@Order} failed: {@Message}", order, ex.Message);
+            Log.Information("Place order {@Order} failed: {@Exception}", order, ex);
         }
         
         return string.Empty;
+    }
+    
+    private async Task HandleRetryOrCleanupAsync(bool isRetry, Dictionary<string, int> result, string retryKey, PosOrder order, string token, CancellationToken cancellationToken)
+    {
+        if (isRetry)
+        {
+            result["count"] += 1;
+            await _cacheManager.SetAsync(retryKey, result, new RedisCachingSetting(), cancellationToken).ConfigureAwait(false);
+
+            _smartTalkBackgroundJobClient.Schedule(() => SafetyPlaceOrderAsync(order, token, true, cancellationToken), TimeSpan.FromSeconds(30), HangfireConstants.InternalHostingRestaurant);
+        }
+        else
+            await _cacheManager.RemoveAsync(retryKey, new RedisCachingSetting(), cancellationToken).ConfigureAwait(false);
     }
 
     private async Task MarkOrderAsSpecificStatusAsync(PosOrder order, PosOrderStatus status, CancellationToken cancellationToken)

@@ -52,6 +52,9 @@ public class PhoneCallOrderItemModifiers
     [JsonProperty("quantity")]
     public int Quantity { get; set; }
     
+    [JsonProperty("notes")]
+    public string Notes { get; set; } = string.Empty;
+    
     [JsonProperty("modifierId")]
     public long ModifierId { get; set; }
     
