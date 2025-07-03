@@ -94,8 +94,10 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
 
         if (foods?.FoodDetails == null || foods.FoodDetails.Count == 0) return result;
         
-        var restaurant = await _restaurantDataProvider.GetRestaurantByNameAsync(record.RestaurantInfo.Name, cancellationToken).ConfigureAwait(false);
+        var restaurant = await _restaurantDataProvider.GetRestaurantByNameAsync(record?.RestaurantInfo?.Name, cancellationToken).ConfigureAwait(false);
 
+        if (restaurant == null) return result;
+        
         var tasks = foods.FoodDetails.Where(x => !string.IsNullOrWhiteSpace(x?.FoodName)).Select(async foodDetail =>
         {
             var similarFoodsResponse = await _vectorDb.GetSimilarListAsync(

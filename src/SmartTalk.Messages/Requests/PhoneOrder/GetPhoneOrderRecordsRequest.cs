@@ -11,7 +11,7 @@ namespace SmartTalk.Messages.Requests.PhoneOrder;
 [SmartTalkAuthorize(Permissions = new[] { SecurityStore.Permissions.CanViewPhoneOrder })]
 public class GetPhoneOrderRecordsRequest : IRequest
 {
-    public int AgentId { get; set; }
+    public int? AgentId { get; set; }
     
     public DateTimeOffset? Date { get; set; }
 
