@@ -368,10 +368,14 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
     {
         var windowsId = TimezoneMapping(timezone);
         var tz = TimeZoneInfo.FindSystemTimeZoneById(windowsId);
+        
         var localTime = TimeZoneInfo.ConvertTime(utcNow, tz);
-        var localMidnight = new DateTimeOffset(localTime.Date, tz.GetUtcOffset(localTime.Date));
-        var utcStart = localMidnight.ToUniversalTime();
+        var localMidnight = new DateTime(localTime.Year, localTime.Month, localTime.Day, 0, 0, 0);
+        var localStart = new DateTimeOffset(localMidnight, tz.GetUtcOffset(localMidnight));
+        
+        var utcStart = localStart.ToUniversalTime();
         var utcEnd = utcStart.AddDays(1);
+        
         return (utcStart, utcEnd);
     }
 
