@@ -14,7 +14,7 @@ public partial interface IPhoneOrderDataProvider
 {
     Task AddPhoneOrderRecordsAsync(List<PhoneOrderRecord> phoneOrderRecords, bool forceSave = true, CancellationToken cancellationToken = default);
     
-    Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(int? agentId, string name, CancellationToken cancellationToken);
+    Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(int agentId, string name, CancellationToken cancellationToken);
 
     Task<List<PhoneOrderOrderItem>> AddPhoneOrderItemAsync(List<PhoneOrderOrderItem> phoneOrderOrderItems, bool forceSave = true, CancellationToken cancellationToken = default);
     
@@ -53,10 +53,12 @@ public partial class PhoneOrderDataProvider
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(int? agentId, string name, CancellationToken cancellationToken)
+    public async Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(int agentId, string name, CancellationToken cancellationToken)
     {
-        var query = _repository.Query<PhoneOrderRecord>().Where(r => r.Status == PhoneOrderRecordStatus.Sent && (!agentId.HasValue || r.AgentId == agentId.Value)
-            && (string.IsNullOrEmpty(name) || r.Name.Contains(name)));
+        var query = from agent in _repository.Query<Agent>()
+            join record in _repository.Query<PhoneOrderRecord>() on agent.Id equals record.AgentId
+            where agent.Id == agentId && record.Status == PhoneOrderRecordStatus.Sent && (string.IsNullOrEmpty(name) || agent.Name.Contains(name))
+            select record;
         
         return await query.OrderByDescending(record => record.CreatedDate).ToListAsync(cancellationToken).ConfigureAwait(false);
     }

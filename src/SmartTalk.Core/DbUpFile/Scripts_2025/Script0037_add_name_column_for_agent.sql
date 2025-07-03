@@ -1,0 +1,1 @@
+alter table `agent` add column `name` varchar(48) null;

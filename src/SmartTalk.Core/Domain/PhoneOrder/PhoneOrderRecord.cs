@@ -20,9 +20,6 @@ public class PhoneOrderRecord : IEntity
     
     [Column("session_id")]
     public string SessionId { get; set; }
-    
-    [Column("name")]
-    public string Name { get; set; }
 
     [Column("status")]
     public PhoneOrderRecordStatus Status { get; set; } = PhoneOrderRecordStatus.Recieved;
