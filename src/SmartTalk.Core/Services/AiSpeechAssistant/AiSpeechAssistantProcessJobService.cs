@@ -60,6 +60,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         {
             AgentId = context.Assistant.AgentId,
             SessionId = context.CallSid,
+            Name = context.Assistant.Name,
             Status = PhoneOrderRecordStatus.Transcription,
             Tips = context.ConversationTranscription.FirstOrDefault().Item2,
             TranscriptionText = string.Empty,

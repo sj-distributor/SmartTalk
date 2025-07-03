@@ -6,6 +6,8 @@ namespace SmartTalk.Messages.Dto.PhoneOrder;
 public class PhoneOrderRecordDto
 {
     public int Id { get; set; }
+    
+    public string Name { get; set; }
 
     public string SessionId { get; set; }
     
