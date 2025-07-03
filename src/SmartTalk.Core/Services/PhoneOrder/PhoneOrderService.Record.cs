@@ -634,7 +634,7 @@ public partial class PhoneOrderService
 
         var pstTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
 
-        var pstDate = inputDate.Value.Date;
+        var pstDate = new DateTime(inputDate.Value.Year, inputDate.Value.Month, inputDate.Value.Day, 0, 0, 0);
         var pstStart = new DateTimeOffset(pstDate, pstTimeZone.GetUtcOffset(pstDate));
 
         var utcStart = pstStart.ToUniversalTime();
