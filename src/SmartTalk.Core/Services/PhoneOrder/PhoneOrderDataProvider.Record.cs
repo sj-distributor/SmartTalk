@@ -55,9 +55,10 @@ public partial class PhoneOrderDataProvider
 
     public async Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(int agentId, string name, CancellationToken cancellationToken)
     {
-        var query = from agent in _repository.Query<Agent>()
-            join record in _repository.Query<PhoneOrderRecord>() on agent.Id equals record.AgentId
-            where agent.Id == agentId && record.Status == PhoneOrderRecordStatus.Sent && (string.IsNullOrEmpty(name) || agent.Name.Contains(name))
+        var query = from record in _repository.Query<PhoneOrderRecord>()
+            join agent in _repository.Query<Agent>() on record.AgentId equals agent.Id
+            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agent.Id equals assistant.AgentId
+            where record.Status == PhoneOrderRecordStatus.Sent && agent.Id == agentId && (string.IsNullOrEmpty(name) || assistant.Name.Contains(name))
             select record;
         
         return await query.OrderByDescending(record => record.CreatedDate).ToListAsync(cancellationToken).ConfigureAwait(false);

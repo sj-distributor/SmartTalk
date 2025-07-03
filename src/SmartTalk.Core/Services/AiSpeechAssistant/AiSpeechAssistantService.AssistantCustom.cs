@@ -272,7 +272,6 @@ public partial class AiSpeechAssistantService
         {
             RelateId = domain?.Id ?? 0,
             Type = command.AgentType,
-            Name = command.AssistantName,
             SourceSystem = command.SourceSystem
         };
 
