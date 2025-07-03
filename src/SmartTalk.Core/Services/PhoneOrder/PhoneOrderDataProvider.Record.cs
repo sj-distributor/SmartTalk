@@ -67,7 +67,7 @@ public partial class PhoneOrderDataProvider
         var query = from record in _repository.Query<PhoneOrderRecord>()
             join agent in _repository.Query<Agent>() on record.AgentId equals agent.Id
             join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agent.Id equals assistant.AgentId
-            where record.Status == PhoneOrderRecordStatus.Sent || (!string.IsNullOrEmpty(record.Url) && record.Status != PhoneOrderRecordStatus.NoContent)
+            where (record.Status == PhoneOrderRecordStatus.Sent || (!string.IsNullOrEmpty(record.Url) && record.Status != PhoneOrderRecordStatus.NoContent))
                 && (!agentId.HasValue || agent.Id == agentId.Value) && (string.IsNullOrEmpty(name) || assistant.Name.Contains(name))
             select record;
         
