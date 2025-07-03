@@ -49,7 +49,7 @@ public partial class PhoneOrderService
     {
         var (utcStart, utcEnd) = ConvertPstDateToUtcRange(request.Date);
 
-        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(request.AgentId, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
+        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(request.AgentId,  request.Name, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
 
         var enrichedRecords = _mapper.Map<List<PhoneOrderRecordDto>>(records);
 

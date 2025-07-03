@@ -15,7 +15,7 @@ public partial interface IPhoneOrderDataProvider
 {
     Task AddPhoneOrderRecordsAsync(List<PhoneOrderRecord> phoneOrderRecords, bool forceSave = true, CancellationToken cancellationToken = default);
     
-    Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(int agentId, DateTimeOffset? utcStart = null, DateTimeOffset? utcEnd = null, CancellationToken cancellationToken = default);
+    Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(int agentId, string name, DateTimeOffset? utcStart = null, DateTimeOffset? utcEnd = null, CancellationToken cancellationToken = default);
 
     Task<List<PhoneOrderOrderItem>> AddPhoneOrderItemAsync(List<PhoneOrderOrderItem> phoneOrderOrderItems, bool forceSave = true, CancellationToken cancellationToken = default);
     
@@ -62,11 +62,14 @@ public partial class PhoneOrderDataProvider
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(int agentId, DateTimeOffset? utcStart = null, DateTimeOffset? utcEnd = null, CancellationToken cancellationToken = default)
+    public async Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(int agentId, string name, DateTimeOffset? utcStart = null, DateTimeOffset? utcEnd = null, CancellationToken cancellationToken = default)
     {
-        var query = from agent in _repository.Query<Agent>()
-            join record in _repository.Query<PhoneOrderRecord>() on agent.Id equals record.AgentId
-            where agent.Id == agentId && (record.Status == PhoneOrderRecordStatus.Sent || (!string.IsNullOrEmpty(record.Url) && record.Status != PhoneOrderRecordStatus.NoContent))
+        var query = from record in _repository.Query<PhoneOrderRecord>()
+            join agent in _repository.Query<Agent>() on record.AgentId equals agent.Id
+            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agent.Id equals assistant.AgentId
+            where agent.Id == agentId
+                  && (record.Status == PhoneOrderRecordStatus.Sent || (!string.IsNullOrEmpty(record.Url) && record.Status != PhoneOrderRecordStatus.NoContent))
+                  && (string.IsNullOrEmpty(name) || assistant.Name.Contains(name))
             select record;
         
         if (utcStart.HasValue && utcEnd.HasValue)
