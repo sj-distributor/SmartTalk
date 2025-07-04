@@ -367,6 +367,6 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
 
         var result = await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
 
-        return (result.assistant, result.agent);
+        return (result?.assistant, result?.agent);
     }
 }
