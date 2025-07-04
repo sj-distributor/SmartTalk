@@ -360,12 +360,13 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
     public async Task<(Domain.AISpeechAssistant.AiSpeechAssistant Assistant, Agent Agent)> GetAiSpeechAssistantByAgentIdAsync(int agentId, CancellationToken cancellationToken)
     {
         var query = from agent in _repository.Query<Agent>()
-            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agent.Id equals assistant.AgentId
+            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agent.Id equals assistant.AgentId into assistantGroups
+            from assistant in assistantGroups.DefaultIfEmpty()
             where agent.Id == agentId
             select new { assistant, agent };
 
         var result = await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
 
-        return (result.assistant, result.agent);
+        return (result?.assistant, result?.agent);
     }
 }
