@@ -288,6 +288,8 @@ public partial class PosService
         try
         {
             var items = JsonConvert.DeserializeObject<List<PosOrderItemDto>>(order.Items);
+            
+            Log.Information("Get order items: {@OrderItems}", items);
 
             var response = await _easyPosClient.ValidatePosProductsAsync(new ValidatePosProductRequestDto
             {
