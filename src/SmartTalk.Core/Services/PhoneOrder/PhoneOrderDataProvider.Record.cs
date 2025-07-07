@@ -61,7 +61,7 @@ public partial class PhoneOrderDataProvider
             where record.Status == PhoneOrderRecordStatus.Sent && (!agentId.HasValue || agent.Id == agentId.Value) && (string.IsNullOrEmpty(name) || assistant.Name.Contains(name))
             select record;
         
-        return await query.OrderByDescending(record => record.CreatedDate).ToListAsync(cancellationToken).ConfigureAwait(false);
+        return await query.OrderByDescending(record => record.CreatedDate).Distinct().ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task UpdatePhoneOrderRecordsAsync(PhoneOrderRecord record, bool forceSave = true, CancellationToken cancellationToken = default)
