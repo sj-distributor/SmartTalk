@@ -95,6 +95,7 @@ public partial class PosService
         order.Total = response.Data.Order.TotalAmount;
         order.Tax = response.Data.Order.TotalTaxAmount;
         order.SubTotal = response.Data.Order.SubTotalAmount;
+        order.Type = response.Data.Order.Type == 1 ? PosOrderReceiveType.Pickup : PosOrderReceiveType.Delivery;
 
         var items = BuildMergedOrderItemsWithStatus(response.Data.Order.OrderItems, order.Items);
         
