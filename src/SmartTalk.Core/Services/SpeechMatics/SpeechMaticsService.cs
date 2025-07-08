@@ -171,7 +171,7 @@ public class SpeechMaticsService : ISpeechMaticsService
                 message += "\n\n" + record.TranscriptionText;
             }
 
-            await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(audioContent, agent.WechatRobotKey, message, cancellationToken).ConfigureAwait(false);
+            await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(audioContent, agent.WechatRobotKey, message, Array.Empty<string>(), cancellationToken).ConfigureAwait(false);
         }
     }
 

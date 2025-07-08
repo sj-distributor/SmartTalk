@@ -210,9 +210,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         }
         catch (Exception e) when (e.Message.Contains("quota"))
         {
-            var alertMessage = $"OpenAI API 配额超限，請盡快檢查配額與計費狀態。";
+            var alertMessage = $"服务器异常。";
             
-            await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, _workWeChatKeySetting.Key, alertMessage, cancellationToken: cancellationToken).ConfigureAwait(false);
+            await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, _workWeChatKeySetting.Key, alertMessage, mentionedList: new[]{"@all"}, cancellationToken: cancellationToken).ConfigureAwait(false);
         }
         
         var detection = await _translationClient.DetectLanguageAsync(transcription, cancellationToken).ConfigureAwait(false);
