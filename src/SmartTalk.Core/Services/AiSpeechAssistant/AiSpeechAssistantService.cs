@@ -9,7 +9,6 @@ using Twilio.TwiML.Voice;
 using SmartTalk.Core.Ioc;
 using Twilio.AspNet.Core;
 using System.Net.WebSockets;
-using System.Runtime.InteropServices;
 using AutoMapper;
 using Google.Cloud.Translation.V2;
 using SmartTalk.Core.Constants;
@@ -33,10 +32,10 @@ using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.Restaurants;
 using SmartTalk.Core.Services.STT;
 using SmartTalk.Core.Settings.Azure;
-using SmartTalk.Messages.Dto.OpenAi;
 using Twilio.Rest.Api.V2010.Account;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Core.Settings.Twilio;
+using SmartTalk.Core.Settings.WorkWeChat;
 using SmartTalk.Core.Settings.ZhiPuAi;
 using Task = System.Threading.Tasks.Task;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
@@ -45,8 +44,6 @@ using SmartTalk.Messages.Events.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.Attachments;
 using SmartTalk.Messages.Dto.Attachments;
-using SmartTalk.Messages.Enums.Agent;
-using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.STT;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 using RecordingResource = Twilio.Rest.Api.V2010.Account.Call.RecordingResource;
@@ -84,6 +81,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly IPhoneOrderService _phoneOrderService;
     private readonly IAgentDataProvider _agentDataProvider;
     private readonly ISpeechToTextService _speechToTextService;
+    private readonly WorkWeChatKeySetting _workWeChatKeySetting;
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
     private readonly IRestaurantDataProvider _restaurantDataProvider;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
@@ -115,6 +113,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         IAgentDataProvider agentDataProvider,
         IOpenAiDataProvider openAiDataProvider,
         ISpeechToTextService speechToTextService,
+        WorkWeChatKeySetting workWeChatKeySetting,
         ISmartTalkHttpClientFactory httpClientFactory,
         IRestaurantDataProvider restaurantDataProvider,
         IPhoneOrderDataProvider phoneOrderDataProvider,
@@ -137,6 +136,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _translationClient = translationClient;
         _openAiDataProvider = openAiDataProvider;
         _speechToTextService = speechToTextService;
+        _workWeChatKeySetting = workWeChatKeySetting;
         _backgroundJobClient = backgroundJobClient;
         _restaurantDataProvider = restaurantDataProvider;
         _phoneOrderDataProvider = phoneOrderDataProvider;
@@ -223,9 +223,19 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         record.Url = command.RecordingUrl;
         
         var audioFileRawBytes = await _httpClientFactory.GetAsync<byte[]>(record.Url, cancellationToken).ConfigureAwait(false);
-        
-        var transcription = await _speechToTextService.SpeechToTextAsync(
-            audioFileRawBytes, fileType: TranscriptionFileType.Wav, responseFormat: TranscriptionResponseFormat.Text, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        string transcription = null;
+        try
+        { 
+            transcription = await _speechToTextService.SpeechToTextAsync(
+                audioFileRawBytes, fileType: TranscriptionFileType.Wav, responseFormat: TranscriptionResponseFormat.Text, cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception e) when (e.Message.Contains("quota"))
+        {
+            var alertMessage = $"服务器异常。";
+            
+            await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, _workWeChatKeySetting.Key, alertMessage, mentionedList: new[]{"@all"}, cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
         
         var detection = await _translationClient.DetectLanguageAsync(transcription, cancellationToken).ConfigureAwait(false);
         

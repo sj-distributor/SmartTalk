@@ -181,7 +181,7 @@ public class SpeechMaticsService : ISpeechMaticsService
             
             Log.Information("Send complete text to wechat: {@Message}", message);
 
-            await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(audioContent, agent.WechatRobotKey, message, cancellationToken).ConfigureAwait(false);
+            await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(audioContent, agent.WechatRobotKey, message, Array.Empty<string>(), cancellationToken).ConfigureAwait(false);
         }
     }
 
