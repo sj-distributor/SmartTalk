@@ -20,11 +20,11 @@ public interface IEasyPosClient : IScopedDependency
 
     Task<EasyPosMerchantResponseDto> GetPosCompanyStoreMessageAsync(EasyPosTokenRequestDto request, CancellationToken cancellationToken);
     
-    Task<PlaceOrderToEasyPosResponseDto> PlaceOrderAsync(PlaceOrderToEasyPosRequestDto request, string token, TimeSpan? timeout = null, CancellationToken cancellationToken = default);
+    Task<PlaceOrderToEasyPosResponseDto> PlaceOrderAsync(PlaceOrderToEasyPosRequestDto request, string baseUrl, string token, TimeSpan? timeout = null, CancellationToken cancellationToken = default);
 
     Task<GetOrderResponse> GetPosOrderAsync(GetOrderRequestDto request, CancellationToken cancellationToken);
     
-    Task<ValidatePosProductResponseDto> ValidatePosProductsAsync(ValidatePosProductRequestDto request, string token, CancellationToken cancellationToken);
+    Task<ValidatePosProductResponseDto> ValidatePosProductsAsync(ValidatePosProductRequestDto request, string baseUrl, string token, CancellationToken cancellationToken);
 }
 
 public class EasyPosClient : IEasyPosClient
@@ -82,12 +82,16 @@ public class EasyPosClient : IEasyPosClient
 
     public async Task<EasyPosTokenResponseDto> GetEasyPosTokenAsync(EasyPosTokenRequestDto request, CancellationToken cancellationToken)
     {
+        var baseUrl = GetBaseUrl(request.BaseUrl);
+        
         return await _httpClientFactory.PostAsJsonAsync<EasyPosTokenResponseDto>(
-            $"{_easyPosSetting.BaseUrl}/api/merchant/oauth/token", request, cancellationToken).ConfigureAwait(false);
+            $"{baseUrl}/api/merchant/oauth/token", request, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<EasyPosResponseDto> GetPosCompanyStoreMenusAsync(EasyPosTokenRequestDto request, CancellationToken cancellationToken)
     {
+        var baseUrl = GetBaseUrl(request.BaseUrl);
+        
         var authorization = await GetEasyPosTokenAsync(request, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Getting the store pos token");
@@ -98,7 +102,7 @@ public class EasyPosClient : IEasyPosClient
         }
         
         return await _httpClientFactory.GetAsync<EasyPosResponseDto>(
-            requestUrl: $"{_easyPosSetting.BaseUrl}/api/merchant/resource", headers: new Dictionary<string, string>
+            requestUrl: $"{baseUrl}/api/merchant/resource", headers: new Dictionary<string, string>
             {
                 { "Authorization", $"Bearer {authorization.Data}"}
             }, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -106,6 +110,8 @@ public class EasyPosClient : IEasyPosClient
 
     public async Task<EasyPosMerchantResponseDto> GetPosCompanyStoreMessageAsync(EasyPosTokenRequestDto request, CancellationToken cancellationToken)
     {
+        var baseUrl = GetBaseUrl(request.BaseUrl);
+        
         var authorization = await GetEasyPosTokenAsync(request, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Getting the store pos token");
@@ -116,16 +122,18 @@ public class EasyPosClient : IEasyPosClient
         }
         
         return await _httpClientFactory.GetAsync<EasyPosMerchantResponseDto>(
-            requestUrl: $"{_easyPosSetting.BaseUrl}/api/merchant", headers: new Dictionary<string, string>
+            requestUrl: $"{baseUrl}/api/merchant", headers: new Dictionary<string, string>
             {
                 { "Authorization", $"Bearer {authorization.Data}"}
             }, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<PlaceOrderToEasyPosResponseDto> PlaceOrderAsync(PlaceOrderToEasyPosRequestDto request, string token, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
+    public async Task<PlaceOrderToEasyPosResponseDto> PlaceOrderAsync(PlaceOrderToEasyPosRequestDto request, string baseUrl, string token, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
     {
+        baseUrl = GetBaseUrl(baseUrl);
+        
         return await _httpClientFactory.PostAsJsonAsync<PlaceOrderToEasyPosResponseDto>(
-            $"{_easyPosSetting.BaseUrl}/api/merchant/order", request, cancellationToken,
+            $"{baseUrl}/api/merchant/order", request, cancellationToken,
             headers: new Dictionary<string, string>
             {
                 { "Authorization", $"Bearer {token}" }
@@ -134,6 +142,8 @@ public class EasyPosClient : IEasyPosClient
     
     public async Task<GetOrderResponse> GetPosOrderAsync(GetOrderRequestDto request, CancellationToken cancellationToken)
     {
+        var baseUrl = GetBaseUrl(request.BaseUrl);
+        
         var authorization = await GetEasyPosTokenAsync(new EasyPosTokenRequestDto
         {
             AppId = request.AppId,
@@ -148,16 +158,18 @@ public class EasyPosClient : IEasyPosClient
         }
         
         return await _httpClientFactory.GetAsync<GetOrderResponse>(
-            requestUrl: $"{_easyPosSetting.BaseUrl}/api/merchant/order?id={request.OrderId}", headers: new Dictionary<string, string>
+            requestUrl: $"{baseUrl}/api/merchant/order?id={request.OrderId}", headers: new Dictionary<string, string>
             {
                 { "Authorization", $"Bearer {authorization.Data}"}
             }, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<ValidatePosProductResponseDto> ValidatePosProductsAsync(ValidatePosProductRequestDto request, string token, CancellationToken cancellationToken)
+    public async Task<ValidatePosProductResponseDto> ValidatePosProductsAsync(ValidatePosProductRequestDto request, string baseUrl, string token, CancellationToken cancellationToken)
     {
+        baseUrl = GetBaseUrl(baseUrl);
+        
         return await _httpClientFactory.PostAsJsonAsync<ValidatePosProductResponseDto>(
-            requestUrl: $"{_easyPosSetting.BaseUrl}/api/merchant/order/order-item/product/validate", request, headers: new Dictionary<string, string>
+            requestUrl: $"{baseUrl}/api/merchant/order/order-item/product/validate", request, headers: new Dictionary<string, string>
             {
                 { "Authorization", $"Bearer {token}"}
             }, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -171,5 +183,10 @@ public class EasyPosClient : IEasyPosClient
                 (_easyPosSetting.MoonHouseAuthorization, _easyPosSetting.MoonHouseMerchantId, _easyPosSetting.MoonHouseCompanyId, _easyPosSetting.MoonHouseMerchantStaffId),
             _ => throw new NotSupportedException(restaurantName)
         };
+    }
+
+    private string GetBaseUrl(string baseUrl)
+    {
+        return string.IsNullOrWhiteSpace(baseUrl) ? _easyPosSetting.BaseUrl : baseUrl.Trim();
     }
 }
