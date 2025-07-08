@@ -45,7 +45,7 @@ public partial class PosService
     {
         var order = await GetOrAddPosOrderAsync(command, cancellationToken).ConfigureAwait(false);
 
-        var token = await GetPosTokenAsync(order.StoreId, cancellationToken).ConfigureAwait(false);
+        var token = await GetPosTokenAsync(order, cancellationToken).ConfigureAwait(false);
         
         await SafetyPlaceOrderAsync(order, token, command.IsWithRetry, cancellationToken).ConfigureAwait(false);
 
@@ -262,9 +262,9 @@ public partial class PosService
         return (utcStart, utcEnd);
     }
     
-    private async Task<string> GetPosTokenAsync(int storeId, CancellationToken cancellationToken)
+    private async Task<string> GetPosTokenAsync(PosOrder order, CancellationToken cancellationToken)
     {
-        var store = await _posDataProvider.GetPosCompanyStoreAsync(id: storeId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var store = await _posDataProvider.GetPosCompanyStoreAsync(id: order.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (store == null) throw new Exception("Store could not be found.");
         
@@ -276,12 +276,14 @@ public partial class PosService
         
         Log.Information("Getting the store pos token");
 
-        if (authorization == null || string.IsNullOrEmpty(authorization.Data) || !authorization.Success)
-        {
-            throw new Exception("Failed to get token");
-        }
-
-        return authorization.Data;
+        if (authorization != null && !string.IsNullOrEmpty(authorization.Data) && authorization.Success)
+            return authorization.Data;
+        
+        order.Status = PosOrderStatus.Error;
+            
+        await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
+            
+        throw new Exception("Failed to get token");
     }
 
     private async Task<bool> ValidatePosProductsAsync(PosOrder order, string token, CancellationToken cancellationToken)
