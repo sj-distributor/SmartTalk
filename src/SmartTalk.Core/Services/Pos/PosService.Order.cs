@@ -279,7 +279,7 @@ public partial class PosService
         if (authorization != null && !string.IsNullOrEmpty(authorization.Data) && authorization.Success)
             return authorization.Data;
         
-        order.Status = PosOrderStatus.Error;
+        order.Status = PosOrderStatus.Modified;
             
         await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
             
