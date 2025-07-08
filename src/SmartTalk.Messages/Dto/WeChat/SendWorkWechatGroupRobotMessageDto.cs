@@ -23,7 +23,7 @@ public class SendWorkWechatGroupRobotTextDto
     public string Content { get; set; }
     
     [JsonProperty("mentioned_list", NullValueHandling = NullValueHandling.Ignore)]
-    public string MentionedList { get; set; }
+    public string[] MentionedList { get; set; }
     
     [JsonProperty("mentioned_mobile_list", NullValueHandling = NullValueHandling.Ignore)]
     public string MentionedMobileList { get; set; }
