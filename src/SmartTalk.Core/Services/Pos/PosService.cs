@@ -206,6 +206,7 @@ public partial class PosService : IPosService
 
         var easyPosMerchant = await _easyPosClient.GetPosCompanyStoreMessageAsync(new EasyPosTokenRequestDto()
         {
+            BaseUrl = command.Link,
             AppId = command.AppId,
             AppSecret = command.AppSecret
         }, cancellationToken).ConfigureAwait(false);

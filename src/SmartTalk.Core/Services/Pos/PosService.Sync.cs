@@ -29,7 +29,7 @@ public partial class PosService
         Log.Information("Get the store info: {@store}", store);
         
         var posConfiguration = await _easyPosClient.GetPosCompanyStoreMenusAsync(
-            new EasyPosTokenRequestDto { AppId = store.AppId, AppSecret = store.AppSecret }, cancellationToken).ConfigureAwait(false);
+            new EasyPosTokenRequestDto { BaseUrl = store.Link, AppId = store.AppId, AppSecret = store.AppSecret }, cancellationToken).ConfigureAwait(false);
 
         Log.Information("Get the pos configuration: {@posConfiguration}", posConfiguration);
         

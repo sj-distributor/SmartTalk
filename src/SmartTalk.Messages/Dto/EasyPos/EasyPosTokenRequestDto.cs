@@ -5,6 +5,9 @@ namespace SmartTalk.Messages.Dto.EasyPos;
 
 public class EasyPosTokenRequestDto
 {
+    [JsonProperty("url")]
+    public string BaseUrl { get; set; }
+    
     [JsonProperty("appId")]
     public string AppId { get; set; }
     

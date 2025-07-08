@@ -45,9 +45,9 @@ public partial class PosService
     {
         var order = await GetOrAddPosOrderAsync(command, cancellationToken).ConfigureAwait(false);
 
-        var token = await GetPosTokenAsync(order, cancellationToken).ConfigureAwait(false);
+        var (store, token) = await GetPosTokenAsync(order, cancellationToken).ConfigureAwait(false);
         
-        await SafetyPlaceOrderAsync(order, token, command.IsWithRetry, cancellationToken).ConfigureAwait(false);
+        await SafetyPlaceOrderAsync(order, store, token, command.IsWithRetry, cancellationToken).ConfigureAwait(false);
 
         return new PlacePosOrderResponse
         {
@@ -67,14 +67,15 @@ public partial class PosService
     
         var store = await _posDataProvider.GetPosCompanyStoreAsync(id: order.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        if (store == null || string.IsNullOrEmpty(store.AppId) || string.IsNullOrEmpty(store.AppSecret))
+        if (store == null || string.IsNullOrEmpty(store.Link) || string.IsNullOrEmpty(store.AppId) || string.IsNullOrEmpty(store.AppSecret))
         {
-            Log.Error("Store could not be found or app id could not be found.");
+            Log.Error("Store could not be found or appId、url、secret could not be empty.");
             return;
         }
     
         var response = await _easyPosClient.GetPosOrderAsync(new GetOrderRequestDto
         {
+            BaseUrl = store.Link,
             AppId = store.AppId,
             AppSecret = store.AppSecret,
             OrderId = command.OrderId,
@@ -262,7 +263,7 @@ public partial class PosService
         return (utcStart, utcEnd);
     }
     
-    private async Task<string> GetPosTokenAsync(PosOrder order, CancellationToken cancellationToken)
+    private async Task<(PosCompanyStore Store, string Token)> GetPosTokenAsync(PosOrder order, CancellationToken cancellationToken)
     {
         var store = await _posDataProvider.GetPosCompanyStoreAsync(id: order.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -270,6 +271,7 @@ public partial class PosService
         
         var authorization = await _easyPosClient.GetEasyPosTokenAsync(new EasyPosTokenRequestDto
         {
+            BaseUrl = store.Link,
             AppId = store.AppId,
             AppSecret = store.AppSecret
         }, cancellationToken).ConfigureAwait(false);
@@ -277,7 +279,7 @@ public partial class PosService
         Log.Information("Getting the store pos token");
 
         if (authorization != null && !string.IsNullOrEmpty(authorization.Data) && authorization.Success)
-            return authorization.Data;
+            return (store, authorization.Data);
         
         order.Status = PosOrderStatus.Modified;
             
@@ -286,7 +288,7 @@ public partial class PosService
         throw new Exception("Failed to get token");
     }
 
-    private async Task<bool> ValidatePosProductsAsync(PosOrder order, string token, CancellationToken cancellationToken)
+    private async Task<bool> ValidatePosProductsAsync(PosOrder order, PosCompanyStore store, string token, CancellationToken cancellationToken)
     {
         try
         {
@@ -297,7 +299,7 @@ public partial class PosService
             var response = await _easyPosClient.ValidatePosProductsAsync(new ValidatePosProductRequestDto
             {
                 ProductIds = items.Select(x => x.ProductId).ToList(),
-            }, token, cancellationToken).ConfigureAwait(false);
+            }, store.Link, token, cancellationToken).ConfigureAwait(false);
         
             Log.Information("Validating pos products response: {@Response}", response);
 
@@ -328,14 +330,14 @@ public partial class PosService
         }
     }
 
-    private async Task SafetyPlaceOrderAsync(PosOrder order, string token, bool isWithRetry, CancellationToken cancellationToken)
+    private async Task SafetyPlaceOrderAsync(PosOrder order, PosCompanyStore store, string token, bool isWithRetry, CancellationToken cancellationToken)
     {
         var lockKey = $"place-order-key-{order.Id}";
         await _redisSafeRunner.ExecuteWithLockAsync(lockKey, async () =>
         {
             if(order.Status == PosOrderStatus.Sent) throw new Exception("Order is already sent.");
 
-            var result = await ValidatePosProductsAsync(order, token, cancellationToken).ConfigureAwait(false);
+            var result = await ValidatePosProductsAsync(order, store, token, cancellationToken).ConfigureAwait(false);
 
             if (!result)
             {
@@ -343,13 +345,13 @@ public partial class PosService
                 return;
             }
             
-            order.OrderId = await SafetyPlaceOrderWithRetryAsync(order, token, isWithRetry, cancellationToken).ConfigureAwait(false);
+            order.OrderId = await SafetyPlaceOrderWithRetryAsync(order, store, token, isWithRetry, cancellationToken).ConfigureAwait(false);
             
             await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
         }, wait: TimeSpan.FromSeconds(10), retry: TimeSpan.FromSeconds(1), server: RedisServer.System).ConfigureAwait(false);
     }
 
-    private async Task<PlaceOrderToEasyPosResponseDto> PlaceOrderAsync(PosOrder order, string token, TimeSpan? timeout, CancellationToken cancellationToken)
+    private async Task<PlaceOrderToEasyPosResponseDto> PlaceOrderAsync(PosOrder order, PosCompanyStore store, string token, TimeSpan? timeout, CancellationToken cancellationToken)
     {
         var response = await _easyPosClient.PlaceOrderAsync(new PlaceOrderToEasyPosRequestDto
         {
@@ -380,14 +382,14 @@ public partial class PosService
                     }
                 ]
             }
-        }, token, timeout, cancellationToken).ConfigureAwait(false);
+        }, store.Link, token, timeout, cancellationToken).ConfigureAwait(false);
 
         Log.Information("Place order: {@Order} and response is: {@Response}", order, response);
         
         return response;
     }
 
-    private async Task<string> SafetyPlaceOrderWithRetryAsync(PosOrder order, string token, bool isRetry, CancellationToken cancellationToken)
+    private async Task<string> SafetyPlaceOrderWithRetryAsync(PosOrder order, PosCompanyStore store, string token, bool isRetry, CancellationToken cancellationToken)
     {
         const int maxRetries = 4;
         var retryKey = $"pos-order-retry-count-{order.Id}";
@@ -401,7 +403,7 @@ public partial class PosService
         {
             Log.Information("Start trying to place an order for the {RetryCount}th time and isRetry is {IsRetry}", result["count"], isRetry);
                 
-            var response = await PlaceOrderAsync(order, token, result["count"] <= 1 ? TimeSpan.FromSeconds(10) : null, cancellationToken).ConfigureAwait(false);
+            var response = await PlaceOrderAsync(order, store, token, result["count"] <= 1 ? TimeSpan.FromSeconds(10) : null, cancellationToken).ConfigureAwait(false);
 
             if (response is { Success: true })
             {
@@ -415,14 +417,14 @@ public partial class PosService
             if (order.Status != PosOrderStatus.Error)
                 await MarkOrderAsSpecificStatusAsync(order, PosOrderStatus.Error, cancellationToken).ConfigureAwait(false);
 
-            await HandleRetryOrCleanupAsync(isRetry, result, retryKey, order, token, cancellationToken).ConfigureAwait(false);
+            await HandleRetryOrCleanupAsync(isRetry, result, retryKey, order, store, token, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             if (order.Status != PosOrderStatus.Error)
                 await MarkOrderAsSpecificStatusAsync(order, PosOrderStatus.Error, cancellationToken).ConfigureAwait(false);
             
-            await HandleRetryOrCleanupAsync(isRetry, result, retryKey, order, token, cancellationToken).ConfigureAwait(false);
+            await HandleRetryOrCleanupAsync(isRetry, result, retryKey, order, store, token, cancellationToken).ConfigureAwait(false);
 
             Log.Information("Place order {@Order} failed: {@Exception}", order, ex);
         }
@@ -430,14 +432,15 @@ public partial class PosService
         return string.Empty;
     }
     
-    private async Task HandleRetryOrCleanupAsync(bool isRetry, Dictionary<string, int> result, string retryKey, PosOrder order, string token, CancellationToken cancellationToken)
+    private async Task HandleRetryOrCleanupAsync(
+        bool isRetry, Dictionary<string, int> result, string retryKey, PosOrder order, PosCompanyStore store, string token, CancellationToken cancellationToken)
     {
         if (isRetry)
         {
             result["count"] += 1;
             await _cacheManager.SetAsync(retryKey, result, new RedisCachingSetting(), cancellationToken).ConfigureAwait(false);
 
-            _smartTalkBackgroundJobClient.Schedule(() => SafetyPlaceOrderAsync(order, token, true, cancellationToken), TimeSpan.FromSeconds(30), HangfireConstants.InternalHostingRestaurant);
+            _smartTalkBackgroundJobClient.Schedule(() => SafetyPlaceOrderAsync(order, store, token, true, cancellationToken), TimeSpan.FromSeconds(30), HangfireConstants.InternalHostingRestaurant);
         }
         else
             await _cacheManager.RemoveAsync(retryKey, new RedisCachingSetting(), cancellationToken).ConfigureAwait(false);
