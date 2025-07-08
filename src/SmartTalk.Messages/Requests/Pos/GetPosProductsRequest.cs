@@ -9,6 +9,8 @@ public class GetPosProductsRequest : IRequest
     public int CategoryId { get; set; }
     
     public string KeyWord { get; set; }
+    
+    public bool? IsActive { get; set; }
 }
 
 public class GetPosProductsResponse : SmartTalkResponse<List<PosProductDto>>;

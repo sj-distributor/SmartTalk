@@ -122,11 +122,9 @@ public partial class PosService : IPosService
 
     public async Task<GetPosMenusListResponse> GetPosMenusListAsync(GetPosMenusListRequest request, CancellationToken cancellationToken)
     {
-        var menus = await _posDataProvider.GetPosMenusAsync(request.StoreId, request.IsActive, cancellationToken).ConfigureAwait(false);
-        
-        if (menus == null) throw new Exception("Can't find menus with id:" + request.StoreId);
+        var menus = await _posDataProvider.GetPosMenusAsync(request.StoreId, request.IsActive, cancellationToken).ConfigureAwait(false) ?? [];
 
-        return new GetPosMenusListResponse()
+        return new GetPosMenusListResponse
         {
             Data = _mapper.Map<List<PosMenuDto>>(menus)
         };
@@ -215,7 +213,7 @@ public partial class PosService : IPosService
     {
         var categories = await _posDataProvider.GetPosCategoriesAsync(menuId: request.MenuId, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        if (categories == null || categories.Count == 0) throw new Exception("Can't find categories with menu id:" + request.MenuId);
+        if (categories == null || categories.Count == 0) categories = [];
 
         return new GetPosCategoriesResponse
         {
@@ -237,9 +235,9 @@ public partial class PosService : IPosService
     
     public async Task<GetPosProductsResponse> GetPosProductsAsync(GetPosProductsRequest request, CancellationToken cancellationToken)
     {
-        var products = await _posDataProvider.GetPosProductsAsync(categoryId: request.CategoryId, keyWord: request.KeyWord, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var products = await _posDataProvider.GetPosProductsAsync(categoryId: request.CategoryId, keyWord: request.KeyWord, isActive: request.IsActive, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        if (products == null || products.Count == 0) throw new Exception("Can't find products with category id:" + request.CategoryId);
+        if (products == null || products.Count == 0) products = [];
 
         return new GetPosProductsResponse
         {
