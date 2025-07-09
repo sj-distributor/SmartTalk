@@ -1,21 +1,22 @@
 using Mediator.Net.Context;
 using Mediator.Net.Contracts;
 using SmartTalk.Core.Services.AiSpeechAssistant;
+using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 
 namespace SmartTalk.Core.Handlers.CommandHandlers.AiSpeechAssistant;
 
 public class ReceivePhoneRecordingStatusCallbackCommandHandler : ICommandHandler<ReceivePhoneRecordingStatusCallbackCommand>
 {
-    private readonly IAiSpeechAssistantService _aiSpeechAssistantService;
+    private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
 
-    public ReceivePhoneRecordingStatusCallbackCommandHandler(IAiSpeechAssistantService aiSpeechAssistantService)
+    public ReceivePhoneRecordingStatusCallbackCommandHandler(ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient)
     {
-        _aiSpeechAssistantService = aiSpeechAssistantService;
+        _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
     }
 
     public async Task Handle(IReceiveContext<ReceivePhoneRecordingStatusCallbackCommand> context, CancellationToken cancellationToken)
     {
-        await _aiSpeechAssistantService.ReceivePhoneRecordingStatusCallbackAsync(context.Message, cancellationToken).ConfigureAwait(false);
+        _smartTalkBackgroundJobClient.Enqueue<IAiSpeechAssistantService>(x => x.ReceivePhoneRecordingStatusCallbackAsync(context.Message, cancellationToken).ConfigureAwait(false));
     }
 }
