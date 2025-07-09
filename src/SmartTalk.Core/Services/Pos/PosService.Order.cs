@@ -165,7 +165,7 @@ public partial class PosService
         
         var newItems = orderItems.Select(item =>
         {
-            var status = originalItemDict.ContainsKey(item.ProductId) ? PosOrderItemStatus.Normal : PosOrderItemStatus.Added;
+            var status = originalItemDict.ContainsKey(item.ProductId) ? item.Quantity > 0 ? PosOrderItemStatus.Normal : PosOrderItemStatus.Missed : PosOrderItemStatus.Added;
 
             return new PosOrderItemDto
             {
