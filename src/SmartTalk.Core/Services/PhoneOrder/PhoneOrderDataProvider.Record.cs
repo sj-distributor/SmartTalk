@@ -74,7 +74,7 @@ public partial class PhoneOrderDataProvider
         if (utcStart.HasValue && utcEnd.HasValue)
             query = query.Where(record => record.CreatedDate >= utcStart.Value && record.CreatedDate < utcEnd.Value);
         
-        return await query.OrderByDescending(record => record.CreatedDate).Distinct().ToListAsync(cancellationToken).ConfigureAwait(false);
+        return await query.Distinct().OrderByDescending(record => record.CreatedDate).Distinct().ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task UpdatePhoneOrderRecordsAsync(PhoneOrderRecord record, bool forceSave = true, CancellationToken cancellationToken = default)
