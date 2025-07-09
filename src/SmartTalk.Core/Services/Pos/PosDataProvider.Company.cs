@@ -35,6 +35,8 @@ public partial interface IPosDataProvider : IScopedDependency
     Task<PosProduct> GetPosProductAsync(int id, CancellationToken cancellationToken);
     
     Task<List<PosOrder>> GetPosOrdersByCompanyIdAsync(int companyId, CancellationToken cancellationToken);
+
+    Task<List<PosOrder>> GetPosOrdersByStoreIdAsync(int storeId, CancellationToken cancellationToken);
 }
 
 public partial class PosDataProvider
@@ -188,6 +190,16 @@ public partial class PosDataProvider
             join store in _repository.Query<PosCompanyStore>() on company.Id equals store.CompanyId
             join order in _repository.Query<PosOrder>() on store.Id equals order.StoreId
             where company.Id == companyId
+            select order;
+        
+        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+    
+    public async Task<List<PosOrder>> GetPosOrdersByStoreIdAsync(int storeId,CancellationToken cancellationToken)
+    {
+        var query = from store in _repository.Query<PosCompanyStore>()
+            join order in _repository.Query<PosOrder>() on store.Id equals order.StoreId
+            where store.Id == storeId
             select order;
         
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);

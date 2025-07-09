@@ -91,10 +91,10 @@ public class PosController : ControllerBase
     }
     
     [Route("company/check"), HttpGet]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(CheckPosCompanyResponse))]
-    public async Task<IActionResult> CheckPosCompanyAsync([FromQuery] CheckPosCompanyRequest request)
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(CheckPosCompanyOrStoreResponse))]
+    public async Task<IActionResult> CheckPosCompanyAsync([FromQuery] CheckPosCompanyOrStoreRequest request)
     {
-        var response = await _mediator.RequestAsync<CheckPosCompanyRequest, CheckPosCompanyResponse>(request).ConfigureAwait(false);
+        var response = await _mediator.RequestAsync<CheckPosCompanyOrStoreRequest, CheckPosCompanyOrStoreResponse>(request).ConfigureAwait(false);
         
         return Ok(response);
     }

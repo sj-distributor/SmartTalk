@@ -42,7 +42,7 @@ public partial interface IPosService : IScopedDependency
 
     Task<AdjustPosMenuContentSortResponse> AdjustPosMenuContentSortAsync(AdjustPosMenuContentSortCommand command, CancellationToken cancellationToken);
     
-    Task<CheckPosCompanyResponse> CheckPosCompanyAsync(CheckPosCompanyRequest request, CancellationToken cancellationToken);
+    Task<CheckPosCompanyOrStoreResponse> CheckPosCompanyOrStoreAsync(CheckPosCompanyOrStoreRequest request, CancellationToken cancellationToken);
 }
 
 public partial class PosService : IPosService
@@ -315,18 +315,23 @@ public partial class PosService : IPosService
         return new AdjustPosMenuContentSortResponse();
     }
 
-    public async Task<CheckPosCompanyResponse> CheckPosCompanyAsync(CheckPosCompanyRequest request, CancellationToken cancellationToken)
+    public async Task<CheckPosCompanyOrStoreResponse> CheckPosCompanyOrStoreAsync(CheckPosCompanyOrStoreRequest request, CancellationToken cancellationToken)
     {
-        var orders = await _posDataProvider.GetPosOrdersByCompanyIdAsync(request.ComapnyId, cancellationToken).ConfigureAwait(false);
+        var orders = request.ComapnyId.HasValue
+            ? await _posDataProvider.GetPosOrdersByCompanyIdAsync(request.ComapnyId.Value, cancellationToken).ConfigureAwait(false)
+            : request.StoreId.HasValue
+                ? await _posDataProvider.GetPosOrdersByStoreIdAsync(request.StoreId.Value, cancellationToken).ConfigureAwait(false) : [];
 
         var isAllow = orders == null || orders.Count == 0;
         
-        return new CheckPosCompanyResponse
+        var domain = request.ComapnyId.HasValue ? "Company" : "Store";
+        
+        return new CheckPosCompanyOrStoreResponse
         {
-            Data = new CheckPosCompanyResponseData
+            Data = new CheckPosCompanyOrStoreResponseData
             {
                 IsAllow = isAllow,
-                Message = isAllow ? string.Empty : "Company with existing order data cannot be deleted."
+                Message = isAllow ? string.Empty : $"{domain} with existing order data cannot be deleted."
             }
         };
     }
