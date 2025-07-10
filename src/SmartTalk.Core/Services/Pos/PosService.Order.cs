@@ -72,6 +72,10 @@ public partial class PosService
             Log.Error("Store could not be found or appId、url、secret could not be empty.");
             return;
         }
+        
+        await Task.Delay(2000, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("delay 2 seconds completed!");
     
         var response = await _easyPosClient.GetPosOrderAsync(new GetOrderRequestDto
         {
