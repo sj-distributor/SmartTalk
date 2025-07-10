@@ -3,8 +3,8 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace SmartTalk.Core.Domain.AISpeechAssistant;
 
-[Table("assistant_number_match")]
-public class AssistantNumberMatch : IEntity, IHasCreatedFields
+[Table("ai_speech_assistant_inbound_route")]
+public class AiSpeechAssistantInboundRoute : IEntity, IHasCreatedFields
 {
     [Key]
     [Column("id")]

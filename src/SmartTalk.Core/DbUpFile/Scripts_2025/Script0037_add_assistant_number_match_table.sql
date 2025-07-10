@@ -1,4 +1,4 @@
-create table if not exists `assistant_number_match`
+create table if not exists `ai_speech_assistant_inbound_route`
 (
     `id` int primary key auto_increment,
     `assistant_id` int not null,
