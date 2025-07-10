@@ -68,6 +68,8 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task<AiSpeechAssistantSession> GetAiSpeechAssistantSessionBySessionIdAsync(Guid sessionId, CancellationToken cancellationToken);
 
     Task<(Domain.AISpeechAssistant.AiSpeechAssistant Assistant, Agent Agent)> GetAiSpeechAssistantByAgentIdAsync(int agentId, CancellationToken cancellationToken);
+    
+    Task<AiSpeechAssistantInboundRoute> GetAiSpeechAssistantInboundRouteAsync(string callerNumber, string didNumber, CancellationToken cancellationToken);
 }
 
 public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
@@ -368,5 +370,11 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
         var result = await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
 
         return (result?.assistant, result?.agent);
+    }
+
+    public async Task<AiSpeechAssistantInboundRoute> GetAiSpeechAssistantInboundRouteAsync(string callerNumber, string didNumber, CancellationToken cancellationToken)
+    {
+        return await _repository.Query<AiSpeechAssistantInboundRoute>()
+            .Where(x => x.From == callerNumber && x.To == didNumber).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 }

@@ -266,8 +266,10 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
     private async Task<(Domain.AISpeechAssistant.AiSpeechAssistant assistant, AiSpeechAssistantKnowledge knowledge, string finalPrompt)> BuildingAiSpeechAssistantKnowledgeBaseAsync(string from, string to, int? assistantId, CancellationToken cancellationToken)
     {
+        var assistantNumberMatch = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantInboundRouteAsync(from, to, cancellationToken).ConfigureAwait(false);
+        
         var (assistant, knowledge, userProfile) = await _aiSpeechAssistantDataProvider
-            .GetAiSpeechAssistantInfoByNumbersAsync(from, to, assistantId, cancellationToken).ConfigureAwait(false);
+            .GetAiSpeechAssistantInfoByNumbersAsync(from, to, assistantNumberMatch?.AssistantId ?? assistantId, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Matching Ai speech assistant: {@Assistant}、{@Knowledge}、{@UserProfile}", assistant, knowledge, userProfile);
 
