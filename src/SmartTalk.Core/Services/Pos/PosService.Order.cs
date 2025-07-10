@@ -159,11 +159,12 @@ public partial class PosService
     private List<PosOrderItemDto> BuildMergedOrderItemsWithStatus(List<EasyPosOrderItemDto> orderItems, string originalItemJson)
     {
         var originalItems = JsonConvert.DeserializeObject<List<PosOrderItemDto>>(originalItemJson);
-        var originalItemDict = originalItems.Select(item =>
-            {
-                item.Status = PosOrderItemStatus.Missed;
-                return item;
-            }).ToDictionary(x => x.ProductId, x => x);
+        var originalItemDict = originalItems.GroupBy(x => x.ProductId).Select(g =>
+        {
+            var item = g.First();
+            item.Status = PosOrderItemStatus.Missed;
+            return item;
+        }).ToDictionary(x => x.ProductId, x => x);
         
         var newItems = orderItems.Select(item =>
         {
