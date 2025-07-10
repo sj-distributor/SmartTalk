@@ -80,6 +80,8 @@ public partial class PosService
             AppSecret = store.AppSecret,
             OrderId = command.OrderId,
         }, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Get pos order response: {@Response}", response);
 
         if (response?.Data.Order == null || response.Success == false)
             throw new Exception($"Order {command.OrderId} could not be found.");
