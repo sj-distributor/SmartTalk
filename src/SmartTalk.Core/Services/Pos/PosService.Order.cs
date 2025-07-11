@@ -427,14 +427,14 @@ public partial class PosService
             if (order.Status != PosOrderStatus.Error)
                 await MarkOrderAsSpecificStatusAsync(order, PosOrderStatus.Error, cancellationToken).ConfigureAwait(false);
 
-            await HandleRetryOrCleanupAsync(isRetry, result, retryKey, order, store, token, cancellationToken).ConfigureAwait(false);
+            // await HandleRetryOrCleanupAsync(isRetry, result, retryKey, order, store, token, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             if (order.Status != PosOrderStatus.Error)
                 await MarkOrderAsSpecificStatusAsync(order, PosOrderStatus.Error, cancellationToken).ConfigureAwait(false);
             
-            await HandleRetryOrCleanupAsync(isRetry, result, retryKey, order, store, token, cancellationToken).ConfigureAwait(false);
+            // await HandleRetryOrCleanupAsync(isRetry, result, retryKey, order, store, token, cancellationToken).ConfigureAwait(false);
 
             Log.Information("Place order {@Order} failed: {@Exception}", order, ex);
         }
