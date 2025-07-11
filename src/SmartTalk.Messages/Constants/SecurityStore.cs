@@ -9,6 +9,9 @@ public static class SecurityStore
         public const string User = nameof(User);
         public const string Administrator = nameof(Administrator);
         public const string SuperAdministrator = nameof(SuperAdministrator);
+        public const string Operator = nameof(Operator);
+        public const string ServiceProviderAdministrator = nameof(ServiceProviderAdministrator);
+        public const string ServiceProviderOperator = nameof(ServiceProviderOperator);
     }
     
     public static class Permissions
@@ -16,6 +19,14 @@ public static class SecurityStore
         public const string CanViewPhoneOrder = nameof(CanViewPhoneOrder);
 
         public const string CanViewAccountManagement = nameof(CanViewAccountManagement);
+
+        public const string CanViewAutoCall = nameof(CanViewAutoCall);
+
+        public const string CanViewKnowledge = nameof(CanViewKnowledge);
+
+        public const string CanViewPlaceOrder = nameof(CanViewPlaceOrder);
+
+        public const string CanViewBusinessManagement = nameof(CanViewBusinessManagement);
 
         public const string CanCreateAccount = nameof(CanCreateAccount);
 
@@ -54,6 +65,10 @@ public static class SecurityStore
             {
                 nameof(CanViewPhoneOrder) => "进去通话记录页面",
                 nameof(CanViewAccountManagement) => "进去账户管理",
+                nameof(CanViewAutoCall) => "进去自动call设置",
+                nameof(CanViewKnowledge) => "进去知识库管理",
+                nameof(CanViewPlaceOrder) => "进去下单模块",
+                nameof(CanViewBusinessManagement) => "进去公司/Agent管理",
                 nameof(CanCreateAccount) => "新增账户",
                 nameof(CanDeleteAccount) => "删除账户",
                 nameof(CanCopyAccount) => "复制账户",

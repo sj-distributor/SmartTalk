@@ -12,6 +12,10 @@ public class UpdateUserAccountCommand : ICommand
     public int OldRoleId { get; set; } 
 
     public int NewRoleId { get; set; }
+    
+    public List<int> CompanyIds { get; set; }
+    
+    public List<int> StoreIds { get; set; }
 }
 
 public class UpdateUserAccountResponse : SmartTalkResponse<UpdateUserAccountDto>
