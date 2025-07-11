@@ -46,6 +46,9 @@ public partial class PosService
         var order = await GetOrAddPosOrderAsync(command, cancellationToken).ConfigureAwait(false);
 
         var (store, token) = await GetPosTokenAsync(order, cancellationToken).ConfigureAwait(false);
+
+        if (string.IsNullOrWhiteSpace(token))
+            return new PlacePosOrderResponse { Data = _mapper.Map<PosOrderDto>(order) };
         
         await SafetyPlaceOrderAsync(order, store, token, command.IsWithRetry, cancellationToken).ConfigureAwait(false);
 
@@ -291,8 +294,8 @@ public partial class PosService
         order.Status = PosOrderStatus.Modified;
             
         await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
-            
-        throw new Exception("Failed to get token");
+        
+        return (store, string.Empty);
     }
 
     private async Task<bool> ValidatePosProductsAsync(PosOrder order, PosCompanyStore store, string token, CancellationToken cancellationToken)
