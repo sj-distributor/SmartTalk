@@ -413,7 +413,7 @@ public partial class PosService
         {
             Log.Information("Start trying to place an order for the {RetryCount}th time and isRetry is {IsRetry}", result["count"], isRetry);
                 
-            var response = await PlaceOrderAsync(order, store, token, result["count"] <= 1 ? TimeSpan.FromSeconds(1) : null, cancellationToken).ConfigureAwait(false);
+            var response = await PlaceOrderAsync(order, store, token, result["count"] <= 1 ? TimeSpan.FromSeconds(10) : null, cancellationToken).ConfigureAwait(false);
 
             if (response is { Success: true })
             {
