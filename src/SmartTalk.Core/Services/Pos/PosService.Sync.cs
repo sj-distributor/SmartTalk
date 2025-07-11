@@ -33,8 +33,12 @@ public partial class PosService
 
         Log.Information("Get the pos configuration: {@posConfiguration}", posConfiguration);
         
-        var storeOpeningHours = posConfiguration?.Data?.TimePeriods; 
-        await UpdateStoreBusinessTimePeriodsAsync(store, storeOpeningHours, cancellationToken).ConfigureAwait(false);
+        var easyPosMerchant = await _easyPosClient.GetPosCompanyStoreMessageAsync(
+            new EasyPosTokenRequestDto { BaseUrl = store.Link, AppId = store.AppId, AppSecret = store.AppSecret }, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Get the merchant info: {@Merchant}", easyPosMerchant);
+        
+        await UpdateStoreBusinessTimePeriodsAsync(store, easyPosMerchant?.Data?.TimePeriods, cancellationToken).ConfigureAwait(false);
         
         var products = await SyncMenuDataAsync(store, posConfiguration?.Data, cancellationToken).ConfigureAwait(false);
         
@@ -46,9 +50,9 @@ public partial class PosService
         };
     }
 
-    private async Task UpdateStoreBusinessTimePeriodsAsync(PosCompanyStore store, List<EasyPosResponseTimePeriod> timePeriods, CancellationToken cancellationToken)
+    private async Task UpdateStoreBusinessTimePeriodsAsync(PosCompanyStore store, List<StoreTimePeriod> timePeriods, CancellationToken cancellationToken)
     {
-        store.TimePeriod = timePeriods != null && timePeriods.Count != 0 ? JsonConvert.SerializeObject(timePeriods.First()) : string.Empty;
+        store.TimePeriod = timePeriods != null && timePeriods.Count != 0 ? JsonConvert.SerializeObject(timePeriods) : string.Empty;
         await _posDataProvider.UpdateStoreAsync(store, true, cancellationToken).ConfigureAwait(false);
     }
 

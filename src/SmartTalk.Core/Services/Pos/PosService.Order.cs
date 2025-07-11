@@ -78,7 +78,7 @@ public partial class PosService
         
         await Task.Delay(2000, cancellationToken).ConfigureAwait(false);
         
-        Log.Information("delay 2 seconds completed!");
+        Log.Information("Delay 2 seconds completed!");
     
         var response = await _easyPosClient.GetPosOrderAsync(new GetOrderRequestDto
         {

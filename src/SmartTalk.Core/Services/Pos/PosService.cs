@@ -213,6 +213,8 @@ public partial class PosService : IPosService
         
         Log.Information("Get the merchant info: {@merchant}", easyPosMerchant);
         
+        var timePeriods = easyPosMerchant?.Data?.TimePeriods;
+        
         store.Link = command.Link;
         store.AppId = command.AppId;
         store.AppSecret = command.AppSecret;
@@ -220,11 +222,11 @@ public partial class PosService : IPosService
         store.PosId = easyPosMerchant?.Data?.Id.ToString() ?? string.Empty;
         store.PosName = easyPosMerchant?.Data?.ShortName ?? string.Empty;
         store.Timezone = easyPosMerchant?.Data?.TimeZoneId ?? string.Empty;
-        store.TimePeriod = JsonConvert.SerializeObject(easyPosMerchant?.Data?.TimePeriods);
+        store.TimePeriod = timePeriods != null && timePeriods.Count != 0 ? JsonConvert.SerializeObject(timePeriods) : string.Empty;
 
         await _posDataProvider.UpdatePosCompanyStoresAsync([store], cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        return new BindPosCompanyStoreResponse()
+        return new BindPosCompanyStoreResponse
         {
             Data = _mapper.Map<PosCompanyStoreDto>(store)
         };
