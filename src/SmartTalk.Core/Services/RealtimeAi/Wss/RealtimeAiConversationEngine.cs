@@ -37,13 +37,11 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
     public event Func<RealtimeAiWssFunctionCallData, Task> FunctionCallSuggestedAsync;
     public event Func<string, Task> AiRawMessageReceivedAsync;
     
-    public RealtimeAiConversationEngine(ISmartiesClient smartiesClient, IRealtimeAiProviderAdapter aiAdapter, IRealtimeAiWssClient realtimeAiClient, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
+    public RealtimeAiConversationEngine(IRealtimeAiProviderAdapter aiAdapter, IRealtimeAiWssClient realtimeAiClient)
     {
         _greetings = string.Empty;
         _aiAdapter = aiAdapter ?? throw new ArgumentNullException(nameof(aiAdapter));
-        _smartiesClient = smartiesClient ?? throw new ArgumentNullException(nameof(smartiesClient));
         _realtimeAiClient = realtimeAiClient ?? throw new ArgumentNullException(nameof(realtimeAiClient));
-        _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider ?? throw new ArgumentNullException(nameof(aiSpeechAssistantDataProvider));
 
         _realtimeAiClient.MessageReceivedAsync += OnClientMessageReceivedAsync;
         _realtimeAiClient.StateChangedAsync += OnClientStateChangedAsync;

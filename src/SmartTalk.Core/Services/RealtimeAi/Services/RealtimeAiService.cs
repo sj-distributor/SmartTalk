@@ -95,7 +95,7 @@ public class RealtimeAiService : IRealtimeAiService
         var client = _realtimeAiSwitcher.WssClient(provider);
         var adapter = _realtimeAiSwitcher.ProviderAdapter(provider);
         
-        _conversationEngine = new RealtimeAiConversationEngine(_smartiesClient, adapter, client, _aiSpeechAssistantDataProvider);
+        _conversationEngine = new RealtimeAiConversationEngine(adapter, client);
         _conversationEngine.AiAudioOutputReadyAsync += OnAiAudioOutputReadyAsync;
         _conversationEngine.AiDetectedUserSpeechAsync += OnAiDetectedUserSpeechAsync;
         _conversationEngine.AiTurnCompletedAsync += OnAiTurnCompletedAsync;
