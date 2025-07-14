@@ -10,12 +10,14 @@ using SmartTalk.Messages.Enums.RealtimeAi;
 using SmartTalk.Core.Services.RealtimeAi.Wss;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Attachments;
+using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Core.Services.RealtimeAi.Adapters;
 using SmartTalk.Messages.Commands.Attachments;
 using SmartTalk.Messages.Commands.RealtimeAi;
 using SmartTalk.Messages.Dto.Attachments;
+using SmartTalk.Messages.Dto.Smarties;
 using JsonException = System.Text.Json.JsonException;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 
@@ -28,6 +30,7 @@ public interface IRealtimeAiService : IScopedDependency
 
 public class RealtimeAiService : IRealtimeAiService
 {
+    private readonly ISmartiesClient _smartiesClient;
     private readonly IAttachmentService _attachmentService;
     private readonly IRealtimeAiSwitcher _realtimeAiSwitcher;
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
@@ -63,8 +66,11 @@ public class RealtimeAiService : IRealtimeAiService
         
         if (assistant == null) throw new Exception($"Could not find a assistant by id: {command.AssistantId}");
         
+        var finalPrompt = await BuildingAiSpeechAssistantKnowledgeBaseAsync(assistant, cancellationToken).ConfigureAwait(false);
+        
         await RealtimeAiConnectInternalAsync(command.WebSocket, assistant, 
-            "You are a friendly assistant", command.InputFormat, command.OutputFormat, cancellationToken).ConfigureAwait(false);
+            !string.IsNullOrWhiteSpace(finalPrompt) ? finalPrompt : "You are a friendly assistant",
+            command.InputFormat, command.OutputFormat, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task RealtimeAiConnectInternalAsync(WebSocket webSocket, Domain.AISpeechAssistant.AiSpeechAssistant assistant,
@@ -89,10 +95,83 @@ public class RealtimeAiService : IRealtimeAiService
         var client = _realtimeAiSwitcher.WssClient(provider);
         var adapter = _realtimeAiSwitcher.ProviderAdapter(provider);
         
-        _conversationEngine = new RealtimeAiConversationEngine(adapter, client);
+        _conversationEngine = new RealtimeAiConversationEngine(_smartiesClient, adapter, client, _aiSpeechAssistantDataProvider);
         _conversationEngine.AiAudioOutputReadyAsync += OnAiAudioOutputReadyAsync;
         _conversationEngine.AiDetectedUserSpeechAsync += OnAiDetectedUserSpeechAsync;
         _conversationEngine.AiTurnCompletedAsync += OnAiTurnCompletedAsync;
+    }
+    
+    private async Task<string> BuildingAiSpeechAssistantKnowledgeBaseAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken)
+    {
+        if (assistant?.Knowledge == null || string.IsNullOrEmpty(assistant.Knowledge?.Prompt)) return string.Empty;
+
+        var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
+        var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
+        
+        var finalPrompt = assistant.Knowledge.Prompt
+            .Replace("#{current_time}", currentTime)
+            .Replace("#{pst_date}", $"{pstTime.Date:yyyy-MM-dd} {pstTime.DayOfWeek}");
+
+        if (finalPrompt.Contains("#{restaurant_info}") || finalPrompt.Contains("#{restaurant_items}"))
+        {
+            var aiKid = await _aiSpeechAssistantDataProvider.GetAiKidAsync(assistant.Id, cancellationToken).ConfigureAwait(false);
+
+            if (aiKid != null)
+            {
+                try
+                {
+                    var response = await _smartiesClient.GetCrmCustomerInfoAsync(aiKid.KidUuid, cancellationToken).ConfigureAwait(false);
+                    
+                    Log.Information("Get crm customer info response: {@Response}", response);
+
+                    var result = SplicingCrmCustomerResponse(response?.Data?.FirstOrDefault());
+
+                    finalPrompt = finalPrompt.Replace("#{restaurant_info}", result.RestaurantInfo).Replace("#{restaurant_items}", result.PurchasedItems);
+                }
+                catch (Exception e)
+                {
+                    Log.Warning("Replace restaurant info failed: {Exception}", e);
+                }
+            }
+        }
+        
+        Log.Information($"The final prompt: {finalPrompt}");
+
+        return finalPrompt;
+    }
+    
+    private (string RestaurantInfo, string PurchasedItems) SplicingCrmCustomerResponse(CrmCustomerInfoDto customerInfo)
+    {
+        var infoSb = new StringBuilder();
+        var itemsSb = new StringBuilder();
+        
+        infoSb.AppendLine($"餐厅名字：{customerInfo.Name}");
+        infoSb.AppendLine($"餐厅地址：{customerInfo.Address}");
+
+        itemsSb.AppendLine("餐厅购买过的items（餐厅所需要的）：");
+        
+        var idx = 1;
+        foreach (var product in customerInfo.Products.OrderByDescending(x => x.CreatedAt))
+        {
+            var itemName = product.Name;
+            var specSb = new StringBuilder();
+            foreach (var attr in product.Attributes)
+            {
+                var attrName = attr.Name;
+                var options = attr.Options;
+                var optionNames = string.Join("、", options.Select(opt => opt.Name.ToString()));
+                specSb.Append($"{attrName}: {optionNames}; ");
+            }
+
+            if (idx < 4)
+                itemsSb.AppendLine($"{idx}. {itemName}(新品)，规格: {specSb.ToString().Trim()}");
+            else
+                itemsSb.AppendLine($"{idx}. {itemName}，规格: {specSb.ToString().Trim()}");
+            
+            idx++;
+        }
+        
+        return (infoSb.ToString(), itemsSb.ToString());
     }
     
     private async Task ReceiveFromWebSocketClientAsync(RealtimeAiEngineContext context, CancellationToken cancellationToken)
