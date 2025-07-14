@@ -10,6 +10,7 @@ using SmartTalk.Messages.Enums.RealtimeAi;
 using SmartTalk.Core.Services.RealtimeAi.Wss;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Attachments;
+using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Core.Services.RealtimeAi.Adapters;
@@ -28,6 +29,7 @@ public interface IRealtimeAiService : IScopedDependency
 
 public class RealtimeAiService : IRealtimeAiService
 {
+    private readonly ISmartiesClient _smartiesClient;
     private readonly IAttachmentService _attachmentService;
     private readonly IRealtimeAiSwitcher _realtimeAiSwitcher;
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
@@ -93,7 +95,7 @@ public class RealtimeAiService : IRealtimeAiService
         var client = _realtimeAiSwitcher.WssClient(provider);
         var adapter = _realtimeAiSwitcher.ProviderAdapter(provider);
         
-        _conversationEngine = new RealtimeAiConversationEngine(adapter, client);
+        _conversationEngine = new RealtimeAiConversationEngine(_smartiesClient, adapter, client, _aiSpeechAssistantDataProvider);
         _conversationEngine.AiAudioOutputReadyAsync += OnAiAudioOutputReadyAsync;
         _conversationEngine.AiDetectedUserSpeechAsync += OnAiDetectedUserSpeechAsync;
         _conversationEngine.AiTurnCompletedAsync += OnAiTurnCompletedAsync;
