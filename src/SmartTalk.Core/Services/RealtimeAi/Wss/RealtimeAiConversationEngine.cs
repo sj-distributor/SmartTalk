@@ -1,9 +1,12 @@
 using System.Net.WebSockets;
-using System.Text.Json.Serialization;
+using System.Text;
 using Newtonsoft.Json;
 using Serilog;
+using SmartTalk.Core.Services.AiSpeechAssistant;
+using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.RealtimeAi.wss;
 using SmartTalk.Messages.Dto.RealtimeAi;
+using SmartTalk.Messages.Dto.Smarties;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.RealtimeAi;
 using JsonSerializer = System.Text.Json.JsonSerializer;
@@ -12,8 +15,10 @@ namespace SmartTalk.Core.Services.RealtimeAi.Wss;
 
 public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
 {
+    private readonly ISmartiesClient _smartiesClient;
     private readonly IRealtimeAiProviderAdapter _aiAdapter;
     private readonly IRealtimeAiWssClient _realtimeAiClient;
+    private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
 
     private string _sessionId;
     private string _greetings;
@@ -34,11 +39,13 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
     public event Func<RealtimeAiWssFunctionCallData, Task> FunctionCallSuggestedAsync;
     public event Func<string, Task> AiRawMessageReceivedAsync;
     
-    public RealtimeAiConversationEngine(IRealtimeAiProviderAdapter aiAdapter, IRealtimeAiWssClient realtimeAiClient)
+    public RealtimeAiConversationEngine(ISmartiesClient smartiesClient, IRealtimeAiProviderAdapter aiAdapter, IRealtimeAiWssClient realtimeAiClient, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
         _greetings = string.Empty;
         _aiAdapter = aiAdapter ?? throw new ArgumentNullException(nameof(aiAdapter));
+        _smartiesClient = smartiesClient ?? throw new ArgumentNullException(nameof(smartiesClient));
         _realtimeAiClient = realtimeAiClient ?? throw new ArgumentNullException(nameof(realtimeAiClient));
+        _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider ?? throw new ArgumentNullException(nameof(aiSpeechAssistantDataProvider));
 
         _realtimeAiClient.MessageReceivedAsync += OnClientMessageReceivedAsync;
         _realtimeAiClient.StateChangedAsync += OnClientStateChangedAsync;
@@ -81,9 +88,11 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
             {
                 throw new InvalidOperationException("无法连接到底层 Realtime AI Client。"); // Cannot connect to underlying Realtime AI Client.
             }
+            
+            var finalPrompt = await BuildingAiSpeechAssistantKnowledgeBaseAsync(assistantProfile, cancellationToken).ConfigureAwait(false);
 
             var initialPayload = await _aiAdapter.GetInitialSessionPayloadAsync(_currentAssistantProfile, 
-                new RealtimeAiEngineContext { InitialPrompt = initialUserPrompt, InputFormat = inputFormat, OutputFormat = outputFormat }, _sessionId, _sessionCts.Token);
+                new RealtimeAiEngineContext { InitialPrompt = string.IsNullOrWhiteSpace(finalPrompt) ? initialUserPrompt : finalPrompt, InputFormat = inputFormat, OutputFormat = outputFormat }, _sessionId, _sessionCts.Token);
             var initialMessageJson = JsonConvert.SerializeObject(initialPayload, new JsonSerializerSettings() { NullValueHandling = NullValueHandling.Ignore });
             
             await _realtimeAiClient.SendMessageAsync(initialMessageJson, _sessionCts.Token);
@@ -106,6 +115,80 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
             await OnSessionStatusChangedAsync(RealtimeAiWssEventType.SessionUpdateFailed, ex.Message);
             await CleanupSessionAsync($"启动失败: {ex.Message}"); // Startup failed:
         }
+    }
+    
+    private async Task<string> BuildingAiSpeechAssistantKnowledgeBaseAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken)
+    {
+        if (assistant?.Knowledge == null || string.IsNullOrEmpty(assistant.Knowledge?.Prompt)) return string.Empty;
+
+        var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
+        var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
+        
+        var finalPrompt = assistant.Knowledge.Prompt
+            // .Replace("#{user_profile}", string.IsNullOrEmpty(userProfile?.ProfileJson) ? " " : userProfile.ProfileJson)
+            .Replace("#{current_time}", currentTime)
+            .Replace("#{pst_date}", $"{pstTime.Date:yyyy-MM-dd} {pstTime.DayOfWeek}");
+
+        if (finalPrompt.Contains("#{restaurant_info}"))
+        {
+            var aiKid = await _aiSpeechAssistantDataProvider.GetAiKidAsync(assistant.Id, cancellationToken).ConfigureAwait(false);
+
+            if (aiKid != null)
+            {
+                try
+                {
+                    var response = await _smartiesClient.GetCrmCustomerInfoAsync(aiKid.KidUuid, cancellationToken).ConfigureAwait(false);
+                    
+                    Log.Information("Get crm customer info response: {@Response}", response);
+
+                    var info = SplicingCrmCustomerResponse(response?.Data?.FirstOrDefault());
+
+                    finalPrompt = finalPrompt.Replace("#{restaurant_info}", info);
+                }
+                catch (Exception e)
+                {
+                    Log.Warning("Replace restaurant info failed: {Exception}", e);
+                }
+            }
+        }
+        
+        Log.Information($"The final prompt: {finalPrompt}");
+
+        return finalPrompt;
+    }
+    
+    private string SplicingCrmCustomerResponse(CrmCustomerInfoDto customerInfo)
+    {
+        if (customerInfo == null) return string.Empty;
+        
+        var sb = new StringBuilder();
+        sb.AppendLine($"餐厅名字：{customerInfo.Name}");
+        sb.AppendLine($"餐厅地址：{customerInfo.Address}");
+        sb.AppendLine();
+        sb.AppendLine("餐厅购买过的items（餐厅所需要的）：");
+
+        var idx = 1;
+        foreach (var product in customerInfo.Products.OrderByDescending(x => x.CreatedAt))
+        {
+            var itemName = product.Name;
+            var specSb = new StringBuilder();
+            foreach (var attr in product.Attributes)
+            {
+                var attrName = attr.Name;
+                var options = attr.Options;
+                var optionNames = string.Join("、", options.Select(opt => opt.Name.ToString()));
+                specSb.Append($"{attrName}: {optionNames}; ");
+            }
+
+            if (idx < 4)
+                sb.AppendLine($"{idx}. {itemName}(新品)，规格: {specSb.ToString().Trim()}");
+            else
+                sb.AppendLine($"{idx}. {itemName}，规格: {specSb.ToString().Trim()}");
+
+            idx++;
+        }
+
+        return sb.ToString();
     }
     
     private string BuildGreetingMessage(string greeting)
