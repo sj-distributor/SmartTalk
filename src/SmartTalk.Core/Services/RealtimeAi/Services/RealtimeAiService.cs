@@ -88,9 +88,7 @@ public class RealtimeAiService : IRealtimeAiService
         
         BuildConversationEngine(assistant.ModelProvider);
         
-        var finalPrompt = await BuildingAiSpeechAssistantKnowledgeBaseAsync(assistant, cancellationToken).ConfigureAwait(false);
-        
-        await _conversationEngine.StartSessionAsync(assistant, string.IsNullOrWhiteSpace(finalPrompt) ? initialPrompt : finalPrompt, inputFormat, outputFormat, cancellationToken).ConfigureAwait(false);
+        await _conversationEngine.StartSessionAsync(assistant, initialPrompt, inputFormat, outputFormat, cancellationToken).ConfigureAwait(false);
         
         await ReceiveFromWebSocketClientAsync(
             new RealtimeAiEngineContext { AgentId = assistant.AgentId, InitialPrompt = initialPrompt, InputFormat = inputFormat, OutputFormat = outputFormat }, cancellationToken).ConfigureAwait(false);
