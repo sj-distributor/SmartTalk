@@ -68,8 +68,11 @@ public class RealtimeAiService : IRealtimeAiService
         
         if (assistant == null) throw new Exception($"Could not find a assistant by id: {command.AssistantId}");
         
+        var finalPrompt = await BuildingAiSpeechAssistantKnowledgeBaseAsync(assistant, cancellationToken).ConfigureAwait(false);
+        
         await RealtimeAiConnectInternalAsync(command.WebSocket, assistant, 
-            "You are a friendly assistant", command.InputFormat, command.OutputFormat, cancellationToken).ConfigureAwait(false);
+            !string.IsNullOrWhiteSpace(finalPrompt) ? finalPrompt : "You are a friendly assistant",
+            command.InputFormat, command.OutputFormat, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task RealtimeAiConnectInternalAsync(WebSocket webSocket, Domain.AISpeechAssistant.AiSpeechAssistant assistant,
