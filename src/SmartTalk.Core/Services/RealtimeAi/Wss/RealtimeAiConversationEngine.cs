@@ -129,7 +129,7 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
             .Replace("#{current_time}", currentTime)
             .Replace("#{pst_date}", $"{pstTime.Date:yyyy-MM-dd} {pstTime.DayOfWeek}");
 
-        if (finalPrompt.Contains("#{restaurant_info}"))
+        if (finalPrompt.Contains("#{restaurant_info}") || finalPrompt.Contains("#{restaurant_items}"))
         {
             var aiKid = await _aiSpeechAssistantDataProvider.GetAiKidAsync(assistant.Id, cancellationToken).ConfigureAwait(false);
 
@@ -141,9 +141,9 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
                     
                     Log.Information("Get crm customer info response: {@Response}", response);
 
-                    var info = SplicingCrmCustomerResponse(response?.Data?.FirstOrDefault());
+                    var result = SplicingCrmCustomerResponse(response?.Data?.FirstOrDefault());
 
-                    finalPrompt = finalPrompt.Replace("#{restaurant_info}", info);
+                    finalPrompt = finalPrompt.Replace("#{restaurant_info}", result.RestaurantInfo).Replace("#{restaurant_items}", result.PurchasedItems);
                 }
                 catch (Exception e)
                 {
@@ -157,16 +157,16 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
         return finalPrompt;
     }
     
-    private string SplicingCrmCustomerResponse(CrmCustomerInfoDto customerInfo)
+    private (string RestaurantInfo, string PurchasedItems) SplicingCrmCustomerResponse(CrmCustomerInfoDto customerInfo)
     {
-        if (customerInfo == null) return string.Empty;
+        var infoSb = new StringBuilder();
+        var itemsSb = new StringBuilder();
         
-        var sb = new StringBuilder();
-        sb.AppendLine($"餐厅名字：{customerInfo.Name}");
-        sb.AppendLine($"餐厅地址：{customerInfo.Address}");
-        sb.AppendLine();
-        sb.AppendLine("餐厅购买过的items（餐厅所需要的）：");
+        infoSb.AppendLine($"餐厅名字：{customerInfo.Name}");
+        infoSb.AppendLine($"餐厅地址：{customerInfo.Address}");
 
+        itemsSb.AppendLine("餐厅购买过的items（餐厅所需要的）：");
+        
         var idx = 1;
         foreach (var product in customerInfo.Products.OrderByDescending(x => x.CreatedAt))
         {
@@ -181,14 +181,14 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
             }
 
             if (idx < 4)
-                sb.AppendLine($"{idx}. {itemName}(新品)，规格: {specSb.ToString().Trim()}");
+                itemsSb.AppendLine($"{idx}. {itemName}(新品)，规格: {specSb.ToString().Trim()}");
             else
-                sb.AppendLine($"{idx}. {itemName}，规格: {specSb.ToString().Trim()}");
-
+                itemsSb.AppendLine($"{idx}. {itemName}，规格: {specSb.ToString().Trim()}");
+            
             idx++;
         }
-
-        return sb.ToString();
+        
+        return (infoSb.ToString(), itemsSb.ToString());
     }
     
     private string BuildGreetingMessage(string greeting)
