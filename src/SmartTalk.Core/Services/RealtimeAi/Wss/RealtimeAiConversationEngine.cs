@@ -125,7 +125,6 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
         
         var finalPrompt = assistant.Knowledge.Prompt
-            // .Replace("#{user_profile}", string.IsNullOrEmpty(userProfile?.ProfileJson) ? " " : userProfile.ProfileJson)
             .Replace("#{current_time}", currentTime)
             .Replace("#{pst_date}", $"{pstTime.Date:yyyy-MM-dd} {pstTime.DayOfWeek}");
 
