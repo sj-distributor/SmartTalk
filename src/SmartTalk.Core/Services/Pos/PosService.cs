@@ -16,6 +16,7 @@ using SmartTalk.Messages.Commands.Pos;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Pos;
+using SmartTalk.Messages.Enums.Account;
 using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Requests.Pos;
 
