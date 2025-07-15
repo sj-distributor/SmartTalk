@@ -40,14 +40,6 @@ public partial interface IPhoneOrderDataProvider
     Task<AiSpeechAssistantKnowledge> GetKnowledgePromptByAssistantIdAsync(int assistantId, CancellationToken cancellationToken);
     
     Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(int? recordId = null, int? agentId = null, DateTimeOffset? createdDate = null, CancellationToken cancellationToken = default);
-
-    Task AddMessageReadRecordsAsync(List<MessageReadRecord> messageReadRecords, bool forceSave = true, CancellationToken cancellationToken = default);
-
-    Task DeleteMessageReadRecordAsync(List<MessageReadRecord> messageReadRecords, bool forceSave = true, CancellationToken cancellationToken = default);
-
-    Task<List<MessageReadRecord>> GetMessageReadRecordsAsync(int? recordId = null, int? userId = null, CancellationToken cancellationToken = default);
-
-    Task<int> GetMessageReadRecordCountAsync(int userId, CancellationToken cancellationToken = default);
 }
 
 public partial class PhoneOrderDataProvider
@@ -232,41 +224,5 @@ public partial class PhoneOrderDataProvider
             query = query.Where(x => x.CreatedDate == createdDate.Value);
 
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task AddMessageReadRecordsAsync(List<MessageReadRecord> messageReadRecords, bool forceSave = true, CancellationToken cancellationToken = default)
-    {
-        if (messageReadRecords == null || messageReadRecords.Count == 0) return;
-
-        await _repository.InsertAllAsync(messageReadRecords, cancellationToken).ConfigureAwait(false);
-
-        if (forceSave)
-            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task DeleteMessageReadRecordAsync(List<MessageReadRecord> messageReadRecords, bool forceSave = true, CancellationToken cancellationToken = default)
-    {
-       await _repository.DeleteAllAsync(messageReadRecords, cancellationToken).ConfigureAwait(false);
-        
-        if (forceSave)
-            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task<List<MessageReadRecord>> GetMessageReadRecordsAsync(int? recordId = null, int? userId = null, CancellationToken cancellationToken = default)
-    {
-        var query = _repository.Query<MessageReadRecord>();
-
-        if (recordId.HasValue)
-            query = query.Where(x => x.RecordId == recordId.Value);
-
-        if (userId.HasValue)
-            query = query.Where(x => x.UserId == userId.Value);
-
-        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task<int> GetMessageReadRecordCountAsync(int userId, CancellationToken cancellationToken = default)
-    {
-        return await _repository.Query<MessageReadRecord>().Where(unread => unread.UserId == userId).CountAsync(cancellationToken);
     }
 }

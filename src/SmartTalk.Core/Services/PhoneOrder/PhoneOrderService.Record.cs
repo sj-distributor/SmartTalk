@@ -39,8 +39,6 @@ public partial interface IPhoneOrderService
     Task<AddOrUpdateManualOrderResponse> AddOrUpdateManualOrderAsync(AddOrUpdateManualOrderCommand command, CancellationToken cancellationToken);
 
     Task<string> CreateSpeechMaticsJobAsync(byte[] recordContent, string recordName, string language, CancellationToken cancellationToken);
-
-    Task<GetMessageReadRecordCountsResponse> GetMessageReadRecordCountsAsync(GetMessageReadRecordCountsRequest request, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderService
@@ -52,18 +50,6 @@ public partial class PhoneOrderService
         var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(request.AgentId, request.Name, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
 
         var enrichedRecords = _mapper.Map<List<PhoneOrderRecordDto>>(records);
-
-        var unreadRecords = await _phoneOrderDataProvider.GetMessageReadRecordsAsync(userId: _currentUser.Id.Value, cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        var unreadRecordIds = new HashSet<int>(unreadRecords.Select(r => r.RecordId));
-
-        foreach (var record in enrichedRecords)
-        {
-            if (unreadRecordIds.Contains(record.Id))
-            {
-                record.IsRead = false;
-            }
-        }
 
         return new GetPhoneOrderRecordsResponse
         {
@@ -426,14 +412,6 @@ public partial class PhoneOrderService
         record.Status = status;
         
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync(new List<PhoneOrderRecord> { record }, cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        var messageReadRecords = roleUsers.Select(u => new MessageReadRecord 
-        {
-            RecordId = record.Id,
-            UserId = u.UserId
-        }).ToList();
-        
-        await _phoneOrderDataProvider.AddMessageReadRecordsAsync(messageReadRecords, true, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<bool> CheckPhoneOrderRecordDurationAsync(byte[] recordContent, CancellationToken cancellationToken)
@@ -616,16 +594,6 @@ public partial class PhoneOrderService
 
             Log.Information("Retrying Create Speech Matics Job Attempts remaining: {RetryCount}", retryCount);
         }
-    }
-
-    public async Task<GetMessageReadRecordCountsResponse> GetMessageReadRecordCountsAsync(GetMessageReadRecordCountsRequest request, CancellationToken cancellationToken)
-    {
-        var counts = await _phoneOrderDataProvider.GetMessageReadRecordCountAsync(_currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
-
-        return new GetMessageReadRecordCountsResponse()
-        {
-            Data = counts
-        };
     }
 
     private (DateTimeOffset? UtcStart, DateTimeOffset? UtcEnd) ConvertPstDateToUtcRange(DateTimeOffset? inputDate)

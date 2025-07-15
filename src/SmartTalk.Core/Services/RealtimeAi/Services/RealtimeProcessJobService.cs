@@ -58,16 +58,6 @@ public class RealtimeProcessJobService : IRealtimeProcessJobService
         
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync([record], cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        var roleUsers = await _securityDataProvider.GetRoleUserByPermissionNameAsync(permissionName: SecurityStore.Permissions.CanViewPhoneOrder, cancellationToken).ConfigureAwait(false);
-        
-        var messageReadRecords = roleUsers.Select(u => new MessageReadRecord()
-        {
-            RecordId = record.Id,
-            UserId = u.UserId
-        }).ToList();
-        
-        await _phoneOrderDataProvider.AddMessageReadRecordsAsync(messageReadRecords, true, cancellationToken).ConfigureAwait(false);
-        
         record.TranscriptionJobId = await _phoneOrderService.CreateSpeechMaticsJobAsync(recordingContent, Guid.NewGuid().ToString("N") + ".wav", detection.Language, cancellationToken).ConfigureAwait(false);
         record.Status = PhoneOrderRecordStatus.Diarization;
         
