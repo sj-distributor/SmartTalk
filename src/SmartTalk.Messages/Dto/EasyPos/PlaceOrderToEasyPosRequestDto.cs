@@ -9,6 +9,8 @@ public class PlaceOrderToEasyPosRequestDto
 
     public int Type { get; set; } = 9;
 
+    public int Guests { get; set; } = 1;
+
     public bool IsTaxFree { get; set; } = true;
     
     public string Notes { get; set; } = string.Empty;

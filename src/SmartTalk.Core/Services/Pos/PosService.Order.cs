@@ -361,6 +361,7 @@ public partial class PosService
         var response = await _easyPosClient.PlaceOrderAsync(new PlaceOrderToEasyPosRequestDto
         {
             Type = order.Type == PosOrderReceiveType.Pickup ? 1 : 3,
+            Guests = 1,
             IsTaxFree = false,
             Notes = string.IsNullOrEmpty(order.Notes) ? string.Empty : order.Notes,
             SourceType = 3,
