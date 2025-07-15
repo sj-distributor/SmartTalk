@@ -6,9 +6,11 @@ namespace SmartTalk.Messages.Commands.Pos;
 
 public class AdjustPosMenuContentSortCommand : ICommand
 {
-    public int ActiveId { get; set; }
+    public int TierId { get; set; }
     
-    public int PassiveId { get; set; }
+    public int ItemId { get; set; }
+    
+    public int Sort { get; set; }
     
     public PosMenuContentType Type { get; set; }
 }
