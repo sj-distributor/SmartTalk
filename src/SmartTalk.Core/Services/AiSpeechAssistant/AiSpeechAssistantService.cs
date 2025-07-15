@@ -680,7 +680,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _inactivityTimerManager.StartTimer(_aiSpeechAssistantStreamContext.CallSid, TimeSpan.FromMinutes(2), async () =>
         {
             Log.Warning("No activity detected for 2 minutes.");
-            await ProcessHangupAsync(default, CancellationToken.None);
+            await HangupCallAsync(_aiSpeechAssistantStreamContext.CallSid, CancellationToken.None);
         });
     }
 
