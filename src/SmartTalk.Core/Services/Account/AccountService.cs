@@ -132,6 +132,10 @@ public partial class AccountService : IAccountService
         await _accountDataProvider.DeleteUserAccountAsync(account, true, cancellationToken).ConfigureAwait(false);
         
         await _securityDataProvider.DeleteRoleUsersAsync(roleUsers, cancellationToken).ConfigureAwait(false);
+
+        var posStoreUsers = await _posDataProvider.GetPosStoreUsersByUserIdAsync(command.UserId, cancellationToken).ConfigureAwait(false);
+
+        await _posDataProvider.DeletePosStoreUsersAsync(posStoreUsers, true, cancellationToken).ConfigureAwait(false);
         
         return new DeleteUserAccountsResponse();
     }

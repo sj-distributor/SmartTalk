@@ -4,7 +4,6 @@ using Serilog;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Ioc;
-using SmartTalk.Core.Services.Account;
 using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.Caching;
 using SmartTalk.Core.Services.Caching.Redis;
@@ -12,11 +11,11 @@ using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Identity;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.RetrievalDb.VectorDb;
+using SmartTalk.Core.Services.Security;
 using SmartTalk.Messages.Commands.Pos;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Pos;
-using SmartTalk.Messages.Enums.Account;
 using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Requests.Pos;
 
@@ -58,7 +57,7 @@ public partial class PosService : IPosService
     private readonly IRedisSafeRunner _redisSafeRunner;
     private readonly IPosDataProvider _posDataProvider;
     private readonly IAgentDataProvider _agentDataProvider;
-    private readonly IAccountDataProvider _accountDataProvider;
+    private readonly ISecurityDataProvider _securityDataProvider;
     private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
     
     public PosService(
@@ -71,7 +70,7 @@ public partial class PosService : IPosService
         IRedisSafeRunner redisSafeRunner,
         IPosDataProvider posDataProvider,
         IAgentDataProvider agentDataProvider,
-        IAccountDataProvider accountDataProvider,
+        ISecurityDataProvider  securityDataProvider,
         ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient)
     {
         _mapper = mapper;
@@ -83,7 +82,7 @@ public partial class PosService : IPosService
         _redisSafeRunner = redisSafeRunner;
         _posDataProvider = posDataProvider;
         _agentDataProvider = agentDataProvider;
-        _accountDataProvider = accountDataProvider;
+        _securityDataProvider = securityDataProvider;
         _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
     }
     
@@ -283,10 +282,12 @@ public partial class PosService : IPosService
 
     public async Task<GetPosStoresResponse> GetPosStoresAsync(GetPosStoresRequest request, CancellationToken cancellationToken)
     {
+        var roles = await _securityDataProvider.GetCurrentUserRolesAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+        
         var storeUsers = request.AuthorizedFilter
             ? await _posDataProvider.GetPosStoreUsersByUserIdAsync(_currentUser.Id.Value, cancellationToken).ConfigureAwait(false)
             : null;
-            
+        
         var stores = await _posDataProvider.GetPosCompanyStoresWithSortingAsync(
             storeUsers?.Select(x => x.StoreId).ToList(),
             request.CompanyId, request.Keyword, request.IsNormalSort, cancellationToken: cancellationToken).ConfigureAwait(false);

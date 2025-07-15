@@ -42,7 +42,7 @@ public partial interface IPosDataProvider : IScopedDependency
     
     Task<PosCompanyStore> GetPosStoreByAgentIdAsync(int agentId, CancellationToken cancellationToken = default);
 
-    Task<List<PosCompanyStore>> GetPosStoresByAgentIdsAsync(List<int> agentIds, CancellationToken cancellationToken = default);
+    Task<PosStoreUser> GetPosStoreUsersByUserIdAndAssistantIdAsync(List<int> assistantIds, int userId, CancellationToken cancellationToken = default);
 }
 
 public partial class PosDataProvider : IPosDataProvider
@@ -285,14 +285,14 @@ public partial class PosDataProvider : IPosDataProvider
         return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<PosCompanyStore>> GetPosStoresByAgentIdsAsync(List<int> agentIds, CancellationToken cancellationToken = default)
+    public async Task<PosStoreUser> GetPosStoreUsersByUserIdAndAssistantIdAsync(List<int> assistantIds, int userId, CancellationToken cancellationToken = default)
     {
-        var query = from agent in _repository.Query<Agent>()
-            join posAgent in _repository.Query<PosAgent>() on agent.Id equals posAgent.AgentId
-            join store in _repository.Query<PosCompanyStore>() on posAgent.StoreId equals store.Id
-            where agentIds.Contains(agent.Id)
+        var query = from assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>().Where(x => assistantIds.Contains(x.Id))
+            join posAgent in _repository.Query<PosAgent>() on assistant.AgentId equals posAgent.AgentId
+            join store in _repository.Query<PosStoreUser>() on posAgent.StoreId equals store.StoreId
+            where store.UserId == userId
             select store;
-    
-        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+
+        return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 }

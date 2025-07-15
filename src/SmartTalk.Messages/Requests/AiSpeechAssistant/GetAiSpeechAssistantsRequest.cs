@@ -12,6 +12,8 @@ public class GetAiSpeechAssistantsRequest : IRequest
     public int? PageSize { get; set; }
     
     public AiSpeechAssistantChannel? Channel { get; set; }
+    
+    public int? AgentId { get; set; }
 }
 
 public class GetAiSpeechAssistantsResponse : SmartTalkResponse<GetAiSpeechAssistantsResponseData>
