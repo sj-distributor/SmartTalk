@@ -1,6 +1,7 @@
 using Mediator.Net.Contracts;
 using SmartTalk.Messages.Responses;
 using SmartTalk.Messages.Dto.Account;
+using SmartTalk.Messages.Enums.Account;
 
 namespace SmartTalk.Messages.Requests.Security;
 
@@ -11,6 +12,8 @@ public class GetUserAccountsRequest : IRequest
     public int? PageSize { get; set; } = 10;
     
     public string UserName { get; set; }
+    
+    public UserAccountLevel? UserAccountLevel { get; set; }
 }
 
 public class GetUserAccountsResponse : SmartTalkResponse<GetUserAccountsDto>

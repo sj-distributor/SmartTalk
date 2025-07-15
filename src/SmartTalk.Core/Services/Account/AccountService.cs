@@ -72,6 +72,24 @@ public partial class AccountService : IAccountService
             UserId = account.Id
         }], cancellationToken).ConfigureAwait(false);
 
+        if (userAccountCommand.AccountLevel == UserAccountLevel.ServiceProvider)
+        {
+            var allCompanyStores = await _posDataProvider.GetPosCompanyStoresAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+            
+            var allCompanyStoreUsers = allCompanyStores.Select(store => new PosStoreUser
+            {
+                UserId = account.Id,
+                StoreId = store.Id
+            }).ToList();
+
+            await _posDataProvider.CreatePosStoreUserAsync(allCompanyStoreUsers, forceSave: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+            
+            return new CreateUserAccountResponse
+            {
+                Data = _mapper.Map<UserAccountDto>(account)
+            };
+        }
+        
         if (userAccountCommand.AccountLevel == UserAccountLevel.Company)
         {
             var companyStores = await _posDataProvider.GetPosCompanyStoresAsync(companyIds: userAccountCommand.CompanyIds, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -109,7 +127,7 @@ public partial class AccountService : IAccountService
     public async Task<GetUserAccountsResponse> GetAccountsAsync(GetUserAccountsRequest request, CancellationToken cancellationToken)
     {
         var (count, userAccount) = await _accountDataProvider.GetUserAccountDtoAsync(
-            request.UserName, request.PageSize, request.PageIndex, true, cancellationToken).ConfigureAwait(false);
+            request.UserName, request.UserAccountLevel, request.PageSize, request.PageIndex, true, cancellationToken).ConfigureAwait(false);
 
         return new GetUserAccountsResponse
         {

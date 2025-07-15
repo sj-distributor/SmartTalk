@@ -43,7 +43,7 @@ namespace SmartTalk.Core.Services.Account
         Task DeleteUserAccountAsync(UserAccount userAccount, bool forceSave = true, CancellationToken cancellationToken = default);
         
         Task<(int, List<UserAccountDto>)> GetUserAccountDtoAsync(
-            string userNameContain = null, int? pageSize = null, int? pageIndex = null, bool orderByCreatedOn = false, CancellationToken cancellationToken = default);
+            string userNameContain = null, UserAccountLevel? userAccountLevel = null, int? pageSize = null, int? pageIndex = null, bool orderByCreatedOn = false, CancellationToken cancellationToken = default);
 
         Task<UserAccount> IsUserAccountExistAsync(int id, CancellationToken cancellationToken);
 
@@ -302,13 +302,16 @@ namespace SmartTalk.Core.Services.Account
         }
 
         
-        public async Task<(int, List<UserAccountDto>)> GetUserAccountDtoAsync(string userNameContain = null, int? pageSize = null, int? pageIndex = null,
+        public async Task<(int, List<UserAccountDto>)> GetUserAccountDtoAsync(string userNameContain = null, UserAccountLevel? userAccountLevel = null,  int? pageSize = null, int? pageIndex = null,
             bool orderByCreatedOn = false, CancellationToken cancellationToken = default)
         {
             var query =  _repository.Query<UserAccount>().Where(x => x.Issuer == 0);
 
             if (!string.IsNullOrEmpty(userNameContain))
                 query = query.Where(x => x.UserName.Contains(userNameContain));
+
+            if (userAccountLevel != null)
+                query = query.Where(x => x.AccountLevel == userAccountLevel);
             
             if (orderByCreatedOn)
                 query = query.OrderByDescending(x => x.CreatedOn);

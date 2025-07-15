@@ -332,4 +332,13 @@ public class PosController : ControllerBase
         
         return Ok(response);
     }
+    
+    [Route("store/agents"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPosAgentsResponse))]
+    public async Task<IActionResult> GetPosAgentsAsync([FromQuery] GetPosAgentsRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetPosAgentsRequest, GetPosAgentsResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
 }

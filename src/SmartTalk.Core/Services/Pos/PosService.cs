@@ -44,6 +44,8 @@ public partial interface IPosService : IScopedDependency
     Task<BindPosCompanyStoreResponse> BindPosCompanyStoreAsync(BindPosCompanyStoreCommand command, CancellationToken cancellationToken);
     
     Task<GetPosStoresResponse> GetPosStoresAsync(GetPosStoresRequest request, CancellationToken cancellationToken);
+
+    Task<GetPosAgentsResponse> GetPosAgentsAsync(GetPosAgentsRequest request, CancellationToken cancellationToken);
 }
 
 public partial class PosService : IPosService
@@ -296,6 +298,16 @@ public partial class PosService : IPosService
         return new GetPosStoresResponse
         {
             Data = _mapper.Map<List<PosCompanyStoreDto>>(stores)
+        };
+    }
+
+    public async Task<GetPosAgentsResponse> GetPosAgentsAsync(GetPosAgentsRequest request, CancellationToken cancellationToken)
+    {
+        var posAgents = await _posDataProvider.GetPosAgentByUserIdAsync(_currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
+
+        return new GetPosAgentsResponse()
+        {
+            Data = posAgents
         };
     }
 
