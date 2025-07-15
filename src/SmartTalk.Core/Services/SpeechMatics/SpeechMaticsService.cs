@@ -105,7 +105,7 @@ public class SpeechMaticsService : ISpeechMaticsService
             
             await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken).ConfigureAwait(false);
 
-            Log.Warning(e.Message);
+            Log.Warning("Handle transcription callback failed: {@Exception}", e);
         }
     }
     
@@ -113,6 +113,8 @@ public class SpeechMaticsService : ISpeechMaticsService
     {
         var (aiSpeechAssistant, agent) = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByAgentIdAsync(record.AgentId, cancellationToken).ConfigureAwait(false);
 
+        Log.Information("Get Assistant: {@Assistant} and Agent: {@Agent} by agent id {agentId}", aiSpeechAssistant, agent, record.AgentId);
+        
         var callFrom = string.Empty;
         try
         {
@@ -130,8 +132,6 @@ public class SpeechMaticsService : ISpeechMaticsService
 
         var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
-
-        record.Status = PhoneOrderRecordStatus.Sent;
 
         ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
 
@@ -158,7 +158,7 @@ public class SpeechMaticsService : ISpeechMaticsService
 
         if (!string.IsNullOrEmpty(agent.WechatRobotKey) && !string.IsNullOrEmpty(agent.WechatRobotMessage))
         {
-            var message = agent.WechatRobotMessage.Replace("#{assistant_name}", aiSpeechAssistant?.Name).Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString()).Replace("#{assistant_file_url}", record.Url);
+            var message = agent.WechatRobotMessage.Replace("#{assistant_name}", aiSpeechAssistant?.Name ?? "").Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString()).Replace("#{assistant_file_url}", record.Url);
 
             if (agent.IsWecomMessageOrder && aiSpeechAssistant != null)
             {
@@ -171,7 +171,7 @@ public class SpeechMaticsService : ISpeechMaticsService
                 message += "\n\n" + record.TranscriptionText;
             }
 
-            await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(audioContent, agent.WechatRobotKey, message, cancellationToken).ConfigureAwait(false);
+            await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(audioContent, agent.WechatRobotKey, message, Array.Empty<string>(), cancellationToken).ConfigureAwait(false);
         }
     }
 

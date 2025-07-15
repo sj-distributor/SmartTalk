@@ -37,7 +37,7 @@ public static class HangfireExtension
         
         services.AddHangfireServer(opt =>
         {
-            opt.WorkerCount = 1;
+            opt.WorkerCount = 5;
             opt.Queues = new[] { HangfireConstants.InternalHostingPhoneOrder };
             opt.ServerName = $"DEPLOY-{HangfireConstants.InternalHostingPhoneOrder.ToUpper()}-{Guid.NewGuid()}";
         });
