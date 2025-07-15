@@ -187,6 +187,7 @@ public partial class PosService : IPosService
         store.AppId = null;
         store.PosId = null;
         store.PosName = null;
+        store.TimePeriod = null;
         
         await _posDataProvider.UpdatePosCompanyStoresAsync([store], cancellationToken: cancellationToken).ConfigureAwait(false);
 
