@@ -579,12 +579,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                             Log.Information($"Interrupting response with id: {_aiSpeechAssistantStreamContext.LastAssistantItem}");
                             await HandleSpeechStartedEventAsync(cancellationToken);
                         }
-
-                        if (_aiSpeechAssistantStreamContext.Assistant.Id == 99)
-                        {
-                            Log.Information("stop timer...");
-                            StopInactivityTimer();
-                        }
+                            
+                        Log.Information("stop timer...");
+                        StopInactivityTimer();
                     }
 
                     if (jsonDocument?.RootElement.GetProperty("type").GetString() == "conversation.item.input_audio_transcription.completed")
@@ -653,12 +650,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                                 }
                             }
                         }
-
-                        if (_aiSpeechAssistantStreamContext.Assistant.Id == 99)
-                        {
-                            Log.Information("start timer...");
-                            StartInactivityTimer();
-                        }
+                        
+                        Log.Information("start timer...");
+                        StartInactivityTimer();
                     }
 
                     if (!_aiSpeechAssistantStreamContext.InitialConversationSent && !string.IsNullOrEmpty(_aiSpeechAssistantStreamContext.Knowledge.Greetings))
