@@ -283,30 +283,42 @@ public partial class PosService : IPosService
         switch (command.Type)
         {
             case PosMenuContentType.Category:
-                var categories = await _posDataProvider.GetPosCategoriesAsync(ids: [command.ActiveId, command.PassiveId], cancellationToken: cancellationToken).ConfigureAwait(false);
+                var categories = await _posDataProvider.GetPosCategoriesAsync(menuId: command.TierId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-                var activeCategory = categories.FirstOrDefault(x => x.Id == command.ActiveId);
-                var passiveCategory = categories.FirstOrDefault(x => x.Id == command.PassiveId);
+                var currentCategoryItem = categories.Where(x => x.Id == command.ItemId).FirstOrDefault();
 
-                if (activeCategory != null && passiveCategory != null)
+                if (currentCategoryItem == null) break;
+                
+                categories.Remove(currentCategoryItem);
+                
+                var insertCategoryIndex = Math.Clamp(command.Sort, 0, categories.Count);
+                categories.Insert(insertCategoryIndex, currentCategoryItem);
+
+                for (var i = 0; i < categories.Count; i++)
                 {
-                    (activeCategory.SortOrder, passiveCategory.SortOrder) = (passiveCategory.SortOrder, activeCategory.SortOrder);
-
-                    await _posDataProvider.UpdateCategoriesAsync([activeCategory, passiveCategory], cancellationToken: cancellationToken).ConfigureAwait(false);
+                    categories[i].SortOrder = i;
                 }
+
+                await _posDataProvider.UpdateCategoriesAsync(categories, cancellationToken: cancellationToken).ConfigureAwait(false);
                 break;
             case PosMenuContentType.Product:
-                var products = await _posDataProvider.GetPosProductsAsync(ids: [command.ActiveId, command.PassiveId], cancellationToken: cancellationToken).ConfigureAwait(false);
+                var products = await _posDataProvider.GetPosProductsAsync(categoryId: command.TierId, cancellationToken: cancellationToken).ConfigureAwait(false);
                 
-                var activeProduct = products.FirstOrDefault(x => x.Id == command.ActiveId);
-                var passiveProduct = products.FirstOrDefault(x => x.Id == command.PassiveId);
+                var currentProductItem = products.Where(x => x.Id == command.ItemId).FirstOrDefault();
 
-                if (activeProduct != null && passiveProduct != null)
+                if (currentProductItem == null) break;
+                
+                products.Remove(currentProductItem);
+                
+                var insertProductIndex = Math.Clamp(command.Sort, 0, products.Count);
+                products.Insert(insertProductIndex, currentProductItem);
+
+                for (var i = 0; i < products.Count; i++)
                 {
-                    (activeProduct.SortOrder, passiveProduct.SortOrder) = (passiveProduct.SortOrder, activeProduct.SortOrder);
-
-                    await _posDataProvider.UpdateProductsAsync([activeProduct, passiveProduct], cancellationToken: cancellationToken).ConfigureAwait(false);
+                    products[i].SortOrder = i;
                 }
+                
+                await _posDataProvider.UpdateProductsAsync(products, cancellationToken: cancellationToken).ConfigureAwait(false);
                 break;
             default:
                 throw new ArgumentOutOfRangeException();
