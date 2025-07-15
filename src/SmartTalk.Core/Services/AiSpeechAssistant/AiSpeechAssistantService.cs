@@ -24,6 +24,7 @@ using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.Restaurants;
 using SmartTalk.Core.Services.STT;
+using SmartTalk.Core.Services.Timer;
 using SmartTalk.Core.Settings.Azure;
 using Twilio.Rest.Api.V2010.Account;
 using SmartTalk.Core.Settings.OpenAi;
@@ -75,6 +76,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
     private readonly IRestaurantDataProvider _restaurantDataProvider;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
+    private readonly IInactivityTimerManager _inactivityTimerManager;
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
 
@@ -100,6 +102,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         ISmartTalkHttpClientFactory httpClientFactory,
         IRestaurantDataProvider restaurantDataProvider,
         IPhoneOrderDataProvider phoneOrderDataProvider,
+        IInactivityTimerManager inactivityTimerManager,
         ISmartTalkBackgroundJobClient backgroundJobClient,
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
@@ -121,6 +124,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _backgroundJobClient = backgroundJobClient;
         _restaurantDataProvider = restaurantDataProvider;
         _phoneOrderDataProvider = phoneOrderDataProvider;
+        _inactivityTimerManager = inactivityTimerManager;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
 
         _openaiEvent = new StringBuilder();
@@ -440,6 +444,12 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                             Log.Information($"Interrupting response with id: {_aiSpeechAssistantStreamContext.LastAssistantItem}");
                             await HandleSpeechStartedEventAsync(cancellationToken);
                         }
+
+                        if (_aiSpeechAssistantStreamContext.Assistant.Id == 99)
+                        {
+                            Log.Information("stop timer...");
+                            StopInactivityTimer();
+                        }
                     }
 
                     if (jsonDocument?.RootElement.GetProperty("type").GetString() == "conversation.item.input_audio_transcription.completed")
@@ -500,6 +510,12 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                                 }
                             }
                         }
+
+                        if (_aiSpeechAssistantStreamContext.Assistant.Id == 99)
+                        {
+                            Log.Information("start timer...");
+                            StartInactivityTimer();
+                        }
                     }
                     
                     if (!_aiSpeechAssistantStreamContext.InitialConversationSent && !string.IsNullOrEmpty(_aiSpeechAssistantStreamContext.Knowledge.Greetings))
@@ -514,6 +530,20 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         {
             Log.Error("WebSocketException: {ex}", ex);
         }
+    }
+    
+    private void StartInactivityTimer()
+    {
+        _inactivityTimerManager.StartTimer(_aiSpeechAssistantStreamContext.CallSid, TimeSpan.FromMinutes(2), async () =>
+        {
+            Log.Warning("No activity detected for 2 minutes.");
+            await ProcessHangupAsync(default, CancellationToken.None);
+        });
+    }
+
+    private void StopInactivityTimer()
+    {
+        _inactivityTimerManager.StopTimer(_aiSpeechAssistantStreamContext.CallSid);
     }
     
     private async Task ProcessOrderAsync(JsonElement jsonDocument, CancellationToken cancellationToken)
