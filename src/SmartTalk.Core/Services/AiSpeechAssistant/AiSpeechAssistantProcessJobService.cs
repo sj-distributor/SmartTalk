@@ -107,14 +107,6 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         };
 
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync([record], cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        if (context.OrderItems != null)
-        {
-            var items = await GenerateOrderItemsAsync(record, context.OrderItems, cancellationToken).ConfigureAwait(false);
-            
-            if (items.Count != 0)
-                await _phoneOrderDataProvider.AddPhoneOrderItemAsync(items, true, cancellationToken).ConfigureAwait(false);
-        }
         
         await GenerateOrderItemsAsync(record, context.OrderItems, cancellationToken).ConfigureAwait(false);
     }
