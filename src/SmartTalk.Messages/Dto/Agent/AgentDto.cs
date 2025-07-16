@@ -5,18 +5,24 @@ namespace SmartTalk.Messages.Dto.Agent;
 public class AgentDto
 {
     public int Id { get; set; }
-
-    public int? RelateId { get; set; }
     
     public bool IsDisplay { get; set; }
     
     public string WechatRobotKey { get; set; }
     
     public string WechatRobotMessage { get; set; }
-    
+
+    public int RelateId { get; set; }
+
     public AgentType Type { get; set; }
     
     public AgentSourceSystem SourceSystem { get; set; }
+    
+    public bool IsWecomMessageOrder { get; set; } = false;
+    
+    public bool IsSendAnalysisReportToWechat { get; set; } = false;
+    
+    public bool IsSendAnalysisReportToSystem { get; set; } = false;
     
     public string Timezone { get; set; }
     
