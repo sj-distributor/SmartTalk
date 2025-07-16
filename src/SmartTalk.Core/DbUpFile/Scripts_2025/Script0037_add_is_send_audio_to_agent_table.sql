@@ -1,0 +1,1 @@
+ALTER TABLE `agent` ADD COLUMN `is_send_audio_record_wechat` TINYINT(1) NOT NULL DEFAULT 0;
