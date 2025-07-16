@@ -5,6 +5,7 @@ using SmartTalk.Core.Domain.Account;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Ioc;
+using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Pos;
 
 namespace SmartTalk.Core.Services.Pos;
@@ -304,12 +305,29 @@ public partial class PosDataProvider : IPosDataProvider
             join agent in _repository.Query<PosAgent>() on storeUser.StoreId equals agent.StoreId
             join store in _repository.Query<PosCompanyStore>() on agent.StoreId equals store.Id
             where storeUser.UserId == userId
+            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() 
+                on agent.AgentId equals assistant.AgentId into assistantsGroup
+            from assistant in assistantsGroup.DefaultIfEmpty()
+            where assistant == null || assistant.IsDisplay
+            group new { agent, store, assistant } by new { agent.Id, agent.StoreId, store.Names, agent.AgentId } into g
             select new PosAgentDto
             {
-                Id = agent.Id,
-                StoreId = agent.StoreId,
-                StoreName = store.Names,
-                AgentId = agent.AgentId
+                Id = g.Key.Id,
+                StoreId = g.Key.StoreId,
+                StoreName = g.Key.Names,
+                AgentAssistantss = new List<AgentAssistantsDto>
+                {
+                    new AgentAssistantsDto
+                    {
+                        AgentId = g.Key.AgentId,
+                        AiSpeechAssistants = g.Where(x => x.assistant != null)
+                            .Select(x => new AiSpeechAssistantDto 
+                            { 
+                                Id = x.assistant.Id,
+                                Name = x.assistant.Name 
+                            }).ToList()
+                    }
+                }
             };
 
         return await query.AsNoTracking().ToListAsync(cancellationToken).ConfigureAwait(false);

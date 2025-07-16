@@ -1,3 +1,5 @@
+using SmartTalk.Messages.Dto.AiSpeechAssistant;
+
 namespace SmartTalk.Messages.Dto.Pos;
 
 public class PosAgentDto
@@ -8,5 +10,12 @@ public class PosAgentDto
     
     public string StoreName { get; set; }
 
+    public List<AgentAssistantsDto> AgentAssistantss { get; set; }
+}
+
+public class AgentAssistantsDto
+{
     public int AgentId { get; set; }
+    
+    public List<AiSpeechAssistantDto> AiSpeechAssistants { get; set; }
 }

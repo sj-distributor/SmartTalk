@@ -5,6 +5,7 @@ using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Agents;
+using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Caching;
 using SmartTalk.Core.Services.Caching.Redis;
 using SmartTalk.Core.Services.Http.Clients;
@@ -52,6 +53,7 @@ public partial class PosService : IPosService
 {
     private readonly IMapper _mapper;
     private readonly IVectorDb _vectorDb;
+    private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
     private readonly ICurrentUser _currentUser;
     private readonly ICacheManager _cacheManager;
     private readonly IEasyPosClient _easyPosClient;
@@ -65,6 +67,7 @@ public partial class PosService : IPosService
     public PosService(
         IMapper mapper,
         IVectorDb vectorDb,
+        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider,
         ICurrentUser currentUser,
         ICacheManager cacheManager,
         IEasyPosClient easyPosClient,
@@ -77,6 +80,7 @@ public partial class PosService : IPosService
     {
         _mapper = mapper;
         _vectorDb = vectorDb;
+        _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
         _currentUser = currentUser;
         _cacheManager = cacheManager;
         _easyPosClient = easyPosClient;
@@ -304,7 +308,7 @@ public partial class PosService : IPosService
     public async Task<GetPosAgentsResponse> GetPosAgentsAsync(GetPosAgentsRequest request, CancellationToken cancellationToken)
     {
         var posAgents = await _posDataProvider.GetPosAgentByUserIdAsync(_currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
-
+        
         return new GetPosAgentsResponse()
         {
             Data = posAgents
