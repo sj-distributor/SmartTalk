@@ -44,6 +44,9 @@ public class RealtimeAiService : IRealtimeAiService
     private WebSocket _webSocket;
     private IRealtimeAiConversationEngine _conversationEngine;
     private Domain.AISpeechAssistant.AiSpeechAssistant _speechAssistant;
+    
+    private volatile bool _isAiSpeaking;
+    private MemoryStream _wholeAudioBuffer;
 
     public RealtimeAiService(
         IPhoneOrderService phoneOrderService,
@@ -66,10 +69,6 @@ public class RealtimeAiService : IRealtimeAiService
         _isAiSpeaking = false;
         _speechAssistant = null;
     }
-
-    private volatile bool _isAiSpeaking;
-
-    private MemoryStream _wholeAudioBuffer;
 
     public async Task RealtimeAiConnectAsync(RealtimeAiConnectCommand command, CancellationToken cancellationToken)
     {
@@ -355,7 +354,7 @@ public class RealtimeAiService : IRealtimeAiService
                 Log.Information("audio uploaded, url: {Url}", audio?.Attachment?.FileUrl);
                 
                 var agent = await _agentDataProvider.GetAgentAsync(_speechAssistant.AgentId).ConfigureAwait(false);
-                if (agent is { IsSendAnalysisReportToSystem: true } && !string.IsNullOrEmpty(audio?.Attachment?.FileUrl))
+                if (agent is { IsSendAudioRecordWechat: true } && !string.IsNullOrEmpty(audio?.Attachment?.FileUrl))
                     await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, agent.WechatRobotKey, $"您有一条新的AI通话录音：\n{audio.Attachment.FileUrl}", Array.Empty<string>(), CancellationToken.None).ConfigureAwait(false);
                 
                 _backgroundJobClient.Enqueue<IRealtimeProcessJobService>(x => x.RecordingRealtimeAiAsync(audio.Attachment.FileUrl, _speechAssistant.AgentId, CancellationToken.None));
