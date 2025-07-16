@@ -345,8 +345,8 @@ public partial class PosService
                 await MarkOrderAsSpecificStatusAsync(order, PosOrderStatus.Modified, cancellationToken).ConfigureAwait(false);
                 return;
             }
-            
-            order.RetryCount = retryCount;
+
+            if (isWithRetry) order.RetryCount = retryCount;
             
             await SafetyPlaceOrderWithRetryAsync(order, store, token, isWithRetry, cancellationToken).ConfigureAwait(false);
             
