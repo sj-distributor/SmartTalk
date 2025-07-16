@@ -86,7 +86,7 @@ public partial class PosService
         
         Log.Information("Get pos order response: {@Response}", response);
 
-        if (response?.Data.Order == null || response.Success == false)
+        if (response?.Data?.Order == null || response.Success == false)
             throw new Exception($"Order {command.OrderId} could not be found.");
 
         var address = response.Data.Order.Customer.Addresses.FirstOrDefault();
@@ -99,6 +99,7 @@ public partial class PosService
         order.Longitude = address?.Lng.ToString(CultureInfo.InvariantCulture);
         order.Room = string.IsNullOrEmpty(address?.Room) ? string.Empty : address.Room;
         order.Type = response.Data.Order.Type == 1 ? PosOrderReceiveType.Pickup : PosOrderReceiveType.Delivery;
+        order.ModifiedStatus = PosOrderModifiedStatusMapping(response.Data.Order.Status);
 
         var items = BuildMergedOrderItemsWithStatus(response.Data.Order.OrderItems, order.Items);
         
@@ -446,5 +447,17 @@ public partial class PosService
         if(status == PosOrderStatus.Sent) order.IsPush = true;
         
         await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    private PosOrderModifiedStatus PosOrderModifiedStatusMapping(int? status)
+    {
+        if (!status.HasValue) return PosOrderModifiedStatus.Normal;
+        
+        return status switch
+        {
+            3 => PosOrderModifiedStatus.BeMerged,
+            2 => PosOrderModifiedStatus.Cancelled,
+            _ => PosOrderModifiedStatus.Normal
+        };
     }
 }
