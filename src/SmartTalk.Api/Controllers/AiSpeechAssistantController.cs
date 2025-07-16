@@ -64,7 +64,7 @@ public class AiSpeechAssistantController : ControllerBase
     
     [AllowAnonymous]
     [HttpGet("outbound/connect")]
-    [HttpGet("outbound/connect/{from}/{to}/{id}/{content}")]
+    [HttpGet("outbound/connect/{from}/{to}/{id}/{greeting}")]
     public async Task OutboundConnectAiSpeechAssistantAsync(string from, string to, int id, string greeting)
     {
         if (HttpContext.WebSockets.IsWebSocketRequest)
