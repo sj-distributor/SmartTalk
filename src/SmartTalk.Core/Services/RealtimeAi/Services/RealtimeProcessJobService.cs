@@ -2,6 +2,7 @@ using Google.Cloud.Translation.V2;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Ioc;
+using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.Security;
@@ -20,6 +21,7 @@ public interface IRealtimeProcessJobService : IScopedDependency
 public class RealtimeProcessJobService : IRealtimeProcessJobService
 {
     private readonly TranslationClient _translationClient;
+    private readonly IAgentDataProvider _agentDataProvider;
     private readonly IPhoneOrderService _phoneOrderService;
     private readonly ISpeechToTextService _speechToTextService;
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
@@ -28,6 +30,7 @@ public class RealtimeProcessJobService : IRealtimeProcessJobService
 
     public RealtimeProcessJobService(
         TranslationClient translationClient,
+        IAgentDataProvider agentDataProvider,
         IPhoneOrderService phoneOrderService,
         ISpeechToTextService speechToTextService,
         ISmartTalkHttpClientFactory httpClientFactory,
@@ -35,6 +38,7 @@ public class RealtimeProcessJobService : IRealtimeProcessJobService
         IPhoneOrderDataProvider phoneOrderDataProvider)
     {
         _phoneOrderService = phoneOrderService;
+        _agentDataProvider = agentDataProvider;
         _translationClient = translationClient;
         _httpClientFactory = httpClientFactory;
         _speechToTextService = speechToTextService;
@@ -45,6 +49,10 @@ public class RealtimeProcessJobService : IRealtimeProcessJobService
     public async Task RecordingRealtimeAiAsync(string recordingUrl, int agentId, CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(recordingUrl) || agentId == 0) return;
+        
+        var agent = await _agentDataProvider.GetAgentAsync(agentId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (agent is { IsSendAudioRecordWechat: true })
+            await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, agent.WechatRobotKey, $"您有一条新的AI通话录音：\n{recordingUrl}", Array.Empty<string>(), CancellationToken.None).ConfigureAwait(false);
 
         var recordingContent = await _httpClientFactory.GetAsync<byte[]>(recordingUrl, cancellationToken).ConfigureAwait(false);
         if (recordingContent == null) return;
