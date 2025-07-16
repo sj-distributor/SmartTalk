@@ -273,16 +273,18 @@ public partial class PhoneOrderService
             ShiftConversations(conversations);
         }
         
-        goalTextsString = ProcessConversation(conversations);
+        goalTextsString = ProcessConversation(conversations, goalTextsString);
         
         await _phoneOrderDataProvider.AddPhoneOrderConversationsAsync(conversations, true, cancellationToken).ConfigureAwait(false);
 
-        return (goalTextsString, conversations.First().Question);
+        return (goalTextsString, conversations.FirstOrDefault()?.Question ?? string.Empty);
     }
 
-    private static string ProcessConversation(List<PhoneOrderConversation> conversations)
+    private static string ProcessConversation(List<PhoneOrderConversation> conversations, string goalTextsString)
     {
-        var goalTextsString = "";
+        if (conversations == null || conversations.Count == 0) return goalTextsString;
+        
+        goalTextsString = "";
         
         foreach (var conversation in conversations.ToList())
         {
