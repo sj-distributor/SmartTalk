@@ -279,7 +279,7 @@ public partial class PosService
             AppSecret = store.AppSecret
         }, cancellationToken).ConfigureAwait(false);
         
-        Log.Information("Getting the store pos token");
+        Log.Information("Getting the store pos token {Success} is available: {IsAvailable}", authorization?.Success, !string.IsNullOrEmpty(authorization?.Data));
 
         if (authorization != null && !string.IsNullOrEmpty(authorization.Data) && authorization.Success)
             return (store, authorization.Data);
@@ -291,7 +291,7 @@ public partial class PosService
         return (store, string.Empty);
     }
 
-    private async Task<bool> ValidatePosProductsAsync(PosOrder order, PosCompanyStore store, string token, CancellationToken cancellationToken)
+    private async Task<(bool IsAvailable, PosOrderStatus Status)> ValidatePosProductsAsync(PosOrder order, PosCompanyStore store, string token, CancellationToken cancellationToken)
     {
         try
         {
@@ -309,10 +309,11 @@ public partial class PosService
             if (response?.Data == null)
             {
                 Log.Error("Failed to get pos products");
-                return false;
+                
+                return (false, PosOrderStatus.Error);
             }
 
-            if (response.Data.Count == 0) return true;
+            if (response.Data.Count == 0) return (true, PosOrderStatus.Pending);
         
             foreach (var item in items)
             {
@@ -325,30 +326,39 @@ public partial class PosService
         
             order.ModifiedItems = JsonConvert.SerializeObject(items);
         
-            return false;
+            return (false, PosOrderStatus.Modified);
         }
         catch (Exception e)
         {
-            throw new Exception($"Failed to validate pos products: {e.Message}");
+            Log.Information($"Failed to validate pos products: {e.Message}");
+
+            return (false, PosOrderStatus.Error);
         }
     }
 
     public async Task SafetyPlaceOrderAsync(PosOrder order, PosCompanyStore store, string token, bool isWithRetry, int retryCount, CancellationToken cancellationToken)
     {
+        const int MaxRetryCount = 3;
         var lockKey = $"place-order-key-{order.Id}";
+        
         await _redisSafeRunner.ExecuteWithLockAsync(lockKey, async () =>
         {
             if(order.Status == PosOrderStatus.Sent) throw new Exception("Order is already sent.");
 
-            var result = await ValidatePosProductsAsync(order, store, token, cancellationToken).ConfigureAwait(false);
+            if (isWithRetry) order.RetryCount = retryCount;
+            
+            var (isAvailable, status) = await ValidatePosProductsAsync(order, store, token, cancellationToken).ConfigureAwait(false);
 
-            if (!result)
+            if (!isAvailable)
             {
-                await MarkOrderAsSpecificStatusAsync(order, PosOrderStatus.Modified, cancellationToken).ConfigureAwait(false);
+                await MarkOrderAsSpecificStatusAsync(order, status, cancellationToken).ConfigureAwait(false);
+
+                if (status == PosOrderStatus.Error && isWithRetry && order.RetryCount < MaxRetryCount)
+                    _smartTalkBackgroundJobClient.Schedule(() => SafetyPlaceOrderAsync(
+                        order, store, token, true, order.RetryCount + 1, cancellationToken), TimeSpan.FromSeconds(30), HangfireConstants.InternalHostingRestaurant);
+                
                 return;
             }
-
-            if (isWithRetry) order.RetryCount = retryCount;
             
             await SafetyPlaceOrderWithRetryAsync(order, store, token, isWithRetry, cancellationToken).ConfigureAwait(false);
             
