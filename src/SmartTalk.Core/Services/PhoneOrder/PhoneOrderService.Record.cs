@@ -275,9 +275,12 @@ public partial class PhoneOrderService
         
         goalTextsString = ProcessConversation(conversations, goalTextsString);
         
-        await _phoneOrderDataProvider.AddPhoneOrderConversationsAsync(conversations, true, cancellationToken).ConfigureAwait(false);
+        await _phoneOrderDataProvider.AddPhoneOrderConversationsAsync(conversations.Count != 0 ? conversations :
+        [
+            new PhoneOrderConversation { Question = goalTextsString, RecordId = record.Id, Order = 0 }
+        ], true, cancellationToken).ConfigureAwait(false);
 
-        return (goalTextsString, conversations.FirstOrDefault()?.Question ?? string.Empty);
+        return (goalTextsString, conversations.FirstOrDefault()?.Question ?? goalTextsString);
     }
 
     private static string ProcessConversation(List<PhoneOrderConversation> conversations, string goalTextsString)
