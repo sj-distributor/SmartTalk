@@ -20,7 +20,7 @@ public class AgentDto
     
     public bool IsSendAnalysisReportToWechat { get; set; } = false;
     
-    public bool IsSendAnalysisReportToSystem { get; set; } = false;
+    public bool IsSendAudioRecordWechat { get; set; } = false;
     
     public string Timezone { get; set; }
     
