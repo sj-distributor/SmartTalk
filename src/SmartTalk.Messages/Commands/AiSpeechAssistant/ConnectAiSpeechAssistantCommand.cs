@@ -11,7 +11,7 @@ public class ConnectAiSpeechAssistantCommand : ICommand
     
     public string Host { get; set; }
     
-    public string GreetingContent { get; set; }
+    public string Greeting { get; set; }
     
     public int? AssistantId { get; set; }
     
