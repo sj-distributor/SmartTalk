@@ -5,12 +5,14 @@ using System.Text.Json;
 using SmartTalk.Core.Ioc;
 using System.Net.WebSockets;
 using NAudio.Wave;
+using SmartTalk.Core.Services.Agents;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.RealtimeAi;
 using SmartTalk.Core.Services.RealtimeAi.Wss;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Attachments;
 using SmartTalk.Core.Services.Jobs;
+using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Core.Services.RealtimeAi.Adapters;
 using SmartTalk.Messages.Commands.Attachments;
@@ -28,6 +30,8 @@ public interface IRealtimeAiService : IScopedDependency
 
 public class RealtimeAiService : IRealtimeAiService
 {
+    private readonly IPhoneOrderService _phoneOrderService;
+    private readonly IAgentDataProvider _agentDataProvider;
     private readonly IAttachmentService _attachmentService;
     private readonly IRealtimeAiSwitcher _realtimeAiSwitcher;
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
@@ -36,17 +40,22 @@ public class RealtimeAiService : IRealtimeAiService
     private string _streamSid;
     private WebSocket _webSocket;
     private IRealtimeAiConversationEngine _conversationEngine;
+    private Domain.AISpeechAssistant.AiSpeechAssistant _speechAssistant;
     
     private volatile bool _isAiSpeaking;
     private MemoryStream _wholeAudioBuffer;
 
     public RealtimeAiService(
+        IPhoneOrderService phoneOrderService,
+        IAgentDataProvider agentDataProvider,
         IAttachmentService attachmentService,
         IRealtimeAiSwitcher realtimeAiSwitcher,
         IRealtimeAiConversationEngine conversationEngine,
         ISmartTalkBackgroundJobClient backgroundJobClient,
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
+        _phoneOrderService = phoneOrderService;
+        _agentDataProvider = agentDataProvider;
         _attachmentService = attachmentService;
         _realtimeAiSwitcher = realtimeAiSwitcher;
         _conversationEngine = conversationEngine;
@@ -55,20 +64,22 @@ public class RealtimeAiService : IRealtimeAiService
 
         _webSocket = null;
         _isAiSpeaking = false;
+        _speechAssistant = null;
     }
-    
+
     public async Task RealtimeAiConnectAsync(RealtimeAiConnectCommand command, CancellationToken cancellationToken)
     {
         var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantWithKnowledgeAsync(command.AssistantId, cancellationToken).ConfigureAwait(false);
+
+        _speechAssistant = assistant ?? throw new Exception($"Could not find a assistant by id: {command.AssistantId}");
         
-        if (assistant == null) throw new Exception($"Could not find a assistant by id: {command.AssistantId}");
-        
-        await RealtimeAiConnectInternalAsync(command.WebSocket, assistant, 
+        await RealtimeAiConnectInternalAsync(command.WebSocket, 
             "You are a friendly assistant", command.InputFormat, command.OutputFormat, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task RealtimeAiConnectInternalAsync(WebSocket webSocket, Domain.AISpeechAssistant.AiSpeechAssistant assistant,
-        string initialPrompt, RealtimeAiAudioCodec inputFormat, RealtimeAiAudioCodec outputFormat, CancellationToken cancellationToken)
+    private async Task RealtimeAiConnectInternalAsync(
+        WebSocket webSocket, string initialPrompt, RealtimeAiAudioCodec inputFormat,
+        RealtimeAiAudioCodec outputFormat, CancellationToken cancellationToken)
     {
         _webSocket = webSocket;
         _streamSid = Guid.NewGuid().ToString("N");
@@ -76,12 +87,12 @@ public class RealtimeAiService : IRealtimeAiService
         _isAiSpeaking = false; 
         _wholeAudioBuffer = new MemoryStream();
         
-        BuildConversationEngine(assistant.ModelProvider);
+        BuildConversationEngine(_speechAssistant.ModelProvider);
         
-        await _conversationEngine.StartSessionAsync(assistant, initialPrompt, inputFormat, outputFormat, cancellationToken).ConfigureAwait(false);
+        await _conversationEngine.StartSessionAsync(_speechAssistant, initialPrompt, inputFormat, outputFormat, cancellationToken).ConfigureAwait(false);
         
         await ReceiveFromWebSocketClientAsync(
-            new RealtimeAiEngineContext { AgentId = assistant.AgentId, InitialPrompt = initialPrompt, InputFormat = inputFormat, OutputFormat = outputFormat }, cancellationToken).ConfigureAwait(false);
+            new RealtimeAiEngineContext { AgentId = _speechAssistant.AgentId, InitialPrompt = initialPrompt, InputFormat = inputFormat, OutputFormat = outputFormat }, cancellationToken).ConfigureAwait(false);
     }
 
     private void BuildConversationEngine(AiSpeechAssistantProvider provider)
@@ -93,6 +104,7 @@ public class RealtimeAiService : IRealtimeAiService
         _conversationEngine.AiAudioOutputReadyAsync += OnAiAudioOutputReadyAsync;
         _conversationEngine.AiDetectedUserSpeechAsync += OnAiDetectedUserSpeechAsync;
         _conversationEngine.AiTurnCompletedAsync += OnAiTurnCompletedAsync;
+        _conversationEngine.ErrorOccurredAsync += OnErrorOccurredAsync;
     }
     
     private async Task ReceiveFromWebSocketClientAsync(RealtimeAiEngineContext context, CancellationToken cancellationToken)
@@ -111,23 +123,7 @@ public class RealtimeAiService : IRealtimeAiService
                     
                     if (result.MessageType == WebSocketMessageType.Close)
                     {
-                        if (_wholeAudioBuffer is { Length: > 0 })
-                        {
-                            var waveFormat = new WaveFormat(24000, 16, 1);
-                            using (var wavStream = new MemoryStream())
-                            await using (var writer = new WaveFileWriter(wavStream, waveFormat))
-                            {
-                                writer.Write(_wholeAudioBuffer.ToArray(), 0, (int)_wholeAudioBuffer.Length);
-                                writer.Flush();
-                                var audio = await _attachmentService.UploadAttachmentAsync(new UploadAttachmentCommand { Attachment = new UploadAttachmentDto { FileName = Guid.NewGuid() + ".wav", FileContent = wavStream.ToArray(), } }, cancellationToken).ConfigureAwait(false);
-                            
-                                Log.Information("audio uploaded, url: {Url}", audio?.Attachment?.FileUrl);
-                                _backgroundJobClient.Enqueue<IRealtimeProcessJobService>(x => x.RecordingRealtimeAiAsync(audio.Attachment.FileUrl, context.AgentId, cancellationToken));
-                            }
-                            
-                            await _wholeAudioBuffer.DisposeAsync();
-                            _wholeAudioBuffer = null;
-                        }
+                        await HandleWholeAudioBufferAsync().ConfigureAwait(false);
                         
                         await _conversationEngine.EndSessionAsync("Disconnect From RealtimeAi");
                         await _webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Client acknowledges close", CancellationToken.None);
@@ -212,6 +208,11 @@ public class RealtimeAiService : IRealtimeAiService
 
         await _webSocket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(speechDetected))), WebSocketMessageType.Text, true, CancellationToken.None);
     }
+    
+    private async Task OnErrorOccurredAsync(RealtimeAiErrorData errorData)
+    {
+        await HandleWholeAudioBufferAsync().ConfigureAwait(false);
+    }
 
     private async Task OnAiTurnCompletedAsync(object data)
     {
@@ -225,5 +226,31 @@ public class RealtimeAiService : IRealtimeAiService
 
         await _webSocket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(turnCompleted))), WebSocketMessageType.Text, true, CancellationToken.None);
         Log.Information("Realtime turn completed, {@data}", data);
+    }
+
+    private async Task HandleWholeAudioBufferAsync()
+    {
+        if (_wholeAudioBuffer is { Length: > 0 })
+        {
+            var waveFormat = new WaveFormat(24000, 16, 1);
+            using (var wavStream = new MemoryStream())
+            await using (var writer = new WaveFileWriter(wavStream, waveFormat))
+            {
+                writer.Write(_wholeAudioBuffer.ToArray(), 0, (int)_wholeAudioBuffer.Length);
+                writer.Flush();
+                var audio = await _attachmentService.UploadAttachmentAsync(new UploadAttachmentCommand { Attachment = new UploadAttachmentDto { FileName = Guid.NewGuid() + ".wav", FileContent = wavStream.ToArray(), } }, CancellationToken.None).ConfigureAwait(false);
+                            
+                Log.Information("audio uploaded, url: {Url}", audio?.Attachment?.FileUrl);
+                
+                var agent = await _agentDataProvider.GetAgentAsync(_speechAssistant.AgentId).ConfigureAwait(false);
+                if (agent is { IsSendAudioRecordWechat: true } && !string.IsNullOrEmpty(audio?.Attachment?.FileUrl))
+                    await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, agent.WechatRobotKey, $"您有一条新的AI通话录音：\n{audio.Attachment.FileUrl}", Array.Empty<string>(), CancellationToken.None).ConfigureAwait(false);
+                
+                _backgroundJobClient.Enqueue<IRealtimeProcessJobService>(x => x.RecordingRealtimeAiAsync(audio.Attachment.FileUrl, _speechAssistant.AgentId, CancellationToken.None));
+            }
+                            
+            await _wholeAudioBuffer.DisposeAsync();
+            _wholeAudioBuffer = null;
+        }
     }
 }
