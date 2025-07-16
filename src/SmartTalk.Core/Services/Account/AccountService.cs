@@ -71,24 +71,6 @@ public partial class AccountService : IAccountService
             RoleId = userAccountCommand.RoleId,
             UserId = account.Id
         }], cancellationToken).ConfigureAwait(false);
-
-        if (userAccountCommand.AccountLevel == UserAccountLevel.ServiceProvider)
-        {
-            var allCompanyStores = await _posDataProvider.GetPosCompanyStoresAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
-            
-            var allCompanyStoreUsers = allCompanyStores.Select(store => new PosStoreUser
-            {
-                UserId = account.Id,
-                StoreId = store.Id
-            }).ToList();
-
-            await _posDataProvider.CreatePosStoreUserAsync(allCompanyStoreUsers, forceSave: true, cancellationToken: cancellationToken).ConfigureAwait(false);
-            
-            return new CreateUserAccountResponse
-            {
-                Data = _mapper.Map<UserAccountDto>(account)
-            };
-        }
         
         if (userAccountCommand.AccountLevel == UserAccountLevel.Company)
         {
