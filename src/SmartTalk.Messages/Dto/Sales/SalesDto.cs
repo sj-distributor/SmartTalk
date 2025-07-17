@@ -12,8 +12,6 @@ public class SalesDto
     
     public SalesCallType Type { get; set; }
     
-    public string Template { get; set; }
-    
     public int? CreatedBy { get; set; }
     
     public DateTimeOffset CreatedDate { get; set; }

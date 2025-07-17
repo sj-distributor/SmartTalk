@@ -21,9 +21,6 @@ public class Sales : IEntity, IHasCreatedFields
     [Column("type")]
     public SalesCallType Type { get; set; }
 
-    [Column("template")]
-    public string Template { get; set; }
-
     [Column("created_by")]
     public int? CreatedBy { get; set; }
 
