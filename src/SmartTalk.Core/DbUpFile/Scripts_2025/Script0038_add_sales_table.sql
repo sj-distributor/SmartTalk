@@ -4,7 +4,6 @@ create table if not exists sales
     `agent_id` int null,
     `name` varchar(255) not null,
     `type` int not null,
-    `template` text null,
     `created_by` int null,
     `created_date` datetime(3) not null
 ) charset=utf8mb4;
