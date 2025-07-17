@@ -212,7 +212,7 @@ public partial class PosService : IPosService
     
     public async Task<GetPosCategoriesResponse> GetPosCategoriesAsync(GetPosCategoriesRequest request, CancellationToken cancellationToken)
     {
-        var categories = await _posDataProvider.GetPosCategoriesAsync(menuId: request.MenuId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var categories = await _posDataProvider.GetPosCategoriesAsync(menuId: request.MenuId, storeId: request.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         if (categories == null || categories.Count == 0) categories = [];
 
