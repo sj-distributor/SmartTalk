@@ -3,7 +3,6 @@ using Newtonsoft.Json;
 using System.Globalization;
 using SmartTalk.Core.Constants;
 using SmartTalk.Core.Domain.Pos;
-using SmartTalk.Core.Services.Caching;
 using SmartTalk.Messages.Commands.Pos;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Pos;
@@ -90,6 +89,7 @@ public partial class PosService
             throw new Exception($"Order {command.OrderId} could not be found.");
 
         var address = response.Data.Order.Customer.Addresses.FirstOrDefault();
+        var modifiedStatus = PosOrderModifiedStatusMapping(response.Data.Order.Status);
 
         order.Notes = response.Data.Order.Notes;
         order.Name = response.Data.Order.Customer.Name;
@@ -99,15 +99,20 @@ public partial class PosService
         order.Longitude = address?.Lng.ToString(CultureInfo.InvariantCulture);
         order.Room = string.IsNullOrEmpty(address?.Room) ? string.Empty : address.Room;
         order.Type = response.Data.Order.Type == 1 ? PosOrderReceiveType.Pickup : PosOrderReceiveType.Delivery;
-        order.ModifiedStatus = PosOrderModifiedStatusMapping(response.Data.Order.Status);
+        order.ModifiedStatus = modifiedStatus;
 
         var items = BuildMergedOrderItemsWithStatus(response.Data.Order.OrderItems, order.Items);
         order.ModifiedItems = JsonConvert.SerializeObject(items);
         
-        if(response.Data.Order.TotalAmount == order.Total && items.All(x => x.Status == PosOrderItemStatus.Normal))
-            order.Status = PosOrderStatus.Sent;
-        else
+        if (modifiedStatus == PosOrderModifiedStatus.Cancelled)
             order.Status = PosOrderStatus.Modified;
+        else
+        {
+            if(response.Data.Order.TotalAmount == order.Total && items.All(x => x.Status == PosOrderItemStatus.Normal))
+                order.Status = PosOrderStatus.Sent;
+            else
+                order.Status = PosOrderStatus.Modified;
+        }
         
         await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
     }
