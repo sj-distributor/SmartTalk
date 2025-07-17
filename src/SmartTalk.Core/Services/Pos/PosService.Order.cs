@@ -102,9 +102,12 @@ public partial class PosService
         order.ModifiedStatus = PosOrderModifiedStatusMapping(response.Data.Order.Status);
 
         var items = BuildMergedOrderItemsWithStatus(response.Data.Order.OrderItems, order.Items);
-        
-        order.Status = PosOrderStatus.Modified;
         order.ModifiedItems = JsonConvert.SerializeObject(items);
+        
+        if(response.Data.Order.TotalAmount == order.Total && items.All(x => x.Status == PosOrderItemStatus.Normal))
+            order.Status = PosOrderStatus.Sent;
+        else
+            order.Status = PosOrderStatus.Modified;
         
         await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
     }
