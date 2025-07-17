@@ -1,7 +1,6 @@
 create table if not exists sales
 (
     `id` int primary key auto_increment,
-    `agent_id` int null,
     `name` varchar(255) not null,
     `type` int not null,
     `created_by` int null,

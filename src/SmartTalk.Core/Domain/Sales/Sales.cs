@@ -12,9 +12,6 @@ public class Sales : IEntity, IHasCreatedFields
     [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     public int Id { get; set; }
 
-    [Column("agent_id")]
-    public int? AgentId { get; set; }
-
     [Column("name"), StringLength(255)]
     public string Name { get; set; }
 

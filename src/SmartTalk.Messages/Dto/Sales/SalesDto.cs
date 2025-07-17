@@ -6,8 +6,6 @@ public class SalesDto
 {
     public int Id { get; set; }
     
-    public int? AgentId { get; set; }
-    
     public string Name { get; set; }
     
     public SalesCallType Type { get; set; }
