@@ -1,3 +1,4 @@
+using Serilog;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Messages.Commands.Pos;
@@ -263,12 +264,20 @@ public partial class PosService : IPosService
 
     public async Task<UpdatePosProductResponse> UpdatePosProductAsync(UpdatePosProductCommand command, CancellationToken cancellationToken)
     {
-        var products = await _posDataProvider.GetPosProductsAsync(id: command.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var products = await _posDataProvider.GetPosProductsAsync(
+            storeId: command.StoreId, productIds: [command.ProductId], cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Get the products: {@Products} by {ProductId}", products, command.ProductId);
 
         if (products == null || products.Count == 0) throw new InvalidOperationException("No product found with the specified ID.");
         
-        products.First().Names = command.Names;
-        products.First().Status = command.Status;
+        foreach (var product in products)
+        {
+            product.Status = command.Status;
+
+            if (product.Id == command.Id)
+                product.Names = command.Names;
+        }
 
         await _posDataProvider.UpdateProductsAsync(products, true, cancellationToken).ConfigureAwait(false);
 

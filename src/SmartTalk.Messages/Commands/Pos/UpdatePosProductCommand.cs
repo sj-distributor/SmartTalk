@@ -11,6 +11,10 @@ public class UpdatePosProductCommand : ICommand
     public string Names { get; set; }
     
     public bool Status { get; set; }
+    
+    public int StoreId { get; set; }
+    
+    public string ProductId { get; set; }
 }
 
 public class UpdatePosProductResponse : SmartTalkResponse<List<PosProductDto>>

@@ -13,6 +13,7 @@ using SmartTalk.Core.Services.Identity;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.RetrievalDb.VectorDb;
 using SmartTalk.Messages.Commands.Pos;
+using SmartTalk.Messages.Constants;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Pos;
@@ -283,10 +284,16 @@ public partial class PosService : IPosService
 
     public async Task<GetPosStoresResponse> GetPosStoresAsync(GetPosStoresRequest request, CancellationToken cancellationToken)
     {
-        var storeUsers = request.AuthorizedFilter
-            ? await _posDataProvider.GetPosStoreUsersByUserIdAsync(_currentUser.Id.Value, cancellationToken).ConfigureAwait(false)
-            : null;
-            
+        var isSuperAdmin = await CheckCurrentIsAdminAsync(cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("The current user: {CurrrentUser} is Admin: {IsSuperAdmin}", _currentUser, isSuperAdmin);
+
+        var storeUsers = isSuperAdmin ? null
+            : request.AuthorizedFilter ? await _posDataProvider.GetPosStoreUsersByUserIdAsync(_currentUser.Id.Value, cancellationToken).ConfigureAwait(false)
+            : [];
+        
+        Log.Information("Get store users: {StoreUsers}", storeUsers);
+        
         var stores = await _posDataProvider.GetPosCompanyStoresWithSortingAsync(
             storeUsers?.Select(x => x.StoreId).ToList(),
             request.CompanyId, request.Keyword, request.IsNormalSort, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -295,6 +302,15 @@ public partial class PosService : IPosService
         {
             Data = _mapper.Map<List<PosCompanyStoreDto>>(stores)
         };
+    }
+    
+    public async Task<bool> CheckCurrentIsAdminAsync(CancellationToken cancellationToken)
+    {
+        var roleUsers = await _accountDataProvider.GetRoleUserByRoleNameAsync(SecurityStore.Roles.SuperAdministrator, cancellationToken).ConfigureAwait(false);
+
+        Log.Information("Get admin role users: {@roleUsers} by current user: {@currentUserId}", roleUsers, _currentUser.Id.Value);
+        
+        return roleUsers.Any(x => x.UserId == _currentUser.Id.Value);
     }
 
     private async Task<List<GetPosCompanyWithStoresData>> EnrichPosCompaniesAsync(List<PosCompanyDto> companies, string keyword, CancellationToken cancellationToken)
