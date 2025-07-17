@@ -4,14 +4,15 @@ using Serilog;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Ioc;
-using SmartTalk.Core.Services.Account;
 using SmartTalk.Core.Services.Agents;
+using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Caching;
 using SmartTalk.Core.Services.Caching.Redis;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Identity;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.RetrievalDb.VectorDb;
+using SmartTalk.Core.Services.Security;
 using SmartTalk.Messages.Commands.Pos;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.EasyPos;
@@ -44,12 +45,15 @@ public partial interface IPosService : IScopedDependency
     Task<BindPosCompanyStoreResponse> BindPosCompanyStoreAsync(BindPosCompanyStoreCommand command, CancellationToken cancellationToken);
     
     Task<GetPosStoresResponse> GetPosStoresAsync(GetPosStoresRequest request, CancellationToken cancellationToken);
+
+    Task<GetPosAgentsResponse> GetPosAgentsAsync(GetPosAgentsRequest request, CancellationToken cancellationToken);
 }
 
 public partial class PosService : IPosService
 {
     private readonly IMapper _mapper;
     private readonly IVectorDb _vectorDb;
+    private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
     private readonly ICurrentUser _currentUser;
     private readonly ICacheManager _cacheManager;
     private readonly IEasyPosClient _easyPosClient;
@@ -57,12 +61,13 @@ public partial class PosService : IPosService
     private readonly IRedisSafeRunner _redisSafeRunner;
     private readonly IPosDataProvider _posDataProvider;
     private readonly IAgentDataProvider _agentDataProvider;
-    private readonly IAccountDataProvider _accountDataProvider;
+    private readonly ISecurityDataProvider _securityDataProvider;
     private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
     
     public PosService(
         IMapper mapper,
         IVectorDb vectorDb,
+        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider,
         ICurrentUser currentUser,
         ICacheManager cacheManager,
         IEasyPosClient easyPosClient,
@@ -70,11 +75,12 @@ public partial class PosService : IPosService
         IRedisSafeRunner redisSafeRunner,
         IPosDataProvider posDataProvider,
         IAgentDataProvider agentDataProvider,
-        IAccountDataProvider accountDataProvider,
+        ISecurityDataProvider  securityDataProvider,
         ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient)
     {
         _mapper = mapper;
         _vectorDb = vectorDb;
+        _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
         _currentUser = currentUser;
         _cacheManager = cacheManager;
         _easyPosClient = easyPosClient;
@@ -82,7 +88,7 @@ public partial class PosService : IPosService
         _redisSafeRunner = redisSafeRunner;
         _posDataProvider = posDataProvider;
         _agentDataProvider = agentDataProvider;
-        _accountDataProvider = accountDataProvider;
+        _securityDataProvider = securityDataProvider;
         _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
     }
     
@@ -187,6 +193,7 @@ public partial class PosService : IPosService
         store.AppId = null;
         store.PosId = null;
         store.PosName = null;
+        store.TimePeriod = null;
         
         await _posDataProvider.UpdatePosCompanyStoresAsync([store], cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -282,10 +289,12 @@ public partial class PosService : IPosService
 
     public async Task<GetPosStoresResponse> GetPosStoresAsync(GetPosStoresRequest request, CancellationToken cancellationToken)
     {
+        var roles = await _securityDataProvider.GetCurrentUserRolesAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+        
         var storeUsers = request.AuthorizedFilter
             ? await _posDataProvider.GetPosStoreUsersByUserIdAsync(_currentUser.Id.Value, cancellationToken).ConfigureAwait(false)
             : null;
-            
+        
         var stores = await _posDataProvider.GetPosCompanyStoresWithSortingAsync(
             storeUsers?.Select(x => x.StoreId).ToList(),
             request.CompanyId, request.Keyword, request.IsNormalSort, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -293,6 +302,16 @@ public partial class PosService : IPosService
         return new GetPosStoresResponse
         {
             Data = _mapper.Map<List<PosCompanyStoreDto>>(stores)
+        };
+    }
+
+    public async Task<GetPosAgentsResponse> GetPosAgentsAsync(GetPosAgentsRequest request, CancellationToken cancellationToken)
+    {
+        var posAgents = await _posDataProvider.GetPosAgentByUserIdAsync(_currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
+        
+        return new GetPosAgentsResponse()
+        {
+            Data = posAgents
         };
     }
 

@@ -34,6 +34,4 @@ public class PhoneOrderRecordDto
     public string CustomerName { get; set; }
     
     public string Comments { get; set; }
-
-    public bool IsRead { get; set; } = true;
 }
