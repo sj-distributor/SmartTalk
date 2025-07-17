@@ -212,6 +212,14 @@ public class RealtimeAiService : IRealtimeAiService
     private async Task OnErrorOccurredAsync(RealtimeAiErrorData errorData)
     {
         await HandleWholeAudioBufferAsync().ConfigureAwait(false);
+        
+        var clientError = new
+        {
+            type = "ClientError",
+            session_id = _streamSid
+        };
+
+        await _webSocket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(clientError))), WebSocketMessageType.Text, true, CancellationToken.None);
     }
 
     private async Task OnAiTurnCompletedAsync(object data)
