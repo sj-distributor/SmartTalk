@@ -20,11 +20,12 @@ public partial interface IPosDataProvider : IScopedDependency
 
     Task<PosMenu> GetPosMenuAsync(int? id = null, string menuId = null, CancellationToken cancellationToken = default);
 
-    Task<List<PosCategory>> GetPosCategoriesAsync(int? menuId = null, int? id = null, int? storeId = null, List<int> ids = null, CancellationToken cancellationToken = default);
+    Task<List<PosCategory>> GetPosCategoriesAsync(
+        int? menuId = null, int? id = null, int? storeId = null, List<int> ids = null, bool excludeNoSorting = true, CancellationToken cancellationToken = default);
 
     Task<List<PosProduct>> GetPosProductsAsync(
         int? categoryId = null, string name = null, int? id = null, int? storeId = null, List<int> ids = null,
-        List<string> productIds = null, string keyWord = null, bool? isActive = null, CancellationToken cancellationToken = default);
+        List<string> productIds = null, string keyWord = null, bool? isActive = null, bool excludeNoSorting = true, CancellationToken cancellationToken = default);
 
     Task UpdateCategoriesAsync(List<PosCategory> categories, bool isForceSave = true, CancellationToken cancellationToken = default);
 
@@ -98,7 +99,7 @@ public partial class PosDataProvider
     }
 
     public async Task<List<PosCategory>> GetPosCategoriesAsync(
-        int? menuId = null, int? id = null, int? storeId = null, List<int> ids = null, CancellationToken cancellationToken = default)
+        int? menuId = null, int? id = null, int? storeId = null, List<int> ids = null, bool excludeNoSorting = true, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<PosCategory>();
 
@@ -114,12 +115,15 @@ public partial class PosDataProvider
         if (ids != null && ids.Count != 0)
             query = query.Where(x => ids.Contains(x.Id));
 
+        if (excludeNoSorting)
+            query = query.Where(x => x.SortOrder.HasValue);
+
         return await query.OrderBy(x => x.SortOrder).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<List<PosProduct>> GetPosProductsAsync(
         int? categoryId = null, string name = null, int? id = null, int? storeId = null, List<int> ids = null,
-        List<string> productIds = null, string keyWord = null, bool? isActive = null, CancellationToken cancellationToken = default)
+        List<string> productIds = null, string keyWord = null, bool? isActive = null, bool excludeNoSorting = true, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<PosProduct>();
 
@@ -146,6 +150,9 @@ public partial class PosDataProvider
         
         if (isActive.HasValue)
             query = query.Where(x => x.Status == isActive.Value);
+        
+        if (excludeNoSorting)
+            query = query.Where(x => x.SortOrder.HasValue);
 
         return await query.OrderBy(x => x.SortOrder).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
