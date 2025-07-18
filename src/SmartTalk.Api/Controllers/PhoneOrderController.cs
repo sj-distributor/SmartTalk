@@ -167,5 +167,13 @@ public class PhoneOrderController : ControllerBase
         return Ok(response);
     }
 
+    [Route("linphone/data"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetLinphoneDataResponse))]
+    public async Task<IActionResult> GetLinphoneDataAsync([FromQuery] GetLinphoneDataRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetLinphoneDataRequest, GetLinphoneDataResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
     #endregion
 }

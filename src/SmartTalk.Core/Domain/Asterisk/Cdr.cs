@@ -53,7 +53,7 @@ public class Cdr : IEntity, IHasCreatedFields
     public string Accountcode { get; set; }
     
     [Column("uniqueid")]
-    public string Uniqueid { get; set; }
+    public decimal Uniqueid { get; set; }
 
     [Column("userfield")]
     public string Userfield { get; set; }
