@@ -2,6 +2,7 @@ using Serilog;
 using System.Text;
 using Newtonsoft.Json.Linq;
 using System.Globalization;
+using Newtonsoft.Json;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.Restaurants;
 using SmartTalk.Core.Domain.System;
@@ -96,6 +97,8 @@ public partial class AiSpeechAssistantService
 
         await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync([assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
 
+        await UpdateAiSpeechAssistantConfigsAsync(assistant, cancellationToken).ConfigureAwait(false);
+        
         return new UpdateAiSpeechAssistantResponse
         {
             Data = _mapper.Map<AiSpeechAssistantDto>(assistant)
@@ -531,5 +534,76 @@ public partial class AiSpeechAssistantService
         agent.RelateId = assistant.Id;
         
         await _agentDataProvider.UpdateAgentsAsync([agent], cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task UpdateAiSpeechAssistantConfigsAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken)
+    {
+        var configs = await _aiSpeechAssistantDataProvider
+            .GetAiSpeechAssistantFunctionCallByAssistantIdAsync(assistant.Id, assistant.ModelProvider, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var turnDetection = configs.FirstOrDefault(x => x.Type == AiSpeechAssistantSessionConfigType.TurnDirection);
+        var transferCallTool = configs.FirstOrDefault(x => x.Type == AiSpeechAssistantSessionConfigType.Tool && x.Name == "transfer_call");
+        
+        if (assistant.ModelProvider == AiSpeechAssistantProvider.OpenAi)
+        {
+            if (transferCallTool == null)
+            {
+                var content = new 
+                {
+                    type = "function",
+                    name = "transfer_call",
+                    description = "Triggered when the customer requests to transfer the call to a real person, or when the customer is not satisfied with the current answer and wants someone else to serve him/her"
+                };
+            
+                transferCallTool = new AiSpeechAssistantFunctionCall
+                {
+                    AssistantId = assistant.Id,
+                    Name = "transfer_call",
+                    Content = JsonConvert.SerializeObject(content),
+                    Type = AiSpeechAssistantSessionConfigType.Tool,
+                    ModelProvider = AiSpeechAssistantProvider.OpenAi,
+                    IsActive = assistant.IsTransferHuman,
+                };
+            
+                await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantFunctionCall(transferCallTool, cancellationToken: cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                transferCallTool.IsActive = assistant.IsTransferHuman;
+                
+                await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantFunctionCall([transferCallTool], cancellationToken: cancellationToken).ConfigureAwait(false);
+            }
+
+            if (turnDetection == null)
+            {
+                var content = new 
+                {
+                    type = "server_vad",
+                    silence_duration_ms = 500
+                };
+                
+                turnDetection = new AiSpeechAssistantFunctionCall
+                {
+                    AssistantId = assistant.Id,
+                    Name = "turn_detection",
+                    Content = JsonConvert.SerializeObject(content),
+                    Type = AiSpeechAssistantSessionConfigType.TurnDirection,
+                    ModelProvider = AiSpeechAssistantProvider.OpenAi,
+                    IsActive = true
+                };
+                
+                await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantFunctionCall(turnDetection, cancellationToken: cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                var content = JsonConvert.DeserializeObject<AiSpeechAssistantSessionTurnDetectionDto>(turnDetection.Content);
+                
+                content.SilenceDuratioMs = assistant.WaitInterval;
+                
+                turnDetection.Content = JsonConvert.SerializeObject(content);
+                
+                await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantFunctionCall([turnDetection], cancellationToken: cancellationToken).ConfigureAwait(false);
+            }
+        }
     }
 }
