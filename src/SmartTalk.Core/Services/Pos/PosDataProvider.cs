@@ -222,7 +222,7 @@ public partial class PosDataProvider : IPosDataProvider
                 OrderCount = orderGroup.Count()
             };
         
-        if (storeIds != null && storeIds.Count != 0)
+        if (storeIds != null)
             query = query.Where(x => storeIds.Contains(x.Store.Id));
 
         if (companyId.HasValue)

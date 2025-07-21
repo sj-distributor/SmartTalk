@@ -3,7 +3,6 @@ using Newtonsoft.Json;
 using System.Globalization;
 using SmartTalk.Core.Constants;
 using SmartTalk.Core.Domain.Pos;
-using SmartTalk.Core.Services.Caching;
 using SmartTalk.Messages.Commands.Pos;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Pos;
@@ -50,7 +49,7 @@ public partial class PosService
         if (string.IsNullOrWhiteSpace(token))
             return new PlacePosOrderResponse { Data = _mapper.Map<PosOrderDto>(order) };
         
-        await SafetyPlaceOrderAsync(order, store, token, command.IsWithRetry, cancellationToken).ConfigureAwait(false);
+        await SafetyPlaceOrderAsync(order, store, token, command.IsWithRetry, 0, cancellationToken).ConfigureAwait(false);
 
         return new PlacePosOrderResponse
         {
@@ -75,10 +74,6 @@ public partial class PosService
             Log.Error("Store could not be found or appId、url、secret could not be empty.");
             return;
         }
-        
-        await Task.Delay(2000, cancellationToken).ConfigureAwait(false);
-        
-        Log.Information("Delay 2 seconds completed!");
     
         var response = await _easyPosClient.GetPosOrderAsync(new GetOrderRequestDto
         {
@@ -90,10 +85,11 @@ public partial class PosService
         
         Log.Information("Get pos order response: {@Response}", response);
 
-        if (response?.Data.Order == null || response.Success == false)
+        if (response?.Data?.Order == null || response.Success == false)
             throw new Exception($"Order {command.OrderId} could not be found.");
 
         var address = response.Data.Order.Customer.Addresses.FirstOrDefault();
+        var modifiedStatus = PosOrderModifiedStatusMapping(response.Data.Order.Status);
 
         order.Notes = response.Data.Order.Notes;
         order.Name = response.Data.Order.Customer.Name;
@@ -103,11 +99,20 @@ public partial class PosService
         order.Longitude = address?.Lng.ToString(CultureInfo.InvariantCulture);
         order.Room = string.IsNullOrEmpty(address?.Room) ? string.Empty : address.Room;
         order.Type = response.Data.Order.Type == 1 ? PosOrderReceiveType.Pickup : PosOrderReceiveType.Delivery;
+        order.ModifiedStatus = modifiedStatus;
 
         var items = BuildMergedOrderItemsWithStatus(response.Data.Order.OrderItems, order.Items);
-        
-        order.Status = PosOrderStatus.Modified;
         order.ModifiedItems = JsonConvert.SerializeObject(items);
+        
+        if (modifiedStatus == PosOrderModifiedStatus.Cancelled)
+            order.Status = PosOrderStatus.Modified;
+        else
+        {
+            if(response.Data.Order.TotalAmount == order.Total && items.All(x => x.Status == PosOrderItemStatus.Normal))
+                order.Status = PosOrderStatus.Sent;
+            else
+                order.Status = PosOrderStatus.Modified;
+        }
         
         await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
     }
@@ -160,39 +165,201 @@ public partial class PosService
         }).ToList();
     }
 
-    private List<PosOrderItemDto> BuildMergedOrderItemsWithStatus(List<EasyPosOrderItemDto> orderItems, string originalItemJson)
+    // private List<PosOrderItemDto> BuildMergedOrderItemsWithStatus(List<EasyPosOrderItemDto> orderItems, string originalItemJson)
+    // {
+    //     var originalItems = JsonConvert.DeserializeObject<List<PosOrderItemDto>>(originalItemJson) ?? [];
+    //     var originalItemDict = originalItems.GroupBy(x => x.ProductId).Select(g =>
+    //     {
+    //         var item = g.First();
+    //         item.Status = PosOrderItemStatus.Missed;
+    //         return item;
+    //     }).ToDictionary(x => x.ProductId, x => x);
+    //     
+    //     var newItems = orderItems.Select(item =>
+    //     {
+    //         var status = originalItemDict.ContainsKey(item.ProductId) ? item.Quantity > 0 ? PosOrderItemStatus.Normal : PosOrderItemStatus.Missed : PosOrderItemStatus.Added;
+    //
+    //         return new PosOrderItemDto
+    //         {
+    //             Id = item.Id,
+    //             ProductId = item.ProductId,
+    //             Quantity = item.Quantity,
+    //             OriginalPrice = item.OriginalPrice,
+    //             Price = item.Price,
+    //             Notes = string.IsNullOrEmpty(item.Notes) ? string.Empty : item.Notes,
+    //             OrderItemModifiers = _mapper.Map<List<PhoneCallOrderItemModifiers>>(item.OrderItemModifiers),
+    //             Status = status
+    //         };
+    //     }).ToList();
+    //
+    //     foreach (var item in originalItemDict)
+    //     {
+    //         var matched = newItems.FirstOrDefault(x => x.ProductId == item.Key);
+    //
+    //         if (matched != null) continue;
+    //         
+    //         newItems.Add(item.Value);
+    //     }
+    //
+    //     return newItems;
+    // }
+
+    private List<PosOrderItemDto> BuildMergedOrderItemsWithStatus(List<EasyPosOrderItemDto> newItems, string originalItemJson)
     {
-        var originalItems = JsonConvert.DeserializeObject<List<PosOrderItemDto>>(originalItemJson);
-        var originalItemDict = originalItems.GroupBy(x => x.ProductId).Select(g =>
-        {
-            var item = g.First();
-            item.Status = PosOrderItemStatus.Missed;
-            return item;
-        }).ToDictionary(x => x.ProductId, x => x);
-        
-        var newItems = orderItems.Select(item =>
-        {
-            var status = originalItemDict.ContainsKey(item.ProductId) ? item.Quantity > 0 ? PosOrderItemStatus.Normal : PosOrderItemStatus.Missed : PosOrderItemStatus.Added;
+        var result = new List<PosOrderItemDto>();
+        var originalItems = JsonConvert.DeserializeObject<List<PosOrderItemDto>>(originalItemJson) ?? [];
 
-            return new PosOrderItemDto
+        var newGroups = newItems.GroupBy(x => x.ProductId).ToDictionary(g => g.Key, g => g.ToList());
+        var originalGroups = originalItems.GroupBy(x => x.ProductId).ToDictionary(g => g.Key, g => g.ToList());
+
+        var allProductIds = originalGroups.Keys.Union(newGroups.Keys);
+
+        foreach (var productId in allProductIds)
+        {
+            Log.Information("Current productId: {ProductId}", productId);
+            
+            var newList = newGroups.GetValueOrDefault(productId) ?? [];
+            var originalList = originalGroups.GetValueOrDefault(productId) ?? [];
+            
+            Log.Information("Original item list: {@OriginalList}, New item list: {@NewList}", originalList, newList);
+
+            if (newList.Count == originalList.Count)
             {
-                Id = item.Id,
-                ProductId = item.ProductId,
-                Quantity = item.Quantity,
-                OriginalPrice = item.OriginalPrice,
-                Price = item.Price,
-                Notes = string.IsNullOrEmpty(item.Notes) ? string.Empty : item.Notes,
-                OrderItemModifiers = _mapper.Map<List<PhoneCallOrderItemModifiers>>(item.OrderItemModifiers),
-                Status = status
-            };
-        });
+                Log.Information("Original items and new items have same count: {ProductId}", productId);
+                
+                result.AddRange(newList.Select(x => new PosOrderItemDto
+                {
+                    Id = x.Id,
+                    ProductId = x.ProductId,
+                    Quantity = x.Quantity,
+                    OriginalPrice = x.OriginalPrice,
+                    Price = x.Price,
+                    Notes = x.Notes ?? string.Empty,
+                    OrderItemModifiers = _mapper.Map<List<PhoneCallOrderItemModifiers>>(x.OrderItemModifiers),
+                    Status = x.Quantity > 0 ? PosOrderItemStatus.Normal : PosOrderItemStatus.Missed
+                }).ToList());
+            }
+            else
+            {
+                if (newList.Count == 0 && originalList.Count != 0)
+                {
+                    result.AddRange(originalList.Select(x => new PosOrderItemDto
+                    {
+                        Id = x.Id,
+                        ProductId = x.ProductId,
+                        Quantity = x.Quantity,
+                        OriginalPrice = x.OriginalPrice,
+                        Price = x.Price,
+                        Notes = x.Notes ?? string.Empty,
+                        OrderItemModifiers = _mapper.Map<List<PhoneCallOrderItemModifiers>>(x.OrderItemModifiers),
+                        Status = PosOrderItemStatus.Missed
+                    }).ToList());
+                    
+                    continue;
+                }
 
-        foreach (var item in newItems)
-        {
-            originalItemDict[item.ProductId] = item;
+                if (originalList.Count == 0 && newList.Count != 0)
+                {
+                    result.AddRange(newList.Select(x => new PosOrderItemDto
+                    {
+                        Id = x.Id,
+                        ProductId = x.ProductId,
+                        Quantity = x.Quantity,
+                        OriginalPrice = x.OriginalPrice,
+                        Price = x.Price,
+                        Notes = x.Notes ?? string.Empty,
+                        OrderItemModifiers = _mapper.Map<List<PhoneCallOrderItemModifiers>>(x.OrderItemModifiers),
+                        Status = PosOrderItemStatus.Added
+                    }).ToList());
+                    
+                    continue;
+                }
+
+                if (originalList.Count != 0 && newList.Count != 0)
+                {
+                    Log.Information("originalList: {@OriginalList} and newList: {@NewList} have different count", originalList, newList);
+                    
+                    var matchedItems = new List<PosOrderItemDto>();
+                    foreach (var newItem in newList)
+                    {
+                        var strictItem = originalList.FirstOrDefault(o =>
+                            !matchedItems.Contains(o) && !string.IsNullOrWhiteSpace(o.Notes) && !string.IsNullOrWhiteSpace(newItem.Notes) && newItem.Notes.Trim() == o.Notes.Trim());
+
+                        if (strictItem != null)
+                        {
+                            Log.Information("Strict match item: {@StrictItem}", strictItem);
+                            matchedItems.Add(strictItem);
+                            
+                            result.Add(new PosOrderItemDto
+                            {
+                                Id = newItem.Id,
+                                ProductId = newItem.ProductId,
+                                Quantity = newItem.Quantity,
+                                OriginalPrice = newItem.OriginalPrice,
+                                Price = newItem.Price,
+                                Notes = newItem.Notes ?? string.Empty,
+                                OrderItemModifiers = _mapper.Map<List<PhoneCallOrderItemModifiers>>(newItem.OrderItemModifiers),
+                                Status = newItem.Quantity > 0 ? PosOrderItemStatus.Normal : PosOrderItemStatus.Missed
+                            });
+                            
+                            continue;
+                        }
+ 
+                        var fuzzyItem = originalList.FirstOrDefault(o => !matchedItems.Contains(o) && !string.IsNullOrWhiteSpace(o.Notes) == !string.IsNullOrWhiteSpace(newItem.Notes));
+                        if (fuzzyItem != null)
+                        {
+                            Log.Information("Fuzzy match item: {@FuzzyItem}", fuzzyItem);
+                            
+                            matchedItems.Add(fuzzyItem);
+                            
+                            result.Add(new PosOrderItemDto
+                            {
+                                Id = newItem.Id,
+                                ProductId = newItem.ProductId,
+                                Quantity = newItem.Quantity,
+                                OriginalPrice = newItem.OriginalPrice,
+                                Price = newItem.Price,
+                                Notes = newItem.Notes ?? string.Empty,
+                                OrderItemModifiers = _mapper.Map<List<PhoneCallOrderItemModifiers>>(newItem.OrderItemModifiers),
+                                Status = newItem.Quantity > 0 ? PosOrderItemStatus.Normal : PosOrderItemStatus.Missed
+                            });
+                            
+                            continue;
+                        }
+                        
+                        result.Add(new PosOrderItemDto
+                        {
+                            Id = newItem.Id,
+                            ProductId = newItem.ProductId,
+                            Quantity = newItem.Quantity,
+                            OriginalPrice = newItem.OriginalPrice,
+                            Price = newItem.Price,
+                            Notes = newItem.Notes ?? string.Empty,
+                            OrderItemModifiers = _mapper.Map<List<PhoneCallOrderItemModifiers>>(newItem.OrderItemModifiers),
+                            Status = PosOrderItemStatus.Added
+                        });
+                    }
+                    
+                    Log.Information("Handle no matching items: {@NoMatchingItems}", originalList.Except(matchedItems).ToList());
+                    
+                    result.AddRange(originalList.Except(matchedItems).Select(x => new PosOrderItemDto
+                    {
+                        Id = x.Id,
+                        ProductId = x.ProductId,
+                        Quantity = x.Quantity,
+                        OriginalPrice = x.OriginalPrice,
+                        Price = x.Price,
+                        Notes = x.Notes ?? string.Empty,
+                        OrderItemModifiers = _mapper.Map<List<PhoneCallOrderItemModifiers>>(x.OrderItemModifiers),
+                        Status = PosOrderItemStatus.Missed
+                    }));
+                }
+                
+                Log.Information("Current modified items: {@Result}", result);
+            }
         }
 
-        return originalItemDict.Values.ToList();
+        return result;
     }
 
     private async Task<PosOrder> GetOrAddPosOrderAsync(PlacePosOrderCommand command, CancellationToken cancellationToken)
@@ -283,7 +450,7 @@ public partial class PosService
             AppSecret = store.AppSecret
         }, cancellationToken).ConfigureAwait(false);
         
-        Log.Information("Getting the store pos token");
+        Log.Information("Getting the store pos token {Success} is available: {IsAvailable}", authorization?.Success, !string.IsNullOrEmpty(authorization?.Data));
 
         if (authorization != null && !string.IsNullOrEmpty(authorization.Data) && authorization.Success)
             return (store, authorization.Data);
@@ -295,7 +462,7 @@ public partial class PosService
         return (store, string.Empty);
     }
 
-    private async Task<bool> ValidatePosProductsAsync(PosOrder order, PosCompanyStore store, string token, CancellationToken cancellationToken)
+    private async Task<(bool IsAvailable, PosOrderStatus Status)> ValidatePosProductsAsync(PosOrder order, PosCompanyStore store, string token, CancellationToken cancellationToken)
     {
         try
         {
@@ -311,10 +478,11 @@ public partial class PosService
             if (response?.Data == null)
             {
                 Log.Error("Failed to get pos products");
-                return false;
+                
+                return (false, PosOrderStatus.Error);
             }
 
-            if (response.Data.Count == 0) return true;
+            if (response.Data.Count == 0) return (true, PosOrderStatus.Pending);
         
             foreach (var item in items)
             {
@@ -327,40 +495,51 @@ public partial class PosService
         
             order.ModifiedItems = JsonConvert.SerializeObject(items);
         
-            return false;
+            return (false, PosOrderStatus.Modified);
         }
         catch (Exception e)
         {
-            throw new Exception($"Failed to validate pos products: {e.Message}");
+            Log.Information($"Failed to validate pos products: {e.Message}");
+
+            return (false, PosOrderStatus.Error);
         }
     }
 
-    private async Task SafetyPlaceOrderAsync(PosOrder order, PosCompanyStore store, string token, bool isWithRetry, CancellationToken cancellationToken)
+    public async Task SafetyPlaceOrderAsync(PosOrder order, PosCompanyStore store, string token, bool isWithRetry, int retryCount, CancellationToken cancellationToken)
     {
+        const int MaxRetryCount = 3;
         var lockKey = $"place-order-key-{order.Id}";
+        
         await _redisSafeRunner.ExecuteWithLockAsync(lockKey, async () =>
         {
             if(order.Status == PosOrderStatus.Sent) throw new Exception("Order is already sent.");
 
-            var result = await ValidatePosProductsAsync(order, store, token, cancellationToken).ConfigureAwait(false);
+            if (isWithRetry) order.RetryCount = retryCount;
+            
+            var (isAvailable, status) = await ValidatePosProductsAsync(order, store, token, cancellationToken).ConfigureAwait(false);
 
-            if (!result)
+            if (!isAvailable)
             {
-                await MarkOrderAsSpecificStatusAsync(order, PosOrderStatus.Modified, cancellationToken).ConfigureAwait(false);
+                await MarkOrderAsSpecificStatusAsync(order, status, cancellationToken).ConfigureAwait(false);
+
+                if (status == PosOrderStatus.Error && isWithRetry && order.RetryCount < MaxRetryCount)
+                    _smartTalkBackgroundJobClient.Schedule(() => SafetyPlaceOrderAsync(
+                        order, store, token, true, order.RetryCount + 1, cancellationToken), TimeSpan.FromSeconds(30), HangfireConstants.InternalHostingRestaurant);
+                
                 return;
             }
             
-            order.OrderId = await SafetyPlaceOrderWithRetryAsync(order, store, token, isWithRetry, cancellationToken).ConfigureAwait(false);
+            await SafetyPlaceOrderWithRetryAsync(order, store, token, isWithRetry, cancellationToken).ConfigureAwait(false);
             
-            await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
         }, wait: TimeSpan.FromSeconds(10), retry: TimeSpan.FromSeconds(1), server: RedisServer.System).ConfigureAwait(false);
     }
 
-    private async Task<PlaceOrderToEasyPosResponseDto> PlaceOrderAsync(PosOrder order, PosCompanyStore store, string token, TimeSpan? timeout, CancellationToken cancellationToken)
+    private async Task<PlaceOrderToEasyPosResponseDto> PlaceOrderAsync(PosOrder order, PosCompanyStore store, string token, CancellationToken cancellationToken)
     {
         var response = await _easyPosClient.PlaceOrderAsync(new PlaceOrderToEasyPosRequestDto
         {
             Type = order.Type == PosOrderReceiveType.Pickup ? 1 : 3,
+            Guests = 1,
             IsTaxFree = false,
             Notes = string.IsNullOrEmpty(order.Notes) ? string.Empty : order.Notes,
             SourceType = 3,
@@ -387,70 +566,48 @@ public partial class PosService
                     }
                 ]
             }
-        }, store.Link, token, timeout, cancellationToken).ConfigureAwait(false);
+        }, store.Link, token, order.RetryCount <= 0 ? TimeSpan.FromSeconds(10) : null, cancellationToken).ConfigureAwait(false);
 
         Log.Information("Place order: {@Order} and response is: {@Response}", order, response);
         
         return response;
     }
 
-    private async Task<string> SafetyPlaceOrderWithRetryAsync(PosOrder order, PosCompanyStore store, string token, bool isRetry, CancellationToken cancellationToken)
+    private async Task SafetyPlaceOrderWithRetryAsync(PosOrder order, PosCompanyStore store, string token, bool isRetry, CancellationToken cancellationToken)
     {
-        const int maxRetries = 4;
-        var retryKey = $"pos-order-retry-count-{order.Id}";
-        
-        var result = await _cacheManager.GetOrAddAsync(retryKey,
-            () => Task.FromResult(new Dictionary<string, int> { { "count", 1 } }), new RedisCachingSetting(), cancellationToken).ConfigureAwait(false);
-        
-        if (isRetry && result["count"] >= maxRetries) return string.Empty;
+        const int MaxRetryCount = 3;
         
         try
         {
-            Log.Information("Start trying to place an order for the {RetryCount}th time and isRetry is {IsRetry}", result["count"], isRetry);
-                
-            var response = await PlaceOrderAsync(order, store, token, result["count"] <= 1 ? TimeSpan.FromSeconds(10) : null, cancellationToken).ConfigureAwait(false);
+            var response = await PlaceOrderAsync(order, store, token, cancellationToken).ConfigureAwait(false);
 
             if (response is { Success: true })
             {
-                await _cacheManager.RemoveAsync(retryKey, new RedisCachingSetting(), cancellationToken).ConfigureAwait(false);
+                order.OrderId = response.Data?.Order?.Id.ToString() ?? string.Empty;
                 
                 await MarkOrderAsSpecificStatusAsync(order, PosOrderStatus.Sent, cancellationToken).ConfigureAwait(false);
-
-                return response.Data?.Order?.Id.ToString() ?? string.Empty;
+                
+                return;
             }
 
-            if (order.Status != PosOrderStatus.Error)
-                await MarkOrderAsSpecificStatusAsync(order, PosOrderStatus.Error, cancellationToken).ConfigureAwait(false);
+            await MarkOrderAsSpecificStatusAsync(order, PosOrderStatus.Error, cancellationToken).ConfigureAwait(false);
 
-            await HandleRetryOrCleanupAsync(isRetry, result, retryKey, order, store, token, cancellationToken).ConfigureAwait(false);
+            if (isRetry && order.RetryCount < MaxRetryCount)
+                _smartTalkBackgroundJobClient.Schedule(() => SafetyPlaceOrderAsync(
+                    order, store, token, true, order.RetryCount + 1, cancellationToken), TimeSpan.FromSeconds(30), HangfireConstants.InternalHostingRestaurant);
         }
         catch (Exception ex)
         {
-            if (order.Status != PosOrderStatus.Error)
-                await MarkOrderAsSpecificStatusAsync(order, PosOrderStatus.Error, cancellationToken).ConfigureAwait(false);
+            await MarkOrderAsSpecificStatusAsync(order, PosOrderStatus.Error, cancellationToken).ConfigureAwait(false);
             
-            await HandleRetryOrCleanupAsync(isRetry, result, retryKey, order, store, token, cancellationToken).ConfigureAwait(false);
+            if (isRetry && order.RetryCount < MaxRetryCount)
+                _smartTalkBackgroundJobClient.Schedule(() => SafetyPlaceOrderAsync(
+                    order, store, token, true, order.RetryCount + 1, cancellationToken), TimeSpan.FromSeconds(30), HangfireConstants.InternalHostingRestaurant);
 
             Log.Information("Place order {@Order} failed: {@Exception}", order, ex);
         }
-        
-        return string.Empty;
     }
     
-    private async Task HandleRetryOrCleanupAsync(
-        bool isRetry, Dictionary<string, int> result, string retryKey, PosOrder order, PosCompanyStore store, string token, CancellationToken cancellationToken)
-    {
-        if (isRetry)
-        {
-            result["count"] += 1;
-            await _cacheManager.SetAsync(retryKey, result, new RedisCachingSetting(), cancellationToken).ConfigureAwait(false);
-
-            _smartTalkBackgroundJobClient.Schedule(() => SafetyPlaceOrderAsync(order, store, token, true, cancellationToken), TimeSpan.FromSeconds(30), HangfireConstants.InternalHostingRestaurant);
-        }
-        else
-            await _cacheManager.RemoveAsync(retryKey, new RedisCachingSetting(), cancellationToken).ConfigureAwait(false);
-    }
-
     private async Task MarkOrderAsSpecificStatusAsync(PosOrder order, PosOrderStatus status, CancellationToken cancellationToken)
     {
         order.Status = status;
@@ -458,5 +615,17 @@ public partial class PosService
         if(status == PosOrderStatus.Sent) order.IsPush = true;
         
         await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    private PosOrderModifiedStatus PosOrderModifiedStatusMapping(int? status)
+    {
+        if (!status.HasValue) return PosOrderModifiedStatus.Normal;
+        
+        return status switch
+        {
+            3 => PosOrderModifiedStatus.BeMerged,
+            2 => PosOrderModifiedStatus.Cancelled,
+            _ => PosOrderModifiedStatus.Normal
+        };
     }
 }

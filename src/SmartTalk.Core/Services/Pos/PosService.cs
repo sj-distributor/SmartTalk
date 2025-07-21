@@ -4,6 +4,7 @@ using Serilog;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Ioc;
+using SmartTalk.Core.Services.Account;
 using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Caching;
@@ -14,6 +15,7 @@ using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.RetrievalDb.VectorDb;
 using SmartTalk.Core.Services.Security;
 using SmartTalk.Messages.Commands.Pos;
+using SmartTalk.Messages.Constants;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Pos;
@@ -61,6 +63,7 @@ public partial class PosService : IPosService
     private readonly IRedisSafeRunner _redisSafeRunner;
     private readonly IPosDataProvider _posDataProvider;
     private readonly IAgentDataProvider _agentDataProvider;
+    private readonly IAccountDataProvider _accountDataProvider;
     private readonly ISecurityDataProvider _securityDataProvider;
     private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
     
@@ -75,6 +78,7 @@ public partial class PosService : IPosService
         IRedisSafeRunner redisSafeRunner,
         IPosDataProvider posDataProvider,
         IAgentDataProvider agentDataProvider,
+        IAccountDataProvider accountDataProvider,
         ISecurityDataProvider  securityDataProvider,
         ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient)
     {
@@ -88,6 +92,7 @@ public partial class PosService : IPosService
         _redisSafeRunner = redisSafeRunner;
         _posDataProvider = posDataProvider;
         _agentDataProvider = agentDataProvider;
+        _accountDataProvider = accountDataProvider;
         _securityDataProvider = securityDataProvider;
         _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
     }
@@ -291,9 +296,15 @@ public partial class PosService : IPosService
     {
         var roles = await _securityDataProvider.GetCurrentUserRolesAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        var storeUsers = request.AuthorizedFilter
-            ? await _posDataProvider.GetPosStoreUsersByUserIdAsync(_currentUser.Id.Value, cancellationToken).ConfigureAwait(false)
-            : null;
+        var isSuperAdmin = await CheckCurrentIsAdminAsync(cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("The current user: {CurrrentUser} is Admin: {IsSuperAdmin}", _currentUser, isSuperAdmin);
+
+        var storeUsers = isSuperAdmin ? null
+            : request.AuthorizedFilter ? await _posDataProvider.GetPosStoreUsersByUserIdAsync(_currentUser.Id.Value, cancellationToken).ConfigureAwait(false)
+            : [];
+        
+        Log.Information("Get store users: {StoreUsers}", storeUsers);
         
         var stores = await _posDataProvider.GetPosCompanyStoresWithSortingAsync(
             storeUsers?.Select(x => x.StoreId).ToList(),
@@ -303,6 +314,15 @@ public partial class PosService : IPosService
         {
             Data = _mapper.Map<List<PosCompanyStoreDto>>(stores)
         };
+    }
+    
+    public async Task<bool> CheckCurrentIsAdminAsync(CancellationToken cancellationToken)
+    {
+        var roleUsers = await _accountDataProvider.GetRoleUserByRoleNameAsync(SecurityStore.Roles.SuperAdministrator, cancellationToken).ConfigureAwait(false);
+
+        Log.Information("Get admin role users: {@roleUsers} by current user: {@currentUserId}", roleUsers, _currentUser.Id.Value);
+        
+        return roleUsers.Any(x => x.UserId == _currentUser.Id.Value);
     }
 
     public async Task<GetPosAgentsResponse> GetPosAgentsAsync(GetPosAgentsRequest request, CancellationToken cancellationToken)

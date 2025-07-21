@@ -125,6 +125,22 @@ public partial class PosService
             mapping[menu.Id] = categories;
         }
         
+        foreach (var category in data.Categories)
+        {
+            if (posCategories.Any(x => x.CategoryId == category.Id.ToString())) continue;
+            
+            posCategories.Add(new PosCategory
+            {
+                MenuId = 0,
+                StoreId = storeId,
+                CategoryId = category.Id.ToString(),
+                Names = JsonConvert.SerializeObject(GetLocalizedNames(category.Localizations)),
+                MenuIds = string.Empty,
+                MenuNames = string.Empty,
+                CreatedBy = _currentUser.Id
+            });
+        }
+        
         await _posDataProvider.AddPosCategoriesAsync(posCategories, true, cancellationToken).ConfigureAwait(false);
 
         return BuildMenuToCategoriesMapping(mapping);

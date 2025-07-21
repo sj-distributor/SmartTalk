@@ -45,6 +45,10 @@ public class PosOrderDto
     public bool IsPush { get; set; }
 
     public string Notes { get; set; }
+    
+    public int RetryCount { get; set; }
+    
+    public PosOrderModifiedStatus ModifiedStatus { get; set; }
 
     public int? CreatedBy { get; set; }
 

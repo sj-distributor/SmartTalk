@@ -52,6 +52,9 @@ public class EasyPosOrderDto
     [JsonProperty("type")]
     public int Type { get; set; }
     
+    [JsonProperty("status")]
+    public int Status { get; set; }
+    
     [JsonProperty("notes")]
     public string Notes { get; set; }
     

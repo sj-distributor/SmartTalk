@@ -71,6 +71,12 @@ public class PosOrder : IEntity, IHasCreatedFields, IHasModifiedFields
 
     [Column("notes"), StringLength(128)]
     public string Notes { get; set; }
+    
+    [Column("retry_count")]
+    public int RetryCount { get; set; }
+    
+    [Column("modified_status")]
+    public PosOrderModifiedStatus ModifiedStatus { get; set; }
 
     [Column("created_by")]
     public int? CreatedBy { get; set; }
