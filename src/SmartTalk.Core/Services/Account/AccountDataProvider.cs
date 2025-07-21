@@ -310,8 +310,8 @@ namespace SmartTalk.Core.Services.Account
             if (!string.IsNullOrEmpty(userNameContain))
                 query = query.Where(x => x.UserName.Contains(userNameContain));
 
-            if (userAccountLevel != null)
-                query = query.Where(x => x.AccountLevel == userAccountLevel);
+            if (userAccountLevel.HasValue)
+                query = query.Where(x => x.AccountLevel == userAccountLevel.Value);
             
             if (orderByCreatedOn)
                 query = query.OrderByDescending(x => x.CreatedOn);

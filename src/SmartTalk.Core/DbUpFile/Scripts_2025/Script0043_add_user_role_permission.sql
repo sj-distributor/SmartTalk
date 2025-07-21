@@ -1,6 +1,6 @@
 INSERT INTO role (created_on, modified_on, uuid, name)
 VALUES
-    (now(3), now(3), uuid(), 'Operator'),,
+    (now(3), now(3), uuid(), 'Operator'),
     (now(3), now(3), uuid(), 'ServiceProviderAdministrator'),
     (now(3), now(3), uuid(), 'ServiceProviderOperator');
 
