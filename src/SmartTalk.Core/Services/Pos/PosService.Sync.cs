@@ -184,7 +184,7 @@ public partial class PosService
                                 CategoryId = posCategoryId,
                                 Price = product.Price,
                                 Status = product.Status,
-                                Names = JsonConvert.SerializeObject(GetLocalizedNames(product.Localizations, oldNames)),
+                                Names = JsonConvert.SerializeObject(GetLocalizedNames(product.Localizations, null)),
                                 Modifiers = product.ModifierGroups != null ? JsonConvert.SerializeObject(product.ModifierGroups) : null,
                                 Tax = product.Taxes != null ? JsonConvert.SerializeObject(product.Taxes) : null,
                                 CategoryIds = string.Join(",", product.CategoryIds ?? []),
@@ -222,7 +222,7 @@ public partial class PosService
                 g => g.ToDictionary(x => x.Field, x => x.Value)
             );
 
-        if (oldNames.Count == 0) return result;
+        if (oldNames == null || oldNames.Count == 0) return result;
         
         foreach (var lang in new[] { "cn", "en" })
         {
