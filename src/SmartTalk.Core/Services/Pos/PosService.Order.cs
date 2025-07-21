@@ -165,39 +165,201 @@ public partial class PosService
         }).ToList();
     }
 
-    private List<PosOrderItemDto> BuildMergedOrderItemsWithStatus(List<EasyPosOrderItemDto> orderItems, string originalItemJson)
+    // private List<PosOrderItemDto> BuildMergedOrderItemsWithStatus(List<EasyPosOrderItemDto> orderItems, string originalItemJson)
+    // {
+    //     var originalItems = JsonConvert.DeserializeObject<List<PosOrderItemDto>>(originalItemJson) ?? [];
+    //     var originalItemDict = originalItems.GroupBy(x => x.ProductId).Select(g =>
+    //     {
+    //         var item = g.First();
+    //         item.Status = PosOrderItemStatus.Missed;
+    //         return item;
+    //     }).ToDictionary(x => x.ProductId, x => x);
+    //     
+    //     var newItems = orderItems.Select(item =>
+    //     {
+    //         var status = originalItemDict.ContainsKey(item.ProductId) ? item.Quantity > 0 ? PosOrderItemStatus.Normal : PosOrderItemStatus.Missed : PosOrderItemStatus.Added;
+    //
+    //         return new PosOrderItemDto
+    //         {
+    //             Id = item.Id,
+    //             ProductId = item.ProductId,
+    //             Quantity = item.Quantity,
+    //             OriginalPrice = item.OriginalPrice,
+    //             Price = item.Price,
+    //             Notes = string.IsNullOrEmpty(item.Notes) ? string.Empty : item.Notes,
+    //             OrderItemModifiers = _mapper.Map<List<PhoneCallOrderItemModifiers>>(item.OrderItemModifiers),
+    //             Status = status
+    //         };
+    //     }).ToList();
+    //
+    //     foreach (var item in originalItemDict)
+    //     {
+    //         var matched = newItems.FirstOrDefault(x => x.ProductId == item.Key);
+    //
+    //         if (matched != null) continue;
+    //         
+    //         newItems.Add(item.Value);
+    //     }
+    //
+    //     return newItems;
+    // }
+
+    private List<PosOrderItemDto> BuildMergedOrderItemsWithStatus(List<EasyPosOrderItemDto> newItems, string originalItemJson)
     {
-        var originalItems = JsonConvert.DeserializeObject<List<PosOrderItemDto>>(originalItemJson);
-        var originalItemDict = originalItems.GroupBy(x => x.ProductId).Select(g =>
-        {
-            var item = g.First();
-            item.Status = PosOrderItemStatus.Missed;
-            return item;
-        }).ToDictionary(x => x.ProductId, x => x);
-        
-        var newItems = orderItems.Select(item =>
-        {
-            var status = originalItemDict.ContainsKey(item.ProductId) ? item.Quantity > 0 ? PosOrderItemStatus.Normal : PosOrderItemStatus.Missed : PosOrderItemStatus.Added;
+        var result = new List<PosOrderItemDto>();
+        var originalItems = JsonConvert.DeserializeObject<List<PosOrderItemDto>>(originalItemJson) ?? [];
 
-            return new PosOrderItemDto
+        var newGroups = newItems.GroupBy(x => x.ProductId).ToDictionary(g => g.Key, g => g.ToList());
+        var originalGroups = originalItems.GroupBy(x => x.ProductId).ToDictionary(g => g.Key, g => g.ToList());
+
+        var allProductIds = originalGroups.Keys.Union(newGroups.Keys);
+
+        foreach (var productId in allProductIds)
+        {
+            Log.Information("Current productId: {ProductId}", productId);
+            
+            var newList = newGroups.GetValueOrDefault(productId) ?? [];
+            var originalList = originalGroups.GetValueOrDefault(productId) ?? [];
+            
+            Log.Information("Original item list: {@OriginalList}, New item list: {@NewList}", originalList, newList);
+
+            if (newList.Count == originalList.Count)
             {
-                Id = item.Id,
-                ProductId = item.ProductId,
-                Quantity = item.Quantity,
-                OriginalPrice = item.OriginalPrice,
-                Price = item.Price,
-                Notes = string.IsNullOrEmpty(item.Notes) ? string.Empty : item.Notes,
-                OrderItemModifiers = _mapper.Map<List<PhoneCallOrderItemModifiers>>(item.OrderItemModifiers),
-                Status = status
-            };
-        });
+                Log.Information("Original items and new items have same count: {ProductId}", productId);
+                
+                result.AddRange(newList.Select(x => new PosOrderItemDto
+                {
+                    Id = x.Id,
+                    ProductId = x.ProductId,
+                    Quantity = x.Quantity,
+                    OriginalPrice = x.OriginalPrice,
+                    Price = x.Price,
+                    Notes = x.Notes ?? string.Empty,
+                    OrderItemModifiers = _mapper.Map<List<PhoneCallOrderItemModifiers>>(x.OrderItemModifiers),
+                    Status = x.Quantity > 0 ? PosOrderItemStatus.Normal : PosOrderItemStatus.Missed
+                }).ToList());
+            }
+            else
+            {
+                if (newList.Count == 0 && originalList.Count != 0)
+                {
+                    result.AddRange(originalList.Select(x => new PosOrderItemDto
+                    {
+                        Id = x.Id,
+                        ProductId = x.ProductId,
+                        Quantity = x.Quantity,
+                        OriginalPrice = x.OriginalPrice,
+                        Price = x.Price,
+                        Notes = x.Notes ?? string.Empty,
+                        OrderItemModifiers = _mapper.Map<List<PhoneCallOrderItemModifiers>>(x.OrderItemModifiers),
+                        Status = PosOrderItemStatus.Missed
+                    }).ToList());
+                    
+                    continue;
+                }
 
-        foreach (var item in newItems)
-        {
-            originalItemDict[item.ProductId] = item;
+                if (originalList.Count == 0 && newList.Count != 0)
+                {
+                    result.AddRange(newList.Select(x => new PosOrderItemDto
+                    {
+                        Id = x.Id,
+                        ProductId = x.ProductId,
+                        Quantity = x.Quantity,
+                        OriginalPrice = x.OriginalPrice,
+                        Price = x.Price,
+                        Notes = x.Notes ?? string.Empty,
+                        OrderItemModifiers = _mapper.Map<List<PhoneCallOrderItemModifiers>>(x.OrderItemModifiers),
+                        Status = PosOrderItemStatus.Added
+                    }).ToList());
+                    
+                    continue;
+                }
+
+                if (originalList.Count != 0 && newList.Count != 0)
+                {
+                    Log.Information("originalList: {@OriginalList} and newList: {@NewList} have different count", originalList, newList);
+                    
+                    var matchedItems = new List<PosOrderItemDto>();
+                    foreach (var newItem in newList)
+                    {
+                        var strictItem = originalList.FirstOrDefault(o =>
+                            !matchedItems.Contains(o) && !string.IsNullOrWhiteSpace(o.Notes) && !string.IsNullOrWhiteSpace(newItem.Notes) && newItem.Notes.Trim() == o.Notes.Trim());
+
+                        if (strictItem != null)
+                        {
+                            Log.Information("Strict match item: {@StrictItem}", strictItem);
+                            matchedItems.Add(strictItem);
+                            
+                            result.Add(new PosOrderItemDto
+                            {
+                                Id = newItem.Id,
+                                ProductId = newItem.ProductId,
+                                Quantity = newItem.Quantity,
+                                OriginalPrice = newItem.OriginalPrice,
+                                Price = newItem.Price,
+                                Notes = newItem.Notes ?? string.Empty,
+                                OrderItemModifiers = _mapper.Map<List<PhoneCallOrderItemModifiers>>(newItem.OrderItemModifiers),
+                                Status = newItem.Quantity > 0 ? PosOrderItemStatus.Normal : PosOrderItemStatus.Missed
+                            });
+                            
+                            continue;
+                        }
+ 
+                        var fuzzyItem = originalList.FirstOrDefault(o => !matchedItems.Contains(o) && !string.IsNullOrWhiteSpace(o.Notes) == !string.IsNullOrWhiteSpace(newItem.Notes));
+                        if (fuzzyItem != null)
+                        {
+                            Log.Information("Fuzzy match item: {@FuzzyItem}", fuzzyItem);
+                            
+                            matchedItems.Add(fuzzyItem);
+                            
+                            result.Add(new PosOrderItemDto
+                            {
+                                Id = newItem.Id,
+                                ProductId = newItem.ProductId,
+                                Quantity = newItem.Quantity,
+                                OriginalPrice = newItem.OriginalPrice,
+                                Price = newItem.Price,
+                                Notes = newItem.Notes ?? string.Empty,
+                                OrderItemModifiers = _mapper.Map<List<PhoneCallOrderItemModifiers>>(newItem.OrderItemModifiers),
+                                Status = newItem.Quantity > 0 ? PosOrderItemStatus.Normal : PosOrderItemStatus.Missed
+                            });
+                            
+                            continue;
+                        }
+                        
+                        result.Add(new PosOrderItemDto
+                        {
+                            Id = newItem.Id,
+                            ProductId = newItem.ProductId,
+                            Quantity = newItem.Quantity,
+                            OriginalPrice = newItem.OriginalPrice,
+                            Price = newItem.Price,
+                            Notes = newItem.Notes ?? string.Empty,
+                            OrderItemModifiers = _mapper.Map<List<PhoneCallOrderItemModifiers>>(newItem.OrderItemModifiers),
+                            Status = PosOrderItemStatus.Added
+                        });
+                    }
+                    
+                    Log.Information("Handle no matching items: {@NoMatchingItems}", originalList.Except(matchedItems).ToList());
+                    
+                    result.AddRange(originalList.Except(matchedItems).Select(x => new PosOrderItemDto
+                    {
+                        Id = x.Id,
+                        ProductId = x.ProductId,
+                        Quantity = x.Quantity,
+                        OriginalPrice = x.OriginalPrice,
+                        Price = x.Price,
+                        Notes = x.Notes ?? string.Empty,
+                        OrderItemModifiers = _mapper.Map<List<PhoneCallOrderItemModifiers>>(x.OrderItemModifiers),
+                        Status = PosOrderItemStatus.Missed
+                    }));
+                }
+                
+                Log.Information("Current modified items: {@Result}", result);
+            }
         }
 
-        return originalItemDict.Values.ToList();
+        return result;
     }
 
     private async Task<PosOrder> GetOrAddPosOrderAsync(PlacePosOrderCommand command, CancellationToken cancellationToken)
