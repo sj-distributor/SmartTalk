@@ -292,9 +292,9 @@ public partial class PosDataProvider : IPosDataProvider
     {
         var query = from assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>().Where(x => assistantIds.Contains(x.Id))
             join posAgent in _repository.Query<PosAgent>() on assistant.AgentId equals posAgent.AgentId
-            join store in _repository.Query<PosStoreUser>() on posAgent.StoreId equals store.StoreId
-            where store.UserId == userId
-            select store;
+            join posStoreUser in _repository.Query<PosStoreUser>() on posAgent.StoreId equals posStoreUser.StoreId
+            where posStoreUser.UserId == userId
+            select posStoreUser;
 
         return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }

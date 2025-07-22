@@ -170,7 +170,7 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
             query = query.Where(x => x.Channel.Contains(channel));
 
         if (agentId.HasValue)
-            query = query.Where(x => x.AgentId == agentId);
+            query = query.Where(x => x.AgentId == agentId.Value);
 
         var count = await query.CountAsync(cancellationToken).ConfigureAwait(false);
 
