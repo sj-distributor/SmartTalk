@@ -525,6 +525,9 @@ public partial class PosService
 
             if (!isAvailable)
             {
+                Log.Information("Current token is available: {IsAvailable}", string.IsNullOrWhiteSpace(token));
+                token = !string.IsNullOrWhiteSpace(token) ? token : await GetPosTokenAsync(store, order, cancellationToken).ConfigureAwait(false);
+                
                 await MarkOrderAsSpecificStatusAsync(order, status, cancellationToken).ConfigureAwait(false);
 
                 if (status == PosOrderStatus.Error && isWithRetry && order.RetryCount < MaxRetryCount)
