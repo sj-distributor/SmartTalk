@@ -255,7 +255,7 @@ public partial class AiSpeechAssistantService
         return type switch
         {
             AgentType.AiKid => provider == AiSpeechAssistantProvider.OpenAi ? AiSpeechAssistantStore.AiKidDefaultUrl : AiSpeechAssistantStore.GoogleDefaultUrl,
-            _ =>  provider == AiSpeechAssistantProvider.OpenAi ? AiSpeechAssistantStore.DefaultUrl : AiSpeechAssistantStore.GoogleDefaultUrl
+            _ => provider == AiSpeechAssistantProvider.OpenAi ? AiSpeechAssistantStore.DefaultUrl : AiSpeechAssistantStore.GoogleDefaultUrl
         };
     }
 
