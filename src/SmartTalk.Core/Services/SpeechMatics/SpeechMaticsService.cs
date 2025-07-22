@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Serilog;
 using AutoMapper;
 using SmartTalk.Core.Ioc;
@@ -15,12 +16,14 @@ using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Core.Settings.PhoneOrder;
+using SmartTalk.Core.Settings.Sales;
 using SmartTalk.Core.Settings.Twilio;
 using SmartTalk.Messages.Dto.SpeechMatics;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
+using SmartTalk.Messages.Dto.Sales;
 using SmartTalk.Messages.Dto.WeChat;
 using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Enums.WeChat;
@@ -36,8 +39,9 @@ public interface ISpeechMaticsService : IScopedDependency
 
 public class SpeechMaticsService : ISpeechMaticsService
 {
-    private readonly  IWeChatClient _weChatClient;
-    private  readonly IFfmpegService _ffmpegService;
+    private readonly ISalesClient _salesClient;
+    private readonly IWeChatClient _weChatClient;
+    private readonly IFfmpegService _ffmpegService;
     private readonly OpenAiSettings _openAiSettings;
     private readonly TwilioSettings _twilioSettings;
     private readonly ISmartiesClient _smartiesClient;
@@ -48,6 +52,7 @@ public class SpeechMaticsService : ISpeechMaticsService
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
     
     public SpeechMaticsService(
+        ISalesClient salesClient,
         IWeChatClient weChatClient,
         IFfmpegService ffmpegService,
         OpenAiSettings openAiSettings,
@@ -59,6 +64,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         ISmartTalkHttpClientFactory smartTalkHttpClientFactory,
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
+        _salesClient = salesClient;
         _weChatClient = weChatClient;
         _ffmpegService = ffmpegService;
         _openAiSettings = openAiSettings;
@@ -132,15 +138,28 @@ public class SpeechMaticsService : ISpeechMaticsService
 
         var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
-
-        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
+        
+        var isSales = agent.Type == AgentType.Sales;
+        string model = isSales ? "gpt-4.1" : "gpt-4o-audio-preview";
+        ChatClient client = new(model, _openAiSettings.ApiKey);
+        
+        string askItemsJson = null;
+        
+        if (isSales)
+        {
+            var requestDto = new GetAskInfoDetailListByCustomerRequestDto { CustomerNumbers = new List<string> { aiSpeechAssistant.Name } };
+            var askedItems = await _salesClient.GetAskInfoDetailListByCustomerAsync(requestDto, cancellationToken);
+            var topItems = askedItems.Data.OrderByDescending(x => x.ValidAskQty).Take(60).ToList();
+            var simplifiedItems = topItems.Select(x => new { name = x.MaterialDesc, quantity = x.ValidAskQty, materialNumber = x.Material }).ToList();
+            askItemsJson = JsonSerializer.Serialize(simplifiedItems, new JsonSerializerOptions { WriteIndented = true });
+        }
 
         var audioData = BinaryData.FromBytes(audioContent);
         List<ChatMessage> messages =
         [
             new SystemChatMessage(string.IsNullOrEmpty(aiSpeechAssistant?.CustomRecordAnalyzePrompt)
                 ? "你是一名電話錄音的分析員，通過聽取錄音內容和語氣情緒作出精確分析，冩出一份分析報告。\n\n分析報告的格式：交談主題：xxx\n\n 來電號碼：#{call_from}\n\n 內容摘要:xxx \n\n 客人情感與情緒: xxx \n\n 待辦事件: \n1.xxx\n2.xxx \n\n 客人下單內容(如果沒有則忽略)：1. 牛肉(1箱)\n2.雞腿肉(1箱)".Replace("#{call_from}", callFrom ?? "")
-                : aiSpeechAssistant.CustomRecordAnalyzePrompt.Replace("#{call_from}", callFrom ?? "").Replace("#{current_time}", currentTime)),
+                : aiSpeechAssistant.CustomRecordAnalyzePrompt.Replace("#{call_from}", callFrom ?? "").Replace("#{current_time}", currentTime).Replace("#{askItemsJson}", askItemsJson ?? "")),
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
             new UserChatMessage("幫我根據錄音生成分析報告：")
         ];
@@ -153,6 +172,32 @@ public class SpeechMaticsService : ISpeechMaticsService
         record.Status = PhoneOrderRecordStatus.Sent;
         record.TranscriptionText = completion.Content.FirstOrDefault()?.Text ?? "";
 
+        if (isSales && !string.IsNullOrEmpty(record.TranscriptionText))
+        {
+            var askInfoResponse = await _salesClient.GetAskInfoDetailListByCustomerAsync(new GetAskInfoDetailListByCustomerRequestDto { CustomerNumbers = new List<string> { aiSpeechAssistant.Name } }, cancellationToken);
+
+            var historyItems = askInfoResponse.Data.Where(x => !string.IsNullOrWhiteSpace(x.Material)).Select(x => (x.Material, x.MaterialDesc)).ToList();
+            
+            var extractedOrderItems = await ExtractAndMatchOrderItemsFromReportAsync(record.TranscriptionText, historyItems, DateTime.Today, cancellationToken);
+
+            if (extractedOrderItems.Any())
+            {
+                var draftOrder = new GenerateAiOrdersRequestDto
+                {
+                    AiOrderInfoDto = new AiOrderInfoDto
+                    {
+                        SoldToId = aiSpeechAssistant.Name,
+                        SoldToIds = aiSpeechAssistant.Name,
+                        DocumentDate = DateTime.Today,
+                        DeliveryDate = DateTime.Today,
+                        AiOrderItemDtoList = extractedOrderItems
+                    }
+                };
+
+                await _salesClient.GenerateAiOrdersAsync(draftOrder, cancellationToken);
+            }
+        }
+        
         if (agent.SourceSystem == AgentSourceSystem.Smarties)
             await CallBackSmartiesRecordAsync(agent, record, cancellationToken).ConfigureAwait(false);
 
@@ -258,5 +303,41 @@ public class SpeechMaticsService : ISpeechMaticsService
         Log.Information("Structure diarization results : {@speakInfos}", speakInfos);
         
         return speakInfos;
+    }
+
+    private async Task<List<AiOrderItemDto>> ExtractAndMatchOrderItemsFromReportAsync(string reportText, List<(string Material, string MaterialDesc)> historyItems, DateTime orderDate, CancellationToken cancellationToken) 
+    { 
+        var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
+        
+        var materialListText = string.Join("\n", historyItems.Select(x => $"{x.MaterialDesc} ({x.Material})"));
+        
+        var systemPrompt = "你是一名订单分析助手。请从下面的客户分析报告文本中提取所有下单的物料名称和数量，并且用历史物料列表匹配每个物料的materialNumber。如果报告中提到了预约送货时间，请提取送货时间（格式yyyy-MM-dd）。返回JSON数组，每个元素包含：\n" + "- name: 物料名称\n" + "- quantity: 数量（整数或小数）\n" + "- materialNumber: 对应的物料编码\n" + "- deliveryDate: 客户预约送货日期（如果报告中没有则用空字符串）\n\n" + "历史物料列表（名称和编码）：\n" + materialListText + "\n\n" + "客户分析报告文本：\n"+ reportText + "\n\n请只返回JSON数组，不要多余说明。";
+        
+        var messages = new List<ChatMessage>
+        {
+            new SystemChatMessage(systemPrompt),
+        };
+        
+        var completion = await client.CompleteChatAsync(messages, new ChatCompletionOptions { ResponseModalities = ChatResponseModalities.Text }, cancellationToken); 
+        var jsonResponse = completion.Value.Content.FirstOrDefault()?.Text ?? "";
+        
+        try 
+        { 
+            var parsedItems = JsonSerializer.Deserialize<List<ExtractedOrderItemDto>>(jsonResponse, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<ExtractedOrderItemDto>();
+            
+            var aiOrderItems = parsedItems.Select(p => new AiOrderItemDto 
+            { 
+                AiMaterialDesc = p.Name, 
+                MateialQuantity = p.Quantity, 
+                MaterialNumber = p.MaterialNumber
+            }).ToList();
+            
+            return aiOrderItems; 
+        }
+        catch (Exception ex) 
+        { 
+            Log.Warning("解析GPT返回JSON失败: {Message}", ex.Message); 
+            return new List<AiOrderItemDto>(); 
+        } 
     }
 }
