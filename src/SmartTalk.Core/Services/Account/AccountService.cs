@@ -71,34 +71,17 @@ public partial class AccountService : IAccountService
             RoleId = userAccountCommand.RoleId,
             UserId = account.Id
         }], cancellationToken).ConfigureAwait(false);
-        
-        if (userAccountCommand.AccountLevel == UserAccountLevel.Company)
-        {
-            var companyStores = await _posDataProvider.GetPosCompanyStoresAsync(companyIds: userAccountCommand.CompanyIds, cancellationToken: cancellationToken).ConfigureAwait(false);
-            
-            var companyStoreUsers = companyStores.Select(store => new PosStoreUser
-            {
-                UserId = account.Id,
-                StoreId = store.Id
-            }).ToList();
 
-            await _posDataProvider.CreatePosStoreUserAsync(companyStoreUsers, forceSave: true, cancellationToken: cancellationToken).ConfigureAwait(false);
-            
-            return new CreateUserAccountResponse
-            {
-                Data = _mapper.Map<UserAccountDto>(account)
-            };
-        }
 
-        var posStores = await _posDataProvider.GetPosCompanyStoresAsync(ids: userAccountCommand.StoreIds, cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        var posStoreUsers = posStores.Select(store => new PosStoreUser
+        var stores = await _posDataProvider.GetPosCompanyStoresAsync(companyIds: userAccountCommand.CompanyIds, ids: userAccountCommand.StoreIds, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var storeUsers = stores.Select(store => new PosStoreUser
         {
             UserId = account.Id,
             StoreId = store.Id
         }).ToList();
 
-        await _posDataProvider.CreatePosStoreUserAsync(posStoreUsers, forceSave: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+        await _posDataProvider.CreatePosStoreUserAsync(storeUsers, forceSave: true, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         return new CreateUserAccountResponse
         {

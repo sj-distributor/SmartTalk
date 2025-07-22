@@ -36,7 +36,6 @@ public class RoleDto
             "User" => "操作员",
             "Operator" => "操作员",
             "ServiceProviderOperator" => "操作员",
-            "ServiceProviderAdministrator" => "管理员",
             _ => null
         };
     }

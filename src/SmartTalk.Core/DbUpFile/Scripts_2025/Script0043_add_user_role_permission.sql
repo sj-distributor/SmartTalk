@@ -30,4 +30,4 @@ SELECT NOW(3), NOW(3), r.id, p.id
 FROM role r JOIN permission p ON p.name IN ('CanViewAutoCall','CanViewKnowledge','CanViewPlaceOrder','CanViewBusinessManagement')
 WHERE r.name = 'SuperAdministrator';
 
-ALTER TABLE `user_account` ADD COLUMN `account_level` VARCHAR(36) NOT NULL;
+ALTER TABLE `user_account` ADD COLUMN `account_level` int NOT NULL;
