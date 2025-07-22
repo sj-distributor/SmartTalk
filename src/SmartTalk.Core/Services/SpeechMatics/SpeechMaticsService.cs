@@ -178,7 +178,7 @@ public class SpeechMaticsService : ISpeechMaticsService
 
             var historyItems = askInfoResponse.Data.Where(x => !string.IsNullOrWhiteSpace(x.Material)).Select(x => (x.Material, x.MaterialDesc)).ToList();
             
-            var extractedOrderItems = await ExtractAndMatchOrderItemsFromReportAsync(record.TranscriptionText, historyItems, DateTime.Today, cancellationToken);
+            var (extractedOrderItems, deliveryDate) = await ExtractAndMatchOrderItemsFromReportAsync(record.TranscriptionText, historyItems, DateTime.Today, cancellationToken);
 
             if (extractedOrderItems.Any())
             {
@@ -189,7 +189,7 @@ public class SpeechMaticsService : ISpeechMaticsService
                         SoldToId = aiSpeechAssistant.Name,
                         SoldToIds = aiSpeechAssistant.Name,
                         DocumentDate = DateTime.Today,
-                        DeliveryDate = DateTime.Today,
+                        DeliveryDate = deliveryDate,
                         AiOrderItemDtoList = extractedOrderItems
                     }
                 };
@@ -305,13 +305,13 @@ public class SpeechMaticsService : ISpeechMaticsService
         return speakInfos;
     }
 
-    private async Task<List<AiOrderItemDto>> ExtractAndMatchOrderItemsFromReportAsync(string reportText, List<(string Material, string MaterialDesc)> historyItems, DateTime orderDate, CancellationToken cancellationToken) 
+    private async Task<(List<AiOrderItemDto> Items, DateTime DeliveryDate)> ExtractAndMatchOrderItemsFromReportAsync(string reportText, List<(string Material, string MaterialDesc)> historyItems, DateTime orderDate, CancellationToken cancellationToken) 
     { 
         var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
         
         var materialListText = string.Join("\n", historyItems.Select(x => $"{x.MaterialDesc} ({x.Material})"));
         
-        var systemPrompt = "你是一名订单分析助手。请从下面的客户分析报告文本中提取所有下单的物料名称和数量，并且用历史物料列表匹配每个物料的materialNumber。如果报告中提到了预约送货时间，请提取送货时间（格式yyyy-MM-dd）。返回JSON数组，每个元素包含：\n" + "- name: 物料名称\n" + "- quantity: 数量（整数或小数）\n" + "- materialNumber: 对应的物料编码\n" + "- deliveryDate: 客户预约送货日期（如果报告中没有则用空字符串）\n\n" + "历史物料列表（名称和编码）：\n" + materialListText + "\n\n" + "客户分析报告文本：\n"+ reportText + "\n\n请只返回JSON数组，不要多余说明。";
+        var systemPrompt = "你是一名订单分析助手。请从下面的客户分析报告文本中提取所有下单的物料名称和数量，并且用历史物料列表匹配每个物料的materialNumber。如果报告中提到了预约送货时间，请提取送货时间（格式yyyy-MM-dd）。返回JSON数组，每个元素包含：\n" + "- name: 物料名称\n" + "- quantity: 数量（整数或小数）\n" + "- materialNumber: 对应的物料编码\n" + "- deliveryDate: 客户预约送货日期（如果报告中没有则用空字符串）\n\n" + materialListText + "\n\n" + "客户分析报告文本：\n"+ reportText + "\n\n请只返回JSON数组，不要多余说明。";
         
         var messages = new List<ChatMessage>
         {
@@ -325,6 +325,14 @@ public class SpeechMaticsService : ISpeechMaticsService
         { 
             var parsedItems = JsonSerializer.Deserialize<List<ExtractedOrderItemDto>>(jsonResponse, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<ExtractedOrderItemDto>();
             
+            var deliveryDateStr = parsedItems.Select(i => i.DeliveryDate).FirstOrDefault(d => !string.IsNullOrEmpty(d));
+            
+            DateTime deliveryDate;
+            if (!DateTime.TryParse(deliveryDateStr, out deliveryDate))
+            {
+                deliveryDate = DateTime.Today;
+            }
+            
             var aiOrderItems = parsedItems.Select(p => new AiOrderItemDto 
             { 
                 AiMaterialDesc = p.Name, 
@@ -332,12 +340,12 @@ public class SpeechMaticsService : ISpeechMaticsService
                 MaterialNumber = p.MaterialNumber
             }).ToList();
             
-            return aiOrderItems; 
+            return (aiOrderItems, deliveryDate);
         }
         catch (Exception ex) 
         { 
             Log.Warning("解析GPT返回JSON失败: {Message}", ex.Message); 
-            return new List<AiOrderItemDto>(); 
+            return new (new List<AiOrderItemDto>(), DateTime.Today);
         } 
     }
 }
