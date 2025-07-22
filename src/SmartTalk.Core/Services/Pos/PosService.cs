@@ -56,7 +56,6 @@ public partial class PosService : IPosService
 {
     private readonly IMapper _mapper;
     private readonly IVectorDb _vectorDb;
-    private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
     private readonly ICurrentUser _currentUser;
     private readonly ICacheManager _cacheManager;
     private readonly IEasyPosClient _easyPosClient;
@@ -65,13 +64,13 @@ public partial class PosService : IPosService
     private readonly IPosDataProvider _posDataProvider;
     private readonly IAgentDataProvider _agentDataProvider;
     private readonly IAccountDataProvider _accountDataProvider;
+    private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
     private readonly ISecurityDataProvider _securityDataProvider;
     private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
     
     public PosService(
         IMapper mapper,
         IVectorDb vectorDb,
-        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider,
         ICurrentUser currentUser,
         ICacheManager cacheManager,
         IEasyPosClient easyPosClient,
@@ -80,12 +79,12 @@ public partial class PosService : IPosService
         IPosDataProvider posDataProvider,
         IAgentDataProvider agentDataProvider,
         IAccountDataProvider accountDataProvider,
+        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider,
         ISecurityDataProvider  securityDataProvider,
         ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient)
     {
         _mapper = mapper;
         _vectorDb = vectorDb;
-        _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
         _currentUser = currentUser;
         _cacheManager = cacheManager;
         _easyPosClient = easyPosClient;
@@ -94,6 +93,7 @@ public partial class PosService : IPosService
         _posDataProvider = posDataProvider;
         _agentDataProvider = agentDataProvider;
         _accountDataProvider = accountDataProvider;
+        _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
         _securityDataProvider = securityDataProvider;
         _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
     }
