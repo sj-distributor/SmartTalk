@@ -72,7 +72,6 @@ public partial class AccountService : IAccountService
             UserId = account.Id
         }], cancellationToken).ConfigureAwait(false);
 
-
         var stores = await _posDataProvider.GetPosCompanyStoresAsync(companyIds: userAccountCommand.CompanyIds, ids: userAccountCommand.StoreIds, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var storeUsers = stores.Select(store => new PosStoreUser
