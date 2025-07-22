@@ -17,6 +17,7 @@ using SmartTalk.Core.Services.Security;
 using SmartTalk.Messages.Commands.Pos;
 using SmartTalk.Messages.Constants;
 using SmartTalk.Messages.Dto.Agent;
+using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Pos;
 using SmartTalk.Messages.Enums.Agent;
@@ -294,8 +295,6 @@ public partial class PosService : IPosService
 
     public async Task<GetPosStoresResponse> GetPosStoresAsync(GetPosStoresRequest request, CancellationToken cancellationToken)
     {
-        var roles = await _securityDataProvider.GetCurrentUserRolesAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
-        
         var isSuperAdmin = await CheckCurrentIsAdminAsync(cancellationToken).ConfigureAwait(false);
         
         Log.Information("The current user: {CurrrentUser} is Admin: {IsSuperAdmin}", _currentUser, isSuperAdmin);
@@ -327,11 +326,52 @@ public partial class PosService : IPosService
 
     public async Task<GetPosAgentsResponse> GetPosAgentsAsync(GetPosAgentsRequest request, CancellationToken cancellationToken)
     {
-        var posAgents = await _posDataProvider.GetPosAgentByUserIdAsync(_currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
+       var posAgents = await _posDataProvider.GetPosAgentByUserIdAsync(_currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
+       
+       var agentAssistantsDict = new Dictionary<int, List<AiSpeechAssistantDto>>();
+
+       var agentStoreDict = new Dictionary<int, PosCompanyStoreDto>();
+       
+       foreach (var agentId in posAgents.Select(x => x.AgentId).Distinct())
+       {
+           var (_, assistants) = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantsAsync(agentId: agentId, cancellationToken: cancellationToken);
+
+           var store = await _posDataProvider.GetPosStoreByAgentIdAsync(agentId, cancellationToken).ConfigureAwait(false);
         
+           agentAssistantsDict[agentId] = assistants.Select(a => new AiSpeechAssistantDto
+           {
+               Id = a.Id,
+               Name = a.Name
+           }).ToList();
+           
+           agentStoreDict[agentId] = new PosCompanyStoreDto
+           {
+               Id = store.Id,
+               Names = store.Names
+           };
+       }
+
+       var result = posAgents.Select(agent => new PosAgentDto
+       {
+           Id = agent.Id,
+           PosStore = agentStoreDict.TryGetValue(agent.AgentId, out var store) 
+               ? store 
+               : new PosCompanyStoreDto(),
+           AgentAssistantss = new List<AgentAssistantsDto>
+           {
+               new AgentAssistantsDto
+               {
+                   AgentId = agent.AgentId,
+                   AiSpeechAssistants = agentAssistantsDict.TryGetValue(agent.AgentId, out var assistants) 
+                       ? assistants 
+                       : new List<AiSpeechAssistantDto>()
+               }
+           }
+       }).ToList();
+       
         return new GetPosAgentsResponse()
         {
-            Data = posAgents
+            Data = result
         };
     }
 

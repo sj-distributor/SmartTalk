@@ -12,6 +12,7 @@ using SmartTalk.Core.Services.Identity;
 using SmartTalk.Core.Services.Pos;
 using SmartTalk.Messages.Requests.Security;
 using SmartTalk.Messages.Commands.Security;
+using SmartTalk.Messages.Constants;
 using SmartTalk.Messages.Enums.Security;
 using SmartTalk.Messages.Events.Security;
 
@@ -184,7 +185,7 @@ public class SecurityService : ISecurityService
     public async Task<GetRolesResponse> GetRolesAsync(GetRolesRequest request, CancellationToken cancellationToken)
     {
         var (count, roles) = await _securityDataProvider.GetRolesAsync(pageSize: request.PageSize, pageIndex: request.PageIndex, systemSource: RoleSystemSource.System, accountLevel: request.AccountLevel, cancellationToken: cancellationToken).ConfigureAwait(false);
-
+        
         return new GetRolesResponse
         {
             Data = new GetRolesResponseData

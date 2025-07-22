@@ -6,9 +6,7 @@ public class PosAgentDto
 {
     public int Id { get; set; }
 
-    public int StoreId { get; set; }
-    
-    public string StoreName { get; set; }
+    public PosCompanyStoreDto PosStore { get; set; }
 
     public List<AgentAssistantsDto> AgentAssistantss { get; set; }
 }

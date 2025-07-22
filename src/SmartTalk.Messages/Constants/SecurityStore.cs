@@ -10,7 +10,6 @@ public static class SecurityStore
         public const string Administrator = nameof(Administrator);
         public const string SuperAdministrator = nameof(SuperAdministrator);
         public const string Operator = nameof(Operator);
-        public const string ServiceProviderAdministrator = nameof(ServiceProviderAdministrator);
         public const string ServiceProviderOperator = nameof(ServiceProviderOperator);
     }
     

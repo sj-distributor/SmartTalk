@@ -1,7 +1,6 @@
 INSERT INTO role (created_on, modified_on, uuid, name)
 VALUES
     (now(3), now(3), uuid(), 'Operator'),
-    (now(3), now(3), uuid(), 'ServiceProviderAdministrator'),
     (now(3), now(3), uuid(), 'ServiceProviderOperator');
 
 INSERT INTO permission (created_date, last_modified_date, name, is_system)
@@ -23,8 +22,12 @@ WHERE r.name = 'ServiceProviderOperator';
 
 INSERT INTO role_permission (created_date, last_modified_date, role_id, permission_id)
 SELECT NOW(3), NOW(3), r.id, p.id
-FROM role r JOIN permission p ON p.name IN ('CanViewPhoneOrder','CanViewAccountManagement', 'CanCreateAccount','CanDeleteAccount','CanCopyAccount','CanUpdateAccount','CanViewPlaceOrder',
-                                           'CanViewBusinessManagement')
-WHERE r.name = 'ServiceProviderAdministrator';
+FROM role r JOIN permission p ON p.name IN ('CanUpdateAccount','CanViewPlaceOrder','CanViewBusinessManagement')
+WHERE r.name = 'Administrator';
+
+INSERT INTO role_permission (created_date, last_modified_date, role_id, permission_id)
+SELECT NOW(3), NOW(3), r.id, p.id
+FROM role r JOIN permission p ON p.name IN ('CanViewAutoCall','CanViewKnowledge','CanViewPlaceOrder','CanViewBusinessManagement')
+WHERE r.name = 'SuperAdministrator';
 
 ALTER TABLE `user_account` ADD COLUMN `account_level` VARCHAR(36) NOT NULL;

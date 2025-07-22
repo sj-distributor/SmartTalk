@@ -117,7 +117,7 @@ public partial class SecurityDataProvider
         {
             query = accountLevel.Value switch
             {
-                UserAccountLevel.ServiceProvider => query.Where(x => x.Name == "ServiceProviderOperator" || x.Name == "ServiceProviderAdministrator"),
+                UserAccountLevel.ServiceProvider => query.Where(x => x.Name == "ServiceProviderOperator" || x.Name == "Administrator"),
                 UserAccountLevel.Company or UserAccountLevel.AiAgent => query.Where(x => x.Name == "Operator"),
                 _ => query.Where(x => false)
             };

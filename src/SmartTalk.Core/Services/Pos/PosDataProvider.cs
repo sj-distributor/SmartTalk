@@ -45,7 +45,7 @@ public partial interface IPosDataProvider : IScopedDependency
 
     Task<PosStoreUser> GetPosStoreUsersByUserIdAndAssistantIdAsync(List<int> assistantIds, int userId, CancellationToken cancellationToken = default);
 
-    Task<List<PosAgentDto>> GetPosAgentByUserIdAsync(int userId, CancellationToken cancellationToken);
+    Task<List<PosAgent>> GetPosAgentByUserIdAsync(int userId, CancellationToken cancellationToken);
 }
 
 public partial class PosDataProvider : IPosDataProvider
@@ -299,37 +299,13 @@ public partial class PosDataProvider : IPosDataProvider
         return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<PosAgentDto>> GetPosAgentByUserIdAsync(int userId, CancellationToken cancellationToken)
+    public async Task<List<PosAgent>> GetPosAgentByUserIdAsync(int userId, CancellationToken cancellationToken)
     {
-        var query = from storeUser in _repository.Query<PosStoreUser>()
-            join agent in _repository.Query<PosAgent>() on storeUser.StoreId equals agent.StoreId
-            join store in _repository.Query<PosCompanyStore>() on agent.StoreId equals store.Id
-            where storeUser.UserId == userId
-            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() 
-                on agent.AgentId equals assistant.AgentId into assistantsGroup
-            from assistant in assistantsGroup.DefaultIfEmpty()
-            where assistant == null || assistant.IsDisplay
-            group new { agent, store, assistant } by new { agent.Id, agent.StoreId, store.Names, agent.AgentId } into g
-            select new PosAgentDto
-            {
-                Id = g.Key.Id,
-                StoreId = g.Key.StoreId,
-                StoreName = g.Key.Names,
-                AgentAssistantss = new List<AgentAssistantsDto>
-                {
-                    new AgentAssistantsDto
-                    {
-                        AgentId = g.Key.AgentId,
-                        AiSpeechAssistants = g.Where(x => x.assistant != null)
-                            .Select(x => new AiSpeechAssistantDto 
-                            { 
-                                Id = x.assistant.Id,
-                                Name = x.assistant.Name 
-                            }).ToList()
-                    }
-                }
-            };
+        var query = from storeUsers in _repository.Query<PosStoreUser>()
+            join posAgent in _repository.Query<PosAgent>() on storeUsers.StoreId equals posAgent.StoreId
+            where storeUsers.UserId == userId
+            select posAgent;
 
-        return await query.AsNoTracking().ToListAsync(cancellationToken).ConfigureAwait(false);
+        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }
