@@ -39,6 +39,7 @@ public interface ISpeechMaticsService : IScopedDependency
 
 public class SpeechMaticsService : ISpeechMaticsService
 {
+    private readonly IMapper _mapper;
     private readonly ISalesClient _salesClient;
     private readonly IWeChatClient _weChatClient;
     private readonly IFfmpegService _ffmpegService;
@@ -52,6 +53,7 @@ public class SpeechMaticsService : ISpeechMaticsService
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
     
     public SpeechMaticsService(
+        IMapper mapper,
         ISalesClient salesClient,
         IWeChatClient weChatClient,
         IFfmpegService ffmpegService,
@@ -64,6 +66,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         ISmartTalkHttpClientFactory smartTalkHttpClientFactory,
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
+        _mapper = mapper;
         _salesClient = salesClient;
         _weChatClient = weChatClient;
         _ffmpegService = ffmpegService;
@@ -140,20 +143,10 @@ public class SpeechMaticsService : ISpeechMaticsService
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
         
         var isSales = agent.Type == AgentType.Sales;
-        string model = isSales ? "gpt-4.1" : "gpt-4o-audio-preview";
-        ChatClient client = new(model, _openAiSettings.ApiKey);
+        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
         
-        string askItemsJson = null;
+        var askItemsJson = await ConfigureRecordAnalyzePromptAsync(isSales, aiSpeechAssistant?.Name, cancellationToken).ConfigureAwait(false);
         
-        if (isSales)
-        {
-            var requestDto = new GetAskInfoDetailListByCustomerRequestDto { CustomerNumbers = new List<string> { aiSpeechAssistant.Name } };
-            var askedItems = await _salesClient.GetAskInfoDetailListByCustomerAsync(requestDto, cancellationToken);
-            var topItems = askedItems.Data.OrderByDescending(x => x.ValidAskQty).Take(60).ToList();
-            var simplifiedItems = topItems.Select(x => new { name = x.MaterialDesc, quantity = x.ValidAskQty, materialNumber = x.Material }).ToList();
-            askItemsJson = JsonSerializer.Serialize(simplifiedItems, new JsonSerializerOptions { WriteIndented = true });
-        }
-
         var audioData = BinaryData.FromBytes(audioContent);
         List<ChatMessage> messages =
         [
@@ -172,31 +165,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         record.Status = PhoneOrderRecordStatus.Sent;
         record.TranscriptionText = completion.Content.FirstOrDefault()?.Text ?? "";
 
-        if (isSales && !string.IsNullOrEmpty(record.TranscriptionText))
-        {
-            var askInfoResponse = await _salesClient.GetAskInfoDetailListByCustomerAsync(new GetAskInfoDetailListByCustomerRequestDto { CustomerNumbers = new List<string> { aiSpeechAssistant.Name } }, cancellationToken);
-
-            var historyItems = askInfoResponse.Data.Where(x => !string.IsNullOrWhiteSpace(x.Material)).Select(x => (x.Material, x.MaterialDesc)).ToList();
-            
-            var (extractedOrderItems, deliveryDate) = await ExtractAndMatchOrderItemsFromReportAsync(record.TranscriptionText, historyItems, DateTime.Today, cancellationToken);
-
-            if (extractedOrderItems.Any())
-            {
-                var draftOrder = new GenerateAiOrdersRequestDto
-                {
-                    AiOrderInfoDto = new AiOrderInfoDto
-                    {
-                        SoldToId = aiSpeechAssistant.Name,
-                        SoldToIds = aiSpeechAssistant.Name,
-                        DocumentDate = DateTime.Today,
-                        DeliveryDate = deliveryDate,
-                        AiOrderItemDtoList = extractedOrderItems
-                    }
-                };
-
-                await _salesClient.GenerateAiOrdersAsync(draftOrder, cancellationToken);
-            }
-        }
+        await MultiScenarioCustomProcessingAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
         
         if (agent.SourceSystem == AgentSourceSystem.Smarties)
             await CallBackSmartiesRecordAsync(agent, record, cancellationToken).ConfigureAwait(false);
@@ -304,6 +273,66 @@ public class SpeechMaticsService : ISpeechMaticsService
         
         return speakInfos;
     }
+    
+    private async Task<string> ConfigureRecordAnalyzePromptAsync(bool isSales, string assistantName, CancellationToken cancellationToken)
+    {
+        if (!isSales || string.IsNullOrEmpty(assistantName)) return null;
+        
+        var requestDto = new GetAskInfoDetailListByCustomerRequestDto { CustomerNumbers = new List<string> { assistantName } };
+
+        var askedItems = await _salesClient.GetAskInfoDetailListByCustomerAsync(requestDto, cancellationToken);
+        
+        var topItems = askedItems.Data.OrderByDescending(x => x.ValidAskQty).Take(60).ToList();
+        
+        var simplifiedItems = topItems.Select(x => new
+        {
+            name = x.MaterialDesc,
+            quantity = x.ValidAskQty,
+            materialNumber = x.Material
+        }).ToList();
+        
+        return JsonSerializer.Serialize(simplifiedItems, new JsonSerializerOptions { WriteIndented = true });
+    }
+    
+    private async Task MultiScenarioCustomProcessingAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, PhoneOrderRecord record, CancellationToken cancellationToken) 
+    { 
+        switch (agent.Type) 
+        { 
+            case AgentType.Sales: 
+                if (!string.IsNullOrEmpty(record.TranscriptionText)) 
+                { 
+                    await HandleSalesScenarioAsync(agent, aiSpeechAssistant, record, cancellationToken);
+                }
+                break; 
+        } 
+    }
+    
+    private async Task HandleSalesScenarioAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, PhoneOrderRecord record, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(record.TranscriptionText)) return;
+
+        var askInfoResponse = await _salesClient.GetAskInfoDetailListByCustomerAsync(new GetAskInfoDetailListByCustomerRequestDto { CustomerNumbers = new List<string> { aiSpeechAssistant.Name } }, cancellationToken);
+
+        var historyItems = askInfoResponse.Data.Where(x => !string.IsNullOrWhiteSpace(x.Material)).Select(x => (x.Material, x.MaterialDesc)).ToList();
+
+        var (extractedOrderItems, deliveryDate) = await ExtractAndMatchOrderItemsFromReportAsync(record.TranscriptionText, historyItems, DateTime.Today, cancellationToken).ConfigureAwait(false);
+
+        if (!extractedOrderItems.Any()) return;
+
+        var draftOrder = new GenerateAiOrdersRequestDto
+        {
+            AiOrderInfoDto = new AiOrderInfoDto
+            {
+                SoldToId = aiSpeechAssistant.Name,
+                SoldToIds = aiSpeechAssistant.Name,
+                DocumentDate = DateTime.Today,
+                DeliveryDate = deliveryDate,
+                AiOrderItemDtoList = extractedOrderItems
+            }
+        };
+
+        await _salesClient.GenerateAiOrdersAsync(draftOrder, cancellationToken).ConfigureAwait(false);
+    }
 
     private async Task<(List<AiOrderItemDto> Items, DateTime DeliveryDate)> ExtractAndMatchOrderItemsFromReportAsync(string reportText, List<(string Material, string MaterialDesc)> historyItems, DateTime orderDate, CancellationToken cancellationToken) 
     { 
@@ -317,9 +346,11 @@ public class SpeechMaticsService : ISpeechMaticsService
         {
             new SystemChatMessage(systemPrompt),
         };
-        
-        var completion = await client.CompleteChatAsync(messages, new ChatCompletionOptions { ResponseModalities = ChatResponseModalities.Text }, cancellationToken); 
+
+        var responseFormat = ChatResponseFormat.CreateJsonObjectFormat();
+        var completion = await client.CompleteChatAsync(messages, new ChatCompletionOptions { ResponseModalities = ChatResponseModalities.Text, ResponseFormat = responseFormat }, cancellationToken).ConfigureAwait(false);
         var jsonResponse = completion.Value.Content.FirstOrDefault()?.Text ?? "";
+        Log.Information("AI JSON Response: {JsonResponse}", jsonResponse);
         
         try 
         { 
@@ -333,13 +364,8 @@ public class SpeechMaticsService : ISpeechMaticsService
                 deliveryDate = DateTime.Today;
             }
             
-            var aiOrderItems = parsedItems.Select(p => new AiOrderItemDto 
-            { 
-                AiMaterialDesc = p.Name, 
-                MateialQuantity = p.Quantity, 
-                MaterialNumber = p.MaterialNumber
-            }).ToList();
-            
+            var aiOrderItems = _mapper.Map<List<AiOrderItemDto>>(parsedItems);
+
             return (aiOrderItems, deliveryDate);
         }
         catch (Exception ex) 
