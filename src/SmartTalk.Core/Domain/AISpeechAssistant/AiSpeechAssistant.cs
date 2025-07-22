@@ -47,6 +47,12 @@ public class AiSpeechAssistant : IEntity<int>, IAgent, IHasCreatedFields
     
     [Column("is_display")]
     public bool IsDisplay { get; set; }
+
+    [Column("wait_interval")]
+    public int WaitInterval { get; set; } = 500;
+    
+    [Column("is_transfer_human")]
+    public bool IsTransferHuman { get; set; } = false;
     
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
