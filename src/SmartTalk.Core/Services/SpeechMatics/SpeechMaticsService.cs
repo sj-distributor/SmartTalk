@@ -19,6 +19,7 @@ using SmartTalk.Core.Settings.Twilio;
 using SmartTalk.Messages.Dto.SpeechMatics;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Commands.PhoneOrder;
+using SmartTalk.Messages.Commands.SpeechMatics;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.WeChat;
@@ -32,6 +33,8 @@ namespace SmartTalk.Core.Services.SpeechMatics;
 public interface ISpeechMaticsService : IScopedDependency
 {
     Task HandleTranscriptionCallbackAsync(HandleTranscriptionCallbackCommand command, CancellationToken cancellationToken);
+
+    Task<ChatCompletion> AudioToTextAsync(AudioToTextCommand command, CancellationToken cancellationToken);
 }
 
 public class SpeechMaticsService : ISpeechMaticsService
@@ -144,7 +147,7 @@ public class SpeechMaticsService : ISpeechMaticsService
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
             new UserChatMessage("幫我根據錄音生成分析報告：")
         ];
-
+ 
         ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
 
         ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
@@ -258,5 +261,25 @@ public class SpeechMaticsService : ISpeechMaticsService
         Log.Information("Structure diarization results : {@speakInfos}", speakInfos);
         
         return speakInfos;
+    }
+
+    public async Task<ChatCompletion> AudioToTextAsync(AudioToTextCommand command, CancellationToken cancellationToken)
+    {
+        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
+
+        var audioData = BinaryData.FromBytes(command.AudioContent);
+        List<ChatMessage> messages =
+        [
+            new SystemChatMessage(command.Prompt),
+            new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
+        ];
+
+        ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
+
+        ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
+        
+        Log.Information("Audio to text result: {Result}", completion);
+        
+        return completion;
     }
 }
