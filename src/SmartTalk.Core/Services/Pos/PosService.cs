@@ -6,15 +6,18 @@ using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Account;
 using SmartTalk.Core.Services.Agents;
+using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Caching;
 using SmartTalk.Core.Services.Caching.Redis;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Identity;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.RetrievalDb.VectorDb;
+using SmartTalk.Core.Services.Security;
 using SmartTalk.Messages.Commands.Pos;
 using SmartTalk.Messages.Constants;
 using SmartTalk.Messages.Dto.Agent;
+using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Pos;
 using SmartTalk.Messages.Enums.Agent;
@@ -45,6 +48,8 @@ public partial interface IPosService : IScopedDependency
     Task<BindPosCompanyStoreResponse> BindPosCompanyStoreAsync(BindPosCompanyStoreCommand command, CancellationToken cancellationToken);
     
     Task<GetPosStoresResponse> GetPosStoresAsync(GetPosStoresRequest request, CancellationToken cancellationToken);
+
+    Task<GetPosAgentsResponse> GetPosAgentsAsync(GetPosAgentsRequest request, CancellationToken cancellationToken);
 }
 
 public partial class PosService : IPosService
@@ -59,6 +64,8 @@ public partial class PosService : IPosService
     private readonly IPosDataProvider _posDataProvider;
     private readonly IAgentDataProvider _agentDataProvider;
     private readonly IAccountDataProvider _accountDataProvider;
+    private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
+    private readonly ISecurityDataProvider _securityDataProvider;
     private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
     
     public PosService(
@@ -72,6 +79,8 @@ public partial class PosService : IPosService
         IPosDataProvider posDataProvider,
         IAgentDataProvider agentDataProvider,
         IAccountDataProvider accountDataProvider,
+        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider,
+        ISecurityDataProvider  securityDataProvider,
         ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient)
     {
         _mapper = mapper;
@@ -84,6 +93,8 @@ public partial class PosService : IPosService
         _posDataProvider = posDataProvider;
         _agentDataProvider = agentDataProvider;
         _accountDataProvider = accountDataProvider;
+        _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
+        _securityDataProvider = securityDataProvider;
         _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
     }
     
@@ -311,6 +322,57 @@ public partial class PosService : IPosService
         Log.Information("Get admin role users: {@roleUsers} by current user: {@currentUserId}", roleUsers, _currentUser.Id.Value);
         
         return roleUsers.Any(x => x.UserId == _currentUser.Id.Value);
+    }
+
+    public async Task<GetPosAgentsResponse> GetPosAgentsAsync(GetPosAgentsRequest request, CancellationToken cancellationToken)
+    {
+       var posAgents = await _posDataProvider.GetPosAgentByUserIdAsync(_currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
+       
+       var agentAssistantsDict = new Dictionary<int, List<AiSpeechAssistantDto>>();
+
+       var agentStoreDict = new Dictionary<int, PosCompanyStoreDto>();
+       
+       foreach (var agentId in posAgents.Select(x => x.AgentId).Distinct())
+       {
+           var (_, assistants) = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantsAsync(agentId: agentId, cancellationToken: cancellationToken);
+
+           var store = await _posDataProvider.GetPosStoreByAgentIdAsync(agentId, cancellationToken).ConfigureAwait(false);
+        
+           agentAssistantsDict[agentId] = assistants.Select(a => new AiSpeechAssistantDto
+           {
+               Id = a.Id,
+               Name = a.Name
+           }).ToList();
+           
+           agentStoreDict[agentId] = new PosCompanyStoreDto
+           {
+               Id = store.Id,
+               Names = store.Names
+           };
+       }
+
+       var result = posAgents.Select(agent => new PosAgentDto
+       {
+           Id = agent.Id,
+           PosStore = agentStoreDict.TryGetValue(agent.AgentId, out var store) 
+               ? store 
+               : new PosCompanyStoreDto(),
+           AgentAssistantss = new List<AgentAssistantsDto>
+           {
+               new AgentAssistantsDto
+               {
+                   AgentId = agent.AgentId,
+                   AiSpeechAssistants = agentAssistantsDict.TryGetValue(agent.AgentId, out var assistants) 
+                       ? assistants 
+                       : new List<AiSpeechAssistantDto>()
+               }
+           }
+       }).ToList();
+       
+        return new GetPosAgentsResponse()
+        {
+            Data = result
+        };
     }
 
     private async Task<List<GetPosCompanyWithStoresData>> EnrichPosCompaniesAsync(List<PosCompanyDto> companies, string keyword, CancellationToken cancellationToken)
