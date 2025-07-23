@@ -95,6 +95,11 @@ public partial class AiSpeechAssistantService
         _mapper.Map(command, assistant);
         assistant.Channel = command.Channels == null ? null : string.Join(",", command.Channels.Select(x => (int)x));
 
+        var storeUser = await _posDataProvider.GetPosStoreUsersByUserIdAndAssistantIdAsync([command.AssistantId], _currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
+
+        if (storeUser == null)
+            throw new Exception("Do not have the store permission to operate");
+
         await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync([assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
 
         await UpdateAiSpeechAssistantConfigsAsync(assistant, cancellationToken).ConfigureAwait(false);
@@ -107,13 +112,17 @@ public partial class AiSpeechAssistantService
 
     public async Task<DeleteAiSpeechAssistantResponse> DeleteAiSpeechAssistantAsync(DeleteAiSpeechAssistantCommand command, CancellationToken cancellationToken)
     {
-        var assistants = await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantsAsync(
-                command.AssistantIds, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var assistants = await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantsAsync(command.AssistantIds, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (assistants.Count == 0) throw new Exception("Delete assistants failed.");
 
         await UpdateNumbersStatusAsync(assistants.Where(x => x.AnsweringNumberId.HasValue).Select(x => x.AnsweringNumberId.Value).ToList(), false, cancellationToken).ConfigureAwait(false);
 
+        var storeUser = await _posDataProvider.GetPosStoreUsersByUserIdAndAssistantIdAsync(command.AssistantIds, _currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
+
+        if (storeUser == null)
+            throw new Exception("Do not have the store permission to operate");
+        
         await DeleteAssistantRelatedInfoAsync(assistants.Select(x => x.AgentId).ToList(), cancellationToken).ConfigureAwait(false);
         
         return new DeleteAiSpeechAssistantResponse
