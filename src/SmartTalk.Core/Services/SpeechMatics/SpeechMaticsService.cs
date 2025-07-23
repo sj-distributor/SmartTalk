@@ -140,8 +140,6 @@ public class SpeechMaticsService : ISpeechMaticsService
         
         var messages = await ConfigureRecordAnalyzePromptAsync(agent, aiSpeechAssistant, callFrom ?? "", currentTime, audioContent, cancellationToken);
         
-        if (messages == null) Log.Warning("No messages found for incoming call. CallFrom: {callFrom}", callFrom);
-        
         ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
         ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
 
@@ -162,7 +160,7 @@ public class SpeechMaticsService : ISpeechMaticsService
 
             if (agent.IsWecomMessageOrder && aiSpeechAssistant != null)
             {
-                var messageNumber = await SendAgentMessageRecordAsync(agent, record.Id, aiSpeechAssistant.GroupKey, cancellationToken);
+                var messageNumber = await SendAgentMessageRecordAsync(agent, record.Id, aiSpeechAssistant.GroupKey, cancellationToken).ConfigureAwait(false);
                 message = $"【第{messageNumber}條】\n" + message;
             }
 
@@ -260,26 +258,36 @@ public class SpeechMaticsService : ISpeechMaticsService
         return speakInfos;
     }
     
-    private async Task<List<ChatMessage?>> ConfigureRecordAnalyzePromptAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, string callFrom, string currentTime, byte[] audioContent, CancellationToken cancellationToken) 
+    private async Task<List<ChatMessage>> ConfigureRecordAnalyzePromptAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, string callFrom, string currentTime, byte[] audioContent, CancellationToken cancellationToken) 
     {
-        if (agent.Type != AgentType.Sales || string.IsNullOrEmpty(aiSpeechAssistant.Name)) return null;
+        var askItemsJson = string.Empty;
         
-        var sales = await _aiSpeechAssistantDataProvider.GetCallInSalesByNameAsync(aiSpeechAssistant.Name, cancellationToken).ConfigureAwait(false); 
-     
-        if (sales == null || sales.Type != SalesCallType.CallIn) return null;
-        
-        var requestDto = new GetAskInfoDetailListByCustomerRequestDto { CustomerNumbers = new List<string> { aiSpeechAssistant.Name } }; 
-        var askedItems = await _salesClient.GetAskInfoDetailListByCustomerAsync(requestDto, cancellationToken).ConfigureAwait(false);
-        
-        var topItems = askedItems.Data.OrderByDescending(x => x.ValidAskQty).Take(60).ToList();
-        var simplifiedItems = topItems.Select(x => new
+        if (agent.Type == AgentType.Sales)
         {
-            name = x.MaterialDesc,
-            quantity = x.ValidAskQty,
-            materialNumber = x.Material
-        }).ToList();
-        
-        var askItemsJson = JsonSerializer.Serialize(simplifiedItems, new JsonSerializerOptions { WriteIndented = true }); 
+            var sales = await _aiSpeechAssistantDataProvider.GetCallInSalesByNameAsync(aiSpeechAssistant.Name, SalesCallType.CallIn, cancellationToken).ConfigureAwait(false);
+
+            if (sales != null)
+            {
+                var requestDto = new GetAskInfoDetailListByCustomerRequestDto
+                {
+                    CustomerNumbers = new List<string> { aiSpeechAssistant.Name }
+                };
+
+                var askedItems = await _salesClient.GetAskInfoDetailListByCustomerAsync(requestDto, cancellationToken).ConfigureAwait(false);
+
+                var topItems = askedItems.Data.OrderByDescending(x => x.ValidAskQty).Take(60).ToList();
+
+                var simplifiedItems = topItems.Select(x => new
+                {
+                    name = x.MaterialDesc,
+                    quantity = x.ValidAskQty,
+                    materialNumber = x.Material
+                }).ToList();
+
+                askItemsJson = JsonSerializer.Serialize(simplifiedItems, new JsonSerializerOptions { WriteIndented = true });
+            }
+        }
+
         var audioData = BinaryData.FromBytes(audioContent);
         List<ChatMessage> messages =
         [
@@ -345,9 +353,8 @@ public class SpeechMaticsService : ISpeechMaticsService
         {
             new SystemChatMessage(systemPrompt),
         };
-
-        var responseFormat = ChatResponseFormat.CreateJsonObjectFormat();
-        var completion = await client.CompleteChatAsync(messages, new ChatCompletionOptions { ResponseModalities = ChatResponseModalities.Text, ResponseFormat = responseFormat }, cancellationToken).ConfigureAwait(false);
+        
+        var completion = await client.CompleteChatAsync(messages, new ChatCompletionOptions { ResponseModalities = ChatResponseModalities.Text, ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat() }, cancellationToken).ConfigureAwait(false);
         var jsonResponse = completion.Value.Content.FirstOrDefault()?.Text ?? "";
         Log.Information("AI JSON Response: {JsonResponse}", jsonResponse);
         

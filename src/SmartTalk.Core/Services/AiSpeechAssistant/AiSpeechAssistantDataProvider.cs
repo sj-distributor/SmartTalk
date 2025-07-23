@@ -71,7 +71,7 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
 
     Task<(Domain.AISpeechAssistant.AiSpeechAssistant Assistant, Agent Agent)> GetAiSpeechAssistantByAgentIdAsync(int agentId, CancellationToken cancellationToken);
 
-    Task<Sales> GetCallInSalesByNameAsync(string assistantName, CancellationToken cancellationToken);
+    Task<Sales> GetCallInSalesByNameAsync(string assistantName, SalesCallType? type, CancellationToken cancellationToken);
 }
 
 public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
@@ -374,8 +374,12 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
         return (result?.assistant, result?.agent);
     }
 
-    public async Task<Sales> GetCallInSalesByNameAsync(string assistantName, CancellationToken cancellationToken)
+    public async Task<Sales> GetCallInSalesByNameAsync(string assistantName, SalesCallType? type, CancellationToken cancellationToken)
     {
-        return await _repository.Query<Sales>().FirstOrDefaultAsync(s => s.Name == assistantName && s.Type == SalesCallType.CallIn, cancellationToken);
+        var query = _repository.Query<Sales>().Where(s => s.Name == assistantName);
+
+        if (type.HasValue) query = query.Where(s => s.Type == type.Value);
+
+        return await query.FirstOrDefaultAsync(cancellationToken);
     }
 }
