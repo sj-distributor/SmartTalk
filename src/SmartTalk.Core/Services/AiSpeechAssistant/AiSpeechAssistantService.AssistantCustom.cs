@@ -152,7 +152,7 @@ public partial class AiSpeechAssistantService
             knowledge.Greetings = command.Greetings;
 
         if (command.VoiceType.HasValue)
-            await UpdateAssistantVoiceIfRequiredAsync(knowledge.AssistantId, command.VoiceType.Value, cancellationToken).ConfigureAwait(false);
+            await UpdateAssistantVoiceIfRequiredAsync(knowledge.AssistantId, command.ModelVoice, command.VoiceType.Value, command.MediaType, cancellationToken).ConfigureAwait(false);
         
         await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync([knowledge], cancellationToken: cancellationToken).ConfigureAwait(false);
         
@@ -197,7 +197,7 @@ public partial class AiSpeechAssistantService
         };
     }
 
-    private async Task UpdateAssistantVoiceIfRequiredAsync(int assistantId, AiKidVoiceType voiceType, CancellationToken cancellationToken)
+    private async Task UpdateAssistantVoiceIfRequiredAsync(int assistantId, string modelVoice, AiKidVoiceType? voiceType, AiSpeechAssistantMediaType? mediaType, CancellationToken cancellationToken)
     {
         var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantAsync(assistantId, cancellationToken).ConfigureAwait(false);
         
@@ -205,7 +205,7 @@ public partial class AiSpeechAssistantService
 
         if (assistant != null)
         {
-            assistant.ModelVoice = ModelVoiceMapping(voiceType);
+            assistant.ModelVoice = ModelVoiceMapping(modelVoice, voiceType, mediaType);
                 
             await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync([assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
         }
@@ -228,13 +228,15 @@ public partial class AiSpeechAssistantService
         var assistant = new Domain.AISpeechAssistant.AiSpeechAssistant
         {
             AgentId = agent.Id,
-            ModelVoice = ModelVoiceMapping(command.VoiceType),
+            ModelVoice = ModelVoiceMapping(command.ModelVoice, command.VoiceType, command.MediaType),
             Name = command.AssistantName,
             AnsweringNumberId = number?.Id,
             AnsweringNumber = number?.Number,
             CreatedBy = _currentUser.Id.Value,
-            ModelUrl = command.AgentType == AgentType.AiKid ? AiSpeechAssistantStore.AiKidDefaultUrl : AiSpeechAssistantStore.DefaultUrl,
-            ModelProvider = AiSpeechAssistantProvider.OpenAi,
+            ModelUrl = GetDefaultModuleUrl(command.ModelUrl, command.ModelProvider, command.AgentType),
+            ModelProvider = command.ModelProvider,
+            ModelName = command.ModelName,
+            ModelLanguage = command.ModelLanguage,
             Channel = command.Channels == null ? null : string.Join(",", command.Channels.Select(x => (int)x)),
             IsDisplay = command.IsDisplay
         };
@@ -246,14 +248,27 @@ public partial class AiSpeechAssistantService
         return assistant;
     }
 
-    private string ModelVoiceMapping(AiKidVoiceType? voiceType)
+    private string GetDefaultModuleUrl(string modelUrl, AiSpeechAssistantProvider provider, AgentType type)
     {
+        if (!string.IsNullOrEmpty(modelUrl)) return modelUrl;
+
+        return type switch
+        {
+            AgentType.AiKid => provider == AiSpeechAssistantProvider.OpenAi ? AiSpeechAssistantStore.AiKidDefaultUrl : AiSpeechAssistantStore.GoogleDefaultUrl,
+            _ => provider == AiSpeechAssistantProvider.OpenAi ? AiSpeechAssistantStore.DefaultUrl : AiSpeechAssistantStore.GoogleDefaultUrl
+        };
+    }
+
+    private string ModelVoiceMapping(string modelVoice, AiKidVoiceType? voiceType, AiSpeechAssistantMediaType? mediaType)
+    {
+        if (!string.IsNullOrEmpty(modelVoice)) return modelVoice;
+        
         if (!voiceType.HasValue) return "alloy";
         
         return voiceType.Value switch
         {
-            AiKidVoiceType.Male => "ash",
-            _ => "alloy"
+            AiKidVoiceType.Male => mediaType.HasValue ? (mediaType == AiSpeechAssistantMediaType.Audio ? "ash" : "Puck") : "ash",
+            _ => mediaType.HasValue ? (mediaType == AiSpeechAssistantMediaType.Audio ? "alloy" : "Aoede") : "alloy"
         };
     }
     
