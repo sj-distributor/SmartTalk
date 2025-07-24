@@ -174,7 +174,7 @@ public partial class PosService
                     var products = category.Products.Where(p => p.CategoryIds.Contains(category.Id) && p.IsIndependentSale)
                         .Select((product, index) =>
                         {
-                            var oldProduct = oldProducts.FirstOrDefault(p => p.Id == product.Id);
+                            var oldProduct = oldProducts.FirstOrDefault(p => p.ProductId == product.Id.ToString());
                             var oldNames = JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(oldProduct?.Names ?? "{}");
 
                             return new PosProduct
@@ -184,7 +184,7 @@ public partial class PosService
                                 CategoryId = posCategoryId,
                                 Price = product.Price,
                                 Status = product.Status,
-                                Names = JsonConvert.SerializeObject(GetLocalizedNames(product.Localizations, null)),
+                                Names = JsonConvert.SerializeObject(GetLocalizedNames(product.Localizations, oldNames)),
                                 Modifiers = product.ModifierGroups != null ? JsonConvert.SerializeObject(product.ModifierGroups) : null,
                                 Tax = product.Taxes != null ? JsonConvert.SerializeObject(product.Taxes) : null,
                                 CategoryIds = string.Join(",", product.CategoryIds ?? []),
