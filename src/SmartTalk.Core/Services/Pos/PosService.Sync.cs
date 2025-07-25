@@ -176,7 +176,7 @@ public partial class PosService
                         {
                             var oldProduct = oldProducts.FirstOrDefault(p => p.ProductId == product.Id.ToString());
                             var oldNames = JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(oldProduct?.Names ?? "{}");
-
+                            
                             return new PosProduct
                             {
                                 StoreId = storeId,
@@ -226,7 +226,13 @@ public partial class PosService
         
         foreach (var lang in new[] { "cn", "en" })
         {
-            if (result.TryGetValue(lang, out var value) && oldNames.TryGetValue(lang, out var oldLangDict) && oldLangDict.TryGetValue("name", out var oldName))
+            if (!result.TryGetValue(lang, out var value))
+            {
+                value = new Dictionary<string, string>();
+                result[lang] = value;
+            }
+
+            if (oldNames.TryGetValue(lang, out var oldLangDict) && oldLangDict.TryGetValue("name", out var oldName))
             {
                 value["name"] = oldName;
             }
