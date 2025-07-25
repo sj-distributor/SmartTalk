@@ -11,6 +11,8 @@ public class GetAiSpeechAssistantsRequest : IRequest
     
     public int? PageSize { get; set; }
     
+    public string Keyword { get; set; }
+    
     public AiSpeechAssistantChannel? Channel { get; set; }
 }
 
