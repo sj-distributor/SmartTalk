@@ -38,7 +38,7 @@ public partial class AiSpeechAssistantService
     public async Task<GetAiSpeechAssistantsResponse> GetAiSpeechAssistantsAsync(GetAiSpeechAssistantsRequest request, CancellationToken cancellationToken)
     {
         var (count, assistants) = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantsAsync(
-            request.PageIndex, request.PageSize, request.Channel.HasValue ? request.Channel.Value.ToString("D") : string.Empty, cancellationToken).ConfigureAwait(false);
+            request.PageIndex, request.PageSize, request.Channel.HasValue ? request.Channel.Value.ToString("D") : string.Empty, request.Keyword, cancellationToken).ConfigureAwait(false);
 
         await EnrichAssistantsInfoAsycn(assistants, cancellationToken).ConfigureAwait(false);
 
