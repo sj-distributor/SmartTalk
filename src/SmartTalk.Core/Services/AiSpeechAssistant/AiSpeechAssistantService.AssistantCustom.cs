@@ -514,14 +514,7 @@ public partial class AiSpeechAssistantService
 
         if (agents.Count == 0) return;
 
-        var domains = await _restaurantDataProvider.GetRestaurantsAsync(
-            agents.Where(x => x.RelateId.HasValue).Select(x => x.RelateId.Value).ToList(), cancellationToken).ConfigureAwait(false);
-
         await _agentDataProvider.DeleteAgentsAsync(agents, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        if (domains.Count == 0) return;
-
-        await _restaurantDataProvider.DeleteRestaurantsAsync(domains, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
     private async Task UpdateAgentIfRequiredAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, Agent agent, CancellationToken cancellationToken)
