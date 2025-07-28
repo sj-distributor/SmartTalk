@@ -274,9 +274,8 @@ public partial class PosService : IPosService
         foreach (var product in products)
         {
             product.Status = command.Status;
-
-            if (product.Id == command.Id)
-                product.Names = command.Names;
+            
+            product.Names = command.Names;
         }
 
         await _posDataProvider.UpdateProductsAsync(products, true, cancellationToken).ConfigureAwait(false);

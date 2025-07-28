@@ -42,7 +42,7 @@ public partial class PosService
         
         var products = await SyncMenuDataAsync(store, posConfiguration?.Data, cancellationToken).ConfigureAwait(false);
         
-        await PosProductsVectorizationAsync(products, store, cancellationToken).ConfigureAwait(false);
+        // await PosProductsVectorizationAsync(products, store, cancellationToken).ConfigureAwait(false);
         
         return new SyncPosConfigurationResponse
         {
@@ -60,7 +60,7 @@ public partial class PosService
     {
         if (data?.Menus == null) throw new NullReferenceException("Pos Resource Data or Menus is null");
         
-        await DeletePosMenuDataAsync(store, cancellationToken).ConfigureAwait(false);
+        var oldProducts = await DeletePosMenuDataAsync(store, cancellationToken).ConfigureAwait(false);
 
         var menuMap = await AddPosMenusAsync(data.Menus, store.Id, cancellationToken).ConfigureAwait(false);
         
@@ -70,15 +70,17 @@ public partial class PosService
         
         Log.Information("Sync categories data: {@CategoriesMap}", categoriesMap);
         
-        return await AddPosProductsAsync(data, categoriesMap, store.Id, cancellationToken).ConfigureAwait(false);
+        return await AddPosProductsAsync(data, categoriesMap, oldProducts, store.Id, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task DeletePosMenuDataAsync(PosCompanyStore store, CancellationToken cancellationToken)
+    private async Task<List<PosProduct>> DeletePosMenuDataAsync(PosCompanyStore store, CancellationToken cancellationToken)
     {
         var products = await _posDataProvider.DeletePosMenuInfosAsync(store.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        foreach (var product in products)
-            await DeleteInternalAsync(store, product, cancellationToken).ConfigureAwait(false);
+        // foreach (var product in products)
+        //     await DeleteInternalAsync(store, product, cancellationToken).ConfigureAwait(false);
+        
+        return products;
     }
     
     private async Task<Dictionary<string, int>> AddPosMenusAsync(List<EasyPosResponseMenu> menus, int storeId, CancellationToken cancellationToken)
@@ -87,7 +89,7 @@ public partial class PosService
         {
             StoreId = storeId,
             MenuId = x.Id.ToString(),
-            Names = JsonConvert.SerializeObject(GetLocalizedNames(x.Localizations)),
+            Names = JsonConvert.SerializeObject(GetLocalizedNames(x.Localizations, null)),
             TimePeriod = JsonConvert.SerializeObject(x.TimePeriods),
             CategoryIds = x.CategoryIds == null ? string.Empty : string.Join(",", x.CategoryIds),
             Status = x.Status,
@@ -114,9 +116,9 @@ public partial class PosService
                 MenuId = posMenuId,
                 StoreId = storeId,
                 CategoryId = x.Id.ToString(),
-                Names = JsonConvert.SerializeObject(GetLocalizedNames(x.Localizations)),
+                Names = JsonConvert.SerializeObject(GetLocalizedNames(x.Localizations, null)),
                 MenuIds = string.Join(",", x.MenuIds ?? []),
-                MenuNames = JsonConvert.SerializeObject(GetLocalizedNames(menu.Localizations)),
+                MenuNames = JsonConvert.SerializeObject(GetLocalizedNames(menu.Localizations, null)),
                 SortOrder = index,
                 CreatedBy = _currentUser.Id
             }).ToList();
@@ -134,7 +136,7 @@ public partial class PosService
                 MenuId = 0,
                 StoreId = storeId,
                 CategoryId = category.Id.ToString(),
-                Names = JsonConvert.SerializeObject(GetLocalizedNames(category.Localizations)),
+                Names = JsonConvert.SerializeObject(GetLocalizedNames(category.Localizations, null)),
                 MenuIds = string.Empty,
                 MenuNames = string.Empty,
                 CreatedBy = _currentUser.Id
@@ -158,7 +160,8 @@ public partial class PosService
         return mapping;
     }
     
-    private async Task<List<PosProduct>> AddPosProductsAsync(EasyPosResponseData data, Dictionary<long, Dictionary<string, int>> categoriesMap, int storeId, CancellationToken cancellationToken)
+    private async Task<List<PosProduct>> AddPosProductsAsync(
+        EasyPosResponseData data, Dictionary<long, Dictionary<string, int>> categoriesMap, List<PosProduct> oldProducts, int storeId, CancellationToken cancellationToken)
     {
         var posProducts = new List<PosProduct>();
         
@@ -169,19 +172,25 @@ public partial class PosService
                 if (categoriesMap.TryGetValue(menu.Id, out var categoryMap) && categoryMap.TryGetValue(category.Id.ToString(), out var posCategoryId))
                 {
                     var products = category.Products.Where(p => p.CategoryIds.Contains(category.Id) && p.IsIndependentSale)
-                        .Select((product, index) => new PosProduct
+                        .Select((product, index) =>
                         {
-                            StoreId = storeId,
-                            ProductId = product.Id.ToString(),
-                            CategoryId = posCategoryId,
-                            Price = product.Price,
-                            Status = product.Status,
-                            Names = JsonConvert.SerializeObject(GetLocalizedNames(product.Localizations)),
-                            Modifiers = product.ModifierGroups != null ? JsonConvert.SerializeObject(product.ModifierGroups) : null,
-                            Tax = product.Taxes != null ? JsonConvert.SerializeObject(product.Taxes) : null,
-                            CategoryIds = string.Join(",", product.CategoryIds ?? []),
-                            SortOrder = index,
-                            CreatedBy = _currentUser.Id
+                            var oldProduct = oldProducts.FirstOrDefault(p => p.ProductId == product.Id.ToString());
+                            var oldNames = JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(oldProduct?.Names ?? "{}");
+                            
+                            return new PosProduct
+                            {
+                                StoreId = storeId,
+                                ProductId = product.Id.ToString(),
+                                CategoryId = posCategoryId,
+                                Price = product.Price,
+                                Status = product.Status,
+                                Names = JsonConvert.SerializeObject(GetLocalizedNames(product.Localizations, oldNames)),
+                                Modifiers = product.ModifierGroups != null ? JsonConvert.SerializeObject(product.ModifierGroups) : null,
+                                Tax = product.Taxes != null ? JsonConvert.SerializeObject(product.Taxes) : null,
+                                CategoryIds = string.Join(",", product.CategoryIds ?? []),
+                                SortOrder = index,
+                                CreatedBy = _currentUser.Id
+                            };
                         }).ToList();
                 
                     posProducts.AddRange(products);
@@ -196,7 +205,7 @@ public partial class PosService
         return posProducts;
     }
     
-    private Dictionary<string, Dictionary<string, string>> GetLocalizedNames(IEnumerable<EasyPosResponseLocalization> localizations)
+    private Dictionary<string, Dictionary<string, string>> GetLocalizedNames(IEnumerable<EasyPosResponseLocalization> localizations, Dictionary<string, Dictionary<string, string>> oldNames)
     {
         var languageCodeMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -204,7 +213,7 @@ public partial class PosService
             ["en_US"] = "en"
         };
 
-        return localizations
+        var result = localizations
             .Where(loc => !string.IsNullOrWhiteSpace(loc.LanguageCode) && !string.IsNullOrWhiteSpace(loc.Field))
             .GroupBy(loc => loc.LanguageCode)
             .Where(g => languageCodeMap.ContainsKey(g.Key))
@@ -212,6 +221,24 @@ public partial class PosService
                 g => languageCodeMap[g.Key],
                 g => g.ToDictionary(x => x.Field, x => x.Value)
             );
+
+        if (oldNames == null || oldNames.Count == 0) return result;
+        
+        foreach (var lang in new[] { "cn", "en" })
+        {
+            if (!result.TryGetValue(lang, out var value))
+            {
+                value = new Dictionary<string, string>();
+                result[lang] = value;
+            }
+
+            if (oldNames.TryGetValue(lang, out var oldLangDict) && oldLangDict.TryGetValue("name", out var oldName))
+            {
+                value["name"] = oldName;
+            }
+        }
+
+        return result;
     }
 
     public async Task PosProductsVectorizationAsync(List<PosProduct> products, PosCompanyStore store, CancellationToken cancellationToken)

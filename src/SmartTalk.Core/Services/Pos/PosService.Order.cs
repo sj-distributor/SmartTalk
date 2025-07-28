@@ -43,11 +43,21 @@ public partial class PosService
     public async Task<PlacePosOrderResponse> PlacePosStoreOrdersAsync(PlacePosOrderCommand command, CancellationToken cancellationToken = default)
     {
         var order = await GetOrAddPosOrderAsync(command, cancellationToken).ConfigureAwait(false);
+        
+        var store = await _posDataProvider.GetPosCompanyStoreAsync(id: order.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        var (store, token) = await GetPosTokenAsync(order, cancellationToken).ConfigureAwait(false);
+        if (store == null) throw new Exception("Store could not be found.");
 
-        if (string.IsNullOrWhiteSpace(token))
+        var token = await GetPosTokenAsync(store, order, cancellationToken).ConfigureAwait(false);
+
+        if (!store.IsLink && string.IsNullOrWhiteSpace(token))
+        {
+            order.Status = PosOrderStatus.Modified;
+            
+            await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
+            
             return new PlacePosOrderResponse { Data = _mapper.Map<PosOrderDto>(order) };
+        }
         
         await SafetyPlaceOrderAsync(order, store, token, command.IsWithRetry, 0, cancellationToken).ConfigureAwait(false);
 
@@ -437,12 +447,8 @@ public partial class PosService
         return (utcStart, utcEnd);
     }
     
-    private async Task<(PosCompanyStore Store, string Token)> GetPosTokenAsync(PosOrder order, CancellationToken cancellationToken)
+    private async Task<string> GetPosTokenAsync(PosCompanyStore store, PosOrder order, CancellationToken cancellationToken)
     {
-        var store = await _posDataProvider.GetPosCompanyStoreAsync(id: order.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        if (store == null) throw new Exception("Store could not be found.");
-        
         var authorization = await _easyPosClient.GetEasyPosTokenAsync(new EasyPosTokenRequestDto
         {
             BaseUrl = store.Link,
@@ -451,21 +457,18 @@ public partial class PosService
         }, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Getting the store pos token {Success} is available: {IsAvailable}", authorization?.Success, !string.IsNullOrEmpty(authorization?.Data));
-
-        if (authorization != null && !string.IsNullOrEmpty(authorization.Data) && authorization.Success)
-            return (store, authorization.Data);
         
-        order.Status = PosOrderStatus.Modified;
-            
-        await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        return (store, string.Empty);
+        return authorization?.Data;
     }
 
     private async Task<(bool IsAvailable, PosOrderStatus Status)> ValidatePosProductsAsync(PosOrder order, PosCompanyStore store, string token, CancellationToken cancellationToken)
     {
         try
         {
+            Log.Information("The pos token is null: {IsNull}", string.IsNullOrEmpty(token));
+            
+            if (string.IsNullOrEmpty(token)) return (false, PosOrderStatus.Error);
+            
             var items = JsonConvert.DeserializeObject<List<PosOrderItemDto>>(order.Items);
 
             var response = await _easyPosClient.ValidatePosProductsAsync(new ValidatePosProductRequestDto
@@ -520,6 +523,9 @@ public partial class PosService
 
             if (!isAvailable)
             {
+                Log.Information("Current token is available: {IsAvailable}", string.IsNullOrWhiteSpace(token));
+                token = !string.IsNullOrWhiteSpace(token) ? token : await GetPosTokenAsync(store, order, cancellationToken).ConfigureAwait(false);
+                
                 await MarkOrderAsSpecificStatusAsync(order, status, cancellationToken).ConfigureAwait(false);
 
                 if (status == PosOrderStatus.Error && isWithRetry && order.RetryCount < MaxRetryCount)
