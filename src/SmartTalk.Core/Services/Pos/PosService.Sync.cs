@@ -42,7 +42,7 @@ public partial class PosService
         
         var products = await SyncMenuDataAsync(store, posConfiguration?.Data, cancellationToken).ConfigureAwait(false);
         
-        await PosProductsVectorizationAsync(products, store, cancellationToken).ConfigureAwait(false);
+        // await PosProductsVectorizationAsync(products, store, cancellationToken).ConfigureAwait(false);
         
         return new SyncPosConfigurationResponse
         {
@@ -77,8 +77,8 @@ public partial class PosService
     {
         var products = await _posDataProvider.DeletePosMenuInfosAsync(store.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        foreach (var product in products)
-            await DeleteInternalAsync(store, product, cancellationToken).ConfigureAwait(false);
+        // foreach (var product in products)
+        //     await DeleteInternalAsync(store, product, cancellationToken).ConfigureAwait(false);
         
         return products;
     }
@@ -174,9 +174,9 @@ public partial class PosService
                     var products = category.Products.Where(p => p.CategoryIds.Contains(category.Id) && p.IsIndependentSale)
                         .Select((product, index) =>
                         {
-                            var oldProduct = oldProducts.FirstOrDefault(p => p.Id == product.Id);
+                            var oldProduct = oldProducts.FirstOrDefault(p => p.ProductId == product.Id.ToString());
                             var oldNames = JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(oldProduct?.Names ?? "{}");
-
+                            
                             return new PosProduct
                             {
                                 StoreId = storeId,
@@ -184,7 +184,7 @@ public partial class PosService
                                 CategoryId = posCategoryId,
                                 Price = product.Price,
                                 Status = product.Status,
-                                Names = JsonConvert.SerializeObject(GetLocalizedNames(product.Localizations, null)),
+                                Names = JsonConvert.SerializeObject(GetLocalizedNames(product.Localizations, oldNames)),
                                 Modifiers = product.ModifierGroups != null ? JsonConvert.SerializeObject(product.ModifierGroups) : null,
                                 Tax = product.Taxes != null ? JsonConvert.SerializeObject(product.Taxes) : null,
                                 CategoryIds = string.Join(",", product.CategoryIds ?? []),
@@ -226,7 +226,13 @@ public partial class PosService
         
         foreach (var lang in new[] { "cn", "en" })
         {
-            if (result.TryGetValue(lang, out var value) && oldNames.TryGetValue(lang, out var oldLangDict) && oldLangDict.TryGetValue("name", out var oldName))
+            if (!result.TryGetValue(lang, out var value))
+            {
+                value = new Dictionary<string, string>();
+                result[lang] = value;
+            }
+
+            if (oldNames.TryGetValue(lang, out var oldLangDict) && oldLangDict.TryGetValue("name", out var oldName))
             {
                 value["name"] = oldName;
             }
