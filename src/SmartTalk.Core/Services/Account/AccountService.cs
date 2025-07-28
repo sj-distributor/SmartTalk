@@ -1,5 +1,6 @@
 using AutoMapper;
 using SmartTalk.Core.Domain.Pos;
+using SmartTalk.Core.Domain.Restaurants;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.System;
 using SmartTalk.Messages.Dto.Account;
@@ -90,7 +91,7 @@ public partial class AccountService : IAccountService
 
     public async Task<GetUserAccountsResponse> GetAccountsAsync(GetUserAccountsRequest request, CancellationToken cancellationToken)
     {
-        var (count, userAccount) = await _accountDataProvider.GetUserAccountDtoAsync(
+        var (count, userAccount) = await _accountDataProvider.GetUserAccountDtosAsync<Restaurant>(
             request.UserName, request.UserAccountLevel, request.PageSize, request.PageIndex, true, cancellationToken).ConfigureAwait(false);
 
         return new GetUserAccountsResponse

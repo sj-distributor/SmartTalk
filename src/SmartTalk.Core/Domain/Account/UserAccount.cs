@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using SmartTalk.Core.Domain.Security;
 using SmartTalk.Core.Domain.System;
+using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Enums.Account;
 
 namespace SmartTalk.Core.Domain.Account
@@ -74,6 +75,6 @@ namespace SmartTalk.Core.Domain.Account
         public UserAccountProfile UserAccountProfile { get; set; }
         
         [NotMapped]
-        public List<Agent> Agents { get; set; }
+        public List<AgentPreviewDto> Agents { get; set; }
     }
 }
