@@ -15,6 +15,7 @@ using SmartTalk.Core.Extensions;
 using SmartTalk.Core.Services.Account.Exceptions;
 using SmartTalk.Messages.Dto.Account;
 using SmartTalk.Messages.Dto.Agent;
+using SmartTalk.Messages.Dto.Pos;
 using SmartTalk.Messages.Enums.Account;
 
 namespace SmartTalk.Core.Services.Account
@@ -336,17 +337,14 @@ namespace SmartTalk.Core.Services.Account
             
             var agentData = await (
                 from storeUser in _repository.QueryNoTracking<PosStoreUser>().Where(x => accountIds.Contains(x.UserId))
-                join posAgent in _repository.QueryNoTracking<PosAgent>() on storeUser.StoreId equals posAgent.StoreId
-                join store in _repository.QueryNoTracking<PosCompanyStore>() on posAgent.StoreId equals store.Id
-                join agent in _repository.Query<Agent>() on posAgent.AgentId equals agent.Id
+                join store in _repository.QueryNoTracking<PosCompanyStore>() on storeUser.StoreId equals store.Id
                 select new 
                 {
                     storeUser.UserId,
-                    agent = new AgentDto()
-                    { 
-                        Id = agent.Id,
-                        Name = store.Names,
-                        CreatedDate = agent.CreatedDate
+                    store = new PosCompanyStoreDto()
+                    {
+                       Id = store.Id,
+                       Names = store.Names
                     }
                 }
             ).ToListAsync(cancellationToken);
@@ -355,7 +353,7 @@ namespace SmartTalk.Core.Services.Account
             {
                 x.Roles = roleUsers.Where(s => s.UserId == x.Id).Select(x => x.role).ToList();
 
-                x.Agents = agentData.Where(a => a.UserId == x.Id).Select(x => x.agent).ToList();
+                x.Stores = agentData.Where(a => a.UserId == x.Id).Select(x => x.store).ToList();
                 
                 return x;
             }).ToList();

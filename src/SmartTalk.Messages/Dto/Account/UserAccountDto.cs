@@ -1,4 +1,5 @@
 using SmartTalk.Messages.Dto.Agent;
+using SmartTalk.Messages.Dto.Pos;
 using SmartTalk.Messages.Dto.Security;
 using SmartTalk.Messages.DTO.Security;
 using SmartTalk.Messages.Enums.Account;
@@ -37,5 +38,5 @@ public class UserAccountDto
     
     public UserAccountProfileDto UserAccountProfile { get; set; }
     
-    public List<AgentDto> Agents { get; set; }
+    public List<PosCompanyStoreDto> Stores { get; set; }
 }
