@@ -5,6 +5,8 @@ namespace SmartTalk.Messages.Dto.Agent;
 public class AgentDto
 {
     public int Id { get; set; }
+    
+    public string Name { get; set; }
 
     public int? RelateId { get; set; }
     

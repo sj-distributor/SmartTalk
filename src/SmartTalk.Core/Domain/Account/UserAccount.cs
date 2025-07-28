@@ -75,6 +75,6 @@ namespace SmartTalk.Core.Domain.Account
         public UserAccountProfile UserAccountProfile { get; set; }
         
         [NotMapped]
-        public List<AgentPreviewDto> Agents { get; set; }
+        public List<AgentDto> Agents { get; set; }
     }
 }
