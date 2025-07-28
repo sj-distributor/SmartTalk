@@ -146,6 +146,7 @@ public class EasyPosClient : IEasyPosClient
         
         var authorization = await GetEasyPosTokenAsync(new EasyPosTokenRequestDto
         {
+            BaseUrl = baseUrl,
             AppId = request.AppId,
             AppSecret = request.AppSecret
         }, cancellationToken).ConfigureAwait(false);
