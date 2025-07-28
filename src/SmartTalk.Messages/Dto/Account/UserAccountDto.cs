@@ -37,5 +37,5 @@ public class UserAccountDto
     
     public UserAccountProfileDto UserAccountProfile { get; set; }
     
-    public List<AgentDto> Agents { get; set; }
+    public List<AgentPreviewDto> Agents { get; set; }
 }

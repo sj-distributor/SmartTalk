@@ -6,6 +6,7 @@ using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Data;
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Constants;
+using SmartTalk.Core.Domain;
 using SmartTalk.Core.Domain.Account;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.Security;
@@ -41,9 +42,8 @@ namespace SmartTalk.Core.Services.Account
         Task UpdateUserAccountAsync(UserAccount userAccount, bool forceSave = true, CancellationToken cancellationToken = default);
         
         Task DeleteUserAccountAsync(UserAccount userAccount, bool forceSave = true, CancellationToken cancellationToken = default);
-        
-        Task<(int, List<UserAccountDto>)> GetUserAccountDtoAsync(
-            string userNameContain = null, UserAccountLevel? userAccountLevel = null, int? pageSize = null, int? pageIndex = null, bool orderByCreatedOn = false, CancellationToken cancellationToken = default);
+
+        Task<(int, List<UserAccountDto>)> GetUserAccountDtosAsync<T>(string userNameContain = null, UserAccountLevel? userAccountLevel = null, int? pageSize = null, int? pageIndex = null, bool orderByCreatedOn = false, CancellationToken cancellationToken = default) where T : class, IEntity<int>, IAgent;
 
         Task<UserAccount> IsUserAccountExistAsync(int id, CancellationToken cancellationToken);
 
@@ -304,8 +304,8 @@ namespace SmartTalk.Core.Services.Account
         }
 
         
-        public async Task<(int, List<UserAccountDto>)> GetUserAccountDtoAsync(string userNameContain = null, UserAccountLevel? userAccountLevel = null,  int? pageSize = null, int? pageIndex = null,
-            bool orderByCreatedOn = false, CancellationToken cancellationToken = default)
+        public async Task<(int, List<UserAccountDto>)> GetUserAccountDtosAsync<T>(string userNameContain = null, UserAccountLevel? userAccountLevel = null,  int? pageSize = null, int? pageIndex = null,
+            bool orderByCreatedOn = false, CancellationToken cancellationToken = default) where T : class, IEntity<int>, IAgent
         {
             var query =  _repository.Query<UserAccount>().Where(x => x.Issuer == 0);
 
@@ -338,14 +338,24 @@ namespace SmartTalk.Core.Services.Account
                 from storeUser in _repository.QueryNoTracking<PosStoreUser>().Where(x => accountIds.Contains(x.UserId))
                 join posAgent in _repository.QueryNoTracking<PosAgent>() on storeUser.StoreId equals posAgent.StoreId
                 join agent in _repository.Query<Agent>() on posAgent.AgentId equals agent.Id
-                select new { storeUser.UserId, agent }
+                join domain in _repository.Query<T>() on agent.RelateId equals domain.Id
+                select new 
+                {
+                    storeUser.UserId,
+                    Preview = new AgentPreviewDto 
+                    { 
+                        Agent = agent, 
+                        Domain = domain, 
+                        CreatedDate = agent.CreatedDate
+                    }
+                }
             ).ToListAsync(cancellationToken);
 
             account = account.Select(x =>
             {
                 x.Roles = roleUsers.Where(s => s.UserId == x.Id).Select(x => x.role).ToList();
 
-                x.Agents = agentData.Where(a => a.UserId == x.Id).Select(x => x.agent).ToList();
+                x.Agents = agentData.Where(a => a.UserId == x.Id).Select(x => x.Preview).ToList();
                 
                 return x;
             }).ToList();
