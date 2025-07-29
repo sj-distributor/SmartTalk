@@ -37,7 +37,7 @@ public class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
         if (records == null || records.Count == 0) return;
         
         foreach (var record in records)
-            _smartTalkBackgroundJobClient.Enqueue(() => CalculateRecordingDurationAsync(record, cancellationToken), HangfireConstants.InternalHostingPhoneOrder);
+            _smartTalkBackgroundJobClient.Enqueue(() => CalculateRecordingDurationAsync(record, cancellationToken), HangfireConstants.InternalHostingFfmpeg);
     }
 
     private (DateTimeOffset Start, DateTimeOffset End) GetQueryTimeRange()

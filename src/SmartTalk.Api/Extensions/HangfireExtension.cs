@@ -48,6 +48,13 @@ public static class HangfireExtension
             opt.Queues = new[] { HangfireConstants.InternalHostingSipServer };
             opt.ServerName = $"DEPLOY-{HangfireConstants.InternalHostingSipServer.ToUpper()}-{Guid.NewGuid()}";
         });
+        
+        services.AddHangfireServer(opt =>
+        {
+            opt.WorkerCount = 5;
+            opt.Queues = new[] { HangfireConstants.InternalHostingFfmpeg };
+            opt.ServerName = $"DEPLOY-{HangfireConstants.InternalHostingFfmpeg.ToUpper()}-{Guid.NewGuid()}";
+        });
     }
     
     public static void UseHangfireInternal(this IApplicationBuilder app)
