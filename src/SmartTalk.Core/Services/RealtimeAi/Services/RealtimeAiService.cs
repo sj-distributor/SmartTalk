@@ -242,6 +242,8 @@ public class RealtimeAiService : IRealtimeAiService
     {
         if (_wholeAudioBuffer is { Length: > 0 } && !_hasHandledAudioBuffer)
         {
+            _hasHandledAudioBuffer = true;
+            
             var waveFormat = new WaveFormat(24000, 16, 1);
             using (var wavStream = new MemoryStream())
             await using (var writer = new WaveFileWriter(wavStream, waveFormat))
@@ -260,8 +262,6 @@ public class RealtimeAiService : IRealtimeAiService
                 
                 _backgroundJobClient.Enqueue<IRealtimeProcessJobService>(x =>
                     x.RecordingRealtimeAiAsync(audio.Attachment.FileUrl, _speechAssistant.AgentId, CancellationToken.None));
-                
-                _hasHandledAudioBuffer = true;
             }
                             
             await _wholeAudioBuffer.DisposeAsync();
