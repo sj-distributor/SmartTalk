@@ -12,7 +12,7 @@ public interface IAgentDataProvider : IScopedDependency
 {
     Task<Agent> GetAgentAsync(int? id = null, AgentType? type = null, int? relateId = null, string name = null, CancellationToken cancellationToken = default);
     
-    Task<Agent> GetAgentByIdAsync(int id, CancellationToken cancellationToken);
+    Task<Agent> GetAgentByIdAsync(int id, CancellationToken cancellationToken = default);
 
     Task<List<Agent>> GetAgentsAsync(List<int> agentIds = null, AgentType? type = null, CancellationToken cancellationToken = default);
 
@@ -54,7 +54,7 @@ public class AgentDataProvider : IAgentDataProvider
         return query == null ? null : await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<Agent> GetAgentByIdAsync(int id, CancellationToken cancellationToken)
+    public async Task<Agent> GetAgentByIdAsync(int id, CancellationToken cancellationToken = default)
     {
         return await _repository.Query<Agent>().Where(x => x.Id == id).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
