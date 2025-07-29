@@ -7,15 +7,15 @@ namespace SmartTalk.Core.Handlers.CommandHandlers.PhoneOrder;
 
 public class SchedulingCalculatePhoneOrderRecodingDurationCommandHandler : ICommandHandler<SchedulingCalculatePhoneOrderRecodingDurationCommand>
 {
-    private readonly IPhoneOrderServiceProcessJobService _phoneOrderServiceProcessJobService;
+    private readonly IPhoneOrderProcessJobService _phoneOrderProcessJobService;
 
-    public SchedulingCalculatePhoneOrderRecodingDurationCommandHandler(IPhoneOrderServiceProcessJobService phoneOrderServiceProcessJobService)
+    public SchedulingCalculatePhoneOrderRecodingDurationCommandHandler(IPhoneOrderProcessJobService phoneOrderProcessJobService)
     {
-        _phoneOrderServiceProcessJobService = phoneOrderServiceProcessJobService;
+        _phoneOrderProcessJobService = phoneOrderProcessJobService;
     }
 
     public async Task Handle(IReceiveContext<SchedulingCalculatePhoneOrderRecodingDurationCommand> context, CancellationToken cancellationToken)
     {
-        await _phoneOrderServiceProcessJobService.CalculatePhoneOrderRecodingDurationAsync(context.Message, cancellationToken).ConfigureAwait(false);
+        await _phoneOrderProcessJobService.CalculatePhoneOrderRecodingDurationAsync(context.Message, cancellationToken).ConfigureAwait(false);
     }
 }

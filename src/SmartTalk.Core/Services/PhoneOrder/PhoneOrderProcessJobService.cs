@@ -1,4 +1,3 @@
-using Smarties.Messages.Enums.System;
 using SmartTalk.Core.Constants;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Ioc;
@@ -9,12 +8,12 @@ using SmartTalk.Messages.Commands.PhoneOrder;
 
 namespace SmartTalk.Core.Services.PhoneOrder;
 
-public interface IPhoneOrderServiceProcessJobService : IScopedDependency
+public interface IPhoneOrderProcessJobService : IScopedDependency
 {
     Task CalculatePhoneOrderRecodingDurationAsync(SchedulingCalculatePhoneOrderRecodingDurationCommand command, CancellationToken cancellationToken);
 }
 
-public class PhoneOrderProcessJobService : IPhoneOrderServiceProcessJobService
+public class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
 {
     private readonly IFfmpegService _ffmpegService;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
