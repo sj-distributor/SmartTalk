@@ -14,14 +14,14 @@ public interface IPhoneOrderServiceProcessJobService : IScopedDependency
     Task CalculatePhoneOrderRecodingDurationAsync(SchedulingCalculatePhoneOrderRecodingDurationCommand command, CancellationToken cancellationToken);
 }
 
-public class PhoneOrderServiceProcessJobService : IPhoneOrderServiceProcessJobService
+public class PhoneOrderProcessJobService : IPhoneOrderServiceProcessJobService
 {
     private readonly IFfmpegService _ffmpegService;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly ISmartTalkHttpClientFactory _smartTalkHttpClient;
     private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
 
-    public PhoneOrderServiceProcessJobService(IFfmpegService ffmpegService, IPhoneOrderDataProvider phoneOrderDataProvider, ISmartTalkHttpClientFactory smartTalkHttpClient, ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient)
+    public PhoneOrderProcessJobService(IFfmpegService ffmpegService, IPhoneOrderDataProvider phoneOrderDataProvider, ISmartTalkHttpClientFactory smartTalkHttpClient, ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient)
     {
         _ffmpegService = ffmpegService;
         _smartTalkHttpClient = smartTalkHttpClient;
