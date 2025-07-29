@@ -15,7 +15,6 @@ using SmartTalk.Core.Extensions;
 using SmartTalk.Core.Services.Account.Exceptions;
 using SmartTalk.Messages.Dto.Account;
 using SmartTalk.Messages.Dto.Agent;
-using SmartTalk.Messages.Dto.Pos;
 using SmartTalk.Messages.Enums.Account;
 
 namespace SmartTalk.Core.Services.Account
