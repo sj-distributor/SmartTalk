@@ -338,22 +338,14 @@ namespace SmartTalk.Core.Services.Account
             var agentData = await (
                 from storeUser in _repository.QueryNoTracking<PosStoreUser>().Where(x => accountIds.Contains(x.UserId))
                 join store in _repository.QueryNoTracking<PosCompanyStore>() on storeUser.StoreId equals store.Id
-                select new 
-                {
-                    storeUser.UserId,
-                    store = new PosCompanyStoreDto()
-                    {
-                       Id = store.Id,
-                       Names = store.Names
-                    }
-                }
+                select new { storeUser.UserId, store }
             ).ToListAsync(cancellationToken);
 
             account = account.Select(x =>
             {
-                x.Roles = roleUsers.Where(s => s.UserId == x.Id).Select(x => x.role).ToList();
+                x.Roles = roleUsers.Where(s => s.UserId == x.Id).Select(s => s.role).ToList();
 
-                x.Stores = agentData.Where(a => a.UserId == x.Id).Select(x => x.store).ToList();
+                x.Stores = agentData.Where(r => r.UserId == x.Id).Select(r => r.store).ToList();
                 
                 return x;
             }).ToList();
