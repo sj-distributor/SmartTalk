@@ -21,6 +21,4 @@ public class SchedulingCalculatePhoneOrderRecodingDurationRecurringJob : IRecurr
     public string JobId => nameof(SchedulingCalculatePhoneOrderRecodingDurationRecurringJob);
     
     public string CronExpression => "* * * * *";
-    
-    public TimeZoneInfo TimeZone => TimeZoneInfo.FindSystemTimeZoneById("America/Los_Angeles");
 }
