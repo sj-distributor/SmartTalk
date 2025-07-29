@@ -80,9 +80,14 @@ public partial class PosDataProvider
 
     public async Task<List<PosCustomerInfoDto>> GetPosCustomerInfosAsync(string phone, CancellationToken cancellationToken)
     {
-        var latestOrders = await _repository.QueryNoTracking<PosOrder>()
-            .Where(x => x.Phone.Contains(phone) && !string.IsNullOrEmpty(x.Phone))
-            .GroupBy(x => x.Phone).Select(g => g.OrderByDescending(x => x.CreatedDate).First())
+        var query = _repository.QueryNoTracking<PosOrder>().Where(x => !string.IsNullOrWhiteSpace(x.Phone));
+
+        if (!string.IsNullOrWhiteSpace(phone))
+            query = query.Where(x => x.Phone.Contains(phone));
+        
+        var latestOrders = await query
+            .GroupBy(x => new { x.Phone, x.Type })
+            .Select(g => g.OrderByDescending(x => x.CreatedDate).First())
             .ToListAsync(cancellationToken).ConfigureAwait(false);
 
         return _mapper.Map<List<PosCustomerInfoDto>>(latestOrders);
