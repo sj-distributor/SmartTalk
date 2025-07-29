@@ -91,7 +91,7 @@ public partial class AccountService : IAccountService
 
     public async Task<GetUserAccountsResponse> GetAccountsAsync(GetUserAccountsRequest request, CancellationToken cancellationToken)
     {
-        var (count, userAccount) = await _accountDataProvider.GetUserAccountDtosAsync<Restaurant>(
+        var (count, userAccount) = await _accountDataProvider.GetUserAccountDtosAsync(
             request.UserName, request.UserAccountLevel, request.PageSize, request.PageIndex, true, cancellationToken).ConfigureAwait(false);
 
         return new GetUserAccountsResponse
