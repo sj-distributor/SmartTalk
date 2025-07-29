@@ -20,5 +20,5 @@ public class SchedulingCalculatePhoneOrderRecodingDurationRecurringJob : IRecurr
 
     public string JobId => nameof(SchedulingCalculatePhoneOrderRecodingDurationRecurringJob);
     
-    public string CronExpression => "* * * * *";
+    public string CronExpression => Cron.Never();
 }
