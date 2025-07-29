@@ -43,7 +43,7 @@ namespace SmartTalk.Core.Services.Account
         
         Task DeleteUserAccountAsync(UserAccount userAccount, bool forceSave = true, CancellationToken cancellationToken = default);
 
-        Task<(int, List<UserAccountDto>)> GetUserAccountDtosAsync<T>(string userNameContain = null, UserAccountLevel? userAccountLevel = null, int? pageSize = null, int? pageIndex = null, bool orderByCreatedOn = false, CancellationToken cancellationToken = default) where T : class, IEntity<int>, IAgent;
+        Task<(int, List<UserAccountDto>)> GetUserAccountDtosAsync(string userNameContain = null, UserAccountLevel? userAccountLevel = null, int? pageSize = null, int? pageIndex = null, bool orderByCreatedOn = false, CancellationToken cancellationToken = default);
 
         Task<UserAccount> IsUserAccountExistAsync(int id, CancellationToken cancellationToken);
 
@@ -304,8 +304,8 @@ namespace SmartTalk.Core.Services.Account
         }
 
         
-        public async Task<(int, List<UserAccountDto>)> GetUserAccountDtosAsync<T>(string userNameContain = null, UserAccountLevel? userAccountLevel = null,  int? pageSize = null, int? pageIndex = null,
-            bool orderByCreatedOn = false, CancellationToken cancellationToken = default) where T : class, IEntity<int>, IAgent
+        public async Task<(int, List<UserAccountDto>)> GetUserAccountDtosAsync(string userNameContain = null, UserAccountLevel? userAccountLevel = null,  int? pageSize = null, int? pageIndex = null,
+            bool orderByCreatedOn = false, CancellationToken cancellationToken = default)
         {
             var query =  _repository.Query<UserAccount>().Where(x => x.Issuer == 0);
 
@@ -336,26 +336,15 @@ namespace SmartTalk.Core.Services.Account
             
             var agentData = await (
                 from storeUser in _repository.QueryNoTracking<PosStoreUser>().Where(x => accountIds.Contains(x.UserId))
-                join posAgent in _repository.QueryNoTracking<PosAgent>() on storeUser.StoreId equals posAgent.StoreId
-                join agent in _repository.Query<Agent>() on posAgent.AgentId equals agent.Id
-                join domain in _repository.Query<T>() on agent.RelateId equals domain.Id
-                select new 
-                {
-                    storeUser.UserId,
-                    Preview = new AgentPreviewDto 
-                    { 
-                        Agent = agent, 
-                        Domain = domain, 
-                        CreatedDate = agent.CreatedDate
-                    }
-                }
+                join store in _repository.QueryNoTracking<PosCompanyStore>() on storeUser.StoreId equals store.Id
+                select new { storeUser.UserId, store }
             ).ToListAsync(cancellationToken);
 
             account = account.Select(x =>
             {
-                x.Roles = roleUsers.Where(s => s.UserId == x.Id).Select(x => x.role).ToList();
+                x.Roles = roleUsers.Where(s => s.UserId == x.Id).Select(s => s.role).ToList();
 
-                x.Agents = agentData.Where(a => a.UserId == x.Id).Select(x => x.Preview).ToList();
+                x.Stores = agentData.Where(r => r.UserId == x.Id).Select(r => r.store).ToList();
                 
                 return x;
             }).ToList();
