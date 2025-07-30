@@ -29,7 +29,6 @@ using SmartTalk.Messages.Enums.Pos;
 using SmartTalk.Messages.Enums.STT;
 using Twilio;
 using Twilio.Rest.Api.V2010.Account;
-using MessageReadRecord = SmartTalk.Core.Domain.Pos.MessageReadRecord;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
 
@@ -107,8 +106,6 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         };
 
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync([record], cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        await GenerateOrderItemsAsync(record, context.OrderItems, cancellationToken).ConfigureAwait(false);
     }
 
     private static string FormattedConversation(List<(AiSpeechAssistantSpeaker, string)> conversationTranscription)
@@ -183,11 +180,24 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         return conversations;
     }
 
-    private async Task GenerateOrderItemsAsync(PhoneOrderRecord record, AiSpeechAssistantOrderDto foods, CancellationToken cancellationToken)
+    private async Task<List<PhoneOrderOrderItem>> GenerateOrderItemsAsync(PhoneOrderRecord record, AiSpeechAssistantOrderDto foods, CancellationToken cancellationToken)
     {
-        var posItems = await MatchSimilarProductsAsync(record, foods, cancellationToken).ConfigureAwait(false);
-    
-        Log.Information("Matched similar pos product items: {@PosItems}", posItems);
+        try
+        {
+            var restaurantItems = await MatchSimilarRestaurantItemsAsync(record, foods, cancellationToken).ConfigureAwait(false);
+        
+            Log.Information("Matched similar restaurant items: {@RestaurantItems}", restaurantItems);
+            
+            var orderItems = restaurantItems != null && restaurantItems.Count != 0 ? restaurantItems : [];
+            
+            return orderItems.Where(x => !string.IsNullOrWhiteSpace(x.FoodName)).ToList();
+        }
+        catch (Exception e)
+        {
+            Log.Warning("Matched similar restaurant items failed: {@Exception}", e);
+
+            return [];
+        }
     }
     
     private async Task<List<PhoneOrderOrderItem>> MatchSimilarRestaurantItemsAsync(PhoneOrderRecord record, AiSpeechAssistantOrderDto foods, CancellationToken cancellationToken)
@@ -227,7 +237,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             ProductId = x.ProductId
         }).ToList();
     }
-
+    
     public async Task OpenAiAccountTrainingAsync(OpenAiAccountTrainingCommand command, CancellationToken cancellationToken)
     {
         var prompt = "生成3000字历史类论文，不要生成框架，要一篇完整的满3000字的论文";
@@ -252,232 +262,4 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         Log.Information("OpenAiAccountTraining 主账号返回 (前50字): {Preview}（总长度: {Length}）", preview, content?.Length ?? 0);
         Log.Information("OpenAiAccountTraining 备用账号返回 (前50字): {Preview}（总长度: {Length}）", anotherPreview, anotherContent?.Length ?? 0);
     }
-    
-    private async Task<List<PhoneOrderOrderItem>> MatchSimilarProductsAsync(PhoneOrderRecord record, AiSpeechAssistantOrderDto foods, CancellationToken cancellationToken)
-    {
-        Log.Information("All ai order items: {@OrderItems}", foods);
-        
-        var store = await _posDataProvider.GetPosStoreByAgentIdAsync(record.AgentId, cancellationToken).ConfigureAwait(false);
-        
-        Log.Information("Generate pos order for store: {@Store} by agentId: {AgentId}", store, record.AgentId);
-        
-        if (store == null) return [];
-
-        var tasks = _mapper.Map<PhoneOrderDetailDto>(foods).FoodDetails.Where(x => !string.IsNullOrWhiteSpace(x?.FoodName)).Select(async foodDetail =>
-        {
-            var similarFoodsResponse = await _vectorDb.GetSimilarListAsync(
-                $"pos-{store.Id}", foodDetail.FoodName, minRelevance: 0.4, cancellationToken: cancellationToken).ToListAsync(cancellationToken);
-
-            if (similarFoodsResponse.Count == 0) return null;
-            
-            var payload = similarFoodsResponse.First().Item1.Payload[VectorDbStore.ReservedPosProductPayload].ToString();
-            
-            if (string.IsNullOrEmpty(payload)) return null;
-
-            var productPayload = JsonConvert.DeserializeObject<PosProductPayloadDto>(payload);
-            Log.Information("{FoodName}-similar product payload: {@Payload} ", foodDetail.FoodName, productPayload);
-            
-            foodDetail.FoodName = productPayload.Names;
-            foodDetail.Price = (double)productPayload.Price;
-            foodDetail.ProductId = productPayload.ProductId;
-            
-            return new SimilarResult
-            {
-                Id = productPayload.Id,
-                FoodDetail = foodDetail,
-                LanguageCode = productPayload.LanguageCode
-            };
-        }).ToList();
-
-        var completedTasks = await Task.WhenAll(tasks);
-        
-        Log.Information("All similar results: {@Results}", completedTasks);
-
-        var results = completedTasks.Where(x => x != null && x.Id != 0).ToList();
-        
-        await BuildPosOrderAsync(record, store, results, cancellationToken).ConfigureAwait(false);
-        
-        return results.Select(x => new PhoneOrderOrderItem
-        {
-            RecordId = record.Id,
-            FoodName = x.FoodDetail.FoodName,
-            Quantity = int.TryParse(x.FoodDetail.Count, out var parsedValue) ? parsedValue : 1,
-            Price = x.FoodDetail.Price,
-            Note = x.FoodDetail.Remark,
-            ProductId = x.FoodDetail.ProductId
-        }).ToList();
-    }
-
-    private async Task BuildPosOrderAsync(PhoneOrderRecord record, PosCompanyStore store, List<SimilarResult> similarResults, CancellationToken cancellationToken)
-    {
-        var products = await _posDataProvider.GetPosProductsAsync(
-            storeId: store.Id, ids: similarResults.Select(x => x.Id).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        var taxes = GetOrderItemTaxes(products, similarResults);
-        
-        await _redisSafeRunner.ExecuteWithLockAsync($"generate-order-number-{store.Id}", async() =>
-        {
-            var orderNo = await GenerateOrderNumberAsync(store, cancellationToken).ConfigureAwait(false);
-            
-            var order = new PosOrder
-            {
-                StoreId = store.Id,
-                Name = record?.CustomerName ?? "Unknown",
-                Phone = record?.PhoneNumber ?? "Unknown",
-                OrderNo = orderNo,
-                Status = PosOrderStatus.Pending,
-                Count = products.Count,
-                Tax = taxes,
-                Total = products.Sum(p => p.Price),
-                SubTotal = products.Sum(p => p.Price) + taxes,
-                Type = PosOrderReceiveType.Pickup,
-                Items = BuildPosOrderItems(products, similarResults),
-                Notes = record?.Comments ?? string.Empty,
-                RecordId = record!.Id
-            };
-            
-            Log.Information("Generate complete order: {@Order}", order);
-        
-            await _posDataProvider.AddPosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
-        }, wait: TimeSpan.FromSeconds(10), retry: TimeSpan.FromSeconds(1), server: RedisServer.System).ConfigureAwait(false);
-    }
-
-    private async Task<string> GenerateOrderNumberAsync(PosCompanyStore store, CancellationToken cancellationToken)
-    {
-        var (utcStart,utcEnd) = GetUtcMidnightForTimeZone(DateTimeOffset.UtcNow, store.Timezone);
-        
-        var preOrder = await _posDataProvider.GetPosOrderSortByOrderNoAsync(store.Id, utcStart, utcEnd, cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        if (preOrder == null) return "0001";
-
-        var rs = Convert.ToInt32(preOrder.OrderNo);
-        
-        rs++;
-        
-        return rs.ToString("D4");
-    }
-    
-    private string TimezoneMapping(string timezone)
-    {
-        if (string.IsNullOrEmpty(timezone)) return "Pacific Standard Time";
-        
-        return timezone.Trim() switch
-        {
-            "America/Los_Angeles" => "Pacific Standard Time",
-            _ => timezone.Trim()
-        };
-    }
-    
-    private (DateTimeOffset utcStart, DateTimeOffset utcEnd) GetUtcMidnightForTimeZone(DateTimeOffset utcNow, string timezone)
-    {
-        var windowsId = TimezoneMapping(timezone);
-        var tz = TimeZoneInfo.FindSystemTimeZoneById(windowsId);
-        
-        var localTime = TimeZoneInfo.ConvertTime(utcNow, tz);
-        var localMidnight = new DateTime(localTime.Year, localTime.Month, localTime.Day, 0, 0, 0);
-        var localStart = new DateTimeOffset(localMidnight, tz.GetUtcOffset(localMidnight));
-        
-        var utcStart = localStart.ToUniversalTime();
-        var utcEnd = utcStart.AddDays(1);
-        
-        return (utcStart, utcEnd);
-    }
-
-    private decimal GetOrderItemTaxes(List<PosProduct> products, List<SimilarResult> similarResults)
-    {
-        decimal taxes = 0;
-        var productMap = new Dictionary<PosProduct, int>();
-        
-        foreach (var product in products)
-        {
-            var result = similarResults.Where(x => x.Id == product.Id).FirstOrDefault();
-
-            if (result == null ) continue;
-            
-            productMap.Add(product, int.TryParse(result.FoodDetail.Count, out var parsedValue) ? parsedValue : 1);
-        }
-        
-        foreach (var (product, quantity) in productMap)
-        {
-            var productTaxes = JsonConvert.DeserializeObject<List<EasyPosResponseTax>>(product.Tax);
-            
-            var productTax = productTaxes?.FirstOrDefault()?.Value;
-
-            taxes += productTax.HasValue ? product.Price * quantity * (productTax.Value / 100) : 0;
-            
-            var modifiers = !string.IsNullOrEmpty(product.Modifiers) ? JsonConvert.DeserializeObject<List<EasyPosResponseModifierGroups>>(product.Modifiers) : [];
-
-            taxes += modifiers.Sum(modifier => modifier.ModifierProducts.Sum(x => (x?.Price ?? 0) * ((modifier.Taxes?.FirstOrDefault()?.Value ?? 0) / 100)));
-        }
-        
-        Log.Information("Calculate order item taxes: {Taxes}", taxes);
-        
-        return taxes;
-    }
-
-    private string BuildPosOrderItems(List<PosProduct> products, List<SimilarResult> similarResults)
-    {
-        EnrichSimilarResults(products, similarResults);
-        
-        var orderItems = similarResults.Where(x => x.Product != null).Select(x => new PhoneCallOrderItem
-        {
-            ProductId = Convert.ToInt64(x.Product.ProductId),
-            Quantity = int.TryParse(x.FoodDetail.Count, out var parsedValue) ? parsedValue : 1,
-            OriginalPrice = x.Product.Price,
-            Price = x.Product.Price,
-            Notes = string.IsNullOrWhiteSpace(x.FoodDetail?.Remark) ? string.Empty : x.FoodDetail?.Remark,
-            OrderItemModifiers = HandleSpecialItems(x.Product)
-        }).Where(x => x.ProductId != 0).ToList();
-        
-        Log.Information("Generate order items: {@orderItems}", orderItems);
-            
-        return JsonConvert.SerializeObject(orderItems);
-    }
-
-    private void EnrichSimilarResults(List<PosProduct> products, List<SimilarResult> similarResults)
-    {
-        foreach (var productIdInfo in similarResults.Where(productIdInfo => products.Any(x => x.Id == productIdInfo.Id)))
-        {
-            productIdInfo.Product = products.First(x => x.Id == productIdInfo.Id);
-        }
-    }
-
-    private List<PhoneCallOrderItemModifiers> HandleSpecialItems(PosProduct product)
-    {
-        var result = !string.IsNullOrWhiteSpace(product?.Modifiers) ? JsonConvert.DeserializeObject<List<EasyPosResponseModifierGroups>>(product.Modifiers) : [];
-
-        if (result == null || result.Count == 0) return [];
-        
-        var orderItemModifiers = new List<PhoneCallOrderItemModifiers>();
-        
-        foreach (var modifierItem in result)
-        {
-            var items = modifierItem.ModifierProducts.Select(x => new PhoneCallOrderItemModifiers
-            {
-                Price = x?.Price ?? 0,
-                Quantity = 1,
-                ModifierId = modifierItem.Id,
-                ModifierProductId = x?.Id ?? 0,
-                Localizations = _mapper.Map<List<PhoneCallOrderItemLocalization>>(modifierItem.Localizations ?? []),
-                ModifierLocalizations = _mapper.Map<List<PhoneCallOrderItemModifierLocalization>>(x?.Localizations ?? [])
-            });
-            
-            orderItemModifiers.AddRange(items);
-        }
-        
-        Log.Information("Generate order item: {@Product} modifiers: {@OrderItemModifiers}", product, orderItemModifiers);
-        
-        return orderItemModifiers;
-    }
-}
-
-public class SimilarResult
-{
-    public int Id { get; set; }
-    
-    public string LanguageCode { get; set; }
-    
-    public PosProduct Product { get; set; }
-    
-    public FoodDetailDto FoodDetail { get; set; }
 }

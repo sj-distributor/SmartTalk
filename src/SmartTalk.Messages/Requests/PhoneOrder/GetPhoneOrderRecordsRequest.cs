@@ -13,9 +13,9 @@ public class GetPhoneOrderRecordsRequest : IRequest
 {
     public int? AgentId { get; set; }
     
-    public DateTimeOffset? Date { get; set; }
-
     public string Name { get; set; }
+    
+    public DateTimeOffset? Date { get; set; }
 }
 
 public class GetPhoneOrderRecordsResponse : SmartTalkResponse<List<PhoneOrderRecordDto>>

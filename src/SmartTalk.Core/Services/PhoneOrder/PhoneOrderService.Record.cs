@@ -10,10 +10,7 @@ using Microsoft.IdentityModel.Tokens;
 using Smarties.Messages.Enums.OpenAi;
 using Smarties.Messages.Requests.Ask;
 using System.Text.RegularExpressions;
-using SmartTalk.Messages.Constants;
 using SmartTalk.Core.Domain.PhoneOrder;
-using SmartTalk.Core.Domain.Pos;
-using SmartTalk.Core.Domain.Security;
 using SmartTalk.Core.Services.Linphone;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Dto.Attachments;
@@ -77,11 +74,9 @@ public partial class PhoneOrderService
         
         var record = new PhoneOrderRecord { SessionId = Guid.NewGuid().ToString(), AgentId = recordInfo.Agent.Id, Language = SelectLanguageEnum(detection.Language), CreatedDate = recordInfo.StartDate, Status = PhoneOrderRecordStatus.Recieved };
         
-        var roleUsers = await _securityDataProvider.GetRoleUserByPermissionNameAsync(permissionName: SecurityStore.Permissions.CanViewPhoneOrder, cancellationToken).ConfigureAwait(false);
-        
         if (await CheckPhoneOrderRecordDurationAsync(command.RecordContent, cancellationToken).ConfigureAwait(false))
         {
-            await AddPhoneOrderRecordAsync(record, roleUsers, PhoneOrderRecordStatus.NoContent, cancellationToken).ConfigureAwait(false);
+            await AddPhoneOrderRecordAsync(record, PhoneOrderRecordStatus.NoContent, cancellationToken).ConfigureAwait(false);
 
             return;
         }
@@ -92,14 +87,14 @@ public partial class PhoneOrderService
         
         if (string.IsNullOrEmpty(record.Url))
         {
-            await AddPhoneOrderRecordAsync(record, roleUsers, PhoneOrderRecordStatus.NoContent, cancellationToken).ConfigureAwait(false);
+            await AddPhoneOrderRecordAsync(record, PhoneOrderRecordStatus.NoContent, cancellationToken).ConfigureAwait(false);
             
             return;
         }
         
         record.TranscriptionJobId = await CreateSpeechMaticsJobAsync(command.RecordContent, command.RecordName ?? Guid.NewGuid().ToString("N") + ".wav", detection.Language, cancellationToken).ConfigureAwait(false);
         
-        await AddPhoneOrderRecordAsync(record, roleUsers, PhoneOrderRecordStatus.Diarization, cancellationToken).ConfigureAwait(false);
+        await AddPhoneOrderRecordAsync(record, PhoneOrderRecordStatus.Diarization, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<bool> CheckOrderExistAsync(int agentId, DateTimeOffset createdDate, CancellationToken cancellationToken)
@@ -412,7 +407,7 @@ public partial class PhoneOrderService
         Log.Information("After shift conversations: {@conversations}", conversations);
     }
 
-    private async Task AddPhoneOrderRecordAsync(PhoneOrderRecord record, List<RoleUser> roleUsers, PhoneOrderRecordStatus status, CancellationToken cancellationToken)
+    private async Task AddPhoneOrderRecordAsync(PhoneOrderRecord record, PhoneOrderRecordStatus status, CancellationToken cancellationToken)
     {
         record.Status = status;
         

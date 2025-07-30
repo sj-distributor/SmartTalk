@@ -46,6 +46,7 @@ public class RealtimeAiService : IRealtimeAiService
     private Domain.AISpeechAssistant.AiSpeechAssistant _speechAssistant;
     
     private volatile bool _isAiSpeaking;
+    private bool _hasHandledAudioBuffer;
     private MemoryStream _wholeAudioBuffer;
 
     public RealtimeAiService(
@@ -68,6 +69,7 @@ public class RealtimeAiService : IRealtimeAiService
         _webSocket = null;
         _isAiSpeaking = false;
         _speechAssistant = null;
+        _hasHandledAudioBuffer = false;
     }
 
     public async Task RealtimeAiConnectAsync(RealtimeAiConnectCommand command, CancellationToken cancellationToken)
@@ -349,8 +351,10 @@ public class RealtimeAiService : IRealtimeAiService
 
     private async Task HandleWholeAudioBufferAsync()
     {
-        if (_wholeAudioBuffer is { Length: > 0 })
+        if (_wholeAudioBuffer is { Length: > 0 } && !_hasHandledAudioBuffer)
         {
+            _hasHandledAudioBuffer = true;
+            
             var waveFormat = new WaveFormat(24000, 16, 1);
             using (var wavStream = new MemoryStream())
             await using (var writer = new WaveFileWriter(wavStream, waveFormat))
@@ -361,7 +365,14 @@ public class RealtimeAiService : IRealtimeAiService
                             
                 Log.Information("audio uploaded, url: {Url}", audio?.Attachment?.FileUrl);
                 
-                _backgroundJobClient.Enqueue<IRealtimeProcessJobService>(x => x.RecordingRealtimeAiAsync(audio.Attachment.FileUrl, _speechAssistant.AgentId, CancellationToken.None));
+                if (string.IsNullOrEmpty(audio?.Attachment?.FileUrl) || _speechAssistant.AgentId == 0) return;
+        
+                var agent = await _agentDataProvider.GetAgentByIdAsync(_speechAssistant.AgentId).ConfigureAwait(false);
+                if (agent is { IsSendAudioRecordWechat: true })
+                    await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, agent.WechatRobotKey, $"您有一条新的AI通话录音：\n{audio?.Attachment?.FileUrl}", Array.Empty<string>(), CancellationToken.None).ConfigureAwait(false);
+                
+                _backgroundJobClient.Enqueue<IRealtimeProcessJobService>(x =>
+                    x.RecordingRealtimeAiAsync(audio.Attachment.FileUrl, _speechAssistant.AgentId, CancellationToken.None));
             }
                             
             await _wholeAudioBuffer.DisposeAsync();
