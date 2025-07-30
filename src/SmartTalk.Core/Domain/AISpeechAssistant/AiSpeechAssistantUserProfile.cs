@@ -20,6 +20,12 @@ public class AiSpeechAssistantUserProfile : IEntity, IHasCreatedFields
     [Column("profile_json")]
     public string ProfileJson { get; set; }
     
+    [Column("sales_name")]
+    public string SalesName { get; set; }
+    
+    [Column("robot_key")]
+    public string RobotKey { get; set; }
+    
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
 }
