@@ -357,16 +357,13 @@ public partial class PosService : IPosService
            PosStore = agentStoreDict.TryGetValue(agent.AgentId, out var store) 
                ? store 
                : new PosCompanyStoreDto(),
-           AgentAssistantss = new List<AgentAssistantsDto>
-           {
-               new AgentAssistantsDto
+           AgentAssistantss = new AgentAssistantsDto
                {
                    AgentId = agent.AgentId,
                    AiSpeechAssistants = agentAssistantsDict.TryGetValue(agent.AgentId, out var assistants) 
                        ? assistants 
                        : new List<AiSpeechAssistantDto>()
                }
-           }
        }).ToList();
        
         return new GetPosAgentsResponse()
