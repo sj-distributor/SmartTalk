@@ -623,7 +623,6 @@ public partial class PhoneOrderService
         var data = result.GroupBy(x => x.Record.AgentId).Select(x => new PhoneCallUsagesPreviewDto
         {
             Name = x.First().Assistant?.Name,
-            AgentId = x.First().Record.AgentId,
             ReportUsages = x.Where(r => !string.IsNullOrWhiteSpace(r.Record.TranscriptionText)).Count(),
             TotalDuration = Math.Round(x.Where(r => r.Record.Duration != null).Select(r => r.Record.Duration.Value).Sum(), 2)
         }).ToList();
