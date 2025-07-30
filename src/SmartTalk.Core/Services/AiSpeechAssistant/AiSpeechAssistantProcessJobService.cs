@@ -149,6 +149,8 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
     {
         var items = await MatchSimilarRestaurantItemsAsync(record, foods, cancellationToken).ConfigureAwait(false);
         
+        Log.Information("Matched similar restaurant items: {@items}", items);
+        
         if (items.Count != 0)
             await _phoneOrderDataProvider.AddPhoneOrderItemAsync(items, true, cancellationToken).ConfigureAwait(false);
     }
