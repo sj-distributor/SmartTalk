@@ -59,7 +59,7 @@ public class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
         
         var duration = await _ffmpegService.GetAudioDurationAsync(audioBytes, cancellationToken).ConfigureAwait(false);
         
-        record.Duration = double.TryParse(duration, out var result) ? result : 0;
+        record.Duration = TimeSpan.TryParse(duration, out var timeSpan) ? timeSpan.TotalSeconds : 0;
         
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
