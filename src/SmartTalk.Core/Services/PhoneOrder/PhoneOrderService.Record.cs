@@ -36,6 +36,8 @@ public partial interface IPhoneOrderService
     Task<AddOrUpdateManualOrderResponse> AddOrUpdateManualOrderAsync(AddOrUpdateManualOrderCommand command, CancellationToken cancellationToken);
 
     Task<string> CreateSpeechMaticsJobAsync(byte[] recordContent, string recordName, string language, CancellationToken cancellationToken);
+    
+    Task<GetPhoneCallUsagesPreviewResponse> GetPhoneCallUsagesPreviewAsync(GetPhoneCallUsagesPreviewRequest request, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderService
@@ -609,5 +611,36 @@ public partial class PhoneOrderService
         var utcEnd = utcStart.AddDays(1);
 
         return (utcStart, utcEnd);
+    }
+
+    public async Task<GetPhoneCallUsagesPreviewResponse> GetPhoneCallUsagesPreviewAsync(GetPhoneCallUsagesPreviewRequest request, CancellationToken cancellationToken)
+    {
+        var (startTime, endTime) = GetQueryTimeRange(request.Month);
+
+        var result = await _phoneOrderDataProvider
+            .GetPhonCallUsagesAsync(startTime, endTime, request.IncludeExternalData, cancellationToken).ConfigureAwait(false);
+
+        var data = result.GroupBy(x => x.Record.AgentId).Select(x => new PhoneCallUsagesPreviewDto
+        {
+            Name = x.First().Assistant?.Name,
+            AgentId = x.First().Record.AgentId,
+            ReportUsages = x.Where(r => !string.IsNullOrWhiteSpace(r.Record.TranscriptionText)).Count(),
+            TotalDuration = x.Where(r => r.Record.Duration != null).Select(x => x.Record.Duration.Value).Sum()
+        }).ToList();
+        
+        return new GetPhoneCallUsagesPreviewResponse { Data = data };
+    }
+    
+    private (DateTimeOffset Start, DateTimeOffset End) GetQueryTimeRange(int month)
+    {
+        var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+        
+        var startLocal = new DateTime(2025, month, 1, 0, 0, 0);
+        var endLocal = new DateTime(2025, month, 31, 23, 59, 59);
+        
+        var startInPst = new DateTimeOffset(startLocal, pacificZone.GetUtcOffset(startLocal));
+        var endInPst = new DateTimeOffset(endLocal, pacificZone.GetUtcOffset(endLocal));
+        
+        return (startInPst.ToUniversalTime(), endInPst.ToUniversalTime());
     }
 }
