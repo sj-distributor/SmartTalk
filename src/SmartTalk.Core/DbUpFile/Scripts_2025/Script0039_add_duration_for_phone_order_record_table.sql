@@ -1,0 +1,1 @@
+alter table `phone_order_record` add column `duration` double null;
