@@ -145,24 +145,12 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         return conversations;
     }
 
-    private async Task<List<PhoneOrderOrderItem>> GenerateOrderItemsAsync(PhoneOrderRecord record, AiSpeechAssistantOrderDto foods, CancellationToken cancellationToken)
+    private async Task OrderRestaurantItemsAsync(PhoneOrderRecord record, AiSpeechAssistantOrderDto foods, CancellationToken cancellationToken)
     {
-        try
-        {
-            var restaurantItems = await MatchSimilarRestaurantItemsAsync(record, foods, cancellationToken).ConfigureAwait(false);
+        var items = await MatchSimilarRestaurantItemsAsync(record, foods, cancellationToken).ConfigureAwait(false);
         
-            Log.Information("Matched similar restaurant items: {@RestaurantItems}", restaurantItems);
-            
-            var orderItems = restaurantItems != null && restaurantItems.Count != 0 ? restaurantItems : [];
-            
-            return orderItems.Where(x => !string.IsNullOrWhiteSpace(x.FoodName)).ToList();
-        }
-        catch (Exception e)
-        {
-            Log.Warning("Matched similar restaurant items failed: {@Exception}", e);
-
-            return [];
-        }
+        if (items.Count != 0)
+            await _phoneOrderDataProvider.AddPhoneOrderItemAsync(items, true, cancellationToken).ConfigureAwait(false);
     }
     
     private async Task<List<PhoneOrderOrderItem>> MatchSimilarRestaurantItemsAsync(PhoneOrderRecord record, AiSpeechAssistantOrderDto foods, CancellationToken cancellationToken)
