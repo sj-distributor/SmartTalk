@@ -38,7 +38,8 @@ public partial interface IPhoneOrderDataProvider
     
     Task<AiSpeechAssistantKnowledge> GetKnowledgePromptByAssistantIdAsync(int assistantId, CancellationToken cancellationToken);
     
-    Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(int? recordId = null, int? agentId = null, DateTimeOffset? createdDate = null, CancellationToken cancellationToken = default);
+    Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(
+        int? recordId = null, int? agentId = null, DateTimeOffset? createdDate = null, DateTimeOffset? startTime = null, DateTimeOffset? endTime = null, CancellationToken cancellationToken = default);
 }
 
 public partial class PhoneOrderDataProvider
@@ -209,7 +210,8 @@ public partial class PhoneOrderDataProvider
         return await _repository.Query<AiSpeechAssistantKnowledge>().Where(x=> x.AssistantId == assistantId && x.IsActive).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(int? recordId = null, int? agentId = null, DateTimeOffset? createdDate = null, CancellationToken cancellationToken = default)
+    public async Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(
+        int? recordId = null, int? agentId = null, DateTimeOffset? createdDate = null, DateTimeOffset? startTime = null, DateTimeOffset? endTime = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<PhoneOrderRecord>();
 
@@ -221,6 +223,9 @@ public partial class PhoneOrderDataProvider
 
         if (createdDate.HasValue)
             query = query.Where(x => x.CreatedDate == createdDate.Value);
+
+        if (startTime.HasValue && endTime.HasValue)
+            query = query.Where(x => x.CreatedDate >= startTime.Value && x.CreatedDate <= endTime.Value);
 
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
