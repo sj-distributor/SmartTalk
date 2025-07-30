@@ -157,7 +157,7 @@ public class SpeechMaticsService : ISpeechMaticsService
             await CallBackSmartiesRecordAsync(agent, record, cancellationToken).ConfigureAwait(false);
 
         var key = "";
-        var message = agent.WechatRobotMessage.Replace("#{assistant_name}", aiSpeechAssistant?.Name ?? "").Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString()).Replace("#{assistant_file_url}", record.Url);
+        var message = agent.WechatRobotMessage?.Replace("#{assistant_name}", aiSpeechAssistant?.Name ?? "").Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString()).Replace("#{assistant_file_url}", record.Url);
 
         (key, message) = await SwitchKeyMessageByGetUserProfileAsync(record, cancellationToken, callFrom, aiSpeechAssistant, agent, key, message);
 
@@ -173,7 +173,7 @@ public class SpeechMaticsService : ISpeechMaticsService
             if (userProfile != null && !string.IsNullOrEmpty(userProfile.RobotKey))
             {
                 key = userProfile.RobotKey;
-                message = agent.WechatRobotMessage.Replace("#{assistant_name}", userProfile.SalesName ?? "").Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString()).Replace("#{assistant_file_url}", record.Url);
+                message = agent.WechatRobotMessage?.Replace("#{assistant_name}", userProfile.SalesName ?? "").Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString()).Replace("#{assistant_file_url}", record.Url);
             }
         }
 
