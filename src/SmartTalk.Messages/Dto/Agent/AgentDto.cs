@@ -18,5 +18,13 @@ public class AgentDto
     
     public AgentSourceSystem SourceSystem { get; set; }
     
+    public bool IsWecomMessageOrder { get; set; } = false;
+    
+    public bool IsSendAnalysisReportToWechat { get; set; } = false;
+    
+    public bool IsSendAudioRecordWechat { get; set; } = false;
+    
+    public string Timezone { get; set; }
+    
     public DateTimeOffset CreatedDate { get; set; }
 }

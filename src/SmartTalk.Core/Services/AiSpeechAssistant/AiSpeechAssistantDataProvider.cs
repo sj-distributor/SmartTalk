@@ -3,6 +3,7 @@ using SmartTalk.Core.Data;
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Domain.AIAssistant;
 using SmartTalk.Core.Domain.AISpeechAssistant;
+using SmartTalk.Core.Domain.System;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
@@ -26,7 +27,7 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
     
     Task UpdateNumberPoolAsync(List<NumberPool> numbers, bool forceSave = true, CancellationToken cancellationToken = default);
     
-    Task<(int, List<Domain.AISpeechAssistant.AiSpeechAssistant>)> GetAiSpeechAssistantsAsync(int? pageIndex = null, int? pageSize = null, string channel = null, CancellationToken cancellationToken = default);
+    Task<(int, List<Domain.AISpeechAssistant.AiSpeechAssistant>)> GetAiSpeechAssistantsAsync(int? pageIndex = null, int? pageSize = null, string channel = null, string keyword = null, CancellationToken cancellationToken = default);
 
     Task AddAiSpeechAssistantsAsync(List<Domain.AISpeechAssistant.AiSpeechAssistant> assistants, bool forceSave = true, CancellationToken cancellationToken = default);
 
@@ -50,9 +51,11 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
     
     Task<Domain.AISpeechAssistant.AiSpeechAssistant> GetAiSpeechAssistantByIdAsync(int assistantId, CancellationToken cancellationToken);
     
-    Task<int> GetMessageCountByAgentAndDateAsync(int agentId, DateTimeOffset date, CancellationToken cancellationToken);
+    Task<int> GetMessageCountByAgentAndDateAsync(int groupKey, DateTimeOffset date, CancellationToken cancellationToken);
     
     Task AddAgentMessageRecordAsync(AgentMessageRecord messageRecord, CancellationToken cancellationToken = default);
+    
+    Task<AiKid> GetAiKidAsync(int? agentId = null, CancellationToken cancellationToken = default);
     
     Task AddAiKidAsync(AiKid kid, bool forceSave = true, CancellationToken cancellationToken = default);
     
@@ -63,6 +66,8 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task UpdateAiSpeechAssistantSessionAsync(AiSpeechAssistantSession session, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task<AiSpeechAssistantSession> GetAiSpeechAssistantSessionBySessionIdAsync(Guid sessionId, CancellationToken cancellationToken);
+
+    Task<(Domain.AISpeechAssistant.AiSpeechAssistant Assistant, Agent Agent)> GetAiSpeechAssistantByAgentIdAsync(int agentId, CancellationToken cancellationToken);
 }
 
 public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
@@ -162,12 +167,15 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
     }
 
     public async Task<(int, List<Domain.AISpeechAssistant.AiSpeechAssistant>)> GetAiSpeechAssistantsAsync(
-        int? pageIndex = null, int? pageSize = null, string channel = null, CancellationToken cancellationToken = default)
+        int? pageIndex = null, int? pageSize = null, string channel = null, string keyword = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.QueryNoTracking<Domain.AISpeechAssistant.AiSpeechAssistant>().Where(x => x.IsDisplay);
 
         if (!string.IsNullOrEmpty(channel))
             query = query.Where(x => x.Channel.Contains(channel));
+        
+        if (!string.IsNullOrEmpty(keyword))
+            query = query.Where(x => x.Name.Contains(keyword));
 
         var count = await query.CountAsync(cancellationToken).ConfigureAwait(false);
 
@@ -284,9 +292,9 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
             .Where(x => x.Id == assistantId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<int> GetMessageCountByAgentAndDateAsync(int agentId, DateTimeOffset date, CancellationToken cancellationToken)
+    public async Task<int> GetMessageCountByAgentAndDateAsync(int groupKey, DateTimeOffset date, CancellationToken cancellationToken)
     {
-        return await _repository.Query<AgentMessageRecord>().Where(x => x.AgentId == agentId && x.MessageDate >= date)
+        return await _repository.Query<AgentMessageRecord>().Where(x => x.GroupKey == groupKey && x.MessageDate >= date)
             .CountAsync(cancellationToken).ConfigureAwait(false);
     }
 
@@ -295,6 +303,16 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
         await _repository.InsertAsync(messageRecord, cancellationToken).ConfigureAwait(false);
         
         await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<AiKid> GetAiKidAsync(int? agentId = null, CancellationToken cancellationToken = default)
+    {
+        var query = _repository.Query<AiKid>();
+
+        if (agentId.HasValue)
+            query = query.Where(x => x.AgentId == agentId.Value);
+        
+        return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task AddAiKidAsync(AiKid kid, bool forceSave = true, CancellationToken cancellationToken = default)
@@ -340,5 +358,18 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
     {
         return await _repository.Query<AiSpeechAssistantSession>()
             .Where(x => x.SessionId == sessionId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+    
+    public async Task<(Domain.AISpeechAssistant.AiSpeechAssistant Assistant, Agent Agent)> GetAiSpeechAssistantByAgentIdAsync(int agentId, CancellationToken cancellationToken)
+    {
+        var query = from agent in _repository.Query<Agent>()
+            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agent.Id equals assistant.AgentId into assistantGroups
+            from assistant in assistantGroups.DefaultIfEmpty()
+            where agent.Id == agentId
+            select new { assistant, agent };
+
+        var result = await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+
+        return (result?.assistant, result?.agent);
     }
 }

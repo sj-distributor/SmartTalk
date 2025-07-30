@@ -41,7 +41,7 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
 
         shoppingCart = await GetSimilarRestaurantByRecordAsync(record, shoppingCart, cancellationToken).ConfigureAwait(false);
         
-        var items = shoppingCart.FoodDetails.Select(x => new PhoneOrderOrderItem
+        var items = shoppingCart?.FoodDetails?.Select(x => new PhoneOrderOrderItem
         {
             RecordId = record.Id,
             FoodName = x.FoodName,
@@ -49,7 +49,7 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
             Price = x.Price,
             Note = x.Remark,
             ProductId = x.ProductId
-        }).ToList();
+        }).ToList() ?? [];
 
         if (items.Any())
             await _phoneOrderDataProvider.AddPhoneOrderItemAsync(items, true, cancellationToken).ConfigureAwait(false);
@@ -91,9 +91,14 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
     private async Task<PhoneOrderDetailDto> GetSimilarRestaurantByRecordAsync(PhoneOrderRecord record, PhoneOrderDetailDto foods, CancellationToken cancellationToken)
     {
         var result = new PhoneOrderDetailDto { FoodDetails = new List<FoodDetailDto>() };
-        var restaurant = await _restaurantDataProvider.GetRestaurantByNameAsync(record.RestaurantInfo.Name, cancellationToken).ConfigureAwait(false);
 
-        var tasks = foods.FoodDetails.Select(async foodDetail =>
+        if (foods?.FoodDetails == null || foods.FoodDetails.Count == 0) return result;
+        
+        var restaurant = await _restaurantDataProvider.GetRestaurantByNameAsync(record?.RestaurantInfo?.Name, cancellationToken).ConfigureAwait(false);
+
+        if (restaurant == null) return result;
+        
+        var tasks = foods.FoodDetails.Where(x => !string.IsNullOrWhiteSpace(x?.FoodName)).Select(async foodDetail =>
         {
             var similarFoodsResponse = await _vectorDb.GetSimilarListAsync(
                 restaurant.Id.ToString(), foodDetail.FoodName, minRelevance: 0.4, cancellationToken: cancellationToken).ToListAsync(cancellationToken);

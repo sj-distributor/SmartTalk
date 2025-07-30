@@ -14,6 +14,8 @@ public interface ISmartiesClient : IScopedDependency
     Task<AskGptEmbeddingResponseDto> GetEmbeddingAsync(AskGptEmbeddingRequestDto request, CancellationToken cancellationToken);
 
     Task CallBackSmartiesAiSpeechAssistantRecordAsync(AiSpeechAssistantCallBackRequestDto request, CancellationToken cancellationToken);
+    
+    Task CallBackSmartiesAiKidRecordAsync(AiKidCallBackRequestDto request, CancellationToken cancellationToken);
 }
 
 public class SmartiesClient : ISmartiesClient
@@ -53,5 +55,10 @@ public class SmartiesClient : ISmartiesClient
     public async Task CallBackSmartiesAiSpeechAssistantRecordAsync(AiSpeechAssistantCallBackRequestDto request, CancellationToken cancellationToken)
     {
         await _httpClientFactory.PostAsJsonAsync(_smartiesSettings.AiSpeechAssistantCallBackUrl, request, cancellationToken, headers: _headers).ConfigureAwait(false);
+    }
+
+    public async Task CallBackSmartiesAiKidRecordAsync(AiKidCallBackRequestDto request, CancellationToken cancellationToken)
+    {
+        await _httpClientFactory.PostAsJsonAsync($"{_smartiesSettings.BaseUrl}/api/Ome/ai/kid/record/callback", request, cancellationToken, headers: _headers).ConfigureAwait(false);
     }
 }

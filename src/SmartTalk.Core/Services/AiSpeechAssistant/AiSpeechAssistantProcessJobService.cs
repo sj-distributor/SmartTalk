@@ -26,7 +26,6 @@ using SmartTalk.Messages.Enums.Pos;
 using SmartTalk.Messages.Enums.STT;
 using Twilio;
 using Twilio.Rest.Api.V2010.Account;
-using MessageReadRecord = SmartTalk.Core.Domain.Pos.MessageReadRecord;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
 
@@ -77,13 +76,17 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
         var callResource = await CallResource.FetchAsync(pathSid: context.CallSid).ConfigureAwait(false);
 
+        var (existRecord, agent, aiSpeechAssistant) = await _phoneOrderDataProvider.GetRecordWithAgentAndAssistantAsync(context.CallSid, cancellationToken).ConfigureAwait(false);
+
+        if (existRecord != null ) return;
+        
         var record = new PhoneOrderRecord
         {
             AgentId = context.Assistant.AgentId,
             SessionId = context.CallSid,
             Status = PhoneOrderRecordStatus.Transcription,
             Tips = context.ConversationTranscription.FirstOrDefault().Item2,
-            TranscriptionText = FormattedConversation(context.ConversationTranscription),
+            TranscriptionText = string.Empty,
             Language = TranscriptionLanguage.Chinese,
             CreatedDate = callResource.StartTime ?? DateTimeOffset.Now,
             OrderStatus = PhoneOrderOrderStatus.Pending,
@@ -92,14 +95,6 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         };
 
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync([record], cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        if (context.OrderItems != null)
-        {
-            var items = await GenerateOrderItemsAsync(record, context.OrderItems, cancellationToken).ConfigureAwait(false);
-            
-            if (items.Count != 0)
-                await _phoneOrderDataProvider.AddPhoneOrderItemAsync(items, true, cancellationToken).ConfigureAwait(false);
-        }
     }
 
     private static string FormattedConversation(List<(AiSpeechAssistantSpeaker, string)> conversationTranscription)
