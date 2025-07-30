@@ -5,14 +5,10 @@ using OpenAI.Chat;
 using Serilog;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Ioc;
-using SmartTalk.Core.Services.Caching.Redis;
-using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.PhoneOrder;
-using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Services.Restaurants;
 using SmartTalk.Core.Services.RetrievalDb.VectorDb;
 using SmartTalk.Core.Settings.OpenAi;
-using SmartTalk.Core.Services.Security;
 using SmartTalk.Core.Settings.Twilio;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Constants;
@@ -39,42 +35,27 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
     private readonly IMapper _mapper;
     private readonly IVectorDb _vectorDb;
     private readonly TwilioSettings _twilioSettings;
-    private readonly IPosDataProvider _posDataProvider;
-    private readonly IRedisSafeRunner _redisSafeRunner;
     private readonly OpenAiTrainingSettings _openAiTrainingSettings;
     private readonly IRestaurantDataProvider _restaurantDataProvider;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly OpenAiAccountTrainingSettings _openAiAccountTrainingSettings;
-    private readonly ISmartTalkHttpClientFactory _httpClientFactory;
-    private readonly IPhoneOrderService _phoneOrderService;
-    private readonly ISecurityDataProvider _securityDataProvider;
 
     public AiSpeechAssistantProcessJobService(
         IMapper mapper,
         IVectorDb vectorDb,
         TwilioSettings twilioSettings,
-        IPosDataProvider posDataProvider,
-        IRedisSafeRunner redisSafeRunner,
         IRestaurantDataProvider restaurantDataProvider,
         OpenAiTrainingSettings openAiTrainingSettings, 
-        OpenAiAccountTrainingSettings openAiAccountTrainingSettings,
         IPhoneOrderDataProvider phoneOrderDataProvider,
-        IPhoneOrderService phoneOrderService,
-        ISmartTalkHttpClientFactory httpClientFactory,
-        ISecurityDataProvider securityDataProvider)
+        OpenAiAccountTrainingSettings openAiAccountTrainingSettings)
     {
         _mapper = mapper;
         _vectorDb = vectorDb;
         _twilioSettings = twilioSettings;
-        _posDataProvider = posDataProvider;
-        _redisSafeRunner = redisSafeRunner;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _openAiTrainingSettings = openAiTrainingSettings;
         _restaurantDataProvider = restaurantDataProvider;
-        _phoneOrderService = phoneOrderService;
         _openAiAccountTrainingSettings = openAiAccountTrainingSettings;
-        _httpClientFactory = httpClientFactory;
-        _securityDataProvider = securityDataProvider;
     }
 
     public async Task RecordAiSpeechAssistantCallAsync(AiSpeechAssistantStreamContextDto context, CancellationToken cancellationToken)
