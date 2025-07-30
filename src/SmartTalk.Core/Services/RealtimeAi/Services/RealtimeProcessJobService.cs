@@ -23,7 +23,6 @@ public class RealtimeProcessJobService : IRealtimeProcessJobService
     private readonly IPhoneOrderService _phoneOrderService;
     private readonly ISpeechToTextService _speechToTextService;
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
-    private readonly ISecurityDataProvider _securityDataProvider;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
 
     public RealtimeProcessJobService(
@@ -40,7 +39,6 @@ public class RealtimeProcessJobService : IRealtimeProcessJobService
         _translationClient = translationClient;
         _httpClientFactory = httpClientFactory;
         _speechToTextService = speechToTextService;
-        _securityDataProvider = securityDataProvider;
         _phoneOrderDataProvider = phoneOrderDataProvider;
     }
 
