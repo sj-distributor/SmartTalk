@@ -8,7 +8,7 @@ public class PosAgentDto
 
     public PosCompanyStoreDto PosStore { get; set; }
 
-    public List<AgentAssistantsDto> AgentAssistantss { get; set; }
+    public AgentAssistantsDto AgentAssistantss { get; set; }
 }
 
 public class AgentAssistantsDto
