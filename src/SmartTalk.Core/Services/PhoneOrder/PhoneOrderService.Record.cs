@@ -625,7 +625,7 @@ public partial class PhoneOrderService
             Name = x.First().Assistant?.Name,
             AgentId = x.First().Record.AgentId,
             ReportUsages = x.Where(r => !string.IsNullOrWhiteSpace(r.Record.TranscriptionText)).Count(),
-            TotalDuration = x.Where(r => r.Record.Duration != null).Select(x => x.Record.Duration.Value).Sum()
+            TotalDuration = Math.Round(x.Where(r => r.Record.Duration != null).Select(r => r.Record.Duration.Value).Sum(), 2)
         }).ToList();
         
         return new GetPhoneCallUsagesPreviewResponse { Data = data };
