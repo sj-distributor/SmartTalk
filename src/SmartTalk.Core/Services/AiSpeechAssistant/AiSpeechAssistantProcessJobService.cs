@@ -4,13 +4,9 @@ using Newtonsoft.Json;
 using Serilog;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Ioc;
-using SmartTalk.Core.Services.Caching.Redis;
-using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.PhoneOrder;
-using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Services.Restaurants;
 using SmartTalk.Core.Services.RetrievalDb.VectorDb;
-using SmartTalk.Core.Services.Security;
 using SmartTalk.Core.Settings.Twilio;
 using SmartTalk.Messages.Constants;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
@@ -34,36 +30,21 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
     private readonly IMapper _mapper;
     private readonly IVectorDb _vectorDb;
     private readonly TwilioSettings _twilioSettings;
-    private readonly IPosDataProvider _posDataProvider;
-    private readonly IRedisSafeRunner _redisSafeRunner;
     private readonly IRestaurantDataProvider _restaurantDataProvider;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
-    private readonly IPhoneOrderService _phoneOrderService;
-    private readonly ISmartTalkHttpClientFactory _httpClientFactory;
-    private readonly ISecurityDataProvider _securityDataProvider;
 
     public AiSpeechAssistantProcessJobService(
         IMapper mapper,
         IVectorDb vectorDb,
         TwilioSettings twilioSettings,
-        IPosDataProvider posDataProvider,
-        IRedisSafeRunner redisSafeRunner,
         IRestaurantDataProvider restaurantDataProvider,
-        IPhoneOrderDataProvider phoneOrderDataProvider,
-        IPhoneOrderService phoneOrderService,
-        ISmartTalkHttpClientFactory httpClientFactory,
-        ISecurityDataProvider securityDataProvider)
+        IPhoneOrderDataProvider phoneOrderDataProvider)
     {
         _mapper = mapper;
         _vectorDb = vectorDb;
         _twilioSettings = twilioSettings;
-        _posDataProvider = posDataProvider;
-        _redisSafeRunner = redisSafeRunner;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _restaurantDataProvider = restaurantDataProvider;
-        _phoneOrderService = phoneOrderService;
-        _httpClientFactory = httpClientFactory;
-        _securityDataProvider = securityDataProvider;
     }
 
     public async Task RecordAiSpeechAssistantCallAsync(AiSpeechAssistantStreamContextDto context, CancellationToken cancellationToken)
