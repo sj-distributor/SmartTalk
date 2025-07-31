@@ -68,6 +68,8 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task<AiSpeechAssistantSession> GetAiSpeechAssistantSessionBySessionIdAsync(Guid sessionId, CancellationToken cancellationToken);
 
     Task<(Domain.AISpeechAssistant.AiSpeechAssistant Assistant, Agent Agent)> GetAiSpeechAssistantByAgentIdAsync(int agentId, CancellationToken cancellationToken);
+    
+    Task<AiSpeechAssistantUserProfile> GetAiSpeechAssistantUserProfileAsync(int assistantId, string callerNumber, CancellationToken cancellationToken);
 }
 
 public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
@@ -371,5 +373,13 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
         var result = await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
 
         return (result?.assistant, result?.agent);
+    }
+
+    public async Task<AiSpeechAssistantUserProfile> GetAiSpeechAssistantUserProfileAsync(int assistantId, string callerNumber, CancellationToken cancellationToken)
+    {
+        var query = _repository.Query<AiSpeechAssistantUserProfile>()
+            .Where(x => x.AssistantId == assistantId && x.CallerNumber == callerNumber);
+
+        return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 }

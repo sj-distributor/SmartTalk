@@ -2,6 +2,7 @@ using Serilog;
 using AutoMapper;
 using SmartTalk.Core.Ioc;
 using Microsoft.IdentityModel.Tokens;
+using Newtonsoft.Json.Linq;
 using OpenAI.Chat;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.PhoneOrder;
@@ -156,10 +157,33 @@ public class SpeechMaticsService : ISpeechMaticsService
         if (agent.SourceSystem == AgentSourceSystem.Smarties)
             await CallBackSmartiesRecordAsync(agent, record, cancellationToken).ConfigureAwait(false);
 
-        if (!string.IsNullOrEmpty(agent.WechatRobotKey) && !string.IsNullOrEmpty(agent.WechatRobotMessage))
-        {
-            var message = agent.WechatRobotMessage.Replace("#{assistant_name}", aiSpeechAssistant?.Name ?? "").Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString()).Replace("#{assistant_file_url}", record.Url);
+        var message = agent.WechatRobotMessage?.Replace("#{assistant_name}", aiSpeechAssistant?.Name ?? "").Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString()).Replace("#{assistant_file_url}", record.Url);
 
+        message = await SwitchKeyMessageByGetUserProfileAsync(record, callFrom, aiSpeechAssistant, agent, message, cancellationToken).ConfigureAwait(false);
+
+        await SendWorkWechatMessageByRobotKeyAsync(message, record, audioContent, agent, aiSpeechAssistant, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<string> SwitchKeyMessageByGetUserProfileAsync(PhoneOrderRecord record, string callFrom, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, Agent agent, string message, CancellationToken cancellationToken)
+    {
+        if (callFrom != null && aiSpeechAssistant?.Id != null && !string.IsNullOrEmpty(message))
+        {
+            var userProfile = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantUserProfileAsync(aiSpeechAssistant.Id, callFrom, cancellationToken).ConfigureAwait(false);
+            var salesName = userProfile?.ProfileJson != null ? JObject.Parse(userProfile.ProfileJson).GetValue("correspond_sales")?.ToString() : string.Empty;
+
+            if (!string.IsNullOrEmpty(salesName))
+            {
+                message = agent.WechatRobotMessage?.Replace("#{assistant_name}", salesName).Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString()).Replace("#{assistant_file_url}", record.Url);
+            }
+        }
+
+        return message;
+    }
+
+    private async Task SendWorkWechatMessageByRobotKeyAsync(string message, PhoneOrderRecord record, byte[] audioContent, Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, CancellationToken cancellationToken)
+    {
+        if (!string.IsNullOrEmpty(agent.WechatRobotKey) && !string.IsNullOrEmpty(message))
+        {
             if (agent.IsWecomMessageOrder && aiSpeechAssistant != null)
             {
                 var messageNumber = await SendAgentMessageRecordAsync(agent, record.Id, aiSpeechAssistant.GroupKey, cancellationToken);
