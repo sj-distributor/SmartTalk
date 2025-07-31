@@ -166,7 +166,7 @@ public class SpeechMaticsService : ISpeechMaticsService
 
     private async Task<string> SwitchKeyMessageByGetUserProfileAsync(PhoneOrderRecord record, string callFrom, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, Agent agent, string message, CancellationToken cancellationToken)
     {
-        if (callFrom != null && aiSpeechAssistant?.Id != null)
+        if (callFrom != null && aiSpeechAssistant?.Id != null && !string.IsNullOrEmpty(message))
         {
             var userProfile = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantUserProfileAsync(aiSpeechAssistant.Id, callFrom, cancellationToken).ConfigureAwait(false);
             var salesName = userProfile?.ProfileJson != null ? JObject.Parse(userProfile.ProfileJson).GetValue("correspond_sales")?.ToString() : string.Empty;
