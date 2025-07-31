@@ -2,6 +2,7 @@ using Serilog;
 using AutoMapper;
 using SmartTalk.Core.Ioc;
 using Microsoft.IdentityModel.Tokens;
+using Newtonsoft.Json.Linq;
 using OpenAI.Chat;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.PhoneOrder;
@@ -169,11 +170,11 @@ public class SpeechMaticsService : ISpeechMaticsService
         if (callFrom != null && aiSpeechAssistant?.Id != null)
         {
             var userProfile = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantUserProfileAsync(aiSpeechAssistant.Id, callFrom, cancellationToken).ConfigureAwait(false);
+            var salesName = userProfile?.ProfileJson != null ? JObject.Parse(userProfile.ProfileJson).GetValue("correspond_sales")?.ToString() : string.Empty;
 
-            if (userProfile != null && !string.IsNullOrEmpty(userProfile.RobotKey))
+            if (!string.IsNullOrEmpty(salesName))
             {
-                key = userProfile.RobotKey;
-                message = agent.WechatRobotMessage?.Replace("#{assistant_name}", userProfile.SalesName ?? "").Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString()).Replace("#{assistant_file_url}", record.Url);
+                message = agent.WechatRobotMessage?.Replace("#{assistant_name}", salesName).Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString()).Replace("#{assistant_file_url}", record.Url);
             }
         }
 
