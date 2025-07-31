@@ -170,12 +170,12 @@ public class SpeechMaticsService : ISpeechMaticsService
 
         message = await SwitchKeyMessageByGetUserProfileAsync(record, callFrom, aiSpeechAssistant, agent, message, cancellationToken).ConfigureAwait(false);
 
-        await SendWorkWechatMessageByRobotKeyAsync(message, record, audioContent, cancellationToken, agent, aiSpeechAssistant);
+        await SendWorkWechatMessageByRobotKeyAsync(message, record, audioContent, agent, aiSpeechAssistant, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<string> SwitchKeyMessageByGetUserProfileAsync(PhoneOrderRecord record, string callFrom, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, Agent agent, string message, CancellationToken cancellationToken)
     {
-        if (callFrom != null && aiSpeechAssistant?.Id != null )
+        if (callFrom != null && aiSpeechAssistant?.Id != null && !string.IsNullOrEmpty(message))
         {
             var userProfile = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantUserProfileAsync(aiSpeechAssistant.Id, callFrom, cancellationToken).ConfigureAwait(false);
             var salesName = userProfile?.ProfileJson != null ? JObject.Parse(userProfile.ProfileJson).GetValue("correspond_sales")?.ToString() : string.Empty;
@@ -189,7 +189,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         return message;
     }
 
-    private async Task SendWorkWechatMessageByRobotKeyAsync(string message, PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken, Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant)
+    private async Task SendWorkWechatMessageByRobotKeyAsync(string message, PhoneOrderRecord record, byte[] audioContent, Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, CancellationToken cancellationToken)
     {
         if (!string.IsNullOrEmpty(agent.WechatRobotKey) && !string.IsNullOrEmpty(message))
         {
