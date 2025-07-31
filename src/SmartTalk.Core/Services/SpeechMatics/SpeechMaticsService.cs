@@ -6,12 +6,10 @@ using OpenAI.Chat;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Domain.System;
-using SmartTalk.Core.Extensions;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Ffmpeg;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
-using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Core.Settings.PhoneOrder;
@@ -21,9 +19,7 @@ using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
-using SmartTalk.Messages.Dto.WeChat;
 using SmartTalk.Messages.Enums.Agent;
-using SmartTalk.Messages.Enums.WeChat;
 using Twilio;
 using Twilio.Rest.Api.V2010.Account;
 
@@ -97,6 +93,8 @@ public class SpeechMaticsService : ISpeechMaticsService
             
             await SummarizeConversationContentAsync(record, audioContent, cancellationToken).ConfigureAwait(false);
 
+            await CalculateRecordingDurationAsync(record, audioContent, cancellationToken).ConfigureAwait(false);
+            
             await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
         }
         catch (Exception e)
@@ -218,6 +216,13 @@ public class SpeechMaticsService : ISpeechMaticsService
         await _aiSpeechAssistantDataProvider.AddAgentMessageRecordAsync(newRecord, cancellationToken).ConfigureAwait(false);
 
         return messageNumber;
+    }
+
+    private async Task CalculateRecordingDurationAsync(PhoneOrderRecord record, byte[] audioBytes, CancellationToken cancellationToken)
+    {
+        var duration = await _ffmpegService.GetAudioDurationAsync(audioBytes, cancellationToken).ConfigureAwait(false);
+        
+        record.Duration = TimeSpan.TryParse(duration, out var timeSpan) ? timeSpan.TotalSeconds : 0;
     }
     
     private List<SpeechMaticsSpeakInfoDto> StructureDiarizationResults(List<SpeechMaticsResultDto> results)
