@@ -11,6 +11,8 @@ namespace SmartTalk.Core.Services.PhoneOrder;
 public interface IPhoneOrderProcessJobService : IScopedDependency
 {
     Task CalculatePhoneOrderRecodingDurationAsync(SchedulingCalculatePhoneOrderRecodingDurationCommand command, CancellationToken cancellationToken);
+
+    Task CalculateRecordingDurationAsync(PhoneOrderRecord record, byte[] audioContent = null, CancellationToken cancellationToken = default);
 }
 
 public class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
@@ -37,7 +39,7 @@ public class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
         if (records == null || records.Count == 0) return;
         
         foreach (var record in records.Where(x => !string.IsNullOrWhiteSpace(x.Url)))
-            _smartTalkBackgroundJobClient.Enqueue(() => CalculateRecordingDurationAsync(record, cancellationToken), HangfireConstants.InternalHostingFfmpeg);
+            _smartTalkBackgroundJobClient.Enqueue(() => CalculateRecordingDurationAsync(record, null, cancellationToken), HangfireConstants.InternalHostingFfmpeg);
     }
 
     private (DateTimeOffset Start, DateTimeOffset End) GetQueryTimeRange()
@@ -53,9 +55,11 @@ public class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
         return (startInPst.ToUniversalTime(), endInPst.ToUniversalTime());
     }
 
-    public async Task CalculateRecordingDurationAsync(PhoneOrderRecord record, CancellationToken cancellationToken = default)
+    public async Task CalculateRecordingDurationAsync(PhoneOrderRecord record, byte[] audioContent = null, CancellationToken cancellationToken = default)
     {
-        var audioBytes = await _smartTalkHttpClient.GetAsync<byte[]>(record.Url, cancellationToken).ConfigureAwait(false);
+        var audioBytes = audioContent == null || audioContent.Length == 0
+            ? await _smartTalkHttpClient.GetAsync<byte[]>(record.Url, cancellationToken).ConfigureAwait(false)
+            : audioContent;
         
         var duration = await _ffmpegService.GetAudioDurationAsync(audioBytes, cancellationToken).ConfigureAwait(false);
         
