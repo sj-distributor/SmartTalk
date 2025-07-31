@@ -118,16 +118,23 @@ public partial class PhoneOrderService
         List<SpeechMaticsSpeakInfoDto> phoneOrderInfo, PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken)
     {
         if (phoneOrderInfo is { Count: 0 }) return;
+
+        try
+        {
+            phoneOrderInfo = await HandlerConversationFirstSentenceAsync(phoneOrderInfo, record, audioContent, cancellationToken).ConfigureAwait(false);
         
-        phoneOrderInfo = await HandlerConversationFirstSentenceAsync(phoneOrderInfo, record, audioContent, cancellationToken).ConfigureAwait(false);
+            Log.Information("Phone order record info: {@phoneOrderInfo}", phoneOrderInfo);
         
-        Log.Information("Phone order record info: {@phoneOrderInfo}", phoneOrderInfo);
+            var (goalText, tip) = await PhoneOrderTranscriptionAsync(phoneOrderInfo, record, audioContent, cancellationToken).ConfigureAwait(false);
         
-        var (goalText, tip) = await PhoneOrderTranscriptionAsync(phoneOrderInfo, record, audioContent, cancellationToken).ConfigureAwait(false);
+            await _phoneOrderUtilService.ExtractPhoneOrderShoppingCartAsync(goalText, record, cancellationToken).ConfigureAwait(false);
         
-        await _phoneOrderUtilService.ExtractPhoneOrderShoppingCartAsync(goalText, record, cancellationToken).ConfigureAwait(false);
-        
-        record.Tips = tip;
+            record.Tips = tip;
+        }
+        catch (Exception e)
+        {
+            Log.Error("Extract phone order record error: {@Error}", e);
+        }
     }
 
     public async Task<AddOrUpdateManualOrderResponse> AddOrUpdateManualOrderAsync(AddOrUpdateManualOrderCommand command, CancellationToken cancellationToken)
@@ -285,7 +292,7 @@ public partial class PhoneOrderService
         
         await _phoneOrderDataProvider.AddPhoneOrderConversationsAsync(conversations.Count != 0 ? conversations :
         [
-            new PhoneOrderConversation { Question = goalTextsString, RecordId = record.Id, Order = 0 }
+            new PhoneOrderConversation { Question = goalTextsString, Answer = string.Empty, RecordId = record.Id, Order = 0 }
         ], true, cancellationToken).ConfigureAwait(false);
 
         return (goalTextsString, conversations.FirstOrDefault()?.Question ?? goalTextsString);
