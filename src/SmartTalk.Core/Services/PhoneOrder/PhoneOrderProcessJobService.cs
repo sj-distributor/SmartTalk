@@ -12,7 +12,7 @@ public interface IPhoneOrderProcessJobService : IScopedDependency
 {
     Task CalculatePhoneOrderRecodingDurationAsync(SchedulingCalculatePhoneOrderRecodingDurationCommand command, CancellationToken cancellationToken);
 
-    Task CalculateRecordingDurationAsync(PhoneOrderRecord record, byte[] audioContent = null, CancellationToken cancellationToken = default);
+    Task CalculateRecordingDurationAsync(PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken = default);
 }
 
 public class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
@@ -55,7 +55,7 @@ public class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
         return (startInPst.ToUniversalTime(), endInPst.ToUniversalTime());
     }
 
-    public async Task CalculateRecordingDurationAsync(PhoneOrderRecord record, byte[] audioContent = null, CancellationToken cancellationToken = default)
+    public async Task CalculateRecordingDurationAsync(PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken = default)
     {
         var audioBytes = audioContent == null || audioContent.Length == 0
             ? await _smartTalkHttpClient.GetAsync<byte[]>(record.Url, cancellationToken).ConfigureAwait(false)
