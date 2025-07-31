@@ -157,15 +157,14 @@ public class SpeechMaticsService : ISpeechMaticsService
         if (agent.SourceSystem == AgentSourceSystem.Smarties)
             await CallBackSmartiesRecordAsync(agent, record, cancellationToken).ConfigureAwait(false);
 
-        var key = agent.WechatRobotKey;
         var message = agent.WechatRobotMessage?.Replace("#{assistant_name}", aiSpeechAssistant?.Name ?? "").Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString()).Replace("#{assistant_file_url}", record.Url);
 
-        (key, message) = await SwitchKeyMessageByGetUserProfileAsync(record, callFrom, aiSpeechAssistant, agent, key, message, cancellationToken).ConfigureAwait(false);
+        message = await SwitchKeyMessageByGetUserProfileAsync(record, callFrom, aiSpeechAssistant, agent, message, cancellationToken).ConfigureAwait(false);
 
-        await SendWorkWechatMessageByRobotKeyAsync(key, message, record, audioContent, cancellationToken, agent, aiSpeechAssistant);
+        await SendWorkWechatMessageByRobotKeyAsync(message, record, audioContent, cancellationToken, agent, aiSpeechAssistant);
     }
 
-    private async Task<(string key, string message)> SwitchKeyMessageByGetUserProfileAsync(PhoneOrderRecord record, string callFrom, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, Agent agent, string key, string message, CancellationToken cancellationToken)
+    private async Task<string> SwitchKeyMessageByGetUserProfileAsync(PhoneOrderRecord record, string callFrom, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, Agent agent, string message, CancellationToken cancellationToken)
     {
         if (callFrom != null && aiSpeechAssistant?.Id != null)
         {
@@ -178,12 +177,12 @@ public class SpeechMaticsService : ISpeechMaticsService
             }
         }
 
-        return (key, message);
+        return message;
     }
 
-    private async Task SendWorkWechatMessageByRobotKeyAsync(string key, string message, PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken, Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant)
+    private async Task SendWorkWechatMessageByRobotKeyAsync(string message, PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken, Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant)
     {
-        if (!string.IsNullOrEmpty(key) && !string.IsNullOrEmpty(message))
+        if (!string.IsNullOrEmpty(agent.WechatRobotKey) && !string.IsNullOrEmpty(message))
         {
             if (agent.IsWecomMessageOrder && aiSpeechAssistant != null)
             {
