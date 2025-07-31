@@ -38,7 +38,7 @@ public class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
 
         if (records == null || records.Count == 0) return;
         
-        foreach (var record in records.Where(x => !string.IsNullOrWhiteSpace(x.Url)))
+        foreach (var record in records.Where(x => !string.IsNullOrWhiteSpace(x.Url) && (!x.Duration.HasValue || x.Duration.Value == 0)))
             _smartTalkBackgroundJobClient.Enqueue(() => CalculateRecordingDurationAsync(record, null, cancellationToken), HangfireConstants.InternalHostingFfmpeg);
     }
 
