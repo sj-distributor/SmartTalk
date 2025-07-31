@@ -176,13 +176,4 @@ public class PhoneOrderController : ControllerBase
         return Ok(response);
     }
     #endregion
-    
-    [Route("usages"), HttpGet]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPhoneCallUsagesPreviewResponse))]
-    public async Task<IActionResult> GetPhoneCallUsagesPreviewAsync([FromQuery] GetPhoneCallUsagesPreviewRequest command)
-    {
-        var response = await _mediator.RequestAsync<GetPhoneCallUsagesPreviewRequest, GetPhoneCallUsagesPreviewResponse>(command).ConfigureAwait(false);
-
-        return Ok(response);
-    }
 }
