@@ -9,13 +9,10 @@ using Twilio.TwiML.Voice;
 using SmartTalk.Core.Ioc;
 using Twilio.AspNet.Core;
 using System.Net.WebSockets;
-using System.Runtime.InteropServices;
 using AutoMapper;
 using Google.Cloud.Translation.V2;
 using SmartTalk.Core.Constants;
 using Microsoft.AspNetCore.Http;
-using Newtonsoft.Json.Linq;
-using OpenAI.Chat;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.Caching.Redis;
@@ -28,19 +25,18 @@ using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Services.Restaurants;
 using SmartTalk.Core.Services.STT;
+using SmartTalk.Core.Services.Timer;
 using SmartTalk.Core.Settings.Azure;
-using SmartTalk.Messages.Dto.OpenAi;
 using Twilio.Rest.Api.V2010.Account;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Core.Settings.Twilio;
+using SmartTalk.Core.Settings.WorkWeChat;
 using SmartTalk.Core.Settings.ZhiPuAi;
 using Task = System.Threading.Tasks.Task;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
-using SmartTalk.Messages.Enums.Agent;
-using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.STT;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 using RecordingResource = Twilio.Rest.Api.V2010.Account.Call.RecordingResource;
@@ -73,16 +69,18 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly ISmartiesClient _smartiesClient;
     private readonly ZhiPuAiSettings _zhiPuAiSettings;
     private readonly IRedisSafeRunner _redisSafeRunner;
+    private readonly TranslationClient _translationClient;
     private readonly IPhoneOrderService _phoneOrderService;
     private readonly IAgentDataProvider _agentDataProvider;
+    private readonly ISpeechToTextService _speechToTextService;
+    private readonly WorkWeChatKeySetting _workWeChatKeySetting;
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
     private readonly IRestaurantDataProvider _restaurantDataProvider;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
+    private readonly IInactivityTimerManager _inactivityTimerManager;
     private readonly IPosDataProvider _posDataProvider;
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
-    private readonly ISpeechToTextService _speechToTextService;
-    private readonly TranslationClient _translationClient;
 
     private StringBuilder _openaiEvent;
     private readonly ClientWebSocket _openaiClientWebSocket;
@@ -98,16 +96,18 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         ISmartiesClient smartiesClient,
         ZhiPuAiSettings zhiPuAiSettings,
         IRedisSafeRunner redisSafeRunner,
+        TranslationClient translationClient,
         IPhoneOrderService phoneOrderService,
         IAgentDataProvider agentDataProvider,
+        ISpeechToTextService speechToTextService,
+        WorkWeChatKeySetting workWeChatKeySetting,
         ISmartTalkHttpClientFactory httpClientFactory,
         IRestaurantDataProvider restaurantDataProvider,
         IPhoneOrderDataProvider phoneOrderDataProvider,
+        IInactivityTimerManager inactivityTimerManager,
         IPosDataProvider posDataProvider,
         ISmartTalkBackgroundJobClient backgroundJobClient,
-        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider,
-        ISpeechToTextService speechToTextService,
-        TranslationClient translationClient)
+        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
         _mapper = mapper;
         _currentUser = currentUser;
@@ -121,13 +121,15 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _agentDataProvider = agentDataProvider;
         _phoneOrderService = phoneOrderService;
         _httpClientFactory = httpClientFactory;
+        _translationClient = translationClient;
+        _speechToTextService = speechToTextService;
+        _workWeChatKeySetting = workWeChatKeySetting;
         _backgroundJobClient = backgroundJobClient;
         _restaurantDataProvider = restaurantDataProvider;
         _phoneOrderDataProvider = phoneOrderDataProvider;
+        _inactivityTimerManager = inactivityTimerManager;
         _posDataProvider = posDataProvider;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
-        _speechToTextService = speechToTextService;
-        _translationClient = translationClient;
 
         _openaiEvent = new StringBuilder();
         _openaiClientWebSocket = new ClientWebSocket();
@@ -200,72 +202,34 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     {
         Log.Information("Handling receive phone record: {@command}", command);
 
-        var (record, agent, aiSpeechAssistant) = await _phoneOrderDataProvider.GetRecordWithAgentAndAssistantAsync(command.CallSid, cancellationToken).ConfigureAwait(false);
+        var (record, _, _) = await _phoneOrderDataProvider.GetRecordWithAgentAndAssistantAsync(command.CallSid, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Get phone order record: {@record}", record);
-        
-        TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
-        
-        var call = await CallResource.FetchAsync(command.CallSid);
-        var callFrom = call?.From;
-
-        Log.Information("Fetched incoming phone number from Twilio: {callFrom}", callFrom);
-        
-        var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
-        var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
 
         record.Url = command.RecordingUrl;
-        record.Status = PhoneOrderRecordStatus.Sent;
         
-        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
         var audioFileRawBytes = await _httpClientFactory.GetAsync<byte[]>(record.Url, cancellationToken).ConfigureAwait(false);
-        var audioData = BinaryData.FromBytes(audioFileRawBytes);
-        List<ChatMessage> messages =
-        [
-            new SystemChatMessage(string.IsNullOrEmpty(aiSpeechAssistant?.CustomRecordAnalyzePrompt)
-                ? "你是一名電話錄音的分析員，通過聽取錄音內容和語氣情緒作出精確分析，冩出一份分析報告。\n\n分析報告的格式：交談主題：xxx\n\n 來電號碼：#{call_from}\n\n 內容摘要:xxx \n\n 客人情感與情緒: xxx \n\n 待辦事件: \n1.xxx\n2.xxx \n\n 客人下單內容(如果沒有則忽略)：1. 牛肉(1箱)\n2.雞腿肉(1箱)".Replace("#{call_from}", callFrom ?? "")
-                : aiSpeechAssistant.CustomRecordAnalyzePrompt.Replace("#{call_from}", callFrom ?? "").Replace("#{current_time}", currentTime)),
-            new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
-            new UserChatMessage("幫我根據錄音生成分析報告：")
-        ];
-        
-        ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
 
-        ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
-        Log.Information("sales record analyze report:" + completion.Content.FirstOrDefault()?.Text);
-        record.TranscriptionText = completion.Content.FirstOrDefault()?.Text ?? "";
-
-        if (agent.SourceSystem == AgentSourceSystem.Smarties)
-            await _smartiesClient.CallBackSmartiesAiSpeechAssistantRecordAsync(new AiSpeechAssistantCallBackRequestDto { CallSid = command.CallSid, RecordUrl = record.Url, RecordAnalyzeReport =  record.TranscriptionText }, cancellationToken).ConfigureAwait(false);
-
-        if (!string.IsNullOrEmpty(agent.WechatRobotKey) && !string.IsNullOrEmpty(agent.WechatRobotMessage))
-        {
-            var message = agent.WechatRobotMessage.Replace("#{assistant_name}", aiSpeechAssistant?.Name).Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString());
-            
-            if (agent.IsWecomMessageOrder)
-            {
-                var messageNumber = await SendAgentMessageRecordAsync(agent.Id, record.Id, cancellationToken);
-                message = $"【第{messageNumber}條】\n" + message;
-            }
-            
-            if (agent.IsSendAnalysisReportToWechat && !string.IsNullOrEmpty(record.TranscriptionText))
-            {
-                message += "\n\n" + record.TranscriptionText;
-            }
-            
-            await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(audioFileRawBytes, agent.WechatRobotKey, message, cancellationToken).ConfigureAwait(false);
+        string transcription = null;
+        try
+        { 
+            transcription = await _speechToTextService.SpeechToTextAsync(
+                audioFileRawBytes, fileType: TranscriptionFileType.Wav, responseFormat: TranscriptionResponseFormat.Text, cancellationToken: cancellationToken).ConfigureAwait(false);
         }
-
-        var transcription = await _speechToTextService.SpeechToTextAsync(
-            audioFileRawBytes, fileType: TranscriptionFileType.Wav, responseFormat: TranscriptionResponseFormat.Text, cancellationToken: cancellationToken).ConfigureAwait(false);
+        catch (Exception e) when (e.Message.Contains("quota"))
+        {
+            var alertMessage = $"服务器异常。";
+            
+            await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, _workWeChatKeySetting.Key, alertMessage, mentionedList: new[]{"@all"}, cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
         
         var detection = await _translationClient.DetectLanguageAsync(transcription, cancellationToken).ConfigureAwait(false);
         
         record.TranscriptionJobId = await _phoneOrderService.CreateSpeechMaticsJobAsync(audioFileRawBytes, Guid.NewGuid().ToString("N") + ".wav", detection.Language, cancellationToken).ConfigureAwait(false);
-        
+
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
-    
+
     public async Task TransferHumanServiceAsync(TransferHumanServiceCommand command, CancellationToken cancellationToken)
     {
         TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
@@ -286,29 +250,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         );
     }
 
-    private async Task<int> SendAgentMessageRecordAsync(int agentId, int recordId, CancellationToken cancellationToken)
-    {
-        var shanghaiTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Asia/Shanghai");
-        var nowShanghai = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, shanghaiTimeZone);
-        
-        var utcDate = TimeZoneInfo.ConvertTimeToUtc(nowShanghai.Date, shanghaiTimeZone);
-        
-        var existingCount = await _aiSpeechAssistantDataProvider.GetMessageCountByAgentAndDateAsync(agentId, utcDate, cancellationToken).ConfigureAwait(false);
-        
-        var messageNumber = existingCount + 1;
-        
-        var newRecord = new AgentMessageRecord
-        {
-            AgentId = agentId,
-            RecordId = recordId,
-            MessageNumber = messageNumber
-        };
-        
-        await _aiSpeechAssistantDataProvider.AddAgentMessageRecordAsync(newRecord, cancellationToken).ConfigureAwait(false);
-        
-        return messageNumber;
-    }
-
     private async Task<(Domain.AISpeechAssistant.AiSpeechAssistant assistant, AiSpeechAssistantKnowledge knowledge, string finalPrompt)> BuildingAiSpeechAssistantKnowledgeBaseAsync(string from, string to, int? assistantId, CancellationToken cancellationToken)
     {
         var (assistant, knowledge, userProfile) = await _aiSpeechAssistantDataProvider
@@ -324,7 +265,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         var finalPrompt = knowledge.Prompt
             .Replace("#{user_profile}", string.IsNullOrEmpty(userProfile?.ProfileJson) ? " " : userProfile.ProfileJson)
             .Replace("#{current_time}", currentTime)
-            .Replace("#{customer_phone}", from.StartsWith("+1") ? from[2..] : from);
+            .Replace("#{customer_phone}", from.StartsWith("+1") ? from[2..] : from)
+            .Replace("#{pst_date}", $"{pstTime.Date:yyyy-MM-dd} {pstTime.DayOfWeek}");
         
         Log.Information($"The final prompt: {finalPrompt}");
 
@@ -417,6 +359,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         }
         catch (WebSocketException ex)
         {
+            _backgroundJobClient.Enqueue<IAiSpeechAssistantProcessJobService>(x => x.RecordAiSpeechAssistantCallAsync(_aiSpeechAssistantStreamContext, CancellationToken.None));
             Log.Error("Receive from Twilio error: {@ex}", ex);
         }
     }
@@ -505,6 +448,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                             Log.Information($"Interrupting response with id: {_aiSpeechAssistantStreamContext.LastAssistantItem}");
                             await HandleSpeechStartedEventAsync(cancellationToken);
                         }
+                            
+                        Log.Information("stop timer...");
+                        StopInactivityTimer();
                     }
 
                     if (jsonDocument?.RootElement.GetProperty("type").GetString() == "conversation.item.input_audio_transcription.completed")
@@ -565,6 +511,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                                 }
                             }
                         }
+                        
+                        Log.Information("start timer...");
+                        StartInactivityTimer();
                     }
                     
                     if (!_aiSpeechAssistantStreamContext.InitialConversationSent && !string.IsNullOrEmpty(_aiSpeechAssistantStreamContext.Knowledge.Greetings))
@@ -579,6 +528,20 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         {
             Log.Error("WebSocketException: {ex}", ex);
         }
+    }
+    
+    private void StartInactivityTimer()
+    {
+        _inactivityTimerManager.StartTimer(_aiSpeechAssistantStreamContext.CallSid, TimeSpan.FromMinutes(2), async () =>
+        {
+            Log.Warning("No activity detected for 2 minutes.");
+            await HangupCallAsync(_aiSpeechAssistantStreamContext.CallSid, CancellationToken.None);
+        });
+    }
+
+    private void StopInactivityTimer()
+    {
+        _inactivityTimerManager.StopTimer(_aiSpeechAssistantStreamContext.CallSid);
     }
     
     private async Task ProcessOrderAsync(JsonElement jsonDocument, CancellationToken cancellationToken)

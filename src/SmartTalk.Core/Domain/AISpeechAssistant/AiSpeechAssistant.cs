@@ -54,6 +54,9 @@ public class AiSpeechAssistant : IEntity<int>, IAgent, IHasCreatedFields
     [Column("is_transfer_human")]
     public bool IsTransferHuman { get; set; } = false;
     
+    [Column("group_key")]
+    public int GroupKey { get; set; }
+    
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
     

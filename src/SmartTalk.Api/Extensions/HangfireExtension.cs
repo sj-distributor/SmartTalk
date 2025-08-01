@@ -37,7 +37,7 @@ public static class HangfireExtension
         
         services.AddHangfireServer(opt =>
         {
-            opt.WorkerCount = 1;
+            opt.WorkerCount = 5;
             opt.Queues = new[] { HangfireConstants.InternalHostingPhoneOrder };
             opt.ServerName = $"DEPLOY-{HangfireConstants.InternalHostingPhoneOrder.ToUpper()}-{Guid.NewGuid()}";
         });
@@ -47,6 +47,13 @@ public static class HangfireExtension
             opt.WorkerCount = 5;
             opt.Queues = new[] { HangfireConstants.InternalHostingSipServer };
             opt.ServerName = $"DEPLOY-{HangfireConstants.InternalHostingSipServer.ToUpper()}-{Guid.NewGuid()}";
+        });
+        
+        services.AddHangfireServer(opt =>
+        {
+            opt.WorkerCount = 5;
+            opt.Queues = new[] { HangfireConstants.InternalHostingFfmpeg };
+            opt.ServerName = $"DEPLOY-{HangfireConstants.InternalHostingFfmpeg.ToUpper()}-{Guid.NewGuid()}";
         });
     }
     

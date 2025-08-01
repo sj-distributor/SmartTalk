@@ -9,7 +9,7 @@ public partial interface IPhoneOrderService
 {
     Task DailyDataBroadcastAsync(SchedulingPhoneOrderDailyDataBroadcastCommand command, CancellationToken cancellationToken);
     
-    Task SendWorkWeChatRobotNotifyAsync(byte[] recordContent, string robotUrl, string transcription, CancellationToken cancellationToken);
+    Task SendWorkWeChatRobotNotifyAsync(byte[] recordContent, string robotUrl, string transcription, string[] mentionedList, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderService : IPhoneOrderService
@@ -35,7 +35,7 @@ public partial class PhoneOrderService : IPhoneOrderService
         }
     }
     
-    public async Task SendWorkWeChatRobotNotifyAsync(byte[] recordContent, string key, string transcription, CancellationToken cancellationToken)
+    public async Task SendWorkWeChatRobotNotifyAsync(byte[] recordContent, string key, string transcription, string[] mentionedList, CancellationToken cancellationToken)
     {
         var robotUrl = $"https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key={key}";
         
@@ -56,7 +56,7 @@ public partial class PhoneOrderService : IPhoneOrderService
         await _weChatClient.SendWorkWechatRobotMessagesAsync(
             robotUrl, new SendWorkWechatGroupRobotMessageDto
             {
-                MsgType = "text", Text = new SendWorkWechatGroupRobotTextDto { Content = transcription }
+                MsgType = "text", Text = new SendWorkWechatGroupRobotTextDto { Content = transcription, MentionedList = mentionedList }
             }, CancellationToken.None);
         
         // await _weChatClient.SendWorkWechatRobotMessagesAsync(
