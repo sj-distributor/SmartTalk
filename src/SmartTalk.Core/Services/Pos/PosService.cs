@@ -122,8 +122,6 @@ public partial class PosService : IPosService
 
         await _posDataProvider.AddPosCompanyStoresAsync([store], cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        await InitialAgentAsync(store.Id, cancellationToken).ConfigureAwait(false);
-        
         await _vectorDb.CreateIndexAsync($"pos-{store.Id}", 3072, cancellationToken).ConfigureAwait(false);
 
         return new CreatePosCompanyStoreResponse
