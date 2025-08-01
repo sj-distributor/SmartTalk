@@ -255,9 +255,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         var audioData = BinaryData.FromBytes(audioContent);
         List<ChatMessage> messages =
         [
-            new SystemChatMessage("你是一名電話錄音的分析員，通過聽取錄音內容判斷該內容使用的語言是屬於哪一個語種，如果是粵語，請返回：zh，如果是國語（普通話）請返回：zh-CN、zh-TW 其中一個，如果是英文，請返回：en "),
+            new SystemChatMessage("你是一名電話錄音的分析員，通過聽取錄音內容判斷該內容使用的語言是屬於哪一個語種，如果是粵語，請返回：zh，如果是國語（普通話）請返回：zh-CN、zh-TW 其中一個，如果是英文，請返回：en，返回的内容应该只有 zh、zh-CN、zh-TW、en 这四个类型中的其中一个，例如錄音中使用的語言是普通話，就返回：zh-CN "),
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
-            new UserChatMessage("幫我根據錄音內容給出錄音使用的語言，返回的内容应该只有 zh、zh-CN、zh-TW、en 这四个类型中的其中一个，例如錄音中使用的語言是普通話，就返回 zh-CN")
+            new UserChatMessage("幫我根據錄音內容給出錄音使用的語言")
         ];
 
         ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
