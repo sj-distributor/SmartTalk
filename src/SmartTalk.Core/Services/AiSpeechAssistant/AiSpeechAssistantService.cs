@@ -209,8 +209,18 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, agent.WechatRobotKey, $"您有一条新的AI通话录音：\n{record.Url}", Array.Empty<string>(), CancellationToken.None).ConfigureAwait(false);
         
         var audioFileRawBytes = await _httpClientFactory.GetAsync<byte[]>(record.Url, cancellationToken).ConfigureAwait(false);
-        
-        var language = await DetectAudioLanguageAsync(audioFileRawBytes, cancellationToken).ConfigureAwait(false);
+
+        var language = "en";
+        try
+        { 
+            language = await DetectAudioLanguageAsync(audioFileRawBytes, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception e) when (e.Message.Contains("quota"))
+        {
+            var alertMessage = "服务器异常。";
+
+            await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, _workWeChatKeySetting.Key, alertMessage, mentionedList: new[]{"@all"}, cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
         
         record.TranscriptionJobId = await _phoneOrderService.CreateSpeechMaticsJobAsync(audioFileRawBytes, Guid.NewGuid().ToString("N") + ".wav", language, cancellationToken).ConfigureAwait(false);
 
