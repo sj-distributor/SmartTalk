@@ -250,7 +250,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
         ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
         
-        Log.Information("Detect the audio language" + completion.Content.FirstOrDefault()?.Text);
+        Log.Information("Detect the audio language: " + completion.Content.FirstOrDefault()?.Text);
         
         return completion.Content.FirstOrDefault()?.Text ?? "en";
     }
