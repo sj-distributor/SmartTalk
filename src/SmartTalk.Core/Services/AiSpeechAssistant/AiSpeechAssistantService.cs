@@ -210,7 +210,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         var audioFileRawBytes = await _httpClientFactory.GetAsync<byte[]>(record.Url, cancellationToken).ConfigureAwait(false);
 
-        var language = "en";
+        var language = string.Empty;
         try
         { 
             language = await DetectAudioLanguageAsync(audioFileRawBytes, cancellationToken).ConfigureAwait(false);
@@ -245,7 +245,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         Log.Information("Detect the audio language" + completion.Content.FirstOrDefault()?.Text);
         
-        return completion.Content.FirstOrDefault()?.Text ?? string.Empty;
+        return completion.Content.FirstOrDefault()?.Text ?? "en";
     }
 
     public async Task TransferHumanServiceAsync(TransferHumanServiceCommand command, CancellationToken cancellationToken)
