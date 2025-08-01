@@ -69,6 +69,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly ISmartiesClient _smartiesClient;
     private readonly ZhiPuAiSettings _zhiPuAiSettings;
     private readonly IRedisSafeRunner _redisSafeRunner;
+    private readonly IPosDataProvider _posDataProvider;
     private readonly TranslationClient _translationClient;
     private readonly IPhoneOrderService _phoneOrderService;
     private readonly IAgentDataProvider _agentDataProvider;
@@ -78,7 +79,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly IRestaurantDataProvider _restaurantDataProvider;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly IInactivityTimerManager _inactivityTimerManager;
-    private readonly IPosDataProvider _posDataProvider;
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
 
@@ -96,6 +96,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         ISmartiesClient smartiesClient,
         ZhiPuAiSettings zhiPuAiSettings,
         IRedisSafeRunner redisSafeRunner,
+        IPosDataProvider posDataProvider,
         TranslationClient translationClient,
         IPhoneOrderService phoneOrderService,
         IAgentDataProvider agentDataProvider,
@@ -105,7 +106,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         IRestaurantDataProvider restaurantDataProvider,
         IPhoneOrderDataProvider phoneOrderDataProvider,
         IInactivityTimerManager inactivityTimerManager,
-        IPosDataProvider posDataProvider,
         ISmartTalkBackgroundJobClient backgroundJobClient,
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
@@ -118,6 +118,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _smartiesClient = smartiesClient;
         _zhiPuAiSettings = zhiPuAiSettings;
         _redisSafeRunner = redisSafeRunner;
+        _posDataProvider = posDataProvider;
         _agentDataProvider = agentDataProvider;
         _phoneOrderService = phoneOrderService;
         _httpClientFactory = httpClientFactory;
@@ -128,7 +129,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _restaurantDataProvider = restaurantDataProvider;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _inactivityTimerManager = inactivityTimerManager;
-        _posDataProvider = posDataProvider;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
 
         _openaiEvent = new StringBuilder();
