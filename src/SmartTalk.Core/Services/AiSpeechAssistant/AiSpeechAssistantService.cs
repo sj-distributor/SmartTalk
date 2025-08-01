@@ -235,12 +235,19 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         List<ChatMessage> messages =
         [
             new SystemChatMessage("""
-                                  你是一名專業的語音分析員，負責根據錄音內容判斷其主要使用的語言。請根據錄音中所說的語言，在以下選項中準確選擇一個並返回對應代碼：
-                                  - 若為**普通話（國語）**，請返回：`zh-CN`
-                                  - 若為**粵語**，請返回：`zh`
-                                  - 若為**繁體中文（台灣中文）**，請返回：`zh-TW`
-                                  - 若為**英文**，請返回：`en`
-                                  請只返回上述四個代碼之一，**不要返回任何其他內容或描述**。例如：如果錄音內容是普通話，則只返回：`zh-CN`。
+                                  你是一名專業的語音識別分析員，請根據錄音內容的語音判斷所使用的語言，並從以下選項中**僅返回一個語言代碼**：
+                                  - zh-CN：普通話（簡體中文）
+                                  - zh：粵語
+                                  - zh-TW：台灣中文（繁體中文）
+                                  - en：英文
+
+                                  請根據語音內容準確判斷，不要預設為任何語言，也不要根據提示猜測。請不要返回任何多餘文字或說明，**只返回代碼**。
+                                  例如：
+                                  - 音頻中為普通話，返回：zh-CN
+                                  - 音頻中為粵語，返回：zh
+                                  - 音頻中為英文，返回：en
+
+                                  注意：如果語音中是英文，請不要誤判為中文。
                                   """),
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
             new UserChatMessage("請根據錄音內容判斷語言，並返回對應代碼。")
