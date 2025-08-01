@@ -81,7 +81,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly TranslationClient _translationClient;
     private readonly IPhoneOrderService _phoneOrderService;
     private readonly IAgentDataProvider _agentDataProvider;
-    private readonly IAttachmentService _attachmentService;
     private readonly ISpeechToTextService _speechToTextService;
     private readonly WorkWeChatKeySetting _workWeChatKeySetting;
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
@@ -114,7 +113,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         TranslationClient translationClient,
         IPhoneOrderService phoneOrderService,
         IAgentDataProvider agentDataProvider,
-        IAttachmentService attachmentService,
         IOpenAiDataProvider openAiDataProvider,
         ISpeechToTextService speechToTextService,
         WorkWeChatKeySetting workWeChatKeySetting,
@@ -139,7 +137,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _phoneOrderService = phoneOrderService;
         _httpClientFactory = httpClientFactory;
         _translationClient = translationClient;
-        _attachmentService = attachmentService;
         _openAiDataProvider = openAiDataProvider;
         _speechToTextService = speechToTextService;
         _workWeChatKeySetting = workWeChatKeySetting;
@@ -229,24 +226,10 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         record.Url = command.RecordingUrl;
         
-        var audioFileRawBytes = await _httpClientFactory.GetAsync<byte[]>(record.Url, cancellationToken).ConfigureAwait(false);
-        
         if (agent is { IsSendAudioRecordWechat: true })
-        {
-            var recordingUrl = record.Url;
-            if (record.Url.Contains("twilio"))
-            {
-                var audio = await _attachmentService.UploadAttachmentAsync(new UploadAttachmentCommand { Attachment = new UploadAttachmentDto { FileName = Guid.NewGuid() + ".wav", FileContent = audioFileRawBytes } }, cancellationToken).ConfigureAwait(false);
-            
-                Log.Information("Audio uploaded, url: {Url}", audio?.Attachment?.FileUrl);
-                
-                if (string.IsNullOrEmpty(audio?.Attachment?.FileUrl) || agent.Id == 0) return;
-                
-                recordingUrl = audio?.Attachment?.FileUrl;
-            }
-            
-            await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, agent.WechatRobotKey, $"您有一条新的AI通话录音：\n{recordingUrl}", Array.Empty<string>(), cancellationToken).ConfigureAwait(false);
-        }
+            await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, agent.WechatRobotKey, $"您有一条新的AI通话录音：\n{record.Url}", Array.Empty<string>(), CancellationToken.None).ConfigureAwait(false);
+        
+        var audioFileRawBytes = await _httpClientFactory.GetAsync<byte[]>(record.Url, cancellationToken).ConfigureAwait(false);
 
         var language = string.Empty;
         try
@@ -255,7 +238,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         }
         catch (Exception e) when (e.Message.Contains("quota"))
         {
-            const string alertMessage = "服务器异常。";
+            var alertMessage = "服务器异常。";
 
             await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, _workWeChatKeySetting.Key, alertMessage, mentionedList: new[]{"@all"}, cancellationToken: cancellationToken).ConfigureAwait(false);
         }
@@ -966,8 +949,31 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
         ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
         
-        await SendToWebSocketAsync(_openaiClientWebSocket, repeatOrderMessage, cancellationToken);
-        await SendToWebSocketAsync(_openaiClientWebSocket, new { type = "response.create" }, cancellationToken);
+        Log.Information("Analyze record to repeat order: {@completion}", completion);
+
+        var responseAudio = completion.OutputAudio.AudioBytes.ToArray();
+
+        _backgroundJobClient.Enqueue<IAttachmentService>(x => x.UploadAttachmentAsync(new UploadAttachmentCommand
+        {
+            Attachment = new UploadAttachmentDto
+            {
+                FileContent = responseAudio,
+                FileName = Guid.NewGuid() + ".wav"
+            }
+        }, CancellationToken.None));
+        
+        var uLawAudio = await _ffmpegService.ConvertWavToULawAsync(responseAudio, cancellationToken);
+
+        var repeatAudio = new
+        {
+            @event = "media",
+            streamSid = _aiSpeechAssistantStreamContext.StreamSid,
+            media = new { payload = uLawAudio }
+        };
+        
+        await SendToWebSocketAsync(twilioWebSocket, repeatAudio, cancellationToken);
+        
+        _shouldSendBuffToOpenAi = true;
     }
     
     private async Task ProcessUpdateOrderAsync(AiSpeechAssistantStreamContextDto context, JsonElement jsonDocument, CancellationToken cancellationToken)
