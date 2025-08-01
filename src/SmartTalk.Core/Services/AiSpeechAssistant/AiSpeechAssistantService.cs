@@ -16,6 +16,7 @@ using Microsoft.AspNetCore.Http;
 using OpenAI.Chat;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Services.Agents;
+using SmartTalk.Core.Services.Attachments;
 using SmartTalk.Core.Services.Caching.Redis;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
@@ -37,6 +38,8 @@ using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
+using SmartTalk.Messages.Commands.Attachments;
+using SmartTalk.Messages.Dto.Attachments;
 using SmartTalk.Messages.Enums.STT;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 using RecordingResource = Twilio.Rest.Api.V2010.Account.Call.RecordingResource;
@@ -72,6 +75,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly TranslationClient _translationClient;
     private readonly IPhoneOrderService _phoneOrderService;
     private readonly IAgentDataProvider _agentDataProvider;
+    private readonly IAttachmentService _attachmentService;
     private readonly ISpeechToTextService _speechToTextService;
     private readonly WorkWeChatKeySetting _workWeChatKeySetting;
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
@@ -98,6 +102,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         TranslationClient translationClient,
         IPhoneOrderService phoneOrderService,
         IAgentDataProvider agentDataProvider,
+        IAttachmentService attachmentService,
         ISpeechToTextService speechToTextService,
         WorkWeChatKeySetting workWeChatKeySetting,
         ISmartTalkHttpClientFactory httpClientFactory,
@@ -120,6 +125,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _phoneOrderService = phoneOrderService;
         _httpClientFactory = httpClientFactory;
         _translationClient = translationClient;
+        _attachmentService = attachmentService;
         _speechToTextService = speechToTextService;
         _workWeChatKeySetting = workWeChatKeySetting;
         _backgroundJobClient = backgroundJobClient;
@@ -205,10 +211,24 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
         record.Url = command.RecordingUrl;
         
-        if (agent is { IsSendAudioRecordWechat: true })
-            await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, agent.WechatRobotKey, $"您有一条新的AI通话录音：\n{record.Url}", Array.Empty<string>(), CancellationToken.None).ConfigureAwait(false);
-        
         var audioFileRawBytes = await _httpClientFactory.GetAsync<byte[]>(record.Url, cancellationToken).ConfigureAwait(false);
+        
+        if (agent is { IsSendAudioRecordWechat: true })
+        {
+            var recordingUrl = record.Url;
+            if (record.Url.Contains("twilio"))
+            {
+                var audio = await _attachmentService.UploadAttachmentAsync(new UploadAttachmentCommand { Attachment = new UploadAttachmentDto { FileName = Guid.NewGuid() + ".wav", FileContent = audioFileRawBytes } }, cancellationToken).ConfigureAwait(false);
+            
+                Log.Information("Audio uploaded, url: {Url}", audio?.Attachment?.FileUrl);
+                
+                if (string.IsNullOrEmpty(audio?.Attachment?.FileUrl) || agent.Id == 0) return;
+                
+                recordingUrl = audio?.Attachment?.FileUrl;
+            }
+            
+            await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, agent.WechatRobotKey, $"您有一条新的AI通话录音：\n{recordingUrl}", Array.Empty<string>(), cancellationToken).ConfigureAwait(false);
+        }
 
         var language = string.Empty;
         try
@@ -217,7 +237,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         }
         catch (Exception e) when (e.Message.Contains("quota"))
         {
-            var alertMessage = "服务器异常。";
+            const string alertMessage = "服务器异常。";
 
             await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, _workWeChatKeySetting.Key, alertMessage, mentionedList: new[]{"@all"}, cancellationToken: cancellationToken).ConfigureAwait(false);
         }
