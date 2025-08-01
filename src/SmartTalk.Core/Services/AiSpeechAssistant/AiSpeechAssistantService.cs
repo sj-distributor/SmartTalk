@@ -20,8 +20,8 @@ using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.OpenAi;
 using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.Attachments;
-using SmartTalk.Core.Services.Ffmpeg;
 using SmartTalk.Core.Services.Caching.Redis;
+using SmartTalk.Core.Services.Ffmpeg;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Identity;
@@ -220,32 +220,53 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     {
         Log.Information("Handling receive phone record: {@command}", command);
 
-        var (record, _, _) = await _phoneOrderDataProvider.GetRecordWithAgentAndAssistantAsync(command.CallSid, cancellationToken).ConfigureAwait(false);
+        var (record, agent, _) = await _phoneOrderDataProvider.GetRecordWithAgentAndAssistantAsync(command.CallSid, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Get phone order record: {@record}", record);
         
         record.Url = command.RecordingUrl;
         
+        if (agent is { IsSendAudioRecordWechat: true })
+            await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, agent.WechatRobotKey, $"您有一条新的AI通话录音：\n{record.Url}", Array.Empty<string>(), CancellationToken.None).ConfigureAwait(false);
+        
         var audioFileRawBytes = await _httpClientFactory.GetAsync<byte[]>(record.Url, cancellationToken).ConfigureAwait(false);
 
-        string transcription = null;
+        var language = "en";
         try
         { 
-            transcription = await _speechToTextService.SpeechToTextAsync(
-                audioFileRawBytes, fileType: TranscriptionFileType.Wav, responseFormat: TranscriptionResponseFormat.Text, cancellationToken: cancellationToken).ConfigureAwait(false);
+            language = await DetectAudioLanguageAsync(audioFileRawBytes, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception e) when (e.Message.Contains("quota"))
         {
-            var alertMessage = $"服务器异常。";
-            
+            var alertMessage = "服务器异常。";
+
             await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, _workWeChatKeySetting.Key, alertMessage, mentionedList: new[]{"@all"}, cancellationToken: cancellationToken).ConfigureAwait(false);
         }
         
-        var detection = await _translationClient.DetectLanguageAsync(transcription, cancellationToken).ConfigureAwait(false);
-        
-        record.TranscriptionJobId = await _phoneOrderService.CreateSpeechMaticsJobAsync(audioFileRawBytes, Guid.NewGuid().ToString("N") + ".wav", detection.Language, cancellationToken).ConfigureAwait(false);
+        record.TranscriptionJobId = await _phoneOrderService.CreateSpeechMaticsJobAsync(audioFileRawBytes, Guid.NewGuid().ToString("N") + ".wav", language, cancellationToken).ConfigureAwait(false);
 
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+    
+    private async Task<string> DetectAudioLanguageAsync(byte[] audioContent, CancellationToken cancellationToken)
+    {
+        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
+
+        var audioData = BinaryData.FromBytes(audioContent);
+        List<ChatMessage> messages =
+        [
+            new SystemChatMessage("你是一名電話錄音的分析員，通過聽取錄音內容判斷該內容使用的語言是屬於哪一個語種，如果是粵語，請返回'zh'，如果是國語（普通話）請返回'zh-CN'、'zh-TW'其中一個，如果是英文，請返回'en'"),
+            new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
+            new UserChatMessage("幫我根據錄音內容給出錄音使用的語言")
+        ];
+
+        ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
+
+        ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
+        
+        Log.Information("Detect the audio language" + completion.Content.FirstOrDefault()?.Text);
+        
+        return completion.Content.FirstOrDefault()?.Text ?? string.Empty;
     }
 
     public async Task TransferHumanServiceAsync(TransferHumanServiceCommand command, CancellationToken cancellationToken)
