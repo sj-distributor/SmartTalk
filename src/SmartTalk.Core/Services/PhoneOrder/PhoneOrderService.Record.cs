@@ -44,11 +44,15 @@ public partial class PhoneOrderService
 {
     public async Task<GetPhoneOrderRecordsResponse> GetPhoneOrderRecordsAsync(GetPhoneOrderRecordsRequest request, CancellationToken cancellationToken)
     {
-        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(request.AgentId, request.Name, cancellationToken).ConfigureAwait(false);
+        var (utcStart, utcEnd) = ConvertPstDateToUtcRange(request.Date);
+
+        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(request.AgentId, request.Name, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
+
+        var enrichedRecords = _mapper.Map<List<PhoneOrderRecordDto>>(records);
 
         return new GetPhoneOrderRecordsResponse
         {
-            Data = _mapper.Map<List<PhoneOrderRecordDto>>(records)
+            Data = enrichedRecords
         };
     }
 
@@ -71,11 +75,11 @@ public partial class PhoneOrderService
         Log.Information("Phone order record transcription detected language: {@detectionLanguage}", detection.Language);
         
         var record = new PhoneOrderRecord { SessionId = Guid.NewGuid().ToString(), AgentId = recordInfo.Agent.Id, Language = SelectLanguageEnum(detection.Language), CreatedDate = recordInfo.StartDate, Status = PhoneOrderRecordStatus.Recieved };
-
+        
         if (await CheckPhoneOrderRecordDurationAsync(command.RecordContent, cancellationToken).ConfigureAwait(false))
         {
             await AddPhoneOrderRecordAsync(record, PhoneOrderRecordStatus.NoContent, cancellationToken).ConfigureAwait(false);
-            
+
             return;
         }
         
@@ -249,7 +253,7 @@ public partial class PhoneOrderService
                     : PhoneOrderRole.Client.ToString()) + ": " + originText);
 
                 if (speakDetail.Role == PhoneOrderRole.Restaurant)
-                    conversations.Add(new PhoneOrderConversation { RecordId = record.Id, Question = originText, Order = conversationIndex });
+                    conversations.Add(new PhoneOrderConversation { RecordId = record.Id, Question = originText, Order = conversationIndex, StartTime = speakDetail.StartTime, EndTime = speakDetail.EndTime});
                 else
                 {
                     conversations[conversationIndex].Answer = originText;
@@ -275,7 +279,9 @@ public partial class PhoneOrderService
                     Order = 0,
                     Answer = "",
                     Question = "",
-                    RecordId = record.Id
+                    RecordId = record.Id,
+                    StartTime = phoneOrderInfo.FirstOrDefault()?.StartTime ?? 0,
+                    EndTime = phoneOrderInfo.FirstOrDefault()?.EndTime ?? 0
                 });
             }
 
@@ -396,12 +402,16 @@ public partial class PhoneOrderService
             currentConversation.Question = currentConversation.Answer;
             currentConversation.Answer = nextConversation.Question;
             currentConversation.Order = i;
+            currentConversation.StartTime = currentConversation.EndTime;
+            currentConversation.EndTime = nextConversation.StartTime;
         }
         
         var lastConversation = conversations[^1];
         lastConversation.Question = lastConversation.Answer;
         lastConversation.Answer = null;
         lastConversation.Order = conversations.Count - 1;
+        lastConversation.StartTime = lastConversation.EndTime;
+        lastConversation.EndTime = null;
         
         Log.Information("After shift conversations: {@conversations}", conversations);
     }
@@ -593,6 +603,21 @@ public partial class PhoneOrderService
 
             Log.Information("Retrying Create Speech Matics Job Attempts remaining: {RetryCount}", retryCount);
         }
+    }
+
+    private (DateTimeOffset? UtcStart, DateTimeOffset? UtcEnd) ConvertPstDateToUtcRange(DateTimeOffset? inputDate)
+    {
+        if (!inputDate.HasValue) return (null, null);
+
+        var pstTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+
+        var pstDate = new DateTime(inputDate.Value.Year, inputDate.Value.Month, inputDate.Value.Day, 0, 0, 0);
+        var pstStart = new DateTimeOffset(pstDate, pstTimeZone.GetUtcOffset(pstDate));
+
+        var utcStart = pstStart.ToUniversalTime();
+        var utcEnd = utcStart.AddDays(1);
+
+        return (utcStart, utcEnd);
     }
 
     public async Task<GetPhoneCallUsagesPreviewResponse> GetPhoneCallUsagesPreviewAsync(GetPhoneCallUsagesPreviewRequest request, CancellationToken cancellationToken)

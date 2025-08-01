@@ -4,6 +4,7 @@ using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.PhoneOrder;
+using SmartTalk.Core.Services.Security;
 using SmartTalk.Core.Services.STT;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.STT;
@@ -30,6 +31,7 @@ public class RealtimeProcessJobService : IRealtimeProcessJobService
         IPhoneOrderService phoneOrderService,
         ISpeechToTextService speechToTextService,
         ISmartTalkHttpClientFactory httpClientFactory,
+        ISecurityDataProvider securityDataProvider,
         IPhoneOrderDataProvider phoneOrderDataProvider)
     {
         _phoneOrderService = phoneOrderService;

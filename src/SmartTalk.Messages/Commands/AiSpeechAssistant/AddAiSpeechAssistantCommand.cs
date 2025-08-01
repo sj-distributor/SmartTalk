@@ -9,6 +9,8 @@ namespace SmartTalk.Messages.Commands.AiSpeechAssistant;
 
 public class AddAiSpeechAssistantCommand : ICommand
 {
+    public int? AgentId { get; set; }
+    
     public string AssistantName { get; set; }
     
     public string Greetings { get; set; }
