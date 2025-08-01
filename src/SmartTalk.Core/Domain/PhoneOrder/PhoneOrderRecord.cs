@@ -63,6 +63,9 @@ public class PhoneOrderRecord : IEntity
     [Column("comments")]
     public string Comments { get; set; }
     
+    [Column("duration")]
+    public double? Duration { get; set; }
+    
     [NotMapped]
     public UserAccount UserAccount { get; set; }
     

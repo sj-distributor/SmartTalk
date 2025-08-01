@@ -36,6 +36,8 @@ public partial interface IPhoneOrderService
     Task<AddOrUpdateManualOrderResponse> AddOrUpdateManualOrderAsync(AddOrUpdateManualOrderCommand command, CancellationToken cancellationToken);
 
     Task<string> CreateSpeechMaticsJobAsync(byte[] recordContent, string recordName, string language, CancellationToken cancellationToken);
+    
+    Task<GetPhoneCallUsagesPreviewResponse> GetPhoneCallUsagesPreviewAsync(GetPhoneCallUsagesPreviewRequest request, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderService
@@ -116,16 +118,23 @@ public partial class PhoneOrderService
         List<SpeechMaticsSpeakInfoDto> phoneOrderInfo, PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken)
     {
         if (phoneOrderInfo is { Count: 0 }) return;
+
+        try
+        {
+            phoneOrderInfo = await HandlerConversationFirstSentenceAsync(phoneOrderInfo, record, audioContent, cancellationToken).ConfigureAwait(false);
         
-        phoneOrderInfo = await HandlerConversationFirstSentenceAsync(phoneOrderInfo, record, audioContent, cancellationToken).ConfigureAwait(false);
+            Log.Information("Phone order record info: {@phoneOrderInfo}", phoneOrderInfo);
         
-        Log.Information("Phone order record info: {@phoneOrderInfo}", phoneOrderInfo);
+            var (goalText, tip) = await PhoneOrderTranscriptionAsync(phoneOrderInfo, record, audioContent, cancellationToken).ConfigureAwait(false);
         
-        var (goalText, tip) = await PhoneOrderTranscriptionAsync(phoneOrderInfo, record, audioContent, cancellationToken).ConfigureAwait(false);
+            await _phoneOrderUtilService.ExtractPhoneOrderShoppingCartAsync(goalText, record, cancellationToken).ConfigureAwait(false);
         
-        await _phoneOrderUtilService.ExtractPhoneOrderShoppingCartAsync(goalText, record, cancellationToken).ConfigureAwait(false);
-        
-        record.Tips = tip;
+            record.Tips = tip;
+        }
+        catch (Exception e)
+        {
+            Log.Error("Extract phone order record error: {@Error}", e);
+        }
     }
 
     public async Task<AddOrUpdateManualOrderResponse> AddOrUpdateManualOrderAsync(AddOrUpdateManualOrderCommand command, CancellationToken cancellationToken)
@@ -283,7 +292,7 @@ public partial class PhoneOrderService
         
         await _phoneOrderDataProvider.AddPhoneOrderConversationsAsync(conversations.Count != 0 ? conversations :
         [
-            new PhoneOrderConversation { Question = goalTextsString, RecordId = record.Id, Order = 0 }
+            new PhoneOrderConversation { Question = goalTextsString, Answer = string.Empty, RecordId = record.Id, Order = 0 }
         ], true, cancellationToken).ConfigureAwait(false);
 
         return (goalTextsString, conversations.FirstOrDefault()?.Question ?? goalTextsString);
@@ -609,5 +618,35 @@ public partial class PhoneOrderService
         var utcEnd = utcStart.AddDays(1);
 
         return (utcStart, utcEnd);
+    }
+
+    public async Task<GetPhoneCallUsagesPreviewResponse> GetPhoneCallUsagesPreviewAsync(GetPhoneCallUsagesPreviewRequest request, CancellationToken cancellationToken)
+    {
+        var (startTime, endTime) = GetQueryTimeRange(request.Month);
+
+        var result = await _phoneOrderDataProvider
+            .GetPhonCallUsagesAsync(startTime, endTime, request.IncludeExternalData, cancellationToken).ConfigureAwait(false);
+
+        var data = result.GroupBy(x => x.Record.AgentId).Select(x => new PhoneCallUsagesPreviewDto
+        {
+            Name = x.First().Assistant?.Name,
+            ReportUsages = x.Where(r => !string.IsNullOrWhiteSpace(r.Record.TranscriptionText)).Count(),
+            TotalDuration = Math.Round(x.Where(r => r.Record.Duration != null).Select(r => r.Record.Duration.Value).Sum(), 2)
+        }).ToList();
+        
+        return new GetPhoneCallUsagesPreviewResponse { Data = data };
+    }
+    
+    private (DateTimeOffset Start, DateTimeOffset End) GetQueryTimeRange(int month)
+    {
+        var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+        
+        var startLocal = new DateTime(2025, month, 1, 0, 0, 0);
+        var endLocal = new DateTime(2025, month, 31, 23, 59, 59);
+        
+        var startInPst = new DateTimeOffset(startLocal, pacificZone.GetUtcOffset(startLocal));
+        var endInPst = new DateTimeOffset(endLocal, pacificZone.GetUtcOffset(endLocal));
+        
+        return (startInPst.ToUniversalTime(), endInPst.ToUniversalTime());
     }
 }
