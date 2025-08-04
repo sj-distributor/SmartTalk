@@ -25,4 +25,13 @@ public class SystemController : ControllerBase
 
         return Ok(response);
     }
+        
+    [Route("usages/detail"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPhoneCallRecordDetailResponse))]
+    public async Task<IActionResult> GetPhoneCallrecordDetailAsync([FromQuery] GetPhoneCallRecordDetailRequest command)
+    {
+        var response = await _mediator.RequestAsync<GetPhoneCallRecordDetailRequest, GetPhoneCallRecordDetailResponse>(command).ConfigureAwait(false);
+
+        return Ok(response);
+    }
 }
