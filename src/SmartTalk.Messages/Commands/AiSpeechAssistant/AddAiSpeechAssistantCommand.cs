@@ -40,6 +40,8 @@ public class AddAiSpeechAssistantCommand : ICommand
     public AiSpeechAssistantMediaType? MediaType { get; set; }
 
     public AiSpeechAssistantProvider ModelProvider { get; set; } = AiSpeechAssistantProvider.OpenAi;
+    
+    public int? StoreId { get; set; }
 }
 
 public class AddAiSpeechAssistantResponse : SmartTalkResponse<AiSpeechAssistantDto>

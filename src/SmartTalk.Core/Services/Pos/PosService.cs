@@ -332,7 +332,7 @@ public partial class PosService : IPosService
        
        foreach (var agentId in posAgents.Select(x => x.AgentId).Distinct())
        {
-           var (_, assistants) = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantsAsync(agentId: agentId, cancellationToken: cancellationToken);
+           var (_, assistants) = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantsAsync(agentIds: [agentId], cancellationToken: cancellationToken);
 
            var store = await _posDataProvider.GetPosStoreByAgentIdAsync(agentId, cancellationToken).ConfigureAwait(false);
         

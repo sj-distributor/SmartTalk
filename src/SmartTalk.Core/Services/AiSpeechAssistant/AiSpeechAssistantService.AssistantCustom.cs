@@ -4,6 +4,7 @@ using Newtonsoft.Json.Linq;
 using System.Globalization;
 using Newtonsoft.Json;
 using SmartTalk.Core.Domain.AISpeechAssistant;
+using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.Restaurants;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
@@ -235,7 +236,7 @@ public partial class AiSpeechAssistantService
 
     private async Task<Domain.AISpeechAssistant.AiSpeechAssistant> InitialAiSpeechAssistantAsync(AddAiSpeechAssistantCommand command, CancellationToken cancellationToken)
     {
-        var assistant = await InitialAssistantRelatedInfoAsync(command , cancellationToken).ConfigureAwait(false);
+        var assistant = await InitialAssistantRelatedInfoAsync(command, cancellationToken).ConfigureAwait(false);
         
         await InitialAssistantKnowledgeAsync(command, assistant, cancellationToken).ConfigureAwait(false);
 
@@ -366,9 +367,17 @@ public partial class AiSpeechAssistantService
     
     private async Task<(Agent Agent, NumberPool Number)> InitialPosCompanyStoreInternalAsync(AddAiSpeechAssistantCommand command, CancellationToken cancellationToken)
     {
-        if (!command.AgentId.HasValue) throw new ArgumentException("Agent id is required", nameof(command.AgentId));
+        if (!command.StoreId.HasValue) throw new ArgumentException("Store id is required", nameof(command.AgentId));
         
-        var agent = await _agentDataProvider.GetAgentAsync(id: command.AgentId.Value, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var agent = await AddAgentAsync(null, AgentType.Assistant, command.SourceSystem, command.IsDisplay, cancellationToken).ConfigureAwait(false);
+
+        var posAgent = new PosAgent
+        {
+            AgentId = agent.Id,
+            StoreId = command.StoreId.Value
+        };
+        
+        await _posDataProvider.AddPosAgentsAsync([posAgent], cancellationToken: cancellationToken).ConfigureAwait(false);
         
         var number = await DistributeNumberAsync(cancellationToken).ConfigureAwait(false);
         
