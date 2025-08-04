@@ -1,7 +1,5 @@
-using System.Reflection;
 using Serilog;
 using System.Text;
-using System.Text.Json.Serialization;
 using Newtonsoft.Json.Linq;
 using SmartTalk.Messages.Enums.STT;
 using Smarties.Messages.DTO.OpenAi;
@@ -13,7 +11,6 @@ using Smarties.Messages.Enums.OpenAi;
 using Smarties.Messages.Requests.Ask;
 using System.Text.RegularExpressions;
 using ClosedXML.Excel;
-using Newtonsoft.Json;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Services.Linphone;
 using SmartTalk.Messages.Dto.PhoneOrder;
