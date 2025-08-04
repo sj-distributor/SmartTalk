@@ -277,7 +277,7 @@ public partial class PhoneOrderService
         
         await _phoneOrderDataProvider.AddPhoneOrderConversationsAsync(conversations.Count != 0 ? conversations :
         [
-            new PhoneOrderConversation { Question = goalTextsString, Answer = "", RecordId = record.Id, Order = 0 }
+            new PhoneOrderConversation { Question = goalTextsString, RecordId = record.Id, Order = 0 }
         ], true, cancellationToken).ConfigureAwait(false);
 
         return (goalTextsString, conversations.FirstOrDefault()?.Question ?? goalTextsString);
