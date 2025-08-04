@@ -854,6 +854,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         }
         else
         {
+            _aiSpeechAssistantStreamContext.IsTransfer = true;
+            
             var (reply, replySeconds) = MatchTransferCallReply(functionName);
             
             _backgroundJobClient.Schedule<IMediator>(x => x.SendAsync(new TransferHumanServiceCommand
