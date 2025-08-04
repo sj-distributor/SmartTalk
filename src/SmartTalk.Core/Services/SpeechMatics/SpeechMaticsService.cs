@@ -1,17 +1,21 @@
 using Twilio;
+using System.Text.Json;
 using Serilog;
-using OpenAI.Chat;
+using AutoMapper;
 using SmartTalk.Core.Ioc;
 using Microsoft.IdentityModel.Tokens;
+using Newtonsoft.Json.Linq;
+using OpenAI.Chat;
+using SmartTalk.Core.Constants;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using Twilio.Rest.Api.V2010.Account;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Domain.System;
-using SmartTalk.Core.Extensions;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Ffmpeg;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
+using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Core.Settings.PhoneOrder;
@@ -22,7 +26,8 @@ using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.Agent;
-
+using SmartTalk.Messages.Dto.Sales;
+using SmartTalk.Messages.Enums.Sales;
 namespace SmartTalk.Core.Services.SpeechMatics;
 
 public interface ISpeechMaticsService : IScopedDependency
@@ -32,6 +37,8 @@ public interface ISpeechMaticsService : IScopedDependency
 
 public class SpeechMaticsService : ISpeechMaticsService
 {
+    private readonly IMapper _mapper;
+    private readonly ISalesClient _salesClient;
     private readonly IWeChatClient _weChatClient;
     private readonly IFfmpegService _ffmpegService;
     private readonly OpenAiSettings _openAiSettings;
@@ -41,9 +48,12 @@ public class SpeechMaticsService : ISpeechMaticsService
     private readonly IPhoneOrderService _phoneOrderService;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly ISmartTalkHttpClientFactory _smartTalkHttpClientFactory;
+    private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
     
     public SpeechMaticsService(
+        IMapper mapper,
+        ISalesClient salesClient,
         IWeChatClient weChatClient,
         IFfmpegService ffmpegService,
         OpenAiSettings openAiSettings,
@@ -53,8 +63,11 @@ public class SpeechMaticsService : ISpeechMaticsService
         IPhoneOrderService phoneOrderService,
         IPhoneOrderDataProvider phoneOrderDataProvider,
         ISmartTalkHttpClientFactory smartTalkHttpClientFactory,
+        ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient,
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
+        _mapper = mapper;
+        _salesClient = salesClient;
         _weChatClient = weChatClient;
         _ffmpegService = ffmpegService;
         _openAiSettings = openAiSettings;
@@ -64,6 +77,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         _phoneOrderService = phoneOrderService;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _smartTalkHttpClientFactory = smartTalkHttpClientFactory;
+        _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
     }
 
@@ -96,6 +110,8 @@ public class SpeechMaticsService : ISpeechMaticsService
             await SummarizeConversationContentAsync(record, audioContent, cancellationToken).ConfigureAwait(false);
             
             await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
+            
+            _smartTalkBackgroundJobClient.Enqueue<IPhoneOrderProcessJobService>(x => x.CalculateRecordingDurationAsync(record, audioContent, cancellationToken), HangfireConstants.InternalHostingFfmpeg);
         }
         catch (Exception e)
         {
@@ -130,19 +146,11 @@ public class SpeechMaticsService : ISpeechMaticsService
 
         var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
-
+        
+        var messages = await ConfigureRecordAnalyzePromptAsync(agent, aiSpeechAssistant, callFrom ?? "", currentTime, audioContent, cancellationToken);
+        
         ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
-
-        var audioData = BinaryData.FromBytes(audioContent);
-        List<ChatMessage> messages =
-        [
-            new SystemChatMessage(string.IsNullOrEmpty(aiSpeechAssistant?.CustomRecordAnalyzePrompt)
-                ? "你是一名電話錄音的分析員，通過聽取錄音內容和語氣情緒作出精確分析，冩出一份分析報告。\n\n分析報告的格式：交談主題：xxx\n\n 來電號碼：#{call_from}\n\n 內容摘要:xxx \n\n 客人情感與情緒: xxx \n\n 待辦事件: \n1.xxx\n2.xxx \n\n 客人下單內容(如果沒有則忽略)：1. 牛肉(1箱)\n2.雞腿肉(1箱)".Replace("#{call_from}", callFrom ?? "")
-                : aiSpeechAssistant.CustomRecordAnalyzePrompt.Replace("#{call_from}", callFrom ?? "").Replace("#{current_time}", currentTime)),
-            new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
-            new UserChatMessage("幫我根據錄音生成分析報告：")
-        ];
-
+        
         ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
 
         ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
@@ -153,23 +161,42 @@ public class SpeechMaticsService : ISpeechMaticsService
         
         Log.Information("Handle Smarties callback if required: {@Agent}、{@Record}", agent, record);
 
+        await MultiScenarioCustomProcessingAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
+        
         if (agent.SourceSystem == AgentSourceSystem.Smarties)
             await CallBackSmartiesRecordAsync(agent, record, cancellationToken).ConfigureAwait(false);
 
-        if (!string.IsNullOrEmpty(agent.WechatRobotKey) && !string.IsNullOrEmpty(agent.WechatRobotMessage))
-        {
-            Log.Information("Ready send message to wechat.");
-            
-            var message = agent.WechatRobotMessage.Replace("#{assistant_name}", aiSpeechAssistant?.Name ?? "").Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString()).Replace("#{assistant_file_url}", record.Url);
+        var message = agent.WechatRobotMessage?.Replace("#{assistant_name}", aiSpeechAssistant?.Name ?? "").Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString()).Replace("#{assistant_file_url}", record.Url);
 
-            Log.Information("Before send {@Message}", message);
+        message = await SwitchKeyMessageByGetUserProfileAsync(record, callFrom, aiSpeechAssistant, agent, message, cancellationToken).ConfigureAwait(false);
+
+        await SendWorkWechatMessageByRobotKeyAsync(message, record, audioContent, agent, aiSpeechAssistant, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<string> SwitchKeyMessageByGetUserProfileAsync(PhoneOrderRecord record, string callFrom, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, Agent agent, string message, CancellationToken cancellationToken)
+    {
+        if (callFrom != null && aiSpeechAssistant?.Id != null && !string.IsNullOrEmpty(message))
+        {
+            var userProfile = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantUserProfileAsync(aiSpeechAssistant.Id, callFrom, cancellationToken).ConfigureAwait(false);
+            var salesName = userProfile?.ProfileJson != null ? JObject.Parse(userProfile.ProfileJson).GetValue("correspond_sales")?.ToString() : string.Empty;
+
+            if (!string.IsNullOrEmpty(salesName))
+            {
+                message = agent.WechatRobotMessage?.Replace("#{assistant_name}", salesName).Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString()).Replace("#{assistant_file_url}", record.Url);
+            }
+        }
+
+        return message;
+    }
+
+    private async Task SendWorkWechatMessageByRobotKeyAsync(string message, PhoneOrderRecord record, byte[] audioContent, Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, CancellationToken cancellationToken)
+    {
+        if (!string.IsNullOrEmpty(agent.WechatRobotKey) && !string.IsNullOrEmpty(message))
+        {
             if (agent.IsWecomMessageOrder && aiSpeechAssistant != null)
             {
-                Log.Information("Agent: {@Agent} and Record: {@Record}", agent, record);
                 var messageNumber = await SendAgentMessageRecordAsync(agent, record.Id, aiSpeechAssistant.GroupKey, cancellationToken);
-                Log.Information("Get message number: {MessageNumber}", messageNumber);
                 message = $"【第{messageNumber}條】\n" + message;
-                Log.Information("After append {@Message}", message);
             }
 
             if (agent.IsSendAnalysisReportToWechat && !string.IsNullOrEmpty(record.TranscriptionText))
@@ -281,5 +308,128 @@ public class SpeechMaticsService : ISpeechMaticsService
         Log.Information("Structure diarization results : {@speakInfos}", speakInfos);
         
         return speakInfos;
+    }
+    
+    private async Task<List<ChatMessage>> ConfigureRecordAnalyzePromptAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, string callFrom, string currentTime, byte[] audioContent, CancellationToken cancellationToken) 
+    {
+        var askItemsJson = string.Empty;
+        
+        if (agent.Type == AgentType.Sales)
+        {
+            var sales = await _aiSpeechAssistantDataProvider.GetCallInSalesByNameAsync(aiSpeechAssistant.Name, SalesCallType.CallIn, cancellationToken).ConfigureAwait(false);
+
+            if (sales != null)
+            {
+                var requestDto = new GetAskInfoDetailListByCustomerRequestDto
+                {
+                    CustomerNumbers = new List<string> { aiSpeechAssistant.Name }
+                };
+
+                var askedItems = await _salesClient.GetAskInfoDetailListByCustomerAsync(requestDto, cancellationToken).ConfigureAwait(false);
+
+                var topItems = askedItems.Data.OrderByDescending(x => x.ValidAskQty).Take(60).ToList();
+
+                var simplifiedItems = topItems.Select(x => new
+                {
+                    name = x.MaterialDesc,
+                    quantity = x.ValidAskQty,
+                    materialNumber = x.Material
+                }).ToList();
+
+                askItemsJson = JsonSerializer.Serialize(simplifiedItems, new JsonSerializerOptions { WriteIndented = true });
+            }
+        }
+
+        var audioData = BinaryData.FromBytes(audioContent);
+        List<ChatMessage> messages =
+        [
+            new SystemChatMessage(string.IsNullOrEmpty(aiSpeechAssistant?.CustomRecordAnalyzePrompt)
+                ? "你是一名電話錄音的分析員，通過聽取錄音內容和語氣情緒作出精確分析，冩出一份分析報告。\n\n分析報告的格式：交談主題：xxx\n\n 來電號碼：#{call_from}\n\n 內容摘要:xxx \n\n 客人情感與情緒: xxx \n\n 待辦事件: \n1.xxx\n2.xxx \n\n 客人下單內容(如果沒有則忽略)：1. 牛肉(1箱)\n2.雞腿肉(1箱)".Replace("#{call_from}", callFrom ?? "")
+                : aiSpeechAssistant.CustomRecordAnalyzePrompt.Replace("#{call_from}", callFrom ?? "").Replace("#{current_time}", currentTime).Replace("#{askItemsJson}", askItemsJson ?? "")),
+            new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
+            new UserChatMessage("幫我根據錄音生成分析報告：")
+        ];
+
+        return messages;
+    }
+    
+    private async Task MultiScenarioCustomProcessingAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, PhoneOrderRecord record, CancellationToken cancellationToken) 
+    { 
+        switch (agent.Type) 
+        { 
+            case AgentType.Sales: 
+                if (!string.IsNullOrEmpty(record.TranscriptionText)) 
+                { 
+                    await HandleSalesScenarioAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
+                }
+                break; 
+        } 
+    }
+    
+    private async Task HandleSalesScenarioAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, PhoneOrderRecord record, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(record.TranscriptionText)) return;
+
+        var askInfoResponse = await _salesClient.GetAskInfoDetailListByCustomerAsync(new GetAskInfoDetailListByCustomerRequestDto { CustomerNumbers = new List<string> { aiSpeechAssistant.Name } }, cancellationToken).ConfigureAwait(false);
+
+        var historyItems = askInfoResponse.Data.Where(x => !string.IsNullOrWhiteSpace(x.Material)).Select(x => (x.Material, x.MaterialDesc)).ToList();
+
+        var (extractedOrderItems, deliveryDate) = await ExtractAndMatchOrderItemsFromReportAsync(record.TranscriptionText, historyItems, DateTime.Today, cancellationToken).ConfigureAwait(false);
+
+        if (!extractedOrderItems.Any()) return;
+
+        var draftOrder = new GenerateAiOrdersRequestDto
+        {
+            AiOrderInfoDto = new AiOrderInfoDto
+            {
+                SoldToId = aiSpeechAssistant.Name,
+                SoldToIds = aiSpeechAssistant.Name,
+                DocumentDate = DateTime.Today,
+                DeliveryDate = deliveryDate,
+                AiOrderItemDtoList = extractedOrderItems
+            }
+        };
+
+        await _salesClient.GenerateAiOrdersAsync(draftOrder, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<(List<AiOrderItemDto> Items, DateTime DeliveryDate)> ExtractAndMatchOrderItemsFromReportAsync(string reportText, List<(string Material, string MaterialDesc)> historyItems, DateTime orderDate, CancellationToken cancellationToken) 
+    { 
+        var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
+        
+        var materialListText = string.Join("\n", historyItems.Select(x => $"{x.MaterialDesc} ({x.Material})"));
+        
+        var systemPrompt = "你是一名订单分析助手。请从下面的客户分析报告文本中提取所有下单的物料名称和数量，并且用历史物料列表匹配每个物料的materialNumber。如果报告中提到了预约送货时间，请提取送货时间（格式yyyy-MM-dd）。返回JSON数组，每个元素包含：\n" + "- name: 物料名称\n" + "- quantity: 数量（整数或小数）\n" + "- materialNumber: 对应的物料编码\n" + "- deliveryDate: 客户预约送货日期（如果报告中没有则用空字符串）\n\n" + materialListText + "\n\n" + "客户分析报告文本：\n"+ reportText + "\n\n请只返回JSON数组，不要多余说明。";
+        
+        var messages = new List<ChatMessage>
+        {
+            new SystemChatMessage(systemPrompt),
+        };
+        
+        var completion = await client.CompleteChatAsync(messages, new ChatCompletionOptions { ResponseModalities = ChatResponseModalities.Text, ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat() }, cancellationToken).ConfigureAwait(false);
+        var jsonResponse = completion.Value.Content.FirstOrDefault()?.Text ?? "";
+        Log.Information("AI JSON Response: {JsonResponse}", jsonResponse);
+        
+        try 
+        { 
+            var parsedItems = JsonSerializer.Deserialize<List<ExtractedOrderItemDto>>(jsonResponse, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<ExtractedOrderItemDto>();
+            
+            var deliveryDateStr = parsedItems.Select(i => i.DeliveryDate).FirstOrDefault(d => !string.IsNullOrEmpty(d));
+            
+            DateTime deliveryDate;
+            if (!DateTime.TryParse(deliveryDateStr, out deliveryDate))
+            {
+                deliveryDate = DateTime.Today;
+            }
+            
+            var aiOrderItems = _mapper.Map<List<AiOrderItemDto>>(parsedItems);
+
+            return (aiOrderItems, deliveryDate);
+        }
+        catch (Exception ex) 
+        { 
+            Log.Warning("解析GPT返回JSON失败: {Message}", ex.Message); 
+            return new (new List<AiOrderItemDto>(), DateTime.Today);
+        } 
     }
 }

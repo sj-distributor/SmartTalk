@@ -5,6 +5,8 @@ using SmartTalk.Core.Domain.AIAssistant;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Core.Domain.System;
+using SmartTalk.Core.Domain.Sales;
+using SmartTalk.Messages.Enums.Sales;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
 
@@ -28,7 +30,7 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
     
     Task UpdateNumberPoolAsync(List<NumberPool> numbers, bool forceSave = true, CancellationToken cancellationToken = default);
     
-    Task<(int, List<Domain.AISpeechAssistant.AiSpeechAssistant>)> GetAiSpeechAssistantsAsync(int? pageIndex = null, int? pageSize = null, string channel = null,  int? agentId = null, CancellationToken cancellationToken = default);
+    Task<(int, List<Domain.AISpeechAssistant.AiSpeechAssistant>)> GetAiSpeechAssistantsAsync(int? pageIndex = null, int? pageSize = null, string channel = null, string keyword = null, int? agentId = null, CancellationToken cancellationToken = default);
 
     Task AddAiSpeechAssistantsAsync(List<Domain.AISpeechAssistant.AiSpeechAssistant> assistants, bool forceSave = true, CancellationToken cancellationToken = default);
 
@@ -75,6 +77,10 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task<(Domain.AISpeechAssistant.AiSpeechAssistant Assistant, Agent Agent)> GetAiSpeechAssistantByAgentIdAsync(int agentId, CancellationToken cancellationToken);
     
     Task<AiSpeechAssistantInboundRoute> GetAiSpeechAssistantInboundRouteAsync(string callerNumber, string didNumber, CancellationToken cancellationToken);
+
+    Task<Sales> GetCallInSalesByNameAsync(string assistantName, SalesCallType? type, CancellationToken cancellationToken);
+    
+    Task<AiSpeechAssistantUserProfile> GetAiSpeechAssistantUserProfileAsync(int assistantId, string callerNumber, CancellationToken cancellationToken);
 }
 
 public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
@@ -179,12 +185,15 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
     }
 
     public async Task<(int, List<Domain.AISpeechAssistant.AiSpeechAssistant>)> GetAiSpeechAssistantsAsync(
-        int? pageIndex = null, int? pageSize = null, string channel = null, int? agentId = null, CancellationToken cancellationToken = default)
+        int? pageIndex = null, int? pageSize = null, string channel = null, string keyword = null, int? agentId = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.QueryNoTracking<Domain.AISpeechAssistant.AiSpeechAssistant>().Where(x => x.IsDisplay);
 
         if (!string.IsNullOrEmpty(channel))
             query = query.Where(x => x.Channel.Contains(channel));
+        
+        if (!string.IsNullOrEmpty(keyword))
+            query = query.Where(x => x.Name.Contains(keyword));
 
         if (agentId.HasValue)
             query = query.Where(x => x.AgentId == agentId.Value);
@@ -403,5 +412,22 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
     {
         return await _repository.Query<AiSpeechAssistantInboundRoute>()
             .Where(x => x.From == callerNumber && x.To == didNumber).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<Sales> GetCallInSalesByNameAsync(string assistantName, SalesCallType? type, CancellationToken cancellationToken)
+    {
+        var query = _repository.Query<Sales>().Where(s => s.Name == assistantName);
+
+        if (type.HasValue) query = query.Where(s => s.Type == type.Value);
+
+        return await query.FirstOrDefaultAsync(cancellationToken);
+    }
+
+    public async Task<AiSpeechAssistantUserProfile> GetAiSpeechAssistantUserProfileAsync(int assistantId, string callerNumber, CancellationToken cancellationToken)
+    {
+        var query = _repository.Query<AiSpeechAssistantUserProfile>()
+            .Where(x => x.AssistantId == assistantId && x.CallerNumber == callerNumber);
+
+        return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 }

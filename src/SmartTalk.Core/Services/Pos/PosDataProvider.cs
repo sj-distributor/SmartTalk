@@ -42,6 +42,8 @@ public partial interface IPosDataProvider : IScopedDependency
     Task AddPosAgentsAsync(List<PosAgent> agents, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task<PosCompanyStore> GetPosStoreByAgentIdAsync(int agentId, CancellationToken cancellationToken = default);
+    
+    Task<List<PosAgent>> GetPosAgentsAsync(int? storeId = null, int? agentId = null, CancellationToken cancellationToken = default);
 
     Task<PosStoreUser> GetPosStoreUsersByUserIdAndAssistantIdAsync(List<int> assistantIds, int userId, CancellationToken cancellationToken = default);
 
@@ -286,6 +288,19 @@ public partial class PosDataProvider : IPosDataProvider
             select store;
         
         return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<PosAgent>> GetPosAgentsAsync(int? storeId = null, int? agentId = null, CancellationToken cancellationToken = default)
+    {
+        var query = _repository.Query<PosAgent>();
+
+        if (storeId.HasValue)
+            query = query.Where(x => x.StoreId == storeId.Value);
+
+        if (agentId.HasValue)
+            query = query.Where(x => x.AgentId == agentId.Value);
+        
+        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<PosStoreUser> GetPosStoreUsersByUserIdAndAssistantIdAsync(List<int> assistantIds, int userId, CancellationToken cancellationToken = default)

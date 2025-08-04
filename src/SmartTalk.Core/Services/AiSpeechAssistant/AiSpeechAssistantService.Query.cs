@@ -39,7 +39,7 @@ public partial class AiSpeechAssistantService
     public async Task<GetAiSpeechAssistantsResponse> GetAiSpeechAssistantsAsync(GetAiSpeechAssistantsRequest request, CancellationToken cancellationToken)
     {
         var (count, assistants) = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantsAsync(
-            request.PageIndex, request.PageSize, request.Channel.HasValue ? request.Channel.Value.ToString("D") : string.Empty, request.AgentId, cancellationToken).ConfigureAwait(false);
+            request.PageIndex, request.PageSize, request.Channel.HasValue ? request.Channel.Value.ToString("D") : string.Empty, request.Keyword, request.AgentId, cancellationToken).ConfigureAwait(false);
 
         Log.Information("Get ai speech assistants {@Assistants}", assistants);
         

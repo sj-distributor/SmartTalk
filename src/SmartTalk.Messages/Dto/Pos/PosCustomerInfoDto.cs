@@ -1,3 +1,5 @@
+using SmartTalk.Messages.Enums.Pos;
+
 namespace SmartTalk.Messages.Dto.Pos;
 
 public class PosCustomerInfoDto
@@ -13,4 +15,6 @@ public class PosCustomerInfoDto
     public string Latitude { get; set; }
     
     public string Longtitude { get; set; }
+    
+    public PosOrderReceiveType Type { get; set; }
 }

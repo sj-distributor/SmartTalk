@@ -544,7 +544,7 @@ public partial class PosService
 
     private async Task<PlaceOrderToEasyPosResponseDto> PlaceOrderAsync(PosOrder order, PosCompanyStore store, string token, CancellationToken cancellationToken)
     {
-        var response = await _easyPosClient.PlaceOrderAsync(new PlaceOrderToEasyPosRequestDto
+        var request = new PlaceOrderToEasyPosRequestDto
         {
             Type = order.Type == PosOrderReceiveType.Pickup ? 1 : 3,
             Guests = 1,
@@ -574,7 +574,11 @@ public partial class PosService
                     }
                 ]
             }
-        }, store.Link, token, order.RetryCount <= 0 ? TimeSpan.FromSeconds(10) : null, cancellationToken).ConfigureAwait(false);
+        };
+        
+        Log.Information("Generate the place order request: {@request}", request);
+        
+        var response = await _easyPosClient.PlaceOrderAsync(request, store.Link, token, order.RetryCount <= 0 ? TimeSpan.FromSeconds(10) : null, cancellationToken).ConfigureAwait(false);
 
         Log.Information("Place order: {@Order} and response is: {@Response}", order, response);
         

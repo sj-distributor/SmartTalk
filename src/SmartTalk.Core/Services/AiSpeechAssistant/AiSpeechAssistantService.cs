@@ -20,8 +20,8 @@ using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.OpenAi;
 using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.Attachments;
-using SmartTalk.Core.Services.Ffmpeg;
 using SmartTalk.Core.Services.Caching.Redis;
+using SmartTalk.Core.Services.Ffmpeg;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Identity;
@@ -82,6 +82,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly TranslationClient _translationClient;
     private readonly IPhoneOrderService _phoneOrderService;
     private readonly IAgentDataProvider _agentDataProvider;
+    private readonly IAttachmentService _attachmentService;
     private readonly ISpeechToTextService _speechToTextService;
     private readonly WorkWeChatKeySetting _workWeChatKeySetting;
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
@@ -115,6 +116,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         TranslationClient translationClient,
         IPhoneOrderService phoneOrderService,
         IAgentDataProvider agentDataProvider,
+        IAttachmentService attachmentService,
         IOpenAiDataProvider openAiDataProvider,
         ISpeechToTextService speechToTextService,
         WorkWeChatKeySetting workWeChatKeySetting,
@@ -140,6 +142,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _phoneOrderService = phoneOrderService;
         _httpClientFactory = httpClientFactory;
         _translationClient = translationClient;
+        _attachmentService = attachmentService;
         _openAiDataProvider = openAiDataProvider;
         _speechToTextService = speechToTextService;
         _workWeChatKeySetting = workWeChatKeySetting;
@@ -224,32 +227,81 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     {
         Log.Information("Handling receive phone record: {@command}", command);
 
-        var (record, _, _) = await _phoneOrderDataProvider.GetRecordWithAgentAndAssistantAsync(command.CallSid, cancellationToken).ConfigureAwait(false);
+        var (record, agent, _) = await _phoneOrderDataProvider.GetRecordWithAgentAndAssistantAsync(command.CallSid, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Get phone order record: {@record}", record);
         
         record.Url = command.RecordingUrl;
         
         var audioFileRawBytes = await _httpClientFactory.GetAsync<byte[]>(record.Url, cancellationToken).ConfigureAwait(false);
+        
+        if (agent is { IsSendAudioRecordWechat: true })
+        {
+            var recordingUrl = record.Url;
+            if (record.Url.Contains("twilio"))
+            {
+                var audio = await _attachmentService.UploadAttachmentAsync(new UploadAttachmentCommand { Attachment = new UploadAttachmentDto { FileName = Guid.NewGuid() + ".wav", FileContent = audioFileRawBytes } }, cancellationToken).ConfigureAwait(false);
+            
+                Log.Information("Audio uploaded, url: {Url}", audio?.Attachment?.FileUrl);
+                
+                if (string.IsNullOrEmpty(audio?.Attachment?.FileUrl) || agent.Id == 0) return;
+                
+                recordingUrl = audio?.Attachment?.FileUrl;
+            }
+            
+            await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, agent.WechatRobotKey, $"您有一条新的AI通话录音：\n{recordingUrl}", Array.Empty<string>(), cancellationToken).ConfigureAwait(false);
+        }
 
-        string transcription = null;
+        var language = string.Empty;
         try
         { 
-            transcription = await _speechToTextService.SpeechToTextAsync(
-                audioFileRawBytes, fileType: TranscriptionFileType.Wav, responseFormat: TranscriptionResponseFormat.Text, cancellationToken: cancellationToken).ConfigureAwait(false);
+            language = await DetectAudioLanguageAsync(audioFileRawBytes, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception e) when (e.Message.Contains("quota"))
         {
-            var alertMessage = $"服务器异常。";
-            
+            const string alertMessage = "服务器异常。";
+
             await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, _workWeChatKeySetting.Key, alertMessage, mentionedList: new[]{"@all"}, cancellationToken: cancellationToken).ConfigureAwait(false);
         }
         
-        var detection = await _translationClient.DetectLanguageAsync(transcription, cancellationToken).ConfigureAwait(false);
-        
-        record.TranscriptionJobId = await _phoneOrderService.CreateSpeechMaticsJobAsync(audioFileRawBytes, Guid.NewGuid().ToString("N") + ".wav", detection.Language, cancellationToken).ConfigureAwait(false);
-        
+        record.TranscriptionJobId = await _phoneOrderService.CreateSpeechMaticsJobAsync(audioFileRawBytes, Guid.NewGuid().ToString("N") + ".wav", language, cancellationToken).ConfigureAwait(false);
+
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+    
+    private async Task<string> DetectAudioLanguageAsync(byte[] audioContent, CancellationToken cancellationToken)
+    {
+        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
+
+        var audioData = BinaryData.FromBytes(audioContent);
+        List<ChatMessage> messages =
+        [
+            new SystemChatMessage("""
+                                  你是一名專業的語音識別分析員，請根據錄音內容的語音判斷所使用的語言，並從以下選項中**僅返回一個語言代碼**：
+                                  - zh-CN：普通話（簡體中文）
+                                  - zh：粵語
+                                  - zh-TW：台灣中文（繁體中文）
+                                  - en：英文
+
+                                  請根據語音內容準確判斷，不要預設為任何語言，也不要根據提示猜測。請不要返回任何多餘文字或說明，**只返回代碼**。
+                                  例如：
+                                  - 音頻中為普通話，返回：zh-CN
+                                  - 音頻中為粵語，返回：zh
+                                  - 音頻中為英文，返回：en
+
+                                  注意：如果語音中是英文，請不要誤判為中文。
+                                  """),
+            new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
+            new UserChatMessage("請根據錄音內容判斷語言，並返回對應代碼。")
+        ];
+
+        ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
+
+        ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
+        
+        Log.Information("Detect the audio language: " + completion.Content.FirstOrDefault()?.Text);
+        
+        return completion.Content.FirstOrDefault()?.Text ?? "en";
     }
 
     public async Task TransferHumanServiceAsync(TransferHumanServiceCommand command, CancellationToken cancellationToken)
@@ -285,14 +337,12 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
         var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
-        var sundayDates = GetSundayDates(pstTime);
         
         var finalPrompt = knowledge.Prompt
             .Replace("#{user_profile}", string.IsNullOrEmpty(userProfile?.ProfileJson) ? " " : userProfile.ProfileJson)
             .Replace("#{current_time}", currentTime)
             .Replace("#{customer_phone}", from.StartsWith("+1") ? from[2..] : from)
-            .Replace("#{pst_date}", $"{pstTime.Date:yyyy-MM-dd} {pstTime.DayOfWeek}")
-            .Replace("#{sunday_dates}", sundayDates);
+            .Replace("#{pst_date}", $"{pstTime.Date:yyyy-MM-dd} {pstTime.DayOfWeek}");
         
         Log.Information($"The final prompt: {finalPrompt}");
 
