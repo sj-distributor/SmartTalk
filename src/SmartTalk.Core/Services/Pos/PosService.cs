@@ -341,12 +341,8 @@ public partial class PosService : IPosService
                Id = a.Id,
                Name = a.Name
            }).ToList();
-           
-           agentStoreDict[agentId] = new PosCompanyStoreDto
-           {
-               Id = store.Id,
-               Names = store.Names
-           };
+
+           agentStoreDict[agentId] = _mapper.Map<PosCompanyStoreDto>(store);
        }
 
        var result = posAgents.Select(agent => new PosAgentDto
