@@ -1,3 +1,4 @@
+using Serilog;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Requests.AiSpeechAssistant;
 
@@ -37,8 +38,16 @@ public partial class AiSpeechAssistantService
 
     public async Task<GetAiSpeechAssistantsResponse> GetAiSpeechAssistantsAsync(GetAiSpeechAssistantsRequest request, CancellationToken cancellationToken)
     {
+        var agentIds = request.AgentId.HasValue
+            ? [request.AgentId.Value]
+            : request.StoreId.HasValue
+                ? (await _posDataProvider.GetPosAgentsAsync(storeId: request.StoreId.Value, cancellationToken: cancellationToken).ConfigureAwait(false)).Select(x => x.AgentId).ToList()
+                : [];
+
+        Log.Information("Get the agent ids: {@AgentIds}", agentIds);
+
         var (count, assistants) = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantsAsync(
-            request.PageIndex, request.PageSize, request.Channel.HasValue ? request.Channel.Value.ToString("D") : string.Empty, request.Keyword, request.AgentId, cancellationToken).ConfigureAwait(false);
+            request.PageIndex, request.PageSize, request.Channel.HasValue ? request.Channel.Value.ToString("D") : string.Empty, request.Keyword, agentIds, cancellationToken).ConfigureAwait(false);
 
         await EnrichAssistantsInfoAsycn(assistants, cancellationToken).ConfigureAwait(false);
 

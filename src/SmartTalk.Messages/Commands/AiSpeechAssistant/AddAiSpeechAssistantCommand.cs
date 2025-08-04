@@ -28,6 +28,8 @@ public class AddAiSpeechAssistantCommand : ICommand
     public AgentType AgentType { get; set; } = AgentType.Restaurant;
 
     public AgentSourceSystem SourceSystem { get; set; } = AgentSourceSystem.Self;
+    
+    public int? StoreId { get; set; }
 }
 
 public class AddAiSpeechAssistantResponse : SmartTalkResponse<AiSpeechAssistantDto>
