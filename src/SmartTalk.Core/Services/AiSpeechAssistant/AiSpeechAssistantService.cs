@@ -29,6 +29,7 @@ using SmartTalk.Messages.Constants;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.OpenAi;
 using SmartTalk.Core.Services.PhoneOrder;
+using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Services.Restaurants;
 using SmartTalk.Core.Services.STT;
 using SmartTalk.Core.Services.Timer;
@@ -78,6 +79,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly ISmartiesClient _smartiesClient;
     private readonly ZhiPuAiSettings _zhiPuAiSettings;
     private readonly IRedisSafeRunner _redisSafeRunner;
+    private readonly IPosDataProvider _posDataProvider;
     private readonly TranslationClient _translationClient;
     private readonly IPhoneOrderService _phoneOrderService;
     private readonly IAgentDataProvider _agentDataProvider;
@@ -111,6 +113,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         ISmartiesClient smartiesClient,
         ZhiPuAiSettings zhiPuAiSettings,
         IRedisSafeRunner redisSafeRunner,
+        IPosDataProvider posDataProvider,
         TranslationClient translationClient,
         IPhoneOrderService phoneOrderService,
         IAgentDataProvider agentDataProvider,
@@ -135,6 +138,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _smartiesClient = smartiesClient;
         _zhiPuAiSettings = zhiPuAiSettings;
         _redisSafeRunner = redisSafeRunner;
+        _posDataProvider = posDataProvider;
         _agentDataProvider = agentDataProvider;
         _phoneOrderService = phoneOrderService;
         _httpClientFactory = httpClientFactory;
@@ -1149,7 +1153,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
     private async Task<List<(AiSpeechAssistantSessionConfigType Type, object Config)>> InitialSessionConfigAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken = default)
     {
-        var functions = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallByAssistantIdAsync(assistant.Id, assistant.ModelProvider, cancellationToken).ConfigureAwait(false);
+        var functions = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallByAssistantIdAsync(assistant.Id, assistant.ModelProvider, true, cancellationToken).ConfigureAwait(false);
 
         return functions.Count == 0 ? [] : functions.Where(x => !string.IsNullOrWhiteSpace(x.Content)).Select(x => (x.Type, JsonConvert.DeserializeObject<object>(x.Content))).ToList();
     }

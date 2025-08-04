@@ -27,7 +27,7 @@ public partial class AccountService
         if (userAccount is not { Count: 0 }) return userAccount.FirstOrDefault();
 
         var account = await _accountDataProvider
-            .CreateUserAccountAsync(username, null, userId, issuer, cancellationToken: cancellationToken).ConfigureAwait(false);
+            .CreateUserAccountAsync(username, null, UserAccountLevel.None, userId, issuer, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         return _mapper.Map<UserAccountDto>(account);
     }
