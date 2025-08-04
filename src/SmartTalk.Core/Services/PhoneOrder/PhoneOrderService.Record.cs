@@ -747,7 +747,7 @@ public partial class PhoneOrderService
         var data = result.GroupBy(x => x.Record.AgentId).Select(x => new PhoneCallRecordDetailDto
         {
             Name = x.First().Assistant?.Name,
-            Records = _mapper.Map<List<PhoneOrderRecordDto>>(x.Select(r => r.Record))
+            Records = _mapper.Map<List<PhoneOrderRecordDto>>(x.Where(r => !string.IsNullOrEmpty(r.Record.Url)).Select(r => r.Record))
         }).ToList();
         
         var fileUrl = await GenerateExcelFileAsync(data, cancellationToken).ConfigureAwait(false);
@@ -807,7 +807,7 @@ public partial class PhoneOrderService
             {
                 worksheet.Cell(currentRow, 1).Value = record.Url;
                 worksheet.Cell(currentRow, 2).Value = record.Duration;
-                worksheet.Cell(currentRow, 3).Value = record.IsTransfer.HasValue ? record.IsTransfer.Value ? "Yes" : "No" : "No";
+                worksheet.Cell(currentRow, 3).Value = record.IsTransfer.HasValue ? record.IsTransfer.Value ? "Yes" : "No" : "";
 
                 var dataRange = worksheet.Range(currentRow, 1, currentRow, 3);
                 dataRange.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
