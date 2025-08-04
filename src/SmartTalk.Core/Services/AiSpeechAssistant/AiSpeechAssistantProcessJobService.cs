@@ -67,7 +67,8 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             CreatedDate = callResource.StartTime ?? DateTimeOffset.Now,
             OrderStatus = PhoneOrderOrderStatus.Pending,
             CustomerName = context.UserInfo?.UserName,
-            PhoneNumber = context.UserInfo?.PhoneNumber
+            PhoneNumber = context.UserInfo?.PhoneNumber,
+            IsTransfer = context.IsTransfer
         };
 
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync([record], cancellationToken: cancellationToken).ConfigureAwait(false);

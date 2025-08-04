@@ -34,4 +34,8 @@ public class PhoneOrderRecordDto
     public string CustomerName { get; set; }
     
     public string Comments { get; set; }
+    
+    public double? Duration { get; set; }
+    
+    public bool IsTransfer { get; set; }
 }

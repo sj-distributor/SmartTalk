@@ -66,6 +66,9 @@ public class PhoneOrderRecord : IEntity
     [Column("duration")]
     public double? Duration { get; set; }
     
+    [Column("is_transfer")]
+    public bool IsTransfer { get; set; }
+    
     [NotMapped]
     public UserAccount UserAccount { get; set; }
     

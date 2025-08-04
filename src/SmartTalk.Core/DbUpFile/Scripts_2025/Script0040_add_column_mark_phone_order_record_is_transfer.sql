@@ -1,0 +1,1 @@
+alter table `phone_order_record` add column `is_transfer` tinyint(1) not null default 0;
