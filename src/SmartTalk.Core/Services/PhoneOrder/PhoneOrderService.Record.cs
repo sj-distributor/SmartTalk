@@ -46,21 +46,13 @@ public partial class PhoneOrderService
     {
         var (utcStart, utcEnd) = ConvertPstDateToUtcRange(request.Date);
 
-        if (request.StoreId.HasValue)
-        {
-            var agentIds = await _posDataProvider.GetPosAgentsAsync(storeId: request.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
-            
-            var allStoreRecords = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds.Select(x => x.AgentId).ToList(), request.Name, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
-            
-            var enrichedAllStoreRecords = _mapper.Map<List<PhoneOrderRecordDto>>(allStoreRecords);
+        var agentIds = request.AgentId.HasValue
+            ? [request.AgentId.Value]
+            : request.StoreId.HasValue
+                ? (await _posDataProvider.GetPosAgentsAsync(storeId: request.StoreId.Value, cancellationToken: cancellationToken).ConfigureAwait(false)).Select(x => x.AgentId).ToList()
+                : [];
 
-            return new GetPhoneOrderRecordsResponse
-            {
-                Data = enrichedAllStoreRecords
-            };
-        }
-
-        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(request.AgentId, request.Name, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
+        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds, request.Name, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
 
         var enrichedRecords = _mapper.Map<List<PhoneOrderRecordDto>>(records);
 
