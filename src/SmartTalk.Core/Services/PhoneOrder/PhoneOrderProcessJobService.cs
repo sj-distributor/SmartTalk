@@ -84,12 +84,13 @@ public class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
 
     public async Task FillingIncomingCallNumber(PhoneOrderRecord record, CancellationToken cancellationToken)
     {
-        if (!record.Url.Contains("twilio") || !string.IsNullOrEmpty(record.IncomingCallNumber)) return;
-        
-        TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
+        if (record.Url.Contains("twilio") && string.IsNullOrWhiteSpace(record.IncomingCallNumber))
+        {
+            TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
 
-        var call = await CallResource.FetchAsync(record.SessionId);
+            var call = await CallResource.FetchAsync(record.SessionId);
         
-        record.IncomingCallNumber = call?.From ?? string.Empty;
+            record.IncomingCallNumber = call?.From ?? string.Empty;
+        }
     }
 }
