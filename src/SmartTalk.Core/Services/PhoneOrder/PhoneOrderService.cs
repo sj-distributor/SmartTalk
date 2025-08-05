@@ -7,6 +7,7 @@ using SmartTalk.Core.Services.Ffmpeg;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Identity;
 using SmartTalk.Core.Services.Jobs;
+using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Services.Restaurants;
 using SmartTalk.Core.Services.RetrievalDb.VectorDb;
 using SmartTalk.Core.Services.SpeechMatics;
@@ -31,6 +32,7 @@ public partial class PhoneOrderService : IPhoneOrderService
     private readonly ISmartiesClient _smartiesClient;
     private readonly TranslationClient _translationClient;
     private readonly PhoneOrderSetting _phoneOrderSetting;
+    private readonly IPosDataProvider _posDataProvider;
     private readonly IAttachmentService _attachmentService;
     private readonly IAgentDataProvider _agentDataProvider;
     private readonly SpeechMaticsClient _speechMaticsClient;
@@ -53,6 +55,7 @@ public partial class PhoneOrderService : IPhoneOrderService
         ISmartiesClient smartiesClient,
         TranslationClient translationClient,
         PhoneOrderSetting phoneOrderSetting,
+        IPosDataProvider posDataProvider,
         IAttachmentService attachmentService,
         IAgentDataProvider agentDataProvider,
         ISpeechToTextService speechToTextService,
@@ -74,6 +77,7 @@ public partial class PhoneOrderService : IPhoneOrderService
         _smartiesClient = smartiesClient;
         _translationClient = translationClient;
         _phoneOrderSetting = phoneOrderSetting;
+        _posDataProvider = posDataProvider;
         _attachmentService = attachmentService;
         _agentDataProvider = agentDataProvider;
         _speechToTextService = speechToTextService;
