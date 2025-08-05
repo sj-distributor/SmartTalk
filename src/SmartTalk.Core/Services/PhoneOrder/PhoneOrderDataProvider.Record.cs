@@ -1,4 +1,3 @@
-using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Domain.Account;
 using SmartTalk.Core.Domain.AISpeechAssistant;
