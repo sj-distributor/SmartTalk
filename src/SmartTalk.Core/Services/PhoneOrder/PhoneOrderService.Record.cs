@@ -747,13 +747,23 @@ public partial class PhoneOrderService
             .GetPhonCallUsagesAsync(startTime, endTime, request.IncludeExternalData, cancellationToken)
             .ConfigureAwait(false);
 
-        var data = result.GroupBy(x => x.Record.AgentId).Select(x => new PhoneCallRecordDetailDto
+        var data = result.GroupBy(x => x.Record.AgentId).SelectMany(x =>
         {
-            Name = x.First().Assistant?.Name,
-            Records = _mapper.Map<List<PhoneOrderRecordDto>>(x.Where(r => !string.IsNullOrEmpty(r.Record.Url)).Select(r => r.Record))
+            var name = x.First().Assistant?.Name;
+            
+            return x.Where(r => !string.IsNullOrEmpty(r.Record.Url)).Select(r => new PhoneCallRecordDetailDto
+            {
+                Name = name,
+                Url = r.Record.Url,
+                Duration = r.Record.Duration,
+                PhoneNumber = r.Record.PhoneNumber ?? string.Empty,
+                InBoundType = r.Record.Url.Contains("twilio") ? "電話" : "網頁",
+                CreatedDate = ConvertUtcToPst(r.Record.CreatedDate),
+                IsTransfer = r.Record.IsTransfer.HasValue ? r.Record.IsTransfer.Value ? "是" : "" : ""
+            });
         }).ToList();
         
-        var fileUrl = await GenerateExcelFileAsync(data, cancellationToken).ConfigureAwait(false);
+        var fileUrl = await ToExcelTransposed(data, cancellationToken).ConfigureAwait(false);
 
         return new GetPhoneCallRecordDetailResponse { Data = fileUrl };
     }
@@ -771,87 +781,30 @@ public partial class PhoneOrderService
         return (startInPst.ToUniversalTime(), endInPst.ToUniversalTime());
     }
     
-    private async Task<string> GenerateExcelFileAsync(List<PhoneCallRecordDetailDto> details, CancellationToken cancellationToken)
+    private DateTimeOffset ConvertUtcToPst(DateTimeOffset utcTime)
     {
-        using var workbook = new XLWorkbook();
-        var worksheet = workbook.Worksheets.Add("Sheet1");
-        var currentRow = 1;
-
-        foreach (var detail in details)
-        {
-            // 1️⃣ 報表標題
-            worksheet.Cell(currentRow, 1).Value = $"{detail.Name}";
-            worksheet.Range(currentRow, 1, currentRow, 3).Merge();
-            var titleCell = worksheet.Cell(currentRow, 1);
-            titleCell.Style.Font.Bold = true;
-            titleCell.Style.Font.FontSize = 14;
-            titleCell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-            titleCell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
-            worksheet.Row(currentRow).Height = 20;
-            
-            currentRow++;
-            
-            // 2️⃣ 欄位列
-            worksheet.Cell(currentRow, 1).Value = "錄音";
-            worksheet.Cell(currentRow, 2).Value = "時長";
-            worksheet.Cell(currentRow, 3).Value = "是否轉接人工";
-            
-            var headerRange = worksheet.Range(currentRow, 1, currentRow, 3);
-            headerRange.Style.Font.Bold = true;
-            headerRange.Style.Fill.BackgroundColor = XLColor.LightGray;
-            headerRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-            headerRange.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
-            headerRange.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
-            
-            currentRow++;
-            
-            // 3️⃣ 數據列（多筆）
-            foreach (var record in detail.Records)
-            {
-                worksheet.Cell(currentRow, 1).Value = record.Url;
-                worksheet.Cell(currentRow, 2).Value = record.Duration;
-                worksheet.Cell(currentRow, 3).Value = record.IsTransfer.HasValue ? record.IsTransfer.Value ? "Yes" : "No" : "";
+        var pstTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
         
-                var dataRange = worksheet.Range(currentRow, 1, currentRow, 3);
-                dataRange.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
-                dataRange.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
+        var pstTime = TimeZoneInfo.ConvertTimeFromUtc(utcTime.UtcDateTime, pstTimeZone);
         
-                currentRow++;
-            }
+        var offset = pstTimeZone.GetUtcOffset(pstTime);
         
-            // 4️⃣ 空行作為分隔
-            currentRow++;
-        }
-        
-        worksheet.Columns().AdjustToContents();
-        
-        using var stream = new MemoryStream();
-        workbook.SaveAs(stream);
-        
-        var audio = await _attachmentService.UploadAttachmentAsync(new UploadAttachmentCommand
-        {
-            Attachment = new UploadAttachmentDto { FileName = Guid.NewGuid() + ".xlsx", FileContent = stream.ToArray() }
-        }, cancellationToken).ConfigureAwait(false);
-
-        return audio.Attachment?.FileUrl ?? string.Empty;
+        return new DateTimeOffset(pstTime, offset);
     }
     
-    /// <summary>
+     /// <summary>
     /// 把任意 List&lt;T&gt; 导出为 Excel，布局为：
     /// 第一列按行列出每个属性的 Json 名（优先取 JsonProperty / JsonPropertyName），
     /// 后续每一列是 list 中一个元素，单元格是该属性在该元素上的值（复杂对象 JSON 序列化）。
     /// 返回生成的 .xlsx 的字节数组。
     /// </summary>
-    public byte[] ToExcelTransposed<T>(IList<T> list)
+    private async Task<string> ToExcelTransposed<T>(IList<T> list, CancellationToken cancellationToken)
     {
         if (list == null) throw new ArgumentNullException(nameof(list));
         var type = typeof(T);
 
         // 取公共可读属性
-        var props = type
-            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .Where(p => p.CanRead)
-            .ToArray();
+        var props = type.GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p => p.CanRead).ToArray();
 
         // 解析每个属性的“名字”：优先 JsonProperty（Newtonsoft），其次 JsonPropertyName（System.Text.Json），否则原始属性名
         var fieldNames = props.Select(p =>
@@ -868,35 +821,31 @@ public partial class PhoneOrderService
         }).ToArray();
 
         using var workbook = new XLWorkbook();
-        var ws = workbook.AddWorksheet("Data");
+        var ws = workbook.AddWorksheet("Sheet1");
 
-        // 顶部左上角
-        ws.Cell(1, 1).Value = "Field";
-
-        // 每一个 list 元素做一列（从第二列开始）
-        for (var i = 0; i < list.Count; i++)
-        {
-            ws.Cell(1, i + 2).Value = $"Item {i + 1}";
-        }
-
-        // 第一列写字段名（从第2行开始）
+        // 顶部
         for (var row = 0; row < fieldNames.Length; row++)
         {
-            ws.Cell(row + 2, 1).Value = fieldNames[row];
+            ws.Cell(1, row + 1).Value = fieldNames[row];
         }
 
         // 填充每个元素对应的值（复杂对象 JSON 序列化）
-        for (var col = 0; col < list.Count; col++)
+        for (var row = 0; row < list.Count; row++)
         {
-            var item = list[col];
-            for (int row = 0; row < props.Length; row++)
+            var item = list[row];
+            for (var col = 0; col < props.Length; col++)
             {
-                var prop = props[row];
+                var prop = props[col];
                 var value = prop.GetValue(item);
                 string cellValue;
+
                 if (value == null)
                 {
                     cellValue = string.Empty;
+                }
+                else if (value is double d)
+                {
+                    cellValue = d.ToString("0.00");
                 }
                 else if (IsSimpleType(value.GetType()))
                 {
@@ -904,11 +853,10 @@ public partial class PhoneOrderService
                 }
                 else
                 {
-                    // 复杂对象序列化成 JSON 字符串
                     cellValue = JsonConvert.SerializeObject(value);
                 }
 
-                ws.Cell(row + 2, col + 2).Value = cellValue;
+                ws.Cell(row + 2, col + 1).Value = cellValue;
             }
         }
 
@@ -916,13 +864,19 @@ public partial class PhoneOrderService
 
         using var ms = new MemoryStream();
         workbook.SaveAs(ms);
-        return ms.ToArray();
+        
+        var audio = await _attachmentService.UploadAttachmentAsync(new UploadAttachmentCommand
+        {
+            Attachment = new UploadAttachmentDto { FileName = Guid.NewGuid() + ".xlsx", FileContent = ms.ToArray() }
+        }, cancellationToken).ConfigureAwait(false);
+        
+        return audio.Attachment?.FileUrl ?? string.Empty;
     }
 
     /// <summary>
     /// 判断是否是简单类型（可以原样 ToString），否则认为复杂需要 JSON 序列化
     /// </summary>
-    private bool IsSimpleType(Type type)
+    private static bool IsSimpleType(Type type)
     {
         type = Nullable.GetUnderlyingType(type) ?? type;
 
