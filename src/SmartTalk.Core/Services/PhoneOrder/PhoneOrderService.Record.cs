@@ -792,7 +792,7 @@ public partial class PhoneOrderService
         
         var offset = pstTimeZone.GetUtcOffset(pstTime);
         
-        return new DateTimeOffset(pstTime, offset).ToString("yyyy-MM-dd");
+        return new DateTimeOffset(pstTime, offset).ToString("yyyy-MM-dd HH:mm:ss");
     }
     
      /// <summary>
