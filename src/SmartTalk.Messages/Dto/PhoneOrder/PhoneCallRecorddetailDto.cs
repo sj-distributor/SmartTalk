@@ -20,7 +20,7 @@ public class PhoneCallRecordDetailDto
     public string InBoundType { get; set; }
     
     [JsonProperty("來電時間")]
-    public DateTimeOffset CreatedDate { get; set; }
+    public string CreatedDate { get; set; }
     
     [JsonProperty("是否轉接人工")]
     public string IsTransfer { get; set; }
