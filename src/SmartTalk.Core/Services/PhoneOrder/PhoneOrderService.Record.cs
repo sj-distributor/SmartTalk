@@ -750,21 +750,17 @@ public partial class PhoneOrderService
         var result = await _phoneOrderDataProvider
             .GetPhonCallUsagesAsync(startTime, endTime, request.IncludeExternalData, cancellationToken).ConfigureAwait(false);
 
-        var data = result.GroupBy(x => x.Record.AgentId).SelectMany(x =>
-        {
-            var name = x.First().Assistant?.Name;
-            
-            return x.Where(r => !string.IsNullOrEmpty(r.Record.Url)).OrderBy(r => r.Record.CreatedDate).Select(r => new PhoneCallRecordDetailDto
+        var data = result.Where(r => !string.IsNullOrEmpty(r.Record.Url)).OrderBy(r => r.Record.CreatedDate).Select(x =>
+            new PhoneCallRecordDetailDto
             {
-                Name = name,
-                Url = r.Record.Url,
-                Duration = r.Record.Duration,
-                PhoneNumber = r.Record.IncomingCallNumber ?? string.Empty,
-                InBoundType = r.Record.Url.Contains("twilio") ? "電話" : "網頁",
-                CreatedDate = ConvertUtcToPst(r.Record.CreatedDate),
-                IsTransfer = r.Record.IsTransfer.HasValue ? r.Record.IsTransfer.Value ? "是" : "" : ""
-            });
-        }).ToList();
+                Name = x.Assistant?.Name,
+                Url = x.Record.Url,
+                Duration = x.Record.Duration,
+                PhoneNumber = x.Record.IncomingCallNumber ?? string.Empty,
+                InBoundType = x.Record.Url.Contains("twilio") ? "電話" : "網頁",
+                CreatedDate = ConvertUtcToPst(x.Record.CreatedDate),
+                IsTransfer = x.Record.IsTransfer.HasValue ? x.Record.IsTransfer.Value ? "是" : "" : ""
+            }).ToList();
         
         var fileUrl = await ToExcelTransposed(data, cancellationToken).ConfigureAwait(false);
 
