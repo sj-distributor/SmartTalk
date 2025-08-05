@@ -62,7 +62,7 @@ public class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
 
     public async Task EnrichPhoneOrderRecordAsync(PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken = default)
     {
-        await FillingIncomingCallNumber(record, cancellationToken).ConfigureAwait(false);
+        await FillingIncomingCallNumberAsync(record, cancellationToken).ConfigureAwait(false);
         
         await CalculateRecordingDurationAsync(record, audioContent, cancellationToken).ConfigureAwait(false);
         
@@ -82,7 +82,7 @@ public class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
         record.Duration = TimeSpan.TryParse(duration, out var timeSpan) ? timeSpan.TotalSeconds : 0;
     }
 
-    public async Task FillingIncomingCallNumber(PhoneOrderRecord record, CancellationToken cancellationToken)
+    public async Task FillingIncomingCallNumberAsync(PhoneOrderRecord record, CancellationToken cancellationToken)
     {
         if (record.Url.Contains("twilio") && string.IsNullOrWhiteSpace(record.IncomingCallNumber))
         {
