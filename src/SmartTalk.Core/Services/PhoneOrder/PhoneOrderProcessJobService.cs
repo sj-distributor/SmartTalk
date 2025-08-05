@@ -8,7 +8,6 @@ using SmartTalk.Core.Settings.Twilio;
 using SmartTalk.Messages.Commands.PhoneOrder;
 using Twilio;
 using Twilio.Rest.Api.V2010.Account;
-using WebSocketSharp;
 
 namespace SmartTalk.Core.Services.PhoneOrder;
 
@@ -85,7 +84,7 @@ public class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
 
     public async Task FillingIncomingCallNumber(PhoneOrderRecord record, CancellationToken cancellationToken)
     {
-        if (!record.Url.Contains("twilio") || !record.IncomingCallNumber.IsNullOrEmpty()) return;
+        if (!record.Url.Contains("twilio") || !string.IsNullOrEmpty(record.IncomingCallNumber)) return;
         
         TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
 
