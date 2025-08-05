@@ -4,7 +4,11 @@ using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Ffmpeg;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Jobs;
+using SmartTalk.Core.Settings.Twilio;
 using SmartTalk.Messages.Commands.PhoneOrder;
+using Twilio;
+using Twilio.Rest.Api.V2010.Account;
+using WebSocketSharp;
 
 namespace SmartTalk.Core.Services.PhoneOrder;
 
@@ -18,13 +22,15 @@ public interface IPhoneOrderProcessJobService : IScopedDependency
 public class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
 {
     private readonly IFfmpegService _ffmpegService;
+    private readonly TwilioSettings _twilioSettings;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly ISmartTalkHttpClientFactory _smartTalkHttpClient;
     private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
 
-    public PhoneOrderProcessJobService(IFfmpegService ffmpegService, IPhoneOrderDataProvider phoneOrderDataProvider, ISmartTalkHttpClientFactory smartTalkHttpClient, ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient)
+    public PhoneOrderProcessJobService(IFfmpegService ffmpegService, TwilioSettings twilioSettings, IPhoneOrderDataProvider phoneOrderDataProvider, ISmartTalkHttpClientFactory smartTalkHttpClient, ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient)
     {
         _ffmpegService = ffmpegService;
+        _twilioSettings = twilioSettings;
         _smartTalkHttpClient = smartTalkHttpClient;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
@@ -39,7 +45,7 @@ public class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
         if (records == null || records.Count == 0) return;
         
         foreach (var record in records.Where(x => !string.IsNullOrWhiteSpace(x.Url)))
-            _smartTalkBackgroundJobClient.Enqueue(() => CalculateRecordingDurationAsync(record, null, cancellationToken), HangfireConstants.InternalHostingFfmpeg);
+            _smartTalkBackgroundJobClient.Enqueue(() => EnrichPhoneOrderRecordAsync(record, null, cancellationToken), HangfireConstants.InternalHostingFfmpeg);
     }
 
     private (DateTimeOffset Start, DateTimeOffset End) GetQueryTimeRange()
@@ -55,8 +61,19 @@ public class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
         return (startInPst.ToUniversalTime(), endInPst.ToUniversalTime());
     }
 
+    public async Task EnrichPhoneOrderRecordAsync(PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken = default)
+    {
+        await FillingIncomingCallNumber(record, cancellationToken).ConfigureAwait(false);
+        
+        await CalculateRecordingDurationAsync(record, audioContent, cancellationToken).ConfigureAwait(false);
+        
+        await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task CalculateRecordingDurationAsync(PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken = default)
     {
+        if (record.Duration is > 0) return;
+        
         var audioBytes = audioContent == null || audioContent.Length == 0
             ? await _smartTalkHttpClient.GetAsync<byte[]>(record.Url, cancellationToken).ConfigureAwait(false)
             : audioContent;
@@ -64,7 +81,16 @@ public class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
         var duration = await _ffmpegService.GetAudioDurationAsync(audioBytes, cancellationToken).ConfigureAwait(false);
         
         record.Duration = TimeSpan.TryParse(duration, out var timeSpan) ? timeSpan.TotalSeconds : 0;
+    }
+
+    public async Task FillingIncomingCallNumber(PhoneOrderRecord record, CancellationToken cancellationToken)
+    {
+        if (!record.Url.Contains("twilio") || !record.IncomingCallNumber.IsNullOrEmpty()) return;
         
-        await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
+        TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
+
+        var call = await CallResource.FetchAsync(record.SessionId);
+        
+        record.IncomingCallNumber = call?.From ?? string.Empty;
     }
 }

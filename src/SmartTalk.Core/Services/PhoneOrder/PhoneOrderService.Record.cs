@@ -756,7 +756,7 @@ public partial class PhoneOrderService
                 Name = name,
                 Url = r.Record.Url,
                 Duration = r.Record.Duration,
-                PhoneNumber = r.Record.PhoneNumber ?? string.Empty,
+                PhoneNumber = r.Record.IncomingCallNumber ?? string.Empty,
                 InBoundType = r.Record.Url.Contains("twilio") ? "電話" : "網頁",
                 CreatedDate = ConvertUtcToPst(r.Record.CreatedDate),
                 IsTransfer = r.Record.IsTransfer.HasValue ? r.Record.IsTransfer.Value ? "是" : "" : ""
