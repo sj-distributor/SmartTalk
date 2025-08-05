@@ -744,14 +744,13 @@ public partial class PhoneOrderService
         var (startTime, endTime) = GetQueryTimeRange(request.Month);
 
         var result = await _phoneOrderDataProvider
-            .GetPhonCallUsagesAsync(startTime, endTime, request.IncludeExternalData, cancellationToken)
-            .ConfigureAwait(false);
+            .GetPhonCallUsagesAsync(startTime, endTime, request.IncludeExternalData, cancellationToken).ConfigureAwait(false);
 
         var data = result.GroupBy(x => x.Record.AgentId).SelectMany(x =>
         {
             var name = x.First().Assistant?.Name;
             
-            return x.Where(r => !string.IsNullOrEmpty(r.Record.Url)).Select(r => new PhoneCallRecordDetailDto
+            return x.Where(r => !string.IsNullOrEmpty(r.Record.Url)).OrderBy(r => r.Record.CreatedDate).Select(r => new PhoneCallRecordDetailDto
             {
                 Name = name,
                 Url = r.Record.Url,
@@ -781,7 +780,7 @@ public partial class PhoneOrderService
         return (startInPst.ToUniversalTime(), endInPst.ToUniversalTime());
     }
     
-    private DateTimeOffset ConvertUtcToPst(DateTimeOffset utcTime)
+    private string ConvertUtcToPst(DateTimeOffset utcTime)
     {
         var pstTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
         
@@ -789,7 +788,7 @@ public partial class PhoneOrderService
         
         var offset = pstTimeZone.GetUtcOffset(pstTime);
         
-        return new DateTimeOffset(pstTime, offset);
+        return new DateTimeOffset(pstTime, offset).ToString("yyyy-MM-dd");
     }
     
      /// <summary>
