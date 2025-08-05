@@ -79,7 +79,8 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             OrderStatus = PhoneOrderOrderStatus.Pending,
             CustomerName = context.UserInfo?.UserName,
             PhoneNumber = context.UserInfo?.PhoneNumber,
-            IsTransfer = context.IsTransfer
+            IsTransfer = context.IsTransfer,
+            IncomingCallNumber = context.LastUserInfo.PhoneNumber
         };
 
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync([record], cancellationToken: cancellationToken).ConfigureAwait(false);
