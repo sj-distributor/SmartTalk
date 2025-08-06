@@ -310,7 +310,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         var call = await CallResource.UpdateAsync(
             pathSid: command.CallSid,
-            twiml: $"<Response>\n    <Dial>\n      <Number>{command.HumanPhone}</Number>\n    </Dial>\n  </Response>"
+            twiml: $"<Response>\n    <Dial>\n      <Number>{command.HumanPhone}</Number>\n    </Dial>\n  </Response>",
+            timeLimit: 7200
         );
     }
 
