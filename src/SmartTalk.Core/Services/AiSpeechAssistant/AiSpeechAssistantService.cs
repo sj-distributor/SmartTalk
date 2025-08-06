@@ -317,6 +317,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
     public async Task HangupCallAsync(string callSid, CancellationToken cancellationToken)
     {
+        if (_aiSpeechAssistantStreamContext.IsTransfer) return;
+        
         TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
         
         await CallResource.UpdateAsync(
@@ -731,6 +733,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _inactivityTimerManager.StartTimer(_aiSpeechAssistantStreamContext.CallSid, TimeSpan.FromMinutes(2), async () =>
         {
             Log.Warning("No activity detected for 2 minutes.");
+            
             await HangupCallAsync(_aiSpeechAssistantStreamContext.CallSid, CancellationToken.None);
         });
     }
