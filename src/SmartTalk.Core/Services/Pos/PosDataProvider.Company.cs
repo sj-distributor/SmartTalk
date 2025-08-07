@@ -23,7 +23,7 @@ public partial interface IPosDataProvider : IScopedDependency
     Task<List<PosCategory>> GetPosCategoriesAsync(int? menuId = null, int? id = null, int? storeId = null, List<int> ids = null, CancellationToken cancellationToken = default);
 
     Task<List<PosProduct>> GetPosProductsAsync(
-        int? categoryId = null, string name = null, int? id = null, int? storeId = null, List<int> ids = null,
+        int? categoryId = null, string name = null, int? id = null, int? storeId = null, List<int> ids = null, List<int> categoryIds = null,
         List<string> productIds = null, string keyWord = null, bool? isActive = null, CancellationToken cancellationToken = default);
 
     Task UpdateCategoriesAsync(List<PosCategory> categories, bool isForceSave = true, CancellationToken cancellationToken = default);
@@ -118,7 +118,7 @@ public partial class PosDataProvider
     }
 
     public async Task<List<PosProduct>> GetPosProductsAsync(
-        int? categoryId = null, string name = null, int? id = null, int? storeId = null, List<int> ids = null,
+        int? categoryId = null, string name = null, int? id = null, int? storeId = null, List<int> ids = null, List<int> categoryIds = null,
         List<string> productIds = null, string keyWord = null, bool? isActive = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<PosProduct>();
@@ -137,6 +137,9 @@ public partial class PosDataProvider
 
         if (ids != null && ids.Count != 0)
             query = query.Where(x => ids.Contains(x.Id));
+
+        if (categoryIds != null && categoryIds.Count != 0)
+            query = query.Where(x => categoryIds.Contains(x.CategoryId));
 
         if (!string.IsNullOrEmpty(keyWord))
             query = query.Where(x => x.Names.Contains(keyWord) || x.Modifiers.Contains(keyWord));
