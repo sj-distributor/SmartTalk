@@ -1,10 +1,10 @@
 using Google.Cloud.Translation.V2;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Ioc;
+using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.PhoneOrder;
-using SmartTalk.Core.Services.Security;
 using SmartTalk.Core.Services.STT;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.STT;
@@ -24,6 +24,7 @@ public class RealtimeProcessJobService : IRealtimeProcessJobService
     private readonly ISpeechToTextService _speechToTextService;
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
+    private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
 
     public RealtimeProcessJobService(
         TranslationClient translationClient,
@@ -31,8 +32,8 @@ public class RealtimeProcessJobService : IRealtimeProcessJobService
         IPhoneOrderService phoneOrderService,
         ISpeechToTextService speechToTextService,
         ISmartTalkHttpClientFactory httpClientFactory,
-        ISecurityDataProvider securityDataProvider,
-        IPhoneOrderDataProvider phoneOrderDataProvider)
+        IPhoneOrderDataProvider phoneOrderDataProvider,
+        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
         _phoneOrderService = phoneOrderService;
         _agentDataProvider = agentDataProvider;
@@ -40,10 +41,17 @@ public class RealtimeProcessJobService : IRealtimeProcessJobService
         _httpClientFactory = httpClientFactory;
         _speechToTextService = speechToTextService;
         _phoneOrderDataProvider = phoneOrderDataProvider;
+        _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
     }
 
-    public async Task RecordingRealtimeAiAsync(string recordingUrl, int agentId, CancellationToken cancellationToken)
+    public async Task RecordingRealtimeAiAsync(string recordingUrl, int assistantId, CancellationToken cancellationToken)
     {
+        if (string.IsNullOrEmpty(recordingUrl) || assistantId == 0) return;
+        
+        var agentAssistant = await _aiSpeechAssistantDataProvider.GetAgentAssistantsAsync(assistantIds: [assistantId], cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        if (agentAssistant == null || agentAssistant.Count == 0) return;
+
         var recordingContent = await _httpClientFactory.GetAsync<byte[]>(recordingUrl, cancellationToken).ConfigureAwait(false);
         if (recordingContent == null) return;
         
@@ -52,8 +60,8 @@ public class RealtimeProcessJobService : IRealtimeProcessJobService
         
         var detection = await _translationClient.DetectLanguageAsync(transcription, cancellationToken).ConfigureAwait(false);
         
-        var record = new PhoneOrderRecord { SessionId = Guid.NewGuid().ToString(), AgentId = agentId, Url = recordingUrl, Language = SelectLanguageEnum(detection.Language), CreatedDate = DateTimeOffset.Now, Status = PhoneOrderRecordStatus.Recieved };
-        
+        var record = new PhoneOrderRecord { SessionId = Guid.NewGuid().ToString(), AgentId = agentAssistant.First().AgentId, TranscriptionText = transcription, Url = recordingUrl, Language = SelectLanguageEnum(detection.Language), CreatedDate = DateTimeOffset.Now, Status = PhoneOrderRecordStatus.Recieved };
+
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync([record], cancellationToken: cancellationToken).ConfigureAwait(false);
         
         record.TranscriptionJobId = await _phoneOrderService.CreateSpeechMaticsJobAsync(recordingContent, Guid.NewGuid().ToString("N") + ".wav", detection.Language, cancellationToken).ConfigureAwait(false);
