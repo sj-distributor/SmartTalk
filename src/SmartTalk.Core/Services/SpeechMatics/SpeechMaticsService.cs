@@ -173,10 +173,13 @@ public class SpeechMaticsService : ISpeechMaticsService
             var userProfile = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantUserProfileAsync(aiSpeechAssistant.Id, callFrom, cancellationToken).ConfigureAwait(false);
             var salesName = userProfile?.ProfileJson != null ? JObject.Parse(userProfile.ProfileJson).GetValue("correspond_sales")?.ToString() : string.Empty;
 
+            var combinedName = $"【{aiSpeechAssistant?.Name ?? ""}】";
             if (!string.IsNullOrEmpty(salesName))
             {
-                message = agent.WechatRobotMessage?.Replace("#{assistant_name}", salesName).Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString()).Replace("#{assistant_file_url}", record.Url);
+                combinedName += $"【{salesName}】";
             }
+            
+            message = agent.WechatRobotMessage?.Replace("#{assistant_name}", combinedName).Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString()).Replace("#{assistant_file_url}", record.Url);
         }
 
         return message;
