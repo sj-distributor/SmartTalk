@@ -17,6 +17,6 @@ public class ReceivePhoneRecordingStatusCallbackCommandHandler : ICommandHandler
 
     public async Task Handle(IReceiveContext<ReceivePhoneRecordingStatusCallbackCommand> context, CancellationToken cancellationToken)
     {
-        _smartTalkBackgroundJobClient.Enqueue<IAiSpeechAssistantService>(x => x.ReceivePhoneRecordingStatusCallbackAsync(context.Message, cancellationToken).ConfigureAwait(false));
+        _smartTalkBackgroundJobClient.Schedule<IAiSpeechAssistantService>(x => x.ReceivePhoneRecordingStatusCallbackAsync(context.Message, cancellationToken), TimeSpan.FromSeconds(10));
     }
 }
