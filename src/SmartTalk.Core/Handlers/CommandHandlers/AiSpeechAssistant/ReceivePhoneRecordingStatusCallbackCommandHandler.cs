@@ -8,15 +8,15 @@ namespace SmartTalk.Core.Handlers.CommandHandlers.AiSpeechAssistant;
 
 public class ReceivePhoneRecordingStatusCallbackCommandHandler : ICommandHandler<ReceivePhoneRecordingStatusCallbackCommand>
 {
-    private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
+    private readonly IAiSpeechAssistantService _aiSpeechAssistantService;
 
-    public ReceivePhoneRecordingStatusCallbackCommandHandler(ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient)
+    public ReceivePhoneRecordingStatusCallbackCommandHandler(IAiSpeechAssistantService aiSpeechAssistantService)
     {
-        _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
+        _aiSpeechAssistantService = aiSpeechAssistantService;
     }
 
     public async Task Handle(IReceiveContext<ReceivePhoneRecordingStatusCallbackCommand> context, CancellationToken cancellationToken)
     {
-        _smartTalkBackgroundJobClient.Schedule<IAiSpeechAssistantService>(x => x.ReceivePhoneRecordingStatusCallbackAsync(context.Message, cancellationToken), TimeSpan.FromSeconds(10));
+        await _aiSpeechAssistantService.ReceivePhoneRecordingStatusCallbackAsync(context.Message, cancellationToken).ConfigureAwait(false);
     }
 }
