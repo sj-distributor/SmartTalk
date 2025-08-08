@@ -65,6 +65,9 @@ public partial class PhoneOrderService
     public async Task ReceivePhoneOrderRecordAsync(ReceivePhoneOrderRecordCommand command, CancellationToken cancellationToken)
     {
         if (command.RecordName.IsNullOrEmpty() && command.RecordUrl.IsNullOrEmpty()) return;
+        
+        if (!string.IsNullOrEmpty(command.RecordUrl))
+            command.RecordContent = await _httpClientFactory.GetAsync<byte[]>(command.RecordUrl, cancellationToken).ConfigureAwait(false);
 
         var recordInfo = await ExtractPhoneOrderRecordInfoAsync(command.RecordName, command.AgentId, command.CreatedDate, cancellationToken).ConfigureAwait(false);
 
