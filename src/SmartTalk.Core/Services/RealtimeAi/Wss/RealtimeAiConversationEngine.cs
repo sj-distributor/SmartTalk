@@ -2,7 +2,6 @@ using System.Net.WebSockets;
 using Newtonsoft.Json;
 using Serilog;
 using SmartTalk.Core.Services.AiSpeechAssistant;
-using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.RealtimeAi.wss;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
@@ -13,10 +12,8 @@ namespace SmartTalk.Core.Services.RealtimeAi.Wss;
 
 public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
 {
-    private readonly ISmartiesClient _smartiesClient;
     private readonly IRealtimeAiProviderAdapter _aiAdapter;
     private readonly IRealtimeAiWssClient _realtimeAiClient;
-    private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
 
     private string _sessionId;
     private string _greetings;
@@ -84,7 +81,7 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
             {
                 throw new InvalidOperationException("无法连接到底层 Realtime AI Client。"); // Cannot connect to underlying Realtime AI Client.
             }
-            
+
             var initialPayload = await _aiAdapter.GetInitialSessionPayloadAsync(_currentAssistantProfile, 
                 new RealtimeAiEngineContext { InitialPrompt = initialUserPrompt, InputFormat = inputFormat, OutputFormat = outputFormat }, _sessionId, _sessionCts.Token);
             var initialMessageJson = JsonConvert.SerializeObject(initialPayload, new JsonSerializerSettings() { NullValueHandling = NullValueHandling.Ignore });
