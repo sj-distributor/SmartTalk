@@ -111,29 +111,6 @@ public class RealtimeAiService : IRealtimeAiService
         var finalPrompt = assistant.Knowledge.Prompt
             .Replace("#{current_time}", currentTime)
             .Replace("#{pst_date}", $"{pstTime.Date:yyyy-MM-dd} {pstTime.DayOfWeek}");
-
-        if (finalPrompt.Contains("#{restaurant_info}") || finalPrompt.Contains("#{restaurant_items}"))
-        {
-            var aiKid = await _aiSpeechAssistantDataProvider.GetAiKidAsync(assistant.Id, cancellationToken).ConfigureAwait(false);
-
-            if (aiKid != null)
-            {
-                try
-                {
-                    var response = await _smartiesClient.GetCrmCustomerInfoAsync(aiKid.KidUuid, cancellationToken).ConfigureAwait(false);
-                    
-                    Log.Information("Get crm customer info response: {@Response}", response);
-
-                    var result = SplicingCrmCustomerResponse(response?.Data?.FirstOrDefault());
-
-                    finalPrompt = finalPrompt.Replace("#{restaurant_info}", result.RestaurantInfo).Replace("#{restaurant_items}", result.PurchasedItems);
-                }
-                catch (Exception e)
-                {
-                    Log.Warning("Replace restaurant info failed: {Exception}", e);
-                }
-            }
-        }
         
         Log.Information($"The final prompt: {finalPrompt}");
 
