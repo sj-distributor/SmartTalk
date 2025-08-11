@@ -1,7 +1,6 @@
 using System.Net.WebSockets;
 using Newtonsoft.Json;
 using Serilog;
-using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.RealtimeAi.wss;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
