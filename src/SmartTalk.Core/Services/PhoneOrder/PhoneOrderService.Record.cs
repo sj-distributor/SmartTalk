@@ -510,11 +510,18 @@ public partial class PhoneOrderService
 
         foreach (var reSplitAudio in splitAudios)
         {
-            var transcriptionResponse = await _speechToTextService.SpeechToTextAsync(
+            try
+            {
+                var transcriptionResponse = await _speechToTextService.SpeechToTextAsync(
                     reSplitAudio, record.Language, TranscriptionFileType.Wav, TranscriptionResponseFormat.Text,
                     record.RestaurantInfo?.Message ?? string.Empty, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-            transcriptionResult.Append(transcriptionResponse);
+                transcriptionResult.Append(transcriptionResponse);
+            }
+            catch (Exception e)
+            {
+                Log.Warning("Audio segment transcription error");
+            }
         }
 
         Log.Information("Transcription result {Transcription}", transcriptionResult.ToString());
