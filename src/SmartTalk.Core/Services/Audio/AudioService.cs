@@ -30,14 +30,23 @@ public class AudioService : IAudioService
 
         var client = new ChatClient("gpt-4o-audio-preview", _openAiSettings.ApiKey);
 
-        var audioContent = !string.IsNullOrWhiteSpace(command.AudioUrl)
-            ? await _httpClientFactory.GetAsync<byte[]>(command.AudioUrl, cancellationToken).ConfigureAwait(false)
-            : command.AudioContent;
+        BinaryData audioData;
 
-        if (audioContent is null || audioContent.Length == 0)
-            throw new InvalidOperationException("Audio content is empty.");
+        if (!string.IsNullOrWhiteSpace(command.AudioUrl))
+        {
+            var httpClient = _httpClientFactory.CreateClient();
 
-        var audioData = BinaryData.FromBytes(audioContent);
+            await using var stream = await httpClient.GetStreamAsync(command.AudioUrl, cancellationToken).ConfigureAwait(false);
+
+            audioData = await BinaryData.FromStreamAsync(stream, cancellationToken);
+        }
+        else
+        {
+            if (command.AudioContent is null || command.AudioContent.Length == 0)
+                throw new InvalidOperationException("Audio content is empty.");
+
+            audioData = BinaryData.FromBytes(command.AudioContent);
+        }
 
         var messages = new List<ChatMessage>();
         if (!string.IsNullOrWhiteSpace(command.SystemPrompt))
