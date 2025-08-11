@@ -29,6 +29,7 @@ public class PrinterController : ControllerBase
             _mapper = mapper;
         }
 
+        [AllowAnonymous]
         [Route("Get/job"), HttpPost]
         [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPrinterJobAvailableResponse))]
         public async Task<IActionResult> GetPrinterJobAvailableAsync([FromBody] PollRequest pollRequest, Guid? token ,CancellationToken cancellationToken)
@@ -51,7 +52,7 @@ public class PrinterController : ControllerBase
             return Ok(response);
         }
 
-        
+        [AllowAnonymous]
         [Route("Get"), HttpGet]
         [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPrinterJobAvailableResponse))]
         public async Task<IActionResult> Get([FromQuery] PrinterJobDto dto)
