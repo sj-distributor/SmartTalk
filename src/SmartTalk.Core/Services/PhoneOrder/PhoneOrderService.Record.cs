@@ -520,7 +520,7 @@ public partial class PhoneOrderService
             }
             catch (Exception e)
             {
-                Log.Warning("Audio segment transcription error");
+                Log.Warning("Audio segment transcription error: {@Exception}", e);
             }
         }
 
