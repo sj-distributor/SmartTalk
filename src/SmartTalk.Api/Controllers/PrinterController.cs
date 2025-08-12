@@ -101,6 +101,8 @@ public class PrinterController : ControllerBase
                 imageUrl = url.ImageUrl;
             }
 
+            Log.Information("image: {imageUrl}", imageUrl);
+            
             Log.Information("Printer Get UploadOrderPrintImageToQiNiuAndUpdatePrintUrlRequest run{@Ms}", stopwatch.ElapsedMilliseconds);
             stopwatch.Restart();
             
@@ -122,6 +124,8 @@ public class PrinterController : ControllerBase
         [HttpDelete, AllowAnonymous]
         public async Task<IActionResult> Delete([FromQuery] ConfirmPrinterJobDto dto)
         {
+            Log.Information("ConfirmPrinterJobDto: {@ConfirmPrinterJobDto}", dto);
+            
             await _mediator.SendAsync(_mapper.Map<ConfirmPrinterJobCommand>(dto));
 
             return Ok();
@@ -131,7 +135,7 @@ public class PrinterController : ControllerBase
         [HttpPost, Route("printTest")]
         public async Task<IActionResult> PrintTest(PrintTestCommand command)
         {
-            await _mediator.SendAsync(command);
+            await _mediator.SendAsync(command).ConfigureAwait(false);
             return Ok();
         }
 }  
