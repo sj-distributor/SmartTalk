@@ -73,15 +73,18 @@ public partial class AccountService : IAccountService
             UserId = account.Id
         }], cancellationToken).ConfigureAwait(false);
 
-        var stores = await _posDataProvider.GetPosCompanyStoresAsync(companyIds: userAccountCommand.CompanyIds, ids: userAccountCommand.StoreIds, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        var storeUsers = stores.Select(store => new PosStoreUser
+        if (userAccountCommand.StoreIds != null || userAccountCommand.CompanyIds != null)
         {
-            UserId = account.Id,
-            StoreId = store.Id
-        }).ToList();
+            var stores = await _posDataProvider.GetPosCompanyStoresAsync(ids: userAccountCommand.StoreIds, companyIds: userAccountCommand.CompanyIds, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        await _posDataProvider.CreatePosStoreUserAsync(storeUsers, forceSave: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+            var storeUsers = stores.Select(store => new PosStoreUser
+            {
+                UserId = account.Id,
+                StoreId = store.Id
+            }).ToList();
+
+            await _posDataProvider.CreatePosStoreUserAsync(storeUsers, forceSave: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
         
         return new CreateUserAccountResponse
         {
