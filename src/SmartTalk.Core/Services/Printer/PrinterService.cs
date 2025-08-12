@@ -329,14 +329,13 @@ public class PrinterService : IPrinterService
 
     private async Task<Image<Rgba32>> RenderReceipt()
     {
-        int width = 512;
-        Color textColor = Color.Black;
-        Color bgColor = Color.White;
+        var width = 512;
+        var textColor = Color.Black;
+        var bgColor = Color.White;
 
-        string fontPath = "font/SourceHanSansSC-Regular.otf"; // 中文字体
-        var collection = new FontCollection();
-        var family = collection.Add(fontPath);
-        collection.Add("font/SourceHanSansSC-Bold.otf");
+        var collection = LoadFonts();
+        var family = collection.Get("Source Han Sans SC");
+
 
         Font CreateFont(float size, bool bold = false)
         {
@@ -697,5 +696,18 @@ public class PrinterService : IPrinterService
         }
 
         return ms.ToArray();
+    }
+    
+    private static FontCollection LoadFonts()
+    {
+        var fontDir = Path.Combine(AppContext.BaseDirectory, "font");
+        var regularFontPath = Path.Combine(fontDir, "SourceHanSansSC-Regular.otf");
+        var boldFontPath = Path.Combine(fontDir, "SourceHanSansSC-Bold.otf");
+
+        var collection = new FontCollection();
+        collection.Add(regularFontPath);
+        collection.Add(boldFontPath);
+
+        return collection;
     }
 }
