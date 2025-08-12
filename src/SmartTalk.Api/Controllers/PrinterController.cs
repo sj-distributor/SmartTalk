@@ -75,7 +75,9 @@ public class PrinterController : ControllerBase
 
             // get order 
             var command = _mapper.Map<PrinterJobCommand>(dto);
-            var response = await _mediator.SendAsync<PrinterJobCommand, PrinterJobResponse>(command);
+            var response = await _mediator.SendAsync<PrinterJobCommand, PrinterJobResponse>(command).ConfigureAwait(false);
+            
+            Log.Information("response: {@response}", response);
 
             Log.Information("Printer Get PrinterJobCommand run{@Ms}", stopwatch.ElapsedMilliseconds);
             stopwatch.Restart();
@@ -105,20 +107,20 @@ public class PrinterController : ControllerBase
             
             Log.Information("Printer Get UploadOrderPrintImageToQiNiuAndUpdatePrintUrlRequest run{@Ms}", stopwatch.ElapsedMilliseconds);
             stopwatch.Restart();
-            
-            var content = $@"[image: url {imageUrl};width 100%;min-width 30mm][cut: feed; partial]";
+
+            var content =
+                $@"[image: url {imageUrl};width 100%;min-width 30mm][cut: feed; partial]";
+
             var jobData = Encoding.UTF8.GetBytes(content);
-
-            var outputFormat = command.Type;
-            
-            var ms = new MemoryStream();
-            Document.Convert(jobData, "text/vnd.star.markup", ms, outputFormat, new ConversionOptions());
-            ms.Position = 0;
-
+            // get the requested output media type from the query string
+            string outputFormat = command.Type;
+            // set the response media type, and output the converted job to the response body
+            Response.ContentType = outputFormat;
+            Document.Convert(jobData, "text/vnd.star.markup", Response.Body, outputFormat, new ConversionOptions() { });
             stopwatch.Stop();
             Log.Information("Printer Get Convert run{@Ms}", stopwatch.ElapsedMilliseconds);
             
-            return File(ms, outputFormat);
+            return new EmptyResult();
         }
         
         [HttpDelete, AllowAnonymous]

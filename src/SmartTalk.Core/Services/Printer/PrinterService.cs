@@ -142,6 +142,8 @@ public class PrinterService : IPrinterService
 
     public async Task<PrinterJobResponse> PrinterJob(PrinterJobCommand command, CancellationToken cancellationToken)
     {
+        Log.Information("PrinterJobCommand: {@PrinterJobCommand}", command);
+        
         var merchPrinterOrder = (await _printerDataProvider.GetMerchPrinterOrdersAsync(command.JobToken, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
         if (merchPrinterOrder != null && merchPrinterOrder.PrintStatus == PrintStatus.Waiting)
         {
