@@ -17,6 +17,8 @@ public interface IPrinterDataProvider : IScopedDependency
     Task UpdateMerchPrinterOrderAsync(MerchPrinterOrder merchPrinterOrder, bool forceSave = true, CancellationToken cancellationToken = default);
 
     Task UpdateMerchPrinterMacAsync(MerchPrinter merchPrinter, bool forceSave = true, CancellationToken cancellationToken = default);
+
+    Task AddMerchPrinterOrderAsync(MerchPrinterOrder merchPrinterOrder, CancellationToken cancellationToken);
 }
 
 public class PrinterDataProvider : IPrinterDataProvider
@@ -77,5 +79,13 @@ public class PrinterDataProvider : IPrinterDataProvider
 
         if (forceSave)
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task AddMerchPrinterOrderAsync(MerchPrinterOrder merchPrinterOrder, CancellationToken cancellationToken)
+    {
+        await _repository.InsertAsync(merchPrinterOrder, cancellationToken).ConfigureAwait(false);
+
+        await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
     }
 }

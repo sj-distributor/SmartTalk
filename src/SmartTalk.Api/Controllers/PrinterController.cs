@@ -29,10 +29,9 @@ public class PrinterController : ControllerBase
             _mapper = mapper;
         }
 
-        [AllowAnonymous]
-        [Route("Get/job"), HttpPost]
+        [HttpPost, AllowAnonymous]
         [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPrinterJobAvailableResponse))]
-        public async Task<IActionResult> GetPrinterJobAvailableAsync([FromBody] PollRequest pollRequest, Guid? token ,CancellationToken cancellationToken)
+        public async Task<IActionResult> Post([FromBody] PollRequest pollRequest, Guid? token ,CancellationToken cancellationToken)
         {
             if (!token.HasValue) return Ok(new GetPrinterJobAvailableResponse{Code = HttpStatusCode.Unauthorized, Msg = "Token is null"});
 
@@ -52,8 +51,7 @@ public class PrinterController : ControllerBase
             return Ok(response);
         }
 
-        [AllowAnonymous]
-        [Route("Get"), HttpGet]
+        [HttpGet, AllowAnonymous]
         [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPrinterJobAvailableResponse))]
         public async Task<IActionResult> Get([FromQuery] PrinterJobDto dto)
         {
@@ -122,6 +120,14 @@ public class PrinterController : ControllerBase
         {
             await _mediator.SendAsync(_mapper.Map<ConfirmPrinterJobCommand>(dto));
 
+            return Ok();
+        }
+        
+        [AllowAnonymous]
+        [HttpPost, Route("printTest")]
+        public async Task<IActionResult> PrintTest(PrintTestCommand command)
+        {
+            await _mediator.SendAsync(command);
             return Ok();
         }
 }  
