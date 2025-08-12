@@ -64,7 +64,7 @@ public class PrinterService : IPrinterService
     public async Task<GetPrinterJobAvailableResponse> GetPrinterJobAvailable(GetPrinterJobAvailableRequest request, CancellationToken cancellationToken)
     {
         var key = $"{request.PrinterMac}-{request.Token}";
-        if (await _cacheManager.GetAsync<object>(key, new MemoryCachingSetting(), cancellationToken).ConfigureAwait(false) == null)
+        if (await _cacheManager.GetAsync<object>(key, new RedisCachingSetting(), cancellationToken).ConfigureAwait(false) == null)
         {
             return null;
         }
@@ -73,7 +73,7 @@ public class PrinterService : IPrinterService
 
         if (merchPrinter == null)
         {
-            await _cacheManager.SetAsync(key,1, new MemoryCachingSetting(TimeSpan.FromMinutes(2)),cancellationToken).ConfigureAwait(false);
+            await _cacheManager.SetAsync(key,1, new RedisCachingSetting(expiry: TimeSpan.FromMinutes(2)),cancellationToken).ConfigureAwait(false);
             return null; 
         }
             
