@@ -47,7 +47,7 @@
         <PackageReference Include="Serilog.Enrichers.CorrelationId" Version="3.0.1" />
         <PackageReference Include="Serilog.Sinks.Seq" Version="5.2.2" />
         <PackageReference Include="SixLabors.Fonts" Version="2.1.3" />
-        <PackageReference Include="SixLabors.ImageSharp" Version="2.1.9" />
+        <PackageReference Include="SixLabors.ImageSharp" Version="2.1.5" />
         <PackageReference Include="SixLabors.ImageSharp.Drawing" Version="1.0.0" />
         <PackageReference Include="StackExchange.Redis" Version="2.6.122" />
         <PackageReference Include="Smarties.Messages" Version="3.86.1" />
