@@ -9,9 +9,11 @@ using SixLabors.ImageSharp.Processing;
 using SixLabors.Fonts;
 using System.Text;
 using AutoMapper;
+using Newtonsoft.Json;
 using Serilog;
 using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.AliYun;
+using SmartTalk.Message.Events.Printer;
 using SmartTalk.Messages.Commands.Printer;
 using SmartTalk.Messages.Dto.Printer;
 using SmartTalk.Messages.Enums.Printer;
@@ -34,6 +36,9 @@ public interface IPrinterService : IScopedDependency
         CancellationToken cancellationToken);
     
     Task<PrinterJobConfirmedEvent> RecordPrintErrorAfterConfirmPrinterJob(ConfirmPrinterJobCommand command,
+        CancellationToken cancellationToken);
+    
+    Task<PrinterStatusChangedEvent> RecordPrinterStatus(RecordPrinterStatusCommand command,
         CancellationToken cancellationToken);
 }
 
@@ -197,6 +202,33 @@ public class PrinterService : IPrinterService
         }
 
         return null;
+    }
+    
+    public async Task<PrinterStatusChangedEvent> RecordPrinterStatus(RecordPrinterStatusCommand command,
+        CancellationToken cancellationToken)
+    {
+        var merchPrinter = await _printerDataProvider.GetMerchPrinterByPrinterMacAsync(
+            command.PrinterMac, command.Token, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (merchPrinter == null)
+            return null;
+
+        var @event = new PrinterStatusChangedEvent()
+        {
+            PrinterMac = command.PrinterMac,
+            Token = command.Token,
+            OldPrinterStatusInfo = string.IsNullOrWhiteSpace(merchPrinter.StatusInfo)
+                ? null
+                : JsonConvert.DeserializeObject<PrinterStatusInfo>(merchPrinter.StatusInfo),
+            NewPrinterStatusInfo = command,
+        };
+
+        merchPrinter.StatusInfo = JsonConvert.SerializeObject(command);
+        merchPrinter.StatusInfoLastModifiedDate = DateTimeOffset.Now;
+
+        await _printerDataProvider.UpdateMerchPrinterMacAsync(merchPrinter, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return @event;
     }
 
     private async Task<Image<Rgba32>> RenderReceipt()
