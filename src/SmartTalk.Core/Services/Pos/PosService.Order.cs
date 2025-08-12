@@ -175,45 +175,6 @@ public partial class PosService
         }).ToList();
     }
 
-    // private List<PosOrderItemDto> BuildMergedOrderItemsWithStatus(List<EasyPosOrderItemDto> orderItems, string originalItemJson)
-    // {
-    //     var originalItems = JsonConvert.DeserializeObject<List<PosOrderItemDto>>(originalItemJson) ?? [];
-    //     var originalItemDict = originalItems.GroupBy(x => x.ProductId).Select(g =>
-    //     {
-    //         var item = g.First();
-    //         item.Status = PosOrderItemStatus.Missed;
-    //         return item;
-    //     }).ToDictionary(x => x.ProductId, x => x);
-    //     
-    //     var newItems = orderItems.Select(item =>
-    //     {
-    //         var status = originalItemDict.ContainsKey(item.ProductId) ? item.Quantity > 0 ? PosOrderItemStatus.Normal : PosOrderItemStatus.Missed : PosOrderItemStatus.Added;
-    //
-    //         return new PosOrderItemDto
-    //         {
-    //             Id = item.Id,
-    //             ProductId = item.ProductId,
-    //             Quantity = item.Quantity,
-    //             OriginalPrice = item.OriginalPrice,
-    //             Price = item.Price,
-    //             Notes = string.IsNullOrEmpty(item.Notes) ? string.Empty : item.Notes,
-    //             OrderItemModifiers = _mapper.Map<List<PhoneCallOrderItemModifiers>>(item.OrderItemModifiers),
-    //             Status = status
-    //         };
-    //     }).ToList();
-    //
-    //     foreach (var item in originalItemDict)
-    //     {
-    //         var matched = newItems.FirstOrDefault(x => x.ProductId == item.Key);
-    //
-    //         if (matched != null) continue;
-    //         
-    //         newItems.Add(item.Value);
-    //     }
-    //
-    //     return newItems;
-    // }
-
     private List<PosOrderItemDto> BuildMergedOrderItemsWithStatus(List<EasyPosOrderItemDto> newItems, string originalItemJson)
     {
         var result = new List<PosOrderItemDto>();
