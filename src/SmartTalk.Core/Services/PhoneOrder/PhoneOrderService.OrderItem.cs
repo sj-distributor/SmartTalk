@@ -61,7 +61,7 @@ public partial class PhoneOrderService
         {
             Type = 1,
             IsTaxFree = false,
-            Notes = record.Comments,
+            Notes = record.Comments ?? string.Empty,
             OrderItems = orderItems.Select(x => new PhoneCallOrderItem
             {
                 ProductId = x.ProductId ?? GetMenuItemByName(menuItems, x.FoodName)?.ProductId ?? 0,
