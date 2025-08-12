@@ -20,8 +20,7 @@
         <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="7.0.5" />
         <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="7.0.4" />
         <PackageReference Include="SixLabors.ImageSharp" Version="2.1.9" />
-        <PackageReference Include="StarMicronics.CloudPRNT-Utility" Version="2.0.0" />
-        <PackageReference Include="StarMicronics.StarDocumentMarkup-Utility" Version="2.0.0" />
+        <PackageReference Include="StarMicronics.CloudPRNT-Utility" Version="1.1.1" />
         <PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
         <PackageReference Include="Swashbuckle.AspNetCore.Annotations" Version="6.5.0" />
     </ItemGroup>
