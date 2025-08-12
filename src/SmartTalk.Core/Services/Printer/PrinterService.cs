@@ -1,3 +1,4 @@
+using System.Reflection;
 using SmartTalk.Core.Domain.Printer;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Caching;
@@ -42,6 +43,10 @@ public interface IPrinterService : IScopedDependency
         CancellationToken cancellationToken);
     
     Task PrintTest(PrintTestCommand command, CancellationToken cancellationToken);
+
+    Task PrinterStatusChangedAsync(PrinterStatusChangedEvent @event, CancellationToken cancellationToken);
+
+    Task PrinterJobConfirmeAsync(PrinterJobConfirmedEvent @event, CancellationToken cancellationToken);
 }
 
 public class PrinterService : IPrinterService
@@ -245,7 +250,83 @@ public class PrinterService : IPrinterService
         
         await _printerDataProvider.AddMerchPrinterOrderAsync(merchPrinterOrder, cancellationToken).ConfigureAwait(false);
     }
+
+    public async Task PrinterStatusChangedAsync(PrinterStatusChangedEvent @event, CancellationToken cancellationToken)
+    {
+        var merchPrinterLog = await GenerateMerchPrinterLog(@event, cancellationToken);
+            
+
+        if (merchPrinterLog != null)
+            await _printerDataProvider.AddMerchPrinterLogAsync(merchPrinterLog, cancellationToken);
+    }
+
+    private async Task<MerchPrinterLog> GenerateMerchPrinterLog(PrinterStatusChangedEvent @event,
+        CancellationToken cancellationToken)
+    {
+        var varianceList = GetVarianceList(@event);
+        if (!varianceList.Any())
+            return null;
+
+        var merchPrinter = await _printerDataProvider.GetMerchPrinterByPrinterMacAsync(@event.PrinterMac, @event.Token,cancellationToken);
+        if (merchPrinter == null)
+            return null;
+
+        return new MerchPrinterLog()
+        {
+            Id = Guid.NewGuid(),
+            AgentId = merchPrinter.AgentId,
+            OrderId = null,
+            PrinterMac = @event.PrinterMac,
+            PrintLogType = PrintLogType.StatusChange,
+            Message = string.Join(Environment.NewLine, varianceList.Select(v => v.ToString()))
+        };
+    }
     
+    private static readonly PropertyInfo[]  PrinterStatusPropertyInfos = typeof(PrinterStatusInfo).GetProperties();
+
+    private static List<Variance> GetVarianceList(PrinterStatusChangedEvent @event)
+    {
+        var variances = new List<Variance>();
+        var oldInfo = @event.OldPrinterStatusInfo;
+        var newInfo = @event.NewPrinterStatusInfo;
+
+        foreach (var f in PrinterStatusPropertyInfos)
+        {
+            var v = new Variance
+            {
+                Name = f.Name, OldValue = (bool) f.GetValue(oldInfo), NewValue = (bool) f.GetValue(newInfo)
+            };
+
+            if (v.OldValue != v.NewValue)
+                variances.Add(v);
+        }
+
+        return variances;
+    }
+
+    private class Variance
+    {
+        public string Name { get; set; }
+        public bool OldValue { get; set; }
+        public bool NewValue { get; set; }
+
+        public override string ToString()
+        {
+            return $"{Name}:{OldValue}->{NewValue}";
+        }
+    }
+
+    public async Task PrinterJobConfirmeAsync(PrinterJobConfirmedEvent @event, CancellationToken cancellationToken)
+    {
+        var merchPrinterLog = _mapper.Map<MerchPrinterLog>(@event);
+        var printError = @event.IsPrintError();
+        
+        var message = $"{(printError?"Print Error":"Print")}";
+        merchPrinterLog.Message = message;
+            
+        await _printerDataProvider.AddMerchPrinterLogAsync(merchPrinterLog, cancellationToken);
+    }
+
     private async Task<Image<Rgba32>> RenderReceipt()
     {
         int width = 512;
