@@ -106,21 +106,31 @@ public class PrinterController : ControllerBase
             Log.Information("image: {imageUrl}", imageUrl);
             
             Log.Information("Printer Get UploadOrderPrintImageToQiNiuAndUpdatePrintUrlRequest run{@Ms}", stopwatch.ElapsedMilliseconds);
-            stopwatch.Restart();
+            try
+            {
+                stopwatch.Restart();
 
-            var content =
-                $@"[image: url {imageUrl};width 100%;min-width 30mm][cut: feed; partial]";
+                var content = $@"[image: url {imageUrl};width 100%;min-width 30mm][cut: feed; partial]";
+                var jobData = Encoding.UTF8.GetBytes(content);
 
-            var jobData = Encoding.UTF8.GetBytes(content);
-            // get the requested output media type from the query string
-            string outputFormat = command.Type;
-            // set the response media type, and output the converted job to the response body
-            Response.ContentType = outputFormat;
-            Document.Convert(jobData, "text/vnd.star.markup", Response.Body, outputFormat, new ConversionOptions() { });
-            stopwatch.Stop();
-            Log.Information("Printer Get Convert run{@Ms}", stopwatch.ElapsedMilliseconds);
-            
-            return new EmptyResult();
+                Log.Information("jobData long:{jobData}", jobData.Length);
+                
+                var outputFormat = command.Type;
+                
+                var ms = new MemoryStream();
+                Document.Convert(jobData, "text/vnd.star.markup", ms, outputFormat, new ConversionOptions());
+                ms.Position = 0;
+                
+                stopwatch.Stop();
+                Log.Information("Printer Get Convert run{@Ms}", stopwatch.ElapsedMilliseconds);
+                            
+                return File(ms, outputFormat);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Convert failed");
+                throw;
+            }
         }
         
         [HttpDelete, AllowAnonymous]
