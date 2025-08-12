@@ -7,7 +7,7 @@ using Newtonsoft.Json;
 using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using SmartTalk.Messages.Dto.Printer;
-using StarMicronics.StarDocumentMarkup;
+using StarMicronics.CloudPrnt;
 using StarMicronics.CloudPrnt.CpMessage;
 using Microsoft.AspNetCore.Authorization;
 using SmartTalk.Messages.Commands.Printer;
