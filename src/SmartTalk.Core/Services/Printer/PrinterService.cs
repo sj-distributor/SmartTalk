@@ -333,8 +333,10 @@ public class PrinterService : IPrinterService
         var textColor = Color.Black;
         var bgColor = Color.White;
 
-        var collection = LoadFonts();
-        var family = collection.Get("Source Han Sans SC");
+        string fontPath = "font/SourceHanSansSC-Regular.otf";
+        var collection = new FontCollection();
+        var family = collection.Add(fontPath);
+        collection.Add("font/SourceHanSansSC-Bold.otf");
 
 
         Font CreateFont(float size, bool bold = false)
@@ -696,18 +698,5 @@ public class PrinterService : IPrinterService
         }
 
         return ms.ToArray();
-    }
-    
-    private static FontCollection LoadFonts()
-    {
-        var fontDir = Path.Combine(AppContext.BaseDirectory, "font");
-        var regularFontPath = Path.Combine(fontDir, "SourceHanSansSC-Regular.otf");
-        var boldFontPath = Path.Combine(fontDir, "SourceHanSansSC-Bold.otf");
-
-        var collection = new FontCollection();
-        collection.Add(regularFontPath);
-        collection.Add(boldFontPath);
-
-        return collection;
     }
 }
