@@ -589,6 +589,7 @@ public partial class AiSpeechAssistantService
                 var content = new 
                 {
                     type = "server_vad",
+                    threshold = 0.8f,
                     silence_duration_ms = 500
                 };
                 
