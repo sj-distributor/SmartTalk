@@ -247,7 +247,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         var inboundRoute = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantInboundRouteAsync(from, to, cancellationToken).ConfigureAwait(false);
         
         var (assistant, knowledge, userProfile) = await _aiSpeechAssistantDataProvider
-            .GetAiSpeechAssistantInfoByNumbersAsync(from, to, inboundRoute?.AssistantId ?? assistantId, cancellationToken).ConfigureAwait(false);
+            .GetAiSpeechAssistantInfoByNumbersAsync(from, to, inboundRoute?.ForwardAssistantId ?? assistantId, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Matching Ai speech assistant: {@Assistant}、{@Knowledge}、{@UserProfile}", assistant, knowledge, userProfile);
 
