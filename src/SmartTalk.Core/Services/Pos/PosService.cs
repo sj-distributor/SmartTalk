@@ -49,7 +49,7 @@ public partial interface IPosService : IScopedDependency
     
     Task<GetPosStoresResponse> GetPosStoresAsync(GetPosStoresRequest request, CancellationToken cancellationToken);
 
-    Task<GetPosAgentsResponse> GetPosAgentsAsync(GetPosAgentsRequest request, CancellationToken cancellationToken);
+    Task<GetPosCurrentUserStoresResponse> GetPosAgentsAsync(GetPosCurrentUserStoresRequest request, CancellationToken cancellationToken);
 }
 
 public partial class PosService : IPosService
@@ -322,47 +322,15 @@ public partial class PosService : IPosService
         return roleUsers.Any(x => x.UserId == _currentUser.Id.Value);
     }
 
-    public async Task<GetPosAgentsResponse> GetPosAgentsAsync(GetPosAgentsRequest request, CancellationToken cancellationToken)
+    public async Task<GetPosCurrentUserStoresResponse> GetPosAgentsAsync(GetPosCurrentUserStoresRequest request, CancellationToken cancellationToken)
     {
-       var posAgents = await _posDataProvider.GetPosAgentByUserIdAsync(_currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
-       
-       var agentAssistantsDict = new Dictionary<int, List<AiSpeechAssistantDto>>();
+        var storeUsers = await _posDataProvider.GetPosStoreUsersByUserIdAsync(_currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
 
-       var agentStoreDict = new Dictionary<int, PosCompanyStoreDto>();
-       
-       foreach (var agentId in posAgents.Select(x => x.AgentId).Distinct())
-       {
-           var (_, assistants) = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantsAsync(agentIds: [agentId], cancellationToken: cancellationToken);
+        var stores = await _posDataProvider.GetPosCompanyStoresAsync(ids: storeUsers.Select(x => x.StoreId).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
 
-           var store = await _posDataProvider.GetPosStoreByAgentIdAsync(agentId, cancellationToken).ConfigureAwait(false);
-        
-           agentAssistantsDict[agentId] = assistants.Select(a => new AiSpeechAssistantDto
-           {
-               Id = a.Id,
-               Name = a.Name
-           }).ToList();
-
-           agentStoreDict[agentId] = _mapper.Map<PosCompanyStoreDto>(store);
-       }
-
-       var result = posAgents.Select(agent => new PosAgentDto
-       {
-           Id = agent.Id,
-           PosStore = agentStoreDict.TryGetValue(agent.AgentId, out var store) 
-               ? store 
-               : new PosCompanyStoreDto(),
-           AgentAssistantss = new AgentAssistantsDto
-               {
-                   AgentId = agent.AgentId,
-                   AiSpeechAssistants = agentAssistantsDict.TryGetValue(agent.AgentId, out var assistants) 
-                       ? assistants 
-                       : new List<AiSpeechAssistantDto>()
-               }
-       }).ToList();
-       
-        return new GetPosAgentsResponse()
+        return new GetPosCurrentUserStoresResponse()
         {
-            Data = result
+            Data = _mapper.Map<List<PosCompanyStoreDto>>(stores)
         };
     }
 
