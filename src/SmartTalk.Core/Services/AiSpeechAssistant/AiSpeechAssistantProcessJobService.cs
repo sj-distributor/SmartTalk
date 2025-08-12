@@ -32,33 +32,40 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
     private readonly TwilioSettings _twilioSettings;
     private readonly IRestaurantDataProvider _restaurantDataProvider;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
+    private readonly IAiSpeechAssistantDataProvider _speechAssistantDataProvider;
 
     public AiSpeechAssistantProcessJobService(
         IMapper mapper,
         IVectorDb vectorDb,
         TwilioSettings twilioSettings,
         IRestaurantDataProvider restaurantDataProvider,
-        IPhoneOrderDataProvider phoneOrderDataProvider)
+        IPhoneOrderDataProvider phoneOrderDataProvider,
+        IAiSpeechAssistantDataProvider speechAssistantDataProvider)
     {
         _mapper = mapper;
         _vectorDb = vectorDb;
         _twilioSettings = twilioSettings;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _restaurantDataProvider = restaurantDataProvider;
+        _speechAssistantDataProvider = speechAssistantDataProvider;
     }
 
     public async Task RecordAiSpeechAssistantCallAsync(AiSpeechAssistantStreamContextDto context, CancellationToken cancellationToken)
     {
         TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
         var callResource = await CallResource.FetchAsync(pathSid: context.CallSid).ConfigureAwait(false);
+        
+        var agentAssistant = await _speechAssistantDataProvider.GetAgentAssistantsAsync(assistantIds: [context.Assistant.Id], cancellationToken: cancellationToken).ConfigureAwait(false);
 
+        if (agentAssistant == null || agentAssistant.Count == 0) throw new NullReferenceException("AgentAssistant is null");
+        
         var (existRecord, agent, aiSpeechAssistant) = await _phoneOrderDataProvider.GetRecordWithAgentAndAssistantAsync(context.CallSid, cancellationToken).ConfigureAwait(false);
 
         if (existRecord != null ) return;
         
         var record = new PhoneOrderRecord
         {
-            AgentId = context.Assistant.AgentId,
+            AgentId = agentAssistant.First().AgentId,
             SessionId = context.CallSid,
             Status = PhoneOrderRecordStatus.Transcription,
             Tips = context.ConversationTranscription.FirstOrDefault().Item2,
