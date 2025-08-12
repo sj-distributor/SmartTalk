@@ -334,8 +334,8 @@ public class PrinterService : IPrinterService
         var bgColor = Color.White;
 
         var collection = new FontCollection();
-        var family = SystemFonts.CreateFont("Arial", 12);
-        var boldFont = SystemFonts.CreateFont("Arial", 12, SixLabors.Fonts.FontStyle.Bold);
+        var family = SystemFonts.CreateFont("DejaVu Sans", 12);
+        var boldFont = SystemFonts.CreateFont("DejaVu Sans", 12, SixLabors.Fonts.FontStyle.Bold);
 
 
         Font CreateFont(float size, bool bold = false)
