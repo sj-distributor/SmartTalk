@@ -71,6 +71,8 @@ public class PrinterService : IPrinterService
 
         var merchPrinter = await _printerDataProvider.GetMerchPrinterByPrinterMacAsync(request.PrinterMac, request.Token, cancellationToken).ConfigureAwait(false);
 
+        Log.Information("MerchPrinter: {@merchPrinter}", merchPrinter);
+        
         if (merchPrinter == null)
         {
             await _cacheManager.SetAsync(key,1, new RedisCachingSetting(expiry: TimeSpan.FromMinutes(2)),cancellationToken).ConfigureAwait(false);
@@ -89,29 +91,21 @@ public class PrinterService : IPrinterService
     private async Task<MerchPrinterOrder> GetMerchPrinterJob(MerchPrinter merchPrinter, CancellationToken cancellationToken)
     {
         var agent = await _agentDataProvider.GetAgentByIdAsync(merchPrinter.AgentId, cancellationToken);
-        if (agent is null)
-        {
-            return null;
-        }
-
-        var now = DateTimeOffset.Now;
+        
+        Log.Information("Agent: {@agent}", agent);
+        
+        if (agent is null) return null;
         
         if (!merchPrinter.IsEnabled)
+            return (await _printerDataProvider.GetMerchPrinterOrdersAsync(null, merchPrinter.AgentId,  PrintStatus.Waiting, DateTimeOffset.Now, merchPrinter.PrinterMac, true, cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+
+        var merchPrinterOrders = await  _printerDataProvider.GetMerchPrinterOrdersAsync(isOrderByPrintDate: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+        foreach (var merchPrinterOrder in merchPrinterOrders)
         {
-            return (await _printerDataProvider.GetMerchPrinterOrdersAsync(null, merchPrinter.AgentId,  PrintStatus.Waiting, now, merchPrinter.PrinterMac, true, cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+            if (string.IsNullOrEmpty(merchPrinterOrder.PrinterMac) || merchPrinterOrder.PrinterMac == merchPrinter.PrinterMac)
+                return merchPrinterOrder;
         }
-        else
-        {
-            var merchPrinterOrders = await  _printerDataProvider.GetMerchPrinterOrdersAsync(isOrderByPrintDate: true, cancellationToken: cancellationToken).ConfigureAwait(false);
-            foreach (var merchPrinterOrder in merchPrinterOrders)
-            {
-                if (string.IsNullOrEmpty(merchPrinterOrder.PrinterMac) || merchPrinterOrder.PrinterMac == merchPrinter.PrinterMac)
-                {
-                    return merchPrinterOrder;
-                }
-            }
-        }
-        
+
         return null;
     }
 
