@@ -64,7 +64,7 @@ public class PrinterService : IPrinterService
     public async Task<GetPrinterJobAvailableResponse> GetPrinterJobAvailable(GetPrinterJobAvailableRequest request, CancellationToken cancellationToken)
     {
         var key = $"{request.PrinterMac}-{request.Token}";
-        if (await _cacheManager.GetAsync<object>(key, new RedisCachingSetting(), cancellationToken).ConfigureAwait(false) == null)
+        if (await _cacheManager.GetAsync<object>(key, new RedisCachingSetting(), cancellationToken).ConfigureAwait(false) != null)
         {
             return null;
         }
