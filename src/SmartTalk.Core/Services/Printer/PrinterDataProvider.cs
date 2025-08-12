@@ -1,5 +1,6 @@
 using AutoMapper;
 using Microsoft.EntityFrameworkCore;
+using Serilog;
 using SmartTalk.Core.Data;
 using SmartTalk.Core.Domain.Printer;
 using SmartTalk.Core.Ioc;
@@ -36,6 +37,8 @@ public class PrinterDataProvider : IPrinterDataProvider
 
     public async Task<MerchPrinter> GetMerchPrinterByPrinterMacAsync(string printerMac, Guid token, CancellationToken cancellationToken)
     {
+        Log.Information("PrinterMac: {printerMac}, token: {token}", printerMac, token);
+        
         return await _repository.Query<MerchPrinter>().Where(x => x.PrinterMac == printerMac && x.Token==token).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
     
