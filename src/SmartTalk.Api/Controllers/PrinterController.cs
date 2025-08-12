@@ -34,11 +34,17 @@ public class PrinterController : ControllerBase
         public async Task<IActionResult> Post([FromBody] PollRequest pollRequest, Guid? token ,CancellationToken cancellationToken)
         {
             if (!token.HasValue) return Ok(new GetPrinterJobAvailableResponse{Code = HttpStatusCode.Unauthorized, Msg = "Token is null"});
-
+            
+            Log.Information("PollReqeust:{@pollRequest}, Token: {token}", pollRequest, token);
+            
             var request = new GetPrinterJobAvailableRequest() {PrinterMac = pollRequest.printerMAC,Token = token.Value};
 
+            Log.Information("Get printer job available request: {@request}", request);
+            
             var response = await _mediator.RequestAsync<GetPrinterJobAvailableRequest, GetPrinterJobAvailableResponse>(request, cancellationToken);
 
+            Log.Information("Get printer job available response: {@response}", response);
+            
             if (response == null)
                 return Ok(new GetPrinterJobAvailableResponse{Code = HttpStatusCode.Unauthorized, Msg = "No printer job"});
             
