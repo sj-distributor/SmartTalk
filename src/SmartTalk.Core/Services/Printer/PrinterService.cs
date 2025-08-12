@@ -333,10 +333,9 @@ public class PrinterService : IPrinterService
         var textColor = Color.Black;
         var bgColor = Color.White;
 
-        string fontPath = "font/SourceHanSansSC-Regular.otf";
         var collection = new FontCollection();
-        var family = collection.Add(fontPath);
-        collection.Add("font/SourceHanSansSC-Bold.otf");
+        var family = SystemFonts.CreateFont("Arial", 12);
+        var boldFont = SystemFonts.CreateFont("Arial", 12, SixLabors.Fonts.FontStyle.Bold);
 
 
         Font CreateFont(float size, bool bold = false)
