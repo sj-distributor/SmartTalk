@@ -58,7 +58,6 @@ public class PrinterController : ControllerBase
         }
 
         [HttpGet, AllowAnonymous]
-        [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPrinterJobAvailableResponse))]
         public async Task<IActionResult> Get([FromQuery] PrinterJobDto dto)
         {
             //Compatible with different firmware versions  
