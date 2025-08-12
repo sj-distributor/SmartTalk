@@ -40,6 +40,8 @@ public interface IPrinterService : IScopedDependency
     
     Task<PrinterStatusChangedEvent> RecordPrinterStatus(RecordPrinterStatusCommand command,
         CancellationToken cancellationToken);
+    
+    Task PrintTest(PrintTestCommand command, CancellationToken cancellationToken);
 }
 
 public class PrinterService : IPrinterService
@@ -109,6 +111,7 @@ public class PrinterService : IPrinterService
                 }
             }
         }
+        
         return null;
     }
 
@@ -231,6 +234,19 @@ public class PrinterService : IPrinterService
         return @event;
     }
 
+    public async Task PrintTest(PrintTestCommand command, CancellationToken cancellationToken)
+    {
+        var merchPrinterOrder = new MerchPrinterOrder
+        {
+            OrderId = Guid.Empty,
+            AgentId = command.AgentId,
+            PrinterMac = command.PrinterMac,
+            PrintDate = DateTimeOffset.Now
+        };
+        
+        await _printerDataProvider.AddMerchPrinterOrderAsync(merchPrinterOrder, cancellationToken).ConfigureAwait(false);
+    }
+    
     private async Task<Image<Rgba32>> RenderReceipt()
     {
         int width = 512;
