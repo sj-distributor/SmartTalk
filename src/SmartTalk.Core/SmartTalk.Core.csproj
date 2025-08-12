@@ -62,7 +62,8 @@
     </ItemGroup>
 
     <ItemGroup>
-        <None Include="..\..\font\**" CopyToOutputDirectory="PreserveNewest" LinkBase="font" />
+        <None Include="bin\Debug\net8.0\font\SourceHanSansSC-Bold.otf" />
+        <None Include="bin\Debug\net8.0\font\SourceHanSansSC-Regular.otf" />
         <Content Include="DbUpFile\*\*.sql">
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </Content>
