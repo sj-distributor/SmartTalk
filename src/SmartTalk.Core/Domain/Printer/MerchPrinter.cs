@@ -12,8 +12,8 @@ public class MerchPrinter : IEntity
         StatusInfoLastModifiedDate = DateTimeOffset.Now;
     }
 
-    [Column("id", TypeName = "char(36)")]
-    public Guid Id { get; set; }
+    [Column("id")]
+    public int Id { get; set; }
 
     [Column("agent_id")]
     public int AgentId { get; set; }
