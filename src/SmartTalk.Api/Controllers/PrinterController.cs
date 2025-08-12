@@ -60,7 +60,7 @@ public class PrinterController : ControllerBase
         [HttpGet, AllowAnonymous]
         public async Task<IActionResult> Get([FromQuery] PrinterJobDto dto)
         {
-            //Compatible with different firmware versions  
+            // Compatible with different firmware versions  
             if (dto.Token == Guid.Empty)
             {
                 var jobToken = Request.Headers["X-Star-Token"];
@@ -69,55 +69,54 @@ public class PrinterController : ControllerBase
                     dto.Token = Guid.Parse(jobToken);
                 }
             }
-            
+
             var stopwatch = new Stopwatch();
             stopwatch.Start();
-            
-            //get order 
+
+            // get order 
             var command = _mapper.Map<PrinterJobCommand>(dto);
             var response = await _mediator.SendAsync<PrinterJobCommand, PrinterJobResponse>(command);
-            
+
             Log.Information("Printer Get PrinterJobCommand run{@Ms}", stopwatch.ElapsedMilliseconds);
             stopwatch.Restart();
 
             if (response?.MerchPrinterOrder == null)
             {
-                return new EmptyResult();
+                return new EmptyResult(); // 没有任务直接返回
             }
-            
+
             string imageUrl;
-            
+
             if (response.MerchPrinterOrder.IsPrintTest())
             {
                 imageUrl = "https://cdn.protonsystem.io/276f95f3-04a1-11ec-82c4-a4bb6ddba40d.jpg";
             }
             else
             {
-                var url =
-                    await _mediator
-                        .RequestAsync<UploadOrderPrintImageToQiNiuAndUpdatePrintUrlRequest,
-                            UploadOrderPrintImageToQiNiuAndUpdatePrintUrlResponse>(
-                            new UploadOrderPrintImageToQiNiuAndUpdatePrintUrlRequest() {JobToken = command.JobToken});
+                var url = await _mediator.RequestAsync<
+                    UploadOrderPrintImageToQiNiuAndUpdatePrintUrlRequest,
+                    UploadOrderPrintImageToQiNiuAndUpdatePrintUrlResponse>(
+                    new UploadOrderPrintImageToQiNiuAndUpdatePrintUrlRequest() { JobToken = command.JobToken });
 
                 imageUrl = url.ImageUrl;
             }
-            
+
             Log.Information("Printer Get UploadOrderPrintImageToQiNiuAndUpdatePrintUrlRequest run{@Ms}", stopwatch.ElapsedMilliseconds);
             stopwatch.Restart();
-
-            var content =
-                $@"[image: url {imageUrl};width 100%;min-width 30mm][cut: feed; partial]";
-
+            
+            var content = $@"[image: url {imageUrl};width 100%;min-width 30mm][cut: feed; partial]";
             var jobData = Encoding.UTF8.GetBytes(content);
-            // get the requested output media type from the query string
-            string outputFormat = command.Type;
-            // set the response media type, and output the converted job to the response body
-            Response.ContentType = outputFormat;
-            Document.Convert(jobData, "text/vnd.star.markup", Response.Body, outputFormat, new ConversionOptions() { });
+
+            var outputFormat = command.Type;
+            
+            var ms = new MemoryStream();
+            Document.Convert(jobData, "text/vnd.star.markup", ms, outputFormat, new ConversionOptions());
+            ms.Position = 0;
+
             stopwatch.Stop();
             Log.Information("Printer Get Convert run{@Ms}", stopwatch.ElapsedMilliseconds);
             
-            return new EmptyResult();
+            return File(ms, outputFormat);
         }
         
         [HttpDelete, AllowAnonymous]
