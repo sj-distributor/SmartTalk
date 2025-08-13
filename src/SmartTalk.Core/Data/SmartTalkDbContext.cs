@@ -43,13 +43,6 @@ public class SmartTalkDbContext : DbContext, IUnitOfWork
             });
     }
     
-    protected override void ConfigureConventions(ModelConfigurationBuilder builder)
-    {
-        builder.Properties<DayOfWeekSet>()
-            .HaveConversion<DowSetValueConverter>()
-            .HaveColumnType("SET('MON','TUE','WED','THU','FRI','SAT','SUN')");
-    }
-    
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         ChangeTracker.DetectChanges();
@@ -83,30 +76,6 @@ public class SmartTalkDbContext : DbContext, IUnitOfWork
                 modifyEntity.LastModifiedBy = _currentUser.Id.Value;
         }
     }
-    
-    public static class DowSetConverter
-    {
-        private static readonly DayOfWeekSet[] AllFlags =
-            Enum.GetValues(typeof(DayOfWeekSet))
-                .Cast<DayOfWeekSet>()
-                .Where(x => x != DayOfWeekSet.None)
-                .ToArray();
-
-        public static string ToProvider(DayOfWeekSet v) =>
-            v == DayOfWeekSet.None
-                ? string.Empty
-                : string.Join(",", AllFlags.Where(set => v.HasFlag(set)));
-
-        public static DayOfWeekSet FromProvider(string v) =>
-            string.IsNullOrEmpty(v)
-                ? DayOfWeekSet.None
-                : v.Split(",", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                    .Aggregate(DayOfWeekSet.None, (acc, s) => acc | Enum.Parse<DayOfWeekSet>(s));
-    }
-    
-    public sealed class DowSetValueConverter() : ValueConverter<DayOfWeekSet, string>(
-        (Expression<Func<DayOfWeekSet, string>>)(v => DowSetConverter.ToProvider(v)),
-        (Expression<Func<string, DayOfWeekSet>>)(v => DowSetConverter.FromProvider(v)));
     
     public bool ShouldSaveChanges { get; set; }
 }

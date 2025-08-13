@@ -19,6 +19,7 @@ using SmartTalk.Core.Services.Caching.Redis;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Identity;
+using SmartTalk.Core.Services.Infrastructure;
 using SmartTalk.Messages.Constants;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.PhoneOrder;
@@ -58,6 +59,7 @@ public partial interface IAiSpeechAssistantService : IScopedDependency
 
 public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 {
+    private readonly IClock _clock;
     private readonly IMapper _mapper;
     private readonly ICurrentUser _currentUser;
     private readonly AzureSetting _azureSetting;
@@ -83,6 +85,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private AiSpeechAssistantStreamContextDto _aiSpeechAssistantStreamContext;
 
     public AiSpeechAssistantService(
+        IClock clock,
         IMapper mapper,
         ICurrentUser currentUser,
         AzureSetting azureSetting,
@@ -103,6 +106,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         ISmartTalkBackgroundJobClient backgroundJobClient,
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
+        _clock = clock;
         _mapper = mapper;
         _currentUser = currentUser;
         _openaiClient = openaiClient;
@@ -246,8 +250,25 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     {
         var inboundRoute = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantInboundRouteAsync(from, to, cancellationToken).ConfigureAwait(false);
         
+        Log.Information("Inbound route: {@inboundRoute}", inboundRoute);
+
+        var (forwardNumber, forwardAssistantId) = DecideDestinationByInboundRoute(inboundRoute);
+
+        Log.Information("Forward number: {@forwardNumber} or Forward assistant id: {forwardAssistantId}", forwardNumber, forwardAssistantId);
+        
+        if (!string.IsNullOrEmpty(forwardNumber))
+        {
+            _backgroundJobClient.Enqueue<IMediator>(x => x.SendAsync(new TransferHumanServiceCommand
+            {
+                CallSid = _aiSpeechAssistantStreamContext.CallSid,
+                HumanPhone = _aiSpeechAssistantStreamContext.HumanContactPhone
+            }, cancellationToken));
+
+            return (null, null, null);
+        }
+        
         var (assistant, knowledge, userProfile) = await _aiSpeechAssistantDataProvider
-            .GetAiSpeechAssistantInfoByNumbersAsync(from, to, inboundRoute?.ForwardAssistantId ?? assistantId, cancellationToken).ConfigureAwait(false);
+            .GetAiSpeechAssistantInfoByNumbersAsync(from, to, forwardAssistantId ?? assistantId, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Matching Ai speech assistant: {@Assistant}、{@Knowledge}、{@UserProfile}", assistant, knowledge, userProfile);
 
@@ -265,6 +286,61 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         Log.Information($"The final prompt: {finalPrompt}");
 
         return (assistant, knowledge, finalPrompt);
+    }
+
+    public (string forwardNumber, int? forwardAssistantId) DecideDestinationByInboundRoute(List<AiSpeechAssistantInboundRoute> routes)
+    {
+        if (routes == null || routes.Count == 0)
+            return (null, null);
+
+        foreach (var rule in routes)
+        {
+            var localNow = ConvertToRuleLocalTime(_clock.Now, rule.TimeZone);
+
+            var days = rule.DaysOfWeek ?? [];
+            var dayOk = days.Count == 0 || days.Contains(localNow.DayOfWeek);
+            if (!dayOk) continue;
+
+            var timeOk = rule.IsFullDay || IsWithinTimeWindow(localNow.TimeOfDay, rule.StartTime, rule.EndTime);
+            if (!timeOk) continue;
+
+            if (!string.IsNullOrWhiteSpace(rule.ForwardNumber))
+                return (rule.ForwardNumber, null);
+
+            if (rule.ForwardAssistantId.HasValue)
+                return (null, rule.ForwardAssistantId.Value);
+        }
+
+        return (null, null);
+    }
+    
+    private static DateTime ConvertToRuleLocalTime(DateTimeOffset utcNow, string? timeZoneId)
+    {
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(timeZoneId))
+            {
+                var tz = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
+                return TimeZoneInfo.ConvertTime(utcNow.UtcDateTime, tz);
+            }
+        }
+        catch
+        {
+            return utcNow.UtcDateTime;
+        }
+        return utcNow.UtcDateTime;
+    }
+    
+    private static bool IsWithinTimeWindow(TimeSpan localTime, TimeSpan? start, TimeSpan? end)
+    {
+        var startTime = start ?? TimeSpan.MinValue;
+        var endTime = end ?? TimeSpan.MaxValue;
+
+        if (startTime == endTime) return false;
+
+        if (startTime < endTime) return localTime >= startTime && localTime <= endTime;
+
+        return localTime >= startTime || localTime <= endTime;
     }
     
     private async Task ConnectOpenAiRealTimeSocketAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, string prompt, CancellationToken cancellationToken)
