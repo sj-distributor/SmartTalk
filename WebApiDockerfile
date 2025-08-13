@@ -28,6 +28,13 @@ cd ffmpeg && \
 make -j8 && make install && \
  ln -s /usr/local/ffmpeg/bin/ffmpeg /usr/local/bin/
 
+
+RUN mkdir -p /app/fonts && \
+    curl -L -o /app/fonts/SourceHanSansSC-Regular.otf \
+        https://github.com/adobe-fonts/source-han-sans/raw/release/OTF/SimplifiedChinese/SourceHanSansSC-Regular.otf && \
+    curl -L -o /app/fonts/SourceHanSansSC-Bold.otf \
+        https://github.com/adobe-fonts/source-han-sans/raw/release/OTF/SimplifiedChinese/SourceHanSansSC-Bold.otf
+
 WORKDIR /app
 COPY --from=build-env /app/out .
 ENTRYPOINT ["dotnet", "SmartTalk.Api.dll"]
