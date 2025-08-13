@@ -150,31 +150,23 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     {
         Log.Information($"The call from {command.From} to {command.To} is connected");
 
-        var (assistant, knowledge, prompt) = await BuildingAiSpeechAssistantKnowledgeBaseAsync(command.From, command.To, command.AssistantId, cancellationToken).ConfigureAwait(false);
+        InitAiSpeechAssistantStreamContext(command.Host, command.From);
+        await BuildingAiSpeechAssistantKnowledgeBaseAsync(command.From, command.To, command.AssistantId, cancellationToken).ConfigureAwait(false);
         
-        var humanContact = _aiSpeechAssistantStreamContext.ShouldForward ? null : await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantHumanContactByAssistantIdAsync(assistant.Id, cancellationToken).ConfigureAwait(false);
+        _aiSpeechAssistantStreamContext.HumanContactPhone = _aiSpeechAssistantStreamContext.ShouldForward ? null 
+            : (await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantHumanContactByAssistantIdAsync(_aiSpeechAssistantStreamContext.Assistant.Id, cancellationToken).ConfigureAwait(false))?.HumanPhone;
         
-        await ConnectOpenAiRealTimeSocketAsync(assistant, prompt, cancellationToken).ConfigureAwait(false);
-        
-        _aiSpeechAssistantStreamContext = new AiSpeechAssistantStreamContextDto
-        {
-            Host = command.Host,
-            LastPrompt = prompt,
-            HumanContactPhone = humanContact?.HumanPhone,
-            LastUserInfo = new AiSpeechAssistantUserInfoDto
-            {
-                PhoneNumber = command.From
-            },
-            Assistant = _mapper.Map<AiSpeechAssistantDto>(assistant),
-            Knowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge)
-        };
+        await ConnectOpenAiRealTimeSocketAsync(cancellationToken).ConfigureAwait(false);
         
         var receiveFromTwilioTask = ReceiveFromTwilioAsync(command.TwilioWebSocket, cancellationToken);
         var sendToTwilioTask = SendToTwilioAsync(command.TwilioWebSocket, cancellationToken);
 
         try
         {
-            await Task.WhenAll(receiveFromTwilioTask, sendToTwilioTask);
+            if (_aiSpeechAssistantStreamContext.ShouldForward)
+                await receiveFromTwilioTask;
+            else
+                await Task.WhenAll(receiveFromTwilioTask, sendToTwilioTask);   
         }
         catch (Exception ex)
         {
@@ -182,6 +174,12 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         }
         
         return new AiSpeechAssistantConnectCloseEvent();
+    }
+
+    private void InitAiSpeechAssistantStreamContext(string host, string from)
+    {
+        _aiSpeechAssistantStreamContext.Host = host;
+        _aiSpeechAssistantStreamContext.LastUserInfo = new AiSpeechAssistantUserInfoDto { PhoneNumber = from };
     }
 
     public async Task RecordAiSpeechAssistantCallAsync(RecordAiSpeechAssistantCallCommand command, CancellationToken cancellationToken)
@@ -244,7 +242,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         );
     }
 
-    private async Task<(Domain.AISpeechAssistant.AiSpeechAssistant assistant, AiSpeechAssistantKnowledge knowledge, string finalPrompt)> BuildingAiSpeechAssistantKnowledgeBaseAsync(string from, string to, int? assistantId, CancellationToken cancellationToken)
+    private async Task BuildingAiSpeechAssistantKnowledgeBaseAsync(string from, string to, int? assistantId, CancellationToken cancellationToken)
     {
         var inboundRoute = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantInboundRouteAsync(from, to, cancellationToken).ConfigureAwait(false);
         
@@ -259,16 +257,14 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             _aiSpeechAssistantStreamContext.ShouldForward = true;
             _aiSpeechAssistantStreamContext.ForwardPhoneNumber = forwardNumber;
 
-            return (null, null, null);
+            return;
         }
         
         var (assistant, knowledge, userProfile) = await _aiSpeechAssistantDataProvider
             .GetAiSpeechAssistantInfoByNumbersAsync(from, to, forwardAssistantId ?? assistantId, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Matching Ai speech assistant: {@Assistant}、{@Knowledge}、{@UserProfile}", assistant, knowledge, userProfile);
-
-        if (assistant == null || knowledge == null || string.IsNullOrEmpty(knowledge.Prompt)) return (assistant, knowledge, string.Empty);
-
+        
         var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
         
@@ -280,7 +276,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         Log.Information($"The final prompt: {finalPrompt}");
 
-        return (assistant, knowledge, finalPrompt);
+        _aiSpeechAssistantStreamContext.LastPrompt = finalPrompt;
+        _aiSpeechAssistantStreamContext.Assistant = _mapper.Map<AiSpeechAssistantDto>(assistant);
+        _aiSpeechAssistantStreamContext.Knowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge);
     }
 
     public (string forwardNumber, int? forwardAssistantId) DecideDestinationByInboundRoute(List<AiSpeechAssistantInboundRoute> routes)
@@ -338,15 +336,16 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         return localTime >= startTime || localTime <= endTime;
     }
     
-    private async Task ConnectOpenAiRealTimeSocketAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, string prompt, CancellationToken cancellationToken)
+    private async Task ConnectOpenAiRealTimeSocketAsync(CancellationToken cancellationToken)
     {
         if (_aiSpeechAssistantStreamContext.ShouldForward) return;
         
-        var url = string.IsNullOrEmpty(assistant.ModelUrl) ? AiSpeechAssistantStore.DefaultUrl : assistant.ModelUrl;
+        var url = string.IsNullOrEmpty(_aiSpeechAssistantStreamContext.Assistant.ModelUrl)
+            ? AiSpeechAssistantStore.DefaultUrl : _aiSpeechAssistantStreamContext.Assistant.ModelUrl;
         
         await _openaiClientWebSocket.ConnectAsync(new Uri(url), cancellationToken).ConfigureAwait(false);
 
-        await SendSessionUpdateAsync(assistant, prompt, cancellationToken).ConfigureAwait(false);
+        await SendSessionUpdateAsync(cancellationToken).ConfigureAwait(false);
     }
 
     private void ConfigWebSocketRequestHeader(Domain.AISpeechAssistant.AiSpeechAssistant assistant)
@@ -414,6 +413,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                                 }, cancellationToken));
                             break;
                         case "media":
+                            if (_aiSpeechAssistantStreamContext.ShouldForward) break;
+                           
                             var payload = jsonDocument?.RootElement.GetProperty("media").GetProperty("payload").GetString();
                             var audioAppend = new
                             {
@@ -861,9 +862,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         await socket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(message))), WebSocketMessageType.Text, true, cancellationToken);
     }
     
-    private async Task SendSessionUpdateAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, string prompt, CancellationToken cancellationToken)
+    private async Task SendSessionUpdateAsync(CancellationToken cancellationToken)
     {
-        var session = await InitialSessionAsync(assistant, prompt, cancellationToken).ConfigureAwait(false);
+        var session = await InitialSessionAsync(cancellationToken).ConfigureAwait(false);
         
         var sessionUpdate = new
         {
@@ -874,8 +875,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         await SendToWebSocketAsync(_openaiClientWebSocket, sessionUpdate, cancellationToken);
     }
 
-    private async Task<object> InitialSessionAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, string prompt, CancellationToken cancellationToken)
+    private async Task<object> InitialSessionAsync(CancellationToken cancellationToken)
     {
+        var assistant = _mapper.Map<Domain.AISpeechAssistant.AiSpeechAssistant>(_aiSpeechAssistantStreamContext.Assistant);
         var configs = await InitialSessionConfigAsync(assistant, cancellationToken).ConfigureAwait(false);
         
         return assistant.ModelProvider switch
@@ -886,7 +888,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                 input_audio_format = "g711_ulaw",
                 output_audio_format = "g711_ulaw",
                 voice = string.IsNullOrEmpty(assistant.ModelVoice) ? "alloy" : assistant.ModelVoice,
-                instructions = prompt,
+                instructions = _aiSpeechAssistantStreamContext.LastPrompt,
                 modalities = new[] { "text", "audio" },
                 temperature = 0.8,
                 input_audio_transcription = new { model = "whisper-1" },
@@ -899,7 +901,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                 input_audio_format = "g711_ulaw",
                 output_audio_format = "g711_ulaw",
                 voice = string.IsNullOrEmpty(assistant.ModelVoice) ? "alloy" : assistant.ModelVoice,
-                instructions = prompt,
+                instructions = _aiSpeechAssistantStreamContext.LastPrompt,
                 modalities = new[] { "text", "audio" },
                 temperature = 0.8,
                 input_audio_transcription = new { model = "whisper-1" },
