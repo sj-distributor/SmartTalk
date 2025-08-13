@@ -53,6 +53,8 @@ public partial class AiSpeechAssistantService
         
         var enrichAssistants = _mapper.Map<List<AiSpeechAssistantDto>>(assistants);
         await EnrichAssistantsInfoAsync(enrichAssistants, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Get enrich assistants {@Assistants}", assistants);
 
         return new GetAiSpeechAssistantsResponse
         {
