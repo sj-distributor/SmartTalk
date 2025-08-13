@@ -49,14 +49,15 @@ public partial class AiSpeechAssistantService
         var (count, assistants) = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantsAsync(
             request.PageIndex, request.PageSize, request.Channel.HasValue ? request.Channel.Value.ToString("D") : string.Empty, request.Keyword, agentIds, cancellationToken).ConfigureAwait(false);
 
-        await EnrichAssistantsInfoAsycn(assistants, cancellationToken).ConfigureAwait(false);
+        var enrichAssistants = _mapper.Map<List<AiSpeechAssistantDto>>(assistants);
+        await EnrichAssistantsInfoAsync(enrichAssistants, cancellationToken).ConfigureAwait(false);
 
         return new GetAiSpeechAssistantsResponse
         {
             Data = new GetAiSpeechAssistantsResponseData
             {
                 Count = count,
-                Assistants = _mapper.Map<List<AiSpeechAssistantDto>>(assistants)
+                Assistants = enrichAssistants
             }
         };
     }
@@ -111,11 +112,20 @@ public partial class AiSpeechAssistantService
         };
     }
 
-    private async Task EnrichAssistantsInfoAsycn(List<Domain.AISpeechAssistant.AiSpeechAssistant> assistants, CancellationToken cancellationToken)
+    private async Task EnrichAssistantsInfoAsync(List<AiSpeechAssistantDto> assistants, CancellationToken cancellationToken)
     {
-        var knowledges = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantActiveKnowledgesAsync(
-                assistants.Select(x => x.Id).ToList(), cancellationToken).ConfigureAwait(false);
+        var assistantIds = assistants.Select(x => x.Id).ToList();
         
-        assistants.ForEach(x => x.Knowledge = knowledges.Where(k => k.AssistantId == x.Id).FirstOrDefault());
+        var knowledges = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantActiveKnowledgesAsync(assistantIds, cancellationToken).ConfigureAwait(false);
+        
+        var humanContacts = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantHumanContactsAsync(assistantIds, cancellationToken).ConfigureAwait(false);
+        
+        foreach (var assistant in assistants)
+        {
+            var knowledge = knowledges.Where(k => k.AssistantId == assistant.Id).FirstOrDefault();
+            
+            assistant.Knowledge = knowledge == null ? null : _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge);
+            assistant.TransferCallNumber = humanContacts.Where(h => h.AssistantId == assistant.Id).FirstOrDefault()?.HumanPhone ?? string.Empty;
+        }
     }
 }
