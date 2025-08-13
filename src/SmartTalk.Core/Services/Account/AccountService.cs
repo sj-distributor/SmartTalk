@@ -73,7 +73,7 @@ public partial class AccountService : IAccountService
             UserId = account.Id
         }], cancellationToken).ConfigureAwait(false);
 
-        if (userAccountCommand.StoreIds != null || userAccountCommand.CompanyIds != null)
+        if (userAccountCommand.StoreIds?.Count > 0 || userAccountCommand.CompanyIds?.Count > 0)
         {
             var stores = await _posDataProvider.GetPosCompanyStoresAsync(ids: userAccountCommand.StoreIds, companyIds: userAccountCommand.CompanyIds, cancellationToken: cancellationToken).ConfigureAwait(false);
 
