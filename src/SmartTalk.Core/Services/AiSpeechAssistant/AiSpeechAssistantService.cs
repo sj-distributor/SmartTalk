@@ -151,10 +151,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         Log.Information($"The call from {command.From} to {command.To} is connected");
 
         var (assistant, knowledge, prompt) = await BuildingAiSpeechAssistantKnowledgeBaseAsync(command.From, command.To, command.AssistantId, cancellationToken).ConfigureAwait(false);
-
-        if (string.IsNullOrEmpty(prompt)) return new AiSpeechAssistantConnectCloseEvent();
-
-        var humanContact = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantHumanContactByAssistantIdAsync(assistant.Id, cancellationToken).ConfigureAwait(false);
+        
+        var humanContact = _aiSpeechAssistantStreamContext.ShouldForward ? null : await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantHumanContactByAssistantIdAsync(assistant.Id, cancellationToken).ConfigureAwait(false);
         
         await ConnectOpenAiRealTimeSocketAsync(assistant, prompt, cancellationToken).ConfigureAwait(false);
         
@@ -258,11 +256,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         if (!string.IsNullOrEmpty(forwardNumber))
         {
-            _backgroundJobClient.Enqueue<IMediator>(x => x.SendAsync(new TransferHumanServiceCommand
-            {
-                CallSid = _aiSpeechAssistantStreamContext.CallSid,
-                HumanPhone = forwardNumber
-            }, cancellationToken));
+            _aiSpeechAssistantStreamContext.ShouldForward = true;
+            _aiSpeechAssistantStreamContext.ForwardPhoneNumber = forwardNumber;
 
             return (null, null, null);
         }
@@ -345,8 +340,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     
     private async Task ConnectOpenAiRealTimeSocketAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, string prompt, CancellationToken cancellationToken)
     {
-        ConfigWebSocketRequestHeader(assistant);
-
         var url = string.IsNullOrEmpty(assistant.ModelUrl) ? AiSpeechAssistantStore.DefaultUrl : assistant.ModelUrl;
         
         await _openaiClientWebSocket.ConnectAsync(new Uri(url), cancellationToken).ConfigureAwait(false);
@@ -410,6 +403,13 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                             {
                                 CallSid = _aiSpeechAssistantStreamContext.CallSid, Host = _aiSpeechAssistantStreamContext.Host
                             }, CancellationToken.None));
+
+                            if (_aiSpeechAssistantStreamContext.ShouldForward)
+                                _backgroundJobClient.Enqueue<IMediator>(x => x.SendAsync(new TransferHumanServiceCommand
+                                {
+                                    CallSid = _aiSpeechAssistantStreamContext.CallSid,
+                                    HumanPhone = _aiSpeechAssistantStreamContext.ForwardPhoneNumber
+                                }, cancellationToken));
                             break;
                         case "media":
                             var payload = jsonDocument?.RootElement.GetProperty("media").GetProperty("payload").GetString();
