@@ -14,6 +14,8 @@ public class UpdateUserAccountCommand : ICommand
 
     public int NewRoleId { get; set; }
     
+    public string NewName { get; set; }
+    
     public List<int> CompanyIds { get; set; }
     
     public List<int> StoreIds { get; set; }
