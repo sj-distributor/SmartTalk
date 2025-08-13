@@ -72,8 +72,6 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task<AiSpeechAssistantSession> GetAiSpeechAssistantSessionBySessionIdAsync(Guid sessionId, CancellationToken cancellationToken);
 
     Task<(Domain.AISpeechAssistant.AiSpeechAssistant Assistant, Agent Agent)> GetAiSpeechAssistantByAgentIdAsync(int agentId, CancellationToken cancellationToken);
-    
-    Task<AiSpeechAssistantInboundRoute> GetAiSpeechAssistantInboundRouteAsync(string callerNumber, string didNumber, CancellationToken cancellationToken);
 
     Task<Sales> GetCallInSalesByNameAsync(string assistantName, SalesCallType? type, CancellationToken cancellationToken);
     
@@ -82,6 +80,8 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task AddAiSpeechAssistantFunctionCall(AiSpeechAssistantFunctionCall tool, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task UpdateAiSpeechAssistantFunctionCall(List<AiSpeechAssistantFunctionCall> tools, bool forceSave = true, CancellationToken cancellationToken = default);
+    
+    Task<List<AiSpeechAssistantInboundRoute>> GetAiSpeechAssistantInboundRouteAsync(string callerNumber, string didNumber, CancellationToken cancellationToken);
 }
 
 public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
@@ -395,10 +395,12 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
         return (result?.assistant, result?.agent);
     }
 
-    public async Task<AiSpeechAssistantInboundRoute> GetAiSpeechAssistantInboundRouteAsync(string callerNumber, string didNumber, CancellationToken cancellationToken)
+    public async Task<List<AiSpeechAssistantInboundRoute>> GetAiSpeechAssistantInboundRouteAsync(string callerNumber, string didNumber, CancellationToken cancellationToken)
     {
         return await _repository.Query<AiSpeechAssistantInboundRoute>()
-            .Where(x => x.From == callerNumber && x.To == didNumber).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+            .Where(x => x.From == callerNumber && x.To == didNumber)
+            .OrderByDescending(x => x.Priority)
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<Sales> GetCallInSalesByNameAsync(string assistantName, SalesCallType? type, CancellationToken cancellationToken)
