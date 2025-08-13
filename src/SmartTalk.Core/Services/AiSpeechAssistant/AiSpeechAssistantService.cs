@@ -470,7 +470,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     
     private async Task ConfigAuthorizationHeader(Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken)
     {
-        var apikey = await GetIdleOpenAiApiKeyAsync(cancellationToken).ConfigureAwait(false);
         switch (assistant.ModelProvider)
         {
             case AiSpeechAssistantProvider.OpenAi:
