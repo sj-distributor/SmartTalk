@@ -261,7 +261,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             _backgroundJobClient.Enqueue<IMediator>(x => x.SendAsync(new TransferHumanServiceCommand
             {
                 CallSid = _aiSpeechAssistantStreamContext.CallSid,
-                HumanPhone = _aiSpeechAssistantStreamContext.HumanContactPhone
+                HumanPhone = forwardNumber
             }, cancellationToken));
 
             return (null, null, null);
