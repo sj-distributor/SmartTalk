@@ -562,8 +562,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
                 if (result is { Count: > 0 })
                 {
-                    Log.Information("ReceiveFromTwilioAsync result: {@result}", JsonConvert.DeserializeObject<object>(Encoding.UTF8.GetString(buffer, 0, result.Count)));
-                    
                     using var jsonDocument = JsonSerializer.Deserialize<JsonDocument>(buffer.AsSpan(0, result.Count));
                     var eventMessage = jsonDocument?.RootElement.GetProperty("event").GetString();
                     
@@ -583,6 +581,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                                 CallSid = _aiSpeechAssistantStreamContext.CallSid, Host = _aiSpeechAssistantStreamContext.Host
                             }, CancellationToken.None));
 
+                            Log.Information("Should forward: {ShouldForward}", _aiSpeechAssistantStreamContext.ShouldForward);
                             if (_aiSpeechAssistantStreamContext.ShouldForward)
                                 _backgroundJobClient.Enqueue<IMediator>(x => x.SendAsync(new TransferHumanServiceCommand
                                 {
