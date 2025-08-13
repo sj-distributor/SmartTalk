@@ -9,6 +9,7 @@ using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 using SixLabors.Fonts;
 using System.Text;
+using Aliyun.OSS;
 using AutoMapper;
 using Newtonsoft.Json;
 using Serilog;
@@ -129,11 +130,19 @@ public class PrinterService : IPrinterService
         }
 
         var img = await RenderReceipt().ConfigureAwait(false);
-        var imageData = ConvertImageToEscPos(img);
-
+       
         var imageKey = Guid.NewGuid().ToString();
         
-        _ossService.UploadFile(imageKey, imageData);
+        using var ms = new MemoryStream();
+        img.SaveAsJpeg(ms);
+        ms.Position = 0;
+
+        var metadata = new ObjectMetadata
+        {
+            ContentType = "image/jpeg"
+        };
+        
+        _ossService.UploadFile(imageKey, ms.ToArray(), metadata);
         
         merchPrinterOrder.ImageKey = imageKey;
         merchPrinterOrder.ImageUrl = _ossService.GetFileUrl(imageKey);
