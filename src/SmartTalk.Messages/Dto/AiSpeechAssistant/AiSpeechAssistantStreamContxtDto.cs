@@ -37,6 +37,10 @@ public class AiSpeechAssistantStreamContextDto
     
     public string HumanContactPhone { get; set; }
     
+    public string ForwardPhoneNumber { get; set; }
+    
+    public bool ShouldForward { get; set; } = false;
+    
     public AiSpeechAssistantDto Assistant { get; set; }
     
     public AiSpeechAssistantKnowledgeDto Knowledge { get; set; }
