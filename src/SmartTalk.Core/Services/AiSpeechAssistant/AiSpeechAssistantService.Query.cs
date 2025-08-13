@@ -115,16 +115,16 @@ public partial class AiSpeechAssistantService
     private async Task EnrichAssistantsInfoAsync(List<AiSpeechAssistantDto> assistants, CancellationToken cancellationToken)
     {
         var assistantIds = assistants.Select(x => x.Id).ToList();
-        
-        var knowledges = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantActiveKnowledgesAsync(assistantIds, cancellationToken).ConfigureAwait(false);
+
+        var knowledges = _mapper.Map<List<AiSpeechAssistantKnowledgeDto>>(await _aiSpeechAssistantDataProvider
+            .GetAiSpeechAssistantActiveKnowledgesAsync(assistantIds, cancellationToken).ConfigureAwait(false));
         
         var humanContacts = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantHumanContactsAsync(assistantIds, cancellationToken).ConfigureAwait(false);
         
         foreach (var assistant in assistants)
         {
-            var knowledge = knowledges.Where(k => k.AssistantId == assistant.Id).FirstOrDefault();
+            assistant.Knowledge = knowledges.Where(k => k.AssistantId == assistant.Id).FirstOrDefault();
             
-            assistant.Knowledge = knowledge == null ? null : _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge);
             assistant.TransferCallNumber = humanContacts.Where(h => h.AssistantId == assistant.Id).FirstOrDefault()?.HumanPhone ?? string.Empty;
         }
     }
