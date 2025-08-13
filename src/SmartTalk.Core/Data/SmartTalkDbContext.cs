@@ -1,4 +1,3 @@
-using System.Linq.Expressions;
 using System.Reflection;
 using SmartTalk.Core.Domain;
 using SmartTalk.Core.Settings;
@@ -8,9 +7,6 @@ using SmartTalk.Core.Data.Exceptions;
 using SmartTalk.Core.Services.Identity;
 using SmartTalk.Core.Services.Infrastructure;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
-using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
-using SmartTalk.Core.Domain.AISpeechAssistant;
-using SmartTalk.Messages.Enums.System;
 
 namespace SmartTalk.Core.Data;
 
