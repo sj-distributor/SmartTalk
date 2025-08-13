@@ -397,10 +397,14 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
 
     public async Task<List<AiSpeechAssistantInboundRoute>> GetAiSpeechAssistantInboundRouteAsync(string callerNumber, string didNumber, CancellationToken cancellationToken)
     {
-        return await _repository.Query<AiSpeechAssistantInboundRoute>()
-            .Where(x => x.From == callerNumber && x.To == didNumber)
+        var routes = await _repository.Query<AiSpeechAssistantInboundRoute>()
+            .Where(x => x.To == didNumber)
             .OrderByDescending(x => x.Priority)
             .ToListAsync(cancellationToken).ConfigureAwait(false);
+        
+        var specifyCallerNumber = routes.Where(x => x.From == callerNumber).OrderByDescending(x => x.Priority).ToList();
+
+        return specifyCallerNumber.Count != 0 ? specifyCallerNumber : routes;
     }
 
     public async Task<Sales> GetCallInSalesByNameAsync(string assistantName, SalesCallType? type, CancellationToken cancellationToken)
