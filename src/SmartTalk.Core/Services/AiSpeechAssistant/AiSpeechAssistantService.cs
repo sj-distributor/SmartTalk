@@ -207,7 +207,10 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
         try
         {
-            await Task.WhenAll(receiveFromTwilioTask, sendToTwilioTask);
+            if (_aiSpeechAssistantStreamContext.ShouldForward)
+                await receiveFromTwilioTask;    
+            else
+                await Task.WhenAll(receiveFromTwilioTask, sendToTwilioTask);
         }
         catch (Exception ex)
         {
@@ -628,8 +631,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
     private async Task SendToTwilioAsync(WebSocket twilioWebSocket, CancellationToken cancellationToken)
     {
-        if (_aiSpeechAssistantStreamContext.ShouldForward) return;
-       
         Log.Information("Sending to twilio.");
         var buffer = new byte[1024 * 40];
 
