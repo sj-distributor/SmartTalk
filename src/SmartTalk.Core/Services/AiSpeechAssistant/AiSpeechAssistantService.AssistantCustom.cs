@@ -103,7 +103,7 @@ public partial class AiSpeechAssistantService
 
         await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync([assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        await UpdateAiSpeechAssistantConfigsAsync(assistant, cancellationToken).ConfigureAwait(false);
+        await UpdateAiSpeechAssistantConfigsAsync(assistant, command.TransferCallNumber, cancellationToken).ConfigureAwait(false);
         
         return new UpdateAiSpeechAssistantResponse
         {
@@ -546,13 +546,18 @@ public partial class AiSpeechAssistantService
         await _agentDataProvider.UpdateAgentsAsync([agent], cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task UpdateAiSpeechAssistantConfigsAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken)
+    private async Task UpdateAiSpeechAssistantConfigsAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, string transferCallNumber, CancellationToken cancellationToken)
     {
         var configs = await _aiSpeechAssistantDataProvider
             .GetAiSpeechAssistantFunctionCallByAssistantIdAsync(assistant.Id, assistant.ModelProvider, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var humanConcat = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantHumanContactByAssistantIdAsync(assistant.Id, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Get the human concat: {@HumanConcat}", humanConcat);
         
         var turnDetection = configs.FirstOrDefault(x => x.Type == AiSpeechAssistantSessionConfigType.TurnDirection);
         var transferCallTool = configs.FirstOrDefault(x => x.Type == AiSpeechAssistantSessionConfigType.Tool && x.Name == "transfer_call");
+        
+        Log.Information("Getting AI Speech Assistant Configs: {@TurnDetection} {@TransferCallTool}", turnDetection, transferCallTool);
         
         if (assistant.ModelProvider == AiSpeechAssistantProvider.OpenAi)
         {
@@ -614,6 +619,25 @@ public partial class AiSpeechAssistantService
                 turnDetection.Content = JsonConvert.SerializeObject(content);
                 
                 await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantFunctionCall([turnDetection], cancellationToken: cancellationToken).ConfigureAwait(false);
+            }
+
+            if (assistant.IsTransferHuman)
+            {
+                if (humanConcat == null)
+                {
+                    humanConcat = new AiSpeechAssistantHumanContact
+                    {
+                        AssistantId = assistant.Id,
+                        HumanPhone = transferCallNumber
+                    };
+                    
+                    await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantHumanContactAsync(humanConcat, cancellationToken: cancellationToken).ConfigureAwait(false);
+                }
+                else
+                {
+                    humanConcat.HumanPhone = transferCallNumber;
+                    await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantHumanContactAsync(humanConcat, cancellationToken: cancellationToken).ConfigureAwait(false);
+                }
             }
         }
     }
