@@ -96,9 +96,14 @@ public partial class AiSpeechAssistantService
 
         if (assistant == null) throw new Exception("Could not found the assistant");
         
+        var humanContact = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantHumanContactByAssistantIdAsync(assistant.Id, cancellationToken).ConfigureAwait(false);
+        
+        var enrichAssistant = _mapper.Map<AiSpeechAssistantDto>(assistant);
+        enrichAssistant.TransferCallNumber = humanContact?.HumanPhone ?? string.Empty;
+        
         return new GetAiSpeechAssistantByIdResponse
         {
-            Data = _mapper.Map<AiSpeechAssistantDto>(assistant)
+            Data = enrichAssistant
         };
     }
 
