@@ -17,7 +17,7 @@ FROM registry-vpc.cn-hongkong.aliyuncs.com/wiltechs/aspnet:8.0
 
 USER root
 
-RUN apt-get update && apt-get install -y nasm rsync openssh-client
+RUN apt-get update && apt-get install -y nasm rsync openssh-client curl
 # ffmpeg
 RUN apt-get update && apt-get install -y bzip2 make gcc yasm libopencore-amrnb-dev libopencore-amrwb-dev wget
 
