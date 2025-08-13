@@ -450,6 +450,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private async Task ConnectOpenAiRealTimeSocketAsync(
         Domain.AISpeechAssistant.AiSpeechAssistant assistant, string prompt, CancellationToken cancellationToken)
     {
+        if (_aiSpeechAssistantStreamContext.ShouldForward) return;
+        
         await ConfigAuthorizationHeader(assistant, cancellationToken).ConfigureAwait(false);
         
         var url = string.IsNullOrEmpty(assistant.ModelUrl) ? AiSpeechAssistantStore.DefaultUrl : assistant.ModelUrl;
@@ -626,6 +628,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
     private async Task SendToTwilioAsync(WebSocket twilioWebSocket, CancellationToken cancellationToken)
     {
+        if (_aiSpeechAssistantStreamContext.ShouldForward) return;
+       
         Log.Information("Sending to twilio.");
         var buffer = new byte[1024 * 40];
 
