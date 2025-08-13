@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Serilog;
 using AutoMapper;
 using SmartTalk.Core.Ioc;
@@ -322,16 +323,18 @@ public class SpeechMaticsService : ISpeechMaticsService
 
         var historyItems = askInfoResponse.Data.Where(x => !string.IsNullOrWhiteSpace(x.Material)).Select(x => (x.Material, x.MaterialDesc)).ToList();
 
-        var (extractedOrderItems, deliveryDate) = await ExtractAndMatchOrderItemsFromReportAsync(record.TranscriptionText, historyItems, DateTime.Today, cancellationToken).ConfigureAwait(false);
+        var (extractedOrderItems, deliveryDate, storeNumber) = await ExtractAndMatchOrderItemsFromReportAsync(record.TranscriptionText, historyItems, DateTime.Today, cancellationToken).ConfigureAwait(false);
 
         if (!extractedOrderItems.Any()) return;
+        
+        var (soldToId, soldToIds) = GetSoldToFields(aiSpeechAssistant.Name, storeNumber);
 
         var draftOrder = new GenerateAiOrdersRequestDto
         {
             AiOrderInfoDto = new AiOrderInfoDto
             {
-                SoldToId = aiSpeechAssistant.Name,
-                SoldToIds = aiSpeechAssistant.Name,
+                SoldToId = soldToId,
+                SoldToIds = soldToIds,
                 DocumentDate = DateTime.Today,
                 DeliveryDate = deliveryDate,
                 AiOrderItemDtoList = extractedOrderItems
@@ -341,14 +344,25 @@ public class SpeechMaticsService : ISpeechMaticsService
         await _salesClient.GenerateAiOrdersAsync(draftOrder, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<(List<AiOrderItemDto> Items, DateTime DeliveryDate)> ExtractAndMatchOrderItemsFromReportAsync(string reportText, List<(string Material, string MaterialDesc)> historyItems, DateTime orderDate, CancellationToken cancellationToken) 
+    private async Task<(List<AiOrderItemDto> Items, DateTime DeliveryDate, string storeNumber)> ExtractAndMatchOrderItemsFromReportAsync(string reportText, List<(string Material, string MaterialDesc)> historyItems, DateTime orderDate, CancellationToken cancellationToken) 
     { 
         var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
         
         var materialListText = string.Join("\n", historyItems.Select(x => $"{x.MaterialDesc} ({x.Material})"));
-        
-        var systemPrompt = "你是一名订单分析助手。请从下面的客户分析报告文本中提取所有下单的物料名称和数量，并且用历史物料列表匹配每个物料的materialNumber。如果报告中提到了预约送货时间，请提取送货时间（格式yyyy-MM-dd）。返回JSON数组，每个元素包含：\n" + "- name: 物料名称\n" + "- quantity: 数量（整数或小数）\n" + "- materialNumber: 对应的物料编码\n" + "- deliveryDate: 客户预约送货日期（如果报告中没有则用空字符串）\n\n" + materialListText + "\n\n" + "客户分析报告文本：\n"+ reportText + "\n\n请只返回JSON数组，不要多余说明。";
-        
+
+        var systemPrompt = "你是一名订单分析助手。请从下面的客户分析报告文本中提取：\n" +
+                           "1. 所有下单的物料名称和数量，并用历史物料列表匹配每个物料的materialNumber；\n" +
+                           "2. 预约送货时间（格式yyyy-MM-dd，如果没有则为空）；\n" +
+                           "3. 客户下单的storeNumber（如number one、number two，如果没有则为空）；\n" +
+                           "返回JSON，格式如下，每个元素包含：\n" +
+                           "- name: 物料名称\n" +
+                           "- quantity: 数量\n" +
+                           "- materialNumber: 物料编码\n" +
+                           "- deliveryDate: 客户预约送货日期\n" +
+                           "- storeNumber: 客户下单storeNumber（如果没有则空字符串）\n\n" +
+                           materialListText + "\n\n客户分析报告文本：\n" + reportText +
+                           "\n请只返回JSON数组，不要多余说明。";
+
         var messages = new List<ChatMessage>
         {
             new SystemChatMessage(systemPrompt),
@@ -363,21 +377,53 @@ public class SpeechMaticsService : ISpeechMaticsService
             var parsedItems = JsonSerializer.Deserialize<List<ExtractedOrderItemDto>>(jsonResponse, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<ExtractedOrderItemDto>();
             
             var deliveryDateStr = parsedItems.Select(i => i.DeliveryDate).FirstOrDefault(d => !string.IsNullOrEmpty(d));
-            
             DateTime deliveryDate;
             if (!DateTime.TryParse(deliveryDateStr, out deliveryDate))
             {
                 deliveryDate = DateTime.Today;
             }
             
+            var storeNumber = parsedItems.Select(i => i.StoreNumber).FirstOrDefault(s => !string.IsNullOrEmpty(s));
+
             var aiOrderItems = _mapper.Map<List<AiOrderItemDto>>(parsedItems);
 
-            return (aiOrderItems, deliveryDate);
+            return (aiOrderItems, deliveryDate, storeNumber);
         }
         catch (Exception ex) 
         { 
             Log.Warning("解析GPT返回JSON失败: {Message}", ex.Message); 
-            return new (new List<AiOrderItemDto>(), DateTime.Today);
+            return (new List<AiOrderItemDto>(), DateTime.Today, null);
         } 
+    }
+
+    private (string SoldToId, string SoldToIds) GetSoldToFields(string customerName, string storeNumber)
+    {
+        var customerIds = customerName.Split('/');
+
+        if (customerIds.Length == 1) return (customerIds[0], null);
+
+        if (string.IsNullOrEmpty(storeNumber)) return (null, null);
+        
+        var mappedId = MapStoreNumberToId(storeNumber, customerIds); 
+        return (null, mappedId);
+    }
+
+    private string MapStoreNumberToId(string storeNumber, string[] allIds)
+    {
+        var match = Regex.Match(storeNumber.ToLower(), @"\b(one|two|three|four|five)\b");
+        if (match.Success)
+        {
+            var index = match.Groups[1].Value switch
+            {
+                "one" => 0,
+                "two" => 1,
+                "three" => 2,
+                "four" => 3,
+                "five" => 4,
+                _ => -1
+            };
+            if (index >= 0 && index < allIds.Length) return allIds[index];
+        }
+        return null;
     }
 }

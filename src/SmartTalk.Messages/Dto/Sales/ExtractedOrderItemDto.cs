@@ -9,4 +9,6 @@ public class ExtractedOrderItemDto
     public string MaterialNumber { get; set; }
         
     public string DeliveryDate { get; set; }
+    
+    public string StoreNumber { get; set; }
 }
