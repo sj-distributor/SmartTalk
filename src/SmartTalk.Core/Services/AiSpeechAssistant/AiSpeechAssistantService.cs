@@ -344,6 +344,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         if (!string.IsNullOrEmpty(forwardNumber))
         {
+            _shouldSendBuffToOpenAi = false;
             _aiSpeechAssistantStreamContext.ShouldForward = true;
             _aiSpeechAssistantStreamContext.ForwardPhoneNumber = forwardNumber;
 
@@ -591,6 +592,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                             break;
                         case "media":
                             if (_aiSpeechAssistantStreamContext.ShouldForward) break;
+                            
                             var media = jsonDocument.RootElement.GetProperty("media");
                             
                             var payload = media.GetProperty("payload").GetString();
