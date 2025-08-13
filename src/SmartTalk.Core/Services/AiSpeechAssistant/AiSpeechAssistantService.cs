@@ -580,11 +580,11 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                             }, CancellationToken.None));
 
                             if (_aiSpeechAssistantStreamContext.ShouldForward)
-                                _backgroundJobClient.Enqueue<IMediator>(x => x.SendAsync(new TransferHumanServiceCommand
+                                _backgroundJobClient.Schedule<IMediator>(x => x.SendAsync(new TransferHumanServiceCommand
                                 {
                                     CallSid = _aiSpeechAssistantStreamContext.CallSid,
                                     HumanPhone = _aiSpeechAssistantStreamContext.ForwardPhoneNumber
-                                }, cancellationToken));
+                                }, cancellationToken), TimeSpan.FromSeconds(5));
                             break;
                         case "media":
                             var media = jsonDocument.RootElement.GetProperty("media");
