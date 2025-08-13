@@ -590,6 +590,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                                 }, cancellationToken), TimeSpan.FromSeconds(5));
                             break;
                         case "media":
+                            if (_aiSpeechAssistantStreamContext.ShouldForward) break;
                             var media = jsonDocument.RootElement.GetProperty("media");
                             
                             var payload = media.GetProperty("payload").GetString();
