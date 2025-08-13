@@ -341,12 +341,14 @@ public class PrinterService : IPrinterService
         var width = 512;
         var textColor = Color.Black;
         var bgColor = Color.White;
-
+        
+        var regularFont = "/app/fonts/SourceHanSansSC-Regular.otf";
+        var boldFont = "/app/fonts/SourceHanSansSC-Bold.otf";
+        
         var collection = new FontCollection();
-        var family = SystemFonts.CreateFont("DejaVu Sans", 12);
-        var boldFont = SystemFonts.CreateFont("DejaVu Sans", 12, SixLabors.Fonts.FontStyle.Bold);
-
-
+        var family = collection.Add(regularFont);
+        collection.Add(boldFont);
+        
         Font CreateFont(float size, bool bold = false)
         {
             return new Font(family, size, bold ? FontStyle.Bold : FontStyle.Regular);
