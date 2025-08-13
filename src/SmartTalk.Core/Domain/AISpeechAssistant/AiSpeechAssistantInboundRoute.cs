@@ -58,5 +58,6 @@ public class AiSpeechAssistantInboundRoute : IEntity, IHasCreatedFields
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
     
+    [NotMapped]
     public List<DayOfWeek> DaysOfWeek { get; set; }
 }
