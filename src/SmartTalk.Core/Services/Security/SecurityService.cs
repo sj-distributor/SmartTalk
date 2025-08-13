@@ -59,6 +59,20 @@ public class SecurityService : ISecurityService
         
         await _securityDataProvider.UpdateRoleUsersAsync([roleUser], cancellationToken).ConfigureAwait(false);
 
+        if (command.NewName != null)
+        {
+            var user = await _accountDataProvider.GetUserAccountDtoAsync(username: command.NewName, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            if (user.Item1 > 0)
+                throw new Exception("This name has been used");
+
+            var oldUser = await _accountDataProvider.GetUserAccountByUserIdAsync(command.UserId, cancellationToken).ConfigureAwait(false);
+
+            oldUser.UserName = command.NewName;
+
+            await _accountDataProvider.UpdateUserAccountAsync(oldUser, true, cancellationToken).ConfigureAwait(false);
+        }
+
         var oldStoreUsers = await _posDataProvider.GetPosStoreUsersByUserIdAsync(command.UserId, cancellationToken).ConfigureAwait(false);
 
         await _posDataProvider.DeletePosStoreUsersAsync(oldStoreUsers, true, cancellationToken).ConfigureAwait(false);
