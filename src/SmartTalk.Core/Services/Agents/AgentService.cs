@@ -49,7 +49,7 @@ public class AgentService : IAgentService
         foreach (var type in types)
         {
             var genericMethod = method.MakeGenericMethod(type.Type);
-            var task = (Task)genericMethod.Invoke(_agentDataProvider, [type.AgentType, cancellationToken]);
+            var task = (Task)genericMethod.Invoke(_agentDataProvider, [type.AgentType, agentIds, cancellationToken]);
 
             if (task == null) continue;
             
