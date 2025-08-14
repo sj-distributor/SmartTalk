@@ -46,6 +46,18 @@ public partial class AiSpeechAssistantService
 
         Log.Information("Get the agent ids: {@AgentIds}", agentIds);
 
+        if (agentIds.Count == 0)
+        {
+            return new GetAiSpeechAssistantsResponse()
+            {
+                Data = new GetAiSpeechAssistantsResponseData()
+                {
+                    Count = 0,
+                    Assistants = new List<AiSpeechAssistantDto>()
+                }
+            };
+        }
+
         var (count, assistants) = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantsAsync(
             request.PageIndex, request.PageSize, request.Channel.HasValue ? request.Channel.Value.ToString("D") : string.Empty, request.Keyword, agentIds, cancellationToken).ConfigureAwait(false);
 
