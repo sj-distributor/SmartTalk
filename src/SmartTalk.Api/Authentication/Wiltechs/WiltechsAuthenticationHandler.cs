@@ -27,8 +27,7 @@ public class WiltechsAuthenticationHandler : AuthenticationHandler<WiltechsAuthe
         _cacheManager = cacheManager;
         _accountService = accountService;
         _clientFactory = clientFactory;
-    }
-    
+    }   
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
