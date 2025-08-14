@@ -43,7 +43,7 @@ public partial interface IPosDataProvider : IScopedDependency
     
     Task<PosCompanyStore> GetPosStoreByAgentIdAsync(int agentId, CancellationToken cancellationToken = default);
     
-    Task<List<PosAgent>> GetPosAgentsAsync(int? storeId = null, int? agentId = null, CancellationToken cancellationToken = default);
+    Task<List<PosAgent>> GetPosAgentsAsync(List<int> storeIds = null, int? agentId = null, CancellationToken cancellationToken = default);
 
     Task<PosStoreUser> GetPosStoreUsersByUserIdAndAssistantIdAsync(List<int> assistantIds, int userId, CancellationToken cancellationToken = default);
 
@@ -290,12 +290,12 @@ public partial class PosDataProvider : IPosDataProvider
         return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<PosAgent>> GetPosAgentsAsync(int? storeId = null, int? agentId = null, CancellationToken cancellationToken = default)
+    public async Task<List<PosAgent>> GetPosAgentsAsync(List<int> storeIds = null, int? agentId = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<PosAgent>();
 
-        if (storeId.HasValue)
-            query = query.Where(x => x.StoreId == storeId.Value);
+        if (storeIds != null && storeIds.Count != 0)
+            query = query.Where(x => storeIds.Contains(x.StoreId));
 
         if (agentId.HasValue)
             query = query.Where(x => x.AgentId == agentId.Value);

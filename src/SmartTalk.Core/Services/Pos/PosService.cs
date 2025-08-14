@@ -326,37 +326,21 @@ public partial class PosService : IPosService
     {
         var storeUsers = await _posDataProvider.GetPosStoreUsersByUserIdAsync(_currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
 
-        if (storeUsers.Count == 0)
-        {
-            return new GetPosCurrentUserStoresResponse()
-            {
-                Data = new List<GetPosCurrentUserStoresResponseData>()
-            };
-        }
-
+        if (storeUsers.Count == 0) return new GetPosCurrentUserStoresResponse { Data = [] };
+        
         var storeIds = storeUsers.Select(x => x.StoreId).ToList();
-        var stores = await _posDataProvider.GetPosCompanyStoresAsync(ids: storeIds, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        var agentTasks = stores.Select(store => _posDataProvider.GetPosAgentsAsync(storeId: store.Id, cancellationToken: cancellationToken)).ToList();
-    
-        var allAgents = await Task.WhenAll(agentTasks).ConfigureAwait(false);
-
-        var storeAgentIds = stores.Zip(allAgents, (store, agents) => new
+        var stores = _mapper.Map<List<PosCompanyStoreDto>>(
+            await _posDataProvider.GetPosCompanyStoresAsync(ids: storeIds, cancellationToken: cancellationToken).ConfigureAwait(false));
+        
+        var allAgents = await _posDataProvider.GetPosAgentsAsync(storeIds: storeIds, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var enrichStores = stores.Select(store => new GetPosCurrentUserStoresResponseData
         {
-            StoreId = store.Id,
-            AgentIds = agents.Select(a => a.AgentId).ToList()
-        }).ToDictionary(x => x.StoreId, x => x.AgentIds);
-    
-        var responseDataList = stores.Select(store => new GetPosCurrentUserStoresResponseData
-        {
-            Store = _mapper.Map<PosCompanyStoreDto>(store),
-            AgentIds = storeAgentIds.GetValueOrDefault(store.Id, new List<int>())
+            Store = store,
+            AgentIds = allAgents.Where(x => x.StoreId == store.Id).Select(x => x.Id).ToList()
         }).ToList();
 
-        return new GetPosCurrentUserStoresResponse()
-        {
-            Data = responseDataList
-        };
+        return new GetPosCurrentUserStoresResponse { Data = enrichStores };
     }
 
     private async Task<List<GetPosCompanyWithStoresData>> EnrichPosCompaniesAsync(List<PosCompanyDto> companies, string keyword, CancellationToken cancellationToken)
