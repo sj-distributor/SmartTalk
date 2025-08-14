@@ -50,6 +50,4 @@ public class PosCompanyStoreDto
     public DateTimeOffset? LastModifiedDate { get; set; }
 
     public int Count { get; set; } = 0;
-    
-    public List<AiSpeechAssistantDto> Assistants { get; set; }
 }

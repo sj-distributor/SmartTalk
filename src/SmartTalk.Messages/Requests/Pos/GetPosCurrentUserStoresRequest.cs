@@ -8,4 +8,12 @@ public class GetPosCurrentUserStoresRequest : IRequest
 {
 }
 
-public class GetPosCurrentUserStoresResponse : SmartTalkResponse<List<PosCompanyStoreDto>>;
+public class GetPosCurrentUserStoresResponse : SmartTalkResponse<List<GetPosCurrentUserStoresResponseData>>;
+
+
+public class GetPosCurrentUserStoresResponseData
+{
+    public PosCompanyStoreDto Store { get; set; }
+    
+    public List<int> AgentIds { get; set; }
+}
