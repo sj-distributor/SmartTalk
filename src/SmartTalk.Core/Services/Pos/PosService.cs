@@ -330,48 +330,32 @@ public partial class PosService : IPosService
         {
             return new GetPosCurrentUserStoresResponse()
             {
-                Data = new List<PosCompanyStoreDto>()
+                Data = new List<GetPosCurrentUserStoresResponseData>()
             };
         }
 
-        var stores = await _posDataProvider.GetPosCompanyStoresAsync(ids: storeUsers.Select(x => x.StoreId).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
+        var storeIds = storeUsers.Select(x => x.StoreId).ToList();
+        var stores = await _posDataProvider.GetPosCompanyStoresAsync(ids: storeIds, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        var allAgentIds = new List<int>();
-        var storeAgentsDict = new Dictionary<int, List<PosAgent>>();
-
-        foreach (var store in stores)
-        {
-            var agents = await _posDataProvider.GetPosAgentsAsync(storeId: store.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-            allAgentIds.AddRange(agents.Select(a => a.AgentId));
-            storeAgentsDict[store.Id] = agents;
-        }
-
-        var assistantsResult = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantsAsync(agentIds: allAgentIds.Distinct().ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        var assistantsByAgentId = assistantsResult.Item2.GroupBy(a => a.AgentId).ToDictionary(g => g.Key, g => g.ToList());
-
-        var storeDtos = new List<PosCompanyStoreDto>();
+        var agentTasks = stores.Select(store => _posDataProvider.GetPosAgentsAsync(storeId: store.Id, cancellationToken: cancellationToken)).ToList();
     
-        foreach (var store in stores)
+        var allAgents = await Task.WhenAll(agentTasks).ConfigureAwait(false);
+
+        var storeAgentIds = stores.Zip(allAgents, (store, agents) => new
         {
-            var dto = _mapper.Map<PosCompanyStoreDto>(store);
-        
-            if (storeAgentsDict.TryGetValue(store.Id, out var agents))
-            {
-                dto.Assistants = agents.SelectMany(agent => assistantsByAgentId.TryGetValue(agent.AgentId, out var agentAssistants) ? agentAssistants : Enumerable.Empty<Domain.AISpeechAssistant.AiSpeechAssistant>())
-                    .Select(_mapper.Map<AiSpeechAssistantDto>)
-                    .ToList();
-                
-                dto.Count = dto.Assistants.Count;
-            }
-        
-            storeDtos.Add(dto);
-        }
+            StoreId = store.Id,
+            AgentIds = agents.Select(a => a.AgentId).ToList()
+        }).ToDictionary(x => x.StoreId, x => x.AgentIds);
+    
+        var responseDataList = stores.Select(store => new GetPosCurrentUserStoresResponseData
+        {
+            Store = _mapper.Map<PosCompanyStoreDto>(store),
+            AgentIds = storeAgentIds.GetValueOrDefault(store.Id, new List<int>())
+        }).ToList();
 
         return new GetPosCurrentUserStoresResponse()
         {
-            Data = storeDtos
+            Data = responseDataList
         };
     }
 
