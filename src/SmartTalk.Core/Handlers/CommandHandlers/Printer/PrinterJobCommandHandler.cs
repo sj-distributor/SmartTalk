@@ -16,6 +16,6 @@ public class PrinterJobCommandHandler : ICommandHandler<PrinterJobCommand, Print
 
     public async Task<PrinterJobResponse> Handle(IReceiveContext<PrinterJobCommand> context, CancellationToken cancellationToken)
     {
-        return await _printerService.PrinterJob(context.Message, cancellationToken).ConfigureAwait(false);
+        return await _printerService.PrinterJobAsync(context.Message, cancellationToken).ConfigureAwait(false);
     }
 }

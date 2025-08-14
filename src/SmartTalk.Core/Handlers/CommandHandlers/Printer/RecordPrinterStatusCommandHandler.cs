@@ -25,7 +25,7 @@ namespace SmartTalk.Core.Handlers.CommandHandlers.Printer
             var cacheKey = $"RecordPrinterStatusKey_{context.Message.PrinterMac}";
             if (!_memoryCache.TryGetValue(cacheKey, out object _))
             {
-                var printerStatusChangedEvent = await _printerService.RecordPrinterStatus(context.Message, cancellationToken);
+                var printerStatusChangedEvent = await _printerService.RecordPrinterStatusAsync(context.Message, cancellationToken);
                 _memoryCache.Set(cacheKey, 1, TimeSpan.FromMinutes(1));
 
                 await context.PublishAsync(printerStatusChangedEvent,cancellationToken);

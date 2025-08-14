@@ -16,7 +16,7 @@ namespace SmartTalk.Core.Handlers.CommandHandlers.Printer
         
         public async Task Handle(IReceiveContext<PrintTestCommand> context, CancellationToken cancellationToken)
         {
-            await _printerService.PrintTest(context.Message, cancellationToken).ConfigureAwait(false);
+            await _printerService.PrintTestAsync(context.Message, cancellationToken).ConfigureAwait(false);
         }
     }
 }
