@@ -382,7 +382,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         {
             var localNow = ConvertToRuleLocalTime(_clock.Now, rule.TimeZone);
 
-            var days = rule.DaysOfWeek ?? [];
+            var days = ParseDays(rule.DayOfWeek) ?? [];
             var dayOk = days.Count == 0 || days.Contains(localNow.DayOfWeek);
             if (!dayOk) continue;
 
@@ -414,6 +414,18 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             return utcNow.UtcDateTime;
         }
         return utcNow.UtcDateTime;
+    }
+    
+    private static List<DayOfWeek> ParseDays(string dayString)
+    {
+        if (string.IsNullOrWhiteSpace(dayString)) return [];
+        var list = new List<DayOfWeek>();
+        foreach (var token in dayString.Split(',', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (int.TryParse(token, out var v) && v >= 0 && v <= 6)
+                list.Add((DayOfWeek)v);
+        }
+        return list;
     }
     
     private static bool IsWithinTimeWindow(TimeSpan localTime, TimeSpan? start, TimeSpan? end)
