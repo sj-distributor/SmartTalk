@@ -30,21 +30,8 @@ public class AiSpeechAssistantInboundRoute : IEntity, IHasCreatedFields
     [Column("is_full_day")]
     public bool IsFullDay { get; set; }
     
-    private string _dayOfWeek;
     [Column("day_of_week")]
-    public string DayOfWeek
-    {
-        get => _dayOfWeek;
-        set
-        {
-            _dayOfWeek = value;
-            DaysOfWeek = string.IsNullOrWhiteSpace(value)
-                ? []
-                : value.Split(',', StringSplitOptions.RemoveEmptyEntries)
-                    .Select(s => (DayOfWeek)int.Parse(s))
-                    .ToList();
-        }
-    }
+    public string DayOfWeek { get; set; }
 
     [Column("forward_assistant_id")]
     public int? ForwardAssistantId { get; set; }
@@ -57,7 +44,4 @@ public class AiSpeechAssistantInboundRoute : IEntity, IHasCreatedFields
     
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
-    
-    [NotMapped]
-    public List<DayOfWeek> DaysOfWeek { get; set; }
 }
