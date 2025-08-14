@@ -77,6 +77,12 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
     
     Task UpdateAiSpeechAssistantFunctionCall(List<AiSpeechAssistantFunctionCall> tools, bool forceSave = true, CancellationToken cancellationToken = default);
     
+    Task AddAiSpeechAssistantHumanContactAsync(AiSpeechAssistantHumanContact humanContact, bool forceSave = true, CancellationToken cancellationToken = default);
+    
+    Task UpdateAiSpeechAssistantHumanContactAsync(AiSpeechAssistantHumanContact humanContact, bool forceSave = true, CancellationToken cancellationToken = default);
+    
+    Task<List<AiSpeechAssistantHumanContact>> GetAiSpeechAssistantHumanContactsAsync(List<int> assistantIds, CancellationToken cancellationToken);
+    
     Task AddAgentAssistantsAsync(List<AgentAssistant> agentAssistants, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task<List<AgentAssistant>> GetAgentAssistantsAsync(List<int> agentIds = null, List<int> assistantIds = null, CancellationToken cancellationToken = default);
@@ -421,6 +427,25 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
         if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task AddAiSpeechAssistantHumanContactAsync(AiSpeechAssistantHumanContact humanContact, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.InsertAsync(humanContact, cancellationToken).ConfigureAwait(false);
+        
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task UpdateAiSpeechAssistantHumanContactAsync(AiSpeechAssistantHumanContact humanContact, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.UpdateAsync(humanContact, cancellationToken).ConfigureAwait(false);
+        
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<AiSpeechAssistantHumanContact>> GetAiSpeechAssistantHumanContactsAsync(List<int> assistantIds, CancellationToken cancellationToken)
+    {
+        return await _repository.Query<AiSpeechAssistantHumanContact>().Where(x => assistantIds.Contains(x.AssistantId)).ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+    
     public async Task AddAgentAssistantsAsync(List<AgentAssistant> agentAssistants, bool forceSave = true, CancellationToken cancellationToken = default)
     {
         await _repository.InsertAllAsync(agentAssistants, cancellationToken).ConfigureAwait(false);

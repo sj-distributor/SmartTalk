@@ -46,17 +46,30 @@ public partial class AiSpeechAssistantService
 
         Log.Information("Get the agent ids: {@AgentIds}", agentIds);
 
+        if (agentIds.Count == 0)
+        {
+            return new GetAiSpeechAssistantsResponse()
+            {
+                Data = new GetAiSpeechAssistantsResponseData()
+                {
+                    Count = 0,
+                    Assistants = new List<AiSpeechAssistantDto>()
+                }
+            };
+        }
+
         var (count, assistants) = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantsAsync(
             request.PageIndex, request.PageSize, request.Channel.HasValue ? request.Channel.Value.ToString("D") : string.Empty, request.Keyword, agentIds, cancellationToken).ConfigureAwait(false);
 
-        await EnrichAssistantsInfoAsycn(assistants, cancellationToken).ConfigureAwait(false);
+        var enrichAssistants = _mapper.Map<List<AiSpeechAssistantDto>>(assistants);
+        await EnrichAssistantsInfoAsync(enrichAssistants, cancellationToken).ConfigureAwait(false);
 
         return new GetAiSpeechAssistantsResponse
         {
             Data = new GetAiSpeechAssistantsResponseData
             {
                 Count = count,
-                Assistants = _mapper.Map<List<AiSpeechAssistantDto>>(assistants)
+                Assistants = enrichAssistants
             }
         };
     }
@@ -93,9 +106,14 @@ public partial class AiSpeechAssistantService
 
         if (assistant == null) throw new Exception("Could not found the assistant");
         
+        var humanContact = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantHumanContactByAssistantIdAsync(assistant.Id, cancellationToken).ConfigureAwait(false);
+        
+        var enrichAssistant = _mapper.Map<AiSpeechAssistantDto>(assistant);
+        enrichAssistant.TransferCallNumber = humanContact?.HumanPhone ?? string.Empty;
+        
         return new GetAiSpeechAssistantByIdResponse
         {
-            Data = _mapper.Map<AiSpeechAssistantDto>(assistant)
+            Data = enrichAssistant
         };
     }
 
@@ -111,11 +129,20 @@ public partial class AiSpeechAssistantService
         };
     }
 
-    private async Task EnrichAssistantsInfoAsycn(List<Domain.AISpeechAssistant.AiSpeechAssistant> assistants, CancellationToken cancellationToken)
+    private async Task EnrichAssistantsInfoAsync(List<AiSpeechAssistantDto> assistants, CancellationToken cancellationToken)
     {
-        var knowledges = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantActiveKnowledgesAsync(
-                assistants.Select(x => x.Id).ToList(), cancellationToken).ConfigureAwait(false);
+        var assistantIds = assistants.Select(x => x.Id).ToList();
+
+        var knowledges = _mapper.Map<List<AiSpeechAssistantKnowledgeDto>>(await _aiSpeechAssistantDataProvider
+            .GetAiSpeechAssistantActiveKnowledgesAsync(assistantIds, cancellationToken).ConfigureAwait(false));
         
-        assistants.ForEach(x => x.Knowledge = knowledges.Where(k => k.AssistantId == x.Id).FirstOrDefault());
+        var humanContacts = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantHumanContactsAsync(assistantIds, cancellationToken).ConfigureAwait(false);
+        
+        foreach (var assistant in assistants)
+        {
+            assistant.Knowledge = knowledges.Where(k => k.AssistantId == assistant.Id).FirstOrDefault();
+            
+            assistant.TransferCallNumber = humanContacts.Where(h => h.AssistantId == assistant.Id).FirstOrDefault()?.HumanPhone ?? string.Empty;
+        }
     }
 }

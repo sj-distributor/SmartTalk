@@ -4,8 +4,8 @@ using SmartTalk.Messages.Responses;
 
 namespace SmartTalk.Messages.Requests.Pos;
 
-public class GetPosAgentsRequest : IRequest
+public class GetPosCurrentUserStoresRequest : IRequest
 {
 }
 
-public class GetPosAgentsResponse : SmartTalkResponse<List<PosAgentDto>>;
+public class GetPosCurrentUserStoresResponse : SmartTalkResponse<List<PosCompanyStoreDto>>;

@@ -1,3 +1,6 @@
+using Smarties.Messages.DTO.SmartAssistant.Domain;
+using SmartTalk.Messages.Dto.AiSpeechAssistant;
+
 namespace SmartTalk.Messages.Dto.Pos;
 
 public class PosCompanyStoreDto
@@ -47,4 +50,6 @@ public class PosCompanyStoreDto
     public DateTimeOffset? LastModifiedDate { get; set; }
 
     public int Count { get; set; } = 0;
+    
+    public List<AiSpeechAssistantDto> Assistants { get; set; }
 }
