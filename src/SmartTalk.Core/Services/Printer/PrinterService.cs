@@ -29,8 +29,7 @@ public interface IPrinterService : IScopedDependency
     Task<GetPrinterJobAvailableResponse> GetPrinterJobAvailableAsync(GetPrinterJobAvailableRequest request,
         CancellationToken cancellationToken);
     
-    Task<string> UploadOrderPrintImageToQiNiuAndUpdatePrintUrlAsync(Guid jobToken, DateTimeOffset printDate,
-        CancellationToken cancellationToken);
+    Task<string> UploadOrderPrintImageAndUpdatePrintUrlAsync(Guid jobToken, DateTimeOffset printDate, CancellationToken cancellationToken);
     
     Task<PrinterJobResponse> PrinterJobAsync(PrinterJobCommand command, CancellationToken cancellationToken);
     
@@ -119,8 +118,8 @@ public class PrinterService : IPrinterService
         return null;
     }
 
-    public async Task<string> UploadOrderPrintImageToQiNiuAndUpdatePrintUrlAsync(Guid jobToken, DateTimeOffset printDate,
-        CancellationToken cancellationToken)
+    public async Task<string> UploadOrderPrintImageAndUpdatePrintUrlAsync(
+        Guid jobToken, DateTimeOffset printDate, CancellationToken cancellationToken)
     {
         var merchPrinterOrder = (await _printerDataProvider.GetMerchPrinterOrdersAsync(jobToken, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
 
@@ -448,13 +447,9 @@ public class PrinterService : IPrinterService
             return CharType.Other;
         }
         
-        bool IsChinese(char c) =>
-            (c >= 0x4E00 && c <= 0x9FFF) ||
-            (c >= 0x3400 && c <= 0x4DBF) ||
-            (c >= 0x3000 && c <= 0x303F);
+        bool IsChinese(char c) => (c >= 0x4E00 && c <= 0x9FFF) || (c >= 0x3400 && c <= 0x4DBF) || (c >= 0x3000 && c <= 0x303F);
 
-        bool IsEnglish(char c) =>
-            (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+        bool IsEnglish(char c) => (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
         
         void DrawItemLineThreeColsWrapped(string qty, string itemName, string price, Dictionary<string, int>? remarks = null,
         float fontSize = 27, bool bold = false, float lineSpacing = 1.5f, float remarkLineSpacing = 1.5f, int backSpacing = 0)

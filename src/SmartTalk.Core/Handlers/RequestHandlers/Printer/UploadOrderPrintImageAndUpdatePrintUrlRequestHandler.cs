@@ -16,9 +16,8 @@ public class UploadOrderPrintImageAndUpdatePrintUrlRequestHandler : IRequestHand
 
     public async Task<UploadOrderPrintImageAndUpdatePrintUrlResponse> Handle(IReceiveContext<UploadOrderPrintImageAndUpdatePrintUrlRequest> context, CancellationToken cancellationToken)
     {
-        var imageUrl = await _printerService.UploadOrderPrintImageToQiNiuAndUpdatePrintUrlAsync(context.Message.JobToken,
-            context.Message.PrintDate,
-            cancellationToken);
+        var imageUrl = await _printerService.UploadOrderPrintImageAndUpdatePrintUrlAsync(
+            context.Message.JobToken, context.Message.PrintDate, cancellationToken).ConfigureAwait(false);
 
         return new UploadOrderPrintImageAndUpdatePrintUrlResponse
         {
