@@ -41,7 +41,7 @@ public partial class AiSpeechAssistantService
         var agentIds = request.AgentId.HasValue
             ? [request.AgentId.Value]
             : request.StoreId.HasValue
-                ? (await _posDataProvider.GetPosAgentsAsync(storeId: request.StoreId.Value, cancellationToken: cancellationToken).ConfigureAwait(false)).Select(x => x.AgentId).ToList()
+                ? (await _posDataProvider.GetPosAgentsAsync(storeIds: [request.StoreId.Value], cancellationToken: cancellationToken).ConfigureAwait(false)).Select(x => x.AgentId).ToList()
                 : [];
 
         Log.Information("Get the agent ids: {@AgentIds}", agentIds);
