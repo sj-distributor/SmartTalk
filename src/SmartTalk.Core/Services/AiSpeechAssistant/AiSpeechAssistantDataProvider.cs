@@ -405,10 +405,10 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
     {
         var routes = await _repository.Query<AiSpeechAssistantInboundRoute>()
             .Where(x => x.To == didNumber)
-            .OrderByDescending(x => x.Priority)
+            .OrderBy(x => x.Priority)
             .ToListAsync(cancellationToken).ConfigureAwait(false);
         
-        var specifyCallerNumber = routes.Where(x => x.From == callerNumber).OrderByDescending(x => x.Priority).ToList();
+        var specifyCallerNumber = routes.Where(x => x.From == callerNumber).OrderBy(x => x.Priority).ToList();
 
         return specifyCallerNumber.Count != 0 ? specifyCallerNumber : routes;
     }
