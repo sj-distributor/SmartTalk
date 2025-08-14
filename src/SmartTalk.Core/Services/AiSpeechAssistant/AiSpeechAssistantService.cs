@@ -151,6 +151,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         Log.Information($"The call from {command.From} to {command.To} is connected");
 
         InitAiSpeechAssistantStreamContext(command.Host, command.From);
+        
         await BuildingAiSpeechAssistantKnowledgeBaseAsync(command.From, command.To, command.AssistantId, cancellationToken).ConfigureAwait(false);
         
         _aiSpeechAssistantStreamContext.HumanContactPhone = _aiSpeechAssistantStreamContext.ShouldForward ? null 
