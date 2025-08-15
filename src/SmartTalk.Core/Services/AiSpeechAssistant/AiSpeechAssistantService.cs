@@ -825,6 +825,12 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     
     private void StartInactivityTimer()
     {
+        if (string.IsNullOrEmpty(_aiSpeechAssistantStreamContext.CallSid))
+        {
+            Log.Information("Starting inactivity timer interrupt, due to the callsid is invalid: {CallSid}", _aiSpeechAssistantStreamContext.CallSid);
+            return;
+        }
+        
         _inactivityTimerManager.StartTimer(_aiSpeechAssistantStreamContext.CallSid, TimeSpan.FromMinutes(2), async () =>
         {
             Log.Warning("No activity detected for 2 minutes.");
@@ -835,6 +841,12 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
     private void StopInactivityTimer()
     {
+        if (string.IsNullOrEmpty(_aiSpeechAssistantStreamContext.CallSid))
+        {
+            Log.Information("Stop inactivity timer interrupt, due to the callsid is invalid: {CallSid}", _aiSpeechAssistantStreamContext.CallSid);
+            return;
+        }
+        
         _inactivityTimerManager.StopTimer(_aiSpeechAssistantStreamContext.CallSid);
     }
     
