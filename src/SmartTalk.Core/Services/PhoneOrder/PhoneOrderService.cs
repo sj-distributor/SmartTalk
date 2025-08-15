@@ -4,6 +4,7 @@ using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.Attachments;
 using SmartTalk.Core.Services.Ffmpeg;
+using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Identity;
 using SmartTalk.Core.Services.Jobs;
@@ -39,6 +40,7 @@ public partial class PhoneOrderService : IPhoneOrderService
     private readonly ISpeechToTextService _speechToTextService;
     private readonly IPhoneOrderUtilService _phoneOrderUtilService;
     private readonly SpeechMaticsKeySetting _speechMaticsKeySetting;
+    private readonly ISmartTalkHttpClientFactory _httpClientFactory;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly IRestaurantDataProvider _restaurantDataProvider;
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
@@ -62,6 +64,7 @@ public partial class PhoneOrderService : IPhoneOrderService
         SpeechMaticsClient speechMaticsClient,
         IPhoneOrderUtilService phoneOrderUtilService,
         SpeechMaticsKeySetting speechMaticsKeySetting,
+        ISmartTalkHttpClientFactory httpClientFactory,
         IRestaurantDataProvider restaurantDataProvider,
         IPhoneOrderDataProvider phoneOrderDataProvider,
         ISmartTalkBackgroundJobClient backgroundJobClient,
@@ -80,6 +83,7 @@ public partial class PhoneOrderService : IPhoneOrderService
         _posDataProvider = posDataProvider;
         _attachmentService = attachmentService;
         _agentDataProvider = agentDataProvider;
+        _httpClientFactory = httpClientFactory;
         _speechToTextService = speechToTextService;
         _speechMaticsClient = speechMaticsClient;
         _backgroundJobClient = backgroundJobClient;

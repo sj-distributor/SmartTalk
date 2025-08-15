@@ -100,7 +100,7 @@ public class SpeechMaticsService : ISpeechMaticsService
             
             await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
             
-            _smartTalkBackgroundJobClient.Enqueue<IPhoneOrderProcessJobService>(x => x.CalculateRecordingDurationAsync(record, audioContent, cancellationToken), HangfireConstants.InternalHostingFfmpeg);
+            _smartTalkBackgroundJobClient.Enqueue<IPhoneOrderProcessJobService>(x => x.CalculateRecordingDurationAsync(record, null, cancellationToken), HangfireConstants.InternalHostingFfmpeg);
         }
         catch (Exception e)
         {
@@ -171,11 +171,10 @@ public class SpeechMaticsService : ISpeechMaticsService
         {
             var userProfile = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantUserProfileAsync(aiSpeechAssistant.Id, callFrom, cancellationToken).ConfigureAwait(false);
             var salesName = userProfile?.ProfileJson != null ? JObject.Parse(userProfile.ProfileJson).GetValue("correspond_sales")?.ToString() : string.Empty;
+            
+            var salesDisplayName = !string.IsNullOrEmpty(salesName) ? $"{salesName}" : "";
 
-            if (!string.IsNullOrEmpty(salesName))
-            {
-                message = agent.WechatRobotMessage?.Replace("#{assistant_name}", salesName).Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString()).Replace("#{assistant_file_url}", record.Url);
-            }
+            message = message.Replace("#{sales_name}", salesDisplayName);
         }
 
         return message;
