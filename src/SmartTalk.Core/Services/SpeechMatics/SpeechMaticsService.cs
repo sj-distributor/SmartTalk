@@ -263,30 +263,27 @@ public class SpeechMaticsService : ISpeechMaticsService
     {
         var askItemsJson = string.Empty;
         
-        if (agent.Type == AgentType.Sales)
+        var sales = await _aiSpeechAssistantDataProvider.GetCallInSalesByNameAsync(aiSpeechAssistant.Name, SalesCallType.CallIn, cancellationToken).ConfigureAwait(false);
+
+        if (sales != null)
         {
-            var sales = await _aiSpeechAssistantDataProvider.GetCallInSalesByNameAsync(aiSpeechAssistant.Name, SalesCallType.CallIn, cancellationToken).ConfigureAwait(false);
-
-            if (sales != null)
+            var requestDto = new GetAskInfoDetailListByCustomerRequestDto
             {
-                var requestDto = new GetAskInfoDetailListByCustomerRequestDto
-                {
-                    CustomerNumbers = new List<string> { aiSpeechAssistant.Name }
-                };
+                CustomerNumbers = new List<string> { aiSpeechAssistant.Name }
+            };
+            
+            var askedItems = await _salesClient.GetAskInfoDetailListByCustomerAsync(requestDto, cancellationToken).ConfigureAwait(false);
 
-                var askedItems = await _salesClient.GetAskInfoDetailListByCustomerAsync(requestDto, cancellationToken).ConfigureAwait(false);
+            var topItems = askedItems.Data.OrderByDescending(x => x.ValidAskQty).Take(60).ToList();
+            
+            var simplifiedItems = topItems.Select(x => new 
+            {
+                name = x.MaterialDesc, 
+                quantity = x.ValidAskQty,
+                materialNumber = x.Material
+            }).ToList();
 
-                var topItems = askedItems.Data.OrderByDescending(x => x.ValidAskQty).Take(60).ToList();
-
-                var simplifiedItems = topItems.Select(x => new
-                {
-                    name = x.MaterialDesc,
-                    quantity = x.ValidAskQty,
-                    materialNumber = x.Material
-                }).ToList();
-
-                askItemsJson = JsonSerializer.Serialize(simplifiedItems, new JsonSerializerOptions { WriteIndented = true });
-            }
+            askItemsJson = JsonSerializer.Serialize(simplifiedItems, new JsonSerializerOptions { WriteIndented = true });
         }
 
         var audioData = BinaryData.FromBytes(audioContent);
@@ -304,15 +301,12 @@ public class SpeechMaticsService : ISpeechMaticsService
     
     private async Task MultiScenarioCustomProcessingAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, PhoneOrderRecord record, CancellationToken cancellationToken) 
     { 
-        switch (agent.Type) 
-        { 
-            case AgentType.Sales: 
-                if (!string.IsNullOrEmpty(record.TranscriptionText)) 
-                { 
-                    await HandleSalesScenarioAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
-                }
-                break; 
-        } 
+        var sales = await _aiSpeechAssistantDataProvider.GetCallInSalesByNameAsync(aiSpeechAssistant.Name, SalesCallType.CallIn, cancellationToken).ConfigureAwait(false);
+
+        if (sales != null && !string.IsNullOrEmpty(record.TranscriptionText))
+        {
+            await HandleSalesScenarioAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
+        }
     }
     
     private async Task HandleSalesScenarioAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, PhoneOrderRecord record, CancellationToken cancellationToken)
