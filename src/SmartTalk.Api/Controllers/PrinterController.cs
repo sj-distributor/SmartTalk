@@ -54,7 +54,8 @@ public class PrinterController : ControllerBase
         return Ok(response);
     }
 
-    [HttpGet, AllowAnonymous]
+    [AllowAnonymous]
+    [HttpGet, Route("poll")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAsync([FromQuery] PrinterJobDto dto)
     {
@@ -118,7 +119,8 @@ public class PrinterController : ControllerBase
         }
     }
         
-    [HttpDelete, AllowAnonymous]
+    [AllowAnonymous]
+    [HttpDelete, Route("poll")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> DeleteAsync([FromQuery] ConfirmPrinterJobDto dto)
     {
