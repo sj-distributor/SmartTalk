@@ -109,7 +109,7 @@ public class SpeechMaticsService : ISpeechMaticsService
             
             await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
             
-            _smartTalkBackgroundJobClient.Enqueue<IPhoneOrderProcessJobService>(x => x.CalculateRecordingDurationAsync(record, audioContent, cancellationToken), HangfireConstants.InternalHostingFfmpeg);
+            _smartTalkBackgroundJobClient.Enqueue<IPhoneOrderProcessJobService>(x => x.CalculateRecordingDurationAsync(record, null, cancellationToken), HangfireConstants.InternalHostingFfmpeg);
         }
         catch (Exception e)
         {

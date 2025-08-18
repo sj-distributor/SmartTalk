@@ -21,9 +21,6 @@ public class ReceivePhoneOrderRecordCommandHandler : ICommandHandler<ReceivePhon
 
     public async Task Handle(IReceiveContext<ReceivePhoneOrderRecordCommand> context, CancellationToken cancellationToken)
     {
-        if (!string.IsNullOrEmpty(context.Message.RecordUrl))
-            context.Message.RecordContent = await _httpClientFactory.GetAsync<byte[]>(context.Message.RecordUrl, cancellationToken).ConfigureAwait(false);
-        
         _backgroundJobClient.Enqueue<IPhoneOrderService>(x => x.ReceivePhoneOrderRecordAsync(context.Message, cancellationToken), HangfireConstants.InternalHostingPhoneOrder);
     }
 }
