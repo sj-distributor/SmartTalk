@@ -83,8 +83,6 @@ public class SpeechMaticsService : ISpeechMaticsService
 
     public async Task HandleTranscriptionCallbackAsync(HandleTranscriptionCallbackCommand command, CancellationToken cancellationToken)
     {
-        Log.Information("Handle Transcription Callback Command: {@Command}", command);
-        
         if (command.Transcription == null || command.Transcription.Results.IsNullOrEmpty() || command.Transcription.Job == null || command.Transcription.Job.Id.IsNullOrEmpty()) return;
 
         var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByTranscriptionJobIdAsync(command.Transcription.Job.Id, cancellationToken).ConfigureAwait(false);
@@ -111,7 +109,7 @@ public class SpeechMaticsService : ISpeechMaticsService
             
             await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
             
-            _smartTalkBackgroundJobClient.Enqueue<IPhoneOrderProcessJobService>(x => x.CalculateRecordingDurationAsync(record, audioContent, cancellationToken), HangfireConstants.InternalHostingFfmpeg);
+            _smartTalkBackgroundJobClient.Enqueue<IPhoneOrderProcessJobService>(x => x.CalculateRecordingDurationAsync(record, null, cancellationToken), HangfireConstants.InternalHostingFfmpeg);
         }
         catch (Exception e)
         {
@@ -163,8 +161,7 @@ public class SpeechMaticsService : ISpeechMaticsService
 
         await MultiScenarioCustomProcessingAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
         
-        if (agent.SourceSystem == AgentSourceSystem.Smarties)
-            await CallBackSmartiesRecordAsync(agent, record, cancellationToken).ConfigureAwait(false);
+        await CallBackSmartiesRecordAsync(agent, record, cancellationToken).ConfigureAwait(false);
 
         var message = agent.WechatRobotMessage?.Replace("#{assistant_name}", aiSpeechAssistant?.Name ?? "").Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString()).Replace("#{assistant_file_url}", record.Url);
 
@@ -200,12 +197,8 @@ public class SpeechMaticsService : ISpeechMaticsService
 
             if (agent.IsSendAnalysisReportToWechat && !string.IsNullOrEmpty(record.TranscriptionText))
             {
-                Log.Information("With analysis report to wechat: {@Message}", message);
                 message += "\n\n" + record.TranscriptionText;
-                Log.Information("After append analysis report to wechat: {@Message}", message);
             }
-            
-            Log.Information("Send complete text to wechat: {@Message}", message);
 
             await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(audioContent, agent.WechatRobotKey, message, Array.Empty<string>(), cancellationToken).ConfigureAwait(false);
         }
@@ -238,18 +231,13 @@ public class SpeechMaticsService : ISpeechMaticsService
 
     private async Task<int> SendAgentMessageRecordAsync(Agent agent, int recordId, int groupKey, CancellationToken cancellationToken)
     {
-        Log.Information("Agent: {@Agent} with groupKey: {GroupKey} and recordId: {RecordId}", agent, groupKey, recordId);
         var timezone = !string.IsNullOrWhiteSpace(agent.Timezone) ? TimeZoneInfo.FindSystemTimeZoneById(agent.Timezone) : TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
         var nowDate = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, timezone);
 
         var utcDate = TimeZoneInfo.ConvertTimeToUtc(nowDate.Date, timezone);
-        
-        Log.Information("Timezone: {Timezone}、NowDate: {NowDate}、UtcDate: {UtcDate}", timezone, nowDate, utcDate);
 
         var existingCount = await _aiSpeechAssistantDataProvider.GetMessageCountByAgentAndDateAsync(groupKey, utcDate, cancellationToken).ConfigureAwait(false);
 
-        Log.Information("Get exist count: {ExistingCount}", existingCount);
-        
         var messageNumber = existingCount + 1;
 
         var newRecord = new AgentMessageRecord
@@ -259,13 +247,9 @@ public class SpeechMaticsService : ISpeechMaticsService
             RecordId = recordId,
             MessageNumber = messageNumber
         };
-        
-        Log.Information("Generate new agent message record: {@MessageRecord}", newRecord);
 
         await _aiSpeechAssistantDataProvider.AddAgentMessageRecordAsync(newRecord, cancellationToken).ConfigureAwait(false);
 
-        Log.Information("Get new agent message record after persist: {@MessageRecord}", newRecord);
-        
         return messageNumber;
     }
     

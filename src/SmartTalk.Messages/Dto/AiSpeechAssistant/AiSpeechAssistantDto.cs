@@ -29,6 +29,8 @@ public class AiSpeechAssistantDto
     
     public bool IsTransferHuman { get; set; }
     
+    public string TransferCallNumber { get; set; }
+    
     public DateTimeOffset CreatedDate { get; set; }
     
     public int CreatedBy { get; set; }

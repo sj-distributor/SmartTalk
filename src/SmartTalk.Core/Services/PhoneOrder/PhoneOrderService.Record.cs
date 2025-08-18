@@ -55,7 +55,7 @@ public partial class PhoneOrderService
         var agentIds = request.AgentId.HasValue
             ? [request.AgentId.Value]
             : request.StoreId.HasValue
-                ? (await _posDataProvider.GetPosAgentsAsync(storeId: request.StoreId.Value, cancellationToken: cancellationToken).ConfigureAwait(false)).Select(x => x.AgentId).ToList()
+                ? (await _posDataProvider.GetPosAgentsAsync(storeIds: [request.StoreId.Value], cancellationToken: cancellationToken).ConfigureAwait(false)).Select(x => x.AgentId).ToList()
                 : [];
 
         var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds, request.Name, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
@@ -71,6 +71,9 @@ public partial class PhoneOrderService
     public async Task ReceivePhoneOrderRecordAsync(ReceivePhoneOrderRecordCommand command, CancellationToken cancellationToken)
     {
         if (command.RecordName.IsNullOrEmpty() && command.RecordUrl.IsNullOrEmpty()) return;
+        
+        if (!string.IsNullOrEmpty(command.RecordUrl))
+            command.RecordContent = await _httpClientFactory.GetAsync<byte[]>(command.RecordUrl, cancellationToken).ConfigureAwait(false);
 
         var recordInfo = await ExtractPhoneOrderRecordInfoAsync(command.RecordName, command.AgentId, command.CreatedDate, cancellationToken).ConfigureAwait(false);
 
@@ -521,11 +524,18 @@ public partial class PhoneOrderService
 
         foreach (var reSplitAudio in splitAudios)
         {
-            var transcriptionResponse = await _speechToTextService.SpeechToTextAsync(
+            try
+            {
+                var transcriptionResponse = await _speechToTextService.SpeechToTextAsync(
                     reSplitAudio, record.Language, TranscriptionFileType.Wav, TranscriptionResponseFormat.Text,
                     record.RestaurantInfo?.Message ?? string.Empty, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-            transcriptionResult.Append(transcriptionResponse);
+                transcriptionResult.Append(transcriptionResponse);
+            }
+            catch (Exception e)
+            {
+                Log.Warning("Audio segment transcription error: {@Exception}", e);
+            }
         }
 
         Log.Information("Transcription result {Transcription}", transcriptionResult.ToString());

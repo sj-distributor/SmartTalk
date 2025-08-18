@@ -182,34 +182,31 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     public async Task<AiSpeechAssistantConnectCloseEvent> ConnectAiSpeechAssistantAsync(ConnectAiSpeechAssistantCommand command, CancellationToken cancellationToken)
     {
         Log.Information($"The call from {command.From} to {command.To} is connected");
-
-        var (assistant, knowledge, prompt) = await BuildingAiSpeechAssistantKnowledgeBaseAsync(command.From, command.To, command.AssistantId, command.Greeting, cancellationToken).ConfigureAwait(false);
-
-        if (string.IsNullOrEmpty(prompt)) return new AiSpeechAssistantConnectCloseEvent();
-
-        var humanContact = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantHumanContactByAssistantIdAsync(assistant.Id, cancellationToken).ConfigureAwait(false);
-        
-        await ConnectOpenAiRealTimeSocketAsync(assistant, prompt, cancellationToken).ConfigureAwait(false);
         
         _aiSpeechAssistantStreamContext = new AiSpeechAssistantStreamContextDto
         {
             Host = command.Host,
-            LastPrompt = prompt,
-            HumanContactPhone = humanContact?.HumanPhone,
             LastUserInfo = new AiSpeechAssistantUserInfoDto
             {
                 PhoneNumber = command.From
-            },
-            Assistant = _mapper.Map<AiSpeechAssistantDto>(assistant),
-            Knowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge)
+            }
         };
+
+        var (assistant, knowledge, prompt) = await BuildingAiSpeechAssistantKnowledgeBaseAsync(command.From, command.To, command.AssistantId, command.Greeting, cancellationToken).ConfigureAwait(false);
+        
+        _aiSpeechAssistantStreamContext.HumanContactPhone = _aiSpeechAssistantStreamContext.ShouldForward ? null : (await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantHumanContactByAssistantIdAsync(assistant.Id, cancellationToken).ConfigureAwait(false))?.HumanPhone;
+        
+        await ConnectOpenAiRealTimeSocketAsync(assistant, prompt, cancellationToken).ConfigureAwait(false);
         
         var receiveFromTwilioTask = ReceiveFromTwilioAsync(command.TwilioWebSocket, cancellationToken);
         var sendToTwilioTask = SendToTwilioAsync(command.TwilioWebSocket, cancellationToken);
 
         try
         {
-            await Task.WhenAll(receiveFromTwilioTask, sendToTwilioTask);
+            if (_aiSpeechAssistantStreamContext.ShouldForward)
+                await receiveFromTwilioTask;    
+            else
+                await Task.WhenAll(receiveFromTwilioTask, sendToTwilioTask);
         }
         catch (Exception ex)
         {
@@ -343,11 +340,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         if (!string.IsNullOrEmpty(forwardNumber))
         {
-            _backgroundJobClient.Enqueue<IMediator>(x => x.SendAsync(new TransferHumanServiceCommand
-            {
-                CallSid = _aiSpeechAssistantStreamContext.CallSid,
-                HumanPhone = _aiSpeechAssistantStreamContext.HumanContactPhone
-            }, cancellationToken));
+            _shouldSendBuffToOpenAi = false;
+            _aiSpeechAssistantStreamContext.ShouldForward = true;
+            _aiSpeechAssistantStreamContext.ForwardPhoneNumber = forwardNumber;
 
             return (null, null, null);
         }
@@ -371,7 +366,10 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         Log.Information($"The final prompt: {finalPrompt}");
 
         knowledge.Greetings = string.IsNullOrEmpty(greeting) ? knowledge.Greetings : greeting;
-        
+
+        _aiSpeechAssistantStreamContext.Assistant = _mapper.Map<AiSpeechAssistantDto>(assistant);
+        _aiSpeechAssistantStreamContext.Knowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge);
+        _aiSpeechAssistantStreamContext.LastPrompt = finalPrompt;
         return (assistant, knowledge, finalPrompt);
     }
 
@@ -384,7 +382,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         {
             var localNow = ConvertToRuleLocalTime(_clock.Now, rule.TimeZone);
 
-            var days = rule.DaysOfWeek ?? [];
+            var days = ParseDays(rule.DayOfWeek) ?? [];
             var dayOk = days.Count == 0 || days.Contains(localNow.DayOfWeek);
             if (!dayOk) continue;
 
@@ -416,6 +414,18 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             return utcNow.UtcDateTime;
         }
         return utcNow.UtcDateTime;
+    }
+    
+    private static List<DayOfWeek> ParseDays(string dayString)
+    {
+        if (string.IsNullOrWhiteSpace(dayString)) return [];
+        var list = new List<DayOfWeek>();
+        foreach (var token in dayString.Split(',', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (int.TryParse(token, out var v) && v >= 0 && v <= 6)
+                list.Add((DayOfWeek)v);
+        }
+        return list;
     }
     
     private static bool IsWithinTimeWindow(TimeSpan localTime, TimeSpan? start, TimeSpan? end)
@@ -455,8 +465,10 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private async Task ConnectOpenAiRealTimeSocketAsync(
         Domain.AISpeechAssistant.AiSpeechAssistant assistant, string prompt, CancellationToken cancellationToken)
     {
+        if (_aiSpeechAssistantStreamContext.ShouldForward) return;
+        
         await ConfigAuthorizationHeader(assistant, cancellationToken).ConfigureAwait(false);
-
+        
         var url = string.IsNullOrEmpty(assistant.ModelUrl) ? AiSpeechAssistantStore.DefaultUrl : assistant.ModelUrl;
         
         try
@@ -475,7 +487,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     
     private async Task ConfigAuthorizationHeader(Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken)
     {
-        var apikey = await GetIdleOpenAiApiKeyAsync(cancellationToken).ConfigureAwait(false);
         switch (assistant.ModelProvider)
         {
             case AiSpeechAssistantProvider.OpenAi:
@@ -562,8 +573,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
                 if (result is { Count: > 0 })
                 {
-                    Log.Information("ReceiveFromTwilioAsync result: {@result}", JsonConvert.DeserializeObject<object>(Encoding.UTF8.GetString(buffer, 0, result.Count)));
-                    
                     using var jsonDocument = JsonSerializer.Deserialize<JsonDocument>(buffer.AsSpan(0, result.Count));
                     var eventMessage = jsonDocument?.RootElement.GetProperty("event").GetString();
                     
@@ -582,8 +591,18 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                             {
                                 CallSid = _aiSpeechAssistantStreamContext.CallSid, Host = _aiSpeechAssistantStreamContext.Host
                             }, CancellationToken.None));
+
+                            Log.Information("Should forward: {ShouldForward}", _aiSpeechAssistantStreamContext.ShouldForward);
+                            if (_aiSpeechAssistantStreamContext.ShouldForward)
+                                _backgroundJobClient.Enqueue<IMediator>(x => x.SendAsync(new TransferHumanServiceCommand
+                                {
+                                    CallSid = _aiSpeechAssistantStreamContext.CallSid,
+                                    HumanPhone = _aiSpeechAssistantStreamContext.ForwardPhoneNumber
+                                }, cancellationToken));
                             break;
                         case "media":
+                            if (_aiSpeechAssistantStreamContext.ShouldForward) break;
+                            
                             var media = jsonDocument.RootElement.GetProperty("media");
                             
                             var payload = media.GetProperty("payload").GetString();
@@ -806,6 +825,12 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     
     private void StartInactivityTimer()
     {
+        if (string.IsNullOrEmpty(_aiSpeechAssistantStreamContext.CallSid))
+        {
+            Log.Information("Starting inactivity timer interrupt, due to the callsid is invalid: {CallSid}", _aiSpeechAssistantStreamContext.CallSid);
+            return;
+        }
+        
         _inactivityTimerManager.StartTimer(_aiSpeechAssistantStreamContext.CallSid, TimeSpan.FromMinutes(2), async () =>
         {
             Log.Warning("No activity detected for 2 minutes.");
@@ -816,6 +841,12 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
     private void StopInactivityTimer()
     {
+        if (string.IsNullOrEmpty(_aiSpeechAssistantStreamContext.CallSid))
+        {
+            Log.Information("Stop inactivity timer interrupt, due to the callsid is invalid: {CallSid}", _aiSpeechAssistantStreamContext.CallSid);
+            return;
+        }
+        
         _inactivityTimerManager.StopTimer(_aiSpeechAssistantStreamContext.CallSid);
     }
     

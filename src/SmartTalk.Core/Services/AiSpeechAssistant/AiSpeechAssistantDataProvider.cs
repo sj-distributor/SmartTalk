@@ -82,6 +82,12 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task UpdateAiSpeechAssistantFunctionCall(List<AiSpeechAssistantFunctionCall> tools, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task<List<AiSpeechAssistantInboundRoute>> GetAiSpeechAssistantInboundRouteAsync(string callerNumber, string didNumber, CancellationToken cancellationToken);
+    
+    Task AddAiSpeechAssistantHumanContactAsync(AiSpeechAssistantHumanContact humanContact, bool forceSave = true, CancellationToken cancellationToken = default);
+    
+    Task UpdateAiSpeechAssistantHumanContactAsync(AiSpeechAssistantHumanContact humanContact, bool forceSave = true, CancellationToken cancellationToken = default);
+    
+    Task<List<AiSpeechAssistantHumanContact>> GetAiSpeechAssistantHumanContactsAsync(List<int> assistantIds, CancellationToken cancellationToken);
 }
 
 public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
@@ -397,10 +403,14 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
 
     public async Task<List<AiSpeechAssistantInboundRoute>> GetAiSpeechAssistantInboundRouteAsync(string callerNumber, string didNumber, CancellationToken cancellationToken)
     {
-        return await _repository.Query<AiSpeechAssistantInboundRoute>()
-            .Where(x => x.From == callerNumber && x.To == didNumber)
-            .OrderByDescending(x => x.Priority)
+        var routes = await _repository.Query<AiSpeechAssistantInboundRoute>()
+            .Where(x => x.To == didNumber)
+            .OrderBy(x => x.Priority)
             .ToListAsync(cancellationToken).ConfigureAwait(false);
+        
+        var specifyCallerNumber = routes.Where(x => x.From == callerNumber).OrderBy(x => x.Priority).ToList();
+
+        return specifyCallerNumber.Count != 0 ? specifyCallerNumber : routes;
     }
 
     public async Task<Sales> GetCallInSalesByNameAsync(string assistantName, SalesCallType? type, CancellationToken cancellationToken)
@@ -432,5 +442,24 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
         await _repository.UpdateAllAsync(tools, cancellationToken).ConfigureAwait(false);
         
         if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task AddAiSpeechAssistantHumanContactAsync(AiSpeechAssistantHumanContact humanContact, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.InsertAsync(humanContact, cancellationToken).ConfigureAwait(false);
+        
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task UpdateAiSpeechAssistantHumanContactAsync(AiSpeechAssistantHumanContact humanContact, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.UpdateAsync(humanContact, cancellationToken).ConfigureAwait(false);
+        
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<AiSpeechAssistantHumanContact>> GetAiSpeechAssistantHumanContactsAsync(List<int> assistantIds, CancellationToken cancellationToken)
+    {
+        return await _repository.Query<AiSpeechAssistantHumanContact>().Where(x => assistantIds.Contains(x.AssistantId)).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }

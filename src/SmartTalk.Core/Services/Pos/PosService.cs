@@ -326,12 +326,21 @@ public partial class PosService : IPosService
     {
         var storeUsers = await _posDataProvider.GetPosStoreUsersByUserIdAsync(_currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
 
-        var stores = await _posDataProvider.GetPosCompanyStoresAsync(ids: storeUsers.Select(x => x.StoreId).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        return new GetPosCurrentUserStoresResponse()
+        if (storeUsers.Count == 0) return new GetPosCurrentUserStoresResponse { Data = [] };
+        
+        var storeIds = storeUsers.Select(x => x.StoreId).ToList();
+        var stores = _mapper.Map<List<PosCompanyStoreDto>>(
+            await _posDataProvider.GetPosCompanyStoresAsync(ids: storeIds, cancellationToken: cancellationToken).ConfigureAwait(false));
+        
+        var allAgents = await _posDataProvider.GetPosAgentsAsync(storeIds: storeIds, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var enrichStores = stores.Select(store => new GetPosCurrentUserStoresResponseData
         {
-            Data = _mapper.Map<List<PosCompanyStoreDto>>(stores)
-        };
+            Store = store,
+            AgentIds = allAgents.Where(x => x.StoreId == store.Id).Select(x => x.Id).ToList()
+        }).ToList();
+
+        return new GetPosCurrentUserStoresResponse { Data = enrichStores };
     }
 
     private async Task<List<GetPosCompanyWithStoresData>> EnrichPosCompaniesAsync(List<PosCompanyDto> companies, string keyword, CancellationToken cancellationToken)
