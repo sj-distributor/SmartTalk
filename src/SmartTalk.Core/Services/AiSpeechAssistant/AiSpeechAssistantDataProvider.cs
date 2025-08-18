@@ -6,9 +6,6 @@ using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Domain.Sales;
-using SmartTalk.Core.Domain.Sales;
-using SmartTalk.Core.Domain.System;
-using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.Sales;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
