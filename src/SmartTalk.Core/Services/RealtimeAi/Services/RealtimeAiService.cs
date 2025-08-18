@@ -214,12 +214,11 @@ public class RealtimeAiService : IRealtimeAiService
                     
                     if (result.MessageType == WebSocketMessageType.Close)
                     {
+                        Log.Information("The Conversation transcription: {@Conversations}", _conversationTranscription);
                         await HandleWholeAudioBufferAsync().ConfigureAwait(false);
                         
                         await _conversationEngine.EndSessionAsync("Disconnect From RealtimeAi");
                         await _webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Client acknowledges close", CancellationToken.None);
-                        
-                        Log.Information("The Conversation transcription: {@Conversations}", _conversationTranscription);
                         return;
                     }
                     
