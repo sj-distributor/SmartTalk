@@ -304,6 +304,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         if (agent.Type == AgentType.Sales)
         {
             var sales = await _aiSpeechAssistantDataProvider.GetCallInSalesByNameAsync(aiSpeechAssistant.Name, SalesCallType.CallIn, cancellationToken).ConfigureAwait(false);
+            Log.Information("Sales fetch result: {@Sales}", sales);
 
             if (sales != null)
             {
@@ -313,6 +314,13 @@ public class SpeechMaticsService : ISpeechMaticsService
                 };
 
                 var askedItems = await _salesClient.GetAskInfoDetailListByCustomerAsync(requestDto, cancellationToken).ConfigureAwait(false);
+                
+                if (askedItems?.Data == null || !askedItems.Data.Any())
+                {
+                    Log.Warning("Sales API 返回空数据，客户：{Customer}", aiSpeechAssistant.Name);
+                    
+                    askedItems = new GetAskInfoDetailListByCustomerResponseDto { Data = new List<VwAskDetail>() };
+                }
 
                 var topItems = askedItems.Data.OrderByDescending(x => x.ValidAskQty).Take(60).ToList();
 
@@ -324,6 +332,7 @@ public class SpeechMaticsService : ISpeechMaticsService
                 }).ToList();
 
                 askItemsJson = JsonSerializer.Serialize(simplifiedItems, new JsonSerializerOptions { WriteIndented = true });
+                Log.Information("Serialized AskItems JSON: {AskItemsJson}", askItemsJson);
             }
         }
 
