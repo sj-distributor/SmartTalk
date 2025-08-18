@@ -48,6 +48,7 @@ public class RealtimeAiService : IRealtimeAiService
     private volatile bool _isAiSpeaking;
     private bool _hasHandledAudioBuffer;
     private MemoryStream _wholeAudioBuffer;
+    private List<(AiSpeechAssistantSpeaker, string)> _conversationTranscription;
 
     public RealtimeAiService(
         IPhoneOrderService phoneOrderService,
@@ -70,6 +71,7 @@ public class RealtimeAiService : IRealtimeAiService
         _isAiSpeaking = false;
         _speechAssistant = null;
         _hasHandledAudioBuffer = false;
+        _conversationTranscription = [];
     }
 
     public async Task RealtimeAiConnectAsync(RealtimeAiConnectCommand command, CancellationToken cancellationToken)
@@ -119,6 +121,8 @@ public class RealtimeAiService : IRealtimeAiService
         _conversationEngine.AiDetectedUserSpeechAsync += OnAiDetectedUserSpeechAsync;
         _conversationEngine.AiTurnCompletedAsync += OnAiTurnCompletedAsync;
         _conversationEngine.ErrorOccurredAsync += OnErrorOccurredAsync;
+        _conversationEngine.InputAudioTranscriptionCompletedAsync += InputAudioTranscriptionCompletedAsync;
+        _conversationEngine.OutputAudioTranscriptionCompletedyAsync += OutputAudioTranscriptionCompletedAsync;
     }
     
     private async Task<string> BuildingAiSpeechAssistantKnowledgeBaseAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken)
@@ -347,6 +351,40 @@ public class RealtimeAiService : IRealtimeAiService
         Log.Information("Realtime turn completed, {@turnCompleted}", turnCompleted);
         await _webSocket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(turnCompleted))), WebSocketMessageType.Text, true, CancellationToken.None);
         Log.Information("Realtime turn completed, {@data}", data);
+    }
+
+    private async Task InputAudioTranscriptionCompletedAsync(RealtimeAiWssTranscriptionData transcriptionData)
+    {
+        _conversationTranscription.Add((transcriptionData.Speaker, transcriptionData.Transcript));
+        
+        var transcription = new
+        {
+            type = "InputAudioTranscriptionCompleted",
+            Data = new
+            { 
+                transcriptionData
+            },
+            session_id = _streamSid
+        };
+
+        await _webSocket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(transcription))), WebSocketMessageType.Text, true, CancellationToken.None);
+    }
+    
+    private async Task OutputAudioTranscriptionCompletedAsync(RealtimeAiWssTranscriptionData transcriptionData)
+    {
+        _conversationTranscription.Add((transcriptionData.Speaker, transcriptionData.Transcript));
+        
+        var transcription = new
+        {
+            type = "OutputAudioTranscriptionCompleted",
+            Data = new
+            { 
+                transcriptionData
+            },
+            session_id = _streamSid
+        };
+
+        await _webSocket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(transcription))), WebSocketMessageType.Text, true, CancellationToken.None);
     }
 
     private async Task HandleWholeAudioBufferAsync()
