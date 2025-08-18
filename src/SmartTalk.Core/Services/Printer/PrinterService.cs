@@ -26,24 +26,23 @@ namespace SmartTalk.Core.Services.Printer;
 
 public interface IPrinterService : IScopedDependency
 {
-    Task<GetPrinterJobAvailableResponse> GetPrinterJobAvailable(GetPrinterJobAvailableRequest request,
+    Task<GetPrinterJobAvailableResponse> GetPrinterJobAvailableAsync(GetPrinterJobAvailableRequest request,
         CancellationToken cancellationToken);
     
-    Task<string> UploadOrderPrintImageToQiNiuAndUpdatePrintUrlAsync(Guid jobToken, DateTimeOffset printDate,
+    Task<string> UploadOrderPrintImageAndUpdatePrintUrlAsync(Guid jobToken, DateTimeOffset printDate, CancellationToken cancellationToken);
+    
+    Task<PrinterJobResponse> PrinterJobAsync(PrinterJobCommand command, CancellationToken cancellationToken);
+    
+    Task<PrinterJobConfirmedEvent> ConfirmPrinterJobAsync(ConfirmPrinterJobCommand command,
         CancellationToken cancellationToken);
     
-    Task<PrinterJobResponse> PrinterJob(PrinterJobCommand command, CancellationToken cancellationToken);
-    
-    Task<PrinterJobConfirmedEvent> ConfirmPrinterJob(ConfirmPrinterJobCommand command,
+    Task<PrinterJobConfirmedEvent> RecordPrintErrorAfterConfirmPrinterJobAsync(ConfirmPrinterJobCommand command,
         CancellationToken cancellationToken);
     
-    Task<PrinterJobConfirmedEvent> RecordPrintErrorAfterConfirmPrinterJob(ConfirmPrinterJobCommand command,
+    Task<PrinterStatusChangedEvent> RecordPrinterStatusAsync(RecordPrinterStatusCommand command,
         CancellationToken cancellationToken);
     
-    Task<PrinterStatusChangedEvent> RecordPrinterStatus(RecordPrinterStatusCommand command,
-        CancellationToken cancellationToken);
-    
-    Task PrintTest(PrintTestCommand command, CancellationToken cancellationToken);
+    Task PrintTestAsync(PrintTestCommand command, CancellationToken cancellationToken);
 
     Task PrinterStatusChangedAsync(PrinterStatusChangedEvent @event, CancellationToken cancellationToken);
 
@@ -67,7 +66,7 @@ public class PrinterService : IPrinterService
         _printerDataProvider = printerDataProvider;
     }
 
-    public async Task<GetPrinterJobAvailableResponse> GetPrinterJobAvailable(GetPrinterJobAvailableRequest request, CancellationToken cancellationToken)
+    public async Task<GetPrinterJobAvailableResponse> GetPrinterJobAvailableAsync(GetPrinterJobAvailableRequest request, CancellationToken cancellationToken)
     {
         var key = $"{request.PrinterMac}-{request.Token}";
         
@@ -88,7 +87,7 @@ public class PrinterService : IPrinterService
             return null; 
         }
             
-        var merchPrinterJob = await GetMerchPrinterJob(merchPrinter, cancellationToken);
+        var merchPrinterJob = await GetMerchPrinterJobAsync(merchPrinter, cancellationToken).ConfigureAwait(false);
 
         return new GetPrinterJobAvailableResponse()
         {
@@ -97,9 +96,9 @@ public class PrinterService : IPrinterService
         };
     }
     
-    private async Task<MerchPrinterOrder> GetMerchPrinterJob(MerchPrinter merchPrinter, CancellationToken cancellationToken)
+    private async Task<MerchPrinterOrder> GetMerchPrinterJobAsync(MerchPrinter merchPrinter, CancellationToken cancellationToken)
     {
-        var agent = await _agentDataProvider.GetAgentByIdAsync(merchPrinter.AgentId, cancellationToken);
+        var agent = await _agentDataProvider.GetAgentByIdAsync(merchPrinter.AgentId, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Agent: {@agent}", agent);
         
@@ -109,6 +108,7 @@ public class PrinterService : IPrinterService
             return (await _printerDataProvider.GetMerchPrinterOrdersAsync(null, merchPrinter.AgentId,  PrintStatus.Waiting, DateTimeOffset.Now, merchPrinter.PrinterMac, true, cancellationToken).ConfigureAwait(false)).FirstOrDefault();
 
         var merchPrinterOrders = await  _printerDataProvider.GetMerchPrinterOrdersAsync(isOrderByPrintDate: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
         foreach (var merchPrinterOrder in merchPrinterOrders)
         {
             if (string.IsNullOrEmpty(merchPrinterOrder.PrinterMac) || merchPrinterOrder.PrinterMac == merchPrinter.PrinterMac)
@@ -118,18 +118,16 @@ public class PrinterService : IPrinterService
         return null;
     }
 
-    public async Task<string> UploadOrderPrintImageToQiNiuAndUpdatePrintUrlAsync(Guid jobToken, DateTimeOffset printDate,
-        CancellationToken cancellationToken)
+    public async Task<string> UploadOrderPrintImageAndUpdatePrintUrlAsync(
+        Guid jobToken, DateTimeOffset printDate, CancellationToken cancellationToken)
     {
         var merchPrinterOrder = (await _printerDataProvider.GetMerchPrinterOrdersAsync(jobToken, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
 
         if (merchPrinterOrder == null) return string.Empty;
-        if (!string.IsNullOrEmpty(merchPrinterOrder.ImageUrl))
-        {
-            return merchPrinterOrder.ImageUrl;
-        }
+        
+        if (!string.IsNullOrEmpty(merchPrinterOrder.ImageUrl)) return merchPrinterOrder.ImageUrl;
 
-        var img = await RenderReceipt().ConfigureAwait(false);
+        var img = await RenderReceiptAsync().ConfigureAwait(false);
        
         var imageKey = Guid.NewGuid().ToString();
         
@@ -154,24 +152,25 @@ public class PrinterService : IPrinterService
         return merchPrinterOrder.ImageUrl;
     }
 
-    public async Task<PrinterJobResponse> PrinterJob(PrinterJobCommand command, CancellationToken cancellationToken)
+    public async Task<PrinterJobResponse> PrinterJobAsync(PrinterJobCommand command, CancellationToken cancellationToken)
     {
         Log.Information("PrinterJobCommand: {@PrinterJobCommand}", command);
         
         var merchPrinterOrder = (await _printerDataProvider.GetMerchPrinterOrdersAsync(command.JobToken, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+        
         if (merchPrinterOrder != null && merchPrinterOrder.PrintStatus == PrintStatus.Waiting)
         {
             merchPrinterOrder.PrintStatus = PrintStatus.Printing;
             await _printerDataProvider.UpdateMerchPrinterOrderAsync(merchPrinterOrder, cancellationToken: cancellationToken).ConfigureAwait(false);
         }
 
-        return new PrinterJobResponse()
+        return new PrinterJobResponse
         {
             MerchPrinterOrder = _mapper.Map<MerchPrinterOrderDto>(merchPrinterOrder)
         };
     }
     
-    public async Task<PrinterJobConfirmedEvent> ConfirmPrinterJob(ConfirmPrinterJobCommand command,
+    public async Task<PrinterJobConfirmedEvent> ConfirmPrinterJobAsync(ConfirmPrinterJobCommand command,
         CancellationToken cancellationToken)
     {
         var merchPrinterOrder = (await _printerDataProvider.GetMerchPrinterOrdersAsync(
@@ -183,7 +182,7 @@ public class PrinterService : IPrinterService
            
             await _printerDataProvider.UpdateMerchPrinterOrderAsync(merchPrinterOrder, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-            return new PrinterJobConfirmedEvent()
+            return new PrinterJobConfirmedEvent
             {
                 MerchPrinterOrderDto = _mapper.Map<MerchPrinterOrderDto>(merchPrinterOrder),
                 PrinterMac = command.PrinterMac,
@@ -194,7 +193,7 @@ public class PrinterService : IPrinterService
         return null;
     }
     
-    public async Task<PrinterJobConfirmedEvent> RecordPrintErrorAfterConfirmPrinterJob(
+    public async Task<PrinterJobConfirmedEvent> RecordPrintErrorAfterConfirmPrinterJobAsync(
         ConfirmPrinterJobCommand command, CancellationToken cancellationToken)
     {
         var merchPrinterOrder = (await _printerDataProvider.GetMerchPrinterOrdersAsync(
@@ -209,7 +208,7 @@ public class PrinterService : IPrinterService
              
             await _printerDataProvider.UpdateMerchPrinterOrderAsync(merchPrinterOrder, cancellationToken: cancellationToken).ConfigureAwait(false);
             
-            return new PrinterJobConfirmedEvent()
+            return new PrinterJobConfirmedEvent
             {
                 MerchPrinterOrderDto = _mapper.Map<MerchPrinterOrderDto>(merchPrinterOrder),
                 PrinterMac = command.PrinterMac,
@@ -220,8 +219,8 @@ public class PrinterService : IPrinterService
         return null;
     }
     
-    public async Task<PrinterStatusChangedEvent> RecordPrinterStatus(RecordPrinterStatusCommand command,
-        CancellationToken cancellationToken)
+    public async Task<PrinterStatusChangedEvent> RecordPrinterStatusAsync(
+        RecordPrinterStatusCommand command, CancellationToken cancellationToken)
     {
         var merchPrinter = await _printerDataProvider.GetMerchPrinterByPrinterMacAsync(
             command.PrinterMac, command.Token, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -247,7 +246,7 @@ public class PrinterService : IPrinterService
         return @event;
     }
 
-    public async Task PrintTest(PrintTestCommand command, CancellationToken cancellationToken)
+    public async Task PrintTestAsync(PrintTestCommand command, CancellationToken cancellationToken)
     {
         var merchPrinterOrder = new MerchPrinterOrder
         {
@@ -262,19 +261,17 @@ public class PrinterService : IPrinterService
 
     public async Task PrinterStatusChangedAsync(PrinterStatusChangedEvent @event, CancellationToken cancellationToken)
     {
-        var merchPrinterLog = await GenerateMerchPrinterLog(@event, cancellationToken);
-            
-
+        var merchPrinterLog = await GenerateMerchPrinterLogAsync(@event, cancellationToken).ConfigureAwait(false);
+        
         if (merchPrinterLog != null)
-            await _printerDataProvider.AddMerchPrinterLogAsync(merchPrinterLog, cancellationToken);
+            await _printerDataProvider.AddMerchPrinterLogAsync(merchPrinterLog, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<MerchPrinterLog> GenerateMerchPrinterLog(PrinterStatusChangedEvent @event,
-        CancellationToken cancellationToken)
+    private async Task<MerchPrinterLog> GenerateMerchPrinterLogAsync(PrinterStatusChangedEvent @event, CancellationToken cancellationToken)
     {
         var varianceList = GetVarianceList(@event);
-        if (!varianceList.Any())
-            return null;
+        
+        if (!varianceList.Any()) return null;
 
         var merchPrinter = await _printerDataProvider.GetMerchPrinterByPrinterMacAsync(@event.PrinterMac, @event.Token,cancellationToken);
         if (merchPrinter == null)
@@ -299,15 +296,15 @@ public class PrinterService : IPrinterService
         var oldInfo = @event.OldPrinterStatusInfo;
         var newInfo = @event.NewPrinterStatusInfo;
 
-        foreach (var f in PrinterStatusPropertyInfos)
+        foreach (var propertyInfo in PrinterStatusPropertyInfos)
         {
-            var v = new Variance
+            var variance = new Variance
             {
-                Name = f.Name, OldValue = (bool) f.GetValue(oldInfo), NewValue = (bool) f.GetValue(newInfo)
+                Name = propertyInfo.Name, OldValue = (bool) propertyInfo.GetValue(oldInfo), NewValue = (bool) propertyInfo.GetValue(newInfo)
             };
 
-            if (v.OldValue != v.NewValue)
-                variances.Add(v);
+            if (variance.OldValue != variance.NewValue)
+                variances.Add(variance);
         }
 
         return variances;
@@ -336,7 +333,7 @@ public class PrinterService : IPrinterService
         await _printerDataProvider.AddMerchPrinterLogAsync(merchPrinterLog, cancellationToken);
     }
 
-    private async Task<Image<Rgba32>> RenderReceipt()
+    private async Task<Image<Rgba32>> RenderReceiptAsync()
     {
         var width = 512;
         var textColor = Color.Black;
@@ -359,14 +356,12 @@ public class PrinterService : IPrinterService
         var fontNormal = CreateFont(30);
         var fontBold = CreateFont(40, bold: true);
         
-
-        // 用“口”测量统一行高
-        float lineHeight = TextMeasurer.MeasureSize("口", new TextOptions(fontNormal)).Height;
+        var lineHeight = TextMeasurer.MeasureSize("口", new TextOptions(fontNormal)).Height;
 
         var img = new Image<Rgba32>(width, 3000);
         img.Mutate(ctx => ctx.Fill(bgColor));
 
-        int y = 10;
+        var y = 10;
 
         void DrawLine(string text, Font font, float spacing = 20, bool rightAlign = false, bool centerAlign = false)
         {
@@ -384,12 +379,13 @@ public class PrinterService : IPrinterService
         
         string GenerateFullLine(char fillChar, Font font)
         {
-            string line = new string(fillChar, 1);
-            float lineWidth = TextMeasurer.MeasureSize(line, new TextOptions(font)).Width;
+            var line = new string(fillChar, 1);
+            var lineWidth = TextMeasurer.MeasureSize(line, new TextOptions(font)).Width;
 
             if (lineWidth == 0) return "";
 
-            int repeatCount = (int)Math.Ceiling(width / lineWidth);
+            var repeatCount = (int)Math.Ceiling(width / lineWidth);
+            
             return new string(fillChar, repeatCount);
         }
 
@@ -411,17 +407,17 @@ public class PrinterService : IPrinterService
         string InsertLineBreakBetweenEnglishAndChinese(string text)
         {
             var sb = new StringBuilder();
-            int i = 0;
+            var i = 0;
 
             while (i < text.Length)
             {
-                char current = text[i];
-                CharType currType = GetCharType(current);
-     
-                // 当前字符先写入
+                var current = text[i];
+                var currType = GetCharType(current);
+                
                 sb.Append(current);
                 
-                int j = i + 1;
+                var j = i + 1;
+                
                 while (j < text.Length && GetCharType(text[j]) == CharType.Other)
                 {
                     sb.Append(text[j]);
@@ -431,13 +427,10 @@ public class PrinterService : IPrinterService
 
                 if (j < text.Length)
                 {
-                    CharType nextType = GetCharType(text[j]);
-
-                    // 若中英混合，插入换行
+                    var nextType = GetCharType(text[j]);
+                    
                     if (currType != CharType.Other && nextType != CharType.Other && currType != nextType)
-                    {
                         sb.Append('\n');
-                    }
                 }
 
                 i++;
@@ -450,16 +443,13 @@ public class PrinterService : IPrinterService
         {
             if (IsEnglish(c)) return CharType.English;
             if (IsChinese(c)) return CharType.Chinese;
+            
             return CharType.Other;
         }
         
-        bool IsChinese(char c) =>
-            (c >= 0x4E00 && c <= 0x9FFF) ||
-            (c >= 0x3400 && c <= 0x4DBF) ||
-            (c >= 0x3000 && c <= 0x303F);
+        bool IsChinese(char c) => (c >= 0x4E00 && c <= 0x9FFF) || (c >= 0x3400 && c <= 0x4DBF) || (c >= 0x3000 && c <= 0x303F);
 
-        bool IsEnglish(char c) =>
-            (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+        bool IsEnglish(char c) => (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
         
         void DrawItemLineThreeColsWrapped(string qty, string itemName, string price, Dictionary<string, int>? remarks = null,
         float fontSize = 27, bool bold = false, float lineSpacing = 1.5f, float remarkLineSpacing = 1.5f, int backSpacing = 0)
@@ -468,14 +458,14 @@ public class PrinterService : IPrinterService
             var boldFont = new Font(family, fontSize, FontStyle.Bold);
             var remarkFont = new Font(family, fontSize - 3, bold ? FontStyle.Regular : FontStyle.Regular);
             
-            float padding = 10;
-            float col1Width = 80;
-            float col3Width = 150;
-            float col2Width = width - col1Width - col3Width - padding * 2;
+            var padding = 10;
+            var col1Width = 80;
+            var col3Width = 150;
+            var col2Width = width - col1Width - col3Width - padding * 2;
 
-            float col1X = padding;
-            float col2X = col1X + col1Width;
-            float col3X = width - col3Width - padding;
+            var col1X = padding;
+            var col2X = col1X + col1Width;
+            var col3X = width - col3Width - padding;
 
             var baseOptions = new TextOptions(font)
             {
@@ -484,36 +474,35 @@ public class PrinterService : IPrinterService
                 HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Top
             };
-
-            // 缩进计算
+            
             float indentX = 0;
+            
             if (!string.IsNullOrEmpty(itemName))
             {
                 var firstChar = itemName[0].ToString();
                 indentX = TextMeasurer.MeasureSize(firstChar, baseOptions).Width;
             }
-
-            // 应用中英文换行
+            
             itemName = InsertLineBreakBetweenEnglishAndChinese(itemName);
-
-            // 测量 itemName 高度
-            float itemBlockHeight = TextMeasurer.MeasureSize(itemName, baseOptions).Height;
-
-            // ======= 备注处理 ========
-            List<(string prefix, string content)> remarkLines = new();
+            
+            var itemBlockHeight = TextMeasurer.MeasureSize(itemName, baseOptions).Height;
+            
+            List<(string prefix, string content)> remarkLines = [];
+            
             if (remarks != null)
             {
                 foreach (var kvp in remarks)
                 {
                     var raw = kvp.Key.Trim();
                     var qtyVal = kvp.Value;
-                    string prefix = qtyVal > 0 ? $"{qtyVal}" : ">";
-                    string content = InsertLineBreakBetweenEnglishAndChinese(raw);
+                    var prefix = qtyVal > 0 ? $"{qtyVal}" : ">";
+                    var content = InsertLineBreakBetweenEnglishAndChinese(raw);
                     remarkLines.Add((prefix, content));
                 }
             }
 
-            float remarkExtraWidth = 50; // 备注区域宽于 itemName
+            var remarkExtraWidth = 50;
+            
             var remarkOptions = new TextOptions(remarkFont)
             {
                 WrappingLength = col2Width + remarkExtraWidth - indentX,
@@ -522,15 +511,15 @@ public class PrinterService : IPrinterService
                 VerticalAlignment = VerticalAlignment.Top
             };
 
-            float remarkBlockHeight = 0f;
+            var remarkBlockHeight = 0f;
+            
             foreach (var (_, content) in remarkLines)
             {
                 remarkBlockHeight += TextMeasurer.MeasureSize(content, remarkOptions).Height + 5;
             }
 
-            float totalBlockHeight = itemBlockHeight + (remarkBlockHeight > 0 ? remarkBlockHeight : 0);
-
-            // ======= 开始绘制 ========
+            var totalBlockHeight = itemBlockHeight + (remarkBlockHeight > 0 ? remarkBlockHeight : 0);
+            
             img.Mutate(ctx =>
             {
                 var qtyTextOptions = new RichTextOptions(boldFont)
@@ -542,7 +531,7 @@ public class PrinterService : IPrinterService
                 ctx.DrawText(qtyTextOptions, qty, textColor);
                 
                 var priceSize = TextMeasurer.MeasureSize(price, new TextOptions(font));
-                float priceX = col3X + col3Width - priceSize.Width;
+                var priceX = col3X + col3Width - priceSize.Width;
                 
                 var priceTextOptions = new RichTextOptions(boldFont)
                 {
@@ -550,6 +539,7 @@ public class PrinterService : IPrinterService
                     WrappingLength = col2Width,
                     LineSpacing = lineSpacing
                 };
+                
                 ctx.DrawText(priceTextOptions ,price, textColor);
 
                 var itemTextOptions = new RichTextOptions(font)
@@ -558,10 +548,10 @@ public class PrinterService : IPrinterService
                     WrappingLength = col2Width,
                     LineSpacing = lineSpacing
                 };
+                
                 ctx.DrawText(itemTextOptions, itemName, textColor);
-
-                // 绘制备注内容
-                float remarkY = y + itemBlockHeight + 5;
+                
+                var remarkY = y + itemBlockHeight + 5;
                 foreach (var (prefix, content) in remarkLines)
                 {
                     var prefixOptions = new RichTextOptions(remarkFont)
@@ -572,9 +562,9 @@ public class PrinterService : IPrinterService
                     };
                     ctx.DrawText(prefixOptions, prefix, textColor);
 
-                    float prefixWidth = TextMeasurer.MeasureSize(prefix, new TextOptions(font)).Width;
-                    float spaceWidth = TextMeasurer.MeasureSize(" ", new TextOptions(font)).Width;
-                    float contentX = col2X + indentX + prefixWidth + spaceWidth * 4;
+                    var prefixWidth = TextMeasurer.MeasureSize(prefix, new TextOptions(font)).Width;
+                    var spaceWidth = TextMeasurer.MeasureSize(" ", new TextOptions(font)).Width;
+                    var contentX = col2X + indentX + prefixWidth + spaceWidth * 4;
 
                     var contentOptions = new RichTextOptions(remarkFont)
                     {
@@ -584,7 +574,7 @@ public class PrinterService : IPrinterService
                     };
                     ctx.DrawText(contentOptions, content.TrimStart(), textColor);
 
-                    float lineHeight = TextMeasurer.MeasureSize(content, remarkOptions).Height + 5;
+                    var lineHeight = TextMeasurer.MeasureSize(content, remarkOptions).Height + 5;
                     remarkY += lineHeight;
                 }
             });
@@ -593,13 +583,12 @@ public class PrinterService : IPrinterService
         }
 
         
-        //实线
         void DrawSolidLine(float thickness = 2, float spacing = 10, Color? color = null, float padding = 10)
         {
             color ??= Color.Black;
 
-            float x1 = padding;
-            float x2 = width - padding;
+            var x1 = padding;
+            var x2 = width - padding;
 
             img.Mutate(ctx =>
             {
@@ -609,13 +598,9 @@ public class PrinterService : IPrinterService
             y += (int)thickness + (int)spacing;
         }
         
-        //虚线
         void DrawDashedLine() => DrawLine(GenerateFullLine('-', fontNormal), fontNormal);
         
         void DrawDashedBoldLine() => DrawLine(GenerateFullLine('-', fontBold), fontBold);
-
-
-        //===== 开始绘制内容 =====
 
         DrawLine("#44", fontNormal);
         DrawLine("Call-in Order",  CreateFont(45, true), spacing: 50, centerAlign: true);
@@ -664,49 +649,5 @@ public class PrinterService : IPrinterService
 
         img.Mutate(x => x.Crop(new Rectangle(0, 0, width, y + 10)));
         return img;
-    }
-
-    private byte[] ConvertImageToEscPos(Image<Rgba32> image)
-    {
-        // 转成单色黑白位图
-        var threshold = 140;
-        int width = image.Width;
-        int height = image.Height;
-        int bytesPerRow = (width + 7) / 8;
-
-        byte[] escpos = new byte[height * bytesPerRow + 8 * height]; // 预留充足
-        using var ms = new MemoryStream();
-
-        for (int y = 0; y < height; y++)
-        {
-            ms.WriteByte(0x1D); // GS v 0
-            ms.WriteByte(0x76);
-            ms.WriteByte(0x30);
-            ms.WriteByte(0x00); // Normal mode
-
-            ms.WriteByte((byte)(bytesPerRow % 256)); // xL
-            ms.WriteByte((byte)(bytesPerRow / 256)); // xH
-            ms.WriteByte(0x01);                      // yL (1行)
-            ms.WriteByte(0x00);                      // yH
-
-            for (int xByte = 0; xByte < bytesPerRow; xByte++)
-            {
-                byte b = 0x00;
-                for (int bit = 0; bit < 8; bit++)
-                {
-                    int x = xByte * 8 + bit;
-                    if (x >= width) continue;
-
-                    var pixel = image[x, y];
-                    var luminance = (0.299 * pixel.R + 0.587 * pixel.G + 0.114 * pixel.B);
-
-                    if (luminance < threshold)
-                        b |= (byte)(1 << (7 - bit));
-                }
-                ms.WriteByte(b);
-            }
-        }
-
-        return ms.ToArray();
     }
 }

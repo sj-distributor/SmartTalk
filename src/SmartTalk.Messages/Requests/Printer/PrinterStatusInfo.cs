@@ -2,7 +2,7 @@ namespace SmartTalk.Messages.Requests.Printer;
 
 public class PrinterStatusInfo
 {
-     /// <summary>
+        /// <summary>
         /// Operating status of the printer:
         /// If true, then the printer is able to print,
         /// If false then the printer is in state which prevents printing.

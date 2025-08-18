@@ -1,9 +1,8 @@
-using AutoMapper;
 using Mediator.Net.Context;
 using Mediator.Net.Contracts;
 using SmartTalk.Core.Services.Printer;
-using SmartTalk.Messages.Commands.Printer;
 using SmartTalk.Messages.Events.Printer;
+using SmartTalk.Messages.Commands.Printer;
 
 namespace SmartTalk.Core.Handlers.CommandHandlers.Printer;
 
@@ -19,18 +18,13 @@ public class ConfirmPrinterJobCommandHandler : ICommandHandler<ConfirmPrinterJob
     public async Task Handle(IReceiveContext<ConfirmPrinterJobCommand> context, CancellationToken cancellationToken)
     {
         PrinterJobConfirmedEvent @event;
+        
         if (context.Message.PrintSuccessfully)
-        {
-            @event = await _printerService.ConfirmPrinterJob(context.Message, cancellationToken).ConfigureAwait(false);
-        }
+            @event = await _printerService.ConfirmPrinterJobAsync(context.Message, cancellationToken).ConfigureAwait(false);
         else
-        {
-            @event = await _printerService.RecordPrintErrorAfterConfirmPrinterJob(context.Message, cancellationToken).ConfigureAwait(false);
-        }
+            @event = await _printerService.RecordPrintErrorAfterConfirmPrinterJobAsync(context.Message, cancellationToken).ConfigureAwait(false);
 
         if (@event != null)
-        {
-            await context.PublishAsync(@event, cancellationToken);
-        }
+            await context.PublishAsync(@event, cancellationToken).ConfigureAwait(false);
     }
 }

@@ -1,5 +1,6 @@
-using System.ComponentModel.DataAnnotations.Schema;
 using SmartTalk.Messages.Enums.Printer;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace SmartTalk.Core.Domain.Printer;
 
@@ -11,7 +12,8 @@ public class MerchPrinterOrder : IEntity
         CreatedDate = DateTimeOffset.Now;
         PrintStatus = PrintStatus.Waiting;
     }
-        
+    
+    [Key]
     [Column("id", TypeName = "char(36)")]
     public Guid Id { get; set; }
 

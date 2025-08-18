@@ -1,6 +1,7 @@
-using System.ComponentModel.DataAnnotations.Schema;
 using Newtonsoft.Json;
 using SmartTalk.Messages.Requests.Printer;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace SmartTalk.Core.Domain.Printer;
 
@@ -11,7 +12,8 @@ public class MerchPrinter : IEntity
     {
         StatusInfoLastModifiedDate = DateTimeOffset.Now;
     }
-
+    
+    [Key]
     [Column("id")]
     public int Id { get; set; }
 
@@ -38,8 +40,7 @@ public class MerchPrinter : IEntity
 
     public PrinterStatusInfo PrinterStatusInfo()
     {
-        if (string.IsNullOrWhiteSpace(StatusInfo) || StatusInfoLastModifiedDate < DateTimeOffset.Now.AddMinutes(-2))
-            return null;
+        if (string.IsNullOrWhiteSpace(StatusInfo) || StatusInfoLastModifiedDate < DateTimeOffset.Now.AddMinutes(-2)) return null;
 
         return JsonConvert.DeserializeObject<PrinterStatusInfo>(StatusInfo);
     }

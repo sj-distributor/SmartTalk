@@ -16,6 +16,6 @@ public class GetPrinterJobAvailableRequestHandler : IRequestHandler<GetPrinterJo
 
     public async Task<GetPrinterJobAvailableResponse> Handle(IReceiveContext<GetPrinterJobAvailableRequest> context, CancellationToken cancellationToken)
     {
-        return await _printerService.GetPrinterJobAvailable(context.Message, cancellationToken).ConfigureAwait(false);
+        return await _printerService.GetPrinterJobAvailableAsync(context.Message, cancellationToken).ConfigureAwait(false);
     }
 }
