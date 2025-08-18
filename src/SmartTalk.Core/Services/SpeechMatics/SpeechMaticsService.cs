@@ -262,51 +262,57 @@ public class SpeechMaticsService : ISpeechMaticsService
     private async Task<List<ChatMessage>> ConfigureRecordAnalyzePromptAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, string callFrom, string currentTime, byte[] audioContent, CancellationToken cancellationToken) 
     {
         var askItemsJson = string.Empty;
-        
-        var sales = await _aiSpeechAssistantDataProvider.GetCallInSalesByNameAsync(aiSpeechAssistant.Name, SalesCallType.CallIn, cancellationToken).ConfigureAwait(false);
 
-        if (sales != null)
+        if (agent.Type == AgentType.Sales)
         {
-            var requestDto = new GetAskInfoDetailListByCustomerRequestDto
-            {
-                CustomerNumbers = new List<string> { aiSpeechAssistant.Name }
-            };
-            
-            var askedItems = await _salesClient.GetAskInfoDetailListByCustomerAsync(requestDto, cancellationToken).ConfigureAwait(false);
+            var sales = await _aiSpeechAssistantDataProvider.GetCallInSalesByNameAsync(aiSpeechAssistant.Name, SalesCallType.CallIn, cancellationToken).ConfigureAwait(false);
 
-            var topItems = askedItems.Data.OrderByDescending(x => x.ValidAskQty).Take(60).ToList();
-            
-            var simplifiedItems = topItems.Select(x => new 
+            if (sales != null)
             {
-                name = x.MaterialDesc, 
-                quantity = x.ValidAskQty,
-                materialNumber = x.Material
-            }).ToList();
+                var requestDto = new GetAskInfoDetailListByCustomerRequestDto
+                {
+                    CustomerNumbers = new List<string> { aiSpeechAssistant.Name }
+                };
 
-            askItemsJson = JsonSerializer.Serialize(simplifiedItems, new JsonSerializerOptions { WriteIndented = true });
+                var askedItems = await _salesClient.GetAskInfoDetailListByCustomerAsync(requestDto, cancellationToken).ConfigureAwait(false);
+
+                var topItems = askedItems.Data.OrderByDescending(x => x.ValidAskQty).Take(60).ToList();
+
+                var simplifiedItems = topItems.Select(x => new
+                {
+                    name = x.MaterialDesc,
+                    quantity = x.ValidAskQty,
+                    materialNumber = x.Material
+                }).ToList();
+                
+                askItemsJson = JsonSerializer.Serialize(simplifiedItems, new JsonSerializerOptions { WriteIndented = true });
+            }
         }
 
         var audioData = BinaryData.FromBytes(audioContent);
-        List<ChatMessage> messages =
-        [
-            new SystemChatMessage(string.IsNullOrEmpty(aiSpeechAssistant?.CustomRecordAnalyzePrompt)
-                ? "你是一名電話錄音的分析員，通過聽取錄音內容和語氣情緒作出精確分析，冩出一份分析報告。\n\n分析報告的格式：交談主題：xxx\n\n 來電號碼：#{call_from}\n\n 內容摘要:xxx \n\n 客人情感與情緒: xxx \n\n 待辦事件: \n1.xxx\n2.xxx \n\n 客人下單內容(如果沒有則忽略)：1. 牛肉(1箱)\n2.雞腿肉(1箱)".Replace("#{call_from}", callFrom ?? "")
-                : aiSpeechAssistant.CustomRecordAnalyzePrompt.Replace("#{call_from}", callFrom ?? "").Replace("#{current_time}", currentTime).Replace("#{askItemsJson}", askItemsJson ?? "")),
-            new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
-            new UserChatMessage("幫我根據錄音生成分析報告：")
-        ];
+            List<ChatMessage> messages =
+            [
+                new SystemChatMessage(string.IsNullOrEmpty(aiSpeechAssistant?.CustomRecordAnalyzePrompt)
+                    ? "你是一名電話錄音的分析員，通過聽取錄音內容和語氣情緒作出精確分析，冩出一份分析報告。\n\n分析報告的格式：交談主題：xxx\n\n 來電號碼：#{call_from}\n\n 內容摘要:xxx \n\n 客人情感與情緒: xxx \n\n 待辦事件: \n1.xxx\n2.xxx \n\n 客人下單內容(如果沒有則忽略)：1. 牛肉(1箱)\n2.雞腿肉(1箱)".Replace("#{call_from}", callFrom ?? "")
+                    : aiSpeechAssistant.CustomRecordAnalyzePrompt.Replace("#{call_from}", callFrom ?? "").Replace("#{current_time}", currentTime).Replace("#{askItemsJson}", askItemsJson ?? "")),
+                new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
+                new UserChatMessage("幫我根據錄音生成分析報告：")
+            ];
 
-        return messages;
-    }
-    
+            return messages;
+        }
+
     private async Task MultiScenarioCustomProcessingAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, PhoneOrderRecord record, CancellationToken cancellationToken) 
     { 
-        var sales = await _aiSpeechAssistantDataProvider.GetCallInSalesByNameAsync(aiSpeechAssistant.Name, SalesCallType.CallIn, cancellationToken).ConfigureAwait(false);
-
-        if (sales != null && !string.IsNullOrEmpty(record.TranscriptionText))
-        {
-            await HandleSalesScenarioAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
-        }
+        switch (agent.Type) 
+        { 
+            case AgentType.Sales: 
+                if (!string.IsNullOrEmpty(record.TranscriptionText)) 
+                { 
+                    await HandleSalesScenarioAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
+                }
+                break; 
+        } 
     }
     
     private async Task HandleSalesScenarioAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, PhoneOrderRecord record, CancellationToken cancellationToken)
