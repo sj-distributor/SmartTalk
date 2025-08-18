@@ -1,3 +1,4 @@
+using Serilog;
 using SmartTalk.Core.Constants;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Ioc;
@@ -71,13 +72,21 @@ public class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
 
     public async Task CalculateRecordingDurationAsync(PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken = default)
     {
-        if (record.Duration is > 0) return;
+        Log.Information("Ready calculate the record: {@Record}", record);
+
+        if (record.Duration is > 0)
+        {
+            Log.Information("Record don't need to be calculated: {@Record}", record);
+            return;
+        }
         
         var audioBytes = audioContent == null || audioContent.Length == 0
             ? await _smartTalkHttpClient.GetAsync<byte[]>(record.Url, cancellationToken).ConfigureAwait(false)
             : audioContent;
         
         var duration = await _ffmpegService.GetAudioDurationAsync(audioBytes, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Calculating recording duration: {Duration}", duration);
         
         record.Duration = TimeSpan.TryParse(duration, out var timeSpan) ? timeSpan.TotalSeconds : 0;
     }
