@@ -2,6 +2,7 @@ using Serilog;
 using Hangfire;
 using Newtonsoft.Json;
 using Hangfire.Correlate;
+using Hangfire.Pro.Redis;
 using SmartTalk.Core.Jobs;
 using SmartTalk.Core.Constants;
 using SmartTalk.Core.Services.Jobs;
@@ -18,7 +19,8 @@ public static class HangfireExtension
             c.UseCorrelate(sp);
             c.UseMaxArgumentSizeToRender(int.MaxValue);
             c.UseFilter(new AutomaticRetryAttribute { Attempts = 0 });
-            c.UseRedisStorage(new RedisCacheConnectionStringSetting(configuration).Value);
+            c.UseRedisStorage(new RedisCacheConnectionStringSetting(configuration).Value, 
+                new RedisStorageOptions { MaxSucceededListLength = 500000, MaxDeletedListLength = 10000 }).WithJobExpirationTimeout(TimeSpan.FromDays(1));
             c.UseSerializerSettings(new JsonSerializerSettings
             {
                 TypeNameHandling = TypeNameHandling.All
@@ -47,6 +49,13 @@ public static class HangfireExtension
             opt.WorkerCount = 5;
             opt.Queues = new[] { HangfireConstants.InternalHostingSipServer };
             opt.ServerName = $"DEPLOY-{HangfireConstants.InternalHostingSipServer.ToUpper()}-{Guid.NewGuid()}";
+        });
+        
+        services.AddHangfireServer(opt =>
+        {
+            opt.WorkerCount = 5;
+            opt.Queues = new[] { HangfireConstants.InternalHostingFfmpeg };
+            opt.ServerName = $"DEPLOY-{HangfireConstants.InternalHostingFfmpeg.ToUpper()}-{Guid.NewGuid()}";
         });
     }
     

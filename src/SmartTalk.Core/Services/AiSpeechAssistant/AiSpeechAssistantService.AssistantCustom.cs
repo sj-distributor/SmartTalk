@@ -223,23 +223,7 @@ public partial class AiSpeechAssistantService
 
     private async Task<Domain.AISpeechAssistant.AiSpeechAssistant> InitialAiSpeechAssistantAsync(AddAiSpeechAssistantCommand command, CancellationToken cancellationToken)
     {
-        var (agent, number) = await InitialAssistantRelatedInfoAsync(command , cancellationToken).ConfigureAwait(false);
-        
-        var assistant = new Domain.AISpeechAssistant.AiSpeechAssistant
-        {
-            AgentId = agent.Id,
-            ModelVoice = ModelVoiceMapping(command.VoiceType),
-            Name = command.AssistantName,
-            AnsweringNumberId = number?.Id,
-            AnsweringNumber = number?.Number,
-            CreatedBy = _currentUser.Id.Value,
-            ModelUrl = command.AgentType == AgentType.AiKid ? AiSpeechAssistantStore.AiKidDefaultUrl : AiSpeechAssistantStore.DefaultUrl,
-            ModelProvider = AiSpeechAssistantProvider.OpenAi,
-            Channel = command.Channels == null ? null : string.Join(",", command.Channels.Select(x => (int)x)),
-            IsDisplay = command.IsDisplay
-        };
-        
-        await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantsAsync([assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
+        var assistant = await InitialAssistantRelatedInfoAsync(command , cancellationToken).ConfigureAwait(false);
         
         await InitialAssistantKnowledgeAsync(command, assistant, cancellationToken).ConfigureAwait(false);
 
@@ -257,35 +241,55 @@ public partial class AiSpeechAssistantService
         };
     }
     
-    private async Task<(Agent agent, NumberPool number)> InitialAssistantRelatedInfoAsync(AddAiSpeechAssistantCommand command, CancellationToken cancellationToken)
+    private async Task<Domain.AISpeechAssistant.AiSpeechAssistant> InitialAssistantRelatedInfoAsync(AddAiSpeechAssistantCommand command, CancellationToken cancellationToken)
     {
-        Restaurant domain = null;
-        
-        if (command.AgentType != AgentType.AiKid)
+        var (agent, number) = command.AgentType switch
         {
-            domain = new Restaurant { Name = command.AssistantName };
+            AgentType.AiKid => await InitialAiKidInternalAsync(command, cancellationToken).ConfigureAwait(false),
+            AgentType.Assistant => await InitialAssistantInternalAsync(command, cancellationToken).ConfigureAwait(false),
+            AgentType.Restaurant => await InitialRestaurantInternalAsync(command, cancellationToken).ConfigureAwait(false),
+            AgentType.PosCompanyStore => await InitialPosCompanyStoreInternalAsync(command, cancellationToken).ConfigureAwait(false),
+            _ => throw new NotSupportedException(nameof(command.AgentType))
+        };
+        
+        var assistant = new Domain.AISpeechAssistant.AiSpeechAssistant
+        {
+            AgentId = agent.Id,
+            ModelVoice = ModelVoiceMapping(command.VoiceType),
+            Name = command.AssistantName,
+            AnsweringNumberId = number?.Id,
+            AnsweringNumber = number?.Number,
+            CreatedBy = _currentUser.Id.Value,
+            ModelUrl = command.AgentType == AgentType.AiKid ? AiSpeechAssistantStore.AiKidDefaultUrl : AiSpeechAssistantStore.DefaultUrl,
+            ModelProvider = AiSpeechAssistantProvider.OpenAi,
+            Channel = command.Channels == null ? null : string.Join(",", command.Channels.Select(x => (int)x)),
+            IsDisplay = command.IsDisplay
+        };
+        
+        await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantsAsync([assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        await UpdateAgentIfRequiredAsync(assistant, agent, cancellationToken).ConfigureAwait(false);
+        
+        return assistant;
+    }
 
-            await _restaurantDataProvider.AddRestaurantAsync(domain, cancellationToken: cancellationToken).ConfigureAwait(false);
-        }
-
+    private async Task<Agent> AddAgentAsync(int? relateId, AgentType type, AgentSourceSystem sourceSystem, bool isDisplay, CancellationToken cancellationToken)
+    {
         var agent = new Agent
         {
-            RelateId = domain?.Id ?? 0,
-            Type = command.AgentType,
-            SourceSystem = command.SourceSystem
+            Type = type,
+            RelateId = relateId,
+            IsDisplay = isDisplay,
+            SourceSystem = sourceSystem
         };
-
+        
         await _agentDataProvider.AddAgentAsync(agent, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        if (command.AgentType == AgentType.AiKid && command.Uuid.HasValue)
-            await _aiSpeechAssistantDataProvider.AddAiKidAsync(new AiKid
-            {
-                AgentId = agent.Id,
-                KidUuid = command.Uuid.Value
-            }, cancellationToken: cancellationToken).ConfigureAwait(false);
+        return agent;
+    }
 
-        if (!command.IsDisplay) return (agent, null);
-        
+    private async Task<NumberPool> DistributeNumberAsync(CancellationToken cancellationToken)
+    {
         var number = await _aiSpeechAssistantDataProvider.GetNumberAsync(isUsed: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (number != null)
@@ -294,9 +298,56 @@ public partial class AiSpeechAssistantService
             await _aiSpeechAssistantDataProvider.UpdateNumberPoolAsync([number], cancellationToken: cancellationToken).ConfigureAwait(false);
         }
         
+        return number;
+    }
+
+    private async Task<(Agent Agent, NumberPool Number)> InitialRestaurantInternalAsync(AddAiSpeechAssistantCommand command, CancellationToken cancellationToken)
+    {
+        var restaurant = new Restaurant { Name = command.AssistantName };
+
+        await _restaurantDataProvider.AddRestaurantAsync(restaurant, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var agent = await AddAgentAsync(restaurant.Id, command.AgentType, command.SourceSystem, command.IsDisplay, cancellationToken);
+        
+        var number = await DistributeNumberAsync(cancellationToken).ConfigureAwait(false);
+        
         return (agent, number);
     }
 
+    private async Task<(Agent Agent, NumberPool Number)> InitialAiKidInternalAsync(AddAiSpeechAssistantCommand command, CancellationToken cancellationToken)
+    {
+        var agent = await AddAgentAsync(null, command.AgentType, command.SourceSystem, command.IsDisplay, cancellationToken).ConfigureAwait(false);
+        
+        if (command.Uuid.HasValue)
+            await _aiSpeechAssistantDataProvider.AddAiKidAsync(new AiKid
+            {
+                AgentId = agent.Id,
+                KidUuid = command.Uuid.Value
+            }, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        return (agent, null);
+    }
+
+    private async Task<(Agent Agent, NumberPool Number)> InitialAssistantInternalAsync(AddAiSpeechAssistantCommand command, CancellationToken cancellationToken)
+    {
+        var agent = await AddAgentAsync(null, command.AgentType, command.SourceSystem, command.IsDisplay, cancellationToken).ConfigureAwait(false);
+        
+        var number = await DistributeNumberAsync(cancellationToken).ConfigureAwait(false);
+        
+        return (agent, number);
+    }
+    
+    private async Task<(Agent Agent, NumberPool Number)> InitialPosCompanyStoreInternalAsync(AddAiSpeechAssistantCommand command, CancellationToken cancellationToken)
+    {
+        if (!command.AgentId.HasValue) throw new ArgumentException("Agent id is required", nameof(command.AgentId));
+        
+        var agent = await _agentDataProvider.GetAgentAsync(id: command.AgentId.Value, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var number = await DistributeNumberAsync(cancellationToken).ConfigureAwait(false);
+        
+        return (agent, number);
+    }
+    
     private async Task InitialAssistantKnowledgeAsync(AddAiSpeechAssistantCommand command, Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken)
     {
         var knowledge = new AiSpeechAssistantKnowledge
@@ -462,12 +513,15 @@ public partial class AiSpeechAssistantService
 
         if (agents.Count == 0) return;
 
-        var domains = await _restaurantDataProvider.GetRestaurantsAsync(agents.Select(x => x.RelateId).ToList(), cancellationToken).ConfigureAwait(false);
-
         await _agentDataProvider.DeleteAgentsAsync(agents, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
 
-        if (domains.Count == 0) return;
-
-        await _restaurantDataProvider.DeleteRestaurantsAsync(domains, cancellationToken: cancellationToken).ConfigureAwait(false);
+    private async Task UpdateAgentIfRequiredAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, Agent agent, CancellationToken cancellationToken)
+    {
+        if (agent.Type != AgentType.Assistant) return;
+        
+        agent.RelateId = assistant.Id;
+        
+        await _agentDataProvider.UpdateAgentsAsync([agent], cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 }

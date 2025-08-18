@@ -66,8 +66,8 @@ public partial class PhoneOrderService
             {
                 ProductId = x.ProductId ?? GetMenuItemByName(menuItems, x.FoodName)?.ProductId ?? 0,
                 Quantity = x.Quantity,
-                OriginalPrice = x.Price,
-                Price = x.Price,
+                OriginalPrice = (decimal)x.Price,
+                Price = (decimal)x.Price,
                 Notes = string.IsNullOrEmpty(x.Note) ? string.Empty : x.Note,
                 OrderItemModifiers = HandleSpecialMenuItems(menuItems, x)
             }).Where(x => x.ProductId != 0).ToList(),

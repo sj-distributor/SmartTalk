@@ -5,7 +5,7 @@ using SmartTalk.Messages.Enums.AiSpeechAssistant;
 namespace SmartTalk.Core.Domain.AISpeechAssistant;
 
 [Table("ai_speech_assistant")]
-public class AiSpeechAssistant : IEntity, IHasCreatedFields
+public class AiSpeechAssistant : IEntity<int>, IAgent, IHasCreatedFields
 {
     [Key]
     [Column("id")]

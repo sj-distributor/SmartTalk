@@ -1,6 +1,7 @@
 using AutoMapper;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
+using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Dto.WebSocket;
 
@@ -26,5 +27,11 @@ public class PhoneOrderMapping : Profile
             .ForMember(dest => dest.Remark, opt => opt.MapFrom(src => src.Comments))
             .ForMember(dest => dest.Price, opt => opt.MapFrom(src => (double)src.Price))
             .ForMember(dest => dest.ProductId, opt => opt.Ignore());
+        
+        CreateMap<EasyPosResponseLocalization, PhoneCallOrderItemLocalization>().ReverseMap();
+        CreateMap<EasyPosResponseLocalization, PhoneCallOrderItemModifierLocalization>().ReverseMap();
+        CreateMap<PhoneCallOrderItemModifiers, EasyPosOrderItemModifiersDto>().ReverseMap();
+        CreateMap<EasyPosLocalizationsDto, PhoneCallOrderItemLocalization>().ReverseMap();
+        CreateMap<EasyPosLocalizationsDto, PhoneCallOrderItemModifierLocalization>().ReverseMap();
     }
 }
