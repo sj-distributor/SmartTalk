@@ -51,8 +51,8 @@ public class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
     {
         var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
         
-        var startLocal = new DateTime(2025, 7, 1, 0, 0, 0);
-        var endLocal = new DateTime(2025, 7, 31, 23, 59, 59);
+        var startLocal = new DateTime(2025, 8, 1, 0, 0, 0);
+        var endLocal = new DateTime(2025, 8, 31, 23, 59, 59);
         
         var startInPst = new DateTimeOffset(startLocal, pacificZone.GetUtcOffset(startLocal));
         var endInPst = new DateTimeOffset(endLocal, pacificZone.GetUtcOffset(endLocal));
