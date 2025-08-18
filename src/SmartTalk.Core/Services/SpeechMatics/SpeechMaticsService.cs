@@ -1,7 +1,7 @@
 using Twilio;
 using System.Text.Json;
-using Serilog;
 using AutoMapper;
+using Serilog;
 using SmartTalk.Core.Ioc;
 using Microsoft.IdentityModel.Tokens;
 using Newtonsoft.Json.Linq;
@@ -25,9 +25,10 @@ using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
-using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Dto.Sales;
+using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Enums.Sales;
+
 namespace SmartTalk.Core.Services.SpeechMatics;
 
 public interface ISpeechMaticsService : IScopedDependency
@@ -163,6 +164,9 @@ public class SpeechMaticsService : ISpeechMaticsService
         
         await CallBackSmartiesRecordAsync(agent, record, cancellationToken).ConfigureAwait(false);
 
+        if (agent.SourceSystem == AgentSourceSystem.Smarties) 
+            await CallBackSmartiesRecordAsync(agent, record, cancellationToken).ConfigureAwait(false);
+
         var message = agent.WechatRobotMessage?.Replace("#{assistant_name}", aiSpeechAssistant?.Name ?? "").Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString()).Replace("#{assistant_file_url}", record.Url);
 
         message = await SwitchKeyMessageByGetUserProfileAsync(record, callFrom, aiSpeechAssistant, agent, message, cancellationToken).ConfigureAwait(false);
@@ -191,7 +195,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         {
             if (agent.IsWecomMessageOrder && aiSpeechAssistant != null)
             {
-                var messageNumber = await SendAgentMessageRecordAsync(agent, record.Id, aiSpeechAssistant.GroupKey, cancellationToken);
+                var messageNumber = await SendAgentMessageRecordAsync(agent, record.Id, aiSpeechAssistant.GroupKey, cancellationToken).ConfigureAwait(false);
                 message = $"【第{messageNumber}條】\n" + message;
             }
 
@@ -356,7 +360,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         var askInfoResponse = await _salesClient.GetAskInfoDetailListByCustomerAsync(new GetAskInfoDetailListByCustomerRequestDto { CustomerNumbers = new List<string> { aiSpeechAssistant.Name } }, cancellationToken).ConfigureAwait(false);
 
         var historyItems = askInfoResponse.Data.Where(x => !string.IsNullOrWhiteSpace(x.Material)).Select(x => (x.Material, x.MaterialDesc)).ToList();
-
+        
         var (extractedOrderItems, deliveryDate) = await ExtractAndMatchOrderItemsFromReportAsync(record.TranscriptionText, historyItems, DateTime.Today, cancellationToken).ConfigureAwait(false);
 
         if (!extractedOrderItems.Any()) return;
@@ -398,7 +402,7 @@ public class SpeechMaticsService : ISpeechMaticsService
             var parsedItems = JsonSerializer.Deserialize<List<ExtractedOrderItemDto>>(jsonResponse, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<ExtractedOrderItemDto>();
             
             var deliveryDateStr = parsedItems.Select(i => i.DeliveryDate).FirstOrDefault(d => !string.IsNullOrEmpty(d));
-            
+
             DateTime deliveryDate;
             if (!DateTime.TryParse(deliveryDateStr, out deliveryDate))
             {
