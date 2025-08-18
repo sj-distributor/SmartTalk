@@ -176,11 +176,11 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
                      break;
                  case RealtimeAiWssEventType.OutputAudioTranscriptionPartial:
                      if (parsedEvent.Data is RealtimeAiWssTranscriptionData outputTranscriptionPartialData)
-                         await (InputAudioTranscriptionPartialAsync?.Invoke(outputTranscriptionPartialData) ?? Task.CompletedTask);
+                         await (OutputAudioTranscriptionPartialAsync?.Invoke(outputTranscriptionPartialData) ?? Task.CompletedTask);
                      break;
                  case RealtimeAiWssEventType.OutputAudioTranscriptionCompleted:
                      if (parsedEvent.Data is RealtimeAiWssTranscriptionData outputTranscriptionCompletedData)
-                         await (InputAudioTranscriptionPartialAsync?.Invoke(outputTranscriptionCompletedData) ?? Task.CompletedTask);
+                         await (OutputAudioTranscriptionCompletedyAsync?.Invoke(outputTranscriptionCompletedData) ?? Task.CompletedTask);
                      break;
                  case RealtimeAiWssEventType.SpeechDetected:
                      await (AiDetectedUserSpeechAsync?.Invoke() ?? Task.CompletedTask);
