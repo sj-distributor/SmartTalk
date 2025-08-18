@@ -218,6 +218,8 @@ public class RealtimeAiService : IRealtimeAiService
                         
                         await _conversationEngine.EndSessionAsync("Disconnect From RealtimeAi");
                         await _webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Client acknowledges close", CancellationToken.None);
+                        
+                        Log.Information("The Conversation transcription: {@Conversations}", _conversationTranscription);
                         return;
                     }
                     
