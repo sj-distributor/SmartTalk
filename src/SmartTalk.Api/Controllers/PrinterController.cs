@@ -28,13 +28,14 @@ public class PrinterController : ControllerBase
         _mediator = mediator;
     }
 
-    [HttpPost, AllowAnonymous]
+    [AllowAnonymous]
+    [HttpPost, Route("poll")]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPrinterJobAvailableResponse))]
-    public async Task<IActionResult> Post([FromBody] PollRequest pollRequest, Guid? token ,CancellationToken cancellationToken)
+    public async Task<IActionResult> PollAsync([FromBody] PollRequest pollRequest, Guid? token ,CancellationToken cancellationToken)
     {
         if (!token.HasValue) return Ok(new GetPrinterJobAvailableResponse{Code = HttpStatusCode.Unauthorized, Msg = "Token is null"});
             
-        var request = new GetPrinterJobAvailableRequest() {PrinterMac = pollRequest.printerMAC,Token = token.Value};
+        var request = new GetPrinterJobAvailableRequest() {PrinterMac = pollRequest.printerMAC, Token = token.Value};
             
         var response = await _mediator.RequestAsync<GetPrinterJobAvailableRequest, GetPrinterJobAvailableResponse>(request, cancellationToken);
 
@@ -54,7 +55,8 @@ public class PrinterController : ControllerBase
     }
 
     [HttpGet, AllowAnonymous]
-    public async Task<IActionResult> Get([FromQuery] PrinterJobDto dto)
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAsync([FromQuery] PrinterJobDto dto)
     {
         if (dto.Token == Guid.Empty)
         {
@@ -117,7 +119,8 @@ public class PrinterController : ControllerBase
     }
         
     [HttpDelete, AllowAnonymous]
-    public async Task<IActionResult> Delete([FromQuery] ConfirmPrinterJobDto dto)
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> DeleteAsync([FromQuery] ConfirmPrinterJobDto dto)
     {
         Log.Information("ConfirmPrinterJobDto: {@ConfirmPrinterJobDto}", dto);
             
@@ -128,7 +131,8 @@ public class PrinterController : ControllerBase
         
     [AllowAnonymous]
     [HttpPost, Route("printTest")]
-    public async Task<IActionResult> PrintTest(PrintTestCommand command)
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> PrintTestAsync([FromBody] PrintTestCommand command)
     {
         await _mediator.SendAsync(command).ConfigureAwait(false);
         
