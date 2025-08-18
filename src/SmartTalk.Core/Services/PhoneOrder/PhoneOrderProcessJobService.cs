@@ -44,7 +44,7 @@ public class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
         if (records == null || records.Count == 0) return;
         
         foreach (var record in records.Where(x => !string.IsNullOrWhiteSpace(x.Url)))
-            _smartTalkBackgroundJobClient.Enqueue(() => EnrichPhoneOrderRecordAsync(record, null, cancellationToken), HangfireConstants.InternalHostingFfmpeg);
+            _smartTalkBackgroundJobClient.Enqueue(() => CalculateRecordingDurationAsync(record, null, cancellationToken), HangfireConstants.InternalHostingFfmpeg);
     }
 
     private (DateTimeOffset Start, DateTimeOffset End) GetQueryTimeRange()
@@ -60,16 +60,16 @@ public class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
         return (startInPst.ToUniversalTime(), endInPst.ToUniversalTime());
     }
 
-    public async Task EnrichPhoneOrderRecordAsync(PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken = default)
+    public async Task CalculateRecordingDurationAsync(PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken = default)
     {
         await FillingIncomingCallNumberAsync(record, cancellationToken).ConfigureAwait(false);
         
-        await CalculateRecordingDurationAsync(record, audioContent, cancellationToken).ConfigureAwait(false);
+        await CalculateRecordingDurationInternalAsync(record, audioContent, cancellationToken).ConfigureAwait(false);
         
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task CalculateRecordingDurationAsync(PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken = default)
+    public async Task CalculateRecordingDurationInternalAsync(PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken = default)
     {
         if (record.Duration is > 0) return;
         
