@@ -2,6 +2,7 @@ namespace SmartTalk.Messages.Dto.Sales;
 
 public class GenerateAiOrdersRequestDto
 {
+    public string AiModel { get; set; }
     public AiOrderInfoDto AiOrderInfoDto { get; set; }
 }
 
