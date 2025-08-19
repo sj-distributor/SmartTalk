@@ -367,6 +367,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         if (string.IsNullOrEmpty(record.TranscriptionText)) return;
 
         var askInfoResponse = await _salesClient.GetAskInfoDetailListByCustomerAsync(new GetAskInfoDetailListByCustomerRequestDto { CustomerNumbers = new List<string> { aiSpeechAssistant.Name } }, cancellationToken).ConfigureAwait(false);
+        Log.Information("Ask info items: {@askInfoItems}", askInfoResponse);
 
         var historyItems = askInfoResponse?.Data?.Where(x => !string.IsNullOrWhiteSpace(x.Material)).Select(x => (x.Material, x.MaterialDesc)).ToList() ?? new List<(string Material, string MaterialDesc)>();
         Log.Information("HistoryItems items: {@historyItems}", historyItems);
