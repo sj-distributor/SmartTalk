@@ -399,7 +399,21 @@ public class SpeechMaticsService : ISpeechMaticsService
         
         var materialListText = string.Join("\n", historyItems.Select(x => $"{x.MaterialDesc} ({x.Material})"));
         
-        var systemPrompt = "你是一名订单分析助手。请从下面的客户分析报告文本中提取所有下单的物料名称和数量，并且用历史物料列表匹配每个物料的materialNumber。如果报告中提到了预约送货时间，请提取送货时间（格式yyyy-MM-dd）。返回JSON数组，每个元素包含：\n" + "- name: 物料名称\n" + "- quantity: 数量（整数或小数）\n" + "- materialNumber: 对应的物料编码\n" + "- deliveryDate: 客户预约送货日期（如果报告中没有则用空字符串）\n\n" + materialListText + "\n\n" + "客户分析报告文本：\n"+ reportText + "\n\n请只返回JSON数组，不要多余说明。";
+        var systemPrompt =
+            "你是一名订单分析助手。请从下面的客户分析报告文本中提取所有下单的物料名称和数量，并且用历史物料列表匹配每个物料的materialNumber。" +
+            "如果报告中提到了预约送货时间，请提取送货时间（格式yyyy-MM-dd）。" +
+            "请严格返回一个 JSON 对象，顶层只包含一个字段 \"orders\"，其值是一个数组。" +
+            "数组中的每个元素包含以下字段：\n" +
+            "- name: 物料名称\n" +
+            "- quantity: 数量（整数或小数）\n" +
+            "- materialNumber: 对应的物料编码\n" +
+            "- deliveryDate: 客户预约送货日期（如果报告中没有则用空字符串）\n\n" +
+            "输出示例：\n" +
+            "{\n  \"orders\": [\n    { \"name\": \"雞胸肉\", \"quantity\": 1, \"materialNumber\": \"000000000010010253\", \"deliveryDate\": \"2025-08-20\" }\n  ]\n}\n\n" +
+            materialListText + "\n\n" +
+            "客户分析报告文本：\n" + reportText + "\n\n" +
+            "注意：必须严格输出 JSON，对象顶层字段必须是 \"orders\"，不要有其他字段或额外说明。";
+        Log.Information("Sending prompt to GPT: {Prompt}", systemPrompt);
         
         var messages = new List<ChatMessage>
         {
@@ -414,16 +428,11 @@ public class SpeechMaticsService : ISpeechMaticsService
         { 
             using var jsonDoc = JsonDocument.Parse(jsonResponse);
             
-            var resultArray = jsonDoc.RootElement.TryGetProperty("result", out var resultProp) ? resultProp : jsonDoc.RootElement;
-            var parsedItems = JsonSerializer.Deserialize<List<ExtractedOrderItemDto>>(resultArray.GetRawText(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<ExtractedOrderItemDto>();
+            var ordersArray = jsonDoc.RootElement.GetProperty("orders");
+            var parsedItems = JsonSerializer.Deserialize<List<ExtractedOrderItemDto>>(ordersArray.GetRawText(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<ExtractedOrderItemDto>();
             
             var deliveryDateStr = parsedItems.Select(i => i.DeliveryDate).FirstOrDefault(d => !string.IsNullOrEmpty(d));
-
-            DateTime deliveryDate;
-            if (!DateTime.TryParse(deliveryDateStr, out deliveryDate))
-            {
-                deliveryDate = DateTime.Today;
-            }
+            var deliveryDate = DateTime.TryParse(deliveryDateStr, out var dt) ? dt : DateTime.Today;
             
             var aiOrderItems = _mapper.Map<List<AiOrderItemDto>>(parsedItems);
 
