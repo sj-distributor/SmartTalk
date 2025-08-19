@@ -384,7 +384,7 @@ public class SpeechMaticsService : ISpeechMaticsService
                 SoldToId = aiSpeechAssistant.Name,
                 SoldToIds = aiSpeechAssistant.Name,
                 DocumentDate = DateTime.Today,
-                DeliveryDate = deliveryDate,
+                DeliveryDate = deliveryDate.Date,
                 AiOrderItemDtoList = extractedOrderItems
             }
         };
@@ -433,7 +433,7 @@ public class SpeechMaticsService : ISpeechMaticsService
             var parsedItems = JsonSerializer.Deserialize<List<ExtractedOrderItemDto>>(ordersArray.GetRawText(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<ExtractedOrderItemDto>();
             
             var deliveryDateStr = parsedItems.Select(i => i.DeliveryDate).FirstOrDefault(d => !string.IsNullOrEmpty(d));
-            var deliveryDate = DateTime.TryParse(deliveryDateStr, out var dt) ? dt : DateTime.Today;
+            var deliveryDate = DateTime.TryParse(deliveryDateStr, out var dt) ? dt : DateTime.Today.AddDays(1);
             
             var aiOrderItems = _mapper.Map<List<AiOrderItemDto>>(parsedItems);
 
@@ -442,7 +442,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         catch (Exception ex) 
         { 
             Log.Warning("解析GPT返回JSON失败: {Message}", ex.Message); 
-            return new (new List<AiOrderItemDto>(), DateTime.Today);
+            return new (new List<AiOrderItemDto>(), DateTime.Today.AddDays(1));
         } 
     }
 }
