@@ -381,6 +381,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         };
 
         await _salesClient.GenerateAiOrdersAsync(draftOrder, cancellationToken).ConfigureAwait(false);
+        Log.Information("GenerateAiOrdersAsync call completed successfully.");
     }
 
     private async Task<(List<AiOrderItemDto> Items, DateTime DeliveryDate, string storeNumber)> ExtractAndMatchOrderItemsFromReportAsync(string reportText, List<(string Material, string MaterialDesc)> historyItems, DateTime orderDate, CancellationToken cancellationToken) 
@@ -414,7 +415,10 @@ public class SpeechMaticsService : ISpeechMaticsService
         
         try 
         { 
-            var parsedItems = JsonSerializer.Deserialize<List<ExtractedOrderItemDto>>(jsonResponse, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<ExtractedOrderItemDto>();
+            using var jsonDoc = JsonDocument.Parse(jsonResponse);
+            
+            var resultArray = jsonDoc.RootElement.TryGetProperty("result", out var resultProp) ? resultProp : jsonDoc.RootElement;
+            var parsedItems = JsonSerializer.Deserialize<List<ExtractedOrderItemDto>>(resultArray.GetRawText(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<ExtractedOrderItemDto>();
             
             var deliveryDateStr = parsedItems.Select(i => i.DeliveryDate).FirstOrDefault(d => !string.IsNullOrEmpty(d));
             DateTime deliveryDate;
