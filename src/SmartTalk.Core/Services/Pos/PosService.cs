@@ -337,7 +337,7 @@ public partial class PosService : IPosService
         var enrichStores = stores.Select(store => new GetPosCurrentUserStoresResponseData
         {
             Store = store,
-            AgentIds = allAgents.Where(x => x.StoreId == store.Id).Select(x => x.Id).ToList()
+            AgentIds = allAgents.Where(x => x.StoreId == store.Id).Select(x => x.AgentId).ToList()
         }).ToList();
 
         return new GetPosCurrentUserStoresResponse { Data = enrichStores };
