@@ -387,6 +387,7 @@ public class SpeechMaticsService : ISpeechMaticsService
                 AiOrderItemDtoList = extractedOrderItems
             }
         };
+        Log.Information("DraftOrder content: {@DraftOrder}", draftOrder);
 
         await _salesClient.GenerateAiOrdersAsync(draftOrder, cancellationToken).ConfigureAwait(false);
         Log.Information("GenerateAiOrdersAsync call completed successfully.");
