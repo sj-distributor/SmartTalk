@@ -1,3 +1,4 @@
+using Google.Cloud.Translation.V2;
 using Serilog;
 using SmartTalk.Core.Ioc;
 using Microsoft.IdentityModel.Tokens;
@@ -21,7 +22,9 @@ using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
+using SmartTalk.Messages.Enums.Account;
 using SmartTalk.Messages.Enums.Agent;
+using SmartTalk.Messages.Enums.STT;
 using Twilio;
 using Twilio.Rest.Api.V2010.Account;
 
@@ -38,6 +41,7 @@ public class SpeechMaticsService : ISpeechMaticsService
     private  readonly IFfmpegService _ffmpegService;
     private readonly OpenAiSettings _openAiSettings;
     private readonly TwilioSettings _twilioSettings;
+    private readonly TranslationClient _translationClient;
     private readonly ISmartiesClient _smartiesClient;
     private readonly PhoneOrderSetting _phoneOrderSetting;
     private readonly IPhoneOrderService _phoneOrderService;
@@ -51,6 +55,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         IFfmpegService ffmpegService,
         OpenAiSettings openAiSettings,
         TwilioSettings twilioSettings,
+        TranslationClient translationClient,
         ISmartiesClient smartiesClient,
         PhoneOrderSetting phoneOrderSetting,
         IPhoneOrderService phoneOrderService,
@@ -63,6 +68,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         _ffmpegService = ffmpegService;
         _openAiSettings = openAiSettings;
         _twilioSettings = twilioSettings;
+        _translationClient = translationClient;
         _smartiesClient = smartiesClient;
         _phoneOrderSetting = phoneOrderSetting;
         _phoneOrderService = phoneOrderService;
@@ -155,6 +161,26 @@ public class SpeechMaticsService : ISpeechMaticsService
         
         record.Status = PhoneOrderRecordStatus.Sent;
         record.TranscriptionText = completion.Content.FirstOrDefault()?.Text ?? "";
+
+        await _phoneOrderDataProvider.AddPhoneOrderRecordReportAsync(new PhoneOrderRecordReport
+        {
+            RecordId = record.Id,
+            Report = record.TranscriptionText,
+            Language = record.Language
+        }, true, cancellationToken).ConfigureAwait(false);
+
+        var (targetLanguage, reportLanguage) = record.Language == TranscriptionLanguage.Chinese 
+            ? ("en", TranscriptionLanguage.English) 
+            : ("zh", TranscriptionLanguage.Chinese);
+
+        var translatedText = await _translationClient.TranslateTextAsync(record.TranscriptionText, targetLanguage, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        await _phoneOrderDataProvider.AddPhoneOrderRecordReportAsync(new PhoneOrderRecordReport
+        {
+            RecordId = record.Id,
+            Report = translatedText.ToString(),
+            Language = reportLanguage
+        }, true, cancellationToken).ConfigureAwait(false);
         
         await CallBackSmartiesRecordAsync(agent, record, cancellationToken).ConfigureAwait(false);
 

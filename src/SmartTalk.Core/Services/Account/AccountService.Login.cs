@@ -14,7 +14,7 @@ public partial class AccountService
             await AuthenticateAsync(request.UserName, request.Password, request.VerificationType, cancellationToken).ConfigureAwait(false);
 
         if (authenticateResult.CannotLoginReason != UserAccountCannotLoginReason.None)
-            return new LoginResponse { Code = HttpStatusCode.Unauthorized, Msg = authenticateResult.CannotLoginReason.ToString(), VerifyCodeResult = authenticateResult.VerifyCodeResult };
+            return new LoginResponse { Code = HttpStatusCode.Unauthorized, Msg = GetFriendlyErrorMessage(authenticateResult.CannotLoginReason), VerifyCodeResult = authenticateResult.VerifyCodeResult };
         
         return new LoginResponse
         {
@@ -57,6 +57,16 @@ public partial class AccountService
         {
             authenticateInternalResult.CannotLoginReason = UserAccountCannotLoginReason.NotFound;
             return;            
+        }
+        
+        if (loginVerificationType == UserAccountVerificationType.Password)
+        {
+            var storeUsers = await _posDataProvider.GetPosStoreUsersByUserIdAsync(account.Id, cancellationToken).ConfigureAwait(false);
+            if (storeUsers.Count < 0)
+            {
+                authenticateInternalResult.CannotLoginReason = UserAccountCannotLoginReason.NoAssociatedStore;
+                return;
+            }
         }
 
         switch (loginVerificationType)
@@ -114,4 +124,11 @@ public partial class AccountService
 
         public UserAccountCannotLoginReason CannotLoginReason { get; set; } = UserAccountCannotLoginReason.None;
     }
+    
+    private string GetFriendlyErrorMessage(UserAccountCannotLoginReason reason) => reason switch
+    {
+        UserAccountCannotLoginReason.NoAssociatedStore => "The account is not associated with the store, please contact the administrator",
+    
+        _ => reason.ToString()
+    };
 }
