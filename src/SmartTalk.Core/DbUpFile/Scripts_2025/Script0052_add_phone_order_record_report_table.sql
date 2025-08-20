@@ -6,7 +6,8 @@ create table if not exists phnoe_order_record_report
     `record_id` int not null,
     `language` int not null,
     `report` text not null,
-    `created_date` datetime(3) not null
+    `created_date` datetime(3) not null,
+    INDEX idx_record_id (record_id)
     ) charset=utf8mb4;
 
 INSERT INTO role_permission (created_date, last_modified_date, role_id, permission_id)

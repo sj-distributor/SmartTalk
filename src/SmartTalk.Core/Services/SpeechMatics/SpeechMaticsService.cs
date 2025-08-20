@@ -162,25 +162,27 @@ public class SpeechMaticsService : ISpeechMaticsService
         record.Status = PhoneOrderRecordStatus.Sent;
         record.TranscriptionText = completion.Content.FirstOrDefault()?.Text ?? "";
 
-        await _phoneOrderDataProvider.AddPhoneOrderRecordReportAsync(new PhoneOrderRecordReport
+        var reports = new List<PhoneOrderRecordReport>();
+
+        reports.Add(new PhoneOrderRecordReport
         {
             RecordId = record.Id,
             Report = record.TranscriptionText,
             Language = record.Language
-        }, true, cancellationToken).ConfigureAwait(false);
+        });
 
-        var (targetLanguage, reportLanguage) = record.Language == TranscriptionLanguage.Chinese 
-            ? ("en", TranscriptionLanguage.English) 
-            : ("zh", TranscriptionLanguage.Chinese);
+        var (targetLanguage, reportLanguage) = record.Language == TranscriptionLanguage.Chinese ? ("en", TranscriptionLanguage.English) : ("zh", TranscriptionLanguage.Chinese);
 
         var translatedText = await _translationClient.TranslateTextAsync(record.TranscriptionText, targetLanguage, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        await _phoneOrderDataProvider.AddPhoneOrderRecordReportAsync(new PhoneOrderRecordReport
+        reports.Add(new PhoneOrderRecordReport
         {
             RecordId = record.Id,
             Report = translatedText.ToString(),
             Language = reportLanguage
-        }, true, cancellationToken).ConfigureAwait(false);
+        });
+
+        await _phoneOrderDataProvider.AddPhoneOrderRecordReportsAsync(reports, true, cancellationToken).ConfigureAwait(false);
         
         await CallBackSmartiesRecordAsync(agent, record, cancellationToken).ConfigureAwait(false);
 

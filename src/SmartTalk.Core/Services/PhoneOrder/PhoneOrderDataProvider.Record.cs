@@ -47,7 +47,7 @@ public partial interface IPhoneOrderDataProvider
     Task<List<(Domain.AISpeechAssistant.AiSpeechAssistant Assistant,PhoneOrderRecord Record)>> GetPhonCallUsagesAsync(
         DateTimeOffset startTime, DateTimeOffset endTime, bool includeExternalData = false, CancellationToken cancellationToken = default);
 
-    Task AddPhoneOrderRecordReportAsync(PhoneOrderRecordReport recordReport, bool forceSave = true, CancellationToken cancellationToken = default);
+    Task AddPhoneOrderRecordReportsAsync(List<PhoneOrderRecordReport> recordReports, bool forceSave = true, CancellationToken cancellationToken = default);
 }
 
 public partial class PhoneOrderDataProvider
@@ -73,9 +73,9 @@ public partial class PhoneOrderDataProvider
             select record;
         
         if (utcStart.HasValue && utcEnd.HasValue)
-            query = query.Where(x => x.CreatedDate >= utcStart.Value && x.CreatedDate < utcEnd.Value);
+            query = query.Where(record => record.CreatedDate >= utcStart.Value && record.CreatedDate < utcEnd.Value);
 
-        var recordIds = await query.Select(x => x.Id).ToListAsync(cancellationToken);
+        var recordIds = await query.Select(record => record.Id).ToListAsync(cancellationToken);
     
         if (!recordIds.Any()) return new List<PhoneOrderRecord>();
 
@@ -89,7 +89,7 @@ public partial class PhoneOrderDataProvider
         if (targetReports.Count == 0)
             return await query.OrderByDescending(x => x.CreatedDate).ToListAsync(cancellationToken);
 
-        var records = await query.OrderByDescending(x => x.CreatedDate).ToListAsync(cancellationToken);
+        var records = await query.Distinct().OrderByDescending(x => x.CreatedDate).ToListAsync(cancellationToken);
     
         foreach (var record in records)
             if (targetReports.TryGetValue(record.Id, out var reportText))
@@ -273,9 +273,9 @@ public partial class PhoneOrderDataProvider
         return result.Select(x => (x.assistant, x.record)).ToList();
     }
 
-    public async Task AddPhoneOrderRecordReportAsync(PhoneOrderRecordReport recordReport, bool forceSave = true, CancellationToken cancellationToken = default)
+    public async Task AddPhoneOrderRecordReportsAsync(List<PhoneOrderRecordReport> recordReports, bool forceSave = true, CancellationToken cancellationToken = default)
     {
-        await _repository.InsertAsync(recordReport, cancellationToken).ConfigureAwait(false);
+        await _repository.InsertAllAsync(recordReports, cancellationToken).ConfigureAwait(false);
 
         if (forceSave)
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
