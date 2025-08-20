@@ -60,7 +60,7 @@ namespace SmartTalk.Core.Domain.Account
         [Column("account_level")]
         public UserAccountLevel AccountLevel { get; set; }
 
-        [Column("SystemLanguage")] 
+        [Column("Language")] 
         public SystemLanguage SystemLanguage { get; set; } = SystemLanguage.English;
         
         [Column("creator")]
