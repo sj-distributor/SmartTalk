@@ -84,7 +84,7 @@ public partial class PhoneOrderDataProvider
         var recordIds = records.Select(x => x.Id).ToList();
 
         var reportsQuery = from report in _repository.Query<PhoneOrderRecordReport>()
-            where recordIds.Contains(report.RecordId) && report.Language.ToString() == systemLanguage.ToString()
+            where recordIds.Contains(report.RecordId) && report.Language == (TranscriptionLanguage)systemLanguage
             select new { report.RecordId, report.Report };
 
         var targetReports = await reportsQuery.ToDictionaryAsync(x => x.RecordId, x => x.Report, cancellationToken);
