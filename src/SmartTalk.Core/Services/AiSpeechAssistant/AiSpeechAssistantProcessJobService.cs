@@ -1,11 +1,13 @@
 using System.Text;
 using AutoMapper;
+using Google.Cloud.Translation.V2;
 using Newtonsoft.Json;
 using OpenAI.Chat;
 using Serilog;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.PhoneOrder;
+using SmartTalk.Core.Services.RealtimeAi.Services;
 using SmartTalk.Core.Services.Restaurants;
 using SmartTalk.Core.Services.RetrievalDb.VectorDb;
 using SmartTalk.Core.Settings.OpenAi;
@@ -36,6 +38,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
     private readonly IVectorDb _vectorDb;
     private readonly TwilioSettings _twilioSettings;
     private readonly OpenAiTrainingSettings _openAiTrainingSettings;
+    private readonly TranslationClient _translationClient;
     private readonly IRestaurantDataProvider _restaurantDataProvider;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly OpenAiAccountTrainingSettings _openAiAccountTrainingSettings;
@@ -44,6 +47,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         IMapper mapper,
         IVectorDb vectorDb,
         TwilioSettings twilioSettings,
+        TranslationClient translationClient,
         IRestaurantDataProvider restaurantDataProvider,
         OpenAiTrainingSettings openAiTrainingSettings, 
         IPhoneOrderDataProvider phoneOrderDataProvider,
@@ -52,6 +56,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         _mapper = mapper;
         _vectorDb = vectorDb;
         _twilioSettings = twilioSettings;
+        _translationClient = translationClient;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _openAiTrainingSettings = openAiTrainingSettings;
         _restaurantDataProvider = restaurantDataProvider;
@@ -67,6 +72,8 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
 
         if (existRecord != null ) return;
         
+        var detection = await _translationClient.DetectLanguageAsync(existRecord.TranscriptionText, cancellationToken).ConfigureAwait(false);
+        
         var record = new PhoneOrderRecord
         {
             AgentId = context.Assistant.AgentId,
@@ -74,7 +81,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             Status = PhoneOrderRecordStatus.Transcription,
             Tips = context.ConversationTranscription.FirstOrDefault().Item2,
             TranscriptionText = string.Empty,
-            Language = TranscriptionLanguage.Chinese,
+            Language = SelectLanguageEnum(detection.Language),
             CreatedDate = callResource.StartTime ?? DateTimeOffset.Now,
             OrderStatus = PhoneOrderOrderStatus.Pending,
             CustomerName = context.UserInfo?.UserName,
@@ -229,5 +236,14 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
 
         Log.Information("OpenAiAccountTraining 主账号返回 (前50字): {Preview}（总长度: {Length}）", preview, content?.Length ?? 0);
         Log.Information("OpenAiAccountTraining 备用账号返回 (前50字): {Preview}（总长度: {Length}）", anotherPreview, anotherContent?.Length ?? 0);
+    }
+    
+    private TranscriptionLanguage SelectLanguageEnum(string language)
+    {
+        return language switch
+        {
+            "zh" or "zh-CN" or "zh-TW" => TranscriptionLanguage.Chinese,
+            _ => TranscriptionLanguage.English
+        };
     }
 }

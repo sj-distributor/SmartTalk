@@ -1,6 +1,7 @@
 using Twilio;
 using System.Text.Json;
 using AutoMapper;
+using Google.Cloud.Translation.V2;
 using Serilog;
 using SmartTalk.Core.Ioc;
 using Microsoft.IdentityModel.Tokens;
@@ -26,8 +27,12 @@ using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Sales;
+using SmartTalk.Messages.Enums.Account;
 using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Enums.Sales;
+using SmartTalk.Messages.Enums.STT;
+using Twilio;
+using Twilio.Rest.Api.V2010.Account;
 
 namespace SmartTalk.Core.Services.SpeechMatics;
 
@@ -44,6 +49,7 @@ public class SpeechMaticsService : ISpeechMaticsService
     private readonly IFfmpegService _ffmpegService;
     private readonly OpenAiSettings _openAiSettings;
     private readonly TwilioSettings _twilioSettings;
+    private readonly TranslationClient _translationClient;
     private readonly ISmartiesClient _smartiesClient;
     private readonly PhoneOrderSetting _phoneOrderSetting;
     private readonly IPhoneOrderService _phoneOrderService;
@@ -59,6 +65,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         IFfmpegService ffmpegService,
         OpenAiSettings openAiSettings,
         TwilioSettings twilioSettings,
+        TranslationClient translationClient,
         ISmartiesClient smartiesClient,
         PhoneOrderSetting phoneOrderSetting,
         IPhoneOrderService phoneOrderService,
@@ -73,6 +80,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         _ffmpegService = ffmpegService;
         _openAiSettings = openAiSettings;
         _twilioSettings = twilioSettings;
+        _translationClient = translationClient;
         _smartiesClient = smartiesClient;
         _phoneOrderSetting = phoneOrderSetting;
         _phoneOrderService = phoneOrderService;
@@ -157,6 +165,28 @@ public class SpeechMaticsService : ISpeechMaticsService
         
         record.Status = PhoneOrderRecordStatus.Sent;
         record.TranscriptionText = completion.Content.FirstOrDefault()?.Text ?? "";
+
+        var reports = new List<PhoneOrderRecordReport>();
+
+        reports.Add(new PhoneOrderRecordReport
+        {
+            RecordId = record.Id,
+            Report = record.TranscriptionText,
+            Language = record.Language
+        });
+
+        var (targetLanguage, reportLanguage) = record.Language == TranscriptionLanguage.Chinese ? ("en", TranscriptionLanguage.English) : ("zh", TranscriptionLanguage.Chinese);
+
+        var translatedText = await _translationClient.TranslateTextAsync(record.TranscriptionText, targetLanguage, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        reports.Add(new PhoneOrderRecordReport
+        {
+            RecordId = record.Id,
+            Report = translatedText.ToString(),
+            Language = reportLanguage
+        });
+
+        await _phoneOrderDataProvider.AddPhoneOrderRecordReportsAsync(reports, true, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Handle Smarties callback if required: {@Agent}、{@Record}", agent, record);
 
