@@ -11,6 +11,7 @@ using SmartTalk.Messages.Enums.RealtimeAi;
 using SmartTalk.Core.Services.RealtimeAi.Wss;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Attachments;
+using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
@@ -18,6 +19,7 @@ using SmartTalk.Core.Services.RealtimeAi.Adapters;
 using SmartTalk.Messages.Commands.Attachments;
 using SmartTalk.Messages.Commands.RealtimeAi;
 using SmartTalk.Messages.Dto.Attachments;
+using SmartTalk.Messages.Dto.Smarties;
 using JsonException = System.Text.Json.JsonException;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 
@@ -305,5 +307,25 @@ public class RealtimeAiService : IRealtimeAiService
             await _wholeAudioBuffer.DisposeAsync();
             _wholeAudioBuffer = null;
         }
+        
+        await HandleTranscriptionsAsync().ConfigureAwait(false);
+    }
+
+    private async Task HandleTranscriptionsAsync()
+    {
+        var kid = await _aiSpeechAssistantDataProvider.GetAiKidAsync(agentId: _speechAssistant.AgentId).ConfigureAwait(false);
+
+        if (kid == null) return;
+        
+        _backgroundJobClient.Enqueue<ISmartiesClient>(x =>
+            x.CallBackSmartiesAiKidConversationsAsync(new AiKidConversationCallBackRequestDto
+            {
+                Uuid = kid.KidUuid,
+                Transcriptions = _conversationTranscription.Select(t => new RealtimeAiTranscriptionDto
+                {
+                    Speaker = t.Item1,
+                    Transcription = t.Item2
+                }).ToList()
+            }, CancellationToken.None));
     }
 }
