@@ -359,38 +359,39 @@ public class SpeechMaticsService : ISpeechMaticsService
         if (string.IsNullOrEmpty(record.TranscriptionText)) return;
 
         var askInfoResponse = await _salesClient.GetAskInfoDetailListByCustomerAsync(new GetAskInfoDetailListByCustomerRequestDto { CustomerNumbers = new List<string> { aiSpeechAssistant.Name } }, cancellationToken).ConfigureAwait(false);
+        Log.Information("Ask info items: {@askInfoItems}", askInfoResponse);
 
         var historyItems = askInfoResponse?.Data?.Where(x => !string.IsNullOrWhiteSpace(x.Material)).Select(x => (x.Material, x.MaterialDesc)).ToList() ?? new List<(string Material, string MaterialDesc)>();
-
-        var (extractedOrderItems, deliveryDate, storeNumber) = await ExtractAndMatchOrderItemsFromReportAsync(record.TranscriptionText, historyItems, DateTime.Today, cancellationToken).ConfigureAwait(false);
+        Log.Information("HistoryItems items: {@historyItems}", historyItems);
+        
+        var (extractedOrderItems, deliveryDate) = await ExtractAndMatchOrderItemsFromReportAsync(record.TranscriptionText, historyItems, DateTime.Today, cancellationToken).ConfigureAwait(false);
 
         if (!extractedOrderItems.Any()) return;
-        
-        var (soldToId, soldToIds) = GetSoldToFields(aiSpeechAssistant.Name, storeNumber);
 
         var draftOrder = new GenerateAiOrdersRequestDto
         {
             AiModel = "SmartTalk",
             AiOrderInfoDto = new AiOrderInfoDto
             {
-                SoldToId = soldToId,
-                SoldToIds = soldToIds,
+                SoldToId = aiSpeechAssistant.Name,
+                SoldToIds = aiSpeechAssistant.Name,
                 DocumentDate = DateTime.Today,
                 DeliveryDate = deliveryDate.Date,
                 AiOrderItemDtoList = extractedOrderItems
             }
         };
+        Log.Information("DraftOrder content: {@DraftOrder}", draftOrder);
 
         await _salesClient.GenerateAiOrdersAsync(draftOrder, cancellationToken).ConfigureAwait(false);
         Log.Information("GenerateAiOrdersAsync call completed successfully.");
     }
 
-    private async Task<(List<AiOrderItemDto> Items, DateTime DeliveryDate, string storeNumber)> ExtractAndMatchOrderItemsFromReportAsync(string reportText, List<(string Material, string MaterialDesc)> historyItems, DateTime orderDate, CancellationToken cancellationToken) 
+    private async Task<(List<AiOrderItemDto> Items, DateTime DeliveryDate)> ExtractAndMatchOrderItemsFromReportAsync(string reportText, List<(string Material, string MaterialDesc)> historyItems, DateTime orderDate, CancellationToken cancellationToken) 
     { 
         var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
         
         var materialListText = string.Join("\n", historyItems.Select(x => $"{x.MaterialDesc} ({x.Material})"));
-
+        
         var systemPrompt =
             "你是一名订单分析助手。请从下面的客户分析报告文本中提取所有下单的物料名称和数量，并且用历史物料列表匹配每个物料的materialNumber。" +
             "如果报告中提到了预约送货时间，请提取送货时间（格式yyyy-MM-dd）。" +
@@ -426,47 +427,14 @@ public class SpeechMaticsService : ISpeechMaticsService
             var deliveryDateStr = parsedItems.Select(i => i.DeliveryDate).FirstOrDefault(d => !string.IsNullOrEmpty(d));
             var deliveryDate = DateTime.TryParse(deliveryDateStr, out var dt) ? dt : DateTime.Today.AddDays(1);
             
-            var storeNumber = parsedItems.Select(i => i.StoreNumber).FirstOrDefault(s => !string.IsNullOrEmpty(s));
-
             var aiOrderItems = _mapper.Map<List<AiOrderItemDto>>(parsedItems);
 
-            return (aiOrderItems, deliveryDate, storeNumber);
+            return (aiOrderItems, deliveryDate);
         }
         catch (Exception ex) 
         { 
             Log.Warning("解析GPT返回JSON失败: {Message}", ex.Message); 
-            return (new List<AiOrderItemDto>(), DateTime.Today.AddDays(1), null);
+            return new (new List<AiOrderItemDto>(), DateTime.Today.AddDays(1));
         } 
-    }
-
-    private (string SoldToId, string SoldToIds) GetSoldToFields(string customerName, string storeNumber)
-    {
-        var customerIds = customerName.Split('/');
-
-        if (customerIds.Length == 1) return (customerIds[0], null);
-
-        if (string.IsNullOrEmpty(storeNumber)) return (null, null);
-        
-        var mappedId = MapStoreNumberToId(storeNumber, customerIds); 
-        return (null, mappedId);
-    }
-
-    private string MapStoreNumberToId(string storeNumber, string[] allIds)
-    {
-        var match = Regex.Match(storeNumber.ToLower(), @"\b(one|two|three|four|five)\b");
-        if (match.Success)
-        {
-            var index = match.Groups[1].Value switch
-            {
-                "one" => 0,
-                "two" => 1,
-                "three" => 2,
-                "four" => 3,
-                "five" => 4,
-                _ => -1
-            };
-            if (index >= 0 && index < allIds.Length) return allIds[index];
-        }
-        return null;
     }
 }
