@@ -1,4 +1,3 @@
-using OpenAI.Chat;
 using Serilog;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Http;
@@ -15,10 +14,12 @@ public interface IAudioService : IScopedDependency
 
 public class AudioService : IAudioService
 {
+    private readonly ISmartTalkHttpClientFactory _httpClientFactory;
     private readonly IAudioModelProviderSwitcher _audioModelProviderSwitcher;
 
-    public AudioService(IAudioModelProviderSwitcher audioModelProviderSwitcher)
+    public AudioService(IAudioModelProviderSwitcher audioModelProviderSwitcher, ISmartTalkHttpClientFactory httpClientFactory)
     {
+        _httpClientFactory = httpClientFactory;
         _audioModelProviderSwitcher = audioModelProviderSwitcher;
     }
 
@@ -28,7 +29,9 @@ public class AudioService : IAudioService
         
         var provider = _audioModelProviderSwitcher.GetAudioModelProvider(command.ModelProviderType);
 
-        var resultText = await provider.ExtractAudioDataFromModelProviderAsync(command, cancellationToken);
+        var audioData = await GetAudioBinaryDataAsync(command, cancellationToken).ConfigureAwait(false);
+
+        var resultText = await provider.ExtractAudioDataFromModelProviderAsync(command, audioData, cancellationToken).ConfigureAwait(false);
 
         Log.Information("Audio analysis result: {Analysis}", resultText);
 
@@ -36,5 +39,28 @@ public class AudioService : IAudioService
         {
             Data = resultText
         };
+    }
+
+    private async Task<BinaryData> GetAudioBinaryDataAsync(AnalyzeAudioCommand command, CancellationToken cancellationToken)
+    {
+        BinaryData audioData;
+
+        if (!string.IsNullOrWhiteSpace(command.AudioUrl))
+        {
+            var httpClient = _httpClientFactory.CreateClient();
+
+            await using var stream = await httpClient.GetStreamAsync(command.AudioUrl, cancellationToken).ConfigureAwait(false);
+
+            audioData = await BinaryData.FromStreamAsync(stream, cancellationToken);
+        }
+        else
+        {
+            if (command.AudioContent is null || command.AudioContent.Length == 0)
+                throw new InvalidOperationException("Audio content is empty.");
+
+            audioData = BinaryData.FromBytes(command.AudioContent);
+        }
+
+        return audioData;
     }
 }
