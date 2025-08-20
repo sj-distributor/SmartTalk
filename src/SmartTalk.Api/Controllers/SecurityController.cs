@@ -80,4 +80,13 @@ public class SecurityController : ControllerBase
 
         return Ok(response);
     }
+    
+    [Route("language/switch"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(SwitchLanguageCommand))]
+    public async Task<IActionResult> SwitchLanguageAsync([FromBody] SwitchLanguageCommand command)
+    {
+        var response = await _mediator.SendAsync<SwitchLanguageCommand, SwitchLanguageResponse>(command).ConfigureAwait(false);
+
+        return Ok(response);
+    }
 }
