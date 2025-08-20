@@ -1,4 +1,3 @@
-using OpenAI.Chat;
 using Serilog;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Http;
@@ -15,21 +14,35 @@ public interface IAudioService : IScopedDependency
 
 public class AudioService : IAudioService
 {
-    private readonly OpenAiSettings _openAiSettings;
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
+    private readonly IAudioModelProviderSwitcher _audioModelProviderSwitcher;
 
-    public AudioService(OpenAiSettings openAiSettings, ISmartTalkHttpClientFactory httpClientFactory)
+    public AudioService(IAudioModelProviderSwitcher audioModelProviderSwitcher, ISmartTalkHttpClientFactory httpClientFactory)
     {
-        _openAiSettings = openAiSettings;
         _httpClientFactory = httpClientFactory;
+        _audioModelProviderSwitcher = audioModelProviderSwitcher;
     }
 
     public async Task<AnalyzeAudioResponse> AnalyzeAudioAsync(AnalyzeAudioCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
+        
+        var provider = _audioModelProviderSwitcher.GetAudioModelProvider(command.ModelProviderType);
 
-        var client = new ChatClient("gpt-4o-audio-preview", _openAiSettings.ApiKey);
+        var audioData = await GetAudioBinaryDataAsync(command, cancellationToken).ConfigureAwait(false);
 
+        var resultText = await provider.ExtractAudioDataFromModelProviderAsync(command, audioData, cancellationToken).ConfigureAwait(false);
+
+        Log.Information("Audio analysis result: {Analysis}", resultText);
+
+        return new AnalyzeAudioResponse
+        {
+            Data = resultText
+        };
+    }
+
+    private async Task<BinaryData> GetAudioBinaryDataAsync(AnalyzeAudioCommand command, CancellationToken cancellationToken)
+    {
         BinaryData audioData;
 
         if (!string.IsNullOrWhiteSpace(command.AudioUrl))
@@ -48,29 +61,6 @@ public class AudioService : IAudioService
             audioData = BinaryData.FromBytes(command.AudioContent);
         }
 
-        var messages = new List<ChatMessage>();
-        if (!string.IsNullOrWhiteSpace(command.SystemPrompt))
-            messages.Add(new SystemChatMessage(command.SystemPrompt));
-
-        messages.Add(new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData,
-            command.AudioFileFormat == AudioFileFormat.Wav ? ChatInputAudioFormat.Wav : ChatInputAudioFormat.Mp3)));
-
-        if (!string.IsNullOrWhiteSpace(command.UserPrompt))
-            messages.Add(new UserChatMessage(command.UserPrompt));
-
-        var options = new ChatCompletionOptions { ResponseModalities = ChatResponseModalities.Text };
-
-        ChatCompletion completion = await client
-            .CompleteChatAsync(messages, options, cancellationToken)
-            .ConfigureAwait(false);
-
-        var resultText = completion.Content.FirstOrDefault()?.Text ?? string.Empty;
-
-        Log.Information("Audio analysis result: {Analysis}", resultText);
-
-        return new AnalyzeAudioResponse
-        {
-            Data = resultText
-        };
+        return audioData;
     }
 }

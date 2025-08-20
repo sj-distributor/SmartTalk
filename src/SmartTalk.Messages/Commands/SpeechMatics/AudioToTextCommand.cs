@@ -15,6 +15,8 @@ public class AnalyzeAudioCommand : ICommand
     public string SystemPrompt { get; set; }
     
     public string UserPrompt { get; set; }
+    
+    public AudioModelProviderType ModelProviderType { get; set; } = AudioModelProviderType.Google;
 }
 
 public class AnalyzeAudioResponse : SmartTalkResponse<string>
