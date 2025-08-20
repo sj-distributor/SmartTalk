@@ -1,4 +1,5 @@
 using Newtonsoft.Json;
+using Serilog;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Settings.Google;
 using SmartTalk.Messages.Dto.Google;
@@ -27,6 +28,8 @@ public class GoogleClient : IGoogleClient
         
         var response = await _httpClient.PostAsJsonAsync<GoogleGenerateContentResponse>(
             $"https://generativelanguage.googleapis.com//v1beta/models/{model}:generateContent?key={_googleSettings.ApiKey}", requestBody, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Google Generate Content Response: {Response}", response);
         
         return response;
     }

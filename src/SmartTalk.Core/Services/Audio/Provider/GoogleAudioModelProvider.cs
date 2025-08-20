@@ -19,7 +19,6 @@ public class GoogleAudioModelProvider : IAudioModelProvider
 
     public AudioModelProviderType ModelProviderType { get; set; } = AudioModelProviderType.Google;
 
-
     public async Task<string> ExtractAudioDataFromModelProviderAsync(AnalyzeAudioCommand command, BinaryData audioData, CancellationToken cancellationToken)
     {
         var requestBody = new GoogleGenerateContentRequest
@@ -61,9 +60,9 @@ public class GoogleAudioModelProvider : IAudioModelProvider
                 Parts = [new() { Text = command.UserPrompt }]
             });
         
-        var response = await _googleClient.GenerateContentAsync(requestBody, "gemini-2.5-flash", cancellationToken);
+        var response = await _googleClient.GenerateContentAsync(requestBody, "gemini-2.5-flash", cancellationToken).ConfigureAwait(false);
 
-        return response.Candidates.First().Content.Parts.First().Text;
+        return response.Candidates.FirstOrDefault()?.Content.Parts.FirstOrDefault()?.Text;
     }
 
     private string GetMimeType(AudioFileFormat commandAudioFileFormat)
