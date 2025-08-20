@@ -61,11 +61,14 @@ public partial class AccountService
         
         if (loginVerificationType == UserAccountVerificationType.Password)
         {
-            var storeUsers = await _posDataProvider.GetPosStoreUsersByUserIdAsync(account.Id, cancellationToken).ConfigureAwait(false);
-            if (storeUsers.Count < 0)
+            if (account.AccountLevel == UserAccountLevel.AiAgent || account.AccountLevel == UserAccountLevel.Company)
             {
-                authenticateInternalResult.CannotLoginReason = UserAccountCannotLoginReason.NoAssociatedStore;
-                return;
+                var storeUsers = await _posDataProvider.GetPosStoreUsersByUserIdAsync(account.Id, cancellationToken).ConfigureAwait(false);
+                if (storeUsers.Count < 0)
+                {
+                    authenticateInternalResult.CannotLoginReason = UserAccountCannotLoginReason.NoAssociatedStore;
+                    return;
+                }
             }
         }
 
