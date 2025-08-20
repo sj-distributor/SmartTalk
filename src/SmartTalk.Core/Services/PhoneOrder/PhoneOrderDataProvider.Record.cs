@@ -7,6 +7,7 @@ using SmartTalk.Core.Domain.System;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Dto.Restaurant;
+using SmartTalk.Messages.Enums;
 using SmartTalk.Messages.Enums.Account;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.STT;
@@ -17,7 +18,7 @@ public partial interface IPhoneOrderDataProvider
 {
     Task AddPhoneOrderRecordsAsync(List<PhoneOrderRecord> phoneOrderRecords, bool forceSave = true, CancellationToken cancellationToken = default);
     
-    Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(List<int> agentIds, string name, TranscriptionLanguage systemLanguage, DateTimeOffset? utcStart = null, DateTimeOffset? utcEnd = null, CancellationToken cancellationToken = default);
+    Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(List<int> agentIds, string name, SystemLanguage systemLanguage, DateTimeOffset? utcStart = null, DateTimeOffset? utcEnd = null, CancellationToken cancellationToken = default);
 
     Task<List<PhoneOrderOrderItem>> AddPhoneOrderItemAsync(List<PhoneOrderOrderItem> phoneOrderOrderItems, bool forceSave = true, CancellationToken cancellationToken = default);
     
@@ -62,7 +63,7 @@ public partial class PhoneOrderDataProvider
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(List<int> agentIds, string name, TranscriptionLanguage systemLanguage, DateTimeOffset? utcStart = null, DateTimeOffset? utcEnd = null, CancellationToken cancellationToken = default)
+    public async Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(List<int> agentIds, string name, SystemLanguage systemLanguage, DateTimeOffset? utcStart = null, DateTimeOffset? utcEnd = null, CancellationToken cancellationToken = default)
     {
         var query = from record in _repository.Query<PhoneOrderRecord>()
             join agent in _repository.Query<Agent>() on record.AgentId equals agent.Id
@@ -80,8 +81,7 @@ public partial class PhoneOrderDataProvider
         if (!recordIds.Any()) return new List<PhoneOrderRecord>();
 
         var reportsQuery = from report in _repository.Query<PhoneOrderRecordReport>()
-            where recordIds.Contains(report.RecordId) 
-                  && report.Language == systemLanguage
+            where recordIds.Contains(report.RecordId) && report.Language.ToString() == systemLanguage.ToString()
             select new { report.RecordId, report.Report };
 
         var targetReports = await reportsQuery.ToDictionaryAsync(x => x.RecordId, x => x.Report, cancellationToken);

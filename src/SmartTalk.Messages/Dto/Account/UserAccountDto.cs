@@ -2,8 +2,8 @@ using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.Pos;
 using SmartTalk.Messages.Dto.Security;
 using SmartTalk.Messages.DTO.Security;
+using SmartTalk.Messages.Enums;
 using SmartTalk.Messages.Enums.Account;
-using SmartTalk.Messages.Enums.STT;
 
 namespace SmartTalk.Messages.Dto.Account;
 
@@ -23,7 +23,7 @@ public class UserAccountDto
     
     public UserAccountLevel AccountLevel { get; set; }
     
-    public TranscriptionLanguage SystemLanguage { get; set; }
+    public SystemLanguage SystemLanguage { get; set; }
     
     public string ThirdPartyUserId { get; set; }
     

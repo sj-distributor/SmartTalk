@@ -5,6 +5,7 @@ using SmartTalk.Core.Domain.Security;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.Pos;
+using SmartTalk.Messages.Enums;
 using SmartTalk.Messages.Enums.Account;
 using SmartTalk.Messages.Enums.STT;
 
@@ -60,7 +61,7 @@ namespace SmartTalk.Core.Domain.Account
         public UserAccountLevel AccountLevel { get; set; }
 
         [Column("SystemLanguage")] 
-        public TranscriptionLanguage SystemLanguage { get; set; } = TranscriptionLanguage.English;
+        public SystemLanguage SystemLanguage { get; set; } = SystemLanguage.English;
         
         [Column("creator")]
         public string Creator { get; set; }

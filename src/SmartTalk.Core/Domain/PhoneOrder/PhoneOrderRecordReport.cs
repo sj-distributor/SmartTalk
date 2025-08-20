@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using SmartTalk.Messages.Enums.Account;
+using SmartTalk.Messages.Enums;
 using SmartTalk.Messages.Enums.STT;
 
 namespace SmartTalk.Core.Domain.PhoneOrder;
