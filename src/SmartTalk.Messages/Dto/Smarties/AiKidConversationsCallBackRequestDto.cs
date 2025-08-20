@@ -6,5 +6,7 @@ public class AiKidConversationCallBackRequestDto
 {
     public Guid Uuid { get; set; }
     
+    public string SessionId { get; set; }
+    
     public List<RealtimeAiTranscriptionDto> Transcriptions { get; set; }
 }
