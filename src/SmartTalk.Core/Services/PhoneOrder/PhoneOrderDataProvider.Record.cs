@@ -76,9 +76,12 @@ public partial class PhoneOrderDataProvider
         if (utcStart.HasValue && utcEnd.HasValue)
             query = query.Where(record => record.CreatedDate >= utcStart.Value && record.CreatedDate < utcEnd.Value);
 
-        var recordIds = await query.Select(record => record.Id).ToListAsync(cancellationToken);
-    
-        if (!recordIds.Any()) return new List<PhoneOrderRecord>();
+        var records = await query.Distinct().OrderByDescending(x => x.CreatedDate).ToListAsync(cancellationToken);
+
+        if (!records.Any()) 
+            return new List<PhoneOrderRecord>();
+
+        var recordIds = records.Select(x => x.Id).ToList();
 
         var reportsQuery = from report in _repository.Query<PhoneOrderRecordReport>()
             where recordIds.Contains(report.RecordId) && report.Language.ToString() == systemLanguage.ToString()
@@ -86,14 +89,13 @@ public partial class PhoneOrderDataProvider
 
         var targetReports = await reportsQuery.ToDictionaryAsync(x => x.RecordId, x => x.Report, cancellationToken);
 
-        if (targetReports.Count == 0)
-            return await query.OrderByDescending(x => x.CreatedDate).ToListAsync(cancellationToken);
-
-        var records = await query.Distinct().OrderByDescending(x => x.CreatedDate).ToListAsync(cancellationToken);
-    
         foreach (var record in records)
+        {
             if (targetReports.TryGetValue(record.Id, out var reportText))
+            {
                 record.TranscriptionText = reportText;
+            }
+        }
 
         return records;
     }
