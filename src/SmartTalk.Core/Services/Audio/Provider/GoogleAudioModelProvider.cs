@@ -47,17 +47,16 @@ public class GoogleAudioModelProvider : IAudioModelProvider
         };
         
         if (!string.IsNullOrWhiteSpace(command.SystemPrompt))
-            requestBody.Contents.Add(new GoogleContentDto
+            requestBody.SystemInstruction = new GoogleContentDto()
             {
                 Role = "system",
                 Parts = [new() { Text = command.SystemPrompt }]
-            });
+            };
         
         if (!string.IsNullOrWhiteSpace(command.UserPrompt))
-            requestBody.Contents.Add(new GoogleContentDto
+            requestBody.Contents.First().Parts.Add(new GooglePartDto()
             {
-                Role = "user",
-                Parts = [new() { Text = command.UserPrompt }]
+                Text = command.UserPrompt
             });
         
         var response = await _googleClient.GenerateContentAsync(requestBody, "gemini-2.5-flash", cancellationToken).ConfigureAwait(false);
