@@ -165,6 +165,8 @@ public class SpeechMaticsService : ISpeechMaticsService
         
         record.Status = PhoneOrderRecordStatus.Sent;
         record.TranscriptionText = completion.Content.FirstOrDefault()?.Text ?? "";
+        
+        var detection = await _translationClient.DetectLanguageAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
 
         var reports = new List<PhoneOrderRecordReport>();
 
@@ -172,18 +174,22 @@ public class SpeechMaticsService : ISpeechMaticsService
         {
             RecordId = record.Id,
             Report = record.TranscriptionText,
-            Language = record.Language
+            Language = SelectLanguageEnum(detection.Language),
+            CreatedDate = DateTimeOffset.Now
         });
 
-        var (targetLanguage, reportLanguage) = record.Language == TranscriptionLanguage.Chinese ? ("en", TranscriptionLanguage.English) : ("zh", TranscriptionLanguage.Chinese);
-
+        var targetLanguage = (SelectLanguageEnum(detection.Language) == TranscriptionLanguage.Chinese) ? "en" : "zh";
+        
+        var reportLanguage = (SelectLanguageEnum(detection.Language) == TranscriptionLanguage.Chinese) ? TranscriptionLanguage.English : TranscriptionLanguage.Chinese;
+        
         var translatedText = await _translationClient.TranslateTextAsync(record.TranscriptionText, targetLanguage, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         reports.Add(new PhoneOrderRecordReport
         {
             RecordId = record.Id,
-            Report = translatedText.ToString(),
-            Language = reportLanguage
+            Report = translatedText.TranslatedText,
+            Language = reportLanguage,
+            CreatedDate = DateTimeOffset.Now
         });
 
         await _phoneOrderDataProvider.AddPhoneOrderRecordReportsAsync(reports, true, cancellationToken).ConfigureAwait(false);
@@ -474,5 +480,14 @@ public class SpeechMaticsService : ISpeechMaticsService
             Log.Warning("解析GPT返回JSON失败: {Message}", ex.Message); 
             return new (new List<AiOrderItemDto>(), DateTime.Today.AddDays(1));
         } 
+    }
+    
+    private TranscriptionLanguage SelectLanguageEnum(string language)
+    {
+        return language switch
+        {
+            "zh" or "zh-CN" or "zh-TW" => TranscriptionLanguage.Chinese,
+            _ => TranscriptionLanguage.English
+        };
     }
 }
