@@ -1,3 +1,4 @@
+using System.Text;
 using Newtonsoft.Json;
 using Serilog;
 using SmartTalk.Core.Ioc;
@@ -24,12 +25,14 @@ public class GoogleClient : IGoogleClient
 
     public async Task<GoogleGenerateContentResponse> GenerateContentAsync(GoogleGenerateContentRequest request, string model, CancellationToken cancellationToken)
     {
-        var requestBody = JsonConvert.SerializeObject(request);
+        var requestBody = JsonConvert.SerializeObject(request, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore });
         
-        Log.Information("Sending request to Google API: {RequestBody}", requestBody);
+        Log.Information("Sending request to Google API: {RequestBody}", request);
         
-        var response = await _httpClient.PostAsJsonAsync<GoogleGenerateContentResponse>(
-            $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={_googleSettings.ApiKey}", requestBody, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var content = new StringContent(requestBody, Encoding.UTF8, "application/json");
+        
+        var response = await _httpClient.PostAsync<GoogleGenerateContentResponse>(
+            $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={_googleSettings.ApiKey}", content, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         Log.Information("Google Generate Content Response: {Response}", response);
         
