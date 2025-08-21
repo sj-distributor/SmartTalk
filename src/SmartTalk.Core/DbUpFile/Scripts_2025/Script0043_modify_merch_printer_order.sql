@@ -1,0 +1,1 @@
+alter table `merch_printer_order` modify `order_id` int not null;

@@ -261,7 +261,7 @@ public class PrinterService : IPrinterService
     {
         var merchPrinterOrder = new MerchPrinterOrder
         {
-            OrderId = Guid.Empty,
+            OrderId = 0,
             AgentId = command.AgentId,
             PrinterMac = command.PrinterMac,
             PrintDate = DateTimeOffset.Now

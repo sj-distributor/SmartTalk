@@ -20,8 +20,8 @@ public class MerchPrinterOrder : IEntity
     [Column("agent_id")]
     public int AgentId { get; set; }
         
-    [Column("order_id", TypeName = "char(36)")]
-    public Guid OrderId { get; set; }
+    [Column("order_id")]
+    public int OrderId { get; set; }
         
     [Column("print_status")]
     public PrintStatus PrintStatus { get; set; }

@@ -7,7 +7,8 @@ public class MerchPrinterOrderDto
     public Guid Id { get; set; }
         
     public int AgentId { get; set; }
-    public Guid OrderId { get; set; }
+    
+    public int OrderId { get; set; }
 
     public PrintStatus PrintStatus { get; set; }
 
@@ -19,7 +20,6 @@ public class MerchPrinterOrderDto
 
     public bool IsPrintTest()
     {
-        return OrderId == Guid.Empty;
+        return OrderId == 0;
     }
-
 }
