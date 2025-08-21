@@ -1,3 +1,4 @@
+using Google.Apis.Json;
 using Newtonsoft.Json;
 using Serilog;
 using SmartTalk.Core.Ioc;
@@ -24,7 +25,7 @@ public class GoogleClient : IGoogleClient
 
     public async Task<GoogleGenerateContentResponse> GenerateContentAsync(GoogleGenerateContentRequest request, string model, CancellationToken cancellationToken)
     {
-        var requestBody = JsonConvert.SerializeObject(request);
+        var requestBody = JsonConvert.SerializeObject(request, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore });
         
         Log.Information("Sending request to Google API: {RequestBody}", requestBody);
         
