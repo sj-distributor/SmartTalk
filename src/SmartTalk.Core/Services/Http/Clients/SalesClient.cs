@@ -12,6 +12,8 @@ public interface ISalesClient : IScopedDependency
     Task<GetOrderHistoryByCustomerResponseDto> GetOrderHistoryByCustomerAsync(GetOrderHistoryByCustomerRequestDto request, CancellationToken cancellationToken);
     
     Task<SalesResponseDto> GenerateAiOrdersAsync(GenerateAiOrdersRequestDto request, CancellationToken cancellationToken);
+    
+    Task<GetCustomerNumbersByNameResponseDto> GetCustomerNumbersByNameAsync(GetCustomerNumbersByNameRequestDto request, CancellationToken cancellationToken); 
 }
 
 public class SalesClient : ISalesClient
@@ -61,5 +63,12 @@ public class SalesClient : ISalesClient
     public async Task<SalesResponseDto> GenerateAiOrdersAsync(GenerateAiOrdersRequestDto request, CancellationToken cancellationToken)
     {
         return await _httpClientFactory.PostAsJsonAsync<SalesResponseDto>($"{_salesSetting.BaseUrl}/api/SalesOrder/GenerateAiOrders", request, headers: _headers, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<GetCustomerNumbersByNameResponseDto> GetCustomerNumbersByNameAsync(GetCustomerNumbersByNameRequestDto request, CancellationToken cancellationToken)
+    {
+        var url = $"{_salesSetting.BaseUrl}/api/SalesOrder/GetCustomerNumbersByName?customerName={Uri.EscapeDataString(request.CustomerName)}";
+        
+        return await _httpClientFactory.GetAsync<GetCustomerNumbersByNameResponseDto>(url, headers: _headers, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 }
