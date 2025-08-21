@@ -26,6 +26,8 @@ public class GoogleClient : IGoogleClient
     {
         var requestBody = JsonConvert.SerializeObject(request);
         
+        Log.Information("Sending request to Google API: {RequestBody}", requestBody);
+        
         var response = await _httpClient.PostAsJsonAsync<GoogleGenerateContentResponse>(
             $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={_googleSettings.ApiKey}", requestBody, cancellationToken: cancellationToken).ConfigureAwait(false);
         
