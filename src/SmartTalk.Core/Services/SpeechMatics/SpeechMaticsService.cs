@@ -359,6 +359,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         if (string.IsNullOrEmpty(record.TranscriptionText)) return;
 
         var askInfoResponse = await _salesClient.GetAskInfoDetailListByCustomerAsync(new GetAskInfoDetailListByCustomerRequestDto { CustomerNumbers = new List<string> { aiSpeechAssistant.Name } }, cancellationToken).ConfigureAwait(false);
+        Log.Information("Ask info items: {@askInfoItems}", askInfoResponse);
 
         var historyItems = askInfoResponse?.Data?.Where(x => !string.IsNullOrWhiteSpace(x.Material)).Select(x => (x.Material, x.MaterialDesc)).ToList() ?? new List<(string Material, string MaterialDesc)>();
 
@@ -409,7 +410,7 @@ public class SpeechMaticsService : ISpeechMaticsService
             "如果客户提到分店名，请提取 StoreName；如果提到第几家店，请提取 StoreNumber。\n" +
             "请严格返回一个 JSON 对象，顶层字段为 \"stores\"，每个店铺对象包含：StoreName, StoreNumber, orders（数组，元素包含 name, quantity, materialNumber, deliveryDate）。\n" +
             "示例输出：\n" +
-            "{\n  \"stores\": [\n    {\n      \"StoreName\": \"HaiDiLao\",\n      \"StoreNumber\": 1,\n      \"orders\": [\n        { \"name\": \"雞胸肉\", \"quantity\": 1, \"materialNumber\": \"000000000010010253\", \"deliveryDate\": \"2025-08-20\" }\n      ]\n    }\n  ]\n}\n\n" +
+            "{\n  \"stores\": [\n {\n \"StoreName\": \"HaiDiLao\",\n \"StoreNumber\": 1,\n \"orders\": [\n { \"name\": \"雞胸肉\", \"quantity\": 1, \"materialNumber\": \"000000000010010253\", \"deliveryDate\": \"2025-08-20\" }\n ]\n }\n  ]\n}\n\n" +
             materialListText + "\n\n客户分析报告文本：\n" + reportText + "\n\n"+
             "注意：必须严格输出 JSON，对象顶层字段必须是 \"orders\"，不要有其他字段或额外说明。";
         Log.Information("Sending prompt to GPT: {Prompt}", systemPrompt);
