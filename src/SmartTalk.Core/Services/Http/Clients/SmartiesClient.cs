@@ -18,6 +18,8 @@ public interface ISmartiesClient : IScopedDependency
     Task CallBackSmartiesAiKidRecordAsync(AiKidCallBackRequestDto request, CancellationToken cancellationToken);
     
     Task<GetCrmCustomerInfoResponseDto> GetCrmCustomerInfoAsync(Guid kidUUid, CancellationToken cancellationToken);
+    
+    Task CallBackSmartiesAiKidConversationsAsync(AiKidConversationCallBackRequestDto request, CancellationToken cancellationToken);
 }
 
 public class SmartiesClient : ISmartiesClient
@@ -61,11 +63,16 @@ public class SmartiesClient : ISmartiesClient
 
     public async Task CallBackSmartiesAiKidRecordAsync(AiKidCallBackRequestDto request, CancellationToken cancellationToken)
     {
-        await _httpClientFactory.PostAsJsonAsync($"{_smartiesSettings.BaseUrl}/api/Ome/ai/kid/record/callback", request, cancellationToken, headers: _headers).ConfigureAwait(false);
+        await _httpClientFactory.PostAsJsonAsync($"{_smartiesSettings.BaseUrl}/api/AiKid/record/callback", request, cancellationToken, headers: _headers).ConfigureAwait(false);
     }
 
     public async Task<GetCrmCustomerInfoResponseDto> GetCrmCustomerInfoAsync(Guid kidUUid, CancellationToken cancellationToken)
     {
         return await _httpClientFactory.GetAsync<GetCrmCustomerInfoResponseDto>($"{_smartiesSettings.BaseUrl}/api/Crm/info/{kidUUid}", cancellationToken, headers: _headers).ConfigureAwait(false);
+    }
+    
+    public async Task CallBackSmartiesAiKidConversationsAsync(AiKidConversationCallBackRequestDto request, CancellationToken cancellationToken)
+    {
+        await _httpClientFactory.PostAsJsonAsync($"{_smartiesSettings.BaseUrl}/api/AiKid/conversation/callback", request, cancellationToken, headers: _headers).ConfigureAwait(false);
     }
 }

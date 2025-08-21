@@ -45,6 +45,7 @@ public class RealtimeAiService : IRealtimeAiService
     private IRealtimeAiConversationEngine _conversationEngine;
     private Domain.AISpeechAssistant.AiSpeechAssistant _speechAssistant;
     
+    private string _sessionId;
     private volatile bool _isAiSpeaking;
     private bool _hasHandledAudioBuffer;
     private MemoryStream _wholeAudioBuffer;
@@ -72,6 +73,7 @@ public class RealtimeAiService : IRealtimeAiService
         _speechAssistant = null;
         _hasHandledAudioBuffer = false;
         _conversationTranscription = [];
+        _sessionId = Guid.NewGuid().ToString();
     }
 
     public async Task RealtimeAiConnectAsync(RealtimeAiConnectCommand command, CancellationToken cancellationToken)
@@ -411,11 +413,32 @@ public class RealtimeAiService : IRealtimeAiService
                     await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, agent.WechatRobotKey, $"您有一条新的AI通话录音：\n{audio?.Attachment?.FileUrl}", Array.Empty<string>(), CancellationToken.None).ConfigureAwait(false);
                 
                 _backgroundJobClient.Enqueue<IRealtimeProcessJobService>(x =>
-                    x.RecordingRealtimeAiAsync(audio.Attachment.FileUrl, _speechAssistant.AgentId, CancellationToken.None));
+                    x.RecordingRealtimeAiAsync(audio.Attachment.FileUrl, _speechAssistant.AgentId, _sessionId, CancellationToken.None));
             }
                             
             await _wholeAudioBuffer.DisposeAsync();
             _wholeAudioBuffer = null;
         }
+        
+        await HandleTranscriptionsAsync().ConfigureAwait(false);
+    }
+
+    private async Task HandleTranscriptionsAsync()
+    {
+        var kid = await _aiSpeechAssistantDataProvider.GetAiKidAsync(agentId: _speechAssistant.AgentId).ConfigureAwait(false);
+
+        if (kid == null) return;
+        
+        _backgroundJobClient.Enqueue<ISmartiesClient>(x =>
+            x.CallBackSmartiesAiKidConversationsAsync(new AiKidConversationCallBackRequestDto
+            {
+                Uuid = kid.KidUuid,
+                SessionId = _sessionId,
+                Transcriptions = _conversationTranscription.Select(t => new RealtimeAiTranscriptionDto
+                {
+                    Speaker = t.Item1,
+                    Transcription = t.Item2
+                }).ToList()
+            }, CancellationToken.None));
     }
 }
