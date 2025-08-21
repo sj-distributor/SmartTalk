@@ -72,7 +72,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
 
         if (existRecord != null ) return;
         
-        var detection = await _translationClient.DetectLanguageAsync(existRecord.TranscriptionText, cancellationToken).ConfigureAwait(false);
+        // var detection = await _translationClient.DetectLanguageAsync(existRecord.TranscriptionText, cancellationToken).ConfigureAwait(false);
         
         var record = new PhoneOrderRecord
         {
@@ -81,7 +81,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             Status = PhoneOrderRecordStatus.Transcription,
             Tips = context.ConversationTranscription.FirstOrDefault().Item2,
             TranscriptionText = string.Empty,
-            Language = SelectLanguageEnum(detection.Language),
+            Language = TranscriptionLanguage.Chinese,
             CreatedDate = callResource.StartTime ?? DateTimeOffset.Now,
             OrderStatus = PhoneOrderOrderStatus.Pending,
             CustomerName = context.UserInfo?.UserName,
