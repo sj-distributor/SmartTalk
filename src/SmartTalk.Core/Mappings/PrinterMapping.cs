@@ -1,9 +1,11 @@
 using AutoMapper;
 using SmartTalk.Core.Domain.Printer;
+using SmartTalk.Message.Commands.Printer;
 using SmartTalk.Messages.Commands.Printer;
 using SmartTalk.Messages.Dto.Printer;
 using SmartTalk.Messages.Enums.Printer;
 using SmartTalk.Messages.Events.Printer;
+using SmartTalk.Messages.Requests.Printer;
 
 namespace SmartTalk.Core.Mappings;
 
@@ -33,5 +35,19 @@ public class PrinterMapping : Profile
             .ForMember(x => x.OrderId, dest => dest.MapFrom(y => y.MerchPrinterOrderDto.OrderId))
             .ForMember(x => x.PrintLogType, dest => dest.MapFrom(y => y.IsPrintError() ? PrintLogType.PrintError : PrintLogType.Print))
             ;
+        
+        CreateMap<MerchPrinter, MerchPrinterDto>()
+            .ForMember(x => x.PrinterStatusInfo, dest => dest.MapFrom(y => y.PrinterStatusInfo()));
+        
+        CreateMap<AddMerchPrinterCommand, MerchPrinter>();
+        
+        CreateMap<UpdateMerchPrinterCommand, MerchPrinter>();
+        
+        CreateMap<MerchPrinterLog, MerchPrinterLogDto>()
+            .ForMember(x => x.LogType, dest => dest.MapFrom(y => y.PrintLogType))
+            .ForMember(x => x.Event, dest => dest.MapFrom(y => y.Message))
+            .ForMember(x => x.Code, dest => dest.MapFrom(y => y.Code))
+            .ForMember(x => x.CodeDescription, dest => dest.MapFrom(y => y.CodeDescription))
+            .ForMember(x => x.Time, dest => dest.MapFrom(y => y.CreatedDate));
     }
 }

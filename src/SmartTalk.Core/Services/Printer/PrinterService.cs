@@ -15,6 +15,7 @@ using Newtonsoft.Json;
 using Serilog;
 using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.AliYun;
+using SmartTalk.Message.Commands.Printer;
 using SmartTalk.Message.Events.Printer;
 using SmartTalk.Messages.Commands.Printer;
 using SmartTalk.Messages.Dto.Printer;
@@ -47,6 +48,16 @@ public interface IPrinterService : IScopedDependency
     Task PrinterStatusChangedAsync(PrinterStatusChangedEvent @event, CancellationToken cancellationToken);
 
     Task PrinterJobConfirmeAsync(PrinterJobConfirmedEvent @event, CancellationToken cancellationToken);
+    
+    Task AddMerchPrinterAsync(AddMerchPrinterCommand command, CancellationToken cancellationToken);
+    
+    Task<GetMerchPrintersResponse> GetMerchPrintersAsync(GetMerchPrintersRequest request, CancellationToken cancellationToken);
+    
+    Task DeleteMerchPrinterAsync(DeleteMerchPrinterCommand command, CancellationToken cancellationToken);
+    
+    Task UpdateMerchPrinterAsync(UpdateMerchPrinterCommand command, CancellationToken cancellationToken);
+    
+    Task<GetMerchPrinterLogResponse> GetMerchPrinterLog(GetMerchPrinterLogRequest request, CancellationToken cancellationToken);
 }
 
 public class PrinterService : IPrinterService
@@ -77,7 +88,7 @@ public class PrinterService : IPrinterService
             return null;
         }
 
-        var merchPrinter = await _printerDataProvider.GetMerchPrinterByPrinterMacAsync(request.PrinterMac, request.Token, cancellationToken).ConfigureAwait(false);
+        var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(request.PrinterMac, request.Token, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
 
         Log.Information("MerchPrinter: {@merchPrinter}", merchPrinter);
         
@@ -222,8 +233,8 @@ public class PrinterService : IPrinterService
     public async Task<PrinterStatusChangedEvent> RecordPrinterStatusAsync(
         RecordPrinterStatusCommand command, CancellationToken cancellationToken)
     {
-        var merchPrinter = await _printerDataProvider.GetMerchPrinterByPrinterMacAsync(
-            command.PrinterMac, command.Token, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(
+            command.PrinterMac, command.Token, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
 
         if (merchPrinter == null)
             return null;
@@ -273,7 +284,7 @@ public class PrinterService : IPrinterService
         
         if (!varianceList.Any()) return null;
 
-        var merchPrinter = await _printerDataProvider.GetMerchPrinterByPrinterMacAsync(@event.PrinterMac, @event.Token,cancellationToken);
+        var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(@event.PrinterMac, @event.Token, cancellationToken: cancellationToken)).FirstOrDefault();
         if (merchPrinter == null)
             return null;
 
@@ -649,5 +660,106 @@ public class PrinterService : IPrinterService
 
         img.Mutate(x => x.Crop(new Rectangle(0, 0, width, y + 10)));
         return img;
+    } 
+    
+    public async Task<GetMerchPrintersResponse> GetMerchPrintersAsync(GetMerchPrintersRequest request, CancellationToken cancellationToken)
+    {
+        var printers = await _printerDataProvider.GetMerchPrintersAsync(
+            agentId: request.AgentId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var result = _mapper.Map<List<MerchPrinterDto>>(printers);
+
+        return new GetMerchPrintersResponse
+        {
+            Result = result
+        };
     }
+    
+    public async Task AddMerchPrinterAsync(AddMerchPrinterCommand command, CancellationToken cancellationToken)
+    {
+        var printer = (await _printerDataProvider.GetMerchPrintersAsync(printerMac: command.PrinterMac, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+
+        if (printer != null)
+        {
+            throw new Exception($"The printer [{command.PrinterMac}] already exists");
+        }
+
+        printer = _mapper.Map<MerchPrinter>(command);
+        printer.Token = await GetOrCreatePrinterTokenAsync(command.PrinterMac, cancellationToken).ConfigureAwait(false);
+
+        await CheckPrinterCanOnlyHaveOneEnabled(printer, cancellationToken);
+
+        await _printerDataProvider.AddMerchPrinterAsync(printer, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task DeleteMerchPrinterAsync(DeleteMerchPrinterCommand command, CancellationToken cancellationToken)
+    {
+        var printer = (await _printerDataProvider.GetMerchPrintersAsync(id: command.Id, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+        
+       await _printerDataProvider.DeleteMerchPrinterAsync(printer, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<Guid> GetOrCreatePrinterTokenAsync(string printerMac,CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(printerMac))
+            throw new ArgumentNullException(nameof(printerMac));
+            
+        var printerToken = await _printerDataProvider.GetPrinterTokenAsync(printerMac, cancellationToken).ConfigureAwait(false);
+
+        if (printerToken != null)
+            return printerToken.Token;
+
+        printerToken = new PrinterToken()
+        {
+            Id = Guid.NewGuid(),
+            PrinterMac = printerMac,
+            Token = Guid.NewGuid(),
+        };
+
+        await _printerDataProvider.AddPrinterTokenAsync(printerToken, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        return printerToken.Token;
+    }
+    
+    private async Task CheckPrinterCanOnlyHaveOneEnabled(MerchPrinter merchPrinter, CancellationToken cancellationToken)
+    {
+        if (merchPrinter.IsEnabled)
+        {
+            var enabledPrinters = await _printerDataProvider.GetMerchPrintersAsync(
+                agentId: merchPrinter.AgentId, id: merchPrinter.Id, isEnabled: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            if (enabledPrinters.Count > 0)
+            {
+                throw new Exception(
+                    "Only one device can be activated. Please disable the current printer before activating this printer.");
+            }
+        }
+    }
+
+    public async Task UpdateMerchPrinterAsync(UpdateMerchPrinterCommand command, CancellationToken cancellationToken)
+    {
+        var printer = (await _printerDataProvider.GetMerchPrintersAsync(id: command.Id, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+
+        _mapper.Map(command, printer);
+
+        await CheckPrinterCanOnlyHaveOneEnabled(printer, cancellationToken).ConfigureAwait(false);
+        
+        await _printerDataProvider.UpdateMerchPrinterMacAsync(printer, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+    
+     public async Task<GetMerchPrinterLogResponse> GetMerchPrinterLog(GetMerchPrinterLogRequest request, CancellationToken cancellationToken)
+     {
+         var (count, merchPrinterLogs) = await _printerDataProvider.GetMerchPrinterLogAsync(
+             request.AgentId,request.PrinterMac, request.StartDate, request.EndDate, request.Code, request.PrintLogType,
+             request.PageIndex, request.PageSize, cancellationToken).ConfigureAwait(false);
+
+            return new GetMerchPrinterLogResponse
+            {
+                Data = new MerchPrinterLogCountDto
+                {
+                    TotalCount = count,
+                    MerchPrinterLogDtos = merchPrinterLogs
+                }
+            };
+        }
 }
