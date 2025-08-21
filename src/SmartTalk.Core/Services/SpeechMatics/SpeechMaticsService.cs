@@ -19,6 +19,7 @@ using SmartTalk.Core.Settings.Twilio;
 using SmartTalk.Messages.Dto.SpeechMatics;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Commands.PhoneOrder;
+using SmartTalk.Messages.Commands.SpeechMatics;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.Agent;
@@ -147,7 +148,7 @@ public class SpeechMaticsService : ISpeechMaticsService
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
             new UserChatMessage("幫我根據錄音生成分析報告：")
         ];
-
+ 
         ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
 
         ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
