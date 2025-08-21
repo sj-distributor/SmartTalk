@@ -25,7 +25,11 @@ public class GoogleClient : IGoogleClient
 
     public async Task<GoogleGenerateContentResponse> GenerateContentAsync(GoogleGenerateContentRequest request, string model, CancellationToken cancellationToken)
     {
-        var requestBody = JsonConvert.SerializeObject(request, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore });
+        var requestBody = JsonConvert.SerializeObject(request, new JsonSerializerSettings
+        {
+            NullValueHandling = NullValueHandling.Ignore,
+            ContractResolver = new Newtonsoft.Json.Serialization.CamelCasePropertyNamesContractResolver()
+        });
         
         Log.Information("Sending request to Google API: {RequestBody}", request);
         
