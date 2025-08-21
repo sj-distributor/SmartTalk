@@ -64,7 +64,7 @@ public partial class AccountService
             if (account.AccountLevel == UserAccountLevel.AiAgent || account.AccountLevel == UserAccountLevel.Company)
             {
                 var storeUsers = await _posDataProvider.GetPosStoreUsersByUserIdAsync(account.Id, cancellationToken).ConfigureAwait(false);
-                if (storeUsers.Count < 0)
+                if (!storeUsers.Any())
                 {
                     authenticateInternalResult.CannotLoginReason = UserAccountCannotLoginReason.NoAssociatedStore;
                     return;
