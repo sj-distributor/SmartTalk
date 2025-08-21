@@ -7,7 +7,6 @@ using Serilog;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.PhoneOrder;
-using SmartTalk.Core.Services.RealtimeAi.Services;
 using SmartTalk.Core.Services.Restaurants;
 using SmartTalk.Core.Services.RetrievalDb.VectorDb;
 using SmartTalk.Core.Settings.OpenAi;
@@ -71,8 +70,6 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         var (existRecord, agent, aiSpeechAssistant) = await _phoneOrderDataProvider.GetRecordWithAgentAndAssistantAsync(context.CallSid, cancellationToken).ConfigureAwait(false);
 
         if (existRecord != null ) return;
-        
-        // var detection = await _translationClient.DetectLanguageAsync(existRecord.TranscriptionText, cancellationToken).ConfigureAwait(false);
         
         var record = new PhoneOrderRecord
         {
@@ -236,14 +233,5 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
 
         Log.Information("OpenAiAccountTraining 主账号返回 (前50字): {Preview}（总长度: {Length}）", preview, content?.Length ?? 0);
         Log.Information("OpenAiAccountTraining 备用账号返回 (前50字): {Preview}（总长度: {Length}）", anotherPreview, anotherContent?.Length ?? 0);
-    }
-    
-    private TranscriptionLanguage SelectLanguageEnum(string language)
-    {
-        return language switch
-        {
-            "zh" or "zh-CN" or "zh-TW" => TranscriptionLanguage.Chinese,
-            _ => TranscriptionLanguage.English
-        };
     }
 }
