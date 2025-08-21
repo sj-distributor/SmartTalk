@@ -4,6 +4,7 @@ using SmartTalk.Core.Data;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Messages.Dto.Agent;
 using Microsoft.EntityFrameworkCore;
+using SmartTalk.Core.Domain;
 using SmartTalk.Core.Domain.Restaurants;
 
 namespace SmartTalk.Core.Services.Agents;
@@ -19,6 +20,10 @@ public interface IAgentDataProvider : IScopedDependency
     Task AddAgentAsync(Agent agent, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task DeleteAgentsAsync(List<Agent> agents, bool forceSave = true, CancellationToken cancellationToken = default);
+    
+    Task UpdateAgentsAsync(List<Agent> agents, bool forceSave = true, CancellationToken cancellationToken = default);
+
+    Task<List<AgentPreviewDto>> GetAgentsByAgentTypeAsync<T>(AgentType agentType, CancellationToken cancellationToken) where T : class, IEntity<int>, IAgent;
 }
 
 public class AgentDataProvider : IAgentDataProvider
@@ -84,5 +89,27 @@ public class AgentDataProvider : IAgentDataProvider
         await _repository.DeleteAllAsync(agents, cancellationToken).ConfigureAwait(false);
 
         if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task UpdateAgentsAsync(List<Agent> agents, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.UpdateAllAsync(agents, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<AgentPreviewDto>> GetAgentsByAgentTypeAsync<T>(AgentType agentType, CancellationToken cancellationToken) where T : class, IEntity<int>, IAgent
+    {
+        var query = from agent in _repository.Query<Agent>()
+            join domain in _repository.Query<T>() on agent.RelateId equals domain.Id
+            where agent.Type == agentType
+            select new AgentPreviewDto
+            {
+                Agent = agent,
+                Domain = domain,
+                CreatedDate = agent.CreatedDate
+            };
+        
+        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }
