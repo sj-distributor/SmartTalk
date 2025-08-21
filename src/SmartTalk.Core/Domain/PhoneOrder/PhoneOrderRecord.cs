@@ -66,6 +66,12 @@ public class PhoneOrderRecord : IEntity
     [Column("duration")]
     public double? Duration { get; set; }
     
+    [Column("is_transfer")]
+    public bool? IsTransfer { get; set; }
+    
+    [Column("incoming_call_number"), StringLength(36)]
+    public string IncomingCallNumber { get; set; }
+    
     [NotMapped]
     public UserAccount UserAccount { get; set; }
     

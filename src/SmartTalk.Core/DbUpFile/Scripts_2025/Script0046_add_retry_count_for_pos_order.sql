@@ -1,0 +1,1 @@
+alter table `pos_order` add column `retry_count` int not null default 0;

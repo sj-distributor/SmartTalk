@@ -4,6 +4,7 @@ using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.PhoneOrder;
+using SmartTalk.Core.Services.Security;
 using SmartTalk.Core.Services.STT;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.STT;
@@ -30,6 +31,7 @@ public class RealtimeProcessJobService : IRealtimeProcessJobService
         IPhoneOrderService phoneOrderService,
         ISpeechToTextService speechToTextService,
         ISmartTalkHttpClientFactory httpClientFactory,
+        ISecurityDataProvider securityDataProvider,
         IPhoneOrderDataProvider phoneOrderDataProvider)
     {
         _phoneOrderService = phoneOrderService;
@@ -42,6 +44,10 @@ public class RealtimeProcessJobService : IRealtimeProcessJobService
 
     public async Task RecordingRealtimeAiAsync(string recordingUrl, int agentId, CancellationToken cancellationToken)
     {
+        var agent = await _agentDataProvider.GetAgentByIdAsync(agentId, cancellationToken).ConfigureAwait(false);
+        if (agent is { IsSendAudioRecordWechat: true })
+            await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, agent.WechatRobotKey, $"您有一条新的AI通话录音：\n{recordingUrl}", [], CancellationToken.None).ConfigureAwait(false);
+        
         var recordingContent = await _httpClientFactory.GetAsync<byte[]>(recordingUrl, cancellationToken).ConfigureAwait(false);
         if (recordingContent == null) return;
         
