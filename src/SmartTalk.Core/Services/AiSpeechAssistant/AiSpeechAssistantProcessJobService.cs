@@ -6,7 +6,6 @@ using Serilog;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.PhoneOrder;
-using SmartTalk.Core.Services.RealtimeAi.Services;
 using SmartTalk.Core.Services.Restaurants;
 using SmartTalk.Core.Services.RetrievalDb.VectorDb;
 using SmartTalk.Core.Settings.Twilio;
@@ -61,8 +60,6 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
 
         if (existRecord != null ) return;
         
-        var detection = await _translationClient.DetectLanguageAsync(existRecord.TranscriptionText, cancellationToken).ConfigureAwait(false);
-        
         var record = new PhoneOrderRecord
         {
             AgentId = context.Assistant.AgentId,
@@ -70,7 +67,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             Status = PhoneOrderRecordStatus.Transcription,
             Tips = context.ConversationTranscription.FirstOrDefault().Item2,
             TranscriptionText = string.Empty,
-            Language = SelectLanguageEnum(detection.Language),
+            Language = TranscriptionLanguage.Chinese,
             CreatedDate = callResource.StartTime ?? DateTimeOffset.Now,
             OrderStatus = PhoneOrderOrderStatus.Pending,
             CustomerName = context.UserInfo?.UserName,
@@ -200,14 +197,5 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             Note = x.Remark,
             ProductId = x.ProductId
         }).ToList();
-    }
-    
-    private TranscriptionLanguage SelectLanguageEnum(string language)
-    {
-        return language switch
-        {
-            "zh" or "zh-CN" or "zh-TW" => TranscriptionLanguage.Chinese,
-            _ => TranscriptionLanguage.English
-        };
     }
 }
