@@ -567,7 +567,7 @@ public partial class AiSpeechAssistantService
                 {
                     type = "function",
                     name = "transfer_call",
-                    description = "Triggered when the customer requests to transfer the call to a real person, or when the customer is not satisfied with the current answer and wants someone else to serve him/her"
+                    description = "Triggered when the customer requests to transfer the call to a real person(e.g. 用户说 '转人工', '找真人', '接客服'), or when the customer is not satisfied with the current answer and wants someone else to serve him/her"
                 };
             
                 transferCallTool = new AiSpeechAssistantFunctionCall
