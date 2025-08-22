@@ -11,4 +11,6 @@ public class ExtractedOrderItemDto
     public string DeliveryDate { get; set; }
     
     public string StoreNumber { get; set; }
+    
+    public string Unit { get; set; }
 }
