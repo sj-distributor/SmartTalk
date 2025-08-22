@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace SmartTalk.Core.Domain.Restaurants;
 
 [Table("restaurant")]
-public class Restaurant : IEntity 
+public class Restaurant : IEntity<int>, IAgent
 {
     [Key]
     [Column("id")]

@@ -23,6 +23,12 @@ public class PhoneOrderConversation : IEntity, IHasCreatedFields
     
     [Column("order")]
     public int Order { get; set; }
+    
+    [Column("start_time")]
+    public double? StartTime { get; set; }
+    
+    [Column("end_time")]
+    public double? EndTime { get; set; }
 
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
