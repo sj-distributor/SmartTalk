@@ -13,7 +13,7 @@ namespace SmartTalk.Core.Services.RealtimeAi.Services;
 
 public interface IRealtimeProcessJobService : IScopedDependency
 {
-    Task RecordingRealtimeAiAsync(string recordingUrl, int agentId, CancellationToken cancellationToken);
+    Task RecordingRealtimeAiAsync(string recordingUrl, int agentId, string sessionId, CancellationToken cancellationToken);
 }
 
 public class RealtimeProcessJobService : IRealtimeProcessJobService
@@ -42,7 +42,7 @@ public class RealtimeProcessJobService : IRealtimeProcessJobService
         _phoneOrderDataProvider = phoneOrderDataProvider;
     }
 
-    public async Task RecordingRealtimeAiAsync(string recordingUrl, int agentId, CancellationToken cancellationToken)
+    public async Task RecordingRealtimeAiAsync(string recordingUrl, int agentId, string sessionId, CancellationToken cancellationToken)
     {
         var agent = await _agentDataProvider.GetAgentByIdAsync(agentId, cancellationToken).ConfigureAwait(false);
         if (agent is { IsSendAudioRecordWechat: true })
@@ -56,7 +56,7 @@ public class RealtimeProcessJobService : IRealtimeProcessJobService
         
         var detection = await _translationClient.DetectLanguageAsync(transcription, cancellationToken).ConfigureAwait(false);
         
-        var record = new PhoneOrderRecord { SessionId = Guid.NewGuid().ToString(), AgentId = agentId, Url = recordingUrl, Language = SelectLanguageEnum(detection.Language), CreatedDate = DateTimeOffset.Now, Status = PhoneOrderRecordStatus.Recieved };
+        var record = new PhoneOrderRecord { SessionId = sessionId, AgentId = agentId, Url = recordingUrl, Language = SelectLanguageEnum(detection.Language), CreatedDate = DateTimeOffset.Now, Status = PhoneOrderRecordStatus.Recieved };
         
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync([record], cancellationToken: cancellationToken).ConfigureAwait(false);
         
