@@ -405,7 +405,21 @@ public class SpeechMaticsService : ISpeechMaticsService
         var askInfoResponse = await _salesClient.GetAskInfoDetailListByCustomerAsync(new GetAskInfoDetailListByCustomerRequestDto { CustomerNumbers = new List<string> { aiSpeechAssistant.Name } }, cancellationToken).ConfigureAwait(false);
         Log.Information("Ask info items: {@askInfoItems}", askInfoResponse);
 
-        var historyItems = askInfoResponse?.Data?.Where(x => !string.IsNullOrWhiteSpace(x.Material)).Select(x => (x.Material, x.MaterialDesc)).ToList() ?? new List<(string Material, string MaterialDesc)>();
+
+        List<(string Material, string MaterialDesc)> historyItems;
+
+        if (askInfoResponse?.Data != null && askInfoResponse.Data.Any())
+        {
+            historyItems = askInfoResponse.Data.Where(x => !string.IsNullOrWhiteSpace(x.Material)).Select(x => (x.Material, x.MaterialDesc)).ToList();
+        }
+        else
+        {
+            var orderHistoryResponse = await _salesClient.GetOrderHistoryByCustomerAsync(new GetOrderHistoryByCustomerRequestDto { CustomerNumber = aiSpeechAssistant.Name }, cancellationToken).ConfigureAwait(false);
+            Log.Information("Order history items: {@orderHistoryItems}", orderHistoryResponse);
+
+            historyItems = orderHistoryResponse?.Data?.Where(x => !string.IsNullOrWhiteSpace(x.MaterialNumber)).Select(x => (x.MaterialNumber, x.MaterialDescription)).ToList() ?? new List<(string Material, string MaterialDesc)>();
+        }
+        
         Log.Information("HistoryItems items: {@historyItems}", historyItems);
         
         var (extractedOrderItems, deliveryDate) = await ExtractAndMatchOrderItemsFromReportAsync(record.TranscriptionText, historyItems, DateTime.Today, cancellationToken).ConfigureAwait(false);
