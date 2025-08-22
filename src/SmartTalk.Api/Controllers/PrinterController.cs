@@ -10,11 +10,13 @@ using Microsoft.AspNetCore.Mvc;
 using SmartTalk.Messages.Dto.Printer;
 using StarMicronics.CloudPrnt.CpMessage;
 using Microsoft.AspNetCore.Authorization;
+using SmartTalk.Message.Commands.Printer;
 using SmartTalk.Messages.Commands.Printer;
 using SmartTalk.Messages.Requests.Printer;
 
 namespace SmartTalk.Api.Controllers;
 
+[Authorize]
 [ApiController]
 [Route("api/[controller]")]
 public class PrinterController : ControllerBase
@@ -139,5 +141,50 @@ public class PrinterController : ControllerBase
         await _mediator.SendAsync(command).ConfigureAwait(false);
         
         return Ok();
+    }
+    
+    [HttpGet, Route("printLog")]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetMerchPrinterLogResponse))]
+    public async Task<IActionResult> PrintLog([FromQuery] GetMerchPrinterLogRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await _mediator.RequestAsync<GetMerchPrinterLogRequest, GetMerchPrinterLogResponse>(request, cancellationToken);
+
+        return Ok(response);
+    }
+
+    [HttpPost, Route("merchPrinter/add")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> AddMerchPrinterAsync(AddMerchPrinterCommand command)
+    {
+        await _mediator.SendAsync(command).ConfigureAwait(false);
+        return Ok();
+    }
+
+    [HttpPost, Route("merchPrinter/update")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> UpdateMerchPrinter(UpdateMerchPrinterCommand command)
+    {
+        await _mediator.SendAsync(command).ConfigureAwait(false);
+        
+        return Ok();
+    }
+
+    [HttpDelete, Route("merchPrinter/delete")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> DeleteMerchPrinterAsync(DeleteMerchPrinterCommand command)
+    {
+        await _mediator.SendAsync(command).ConfigureAwait(false);
+        
+        return Ok();
+    }
+
+    [HttpGet, Route("merchPrinters")]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetMerchPrintersResponse))]
+    public async Task<IActionResult> GetMerchPrintersAsync([FromQuery] GetMerchPrintersRequest request, CancellationToken cancellationToken)
+    {
+        var response = await _mediator.RequestAsync<GetMerchPrintersRequest, GetMerchPrintersResponse>(request, cancellationToken).ConfigureAwait(false);
+
+        return Ok(response);
     }
 }  

@@ -3,6 +3,7 @@ using Newtonsoft.Json;
 using System.Globalization;
 using SmartTalk.Core.Constants;
 using SmartTalk.Core.Domain.Pos;
+using SmartTalk.Core.Domain.Printer;
 using SmartTalk.Messages.Commands.Pos;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Pos;
@@ -61,10 +62,29 @@ public partial class PosService
         
         await SafetyPlaceOrderAsync(order, store, token, command.IsWithRetry, 0, cancellationToken).ConfigureAwait(false);
 
+        _smartTalkBackgroundJobClient.Enqueue(() => CreateMerchPrinterOrderAsync(command.StoreId, order.Id, cancellationToken));
+
         return new PlacePosOrderResponse
         {
             Data = _mapper.Map<PosOrderDto>(order)
         };
+    }
+
+    public async Task CreateMerchPrinterOrderAsync(int storeId, int orderId, CancellationToken cancellationToken)
+    {
+        Log.Information("storeId:{storeId}, orderId:{orderId}", storeId, orderId);
+        
+        var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(storeId: storeId, isEnabled: true, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+
+        Log.Information("get merch printer:{@merchPrinter}", merchPrinter);
+        
+        await _printerDataProvider.AddMerchPrinterOrderAsync(new MerchPrinterOrder
+        {
+            OrderId = orderId,
+            StoreId = storeId,
+            PrinterMac = merchPrinter?.PrinterMac,
+            PrintDate = DateTimeOffset.Now
+        }, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task UpdatePosOrderAsync(UpdatePosOrderCommand command, CancellationToken cancellationToken)
