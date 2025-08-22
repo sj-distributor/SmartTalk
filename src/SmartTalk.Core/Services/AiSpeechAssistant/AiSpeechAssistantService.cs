@@ -415,6 +415,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private async Task ConnectOpenAiRealTimeSocketAsync(CancellationToken cancellationToken)
     {
         if (_aiSpeechAssistantStreamContext.ShouldForward) return;
+
+        ConfigWebSocketRequestHeader(_mapper.Map<Domain.AISpeechAssistant.AiSpeechAssistant>(_aiSpeechAssistantStreamContext.Assistant));
         
         var url = string.IsNullOrEmpty(_aiSpeechAssistantStreamContext.Assistant.ModelUrl)
             ? AiSpeechAssistantStore.DefaultUrl : _aiSpeechAssistantStreamContext.Assistant.ModelUrl;
