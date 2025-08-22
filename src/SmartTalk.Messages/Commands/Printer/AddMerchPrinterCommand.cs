@@ -7,5 +7,7 @@ namespace SmartTalk.Message.Commands.Printer
         public string PrinterName { get; set; }
 
         public string PrinterMac { get; set; }
+
+        public int StoreId { get; set; }
     }
 }
