@@ -411,6 +411,8 @@ public class SpeechMaticsService : ISpeechMaticsService
         var (extractedOrderItems, deliveryDate) = await ExtractAndMatchOrderItemsFromReportAsync(record.TranscriptionText, historyItems, DateTime.Today, cancellationToken).ConfigureAwait(false);
 
         if (!extractedOrderItems.Any()) return;
+ 
+        var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
 
         var draftOrder = new GenerateAiOrdersRequestDto
         {
@@ -419,8 +421,8 @@ public class SpeechMaticsService : ISpeechMaticsService
             {
                 SoldToId = aiSpeechAssistant.Name,
                 SoldToIds = aiSpeechAssistant.Name,
-                DocumentDate = DateTime.Today,
-                DeliveryDate = deliveryDate.Date,
+                DocumentDate = TimeZoneInfo.ConvertTime(DateTime.Today, pacificZone).Date,
+                DeliveryDate = TimeZoneInfo.ConvertTime(deliveryDate.Date, pacificZone).Date,
                 AiOrderItemDtoList = extractedOrderItems
             }
         };
