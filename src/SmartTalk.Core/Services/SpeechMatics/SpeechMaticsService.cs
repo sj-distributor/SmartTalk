@@ -382,6 +382,9 @@ public class SpeechMaticsService : ISpeechMaticsService
         if (!extractedOrderItems.Any()) return;
         
         var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+        var pacificNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, pacificZone);
+        var pacificDeliveryDate = TimeZoneInfo.ConvertTimeFromUtc(deliveryDate.ToUniversalTime(), pacificZone);
+        
         var draftOrder = new GenerateAiOrdersRequestDto
         {
             AiModel = "SmartTalk",
@@ -389,8 +392,8 @@ public class SpeechMaticsService : ISpeechMaticsService
             {
                 SoldToId = aiSpeechAssistant.Name,
                 SoldToIds = aiSpeechAssistant.Name,
-                DocumentDate = TimeZoneInfo.ConvertTime(DateTime.Today, pacificZone).Date,
-                DeliveryDate = TimeZoneInfo.ConvertTime(deliveryDate.Date, pacificZone).Date,
+                DocumentDate = pacificNow.Date,
+                DeliveryDate = pacificDeliveryDate.Date, 
                 AiOrderItemDtoList = extractedOrderItems
             }
         };
@@ -440,7 +443,7 @@ public class SpeechMaticsService : ISpeechMaticsService
             var parsedItems = JsonSerializer.Deserialize<List<ExtractedOrderItemDto>>(ordersArray.GetRawText(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<ExtractedOrderItemDto>();
             
             var deliveryDateStr = parsedItems.Select(i => i.DeliveryDate).FirstOrDefault(d => !string.IsNullOrEmpty(d));
-            var deliveryDate = DateTime.TryParse(deliveryDateStr, out var dt) ? dt : DateTime.Today.AddDays(1);
+            var deliveryDate = DateTime.TryParse(deliveryDateStr, out var dt) ? DateTime.SpecifyKind(dt, DateTimeKind.Utc) : DateTime.UtcNow.AddDays(1);
             
             foreach (var item in parsedItems)
             {
@@ -459,7 +462,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         catch (Exception ex) 
         { 
             Log.Warning("解析GPT返回JSON失败: {Message}", ex.Message); 
-            return new (new List<AiOrderItemDto>(), DateTime.Today.AddDays(1));
+            return new (new List<AiOrderItemDto>(), DateTime.UtcNow.AddDays(1));
         } 
     }
     
