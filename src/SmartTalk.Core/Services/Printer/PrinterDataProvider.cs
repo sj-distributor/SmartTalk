@@ -13,9 +13,9 @@ namespace SmartTalk.Core.Services.Printer;
 public interface IPrinterDataProvider : IScopedDependency
 {
     Task<List<MerchPrinter>> GetMerchPrintersAsync(string printerMac = null, Guid? token = null,
-        int? agentId = null, int? id = null, bool? isEnabled = null, CancellationToken cancellationToken = default);
+        int? storeId = null, int? id = null, bool? isEnabled = null, CancellationToken cancellationToken = default);
 
-    Task<List<MerchPrinterOrder>> GetMerchPrinterOrdersAsync(Guid? jobToken = null, int? agentId = null, PrintStatus? status = null,
+    Task<List<MerchPrinterOrder>> GetMerchPrinterOrdersAsync(Guid? jobToken = null, int? storeId = null, PrintStatus? status = null,
         DateTimeOffset? endTime = null, string printerMac = null, bool isOrderByPrintDate = false, CancellationToken cancellationToken = default);
 
     Task UpdateMerchPrinterOrderAsync(MerchPrinterOrder merchPrinterOrder, bool forceSave = true, CancellationToken cancellationToken = default);
@@ -34,7 +34,7 @@ public interface IPrinterDataProvider : IScopedDependency
 
     Task DeleteMerchPrinterAsync(MerchPrinter merchPrinter, bool foreSave = true, CancellationToken cancellationToken = default);
 
-    Task<(int, List<MerchPrinterLogDto>)> GetMerchPrinterLogAsync(int agentId, string printerMac = null, DateTimeOffset? startDate = null,
+    Task<(int, List<MerchPrinterLogDto>)> GetMerchPrinterLogAsync(int storeId, string printerMac = null, DateTimeOffset? startDate = null,
         DateTimeOffset? endDate = null, int? code = null, PrintLogType? logType = null, int? pageIndex = null, int? pageSize = null, CancellationToken cancellationToken = default);
 }
 
@@ -52,7 +52,7 @@ public class PrinterDataProvider : IPrinterDataProvider
     }
 
     public async Task<List<MerchPrinter>> GetMerchPrintersAsync(string printerMac = null, Guid? token = null,
-        int? agentId = null, int? id = null, bool? isEnabled = null, CancellationToken cancellationToken = default)
+        int? storeId = null, int? id = null, bool? isEnabled = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<MerchPrinter>();
 
@@ -65,8 +65,8 @@ public class PrinterDataProvider : IPrinterDataProvider
         if (token.HasValue)
             query = query.Where(x => x.Token == token);
 
-        if (agentId.HasValue)
-            query = query.Where(x => x.AgentId == agentId);
+        if (storeId.HasValue)
+            query = query.Where(x => x.StoreId == storeId);
 
         if (isEnabled.HasValue)
             query = query.Where(x => x.IsEnabled == isEnabled);
@@ -74,7 +74,7 @@ public class PrinterDataProvider : IPrinterDataProvider
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
     
-    public async Task<List<MerchPrinterOrder>> GetMerchPrinterOrdersAsync(Guid? jobToken = null, int? agentId = null, PrintStatus? status = null,
+    public async Task<List<MerchPrinterOrder>> GetMerchPrinterOrdersAsync(Guid? jobToken = null, int? storeId = null, PrintStatus? status = null,
         DateTimeOffset? endTime = null, string printerMac = null, bool isOrderByPrintDate = false, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<MerchPrinterOrder>();
@@ -82,8 +82,8 @@ public class PrinterDataProvider : IPrinterDataProvider
         if (jobToken.HasValue)
             query = query.Where(x => x.Id == jobToken);
 
-        if (agentId.HasValue)
-            query = query.Where(x => x.AgentId == agentId);
+        if (storeId.HasValue)
+            query = query.Where(x => x.StoreId == storeId);
 
         if (status.HasValue)
             query = query.Where(x => x.PrintStatus == status);
@@ -160,10 +160,10 @@ public class PrinterDataProvider : IPrinterDataProvider
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<(int, List<MerchPrinterLogDto>)> GetMerchPrinterLogAsync(int agentId, string printerMac = null, DateTimeOffset? startDate = null,
+    public async Task<(int, List<MerchPrinterLogDto>)> GetMerchPrinterLogAsync(int storeId, string printerMac = null, DateTimeOffset? startDate = null,
         DateTimeOffset? endDate = null, int? code = null, PrintLogType? logType = null, int? pageIndex = null, int? pageSize = null, CancellationToken cancellationToken = default)
     {
-        var query = _repository.Query<MerchPrinterLog>().Where(x => x.AgentId == agentId);
+        var query = _repository.Query<MerchPrinterLog>().Where(x => x.StoreId == storeId);
 
         if (!string.IsNullOrEmpty(printerMac))
             query = query.Where(x => x.PrinterMac == printerMac);

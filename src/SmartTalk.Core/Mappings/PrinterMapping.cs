@@ -31,7 +31,7 @@ public class PrinterMapping : Profile
             .ForMember(x => x.Code, dest => dest.MapFrom(y => y.GetCode()))
             .ForMember(x => x.CodeDescription, dest => dest.MapFrom(y => y.GetCodeDescription()))
             .ForMember(x => x.Id, dest => dest.MapFrom(y => Guid.NewGuid()))
-            .ForMember(x => x.AgentId, dest => dest.MapFrom(y => y.MerchPrinterOrderDto.AgentId))
+            .ForMember(x => x.StoreId, dest => dest.MapFrom(y => y.MerchPrinterOrderDto.StoreId))
             .ForMember(x => x.OrderId, dest => dest.MapFrom(y => y.MerchPrinterOrderDto.OrderId))
             .ForMember(x => x.PrintLogType, dest => dest.MapFrom(y => y.IsPrintError() ? PrintLogType.PrintError : PrintLogType.Print))
             ;

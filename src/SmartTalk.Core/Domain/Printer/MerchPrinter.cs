@@ -17,8 +17,8 @@ public class MerchPrinter : IEntity
     [Column("id")]
     public int Id { get; set; }
 
-    [Column("agent_id")]
-    public int AgentId { get; set; }
+    [Column("store_id")]
+    public int StoreId { get; set; }
 
     [Column("printer_name")]
     public string PrinterName { get; set; }

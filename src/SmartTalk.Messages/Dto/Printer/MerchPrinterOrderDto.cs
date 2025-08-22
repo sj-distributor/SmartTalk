@@ -6,7 +6,7 @@ public class MerchPrinterOrderDto
 {
     public Guid Id { get; set; }
         
-    public int AgentId { get; set; }
+    public int StoreId { get; set; }
     
     public int OrderId { get; set; }
 

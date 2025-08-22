@@ -11,13 +11,16 @@ using SixLabors.Fonts;
 using System.Text;
 using Aliyun.OSS;
 using AutoMapper;
+using DocumentFormat.OpenXml.Office2010.ExcelAc;
 using Newtonsoft.Json;
 using Serilog;
 using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.AliYun;
+using SmartTalk.Core.Services.Pos;
 using SmartTalk.Message.Commands.Printer;
 using SmartTalk.Message.Events.Printer;
 using SmartTalk.Messages.Commands.Printer;
+using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Printer;
 using SmartTalk.Messages.Enums.Printer;
 using SmartTalk.Messages.Events.Printer;
@@ -65,15 +68,15 @@ public class PrinterService : IPrinterService
     private readonly IMapper _mapper;
     private readonly ICacheManager _cacheManager;
     private readonly IAliYunOssService _ossService;
-    private readonly IAgentDataProvider _agentDataProvider;
+    private readonly IPosDataProvider _posDataProvider;
     private readonly IPrinterDataProvider _printerDataProvider;
 
-    public PrinterService(IMapper mapper,ICacheManager cacheManager, IAliYunOssService ossService, IAgentDataProvider agentDataProvider, IPrinterDataProvider printerDataProvider)
+    public PrinterService(IMapper mapper,ICacheManager cacheManager, IAliYunOssService ossService, IPosDataProvider posDataProvider, IPrinterDataProvider printerDataProvider)
     {
         _mapper = mapper;
         _cacheManager = cacheManager;
         _ossService = ossService;
-        _agentDataProvider = agentDataProvider;
+        _posDataProvider = posDataProvider;
         _printerDataProvider = printerDataProvider;
     }
 
@@ -109,14 +112,14 @@ public class PrinterService : IPrinterService
     
     private async Task<MerchPrinterOrder> GetMerchPrinterJobAsync(MerchPrinter merchPrinter, CancellationToken cancellationToken)
     {
-        var agent = await _agentDataProvider.GetAgentByIdAsync(merchPrinter.AgentId, cancellationToken).ConfigureAwait(false);
+        var store = await _posDataProvider.GetPosCompanyStoreDetailAsync(merchPrinter.StoreId, cancellationToken).ConfigureAwait(false);
         
-        Log.Information("Agent: {@agent}", agent);
+        Log.Information("Store: {@agent}", store);
         
-        if (agent is null) return null;
+        if (store is null) return null;
         
         if (!merchPrinter.IsEnabled)
-            return (await _printerDataProvider.GetMerchPrinterOrdersAsync(null, merchPrinter.AgentId,  PrintStatus.Waiting, DateTimeOffset.Now, merchPrinter.PrinterMac, true, cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+            return (await _printerDataProvider.GetMerchPrinterOrdersAsync(null, merchPrinter.StoreId,  PrintStatus.Waiting, DateTimeOffset.Now, merchPrinter.PrinterMac, true, cancellationToken).ConfigureAwait(false)).FirstOrDefault();
 
         var merchPrinterOrders = await  _printerDataProvider.GetMerchPrinterOrdersAsync(isOrderByPrintDate: true, cancellationToken: cancellationToken).ConfigureAwait(false);
         
@@ -138,7 +141,53 @@ public class PrinterService : IPrinterService
         
         if (!string.IsNullOrEmpty(merchPrinterOrder.ImageUrl)) return merchPrinterOrder.ImageUrl;
 
-        var img = await RenderReceiptAsync().ConfigureAwait(false);
+        var order = await _posDataProvider.GetPosOrderByIdAsync(orderId: merchPrinterOrder.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var orderItems = JsonConvert.DeserializeObject<List<PhoneCallOrderItem>>(order.Items);
+
+        var productIds = new List<string>();
+        
+        foreach (var orderItem in orderItems)
+        {
+            productIds.Add(orderItem.ProductId.ToString());
+        }
+
+        if (productIds.Count > 0)
+        {
+            var products = await _posDataProvider.GetPosProductsAsync(productIds: productIds, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            Log.Information("Products:{@products}", products);
+            
+            foreach (var orderItem in orderItems)
+            {
+                var product = products.FirstOrDefault(x => x.ProductId == orderItem.ProductId.ToString());
+
+                if (product != null)
+                    orderItem.ProductName = product.Names;
+            }
+        }
+
+        var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(printerMac: merchPrinterOrder.PrinterMac,
+            storeId: merchPrinterOrder.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+        
+        var store = await _posDataProvider.GetPosCompanyStoreDetailAsync(order.StoreId, cancellationToken).ConfigureAwait(false);
+        
+        var img = await RenderReceiptAsync("1",  
+            JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(store.Names).GetValueOrDefault("en")?.GetValueOrDefault("name"),
+            store.Address,
+            store.PhoneNums,
+            order.CreatedDate.ToString("yyyy-mm-dd hh:mm:ss"),
+            merchPrinter.PrinterName,
+            order.Type.ToString(),
+            order.Name,
+            order.Phone,
+            order.Address,
+            order.Notes,
+            orderItems,
+            order.SubTotal.ToString(),
+            order.Tax.ToString(),
+            order.Total.ToString(),
+            DateTime.Now.ToString("yyyy-mm-dd hh:mm:ss")).ConfigureAwait(false);
        
         var imageKey = Guid.NewGuid().ToString();
         
@@ -262,7 +311,7 @@ public class PrinterService : IPrinterService
         var merchPrinterOrder = new MerchPrinterOrder
         {
             OrderId = 0,
-            AgentId = command.AgentId,
+            StoreId = command.StoreId,
             PrinterMac = command.PrinterMac,
             PrintDate = DateTimeOffset.Now
         };
@@ -288,10 +337,10 @@ public class PrinterService : IPrinterService
         if (merchPrinter == null)
             return null;
 
-        return new MerchPrinterLog()
+        return new MerchPrinterLog
         {
             Id = Guid.NewGuid(),
-            AgentId = merchPrinter.AgentId,
+            StoreId = merchPrinter.StoreId,
             OrderId = null,
             PrinterMac = @event.PrinterMac,
             PrintLogType = PrintLogType.StatusChange,
@@ -344,7 +393,10 @@ public class PrinterService : IPrinterService
         await _printerDataProvider.AddMerchPrinterLogAsync(merchPrinterLog, cancellationToken);
     }
 
-    private async Task<Image<Rgba32>> RenderReceiptAsync()
+    private async Task<Image<Rgba32>> RenderReceiptAsync(string printNumber, string restaurantName, string restaurantAddress,
+        string restaurantPhone, string orderTime, string printerName, string orderType, string guestName, 
+        string guestPhone, string guestAddress, string orderNotes, List<PhoneCallOrderItem> orderItems,
+        string subtotal, string tax, string total, string printTime)
     {
         var width = 512;
         var textColor = Color.Black;
@@ -613,39 +665,45 @@ public class PrinterService : IPrinterService
         
         void DrawDashedBoldLine() => DrawLine(GenerateFullLine('-', fontBold), fontBold);
 
-        DrawLine("#44", fontNormal);
-        DrawLine("Call-in Order",  CreateFont(45, true), spacing: 50, centerAlign: true);
-        DrawLine("chongqing hot", fontMaxSmall, centerAlign: true);
-        DrawLine("21385 S Western Ave, Torrance, CA 90501,USA", fontMaxSmall);
-        DrawLine("(902)-316-2148", fontMaxSmall, centerAlign: true);
+        DrawLine($"#{printNumber}", fontNormal);
+        DrawLine($"{orderType} Order",  CreateFont(45, true), spacing: 50, centerAlign: true);
+        DrawLine($"{restaurantName}", fontMaxSmall, centerAlign: true);
+        DrawLine($"{restaurantAddress}", fontMaxSmall);
+        DrawLine($"{restaurantPhone}", fontMaxSmall, centerAlign: true);
         
         DrawDashedBoldLine();
         
-        DrawItemLine("07/05/2025 12:14 AM", "Delivery", fontSmall);
-        DrawItemLine("shouju", "AiPhoneOrder", fontSmall);
+        DrawItemLine($"{orderTime}", $"{orderType}", fontSmall);
+        DrawItemLine($"{printerName}", "AiPhoneOrder", fontSmall);
         
         DrawSolidLine();
         
-        DrawLine("新的name", fontSmall);
-        DrawLine("(902)-316-2140", fontSmall);
-        DrawLine("625 Vista Way, Milpitas, CA", fontSmall);
+        DrawLine($"{guestName}", fontSmall);
+        DrawLine($"{guestPhone}", fontSmall);
+        DrawLine($"{guestAddress}", fontSmall);
         
         DrawSolidLine();
         
-        DrawLine("Order Remark:订单备注", fontNormal);
+        DrawLine($"Order Remark:{orderNotes}", fontNormal);
         
         DrawDashedLine();
         
         DrawItemLineThreeColsWrapped("QTY", "Items", "Total", fontSize: 25, bold: true, backSpacing: 15);
-        DrawItemLineThreeColsWrapped("1", "Pan Fried Spaghetti w. Shredded Beef in Black Pepper Sauce 黑椒牛柳炒意粉", "$15.00");
-        DrawItemLineThreeColsWrapped("1", "Spicy Beef Tripe & Tendon Noodle in Soup 香辣牛肚牛筋汤面", "$10.00",new Dictionary<string, int>{{"Kumquat Tea($15.00) 金桔茶", 0}, {"Kumquat Tea($15.00) 金桔茶2", 2}});
-        DrawItemLineThreeColsWrapped("1", "Kumquat Tea 金桔茶", "$45.00", new Dictionary<string, int>{{"Kumquat($15.00) 金桔茶", 0}});
+       
+        foreach (var orderItem in orderItems)
+        {
+            var res = orderItem.OrderItemModifiers.Select(x => (
+                $"{orderItem.ProductNames.GetValueOrDefault("en")?.GetValueOrDefault("posName")} {orderItem.ProductNames.GetValueOrDefault("cn")?.GetValueOrDefault("posName")}",
+                orderItem.Quantity)).ToDictionary(x => x.Item1, x => x.Item2);
+            
+            DrawItemLineThreeColsWrapped($"{orderItem.Quantity}", $"{orderItem.ProductNames.GetValueOrDefault("en")?.GetValueOrDefault("posName")} {orderItem.ProductNames.GetValueOrDefault("cn")?.GetValueOrDefault("posName")}", $"${orderItem.Price}", res);
+        }
         
         DrawDashedLine();
         
-        DrawItemLine("Subtotal", "$70.00", fontSmall);
-        DrawItemLine("Tax", "$12.00", fontSmall);
-        DrawItemLine("Total", "$82.00", fontNormal);
+        DrawItemLine("Subtotal", $"{subtotal}", fontSmall);
+        DrawItemLine("Tax", $"${tax}", fontSmall);
+        DrawItemLine("Total", $"${total}", fontNormal);
         
         DrawDashedLine();
         
@@ -655,8 +713,8 @@ public class PrinterService : IPrinterService
         
         DrawLine("", fontNormal, centerAlign: true);
         DrawLine("", fontNormal, centerAlign: true);
-        DrawLine("Print Time 07/09/2025 11:48 PM", fontSmall, centerAlign: true);
-        DrawLine("Powered by SmartTalk AI", fontSmall, centerAlign: true);
+        DrawLine($"Print Time {printTime}", fontSmall, centerAlign: true);
+        DrawLine($"Powered by SmartTalk AI", fontSmall, centerAlign: true);
 
         img.Mutate(x => x.Crop(new Rectangle(0, 0, width, y + 10)));
         return img;
@@ -665,7 +723,7 @@ public class PrinterService : IPrinterService
     public async Task<GetMerchPrintersResponse> GetMerchPrintersAsync(GetMerchPrintersRequest request, CancellationToken cancellationToken)
     {
         var printers = await _printerDataProvider.GetMerchPrintersAsync(
-            agentId: request.AgentId, cancellationToken: cancellationToken).ConfigureAwait(false);
+            storeId: request.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var result = _mapper.Map<List<MerchPrinterDto>>(printers);
 
@@ -726,7 +784,7 @@ public class PrinterService : IPrinterService
         if (merchPrinter.IsEnabled)
         {
             var enabledPrinters = await _printerDataProvider.GetMerchPrintersAsync(
-                agentId: merchPrinter.AgentId, id: merchPrinter.Id, isEnabled: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+                storeId: merchPrinter.StoreId, id: merchPrinter.Id, isEnabled: true, cancellationToken: cancellationToken).ConfigureAwait(false);
 
             if (enabledPrinters.Count > 0)
             {

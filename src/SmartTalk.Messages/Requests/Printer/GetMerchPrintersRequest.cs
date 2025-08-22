@@ -5,7 +5,7 @@ namespace SmartTalk.Messages.Requests.Printer
 {
     public class GetMerchPrintersRequest: IRequest
     {
-        public int AgentId { get; set; }
+        public int StoreId { get; set; }
     }
 
     public class GetMerchPrintersResponse : IResponse
