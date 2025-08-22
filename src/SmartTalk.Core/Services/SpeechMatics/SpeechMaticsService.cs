@@ -1,5 +1,6 @@
 using Twilio;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using AutoMapper;
 using Google.Cloud.Translation.V2;
 using Serilog;
@@ -405,7 +406,6 @@ public class SpeechMaticsService : ISpeechMaticsService
         var askInfoResponse = await _salesClient.GetAskInfoDetailListByCustomerAsync(new GetAskInfoDetailListByCustomerRequestDto { CustomerNumbers = new List<string> { aiSpeechAssistant.Name } }, cancellationToken).ConfigureAwait(false);
         Log.Information("Ask info items: {@askInfoItems}", askInfoResponse);
 
-
         List<(string Material, string MaterialDesc)> historyItems;
 
         if (askInfoResponse?.Data != null && askInfoResponse.Data.Any())
@@ -427,7 +427,9 @@ public class SpeechMaticsService : ISpeechMaticsService
         if (!extractedOrderItems.Any()) return;
  
         var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
-
+        var pacificNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, pacificZone);
+        var pacificDeliveryDate = TimeZoneInfo.ConvertTimeFromUtc(deliveryDate.ToUniversalTime(), pacificZone);
+        
         var draftOrder = new GenerateAiOrdersRequestDto
         {
             AiModel = "SmartTalk",
@@ -435,8 +437,8 @@ public class SpeechMaticsService : ISpeechMaticsService
             {
                 SoldToId = aiSpeechAssistant.Name,
                 SoldToIds = aiSpeechAssistant.Name,
-                DocumentDate = TimeZoneInfo.ConvertTime(DateTime.Today, pacificZone).Date,
-                DeliveryDate = TimeZoneInfo.ConvertTime(deliveryDate.Date, pacificZone).Date,
+                DocumentDate = pacificNow.Date,
+                DeliveryDate = pacificDeliveryDate.Date, 
                 AiOrderItemDtoList = extractedOrderItems
             }
         };
@@ -453,16 +455,17 @@ public class SpeechMaticsService : ISpeechMaticsService
         var materialListText = string.Join("\n", historyItems.Select(x => $"{x.MaterialDesc} ({x.Material})"));
         
         var systemPrompt =
-            "你是一名订单分析助手。请从下面的客户分析报告文本中提取所有下单的物料名称和数量，并且用历史物料列表匹配每个物料的materialNumber。" +
+            "你是一名订单分析助手。请从下面的客户分析报告文本中提取所有下单的物料名称、数量、单位，并且用历史物料列表匹配每个物料的materialNumber。" +
             "如果报告中提到了预约送货时间，请提取送货时间（格式yyyy-MM-dd）。" +
             "请严格返回一个 JSON 对象，顶层只包含一个字段 \"orders\"，其值是一个数组。" +
             "数组中的每个元素包含以下字段：\n" +
             "- name: 物料名称\n" +
             "- quantity: 数量（整数或小数）\n" +
-            "- materialNumber: 对应的物料编码\n" +
-            "- deliveryDate: 客户预约送货日期（如果报告中没有则用空字符串）\n\n" +
+            "- unit: 客户提到的单位，比如 \"case\" 表示箱，\"pc\" 表示件，如果未提到则为空字符串\n" +
+            "- materialNumber: 对应的物料编码（基础数字部分即可，比如11001）\n" +
+            "- deliveryDate: 客户预约送货日期（如果报告中没有则用空字符串）\n" +
             "输出示例：\n" +
-            "{\n  \"orders\": [\n    { \"name\": \"雞胸肉\", \"quantity\": 1, \"materialNumber\": \"000000000010010253\", \"deliveryDate\": \"2025-08-20\" }\n  ]\n}\n\n" +
+            "{\n  \"orders\": [\n    { \"name\": \"雞胸肉\", \"quantity\": 1, \"unit\": \"case\", \"materialNumber\": \"000000000010010253\", \"deliveryDate\": \"2025-08-20\" }\n  ]\n}\n\n" +
             materialListText + "\n\n" +
             "客户分析报告文本：\n" + reportText + "\n\n" +
             "注意：必须严格输出 JSON，对象顶层字段必须是 \"orders\"，不要有其他字段或额外说明。";
@@ -485,16 +488,26 @@ public class SpeechMaticsService : ISpeechMaticsService
             var parsedItems = JsonSerializer.Deserialize<List<ExtractedOrderItemDto>>(ordersArray.GetRawText(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<ExtractedOrderItemDto>();
             
             var deliveryDateStr = parsedItems.Select(i => i.DeliveryDate).FirstOrDefault(d => !string.IsNullOrEmpty(d));
-            var deliveryDate = DateTime.TryParse(deliveryDateStr, out var dt) ? dt : DateTime.Today.AddDays(1);
+            var deliveryDate = DateTime.TryParse(deliveryDateStr, out var dt) ? DateTime.SpecifyKind(dt, DateTimeKind.Utc) : DateTime.UtcNow.AddDays(1);
             
-            var aiOrderItems = _mapper.Map<List<AiOrderItemDto>>(parsedItems);
+            foreach (var item in parsedItems)
+            {
+                item.MaterialNumber = MatchMaterialNumber(item.Name, item.MaterialNumber, item.Unit, historyItems);
+            }
+            
+            var aiOrderItems = parsedItems.Select(i => new AiOrderItemDto
+            {
+                MaterialNumber = i.MaterialNumber,
+                AiMaterialDesc = i.Name,
+                MaterialQuantity = i.Quantity
+            }).ToList();
 
             return (aiOrderItems, deliveryDate);
         }
         catch (Exception ex) 
         { 
             Log.Warning("解析GPT返回JSON失败: {Message}", ex.Message); 
-            return new (new List<AiOrderItemDto>(), DateTime.Today.AddDays(1));
+            return new (new List<AiOrderItemDto>(), DateTime.UtcNow.AddDays(1));
         } 
     }
     
@@ -505,5 +518,32 @@ public class SpeechMaticsService : ISpeechMaticsService
             "zh" or "zh-CN" or "zh-TW" => TranscriptionLanguage.Chinese,
             _ => TranscriptionLanguage.English
         };
+    }
+    
+    private string MatchMaterialNumber(string itemName, string baseNumber, string unit, List<(string Material, string MaterialDesc)> historyItems)
+    {
+        var candidates = historyItems.Where(x => x.MaterialDesc != null && x.MaterialDesc.Contains(itemName, StringComparison.OrdinalIgnoreCase)).Select(x => x.Material).ToList();
+        Log.Information("Candidate material code list: {@Candidates}", candidates);
+        
+        if (!candidates.Any()) return null; 
+        if (candidates.Count == 1) return candidates.First();
+        
+        if (!string.IsNullOrWhiteSpace(unit))
+        {
+            var u = unit.ToLower();
+            if (u.Contains("case") || u.Contains("箱"))
+            {
+                var csItem = candidates.FirstOrDefault(x => x.EndsWith("CS", StringComparison.OrdinalIgnoreCase));
+                if (!string.IsNullOrEmpty(csItem)) return csItem;
+            }
+            else
+            {
+                var pcItem = candidates.FirstOrDefault(x => x.EndsWith("PC", StringComparison.OrdinalIgnoreCase));
+                if (!string.IsNullOrEmpty(pcItem)) return pcItem;
+            }
+        }
+        
+        var pureNumber = candidates.FirstOrDefault(x => Regex.IsMatch(x, @"^\d+$"));
+        return pureNumber ?? candidates.First();
     }
 }
