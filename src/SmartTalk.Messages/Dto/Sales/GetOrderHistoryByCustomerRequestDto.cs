@@ -13,6 +13,8 @@ public class GetOrderHistoryByCustomerResponseDto : SalesResponseDto
 public class SalesOrderHistoryDto
 {
     public string MaterialNumber { get; set; }
+    
+    public string MaterialDescription{ get ; set; }
      
     public string SalesUnit { get; set; }
      
