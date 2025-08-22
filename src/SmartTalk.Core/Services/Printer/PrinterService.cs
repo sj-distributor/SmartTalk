@@ -121,7 +121,7 @@ public class PrinterService : IPrinterService
         if (!merchPrinter.IsEnabled)
             return (await _printerDataProvider.GetMerchPrinterOrdersAsync(null, merchPrinter.StoreId,  PrintStatus.Waiting, DateTimeOffset.Now, merchPrinter.PrinterMac, true, cancellationToken).ConfigureAwait(false)).FirstOrDefault();
 
-        var merchPrinterOrders = await  _printerDataProvider.GetMerchPrinterOrdersAsync(isOrderByPrintDate: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var merchPrinterOrders = await  _printerDataProvider.GetMerchPrinterOrdersAsync(null, merchPrinter.StoreId,  PrintStatus.Waiting, DateTimeOffset.Now, null, true, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         foreach (var merchPrinterOrder in merchPrinterOrders)
         {
