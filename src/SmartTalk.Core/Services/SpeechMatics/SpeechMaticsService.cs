@@ -410,7 +410,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         var materialListText = string.Join("\n", historyItems.Select(x => $"{x.MaterialDesc} ({x.Material})"));
         
         var systemPrompt =
-            "你是一名订单分析助手。请从下面的客户分析报告文本中提取所有下单的物料名称、数量、单位，并且用历史物料列表匹配每个物料的materialNumber。" +
+            "你是一名订单分析助手。请从下面的客户分析报告文本中提取所有下单的物料名称、数量、单位，并且用历史物料列表尽力匹配每个物料的materialNumber。" +
             "如果报告中提到了预约送货时间，请提取送货时间（格式yyyy-MM-dd）。" +
             "请严格返回一个 JSON 对象，顶层只包含一个字段 \"orders\"，其值是一个数组。" +
             "数组中的每个元素包含以下字段：\n" +
@@ -421,14 +421,14 @@ public class SpeechMaticsService : ISpeechMaticsService
             "- deliveryDate: 客户预约送货日期（如果报告中没有则用空字符串）\n" +
             "输出示例：\n" +
             "{\n  \"orders\": [\n    { \"name\": \"雞胸肉\", \"quantity\": 1, \"unit\": \"case\", \"materialNumber\": \"000000000010010253\", \"deliveryDate\": \"2025-08-20\" }\n  ]\n}\n\n" +
-            materialListText + "\n\n" +
-            "客户分析报告文本：\n" + reportText + "\n\n" +
+            "历史物料列表：\n" + materialListText + "\n\n" +
             "注意：必须严格输出 JSON，对象顶层字段必须是 \"orders\"，不要有其他字段或额外说明。";
         Log.Information("Sending prompt to GPT: {Prompt}", systemPrompt);
 
         var messages = new List<ChatMessage>
         {
             new SystemChatMessage(systemPrompt),
+            new UserChatMessage("客户分析报告文本：\n" + reportText + "\n\n")
         };
         
         var completion = await client.CompleteChatAsync(messages, new ChatCompletionOptions { ResponseModalities = ChatResponseModalities.Text, ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat() }, cancellationToken).ConfigureAwait(false);
