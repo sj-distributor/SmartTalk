@@ -72,7 +72,10 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task<(Domain.AISpeechAssistant.AiSpeechAssistant Assistant, Agent Agent)> GetAiSpeechAssistantByAgentIdAsync(int agentId, CancellationToken cancellationToken);
 
     Task<Sales> GetCallInSalesByNameAsync(string assistantName, SalesCallType? type, CancellationToken cancellationToken);
-
+    
+    
+    Task<List<AiSpeechAssistantInboundRoute>> GetAiSpeechAssistantInboundRouteAsync(string callerNumber, string didNumber, CancellationToken cancellationToken);
+    
     Task<AiSpeechAssistantUserProfile> GetAiSpeechAssistantUserProfileAsync(int assistantId, string callerNumber, CancellationToken cancellationToken);
 }
 
@@ -377,6 +380,19 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
         var result = await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
 
         return (result?.assistant, result?.agent);
+    }
+    
+    public async Task<List<AiSpeechAssistantInboundRoute>> GetAiSpeechAssistantInboundRouteAsync(string callerNumber,
+        string didNumber, CancellationToken cancellationToken)
+    {
+        var routes = await _repository.Query<AiSpeechAssistantInboundRoute>()
+            .Where(x => x.To == didNumber)
+            .OrderBy(x => x.Priority)
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+
+        var specifyCallerNumber = routes.Where(x => x.From == callerNumber).OrderBy(x => x.Priority).ToList();
+
+        return specifyCallerNumber.Count != 0 ? specifyCallerNumber : routes;
     }
 
     public async Task<Sales> GetCallInSalesByNameAsync(string assistantName, SalesCallType? type,
