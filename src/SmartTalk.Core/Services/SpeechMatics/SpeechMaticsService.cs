@@ -1,3 +1,6 @@
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using AutoMapper;
 using Serilog;
 using SmartTalk.Core.Ioc;
 using Microsoft.IdentityModel.Tokens;
@@ -21,7 +24,9 @@ using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
+using SmartTalk.Messages.Dto.Sales;
 using SmartTalk.Messages.Enums.Agent;
+using SmartTalk.Messages.Enums.Sales;
 using Twilio;
 using Twilio.Rest.Api.V2010.Account;
 
@@ -34,8 +39,10 @@ public interface ISpeechMaticsService : IScopedDependency
 
 public class SpeechMaticsService : ISpeechMaticsService
 {
-    private readonly  IWeChatClient _weChatClient;
-    private  readonly IFfmpegService _ffmpegService;
+    private readonly IMapper _mapper;
+    private readonly ISalesClient _salesClient;
+    private readonly IWeChatClient _weChatClient;
+    private readonly IFfmpegService _ffmpegService;
     private readonly OpenAiSettings _openAiSettings;
     private readonly TwilioSettings _twilioSettings;
     private readonly ISmartiesClient _smartiesClient;
@@ -47,6 +54,8 @@ public class SpeechMaticsService : ISpeechMaticsService
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
     
     public SpeechMaticsService(
+        IMapper mapper,
+        ISalesClient salesClient,
         IWeChatClient weChatClient,
         IFfmpegService ffmpegService,
         OpenAiSettings openAiSettings,
@@ -59,6 +68,8 @@ public class SpeechMaticsService : ISpeechMaticsService
         ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient,
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
+        _mapper = mapper;
+        _salesClient = salesClient;
         _weChatClient = weChatClient;
         _ffmpegService = ffmpegService;
         _openAiSettings = openAiSettings;
@@ -135,19 +146,10 @@ public class SpeechMaticsService : ISpeechMaticsService
 
         var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
-
+        
+        var messages = await ConfigureRecordAnalyzePromptAsync(agent, aiSpeechAssistant, callFrom ?? "", currentTime, audioContent, cancellationToken);
+        
         ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
-
-        var audioData = BinaryData.FromBytes(audioContent);
-        List<ChatMessage> messages =
-        [
-            new SystemChatMessage(string.IsNullOrEmpty(aiSpeechAssistant?.CustomRecordAnalyzePrompt)
-                ? "你是一名電話錄音的分析員，通過聽取錄音內容和語氣情緒作出精確分析，冩出一份分析報告。\n\n分析報告的格式：交談主題：xxx\n\n 來電號碼：#{call_from}\n\n 內容摘要:xxx \n\n 客人情感與情緒: xxx \n\n 待辦事件: \n1.xxx\n2.xxx \n\n 客人下單內容(如果沒有則忽略)：1. 牛肉(1箱)\n2.雞腿肉(1箱)".Replace("#{call_from}", callFrom ?? "")
-                : aiSpeechAssistant.CustomRecordAnalyzePrompt.Replace("#{call_from}", callFrom ?? "").Replace("#{current_time}", currentTime)),
-            new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
-            new UserChatMessage("幫我根據錄音生成分析報告：")
-        ];
-
         ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
 
         ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
@@ -156,6 +158,8 @@ public class SpeechMaticsService : ISpeechMaticsService
         record.Status = PhoneOrderRecordStatus.Sent;
         record.TranscriptionText = completion.Content.FirstOrDefault()?.Text ?? "";
 
+        await MultiScenarioCustomProcessingAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
+        
         if (agent.SourceSystem == AgentSourceSystem.Smarties)
             await CallBackSmartiesRecordAsync(agent, record, cancellationToken).ConfigureAwait(false);
 
@@ -187,7 +191,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         {
             if (agent.IsWecomMessageOrder && aiSpeechAssistant != null)
             {
-                var messageNumber = await SendAgentMessageRecordAsync(agent, record.Id, aiSpeechAssistant.GroupKey, cancellationToken);
+                var messageNumber = await SendAgentMessageRecordAsync(agent, record.Id, aiSpeechAssistant.GroupKey, cancellationToken).ConfigureAwait(false);
                 message = $"【第{messageNumber}條】\n" + message;
             }
 
@@ -283,5 +287,216 @@ public class SpeechMaticsService : ISpeechMaticsService
         Log.Information("Structure diarization results : {@speakInfos}", speakInfos);
         
         return speakInfos;
+    }
+    
+    private async Task<List<ChatMessage>> ConfigureRecordAnalyzePromptAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, string callFrom, string currentTime, byte[] audioContent, CancellationToken cancellationToken) 
+    {
+        var askItemsJson = string.Empty;
+
+        if (agent.Type == AgentType.Sales)
+        {
+            var sales = await _aiSpeechAssistantDataProvider.GetCallInSalesByNameAsync(aiSpeechAssistant.Name, SalesCallType.CallIn, cancellationToken).ConfigureAwait(false);
+            Log.Information("Sales fetch result: {@Sales}", sales);
+
+            if (sales != null)
+            {
+                var requestDto = new GetAskInfoDetailListByCustomerRequestDto
+                {
+                    CustomerNumbers = new List<string> { aiSpeechAssistant.Name }
+                };
+
+                var askedItems = await _salesClient.GetAskInfoDetailListByCustomerAsync(requestDto, cancellationToken).ConfigureAwait(false);
+                
+                if (askedItems?.Data == null || !askedItems.Data.Any())
+                {
+                    Log.Warning("Sales API 返回空数据，客户：{Customer}", aiSpeechAssistant.Name);
+                    
+                    askedItems = new GetAskInfoDetailListByCustomerResponseDto { Data = new List<VwAskDetail>() };
+                }
+
+                var topItems = askedItems.Data.OrderByDescending(x => x.ValidAskQty).Take(60).ToList();
+
+                var simplifiedItems = topItems.Select(x => new
+                {
+                    name = x.MaterialDesc,
+                    quantity = x.ValidAskQty,
+                    materialNumber = x.Material
+                }).ToList();
+                
+                askItemsJson = JsonSerializer.Serialize(simplifiedItems, new JsonSerializerOptions { WriteIndented = true });
+                Log.Information("Serialized AskItems JSON: {AskItemsJson}", askItemsJson);
+            }
+        }
+
+        var audioData = BinaryData.FromBytes(audioContent);
+            List<ChatMessage> messages =
+            [
+                new SystemChatMessage(string.IsNullOrEmpty(aiSpeechAssistant?.CustomRecordAnalyzePrompt)
+                    ? "你是一名電話錄音的分析員，通過聽取錄音內容和語氣情緒作出精確分析，冩出一份分析報告。\n\n分析報告的格式：交談主題：xxx\n\n 來電號碼：#{call_from}\n\n 內容摘要:xxx \n\n 客人情感與情緒: xxx \n\n 待辦事件: \n1.xxx\n2.xxx \n\n 客人下單內容(如果沒有則忽略)：1. 牛肉(1箱)\n2.雞腿肉(1箱)".Replace("#{call_from}", callFrom ?? "")
+                    : aiSpeechAssistant.CustomRecordAnalyzePrompt.Replace("#{call_from}", callFrom ?? "").Replace("#{current_time}", currentTime).Replace("#{askItemsJson}", askItemsJson ?? "")),
+                new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
+                new UserChatMessage("幫我根據錄音生成分析報告：")
+            ];
+
+            return messages;
+        }
+
+    private async Task MultiScenarioCustomProcessingAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, PhoneOrderRecord record, CancellationToken cancellationToken) 
+    { 
+        switch (agent.Type) 
+        { 
+            case AgentType.Sales: 
+                if (!string.IsNullOrEmpty(record.TranscriptionText)) 
+                { 
+                    await HandleSalesScenarioAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
+                }
+                break; 
+        } 
+    }
+    
+    private async Task HandleSalesScenarioAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, PhoneOrderRecord record, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(record.TranscriptionText)) return;
+
+        var askInfoResponse = await _salesClient.GetAskInfoDetailListByCustomerAsync(new GetAskInfoDetailListByCustomerRequestDto { CustomerNumbers = new List<string> { aiSpeechAssistant.Name } }, cancellationToken).ConfigureAwait(false);
+        Log.Information("Ask info items: {@askInfoItems}", askInfoResponse);
+
+        List<(string Material, string MaterialDesc)> historyItems;
+
+        if (askInfoResponse?.Data != null && askInfoResponse.Data.Any())
+        {
+            historyItems = askInfoResponse.Data.Where(x => !string.IsNullOrWhiteSpace(x.Material)).Select(x => (x.Material, x.MaterialDesc)).ToList();
+        }
+        else
+        {
+            var orderHistoryResponse = await _salesClient.GetOrderHistoryByCustomerAsync(new GetOrderHistoryByCustomerRequestDto { CustomerNumber = aiSpeechAssistant.Name }, cancellationToken).ConfigureAwait(false);
+            Log.Information("Order history items: {@orderHistoryItems}", orderHistoryResponse);
+
+            historyItems = orderHistoryResponse?.Data?.Where(x => !string.IsNullOrWhiteSpace(x.MaterialNumber)).Select(x => (x.MaterialNumber, x.MaterialDescription)).ToList() ?? new List<(string Material, string MaterialDesc)>();
+        }
+
+        Log.Information("HistoryItems items: {@historyItems}", historyItems);
+        
+        var (extractedOrderItems, deliveryDate) = await ExtractAndMatchOrderItemsFromReportAsync(record.TranscriptionText, historyItems, DateTime.Today, cancellationToken).ConfigureAwait(false);
+
+        if (!extractedOrderItems.Any()) return;
+        
+        var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+        var pacificNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, pacificZone);
+        var pacificDeliveryDate = TimeZoneInfo.ConvertTimeFromUtc(deliveryDate.ToUniversalTime(), pacificZone);
+        
+        var draftOrder = new GenerateAiOrdersRequestDto
+        {
+            AiModel = "SmartTalk",
+            AiOrderInfoDto = new AiOrderInfoDto
+            {
+                SoldToId = aiSpeechAssistant.Name,
+                SoldToIds = aiSpeechAssistant.Name,
+                DocumentDate = pacificNow.Date,
+                DeliveryDate = pacificDeliveryDate.Date, 
+                AiOrderItemDtoList = extractedOrderItems
+            }
+        };
+        Log.Information("DraftOrder content: {@DraftOrder}", draftOrder);
+
+        var response = await _salesClient.GenerateAiOrdersAsync(draftOrder, cancellationToken).ConfigureAwait(false);
+        Log.Information("Generate Ai Order response: {@response}", response);
+        
+        if (response?.Data != null && response.Data.OrderId != Guid.Empty)
+        {
+            record.OrderId = response.Data.OrderId.ToString();
+            
+            await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private async Task<(List<AiOrderItemDto> Items, DateTime DeliveryDate)> ExtractAndMatchOrderItemsFromReportAsync(string reportText, List<(string Material, string MaterialDesc)> historyItems, DateTime orderDate, CancellationToken cancellationToken) 
+    { 
+        var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
+        
+        var materialListText = string.Join("\n", historyItems.Select(x => $"{x.MaterialDesc} ({x.Material})"));
+        
+        var systemPrompt =
+            "你是一名订单分析助手。请从下面的客户分析报告文本中提取所有下单的物料名称、数量、单位，并且用历史物料列表尽力匹配每个物料的materialNumber。" +
+            "如果报告中提到了预约送货时间，请提取送货时间（格式yyyy-MM-dd）。" +
+            "请严格返回一个 JSON 对象，顶层只包含一个字段 \"orders\"，其值是一个数组。" +
+            "数组中的每个元素包含以下字段：\n" +
+            "- name: 物料名称\n" +
+            "- quantity: 数量（整数或小数）\n" +
+            "- unit: 客户提到的单位，比如 \"case\" 表示箱，\"pc\" 表示件，如果未提到则为空字符串\n" +
+            "- materialNumber: 对应的物料编码（基础数字部分即可，比如11001）\n" +
+            "- deliveryDate: 客户预约送货日期（如果报告中没有则用空字符串）\n" +
+            "输出示例：\n" +
+            "{\n  \"orders\": [\n    { \"name\": \"雞胸肉\", \"quantity\": 1, \"unit\": \"case\", \"materialNumber\": \"000000000010010253\", \"deliveryDate\": \"2025-08-20\" }\n  ]\n}\n\n" +
+            "历史物料列表：\n" + materialListText + "\n\n" +
+            "注意：必须严格输出 JSON，对象顶层字段必须是 \"orders\"，不要有其他字段或额外说明。";
+        Log.Information("Sending prompt to GPT: {Prompt}", systemPrompt);
+
+        var messages = new List<ChatMessage>
+        {
+            new SystemChatMessage(systemPrompt),
+            new UserChatMessage("客户分析报告文本：\n" + reportText + "\n\n")
+        };
+        
+        var completion = await client.CompleteChatAsync(messages, new ChatCompletionOptions { ResponseModalities = ChatResponseModalities.Text, ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat() }, cancellationToken).ConfigureAwait(false);
+        var jsonResponse = completion.Value.Content.FirstOrDefault()?.Text ?? "";
+        Log.Information("AI JSON Response: {JsonResponse}", jsonResponse);
+        
+        try 
+        { 
+            using var jsonDoc = JsonDocument.Parse(jsonResponse);
+            
+            var ordersArray = jsonDoc.RootElement.GetProperty("orders");
+            var parsedItems = JsonSerializer.Deserialize<List<ExtractedOrderItemDto>>(ordersArray.GetRawText(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<ExtractedOrderItemDto>();
+            
+            var deliveryDateStr = parsedItems.Select(i => i.DeliveryDate).FirstOrDefault(d => !string.IsNullOrEmpty(d));
+            var deliveryDate = DateTime.TryParse(deliveryDateStr, out var dt) ? DateTime.SpecifyKind(dt, DateTimeKind.Utc) : DateTime.UtcNow.AddDays(1);
+            
+            foreach (var item in parsedItems)
+            {
+                item.MaterialNumber = MatchMaterialNumber(item.Name, item.MaterialNumber, item.Unit, historyItems);
+            }
+            
+            var aiOrderItems = parsedItems.Select(i => new AiOrderItemDto
+            {
+                MaterialNumber = i.MaterialNumber,
+                AiMaterialDesc = i.Name,
+                MaterialQuantity = i.Quantity
+            }).ToList();
+
+            return (aiOrderItems, deliveryDate);
+        }
+        catch (Exception ex) 
+        { 
+            Log.Warning("解析GPT返回JSON失败: {Message}", ex.Message); 
+            return new (new List<AiOrderItemDto>(), DateTime.UtcNow.AddDays(1));
+        } 
+    }
+    
+    private string MatchMaterialNumber(string itemName, string baseNumber, string unit, List<(string Material, string MaterialDesc)> historyItems)
+    {
+        var candidates = historyItems.Where(x => x.MaterialDesc != null && x.MaterialDesc.Contains(itemName, StringComparison.OrdinalIgnoreCase)).Select(x => x.Material).ToList();
+        Log.Information("Candidate material code list: {@Candidates}", candidates);
+        
+        if (!candidates.Any()) return ""; 
+        if (candidates.Count == 1) return candidates.First();
+        
+        if (!string.IsNullOrWhiteSpace(unit))
+        {
+            var u = unit.ToLower();
+            if (u.Contains("case") || u.Contains("箱"))
+            {
+                var csItem = candidates.FirstOrDefault(x => x.EndsWith("CS", StringComparison.OrdinalIgnoreCase));
+                if (!string.IsNullOrEmpty(csItem)) return csItem;
+            }
+            else
+            {
+                var pcItem = candidates.FirstOrDefault(x => x.EndsWith("PC", StringComparison.OrdinalIgnoreCase));
+                if (!string.IsNullOrEmpty(pcItem)) return pcItem;
+            }
+        }
+        
+        var pureNumber = candidates.FirstOrDefault(x => Regex.IsMatch(x, @"^\d+$"));
+        return pureNumber ?? candidates.First();
     }
 }
