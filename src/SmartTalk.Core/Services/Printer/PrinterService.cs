@@ -468,15 +468,15 @@ public class PrinterService : IPrinterService
         string GenerateFullLine(char fillChar, Font font, float maxWidth)
         {
             var charSize = TextMeasurer.MeasureSize(fillChar.ToString(), new TextOptions(font));
-            float charWidth = charSize.Width;
+            var charWidth = charSize.Width;
 
             if (charWidth <= 0) 
                 return "";
             
-            int repeatCount = (int)(maxWidth / charWidth);
+            var repeatCount = (int)(maxWidth / charWidth);
 
             var sb = new StringBuilder();
-            for (int i = 0; i < repeatCount; i++)
+            for (var i = 0; i < repeatCount; i++)
             {
                 sb.Append(fillChar);
             }
@@ -514,7 +514,7 @@ public class PrinterService : IPrinterService
             var sb = new StringBuilder();
             var lineBuffer = new StringBuilder();
 
-            int i = 0;
+            var i = 0;
             while (i < text.Length)
             {
                 var current = text[i];
@@ -719,9 +719,9 @@ public class PrinterService : IPrinterService
             y += (int)thickness + (int)spacing;
         }
         
-        void DrawDashedLine() => DrawLine(GenerateFullLine('-', fontNormal, width), fontNormal);
+        void DrawDashedLine() => DrawLine(GenerateFullLine('-', fontNormal, width-20), fontNormal);
         
-        void DrawDashedBoldLine() => DrawLine(GenerateFullLine('-', fontBold, width), fontBold);
+        void DrawDashedBoldLine() => DrawLine(GenerateFullLine('-', fontBold, width-20), fontBold);
 
         Log.Information("orderItems: {@orderItems}", orderItems);
         
@@ -763,7 +763,7 @@ public class PrinterService : IPrinterService
         foreach (var orderItem in orderItems)
         {
             var res = orderItem.OrderItemModifiers.Select(x => (
-                $"{x.ModifierLocalizations.FirstOrDefault(s => s.Field == "name" && s.LanguageCode == "en_US")?.Value} (${x.Price})n {x.ModifierLocalizations.FirstOrDefault(s => s.Field == "name" && s.LanguageCode == "zh_CN")?.Value}",
+                $"{x.ModifierLocalizations.FirstOrDefault(s => s.Field == "name" && s.LanguageCode == "en_US")?.Value} (${x.Price}) {x.ModifierLocalizations.FirstOrDefault(s => s.Field == "name" && s.LanguageCode == "zh_CN")?.Value}",
                 orderItem.Quantity)).ToDictionary(x => x.Item1, x => x.Item2);
             
             if (!string.IsNullOrEmpty(orderItem.Notes))
