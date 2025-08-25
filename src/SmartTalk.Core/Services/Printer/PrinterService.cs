@@ -665,6 +665,8 @@ public class PrinterService : IPrinterService
         
         void DrawDashedBoldLine() => DrawLine(GenerateFullLine('-', fontBold), fontBold);
 
+        Log.Information("orderItems: {@orderItems}", orderItems);
+        
         DrawLine($"#{printNumber}", fontNormal);
         DrawLine($"{orderType} Order",  CreateFont(45, true), spacing: 50, centerAlign: true);
         DrawLine($"{restaurantName}", fontMaxSmall, centerAlign: true);
