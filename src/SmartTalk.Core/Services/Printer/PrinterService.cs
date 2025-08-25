@@ -553,6 +553,8 @@ public class PrinterService : IPrinterService
             
             List<(string prefix, string content)> remarkLines = [];
             
+            Log.Information("Remarks:{@remarks}", remarks);
+            
             if (remarks != null)
             {
                 foreach (var kvp in remarks)
@@ -706,12 +708,15 @@ public class PrinterService : IPrinterService
         foreach (var orderItem in orderItems)
         {
             var res = orderItem.OrderItemModifiers.Select(x => (
-                $"{orderItem.ProductNames.GetValueOrDefault("en")?.GetValueOrDefault("posName")} {orderItem.ProductNames.GetValueOrDefault("cn")?.GetValueOrDefault("posName")}",
+                $"{x.ModifierLocalizations.FirstOrDefault(s => s.Field == "name" && s.LanguageCode == "en_US")?.Value} {x.ModifierLocalizations.FirstOrDefault(s => s.Field == "name" && s.LanguageCode == "zh_CN")?.Value}",
                 orderItem.Quantity)).ToDictionary(x => x.Item1, x => x.Item2);
             
-            res.Add($"{orderItem.Notes}", 0);
+            if (!string.IsNullOrEmpty(orderItem.Notes))
+            {
+                res.Add($"{orderItem.Notes}", 0);   
+            }
             
-            DrawItemLineThreeColsWrapped($"{orderItem.Quantity}", $"{orderItem.ProductNames.GetValueOrDefault("en")?.GetValueOrDefault("posName")} {orderItem.ProductNames.GetValueOrDefault("cn")?.GetValueOrDefault("posName")}", $"${orderItem.Price}", res);
+            DrawItemLineThreeColsWrapped($"{orderItem.Quantity}", $"{orderItem.ProductNames.GetValueOrDefault("en")?.GetValueOrDefault("posName")} {orderItem.ProductNames.GetValueOrDefault("cn")?.GetValueOrDefault("posName")}", $"${orderItem.Price * orderItem.Quantity}", res);
         }
         
         DrawDashedLine();
