@@ -428,17 +428,41 @@ public class PrinterService : IPrinterService
 
         void DrawLine(string text, Font font, float spacing = 20, bool rightAlign = false, bool centerAlign = false)
         {
-            var size = TextMeasurer.MeasureSize(text, new TextOptions(font));
-            float x = 10;
-
-            if (centerAlign)
-                x = (width - size.Width) / 2;
-            else if (rightAlign)
-                x = width - size.Width - 10;
-
-            img.Mutate(ctx => ctx.DrawText(text, font, textColor, new PointF(x, y)));
+            float maxWidth = width - 20;
+            List<string> lines = new List<string>();
             
-            y += (int)size.Height + (int)spacing;
+            string currentLine = "";
+            foreach (char c in text)
+            {
+                string testLine = currentLine + c;
+                var size = TextMeasurer.MeasureSize(testLine, new TextOptions(font));
+
+                if (size.Width > maxWidth && currentLine.Length > 0)
+                {
+                    lines.Add(currentLine);
+                    currentLine = c.ToString();
+                }
+                else
+                {
+                    currentLine = testLine;
+                }
+            }
+            if (!string.IsNullOrEmpty(currentLine))
+                lines.Add(currentLine);
+            
+            foreach (var line in lines)
+            {
+                var size = TextMeasurer.MeasureSize(line, new TextOptions(font));
+                float x = 10;
+
+                if (centerAlign)
+                    x = (width - size.Width) / 2;
+                else if (rightAlign)
+                    x = width - size.Width - 10;
+
+                img.Mutate(ctx => ctx.DrawText(line, font, textColor, new PointF(x, y)));
+                y += (int)size.Height + (int)spacing;
+            }
         }
         
         string GenerateFullLine(char fillChar, Font font)
@@ -468,36 +492,31 @@ public class PrinterService : IPrinterService
             y += (int)lineHeight + 10;
         }
         
-        string InsertLineBreakBetweenEnglishAndChinese(string text)
+        string InsertLineBreakWithWrap(string text, Font font, float maxWidth)
         {
             var sb = new StringBuilder();
-            var i = 0;
+            var lineBuffer = new StringBuilder();
 
-            while (i < text.Length)
+            foreach (var ch in text)
             {
-                var current = text[i];
-                var currType = GetCharType(current);
+                lineBuffer.Append(ch);
                 
-                sb.Append(current);
-                
-                var j = i + 1;
-                
-                while (j < text.Length && GetCharType(text[j]) == CharType.Other)
-                {
-                    sb.Append(text[j]);
-                    i = j;
-                    j++;
-                }
+                var size = TextMeasurer.MeasureSize(lineBuffer.ToString(), new TextOptions(font));
 
-                if (j < text.Length)
+                if (size.Width > maxWidth) 
                 {
-                    var nextType = GetCharType(text[j]);
-                    
-                    if (currType != CharType.Other && nextType != CharType.Other && currType != nextType)
-                        sb.Append('\n');
-                }
+                    lineBuffer.Length -= 1; 
+                    sb.Append(lineBuffer);
+                    sb.Append('\n');
 
-                i++;
+                    lineBuffer.Clear();
+                    lineBuffer.Append(ch);
+                }
+            }
+
+            if (lineBuffer.Length > 0)
+            {
+                sb.Append(lineBuffer);
             }
 
             return sb.ToString();
@@ -547,7 +566,7 @@ public class PrinterService : IPrinterService
                 indentX = TextMeasurer.MeasureSize(firstChar, baseOptions).Width;
             }
             
-            itemName = InsertLineBreakBetweenEnglishAndChinese(itemName);
+            itemName = InsertLineBreakWithWrap(itemName, font, col2Width);
             
             var itemBlockHeight = TextMeasurer.MeasureSize(itemName, baseOptions).Height;
             
@@ -555,19 +574,19 @@ public class PrinterService : IPrinterService
             
             Log.Information("Remarks:{@remarks}", remarks);
             
+            var remarkExtraWidth = 50;
+            
             if (remarks != null)
             {
                 foreach (var kvp in remarks)
                 {
                     var raw = kvp.Key.Trim();
                     var qtyVal = kvp.Value;
-                    var prefix = qtyVal > 0 ? $"{qtyVal}" : ">";
-                    var content = InsertLineBreakBetweenEnglishAndChinese(raw);
+                    var prefix = qtyVal > 1 ? $"{qtyVal}" : ">";
+                    var content = InsertLineBreakWithWrap(raw, remarkFont,col2Width + remarkExtraWidth - indentX);
                     remarkLines.Add((prefix, content));
                 }
             }
-
-            var remarkExtraWidth = 50;
             
             var remarkOptions = new TextOptions(remarkFont)
             {
@@ -708,7 +727,7 @@ public class PrinterService : IPrinterService
         foreach (var orderItem in orderItems)
         {
             var res = orderItem.OrderItemModifiers.Select(x => (
-                $"{x.ModifierLocalizations.FirstOrDefault(s => s.Field == "name" && s.LanguageCode == "en_US")?.Value} {x.ModifierLocalizations.FirstOrDefault(s => s.Field == "name" && s.LanguageCode == "zh_CN")?.Value}",
+                $"{x.ModifierLocalizations.FirstOrDefault(s => s.Field == "name" && s.LanguageCode == "en_US")?.Value} (${x.Price})n {x.ModifierLocalizations.FirstOrDefault(s => s.Field == "name" && s.LanguageCode == "zh_CN")?.Value}",
                 orderItem.Quantity)).ToDictionary(x => x.Item1, x => x.Item2);
             
             if (!string.IsNullOrEmpty(orderItem.Notes))
