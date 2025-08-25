@@ -6,7 +6,7 @@ namespace SmartTalk.Messages.Dto.Printer
     {
         public Guid Id { get; set; }
 
-        public int AgentId { get; set; }
+        public int StoreId { get; set; }
 
         public string PrinterName { get; set; }
 

@@ -6,7 +6,7 @@ namespace SmartTalk.Messages.Requests.Printer;
 
 public class GetMerchPrinterLogRequest : IRequest
 {
-    public int AgentId { get; set; }
+    public int StoreId { get; set; }
     
     public string PrinterMac { get; set; }
 

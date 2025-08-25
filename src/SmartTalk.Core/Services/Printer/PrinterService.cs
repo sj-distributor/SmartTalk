@@ -176,7 +176,7 @@ public class PrinterService : IPrinterService
             JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(store.Names).GetValueOrDefault("en")?.GetValueOrDefault("name"),
             store.Address,
             store.PhoneNums,
-            order.CreatedDate.ToString("yyyy-mm-dd hh:mm:ss"),
+            order.CreatedDate.ToString("yyyy-MM-dd HH:mm:ss"),
             merchPrinter.PrinterName,
             order.Type.ToString(),
             order.Name,
@@ -187,7 +187,7 @@ public class PrinterService : IPrinterService
             order.SubTotal.ToString(),
             order.Tax.ToString(),
             order.Total.ToString(),
-            DateTime.Now.ToString("yyyy-mm-dd hh:mm:ss")).ConfigureAwait(false);
+            DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")).ConfigureAwait(false);
        
         var imageKey = Guid.NewGuid().ToString();
         
@@ -668,7 +668,7 @@ public class PrinterService : IPrinterService
         DrawLine($"#{printNumber}", fontNormal);
         DrawLine($"{orderType} Order",  CreateFont(45, true), spacing: 50, centerAlign: true);
         DrawLine($"{restaurantName}", fontMaxSmall, centerAlign: true);
-        DrawLine($"{restaurantAddress}", fontMaxSmall);
+        DrawLine($"{restaurantAddress}", fontMaxSmall, centerAlign: true);
         DrawLine($"{restaurantPhone}", fontMaxSmall, centerAlign: true);
         
         DrawDashedBoldLine();
@@ -677,14 +677,20 @@ public class PrinterService : IPrinterService
         DrawItemLine($"{printerName}", "AiPhoneOrder", fontSmall);
         
         DrawSolidLine();
+
+        if (!string.IsNullOrEmpty(guestName))
+            DrawLine($"{guestName}", fontSmall);
+
+        if (!string.IsNullOrEmpty(guestPhone))
+            DrawLine($"{guestPhone}", fontSmall);
         
-        DrawLine($"{guestName}", fontSmall);
-        DrawLine($"{guestPhone}", fontSmall);
-        DrawLine($"{guestAddress}", fontSmall);
+        if (!string.IsNullOrEmpty(guestAddress))
+            DrawLine($"{guestAddress}", fontSmall);
         
         DrawSolidLine();
         
-        DrawLine($"Order Remark:{orderNotes}", fontNormal);
+        if(!string.IsNullOrEmpty(orderNotes))
+            DrawLine($"Order Remark:{orderNotes}", fontNormal);
         
         DrawDashedLine();
         
@@ -701,7 +707,7 @@ public class PrinterService : IPrinterService
         
         DrawDashedLine();
         
-        DrawItemLine("Subtotal", $"{subtotal}", fontSmall);
+        DrawItemLine("Subtotal", $"${subtotal}", fontSmall);
         DrawItemLine("Tax", $"${tax}", fontSmall);
         DrawItemLine("Total", $"${total}", fontNormal);
         
@@ -808,7 +814,7 @@ public class PrinterService : IPrinterService
      public async Task<GetMerchPrinterLogResponse> GetMerchPrinterLog(GetMerchPrinterLogRequest request, CancellationToken cancellationToken)
      {
          var (count, merchPrinterLogs) = await _printerDataProvider.GetMerchPrinterLogAsync(
-             request.AgentId,request.PrinterMac, request.StartDate, request.EndDate, request.Code, request.PrintLogType,
+             request.StoreId,request.PrinterMac, request.StartDate, request.EndDate, request.Code, request.PrintLogType,
              request.PageIndex, request.PageSize, cancellationToken).ConfigureAwait(false);
 
             return new GetMerchPrinterLogResponse
