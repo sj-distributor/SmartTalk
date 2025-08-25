@@ -172,7 +172,7 @@ public class PrinterService : IPrinterService
         
         var store = await _posDataProvider.GetPosCompanyStoreDetailAsync(order.StoreId, cancellationToken).ConfigureAwait(false);
         
-        var img = await RenderReceiptAsync("1",  
+        var img = await RenderReceiptAsync(order.OrderNo,  
             JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(store.Names).GetValueOrDefault("en")?.GetValueOrDefault("name"),
             store.Address,
             store.PhoneNums,
@@ -437,7 +437,8 @@ public class PrinterService : IPrinterService
                 x = width - size.Width - 10;
 
             img.Mutate(ctx => ctx.DrawText(text, font, textColor, new PointF(x, y)));
-            y += (int)lineHeight + (int)spacing;
+            
+            y += (int)size.Height + (int)spacing;
         }
         
         string GenerateFullLine(char fillChar, Font font)
@@ -670,7 +671,10 @@ public class PrinterService : IPrinterService
         DrawLine($"#{printNumber}", fontNormal);
         DrawLine($"{orderType} Order",  CreateFont(45, true), spacing: 50, centerAlign: true);
         DrawLine($"{restaurantName}", fontMaxSmall, centerAlign: true);
-        DrawLine($"{restaurantAddress}", fontMaxSmall, centerAlign: true);
+        
+        if (!string.IsNullOrEmpty(restaurantAddress))
+            DrawLine($"{restaurantAddress}", fontMaxSmall, centerAlign: true);
+        
         DrawLine($"{restaurantPhone}", fontMaxSmall, centerAlign: true);
         
         DrawDashedBoldLine();
@@ -688,11 +692,12 @@ public class PrinterService : IPrinterService
         
         if (!string.IsNullOrEmpty(guestAddress))
             DrawLine($"{guestAddress}", fontSmall);
-        
-        DrawSolidLine();
-        
-        if(!string.IsNullOrEmpty(orderNotes))
+
+        if (!string.IsNullOrEmpty(orderNotes))
+        {
+            DrawSolidLine();
             DrawLine($"Order Remark:{orderNotes}", fontNormal);
+        }
         
         DrawDashedLine();
         
@@ -703,6 +708,8 @@ public class PrinterService : IPrinterService
             var res = orderItem.OrderItemModifiers.Select(x => (
                 $"{orderItem.ProductNames.GetValueOrDefault("en")?.GetValueOrDefault("posName")} {orderItem.ProductNames.GetValueOrDefault("cn")?.GetValueOrDefault("posName")}",
                 orderItem.Quantity)).ToDictionary(x => x.Item1, x => x.Item2);
+            
+            res.Add($"{orderItem.Notes}", 0);
             
             DrawItemLineThreeColsWrapped($"{orderItem.Quantity}", $"{orderItem.ProductNames.GetValueOrDefault("en")?.GetValueOrDefault("posName")} {orderItem.ProductNames.GetValueOrDefault("cn")?.GetValueOrDefault("posName")}", $"${orderItem.Price}", res);
         }
