@@ -636,7 +636,15 @@ public class PrinterService : IPrinterService
             
             foreach (var (_, content) in remarkLines)
             {
-                remarkBlockHeight += TextMeasurer.MeasureSize(content, remarkOptions).Height + 5;
+                var lines = content.Split('\n');
+                
+                foreach (var line in lines)
+                {
+                    if (string.IsNullOrWhiteSpace(line)) continue;
+                    remarkBlockHeight += TextMeasurer.MeasureSize(line, remarkOptions).Height;
+                }
+                
+                remarkBlockHeight += 5;
             }
 
             var totalBlockHeight = itemBlockHeight + (remarkBlockHeight > 0 ? remarkBlockHeight : 0);
