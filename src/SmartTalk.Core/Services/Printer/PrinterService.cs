@@ -465,16 +465,33 @@ public class PrinterService : IPrinterService
             }
         }
         
-        string GenerateFullLine(char fillChar, Font font)
+        string GenerateFullLine(char fillChar, Font font, float maxWidth)
         {
-            var line = new string(fillChar, 1);
-            var lineWidth = TextMeasurer.MeasureSize(line, new TextOptions(font)).Width;
+            var charSize = TextMeasurer.MeasureSize(fillChar.ToString(), new TextOptions(font));
+            float charWidth = charSize.Width;
 
-            if (lineWidth == 0) return "";
-
-            var repeatCount = (int)Math.Ceiling(width / lineWidth);
+            if (charWidth <= 0) 
+                return "";
             
-            return new string(fillChar, repeatCount);
+            int repeatCount = (int)(maxWidth / charWidth);
+
+            var sb = new StringBuilder();
+            for (int i = 0; i < repeatCount; i++)
+            {
+                sb.Append(fillChar);
+            }
+            
+            while (TextMeasurer.MeasureSize(sb.ToString(), new TextOptions(font)).Width < maxWidth)
+            {
+                sb.Append(fillChar);
+            }
+
+            while (TextMeasurer.MeasureSize(sb.ToString(), new TextOptions(font)).Width > maxWidth && sb.Length > 0)
+            {
+                sb.Length--;
+            }
+
+            return sb.ToString();
         }
 
         void DrawItemLine(string item, string price, Font? itemFont = null)
@@ -683,9 +700,9 @@ public class PrinterService : IPrinterService
             y += (int)thickness + (int)spacing;
         }
         
-        void DrawDashedLine() => DrawLine(GenerateFullLine('-', fontNormal), fontNormal);
+        void DrawDashedLine() => DrawLine(GenerateFullLine('-', fontNormal, width), fontNormal);
         
-        void DrawDashedBoldLine() => DrawLine(GenerateFullLine('-', fontBold), fontBold);
+        void DrawDashedBoldLine() => DrawLine(GenerateFullLine('-', fontBold, width), fontBold);
 
         Log.Information("orderItems: {@orderItems}", orderItems);
         
