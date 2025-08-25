@@ -28,6 +28,10 @@ public partial class AccountService
         AuthenticateInternalResult authenticateInternalResult = new();
         
         await AuthenticateSelfAsync(authenticateInternalResult, username, clearTextPassword, loginVerificationType, cancellationToken).ConfigureAwait(false);
+        
+        if (authenticateInternalResult.CannotLoginReason != UserAccountCannotLoginReason.None)
+            return authenticateInternalResult;
+        
         await AuthenticateWiltechsAsync(authenticateInternalResult, username, clearTextPassword, loginVerificationType, cancellationToken).ConfigureAwait(false);
 
         return authenticateInternalResult;
@@ -56,6 +60,7 @@ public partial class AccountService
         if (account == null)
         {
             authenticateInternalResult.CannotLoginReason = UserAccountCannotLoginReason.NotFound;
+            authenticateInternalResult.IsAuthenticated = false;
             return;            
         }
         
@@ -67,6 +72,7 @@ public partial class AccountService
                 if (!storeUsers.Any())
                 {
                     authenticateInternalResult.CannotLoginReason = UserAccountCannotLoginReason.NoAssociatedStore;
+                    authenticateInternalResult.IsAuthenticated = false;
                     return;
                 }
             }
