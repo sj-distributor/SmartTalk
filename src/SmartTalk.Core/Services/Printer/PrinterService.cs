@@ -492,36 +492,31 @@ public class PrinterService : IPrinterService
             y += (int)lineHeight + 10;
         }
         
-        string InsertLineBreakBetweenEnglishAndChinese(string text)
+        string InsertLineBreakWithWrap(string text, Font font, float maxWidth)
         {
             var sb = new StringBuilder();
-            var i = 0;
+            var lineBuffer = new StringBuilder();
 
-            while (i < text.Length)
+            foreach (var ch in text)
             {
-                var current = text[i];
-                var currType = GetCharType(current);
+                lineBuffer.Append(ch);
                 
-                sb.Append(current);
-                
-                var j = i + 1;
-                
-                while (j < text.Length && GetCharType(text[j]) == CharType.Other)
-                {
-                    sb.Append(text[j]);
-                    i = j;
-                    j++;
-                }
+                var size = TextMeasurer.MeasureSize(lineBuffer.ToString(), new TextOptions(font));
 
-                if (j < text.Length)
+                if (size.Width > maxWidth) 
                 {
-                    var nextType = GetCharType(text[j]);
-                    
-                    if (currType != CharType.Other && nextType != CharType.Other && currType != nextType)
-                        sb.Append('\n');
-                }
+                    lineBuffer.Length -= 1; 
+                    sb.Append(lineBuffer);
+                    sb.Append('\n');
 
-                i++;
+                    lineBuffer.Clear();
+                    lineBuffer.Append(ch);
+                }
+            }
+
+            if (lineBuffer.Length > 0)
+            {
+                sb.Append(lineBuffer);
             }
 
             return sb.ToString();
@@ -571,13 +566,15 @@ public class PrinterService : IPrinterService
                 indentX = TextMeasurer.MeasureSize(firstChar, baseOptions).Width;
             }
             
-            itemName = InsertLineBreakBetweenEnglishAndChinese(itemName);
+            itemName = InsertLineBreakWithWrap(itemName, font, col2Width);
             
             var itemBlockHeight = TextMeasurer.MeasureSize(itemName, baseOptions).Height;
             
             List<(string prefix, string content)> remarkLines = [];
             
             Log.Information("Remarks:{@remarks}", remarks);
+            
+            var remarkExtraWidth = 50;
             
             if (remarks != null)
             {
@@ -586,12 +583,10 @@ public class PrinterService : IPrinterService
                     var raw = kvp.Key.Trim();
                     var qtyVal = kvp.Value;
                     var prefix = qtyVal > 1 ? $"{qtyVal}" : ">";
-                    var content = InsertLineBreakBetweenEnglishAndChinese(raw);
+                    var content = InsertLineBreakWithWrap(raw, remarkFont,col2Width + remarkExtraWidth - indentX);
                     remarkLines.Add((prefix, content));
                 }
             }
-
-            var remarkExtraWidth = 50;
             
             var remarkOptions = new TextOptions(remarkFont)
             {
