@@ -444,8 +444,15 @@ public class SpeechMaticsService : ISpeechMaticsService
         };
         Log.Information("DraftOrder content: {@DraftOrder}", draftOrder);
 
-        await _salesClient.GenerateAiOrdersAsync(draftOrder, cancellationToken).ConfigureAwait(false);
-        Log.Information("GenerateAiOrdersAsync call completed successfully.");
+        var response = await _salesClient.GenerateAiOrdersAsync(draftOrder, cancellationToken).ConfigureAwait(false);
+        Log.Information("Generate Ai Order response: {@response}", response);
+        
+        if (response?.Data != null && response.Data.OrderId != Guid.Empty)
+        {
+            record.OrderId = response.Data.OrderId.ToString();
+            
+            await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken).ConfigureAwait(false);
+        }
     }
 
     private async Task<(List<AiOrderItemDto> Items, DateTime DeliveryDate)> ExtractAndMatchOrderItemsFromReportAsync(string reportText, List<(string Material, string MaterialDesc)> historyItems, DateTime orderDate, CancellationToken cancellationToken) 

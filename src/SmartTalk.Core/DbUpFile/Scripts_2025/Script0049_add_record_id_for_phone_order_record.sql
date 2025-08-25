@@ -1,0 +1,1 @@
+alter table `phone_order_record` add column `order_id` varchar(128) null;
