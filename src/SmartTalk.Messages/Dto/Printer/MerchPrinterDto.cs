@@ -4,7 +4,7 @@ namespace SmartTalk.Messages.Dto.Printer
 {
     public class MerchPrinterDto
     {
-        public Guid Id { get; set; }
+        public int Id { get; set; }
 
         public int StoreId { get; set; }
 
