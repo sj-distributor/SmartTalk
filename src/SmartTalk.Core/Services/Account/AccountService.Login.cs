@@ -14,7 +14,16 @@ public partial class AccountService
             await AuthenticateAsync(request.UserName, request.Password, request.VerificationType, cancellationToken).ConfigureAwait(false);
 
         if (authenticateResult.CannotLoginReason != UserAccountCannotLoginReason.None)
-            return new LoginResponse { Code = HttpStatusCode.Unauthorized, Msg = GetFriendlyErrorMessage(authenticateResult.CannotLoginReason), VerifyCodeResult = authenticateResult.VerifyCodeResult };
+        {
+            var code = HttpStatusCode.Unauthorized;
+
+            if (authenticateResult.CannotLoginReason == UserAccountCannotLoginReason.NoAssociatedStore)
+            {
+                code = HttpStatusCode.Forbidden;
+            }
+            
+            return new LoginResponse { Code = code, Msg = GetFriendlyErrorMessage(authenticateResult.CannotLoginReason), VerifyCodeResult = authenticateResult.VerifyCodeResult };
+        }
         
         return new LoginResponse
         {
