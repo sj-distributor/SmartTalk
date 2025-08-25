@@ -466,8 +466,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         Domain.AISpeechAssistant.AiSpeechAssistant assistant, string prompt, CancellationToken cancellationToken)
     {
         if (_aiSpeechAssistantStreamContext.ShouldForward) return;
-
-        ConfigWebSocketRequestHeader(_mapper.Map<Domain.AISpeechAssistant.AiSpeechAssistant>(_aiSpeechAssistantStreamContext.Assistant));
         
         await ConfigAuthorizationHeader(assistant, cancellationToken).ConfigureAwait(false);
         
