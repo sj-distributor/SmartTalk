@@ -11,10 +11,8 @@ using SixLabors.Fonts;
 using System.Text;
 using Aliyun.OSS;
 using AutoMapper;
-using DocumentFormat.OpenXml.Office2010.ExcelAc;
 using Newtonsoft.Json;
 using Serilog;
-using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.AliYun;
 using SmartTalk.Core.Services.Pos;
 using SmartTalk.Message.Commands.Printer;
@@ -46,19 +44,19 @@ public interface IPrinterService : IScopedDependency
     Task<PrinterStatusChangedEvent> RecordPrinterStatusAsync(RecordPrinterStatusCommand command,
         CancellationToken cancellationToken);
     
-    Task PrintTestAsync(PrintTestCommand command, CancellationToken cancellationToken);
+    Task<PrintTestResponse> PrintTestAsync(PrintTestCommand command, CancellationToken cancellationToken);
 
     Task PrinterStatusChangedAsync(PrinterStatusChangedEvent @event, CancellationToken cancellationToken);
 
     Task PrinterJobConfirmeAsync(PrinterJobConfirmedEvent @event, CancellationToken cancellationToken);
     
-    Task AddMerchPrinterAsync(AddMerchPrinterCommand command, CancellationToken cancellationToken);
+    Task<AddMerchPrinterResponse> AddMerchPrinterAsync(AddMerchPrinterCommand command, CancellationToken cancellationToken);
     
     Task<GetMerchPrintersResponse> GetMerchPrintersAsync(GetMerchPrintersRequest request, CancellationToken cancellationToken);
     
-    Task DeleteMerchPrinterAsync(DeleteMerchPrinterCommand command, CancellationToken cancellationToken);
+    Task<DeleteMerchPrinterResponse> DeleteMerchPrinterAsync(DeleteMerchPrinterCommand command, CancellationToken cancellationToken);
     
-    Task UpdateMerchPrinterAsync(UpdateMerchPrinterCommand command, CancellationToken cancellationToken);
+    Task<UpdateMerchPrinterResponse> UpdateMerchPrinterAsync(UpdateMerchPrinterCommand command, CancellationToken cancellationToken);
     
     Task<GetMerchPrinterLogResponse> GetMerchPrinterLog(GetMerchPrinterLogRequest request, CancellationToken cancellationToken);
 }
@@ -306,7 +304,7 @@ public class PrinterService : IPrinterService
         return @event;
     }
 
-    public async Task PrintTestAsync(PrintTestCommand command, CancellationToken cancellationToken)
+    public async Task<PrintTestResponse> PrintTestAsync(PrintTestCommand command, CancellationToken cancellationToken)
     {
         var merchPrinterOrder = new MerchPrinterOrder
         {
@@ -317,6 +315,8 @@ public class PrinterService : IPrinterService
         };
         
         await _printerDataProvider.AddMerchPrinterOrderAsync(merchPrinterOrder, cancellationToken).ConfigureAwait(false);
+
+        return new PrintTestResponse();
     }
 
     public async Task PrinterStatusChangedAsync(PrinterStatusChangedEvent @event, CancellationToken cancellationToken)
@@ -390,7 +390,7 @@ public class PrinterService : IPrinterService
         var message = $"{(printError?"Print Error":"Print")}";
         merchPrinterLog.Message = message;
             
-        await _printerDataProvider.AddMerchPrinterLogAsync(merchPrinterLog, cancellationToken);
+        await _printerDataProvider.AddMerchPrinterLogAsync(merchPrinterLog, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<Image<Rgba32>> RenderReceiptAsync(string printNumber, string restaurantName, string restaurantAddress,
@@ -816,14 +816,12 @@ public class PrinterService : IPrinterService
         };
     }
     
-    public async Task AddMerchPrinterAsync(AddMerchPrinterCommand command, CancellationToken cancellationToken)
+    public async Task<AddMerchPrinterResponse> AddMerchPrinterAsync(AddMerchPrinterCommand command, CancellationToken cancellationToken)
     {
         var printer = (await _printerDataProvider.GetMerchPrintersAsync(printerMac: command.PrinterMac, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
 
         if (printer != null)
-        {
             throw new Exception($"The printer [{command.PrinterMac}] already exists");
-        }
 
         printer = _mapper.Map<MerchPrinter>(command);
         printer.Token = await GetOrCreatePrinterTokenAsync(command.PrinterMac, cancellationToken).ConfigureAwait(false);
@@ -831,13 +829,17 @@ public class PrinterService : IPrinterService
         await CheckPrinterCanOnlyHaveOneEnabled(printer, cancellationToken);
 
         await _printerDataProvider.AddMerchPrinterAsync(printer, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return new AddMerchPrinterResponse();
     }
 
-    public async Task DeleteMerchPrinterAsync(DeleteMerchPrinterCommand command, CancellationToken cancellationToken)
+    public async Task<DeleteMerchPrinterResponse> DeleteMerchPrinterAsync(DeleteMerchPrinterCommand command, CancellationToken cancellationToken)
     {
         var printer = (await _printerDataProvider.GetMerchPrintersAsync(id: command.Id, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
         
        await _printerDataProvider.DeleteMerchPrinterAsync(printer, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+       return new DeleteMerchPrinterResponse();
     }
 
     private async Task<Guid> GetOrCreatePrinterTokenAsync(string printerMac,CancellationToken cancellationToken)
@@ -877,7 +879,7 @@ public class PrinterService : IPrinterService
         }
     }
 
-    public async Task UpdateMerchPrinterAsync(UpdateMerchPrinterCommand command, CancellationToken cancellationToken)
+    public async Task<UpdateMerchPrinterResponse> UpdateMerchPrinterAsync(UpdateMerchPrinterCommand command, CancellationToken cancellationToken)
     {
         var printer = (await _printerDataProvider.GetMerchPrintersAsync(id: command.Id, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
 
@@ -886,6 +888,8 @@ public class PrinterService : IPrinterService
         await CheckPrinterCanOnlyHaveOneEnabled(printer, cancellationToken).ConfigureAwait(false);
         
         await _printerDataProvider.UpdateMerchPrinterMacAsync(printer, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return new UpdateMerchPrinterResponse();
     }
     
      public async Task<GetMerchPrinterLogResponse> GetMerchPrinterLog(GetMerchPrinterLogRequest request, CancellationToken cancellationToken)

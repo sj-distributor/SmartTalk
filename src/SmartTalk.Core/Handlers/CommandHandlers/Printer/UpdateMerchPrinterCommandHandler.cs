@@ -5,7 +5,7 @@ using SmartTalk.Messages.Commands.Printer;
 
 namespace SmartTalk.Core.Handlers.CommandHandlers.Printer;
 
-public class UpdateMerchPrinterCommandHandler : ICommandHandler<UpdateMerchPrinterCommand>
+public class UpdateMerchPrinterCommandHandler : ICommandHandler<UpdateMerchPrinterCommand, UpdateMerchPrinterResponse>
 {
     private readonly IPrinterService _printerService;
 
@@ -14,8 +14,8 @@ public class UpdateMerchPrinterCommandHandler : ICommandHandler<UpdateMerchPrint
         _printerService = printerService;
     }
     
-    public async Task Handle(IReceiveContext<UpdateMerchPrinterCommand> context, CancellationToken cancellationToken)
+    public async Task<UpdateMerchPrinterResponse> Handle(IReceiveContext<UpdateMerchPrinterCommand> context, CancellationToken cancellationToken)
     {
-        await _printerService.UpdateMerchPrinterAsync(context.Message, cancellationToken).ConfigureAwait(false);
+        return await _printerService.UpdateMerchPrinterAsync(context.Message, cancellationToken).ConfigureAwait(false);
     }
 }
