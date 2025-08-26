@@ -1,5 +1,6 @@
 using Mediator.Net.Contracts;
 using SmartTalk.Messages.Dto.Printer;
+using SmartTalk.Messages.Responses;
 
 namespace SmartTalk.Messages.Requests.Printer
 {
@@ -8,8 +9,7 @@ namespace SmartTalk.Messages.Requests.Printer
         public int StoreId { get; set; }
     }
 
-    public class GetMerchPrintersResponse : IResponse
+    public class GetMerchPrintersResponse : SmartTalkResponse<List<MerchPrinterDto>>
     {
-        public List<MerchPrinterDto> Result { get; set; }
     }
 }

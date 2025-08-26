@@ -812,7 +812,7 @@ public class PrinterService : IPrinterService
 
         return new GetMerchPrintersResponse
         {
-            Result = result
+            Data = result
         };
     }
     
