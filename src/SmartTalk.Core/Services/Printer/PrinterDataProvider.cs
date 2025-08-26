@@ -169,13 +169,7 @@ public class PrinterDataProvider : IPrinterDataProvider
             query = query.Where(x => x.PrinterMac == printerMac);
 
         if (startDate.HasValue && endDate.HasValue)
-        {
-            var timeZone = TimeZoneInfo.FindSystemTimeZoneById("America/Los_Angeles");
-            var startDateUtc = startDate.Value.Date.ConvertToUtc(timeZone);
-            var endDateUtc = endDate.Value.Date.AddDays(1).AddMilliseconds(-1).ConvertToUtc(timeZone);
-
-            query = query.Where(x => x.CreatedDate >= startDateUtc && x.CreatedDate <= endDateUtc);
-        }
+            query = query.Where(x => x.CreatedDate >= startDate && x.CreatedDate <= endDate);
 
         if (code.HasValue)
             query = query.Where(x => x.Code == code);

@@ -5,7 +5,7 @@ using SmartTalk.Messages.Commands.Printer;
 
 namespace SmartTalk.Core.Handlers.CommandHandlers.Printer;
 
-public class DeleteMerchPrinterCommandHandler : ICommandHandler<DeleteMerchPrinterCommand>
+public class DeleteMerchPrinterCommandHandler : ICommandHandler<DeleteMerchPrinterCommand, DeleteMerchPrinterResponse>
 {
     private readonly IPrinterService _printerService;
 
@@ -14,8 +14,8 @@ public class DeleteMerchPrinterCommandHandler : ICommandHandler<DeleteMerchPrint
         _printerService = printerService;
     }
 
-    public async Task Handle(IReceiveContext<DeleteMerchPrinterCommand> context, CancellationToken cancellationToken)
+    public async Task<DeleteMerchPrinterResponse> Handle(IReceiveContext<DeleteMerchPrinterCommand> context, CancellationToken cancellationToken)
     {
-        await _printerService.DeleteMerchPrinterAsync(context.Message, cancellationToken).ConfigureAwait(false);
+        return await _printerService.DeleteMerchPrinterAsync(context.Message, cancellationToken).ConfigureAwait(false);
     }
 }
