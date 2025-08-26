@@ -1,0 +1,1 @@
+ALTER TABLE `phone_order_record` MODIFY COLUMN `order_id` VARCHAR(1024) NULL;

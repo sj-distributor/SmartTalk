@@ -70,7 +70,7 @@ public partial class PhoneOrderDataProvider
             query = query.Where(record => record.CreatedDate >= utcStart.Value && record.CreatedDate < utcEnd.Value);
         
         if (!string.IsNullOrEmpty(orderId))
-            query = query.Where(record => record.OrderId == orderId);
+            query = query.Where(record => record.OrderId.Contains(orderId));
         
         return await query.Distinct().OrderByDescending(record => record.CreatedDate).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
