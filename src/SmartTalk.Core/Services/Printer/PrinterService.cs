@@ -58,7 +58,7 @@ public interface IPrinterService : IScopedDependency
     
     Task<UpdateMerchPrinterResponse> UpdateMerchPrinterAsync(UpdateMerchPrinterCommand command, CancellationToken cancellationToken);
     
-    Task<GetMerchPrinterLogResponse> GetMerchPrinterLog(GetMerchPrinterLogRequest request, CancellationToken cancellationToken);
+    Task<GetMerchPrinterLogResponse> GetMerchPrinterLogAsync(GetMerchPrinterLogRequest request, CancellationToken cancellationToken);
 }
 
 public class PrinterService : IPrinterService
@@ -892,7 +892,7 @@ public class PrinterService : IPrinterService
         return new UpdateMerchPrinterResponse();
     }
     
-     public async Task<GetMerchPrinterLogResponse> GetMerchPrinterLog(GetMerchPrinterLogRequest request, CancellationToken cancellationToken)
+     public async Task<GetMerchPrinterLogResponse> GetMerchPrinterLogAsync(GetMerchPrinterLogRequest request, CancellationToken cancellationToken)
      {
          var (count, merchPrinterLogs) = await _printerDataProvider.GetMerchPrinterLogAsync(
              request.StoreId,request.PrinterMac, request.StartDate, request.EndDate, request.Code, request.PrintLogType,

@@ -16,7 +16,7 @@ namespace SmartTalk.Core.Handlers.RequestHandlers.Printer
         
         public async Task<GetMerchPrinterLogResponse> Handle(IReceiveContext<GetMerchPrinterLogRequest> context, CancellationToken cancellationToken)
         {
-            return await _printerService.GetMerchPrinterLog(context.Message, cancellationToken).ConfigureAwait(false);
+            return await _printerService.GetMerchPrinterLogAsync(context.Message, cancellationToken).ConfigureAwait(false);
         }
     }
 }

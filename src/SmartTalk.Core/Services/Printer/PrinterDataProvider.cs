@@ -184,7 +184,7 @@ public class PrinterDataProvider : IPrinterDataProvider
 
         if (pageIndex.HasValue && pageSize.HasValue)
             query = query.OrderByDescending(x => x.CreatedDate)
-                .Skip(pageIndex.Value * pageSize.Value).Take(pageSize.Value);
+                .Skip((pageIndex.Value - 1) * pageSize.Value).Take(pageSize.Value);
         
         var results = await query
             .ProjectTo<MerchPrinterLogDto>(_mapper.ConfigurationProvider)
