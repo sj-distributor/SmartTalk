@@ -280,6 +280,15 @@ public partial class PhoneOrderDataProvider
 
     public async Task AddPhoneOrderRecordReportsAsync(List<PhoneOrderRecordReport> recordReports, bool forceSave = true, CancellationToken cancellationToken = default)
     {
+        var recordId = recordReports.First().RecordId;
+        
+        var existingReports = await _repository.Query<PhoneOrderRecordReport>().Where(x => x.RecordId == recordId).ToListAsync(cancellationToken).ConfigureAwait(false);
+        
+        if (existingReports.Any())
+        {
+            await _repository.DeleteAllAsync(existingReports, cancellationToken).ConfigureAwait(false);
+        }
+        
         await _repository.InsertAllAsync(recordReports, cancellationToken).ConfigureAwait(false);
 
         if (forceSave)
