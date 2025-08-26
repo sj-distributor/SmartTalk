@@ -429,7 +429,7 @@ public class SpeechMaticsService : ISpeechMaticsService
             "輸出範例：\n" +
             "{\n  \"orders\": [\n    { \"name\": \"雞胸肉\", \"quantity\": 1, \"unit\": \"case\", \"materialNumber\": \"000000000010010253\", \"deliveryDate\": \"2025-08-20\" }\n  ]\n}\n\n" +
             "歷史物料列表：\n" + materialListText + "\n\n" +
-            "注意：必須嚴格輸出 JSON，物件頂層字段必須是 \"orders\"，不要有其他字段或額外說明。"+
+            "注意：必須嚴格輸出 JSON，物件頂層字段必須是 \"orders\"，不要有其他字段或額外說明，提取的物料名稱需要為繁體中文。"+
             "**如果客戶分析文本中沒有任何可識別的下單信息，請返回：{ \"orders\": [] }。不得臆造或猜測物料。**";
         Log.Information("Sending prompt to GPT: {Prompt}", systemPrompt);
 
