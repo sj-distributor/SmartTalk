@@ -530,11 +530,12 @@ public class SpeechMaticsService : ISpeechMaticsService
             return customerNumber?.Data?.FirstOrDefault()?.CustomerNumber ?? string.Empty; 
         }
         
-        if (!string.IsNullOrEmpty(storeOrder.StoreNumber) && soldToIds.Any()) 
-        { 
-            if (int.TryParse(storeOrder.StoreNumber, out var storeIndex) && storeIndex > 0 && storeIndex <= soldToIds.Count) 
-                return soldToIds[storeIndex - 1]; 
+        if (!string.IsNullOrEmpty(storeOrder.StoreNumber) && soldToIds.Any() && int.TryParse(storeOrder.StoreNumber, out var storeIndex) && storeIndex > 0 && storeIndex <= soldToIds.Count)
+        {
+            return soldToIds[storeIndex - 1];
         }
+        
+        if (soldToIds.Count > 1) return "";
         
         return aiSpeechAssistant.Name; 
     }
