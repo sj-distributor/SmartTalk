@@ -462,25 +462,26 @@ public class SpeechMaticsService : ISpeechMaticsService
         var materialListText = string.Join("\n", historyItems.Select(x => $"{x.MaterialDesc} ({x.Material})"));
         
         var systemPrompt =
-            "你是一名订单分析助手。请从下面的客户分析报告文本中提取所有下单的物料名称、数量、单位，并且用历史物料列表尽力匹配每个物料的materialNumber。" +
-            "如果报告中提到了预约送货时间，请提取送货时间（格式yyyy-MM-dd）。" +
-            "请严格返回一个 JSON 对象，顶层只包含一个字段 \"orders\"，其值是一个数组。" +
-            "数组中的每个元素包含以下字段：\n" +
-            "- name: 物料名称\n" +
-            "- quantity: 数量（整数或小数）\n" +
-            "- unit: 客户提到的单位，比如 \"case\" 表示箱，\"pc\" 表示件，如果未提到则为空字符串\n" +
-            "- materialNumber: 对应的物料编码（基础数字部分即可，比如11001）\n" +
-            "- deliveryDate: 客户预约送货日期（如果报告中没有则用空字符串）\n" +
-            "输出示例：\n" +
+            "你是一名訂單分析助手。請從下面的客戶分析報告文字中提取所有下單的物料名稱、數量、單位，並且用歷史物料列表盡力匹配每個物料的materialNumber。" +
+            "如果報告中提到了預約送貨時間，請提取送貨時間（格式yyyy-MM-dd）。" +
+            "請嚴格傳回一個 JSON 對象，頂層只包含一個字段 \"orders\"，其值是一個數組。" +
+            "數組中的每個元素包含以下字段：\n" +
+            "- name: 物料名稱\n" +
+            "- quantity: 數量（整數或小數）\n" +
+            "- unit: 客戶提到的單位，例如 \"case\" 表示箱，\"pc\" 表示件，如果未提到則為空字串n" +
+            "- materialNumber: 對應的物料編碼（基礎數字部分即可，例如11001）\n" +
+            "- deliveryDate: 客戶預約送貨日期（如果報告中沒有則用空字符串）\n" +
+            "輸出範例：\n" +
             "{\n  \"orders\": [\n    { \"name\": \"雞胸肉\", \"quantity\": 1, \"unit\": \"case\", \"materialNumber\": \"000000000010010253\", \"deliveryDate\": \"2025-08-20\" }\n  ]\n}\n\n" +
-            "历史物料列表：\n" + materialListText + "\n\n" +
-            "注意：必须严格输出 JSON，对象顶层字段必须是 \"orders\"，不要有其他字段或额外说明。";
+            "歷史物料列表：\n" + materialListText + "\n\n" +
+            "注意：必須嚴格輸出 JSON，物件頂層字段必須是 \"orders\"，不要有其他字段或額外說明，提取的物料名稱需要為繁體中文。"+
+            "**如果客戶分析文本中沒有任何可識別的下單信息，請返回：{ \"orders\": [] }。不得臆造或猜測物料。**";
         Log.Information("Sending prompt to GPT: {Prompt}", systemPrompt);
         
         var messages = new List<ChatMessage>
         {
             new SystemChatMessage(systemPrompt),
-            new UserChatMessage("客户分析报告文本：\n" + reportText + "\n\n")
+            new UserChatMessage("客戶分析報告文本：\n" + reportText + "\n\n")
         };
         
         var completion = await client.CompleteChatAsync(messages, new ChatCompletionOptions { ResponseModalities = ChatResponseModalities.Text, ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat() }, cancellationToken).ConfigureAwait(false);
