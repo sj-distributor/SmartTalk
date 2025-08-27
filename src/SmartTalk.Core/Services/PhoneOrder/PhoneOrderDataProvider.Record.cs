@@ -8,7 +8,6 @@ using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Dto.Restaurant;
 using SmartTalk.Messages.Enums;
-using SmartTalk.Messages.Enums.Account;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.STT;
 
@@ -77,7 +76,7 @@ public partial class PhoneOrderDataProvider
             query = query.Where(record => record.CreatedDate >= utcStart.Value && record.CreatedDate < utcEnd.Value);
         
         if (!string.IsNullOrEmpty(orderId))
-            query = query.Where(record => record.OrderId == orderId);
+            query = query.Where(record => record.OrderId.Contains(orderId));
 
         var records = await query.Distinct().OrderByDescending(x => x.CreatedDate).ToListAsync(cancellationToken);
 
