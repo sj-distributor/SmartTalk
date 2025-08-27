@@ -2,6 +2,7 @@ using AutoMapper;
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Data;
 using SmartTalk.Core.Domain.Account;
+using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Ioc;
@@ -42,7 +43,11 @@ public partial interface IPosDataProvider : IScopedDependency
     
     Task<PosCompanyStore> GetPosStoreByAgentIdAsync(int agentId, CancellationToken cancellationToken = default);
     
-    Task<List<PosAgent>> GetPosAgentsAsync(int? storeId = null, int? agentId = null, CancellationToken cancellationToken = default);
+    Task<List<PosAgent>> GetPosAgentsAsync(List<int> storeIds = null, int? agentId = null, CancellationToken cancellationToken = default);
+
+    Task<PosStoreUser> GetPosStoreUsersByUserIdAndAssistantIdAsync(List<int> assistantIds, int userId, CancellationToken cancellationToken = default);
+
+    Task<List<PosAgent>> GetPosAgentByUserIdAsync(int userId, CancellationToken cancellationToken);
 }
 
 public partial class PosDataProvider : IPosDataProvider
@@ -285,16 +290,38 @@ public partial class PosDataProvider : IPosDataProvider
         return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<PosAgent>> GetPosAgentsAsync(int? storeId = null, int? agentId = null, CancellationToken cancellationToken = default)
+    public async Task<List<PosAgent>> GetPosAgentsAsync(List<int> storeIds = null, int? agentId = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<PosAgent>();
 
-        if (storeId.HasValue)
-            query = query.Where(x => x.StoreId == storeId.Value);
+        if (storeIds != null && storeIds.Count != 0)
+            query = query.Where(x => storeIds.Contains(x.StoreId));
 
         if (agentId.HasValue)
             query = query.Where(x => x.AgentId == agentId.Value);
         
+        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<PosStoreUser> GetPosStoreUsersByUserIdAndAssistantIdAsync(List<int> assistantIds, int userId, CancellationToken cancellationToken = default)
+    {
+        var query = from assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>().Where(x => assistantIds.Contains(x.Id))
+            join agentAssistant in _repository.Query<AgentAssistant>() on assistant.Id equals agentAssistant.AssistantId
+            join posAgent in _repository.Query<PosAgent>() on agentAssistant.AgentId equals posAgent.AgentId
+            join posStoreUser in _repository.Query<PosStoreUser>() on posAgent.StoreId equals posStoreUser.StoreId
+            where posStoreUser.UserId == userId
+            select posStoreUser;
+
+        return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<PosAgent>> GetPosAgentByUserIdAsync(int userId, CancellationToken cancellationToken)
+    {
+        var query = from storeUsers in _repository.Query<PosStoreUser>()
+            join posAgent in _repository.Query<PosAgent>() on storeUsers.StoreId equals posAgent.StoreId
+            where storeUsers.UserId == userId
+            select posAgent;
+
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }

@@ -1,3 +1,6 @@
+using Smarties.Messages.DTO.SmartAssistant.Domain;
+using SmartTalk.Messages.Dto.AiSpeechAssistant;
+
 namespace SmartTalk.Messages.Dto.Pos;
 
 public class PosCompanyStoreDto

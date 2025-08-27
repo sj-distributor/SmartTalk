@@ -36,8 +36,8 @@ public class AiSpeechAssistant : IEntity<int>, IAgent, IHasCreatedFields
     [Column("model_voice")]
     public string ModelVoice { get; set; }
     
-    [Column("agent_id")]
-    public int AgentId { get; set; }
+    // [Column("agent_id")]
+    // public int AgentId { get; set; }
     
     [Column("custom_record_analyze_prompt")]
     public string CustomRecordAnalyzePrompt { get; set; }
@@ -47,6 +47,12 @@ public class AiSpeechAssistant : IEntity<int>, IAgent, IHasCreatedFields
     
     [Column("is_display")]
     public bool IsDisplay { get; set; }
+
+    [Column("wait_interval")]
+    public int WaitInterval { get; set; } = 500;
+    
+    [Column("is_transfer_human")]
+    public bool IsTransferHuman { get; set; } = false;
     
     [Column("group_key")]
     public int GroupKey { get; set; }
