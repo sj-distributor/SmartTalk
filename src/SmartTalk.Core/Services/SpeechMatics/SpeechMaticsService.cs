@@ -546,7 +546,7 @@ public class SpeechMaticsService : ISpeechMaticsService
 
         return new GenerateAiOrdersRequestDto
         {
-            AiModel = "SmartTalk",
+            AiModel = "Smartalk",
             AiOrderInfoDto = new AiOrderInfoDto
             {
                 SoldToId = soldToId,
