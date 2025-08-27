@@ -9,6 +9,7 @@ using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 using SixLabors.Fonts;
 using System.Text;
+using System.Text.RegularExpressions;
 using Aliyun.OSS;
 using AutoMapper;
 using Newtonsoft.Json;
@@ -189,7 +190,6 @@ public class PrinterService : IPrinterService
             storeCreatedDate = order.CreatedDate.ToString("yyyy-MM-dd HH:mm:ss");
             storePrintDate = merchPrinterOrder.PrintDate.ToString("yyyy-MM-dd HH:mm:ss");
         }
-        
         
         var img = await RenderReceiptAsync(order.OrderNo,  
             JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(store.Names).GetValueOrDefault("en")?.GetValueOrDefault("name"),
@@ -467,22 +467,25 @@ public class PrinterService : IPrinterService
             var maxWidth = width - 20;
             var lines = new List<string>();
             
+            var tokens = Regex.Matches(text, @"\w+|[^\w\s]").Select(m => m.Value).ToList();
+
             var currentLine = "";
-            foreach (char c in text)
+            foreach (var token in tokens)
             {
-                var testLine = currentLine + c;
+                var testLine = string.IsNullOrEmpty(currentLine) ? token : currentLine + token;
                 var size = TextMeasurer.MeasureSize(testLine, new TextOptions(font));
 
-                if (size.Width > maxWidth && currentLine.Length > 0)
+                if (size.Width > maxWidth && !string.IsNullOrEmpty(currentLine))
                 {
                     lines.Add(currentLine);
-                    currentLine = c.ToString();
+                    currentLine = token;
                 }
                 else
                 {
                     currentLine = testLine;
                 }
             }
+
             if (!string.IsNullOrEmpty(currentLine))
                 lines.Add(currentLine);
             
@@ -660,7 +663,7 @@ public class PrinterService : IPrinterService
                     var raw = kvp.Key.Trim();
                     var qtyVal = kvp.Value;
                     var prefix = qtyVal > 1 ? $"{qtyVal}" : ">";
-                    var content = InsertLineBreakBetweenEnglishAndChinese(raw, remarkFont,col2Width + remarkExtraWidth - indentX);
+                    var content = InsertLineBreakBetweenEnglishAndChinese(raw, remarkFont, col2Width + remarkExtraWidth - indentX);
                     remarkLines.Add((prefix, content));
                 }
             }
@@ -753,7 +756,7 @@ public class PrinterService : IPrinterService
         }
 
         
-        void DrawSolidLine(float thickness = 2, float spacing = 10, Color? color = null, float padding = 10)
+        void DrawSolidLine(float thickness = 3, float spacing = 10, Color? color = null, float padding = 10)
         {
             color ??= Color.Black;
 
@@ -796,7 +799,6 @@ public class PrinterService : IPrinterService
             
             DrawLine($"{phones}", fontMaxSmall, centerAlign: true);    
         }
-        
         
         DrawDashedBoldLine();
         
