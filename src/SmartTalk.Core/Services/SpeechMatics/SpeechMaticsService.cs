@@ -358,11 +358,11 @@ public class SpeechMaticsService : ISpeechMaticsService
     { 
         if (string.IsNullOrEmpty(record.TranscriptionText)) return;
         
-        List<string> soldToIds = new List<string>(); 
+        var soldToIds = new List<string>(); 
         if (!string.IsNullOrEmpty(aiSpeechAssistant.Name))
              soldToIds = aiSpeechAssistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList();
 
-        var extractedOrders = await ExtractAndMatchOrderItemsFromReportAsync(record.TranscriptionText, new List<(string, string)>(), DateTime.Today, cancellationToken); 
+        var extractedOrders = await ExtractAndMatchOrderItemsFromReportAsync(record.TranscriptionText, new List<(string, string)>(), DateTime.Today, cancellationToken).ConfigureAwait(false); 
         if (!extractedOrders.Any()) return;
         
         var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
@@ -535,7 +535,7 @@ public class SpeechMaticsService : ISpeechMaticsService
             return soldToIds[storeIndex - 1];
         }
         
-        if (soldToIds.Count > 1) return "";
+        if (soldToIds.Count > 1) return string.Empty;
         
         return aiSpeechAssistant.Name; 
     }
