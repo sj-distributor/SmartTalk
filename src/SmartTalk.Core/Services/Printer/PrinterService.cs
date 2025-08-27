@@ -14,12 +14,15 @@ using AutoMapper;
 using Newtonsoft.Json;
 using Serilog;
 using SmartTalk.Core.Services.AliYun;
+using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Pos;
+using SmartTalk.Core.Settings.Printer;
 using SmartTalk.Message.Commands.Printer;
 using SmartTalk.Message.Events.Printer;
 using SmartTalk.Messages.Commands.Printer;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Printer;
+using SmartTalk.Messages.Dto.WeChat;
 using SmartTalk.Messages.Enums.Printer;
 using SmartTalk.Messages.Events.Printer;
 using Color = SixLabors.ImageSharp.Color;
@@ -64,18 +67,22 @@ public interface IPrinterService : IScopedDependency
 public class PrinterService : IPrinterService
 {
     private readonly IMapper _mapper;
+    private readonly IWeChatClient _weChatClient;
     private readonly ICacheManager _cacheManager;
     private readonly IAliYunOssService _ossService;
     private readonly IPosDataProvider _posDataProvider;
     private readonly IPrinterDataProvider _printerDataProvider;
+    private readonly PrinterSendErrorLogSetting _printerSendErrorLogSetting;
 
-    public PrinterService(IMapper mapper,ICacheManager cacheManager, IAliYunOssService ossService, IPosDataProvider posDataProvider, IPrinterDataProvider printerDataProvider)
+    public PrinterService(IMapper mapper, IWeChatClient weChatClient, ICacheManager cacheManager, IAliYunOssService ossService, IPosDataProvider posDataProvider, IPrinterDataProvider printerDataProvider, PrinterSendErrorLogSetting printerSendErrorLogSetting)
     {
         _mapper = mapper;
-        _cacheManager = cacheManager;
         _ossService = ossService;
+        _weChatClient = weChatClient;
+        _cacheManager = cacheManager;
         _posDataProvider = posDataProvider;
         _printerDataProvider = printerDataProvider;
+        _printerSendErrorLogSetting = printerSendErrorLogSetting;
     }
 
     public async Task<GetPrinterJobAvailableResponse> GetPrinterJobAvailableAsync(GetPrinterJobAvailableRequest request, CancellationToken cancellationToken)
@@ -185,7 +192,7 @@ public class PrinterService : IPrinterService
             order.SubTotal.ToString(),
             order.Tax.ToString(),
             order.Total.ToString(),
-            DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")).ConfigureAwait(false);
+            merchPrinterOrder.PrintDate.ToString("yyyy-MM-dd HH:mm:ss")).ConfigureAwait(false);
        
         var imageKey = Guid.NewGuid().ToString();
         
@@ -389,6 +396,21 @@ public class PrinterService : IPrinterService
         
         var message = $"{(printError?"Print Error":"Print")}";
         merchPrinterLog.Message = message;
+        
+        var store = await _posDataProvider.GetPosCompanyStoreAsync(id: @event.MerchPrinterOrderDto.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var order = await _posDataProvider.GetPosOrderByIdAsync(orderId: @event.MerchPrinterOrderDto.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var storeName = JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(store.Names).GetValueOrDefault("en")?.GetValueOrDefault("name");
+        
+        var text = new SendWorkWechatGroupRobotTextDto { Content = $"🆘SMT Cloud Print Error Infor🆘\n\nPrint Error: {merchPrinterLog.Message}\nPrint Time: {@event.MerchPrinterOrderDto.PrintDate.ToString("yyyy-MM-dd HH:mm:ss")}\nStore: {storeName}\nOrder Date:{order.CreatedDate.ToString("yyyy-MM-dd")}\nOrder NO: #{order.OrderNo}"};
+        text.MentionedMobileList = "@all";
+        
+        await _weChatClient.SendWorkWechatRobotMessagesAsync(_printerSendErrorLogSetting.CloudPrinterSendErrorLogRobotUrl, new SendWorkWechatGroupRobotMessageDto
+        {
+            MsgType = "text",
+            Text = text
+        }, cancellationToken).ConfigureAwait(false);
             
         await _printerDataProvider.AddMerchPrinterLogAsync(merchPrinterLog, cancellationToken).ConfigureAwait(false);
     }
@@ -739,8 +761,23 @@ public class PrinterService : IPrinterService
         
         if (!string.IsNullOrEmpty(restaurantAddress))
             DrawLine($"{restaurantAddress}", fontMaxSmall, centerAlign: true);
+
+        if (!string.IsNullOrEmpty(restaurantPhone))
+        {
+            var phoneSplit = restaurantPhone.Split(",");
+
+            var phones = "";
+            
+            foreach (var phone in phoneSplit)
+            {
+                phones += $"({phone[..3]})-{phone.Substring(3, 3)}-{phone[6..]},";
+            }
+            
+            phones = phones.TrimEnd(',');
+            
+            DrawLine($"({phones})", fontMaxSmall, centerAlign: true);    
+        }
         
-        DrawLine($"{restaurantPhone}", fontMaxSmall, centerAlign: true);
         
         DrawDashedBoldLine();
         
@@ -753,7 +790,10 @@ public class PrinterService : IPrinterService
             DrawLine($"{guestName}", fontSmall);
 
         if (!string.IsNullOrEmpty(guestPhone))
-            DrawLine($"{guestPhone}", fontSmall);
+        {
+            var formatted = $"({guestPhone[..3]})-{guestPhone.Substring(3, 3)}-{guestPhone[6..]}";
+            DrawLine($"{formatted}", fontSmall);    
+        }
         
         if (!string.IsNullOrEmpty(guestAddress))
             DrawLine($"{guestAddress}", fontSmall);
