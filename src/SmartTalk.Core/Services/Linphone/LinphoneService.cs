@@ -26,6 +26,8 @@ public interface ILinphoneService : IScopedDependency
     Task AutoGetLinphoneCdrRecordAsync(CancellationToken cancellationToken);
 
     Task<GetLinphoneRestaurantNumberResponse> GetLinphoneRestaurantNumberAsync(GetLinphoneRestaurantNumberRequest request, CancellationToken cancellationToken);
+
+    Task<GetLinphoneDataResponse> GetLinphoneDataAsync(GetLinphoneDataRequest request, CancellationToken cancellationToken);
 }
 
 public class LinphoneService : ILinphoneService
@@ -252,5 +254,85 @@ public class LinphoneService : ILinphoneService
         {
             Data = restaurantPhoneNumbers?.PhoneNumber
         };
+    }
+
+    public async Task<GetLinphoneDataResponse> GetLinphoneDataAsync(GetLinphoneDataRequest request, CancellationToken cancellationToken)
+    {
+        var specifiedDate = request.Time.Date;
+        var pstOffset = TimeZoneInfo.FindSystemTimeZoneById("America/Los_Angeles").GetUtcOffset(specifiedDate);
+        var startPst = new DateTimeOffset(specifiedDate, pstOffset);
+        var endPst = startPst.AddDays(1);
+
+        Log.Information("Filter time: start: {@startPst} end: {@endPst}", startPst, endPst);
+        
+        try
+        {
+            var restaurants = await _linphoneDataProvider.GetRestaurantSipAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+            
+            var linphoneCdrs = await _linphoneDataProvider.GetCdrsAsync(startPst.ToUnixTimeSeconds(), endPst.ToUnixTimeSeconds(), cancellationToken).ConfigureAwait(false);
+           
+            linphoneCdrs = linphoneCdrs.Where(x => !string.IsNullOrEmpty(x.RecordingFile)).ToList();
+            
+            Log.Information("LinphoneCdrs: {@linphoneCdrs}", linphoneCdrs);
+            
+            var externalLinphoneGroupedCdrs = linphoneCdrs.GroupBy(x => x.RecordingFile);
+
+            var linphoneDates = new List<LinphoneData>();
+            
+            var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("America/Los_Angeles");
+            
+            var tasks = externalLinphoneGroupedCdrs.Select(async group =>
+            {
+                Log.Information("Cdr: {@group}", group);
+
+                LinphoneData linphoneData;
+
+                if (group.Any(s => s.Disposition == "ANSWERED"))
+                {
+                    var answeredCdr = group.First(x => x.Disposition == "ANSWERED"); 
+                    
+                    linphoneData = new LinphoneData
+                    {
+                        CallId = answeredCdr.Id,
+                        MerchName = restaurants.FirstOrDefault(x => x.Key == answeredCdr.Did).Value ?? restaurants.FirstOrDefault(x => x.Key == answeredCdr.Cnum).Value ?? "未知",
+                        CallTime = TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeSeconds((long)answeredCdr.Uniqueid), pacificZone).ToString("yyyy-MM-dd HH:mm:ss"),
+                        PickStat = "On",
+                        CallPeriod = TimeSpan.FromSeconds(int.Parse(answeredCdr.Duration)).ToString(@"mm\:ss")
+                    };
+                }
+                else
+                {
+                    var answeredCdr = group.First(); 
+                    
+                    linphoneData = new LinphoneData
+                    {
+                        CallId = answeredCdr.Id,
+                        MerchName = restaurants.FirstOrDefault(x => x.Key == answeredCdr.Did).Value ?? restaurants.FirstOrDefault(x => x.Key == answeredCdr.Cnum).Value ?? "未知",
+                        CallTime = TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeSeconds((long)answeredCdr.Uniqueid), pacificZone).ToString("yyyy-MM-dd HH:mm:ss"),
+                        PickStat = "Cut",
+                        CallPeriod = TimeSpan.FromSeconds(int.Parse(answeredCdr.Duration)).ToString(@"mm\:ss")
+                    };
+                }
+
+                return linphoneData;
+            });
+
+            var results = await Task.WhenAll(tasks);
+            
+            linphoneDates.AddRange(results);
+
+            linphoneDates.RemoveAll(x => x == null);
+            
+            return new GetLinphoneDataResponse
+            {
+                Data = linphoneDates
+            };
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Redis occur error: {ErrorMessage}", e.Message);
+        }
+        
+        return new GetLinphoneDataResponse();
     }
 }
