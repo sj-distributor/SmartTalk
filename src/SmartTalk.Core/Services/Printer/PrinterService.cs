@@ -176,12 +176,26 @@ public class PrinterService : IPrinterService
             storeId: merchPrinterOrder.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
         
         var store = await _posDataProvider.GetPosCompanyStoreDetailAsync(order.StoreId, cancellationToken).ConfigureAwait(false);
+
+        var storeCreatedDate = "";
+        var storePrintDate = "";
+        if (!string.IsNullOrEmpty(store.Timezone))
+        {
+            storeCreatedDate = TimeZoneInfo.ConvertTimeFromUtc(order.CreatedDate.UtcDateTime, TimeZoneInfo.FindSystemTimeZoneById(store.Timezone)).ToString("yyyy-MM-dd HH:mm:ss");    
+            storePrintDate = TimeZoneInfo.ConvertTimeFromUtc(merchPrinterOrder.PrintDate.UtcDateTime, TimeZoneInfo.FindSystemTimeZoneById(store.Timezone)).ToString("yyyy-MM-dd HH:mm:ss");    
+        }
+        else
+        {
+            storeCreatedDate = order.CreatedDate.ToString("yyyy-MM-dd HH:mm:ss");
+            storePrintDate = merchPrinterOrder.PrintDate.ToString("yyyy-MM-dd HH:mm:ss");
+        }
+        
         
         var img = await RenderReceiptAsync(order.OrderNo,  
             JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(store.Names).GetValueOrDefault("en")?.GetValueOrDefault("name"),
             store.Address,
             store.PhoneNums,
-            order.CreatedDate.ToString("yyyy-MM-dd HH:mm:ss"),
+            storeCreatedDate,
             merchPrinter.PrinterName,
             order.Type.ToString(),
             order.Name,
@@ -192,7 +206,7 @@ public class PrinterService : IPrinterService
             order.SubTotal.ToString(),
             order.Tax.ToString(),
             order.Total.ToString(),
-            merchPrinterOrder.PrintDate.ToString("yyyy-MM-dd HH:mm:ss")).ConfigureAwait(false);
+            storePrintDate).ConfigureAwait(false);
        
         var imageKey = Guid.NewGuid().ToString();
         
@@ -450,13 +464,13 @@ public class PrinterService : IPrinterService
 
         void DrawLine(string text, Font font, float spacing = 20, bool rightAlign = false, bool centerAlign = false)
         {
-            float maxWidth = width - 20;
-            List<string> lines = new List<string>();
+            var maxWidth = width - 20;
+            var lines = new List<string>();
             
-            string currentLine = "";
+            var currentLine = "";
             foreach (char c in text)
             {
-                string testLine = currentLine + c;
+                var testLine = currentLine + c;
                 var size = TextMeasurer.MeasureSize(testLine, new TextOptions(font));
 
                 if (size.Width > maxWidth && currentLine.Length > 0)
@@ -540,42 +554,47 @@ public class PrinterService : IPrinterService
             while (i < text.Length)
             {
                 var current = text[i];
-                var currType = GetCharType(current);
-                lineBuffer.Append(current);
+                var type = GetCharType(current);
+
+                string token;
+
+                if (type == CharType.English)
+                {
+                    var start = i;
+                    while (i < text.Length && GetCharType(text[i]) == CharType.English)
+                        i++;
+                    token = text.Substring(start, i - start);
+                }
+                else
+                {
+                    token = current.ToString();
+                    i++;
+                }
                 
-                var size = TextMeasurer.MeasureSize(lineBuffer.ToString(), new TextOptions(font));
-                if (size.Width > maxWidth && lineBuffer.Length > 1)
+                var testLine = lineBuffer + token;
+                var size = TextMeasurer.MeasureSize(testLine, new TextOptions(font));
+
+                if (size.Width > maxWidth && lineBuffer.Length > 0)
                 {
-                    sb.AppendLine(lineBuffer.ToString(0, lineBuffer.Length - 1));
+                    sb.AppendLine(lineBuffer.ToString());
                     lineBuffer.Clear();
-                    lineBuffer.Append(current);
                 }
 
-                var j = i + 1;
-                while (j < text.Length && GetCharType(text[j]) == CharType.Other)
+                lineBuffer.Append(token);
+                
+                if (i < text.Length)
                 {
-                    lineBuffer.Append(text[j]);
-                    i = j;
-                    j++;
-                }
-
-                if (j < text.Length)
-                {
-                    var nextType = GetCharType(text[j]);
-                    if (currType != CharType.Other && nextType != CharType.Other && currType != nextType)
+                    var nextType = GetCharType(text[i]);
+                    if (type != CharType.Other && nextType != CharType.Other && type != nextType)
                     {
                         sb.AppendLine(lineBuffer.ToString());
                         lineBuffer.Clear();
                     }
                 }
-
-                i++;
             }
 
             if (lineBuffer.Length > 0)
-            {
-                sb.Append(lineBuffer.ToString());
-            }
+                sb.Append(lineBuffer);
 
             return sb.ToString();
         }
@@ -751,7 +770,7 @@ public class PrinterService : IPrinterService
         
         void DrawDashedLine() => DrawLine(GenerateFullLine('-', fontNormal, width-20), fontNormal);
         
-        void DrawDashedBoldLine() => DrawLine(GenerateFullLine('-', fontBold, width-20), fontBold);
+        void DrawDashedBoldLine() => DrawLine(GenerateFullLine('-', fontBold, width-20), fontBold, 30);
 
         Log.Information("orderItems: {@orderItems}", orderItems);
         
@@ -775,7 +794,7 @@ public class PrinterService : IPrinterService
             
             phones = phones.TrimEnd(',');
             
-            DrawLine($"({phones})", fontMaxSmall, centerAlign: true);    
+            DrawLine($"{phones}", fontMaxSmall, centerAlign: true);    
         }
         
         
@@ -830,7 +849,7 @@ public class PrinterService : IPrinterService
         
         DrawDashedLine();
         
-        DrawLine("*** Unpaid ***", CreateFont(35, true), spacing: 15, centerAlign: true);
+        DrawLine("*** Unpaid ***", CreateFont(35, true), spacing: 30, centerAlign: true);
         
         DrawDashedLine();
         
