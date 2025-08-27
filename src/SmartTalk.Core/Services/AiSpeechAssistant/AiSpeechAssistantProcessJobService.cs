@@ -65,7 +65,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         
         var agentAssistant = await _speechAssistantDataProvider.GetAgentAssistantsAsync(assistantIds: [context.Assistant.Id], cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        if (agentAssistant == null || agentAssistant.Count == 0) throw new NullReferenceException("AgentAssistant is null");
+        if (agentAssistant == null || agentAssistant.Count == 0) throw new Exception("AgentAssistant is null");
         
         var record = new PhoneOrderRecord
         {
