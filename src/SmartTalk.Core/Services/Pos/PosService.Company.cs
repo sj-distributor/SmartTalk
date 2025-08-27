@@ -216,6 +216,11 @@ public partial class PosService : IPosService
         
         if (categories == null || categories.Count == 0) categories = [];
 
+        var products = await _posDataProvider.GetPosProductsAsync(
+            categoryIds: categories.Select(x => x.Id).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        categories = categories.Where(x => products.Select(p => p.CategoryId).Distinct().Contains(x.Id)).ToList();
+
         return new GetPosCategoriesResponse
         {
             Data = _mapper.Map<List<PosCategoryDto>>(categories)
