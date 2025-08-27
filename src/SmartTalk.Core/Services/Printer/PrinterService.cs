@@ -467,18 +467,26 @@ public class PrinterService : IPrinterService
             var maxWidth = width - 20;
             var lines = new List<string>();
             
-            var tokens = Regex.Matches(text, @"\w+|[^\w\s]").Select(m => m.Value).ToList();
+            var tokens = Regex.Matches(text, @"\w+|[^\w\s]|\s").Select(m => m.Value).ToList();
 
             var currentLine = "";
             foreach (var token in tokens)
             {
-                var testLine = string.IsNullOrEmpty(currentLine) ? token : currentLine + token;
+                var testLine = currentLine + token;
                 var size = TextMeasurer.MeasureSize(testLine, new TextOptions(font));
 
-                if (size.Width > maxWidth && !string.IsNullOrEmpty(currentLine))
+                if (size.Width > maxWidth && !string.IsNullOrWhiteSpace(currentLine))
                 {
-                    lines.Add(currentLine);
-                    currentLine = token;
+                    if (Regex.IsMatch(token, @"[,.!?;:，。！？；：]") && lines.Count > 0)
+                    {
+                        lines[^1] += token;
+                        currentLine = "";
+                    }
+                    else
+                    {
+                        lines.Add(currentLine);
+                        currentLine = token.TrimStart();
+                    }
                 }
                 else
                 {
