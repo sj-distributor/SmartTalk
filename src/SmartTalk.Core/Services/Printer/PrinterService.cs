@@ -567,6 +567,8 @@ public class PrinterService : IPrinterService
                 var current = text[i];
                 var type = GetCharType(current);
 
+                Log.Information("current:{current},type:{type}", current, type);
+
                 string token;
 
                 if (type == CharType.English)
@@ -584,6 +586,8 @@ public class PrinterService : IPrinterService
                 
                 var testLine = lineBuffer + token;
                 var size = TextMeasurer.MeasureSize(testLine, new TextOptions(font));
+
+                Log.Information("testLine:{@testLine}:{@size}:{@maxWidth}", testLine, size, maxWidth);
 
                 if (size.Width > maxWidth && lineBuffer.Length > 0)
                 {
