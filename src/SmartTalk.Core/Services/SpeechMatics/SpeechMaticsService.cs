@@ -432,7 +432,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         
         var draftOrder = new GenerateAiOrdersRequestDto
         {
-            AiModel = "SmartTalk",
+            AiModel = "Smartalk",
             AiOrderInfoDto = new AiOrderInfoDto
             {
                 SoldToId = aiSpeechAssistant.Name,
