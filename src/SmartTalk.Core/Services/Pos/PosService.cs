@@ -315,7 +315,9 @@ public partial class PosService : IPosService
     
     public async Task<bool> CheckCurrentIsAdminAsync(CancellationToken cancellationToken)
     {
-        var roleUsers = await _accountDataProvider.GetRoleUserByRoleNameAsync(SecurityStore.Roles.SuperAdministrator, cancellationToken).ConfigureAwait(false);
+        var rolesToCheck = new List<string> { SecurityStore.Roles.SuperAdministrator, SecurityStore.Roles.Administrator };
+        
+        var roleUsers = await _accountDataProvider.GetRoleUserByRoleNameAsync(rolesToCheck, cancellationToken).ConfigureAwait(false);
 
         Log.Information("Get admin role users: {@roleUsers} by current user: {@currentUserId}", roleUsers, _currentUser.Id.Value);
         
@@ -337,7 +339,7 @@ public partial class PosService : IPosService
         var enrichStores = stores.Select(store => new GetPosCurrentUserStoresResponseData
         {
             Store = store,
-            AgentIds = allAgents.Where(x => x.StoreId == store.Id).Select(x => x.Id).ToList()
+            AgentIds = allAgents.Where(x => x.StoreId == store.Id).Select(x => x.AgentId).ToList()
         }).ToList();
 
         return new GetPosCurrentUserStoresResponse { Data = enrichStores };

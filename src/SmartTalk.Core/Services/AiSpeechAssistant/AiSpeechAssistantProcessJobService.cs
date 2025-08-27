@@ -1,5 +1,6 @@
 using System.Text;
 using AutoMapper;
+using Google.Cloud.Translation.V2;
 using Newtonsoft.Json;
 using Serilog;
 using SmartTalk.Core.Domain.PhoneOrder;
@@ -30,6 +31,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
     private readonly IMapper _mapper;
     private readonly IVectorDb _vectorDb;
     private readonly TwilioSettings _twilioSettings;
+    private readonly TranslationClient _translationClient;
     private readonly IRestaurantDataProvider _restaurantDataProvider;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly IAiSpeechAssistantDataProvider _speechAssistantDataProvider;
@@ -38,6 +40,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         IMapper mapper,
         IVectorDb vectorDb,
         TwilioSettings twilioSettings,
+        TranslationClient translationClient,
         IRestaurantDataProvider restaurantDataProvider,
         IPhoneOrderDataProvider phoneOrderDataProvider,
         IAiSpeechAssistantDataProvider speechAssistantDataProvider)
@@ -45,6 +48,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         _mapper = mapper;
         _vectorDb = vectorDb;
         _twilioSettings = twilioSettings;
+        _translationClient = translationClient;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _restaurantDataProvider = restaurantDataProvider;
         _speechAssistantDataProvider = speechAssistantDataProvider;

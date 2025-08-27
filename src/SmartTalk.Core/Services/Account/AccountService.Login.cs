@@ -14,7 +14,16 @@ public partial class AccountService
             await AuthenticateAsync(request.UserName, request.Password, request.VerificationType, cancellationToken).ConfigureAwait(false);
 
         if (authenticateResult.CannotLoginReason != UserAccountCannotLoginReason.None)
-            return new LoginResponse { Code = HttpStatusCode.Unauthorized, Msg = authenticateResult.CannotLoginReason.ToString(), VerifyCodeResult = authenticateResult.VerifyCodeResult };
+        {
+            var code = HttpStatusCode.Unauthorized;
+
+            if (authenticateResult.CannotLoginReason == UserAccountCannotLoginReason.NoAssociatedStore)
+            {
+                code = HttpStatusCode.Forbidden;
+            }
+            
+            return new LoginResponse { Code = code, Msg = GetFriendlyErrorMessage(authenticateResult.CannotLoginReason), VerifyCodeResult = authenticateResult.VerifyCodeResult };
+        }
         
         return new LoginResponse
         {
@@ -28,6 +37,10 @@ public partial class AccountService
         AuthenticateInternalResult authenticateInternalResult = new();
         
         await AuthenticateSelfAsync(authenticateInternalResult, username, clearTextPassword, loginVerificationType, cancellationToken).ConfigureAwait(false);
+        
+        if (authenticateInternalResult.CannotLoginReason != UserAccountCannotLoginReason.None)
+            return authenticateInternalResult;
+        
         await AuthenticateWiltechsAsync(authenticateInternalResult, username, clearTextPassword, loginVerificationType, cancellationToken).ConfigureAwait(false);
 
         return authenticateInternalResult;
@@ -56,7 +69,22 @@ public partial class AccountService
         if (account == null)
         {
             authenticateInternalResult.CannotLoginReason = UserAccountCannotLoginReason.NotFound;
+            authenticateInternalResult.IsAuthenticated = false;
             return;            
+        }
+        
+        if (loginVerificationType == UserAccountVerificationType.Password)
+        {
+            if (account.AccountLevel == UserAccountLevel.AiAgent || account.AccountLevel == UserAccountLevel.Company)
+            {
+                var storeUsers = await _posDataProvider.GetPosStoreUsersByUserIdAsync(account.Id, cancellationToken).ConfigureAwait(false);
+                if (!storeUsers.Any())
+                {
+                    authenticateInternalResult.CannotLoginReason = UserAccountCannotLoginReason.NoAssociatedStore;
+                    authenticateInternalResult.IsAuthenticated = false;
+                    return;
+                }
+            }
         }
 
         switch (loginVerificationType)
@@ -114,4 +142,11 @@ public partial class AccountService
 
         public UserAccountCannotLoginReason CannotLoginReason { get; set; } = UserAccountCannotLoginReason.None;
     }
+    
+    private string GetFriendlyErrorMessage(UserAccountCannotLoginReason reason) => reason switch
+    {
+        UserAccountCannotLoginReason.NoAssociatedStore => "The account is not associated with the store, please contact the administrator",
+    
+        _ => reason.ToString()
+    };
 }

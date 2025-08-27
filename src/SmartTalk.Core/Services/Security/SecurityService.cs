@@ -13,6 +13,7 @@ using SmartTalk.Core.Services.Pos;
 using SmartTalk.Messages.Requests.Security;
 using SmartTalk.Messages.Commands.Security;
 using SmartTalk.Messages.Constants;
+using SmartTalk.Messages.Dto.Account;
 using SmartTalk.Messages.Enums.Security;
 using SmartTalk.Messages.Events.Security;
 
@@ -32,6 +33,8 @@ public interface ISecurityService : IScopedDependency
      
      Task<UserPermissionsCreatedEvent> CreateUserPermissionsAsync(
          CreateUserPermissionsCommand command, CancellationToken cancellationToken);
+
+     Task<SwitchLanguageResponse> SwitchLanguageAsync(SwitchLanguageCommand command, CancellationToken cancellationToken);
 }
 
 public class SecurityService : ISecurityService
@@ -219,6 +222,20 @@ public class SecurityService : ISecurityService
         return new UserPermissionsCreatedEvent
         {
             UserPermissions = _mapper.Map<List<UserPermissionDto>>(userPermissions)
+        };
+    }
+
+    public async Task<SwitchLanguageResponse> SwitchLanguageAsync(SwitchLanguageCommand command, CancellationToken cancellationToken)
+    {
+        var userAccount = await _accountDataProvider.GetUserAccountByUserIdAsync(_currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
+
+        userAccount.SystemLanguage = command.Language;
+
+        await _accountDataProvider.UpdateUserAccountAsync(userAccount, true, cancellationToken).ConfigureAwait(false);
+
+        return new SwitchLanguageResponse()
+        {
+            Data = _mapper.Map<UserAccountDto>(userAccount)
         };
     }
 }
