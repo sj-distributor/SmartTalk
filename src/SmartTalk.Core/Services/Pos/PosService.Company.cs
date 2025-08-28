@@ -52,7 +52,7 @@ public partial class PosService : IPosService
     {
         var company = new PosCompany
         {
-            Name = command.Name, Description = command.Description, Status = false
+            Name = command.Name, PosServiceId = command.PosServiceId, Description = command.Description, Status = false
         };
 
         await _posDataProvider.CreatePosCompanyAsync(company, cancellationToken: cancellationToken).ConfigureAwait(false);

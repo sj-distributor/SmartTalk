@@ -13,7 +13,7 @@ namespace SmartTalk.Core.Services.Pos;
 public partial interface IPosDataProvider : IScopedDependency
 {
     Task<(int Count, List<PosCompany> Companies)> GetPosCompaniesAsync(
-        int? pageIndex = null, int? pageSize = null, List<int> companyIds = null, string keyword = null, CancellationToken cancellationToken = default);
+        int? pageIndex = null, int? pageSize = null, List<int> companyIds = null, int? posServiceId = null, string keyword = null, CancellationToken cancellationToken = default);
         
     Task<PosCompanyStore> GetPosCompanyStoreAsync(
         string link = null, int? id = null, string appId = null, string appSecret = null, CancellationToken cancellationToken = default);
@@ -35,7 +35,7 @@ public partial interface IPosDataProvider : IScopedDependency
     Task<List<PosStoreUserDto>> GetPosStoreUsersAsync(int storeId, CancellationToken cancellationToken = default);
     
     Task<List<PosCompanyStoreDto>> GetPosCompanyStoresWithSortingAsync(List<int> storeIds = null,
-        int? companyId = null, string keyword = null, bool isNormalSort = false, CancellationToken cancellationToken = default);
+        int? companyId = null, int? posServiceId = null, string keyword = null, bool isNormalSort = false, CancellationToken cancellationToken = default);
 
     Task<List<PosStoreUser>> GetPosStoreUsersByUserIdAsync(int userId, CancellationToken cancellationToken);
     
@@ -64,9 +64,12 @@ public partial class PosDataProvider : IPosDataProvider
     }
 
     public async Task<(int Count, List<PosCompany> Companies)> GetPosCompaniesAsync(
-        int? pageIndex = null, int? pageSize = null, List<int> companyIds = null, string keyword = null, CancellationToken cancellationToken = default)
+        int? pageIndex = null, int? pageSize = null, List<int> companyIds = null, int? posServiceId = null, string keyword = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<PosCompany>();
+
+        if (posServiceId.HasValue)
+            query = query.Where(x => x.PosServiceId == posServiceId.Value);
 
         if (companyIds != null && companyIds.Count != 0)
             query = query.Where(x => companyIds.Contains(x.Id));
@@ -213,9 +216,9 @@ public partial class PosDataProvider : IPosDataProvider
     }
 
     public async Task<List<PosCompanyStoreDto>> GetPosCompanyStoresWithSortingAsync(
-        List<int> storeIds = null, int? companyId = null, string keyword = null, bool isNormalSort = false, CancellationToken cancellationToken = default)
+        List<int> storeIds = null, int? companyId = null, int? posServiceId = null, string keyword = null, bool isNormalSort = false, CancellationToken cancellationToken = default)
     {
-        var query = from company in _repository.Query<PosCompany>().Where(x => x.Status)
+        var query = from company in _repository.Query<PosCompany>().Where(x => x.Status && x.PosServiceId == posServiceId)
             join store in _repository.Query<PosCompanyStore>().Where(x => x.Status) on company.Id equals store.CompanyId
             join order in _repository.Query<PosOrder>() on store.Id equals order.StoreId into orderGroup
             select new

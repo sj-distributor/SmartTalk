@@ -7,6 +7,8 @@ public class PosCompanyStoreDto
 {
     public int Id { get; set; }
     
+    public int PosServiceId { get; set; }
+    
     public int CompanyId { get; set; }
     
     public string Names { get; set; }

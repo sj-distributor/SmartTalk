@@ -21,6 +21,8 @@ public class UserAccountDto
     
     public bool IsActive { get; set; }
     
+    public int? PosServiceId { get; set; }
+    
     public UserAccountLevel AccountLevel { get; set; }
     
     public SystemLanguage SystemLanguage { get; set; }

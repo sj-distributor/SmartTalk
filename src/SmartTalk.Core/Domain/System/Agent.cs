@@ -13,6 +13,9 @@ public class Agent : IEntity, IHasCreatedFields
     [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     public int Id { get; set; }
     
+    [Column("pos_service_id")]
+    public int? PosServiceId { get; set; }
+    
     [Column("wechat_robot_key"), StringLength(256)]
     public string WechatRobotKey { get; set; }
     

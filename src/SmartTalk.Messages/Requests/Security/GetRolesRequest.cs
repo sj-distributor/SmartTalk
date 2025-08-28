@@ -3,10 +3,11 @@ using SmartTalk.Messages.Responses;
 using SmartTalk.Messages.DTO.Security;
 using SmartTalk.Messages.Enums.Account;
 using SmartTalk.Messages.Enums.Security;
+using SmartTalk.Messages.Requests.Pos;
 
 namespace SmartTalk.Messages.Requests.Security;
 
-public class GetRolesRequest : IRequest
+public class GetRolesRequest : PosHasServiceId, IRequest
 {
     public int PageIndex { get; set; } = 1;
 
