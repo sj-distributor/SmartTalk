@@ -714,7 +714,7 @@ public class PrinterService : IPrinterService
                 }
             });
 
-            y += (int)totalBlockHeight + 12 + backSpacing;
+            y += (int)totalBlockHeight + 20 + backSpacing;
         }
 
         
