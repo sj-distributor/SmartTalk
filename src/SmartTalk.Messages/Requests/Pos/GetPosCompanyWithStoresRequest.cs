@@ -7,7 +7,7 @@ using SmartTalk.Messages.Responses;
 namespace SmartTalk.Messages.Requests.Pos;
 
 [SmartTalkAuthorize(Permissions = new[] { SecurityStore.Permissions.CanViewBusinessManagement })]
-public class GetPosCompanyWithStoresRequest : IRequest
+public class GetPosCompanyWithStoresRequest : PosHasServiceId, IRequest
 {
     public int? PageIndex { get; set; }
     

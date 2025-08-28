@@ -13,6 +13,10 @@ public class RoleDto
     
     public int Id { get; set; }
     
+    public int? PosServiceId { get; set; }
+    
+    public UserAccountLevel UserAccountLevel { get; set; }
+    
     public DateTimeOffset CreatedDate { get; set; }
     
     public DateTimeOffset ModifiedDate { get; set; }

@@ -4,6 +4,8 @@ public class PosCompanyDto
 {
     public int Id { get; set; }
     
+    public int? PosServiceId { get; set; }
+    
     public string Name { get; set; }
     
     public string Description { get; set; }

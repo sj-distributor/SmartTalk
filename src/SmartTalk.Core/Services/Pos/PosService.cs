@@ -101,7 +101,7 @@ public partial class PosService : IPosService
     public async Task<GetPosCompanyWithStoresResponse> GetPosCompanyWithStoresAsync(GetPosCompanyWithStoresRequest request, CancellationToken cancellationToken)
     {
         var (count, companies) = await _posDataProvider.GetPosCompaniesAsync(
-            request.PageIndex, request.PageSize, cancellationToken: cancellationToken).ConfigureAwait(false);
+            request.PageIndex, request.PageSize, posServiceId: request.PosServiceId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var result = _mapper.Map<List<PosCompanyDto>>(companies);
         
@@ -305,7 +305,7 @@ public partial class PosService : IPosService
         
         var stores = await _posDataProvider.GetPosCompanyStoresWithSortingAsync(
             storeUsers?.Select(x => x.StoreId).ToList(),
-            request.CompanyId, request.Keyword, request.IsNormalSort, cancellationToken: cancellationToken).ConfigureAwait(false);
+            request.CompanyId, request.PosServiceId, request.Keyword, request.IsNormalSort, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         return new GetPosStoresResponse
         {
@@ -315,7 +315,7 @@ public partial class PosService : IPosService
     
     public async Task<bool> CheckCurrentIsAdminAsync(CancellationToken cancellationToken)
     {
-        var rolesToCheck = new List<string> { SecurityStore.Roles.SuperAdministrator, SecurityStore.Roles.Administrator };
+        var rolesToCheck = new List<string> { SecurityStore.Roles.SuperAdministrator, SecurityStore.Roles.Administrator, SecurityStore.Roles.ServiceProviderOperator };
         
         var roleUsers = await _accountDataProvider.GetRoleUserByRoleNameAsync(rolesToCheck, cancellationToken).ConfigureAwait(false);
 
