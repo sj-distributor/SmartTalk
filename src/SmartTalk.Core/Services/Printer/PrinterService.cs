@@ -207,6 +207,8 @@ public class PrinterService : IPrinterService
             order.Tax.ToString(),
             order.Total.ToString(),
             storePrintDate).ConfigureAwait(false);
+
+        await img.SaveAsync("img", cancellationToken).ConfigureAwait(false);
        
         var imageKey = Guid.NewGuid().ToString();
         
@@ -462,7 +464,7 @@ public class PrinterService : IPrinterService
 
         var y = 10;
 
-        void DrawLine(string text, Font font, float spacing = 20, bool rightAlign = false, bool centerAlign = false, bool heightAlign = false)
+        void DrawLine(string text, Font font, float spacing = 20, bool rightAlign = false, bool centerAlign = false, int? upY = 0)
         {
             var maxWidth = width - 20;
             var lines = new List<string>();
@@ -511,13 +513,14 @@ public class PrinterService : IPrinterService
 
                 Log.Information("line:{@line}, size{@size}", line, size);
                 
-                if (heightAlign)
+                
+                img.Mutate(ctx =>
                 {
-                    var totalHeight = ((int)spacing + (int)size.Height) / 2;
-                    img.Mutate(ctx => ctx.DrawText(line, font, textColor, new PointF(x, y + totalHeight)));
-                }
-                else
-                    img.Mutate(ctx => ctx.DrawText(line, font, textColor, new PointF(x, y)));
+                    if (upY != null) 
+                        ctx.DrawText(line, font, textColor, new PointF(x, y + upY.Value));
+                    else
+                        ctx.DrawText(line, font, textColor, new PointF(x, y));
+                });
                 
                 y += (int)size.Height + (int)spacing;
             }
@@ -722,7 +725,6 @@ public class PrinterService : IPrinterService
 
             y += (int)totalBlockHeight + 12 + backSpacing;
         }
-
         
         void DrawSolidLine(float thickness = 3, float spacing = 10, Color? color = null, float padding = 10)
         {
@@ -741,7 +743,7 @@ public class PrinterService : IPrinterService
         
         void DrawDashedLine() => DrawLine(GenerateFullLine('-', fontNormal, width-20), fontNormal);
         
-        void DrawDashedBoldLine() => DrawLine(GenerateFullLine('-', fontBold, width-20), fontBold);
+        void DrawDashedBoldLine(int? upY = 0) => DrawLine(GenerateFullLine('-', fontBold, width-20), fontBold, upY: upY);
 
         Log.Information("orderItems: {@orderItems}", orderItems);
         
@@ -765,10 +767,10 @@ public class PrinterService : IPrinterService
             
             phones = phones.TrimEnd(',');
             
-            DrawLine($"{phones}", fontMaxSmall, centerAlign: true, spacing:10);    
+            DrawLine($"{phones}", fontMaxSmall, centerAlign: true, spacing:0);    
         }
         
-        DrawDashedBoldLine();
+        DrawDashedBoldLine(upY: -10);
         
         DrawItemLine($"{orderTime}", $"{orderType}", fontSmall);
         DrawItemLine($"{printerName}", "AiPhoneOrder", fontSmall);
@@ -835,7 +837,7 @@ public class PrinterService : IPrinterService
         
         DrawDashedLine();
         
-        DrawLine("*** Unpaid ***", CreateFont(35, true), spacing: 15, centerAlign: true, heightAlign: true);
+        DrawLine("*** Unpaid ***", CreateFont(35, true), centerAlign: true, upY: 15);
         
         DrawDashedLine();
         
