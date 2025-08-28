@@ -462,7 +462,7 @@ public class PrinterService : IPrinterService
 
         var y = 10;
 
-        void DrawLine(string text, Font font, float spacing = 20, bool rightAlign = false, bool centerAlign = false)
+        void DrawLine(string text, Font font, float spacing = 20, bool rightAlign = false, bool centerAlign = false, bool heightAlign = false)
         {
             var maxWidth = width - 20;
             var lines = new List<string>();
@@ -506,10 +506,15 @@ public class PrinterService : IPrinterService
                     x = (width - size.Width) / 2;
                 else if (rightAlign)
                     x = width - size.Width - 10;
+
+                if (heightAlign)
+                {
+                    var totalHeight = ((int)size.Height + (int)spacing) / 2;
+                    img.Mutate(ctx => ctx.DrawText(line, font, textColor, new PointF(x, y + totalHeight)));
+                }
+                else
+                    img.Mutate(ctx => ctx.DrawText(line, font, textColor, new PointF(x, y)));
                 
-                var totalHeight = (int)spacing / 2;
-                
-                img.Mutate(ctx => ctx.DrawText(line, font, textColor, new PointF(x, y + totalHeight)));
                 y += (int)size.Height + (int)spacing;
             }
         }
@@ -732,7 +737,7 @@ public class PrinterService : IPrinterService
         
         void DrawDashedLine() => DrawLine(GenerateFullLine('-', fontNormal, width-20), fontNormal);
         
-        void DrawDashedBoldLine() => DrawLine(GenerateFullLine('-', fontBold, width-20), fontBold, 20);
+        void DrawDashedBoldLine() => DrawLine(GenerateFullLine('-', fontBold, width-20), fontBold);
 
         Log.Information("orderItems: {@orderItems}", orderItems);
         
@@ -826,7 +831,7 @@ public class PrinterService : IPrinterService
         
         DrawDashedLine();
         
-        DrawLine("*** Unpaid ***", CreateFont(35, true), spacing: 15, centerAlign: true);
+        DrawLine("*** Unpaid ***", CreateFont(35, true), spacing: 15, centerAlign: true, heightAlign: true);
         
         DrawDashedLine();
         
