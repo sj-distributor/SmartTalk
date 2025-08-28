@@ -637,6 +637,8 @@ public class PrinterService : IPrinterService
             {
                 var lines = content.Split('\n');
                 
+                Log.Information("lines:{@lines}", lines);
+                
                 foreach (var line in lines)
                 {
                     if (string.IsNullOrWhiteSpace(line)) continue;
@@ -679,7 +681,7 @@ public class PrinterService : IPrinterService
                 
                 ctx.DrawText(itemTextOptions, firstChar, textColor);
                 
-                var remarkY = y + itemBlockHeight + 5;
+                var remarkY = y + itemBlockHeight + 10;
                 foreach (var (prefix, content) in remarkLines)
                 {
                     var prefixOptions = new RichTextOptions(remarkFont)
@@ -692,7 +694,7 @@ public class PrinterService : IPrinterService
 
                     var prefixWidth = TextMeasurer.MeasureSize(prefix, new TextOptions(font)).Width;
                     var spaceWidth = TextMeasurer.MeasureSize(" ", new TextOptions(font)).Width;
-                    var contentX = col2X + indentX + prefixWidth + spaceWidth * 4;
+                    var contentX = col2X + towIndentx + prefixWidth + spaceWidth * 4;
 
                     var contentOptions = new RichTextOptions(remarkFont)
                     {
