@@ -626,7 +626,7 @@ public class PrinterService : IPrinterService
 
         bool IsEnglish(char c) => (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
         
-        void DrawItemLineThreeColsWrapped(string qty, string itemName, string price, Dictionary<string, int>? remarks = null,
+        void DrawItemLineThreeColsWrapped(string qty, OrderItemsDto itemName, string price, List<OrderItemsDto> remarks = null,
         float fontSize = 27, bool bold = false, float lineSpacing = 1.5f, float remarkLineSpacing = 1.5f, int backSpacing = 0)
         {
             var font = new Font(family, fontSize, bold ? FontStyle.Bold : FontStyle.Regular);
@@ -651,16 +651,31 @@ public class PrinterService : IPrinterService
             };
             
             float indentX = 0;
+            float itemBlockHeight = 0;
+            var firstChar = "";
             
-            if (!string.IsNullOrEmpty(itemName))
+            if (itemName != null)
             {
-                var firstChar = itemName[0].ToString();
+                firstChar = itemName.EnName ;
+                
+                if (!string.IsNullOrEmpty(itemName.CnName))
+                {
+                    firstChar += "\n" + itemName.CnName;
+                    
+                    var lines = firstChar.Split('\n');
+                
+                    foreach (var line in lines)
+                    {
+                        if (string.IsNullOrWhiteSpace(line)) continue;
+                        itemBlockHeight += TextMeasurer.MeasureSize(line, baseOptions).Height;
+                    }
+                }
+                else
+                    itemBlockHeight = TextMeasurer.MeasureSize(firstChar, baseOptions).Height;
+
                 indentX = TextMeasurer.MeasureSize(firstChar, baseOptions).Width;
+                
             }
-            
-            itemName = InsertLineBreakBetweenEnglishAndChinese(itemName, font, col2Width);
-            
-            var itemBlockHeight = TextMeasurer.MeasureSize(itemName, baseOptions).Height;
             
             List<(string prefix, string content)> remarkLines = [];
             
@@ -670,12 +685,10 @@ public class PrinterService : IPrinterService
             
             if (remarks != null)
             {
-                foreach (var kvp in remarks)
+                foreach (var remark in remarks)
                 {
-                    var raw = kvp.Key.Trim();
-                    var qtyVal = kvp.Value;
-                    var prefix = qtyVal > 1 ? $"{qtyVal}" : ">";
-                    var content = InsertLineBreakBetweenEnglishAndChinese(raw, remarkFont, col2Width + remarkExtraWidth - indentX);
+                    var prefix = remark.Count > 1 ? $"{remark.Count}" : ">";
+                    var content = remark.EnName + "\n" + remark.CnName;
                     remarkLines.Add((prefix, content));
                 }
             }
@@ -734,7 +747,7 @@ public class PrinterService : IPrinterService
                     LineSpacing = lineSpacing
                 };
                 
-                ctx.DrawText(itemTextOptions, itemName, textColor);
+                ctx.DrawText(itemTextOptions, firstChar, textColor);
                 
                 var remarkY = y + itemBlockHeight + 5;
                 foreach (var (prefix, content) in remarkLines)
@@ -839,20 +852,36 @@ public class PrinterService : IPrinterService
         
         DrawDashedLine();
         
-        DrawItemLineThreeColsWrapped("QTY", "Items", "Total", fontSize: 25, bold: true, backSpacing: 15);
+        DrawItemLineThreeColsWrapped("QTY", new OrderItemsDto{EnName = "Items"}, "Total", fontSize: 25, bold: true, backSpacing: 15);
        
         foreach (var orderItem in orderItems)
         {
-            var res = orderItem.OrderItemModifiers.Select(x => (
-                $"{x.ModifierLocalizations.FirstOrDefault(s => s.Field == "name" && s.LanguageCode == "en_US")?.Value} (${x.Price}) {x.ModifierLocalizations.FirstOrDefault(s => s.Field == "name" && s.LanguageCode == "zh_CN")?.Value}",
-                orderItem.Quantity)).ToDictionary(x => x.Item1, x => x.Item2);
+            var itema = new OrderItemsDto()
+            {
+                EnName = orderItem.ProductNames.GetValueOrDefault("en")?.GetValueOrDefault("posName"),
+                CnName = orderItem.ProductNames.GetValueOrDefault("cn")?.GetValueOrDefault("posName")
+            };
+
+            var itemb = orderItem.OrderItemModifiers.Select(x =>
+            {
+                return new OrderItemsDto()
+                {
+                    Count = orderItem.Quantity,
+                    EnName = x.ModifierLocalizations.FirstOrDefault(s => s.Field == "name" && s.LanguageCode == "en_US")?.Value,
+                    CnName = x.ModifierLocalizations.FirstOrDefault(s => s.Field == "name" && s.LanguageCode == "zh_CN")?.Value
+                };
+            }).ToList();
             
             if (!string.IsNullOrEmpty(orderItem.Notes))
             {
-                res.Add($"{orderItem.Notes}", 0);   
+                itemb.Add(new OrderItemsDto
+                {
+                    Count = 1,
+                    EnName = orderItem.Notes
+                });   
             }
             
-            DrawItemLineThreeColsWrapped($"{orderItem.Quantity}", $"{orderItem.ProductNames.GetValueOrDefault("en")?.GetValueOrDefault("posName")} {orderItem.ProductNames.GetValueOrDefault("cn")?.GetValueOrDefault("posName")}", $"${orderItem.Price * orderItem.Quantity}", res);
+            DrawItemLineThreeColsWrapped($"{orderItem.Quantity}", itema, $"${orderItem.Price * orderItem.Quantity}", itemb);
         }
         
         DrawDashedLine();
@@ -863,7 +892,7 @@ public class PrinterService : IPrinterService
         
         DrawDashedLine();
         
-        DrawLine("*** Unpaid ***", CreateFont(35, true), spacing: 30, centerAlign: true);
+        DrawLine("*** Unpaid ***", CreateFont(35, true), spacing: 15, centerAlign: true);
         
         DrawDashedLine();
         
