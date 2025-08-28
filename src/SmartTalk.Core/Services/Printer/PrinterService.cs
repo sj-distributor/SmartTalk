@@ -507,9 +507,11 @@ public class PrinterService : IPrinterService
                 else if (rightAlign)
                     x = width - size.Width - 10;
 
+                Log.Information("line:{@line}, size{@size}", line, size);
+                
                 if (heightAlign)
                 {
-                    var totalHeight = ((int)size.Height + (int)spacing) / 2;
+                    var totalHeight = (int)spacing / 2;
                     img.Mutate(ctx => ctx.DrawText(line, font, textColor, new PointF(x, y + totalHeight)));
                 }
                 else
@@ -742,7 +744,7 @@ public class PrinterService : IPrinterService
         Log.Information("orderItems: {@orderItems}", orderItems);
         
         DrawLine($"#{printNumber}", fontNormal);
-        DrawLine($"{orderType} Order",  CreateFont(45, true), spacing: 50, centerAlign: true);
+        DrawLine($"{orderType} Order",  CreateFont(45, true), spacing: 40, centerAlign: true);
         DrawLine($"{restaurantName}", fontMaxSmall, centerAlign: true);
         
         if (!string.IsNullOrEmpty(restaurantAddress))
@@ -761,7 +763,7 @@ public class PrinterService : IPrinterService
             
             phones = phones.TrimEnd(',');
             
-            DrawLine($"{phones}", fontMaxSmall, centerAlign: true);    
+            DrawLine($"{phones}", fontMaxSmall, centerAlign: true, spacing:10);    
         }
         
         DrawDashedBoldLine();
