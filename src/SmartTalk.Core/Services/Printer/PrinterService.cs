@@ -507,7 +507,7 @@ public class PrinterService : IPrinterService
                 else if (rightAlign)
                     x = width - size.Width - 10;
                 
-                var totalHeight = ((int)size.Height + (int)spacing) / 2;
+                var totalHeight = (int)spacing / 2;
                 
                 img.Mutate(ctx => ctx.DrawText(line, font, textColor, new PointF(x, y + totalHeight)));
                 y += (int)size.Height + (int)spacing;
