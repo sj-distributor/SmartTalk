@@ -497,6 +497,8 @@ public class PrinterService : IPrinterService
             if (!string.IsNullOrEmpty(currentLine))
                 lines.Add(currentLine);
             
+            Log.Information("lins:{@lines}", lines);
+            
             foreach (var line in lines)
             {
                 var size = TextMeasurer.MeasureSize(line, new TextOptions(font));
@@ -511,7 +513,7 @@ public class PrinterService : IPrinterService
                 
                 if (heightAlign)
                 {
-                    var totalHeight = (int)spacing / 2;
+                    var totalHeight = ((int)spacing + (int)size.Height) / 2;
                     img.Mutate(ctx => ctx.DrawText(line, font, textColor, new PointF(x, y + totalHeight)));
                 }
                 else
