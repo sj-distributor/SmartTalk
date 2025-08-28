@@ -714,7 +714,7 @@ public class PrinterService : IPrinterService
                 }
             });
 
-            y += (int)totalBlockHeight + 12 + backSpacing;
+            y += (int)totalBlockHeight + 20 + backSpacing;
         }
         
         void DrawSolidLine(float thickness = 3, float spacing = 10, Color? color = null, float padding = 10)
