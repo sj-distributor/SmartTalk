@@ -207,8 +207,6 @@ public class PrinterService : IPrinterService
             order.Tax.ToString(),
             order.Total.ToString(),
             storePrintDate).ConfigureAwait(false);
-
-        await img.SaveAsync("img", cancellationToken).ConfigureAwait(false);
        
         var imageKey = Guid.NewGuid().ToString();
         
