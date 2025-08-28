@@ -733,7 +733,7 @@ public class PrinterService : IPrinterService
             y += (int)thickness + (int)spacing;
         }
         
-        void DrawDashedLine() => DrawLine(GenerateFullLine('-', fontNormal, width-20), fontNormal);
+        void DrawDashedLine(int spacing = 20, int upY = 0) => DrawLine(GenerateFullLine('-', fontNormal, width-20), fontNormal, spacing, upY: upY);
         
         void DrawDashedBoldLine(int upY = 0) => DrawLine(GenerateFullLine('-', fontBold, width-20), fontBold, upY: upY);
 
@@ -787,7 +787,7 @@ public class PrinterService : IPrinterService
             DrawLine($"Order Remark:{orderNotes}", fontNormal);
         }
         
-        DrawDashedLine();
+        DrawDashedLine(upY: -10);
         
         DrawItemLineThreeColsWrapped("QTY", new OrderItemsDto{EnName = "Items"}, "Total", fontSize: 25, bold: true, backSpacing: 15);
        
@@ -821,7 +821,7 @@ public class PrinterService : IPrinterService
             DrawItemLineThreeColsWrapped($"{orderItem.Quantity}", itema, $"${orderItem.Price * orderItem.Quantity}", itemb);
         }
         
-        DrawDashedLine();
+        DrawDashedLine(spacing:50, upY: 15);
         
         DrawItemLine("Subtotal", $"${subtotal}", fontSmall);
         DrawItemLine("Tax", $"${tax}", fontSmall);
@@ -833,9 +833,7 @@ public class PrinterService : IPrinterService
         
         DrawDashedLine();
         
-        DrawLine("", fontNormal, centerAlign: true);
-        DrawLine("", fontNormal, centerAlign: true);
-        DrawLine($"Print Time {printTime}", fontSmall, centerAlign: true);
+        DrawLine($"Print Time {printTime}", fontSmall, centerAlign: true, spacing: 80, upY: 60);
         DrawLine($"Powered by SmartTalk AI", fontSmall, centerAlign: true);
 
         img.Mutate(x => x.Crop(new Rectangle(0, 0, width, y + 10)));
