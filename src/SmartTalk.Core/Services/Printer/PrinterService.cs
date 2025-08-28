@@ -506,8 +506,10 @@ public class PrinterService : IPrinterService
                     x = (width - size.Width) / 2;
                 else if (rightAlign)
                     x = width - size.Width - 10;
-
-                img.Mutate(ctx => ctx.DrawText(line, font, textColor, new PointF(x, y)));
+                
+                var totalHeight = ((int)size.Height + (int)spacing) / 2;
+                
+                img.Mutate(ctx => ctx.DrawText(line, font, textColor, new PointF(x, y + totalHeight)));
                 y += (int)size.Height + (int)spacing;
             }
         }
@@ -681,7 +683,7 @@ public class PrinterService : IPrinterService
                 
                 ctx.DrawText(itemTextOptions, firstChar, textColor);
                 
-                var remarkY = y + itemBlockHeight + 10;
+                var remarkY = y + itemBlockHeight + 15;
                 foreach (var (prefix, content) in remarkLines)
                 {
                     var prefixOptions = new RichTextOptions(remarkFont)
