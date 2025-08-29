@@ -286,7 +286,7 @@ public partial class AiSpeechAssistantService
         return assistant;
     }
 
-    private async Task<Agent> AddAgentAsync(int? relateId, int posServiceId, AgentType type, AgentSourceSystem sourceSystem, bool isDisplay, CancellationToken cancellationToken)
+    private async Task<Agent> AddAgentAsync(int? relateId, int? posServiceId, AgentType type, AgentSourceSystem sourceSystem, bool isDisplay, CancellationToken cancellationToken)
     {
         var agent = new Agent
         {
