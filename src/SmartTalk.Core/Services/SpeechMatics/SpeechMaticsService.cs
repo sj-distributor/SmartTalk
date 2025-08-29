@@ -556,7 +556,8 @@ public class SpeechMaticsService : ISpeechMaticsService
                 {
                     MaterialNumber = i.MaterialNumber,
                     AiMaterialDesc = i.Name,
-                    MaterialQuantity = i.Quantity
+                    MaterialQuantity = i.Quantity,
+                    AiUnit = i.Unit
                 }).ToList()
             }
         };

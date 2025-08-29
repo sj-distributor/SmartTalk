@@ -30,4 +30,6 @@ public class AiOrderItemDto
     public decimal? Price { get; set; } = null;
      
     public int MaterialQuantity { get; set; } = 1;
+    
+    public string AiUnit { get; set; }
 }
