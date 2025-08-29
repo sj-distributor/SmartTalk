@@ -457,7 +457,7 @@ public class PrinterService : IPrinterService
         
         var lineHeight = TextMeasurer.MeasureSize("口", new TextOptions(fontNormal)).Height;
 
-        var img = new Image<Rgba32>(width, 3000);
+        var img = new Image<Rgba32>(width, 10000);
         img.Mutate(ctx => ctx.Fill(bgColor));
 
         var y = 10;
