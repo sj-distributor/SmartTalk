@@ -403,8 +403,10 @@ public class SpeechMaticsService : ISpeechMaticsService
         var soldToIds = new List<string>(); 
         if (!string.IsNullOrEmpty(aiSpeechAssistant.Name))
              soldToIds = aiSpeechAssistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList();
+        
+        var historyItems = await GetCustomerHistoryItemsBySoldToIdAsync(soldToIds, cancellationToken).ConfigureAwait(false);
 
-        var extractedOrders = await ExtractAndMatchOrderItemsFromReportAsync(record.TranscriptionText, new List<(string, string)>(), DateTime.Today, cancellationToken).ConfigureAwait(false); 
+        var extractedOrders = await ExtractAndMatchOrderItemsFromReportAsync(record.TranscriptionText, historyItems, DateTime.Today, cancellationToken).ConfigureAwait(false); 
         if (!extractedOrders.Any()) return;
         
         var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
@@ -418,8 +420,6 @@ public class SpeechMaticsService : ISpeechMaticsService
                 Log.Warning("未能获取店铺 SoldToId, StoreName={StoreName}, StoreNumber={StoreNumber}", storeOrder.StoreName, storeOrder.StoreNumber); 
                 continue; 
             }
-             
-            var historyItems = await GetCustomerHistoryItemsBySoldToIdAsync(soldToId, cancellationToken).ConfigureAwait(false);
              
             foreach (var item in storeOrder.Orders)
             { 
@@ -515,11 +515,11 @@ public class SpeechMaticsService : ISpeechMaticsService
         } 
     }
     
-    private async Task<List<(string Material, string MaterialDesc)>> GetCustomerHistoryItemsBySoldToIdAsync(string soldToId, CancellationToken cancellationToken)
+    private async Task<List<(string Material, string MaterialDesc)>> GetCustomerHistoryItemsBySoldToIdAsync(List<string> soldToIds, CancellationToken cancellationToken)
     {
         List<(string Material, string MaterialDesc)> historyItems = new List<(string, string)>();
 
-        var askInfoResponse = await _salesClient.GetAskInfoDetailListByCustomerAsync(new GetAskInfoDetailListByCustomerRequestDto { CustomerNumbers = new List<string> { soldToId } }, cancellationToken).ConfigureAwait(false);
+        var askInfoResponse = await _salesClient.GetAskInfoDetailListByCustomerAsync(new GetAskInfoDetailListByCustomerRequestDto { CustomerNumbers = soldToIds }, cancellationToken).ConfigureAwait(false);
 
         if (askInfoResponse?.Data != null && askInfoResponse.Data.Any())
         {
@@ -527,7 +527,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         }
         else
         {
-            var orderHistoryResponse = await _salesClient.GetOrderHistoryByCustomerAsync(new GetOrderHistoryByCustomerRequestDto { CustomerNumber = soldToId }, cancellationToken).ConfigureAwait(false);
+            var orderHistoryResponse = await _salesClient.GetOrderHistoryByCustomerAsync(new GetOrderHistoryByCustomerRequestDto { CustomerNumber = soldToIds.FirstOrDefault() }, cancellationToken).ConfigureAwait(false);
 
             historyItems.AddRange(orderHistoryResponse?.Data.Where(x => !string.IsNullOrWhiteSpace(x.MaterialNumber)).Select(x => (x.MaterialNumber, x.MaterialDescription)) ?? new List<(string, string)>());
         }
