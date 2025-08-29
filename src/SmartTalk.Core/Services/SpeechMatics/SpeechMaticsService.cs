@@ -357,7 +357,7 @@ public class SpeechMaticsService : ISpeechMaticsService
                 }
 
                 var topItems = askedItems.Data.OrderByDescending(x => x.ValidAskQty).Take(60).ToList();
-
+                
                 var simplifiedItems = topItems.Select(x => new
                 {
                     name = x.MaterialDesc,
@@ -549,7 +549,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         var candidates = historyItems.Where(x => x.MaterialDesc != null && x.MaterialDesc.Contains(itemName, StringComparison.OrdinalIgnoreCase)).Select(x => x.Material).ToList();
         Log.Information("Candidate material code list: {@Candidates}", candidates);
         
-        if (!candidates.Any()) return ""; 
+        if (!candidates.Any()) return string.IsNullOrEmpty(baseNumber) ? "" : baseNumber;; 
         if (candidates.Count == 1) return candidates.First();
         
         if (!string.IsNullOrWhiteSpace(unit))
@@ -607,7 +607,8 @@ public class SpeechMaticsService : ISpeechMaticsService
                 {
                     MaterialNumber = i.MaterialNumber,
                     AiMaterialDesc = i.Name,
-                    MaterialQuantity = i.Quantity
+                    MaterialQuantity = i.Quantity,
+                    AiUnit = i.Unit
                 }).ToList()
             }
         };
