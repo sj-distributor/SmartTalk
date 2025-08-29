@@ -630,6 +630,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                             _backgroundJobClient.Enqueue<IAiSpeechAssistantProcessJobService>(x => x.RecordAiSpeechAssistantCallAsync(_aiSpeechAssistantStreamContext, CancellationToken.None));
                             
                             await ReduceOpenAiApiKeyUsingNumberAsync(cancellationToken).ConfigureAwait(false);
+                            
+                            Log.Information("Session Transcription: {@transcription}", _aiSpeechAssistantStreamContext.ConversationTranscription);
                             break;
                     }
                 }
