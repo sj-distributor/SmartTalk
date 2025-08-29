@@ -449,6 +449,8 @@ public class RealtimeAiService : IRealtimeAiService
 
     private async Task HandleTranscriptionsAsync()
     {
+        Log.Information("Get the realtime transcriptions: {@Transcriptions}", _conversationTranscription);
+        
         var kid = await _aiSpeechAssistantDataProvider.GetAiKidAsync(agentId: _speechAssistant.AgentId).ConfigureAwait(false);
 
         if (kid == null) return;
