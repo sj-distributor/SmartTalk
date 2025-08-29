@@ -1244,7 +1244,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                 instructions = prompt,
                 modalities = new[] { "text", "audio" },
                 temperature = _openAiSettings.RealtimeTemperature,
-                input_audio_transcription = new { model = "whisper-1" },
+                input_audio_transcription = assistant.Id == 176 ? new { model = "gpt-4o-transcription" } : new { model = "whisper-1" },
                 input_audio_noise_reduction = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction),
                 tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config)
             },
