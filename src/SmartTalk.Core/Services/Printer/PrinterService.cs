@@ -457,7 +457,7 @@ public class PrinterService : IPrinterService
         
         var lineHeight = TextMeasurer.MeasureSize("口", new TextOptions(fontNormal)).Height;
 
-        var img = new Image<Rgba32>(width, 3000);
+        var img = new Image<Rgba32>(width, 10000);
         img.Mutate(ctx => ctx.Fill(bgColor));
 
         var y = 10;
@@ -562,7 +562,7 @@ public class PrinterService : IPrinterService
         }
         
         void DrawItemLineThreeColsWrapped(string qty, OrderItemsDto itemName, string price, List<OrderItemsDto> remarks = null,
-        float fontSize = 27, bool bold = false, float lineSpacing = 1.6f, float remarkLineSpacing = 1.6f, int backSpacing = 10)
+        float fontSize = 27, bool bold = false, float lineSpacing = 1.6f, float remarkLineSpacing = 1.6f, int backSpacing = 20)
         {
             var font = new Font(family, fontSize, bold ? FontStyle.Bold : FontStyle.Regular);
             var boldFont = new Font(family, fontSize, FontStyle.Bold);
@@ -593,23 +593,12 @@ public class PrinterService : IPrinterService
             if (itemName != null)
             {
                 firstChar = itemName.EnName;
-                
                 if (!string.IsNullOrEmpty(itemName.CnName))
-                {
                     firstChar += "\n" + itemName.CnName;
-                    
-                    var lines = firstChar.Split('\n');
-                
-                    foreach (var line in lines)
-                    {
-                        if (string.IsNullOrWhiteSpace(line)) continue;
-                        itemBlockHeight += TextMeasurer.MeasureSize(line, baseOptions).Height + 5;
-                    }
-                }
-                else
-                    itemBlockHeight = TextMeasurer.MeasureSize(firstChar, baseOptions).Height + 5;
 
-                indentX = TextMeasurer.MeasureSize(firstChar, baseOptions).Width;
+                var size = TextMeasurer.MeasureSize(firstChar, baseOptions);
+                itemBlockHeight = size.Height;
+                indentX = size.Width;
             }
             
             List<(string prefix, string content)> remarkLines = [];
@@ -638,23 +627,23 @@ public class PrinterService : IPrinterService
 
             var remarkBlockHeight = 0f;
             
-            foreach (var (_, content) in remarkLines)
-            {
-                var lines = content.Split('\n');
+            foreach (var (prefix, content) in remarkLines) {
+                var prefixWidth = TextMeasurer.MeasureSize(prefix, new TextOptions(remarkFont)).Width;
+                var spaceWidth = TextMeasurer.MeasureSize(" ", new TextOptions(remarkFont)).Width;
+                var contentX = col2X + towIndentx + prefixWidth + spaceWidth * 4;
+
+                var contentOptions = new TextOptions(remarkFont) {
+                    WrappingLength = col2Width + remarkExtraWidth - (contentX - col2X),
+                    LineSpacing = remarkLineSpacing,
+                };
                 
-                Log.Information("lines:{@lines}", lines);
-                
-                foreach (var line in lines)
-                {
-                    if (string.IsNullOrWhiteSpace(line)) continue;
-                    remarkBlockHeight += TextMeasurer.MeasureSize(line, remarkOptions).Height;
-                }
-                
-                remarkBlockHeight += 5;
+                var size = TextMeasurer.MeasureSize(content.TrimStart(), contentOptions);
+                remarkBlockHeight += size.Height; 
             }
 
             var totalBlockHeight = itemBlockHeight + (remarkBlockHeight > 0 ? remarkBlockHeight : 0);
-            
+            float remarkY = 0;
+            var remarkSpacer = 10;
             img.Mutate(ctx =>
             {
                 var qtyTextOptions = new RichTextOptions(boldFont)
@@ -686,7 +675,7 @@ public class PrinterService : IPrinterService
                 
                 ctx.DrawText(itemTextOptions, firstChar, textColor);
                 
-                var remarkY = y + itemBlockHeight + 15;
+                remarkY = y + itemBlockHeight + remarkSpacer;
                 foreach (var (prefix, content) in remarkLines)
                 {
                     var prefixOptions = new RichTextOptions(remarkFont)
@@ -709,12 +698,13 @@ public class PrinterService : IPrinterService
                     };
                     ctx.DrawText(contentOptions, content.TrimStart(), textColor);
 
-                    var lineHeight = TextMeasurer.MeasureSize(content, remarkOptions).Height + 5;
-                    remarkY += lineHeight;
+                    var remarkLineHeight = TextMeasurer.MeasureSize(content.TrimStart(), contentOptions).Height;
+                    remarkY += remarkLineHeight + 10;
+                    remarkSpacer += 10;
                 }
             });
 
-            y += (int)totalBlockHeight + 20 + backSpacing;
+            y += (int)totalBlockHeight + backSpacing + remarkSpacer;
         }
         
         void DrawSolidLine(float thickness = 3, float spacing = 10, Color? color = null, float padding = 10)
@@ -788,7 +778,7 @@ public class PrinterService : IPrinterService
         
         DrawDashedLine(upY: -10);
         
-        DrawItemLineThreeColsWrapped("QTY", new OrderItemsDto{EnName = "Items"}, "Total", fontSize: 25, bold: true, backSpacing: 15);
+        DrawItemLineThreeColsWrapped("QTY", new OrderItemsDto{EnName = "Items"}, "Total", fontSize: 25, bold: true);
        
         foreach (var orderItem in orderItems)
         {
@@ -820,7 +810,7 @@ public class PrinterService : IPrinterService
             DrawItemLineThreeColsWrapped($"{orderItem.Quantity}", itema, $"${orderItem.Price * orderItem.Quantity}", itemb);
         }
         
-        DrawDashedLine(spacing:50, upY: 15);
+        DrawDashedLine(upY: -15);
         
         DrawItemLine("Subtotal", $"${subtotal}", fontSmall);
         DrawItemLine("Tax", $"${tax}", fontSmall);
