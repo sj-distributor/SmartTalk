@@ -449,12 +449,11 @@ public class SpeechMaticsService : ISpeechMaticsService
             "你是一名訂單分析助手。請從下面的客戶分析報告文字中提取所有下單的物料名稱、數量、單位，並且用歷史物料列表盡力匹配每個物料的materialNumber。" +
             "如果報告中提到了預約送貨時間，請提取送貨時間（格式yyyy-MM-dd）。" +
             "如果客戶提到了分店名，請提取 StoreName；如果提到第幾家店，請提取 StoreNumber。\n" +
-            "請嚴格傳回一個 JSON 對象，頂層字段為 \"stores\"，每个店铺对象包含：StoreName, StoreNumber, orders（数组，元素包含 name, quantity, unit, materialNumber, deliveryDate）。\n" +
+            "請嚴格傳回一個 JSON 對象，頂層字段為 \"stores\"，每个店铺对象包含：StoreName（可空字符串）, StoreNumber（可空字符串）, DeliveryDate（可空字符串），orders（数组，元素包含 name, quantity, unit, materialNumber, deliveryDate）。\n" +
             "範例：\n" +
-            "{\n  \"stores\": [\n  {\n  \"StoreName\": \"HaiDiLao\",\n \"StoreNumber\": 1,\n \"DeliveryDate\": \"2025-08-20\"\n\n \"orders\": [\n  { \"name\": \"雞胸肉\", \"quantity\": 1, \"unit\": \"箱\", \"materialNumber\": \"000000000010010253\" }\n  ]\n  }\n  ]\n}\n\n" +
+            "{\n    \"stores\": [\n        {\n            \"StoreName\": \"HaiDiLao\",\n            \"StoreNumber\": \"1\",\n            \"DeliveryDate\": \"2025-08-20\",\n            \"orders\": [\n                {\n                    \"name\": \"雞胸肉\",\n                    \"quantity\": 1,\n                    \"unit\": \"箱\",\n                    \"materialNumber\": \"000000000010010253\"\n                }\n            ]\n        }\n    ]\n}" +
             "歷史物料列表：\n" + materialListText + "\n\n" +
-            "注意：必須嚴格輸出 JSON，物件頂層字段必須是 \"stores\"，不要有其他字段或額外說明。提取的物料名稱需要為繁體中文。" +
-            "**如果客戶分析文本中沒有任何可識別的下單信息，請返回：{ \"stores\": [] }。不得臆造或猜測物料。**";
+            "注意：\n1. 必須嚴格輸出 JSON，物件頂層字段必須是 \"stores\"，不要有其他字段或額外說明。\n2. 提取的物料名稱需要為繁體中文。\n3. 如果没有提到店铺信息，但是有下单内容，则StoreName和StoreNumber可为空值，orders要正常提取。\n4. **如果客戶分析文本中沒有任何可識別的下單信息，請返回：{ \"stores\": [] }。不得臆造或猜測物料。**";
         Log.Information("Sending prompt to GPT: {Prompt}", systemPrompt);
 
         var messages = new List<ChatMessage>
