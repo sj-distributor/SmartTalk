@@ -314,7 +314,7 @@ public class SpeechMaticsService : ISpeechMaticsService
                     askedItems = new GetAskInfoDetailListByCustomerResponseDto { Data = new List<VwAskDetail>() };
                 }
 
-                var topItems = askedItems.Data.Where(x => x.Status == 1 || x.Status == 2 || x.Status == 3).OrderByDescending(x => x.ValidAskQty).Take(60).ToList();
+                var topItems = askedItems.Data.OrderByDescending(x => x.ValidAskQty).Take(60).ToList();
                 
                 var simplifiedItems = topItems.Select(x => new
                 {
@@ -481,7 +481,7 @@ public class SpeechMaticsService : ISpeechMaticsService
 
         if (askInfoResponse?.Data != null && askInfoResponse.Data.Any())
         {
-            historyItems.AddRange(askInfoResponse.Data.Where(x => (x.Status == 1 || x.Status == 2 || x.Status == 3) && !string.IsNullOrWhiteSpace(x.Material)).Select(x => (x.Material, x.MaterialDesc)));
+            historyItems.AddRange(askInfoResponse.Data.Where(x => !string.IsNullOrWhiteSpace(x.Material)).Select(x => (x.Material, x.MaterialDesc)));
         }
         else
         {
