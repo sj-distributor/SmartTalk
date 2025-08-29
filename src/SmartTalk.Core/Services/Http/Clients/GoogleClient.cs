@@ -31,7 +31,7 @@ public class GoogleClient : IGoogleClient
             ContractResolver = new Newtonsoft.Json.Serialization.CamelCasePropertyNamesContractResolver()
         });
         
-        Log.Information("Sending request to Google API: {RequestBody}", request);
+        Log.Information("Sending request to Google API: {RequestBody}", requestBody);
         
         var content = new StringContent(requestBody, Encoding.UTF8, "application/json");
         
