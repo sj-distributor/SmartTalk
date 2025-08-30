@@ -3,8 +3,10 @@ using SmartTalk.Core.Data;
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Domain.AIAssistant;
 using SmartTalk.Core.Domain.AISpeechAssistant;
+using SmartTalk.Core.Domain.Sales;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
+using SmartTalk.Messages.Enums.Sales;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
 
@@ -68,6 +70,9 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task<AiSpeechAssistantSession> GetAiSpeechAssistantSessionBySessionIdAsync(Guid sessionId, CancellationToken cancellationToken);
 
     Task<(Domain.AISpeechAssistant.AiSpeechAssistant Assistant, Agent Agent)> GetAiSpeechAssistantByAgentIdAsync(int agentId, CancellationToken cancellationToken);
+
+    Task<Sales> GetCallInSalesByNameAsync(string assistantName, SalesCallType? type, CancellationToken cancellationToken);
+    
     
     Task<List<AiSpeechAssistantInboundRoute>> GetAiSpeechAssistantInboundRouteAsync(string callerNumber, string didNumber, CancellationToken cancellationToken);
     
@@ -388,6 +393,16 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
         var specifyCallerNumber = routes.Where(x => x.From == callerNumber).OrderBy(x => x.Priority).ToList();
 
         return specifyCallerNumber.Count != 0 ? specifyCallerNumber : routes;
+    }
+
+    public async Task<Sales> GetCallInSalesByNameAsync(string assistantName, SalesCallType? type,
+        CancellationToken cancellationToken)
+    {
+        var query = _repository.Query<Sales>().Where(s => s.Name == assistantName);
+
+        if (type.HasValue) query = query.Where(s => s.Type == type.Value);
+
+        return await query.FirstOrDefaultAsync(cancellationToken);
     }
 
     public async Task<AiSpeechAssistantUserProfile> GetAiSpeechAssistantUserProfileAsync(int assistantId, string callerNumber, CancellationToken cancellationToken)

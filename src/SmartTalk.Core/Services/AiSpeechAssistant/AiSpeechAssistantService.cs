@@ -26,6 +26,7 @@ using SmartTalk.Messages.Constants;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.Restaurants;
+using SmartTalk.Core.Services.SpeechMatics;
 using SmartTalk.Core.Services.STT;
 using SmartTalk.Core.Services.Timer;
 using SmartTalk.Core.Settings.Azure;
@@ -78,6 +79,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly IPhoneOrderService _phoneOrderService;
     private readonly IAgentDataProvider _agentDataProvider;
     private readonly IAttachmentService _attachmentService;
+    private readonly ISpeechMaticsService _speechMaticsService;
     private readonly ISpeechToTextService _speechToTextService;
     private readonly WorkWeChatKeySetting _workWeChatKeySetting;
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
@@ -106,6 +108,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         IPhoneOrderService phoneOrderService,
         IAgentDataProvider agentDataProvider,
         IAttachmentService attachmentService,
+        ISpeechMaticsService speechMaticsService,
         ISpeechToTextService speechToTextService,
         WorkWeChatKeySetting workWeChatKeySetting,
         ISmartTalkHttpClientFactory httpClientFactory,
@@ -130,6 +133,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _httpClientFactory = httpClientFactory;
         _translationClient = translationClient;
         _attachmentService = attachmentService;
+        _speechMaticsService = speechMaticsService;
         _speechToTextService = speechToTextService;
         _workWeChatKeySetting = workWeChatKeySetting;
         _backgroundJobClient = backgroundJobClient;
