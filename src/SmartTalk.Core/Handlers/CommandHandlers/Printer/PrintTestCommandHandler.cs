@@ -5,7 +5,7 @@ using SmartTalk.Messages.Commands.Printer;
 
 namespace SmartTalk.Core.Handlers.CommandHandlers.Printer
 {
-    public class PrintTestCommandHandler : ICommandHandler<PrintTestCommand>
+    public class PrintTestCommandHandler : ICommandHandler<PrintTestCommand, PrintTestResponse>
     {
         private readonly IPrinterService _printerService;
 
@@ -14,9 +14,9 @@ namespace SmartTalk.Core.Handlers.CommandHandlers.Printer
             _printerService = printerService;
         }
         
-        public async Task Handle(IReceiveContext<PrintTestCommand> context, CancellationToken cancellationToken)
+        public async Task<PrintTestResponse> Handle(IReceiveContext<PrintTestCommand> context, CancellationToken cancellationToken)
         {
-            await _printerService.PrintTestAsync(context.Message, cancellationToken).ConfigureAwait(false);
+            return await _printerService.PrintTestAsync(context.Message, cancellationToken).ConfigureAwait(false);
         }
     }
 }

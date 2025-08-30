@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations.Schema;
 using Newtonsoft.Json;
 using SmartTalk.Messages.Responses;
 
@@ -44,6 +45,12 @@ public class PhoneCallOrderItem
     
     [JsonProperty("orderItemModifiers")]
     public List<PhoneCallOrderItemModifiers> OrderItemModifiers { get; set; }
+
+    [NotMapped]
+    public string ProductName { get; set; }
+
+    [NotMapped]
+    public Dictionary<string, Dictionary<string, string>> ProductNames => JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(ProductName ?? "{}");
 }
 
 public class PhoneCallOrderItemModifiers
