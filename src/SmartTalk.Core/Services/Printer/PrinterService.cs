@@ -788,13 +788,16 @@ public class PrinterService : IPrinterService
                 CnName = orderItem.ProductNames.GetValueOrDefault("cn")?.GetValueOrDefault("posName")
             };
 
+            decimal itembMoney = 0;
             var itemb = orderItem.OrderItemModifiers.Select(x =>
             {
+                itembMoney += x.Price * x.Quantity * orderItem.Quantity;
+                
                 return new OrderItemsDto()
                 {
-                    Count = orderItem.Quantity,
-                    EnName = x.ModifierLocalizations.FirstOrDefault(s => s.Field == "name" && s.LanguageCode == "en_US")?.Value,
-                    CnName = x.ModifierLocalizations.FirstOrDefault(s => s.Field == "name" && s.LanguageCode == "zh_CN")?.Value
+                    Count = x.Quantity,
+                    EnName = x.ModifierLocalizations.FirstOrDefault(s => s.Field == "name" && s.LanguageCode == "en_US")?.Value + "($" + x.Price.ToString("0.00") + ")",
+                    CnName = x.ModifierLocalizations.FirstOrDefault(s => s.Field == "name" && s.LanguageCode == "zh_CN")?.Value + "($" + x.Price.ToString("0.00") + ")"
                 };
             }).ToList();
             
@@ -807,7 +810,7 @@ public class PrinterService : IPrinterService
                 });   
             }
             
-            DrawItemLineThreeColsWrapped($"{orderItem.Quantity}", itema, $"${orderItem.Price * orderItem.Quantity}", itemb);
+            DrawItemLineThreeColsWrapped($"{orderItem.Quantity}", itema, $"${(orderItem.Price * orderItem.Quantity + itembMoney):0.00}", itemb);
         }
         
         DrawDashedLine(upY: -15);
