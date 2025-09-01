@@ -350,12 +350,6 @@ public partial class AiSpeechAssistantService
     
     private async Task InitialAssistantKnowledgeAsync(AddAiSpeechAssistantCommand command, Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken)
     {
-        var prompt = GenerateKnowledgePrompt(command.Json);
-        
-        var soldToIds = !string.IsNullOrEmpty(assistant.Name) ? assistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : new List<string>();
-        
-        var customerItemsString = await _speechMaticsService.BuildCustomerItemsStringAsync(soldToIds, cancellationToken).ConfigureAwait(false);
-        
         var knowledge = new AiSpeechAssistantKnowledge
         {
             Version = "1.0",
@@ -364,7 +358,7 @@ public partial class AiSpeechAssistantService
             AssistantId = assistant.Id,
             Greetings = command.Greetings,
             CreatedBy = _currentUser.Id.Value,
-            Prompt = prompt.Replace("#{customer_items}", customerItemsString ?? "")
+            Prompt = GenerateKnowledgePrompt(command.Json)
         };
 
         await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgesAsync([knowledge], cancellationToken: cancellationToken).ConfigureAwait(false);
