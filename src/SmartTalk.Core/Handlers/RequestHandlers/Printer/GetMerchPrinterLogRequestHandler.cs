@@ -5,7 +5,7 @@ using SmartTalk.Messages.Requests.Printer;
 
 namespace SmartTalk.Core.Handlers.RequestHandlers.Printer
 {
-    public class GetMerchPrinterLogRequestHandler : IRequestHandler<GetMerchPrinterLogRequest,GetMerchPrinterLogResponse>
+    public class GetMerchPrinterLogRequestHandler : IRequestHandler<GetMerchPrinterLogRequest, GetMerchPrinterLogResponse>
     {
         private readonly IPrinterService _printerService;
 

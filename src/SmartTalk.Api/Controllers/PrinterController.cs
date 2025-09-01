@@ -145,7 +145,7 @@ public class PrinterController : ControllerBase
     
     [HttpGet, Route("printLog")]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetMerchPrinterLogResponse))]
-    public async Task<IActionResult> PrintLogAsync([FromQuery] GetMerchPrinterLogRequest request)
+    public async Task<IActionResult> GetMerchPrinterLogAsync([FromQuery] GetMerchPrinterLogRequest request)
     {
         var response = await _mediator.RequestAsync<GetMerchPrinterLogRequest, GetMerchPrinterLogResponse>(request).ConfigureAwait(false);
 
