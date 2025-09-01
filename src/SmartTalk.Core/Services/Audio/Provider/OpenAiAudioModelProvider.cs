@@ -22,7 +22,7 @@ public class OpenAiAudioModelProvider : IAudioModelProvider
 
     public async Task<string> ExtractAudioDataFromModelProviderAsync(AnalyzeAudioCommand command, BinaryData audioData, CancellationToken cancellationToken)
     {
-        var client = new ChatClient("gpt-4o-audio", _openAiSettings.ApiKey);
+        var client = new ChatClient("gpt-audio", _openAiSettings.ApiKey);
 
         var messages = new List<ChatMessage>();
         if (!string.IsNullOrWhiteSpace(command.SystemPrompt))
