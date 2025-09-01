@@ -434,7 +434,8 @@ public class PrinterService : IPrinterService
         string guestPhone, string guestAddress, string orderNotes, List<PhoneCallOrderItem> orderItems,
         string subtotal, string tax, string total, string printTime)
     {
-        var width = 512;
+        var y = 10;
+        var paperWidth = 512;
         var textColor = Color.Black;
         var bgColor = Color.White;
         
@@ -442,298 +443,27 @@ public class PrinterService : IPrinterService
         var boldFont = "/app/fonts/SourceHanSansSC-Bold.otf";
         
         var collection = new FontCollection();
-        var family = collection.Add(regularFont);
+        var fontFamily = collection.Add(regularFont);
         collection.Add(boldFont);
         
-        Font CreateFont(float size, bool bold = false)
-        {
-            return new Font(family, size, bold ? FontStyle.Bold : FontStyle.Regular);
-        }
-        
-        var fontSmall = CreateFont(25);
-        var fontMaxSmall = CreateFont(23);
-        var fontNormal = CreateFont(30);
-        var fontBold = CreateFont(40, bold: true);
+        var fontSmall = CreateFont(fontFamily, 25);
+        var fontMaxSmall = CreateFont(fontFamily, 23);
+        var fontNormal = CreateFont(fontFamily, 30);
+        var fontBold = CreateFont(fontFamily, 40, bold: true);
         
         var lineHeight = TextMeasurer.MeasureSize("口", new TextOptions(fontNormal)).Height;
 
-        var img = new Image<Rgba32>(width, 10000);
+        var img = new Image<Rgba32>(paperWidth, 10000);
         img.Mutate(ctx => ctx.Fill(bgColor));
-
-        var y = 10;
-
-        void DrawLine(string text, Font font, float spacing = 20, bool rightAlign = false, bool centerAlign = false, int upY = 0)
-        {
-            var maxWidth = width - 20;
-            var lines = new List<string>();
-            
-            var tokens = Regex.Matches(text, @"\w+|[^\w\s]|\s").Select(m => m.Value).ToList();
-
-            var currentLine = "";
-            foreach (var token in tokens)
-            {
-                var testLine = currentLine + token;
-                var size = TextMeasurer.MeasureSize(testLine, new TextOptions(font));
-
-                if (size.Width > maxWidth && !string.IsNullOrWhiteSpace(currentLine))
-                {
-                    if (Regex.IsMatch(token, @"[,.!?;:，。！？；：]") && lines.Count > 0)
-                    {
-                        lines[^1] += token;
-                        currentLine = "";
-                    }
-                    else
-                    {
-                        lines.Add(currentLine);
-                        currentLine = token.TrimStart();
-                    }
-                }
-                else
-                {
-                    currentLine = testLine;
-                }
-            }
-
-            if (!string.IsNullOrEmpty(currentLine))
-                lines.Add(currentLine);
-            
-            Log.Information("lins:{@lines}", lines);
-            
-            foreach (var line in lines)
-            {
-                var size = TextMeasurer.MeasureSize(line, new TextOptions(font));
-                float x = 10;
-
-                if (centerAlign)
-                    x = (width - size.Width) / 2;
-                else if (rightAlign)
-                    x = width - size.Width - 10;
-
-                Log.Information("line:{@line}, size{@size}", line, size);
-                
-                img.Mutate(ctx => ctx.DrawText(line, font, textColor, new PointF(x, y + upY)));
-                
-                y += (int)size.Height + (int)spacing;
-            }
-        }
         
-        string GenerateFullLine(char fillChar, Font font, float maxWidth)
-        {
-            var charSize = TextMeasurer.MeasureSize(fillChar.ToString(), new TextOptions(font));
-            var charWidth = charSize.Width;
-
-            if (charWidth <= 0) 
-                return "";
-            
-            var repeatCount = (int)(maxWidth / charWidth);
-
-            var sb = new StringBuilder();
-            for (var i = 0; i < repeatCount; i++)
-            {
-                sb.Append(fillChar);
-            }
-            
-            while (TextMeasurer.MeasureSize(sb.ToString(), new TextOptions(font)).Width < maxWidth)
-            {
-                sb.Append(fillChar);
-            }
-
-            while (TextMeasurer.MeasureSize(sb.ToString(), new TextOptions(font)).Width > maxWidth && sb.Length > 0)
-            {
-                sb.Length--;
-            }
-
-            return sb.ToString();
-        }
-
-        void DrawItemLine(string item, string price, Font? itemFont = null)
-        {
-            itemFont ??= fontNormal;
-            var priceSize = TextMeasurer.MeasureSize(price, new TextOptions(itemFont));
-            var maxTextWidth = width - 20 - priceSize.Width;
-
-            img.Mutate(ctx =>
-            {
-                ctx.DrawText(item, itemFont, textColor, new PointF(10, y));
-                ctx.DrawText(price, itemFont, textColor, new PointF(maxTextWidth, y));
-            });
-
-            y += (int)lineHeight + 10;
-        }
-        
-        void DrawItemLineThreeColsWrapped(string qty, OrderItemsDto itemName, string price, List<OrderItemsDto> remarks = null,
-        float fontSize = 27, bool bold = false, float lineSpacing = 1.6f, float remarkLineSpacing = 1.6f, int backSpacing = 20)
-        {
-            var font = new Font(family, fontSize, bold ? FontStyle.Bold : FontStyle.Regular);
-            var boldFont = new Font(family, fontSize, FontStyle.Bold);
-            var remarkFont = new Font(family, fontSize - 3, bold ? FontStyle.Regular : FontStyle.Regular);
-            
-            var padding = 10;
-            var col1Width = 80;
-            var col3Width = 150;
-            var col2Width = width - col1Width - col3Width - padding * 2;
-
-            var col1X = padding;
-            var col2X = col1X + col1Width;
-            var col3X = width - col3Width - padding;
-
-            var baseOptions = new TextOptions(font)
-            {
-                WrappingLength = col2Width,
-                LineSpacing = lineSpacing,
-                HorizontalAlignment = HorizontalAlignment.Left,
-                VerticalAlignment = VerticalAlignment.Top
-            };
-            
-            float indentX = 0;
-            float itemBlockHeight = 0;
-            var firstChar = "";
-            var towIndentx = TextMeasurer.MeasureSize("口口",baseOptions).Width;
-            
-            if (itemName != null)
-            {
-                firstChar = itemName.EnName;
-                if (!string.IsNullOrEmpty(itemName.CnName))
-                    firstChar += "\n" + itemName.CnName;
-
-                var size = TextMeasurer.MeasureSize(firstChar, baseOptions);
-                itemBlockHeight = size.Height;
-                indentX = size.Width;
-            }
-            
-            List<(string prefix, string content)> remarkLines = [];
-            
-            Log.Information("Remarks:{@remarks}", remarks);
-            
-            var remarkExtraWidth = 50;
-            
-            if (remarks != null)
-            {
-                foreach (var remark in remarks)
-                {
-                    var prefix = remark.Count > 1 ? $"{remark.Count}" : ">";
-                    var content = remark.EnName + "\n" + remark.CnName;
-                    remarkLines.Add((prefix, content));
-                }
-            }
-            
-            var remarkOptions = new TextOptions(remarkFont)
-            {
-                WrappingLength = col2Width + remarkExtraWidth - towIndentx,
-                LineSpacing = remarkLineSpacing,
-                HorizontalAlignment = HorizontalAlignment.Left,
-                VerticalAlignment = VerticalAlignment.Top
-            };
-
-            var remarkBlockHeight = 0f;
-            
-            foreach (var (prefix, content) in remarkLines) {
-                var prefixWidth = TextMeasurer.MeasureSize(prefix, new TextOptions(remarkFont)).Width;
-                var spaceWidth = TextMeasurer.MeasureSize(" ", new TextOptions(remarkFont)).Width;
-                var contentX = col2X + towIndentx + prefixWidth + spaceWidth * 4;
-
-                var contentOptions = new TextOptions(remarkFont) {
-                    WrappingLength = col2Width + remarkExtraWidth - (contentX - col2X),
-                    LineSpacing = remarkLineSpacing,
-                };
-                
-                var size = TextMeasurer.MeasureSize(content.TrimStart(), contentOptions);
-                remarkBlockHeight += size.Height; 
-            }
-
-            var totalBlockHeight = itemBlockHeight + (remarkBlockHeight > 0 ? remarkBlockHeight : 0);
-            float remarkY = 0;
-            var remarkSpacer = 10;
-            img.Mutate(ctx =>
-            {
-                var qtyTextOptions = new RichTextOptions(boldFont)
-                {
-                    Origin = new PointF(col1X, y),
-                    WrappingLength = col2Width,
-                    LineSpacing = lineSpacing
-                };
-                ctx.DrawText(qtyTextOptions, qty, textColor);
-                
-                var priceSize = TextMeasurer.MeasureSize(price, new TextOptions(font));
-                var priceX = col3X + col3Width - priceSize.Width;
-                
-                var priceTextOptions = new RichTextOptions(boldFont)
-                {
-                    Origin = new PointF(priceX, y),
-                    WrappingLength = col2Width,
-                    LineSpacing = lineSpacing
-                };
-                
-                ctx.DrawText(priceTextOptions ,price, textColor);
-
-                var itemTextOptions = new RichTextOptions(font)
-                {
-                    Origin = new PointF(col2X, y),
-                    WrappingLength = col2Width,
-                    LineSpacing = lineSpacing
-                };
-                
-                ctx.DrawText(itemTextOptions, firstChar, textColor);
-                
-                remarkY = y + itemBlockHeight + remarkSpacer;
-                foreach (var (prefix, content) in remarkLines)
-                {
-                    var prefixOptions = new RichTextOptions(remarkFont)
-                    {
-                        Origin = new PointF(col2X + towIndentx, remarkY),
-                        WrappingLength = col2Width + remarkExtraWidth - indentX,
-                        LineSpacing = remarkLineSpacing
-                    };
-                    ctx.DrawText(prefixOptions, prefix, textColor);
-
-                    var prefixWidth = TextMeasurer.MeasureSize(prefix, new TextOptions(font)).Width;
-                    var spaceWidth = TextMeasurer.MeasureSize(" ", new TextOptions(font)).Width;
-                    var contentX = col2X + towIndentx + prefixWidth + spaceWidth * 4;
-
-                    var contentOptions = new RichTextOptions(remarkFont)
-                    {
-                        Origin = new PointF(contentX, remarkY),
-                        WrappingLength = col2Width + remarkExtraWidth - (contentX - col2X),
-                        LineSpacing = remarkLineSpacing
-                    };
-                    ctx.DrawText(contentOptions, content.TrimStart(), textColor);
-
-                    var remarkLineHeight = TextMeasurer.MeasureSize(content.TrimStart(), contentOptions).Height;
-                    remarkY += remarkLineHeight + 10;
-                    remarkSpacer += 10;
-                }
-            });
-
-            y += (int)totalBlockHeight + backSpacing + remarkSpacer;
-        }
-        
-        void DrawSolidLine(float thickness = 3, float spacing = 10, Color? color = null, float padding = 10)
-        {
-            color ??= Color.Black;
-
-            var x1 = padding;
-            var x2 = width - padding;
-
-            img.Mutate(ctx =>
-            {
-                ctx.DrawLine(color.Value, thickness, new PointF(x1, y), new PointF(x2, y));
-            });
-
-            y += (int)thickness + (int)spacing;
-        }
-        
-        void DrawDashedLine(int spacing = 20, int upY = 0) => DrawLine(GenerateFullLine('-', fontNormal, width-20), fontNormal, spacing, upY: upY);
-        
-        void DrawDashedBoldLine(int upY = 0) => DrawLine(GenerateFullLine('-', fontBold, width-20), fontBold, upY: upY);
-
         Log.Information("orderItems: {@orderItems}", orderItems);
         
-        DrawLine($"#{printNumber}", fontNormal);
-        DrawLine($"{orderType} Order",  CreateFont(45, true), spacing: 40, centerAlign: true);
-        DrawLine($"{restaurantName}", fontMaxSmall, centerAlign: true);
+        y = DrawLine(paperWidth, img, y, textColor, $"#{printNumber}", fontNormal);
+        y = DrawLine(paperWidth, img, y, textColor, $"{orderType} Order",  CreateFont(fontFamily, 45, true), spacing: 40, centerAlign: true);
+        y = DrawLine(paperWidth, img, y, textColor, $"{restaurantName}", fontMaxSmall, centerAlign: true);
         
         if (!string.IsNullOrEmpty(restaurantAddress))
-            DrawLine($"{restaurantAddress}", fontMaxSmall, centerAlign: true);
+            y = DrawLine(paperWidth, img, y, textColor, $"{restaurantAddress}", fontMaxSmall, centerAlign: true);
 
         if (!string.IsNullOrEmpty(restaurantPhone))
         {
@@ -748,87 +478,55 @@ public class PrinterService : IPrinterService
             
             phones = phones.TrimEnd(',');
             
-            DrawLine($"{phones}", fontMaxSmall, centerAlign: true, spacing:0);    
+            y = DrawLine(paperWidth, img, y, textColor, $"{phones}", fontMaxSmall, centerAlign: true, spacing:10);
         }
         
-        DrawDashedBoldLine(-10);
+        y = DrawLine(paperWidth, img, y, textColor, GenerateFullLine('-', fontBold, paperWidth-20), fontBold, yOffset: -10);
         
-        DrawItemLine($"{orderTime}", $"{orderType}", fontSmall);
-        DrawItemLine($"{printerName}", "AiPhoneOrder", fontSmall);
+        y = DrawItemLine(paperWidth, img, y, textColor, lineHeight, $"{orderTime}", $"{orderType}", fontSmall);
+        y = DrawItemLine(paperWidth, img, y, textColor, lineHeight, $"{printerName}", "AiPhoneOrder", fontSmall);
         
-        DrawSolidLine();
+        y = DrawSolidLine(paperWidth, img, y);
 
         if (!string.IsNullOrEmpty(guestName))
-            DrawLine($"{guestName}", fontSmall);
+            y = DrawLine(paperWidth, img, y, textColor, $"{guestName}", fontSmall);
 
         if (!string.IsNullOrEmpty(guestPhone))
         {
             var formatted = $"({guestPhone[..3]})-{guestPhone.Substring(3, 3)}-{guestPhone[6..]}";
-            DrawLine($"{formatted}", fontSmall);    
+            y = DrawLine(paperWidth, img, y, textColor, $"{formatted}", fontSmall);    
         }
         
         if (!string.IsNullOrEmpty(guestAddress))
-            DrawLine($"{guestAddress}", fontSmall);
+            y = DrawLine(paperWidth, img, y, textColor, $"{guestAddress}", fontSmall);
 
         if (!string.IsNullOrEmpty(orderNotes))
         {
-            DrawSolidLine();
-            DrawLine($"Order Remark:{orderNotes}", fontNormal);
+            y = DrawSolidLine(paperWidth, img, y);
+            y = DrawLine(paperWidth, img, y, textColor, $"Order Remark:{orderNotes}", fontNormal);
         }
         
-        DrawDashedLine(upY: -10);
+        y = DrawLine(paperWidth, img, y, textColor,GenerateFullLine('-', fontNormal, paperWidth-20), fontNormal, yOffset: -10);
         
-        DrawItemLineThreeColsWrapped("QTY", new OrderItemsDto{EnName = "Items"}, "Total", fontSize: 25, bold: true);
-       
-        foreach (var orderItem in orderItems)
-        {
-            var itema = new OrderItemsDto()
-            {
-                EnName = orderItem.ProductNames.GetValueOrDefault("en")?.GetValueOrDefault("posName"),
-                CnName = orderItem.ProductNames.GetValueOrDefault("cn")?.GetValueOrDefault("posName")
-            };
+        y = DrawingOrderItems(fontFamily, paperWidth, img, y, textColor, orderItems);
+        
+        y = DrawLine(paperWidth, img, y, textColor,GenerateFullLine('-', fontNormal, paperWidth-20), fontNormal, yOffset: -15);
+        
+        y = DrawItemLine(paperWidth, img, y, textColor, lineHeight, "Subtotal", $"${subtotal}", fontSmall);
+        y = DrawItemLine(paperWidth, img, y, textColor, lineHeight, "Tax", $"${tax}", fontSmall);
+        y = DrawItemLine(paperWidth, img, y, textColor, lineHeight, "Total", $"${total}", fontNormal);
+        
+        y = DrawLine(paperWidth, img, y, textColor,GenerateFullLine('-', fontNormal, paperWidth-20), fontNormal);
+        
+        y = DrawLine(paperWidth, img, y, textColor, "*** Unpaid ***", CreateFont(fontFamily, 35, true), spacing: 15, centerAlign: true, yOffset: 15);
+        
+        y = DrawLine(paperWidth, img, y, textColor,GenerateFullLine('-', fontNormal, paperWidth-20), fontNormal);
+        
+        y = DrawLine(paperWidth, img, y, textColor, $"Print Time {printTime}", fontSmall, centerAlign: true, spacing: 80, yOffset: 60);
+        y = DrawLine(paperWidth, img, y, textColor, $"Powered by SmartTalk AI", fontSmall, centerAlign: true);
 
-            decimal itembMoney = 0;
-            var itemb = orderItem.OrderItemModifiers.Select(x =>
-            {
-                itembMoney += x.Price * x.Quantity * orderItem.Quantity;
-                
-                return new OrderItemsDto()
-                {
-                    Count = x.Quantity,
-                    EnName = x.ModifierLocalizations.FirstOrDefault(s => s.Field == "name" && s.LanguageCode == "en_US")?.Value + "($" + x.Price.ToString("0.00") + ")",
-                    CnName = x.ModifierLocalizations.FirstOrDefault(s => s.Field == "name" && s.LanguageCode == "zh_CN")?.Value + "($" + x.Price.ToString("0.00") + ")"
-                };
-            }).ToList();
-            
-            if (!string.IsNullOrEmpty(orderItem.Notes))
-            {
-                itemb.Add(new OrderItemsDto
-                {
-                    Count = 1,
-                    EnName = orderItem.Notes
-                });   
-            }
-            
-            DrawItemLineThreeColsWrapped($"{orderItem.Quantity}", itema, $"${(orderItem.Price * orderItem.Quantity + itembMoney):0.00}", itemb);
-        }
+        img.Mutate(x => x.Crop(new Rectangle(0, 0, paperWidth, y + 10)));
         
-        DrawDashedLine(upY: -15);
-        
-        DrawItemLine("Subtotal", $"${subtotal}", fontSmall);
-        DrawItemLine("Tax", $"${tax}", fontSmall);
-        DrawItemLine("Total", $"${total}", fontNormal);
-        
-        DrawDashedLine();
-        
-        DrawLine("*** Unpaid ***", CreateFont(35, true), spacing: 15, centerAlign: true, upY: 15);
-        
-        DrawDashedLine();
-        
-        DrawLine($"Print Time {printTime}", fontSmall, centerAlign: true, spacing: 80, upY: 60);
-        DrawLine($"Powered by SmartTalk AI", fontSmall, centerAlign: true);
-
-        img.Mutate(x => x.Crop(new Rectangle(0, 0, width, y + 10)));
         return img;
     } 
     
@@ -927,13 +625,318 @@ public class PrinterService : IPrinterService
              request.StoreId,request.PrinterMac, request.StartDate, request.EndDate, request.Code, request.PrintLogType,
              request.PageIndex, request.PageSize, cancellationToken).ConfigureAwait(false);
 
-            return new GetMerchPrinterLogResponse
-            {
-                Data = new MerchPrinterLogCountDto
-                {
-                    TotalCount = count,
-                    MerchPrinterLogDtos = merchPrinterLogs
-                }
-            };
-        }
+         return new GetMerchPrinterLogResponse 
+         {
+             Data = new MerchPrinterLogCountDto 
+             { 
+                 TotalCount = count, 
+                 MerchPrinterLogDtos = merchPrinterLogs
+             }
+         };
+     }
+     
+     private static Font CreateFont(FontFamily fontFamily, float size, bool bold = false)
+     {
+         return new Font(fontFamily, size, bold ? FontStyle.Bold : FontStyle.Regular);
+     }
+     
+     private static int DrawItemLineThreeColsWrapped(FontFamily fontFamily, int paperWidth, Image<Rgba32> img, int y, Color textColor
+         , string qty, OrderItemsDto itemName, string price, List<OrderItemsDto> remarks = null
+         , float fontSize = 27, bool bold = false, float lineSpacing = 1.6f, float remarkLineSpacing = 1.6f, int backSpacing = 20)
+     {
+         var font = new Font(fontFamily, fontSize, bold ? FontStyle.Bold : FontStyle.Regular);
+         var boldFont = new Font(fontFamily, fontSize, FontStyle.Bold);
+         var remarkFont = new Font(fontFamily, fontSize - 3, FontStyle.Regular);
+
+         var padding = 10;
+         var col1Width = 80;
+         var col3Width = 150;
+         var col2Width = paperWidth - col1Width - col3Width - padding * 2;
+
+         var col1X = padding;
+         var col2X = col1X + col1Width;
+         var col3X = paperWidth - col3Width - padding;
+
+         var baseOptions = new TextOptions(font)
+         {
+             WrappingLength = col2Width,
+             LineSpacing = lineSpacing,
+             HorizontalAlignment = HorizontalAlignment.Left,
+             VerticalAlignment = VerticalAlignment.Top
+         };
+
+         float indentX = 0;
+         float itemBlockHeight = 0;
+         var firstChar = "";
+         var towFontWidth = TextMeasurer.MeasureSize("口口", baseOptions).Width;
+
+         if (itemName != null)
+         {
+             firstChar = itemName.EnName;
+             if (!string.IsNullOrEmpty(itemName.CnName)) firstChar += "\n" + itemName.CnName;
+
+             var size = TextMeasurer.MeasureSize(firstChar, baseOptions);
+             itemBlockHeight = size.Height;
+             indentX = size.Width;
+         }
+
+         List<(string prefix, string content)> remarkLines = [];
+
+         Log.Information("Remarks:{@remarks}", remarks);
+
+         var remarkExtraWidth = 50;
+
+         if (remarks != null)
+         {
+             foreach (var remark in remarks)
+             {
+                 var prefix = remark.Count > 1 ? $"{remark.Count}" : ">";
+                 var content = remark.EnName + "\n" + remark.CnName;
+                 remarkLines.Add((prefix, content));
+             }
+         }
+
+         var remarkBlockHeight = 0f;
+
+         foreach (var (prefix, content) in remarkLines)
+         {
+             var prefixWidth = TextMeasurer.MeasureSize(prefix, new TextOptions(remarkFont)).Width;
+             var spaceWidth = TextMeasurer.MeasureSize(" ", new TextOptions(remarkFont)).Width;
+             var contentX = col2X + towFontWidth + prefixWidth + spaceWidth * 4;
+
+             var contentOptions = new TextOptions(remarkFont)
+             {
+                 WrappingLength = col2Width + remarkExtraWidth - (contentX - col2X),
+                 LineSpacing = remarkLineSpacing,
+             };
+
+             var size = TextMeasurer.MeasureSize(content.TrimStart(), contentOptions);
+             remarkBlockHeight += size.Height;
+         }
+
+         var totalBlockHeight = itemBlockHeight + (remarkBlockHeight > 0 ? remarkBlockHeight : 0);
+         float remarkY;
+         var remarkSpacer = 10;
+         img.Mutate(ctx =>
+         {
+             var qtyTextOptions = new RichTextOptions(boldFont)
+             {
+                 Origin = new PointF(col1X, y), WrappingLength = col2Width, LineSpacing = lineSpacing
+             };
+             ctx.DrawText(qtyTextOptions, qty, textColor);
+
+             var priceSize = TextMeasurer.MeasureSize(price, new TextOptions(font));
+             var priceX = col3X + col3Width - priceSize.Width;
+
+             var priceTextOptions = new RichTextOptions(boldFont)
+             {
+                 Origin = new PointF(priceX, y), WrappingLength = col2Width, LineSpacing = lineSpacing
+             };
+
+             ctx.DrawText(priceTextOptions, price, textColor);
+
+             var itemTextOptions = new RichTextOptions(font)
+             {
+                 Origin = new PointF(col2X, y), WrappingLength = col2Width, LineSpacing = lineSpacing
+             };
+
+             ctx.DrawText(itemTextOptions, firstChar, textColor);
+
+             remarkY = y + itemBlockHeight + remarkSpacer;
+             foreach (var (prefix, content) in remarkLines)
+             {
+                 var prefixOptions = new RichTextOptions(remarkFont)
+                 {
+                     Origin = new PointF(col2X + towFontWidth, remarkY),
+                     WrappingLength = col2Width + remarkExtraWidth - indentX,
+                     LineSpacing = remarkLineSpacing
+                 };
+                 ctx.DrawText(prefixOptions, prefix, textColor);
+
+                 var prefixWidth = TextMeasurer.MeasureSize(prefix, new TextOptions(font)).Width;
+                 var spaceWidth = TextMeasurer.MeasureSize(" ", new TextOptions(font)).Width;
+                 var contentX = col2X + towFontWidth + prefixWidth + spaceWidth * 4;
+
+                 var contentOptions = new RichTextOptions(remarkFont)
+                 {
+                     Origin = new PointF(contentX, remarkY),
+                     WrappingLength = col2Width + remarkExtraWidth - (contentX - col2X),
+                     LineSpacing = remarkLineSpacing
+                 };
+                 ctx.DrawText(contentOptions, content.TrimStart(), textColor);
+
+                 var remarkLineHeight = TextMeasurer.MeasureSize(content.TrimStart(), contentOptions).Height;
+                 remarkY += remarkLineHeight + 10;
+                 remarkSpacer += 10;
+             }
+         });
+
+         y += (int)totalBlockHeight + backSpacing + remarkSpacer;
+
+         return y;
+     }
+
+     private static int DrawingOrderItems(FontFamily fontFamily, int paperWidth, Image<Rgba32> img, int y,
+         Color textColor, List<PhoneCallOrderItem> orderItems)
+     {
+         y = DrawItemLineThreeColsWrapped(fontFamily, paperWidth, img, y, textColor, "QTY",
+             new OrderItemsDto { EnName = "Items" }, "Total", fontSize: 25, bold: true);
+
+         foreach (var orderItem in orderItems)
+         {
+             var itema = new OrderItemsDto()
+             {
+                 EnName = orderItem.ProductNames.GetValueOrDefault("en")?.GetValueOrDefault("posName"),
+                 CnName = orderItem.ProductNames.GetValueOrDefault("cn")?.GetValueOrDefault("posName")
+             };
+
+             decimal itembMoney = 0;
+             var itemb = orderItem.OrderItemModifiers.Select(x =>
+                 {
+                     itembMoney += x.Price * x.Quantity * orderItem.Quantity;
+
+                     return new OrderItemsDto()
+                     {
+                         Count = x.Quantity,
+                         EnName =
+                             x.ModifierLocalizations.FirstOrDefault(s => s.Field == "name" && s.LanguageCode == "en_US")
+                                 ?.Value + "($" + x.Price.ToString("0.00") + ")",
+                         CnName = x.ModifierLocalizations
+                             .FirstOrDefault(s => s.Field == "name" && s.LanguageCode == "zh_CN")
+                             ?.Value + "($" + x.Price.ToString("0.00") + ")"
+                     };
+                 })
+                 .ToList();
+
+             if (!string.IsNullOrEmpty(orderItem.Notes))
+             {
+                 itemb.Add(new OrderItemsDto { Count = 1, EnName = orderItem.Notes });
+             }
+
+             y = DrawItemLineThreeColsWrapped(fontFamily, paperWidth, img, y, textColor, $"{orderItem.Quantity}", itema,
+                 $"${(orderItem.Price * orderItem.Quantity + itembMoney):0.00}", itemb);
+         }
+
+         return y;
+     }
+
+     private static int DrawItemLine(int paperWidth, Image<Rgba32> img, int y, Color textColor, float lineHeight,
+         string item, string price, Font? itemFont = null, FontStyle style = FontStyle.Regular, int size = 30, 
+         FontFamily fontFamily = default)
+     {
+         itemFont ??= new Font(fontFamily, size, style);
+
+         var priceSize = TextMeasurer.MeasureSize(price, new TextOptions(itemFont));
+         var maxTextWidth = paperWidth - 20 - priceSize.Width;
+
+         img.Mutate(ctx =>
+         {
+             ctx.DrawText(item, itemFont, textColor, new PointF(10, y));
+             ctx.DrawText(price, itemFont, textColor, new PointF(maxTextWidth, y));
+         });
+
+         return y + (int)lineHeight + 10;
+     }
+     
+     private static int DrawLine(int paperWidth, Image<Rgba32> img, int y, Color textColor, string text, Font font
+         , float spacing = 20, bool rightAlign = false, bool centerAlign = false, int yOffset = 0)
+     {
+         var maxWidth = paperWidth - 20;
+         var lines = new List<string>();
+            
+         var tokens = Regex.Matches(text, @"\w+|[^\w\s]|\s").Select(m => m.Value).ToList();
+
+         var currentLine = "";
+         foreach (var token in tokens)
+         {
+             var testLine = currentLine + token;
+             var size = TextMeasurer.MeasureSize(testLine, new TextOptions(font));
+
+             if (size.Width > maxWidth && !string.IsNullOrWhiteSpace(currentLine))
+             {
+                 if (Regex.IsMatch(token, @"[,.!?;:，。！？；：]") && lines.Count > 0)
+                 {
+                     lines[^1] += token;
+                     currentLine = "";
+                 }
+                 else
+                 {
+                     lines.Add(currentLine);
+                     currentLine = token.TrimStart();
+                 }
+             }
+             else
+             {
+                 currentLine = testLine;
+             }
+         }
+
+         if (!string.IsNullOrEmpty(currentLine))
+             lines.Add(currentLine);
+            
+         Log.Information("lins:{@lines}", lines);
+            
+         foreach (var line in lines)
+         {
+             var size = TextMeasurer.MeasureSize(line, new TextOptions(font));
+             float x = 10;
+
+             if (centerAlign)
+                 x = (paperWidth - size.Width) / 2;
+             else if (rightAlign)
+                 x = paperWidth - size.Width - 10;
+
+             Log.Information("line:{@line}, size{@size}", line, size);
+                
+             img.Mutate(ctx => ctx.DrawText(line, font, textColor, new PointF(x, y + yOffset)));
+                
+             y += (int)size.Height + (int)spacing;
+         }
+         
+         return y;
+     }
+     
+     private static string GenerateFullLine(char fillChar, Font font, float maxWidth)
+     {
+         var charSize = TextMeasurer.MeasureSize(fillChar.ToString(), new TextOptions(font));
+         var charWidth = charSize.Width;
+
+         if (charWidth <= 0) 
+             return "";
+            
+         var repeatCount = (int)(maxWidth / charWidth);
+
+         var sb = new StringBuilder();
+         for (var i = 0; i < repeatCount; i++)
+         {
+             sb.Append(fillChar);
+         }
+            
+         while (TextMeasurer.MeasureSize(sb.ToString(), new TextOptions(font)).Width < maxWidth)
+         {
+             sb.Append(fillChar);
+         }
+
+         while (TextMeasurer.MeasureSize(sb.ToString(), new TextOptions(font)).Width > maxWidth && sb.Length > 0)
+         {
+             sb.Length--;
+         }
+
+         return sb.ToString();
+     }
+     
+     private static int DrawSolidLine(int paperWidth, Image<Rgba32> img, int y, float thickness = 3, float spacing = 10, Color? color = null, float padding = 10)
+     {
+         color ??= Color.Black;
+
+         var x1 = padding;
+         var x2 = paperWidth - padding;
+
+         img.Mutate(ctx =>
+         {
+             ctx.DrawLine(color.Value, thickness, new PointF(x1, y), new PointF(x2, y));
+         });
+
+         return y + (int)thickness + (int)spacing;
+     }
 }
