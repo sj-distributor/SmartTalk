@@ -64,7 +64,7 @@ public partial class AccountService : IAccountService
             throw new Exception("The name is already in use and cannot be created");
         
         var account = await _accountDataProvider.CreateUserAccountAsync(
-            userAccountCommand.UserName, userAccountCommand.OriginalPassword, userAccountCommand.AccountLevel, null,
+            userAccountCommand.UserName, userAccountCommand.OriginalPassword, userAccountCommand.AccountLevel, serviceProviderId: userAccountCommand.ServiceProviderId, null,
             UserAccountIssuer.Self, null, _currentUser.Name, isProfile: false, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         await _securityDataProvider.CreateRoleUsersAsync([new RoleUser
@@ -77,7 +77,7 @@ public partial class AccountService : IAccountService
         {
             var stores = await _posDataProvider.GetPosCompanyStoresAsync(ids: userAccountCommand.StoreIds, companyIds: userAccountCommand.CompanyIds, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-            var storeUsers = stores.Select(store => new PosStoreUser
+            var storeUsers = stores.Select(store => new StoreUser
             {
                 UserId = account.Id,
                 StoreId = store.Id
@@ -95,7 +95,7 @@ public partial class AccountService : IAccountService
     public async Task<GetUserAccountsResponse> GetAccountsAsync(GetUserAccountsRequest request, CancellationToken cancellationToken)
     {
         var (count, userAccount) = await _accountDataProvider.GetUserAccountDtosAsync(
-            request.UserName, request.UserAccountLevel, request.PageSize, request.PageIndex, true, cancellationToken).ConfigureAwait(false);
+            request.UserName, request.ServiceProviderId, request.UserAccountLevel, request.PageSize, request.PageIndex, true, cancellationToken).ConfigureAwait(false);
 
         return new GetUserAccountsResponse
         {

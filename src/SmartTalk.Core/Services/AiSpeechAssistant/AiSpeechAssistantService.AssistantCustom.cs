@@ -276,7 +276,7 @@ public partial class AiSpeechAssistantService
         
         return assistant;
     }
-
+    
     private string GetDefaultModuleUrl(string modelUrl, AiSpeechAssistantProvider provider, AgentType type)
     {
         if (!string.IsNullOrEmpty(modelUrl)) return modelUrl;
@@ -301,12 +301,13 @@ public partial class AiSpeechAssistantService
         };
     }
 
-    private async Task<Agent> AddAgentAsync(int? relateId, AgentType type, AgentSourceSystem sourceSystem, bool isDisplay, CancellationToken cancellationToken)
+    private async Task<Agent> AddAgentAsync(int? relateId, int? serviceProviderId, AgentType type, AgentSourceSystem sourceSystem, bool isDisplay, CancellationToken cancellationToken)
     {
         var agent = new Agent
         {
             Type = type,
             RelateId = relateId,
+            ServiceProviderId = serviceProviderId,
             IsDisplay = isDisplay,
             SourceSystem = sourceSystem
         };
@@ -335,7 +336,7 @@ public partial class AiSpeechAssistantService
 
         await _restaurantDataProvider.AddRestaurantAsync(restaurant, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        var agent = await AddAgentAsync(restaurant.Id, command.AgentType, command.SourceSystem, command.IsDisplay, cancellationToken);
+        var agent = await AddAgentAsync(restaurant.Id, command.ServiceProviderId, command.AgentType, command.SourceSystem, command.IsDisplay, cancellationToken);
         
         var number = await DistributeNumberAsync(cancellationToken).ConfigureAwait(false);
         
@@ -344,7 +345,7 @@ public partial class AiSpeechAssistantService
 
     private async Task<(Agent Agent, NumberPool Number)> InitialAiKidInternalAsync(AddAiSpeechAssistantCommand command, CancellationToken cancellationToken)
     {
-        var agent = await AddAgentAsync(null, command.AgentType, command.SourceSystem, command.IsDisplay, cancellationToken).ConfigureAwait(false);
+        var agent = await AddAgentAsync(null, command.ServiceProviderId, command.AgentType, command.SourceSystem, command.IsDisplay, cancellationToken).ConfigureAwait(false);
         
         if (command.Uuid.HasValue)
             await _aiSpeechAssistantDataProvider.AddAiKidAsync(new AiKid
@@ -358,7 +359,7 @@ public partial class AiSpeechAssistantService
 
     private async Task<(Agent Agent, NumberPool Number)> InitialAssistantInternalAsync(AddAiSpeechAssistantCommand command, CancellationToken cancellationToken)
     {
-        var agent = await AddAgentAsync(null, command.AgentType, command.SourceSystem, command.IsDisplay, cancellationToken).ConfigureAwait(false);
+        var agent = await AddAgentAsync(null, command.ServiceProviderId, command.AgentType, command.SourceSystem, command.IsDisplay, cancellationToken).ConfigureAwait(false);
         
         var number = await DistributeNumberAsync(cancellationToken).ConfigureAwait(false);
         
@@ -369,7 +370,7 @@ public partial class AiSpeechAssistantService
     {
         if (!command.StoreId.HasValue) throw new ArgumentException("Store id is required", nameof(command.AgentId));
         
-        var agent = await AddAgentAsync(null, AgentType.Assistant, command.SourceSystem, command.IsDisplay, cancellationToken).ConfigureAwait(false);
+        var agent = await AddAgentAsync(null, command.ServiceProviderId, AgentType.Assistant, command.SourceSystem, command.IsDisplay, cancellationToken).ConfigureAwait(false);
 
         var posAgent = new PosAgent
         {

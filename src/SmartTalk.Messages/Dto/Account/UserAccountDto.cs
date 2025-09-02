@@ -21,6 +21,8 @@ public class UserAccountDto
     
     public bool IsActive { get; set; }
     
+    public int? ServiceProviderId { get; set; }
+    
     public UserAccountLevel AccountLevel { get; set; }
     
     public SystemLanguage SystemLanguage { get; set; }
@@ -41,5 +43,5 @@ public class UserAccountDto
     
     public UserAccountProfileDto UserAccountProfile { get; set; }
     
-    public List<PosCompanyStoreDto> Stores { get; set; }
+    public List<CompanyStoreDto> Stores { get; set; }
 }

@@ -21,6 +21,7 @@ using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Pos;
+using SmartTalk.Messages.Enums.Account;
 using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Requests.Pos;
 
@@ -28,29 +29,29 @@ namespace SmartTalk.Core.Services.Pos;
 
 public partial interface IPosService : IScopedDependency
 {
-    Task<GetPosCompanyWithStoresResponse> GetPosCompanyWithStoresAsync(GetPosCompanyWithStoresRequest request, CancellationToken cancellationToken);
+    Task<GetCompanyWithStoresResponse> GetCompanyWithStoresAsync(GetCompanyWithStoresRequest request, CancellationToken cancellationToken);
     
-    Task<GetPosCompanyStoreDetailResponse> GetPosCompanyStoreDetailAsync(GetPosCompanyStoreDetailRequest request, CancellationToken cancellationToken);
+    Task<GetCompanyStoreDetailResponse> GetCompanyStoreDetailAsync(GetCompanyStoreDetailRequest request, CancellationToken cancellationToken);
     
-    Task<CreatePosCompanyStoreResponse> CreatePosCompanyStoreAsync(CreatePosCompanyStoreCommand command,CancellationToken cancellationToken);
+    Task<CreateCompanyStoreResponse> CreateCompanyStoreAsync(CreateCompanyStoreCommand command,CancellationToken cancellationToken);
     
-    Task<UpdatePosCompanyStoreResponse> UpdatePosCompanyStoreAsync(UpdatePosCompanyStoreCommand command,CancellationToken cancellationToken);
+    Task<UpdateCompanyStoreResponse> UpdateCompanyStoreAsync(UpdateCompanyStoreCommand command,CancellationToken cancellationToken);
     
-    Task<DeletePosCompanyStoreResponse> DeletePosCompanyStoreAsync(DeletePosCompanyStoreCommand command,CancellationToken cancellationToken);
+    Task<DeleteCompanyStoreResponse> DeleteCompanyStoreAsync(DeleteCompanyStoreCommand command,CancellationToken cancellationToken);
     
-    Task<UpdatePosCompanyStoreStatusResponse> UpdatePosCompanyStoreStatusAsync(UpdatePosCompanyStoreStatusCommand command,CancellationToken cancellationToken);
+    Task<UpdateCompanyStoreStatusResponse> UpdateCompanyStoreStatusAsync(UpdateCompanyStoreStatusCommand command,CancellationToken cancellationToken);
 
-    Task<ManagePosCompanyStoreAccountsResponse> ManagePosCompanyStoreAccountAsync(ManagePosCompanyStoreAccountsCommand command, CancellationToken cancellationToken);
+    Task<ManageCompanyStoreAccountsResponse> ManageCompanyStoreAccountAsync(ManageCompanyStoreAccountsCommand command, CancellationToken cancellationToken);
 
-    Task<GetPosStoreUsersResponse> GetPosStoreUsersAsync(GetPosStoreUsersRequest request, CancellationToken cancellationToken);
+    Task<GetStoreUsersResponse> GetStoreUsersAsync(GetStoreUsersRequest request, CancellationToken cancellationToken);
 
     Task<UnbindPosCompanyStoreResponse> UnbindPosCompanyStoreAsync(UnbindPosCompanyStoreCommand command, CancellationToken cancellationToken);
 
     Task<BindPosCompanyStoreResponse> BindPosCompanyStoreAsync(BindPosCompanyStoreCommand command, CancellationToken cancellationToken);
     
-    Task<GetPosStoresResponse> GetPosStoresAsync(GetPosStoresRequest request, CancellationToken cancellationToken);
+    Task<GetPosStoresResponse> GetStoresAsync(GetStoresRequest request, CancellationToken cancellationToken);
 
-    Task<GetPosCurrentUserStoresResponse> GetPosAgentsAsync(GetPosCurrentUserStoresRequest request, CancellationToken cancellationToken);
+    Task<GetCurrentUserStoresResponse> GetCurrentUserStoresAsync(GetCurrentUserStoresRequest request, CancellationToken cancellationToken);
 }
 
 public partial class PosService : IPosService
@@ -102,16 +103,16 @@ public partial class PosService : IPosService
         _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
     }
     
-    public async Task<GetPosCompanyWithStoresResponse> GetPosCompanyWithStoresAsync(GetPosCompanyWithStoresRequest request, CancellationToken cancellationToken)
+    public async Task<GetCompanyWithStoresResponse> GetCompanyWithStoresAsync(GetCompanyWithStoresRequest request, CancellationToken cancellationToken)
     {
         var (count, companies) = await _posDataProvider.GetPosCompaniesAsync(
-            request.PageIndex, request.PageSize, cancellationToken: cancellationToken).ConfigureAwait(false);
+            request.PageIndex, request.PageSize, serviceProviderId: request.ServiceProviderId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        var result = _mapper.Map<List<PosCompanyDto>>(companies);
+        var result = _mapper.Map<List<CompanyDto>>(companies);
         
-        return new GetPosCompanyWithStoresResponse
+        return new GetCompanyWithStoresResponse
         {
-            Data = new GetPosCompanyWithStoresResponseData
+            Data = new GetCompanyWithStoresResponseData
             {
                 Count = count,
                 Data = await EnrichPosCompaniesAsync(result, request.Keyword, cancellationToken).ConfigureAwait(false)
@@ -119,19 +120,19 @@ public partial class PosService : IPosService
         };
     }
 
-    public async Task<GetPosCompanyStoreDetailResponse> GetPosCompanyStoreDetailAsync(GetPosCompanyStoreDetailRequest request, CancellationToken cancellationToken)
+    public async Task<GetCompanyStoreDetailResponse> GetCompanyStoreDetailAsync(GetCompanyStoreDetailRequest request, CancellationToken cancellationToken)
     {
         var store = await _posDataProvider.GetPosCompanyStoreDetailAsync(request.StoreId, cancellationToken).ConfigureAwait(false);
 
-        return new GetPosCompanyStoreDetailResponse
+        return new GetCompanyStoreDetailResponse
         {
             Data = store
         };
     }
     
-    public async Task<CreatePosCompanyStoreResponse> CreatePosCompanyStoreAsync(CreatePosCompanyStoreCommand command, CancellationToken cancellationToken)
+    public async Task<CreateCompanyStoreResponse> CreateCompanyStoreAsync(CreateCompanyStoreCommand command, CancellationToken cancellationToken)
     {
-        var store = _mapper.Map<PosCompanyStore>(command);
+        var store = _mapper.Map<CompanyStore>(command);
 
         store.CreatedBy = _currentUser.Id.Value;
 
@@ -139,13 +140,13 @@ public partial class PosService : IPosService
         
         await _vectorDb.CreateIndexAsync($"pos-{store.Id}", 3072, cancellationToken).ConfigureAwait(false);
 
-        return new CreatePosCompanyStoreResponse
+        return new CreateCompanyStoreResponse
         {
-            Data = _mapper.Map<PosCompanyStoreDto>(store)
+            Data = _mapper.Map<CompanyStoreDto>(store)
         };
     }
 
-    public async Task<UpdatePosCompanyStoreResponse> UpdatePosCompanyStoreAsync(UpdatePosCompanyStoreCommand command, CancellationToken cancellationToken)
+    public async Task<UpdateCompanyStoreResponse> UpdateCompanyStoreAsync(UpdateCompanyStoreCommand command, CancellationToken cancellationToken)
     {
         var store = await _posDataProvider.GetPosCompanyStoreAsync(id: command.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
         
@@ -153,13 +154,13 @@ public partial class PosService : IPosService
 
         await _posDataProvider.UpdatePosCompanyStoresAsync([store], cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        return new UpdatePosCompanyStoreResponse
+        return new UpdateCompanyStoreResponse
         {
-            Data = _mapper.Map<PosCompanyStoreDto>(store)
+            Data = _mapper.Map<CompanyStoreDto>(store)
         };
     }
 
-    public async Task<DeletePosCompanyStoreResponse> DeletePosCompanyStoreAsync(DeletePosCompanyStoreCommand command, CancellationToken cancellationToken)
+    public async Task<DeleteCompanyStoreResponse> DeleteCompanyStoreAsync(DeleteCompanyStoreCommand command, CancellationToken cancellationToken)
     {
         var stores = await _posDataProvider.GetPosCompanyStoresAsync([command.StoreId], cancellationToken:cancellationToken).ConfigureAwait(false);
 
@@ -167,13 +168,13 @@ public partial class PosService : IPosService
 
         await _posDataProvider.DeletePosCompanyStoresAsync(stores, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        return new DeletePosCompanyStoreResponse
+        return new DeleteCompanyStoreResponse
         {
-            Data = _mapper.Map<List<PosCompanyStoreDto>>(stores)
+            Data = _mapper.Map<List<CompanyStoreDto>>(stores)
         };
     }
 
-    public async Task<UpdatePosCompanyStoreStatusResponse> UpdatePosCompanyStoreStatusAsync(UpdatePosCompanyStoreStatusCommand command, CancellationToken cancellationToken)
+    public async Task<UpdateCompanyStoreStatusResponse> UpdateCompanyStoreStatusAsync(UpdateCompanyStoreStatusCommand command, CancellationToken cancellationToken)
     {
         var store = await _posDataProvider.GetPosCompanyStoreAsync(id: command.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -183,9 +184,9 @@ public partial class PosService : IPosService
 
         await _posDataProvider.UpdatePosCompanyStoresAsync([store], cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        return new UpdatePosCompanyStoreStatusResponse
+        return new UpdateCompanyStoreStatusResponse
         {
-            Data = _mapper.Map<PosCompanyStoreDto>(store)
+            Data = _mapper.Map<CompanyStoreDto>(store)
         };
     }
 
@@ -207,7 +208,7 @@ public partial class PosService : IPosService
 
         return new UnbindPosCompanyStoreResponse
         {
-            Data = _mapper.Map<PosCompanyStoreDto>(store)
+            Data = _mapper.Map<CompanyStoreDto>(store)
         };
     }
 
@@ -243,11 +244,11 @@ public partial class PosService : IPosService
 
         return new BindPosCompanyStoreResponse
         {
-            Data = _mapper.Map<PosCompanyStoreDto>(store)
+            Data = _mapper.Map<CompanyStoreDto>(store)
         };
     }
 
-    public async Task<ManagePosCompanyStoreAccountsResponse> ManagePosCompanyStoreAccountAsync(ManagePosCompanyStoreAccountsCommand command, CancellationToken cancellationToken)
+    public async Task<ManageCompanyStoreAccountsResponse> ManageCompanyStoreAccountAsync(ManageCompanyStoreAccountsCommand command, CancellationToken cancellationToken)
     {
         command.UserIds ??= new List<int>();
 
@@ -255,14 +256,14 @@ public partial class PosService : IPosService
 
         if (existingAccounts.Any())
         {
-            await _posDataProvider.DeletePosStoreUsersAsync(_mapper.Map<List<PosStoreUser>>(existingAccounts), cancellationToken: cancellationToken).ConfigureAwait(false);
+            await _posDataProvider.DeletePosStoreUsersAsync(_mapper.Map<List<StoreUser>>(existingAccounts), cancellationToken: cancellationToken).ConfigureAwait(false);
         }
 
-        List<PosStoreUser> newAccounts = new();
+        List<StoreUser> newAccounts = new();
     
         if (command.UserIds.Any())
         {
-            newAccounts = command.UserIds.Select(userId => new PosStoreUser
+            newAccounts = command.UserIds.Select(userId => new StoreUser
                 {
                     UserId = userId,
                     StoreId = command.StoreId,
@@ -273,29 +274,29 @@ public partial class PosService : IPosService
             await _posDataProvider.CreatePosStoreUserAsync(newAccounts, cancellationToken: cancellationToken).ConfigureAwait(false);
         }
 
-        return new ManagePosCompanyStoreAccountsResponse 
+        return new ManageCompanyStoreAccountsResponse 
         {
-            Data = _mapper.Map<List<PosStoreUserDto>>(newAccounts)
+            Data = _mapper.Map<List<StoreUserDto>>(newAccounts)
         };
     }
 
-    public async Task<GetPosStoreUsersResponse> GetPosStoreUsersAsync(GetPosStoreUsersRequest request, CancellationToken cancellationToken)
+    public async Task<GetStoreUsersResponse> GetStoreUsersAsync(GetStoreUsersRequest request, CancellationToken cancellationToken)
     {
         var posStoreUsers = await _posDataProvider.GetPosStoreUsersAsync(request.StoreId, cancellationToken).ConfigureAwait(false);
 
         if (!posStoreUsers.Any())
-            return new GetPosStoreUsersResponse
+            return new GetStoreUsersResponse
             {
-                Data = new List<PosStoreUserDto>()
+                Data = new List<StoreUserDto>()
             };
 
-        return new GetPosStoreUsersResponse
+        return new GetStoreUsersResponse
         {
             Data = posStoreUsers
         };
     }
 
-    public async Task<GetPosStoresResponse> GetPosStoresAsync(GetPosStoresRequest request, CancellationToken cancellationToken)
+    public async Task<GetPosStoresResponse> GetStoresAsync(GetStoresRequest request, CancellationToken cancellationToken)
     {
         var isSuperAdmin = await CheckCurrentIsAdminAsync(cancellationToken).ConfigureAwait(false);
         
@@ -309,54 +310,52 @@ public partial class PosService : IPosService
         
         var stores = await _posDataProvider.GetPosCompanyStoresWithSortingAsync(
             storeUsers?.Select(x => x.StoreId).ToList(),
-            request.CompanyId, request.Keyword, request.IsNormalSort, cancellationToken: cancellationToken).ConfigureAwait(false);
+            request.CompanyId, request.ServiceProviderId, request.Keyword, request.IsNormalSort, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         return new GetPosStoresResponse
         {
-            Data = _mapper.Map<List<PosCompanyStoreDto>>(stores)
+            Data = _mapper.Map<List<CompanyStoreDto>>(stores)
         };
     }
     
     public async Task<bool> CheckCurrentIsAdminAsync(CancellationToken cancellationToken)
     {
-        var rolesToCheck = new List<string> { SecurityStore.Roles.SuperAdministrator, SecurityStore.Roles.Administrator };
-        
-        var roleUsers = await _accountDataProvider.GetRoleUserByRoleNameAsync(rolesToCheck, cancellationToken).ConfigureAwait(false);
+        var roleUsers = await _accountDataProvider.GetRoleUserByRoleAccountLevelAsync(UserAccountLevel.ServiceProvider, cancellationToken).ConfigureAwait(false);
 
         Log.Information("Get admin role users: {@roleUsers} by current user: {@currentUserId}", roleUsers, _currentUser.Id.Value);
         
         return roleUsers.Any(x => x.UserId == _currentUser.Id.Value);
     }
 
-    public async Task<GetPosCurrentUserStoresResponse> GetPosAgentsAsync(GetPosCurrentUserStoresRequest request, CancellationToken cancellationToken)
+    public async Task<GetCurrentUserStoresResponse> GetCurrentUserStoresAsync(GetCurrentUserStoresRequest request, CancellationToken cancellationToken)
     {
         var storeUsers = await _posDataProvider.GetPosStoreUsersByUserIdAsync(_currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
 
-        if (storeUsers.Count == 0) return new GetPosCurrentUserStoresResponse { Data = [] };
+        if (storeUsers.Count == 0) return new GetCurrentUserStoresResponse { Data = [] };
         
         var storeIds = storeUsers.Select(x => x.StoreId).ToList();
-        var stores = _mapper.Map<List<PosCompanyStoreDto>>(
+        var stores = _mapper.Map<List<CompanyStoreDto>>(
             await _posDataProvider.GetPosCompanyStoresAsync(ids: storeIds, cancellationToken: cancellationToken).ConfigureAwait(false));
         
         var allAgents = await _posDataProvider.GetPosAgentsAsync(storeIds: storeIds, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        var enrichStores = stores.Select(store => new GetPosCurrentUserStoresResponseData
+        var enrichStores = stores.Select(store => new GetCurrentUserStoresResponseData
         {
             Store = store,
             AgentIds = allAgents.Where(x => x.StoreId == store.Id).Select(x => x.AgentId).ToList()
         }).ToList();
 
-        return new GetPosCurrentUserStoresResponse { Data = enrichStores };
+        return new GetCurrentUserStoresResponse { Data = enrichStores };
     }
 
-    private async Task<List<GetPosCompanyWithStoresData>> EnrichPosCompaniesAsync(List<PosCompanyDto> companies, string keyword, CancellationToken cancellationToken)
+    private async Task<List<GetCompanyWithStoresData>> EnrichPosCompaniesAsync(List<CompanyDto> companies, string keyword, CancellationToken cancellationToken)
     {
         var stores = await _posDataProvider.GetPosCompanyStoresAsync(
             companyIds: companies.Select(x => x.Id).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var storeGroups = stores.GroupBy(x => x.CompanyId).ToDictionary(kvp => kvp.Key, kvp => kvp.ToList());
 
-        var data = companies.Select(x => new GetPosCompanyWithStoresData
+        var data = companies.Select(x => new GetCompanyWithStoresData
         {
             Company = x,
             Stores = EnrichCompanyStores(x, storeGroups),
@@ -370,11 +369,11 @@ public partial class PosService : IPosService
                 x.Stores.Any(s => s.Names?.Contains(keyword, StringComparison.OrdinalIgnoreCase) ?? false)).ToList();
     }
 
-    private List<PosCompanyStoreDto> EnrichCompanyStores(PosCompanyDto company, Dictionary<int,List<PosCompanyStore>> storeGroups)
+    private List<CompanyStoreDto> EnrichCompanyStores(CompanyDto company, Dictionary<int,List<CompanyStore>> storeGroups)
     {
         var stores = storeGroups.TryGetValue(company.Id, out var group) ? group : [];
         
-        return _mapper.Map<List<PosCompanyStoreDto>>(stores);
+        return _mapper.Map<List<CompanyStoreDto>>(stores);
     }
 
     private async Task InitialAgentAsync(int storeId, CancellationToken cancellationToken)

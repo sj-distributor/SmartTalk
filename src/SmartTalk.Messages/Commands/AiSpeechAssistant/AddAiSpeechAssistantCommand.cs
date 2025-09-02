@@ -3,11 +3,12 @@ using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
+using SmartTalk.Messages.Requests.Pos;
 using SmartTalk.Messages.Responses;
 
 namespace SmartTalk.Messages.Commands.AiSpeechAssistant;
 
-public class AddAiSpeechAssistantCommand : ICommand
+public class AddAiSpeechAssistantCommand : HasServiceProviderId, ICommand
 {
     public int? AgentId { get; set; }
     
