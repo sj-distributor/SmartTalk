@@ -805,13 +805,13 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         {
             _aiSpeechAssistantStreamContext.IsTransfer = true;
             
-            var (reply, replySeconds) = MatchTransferCallReply(functionName);
+            var (reply, _) = MatchTransferCallReply(functionName);
             
-            _backgroundJobClient.Schedule<IMediator>(x => x.SendAsync(new TransferHumanServiceCommand
+            _backgroundJobClient.Enqueue<IMediator>(x => x.SendAsync(new TransferHumanServiceCommand
             {
                 CallSid = _aiSpeechAssistantStreamContext.CallSid,
                 HumanPhone = _aiSpeechAssistantStreamContext.HumanContactPhone
-            }, cancellationToken), TimeSpan.FromSeconds(replySeconds));
+            }, cancellationToken));
             
             var transferringHumanService = new
             {
