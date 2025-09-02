@@ -6,11 +6,12 @@ using SmartTalk.Messages.Attributes;
 using SmartTalk.Messages.Constants;
 using SmartTalk.Messages.Dto.Account;
 using SmartTalk.Messages.Enums.Account;
+using SmartTalk.Messages.Requests.Pos;
 
 namespace SmartTalk.Messages.Commands.Security;
 
 [SmartTalkAuthorize(Permissions = [SecurityStore.Permissions.CanCreateAccount])]
-public class CreateUserAccountCommand : ICommand
+public class CreateUserAccountCommand : HasServiceProviderId, ICommand
 {
     public string UserName { get; set; }
     

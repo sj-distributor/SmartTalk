@@ -6,13 +6,13 @@ namespace SmartTalk.Core.Services.Pos;
 
 public partial interface IPosDataProvider : IScopedDependency
 {
-    Task CreatePosCompanyAsync(PosCompany company, bool isForceSave = true, CancellationToken cancellationToken = default);
+    Task CreatePosCompanyAsync(Company company, bool isForceSave = true, CancellationToken cancellationToken = default);
 
-    Task UpdatePosCompanyAsync(PosCompany company, bool isForceSave = true, CancellationToken cancellationToken = default);
+    Task UpdatePosCompanyAsync(Company company, bool isForceSave = true, CancellationToken cancellationToken = default);
 
-    Task DeletePosCompanyAsync(PosCompany company, bool isForceSave = true, CancellationToken cancellationToken = default);
+    Task DeletePosCompanyAsync(Company company, bool isForceSave = true, CancellationToken cancellationToken = default);
 
-    Task<PosCompany> GetPosCompanyAsync(int id, CancellationToken cancellationToken);
+    Task<Company> GetPosCompanyAsync(int id, CancellationToken cancellationToken);
 
     Task<List<PosMenu>> GetPosMenusAsync(int storeId, bool? IsActive = null, CancellationToken cancellationToken = default);
 
@@ -41,30 +41,30 @@ public partial interface IPosDataProvider : IScopedDependency
 
 public partial class PosDataProvider
 {
-    public async Task CreatePosCompanyAsync(PosCompany company, bool isForceSave = true, CancellationToken cancellationToken = default)
+    public async Task CreatePosCompanyAsync(Company company, bool isForceSave = true, CancellationToken cancellationToken = default)
     {
         await _repository.InsertAsync(company, cancellationToken).ConfigureAwait(false);
         
         if (isForceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task UpdatePosCompanyAsync(PosCompany company, bool isForceSave = true, CancellationToken cancellationToken = default)
+    public async Task UpdatePosCompanyAsync(Company company, bool isForceSave = true, CancellationToken cancellationToken = default)
     {
         await _repository.UpdateAsync(company, cancellationToken).ConfigureAwait(false);
         
         if (isForceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task DeletePosCompanyAsync(PosCompany company, bool isForceSave = true, CancellationToken cancellationToken = default)
+    public async Task DeletePosCompanyAsync(Company company, bool isForceSave = true, CancellationToken cancellationToken = default)
     {
         await _repository.DeleteAsync(company, cancellationToken).ConfigureAwait(false);
         
         if (isForceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<PosCompany> GetPosCompanyAsync(int id, CancellationToken cancellationToken)
+    public async Task<Company> GetPosCompanyAsync(int id, CancellationToken cancellationToken)
     {
-        return await _repository.Query<PosCompany>(x => x.Id == id).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        return await _repository.Query<Company>(x => x.Id == id).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<List<PosMenu>> GetPosMenusAsync(int storeId, bool? IsActive = null, CancellationToken cancellationToken = default)
@@ -189,8 +189,8 @@ public partial class PosDataProvider
 
     public async Task<List<PosOrder>> GetPosOrdersByCompanyIdAsync(int companyId, CancellationToken cancellationToken)
     {
-        var query = from company in _repository.Query<PosCompany>()
-            join store in _repository.Query<PosCompanyStore>() on company.Id equals store.CompanyId
+        var query = from company in _repository.Query<Company>()
+            join store in _repository.Query<CompanyStore>() on company.Id equals store.CompanyId
             join order in _repository.Query<PosOrder>() on store.Id equals order.StoreId
             where company.Id == companyId
             select order;
@@ -200,7 +200,7 @@ public partial class PosDataProvider
     
     public async Task<List<PosOrder>> GetPosOrdersByStoreIdAsync(int storeId,CancellationToken cancellationToken)
     {
-        var query = from store in _repository.Query<PosCompanyStore>()
+        var query = from store in _repository.Query<CompanyStore>()
             join order in _repository.Query<PosOrder>() on store.Id equals order.StoreId
             where store.Id == storeId
             select order;

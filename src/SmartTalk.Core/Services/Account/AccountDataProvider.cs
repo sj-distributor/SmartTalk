@@ -36,20 +36,20 @@ namespace SmartTalk.Core.Services.Account
         List<Claim> GenerateClaimsFromUserAccount(UserAccountDto account);
 
         Task<UserAccount> CreateUserAccountAsync(
-            string requestUserName, string requestPassword, UserAccountLevel accountLevel, string thirdPartyUserId = null,
+            string requestUserName, string requestPassword, UserAccountLevel accountLevel, int? serviceProviderId = null, string thirdPartyUserId = null,
             UserAccountIssuer authType = UserAccountIssuer.Self, UserAccountProfile profile = null, string creator = null, bool isProfile = true, CancellationToken cancellationToken = default);
 
         Task UpdateUserAccountAsync(UserAccount userAccount, bool forceSave = true, CancellationToken cancellationToken = default);
         
         Task DeleteUserAccountAsync(UserAccount userAccount, bool forceSave = true, CancellationToken cancellationToken = default);
 
-        Task<(int, List<UserAccountDto>)> GetUserAccountDtosAsync(string userNameContain = null, UserAccountLevel? userAccountLevel = null, int? pageSize = null, int? pageIndex = null, bool orderByCreatedOn = false, CancellationToken cancellationToken = default);
+        Task<(int, List<UserAccountDto>)> GetUserAccountDtosAsync(string userNameContain = null, int? serviceProviderId = null, UserAccountLevel? userAccountLevel = null, int? pageSize = null, int? pageIndex = null, bool orderByCreatedOn = false, CancellationToken cancellationToken = default);
 
         Task<UserAccount> IsUserAccountExistAsync(int id, CancellationToken cancellationToken);
 
         Task<UserAccount> GetUserAccountRolePermissionsByUserIdAsync(int? userId, CancellationToken cancellationToken);
         
-        Task<List<RoleUser>> GetRoleUserByRoleNameAsync(List<string> names, CancellationToken cancellationToken);
+        Task<List<RoleUser>> GetRoleUserByRoleAccountLevelAsync(UserAccountLevel userAccountLevel, CancellationToken cancellationToken);
 
         Task<UserAccount> GetUserAccountByUserIdAsync(int userId, CancellationToken cancellationToken);
     }
@@ -253,7 +253,7 @@ namespace SmartTalk.Core.Services.Account
         }
         
         public async Task<UserAccount> CreateUserAccountAsync(
-            string requestUserName, string requestPassword, UserAccountLevel accountLevel, string thirdPartyUserId = null, 
+            string requestUserName, string requestPassword, UserAccountLevel accountLevel, int? serviceProviderId = null, string thirdPartyUserId = null, 
             UserAccountIssuer authType = UserAccountIssuer.Self, UserAccountProfile profile = null, string creator = null, bool isProfile = true, CancellationToken cancellationToken = default)
         {
             var userAccount = new UserAccount
@@ -266,7 +266,8 @@ namespace SmartTalk.Core.Services.Account
                 OriginalPassword = requestPassword ?? null,
                 ThirdPartyUserId = thirdPartyUserId,
                 IsActive = true,
-                AccountLevel = accountLevel
+                AccountLevel = accountLevel,
+                ServiceProviderId = serviceProviderId
             };
         
             await _repository.InsertAsync(userAccount, cancellationToken).ConfigureAwait(false);
@@ -304,13 +305,16 @@ namespace SmartTalk.Core.Services.Account
         }
 
         
-        public async Task<(int, List<UserAccountDto>)> GetUserAccountDtosAsync(string userNameContain = null, UserAccountLevel? userAccountLevel = null,  int? pageSize = null, int? pageIndex = null,
+        public async Task<(int, List<UserAccountDto>)> GetUserAccountDtosAsync(string userNameContain = null, int? serviceProviderId = null, UserAccountLevel? userAccountLevel = null,  int? pageSize = null, int? pageIndex = null,
             bool orderByCreatedOn = false, CancellationToken cancellationToken = default)
         {
             var query =  _repository.Query<UserAccount>().Where(x => x.Issuer == 0);
 
             if (!string.IsNullOrEmpty(userNameContain))
                 query = query.Where(x => x.UserName.Contains(userNameContain));
+
+            if (serviceProviderId.HasValue)
+                query = query.Where(x => x.ServiceProviderId == serviceProviderId.Value);
 
             if (userAccountLevel.HasValue)
                 query = query.Where(x => x.AccountLevel == userAccountLevel.Value);
@@ -335,8 +339,8 @@ namespace SmartTalk.Core.Services.Account
                 select new { roleUser.UserId, role}).ToListAsync(cancellationToken);
             
             var agentData = await (
-                from storeUser in _repository.QueryNoTracking<PosStoreUser>().Where(x => accountIds.Contains(x.UserId))
-                join store in _repository.QueryNoTracking<PosCompanyStore>() on storeUser.StoreId equals store.Id
+                from storeUser in _repository.QueryNoTracking<StoreUser>().Where(x => accountIds.Contains(x.UserId))
+                join store in _repository.QueryNoTracking<CompanyStore>() on storeUser.StoreId equals store.Id
                 select new { storeUser.UserId, store }
             ).ToListAsync(cancellationToken);
 
@@ -388,11 +392,11 @@ namespace SmartTalk.Core.Services.Account
             return await _repository.Query<UserAccount>().Where(x => x.Id == userId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
         }
         
-        public async Task<List<RoleUser>> GetRoleUserByRoleNameAsync(List<string> names, CancellationToken cancellationToken)
+        public async Task<List<RoleUser>> GetRoleUserByRoleAccountLevelAsync(UserAccountLevel userAccountLevel, CancellationToken cancellationToken)
         {
             var query = _repository.QueryNoTracking<RoleUser>();
 
-            var roles = await _repository.QueryNoTracking<Role>().Where(x => names.Contains(x.Name)).ToListAsync(cancellationToken).ConfigureAwait(false);
+            var roles = await _repository.QueryNoTracking<Role>().Where(x => x.UserAccountLevel == userAccountLevel).ToListAsync(cancellationToken).ConfigureAwait(false);
             
             var roleIds = roles.Select(x => x.Id).ToList();
         
