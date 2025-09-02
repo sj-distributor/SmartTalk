@@ -15,4 +15,4 @@ public class GetStoresRequest : HasServiceProviderId, IRequest
     public bool IsNormalSort { get; set; } = false;
 }
 
-public class GetPosStoresResponse : SmartTalkResponse<List<PosCompanyStoreDto>>;
+public class GetPosStoresResponse : SmartTalkResponse<List<CompanyStoreDto>>;

@@ -12,6 +12,12 @@ VALUES
 
 alter table pos_company modify column service_provider_id int null;
 
+alter table pos_company rename to company;
+
+alter table pos_company_store rename to company_store;
+
+alter table pos_store_user rename to stroe_user;
+
 alter table user_account modify column service_provider_id int null;
 
 alter table agent modify column service_provider_id int null;

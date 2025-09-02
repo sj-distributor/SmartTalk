@@ -16,20 +16,20 @@ public class GetCompanyWithStoresRequest : HasServiceProviderId, IRequest
     public string Keyword { get; set; }
 }
 
-public class GetPosCompanyWithStoresResponse : SmartTalkResponse<GetPosCompanyWithStoresResponseData>;
+public class GetCompanyWithStoresResponse : SmartTalkResponse<GetCompanyWithStoresResponseData>;
 
-public class GetPosCompanyWithStoresResponseData
+public class GetCompanyWithStoresResponseData
 {
     public int Count { get; set; }
     
-    public List<GetPosCompanyWithStoresData> Data { get; set; }
+    public List<GetCompanyWithStoresData> Data { get; set; }
 }
 
-public class GetPosCompanyWithStoresData
+public class GetCompanyWithStoresData
 {
     public int Count { get; set; }
     
-    public PosCompanyDto Company { get; set; }
+    public CompanyDto Company { get; set; }
     
-    public List<PosCompanyStoreDto> Stores { get; set; }
+    public List<CompanyStoreDto> Stores { get; set; }
 }

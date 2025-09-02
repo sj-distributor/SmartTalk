@@ -43,5 +43,5 @@ public class UserAccountDto
     
     public UserAccountProfileDto UserAccountProfile { get; set; }
     
-    public List<PosCompanyStoreDto> Stores { get; set; }
+    public List<CompanyStoreDto> Stores { get; set; }
 }

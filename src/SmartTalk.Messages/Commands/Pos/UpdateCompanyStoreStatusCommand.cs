@@ -4,11 +4,11 @@ using SmartTalk.Messages.Responses;
 
 namespace SmartTalk.Messages.Commands.Pos;
 
-public class UnbindPosCompanyStoreCommand : ICommand
+public class UpdateCompanyStoreStatusCommand : ICommand
 {
     public int StoreId { get; set; }
+    
+    public bool Status { get; set; }
 }
 
-public class UnbindPosCompanyStoreResponse : SmartTalkResponse<CompanyStoreDto>
-{
-}
+public class UpdateCompanyStoreStatusResponse : SmartTalkResponse<CompanyStoreDto>;

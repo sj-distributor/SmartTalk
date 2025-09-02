@@ -84,7 +84,7 @@ public class SecurityService : ISecurityService
         {
             var companyStores = await _posDataProvider.GetPosCompanyStoresAsync(companyIds: command.CompanyIds, cancellationToken: cancellationToken).ConfigureAwait(false);
             
-            var companyStoreUsers = companyStores.Select(store => new PosStoreUser
+            var companyStoreUsers = companyStores.Select(store => new StoreUser
             {
                 UserId = command.UserId,
                 StoreId = store.Id
@@ -97,7 +97,7 @@ public class SecurityService : ISecurityService
         {
             var posStores = await _posDataProvider.GetPosCompanyStoresAsync(ids: command.StoreIds, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-            var posStoreUsers = posStores.Select(store => new PosStoreUser
+            var posStoreUsers = posStores.Select(store => new StoreUser
             {
                 UserId = command.UserId,
                 StoreId = store.Id

@@ -85,6 +85,6 @@ namespace SmartTalk.Core.Domain.Account
         public UserAccountProfile UserAccountProfile { get; set; }
         
         [NotMapped]
-        public List<PosCompanyStore> Stores { get; set; }
+        public List<CompanyStore> Stores { get; set; }
     }
 }
