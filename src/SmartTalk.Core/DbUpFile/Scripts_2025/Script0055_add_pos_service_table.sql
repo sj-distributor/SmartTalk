@@ -8,7 +8,7 @@ create table if not exists pos_service
 INSERT INTO pos_service (name, created_date)
 VALUES 
     ('SmartTalk', now(3)),
-    ('TestOmeNow' now(3));
+    ('TestOmeNow', now(3));
 
 alter table pos_company modify column pos_service_id int null;
 
