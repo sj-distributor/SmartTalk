@@ -2,10 +2,13 @@ create table if not exists pos_service
 (
     `id` int primary key auto_increment,
     `name` varchar(36) not null,
-    `created_date` datetime(3) not null,
-    `last_modified_by` int not null,
-    `last_modified_date` datetime(3) not null
+    `created_date` datetime(3) not null
     ) charset=utf8mb4;
+
+INSERT INTO pos_service (name, created_date)
+VALUES 
+    ('SmartTalk', now(3)),
+    ('TestOmeNow' now(3));
 
 alter table pos_company modify column pos_service_id int null;
 

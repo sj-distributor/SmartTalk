@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace SmartTalk.Core.Domain.Pos;
 
-public class PosService : IEntity, IHasCreatedFields, IHasModifiedFields
+public class PosService : IEntity, IHasCreatedFields
 {
     [Key]
     [Column("id")]
@@ -15,10 +15,4 @@ public class PosService : IEntity, IHasCreatedFields, IHasModifiedFields
     
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
-
-    [Column("last_modified_by")]
-    public int? LastModifiedBy { get; set; }
-    
-    [Column("last_modified_date")]
-    public DateTimeOffset? LastModifiedDate { get; set; }
 }
