@@ -699,14 +699,14 @@ public class PrinterService : IPrinterService
              {
                  var content = "";
                  
-                 if (!string.IsNullOrEmpty(itemName.EnName) && string.IsNullOrEmpty(itemName.CnName))
-                     firstChar = itemName.EnName;
+                 if (!string.IsNullOrEmpty(remark.EnName) && string.IsNullOrEmpty(remark.CnName))
+                     content = remark.EnName;
              
-                 if (!string.IsNullOrEmpty(itemName.CnName) && string.IsNullOrEmpty(itemName.EnName)) 
-                     firstChar = itemName.CnName;
+                 if (!string.IsNullOrEmpty(remark.CnName) && string.IsNullOrEmpty(remark.EnName)) 
+                     content = remark.CnName;
 
-                 if (!string.IsNullOrEmpty(itemName.EnName) && !string.IsNullOrEmpty(itemName.CnName))
-                     firstChar = itemName.EnName + "\n" + itemName.CnName;
+                 if (!string.IsNullOrEmpty(remark.EnName) && !string.IsNullOrEmpty(remark.CnName))
+                     content = remark.EnName + "\n" + remark.CnName;
                  
                  var prefix = remark.Count > 1 ? $"{remark.Count}" : ">";
                  remarkLines.Add((prefix, content));
@@ -823,7 +823,18 @@ public class PrinterService : IPrinterService
 
              if (!string.IsNullOrEmpty(orderItem.Notes))
              {
-                 itemb.Add(new OrderItemsDto { Count = 1, EnName = orderItem.Notes });
+                 var item = new OrderItemsDto();
+                 
+                 if (printerLanguageType != PrinterLanguageType.EnglishAndChinese)
+                 {
+                     item = IsGetLanguageValue(printerLanguageType, "en")
+                         ? new OrderItemsDto { Count = 1, EnName = orderItem.Notes }
+                         : new OrderItemsDto { Count = 1, CnName = orderItem.Notes };
+                 }
+                 else
+                     item = new OrderItemsDto { Count = 1, EnName = orderItem.Notes };
+                
+                 itemb.Add(item);
              }
 
              y = DrawItemLineThreeColsWrapped(fontFamily, paperWidth, img, y, textColor, $"{orderItem.Quantity}", itema,
