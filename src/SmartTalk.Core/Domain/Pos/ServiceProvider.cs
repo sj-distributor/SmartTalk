@@ -3,6 +3,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace SmartTalk.Core.Domain.Pos;
 
+[Table("service_provider")]
 public class ServiceProvider : IEntity, IHasCreatedFields
 {
     [Key]

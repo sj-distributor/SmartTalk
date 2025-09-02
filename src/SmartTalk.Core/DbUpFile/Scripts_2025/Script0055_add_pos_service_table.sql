@@ -5,7 +5,7 @@ create table if not exists service_provider
     `created_date` datetime(3) not null
     ) charset=utf8mb4;
 
-INSERT INTO pos_service (name, created_date)
+INSERT INTO service_provider (name, created_date)
 VALUES 
     ('SmartTalk', now(3)),
     ('TestOmeNow', now(3));
