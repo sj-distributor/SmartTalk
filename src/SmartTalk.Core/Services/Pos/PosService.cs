@@ -20,6 +20,7 @@ using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Pos;
+using SmartTalk.Messages.Enums.Account;
 using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Requests.Pos;
 
@@ -315,9 +316,7 @@ public partial class PosService : IPosService
     
     public async Task<bool> CheckCurrentIsAdminAsync(CancellationToken cancellationToken)
     {
-        var rolesToCheck = new List<string> { SecurityStore.Roles.SuperAdministrator, SecurityStore.Roles.Administrator, SecurityStore.Roles.ServiceProviderOperator };
-        
-        var roleUsers = await _accountDataProvider.GetRoleUserByRoleNameAsync(rolesToCheck, cancellationToken).ConfigureAwait(false);
+        var roleUsers = await _accountDataProvider.GetRoleUserByRoleAccountLevelAsync(UserAccountLevel.ServiceProvider, cancellationToken).ConfigureAwait(false);
 
         Log.Information("Get admin role users: {@roleUsers} by current user: {@currentUserId}", roleUsers, _currentUser.Id.Value);
         

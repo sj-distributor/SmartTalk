@@ -49,7 +49,7 @@ namespace SmartTalk.Core.Services.Account
 
         Task<UserAccount> GetUserAccountRolePermissionsByUserIdAsync(int? userId, CancellationToken cancellationToken);
         
-        Task<List<RoleUser>> GetRoleUserByRoleNameAsync(List<string> names, CancellationToken cancellationToken);
+        Task<List<RoleUser>> GetRoleUserByRoleAccountLevelAsync(UserAccountLevel userAccountLevel, CancellationToken cancellationToken);
 
         Task<UserAccount> GetUserAccountByUserIdAsync(int userId, CancellationToken cancellationToken);
     }
@@ -392,11 +392,11 @@ namespace SmartTalk.Core.Services.Account
             return await _repository.Query<UserAccount>().Where(x => x.Id == userId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
         }
         
-        public async Task<List<RoleUser>> GetRoleUserByRoleNameAsync(List<string> names, CancellationToken cancellationToken)
+        public async Task<List<RoleUser>> GetRoleUserByRoleAccountLevelAsync(UserAccountLevel userAccountLevel, CancellationToken cancellationToken)
         {
             var query = _repository.QueryNoTracking<RoleUser>();
 
-            var roles = await _repository.QueryNoTracking<Role>().Where(x => names.Contains(x.Name)).ToListAsync(cancellationToken).ConfigureAwait(false);
+            var roles = await _repository.QueryNoTracking<Role>().Where(x => x.UserAccountLevel == userAccountLevel).ToListAsync(cancellationToken).ConfigureAwait(false);
             
             var roleIds = roles.Select(x => x.Id).ToList();
         
