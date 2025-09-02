@@ -1,4 +1,5 @@
 using Mediator.Net.Contracts;
+using SmartTalk.Messages.Enums.Printer;
 using SmartTalk.Messages.Responses;
 
 namespace SmartTalk.Messages.Commands.Printer;

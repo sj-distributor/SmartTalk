@@ -206,7 +206,8 @@ public class PrinterService : IPrinterService
             order.SubTotal.ToString(),
             order.Tax.ToString(),
             order.Total.ToString(),
-            storePrintDate).ConfigureAwait(false);
+            storePrintDate,
+            merchPrinter.PrinterLanguage).ConfigureAwait(false);
        
         var imageKey = Guid.NewGuid().ToString();
         
@@ -432,7 +433,7 @@ public class PrinterService : IPrinterService
     private async Task<Image<Rgba32>> RenderReceiptAsync(string printNumber, string restaurantName, string restaurantAddress,
         string restaurantPhone, string orderTime, string printerName, string orderType, string guestName, 
         string guestPhone, string guestAddress, string orderNotes, List<PhoneCallOrderItem> orderItems,
-        string subtotal, string tax, string total, string printTime)
+        string subtotal, string tax, string total, string printTime, PrinterLanguageType? printerLanguageType)
     {
         var y = 10;
         var paperWidth = 512;
@@ -508,7 +509,7 @@ public class PrinterService : IPrinterService
         
         y = DrawLine(paperWidth, img, y, textColor,GenerateFullLine('-', fontNormal, paperWidth-20), fontNormal, yOffset: -10);
         
-        y = DrawingOrderItems(fontFamily, paperWidth, img, y, textColor, orderItems);
+        y = DrawingOrderItems(fontFamily, paperWidth, img, y, textColor, orderItems, printerLanguageType);
         
         y = DrawLine(paperWidth, img, y, textColor,GenerateFullLine('-', fontNormal, paperWidth-20), fontNormal, yOffset: -15);
         
@@ -672,9 +673,15 @@ public class PrinterService : IPrinterService
 
          if (itemName != null)
          {
-             firstChar = itemName.EnName;
-             if (!string.IsNullOrEmpty(itemName.CnName)) firstChar += "\n" + itemName.CnName;
+             if (!string.IsNullOrEmpty(itemName.EnName) && string.IsNullOrEmpty(itemName.CnName))
+                firstChar = itemName.EnName;
+             
+             if (!string.IsNullOrEmpty(itemName.CnName) && string.IsNullOrEmpty(itemName.EnName)) 
+                 firstChar = itemName.CnName;
 
+             if (!string.IsNullOrEmpty(itemName.EnName) && !string.IsNullOrEmpty(itemName.CnName))
+                 firstChar = itemName.EnName + "\n" + itemName.CnName;
+             
              var size = TextMeasurer.MeasureSize(firstChar, baseOptions);
              itemBlockHeight = size.Height;
              indentX = size.Width;
@@ -690,8 +697,18 @@ public class PrinterService : IPrinterService
          {
              foreach (var remark in remarks)
              {
+                 var content = "";
+                 
+                 if (!string.IsNullOrEmpty(itemName.EnName) && string.IsNullOrEmpty(itemName.CnName))
+                     firstChar = itemName.EnName;
+             
+                 if (!string.IsNullOrEmpty(itemName.CnName) && string.IsNullOrEmpty(itemName.EnName)) 
+                     firstChar = itemName.CnName;
+
+                 if (!string.IsNullOrEmpty(itemName.EnName) && !string.IsNullOrEmpty(itemName.CnName))
+                     firstChar = itemName.EnName + "\n" + itemName.CnName;
+                 
                  var prefix = remark.Count > 1 ? $"{remark.Count}" : ">";
-                 var content = remark.EnName + "\n" + remark.CnName;
                  remarkLines.Add((prefix, content));
              }
          }
@@ -777,7 +794,7 @@ public class PrinterService : IPrinterService
      }
 
      private static int DrawingOrderItems(FontFamily fontFamily, int paperWidth, Image<Rgba32> img, int y,
-         Color textColor, List<PhoneCallOrderItem> orderItems)
+         Color textColor, List<PhoneCallOrderItem> orderItems, PrinterLanguageType? printerLanguageType)
      {
          y = DrawItemLineThreeColsWrapped(fontFamily, paperWidth, img, y, textColor, "QTY",
              new OrderItemsDto { EnName = "Items" }, "Total", fontSize: 25, bold: true);
@@ -786,8 +803,8 @@ public class PrinterService : IPrinterService
          {
              var itema = new OrderItemsDto()
              {
-                 EnName = orderItem.ProductNames.GetValueOrDefault("en")?.GetValueOrDefault("posName"),
-                 CnName = orderItem.ProductNames.GetValueOrDefault("cn")?.GetValueOrDefault("posName")
+                 EnName = IsGetLanguageValue(printerLanguageType, "en") ? orderItem.ProductNames.GetValueOrDefault("en")?.GetValueOrDefault("posName") : null,
+                 CnName = IsGetLanguageValue(printerLanguageType, "cn") ? orderItem.ProductNames.GetValueOrDefault("cn")?.GetValueOrDefault("posName") : null,
              };
 
              decimal itembMoney = 0;
@@ -798,12 +815,8 @@ public class PrinterService : IPrinterService
                      return new OrderItemsDto()
                      {
                          Count = x.Quantity,
-                         EnName =
-                             x.ModifierLocalizations.FirstOrDefault(s => s.Field == "name" && s.LanguageCode == "en_US")
-                                 ?.Value + "($" + (x.Price*x.Quantity).ToString("0.00") + ")",
-                         CnName = x.ModifierLocalizations
-                             .FirstOrDefault(s => s.Field == "name" && s.LanguageCode == "zh_CN")
-                             ?.Value + "($" + (x.Price*x.Quantity).ToString("0.00") + ")"
+                         EnName = IsGetLanguageValue(printerLanguageType, "en") ? x.ModifierLocalizations.FirstOrDefault(s => s.Field == "name" && s.LanguageCode == "en_US")?.Value + "($" + (x.Price*x.Quantity).ToString("0.00") + ")" : null,
+                         CnName = IsGetLanguageValue(printerLanguageType, "cn") ? x.ModifierLocalizations.FirstOrDefault(s => s.Field == "name" && s.LanguageCode == "zh_CN")?.Value + "($" + (x.Price*x.Quantity).ToString("0.00") + ")" : null
                      };
                  })
                  .ToList();
@@ -818,6 +831,20 @@ public class PrinterService : IPrinterService
          }
 
          return y;
+     }
+
+     private static bool IsGetLanguageValue(PrinterLanguageType? languageType, string language)
+     {
+         switch (languageType)
+         {
+             case null:
+             case PrinterLanguageType.Chinese when language == "cn":
+             case PrinterLanguageType.English when language == "en":
+             case PrinterLanguageType.EnglishAndChinese:
+                 return true;
+             default:
+                 return false;
+         }
      }
 
      private static int DrawItemLine(int paperWidth, Image<Rgba32> img, int y, Color textColor, float lineHeight,
