@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace SmartTalk.Core.Domain.Pos;
 
-public class PosService : IEntity, IHasCreatedFields
+public class ServiceProvider : IEntity, IHasCreatedFields
 {
     [Key]
     [Column("id")]

@@ -20,8 +20,8 @@ public class PosCompany : IEntity, IHasCreatedFields, IHasModifiedFields
     [Column("status")]
     public bool Status { get; set; }
     
-    [Column("pos_service_id")]
-    public int? PosServiceId { get; set; }
+    [Column("service_provider_id")]
+    public int? ServiceProviderId { get; set; }
     
     [Column("created_by")]
     public int? CreatedBy { get; set; }

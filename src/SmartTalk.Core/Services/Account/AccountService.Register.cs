@@ -29,7 +29,7 @@ public partial class AccountService
         var currentUser = await _accountDataProvider.GetUserAccountByUserIdAsync(_currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
 
         var account = await _accountDataProvider
-            .CreateUserAccountAsync(username, null, UserAccountLevel.None, currentUser.PosServiceId, userId, issuer, cancellationToken: cancellationToken).ConfigureAwait(false);
+            .CreateUserAccountAsync(username, null, UserAccountLevel.None, currentUser.ServiceProviderId, userId, issuer, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         return _mapper.Map<UserAccountDto>(account);
     }

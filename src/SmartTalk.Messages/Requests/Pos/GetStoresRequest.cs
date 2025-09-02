@@ -4,7 +4,7 @@ using SmartTalk.Messages.Responses;
 
 namespace SmartTalk.Messages.Requests.Pos;
 
-public class GetPosStoresRequest : PosHasServiceId, IRequest
+public class GetStoresRequest : HasServiceProviderId, IRequest
 {
     public int? CompanyId { get; set; }
     

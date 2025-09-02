@@ -5,7 +5,7 @@ using SmartTalk.Messages.Responses;
 
 namespace SmartTalk.Messages.Requests.Agent;
 
-public class GetAgentsRequest : PosHasServiceId, IRequest
+public class GetAgentsRequest : HasServiceProviderId, IRequest
 {
     public AgentType? AgentType { get; set; }
     

@@ -5,7 +5,7 @@ using SmartTalk.Messages.Requests.Pos;
 
 namespace SmartTalk.Core.Handlers.RequestHandlers.Pos;
 
-public class GetPosCompanyWithStoresRequestHandler : IRequestHandler<GetPosCompanyWithStoresRequest, GetPosCompanyWithStoresResponse>
+public class GetPosCompanyWithStoresRequestHandler : IRequestHandler<GetCompanyWithStoresRequest, GetPosCompanyWithStoresResponse>
 {
     private readonly IPosService _posService;
 
@@ -14,7 +14,7 @@ public class GetPosCompanyWithStoresRequestHandler : IRequestHandler<GetPosCompa
         _posService = posService;
     }
 
-    public async Task<GetPosCompanyWithStoresResponse> Handle(IReceiveContext<GetPosCompanyWithStoresRequest> context, CancellationToken cancellationToken)
+    public async Task<GetPosCompanyWithStoresResponse> Handle(IReceiveContext<GetCompanyWithStoresRequest> context, CancellationToken cancellationToken)
     {
         return await _posService.GetPosCompanyWithStoresAsync(context.Message, cancellationToken).ConfigureAwait(false);
     }

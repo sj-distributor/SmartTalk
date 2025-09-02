@@ -7,7 +7,7 @@ using SmartTalk.Messages.Requests.Pos;
 
 namespace SmartTalk.Messages.Requests.Security;
 
-public class GetRolesRequest : PosHasServiceId, IRequest
+public class GetRolesRequest : HasServiceProviderId, IRequest
 {
     public int PageIndex { get; set; } = 1;
 

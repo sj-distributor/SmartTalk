@@ -13,7 +13,7 @@ public class RoleDto
     
     public int Id { get; set; }
     
-    public int? PosServiceId { get; set; }
+    public int? ServiceProviderId { get; set; }
     
     public UserAccountLevel UserAccountLevel { get; set; }
     

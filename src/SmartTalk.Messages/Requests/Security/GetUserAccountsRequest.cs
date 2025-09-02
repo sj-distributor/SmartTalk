@@ -9,7 +9,7 @@ using SmartTalk.Messages.Requests.Pos;
 namespace SmartTalk.Messages.Requests.Security;
 
 [SmartTalkAuthorize(Permissions = new[] { SecurityStore.Permissions.CanViewAccountManagement})]
-public class GetUserAccountsRequest : PosHasServiceId, IRequest
+public class GetUserAccountsRequest : HasServiceProviderId, IRequest
 {
     public int? PageIndex { get; set; } = 1;
 

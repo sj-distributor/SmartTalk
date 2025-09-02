@@ -8,7 +8,7 @@ using SmartTalk.Messages.Responses;
 
 namespace SmartTalk.Messages.Commands.AiSpeechAssistant;
 
-public class AddAiSpeechAssistantCommand : PosHasServiceId, ICommand
+public class AddAiSpeechAssistantCommand : HasServiceProviderId, ICommand
 {
     public int? AgentId { get; set; }
     

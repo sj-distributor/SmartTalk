@@ -103,7 +103,7 @@ public partial class SecurityDataProvider
     }
     
     public async Task<(int, List<Role>)> GetRolesAsync(
-        int? pageIndex = null, int? pageSize = null, string keyword = null, int? userId = null, int? posServiceId = null, RoleSystemSource? systemSource = null, UserAccountLevel? accountLevel = null, CancellationToken cancellationToken = default)
+        int? pageIndex = null, int? pageSize = null, string keyword = null, int? userId = null, int? serviceProviderId = null, RoleSystemSource? systemSource = null, UserAccountLevel? accountLevel = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<Role>();
 
@@ -113,8 +113,8 @@ public partial class SecurityDataProvider
         if (systemSource.HasValue)
             query = query.Where(x => x.SystemSource == systemSource.Value || x.SystemSource == RoleSystemSource.System);
 
-        if (posServiceId.HasValue)
-            query = query.Where(x => x.PosServiceId == posServiceId.Value);
+        if (serviceProviderId.HasValue)
+            query = query.Where(x => x.ServiceProviderId == serviceProviderId.Value);
 
         if (accountLevel.HasValue)
             query = query.Where(x => x.UserAccountLevel == accountLevel);

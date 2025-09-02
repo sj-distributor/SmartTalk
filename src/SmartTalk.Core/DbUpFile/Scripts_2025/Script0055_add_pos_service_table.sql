@@ -1,4 +1,4 @@
-create table if not exists pos_service
+create table if not exists service_provider
 (
     `id` int primary key auto_increment,
     `name` varchar(36) not null,
@@ -10,13 +10,13 @@ VALUES
     ('SmartTalk', now(3)),
     ('TestOmeNow', now(3));
 
-alter table pos_company modify column pos_service_id int null;
+alter table pos_company modify column service_provider_id int null;
 
-alter table user_account modify column pos_service_id int null;
+alter table user_account modify column service_provider_id int null;
 
-alter table agent modify column pos_service_id int null;
+alter table agent modify column service_provider_id int null;
 
-alter table role modify column pos_service_id int null;
+alter table role modify column service_provider_id int null;
 
 alter table role modify column user_account_level int null;
 

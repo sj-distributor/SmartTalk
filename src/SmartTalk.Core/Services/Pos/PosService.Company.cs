@@ -11,7 +11,7 @@ namespace SmartTalk.Core.Services.Pos;
 
 public partial interface IPosService : IScopedDependency
 {
-    Task<PosCompanyCreatedEvent> CreatePosCompanyAsync(CreatePosCompanyCommand command, CancellationToken cancellationToken);
+    Task<PosCompanyCreatedEvent> CreatePosCompanyAsync(CreateCompanyCommand command, CancellationToken cancellationToken);
 
     Task<PosCompanyUpdatedEvent> UpdatePosCompanyAsync(UpdatePosCompanyCommand command, CancellationToken cancellationToken);
 
@@ -48,11 +48,11 @@ public partial interface IPosService : IScopedDependency
 
 public partial class PosService : IPosService
 {
-    public async Task<PosCompanyCreatedEvent> CreatePosCompanyAsync(CreatePosCompanyCommand command, CancellationToken cancellationToken)
+    public async Task<PosCompanyCreatedEvent> CreatePosCompanyAsync(CreateCompanyCommand command, CancellationToken cancellationToken)
     {
         var company = new PosCompany
         {
-            Name = command.Name, PosServiceId = command.PosServiceId, Description = command.Description, Status = false
+            Name = command.Name, ServiceProviderId = command.ServiceProviderId, Description = command.Description, Status = false
         };
 
         await _posDataProvider.CreatePosCompanyAsync(company, cancellationToken: cancellationToken).ConfigureAwait(false);

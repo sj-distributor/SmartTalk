@@ -20,8 +20,8 @@ public class Role : IEntity
     [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     public int Id { get; set; }
     
-    [Column("pos_service_id")]
-    public int? PosServiceId { get; set; }
+    [Column("service_provider_id")]
+    public int? ServiceProviderId { get; set; }
     
     [Column("user_account_level")]
     public UserAccountLevel? UserAccountLevel { get; set; }

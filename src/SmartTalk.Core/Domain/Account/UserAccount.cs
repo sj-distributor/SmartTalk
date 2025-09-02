@@ -63,8 +63,8 @@ namespace SmartTalk.Core.Domain.Account
         [Column("Language")] 
         public SystemLanguage SystemLanguage { get; set; } = SystemLanguage.English;
         
-        [Column("pos_service_id")]
-        public int? PosServiceId { get; set; }
+        [Column("service_provider_id")]
+        public int? ServiceProviderId { get; set; }
         
         [Column("creator")]
         public string Creator { get; set; }

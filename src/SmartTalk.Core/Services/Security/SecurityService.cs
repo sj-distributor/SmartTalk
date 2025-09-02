@@ -201,7 +201,7 @@ public class SecurityService : ISecurityService
 
     public async Task<GetRolesResponse> GetRolesAsync(GetRolesRequest request, CancellationToken cancellationToken)
     {
-        var (count, roles) = await _securityDataProvider.GetRolesAsync(pageSize: request.PageSize, pageIndex: request.PageIndex, posServiceId: request.PosServiceId, systemSource: RoleSystemSource.System, accountLevel: request.AccountLevel, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var (count, roles) = await _securityDataProvider.GetRolesAsync(pageSize: request.PageSize, pageIndex: request.PageIndex, serviceProviderId: request.ServiceProviderId, systemSource: RoleSystemSource.System, accountLevel: request.AccountLevel, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         return new GetRolesResponse
         {

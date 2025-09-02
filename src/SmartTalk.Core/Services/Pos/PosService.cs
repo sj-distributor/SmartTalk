@@ -28,7 +28,7 @@ namespace SmartTalk.Core.Services.Pos;
 
 public partial interface IPosService : IScopedDependency
 {
-    Task<GetPosCompanyWithStoresResponse> GetPosCompanyWithStoresAsync(GetPosCompanyWithStoresRequest request, CancellationToken cancellationToken);
+    Task<GetPosCompanyWithStoresResponse> GetPosCompanyWithStoresAsync(GetCompanyWithStoresRequest request, CancellationToken cancellationToken);
     
     Task<GetPosCompanyStoreDetailResponse> GetPosCompanyStoreDetailAsync(GetPosCompanyStoreDetailRequest request, CancellationToken cancellationToken);
     
@@ -48,7 +48,7 @@ public partial interface IPosService : IScopedDependency
 
     Task<BindPosCompanyStoreResponse> BindPosCompanyStoreAsync(BindPosCompanyStoreCommand command, CancellationToken cancellationToken);
     
-    Task<GetPosStoresResponse> GetPosStoresAsync(GetPosStoresRequest request, CancellationToken cancellationToken);
+    Task<GetPosStoresResponse> GetPosStoresAsync(GetStoresRequest request, CancellationToken cancellationToken);
 
     Task<GetPosCurrentUserStoresResponse> GetPosAgentsAsync(GetPosCurrentUserStoresRequest request, CancellationToken cancellationToken);
 }
@@ -99,10 +99,10 @@ public partial class PosService : IPosService
         _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
     }
     
-    public async Task<GetPosCompanyWithStoresResponse> GetPosCompanyWithStoresAsync(GetPosCompanyWithStoresRequest request, CancellationToken cancellationToken)
+    public async Task<GetPosCompanyWithStoresResponse> GetPosCompanyWithStoresAsync(GetCompanyWithStoresRequest request, CancellationToken cancellationToken)
     {
         var (count, companies) = await _posDataProvider.GetPosCompaniesAsync(
-            request.PageIndex, request.PageSize, posServiceId: request.PosServiceId, cancellationToken: cancellationToken).ConfigureAwait(false);
+            request.PageIndex, request.PageSize, serviceProviderId: request.ServiceProviderId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var result = _mapper.Map<List<PosCompanyDto>>(companies);
         
@@ -292,7 +292,7 @@ public partial class PosService : IPosService
         };
     }
 
-    public async Task<GetPosStoresResponse> GetPosStoresAsync(GetPosStoresRequest request, CancellationToken cancellationToken)
+    public async Task<GetPosStoresResponse> GetPosStoresAsync(GetStoresRequest request, CancellationToken cancellationToken)
     {
         var isSuperAdmin = await CheckCurrentIsAdminAsync(cancellationToken).ConfigureAwait(false);
         
@@ -306,7 +306,7 @@ public partial class PosService : IPosService
         
         var stores = await _posDataProvider.GetPosCompanyStoresWithSortingAsync(
             storeUsers?.Select(x => x.StoreId).ToList(),
-            request.CompanyId, request.PosServiceId, request.Keyword, request.IsNormalSort, cancellationToken: cancellationToken).ConfigureAwait(false);
+            request.CompanyId, request.ServiceProviderId, request.Keyword, request.IsNormalSort, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         return new GetPosStoresResponse
         {

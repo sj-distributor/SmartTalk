@@ -21,7 +21,7 @@ public class UserAccountDto
     
     public bool IsActive { get; set; }
     
-    public int? PosServiceId { get; set; }
+    public int? ServiceProviderId { get; set; }
     
     public UserAccountLevel AccountLevel { get; set; }
     

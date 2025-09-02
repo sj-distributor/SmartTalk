@@ -5,7 +5,7 @@ using SmartTalk.Messages.Commands.Pos;
 
 namespace SmartTalk.Core.Handlers.CommandHandlers.Pos;
 
-public class CreatePosCompanyCommandHandler : ICommandHandler<CreatePosCompanyCommand, CreatePosCompanyResponse>
+public class CreatePosCompanyCommandHandler : ICommandHandler<CreateCompanyCommand, CreatePosCompanyResponse>
 {
     private readonly IPosService _service;
 
@@ -14,7 +14,7 @@ public class CreatePosCompanyCommandHandler : ICommandHandler<CreatePosCompanyCo
         _service = service;
     }
 
-    public async Task<CreatePosCompanyResponse> Handle(IReceiveContext<CreatePosCompanyCommand> context, CancellationToken cancellationToken)
+    public async Task<CreatePosCompanyResponse> Handle(IReceiveContext<CreateCompanyCommand> context, CancellationToken cancellationToken)
     {
         var @event = await _service.CreatePosCompanyAsync(context.Message, cancellationToken).ConfigureAwait(false);
 

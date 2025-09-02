@@ -5,7 +5,7 @@ using SmartTalk.Messages.Responses;
 
 namespace SmartTalk.Messages.Commands.Pos;
 
-public class CreatePosCompanyCommand : PosHasServiceId, ICommand
+public class CreateCompanyCommand : HasServiceProviderId, ICommand
 {
     public string Name { get; set; }
 

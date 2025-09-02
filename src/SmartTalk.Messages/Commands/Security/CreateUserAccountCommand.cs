@@ -11,7 +11,7 @@ using SmartTalk.Messages.Requests.Pos;
 namespace SmartTalk.Messages.Commands.Security;
 
 [SmartTalkAuthorize(Permissions = [SecurityStore.Permissions.CanCreateAccount])]
-public class CreateUserAccountCommand : PosHasServiceId, ICommand
+public class CreateUserAccountCommand : HasServiceProviderId, ICommand
 {
     public string UserName { get; set; }
     

@@ -20,9 +20,9 @@ public class PosController : ControllerBase
         
     [Route("companies"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPosCompanyWithStoresResponse))]
-    public async Task<IActionResult> GetPosCompanyWithStoresAsync([FromQuery] GetPosCompanyWithStoresRequest request)
+    public async Task<IActionResult> GetPosCompanyWithStoresAsync([FromQuery] GetCompanyWithStoresRequest request)
     {
-        var response = await _mediator.RequestAsync<GetPosCompanyWithStoresRequest, GetPosCompanyWithStoresResponse>(request).ConfigureAwait(false);
+        var response = await _mediator.RequestAsync<GetCompanyWithStoresRequest, GetPosCompanyWithStoresResponse>(request).ConfigureAwait(false);
         
         return Ok(response);
     }
@@ -74,9 +74,9 @@ public class PosController : ControllerBase
     
     [Route("company/add"), HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(CreatePosCompanyResponse))]
-    public async Task<IActionResult> CreatePosCompanyAsync([FromBody] CreatePosCompanyCommand command)
+    public async Task<IActionResult> CreatePosCompanyAsync([FromBody] CreateCompanyCommand command)
     {
-        var response = await _mediator.SendAsync<CreatePosCompanyCommand, CreatePosCompanyResponse>(command).ConfigureAwait(false);
+        var response = await _mediator.SendAsync<CreateCompanyCommand, CreatePosCompanyResponse>(command).ConfigureAwait(false);
         
         return Ok(response);
     }
@@ -263,9 +263,9 @@ public class PosController : ControllerBase
     
     [Route("stores"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPosStoresResponse))]
-    public async Task<IActionResult> GetPosStoresAsync([FromQuery] GetPosStoresRequest request)
+    public async Task<IActionResult> GetPosStoresAsync([FromQuery] GetStoresRequest request)
     {
-        var response = await _mediator.RequestAsync<GetPosStoresRequest, GetPosStoresResponse>(request).ConfigureAwait(false);
+        var response = await _mediator.RequestAsync<GetStoresRequest, GetPosStoresResponse>(request).ConfigureAwait(false);
         
         return Ok(response);
     }
