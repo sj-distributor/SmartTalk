@@ -648,14 +648,21 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                                             await ProcessHangupAsync(outputElement, cancellationToken).ConfigureAwait(false);
                                             break;
                                         
+                                        case OpenAiToolConstants.Refund:
+                                        case OpenAiToolConstants.Complaint:
+                                        case OpenAiToolConstants.ReturnGoods:
                                         case OpenAiToolConstants.TransferCall:
+                                        case OpenAiToolConstants.DeliveryTracking:
+                                        case OpenAiToolConstants.LessGoodsDelivered:
+                                        case OpenAiToolConstants.RefuseToAcceptGoods:
+                                        case OpenAiToolConstants.HandlePromotionCalls:
                                         case OpenAiToolConstants.HandlePhoneOrderIssues:
-                                        case OpenAiToolConstants.HandleThirdPartyDelayedDelivery:
+                                        case OpenAiToolConstants.PickUpGoodsFromTheWarehouse:
                                         case OpenAiToolConstants.HandleThirdPartyFoodQuality:
+                                        case OpenAiToolConstants.HandleThirdPartyDelayedDelivery:
                                         case OpenAiToolConstants.HandleThirdPartyUnexpectedIssues:
                                         case OpenAiToolConstants.HandleThirdPartyPickupTimeChange:
-                                        case OpenAiToolConstants.HandlePromotionCalls:
-                                        case OpenAiToolConstants.CheckOrderStatus:
+                                        case OpenAiToolConstants.DriverDeliveryRelatedCommunication:
                                             await ProcessTransferCallAsync(outputElement, functionName, cancellationToken).ConfigureAwait(false);
                                             break;
                                     }
