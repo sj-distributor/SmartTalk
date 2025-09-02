@@ -800,10 +800,10 @@ public class PrinterService : IPrinterService
                          Count = x.Quantity,
                          EnName =
                              x.ModifierLocalizations.FirstOrDefault(s => s.Field == "name" && s.LanguageCode == "en_US")
-                                 ?.Value + "($" + x.Price.ToString("0.00") + ")",
+                                 ?.Value + "($" + (x.Price*x.Quantity).ToString("0.00") + ")",
                          CnName = x.ModifierLocalizations
                              .FirstOrDefault(s => s.Field == "name" && s.LanguageCode == "zh_CN")
-                             ?.Value + "($" + x.Price.ToString("0.00") + ")"
+                             ?.Value + "($" + (x.Price*x.Quantity).ToString("0.00") + ")"
                      };
                  })
                  .ToList();
