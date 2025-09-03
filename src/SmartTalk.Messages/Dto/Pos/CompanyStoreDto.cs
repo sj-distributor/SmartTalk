@@ -7,7 +7,7 @@ public class CompanyStoreDto
 {
     public int Id { get; set; }
     
-    public int ServiceProviderId { get; set; }
+    public int? ServiceProviderId { get; set; }
     
     public int CompanyId { get; set; }
     

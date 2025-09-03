@@ -218,14 +218,18 @@ public partial class PosDataProvider : IPosDataProvider
     public async Task<List<CompanyStoreDto>> GetPosCompanyStoresWithSortingAsync(
         List<int> storeIds = null, int? companyId = null, int? serviceProviderId = null, string keyword = null, bool isNormalSort = false, CancellationToken cancellationToken = default)
     {
-        var query = from company in _repository.Query<Company>().Where(x => x.Status && x.ServiceProviderId == serviceProviderId)
-            join store in _repository.Query<CompanyStore>().Where(x => x.Status) on company.Id equals store.CompanyId
+        var query = from store in _repository.Query<CompanyStore>().Where(x => x.Status)
+            join company in _repository.Query<Company>().Where(x => x.Status) on store.CompanyId equals company.Id
             join order in _repository.Query<PosOrder>() on store.Id equals order.StoreId into orderGroup
             select new
             {
                 Store = store,
-                OrderCount = orderGroup.Count()
+                OrderCount = orderGroup.Count(),
+                Company = company
             };
+        
+        if (serviceProviderId.HasValue)
+            query = query.Where(x => x.Company.ServiceProviderId == serviceProviderId.Value);
         
         if (storeIds != null)
             query = query.Where(x => storeIds.Contains(x.Store.Id));
@@ -246,6 +250,7 @@ public partial class PosDataProvider : IPosDataProvider
         {
             Id = x.Store.Id,
             CompanyId = x.Store.CompanyId,
+            ServiceProviderId = x.Company.ServiceProviderId,
             Names = x.Store.Names,
             Description = x.Store.Description,
             Status = x.Store.Status,
