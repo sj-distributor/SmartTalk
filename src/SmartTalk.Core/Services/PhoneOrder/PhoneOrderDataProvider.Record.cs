@@ -50,7 +50,7 @@ public partial interface IPhoneOrderDataProvider
 
     Task AddPhoneOrderRecordReportsAsync(List<PhoneOrderRecordReport> recordReports, bool forceSave = true, CancellationToken cancellationToken = default);
 
-    Task<PhoneOrderRecordReport> GetPhoneOrderRecordReportAsync(string callSid, int language, CancellationToken cancellationToken);
+    Task<PhoneOrderRecordReport> GetPhoneOrderRecordReportAsync(string callSid, SystemLanguage language, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderDataProvider
@@ -294,7 +294,7 @@ public partial class PhoneOrderDataProvider
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<PhoneOrderRecordReport> GetPhoneOrderRecordReportAsync(string callSid, int language, CancellationToken cancellationToken)
+    public async Task<PhoneOrderRecordReport> GetPhoneOrderRecordReportAsync(string callSid, SystemLanguage language, CancellationToken cancellationToken)
     {
         var query = from record in _repository.Query<PhoneOrderRecord>().Where(x => x.SessionId == callSid)
             join report in _repository.Query<PhoneOrderRecordReport>() on record.Id equals report.RecordId
