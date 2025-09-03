@@ -204,9 +204,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         try
         {
             if (_aiSpeechAssistantStreamContext.ShouldForward)
-                await receiveFromTwilioTask;    
+                await receiveFromTwilioTask;
             else
-                await Task.WhenAll(receiveFromTwilioTask, sendToTwilioTask);
+                await Task.WhenAll(receiveFromTwilioTask, sendToTwilioTask);   
         }
         catch (Exception ex)
         {
@@ -265,9 +265,20 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, _workWeChatKeySetting.Key, alertMessage, mentionedList: new[]{"@all"}, cancellationToken: cancellationToken).ConfigureAwait(false);
         }
         
+        record.Language = ConvertLanguageCode(language);
         record.TranscriptionJobId = await _phoneOrderService.CreateSpeechMaticsJobAsync(audioFileRawBytes, Guid.NewGuid().ToString("N") + ".wav", language, cancellationToken).ConfigureAwait(false);
 
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    private TranscriptionLanguage ConvertLanguageCode(string languageCode)
+    {
+        return languageCode switch
+        {
+            "en" => TranscriptionLanguage.English,
+            "es" => TranscriptionLanguage.Spanish,
+            _ => TranscriptionLanguage.Chinese
+        };
     }
     
     private async Task<string> DetectAudioLanguageAsync(byte[] audioContent, CancellationToken cancellationToken)
@@ -419,6 +430,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private static List<DayOfWeek> ParseDays(string dayString)
     {
         if (string.IsNullOrWhiteSpace(dayString)) return [];
+        
         var list = new List<DayOfWeek>();
         foreach (var token in dayString.Split(',', StringSplitOptions.RemoveEmptyEntries))
         {
@@ -438,28 +450,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         if (startTime < endTime) return localTime >= startTime && localTime <= endTime;
 
         return localTime >= startTime || localTime <= endTime;
-    }
-    
-    private string GetSundayDates(DateTimeOffset dateTime)
-    {
-        var sb = new StringBuilder();
-        var date = new DateTime(dateTime.Year, 1, 1);
-        
-        while (date.DayOfWeek != DayOfWeek.Sunday)
-        {
-            date = date.AddDays(1);
-        }
-        
-        while (date.Year == dateTime.Year)
-        {
-            sb.Append(date.ToString("yyyy-MM-dd")).Append(' ');
-            date = date.AddDays(7);
-        }
-        
-        if (sb.Length > 0)
-            sb.Length -= 1;
-
-        return sb.ToString();
     }
     
     private async Task ConnectOpenAiRealTimeSocketAsync(
@@ -790,13 +780,21 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                                             await ProcessRepeatOrderAsync(twilioWebSocket, outputElement, cancellationToken).ConfigureAwait(false);
                                             break;
                                             
+                                        case OpenAiToolConstants.Refund:
+                                        case OpenAiToolConstants.Complaint:
+                                        case OpenAiToolConstants.ReturnGoods:
                                         case OpenAiToolConstants.TransferCall:
+                                        case OpenAiToolConstants.DeliveryTracking:
+                                        case OpenAiToolConstants.LessGoodsDelivered:
+                                        case OpenAiToolConstants.RefuseToAcceptGoods:
+                                        case OpenAiToolConstants.HandlePromotionCalls:
                                         case OpenAiToolConstants.HandlePhoneOrderIssues:
-                                        case OpenAiToolConstants.HandleThirdPartyDelayedDelivery:
+                                        case OpenAiToolConstants.PickUpGoodsFromTheWarehouse:
                                         case OpenAiToolConstants.HandleThirdPartyFoodQuality:
+                                        case OpenAiToolConstants.HandleThirdPartyDelayedDelivery:
                                         case OpenAiToolConstants.HandleThirdPartyUnexpectedIssues:
                                         case OpenAiToolConstants.HandleThirdPartyPickupTimeChange:
-                                        case OpenAiToolConstants.HandlePromotionCalls:
+                                        case OpenAiToolConstants.DriverDeliveryRelatedCommunication:
                                         case OpenAiToolConstants.CheckOrderStatus:
                                             await ProcessTransferCallAsync(outputElement, functionName, cancellationToken).ConfigureAwait(false);
                                             break;
