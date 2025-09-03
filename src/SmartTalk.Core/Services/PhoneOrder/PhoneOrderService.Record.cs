@@ -44,6 +44,8 @@ public partial interface IPhoneOrderService
     Task<GetPhoneCallUsagesPreviewResponse> GetPhoneCallUsagesPreviewAsync(GetPhoneCallUsagesPreviewRequest request, CancellationToken cancellationToken);
 
     Task<GetPhoneCallRecordDetailResponse> GetPhoneCallrecordDetailAsync(GetPhoneCallRecordDetailRequest request, CancellationToken cancellationToken);
+
+    Task<GetPhoneOrderRecordReportResponse> GetPhoneOrderRecordReportByCallSidAsync(GetPhoneOrderRecordReportRequest request, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderService
@@ -697,6 +699,16 @@ public partial class PhoneOrderService
         var fileUrl = await ToExcelTransposed(data, cancellationToken).ConfigureAwait(false);
 
         return new GetPhoneCallRecordDetailResponse { Data = fileUrl };
+    }
+
+    public async Task<GetPhoneOrderRecordReportResponse> GetPhoneOrderRecordReportByCallSidAsync(GetPhoneOrderRecordReportRequest request, CancellationToken cancellationToken)
+    {
+        var report = await _phoneOrderDataProvider.GetPhoneOrderRecordReportAsync(request.CallSid, request.Language, cancellationToken).ConfigureAwait(false);
+
+        return new GetPhoneOrderRecordReportResponse()
+        {
+            Data = _mapper.Map<PhoneOrderRecordReportDto>(report)
+        };
     }
 
     private (DateTimeOffset Start, DateTimeOffset End) GetQueryTimeRange(int month)

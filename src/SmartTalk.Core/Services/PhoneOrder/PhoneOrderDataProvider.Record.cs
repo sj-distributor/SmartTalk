@@ -48,6 +48,8 @@ public partial interface IPhoneOrderDataProvider
         DateTimeOffset startTime, DateTimeOffset endTime, bool includeExternalData = false, CancellationToken cancellationToken = default);
 
     Task AddPhoneOrderRecordReportsAsync(List<PhoneOrderRecordReport> recordReports, bool forceSave = true, CancellationToken cancellationToken = default);
+
+    Task<PhoneOrderRecordReport> GetPhoneOrderRecordReportAsync(string callSid, SystemLanguage language, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderDataProvider
@@ -292,5 +294,15 @@ public partial class PhoneOrderDataProvider
 
         if (forceSave)
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<PhoneOrderRecordReport> GetPhoneOrderRecordReportAsync(string callSid, SystemLanguage language, CancellationToken cancellationToken)
+    {
+        var query = from record in _repository.Query<PhoneOrderRecord>().Where(x => x.SessionId == callSid)
+            join report in _repository.Query<PhoneOrderRecordReport>() on record.Id equals report.RecordId
+            where report.Language == (TranscriptionLanguage)language
+            select report;
+
+        return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 }
