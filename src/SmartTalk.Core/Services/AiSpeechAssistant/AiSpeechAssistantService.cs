@@ -281,11 +281,12 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                                   Return only the code without any additional text or explanations.
                                   
                                   Examples:
-                                  If the audio is in Mandarin, return: zh-CN
-                                  If the audio is in Cantonese, return: zh
-                                  If the audio is in English, return: en
-                                  If the audio has both Mandarin and English but Mandarin is the dominant language, return: zh-CN
-                                  If the audio has both Cantonese and English but English dominates, return: en
+                                  If the audio is entirely in Mandarin, return: zh-CN
+                                  If the audio is entirely in Cantonese, return: zh
+                                  If the audio is entirely in English, return: en
+                                  If the audio is mixed, but 60% is in Cantonese and 40% in English, return: zh
+                                  If the audio is 50% Mandarin and 50% English, return the language that occurs last in the recording.
+                                  If a recording is 60 seconds long, with the first 20 seconds in Mandarin and the remaining 40 seconds in English, return: en
                                   """),
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
             new UserChatMessage("Please determine the language based on the recording and return the corresponding code.")
