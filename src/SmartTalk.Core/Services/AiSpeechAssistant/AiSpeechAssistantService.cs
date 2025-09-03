@@ -332,10 +332,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         Log.Information("Matching Ai speech assistant: {@Assistant}、{@Knowledge}、{@UserProfile}", assistant, knowledge, userProfile);
         
-        var soldToIds = !string.IsNullOrEmpty(assistant.Name) ? assistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : new List<string>();
-        
-        var customerItemsString = await _speechMaticsService.BuildCustomerItemsStringAsync(soldToIds, cancellationToken).ConfigureAwait(false);
-        
         var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
         
@@ -343,8 +339,16 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             .Replace("#{user_profile}", string.IsNullOrEmpty(userProfile?.ProfileJson) ? " " : userProfile.ProfileJson)
             .Replace("#{current_time}", currentTime)
             .Replace("#{customer_phone}", from.StartsWith("+1") ? from[2..] : from)
-            .Replace("#{pst_date}", $"{pstTime.Date:yyyy-MM-dd} {pstTime.DayOfWeek}")
-            .Replace("#{customer_items}", customerItemsString ?? ""); 
+            .Replace("#{pst_date}", $"{pstTime.Date:yyyy-MM-dd} {pstTime.DayOfWeek}"); 
+        
+        if (finalPrompt.Contains("#{customer_items}", StringComparison.OrdinalIgnoreCase))
+        {
+            var soldToIds = !string.IsNullOrEmpty(assistant.Name) ? assistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : new List<string>();
+            
+            var customerItemsString = await _speechMaticsService.BuildCustomerItemsStringAsync(soldToIds, cancellationToken).ConfigureAwait(false);
+
+            finalPrompt = finalPrompt.Replace("#{customer_items}", customerItemsString ?? "");
+        }
         
         Log.Information($"The final prompt: {finalPrompt}");
 

@@ -464,17 +464,13 @@ public class SpeechMaticsService : ISpeechMaticsService
         List<(string Material, string MaterialDesc)> historyItems = new List<(string, string)>();
 
         var askInfoResponse = await _salesClient.GetAskInfoDetailListByCustomerAsync(new GetAskInfoDetailListByCustomerRequestDto { CustomerNumbers = soldToIds }, cancellationToken).ConfigureAwait(false);
-
+        var orderHistoryResponse = await _salesClient.GetOrderHistoryByCustomerAsync(new GetOrderHistoryByCustomerRequestDto { CustomerNumber = soldToIds.FirstOrDefault() }, cancellationToken).ConfigureAwait(false);
+        
         if (askInfoResponse?.Data != null && askInfoResponse.Data.Any())
-        {
             historyItems.AddRange(askInfoResponse.Data.Where(x => !string.IsNullOrWhiteSpace(x.Material)).Select(x => (x.Material, x.MaterialDesc)));
-        }
-        else
-        {
-            var orderHistoryResponse = await _salesClient.GetOrderHistoryByCustomerAsync(new GetOrderHistoryByCustomerRequestDto { CustomerNumber = soldToIds.FirstOrDefault() }, cancellationToken).ConfigureAwait(false);
-
+        
+        if (orderHistoryResponse?.Data != null && orderHistoryResponse.Data.Any())
             historyItems.AddRange(orderHistoryResponse?.Data.Where(x => !string.IsNullOrWhiteSpace(x.MaterialNumber)).Select(x => (x.MaterialNumber, x.MaterialDescription)) ?? new List<(string, string)>());
-        }
 
         return historyItems;
     }
