@@ -62,6 +62,8 @@ public class SpeechToTextService : ISpeechToTextService
         byte[] file, TranscriptionLanguage? language, TranscriptionFileType fileType = TranscriptionFileType.Wav, 
         TranscriptionResponseFormat responseFormat = TranscriptionResponseFormat.Vtt, string prompt = null, CancellationToken cancellationToken = default)
     {
+        Log.Information("The transcription language: {@Language}", language);
+        
         AudioClient client = new("whisper-1", _openAiSettings.ApiKey);
         
         var filename = $"{Guid.NewGuid()}.{fileType.ToString().ToLower()}";
@@ -84,6 +86,8 @@ public class SpeechToTextService : ISpeechToTextService
         };
         
         if (language.HasValue) options.Language = language.Value.GetDescription();
+        
+        Log.Information("The audio transcription options: {@Options}", options);
         
         var response = await client.TranscribeAudioAsync(stream, "test.wav", options, cancellationToken);
 
