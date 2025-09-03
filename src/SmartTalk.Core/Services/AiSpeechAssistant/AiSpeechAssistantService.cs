@@ -32,6 +32,7 @@ using SmartTalk.Core.Services.OpenAi;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Services.Restaurants;
+using SmartTalk.Core.Services.SpeechMatics;
 using SmartTalk.Core.Services.STT;
 using SmartTalk.Core.Services.Timer;
 using SmartTalk.Core.Settings.Azure;
@@ -86,6 +87,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly IPhoneOrderService _phoneOrderService;
     private readonly IAgentDataProvider _agentDataProvider;
     private readonly IAttachmentService _attachmentService;
+    private readonly ISpeechMaticsService _speechMaticsService;
     private readonly ISpeechToTextService _speechToTextService;
     private readonly WorkWeChatKeySetting _workWeChatKeySetting;
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
@@ -122,6 +124,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         IAgentDataProvider agentDataProvider,
         IAttachmentService attachmentService,
         IOpenAiDataProvider openAiDataProvider,
+        ISpeechMaticsService speechMaticsService,
         ISpeechToTextService speechToTextService,
         WorkWeChatKeySetting workWeChatKeySetting,
         ISmartTalkHttpClientFactory httpClientFactory,
@@ -149,6 +152,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _translationClient = translationClient;
         _attachmentService = attachmentService;
         _openAiDataProvider = openAiDataProvider;
+        _speechMaticsService = speechMaticsService;
         _speechToTextService = speechToTextService;
         _workWeChatKeySetting = workWeChatKeySetting;
         _backgroundJobClient = backgroundJobClient;
@@ -378,7 +382,16 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             .Replace("#{user_profile}", string.IsNullOrEmpty(userProfile?.ProfileJson) ? " " : userProfile.ProfileJson)
             .Replace("#{current_time}", currentTime)
             .Replace("#{customer_phone}", from.StartsWith("+1") ? from[2..] : from)
-            .Replace("#{pst_date}", $"{pstTime.Date:yyyy-MM-dd} {pstTime.DayOfWeek}");
+            .Replace("#{pst_date}", $"{pstTime.Date:yyyy-MM-dd} {pstTime.DayOfWeek}"); 
+        
+        if (finalPrompt.Contains("#{customer_items}", StringComparison.OrdinalIgnoreCase))
+        {
+            var soldToIds = !string.IsNullOrEmpty(assistant.Name) ? assistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : new List<string>();
+            
+            var customerItemsString = await _speechMaticsService.BuildCustomerItemsStringAsync(soldToIds, cancellationToken).ConfigureAwait(false);
+
+            finalPrompt = finalPrompt.Replace("#{customer_items}", customerItemsString ?? "");
+        }
         
         Log.Information($"The final prompt: {finalPrompt}");
 

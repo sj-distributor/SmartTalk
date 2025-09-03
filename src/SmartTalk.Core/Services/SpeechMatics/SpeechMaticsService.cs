@@ -37,6 +37,8 @@ namespace SmartTalk.Core.Services.SpeechMatics;
 public interface ISpeechMaticsService : IScopedDependency
 {
     Task HandleTranscriptionCallbackAsync(HandleTranscriptionCallbackCommand command, CancellationToken cancellationToken);
+
+    Task<string> BuildCustomerItemsStringAsync(List<string> soldToIds, CancellationToken cancellationToken);
 }
 
 public class SpeechMaticsService : ISpeechMaticsService
@@ -127,7 +129,24 @@ public class SpeechMaticsService : ISpeechMaticsService
             Log.Warning("Handle transcription callback failed: {@Exception}", e);
         }
     }
-    
+
+    public async Task<string> BuildCustomerItemsStringAsync(List<string> soldToIds, CancellationToken cancellationToken)
+    {
+        var allItems = new List<string>();
+        
+        var askInfoResponse = await _salesClient.GetAskInfoDetailListByCustomerAsync(new GetAskInfoDetailListByCustomerRequestDto { CustomerNumbers = soldToIds }, cancellationToken).ConfigureAwait(false);
+
+        if (askInfoResponse?.Data != null && askInfoResponse.Data.Any())
+            allItems.AddRange(askInfoResponse.Data.Select(x => x.MaterialDesc));
+        
+        var orderHistoryResponse = await _salesClient.GetOrderHistoryByCustomerAsync(new GetOrderHistoryByCustomerRequestDto { CustomerNumber = soldToIds.FirstOrDefault() }, cancellationToken).ConfigureAwait(false);
+
+        if (orderHistoryResponse?.Data != null && orderHistoryResponse.Data.Any())
+            allItems.AddRange(orderHistoryResponse.Data.Select(x => x.MaterialDescription));
+
+        return string.Join(Environment.NewLine, allItems.Distinct());
+    }
+
     private async Task SummarizeConversationContentAsync(PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken)
     {
         var (aiSpeechAssistant, agent) = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByAgentIdAsync(record.AgentId, cancellationToken).ConfigureAwait(false);
@@ -369,18 +388,22 @@ public class SpeechMaticsService : ISpeechMaticsService
                 Log.Information("Serialized AskItems JSON: {AskItemsJson}", askItemsJson);
             }
         }
+        
+        var soldToIds = !string.IsNullOrEmpty(aiSpeechAssistant.Name) ? aiSpeechAssistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : new List<string>();
+        
+        var customerItemsString = await BuildCustomerItemsStringAsync(soldToIds, cancellationToken);
 
         var audioData = BinaryData.FromBytes(audioContent);
         List<ChatMessage> messages =
         [
-            new SystemChatMessage(string.IsNullOrEmpty(aiSpeechAssistant?.CustomRecordAnalyzePrompt)
-                ? "你是一名電話錄音的分析員，通過聽取錄音內容和語氣情緒作出精確分析，冩出一份分析報告。\n\n分析報告的格式：交談主題：xxx\n\n 來電號碼：#{call_from}\n\n 內容摘要:xxx \n\n 客人情感與情緒: xxx \n\n 待辦事件: \n1.xxx\n2.xxx \n\n 客人下單內容(如果沒有則忽略)：1. 牛肉(1箱)\n2.雞腿肉(1箱)".Replace("#{call_from}", callFrom ?? "")
-                : aiSpeechAssistant.CustomRecordAnalyzePrompt.Replace("#{call_from}", callFrom ?? "").Replace("#{current_time}", currentTime).Replace("#{askItemsJson}", askItemsJson ?? "")),
+            new SystemChatMessage( (string.IsNullOrEmpty(aiSpeechAssistant?.CustomRecordAnalyzePrompt)
+                ? "你是一名電話錄音的分析員，通過聽取錄音內容和語氣情緒作出精確分析，冩出一份分析報告。\n\n分析報告的格式：交談主題：xxx\n\n 來電號碼：#{call_from}\n\n 內容摘要:xxx \n\n 客人情感與情緒: xxx \n\n 待辦事件: \n1.xxx\n2.xxx \n\n 客人下單內容(如果沒有則忽略)：1. 牛肉(1箱)\n2. 雞腿肉(1箱)"
+                : aiSpeechAssistant.CustomRecordAnalyzePrompt).Replace("#{call_from}", callFrom ?? "").Replace("#{current_time}", currentTime ?? "").Replace("#{customer_items}", customerItemsString ?? "")),
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
             new UserChatMessage("幫我根據錄音生成分析報告：")
         ];
-
-        return messages;
+        
+        return messages; 
     }
     
     private async Task MultiScenarioCustomProcessingAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, PhoneOrderRecord record, CancellationToken cancellationToken) 
