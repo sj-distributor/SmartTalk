@@ -5,7 +5,7 @@ using SmartTalk.Messages.Requests.PhoneOrder;
 
 namespace SmartTalk.Core.Handlers.RequestHandlers.PhoneOrder;
 
-public class GetPhoneOrderOrderItemsRequestHandler : IRequestHandler<GetPhoneOrderOrderItemsRequest, GetPhoneOrderOrderItemsRessponse>
+public class GetPhoneOrderOrderItemsRequestHandler : IRequestHandler<GetPhoneOrderOrderItemsRequest, GetPhoneOrderOrderItemsResponse>
 {
     private readonly IPhoneOrderService _phoneOrderService;
 
@@ -14,7 +14,7 @@ public class GetPhoneOrderOrderItemsRequestHandler : IRequestHandler<GetPhoneOrd
         _phoneOrderService = phoneOrderService;
     }
     
-    public async Task<GetPhoneOrderOrderItemsRessponse> Handle(IReceiveContext<GetPhoneOrderOrderItemsRequest> context, CancellationToken cancellationToken)
+    public async Task<GetPhoneOrderOrderItemsResponse> Handle(IReceiveContext<GetPhoneOrderOrderItemsRequest> context, CancellationToken cancellationToken)
     {
         return await _phoneOrderService.GetPhoneOrderOrderItemsAsync(context.Message, cancellationToken).ConfigureAwait(false);
     }
