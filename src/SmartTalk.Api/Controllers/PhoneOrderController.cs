@@ -51,10 +51,10 @@ public class PhoneOrderController : ControllerBase
     }
     
     [Route("items"), HttpGet]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPhoneOrderOrderItemsRessponse))]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPhoneOrderOrderItemsResponse))]
     public async Task<IActionResult> GetPhoneOrderOrderItemsAsync([FromQuery] GetPhoneOrderOrderItemsRequest request)
     {
-        var response = await _mediator.RequestAsync<GetPhoneOrderOrderItemsRequest, GetPhoneOrderOrderItemsRessponse>(request).ConfigureAwait(false);
+        var response = await _mediator.RequestAsync<GetPhoneOrderOrderItemsRequest, GetPhoneOrderOrderItemsResponse>(request).ConfigureAwait(false);
         
         return Ok(response);
     }
@@ -113,6 +113,15 @@ public class PhoneOrderController : ControllerBase
     {
         var response = await _mediator.SendAsync<PlaceOrderAndModifyItemCommand, PlaceOrderAndModifyItemResponse>(command).ConfigureAwait(false);
 
+        return Ok(response);
+    }
+    
+    [Route("record/report"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPhoneOrderRecordReportResponse))]
+    public async Task<IActionResult> GetPhoneOrderRecordReportAsync([FromQuery] GetPhoneOrderRecordReportRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetPhoneOrderRecordReportRequest, GetPhoneOrderRecordReportResponse>(request).ConfigureAwait(false);
+        
         return Ok(response);
     }
 
