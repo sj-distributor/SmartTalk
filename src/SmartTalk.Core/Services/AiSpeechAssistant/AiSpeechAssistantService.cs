@@ -310,7 +310,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                                   If the audio has both Cantonese and English but English dominates, return: en
                                   """),
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
-            new UserChatMessage("請根據錄音內容判斷語言，並返回對應代碼。")
+            new UserChatMessage("Please determine the language based on the recording and return the corresponding code.")
         ];
 
         ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
