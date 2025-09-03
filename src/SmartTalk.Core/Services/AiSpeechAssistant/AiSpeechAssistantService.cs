@@ -243,9 +243,20 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, _workWeChatKeySetting.Key, alertMessage, mentionedList: new[]{"@all"}, cancellationToken: cancellationToken).ConfigureAwait(false);
         }
         
+        record.Language = ConvertLanguageCode(language);
         record.TranscriptionJobId = await _phoneOrderService.CreateSpeechMaticsJobAsync(audioFileRawBytes, Guid.NewGuid().ToString("N") + ".wav", language, cancellationToken).ConfigureAwait(false);
 
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    private TranscriptionLanguage ConvertLanguageCode(string languageCode)
+    {
+        return languageCode switch
+        {
+            "en" => TranscriptionLanguage.English,
+            "es" => TranscriptionLanguage.Spanish,
+            _ => TranscriptionLanguage.Chinese
+        };
     }
     
     private async Task<string> DetectAudioLanguageAsync(byte[] audioContent, CancellationToken cancellationToken)
