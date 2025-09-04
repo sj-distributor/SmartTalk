@@ -11,6 +11,10 @@ public static class SecurityStore
         public const string SuperAdministrator = nameof(SuperAdministrator);
         public const string Operator = nameof(Operator);
         public const string ServiceProviderOperator = nameof(ServiceProviderOperator);
+        public const string TestAdmin = nameof(TestAdmin);
+        public const string TestOperator = nameof(TestOperator);
+        public const string TestServiceProviderOperator = nameof(TestServiceProviderOperator);
+        public const string TestSuperAdministrator = nameof(TestSuperAdministrator);
     }
     
     public static class Permissions
@@ -34,6 +38,8 @@ public static class SecurityStore
         public const string CanCopyAccount = nameof(CanCopyAccount);
 
         public const string CanUpdateAccount = nameof(CanUpdateAccount);
+
+        public const string CanViewMerchPrinter = nameof(CanViewMerchPrinter);
         
         private static List<string> _allPermissions;
 
@@ -72,6 +78,7 @@ public static class SecurityStore
                 nameof(CanDeleteAccount) => "删除账户",
                 nameof(CanCopyAccount) => "复制账户",
                 nameof(CanUpdateAccount) => "更新账户",
+                nameof(CanViewMerchPrinter) => "进入打印设置",
                 _ => throw new ArgumentOutOfRangeException(nameof(permission), permission, null)
             };
     }

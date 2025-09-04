@@ -24,7 +24,7 @@ public interface IAgentDataProvider : IScopedDependency
     
     Task UpdateAgentsAsync(List<Agent> agents, bool forceSave = true, CancellationToken cancellationToken = default);
 
-    Task<List<AgentPreviewDto>> GetAgentsByAgentTypeAsync<T>(AgentType agentType, List<int> agentIds = null, CancellationToken cancellationToken = default) where T : class, IEntity<int>, IAgent;
+    Task<List<AgentPreviewDto>> GetAgentsByAgentTypeAsync<T>(AgentType agentType, List<int> agentIds = null, int? serviceProviderId = null, CancellationToken cancellationToken = default) where T : class, IEntity<int>, IAgent;
 }
 
 public class AgentDataProvider : IAgentDataProvider
@@ -105,11 +105,12 @@ public class AgentDataProvider : IAgentDataProvider
     }
 
     public async Task<List<AgentPreviewDto>> GetAgentsByAgentTypeAsync<T>(
-        AgentType agentType, List<int> agentIds = null, CancellationToken cancellationToken = default) where T : class, IEntity<int>, IAgent
+        AgentType agentType, List<int> agentIds = null, int? serviceProviderId = null, CancellationToken cancellationToken = default) where T : class, IEntity<int>, IAgent
     {
-        var query = from agent in _repository.Query<Agent>()
+        var query = from agent in _repository.Query<Agent>().Where(x => x.IsDisplay)
             join domain in _repository.Query<T>() on agent.RelateId equals domain.Id
-            where agent.Type == agentType && (agentIds == null || agentIds.Count == 0 || agentIds.Contains(agent.Id))
+            where agent.Type == agentType && (agentIds == null || agentIds.Count == 0 || agentIds.Contains(agent.Id)) 
+                                          && (!serviceProviderId.HasValue || agent.ServiceProviderId == serviceProviderId.Value)
             select new AgentPreviewDto
             {
                 Agent = agent,

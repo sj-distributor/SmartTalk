@@ -63,6 +63,9 @@ namespace SmartTalk.Core.Domain.Account
         [Column("Language")] 
         public SystemLanguage SystemLanguage { get; set; } = SystemLanguage.English;
         
+        [Column("service_provider_id")]
+        public int? ServiceProviderId { get; set; }
+        
         [Column("creator")]
         public string Creator { get; set; }
         
@@ -82,6 +85,6 @@ namespace SmartTalk.Core.Domain.Account
         public UserAccountProfile UserAccountProfile { get; set; }
         
         [NotMapped]
-        public List<PosCompanyStore> Stores { get; set; }
+        public List<CompanyStore> Stores { get; set; }
     }
 }

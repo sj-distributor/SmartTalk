@@ -31,12 +31,12 @@ public class AgentService : IAgentService
         var agentTypes = request.AgentType.HasValue
             ? [request.AgentType.Value] : Enum.GetValues(typeof(AgentType)).Cast<AgentType>().ToList();
         
-        var agentInfo = await GetAllAgentsAsync(agentTypes, request.AgentIds, cancellationToken).ConfigureAwait(false);
+        var agentInfo = await GetAllAgentsAsync(agentTypes, request.AgentIds, request.ServiceProviderId, cancellationToken).ConfigureAwait(false);
         
         return new GetAgentsResponse { Data = agentInfo.OrderBy(x => x.CreatedDate).ToList() };
     }
 
-    private async Task<List<AgentPreviewDto>> GetAllAgentsAsync(List<AgentType> agentTypes, List<int> agentIds, CancellationToken cancellationToken)
+    private async Task<List<AgentPreviewDto>> GetAllAgentsAsync(List<AgentType> agentTypes, List<int> agentIds, int? serviceProviderId, CancellationToken cancellationToken)
     {
         var types = GetAllIAgentImplementations(agentTypes);
         var method = typeof(IAgentDataProvider).GetMethod(nameof(_agentDataProvider.GetAgentsByAgentTypeAsync));
@@ -49,7 +49,7 @@ public class AgentService : IAgentService
         foreach (var type in types)
         {
             var genericMethod = method.MakeGenericMethod(type.Type);
-            var task = (Task)genericMethod.Invoke(_agentDataProvider, [type.AgentType, agentIds, cancellationToken]);
+            var task = (Task)genericMethod.Invoke(_agentDataProvider, [type.AgentType, agentIds, serviceProviderId, cancellationToken]);
 
             if (task == null) continue;
             

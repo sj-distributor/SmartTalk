@@ -408,7 +408,7 @@ public partial class PosService
         return (utcStart, utcEnd);
     }
     
-    private async Task<string> GetPosTokenAsync(PosCompanyStore store, PosOrder order, CancellationToken cancellationToken)
+    private async Task<string> GetPosTokenAsync(CompanyStore store, PosOrder order, CancellationToken cancellationToken)
     {
         var authorization = await _easyPosClient.GetEasyPosTokenAsync(new EasyPosTokenRequestDto
         {
@@ -422,7 +422,7 @@ public partial class PosService
         return authorization?.Data;
     }
 
-    private async Task<(bool IsAvailable, PosOrderStatus Status)> ValidatePosProductsAsync(PosOrder order, PosCompanyStore store, string token, CancellationToken cancellationToken)
+    private async Task<(bool IsAvailable, PosOrderStatus Status)> ValidatePosProductsAsync(PosOrder order, CompanyStore store, string token, CancellationToken cancellationToken)
     {
         try
         {
@@ -469,7 +469,7 @@ public partial class PosService
         }
     }
 
-    public async Task SafetyPlaceOrderAsync(PosOrder order, PosCompanyStore store, string token, bool isWithRetry, int retryCount, CancellationToken cancellationToken)
+    public async Task SafetyPlaceOrderAsync(PosOrder order, CompanyStore store, string token, bool isWithRetry, int retryCount, CancellationToken cancellationToken)
     {
         const int MaxRetryCount = 3;
         var lockKey = $"place-order-key-{order.Id}";
@@ -501,7 +501,7 @@ public partial class PosService
         }, wait: TimeSpan.FromSeconds(10), retry: TimeSpan.FromSeconds(1), server: RedisServer.System).ConfigureAwait(false);
     }
 
-    private async Task<PlaceOrderToEasyPosResponseDto> PlaceOrderAsync(PosOrder order, PosCompanyStore store, string token, CancellationToken cancellationToken)
+    private async Task<PlaceOrderToEasyPosResponseDto> PlaceOrderAsync(PosOrder order, CompanyStore store, string token, CancellationToken cancellationToken)
     {
         var response = await _easyPosClient.PlaceOrderAsync(new PlaceOrderToEasyPosRequestDto
         {
@@ -540,7 +540,7 @@ public partial class PosService
         return response;
     }
 
-    private async Task SafetyPlaceOrderWithRetryAsync(PosOrder order, PosCompanyStore store, string token, bool isRetry, CancellationToken cancellationToken)
+    private async Task SafetyPlaceOrderWithRetryAsync(PosOrder order, CompanyStore store, string token, bool isRetry, CancellationToken cancellationToken)
     {
         const int MaxRetryCount = 3;
         
