@@ -1,4 +1,4 @@
-INSERT INTO role (created_on, modified_on, uuid, name, user_account_level, service_provider_id
+INSERT INTO role (created_on, modified_on, uuid, name, user_account_level, service_provider_id)
 VALUES
     (now(3), now(3), uuid(), 'TestSuperAdministrator', 1, 2);
 
