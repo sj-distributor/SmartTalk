@@ -63,6 +63,8 @@ public interface IPrinterService : IScopedDependency
     Task<UpdateMerchPrinterResponse> UpdateMerchPrinterAsync(UpdateMerchPrinterCommand command, CancellationToken cancellationToken);
     
     Task<GetMerchPrinterLogResponse> GetMerchPrinterLogAsync(GetMerchPrinterLogRequest request, CancellationToken cancellationToken);
+    
+    Task ScanOfflinePrinter(CancellationToken cancellationToken);
 }
 
 public class PrinterService : IPrinterService
@@ -635,6 +637,19 @@ public class PrinterService : IPrinterService
              }
          };
      }
+
+     public async Task ScanOfflinePrinter(CancellationToken cancellationToken)
+     {
+         var allMaybeOfflinePrinters = await _printerDataProvider.GetMerchPrintersAsync(isEnabled: true,
+             lastStatusInfoLastModifiedDate: DateTimeOffset.Now.AddMinutes(-2), IsStatusInfo: true,
+             cancellationToken: cancellationToken).ConfigureAwait(false);
+         
+         foreach (var printer in allMaybeOfflinePrinters)
+         {
+             printer.StatusInfo = null;
+             await _printerDataProvider.UpdateMerchPrinterMacAsync(printer, cancellationToken: cancellationToken).ConfigureAwait(false);
+         }
+     } 
      
      private static Font CreateFont(FontFamily fontFamily, float size, bool bold = false)
      {
