@@ -13,7 +13,7 @@ namespace SmartTalk.Core.Services.Printer;
 public interface IPrinterDataProvider : IScopedDependency
 {
     Task<List<MerchPrinter>> GetMerchPrintersAsync(string printerMac = null, Guid? token = null,
-        int? storeId = null, int? id = null, bool? isEnabled = null, CancellationToken cancellationToken = default);
+        int? storeId = null, int? id = null, bool? isEnabled = null, DateTimeOffset? lastStatusInfoLastModifiedDate = null, bool? IsStatusInfo = null, CancellationToken cancellationToken = default);
 
     Task<List<MerchPrinterOrder>> GetMerchPrinterOrdersAsync(Guid? jobToken = null, int? storeId = null, PrintStatus? status = null,
         DateTimeOffset? endTime = null, string printerMac = null, bool isOrderByPrintDate = false, CancellationToken cancellationToken = default);
@@ -52,7 +52,7 @@ public class PrinterDataProvider : IPrinterDataProvider
     }
 
     public async Task<List<MerchPrinter>> GetMerchPrintersAsync(string printerMac = null, Guid? token = null,
-        int? storeId = null, int? id = null, bool? isEnabled = null, CancellationToken cancellationToken = default)
+        int? storeId = null, int? id = null, bool? isEnabled = null, DateTimeOffset? lastStatusInfoLastModifiedDate = null, bool? IsStatusInfo = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<MerchPrinter>();
 
@@ -70,6 +70,12 @@ public class PrinterDataProvider : IPrinterDataProvider
 
         if (isEnabled.HasValue)
             query = query.Where(x => x.IsEnabled == isEnabled);
+
+        if (lastStatusInfoLastModifiedDate.HasValue)
+            query = query.Where(x => x.StatusInfoLastModifiedDate < lastStatusInfoLastModifiedDate);
+
+        if (IsStatusInfo.HasValue)
+            query = query.Where(x => !string.IsNullOrEmpty(x.StatusInfo));
         
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
