@@ -14,6 +14,7 @@ public static class SecurityStore
         public const string TestAdmin = nameof(TestAdmin);
         public const string TestOperator = nameof(TestOperator);
         public const string TestServiceProviderOperator = nameof(TestServiceProviderOperator);
+        public const string TestSuperAdministrator = nameof(TestSuperAdministrator);
     }
     
     public static class Permissions
