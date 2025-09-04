@@ -13,3 +13,8 @@ create table if not exists `agent_assistant`
 
 CREATE INDEX idx_agent_id ON agent_assistant (agent_id);
 CREATE INDEX idx_assistant_id ON agent_assistant (assistant_id);
+
+INSERT INTO agent_assistant (agent_id, assistant_id, is_default, is_multiple, created_date, last_modified_date)
+SELECT asa.agent_id, asa.id, true, false, NOW(3),Now(3) FROM `ai_speech_assistant` asa
+
+alter table `ai_speech_assistant` drop column `agent_id`
