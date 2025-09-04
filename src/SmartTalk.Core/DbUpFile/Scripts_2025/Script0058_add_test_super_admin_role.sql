@@ -1,6 +1,6 @@
-INSERT INTO role (created_on, modified_on, uuid, name, user_account_level)
+INSERT INTO role (created_on, modified_on, uuid, name, user_account_level, service_provider_id
 VALUES
-    (now(3), now(3), uuid(), 'TestSuperAdministrator', 1);
+    (now(3), now(3), uuid(), 'TestSuperAdministrator', 1, 2);
 
 INSERT INTO role_permission (created_date, last_modified_date, role_id, permission_id)
 SELECT NOW(3), NOW(3), r.id, p.id
