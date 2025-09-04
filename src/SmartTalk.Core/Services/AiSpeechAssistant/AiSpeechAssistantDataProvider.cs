@@ -196,7 +196,7 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
     public async Task<(int, List<Domain.AISpeechAssistant.AiSpeechAssistant>)> GetAiSpeechAssistantsAsync(
         int? pageIndex = null, int? pageSize = null, string channel = null, string keyword = null, List<int> agentIds = null, CancellationToken cancellationToken = default)
     {
-        var query = from agentAssistant in _repository.QueryNoTracking<AgentAssistant>()
+        var query = from agentAssistant in _repository.QueryNoTracking<AgentAssistant>().Where(x => x.IsDefault)
             join assistant in _repository.QueryNoTracking<Domain.AISpeechAssistant.AiSpeechAssistant>()
                 .Where(x => x.IsDisplay) on agentAssistant.AssistantId equals assistant.Id
             select new { agentAssistant, assistant };
@@ -396,7 +396,7 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
     public async Task<(Domain.AISpeechAssistant.AiSpeechAssistant Assistant, Agent Agent)> GetAiSpeechAssistantByAgentIdAsync(int agentId, CancellationToken cancellationToken)
     {
         var query = from agent in _repository.Query<Agent>()
-            join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
+            join agentAssistant in _repository.Query<AgentAssistant>().Where(x => x.IsDefault) on agent.Id equals agentAssistant.AgentId
             join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agentAssistant.AssistantId equals assistant.Id into assistantGroups
             from assistant in assistantGroups.DefaultIfEmpty()
             where agent.Id == agentId
