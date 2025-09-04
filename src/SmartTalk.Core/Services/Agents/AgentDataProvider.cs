@@ -101,7 +101,7 @@ public class AgentDataProvider : IAgentDataProvider
     public async Task<List<AgentPreviewDto>> GetAgentsByAgentTypeAsync<T>(
         AgentType agentType, List<int> agentIds = null, int? serviceProviderId = null, CancellationToken cancellationToken = default) where T : class, IEntity<int>, IAgent
     {
-        var query = from agent in _repository.Query<Agent>()
+        var query = from agent in _repository.Query<Agent>().Where(x => x.IsDisplay)
             join domain in _repository.Query<T>() on agent.RelateId equals domain.Id
             where agent.Type == agentType && (agentIds == null || agentIds.Count == 0 || agentIds.Contains(agent.Id)) 
                                           && (!serviceProviderId.HasValue || agent.ServiceProviderId == serviceProviderId.Value)
