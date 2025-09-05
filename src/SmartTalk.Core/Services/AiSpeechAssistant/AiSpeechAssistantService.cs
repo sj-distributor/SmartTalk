@@ -805,13 +805,13 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         {
             _aiSpeechAssistantStreamContext.IsTransfer = true;
             
-            var (reply, _) = MatchTransferCallReply(functionName);
+            var (reply, replySeconds) = MatchTransferCallReply(functionName);
             
-            _backgroundJobClient.Enqueue<IMediator>(x => x.SendAsync(new TransferHumanServiceCommand
+            _backgroundJobClient.Schedule<IMediator>(x => x.SendAsync(new TransferHumanServiceCommand
             {
                 CallSid = _aiSpeechAssistantStreamContext.CallSid,
                 HumanPhone = _aiSpeechAssistantStreamContext.HumanContactPhone
-            }, cancellationToken));
+            }, cancellationToken), TimeSpan.FromSeconds(replySeconds));
             
             var transferringHumanService = new
             {
@@ -824,7 +824,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                 }
             };
             
-            await SendToWebSocketAsync(_openaiClientWebSocket, transferringHumanService, cancellationToken);
+            // await SendToWebSocketAsync(_openaiClientWebSocket, transferringHumanService, cancellationToken);
         }
 
         await SendToWebSocketAsync(_openaiClientWebSocket, new { type = "response.create" }, cancellationToken);
