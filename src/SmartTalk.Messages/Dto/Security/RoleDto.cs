@@ -40,6 +40,10 @@ public class RoleDto
             "User" => "操作员",
             "Operator" => "操作员",
             "ServiceProviderOperator" => "操作员",
+            "TestAdmin" => "管理员",
+            "TestOperator" => "操作员",
+            "TestSuperAdministrator" => "超级管理员",
+            "TestServiceProviderOperator" => "操作员",
             _ => null
         };
     }
