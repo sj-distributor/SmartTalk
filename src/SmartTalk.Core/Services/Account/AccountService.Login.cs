@@ -1,4 +1,5 @@
 using System.Net;
+using Microsoft.AspNetCore.Http;
 using SmartTalk.Core.Extensions;
 using SmartTalk.Messages.Dto.System;
 using SmartTalk.Messages.Enums.Account;
@@ -71,6 +72,21 @@ public partial class AccountService
             authenticateInternalResult.CannotLoginReason = UserAccountCannotLoginReason.NotFound;
             authenticateInternalResult.IsAuthenticated = false;
             return;            
+        }
+
+        var origin = _httpContext.Request.Headers.Origin.ToString();
+        if (string.IsNullOrEmpty(origin))
+        {
+            origin = _httpContext.Request.Headers.Referer.ToString();
+        }
+
+        var serviceProvider = await _posDataProvider.GetServiceProviderByIdAsync(account.ServiceProviderId, cancellationToken).ConfigureAwait(false);
+
+        if (origin != serviceProvider.Domain)
+        {
+            authenticateInternalResult.CannotLoginReason = UserAccountCannotLoginReason.IncorrectDomain;
+            authenticateInternalResult.IsAuthenticated = false;
+            return;
         }
         
         if (loginVerificationType == UserAccountVerificationType.Password)
@@ -146,6 +162,8 @@ public partial class AccountService
     private string GetFriendlyErrorMessage(UserAccountCannotLoginReason reason) => reason switch
     {
         UserAccountCannotLoginReason.NoAssociatedStore => "The account is not associated with the store, please contact the administrator",
+        
+        UserAccountCannotLoginReason.IncorrectDomain => "Unable to login, please use the correct domain name to access",
     
         _ => reason.ToString()
     };
