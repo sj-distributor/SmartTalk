@@ -1,3 +1,4 @@
+using System.Buffers;
 using Serilog;
 using System.Text;
 using Newtonsoft.Json;
@@ -237,30 +238,53 @@ public class RealtimeAiService : IRealtimeAiService
         await _webSocket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(turnCompleted))), WebSocketMessageType.Text, true, CancellationToken.None);
         Log.Information("Realtime turn completed, {@data}", data);
     }
-
+    
     private async Task HandleWholeAudioBufferAsync()
     {
-        if (_wholeAudioBuffer is { Length: > 0 } && !_hasHandledAudioBuffer)
+        if (_wholeAudioBuffer is { CanRead: true } src && !_hasHandledAudioBuffer)
         {
             _hasHandledAudioBuffer = true;
-            
+
             var waveFormat = new WaveFormat(24000, 16, 1);
-            using (var wavStream = new MemoryStream())
+            using var wavStream = new MemoryStream();
+
             await using (var writer = new WaveFileWriter(wavStream, waveFormat))
             {
-                writer.Write(_wholeAudioBuffer.ToArray(), 0, (int)_wholeAudioBuffer.Length);
-                writer.Flush();
-                var audio = await _attachmentService.UploadAttachmentAsync(new UploadAttachmentCommand { Attachment = new UploadAttachmentDto { FileName = Guid.NewGuid() + ".wav", FileContent = wavStream.ToArray(), } }, CancellationToken.None).ConfigureAwait(false);
-                            
-                Log.Information("audio uploaded, url: {Url}", audio?.Attachment?.FileUrl);
-                
-                if (string.IsNullOrEmpty(audio?.Attachment?.FileUrl) || _speechAssistant.AgentId == 0) return;
-                
+                var rented = ArrayPool<byte>.Shared.Rent(64 * 1024);
+                try
+                {
+                    int read;
+                    if (src.CanSeek) src.Position = 0;
+                    while ((read = await src.ReadAsync(rented.AsMemory(0, rented.Length))) > 0)
+                    {
+                        writer.Write(rented, 0, read);
+                    }
+                    await writer.FlushAsync();
+                }
+                finally
+                {
+                    ArrayPool<byte>.Shared.Return(rented);
+                }
+            }
+            
+            var audio = await _attachmentService.UploadAttachmentAsync(
+                new UploadAttachmentCommand
+                {
+                    Attachment = new UploadAttachmentDto
+                    {
+                        FileName = Guid.NewGuid() + ".wav",
+                        FileContent = wavStream.ToArray(),
+                    }
+                }, CancellationToken.None).ConfigureAwait(false);
+
+            Log.Information("audio uploaded, url: {Url}", audio?.Attachment?.FileUrl);
+            if (!string.IsNullOrEmpty(audio?.Attachment?.FileUrl) && _speechAssistant.AgentId != 0)
+            {
                 _backgroundJobClient.Enqueue<IRealtimeProcessJobService>(x =>
                     x.RecordingRealtimeAiAsync(audio.Attachment.FileUrl, _speechAssistant.AgentId, CancellationToken.None));
             }
-                            
-            await _wholeAudioBuffer.DisposeAsync();
+
+            await src.DisposeAsync();
             _wholeAudioBuffer = null;
         }
     }
