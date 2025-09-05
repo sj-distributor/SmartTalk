@@ -89,17 +89,17 @@ public partial class AiSpeechAssistantService
 
     public async Task<UpdateAiSpeechAssistantResponse> UpdateAiSpeechAssistantAsync(UpdateAiSpeechAssistantCommand command, CancellationToken cancellationToken)
     {
+        var storeUser = await _posDataProvider.GetPosStoreUsersByUserIdAndAssistantIdAsync([command.AssistantId], _currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
+
+        if (storeUser == null)
+            throw new Exception("Do not have the store permission to operate");
+        
         var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantAsync(command.AssistantId, cancellationToken).ConfigureAwait(false);
         
         await UpdateAssistantNumberIfRequiredAsync(assistant.AnsweringNumberId, command.AnsweringNumberId, cancellationToken).ConfigureAwait(false);
         
         _mapper.Map(command, assistant);
         assistant.Channel = command.Channels == null ? null : string.Join(",", command.Channels.Select(x => (int)x));
-
-        var storeUser = await _posDataProvider.GetPosStoreUsersByUserIdAndAssistantIdAsync([command.AssistantId], _currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
-
-        if (storeUser == null)
-            throw new Exception("Do not have the store permission to operate");
 
         await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync([assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -113,18 +113,24 @@ public partial class AiSpeechAssistantService
 
     public async Task<DeleteAiSpeechAssistantResponse> DeleteAiSpeechAssistantAsync(DeleteAiSpeechAssistantCommand command, CancellationToken cancellationToken)
     {
-        var assistants = await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantsAsync(command.AssistantIds, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        if (assistants.Count == 0) throw new Exception("Delete assistants failed.");
-
-        await UpdateNumbersStatusAsync(assistants.Where(x => x.AnsweringNumberId.HasValue).Select(x => x.AnsweringNumberId.Value).ToList(), false, cancellationToken).ConfigureAwait(false);
-
         var storeUser = await _posDataProvider.GetPosStoreUsersByUserIdAndAssistantIdAsync(command.AssistantIds, _currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
 
         if (storeUser == null)
             throw new Exception("Do not have the store permission to operate");
         
+        var assistants = await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantsAsync(command.AssistantIds, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (assistants.Count == 0) throw new Exception("Delete assistants failed.");
+
+        await UpdateNumbersStatusAsync(assistants.Where(x => x.AnsweringNumberId.HasValue).Select(x => x.AnsweringNumberId.Value).ToList(), false, cancellationToken).ConfigureAwait(false);
+        
         await DeleteAssistantRelatedInfoAsync(assistants.Select(x => x.AgentId).ToList(), cancellationToken).ConfigureAwait(false);
+
+        var agents = await _agentDataProvider.GetAgentsAsync(assistants.Select(x => x.AgentId).ToList(),cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        await _agentDataProvider.DeleteAgentsAsync(agents, true, cancellationToken).ConfigureAwait(false);
+
+        await _posDataProvider.DeletePosAgentsByAgentIdsAsync(agents.Select(x => x.Id).ToList(), true, cancellationToken).ConfigureAwait(false);
         
         return new DeleteAiSpeechAssistantResponse
         {

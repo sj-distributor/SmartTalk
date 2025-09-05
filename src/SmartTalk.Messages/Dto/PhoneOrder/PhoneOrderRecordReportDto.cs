@@ -11,6 +11,8 @@ public class PhoneOrderRecordReportDto
     public TranscriptionLanguage Language { get; set; }
 
     public string Report { get; set; }
+    
+    public bool IsOrigin { get; set; }
    
     public DateTimeOffset CreatedDate { get; set; }
 }

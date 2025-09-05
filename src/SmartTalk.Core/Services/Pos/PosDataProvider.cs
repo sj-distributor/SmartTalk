@@ -1,4 +1,5 @@
 using AutoMapper;
+using DocumentFormat.OpenXml.Office2010.ExcelAc;
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Data;
 using SmartTalk.Core.Domain.Account;
@@ -48,6 +49,8 @@ public partial interface IPosDataProvider : IScopedDependency
     Task<StoreUser> GetPosStoreUsersByUserIdAndAssistantIdAsync(List<int> assistantIds, int userId, CancellationToken cancellationToken = default);
 
     Task<List<PosAgent>> GetPosAgentByUserIdAsync(int userId, CancellationToken cancellationToken);
+
+    Task DeletePosAgentsByAgentIdsAsync(List<int> agentIds, bool forceSave = true, CancellationToken cancellationToken = default);
 }
 
 public partial class PosDataProvider : IPosDataProvider
@@ -330,5 +333,14 @@ public partial class PosDataProvider : IPosDataProvider
             select posAgent;
 
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task DeletePosAgentsByAgentIdsAsync(List<int> agentIds, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        var posAgents = await _repository.Query<PosAgent>().Where(x => agentIds.Contains(x.Id)).ToListAsync(cancellationToken).ConfigureAwait(false);
+
+        await _repository.DeleteAllAsync(posAgents, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 }

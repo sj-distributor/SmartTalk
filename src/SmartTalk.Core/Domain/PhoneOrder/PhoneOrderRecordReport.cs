@@ -22,6 +22,9 @@ public class PhoneOrderRecordReport : IEntity
    [Column("report")]
    public string Report { get; set; }
    
+   [Column("is_origin")]
+   public bool IsOrigin { get; set; }
+   
    [Column("created_date")]
    public DateTimeOffset CreatedDate { get; set; }
 }

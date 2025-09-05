@@ -192,6 +192,7 @@ public class SpeechMaticsService : ISpeechMaticsService
             RecordId = record.Id,
             Report = record.TranscriptionText,
             Language = SelectLanguageEnum(detection.Language),
+            IsOrigin = true,
             CreatedDate = DateTimeOffset.Now
         });
 
@@ -206,6 +207,7 @@ public class SpeechMaticsService : ISpeechMaticsService
             RecordId = record.Id,
             Report = translatedText.TranslatedText,
             Language = reportLanguage,
+            IsOrigin = false,
             CreatedDate = DateTimeOffset.Now
         });
 
