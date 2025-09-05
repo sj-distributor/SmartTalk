@@ -1,5 +1,6 @@
 using System.Net;
 using Microsoft.AspNetCore.Http;
+using Serilog;
 using SmartTalk.Core.Extensions;
 using SmartTalk.Messages.Dto.System;
 using SmartTalk.Messages.Enums.Account;
@@ -76,6 +77,8 @@ public partial class AccountService
         
         var httpContext = _httpContextAccessor.HttpContext;
         var domain = httpContext?.Request.Host.Host;
+        
+        Log.Information("The domain is: {Domain}", domain);
 
         var serviceProvider = await _posDataProvider.GetServiceProviderByIdAsync(account.ServiceProviderId, cancellationToken).ConfigureAwait(false);
 
