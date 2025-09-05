@@ -2,6 +2,7 @@ using Newtonsoft.Json;
 using SmartTalk.Messages.Requests.Printer;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using SmartTalk.Messages.Enums.Printer;
 
 namespace SmartTalk.Core.Domain.Printer;
 
@@ -17,8 +18,8 @@ public class MerchPrinter : IEntity
     [Column("id")]
     public int Id { get; set; }
 
-    [Column("agent_id")]
-    public int AgentId { get; set; }
+    [Column("store_id")]
+    public int StoreId { get; set; }
 
     [Column("printer_name")]
     public string PrinterName { get; set; }
@@ -34,6 +35,9 @@ public class MerchPrinter : IEntity
 
     [Column("token", TypeName = "char(36)")]
     public Guid Token { get; set; }
+
+    [Column("printer_language")]
+    public PrinterLanguageType? PrinterLanguage { get; set; }
 
     [Column("status_info_last_modified_date")]
     public DateTimeOffset StatusInfoLastModifiedDate { get; set; }
