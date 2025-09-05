@@ -73,16 +73,13 @@ public partial class AccountService
             authenticateInternalResult.IsAuthenticated = false;
             return;            
         }
-
-        var origin = _httpContext.Request.Headers.Origin.ToString();
-        if (string.IsNullOrEmpty(origin))
-        {
-            origin = _httpContext.Request.Headers.Referer.ToString();
-        }
+        
+        var httpContext = _httpContextAccessor.HttpContext;
+        var domain = httpContext?.Request.Host.Host;
 
         var serviceProvider = await _posDataProvider.GetServiceProviderByIdAsync(account.ServiceProviderId, cancellationToken).ConfigureAwait(false);
 
-        if (origin != serviceProvider.Domain)
+        if (domain != serviceProvider.Domain)
         {
             authenticateInternalResult.CannotLoginReason = UserAccountCannotLoginReason.IncorrectDomain;
             authenticateInternalResult.IsAuthenticated = false;
