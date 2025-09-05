@@ -10,7 +10,7 @@ public class AgentAssistantDto
     
     public bool IsDefault { get; set; }
     
-    public bool IsMultiple { get; set; }
+    public bool IsDisplay { get; set; }
     
     public int? CreatedBy { get; set; }
     

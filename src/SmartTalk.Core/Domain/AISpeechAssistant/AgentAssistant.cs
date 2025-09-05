@@ -20,8 +20,8 @@ public class AgentAssistant : IEntity, IHasCreatedFields
     [Column("is_default")]
     public bool IsDefault { get; set; }
     
-    [Column("is_multiple")]
-    public bool IsMultiple { get; set; }
+    [Column("is_display")]
+    public bool IsDisplay { get; set; }
 
     [Column("created_by")]
     public int? CreatedBy { get; set; }
