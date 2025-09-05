@@ -76,7 +76,7 @@ public partial class AccountService
         }
         
         var httpContext = _httpContextAccessor.HttpContext;
-        var domain = httpContext?.Request.Host.ToString();
+        var domain = httpContext?.Request.Headers.Origin.ToString();
         
         Log.Information("The domain is: {Domain}", domain);
 
