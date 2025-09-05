@@ -42,11 +42,11 @@ public partial class AccountService : IAccountService
     private readonly ISecurityDataProvider _securityDataProvider;
     private readonly IVerificationCodeService _verificationCodeService;
     private readonly IPosDataProvider _posDataProvider;
-    private readonly HttpContext _httpContext;
+    private readonly IHttpContextAccessor _httpContextAccessor;
     
     public AccountService(
         IMapper mapper, ICurrentUser currentUser, ITokenProvider tokenProvider, IWiltechsService wiltechsService, IAccountDataProvider accountDataProvider, ISecurityDataProvider securityDataProvider, IVerificationCodeService verificationCodeService
-        ,IPosDataProvider posDataProvider, HttpContext httpContext)
+        ,IPosDataProvider posDataProvider, IHttpContextAccessor httpContextAccessor)
     {
         _mapper = mapper;
         _currentUser = currentUser;
@@ -56,7 +56,7 @@ public partial class AccountService : IAccountService
         _securityDataProvider = securityDataProvider;
         _verificationCodeService = verificationCodeService;
         _posDataProvider = posDataProvider;
-        _httpContext = httpContext;
+        _httpContextAccessor = httpContextAccessor;
     }
 
     public async Task<CreateUserAccountResponse> CreateUserAccountAsync(CreateUserAccountCommand userAccountCommand, CancellationToken cancellationToken)
