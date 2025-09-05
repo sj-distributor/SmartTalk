@@ -22,6 +22,10 @@ public partial class AccountService
             {
                 code = HttpStatusCode.Forbidden;
             }
+            else if (authenticateResult.CannotLoginReason == UserAccountCannotLoginReason.IncorrectDomain)
+            {
+                code = HttpStatusCode.NotFound;
+            }
             
             return new LoginResponse { Code = code, Msg = GetFriendlyErrorMessage(authenticateResult.CannotLoginReason), VerifyCodeResult = authenticateResult.VerifyCodeResult };
         }
@@ -75,7 +79,7 @@ public partial class AccountService
         }
         
         var httpContext = _httpContextAccessor.HttpContext;
-        var domain = httpContext?.Request.Host.Host;
+        var domain = httpContext?.Request.Headers.Origin.ToString();
 
         var serviceProvider = await _posDataProvider.GetServiceProviderByIdAsync(account.ServiceProviderId, cancellationToken).ConfigureAwait(false);
 
