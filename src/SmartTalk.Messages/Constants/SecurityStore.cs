@@ -60,7 +60,7 @@ public static class SecurityStore
                 nameof(CanDeleteAccount) => "删除账户",
                 nameof(CanCopyAccount) => "复制账户",
                 nameof(CanUpdateAccount) => "更新账户",
-                nameof(CanViewMerchPrinter) => "进入打印设产",
+                nameof(CanViewMerchPrinter) => "进入打印设置",
                 _ => throw new ArgumentOutOfRangeException(nameof(permission), permission, null)
             };
     }
