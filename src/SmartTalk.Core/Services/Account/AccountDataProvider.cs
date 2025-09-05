@@ -52,6 +52,8 @@ namespace SmartTalk.Core.Services.Account
         Task<List<RoleUser>> GetRoleUserByRoleAccountLevelAsync(UserAccountLevel userAccountLevel, CancellationToken cancellationToken);
 
         Task<UserAccount> GetUserAccountByUserIdAsync(int userId, CancellationToken cancellationToken);
+
+        Task<UserAccount> GetUserAccountByUserNameWithServiceProviderIdAsync(string userName, int? serviceProviderId, CancellationToken cancellationToken);
     }
     
     public partial class AccountDataProvider : IAccountDataProvider
@@ -391,7 +393,13 @@ namespace SmartTalk.Core.Services.Account
         {
             return await _repository.Query<UserAccount>().Where(x => x.Id == userId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
         }
-        
+
+        public async Task<UserAccount> GetUserAccountByUserNameWithServiceProviderIdAsync(string userName, int? serviceProviderId, CancellationToken cancellationToken)
+        {
+            return await _repository.Query<UserAccount>()
+                .Where(x => x.UserName == userName && x.ServiceProviderId == serviceProviderId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        }
+
         public async Task<List<RoleUser>> GetRoleUserByRoleAccountLevelAsync(UserAccountLevel userAccountLevel, CancellationToken cancellationToken)
         {
             var query = _repository.QueryNoTracking<RoleUser>();

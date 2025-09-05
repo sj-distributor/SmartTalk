@@ -14,6 +14,9 @@ public class ServiceProvider : IEntity, IHasCreatedFields
     [Column("name")]
     public string Name { get; set; }
     
+    [Column("domain")]
+    public string Domain { get; set; }
+    
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
 }

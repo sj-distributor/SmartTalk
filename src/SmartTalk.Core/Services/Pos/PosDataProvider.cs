@@ -1,3 +1,4 @@
+using Autofac.Core;
 using AutoMapper;
 using DocumentFormat.OpenXml.Office2010.ExcelAc;
 using Microsoft.EntityFrameworkCore;
@@ -51,6 +52,8 @@ public partial interface IPosDataProvider : IScopedDependency
     Task<List<PosAgent>> GetPosAgentByUserIdAsync(int userId, CancellationToken cancellationToken);
 
     Task DeletePosAgentsByAgentIdsAsync(List<int> agentIds, bool forceSave = true, CancellationToken cancellationToken = default);
+
+    Task<ServiceProvider> GetServiceProviderByIdAsync(int? serviceProviderId, CancellationToken cancellationToken);
 }
 
 public partial class PosDataProvider : IPosDataProvider
@@ -342,5 +345,10 @@ public partial class PosDataProvider : IPosDataProvider
         await _repository.DeleteAllAsync(posAgents, cancellationToken).ConfigureAwait(false);
 
         if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<ServiceProvider> GetServiceProviderByIdAsync(int? serviceProviderId, CancellationToken cancellationToken)
+    {
+        return await _repository.Query<ServiceProvider>().Where(x => x.Id == serviceProviderId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 }
