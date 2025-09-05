@@ -19,13 +19,9 @@ public partial class AccountService
         {
             var code = HttpStatusCode.Unauthorized;
 
-            if (authenticateResult.CannotLoginReason == UserAccountCannotLoginReason.NoAssociatedStore)
+            if (authenticateResult.CannotLoginReason == UserAccountCannotLoginReason.NoAssociatedStore || authenticateResult.CannotLoginReason == UserAccountCannotLoginReason.IncorrectDomain)
             {
                 code = HttpStatusCode.Forbidden;
-            }
-            else if (authenticateResult.CannotLoginReason == UserAccountCannotLoginReason.IncorrectDomain)
-            {
-                code = HttpStatusCode.NotFound;
             }
             
             return new LoginResponse { Code = code, Msg = GetFriendlyErrorMessage(authenticateResult.CannotLoginReason), VerifyCodeResult = authenticateResult.VerifyCodeResult };
