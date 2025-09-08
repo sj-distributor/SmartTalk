@@ -77,13 +77,16 @@ public partial class AccountService
         var httpContext = _httpContextAccessor.HttpContext;
         var domain = httpContext?.Request.Headers.Origin.ToString();
 
-        var serviceProvider = await _posDataProvider.GetServiceProviderByIdAsync(account.ServiceProviderId, cancellationToken).ConfigureAwait(false);
-
-        if (domain != serviceProvider.Domain)
+        if (!IsLocalDevelopmentDomain(domain))
         {
-            authenticateInternalResult.CannotLoginReason = UserAccountCannotLoginReason.IncorrectDomain;
-            authenticateInternalResult.IsAuthenticated = false;
-            return;
+            var serviceProvider = await _posDataProvider.GetServiceProviderByIdAsync(account.ServiceProviderId, cancellationToken).ConfigureAwait(false);
+
+            if (domain != serviceProvider?.Domain)
+            {
+                authenticateInternalResult.CannotLoginReason = UserAccountCannotLoginReason.IncorrectDomain;
+                authenticateInternalResult.IsAuthenticated = false;
+                return;
+            }
         }
         
         if (loginVerificationType == UserAccountVerificationType.Password)
@@ -164,4 +167,17 @@ public partial class AccountService
     
         _ => reason.ToString()
     };
+
+    private bool IsLocalDevelopmentDomain(string domain)
+    {
+        if (string.IsNullOrEmpty(domain))
+            return false;
+        
+        var localDomains = new[]
+        {
+            "http://localhost:3000"
+        };
+        
+        return localDomains.Contains(domain, StringComparer.OrdinalIgnoreCase);
+    }
 }
