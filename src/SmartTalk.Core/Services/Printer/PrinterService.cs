@@ -700,7 +700,12 @@ public class PrinterService : IPrinterService
              if (!string.IsNullOrEmpty(itemName.EnName) && !string.IsNullOrEmpty(itemName.CnName))
                  firstChar = itemName.EnName + "\n" + itemName.CnName;
              
-             var size = TextMeasurer.MeasureSize(firstChar, baseOptions);
+             var itemTextOptions = new RichTextOptions(font)
+             {
+                 Origin = new PointF(col2X, y), WrappingLength = col2Width, LineSpacing = lineSpacing
+             };
+             
+             var size = TextMeasurer.MeasureSize(firstChar, itemTextOptions);
              itemBlockHeight = size.Height;
              indentX = size.Width;
          }
@@ -735,18 +740,19 @@ public class PrinterService : IPrinterService
 
          foreach (var (prefix, content) in remarkLines)
          {
-             var prefixWidth = TextMeasurer.MeasureSize(prefix, new TextOptions(remarkFont)).Width;
-             var spaceWidth = TextMeasurer.MeasureSize(" ", new TextOptions(remarkFont)).Width;
+             var prefixWidth = TextMeasurer.MeasureSize(prefix, new TextOptions(font)).Width;
+             var spaceWidth = TextMeasurer.MeasureSize(" ", new TextOptions(font)).Width;
              var contentX = col2X + towFontWidth + prefixWidth + spaceWidth * 4;
 
-             var contentOptions = new TextOptions(remarkFont)
+             var contentOptions = new RichTextOptions(remarkFont)
              {
                  WrappingLength = col2Width + remarkExtraWidth - (contentX - col2X),
-                 LineSpacing = remarkLineSpacing,
+                 LineSpacing = remarkLineSpacing
              };
 
-             var size = TextMeasurer.MeasureSize(content.TrimStart(), contentOptions);
-             remarkBlockHeight += size.Height;
+             var remarkLineHeight = TextMeasurer.MeasureSize(content.TrimStart(), contentOptions).Height;
+             
+             remarkBlockHeight += remarkLineHeight;
          }
 
          var totalBlockHeight = itemBlockHeight + (remarkBlockHeight > 0 ? remarkBlockHeight : 0);
