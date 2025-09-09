@@ -8,8 +8,6 @@ public class AgentAssistantDto
     
     public int AssistantId { get; set; }
     
-    public bool IsDefault { get; set; }
-    
     public bool IsDisplay { get; set; }
     
     public int? CreatedBy { get; set; }

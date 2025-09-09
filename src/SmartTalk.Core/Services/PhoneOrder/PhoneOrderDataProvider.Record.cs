@@ -70,8 +70,8 @@ public partial class PhoneOrderDataProvider
     {
         var query = from record in _repository.Query<PhoneOrderRecord>()
             join agent in _repository.Query<Agent>() on record.AgentId equals agent.Id
-            join agentAssistant in _repository.Query<AgentAssistant>().Where(x => x.IsDefault) on agent.Id equals agentAssistant.AgentId
-            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agentAssistant.AssistantId equals assistant.Id
+            join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
+            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>().Where(x => x.IsDefault) on agentAssistant.AssistantId equals assistant.Id
             where record.Status == PhoneOrderRecordStatus.Sent
                   && (agentIds == null || !agentIds.Any() || agentIds.Contains(agent.Id))
                   && (string.IsNullOrEmpty(name) || assistant.Name.Contains(name))
@@ -243,9 +243,9 @@ public partial class PhoneOrderDataProvider
             from record in _repository.Query<PhoneOrderRecord>() where record.SessionId == sessionId
             join agent in _repository.Query<Agent>() on record.AgentId equals agent.Id into agentGroup
             from agent in agentGroup.DefaultIfEmpty()
-            join agentAssistant in _repository.Query<AgentAssistant>().Where(x => x.IsDefault) on agent.Id equals agentAssistant.AgentId into agentAssistantGroups
+            join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId into agentAssistantGroups
             from agentAssistant in agentAssistantGroups.DefaultIfEmpty()
-            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agentAssistant.AssistantId equals assistant.Id into assistantGroup
+            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>().Where(x => x.IsDefault) on agentAssistant.AssistantId equals assistant.Id into assistantGroup
             from assistant in assistantGroup.DefaultIfEmpty()
             select new { record, agent, assistant }
         ).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
@@ -283,8 +283,8 @@ public partial class PhoneOrderDataProvider
     {
         var query = from record in _repository.Query<PhoneOrderRecord>().Where(x => x.CreatedDate >= startTime && x.CreatedDate <= endTime)
             join agent in _repository.Query<Agent>().Where(x => !includeExternalData && x.Type != AgentType.AiKid) on record.AgentId equals agent.Id
-            join agentAssistant in _repository.Query<AgentAssistant>().Where(x => x.IsDefault) on agent.Id equals agentAssistant.AgentId
-            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agentAssistant.AssistantId equals assistant.Id into assistantGroups
+            join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
+            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>().Where(x => x.IsDefault) on agentAssistant.AssistantId equals assistant.Id into assistantGroups
             from assistant in assistantGroups.DefaultIfEmpty()
             select new { assistant, record };
         

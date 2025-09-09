@@ -31,6 +31,8 @@ public class AiSpeechAssistantDto
     
     public string TransferCallNumber { get; set; }
     
+    public bool IsDefault { get; set; }
+    
     public DateTimeOffset CreatedDate { get; set; }
     
     public int CreatedBy { get; set; }
