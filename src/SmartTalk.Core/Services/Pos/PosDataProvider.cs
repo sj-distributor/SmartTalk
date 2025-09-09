@@ -53,7 +53,7 @@ public partial interface IPosDataProvider : IScopedDependency
 
     Task DeletePosAgentsByAgentIdsAsync(List<int> agentIds, bool forceSave = true, CancellationToken cancellationToken = default);
 
-    Task<ServiceProvider> GetServiceProviderByIdAsync(int? serviceProviderId, CancellationToken cancellationToken);
+    Task<List<ServiceProvider>> GetServiceProviderByIdAsync(int? serviceProviderId = null, CancellationToken cancellationToken = default);
 }
 
 public partial class PosDataProvider : IPosDataProvider
@@ -347,8 +347,15 @@ public partial class PosDataProvider : IPosDataProvider
         if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<ServiceProvider> GetServiceProviderByIdAsync(int? serviceProviderId, CancellationToken cancellationToken)
+    public async Task<List<ServiceProvider>> GetServiceProviderByIdAsync(int? serviceProviderId = null, CancellationToken cancellationToken = default)
     {
-        return await _repository.Query<ServiceProvider>().Where(x => x.Id == serviceProviderId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        var query = _repository.Query<ServiceProvider>();
+
+        if (serviceProviderId.HasValue)
+        {
+            query = query.Where(x => x.Id == serviceProviderId.Value);
+        }
+
+        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }
