@@ -419,15 +419,15 @@ public class PrinterService : IPrinterService
         var merchPrinterLog = _mapper.Map<MerchPrinterLog>(@event);
         var printError = @event.IsPrintError();
         
-        var message = $"{(printError?"Print Error":"Print")}";
+        var order = await _posDataProvider.GetPosOrderByIdAsync(@event.MerchPrinterOrderDto.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var message = $"{(printError?"Print Error":"Print")}:{order.OrderNo}";
         merchPrinterLog.Message = message;
         
         if (message.Equals("Print Error"))
         {
             var store = await _posDataProvider.GetPosCompanyStoreAsync(id: @event.MerchPrinterOrderDto.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-            var order = await _posDataProvider.GetPosOrderByIdAsync(orderId: @event.MerchPrinterOrderDto.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false);
-        
             var storeName = JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(store.Names).GetValueOrDefault("en")?.GetValueOrDefault("name");
         
             var text = new SendWorkWechatGroupRobotTextDto { Content = $"🆘SMT Cloud Print Error Infor🆘\n\nPrint Error: {merchPrinterLog.Message}\nPrint Time: {@event.MerchPrinterOrderDto.PrintDate.ToString("yyyy-MM-dd HH:mm:ss")}\nStore: {storeName}\nOrder Date:{order.CreatedDate.ToString("yyyy-MM-dd")}\nOrder NO: #{order.OrderNo}"};
