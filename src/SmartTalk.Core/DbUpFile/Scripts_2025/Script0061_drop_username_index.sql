@@ -1,1 +1,1 @@
-DROP INDEX [IF EXISTS] username ON user_account;
+DROP INDEX username ON user_account;
