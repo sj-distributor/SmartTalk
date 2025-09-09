@@ -313,8 +313,8 @@ public partial class PosDataProvider : IPosDataProvider
 
     public async Task<StoreUser> GetPosStoreUsersByUserIdAndAssistantIdAsync(List<int> assistantIds, int userId, CancellationToken cancellationToken = default)
     {
-        var query = from assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>().Where(x => assistantIds.Contains(x.Id))
-            join agentAssistant in _repository.Query<AgentAssistant>().Where(x => x.IsDefault) on assistant.Id equals agentAssistant.AssistantId
+        var query = from assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>().Where(x => assistantIds.Contains(x.Id) && x.IsDefault)
+            join agentAssistant in _repository.Query<AgentAssistant>() on assistant.Id equals agentAssistant.AssistantId
             join posAgent in _repository.Query<PosAgent>() on agentAssistant.AgentId equals posAgent.AgentId
             join posStoreUser in _repository.Query<StoreUser>() on posAgent.StoreId equals posStoreUser.StoreId
             where posStoreUser.UserId == userId
