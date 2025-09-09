@@ -57,22 +57,22 @@ public class PrinterDataProvider : IPrinterDataProvider
         var query = _repository.Query<MerchPrinter>();
 
         if (id.HasValue)
-            query = query.Where(x => x.Id == id);
+            query = query.Where(x => x.Id == id.Value);
             
         if (!string.IsNullOrEmpty(printerMac))
             query = query.Where(x => x.PrinterMac == printerMac);
 
         if (token.HasValue)
-            query = query.Where(x => x.Token == token);
+            query = query.Where(x => x.Token == token.Value);
 
         if (storeId.HasValue)
-            query = query.Where(x => x.StoreId == storeId);
+            query = query.Where(x => x.StoreId == storeId.Value);
 
         if (isEnabled.HasValue)
-            query = query.Where(x => x.IsEnabled == isEnabled);
+            query = query.Where(x => x.IsEnabled == isEnabled.Value);
 
         if (lastStatusInfoLastModifiedDate.HasValue)
-            query = query.Where(x => x.StatusInfoLastModifiedDate < lastStatusInfoLastModifiedDate);
+            query = query.Where(x => x.StatusInfoLastModifiedDate < lastStatusInfoLastModifiedDate.Value);
 
         if (IsStatusInfo.HasValue)
             query = query.Where(x => !string.IsNullOrEmpty(x.StatusInfo));
@@ -86,16 +86,16 @@ public class PrinterDataProvider : IPrinterDataProvider
         var query = _repository.Query<MerchPrinterOrder>();
 
         if (jobToken.HasValue)
-            query = query.Where(x => x.Id == jobToken);
+            query = query.Where(x => x.Id == jobToken.Value);
 
         if (storeId.HasValue)
-            query = query.Where(x => x.StoreId == storeId);
+            query = query.Where(x => x.StoreId == storeId.Value);
 
         if (status.HasValue)
-            query = query.Where(x => x.PrintStatus == status);
+            query = query.Where(x => x.PrintStatus == status.Value);
 
         if (endTime.HasValue)
-            query = query.Where(x => x.PrintDate <= endTime);
+            query = query.Where(x => x.PrintDate <= endTime.Value);
 
         if (!string.IsNullOrEmpty(printerMac))
             query = query.Where(x => x.PrinterMac == printerMac);
@@ -175,13 +175,13 @@ public class PrinterDataProvider : IPrinterDataProvider
             query = query.Where(x => x.PrinterMac == printerMac);
 
         if (startDate.HasValue && endDate.HasValue)
-            query = query.Where(x => x.CreatedDate >= startDate && x.CreatedDate <= endDate);
+            query = query.Where(x => x.CreatedDate >= startDate.Value && x.CreatedDate <= endDate.Value);
 
         if (code.HasValue)
-            query = query.Where(x => x.Code == code);
+            query = query.Where(x => x.Code == code.Value);
 
         if (logType.HasValue)
-            query = query.Where(x => x.PrintLogType == logType);
+            query = query.Where(x => x.PrintLogType == logType.Value);
 
         var count = query.Count();
 
