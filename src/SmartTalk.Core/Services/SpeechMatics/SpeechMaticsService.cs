@@ -322,10 +322,9 @@ public class SpeechMaticsService : ISpeechMaticsService
     
     private TranscriptionLanguage SelectLanguageEnum(string language)
     {
-        return language switch
-        {
-            "zh" or "zh-CN" or "zh-TW" => TranscriptionLanguage.Chinese,
-            _ => TranscriptionLanguage.English
-        };
+        if (language.StartsWith("zh", StringComparison.OrdinalIgnoreCase))
+            return TranscriptionLanguage.Chinese;
+    
+        return TranscriptionLanguage.English;
     }
 }
