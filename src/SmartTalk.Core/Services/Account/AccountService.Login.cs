@@ -179,9 +179,7 @@ public partial class AccountService
         var registeredServiceProviders = await _posDataProvider.GetServiceProviderByIdAsync().ConfigureAwait(false);
     
         var registeredDomains = registeredServiceProviders
-            .Where(sp => !string.IsNullOrEmpty(sp.Domain))
-            .Select(sp => sp.Domain.Trim())
-            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(sp => sp.Domain)
             .ToList();
 
         return registeredDomains.Contains(domain, StringComparer.OrdinalIgnoreCase);
