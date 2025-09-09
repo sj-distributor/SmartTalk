@@ -1,0 +1,1 @@
+DROP INDEX [IF EXISTS] username ON user_account;
