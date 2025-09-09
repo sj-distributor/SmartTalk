@@ -345,6 +345,9 @@ public class PrinterService : IPrinterService
 
     public async Task PrinterStatusChangedAsync(PrinterStatusChangedEvent @event, CancellationToken cancellationToken)
     {
+        if (@event.Skip())
+            return;
+        
         var merchPrinterLog = await GenerateMerchPrinterLogAsync(@event, cancellationToken).ConfigureAwait(false);
         
         if (merchPrinterLog != null)
@@ -355,9 +358,14 @@ public class PrinterService : IPrinterService
     {
         var varianceList = GetVarianceList(@event);
         
+        Log.Information("VarianceList:{@varianceList}", varianceList);
+        
         if (!varianceList.Any()) return null;
 
         var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(@event.PrinterMac, @event.Token, cancellationToken: cancellationToken)).FirstOrDefault();
+        
+        Log.Information("Log merch printer:{@merchPrinter}", merchPrinter);
+        
         if (merchPrinter == null)
             return null;
 
