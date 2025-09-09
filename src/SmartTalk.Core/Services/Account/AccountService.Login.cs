@@ -76,19 +76,37 @@ public partial class AccountService
         }
         
         var httpContext = _httpContextAccessor.HttpContext;
+        var currentDomain = httpContext?.Request.Headers.Origin.ToString();
+        
+        Log.Information("The domain is: {Domain}", currentDomain);
         var domain = httpContext?.Request.Headers.Origin.ToString();
         
         Log.Information("The domain is: {Domain}", domain);
 
-        if (await IsDevelopmentDomain(domain).ConfigureAwait(false))
+        if (!string.IsNullOrEmpty(currentDomain))
         {
-            var serviceProvider = await _posDataProvider.GetServiceProviderByIdAsync(account.ServiceProviderId, cancellationToken).ConfigureAwait(false);
+            var allServiceProviders = await _posDataProvider.GetServiceProviderByIdAsync(null, cancellationToken).ConfigureAwait(false);
+            
+            var registeredDomains = allServiceProviders?
+                .Where(sp => !string.IsNullOrEmpty(sp.Domain))
+                .Select(sp => sp.Domain!.Trim())
+                .ToList() ?? new List<string>();
 
-            if (domain != serviceProvider?.Select(x => x.Domain).ToString())
+            if (registeredDomains.Contains(currentDomain, StringComparer.OrdinalIgnoreCase))
             {
-                authenticateInternalResult.CannotLoginReason = UserAccountCannotLoginReason.IncorrectDomain;
-                authenticateInternalResult.IsAuthenticated = false;
-                return;
+                var userServiceProvider = await _posDataProvider.GetServiceProviderByIdAsync(account.ServiceProviderId, cancellationToken).ConfigureAwait(false);
+                
+                var userDomains = userServiceProvider?
+                    .Where(sp => !string.IsNullOrEmpty(sp.Domain))
+                    .Select(sp => sp.Domain!.Trim())
+                    .ToList() ?? new List<string>();
+
+                if (!userDomains.Contains(currentDomain, StringComparer.OrdinalIgnoreCase))
+                {
+                    authenticateInternalResult.CannotLoginReason = UserAccountCannotLoginReason.IncorrectDomain;
+                    authenticateInternalResult.IsAuthenticated = false;
+                    return;
+                }
             }
         }
         
@@ -170,18 +188,4 @@ public partial class AccountService
     
         _ => reason.ToString()
     };
-
-    private async Task<bool> IsDevelopmentDomain(string domain)
-    {
-        if (string.IsNullOrEmpty(domain))
-            return false;
-        
-        var registeredServiceProviders = await _posDataProvider.GetServiceProviderByIdAsync().ConfigureAwait(false);
-    
-        var registeredDomains = registeredServiceProviders
-            .Select(sp => sp.Domain)
-            .ToList();
-
-        return registeredDomains.Contains(domain, StringComparer.OrdinalIgnoreCase);
-    }
 }
