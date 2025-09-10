@@ -1,3 +1,4 @@
+using DocumentFormat.OpenXml.Office2010.ExcelAc;
 using Serilog;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Requests.AiSpeechAssistant;
@@ -17,6 +18,8 @@ public partial interface IAiSpeechAssistantService
     Task<GetAiSpeechAssistantByIdResponse> GetAiSpeechAssistantByIdAsync(GetAiSpeechAssistantByIdRequest request, CancellationToken cancellationToken);
     
     Task<GetAiSpeechAssistantSessionResponse> GetAiSpeechAssistantSessionAsync(GetAiSpeechAssistantSessionRequest request, CancellationToken cancellationToken);
+    
+    Task<GetAiSpeechAssistantInboundRoutesResponse> GetAiSpeechAssistantInboundRoutesAsync(GetAiSpeechAssistantInboundRoutesRequest request, CancellationToken cancellationToken);
 }
 
 public partial class AiSpeechAssistantService
@@ -126,6 +129,16 @@ public partial class AiSpeechAssistantService
         return new GetAiSpeechAssistantSessionResponse
         {
             Data = _mapper.Map<AiSpeechAssistantSessionDto>(session)
+        };
+    }
+
+    public async Task<GetAiSpeechAssistantInboundRoutesResponse> GetAiSpeechAssistantInboundRoutesAsync(GetAiSpeechAssistantInboundRoutesRequest request, CancellationToken cancellationToken)
+    {
+        var (count, routes) = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantInboundRoutesAsync(request.PageIndex, request.PageSize, request.Keyword, cancellationToken).ConfigureAwait(false);
+
+        return new GetAiSpeechAssistantInboundRoutesResponse
+        {
+            Data = _mapper.Map<List<AiSpeechAssistantInboundRouteDto>>(routes)
         };
     }
 

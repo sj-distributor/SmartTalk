@@ -96,6 +96,16 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task DeleteAiSpeechAssistantsAsync(List<Domain.AISpeechAssistant.AiSpeechAssistant> assistants, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task<List<Domain.AISpeechAssistant.AiSpeechAssistant>> GetAiSpeechAssistantByIdsAsync(List<int> assistantIds, CancellationToken cancellationToken = default);
+    
+    Task AddAiSpeechAssistantInboundRouteAsync(List<AiSpeechAssistantInboundRoute> routes, bool forceSave = true, CancellationToken cancellationToken = default);
+    
+    Task UpdateAiSpeechAssistantInboundRouteAsync(List<AiSpeechAssistantInboundRoute> routes, bool forceSave = true, CancellationToken cancellationToken = default);
+    
+    Task<AiSpeechAssistantInboundRoute> GetAiSpeechAssistantInboundRouteAsync(int routeId, CancellationToken cancellationToken = default);
+    
+    Task<List<AiSpeechAssistantInboundRoute>> DeleteAiSpeechAssistantInboundRoutesAsync(List<int> routeIds, bool forceSave = true, CancellationToken cancellationToken = default);
+    
+    Task<(int, List<AiSpeechAssistantInboundRoute>)> GetAiSpeechAssistantInboundRoutesAsync(int pageInddex, int pageSize, string keyword = null, CancellationToken cancellationToken = default);
 }
 
 public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
@@ -518,5 +528,49 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
     public async Task<List<Domain.AISpeechAssistant.AiSpeechAssistant>> GetAiSpeechAssistantByIdsAsync(List<int> assistantIds, CancellationToken cancellationToken = default)
     {
         return await _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>().Where(x => assistantIds.Contains(x.Id)).ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task AddAiSpeechAssistantInboundRouteAsync(List<AiSpeechAssistantInboundRoute> routes, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.InsertAllAsync(routes, cancellationToken).ConfigureAwait(false);
+        
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task UpdateAiSpeechAssistantInboundRouteAsync(List<AiSpeechAssistantInboundRoute> routes, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.UpdateAllAsync(routes, cancellationToken).ConfigureAwait(false);
+        
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<AiSpeechAssistantInboundRoute> GetAiSpeechAssistantInboundRouteAsync(int routeId, CancellationToken cancellationToken = default)
+    {
+        return await _repository.Query<AiSpeechAssistantInboundRoute>().Where(x => x.Id == routeId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<AiSpeechAssistantInboundRoute>> DeleteAiSpeechAssistantInboundRoutesAsync(List<int> routeIds, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        var routes = await _repository.Query<AiSpeechAssistantInboundRoute>().Where(x => routeIds.Contains(x.Id)).ToListAsync(cancellationToken).ConfigureAwait(false);
+        
+        await _repository.DeleteAllAsync(routes, cancellationToken).ConfigureAwait(false);
+        
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        
+        return routes;
+    }
+
+    public async Task<(int, List<AiSpeechAssistantInboundRoute>)> GetAiSpeechAssistantInboundRoutesAsync(int pageInddex, int pageSize, string keyword = null, CancellationToken cancellationToken = default)
+    {
+        var query = _repository.Query<AiSpeechAssistantInboundRoute>();
+
+        if (!string.IsNullOrEmpty(keyword))
+            query = query.Where(x => x.To.Contains(keyword));
+        
+        var count = await query.CountAsync(cancellationToken).ConfigureAwait(false);
+        
+        var routes = await query.Skip((pageInddex - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken).ConfigureAwait(false);
+        
+        return (count, routes);
     }
 }
