@@ -243,4 +243,13 @@ public class AiSpeechAssistantController : ControllerBase
 
         return Ok(response);
     }
+    
+    [Route("assistant/switch"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(SwitchAiSpeechDefaultAssistantResponse))]
+    public async Task<IActionResult> SwitchAiSpeechDefaultAssistantAsync([FromBody] SwitchAiSpeechDefaultAssistantCommand command)
+    {
+        var response = await _mediator.SendAsync<SwitchAiSpeechDefaultAssistantCommand, SwitchAiSpeechDefaultAssistantResponse>(command).ConfigureAwait(false);
+
+        return Ok(response);
+    }
 }
