@@ -124,7 +124,7 @@ public partial class AiSpeechAssistantService
         if (storeUser == null)
             throw new Exception("Do not have the store permission to operate");
         
-        await DeleteAssistantRelatedInfoAsync(assistants.Select(x => x.AgentId).ToList(), cancellationToken).ConfigureAwait(false);
+        await DeleteAssistantRelatedInfoAsync(assistants.Select(x => x.Id).ToList(), cancellationToken).ConfigureAwait(false);
         
         return new DeleteAiSpeechAssistantResponse
         {
@@ -267,7 +267,7 @@ public partial class AiSpeechAssistantService
         
         var assistant = new Domain.AISpeechAssistant.AiSpeechAssistant
         {
-            AgentId = agent.Id,
+            // AgentId = agent.Id,
             ModelVoice = ModelVoiceMapping(command.VoiceType),
             Name = command.AssistantName,
             AnsweringNumberId = number?.Id,
@@ -276,10 +276,19 @@ public partial class AiSpeechAssistantService
             ModelUrl = command.AgentType == AgentType.AiKid ? AiSpeechAssistantStore.AiKidDefaultUrl : AiSpeechAssistantStore.DefaultUrl,
             ModelProvider = AiSpeechAssistantProvider.OpenAi,
             Channel = command.Channels == null ? null : string.Join(",", command.Channels.Select(x => (int)x)),
-            IsDisplay = command.IsDisplay
+            IsDisplay = command.IsDisplay,
+            IsDefault = command.IsDefault
         };
         
         await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantsAsync([assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var agentAssistant = new AgentAssistant
+        {
+            AgentId = agent.Id,
+            AssistantId = assistant.Id,
+        };
+        
+        await _aiSpeechAssistantDataProvider.AddAgentAssistantsAsync([agentAssistant], cancellationToken: cancellationToken).ConfigureAwait(false);
         
         await UpdateAgentIfRequiredAsync(assistant, agent, cancellationToken).ConfigureAwait(false);
         
@@ -529,13 +538,13 @@ public partial class AiSpeechAssistantService
         return number;
     }
     
-    private async Task DeleteAssistantRelatedInfoAsync(List<int> agentIds, CancellationToken cancellationToken)
+    private async Task DeleteAssistantRelatedInfoAsync(List<int> assistantIds, CancellationToken cancellationToken)
     {
-        var agents = await _agentDataProvider.GetAgentsAsync(agentIds: agentIds, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var agentAssistants = await _aiSpeechAssistantDataProvider.GetAgentAssistantsAsync(assistantIds: assistantIds, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        if (agents.Count == 0) return;
+        if (agentAssistants.Count == 0) return;
 
-        await _agentDataProvider.DeleteAgentsAsync(agents, cancellationToken: cancellationToken).ConfigureAwait(false);
+        await _aiSpeechAssistantDataProvider.DeleteAgentAssistantsAsync(agentAssistants, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
     private async Task UpdateAgentIfRequiredAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, Agent agent, CancellationToken cancellationToken)

@@ -5,6 +5,7 @@ using SmartTalk.Core.Domain.System;
 using SmartTalk.Messages.Dto.Agent;
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Domain;
+using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.Restaurants;
 
 namespace SmartTalk.Core.Services.Agents;
@@ -15,7 +16,7 @@ public interface IAgentDataProvider : IScopedDependency
     
     Task<Agent> GetAgentByIdAsync(int id, CancellationToken cancellationToken = default);
 
-    Task<List<Agent>> GetAgentsAsync(List<int> agentIds = null, AgentType? type = null, CancellationToken cancellationToken = default);
+    Task<List<Agent>> GetAgentsAsync(List<int> agentIds = null, List<int> assistantIds = null, AgentType? type = null, CancellationToken cancellationToken = default);
 
     Task AddAgentAsync(Agent agent, bool forceSave = true, CancellationToken cancellationToken = default);
     
@@ -64,17 +65,22 @@ public class AgentDataProvider : IAgentDataProvider
         return await _repository.Query<Agent>().Where(x => x.Id == id).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<Agent>> GetAgentsAsync(List<int> agentIds = null, AgentType? type = null, CancellationToken cancellationToken = default)
+    public async Task<List<Agent>> GetAgentsAsync(List<int> agentIds = null, List<int> assistantIds = null, AgentType? type = null, CancellationToken cancellationToken = default)
     {
-        var query = _repository.Query<Agent>();
+        var query = from agent in _repository.Query<Agent>()
+            join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
+            select new { agent, agentAssistant };
 
         if (agentIds is { Count: > 0 })
-            query = query.Where(x => agentIds.Contains(x.Id));
+            query = query.Where(x => agentIds.Contains(x.agent.Id));
+        
+        if (assistantIds is { Count: > 0 })
+            query = query.Where(x => assistantIds.Contains(x.agentAssistant.AssistantId));
 
         if (type.HasValue)
-            query = query.Where(x => x.Type == type.Value);
+            query = query.Where(x => x.agent.Type == type.Value);
         
-        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+        return await query.Select(x => x.agent).Distinct().ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task AddAgentAsync(Agent agent, bool forceSave = true, CancellationToken cancellationToken = default)
