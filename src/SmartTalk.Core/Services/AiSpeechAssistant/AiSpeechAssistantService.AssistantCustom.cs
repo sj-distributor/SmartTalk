@@ -197,7 +197,7 @@ public partial class AiSpeechAssistantService
     {
         var assistants = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByIdsAsync([command.PreviousAssistantId, command.LatestAssistantId], cancellationToken).ConfigureAwait(false);
 
-        var previousDefaultAssistant = assistants.Where(x => x.Id == command.LatestAssistantId).FirstOrDefault();
+        var previousDefaultAssistant = assistants.Where(x => x.Id == command.PreviousAssistantId).FirstOrDefault();
         var latestDefaultAssistant = assistants.Where(x => x.Id == command.LatestAssistantId).FirstOrDefault();
         
         Log.Information("Get the default assistant, previous: {@PreviousDefaultAssistant}, latest: {@LatestDefaultAssistant}", previousDefaultAssistant, latestDefaultAssistant);

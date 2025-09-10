@@ -152,6 +152,7 @@ public class AgentDataProvider : IAgentDataProvider
     {
         var query = from agent in _repository.Query<Agent>().Where(x => x.IsDisplay)
             join agentAssistant in _repository.Query<AgentAssistant>().Where(x => x.IsDisplay) on agent.Id equals agentAssistant.AgentId
+            where agentAssistant.AssistantId == assistantId
             select agent;
         
         return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
