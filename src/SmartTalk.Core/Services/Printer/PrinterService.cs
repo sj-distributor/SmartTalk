@@ -179,6 +179,7 @@ public class PrinterService : IPrinterService
             storeId: merchPrinterOrder.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
         
         var store = await _posDataProvider.GetPosCompanyStoreDetailAsync(order.StoreId, cancellationToken).ConfigureAwait(false);
+        var printerLog = await _printerDataProvider.GetMerchPrinterLogAsync(storeId: store.Id, printerMac: merchPrinter?.PrinterMac, orderId: merchPrinterOrder.OrderId).ConfigureAwait(false);
 
         var storeCreatedDate = "";
         var storePrintDate = "";
@@ -190,7 +191,7 @@ public class PrinterService : IPrinterService
         else
         {
             storeCreatedDate = order.CreatedDate.ToString("yyyy-MM-dd HH:mm:ss");
-            storePrintDate = merchPrinterOrder.PrintDate.ToString("yyyy-MM-dd HH:mm:ss");
+            storePrintDate = printerLog.Item2.FirstOrDefault()?.Time.ToString("yyyy-MM-dd HH:mm:ss");
         }
         
         var img = await RenderReceiptAsync(order.OrderNo,  
@@ -637,7 +638,7 @@ public class PrinterService : IPrinterService
      {
          var (count, merchPrinterLogs) = await _printerDataProvider.GetMerchPrinterLogAsync(
              request.StoreId,request.PrinterMac, request.StartDate, request.EndDate, request.Code, request.PrintLogType,
-             request.PageIndex, request.PageSize, cancellationToken).ConfigureAwait(false);
+             request.PageIndex, request.PageSize, cancellationToken: cancellationToken).ConfigureAwait(false);
 
          return new GetMerchPrinterLogResponse 
          {
