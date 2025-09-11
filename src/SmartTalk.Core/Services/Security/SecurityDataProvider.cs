@@ -4,6 +4,7 @@ using SmartTalk.Core.Domain.Security;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Identity;
 using SmartTalk.Messages.DTO.Security;
+using SmartTalk.Messages.Enums.Account;
 using SmartTalk.Messages.Enums.Security;
 
 namespace SmartTalk.Core.Services.Security;
@@ -92,7 +93,7 @@ public partial interface ISecurityDataProvider : IScopedDependency
         List<RoleDto> roles, CancellationToken cancellationToken);
     
     Task<(int, List<Role>)> GetRolesAsync(
-        int? pageIndex = null, int? pageSize = null, string keyword = null, int? userId = null, RoleSystemSource? systemSource = null, CancellationToken cancellationToken = default);
+        int? pageIndex = null, int? pageSize = null, string keyword = null, int? userId = null, int? serviceProviderId = null, RoleSystemSource? systemSource = null, UserAccountLevel? accountLevel = null, CancellationToken cancellationToken = default);
     
     Task<(int, List<RoleUser>)> GetRoleUsersPagingAsync(
         int? pageIndex = null, int? pageSize = null, int? roleId = null, string keyword = null, CancellationToken cancellationToken = default);

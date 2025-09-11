@@ -9,6 +9,6 @@ public class GetPosCompanyDetailRequest : IRequest
     public int Id { get; set; }
 }
 
-public class GetPosCompanyDetailResponse : SmartTalkResponse<PosCompanyDto>
+public class GetPosCompanyDetailResponse : SmartTalkResponse<CompanyDto>
 {
 }

@@ -9,6 +9,6 @@ public class UnbindPosCompanyStoreCommand : ICommand
     public int StoreId { get; set; }
 }
 
-public class UnbindPosCompanyStoreResponse : SmartTalkResponse<PosCompanyStoreDto>
+public class UnbindPosCompanyStoreResponse : SmartTalkResponse<CompanyStoreDto>
 {
 }

@@ -4,5 +4,7 @@ public enum UserAccountCannotLoginReason
 {
     None,
     NotFound,
-    VerificationCodeInvalid
+    VerificationCodeInvalid,
+    NoAssociatedStore,
+    IncorrectDomain
 }

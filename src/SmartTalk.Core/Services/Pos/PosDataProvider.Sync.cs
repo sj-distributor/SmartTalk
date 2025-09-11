@@ -6,7 +6,7 @@ namespace SmartTalk.Core.Services.Pos;
 
 public partial interface IPosDataProvider : IScopedDependency
 {
-    Task UpdateStoreAsync(PosCompanyStore store, bool forceSave = true, CancellationToken cancellationToken = default);
+    Task UpdateStoreAsync(CompanyStore store, bool forceSave = true, CancellationToken cancellationToken = default);
 
     Task AddPosMenusAsync(List<PosMenu> menus, bool forceSave = true, CancellationToken cancellationToken = default);
 
@@ -21,7 +21,7 @@ public partial interface IPosDataProvider : IScopedDependency
 
 public partial class PosDataProvider
 {
-    public async Task UpdateStoreAsync(PosCompanyStore store, bool forceSave = true, CancellationToken cancellationToken = default)
+    public async Task UpdateStoreAsync(CompanyStore store, bool forceSave = true, CancellationToken cancellationToken = default)
     {
         await _repository.UpdateAsync(store, cancellationToken).ConfigureAwait(false);
         

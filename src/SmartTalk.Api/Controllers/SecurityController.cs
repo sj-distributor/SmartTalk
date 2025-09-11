@@ -46,7 +46,7 @@ public class SecurityController : ControllerBase
     }
     
     [Route("delete"), HttpPost]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(DeleteUserAccountsCommand))]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(DeleteUserAccountsResponse))]
     public async Task<IActionResult> DeleteUserAccountsAsync([FromBody] DeleteUserAccountsCommand command)
     {
         var response = await _mediator.SendAsync<DeleteUserAccountsCommand, DeleteUserAccountsResponse>(command).ConfigureAwait(false);
@@ -77,6 +77,15 @@ public class SecurityController : ControllerBase
     public async Task<IActionResult> GetCurrentUserRoleAsync([FromQuery] GetCurrentUserRolesRequest request)
     {
         var response = await _mediator.RequestAsync<GetCurrentUserRolesRequest, GetCurrentUserRolesResponse>(request).ConfigureAwait(false);
+
+        return Ok(response);
+    }
+    
+    [Route("language/switch"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(SwitchLanguageResponse))]
+    public async Task<IActionResult> SwitchLanguageAsync([FromBody] SwitchLanguageCommand command)
+    {
+        var response = await _mediator.SendAsync<SwitchLanguageCommand, SwitchLanguageResponse>(command).ConfigureAwait(false);
 
         return Ok(response);
     }

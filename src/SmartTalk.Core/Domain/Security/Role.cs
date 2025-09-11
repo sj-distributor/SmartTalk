@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using SmartTalk.Messages.Enums.Account;
 using SmartTalk.Messages.Enums.Security;
 
 namespace SmartTalk.Core.Domain.Security;
@@ -18,6 +19,12 @@ public class Role : IEntity
     [Column("id")]
     [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     public int Id { get; set; }
+    
+    [Column("service_provider_id")]
+    public int? ServiceProviderId { get; set; }
+    
+    [Column("user_account_level")]
+    public UserAccountLevel? UserAccountLevel { get; set; }
     
     [Column("created_on")]
     public DateTimeOffset CreatedOn { get; set; }
