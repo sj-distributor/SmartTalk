@@ -15,6 +15,7 @@ using AutoMapper;
 using Newtonsoft.Json;
 using Serilog;
 using SmartTalk.Core.Services.AliYun;
+using SmartTalk.Core.Services.Caching.Redis;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Settings.Printer;
@@ -24,6 +25,7 @@ using SmartTalk.Messages.Commands.Printer;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Printer;
 using SmartTalk.Messages.Dto.WeChat;
+using SmartTalk.Messages.Enums.Caching;
 using SmartTalk.Messages.Enums.Printer;
 using SmartTalk.Messages.Events.Printer;
 using Color = SixLabors.ImageSharp.Color;
@@ -73,16 +75,18 @@ public class PrinterService : IPrinterService
     private readonly IWeChatClient _weChatClient;
     private readonly ICacheManager _cacheManager;
     private readonly IAliYunOssService _ossService;
+    private readonly IRedisSafeRunner _redisSafeRunner;
     private readonly IPosDataProvider _posDataProvider;
     private readonly IPrinterDataProvider _printerDataProvider;
     private readonly PrinterSendErrorLogSetting _printerSendErrorLogSetting;
 
-    public PrinterService(IMapper mapper, IWeChatClient weChatClient, ICacheManager cacheManager, IAliYunOssService ossService, IPosDataProvider posDataProvider, IPrinterDataProvider printerDataProvider, PrinterSendErrorLogSetting printerSendErrorLogSetting)
+    public PrinterService(IMapper mapper, IWeChatClient weChatClient, ICacheManager cacheManager, IAliYunOssService ossService, IRedisSafeRunner redisSafeRunner, IPosDataProvider posDataProvider, IPrinterDataProvider printerDataProvider, PrinterSendErrorLogSetting printerSendErrorLogSetting)
     {
         _mapper = mapper;
         _ossService = ossService;
         _weChatClient = weChatClient;
         _cacheManager = cacheManager;
+        _redisSafeRunner = redisSafeRunner;
         _posDataProvider = posDataProvider;
         _printerDataProvider = printerDataProvider;
         _printerSendErrorLogSetting = printerSendErrorLogSetting;
@@ -125,19 +129,22 @@ public class PrinterService : IPrinterService
         Log.Information("Store: {@agent}", store);
         
         if (store is null) return null;
-        
+
         if (!merchPrinter.IsEnabled)
-            return (await _printerDataProvider.GetMerchPrinterOrdersAsync(null, merchPrinter.StoreId,  PrintStatus.Waiting, DateTimeOffset.Now, merchPrinter.PrinterMac, true, cancellationToken).ConfigureAwait(false)).FirstOrDefault();
-
-        var merchPrinterOrders = await  _printerDataProvider.GetMerchPrinterOrdersAsync(null, merchPrinter.StoreId,  PrintStatus.Waiting, DateTimeOffset.Now, null, true, cancellationToken: cancellationToken).ConfigureAwait(false);
+            return null;
         
-        foreach (var merchPrinterOrder in merchPrinterOrders)
-        {
-            if (string.IsNullOrEmpty(merchPrinterOrder.PrinterMac) || merchPrinterOrder.PrinterMac == merchPrinter.PrinterMac)
-                return merchPrinterOrder;
-        }
+        var merchPrinterOrder = (await _printerDataProvider.GetMerchPrinterOrdersAsync(null, merchPrinter.StoreId, PrintStatus.Waiting, DateTimeOffset.Now, null, true, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
 
-        return null;
+        if (merchPrinterOrder == null)
+            return null;
+        
+        return await _redisSafeRunner.ExecuteWithLockAsync(
+            $"merch-printer-order-{merchPrinterOrder.Id}",
+            async () => merchPrinterOrder,
+            wait: TimeSpan.FromSeconds(5),
+            retry: TimeSpan.FromSeconds(1),
+            server: RedisServer.System
+        ).ConfigureAwait(false);
     }
 
     public async Task<string> UploadOrderPrintImageAndUpdatePrintUrlAsync(
