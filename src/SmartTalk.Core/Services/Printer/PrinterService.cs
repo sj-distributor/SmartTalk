@@ -191,7 +191,7 @@ public class PrinterService : IPrinterService
         else
         {
             storeCreatedDate = order.CreatedDate.ToString("yyyy-MM-dd HH:mm:ss");
-            storePrintDate = printerLog.Item2.FirstOrDefault()?.Time.ToString("yyyy-MM-dd HH:mm:ss");
+            storePrintDate = DateTimeOffset.Now.ToString("yyyy-MM-dd HH:mm:ss");
         }
         
         var img = await RenderReceiptAsync(order.OrderNo,  
