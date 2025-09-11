@@ -271,7 +271,7 @@ public class AiSpeechAssistantController : ControllerBase
         return Ok(response);
     }
     
-    [Route("route/modify"), HttpDelete]
+    [Route("routes"), HttpDelete]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(DeleteAiSpeechAssistantInboundRoutesResponse))]
     public async Task<IActionResult> DeleteAiSpeechAssistantSessionAsync([FromBody] DeleteAiSpeechAssistantInboundRoutesCommand command)
     {
