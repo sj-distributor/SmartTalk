@@ -41,6 +41,8 @@ public static class SecurityStore
 
         public const string CanViewMerchPrinter = nameof(CanViewMerchPrinter);
         
+        public const string CanViewMerchPrinter = nameof(CanViewMerchPrinter);
+        
         private static List<string> _allPermissions;
 
         public static List<string> AllPermissions

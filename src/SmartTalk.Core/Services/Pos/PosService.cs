@@ -12,6 +12,7 @@ using SmartTalk.Core.Services.Caching.Redis;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Identity;
 using SmartTalk.Core.Services.Jobs;
+using SmartTalk.Core.Services.Printer;
 using SmartTalk.Core.Services.RetrievalDb.VectorDb;
 using SmartTalk.Core.Services.Security;
 using SmartTalk.Messages.Commands.Pos;
@@ -64,6 +65,7 @@ public partial class PosService : IPosService
     private readonly IRedisSafeRunner _redisSafeRunner;
     private readonly IPosDataProvider _posDataProvider;
     private readonly IAgentDataProvider _agentDataProvider;
+    private readonly IPrinterDataProvider _printerDataProvider;
     private readonly IAccountDataProvider _accountDataProvider;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
     private readonly ISecurityDataProvider _securityDataProvider;
@@ -79,6 +81,7 @@ public partial class PosService : IPosService
         IRedisSafeRunner redisSafeRunner,
         IPosDataProvider posDataProvider,
         IAgentDataProvider agentDataProvider,
+        IPrinterDataProvider printerDataProvider,
         IAccountDataProvider accountDataProvider,
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider,
         ISecurityDataProvider  securityDataProvider,
@@ -93,6 +96,7 @@ public partial class PosService : IPosService
         _redisSafeRunner = redisSafeRunner;
         _posDataProvider = posDataProvider;
         _agentDataProvider = agentDataProvider;
+        _printerDataProvider = printerDataProvider;
         _accountDataProvider = accountDataProvider;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
         _securityDataProvider = securityDataProvider;

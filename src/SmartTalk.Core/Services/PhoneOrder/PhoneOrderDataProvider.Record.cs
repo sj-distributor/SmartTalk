@@ -205,7 +205,7 @@ public partial class PhoneOrderDataProvider
     public async Task<(PhoneOrderRecord, Agent, Domain.AISpeechAssistant.AiSpeechAssistant)> GetRecordWithAgentAndAssistantAsync(string sessionId, CancellationToken cancellationToken)
     {
         var result = await (
-            from record in _repository.Query<PhoneOrderRecord>()
+            from record in _repository.Query<PhoneOrderRecord>().AsNoTracking()
             where record.SessionId == sessionId
             join agent in _repository.Query<Agent>() on record.AgentId equals agent.Id into agentGroup
             from agent in agentGroup.DefaultIfEmpty()

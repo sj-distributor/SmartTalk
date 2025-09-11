@@ -247,9 +247,20 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, _workWeChatKeySetting.Key, alertMessage, mentionedList: new[]{"@all"}, cancellationToken: cancellationToken).ConfigureAwait(false);
         }
         
+        record.Language = ConvertLanguageCode(language);
         record.TranscriptionJobId = await _phoneOrderService.CreateSpeechMaticsJobAsync(audioFileRawBytes, Guid.NewGuid().ToString("N") + ".wav", language, cancellationToken).ConfigureAwait(false);
 
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    private TranscriptionLanguage ConvertLanguageCode(string languageCode)
+    {
+        return languageCode switch
+        {
+            "en" => TranscriptionLanguage.English,
+            "es" => TranscriptionLanguage.Spanish,
+            _ => TranscriptionLanguage.Chinese
+        };
     }
     
     private async Task<string> DetectAudioLanguageAsync(byte[] audioContent, CancellationToken cancellationToken)
@@ -260,22 +271,28 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         List<ChatMessage> messages =
         [
             new SystemChatMessage("""
-                                  你是一名專業的語音識別分析員，請根據錄音內容的語音判斷所使用的語言，並從以下選項中**僅返回一個語言代碼**：
-                                  - zh-CN：普通話（簡體中文）
-                                  - zh：粵語
-                                  - zh-TW：台灣中文（繁體中文）
-                                  - en：英文
-
-                                  請根據語音內容準確判斷，不要預設為任何語言，也不要根據提示猜測。請不要返回任何多餘文字或說明，**只返回代碼**。
-                                  例如：
-                                  - 音頻中為普通話，返回：zh-CN
-                                  - 音頻中為粵語，返回：zh
-                                  - 音頻中為英文，返回：en
-
-                                  注意：如果語音中是英文，請不要誤判為中文。
+                                  You are a professional speech recognition analyst. Based on the audio content, determine the main language used and return only one language code from the following options:
+                                  zh-CN: Mandarin (Simplified Chinese)
+                                  zh: Cantonese
+                                  zh-TW: Taiwanese Chinese (Traditional Chinese)
+                                  en: English
+                                  es: Spanish
+                                  
+                                  Rules:
+                                  Analyze the speech content carefully and identify the primary language spoken.
+                                  If the recording contains mixed languages, return the code of the language that dominates most of the speech.
+                                  Do not assume or guess based on the prompt itself—only judge from the actual audio content.
+                                  Return only the code without any additional text or explanations.
+                                  
+                                  Examples:
+                                  If the audio is in Mandarin, return: zh-CN
+                                  If the audio is in Cantonese, return: zh
+                                  If the audio is in English, return: en
+                                  If the audio has both Mandarin and English but Mandarin is the dominant language, return: zh-CN
+                                  If the audio has both Cantonese and English but English dominates, return: en
                                   """),
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
-            new UserChatMessage("請根據錄音內容判斷語言，並返回對應代碼。")
+            new UserChatMessage("Please determine the language based on the recording and return the corresponding code.")
         ];
 
         ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
@@ -652,14 +669,21 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                                             await ProcessHangupAsync(outputElement, cancellationToken).ConfigureAwait(false);
                                             break;
                                         
+                                        case OpenAiToolConstants.Refund:
+                                        case OpenAiToolConstants.Complaint:
+                                        case OpenAiToolConstants.ReturnGoods:
                                         case OpenAiToolConstants.TransferCall:
+                                        case OpenAiToolConstants.DeliveryTracking:
+                                        case OpenAiToolConstants.LessGoodsDelivered:
+                                        case OpenAiToolConstants.RefuseToAcceptGoods:
+                                        case OpenAiToolConstants.HandlePromotionCalls:
                                         case OpenAiToolConstants.HandlePhoneOrderIssues:
-                                        case OpenAiToolConstants.HandleThirdPartyDelayedDelivery:
+                                        case OpenAiToolConstants.PickUpGoodsFromTheWarehouse:
                                         case OpenAiToolConstants.HandleThirdPartyFoodQuality:
+                                        case OpenAiToolConstants.HandleThirdPartyDelayedDelivery:
                                         case OpenAiToolConstants.HandleThirdPartyUnexpectedIssues:
                                         case OpenAiToolConstants.HandleThirdPartyPickupTimeChange:
-                                        case OpenAiToolConstants.HandlePromotionCalls:
-                                        case OpenAiToolConstants.CheckOrderStatus:
+                                        case OpenAiToolConstants.DriverDeliveryRelatedCommunication:
                                             await ProcessTransferCallAsync(outputElement, functionName, cancellationToken).ConfigureAwait(false);
                                             break;
                                     }
@@ -821,7 +845,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                 }
             };
             
-            await SendToWebSocketAsync(_openaiClientWebSocket, transferringHumanService, cancellationToken);
+            // await SendToWebSocketAsync(_openaiClientWebSocket, transferringHumanService, cancellationToken);
         }
 
         await SendToWebSocketAsync(_openaiClientWebSocket, new { type = "response.create" }, cancellationToken);
