@@ -186,7 +186,7 @@ public class PrinterService : IPrinterService
         if (!string.IsNullOrEmpty(store.Timezone))
         {
             storeCreatedDate = TimeZoneInfo.ConvertTimeFromUtc(order.CreatedDate.UtcDateTime, TimeZoneInfo.FindSystemTimeZoneById(store.Timezone)).ToString("yyyy-MM-dd HH:mm:ss");    
-            storePrintDate = TimeZoneInfo.ConvertTimeFromUtc(merchPrinterOrder.PrintDate.UtcDateTime, TimeZoneInfo.FindSystemTimeZoneById(store.Timezone)).ToString("yyyy-MM-dd HH:mm:ss");    
+            storePrintDate = TimeZoneInfo.ConvertTimeFromUtc(DateTimeOffset.Now.UtcDateTime, TimeZoneInfo.FindSystemTimeZoneById(store.Timezone)).ToString("yyyy-MM-dd HH:mm:ss");    
         }
         else
         {
