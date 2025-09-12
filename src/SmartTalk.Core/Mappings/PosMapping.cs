@@ -27,6 +27,9 @@ public class PosMapping : Profile
 
         CreateMap<PlacePosOrderCommand, PosOrder>()
             .ForMember(dest => dest.Items, opt => opt.MapFrom(x => x.OrderItems));
-        CreateMap<PosOrder, PosCustomerInfoDto>();
+        CreateMap<PosOrder, StoreCustomerDto>();
+
+        CreateMap<StoreCustomer, StoreCustomerDto>().ReverseMap();
+        CreateMap<UpdateStoreCustomerCommand, StoreCustomer>();
     }
 }
