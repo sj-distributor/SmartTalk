@@ -324,11 +324,20 @@ public class PosController : ControllerBase
         return Ok();
     }
     
-    [Route("customer/info/match"), HttpGet]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPosCustomerInfoResponse))]
-    public async Task<IActionResult> GetPosCustomerInfosAsync([FromQuery] GetPosCustomerInfoRequest request)
+    [Route("customers"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetStoreCustomersResponse))]
+    public async Task<IActionResult> GetPosCustomerInfosAsync([FromQuery] GetStoreCustomersRequest request)
     {
-        var response = await _mediator.RequestAsync<GetPosCustomerInfoRequest, GetPosCustomerInfoResponse>(request).ConfigureAwait(false);
+        var response = await _mediator.RequestAsync<GetStoreCustomersRequest, GetStoreCustomersResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("customer/modify"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdateStoreCustomerResponse))]
+    public async Task<IActionResult> UpdateStoreCustomerAsync([FromBody] UpdateStoreCustomerCommand command)
+    {
+        var response = await _mediator.SendAsync<UpdateStoreCustomerCommand, UpdateStoreCustomerResponse>(command).ConfigureAwait(false);
         
         return Ok(response);
     }
