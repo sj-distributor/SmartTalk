@@ -378,7 +378,7 @@ public class PrinterService : IPrinterService
 
             var storeName = JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(store.Names).GetValueOrDefault("en")?.GetValueOrDefault("name");
 
-            var text = new SendWorkWechatGroupRobotTextDto { Content = $"✅SMT Cloud Printer Online\nTime: {DateTimeOffset.Now.UtcDateTime:yyyy-MM-dd HH:mm:ss}\nStore: {storeName}"};
+            var text = new SendWorkWechatGroupRobotTextDto { Content = $"✅SMT Cloud Printer Online\nTime: {DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss}\nStore: {storeName}"};
             text.MentionedMobileList = "@all";
         
             await _weChatClient.SendWorkWechatRobotMessagesAsync(_printerSendErrorLogSetting.CloudPrinterSendErrorLogRobotUrl, new SendWorkWechatGroupRobotMessageDto
@@ -693,7 +693,7 @@ public class PrinterService : IPrinterService
              
              var storeName = JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(store.Names).GetValueOrDefault("en")?.GetValueOrDefault("name");
              
-             var text = new SendWorkWechatGroupRobotTextDto { Content = $"❌SMT Cloud Printer Offline\nTime: {DateTimeOffset.Now.UtcDateTime:yyyy-MM-dd HH:mm:ss}\nStore: {storeName}"};
+             var text = new SendWorkWechatGroupRobotTextDto { Content = $"❌SMT Cloud Printer Offline\nTime: {DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss}\nStore: {storeName}"};
              text.MentionedMobileList = "@all";
         
              await _weChatClient.SendWorkWechatRobotMessagesAsync(_printerSendErrorLogSetting.CloudPrinterSendErrorLogRobotUrl, new SendWorkWechatGroupRobotMessageDto
