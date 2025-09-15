@@ -466,9 +466,12 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private async Task ReceiveFromTwilioAsync(WebSocket twilioWebSocket, CancellationToken cancellationToken)
     {
         var buffer = new byte[1024 * 10];
-        try
+        int maxRetries = 3;
+        int retryCount = 0;
+
+        while (twilioWebSocket.State == WebSocketState.Open && !cancellationToken.IsCancellationRequested)
         {
-            while (twilioWebSocket.State == WebSocketState.Open)
+            try
             {
                 var result = await twilioWebSocket.ReceiveAsync(new ArraySegment<byte>(buffer), cancellationToken);
                 Log.Information("ReceiveFromTwilioAsync result: {result}", Encoding.UTF8.GetString(buffer, 0, result.Count));
@@ -523,12 +526,23 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                             break;
                     }
                 }
+
+                retryCount = 0;
             }
-        }
-        catch (WebSocketException ex)
-        {
-            _backgroundJobClient.Enqueue<IAiSpeechAssistantProcessJobService>(x => x.RecordAiSpeechAssistantCallAsync(_aiSpeechAssistantStreamContext, CancellationToken.None));
-            Log.Error("Receive from Twilio error: {@ex}", ex);
+            catch (WebSocketException ex)
+            {
+                retryCount++;
+                Log.Warning("WebSocketException occurred, retry {RetryCount}/{MaxRetries}: {ex}", retryCount, maxRetries, ex);
+
+                if (retryCount >= maxRetries)
+                {
+                    Log.Error("ReceiveFromTwilioAsync failed after {MaxRetries} retries.", maxRetries);
+                    _backgroundJobClient.Enqueue<IAiSpeechAssistantProcessJobService>(x => x.RecordAiSpeechAssistantCallAsync(_aiSpeechAssistantStreamContext, CancellationToken.None));
+                    break;
+                }
+
+                await Task.Delay(1000 * retryCount, cancellationToken);
+            }
         }
     }
 
