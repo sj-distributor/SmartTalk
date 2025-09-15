@@ -828,7 +828,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             {
                 CallSid = _aiSpeechAssistantStreamContext.CallSid,
                 HumanPhone = _aiSpeechAssistantStreamContext.HumanContactPhone
-            }, cancellationToken), TimeSpan.FromSeconds(replySeconds));
+            }, cancellationToken), TimeSpan.FromSeconds(replySeconds), HangfireConstants.InternalHostingTransfer);
             
             var transferringHumanService = new
             {
