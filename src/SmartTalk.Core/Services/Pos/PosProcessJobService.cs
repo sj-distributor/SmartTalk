@@ -26,7 +26,7 @@ public class PosProcessJobService : IPosProcessJobService
 
         Log.Information("Get orders: {@Orders} for customer ...", orders);
         
-        if (orders ==null || orders.Count == 0) return;
+        if (orders == null || orders.Count == 0) return;
         
         var customers = orders.GroupBy(x => x.Phone).Select(x => new StoreCustomer
         {
