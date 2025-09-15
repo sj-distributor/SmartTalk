@@ -1,5 +1,6 @@
 using System.Net;
 using Microsoft.AspNetCore.Http;
+using Serilog;
 using SmartTalk.Core.Extensions;
 using SmartTalk.Messages.Dto.System;
 using SmartTalk.Messages.Enums.Account;

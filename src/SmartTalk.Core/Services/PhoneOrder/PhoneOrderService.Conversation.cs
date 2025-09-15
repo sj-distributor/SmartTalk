@@ -1,6 +1,8 @@
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Commands.PhoneOrder;
+using SmartTalk.Messages.Enums;
+using SmartTalk.Messages.Enums.STT;
 using SmartTalk.Messages.Requests.PhoneOrder;
 
 namespace SmartTalk.Core.Services.PhoneOrder;
@@ -33,6 +35,20 @@ public partial class PhoneOrderService
         var conversations = await _phoneOrderDataProvider.AddPhoneOrderConversationsAsync(_mapper.Map<List<PhoneOrderConversation>>(command.Conversations), cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var record = (await _phoneOrderDataProvider.GetPhoneOrderRecordAsync(command.Conversations.First().RecordId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+        
+        var detection = await _translationClient.DetectLanguageAsync(conversations.FirstOrDefault().Answer, cancellationToken).ConfigureAwait(false);
+
+        var report = await _phoneOrderDataProvider.GetPhoneOrderRecordReportAsync(record.SessionId, SelectReportLanguageEnum(detection.Language), cancellationToken).ConfigureAwait(false);
+
+        report.IsOrigin = true;
+        
+        var anotherReportLanguage = (SelectReportLanguageEnum(detection.Language) == SystemLanguage.Chinese) ? SystemLanguage.English : SystemLanguage.Chinese;
+        
+        var anotherReport = await _phoneOrderDataProvider.GetPhoneOrderRecordReportAsync(record.SessionId, anotherReportLanguage, cancellationToken).ConfigureAwait(false);
+        
+        anotherReport.IsOrigin = false;
+
+        await _phoneOrderDataProvider.UpdatePhoneOrderRecordReportsAsync(new List<PhoneOrderRecordReport>() { report, anotherReport }, true, cancellationToken).ConfigureAwait(false);
 
         await EnrichPhoneOrderRecordAsync(record, cancellationToken).ConfigureAwait(false);
         
@@ -58,5 +74,13 @@ public partial class PhoneOrderService
         if (restaurant == null) return;
 
         record.RestaurantInfo = restaurant;
+    }
+    
+    private SystemLanguage SelectReportLanguageEnum(string language)
+    {
+        if (language.StartsWith("zh", StringComparison.OrdinalIgnoreCase))
+            return SystemLanguage.Chinese;
+    
+        return SystemLanguage.English;
     }
 }
