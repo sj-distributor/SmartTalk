@@ -124,11 +124,7 @@ public partial class AiSpeechAssistantService
 
         await UpdateNumbersStatusAsync(assistants.Where(x => x.AnsweringNumberId.HasValue).Select(x => x.AnsweringNumberId.Value).ToList(), false, cancellationToken).ConfigureAwait(false);
         
-        await DeleteAssistantRelatedInfoAsync(assistants.Select(x => x.AgentId).ToList(), cancellationToken).ConfigureAwait(false);
-
-        var agents = await _agentDataProvider.GetAgentsAsync(assistants.Select(x => x.AgentId).ToList(),cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        await _agentDataProvider.DeleteAgentsAsync(agents, true, cancellationToken).ConfigureAwait(false);
+        var agents = await DeleteAssistantRelatedInfoAsync(assistants.Select(x => x.AgentId).ToList(), cancellationToken).ConfigureAwait(false);
 
         await _posDataProvider.DeletePosAgentsByAgentIdsAsync(agents.Select(x => x.Id).ToList(), true, cancellationToken).ConfigureAwait(false);
         
@@ -535,13 +531,15 @@ public partial class AiSpeechAssistantService
         return number;
     }
     
-    private async Task DeleteAssistantRelatedInfoAsync(List<int> agentIds, CancellationToken cancellationToken)
+    private async Task<List<Agent>> DeleteAssistantRelatedInfoAsync(List<int> agentIds, CancellationToken cancellationToken)
     {
         var agents = await _agentDataProvider.GetAgentsAsync(agentIds: agentIds, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        if (agents.Count == 0) return;
+        if (agents.Count == 0) return [];
 
         await _agentDataProvider.DeleteAgentsAsync(agents, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        return agents;
     }
 
     private async Task UpdateAgentIfRequiredAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, Agent agent, CancellationToken cancellationToken)
