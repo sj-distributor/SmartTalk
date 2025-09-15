@@ -554,7 +554,6 @@ public class SpeechMaticsService : ISpeechMaticsService
         return historyItems;
     }
     
-    private TranscriptionLanguage SelectLanguageEnum(string language)
     private TranscriptionLanguage SelectReportLanguageEnum(string language)
     {
         if (language.StartsWith("zh", StringComparison.OrdinalIgnoreCase))
