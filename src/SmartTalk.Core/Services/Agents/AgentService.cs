@@ -31,7 +31,9 @@ public class AgentService : IAgentService
         var agentTypes = request.AgentType.HasValue
             ? [request.AgentType.Value] : Enum.GetValues(typeof(AgentType)).Cast<AgentType>().ToList();
         
-        var agentInfo = await GetAllAgentsAsync(agentTypes, request.AgentIds, request.ServiceProviderId, cancellationToken).ConfigureAwait(false);
+        var agentIds = request.AgentIds != null && request.AgentIds.Count != 0 ? request.AgentIds : [];
+        
+        var agentInfo = await GetAllAgentsAsync(agentTypes, agentIds, request.ServiceProviderId, cancellationToken).ConfigureAwait(false);
         
         return new GetAgentsResponse { Data = agentInfo.OrderBy(x => x.CreatedDate).ToList() };
     }
