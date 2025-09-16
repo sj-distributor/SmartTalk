@@ -54,19 +54,19 @@ public class AiSpeechAssistantController : ControllerBase
     
     [AllowAnonymous]
     [HttpGet("outbound/connect")]
-    [HttpGet("outbound/connect/{from}/{to}/{id}/{greeting}")]
-    public async Task OutboundConnectAiSpeechAssistantAsync(string from, string to, int id, string greeting)
+    [HttpGet("outbound/connect/{from}/{to}/{id}/{greetingId}")]
+    public async Task OutboundConnectAiSpeechAssistantAsync(string from, string to, int id, int greetingId)
     {
         if (HttpContext.WebSockets.IsWebSocketRequest)
         {
-            Log.Information("Outbound connect to assistant, from: {From}, to: {To}, assistantId: {AssistantId}, greeting: {Greeting}", from, to, id, greeting);
+            Log.Information("Outbound connect to assistant, from: {From}, to: {To}, assistantId: {AssistantId}, greeting: {GreetingId}", from, to, id, greetingId);
             var command = new ConnectAiSpeechAssistantCommand
             {
                 From = from,
                 To = to,
                 AssistantId = id,
                 Host = HttpContext.Request.Host.Host,
-                Greeting = greeting,
+                GreetingId = greetingId,
                 TwilioWebSocket = await HttpContext.WebSockets.AcceptWebSocketAsync()
             };
             await _mediator.SendAsync(command);

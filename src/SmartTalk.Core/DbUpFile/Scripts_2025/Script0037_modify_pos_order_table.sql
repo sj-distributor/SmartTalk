@@ -1,0 +1,1 @@
+alter table `pos_order` add column `record_id` int null;

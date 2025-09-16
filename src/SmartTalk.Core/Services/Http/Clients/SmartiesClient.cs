@@ -16,6 +16,8 @@ public interface ISmartiesClient : IScopedDependency
     Task CallBackSmartiesAiSpeechAssistantRecordAsync(AiSpeechAssistantCallBackRequestDto request, CancellationToken cancellationToken);
     
     Task CallBackSmartiesAiKidRecordAsync(AiKidCallBackRequestDto request, CancellationToken cancellationToken);
+
+    Task<GetNumberGreetingResponse> GetNumberGreetingAsync(GetNumberGreetingRequest request, CancellationToken cancellationToken);
 }
 
 public class SmartiesClient : ISmartiesClient
@@ -60,5 +62,16 @@ public class SmartiesClient : ISmartiesClient
     public async Task CallBackSmartiesAiKidRecordAsync(AiKidCallBackRequestDto request, CancellationToken cancellationToken)
     {
         await _httpClientFactory.PostAsJsonAsync($"{_smartiesSettings.BaseUrl}/api/Ome/ai/kid/record/callback", request, cancellationToken, headers: _headers).ConfigureAwait(false);
+    }
+    
+    public async Task<GetNumberGreetingResponse> GetNumberGreetingAsync(GetNumberGreetingRequest request, CancellationToken cancellationToken)
+    {
+        Log.Information("Ask gpt embedding request: {@Request}", request);
+
+        var response = await _httpClientFactory.PostAsJsonAsync<GetNumberGreetingResponse>($"{_smartiesSettings.BaseUrl}/api/AutoCall/number/greeting", request, cancellationToken, headers: _headers).ConfigureAwait(false);
+        
+        Log.Information("Ask gpt embedding response: {@Response}", response);
+
+        return response;
     }
 }

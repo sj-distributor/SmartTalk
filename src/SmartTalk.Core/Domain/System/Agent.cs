@@ -20,7 +20,7 @@ public class Agent : IEntity, IHasCreatedFields
     public string WechatRobotMessage { get; set; }
 
     [Column("relate_id")]
-    public int RelateId { get; set; }
+    public int? RelateId { get; set; }
 
     [Column("type")]
     public AgentType Type { get; set; }
@@ -28,11 +28,17 @@ public class Agent : IEntity, IHasCreatedFields
     [Column("source_system")]
     public AgentSourceSystem SourceSystem { get; set; }
     
+    [Column("is_display")]
+    public bool IsDisplay { get; set; }
+    
     [Column("is_wecom_message_order")]
     public bool IsWecomMessageOrder { get; set; } = false;
     
     [Column("is_send_analysis_report_to_wechat")]
     public bool IsSendAnalysisReportToWechat { get; set; } = false;
+    
+    [Column("is_send_audio_record_wechat")]
+    public bool IsSendAudioRecordWechat { get; set; } = false;
     
     [Column("timezone")]
     public string Timezone { get; set; }

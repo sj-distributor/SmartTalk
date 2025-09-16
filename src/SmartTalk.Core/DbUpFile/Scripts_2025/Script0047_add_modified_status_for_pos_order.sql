@@ -1,0 +1,1 @@
+alter table `pos_order` add column `modified_status` int not null default 0;
