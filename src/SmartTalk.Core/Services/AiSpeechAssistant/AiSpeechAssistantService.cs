@@ -164,7 +164,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
         InitAiSpeechAssistantStreamContext(command.Host, command.From);
 
-        await BuildingAiSpeechAssistantKnowledgeBaseAsync(command.From, command.To, command.AssistantId, command.GreetingId, cancellationToken).ConfigureAwait(false);
+        await BuildingAiSpeechAssistantKnowledgeBaseAsync(command.From, command.To, command.AssistantId, command.NumberId, cancellationToken).ConfigureAwait(false);
         
         _aiSpeechAssistantStreamContext.HumanContactPhone = _aiSpeechAssistantStreamContext.ShouldForward ? null 
             : (await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantHumanContactByAssistantIdAsync(_aiSpeechAssistantStreamContext.Assistant.Id, cancellationToken).ConfigureAwait(false))?.HumanPhone;
@@ -323,7 +323,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         );
     }
     
-    private async Task BuildingAiSpeechAssistantKnowledgeBaseAsync(string from, string to, int? assistantId, int? greetingId, CancellationToken cancellationToken)
+    private async Task BuildingAiSpeechAssistantKnowledgeBaseAsync(string from, string to, int? assistantId, int? numberId, CancellationToken cancellationToken)
     {
         var inboundRoute = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantInboundRouteAsync(from, to, cancellationToken).ConfigureAwait(false);
         
@@ -357,9 +357,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         Log.Information($"The final prompt: {finalPrompt}");
 
-        if (greetingId.HasValue)
+        if (numberId.HasValue)
         {
-            var greeting = await _smartiesClient.GetSaleAutoCallNumberAsync(new GetSaleAutoCallNumberRequest(){ Id = greetingId.Value }, cancellationToken).ConfigureAwait(false);
+            var greeting = await _smartiesClient.GetSaleAutoCallNumberAsync(new GetSaleAutoCallNumberRequest(){ Id = numberId.Value }, cancellationToken).ConfigureAwait(false);
             knowledge.Greetings = string.IsNullOrEmpty(greeting.Data.Number.Greeting) ? knowledge.Greetings : greeting.Data.Number.Greeting;
         }
         
