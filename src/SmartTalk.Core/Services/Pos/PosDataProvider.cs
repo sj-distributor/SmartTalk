@@ -73,7 +73,8 @@ public partial class PosDataProvider : IPosDataProvider
         int? pageIndex = null, int? pageSize = null, List<int> companyIds = null, int? serviceProviderId = null, string keyword = null, CancellationToken cancellationToken = default)
     {
         var query = from company in _repository.Query<Company>()
-            join store in _repository.Query<CompanyStore>() on company.Id equals store.CompanyId
+            join store in _repository.Query<CompanyStore>() on company.Id equals store.CompanyId into storeGroups
+            from store in storeGroups.DefaultIfEmpty()
             where (!serviceProviderId.HasValue || company.ServiceProviderId == serviceProviderId.Value)
                   && (companyIds == null || companyIds.Count == 0 || companyIds.Contains(company.Id))
                   && (string.IsNullOrEmpty(keyword) || company.Name.Contains(keyword) || store.Names.Contains(keyword))
