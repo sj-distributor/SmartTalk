@@ -66,11 +66,11 @@ public class SmartiesClient : ISmartiesClient
     
     public async Task<GetSaleAutoCallNumberResponse> GetSaleAutoCallNumberAsync(GetSaleAutoCallNumberRequest request, CancellationToken cancellationToken)
     {
-        Log.Information("GetNumberGreeting request: {@Request}", request);
+        Log.Information("GetSaleAutoCallNumber request: {@Request}", request);
 
         var response = await _httpClientFactory.PostAsJsonAsync<GetSaleAutoCallNumberResponse>($"{_smartiesSettings.BaseUrl}/api/AutoCall/number", request, cancellationToken, headers: _headers).ConfigureAwait(false);
         
-        Log.Information("GetNumberGreeting response: {@Response}", response);
+        Log.Information("GetSaleAutoCallNumber response: {@Response}", response);
 
         return response;
     }
