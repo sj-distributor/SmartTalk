@@ -48,6 +48,7 @@ using SmartTalk.Messages.Events.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.Attachments;
 using SmartTalk.Messages.Dto.Attachments;
+using SmartTalk.Messages.Dto.Smarties;
 using SmartTalk.Messages.Enums.STT;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 using RecordingResource = Twilio.Rest.Api.V2010.Account.Call.RecordingResource;
