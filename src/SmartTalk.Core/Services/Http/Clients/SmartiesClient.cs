@@ -66,11 +66,11 @@ public class SmartiesClient : ISmartiesClient
     
     public async Task<GetNumberGreetingResponse> GetNumberGreetingAsync(GetNumberGreetingRequest request, CancellationToken cancellationToken)
     {
-        Log.Information("Ask gpt embedding request: {@Request}", request);
+        Log.Information("GetNumberGreeting request: {@Request}", request);
 
         var response = await _httpClientFactory.PostAsJsonAsync<GetNumberGreetingResponse>($"{_smartiesSettings.BaseUrl}/api/AutoCall/number/greeting", request, cancellationToken, headers: _headers).ConfigureAwait(false);
         
-        Log.Information("Ask gpt embedding response: {@Response}", response);
+        Log.Information("GetNumberGreeting response: {@Response}", response);
 
         return response;
     }
