@@ -77,7 +77,7 @@ public partial class PosDataProvider : IPosDataProvider
             from store in storeGroups.DefaultIfEmpty()
             where (!serviceProviderId.HasValue || company.ServiceProviderId == serviceProviderId.Value)
                   && (companyIds == null || companyIds.Count == 0 || companyIds.Contains(company.Id))
-                  && (string.IsNullOrEmpty(keyword) || company.Name.Contains(keyword) || store.Names.Contains(keyword))
+                  && (string.IsNullOrEmpty(keyword) || company.Name.Contains(keyword) || (store != null && store.Names.Contains(keyword)))
             select company;
 
         query = query.Distinct();
