@@ -21,7 +21,7 @@ public interface IRealtimeAiConversationEngine : IAsyncDisposable, IScopedDepend
     event Func<string, Task> AiRawMessageReceivedAsync;
     
     Task StartSessionAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistantProfile, string initialUserPrompt,
-        RealtimeAiAudioCodec inputFormat, RealtimeAiAudioCodec outputFormat, CancellationToken cancellationToken);
+        RealtimeAiAudioCodec inputFormat, RealtimeAiAudioCodec outputFormat, RealtimeAiServerRegion region, CancellationToken cancellationToken);
     /// <summary>
     /// 发送音频数据块给 AI。
     /// **注意:** 此方法接收的 audioData 应为 AI 服务提供商期望的格式 (可能已由外部转换)。

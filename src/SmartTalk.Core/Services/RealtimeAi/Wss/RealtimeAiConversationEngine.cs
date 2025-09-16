@@ -47,7 +47,7 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
     }
 
     public async Task StartSessionAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistantProfile,
-        string initialUserPrompt, RealtimeAiAudioCodec inputFormat, RealtimeAiAudioCodec outputFormat, CancellationToken cancellationToken)
+        string initialUserPrompt, RealtimeAiAudioCodec inputFormat, RealtimeAiAudioCodec outputFormat, RealtimeAiServerRegion region, CancellationToken cancellationToken)
     {
         // ... (启动逻辑同前) ...
         // ... (Startup logic same as before) ...
@@ -63,7 +63,7 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
         }
         _currentAssistantProfile = assistantProfile; // 保存配置 (Save profile)
         var aiProviderServiceUri = new Uri(_currentAssistantProfile.ModelUrl);
-        var connectionHeaders = _aiAdapter.GetHeaders();
+        var connectionHeaders = _aiAdapter.GetHeaders(region);
 
         _sessionId = Guid.NewGuid().ToString("N"); // 生成一个新的会话 ID (Generate a new session ID)
         _sessionCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);

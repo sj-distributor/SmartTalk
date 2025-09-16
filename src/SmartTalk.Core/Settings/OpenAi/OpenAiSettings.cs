@@ -14,8 +14,13 @@ public class OpenAiSettings : IConfigurationSetting
         RealtimeReceiveBufferLength = configuration.GetValue<int>("OpenAi:Realtime:ReceiveBufferLength");
         RealtimeTemperature = configuration.GetValue<float>("OpenAi:Realtime:Temperature");
         RealTimeApiKeys = configuration.GetValue<string>("OpenAi:RealTimeApiKeys").Split(',').Where(x => !string.IsNullOrEmpty(x)).ToList();
+        
+        HkBaseUrl = configuration.GetValue<string>("OpenAiForHk:BaseUrl");
+        HkApiKey = configuration.GetValue<string>("OpenAiForHk:ApiKey");
+        HkOrganization = configuration.GetValue<string>("OpenAiForHk:Organization");
     }
     
+    // Us 
     public string BaseUrl { get; set; }
     
     public string ApiKey { get; set; }
@@ -29,4 +34,11 @@ public class OpenAiSettings : IConfigurationSetting
     public float RealtimeTemperature { get; set; }
     
     public List<string> RealTimeApiKeys { get; set; }
+    
+    // Hk 
+    public string HkBaseUrl { get; set; }
+    
+    public string HkApiKey { get; set; }
+    
+    public string HkOrganization { get; set; }
 }

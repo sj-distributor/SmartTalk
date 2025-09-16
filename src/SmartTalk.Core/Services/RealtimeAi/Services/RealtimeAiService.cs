@@ -91,12 +91,12 @@ public class RealtimeAiService : IRealtimeAiService
         
         await RealtimeAiConnectInternalAsync(command.WebSocket, 
             !string.IsNullOrWhiteSpace(finalPrompt) ? finalPrompt : "You are a friendly assistant",
-            command.InputFormat, command.OutputFormat, cancellationToken).ConfigureAwait(false);
+            command.InputFormat, command.OutputFormat, command.Region, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task RealtimeAiConnectInternalAsync(
         WebSocket webSocket, string initialPrompt, RealtimeAiAudioCodec inputFormat,
-        RealtimeAiAudioCodec outputFormat, CancellationToken cancellationToken)
+        RealtimeAiAudioCodec outputFormat, RealtimeAiServerRegion region,  CancellationToken cancellationToken)
     {
         _webSocket = webSocket;
         _streamSid = Guid.NewGuid().ToString("N");
@@ -108,7 +108,7 @@ public class RealtimeAiService : IRealtimeAiService
         
         BuildConversationEngine(_speechAssistant.ModelProvider);
         
-        await _conversationEngine.StartSessionAsync(_speechAssistant, initialPrompt, inputFormat, outputFormat, cancellationToken).ConfigureAwait(false);
+        await _conversationEngine.StartSessionAsync(_speechAssistant, initialPrompt, inputFormat, outputFormat, region, cancellationToken).ConfigureAwait(false);
         
         await ReceiveFromWebSocketClientAsync(
             new RealtimeAiEngineContext { AgentId = _speechAssistant.AgentId, InitialPrompt = initialPrompt, InputFormat = inputFormat, OutputFormat = outputFormat }, cancellationToken).ConfigureAwait(false);
