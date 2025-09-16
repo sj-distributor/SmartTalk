@@ -172,12 +172,13 @@ public class SpeechMaticsService : ISpeechMaticsService
             RecordId = record.Id,
             Report = record.TranscriptionText,
             Language = SelectReportLanguageEnum(detection.Language),
+            IsOrigin = SelectReportLanguageEnum(detection.Language) == record.Language,
             CreatedDate = DateTimeOffset.Now
         });
-
-        var targetLanguage = (SelectReportLanguageEnum(detection.Language) == TranscriptionLanguage.Chinese) ? "en" : "zh";
         
-        var reportLanguage = (SelectReportLanguageEnum(detection.Language) == TranscriptionLanguage.Chinese) ? TranscriptionLanguage.English : TranscriptionLanguage.Chinese;
+        var targetLanguage = SelectReportLanguageEnum(detection.Language) == TranscriptionLanguage.Chinese ? "en" : "zh";
+        
+        var reportLanguage = SelectReportLanguageEnum(detection.Language) == TranscriptionLanguage.Chinese ? TranscriptionLanguage.English : TranscriptionLanguage.Chinese;
         
         var translatedText = await _translationClient.TranslateTextAsync(record.TranscriptionText, targetLanguage, cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -186,6 +187,7 @@ public class SpeechMaticsService : ISpeechMaticsService
             RecordId = record.Id,
             Report = translatedText.TranslatedText,
             Language = reportLanguage,
+            IsOrigin = SelectReportLanguageEnum(detection.Language) == record.Language,
             CreatedDate = DateTimeOffset.Now
         });
 
