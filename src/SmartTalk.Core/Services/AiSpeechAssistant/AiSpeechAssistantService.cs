@@ -359,7 +359,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
         if (greetingId.HasValue)
         {
-            var greeting = await _smartiesClient.GetNumberGreetingAsync(new GetNumberGreetingRequest(){ Id = greetingId.Value }, cancellationToken).ConfigureAwait(false);
+            var greeting = await _smartiesClient.GetSaleAutoCallNumberAsync(new GetSaleAutoCallNumberRequest(){ Id = greetingId.Value }, cancellationToken).ConfigureAwait(false);
             knowledge.Greetings = string.IsNullOrEmpty(greeting.Data.Number.Greeting) ? knowledge.Greetings : greeting.Data.Number.Greeting;
         }
         

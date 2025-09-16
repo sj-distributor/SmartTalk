@@ -1,16 +1,16 @@
 namespace SmartTalk.Messages.Dto.Smarties;
 
-public class GetNumberGreetingRequest
+public class GetSaleAutoCallNumberRequest
 {
     public int Id { get; set; }
 }
 
-public class GetNumberGreetingResponse
+public class GetSaleAutoCallNumberResponse
 {
-    public GetNumberGreetingResponseData Data { get; set; }
+    public GetSaleAutoCallNumberResponseData Data { get; set; }
 }
 
-public class GetNumberGreetingResponseData
+public class GetSaleAutoCallNumberResponseData
 {
     public SettingNumberDto Number { get; set; }
 }
