@@ -197,7 +197,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             }
         };
 
-        var (assistant, knowledge, prompt) = await BuildingAiSpeechAssistantKnowledgeBaseAsync(command.From, command.To, command.AssistantId, command.Greeting, cancellationToken).ConfigureAwait(false);
+        var (assistant, knowledge, prompt) = await BuildingAiSpeechAssistantKnowledgeBaseAsync(command.From, command.To, command.AssistantId, command.NumberId, cancellationToken).ConfigureAwait(false);
         
         _aiSpeechAssistantStreamContext.HumanContactPhone = _aiSpeechAssistantStreamContext.ShouldForward ? null : (await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantHumanContactByAssistantIdAsync(assistant.Id, cancellationToken).ConfigureAwait(false))?.HumanPhone;
         
@@ -350,7 +350,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         );
     }
 
-    private async Task<(Domain.AISpeechAssistant.AiSpeechAssistant assistant, AiSpeechAssistantKnowledge knowledge, string finalPrompt)> BuildingAiSpeechAssistantKnowledgeBaseAsync(string from, string to, int? assistantId, string greeting, CancellationToken cancellationToken)
+    private async Task<(Domain.AISpeechAssistant.AiSpeechAssistant assistant, AiSpeechAssistantKnowledge knowledge, string finalPrompt)> BuildingAiSpeechAssistantKnowledgeBaseAsync(string from, string to, int? assistantId, int? numberId, CancellationToken cancellationToken)
     {
         var inboundRoute = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantInboundRouteAsync(from, to, cancellationToken).ConfigureAwait(false);
         
@@ -396,8 +396,12 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         Log.Information($"The final prompt: {finalPrompt}");
 
-        knowledge.Greetings = string.IsNullOrEmpty(greeting) ? knowledge.Greetings : greeting;
-
+        if (numberId.HasValue)
+        {
+            var greeting = await _smartiesClient.GetSaleAutoCallNumberAsync(new GetSaleAutoCallNumberRequest(){ Id = numberId.Value }, cancellationToken).ConfigureAwait(false);
+            knowledge.Greetings = string.IsNullOrEmpty(greeting.Data.Number.Greeting) ? knowledge.Greetings : greeting.Data.Number.Greeting;
+        }
+        
         _aiSpeechAssistantStreamContext.Assistant = _mapper.Map<AiSpeechAssistantDto>(assistant);
         _aiSpeechAssistantStreamContext.Knowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge);
         _aiSpeechAssistantStreamContext.LastPrompt = finalPrompt;
