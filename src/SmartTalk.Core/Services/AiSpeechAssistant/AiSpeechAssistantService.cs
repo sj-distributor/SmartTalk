@@ -197,9 +197,14 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     public async Task RecordAiSpeechAssistantCallAsync(RecordAiSpeechAssistantCallCommand command, CancellationToken cancellationToken)
     {
         TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
-        
-        await RecordingResource.CreateAsync(pathCallSid: command.CallSid, recordingStatusCallbackMethod: Twilio.Http.HttpMethod.Post,
-            recordingStatusCallback: new Uri($"https://{command.Host}/api/AiSpeechAssistant/recording/callback"));
+
+        await RetryAsync(async () =>
+        {
+            await RecordingResource.CreateAsync(
+                pathCallSid: command.CallSid,
+                recordingStatusCallbackMethod: Twilio.Http.HttpMethod.Post,
+                recordingStatusCallback: new Uri($"https://{command.Host}/api/AiSpeechAssistant/recording/callback"));
+        }, maxRetryCount: 3, delaySeconds: 1, cancellationToken);
     }
 
     public async Task ReceivePhoneRecordingStatusCallbackAsync(ReceivePhoneRecordingStatusCallbackCommand command, CancellationToken cancellationToken)
@@ -1053,5 +1058,26 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction => config.Config,
             _ => throw new NotSupportedException(nameof(type))
         };
+    }
+    
+    private async Task RetryAsync(
+        Func<Task> action,
+        int maxRetryCount,
+        int delaySeconds,
+        CancellationToken cancellationToken)
+    {
+        for (int attempt = 1; attempt <= maxRetryCount + 1; attempt++)
+        {
+            try
+            {
+                await action();
+                return;
+            }
+            catch (Exception ex) when (attempt <= maxRetryCount)
+            {
+                Log.Warning(ex, "重試第 {Attempt} 次失敗，稍後再試…", attempt);
+                await Task.Delay(TimeSpan.FromSeconds(delaySeconds), cancellationToken);
+            }
+        }
     }
 }
