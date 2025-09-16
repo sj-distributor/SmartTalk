@@ -68,7 +68,7 @@ public class SmartiesClient : ISmartiesClient
     {
         Log.Information("GetSaleAutoCallNumber request: {@Request}", request);
 
-        var response = await _httpClientFactory.PostAsJsonAsync<GetSaleAutoCallNumberResponse>($"{_smartiesSettings.BaseUrl}/api/AutoCall/number", request, cancellationToken, headers: _headers).ConfigureAwait(false);
+        var response = await _httpClientFactory.GetAsync<GetSaleAutoCallNumberResponse>($"{_smartiesSettings.BaseUrl}/api/AutoCall/number?{request.Id}", cancellationToken, headers: _headers).ConfigureAwait(false);
         
         Log.Information("GetSaleAutoCallNumber response: {@Response}", response);
 
