@@ -163,7 +163,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         Log.Information($"The call from {command.From} to {command.To} is connected");
 
         InitAiSpeechAssistantStreamContext(command.Host, command.From);
-        
+
         await BuildingAiSpeechAssistantKnowledgeBaseAsync(command.From, command.To, command.AssistantId, command.GreetingId, cancellationToken).ConfigureAwait(false);
         
         _aiSpeechAssistantStreamContext.HumanContactPhone = _aiSpeechAssistantStreamContext.ShouldForward ? null 
@@ -322,7 +322,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             status: CallResource.UpdateStatusEnum.Completed
         );
     }
-
+    
     private async Task BuildingAiSpeechAssistantKnowledgeBaseAsync(string from, string to, int? assistantId, int? greetingId, CancellationToken cancellationToken)
     {
         var inboundRoute = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantInboundRouteAsync(from, to, cancellationToken).ConfigureAwait(false);
