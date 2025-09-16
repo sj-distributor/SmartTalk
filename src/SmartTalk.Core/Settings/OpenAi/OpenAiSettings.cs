@@ -10,9 +10,9 @@ public class OpenAiSettings : IConfigurationSetting
         ApiKey = configuration.GetValue<string>("OpenAi:ApiKey");
         Organization = configuration.GetValue<string>("OpenAi:Organization");
         
-        BaseUrl = configuration.GetValue<string>("OpenAiForHk:BaseUrl");
-        ApiKey = configuration.GetValue<string>("OpenAiForHk:ApiKey");
-        Organization = configuration.GetValue<string>("OpenAiForHk:Organization");
+        HkBaseUrl = configuration.GetValue<string>("OpenAiForHk:BaseUrl");
+        HkApiKey = configuration.GetValue<string>("OpenAiForHk:ApiKey");
+        HkOrganization = configuration.GetValue<string>("OpenAiForHk:Organization");
     }
     
     // Us 
