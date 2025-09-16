@@ -23,7 +23,7 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
     }
 
-    public Dictionary<string, string> GetHeaders()
+    public Dictionary<string, string> GetHeaders(RealtimeAiServerRegion region)
     {
         return new Dictionary<string, string>();
     }
