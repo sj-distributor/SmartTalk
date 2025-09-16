@@ -72,17 +72,15 @@ public partial class PosDataProvider : IPosDataProvider
     public async Task<(int Count, List<Company> Companies)> GetPosCompaniesAsync(
         int? pageIndex = null, int? pageSize = null, List<int> companyIds = null, int? serviceProviderId = null, string keyword = null, CancellationToken cancellationToken = default)
     {
-        var query = _repository.Query<Company>();
+        var query = from company in _repository.Query<Company>()
+            join store in _repository.Query<CompanyStore>() on company.Id equals store.CompanyId
+            where (!serviceProviderId.HasValue || company.ServiceProviderId == serviceProviderId.Value)
+                  && (companyIds == null || companyIds.Count == 0 || companyIds.Contains(company.Id))
+                  && (string.IsNullOrEmpty(keyword) || company.Name.Contains(keyword) || store.Names.Contains(keyword))
+            select company;
 
-        if (serviceProviderId.HasValue)
-            query = query.Where(x => x.ServiceProviderId == serviceProviderId.Value);
-
-        if (companyIds != null && companyIds.Count != 0)
-            query = query.Where(x => companyIds.Contains(x.Id));
-
-        if (!string.IsNullOrEmpty(keyword))
-            query = query.Where(x => x.Name.Contains(keyword));
-
+        query = query.Distinct();
+        
         var count = await query.CountAsync(cancellationToken).ConfigureAwait(false);
 
         if (pageIndex.HasValue && pageSize.HasValue)

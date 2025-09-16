@@ -16,9 +16,7 @@ using SmartTalk.Core.Services.Printer;
 using SmartTalk.Core.Services.RetrievalDb.VectorDb;
 using SmartTalk.Core.Services.Security;
 using SmartTalk.Messages.Commands.Pos;
-using SmartTalk.Messages.Constants;
 using SmartTalk.Messages.Dto.Agent;
-using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Pos;
 using SmartTalk.Messages.Enums.Account;
@@ -106,7 +104,7 @@ public partial class PosService : IPosService
     public async Task<GetCompanyWithStoresResponse> GetCompanyWithStoresAsync(GetCompanyWithStoresRequest request, CancellationToken cancellationToken)
     {
         var (count, companies) = await _posDataProvider.GetPosCompaniesAsync(
-            request.PageIndex, request.PageSize, serviceProviderId: request.ServiceProviderId, cancellationToken: cancellationToken).ConfigureAwait(false);
+            request.PageIndex, request.PageSize, serviceProviderId: request.ServiceProviderId, keyword: request.Keyword, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var result = _mapper.Map<List<CompanyDto>>(companies);
         
@@ -115,7 +113,7 @@ public partial class PosService : IPosService
             Data = new GetCompanyWithStoresResponseData
             {
                 Count = count,
-                Data = await EnrichPosCompaniesAsync(result, request.Keyword, cancellationToken).ConfigureAwait(false)
+                Data = await EnrichPosCompaniesAsync(result, cancellationToken).ConfigureAwait(false)
             }
         };
     }
@@ -348,25 +346,19 @@ public partial class PosService : IPosService
         return new GetCurrentUserStoresResponse { Data = enrichStores };
     }
 
-    private async Task<List<GetCompanyWithStoresData>> EnrichPosCompaniesAsync(List<CompanyDto> companies, string keyword, CancellationToken cancellationToken)
+    private async Task<List<GetCompanyWithStoresData>> EnrichPosCompaniesAsync(List<CompanyDto> companies, CancellationToken cancellationToken)
     {
         var stores = await _posDataProvider.GetPosCompanyStoresAsync(
             companyIds: companies.Select(x => x.Id).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var storeGroups = stores.GroupBy(x => x.CompanyId).ToDictionary(kvp => kvp.Key, kvp => kvp.ToList());
 
-        var data = companies.Select(x => new GetCompanyWithStoresData
+        return companies.Select(x => new GetCompanyWithStoresData
         {
             Company = x,
             Stores = EnrichCompanyStores(x, storeGroups),
             Count = storeGroups.TryGetValue(x.Id, out var group) ? group.Count : 0
         }).ToList();
-        
-        if (string.IsNullOrWhiteSpace(keyword)) return data;
-        
-        return data.Where(x =>
-                (x.Company.Name?.Contains(keyword, StringComparison.OrdinalIgnoreCase) ?? false) ||
-                x.Stores.Any(s => s.Names?.Contains(keyword, StringComparison.OrdinalIgnoreCase) ?? false)).ToList();
     }
 
     private List<CompanyStoreDto> EnrichCompanyStores(CompanyDto company, Dictionary<int,List<CompanyStore>> storeGroups)
