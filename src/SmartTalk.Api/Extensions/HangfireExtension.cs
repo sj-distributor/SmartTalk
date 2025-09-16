@@ -60,7 +60,7 @@ public static class HangfireExtension
         
         services.AddHangfireServer(opt =>
         {
-            opt.WorkerCount = 5;
+            opt.WorkerCount = 50;
             opt.Queues = new[] { HangfireConstants.InternalHostingTransfer };
             opt.ServerName = $"DEPLOY-{HangfireConstants.InternalHostingTransfer.ToUpper()}-{Guid.NewGuid()}";
         });
