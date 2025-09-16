@@ -273,17 +273,22 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                                   zh-TW: Taiwanese Chinese (Traditional Chinese)
                                   en: English
                                   es: Spanish
-                                  
+                                                            
                                   Rules:
-                                  Analyze the speech content carefully and identify the primary language spoken.
-                                  If the recording contains mixed languages, return the code of the language that dominates most of the speech.
-                                  Do not assume or guess based on the prompt itself—only judge from the actual audio content.
-                                  Return only the code without any additional text or explanations.
-                                  
+                                  1. Carefully analyze the speech content and identify the primary spoken language.
+                                  2. If the recording contains noise, background sounds, or non-standard pronunciation, focus on the linguistic features (tone, rhythm, common words) rather than misclassifying it.
+                                  3. For English with heavy accents or imperfect pronunciation, still classify as English (en).
+                                  4. Only return 'es' (Spanish) if the majority of the recording is clearly and consistently spoken in Spanish. Do NOT classify English with accents or noise as Spanish.
+                                  5. If the recording contains mixed languages, return the code of the language that dominates most of the speech.
+                                  6. Return only the code without any additional text or explanations.
+                                                            
                                   Examples:
-                                  If the audio is in Mandarin, return: zh-CN
-                                  If the audio is in Cantonese, return: zh
-                                  If the audio is in English, return: en
+                                  If the audio is in Mandarin, even with background noise, return: zh-CN
+                                  If the audio is in Cantonese, possibly with some Mandarin words, return: zh
+                                  If the audio is in Taiwanese Mandarin (Traditional Chinese), return: zh-TW
+                                  If the audio is in English, even with a strong accent or imperfect pronunciation, return: en
+                                  If the audio is in English with background noise, return: en
+                                  If the audio is predominantly in Spanish, spoken clearly and throughout most of the recording, return: es
                                   If the audio has both Mandarin and English but Mandarin is the dominant language, return: zh-CN
                                   If the audio has both Cantonese and English but English dominates, return: en
                                   """),
