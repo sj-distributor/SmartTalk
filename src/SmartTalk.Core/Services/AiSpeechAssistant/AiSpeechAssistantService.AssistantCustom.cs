@@ -2,7 +2,9 @@ using Serilog;
 using System.Text;
 using Newtonsoft.Json.Linq;
 using System.Globalization;
+using Newtonsoft.Json;
 using SmartTalk.Core.Domain.AISpeechAssistant;
+using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.Restaurants;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
@@ -87,6 +89,11 @@ public partial class AiSpeechAssistantService
 
     public async Task<UpdateAiSpeechAssistantResponse> UpdateAiSpeechAssistantAsync(UpdateAiSpeechAssistantCommand command, CancellationToken cancellationToken)
     {
+        var storeUser = await _posDataProvider.GetPosStoreUsersByUserIdAndAssistantIdAsync([command.AssistantId], _currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
+
+        if (storeUser == null)
+            throw new Exception("Do not have the store permission to operate");
+        
         var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantAsync(command.AssistantId, cancellationToken).ConfigureAwait(false);
         
         await UpdateAssistantNumberIfRequiredAsync(assistant.AnsweringNumberId, command.AnsweringNumberId, cancellationToken).ConfigureAwait(false);
@@ -96,6 +103,8 @@ public partial class AiSpeechAssistantService
 
         await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync([assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
 
+        await UpdateAiSpeechAssistantConfigsAsync(assistant, command.TransferCallNumber, cancellationToken).ConfigureAwait(false);
+        
         return new UpdateAiSpeechAssistantResponse
         {
             Data = _mapper.Map<AiSpeechAssistantDto>(assistant)
@@ -104,14 +113,20 @@ public partial class AiSpeechAssistantService
 
     public async Task<DeleteAiSpeechAssistantResponse> DeleteAiSpeechAssistantAsync(DeleteAiSpeechAssistantCommand command, CancellationToken cancellationToken)
     {
-        var assistants = await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantsAsync(
-                command.AssistantIds, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var storeUser = await _posDataProvider.GetPosStoreUsersByUserIdAndAssistantIdAsync(command.AssistantIds, _currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
+
+        if (storeUser == null)
+            throw new Exception("Do not have the store permission to operate");
+        
+        var assistants = await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantsAsync(command.AssistantIds, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (assistants.Count == 0) throw new Exception("Delete assistants failed.");
 
         await UpdateNumbersStatusAsync(assistants.Where(x => x.AnsweringNumberId.HasValue).Select(x => x.AnsweringNumberId.Value).ToList(), false, cancellationToken).ConfigureAwait(false);
+        
+        var agents = await DeleteAssistantRelatedInfoAsync(assistants.Select(x => x.AgentId).ToList(), cancellationToken).ConfigureAwait(false);
 
-        await DeleteAssistantRelatedInfoAsync(assistants.Select(x => x.AgentId).ToList(), cancellationToken).ConfigureAwait(false);
+        await _posDataProvider.DeletePosAgentsByAgentIdsAsync(agents.Select(x => x.Id).ToList(), true, cancellationToken).ConfigureAwait(false);
         
         return new DeleteAiSpeechAssistantResponse
         {
@@ -223,7 +238,7 @@ public partial class AiSpeechAssistantService
 
     private async Task<Domain.AISpeechAssistant.AiSpeechAssistant> InitialAiSpeechAssistantAsync(AddAiSpeechAssistantCommand command, CancellationToken cancellationToken)
     {
-        var assistant = await InitialAssistantRelatedInfoAsync(command , cancellationToken).ConfigureAwait(false);
+        var assistant = await InitialAssistantRelatedInfoAsync(command, cancellationToken).ConfigureAwait(false);
         
         await InitialAssistantKnowledgeAsync(command, assistant, cancellationToken).ConfigureAwait(false);
 
@@ -273,12 +288,13 @@ public partial class AiSpeechAssistantService
         return assistant;
     }
 
-    private async Task<Agent> AddAgentAsync(int? relateId, AgentType type, AgentSourceSystem sourceSystem, bool isDisplay, CancellationToken cancellationToken)
+    private async Task<Agent> AddAgentAsync(int? relateId, int? serviceProviderId, AgentType type, AgentSourceSystem sourceSystem, bool isDisplay, CancellationToken cancellationToken)
     {
         var agent = new Agent
         {
             Type = type,
             RelateId = relateId,
+            ServiceProviderId = serviceProviderId,
             IsDisplay = isDisplay,
             SourceSystem = sourceSystem
         };
@@ -307,7 +323,7 @@ public partial class AiSpeechAssistantService
 
         await _restaurantDataProvider.AddRestaurantAsync(restaurant, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        var agent = await AddAgentAsync(restaurant.Id, command.AgentType, command.SourceSystem, command.IsDisplay, cancellationToken);
+        var agent = await AddAgentAsync(restaurant.Id, command.ServiceProviderId, command.AgentType, command.SourceSystem, command.IsDisplay, cancellationToken);
         
         var number = await DistributeNumberAsync(cancellationToken).ConfigureAwait(false);
         
@@ -316,7 +332,7 @@ public partial class AiSpeechAssistantService
 
     private async Task<(Agent Agent, NumberPool Number)> InitialAiKidInternalAsync(AddAiSpeechAssistantCommand command, CancellationToken cancellationToken)
     {
-        var agent = await AddAgentAsync(null, command.AgentType, command.SourceSystem, command.IsDisplay, cancellationToken).ConfigureAwait(false);
+        var agent = await AddAgentAsync(null, command.ServiceProviderId, command.AgentType, command.SourceSystem, command.IsDisplay, cancellationToken).ConfigureAwait(false);
         
         if (command.Uuid.HasValue)
             await _aiSpeechAssistantDataProvider.AddAiKidAsync(new AiKid
@@ -330,7 +346,7 @@ public partial class AiSpeechAssistantService
 
     private async Task<(Agent Agent, NumberPool Number)> InitialAssistantInternalAsync(AddAiSpeechAssistantCommand command, CancellationToken cancellationToken)
     {
-        var agent = await AddAgentAsync(null, command.AgentType, command.SourceSystem, command.IsDisplay, cancellationToken).ConfigureAwait(false);
+        var agent = await AddAgentAsync(null, command.ServiceProviderId, command.AgentType, command.SourceSystem, command.IsDisplay, cancellationToken).ConfigureAwait(false);
         
         var number = await DistributeNumberAsync(cancellationToken).ConfigureAwait(false);
         
@@ -339,9 +355,17 @@ public partial class AiSpeechAssistantService
     
     private async Task<(Agent Agent, NumberPool Number)> InitialPosCompanyStoreInternalAsync(AddAiSpeechAssistantCommand command, CancellationToken cancellationToken)
     {
-        if (!command.AgentId.HasValue) throw new ArgumentException("Agent id is required", nameof(command.AgentId));
+        if (!command.StoreId.HasValue) throw new ArgumentException("Store id is required", nameof(command.AgentId));
         
-        var agent = await _agentDataProvider.GetAgentAsync(id: command.AgentId.Value, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var agent = await AddAgentAsync(null, command.ServiceProviderId, AgentType.Assistant, command.SourceSystem, command.IsDisplay, cancellationToken).ConfigureAwait(false);
+
+        var posAgent = new PosAgent
+        {
+            AgentId = agent.Id,
+            StoreId = command.StoreId.Value
+        };
+        
+        await _posDataProvider.AddPosAgentsAsync([posAgent], cancellationToken: cancellationToken).ConfigureAwait(false);
         
         var number = await DistributeNumberAsync(cancellationToken).ConfigureAwait(false);
         
@@ -507,13 +531,15 @@ public partial class AiSpeechAssistantService
         return number;
     }
     
-    private async Task DeleteAssistantRelatedInfoAsync(List<int> agentIds, CancellationToken cancellationToken)
+    private async Task<List<Agent>> DeleteAssistantRelatedInfoAsync(List<int> agentIds, CancellationToken cancellationToken)
     {
         var agents = await _agentDataProvider.GetAgentsAsync(agentIds: agentIds, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        if (agents.Count == 0) return;
+        if (agents.Count == 0) return [];
 
         await _agentDataProvider.DeleteAgentsAsync(agents, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        return agents;
     }
 
     private async Task UpdateAgentIfRequiredAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, Agent agent, CancellationToken cancellationToken)
@@ -523,5 +549,101 @@ public partial class AiSpeechAssistantService
         agent.RelateId = assistant.Id;
         
         await _agentDataProvider.UpdateAgentsAsync([agent], cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task UpdateAiSpeechAssistantConfigsAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, string transferCallNumber, CancellationToken cancellationToken)
+    {
+        var configs = await _aiSpeechAssistantDataProvider
+            .GetAiSpeechAssistantFunctionCallByAssistantIdAsync(assistant.Id, assistant.ModelProvider, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var humanConcat = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantHumanContactByAssistantIdAsync(assistant.Id, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Get the human concat: {@HumanConcat}", humanConcat);
+        
+        var turnDetection = configs.FirstOrDefault(x => x.Type == AiSpeechAssistantSessionConfigType.TurnDirection);
+        var transferCallTool = configs.FirstOrDefault(x => x.Type == AiSpeechAssistantSessionConfigType.Tool && x.Name == "transfer_call");
+        
+        Log.Information("Getting AI Speech Assistant Configs: {@TurnDetection} {@TransferCallTool}", turnDetection, transferCallTool);
+        
+        if (assistant.ModelProvider == AiSpeechAssistantProvider.OpenAi)
+        {
+            if (transferCallTool == null)
+            {
+                var content = new 
+                {
+                    type = "function",
+                    name = "transfer_call",
+                    description = "Triggered when the customer requests to transfer the call to a real person(e.g. 用户说 '转人工', '找真人', '接客服'), or when the customer is not satisfied with the current answer and wants someone else to serve him/her"
+                };
+            
+                transferCallTool = new AiSpeechAssistantFunctionCall
+                {
+                    AssistantId = assistant.Id,
+                    Name = "transfer_call",
+                    Content = JsonConvert.SerializeObject(content),
+                    Type = AiSpeechAssistantSessionConfigType.Tool,
+                    ModelProvider = AiSpeechAssistantProvider.OpenAi,
+                    IsActive = assistant.IsTransferHuman,
+                };
+            
+                await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantFunctionCall(transferCallTool, cancellationToken: cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                transferCallTool.IsActive = assistant.IsTransferHuman;
+                
+                await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantFunctionCall([transferCallTool], cancellationToken: cancellationToken).ConfigureAwait(false);
+            }
+
+            if (turnDetection == null)
+            {
+                var content = new 
+                {
+                    type = "server_vad",
+                    threshold = 0.8f,
+                    silence_duration_ms = 500
+                };
+                
+                turnDetection = new AiSpeechAssistantFunctionCall
+                {
+                    AssistantId = assistant.Id,
+                    Name = "turn_detection",
+                    Content = JsonConvert.SerializeObject(content),
+                    Type = AiSpeechAssistantSessionConfigType.TurnDirection,
+                    ModelProvider = AiSpeechAssistantProvider.OpenAi,
+                    IsActive = true
+                };
+                
+                await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantFunctionCall(turnDetection, cancellationToken: cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                var content = JsonConvert.DeserializeObject<AiSpeechAssistantSessionTurnDetectionDto>(turnDetection.Content);
+                
+                content.SilenceDuratioMs = assistant.WaitInterval;
+                
+                turnDetection.Content = JsonConvert.SerializeObject(content);
+                
+                await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantFunctionCall([turnDetection], cancellationToken: cancellationToken).ConfigureAwait(false);
+            }
+
+            if (assistant.IsTransferHuman)
+            {
+                if (humanConcat == null)
+                {
+                    humanConcat = new AiSpeechAssistantHumanContact
+                    {
+                        AssistantId = assistant.Id,
+                        HumanPhone = transferCallNumber
+                    };
+                    
+                    await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantHumanContactAsync(humanConcat, cancellationToken: cancellationToken).ConfigureAwait(false);
+                }
+                else
+                {
+                    humanConcat.HumanPhone = transferCallNumber;
+                    await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantHumanContactAsync(humanConcat, cancellationToken: cancellationToken).ConfigureAwait(false);
+                }
+            }
+        }
     }
 }

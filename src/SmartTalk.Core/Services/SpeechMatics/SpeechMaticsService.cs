@@ -1,3 +1,4 @@
+using Google.Cloud.Translation.V2;
 using Serilog;
 using SmartTalk.Core.Ioc;
 using Microsoft.IdentityModel.Tokens;
@@ -22,7 +23,9 @@ using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Commands.SpeechMatics;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
+using SmartTalk.Messages.Enums.Account;
 using SmartTalk.Messages.Enums.Agent;
+using SmartTalk.Messages.Enums.STT;
 using Twilio;
 using Twilio.Rest.Api.V2010.Account;
 
@@ -39,6 +42,7 @@ public class SpeechMaticsService : ISpeechMaticsService
     private  readonly IFfmpegService _ffmpegService;
     private readonly OpenAiSettings _openAiSettings;
     private readonly TwilioSettings _twilioSettings;
+    private readonly TranslationClient _translationClient;
     private readonly ISmartiesClient _smartiesClient;
     private readonly PhoneOrderSetting _phoneOrderSetting;
     private readonly IPhoneOrderService _phoneOrderService;
@@ -52,6 +56,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         IFfmpegService ffmpegService,
         OpenAiSettings openAiSettings,
         TwilioSettings twilioSettings,
+        TranslationClient translationClient,
         ISmartiesClient smartiesClient,
         PhoneOrderSetting phoneOrderSetting,
         IPhoneOrderService phoneOrderService,
@@ -64,6 +69,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         _ffmpegService = ffmpegService;
         _openAiSettings = openAiSettings;
         _twilioSettings = twilioSettings;
+        _translationClient = translationClient;
         _smartiesClient = smartiesClient;
         _phoneOrderSetting = phoneOrderSetting;
         _phoneOrderService = phoneOrderService;
@@ -156,9 +162,38 @@ public class SpeechMaticsService : ISpeechMaticsService
         
         record.Status = PhoneOrderRecordStatus.Sent;
         record.TranscriptionText = completion.Content.FirstOrDefault()?.Text ?? "";
+        
+        var detection = await _translationClient.DetectLanguageAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
 
-        if (agent.SourceSystem == AgentSourceSystem.Smarties)
-            await CallBackSmartiesRecordAsync(agent, record, cancellationToken).ConfigureAwait(false);
+        var reports = new List<PhoneOrderRecordReport>();
+
+        reports.Add(new PhoneOrderRecordReport
+        {
+            RecordId = record.Id,
+            Report = record.TranscriptionText,
+            Language = SelectReportLanguageEnum(detection.Language),
+            IsOrigin = SelectReportLanguageEnum(detection.Language) == record.Language,
+            CreatedDate = DateTimeOffset.Now
+        });
+        
+        var targetLanguage = SelectReportLanguageEnum(detection.Language) == TranscriptionLanguage.Chinese ? "en" : "zh";
+        
+        var reportLanguage = SelectReportLanguageEnum(detection.Language) == TranscriptionLanguage.Chinese ? TranscriptionLanguage.English : TranscriptionLanguage.Chinese;
+        
+        var translatedText = await _translationClient.TranslateTextAsync(record.TranscriptionText, targetLanguage, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        reports.Add(new PhoneOrderRecordReport
+        {
+            RecordId = record.Id,
+            Report = translatedText.TranslatedText,
+            Language = reportLanguage,
+            IsOrigin = reportLanguage == record.Language,
+            CreatedDate = DateTimeOffset.Now
+        });
+
+        await _phoneOrderDataProvider.AddPhoneOrderRecordReportsAsync(reports, true, cancellationToken).ConfigureAwait(false);
+        
+        await CallBackSmartiesRecordAsync(agent, record, cancellationToken).ConfigureAwait(false);
 
         var message = agent.WechatRobotMessage?.Replace("#{assistant_name}", aiSpeechAssistant?.Name ?? "").Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString()).Replace("#{assistant_file_url}", record.Url);
 
@@ -284,5 +319,13 @@ public class SpeechMaticsService : ISpeechMaticsService
         Log.Information("Structure diarization results : {@speakInfos}", speakInfos);
         
         return speakInfos;
+    }
+    
+    private TranscriptionLanguage SelectReportLanguageEnum(string language)
+    {
+        if (language.StartsWith("zh", StringComparison.OrdinalIgnoreCase))
+            return TranscriptionLanguage.Chinese;
+    
+        return TranscriptionLanguage.English;
     }
 }
