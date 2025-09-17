@@ -702,6 +702,24 @@ public partial class PhoneOrderService
     public async Task<GetPhoneOrderRecordReportResponse> GetPhoneOrderRecordReportByCallSidAsync(GetPhoneOrderRecordReportRequest request, CancellationToken cancellationToken)
     {
         var report = await _phoneOrderDataProvider.GetPhoneOrderRecordReportAsync(request.CallSid, request.Language, cancellationToken).ConfigureAwait(false);
+        
+        if (report == null)
+        {
+            var record = await _phoneOrderDataProvider.GetPhoneOrderRecordBySessionIdAsync(request.CallSid, cancellationToken).ConfigureAwait(false);
+
+            var newReport = new PhoneOrderRecordReportDto()
+            {
+                RecordId = record.Id,
+                Language = (TranscriptionLanguage)request.Language,
+                Report = record.TranscriptionText,
+                IsOrigin = (TranscriptionLanguage)request.Language == record.Language,
+            };
+
+            return new GetPhoneOrderRecordReportResponse()
+            {
+                Data = newReport
+            };
+        }
 
         return new GetPhoneOrderRecordReportResponse()
         {
