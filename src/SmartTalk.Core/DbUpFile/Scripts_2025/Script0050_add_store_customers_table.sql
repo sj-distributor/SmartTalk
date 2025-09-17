@@ -8,6 +8,7 @@ create table if not exists `store_customer`
     `latitude` varchar(16) null,
     `longitude` varchar(16) null,
     `timezone` varchar(64) null,
+    `room` varchar(64) null,
     `notes` varchar(512) null,
     `is_deleted` tinyint(1) not null,
     `created_by` int null,

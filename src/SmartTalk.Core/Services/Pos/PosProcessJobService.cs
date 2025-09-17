@@ -36,6 +36,7 @@ public class PosProcessJobService : IPosProcessJobService
             Address = x.Where(o => o.Type == PosOrderReceiveType.Delivery).FirstOrDefault()?.Address,
             Latitude = x.Where(o => o.Type == PosOrderReceiveType.Delivery).FirstOrDefault()?.Latitude,
             Longitude = x.Where(o => o.Type == PosOrderReceiveType.Delivery).FirstOrDefault()?.Longitude,
+            Room = x.Where(o => o.Type == PosOrderReceiveType.Delivery).FirstOrDefault()?.Room,
             Notes = x.Where(o => o.Type == PosOrderReceiveType.Delivery).FirstOrDefault()?.Notes
         }).ToList();
         

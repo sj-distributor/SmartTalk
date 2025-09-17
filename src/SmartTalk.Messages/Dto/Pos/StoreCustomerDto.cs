@@ -15,6 +15,8 @@ public class StoreCustomerDto
     public string Latitude { get; set; }
 
     public string Longitude { get; set; }
+    
+    public string Room { get; set; }
 
     public string Notes { get; set; }
     
