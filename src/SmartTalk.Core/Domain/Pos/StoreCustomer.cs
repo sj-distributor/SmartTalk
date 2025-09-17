@@ -28,6 +28,9 @@ public class StoreCustomer : IEntity, IHasCreatedFields, IHasModifiedFields
 
     [Column("longitude"), StringLength(16)]
     public string Longitude { get; set; }
+    
+    [Column("room")]
+    public string Room { get; set; }
 
     [Column("notes"), StringLength(512)]
     public string Notes { get; set; }
