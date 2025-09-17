@@ -333,7 +333,7 @@ public class PosController : ControllerBase
         return Ok(response);
     }
     
-    [Route("customer/modify"), HttpPost]
+    [Route("customer"), HttpPut]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdateStoreCustomerResponse))]
     public async Task<IActionResult> UpdateStoreCustomerAsync([FromBody] UpdateStoreCustomerCommand command)
     {
