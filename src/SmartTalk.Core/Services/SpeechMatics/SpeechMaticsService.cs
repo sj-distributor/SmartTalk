@@ -187,7 +187,7 @@ public class SpeechMaticsService : ISpeechMaticsService
             RecordId = record.Id,
             Report = translatedText.TranslatedText,
             Language = reportLanguage,
-            IsOrigin = reportLanguage== record.Language,
+            IsOrigin = reportLanguage == record.Language,
             CreatedDate = DateTimeOffset.Now
         });
 
