@@ -1,6 +1,6 @@
 create table if not exists `store_customer`
 (
-    `id` int primary key,
+    `id` int primary key auto_increment,
     `store_id` int not null,
     `name` varchar(255) not null,
     `phone` varchar(64) not null,
