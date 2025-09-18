@@ -18,7 +18,7 @@ public class StoreCustomerDto
     
     public string Room { get; set; }
 
-    public string Notes { get; set; }
+    public string Remarks { get; set; }
     
     public string Timezone { get; set; }
 
