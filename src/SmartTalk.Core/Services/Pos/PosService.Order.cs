@@ -520,7 +520,7 @@ public partial class PosService
             Type = order.Type == PosOrderReceiveType.Pickup ? 1 : 3,
             Guests = 1,
             IsTaxFree = false,
-            Notes = string.IsNullOrEmpty(order.Notes) ? string.Empty : order.Notes,
+            Notes = string.IsNullOrEmpty(order.Notes) ? string.IsNullOrEmpty(order.Remarks) ? string.Empty : order.Remarks : order.Notes,
             SourceType = 3,
             OrderItems = JsonConvert.DeserializeObject<List<PhoneCallOrderItem>>(order.Items),
             Customer = new PhoneCallOrderCustomer
