@@ -28,7 +28,7 @@ public partial class EventHandlingService
                 Address = @event.Order.Address,
                 Latitude = @event.Order.Latitude,
                 Longitude = @event.Order.Longitude,
-                Notes = @event.Order.Notes
+                Remarks = @event.Order.Notes
             };
             
             await _posDataProvider.AddStoreCustomersAsync([customer], cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -37,21 +37,24 @@ public partial class EventHandlingService
         {
             if (!string.IsNullOrEmpty(@event.Order.Name) && @event.Order.Name.Trim() != customer.Name.Trim())
                 customer.Name = @event.Order.Name;
+
+            if (@event.Order.Type == PosOrderReceiveType.Delivery)
+            {
+                if (!string.IsNullOrEmpty(@event.Order.Address) && @event.Order.Address?.Trim() != customer.Address?.Trim())
+                    customer.Address = @event.Order.Address;
             
-            if (!string.IsNullOrEmpty(@event.Order.Address) && @event.Order.Address?.Trim() != customer.Address?.Trim())
-                customer.Address = @event.Order.Address;
+                if (!string.IsNullOrEmpty(@event.Order.Latitude) && @event.Order.Latitude?.Trim() != customer.Latitude?.Trim())
+                    customer.Latitude = @event.Order.Latitude;
             
-            if (!string.IsNullOrEmpty(@event.Order.Latitude) && @event.Order.Latitude?.Trim() != customer.Latitude?.Trim())
-                customer.Latitude = @event.Order.Latitude;
+                if (!string.IsNullOrEmpty(@event.Order.Longitude) && @event.Order.Longitude?.Trim() != customer.Longitude?.Trim())
+                    customer.Longitude = @event.Order.Longitude;
             
-            if (!string.IsNullOrEmpty(@event.Order.Longitude) && @event.Order.Longitude?.Trim() != customer.Longitude?.Trim())
-                customer.Longitude = @event.Order.Longitude;
+                if (@event.Order.Room?.Trim() != customer.Room?.Trim())
+                    customer.Room = @event.Order.Room;
             
-            if (!string.IsNullOrEmpty(@event.Order.Room) && @event.Order.Room?.Trim() != customer.Room?.Trim())
-                customer.Room = @event.Order.Room;
-            
-            if (!string.IsNullOrEmpty(@event.Order.Notes) && @event.Order.Type == PosOrderReceiveType.Delivery && @event.Order.Notes?.Trim() != customer.Notes?.Trim())
-                customer.Notes = @event.Order.Notes;
+                if (@event.Order.Remarks?.Trim() != customer.Remarks?.Trim())
+                    customer.Remarks = @event.Order.Remarks;
+            }
             
             await _posDataProvider.UpdateStoreCustomersAsync([customer], cancellationToken: cancellationToken).ConfigureAwait(false);
         }
