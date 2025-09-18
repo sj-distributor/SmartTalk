@@ -241,7 +241,8 @@ public partial class PosService : IPosService
     
     public async Task<GetPosProductsResponse> GetPosProductsAsync(GetPosProductsRequest request, CancellationToken cancellationToken)
     {
-        var products = await _posDataProvider.GetPosProductsAsync(categoryId: request.CategoryId, keyWord: request.KeyWord, isActive: request.IsActive, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var products = await _posDataProvider.GetPosProductsAsync(
+            categoryId: request.CategoryId, keyWord: request.KeyWord, isActive: request.IsActive, storeId: request.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         if (products == null || products.Count == 0) products = [];
 
