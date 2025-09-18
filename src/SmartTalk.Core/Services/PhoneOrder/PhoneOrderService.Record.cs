@@ -136,9 +136,12 @@ public partial class PhoneOrderService
 
             var (goalText, tip) = await PhoneOrderTranscriptionAsync(phoneOrderInfo, record, audioContent, cancellationToken).ConfigureAwait(false);
 
+            record.ConversationText = goalText;
+
             await _phoneOrderUtilService.ExtractPhoneOrderShoppingCartAsync(goalText, record, cancellationToken).ConfigureAwait(false);
 
             record.Tips = tip;
+            await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception e)
         {
