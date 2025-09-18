@@ -307,7 +307,7 @@ public class PhoneOrderFixture : PhoneOrderFixtureBase
     
         await RunWithUnitOfWork<IMediator>(async mediator =>
         {
-            var response = await mediator.RequestAsync<GetPhoneOrderOrderItemsRequest, GetPhoneOrderOrderItemsRessponse>(new GetPhoneOrderOrderItemsRequest { RecordId = 1 });
+            var response = await mediator.RequestAsync<GetPhoneOrderOrderItemsRequest, GetPhoneOrderOrderItemsResponse>(new GetPhoneOrderOrderItemsRequest { RecordId = 1 });
             
             response.Data.ShouldNotBeNull();
             response.Data.ManualItems.Count.ShouldBe(2);
