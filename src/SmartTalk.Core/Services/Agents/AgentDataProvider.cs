@@ -26,7 +26,7 @@ public interface IAgentDataProvider : IScopedDependency
 
     Task<List<AgentPreviewDto>> GetAgentsByAgentTypeAsync<T>(AgentType agentType, List<int> agentIds = null, int? serviceProviderId = null, CancellationToken cancellationToken = default) where T : class, IEntity<int>, IAgent;
 
-    Task<List<Agent>> GetAgentsWitAssistantsAsync(int? agentId = null, string keyword = null, bool? isDefault = null, CancellationToken cancellationToken = default);
+    Task<List<Agent>> GetAgentsWithAssistantsAsync(int? agentId = null, string keyword = null, bool? isDefault = null, CancellationToken cancellationToken = default);
     
     Task<Agent> GetAgentByAssistantIdAsync(int assistantId, CancellationToken cancellationToken = default);
 
@@ -127,7 +127,7 @@ public class AgentDataProvider : IAgentDataProvider
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<Agent>> GetAgentsWitAssistantsAsync(
+    public async Task<List<Agent>> GetAgentsWithAssistantsAsync(
         int? agentId = null, string keyword = null, bool? isDefault = null, CancellationToken cancellationToken = default)
     {
         var query = from agent in _repository.Query<Agent>().Where(x => x.IsDisplay)
@@ -152,6 +152,7 @@ public class AgentDataProvider : IAgentDataProvider
     {
         var query = from agent in _repository.Query<Agent>().Where(x => x.IsDisplay)
             join agentAssistant in _repository.Query<AgentAssistant>().Where(x => x.IsDisplay) on agent.Id equals agentAssistant.AgentId
+            where agentAssistant.AssistantId == assistantId
             select agent;
         
         return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);

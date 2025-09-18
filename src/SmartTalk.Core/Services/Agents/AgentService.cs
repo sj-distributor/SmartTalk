@@ -50,7 +50,7 @@ public class AgentService : IAgentService
 
     public async Task<GetSurfaceAgentsResponse> GetSurfaceAgentsAsync(GetSurfaceAgentsRequest request, CancellationToken cancellationToken)
     {
-        var agents = await _agentDataProvider.GetAgentsWitAssistantsAsync(keyword: request.Keyword, isDefault: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var agents = await _agentDataProvider.GetAgentsWithAssistantsAsync(keyword: request.Keyword, isDefault: true, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         return new GetSurfaceAgentsResponse
         {
