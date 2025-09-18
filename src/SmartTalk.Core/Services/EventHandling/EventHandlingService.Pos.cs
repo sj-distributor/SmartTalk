@@ -4,6 +4,7 @@ using Smarties.Messages.DTO.OpenAi;
 using Smarties.Messages.Enums.OpenAi;
 using Smarties.Messages.Requests.Ask;
 using SmartTalk.Core.Domain.Pos;
+using SmartTalk.Messages.Enums.Pos;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
 using SmartTalk.Messages.Events.Pos;
 
@@ -49,7 +50,7 @@ public partial class EventHandlingService
             if (!string.IsNullOrEmpty(@event.Order.Room) && @event.Order.Room?.Trim() != customer.Room?.Trim())
                 customer.Room = @event.Order.Room;
             
-            if (!string.IsNullOrEmpty(@event.Order.Notes) && @event.Order.Notes?.Trim() != customer.Notes?.Trim())
+            if (!string.IsNullOrEmpty(@event.Order.Notes) && @event.Order.Type == PosOrderReceiveType.Delivery && @event.Order.Notes?.Trim() != customer.Notes?.Trim())
                 customer.Notes = @event.Order.Notes;
             
             await _posDataProvider.UpdateStoreCustomersAsync([customer], cancellationToken: cancellationToken).ConfigureAwait(false);
