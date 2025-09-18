@@ -344,7 +344,7 @@ public partial class PosService : IPosService
     
     public async Task<bool> CheckCurrentIsAdminAsync(CancellationToken cancellationToken)
     {
-        var roleUsers = await _securityDataProvider.GetRoleUsersAsync(null, SecurityStore.Roles.SuperAdministrator, cancellationToken).ConfigureAwait(false);
+        var roleUsers = await _securityDataProvider.GetRoleUserByRoleNameAsync(SecurityStore.Roles.SuperAdministrator, cancellationToken).ConfigureAwait(false);
 
         Log.Information("Get SuperAdmin role users: {@roleUsers} by current user: {@currentUserId}", roleUsers, _currentUser.Id.Value);
         
