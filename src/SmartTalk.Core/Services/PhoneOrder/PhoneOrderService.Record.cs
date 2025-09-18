@@ -44,6 +44,8 @@ public partial interface IPhoneOrderService
     Task<GetPhoneCallUsagesPreviewResponse> GetPhoneCallUsagesPreviewAsync(GetPhoneCallUsagesPreviewRequest request, CancellationToken cancellationToken);
 
     Task<GetPhoneCallRecordDetailResponse> GetPhoneCallrecordDetailAsync(GetPhoneCallRecordDetailRequest request, CancellationToken cancellationToken);
+
+    Task<GetPhoneOrderRecordReportResponse> GetPhoneOrderRecordReportByCallSidAsync(GetPhoneOrderRecordReportRequest request, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderService
@@ -52,7 +54,13 @@ public partial class PhoneOrderService
     {
         var (utcStart, utcEnd) = ConvertPstDateToUtcRange(request.Date);
 
-        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(request.AgentId, request.Name, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
+        var agentIds = request.AgentId.HasValue
+            ? [request.AgentId.Value]
+            : request.StoreId.HasValue
+                ? (await _posDataProvider.GetPosAgentsAsync(storeIds: [request.StoreId.Value], cancellationToken: cancellationToken).ConfigureAwait(false)).Select(x => x.AgentId).ToList()
+                : [];
+
+        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds, request.Name, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
 
         var enrichedRecords = _mapper.Map<List<PhoneOrderRecordDto>>(records);
 
@@ -684,6 +692,34 @@ public partial class PhoneOrderService
         var fileUrl = await ToExcelTransposed(data, cancellationToken).ConfigureAwait(false);
 
         return new GetPhoneCallRecordDetailResponse { Data = fileUrl };
+    }
+
+    public async Task<GetPhoneOrderRecordReportResponse> GetPhoneOrderRecordReportByCallSidAsync(GetPhoneOrderRecordReportRequest request, CancellationToken cancellationToken)
+    {
+        var report = await _phoneOrderDataProvider.GetPhoneOrderRecordReportAsync(request.CallSid, request.Language, cancellationToken).ConfigureAwait(false);
+
+        if (report == null)
+        {
+            var record = await _phoneOrderDataProvider.GetPhoneOrderRecordBySessionIdAsync(request.CallSid, cancellationToken).ConfigureAwait(false);
+
+            var newReport = new PhoneOrderRecordReportDto()
+            {
+                RecordId = record.Id,
+                Language = (TranscriptionLanguage)request.Language,
+                Report = record.TranscriptionText,
+                IsOrigin = (TranscriptionLanguage)request.Language == record.Language,
+            };
+
+            return new GetPhoneOrderRecordReportResponse()
+            {
+                Data = newReport
+            };
+        }
+
+        return new GetPhoneOrderRecordReportResponse()
+        {
+            Data = _mapper.Map<PhoneOrderRecordReportDto>(report)
+        };
     }
 
     private (DateTimeOffset Start, DateTimeOffset End) GetQueryTimeRange(int month)

@@ -19,100 +19,100 @@ public class PosController : ControllerBase
     }
         
     [Route("companies"), HttpGet]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPosCompanyWithStoresResponse))]
-    public async Task<IActionResult> GetPosCompanyWithStoresAsync([FromQuery] GetPosCompanyWithStoresRequest request)
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetCompanyWithStoresResponse))]
+    public async Task<IActionResult> GetPosCompanyWithStoresAsync([FromQuery] GetCompanyWithStoresRequest request)
     {
-        var response = await _mediator.RequestAsync<GetPosCompanyWithStoresRequest, GetPosCompanyWithStoresResponse>(request).ConfigureAwait(false);
+        var response = await _mediator.RequestAsync<GetCompanyWithStoresRequest, GetCompanyWithStoresResponse>(request).ConfigureAwait(false);
         
         return Ok(response);
     }
     
     [Route("company/store/detail"), HttpGet]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPosCompanyStoreDetailResponse))]
-    public async Task<IActionResult> GetPosCompanyStoreDetailAsync([FromQuery] GetPosCompanyStoreDetailRequest request)
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetCompanyStoreDetailResponse))]
+    public async Task<IActionResult> GetPosCompanyStoreDetailAsync([FromQuery] GetCompanyStoreDetailRequest request)
     {
-        var response = await _mediator.RequestAsync<GetPosCompanyStoreDetailRequest, GetPosCompanyStoreDetailResponse>(request).ConfigureAwait(false);
+        var response = await _mediator.RequestAsync<GetCompanyStoreDetailRequest, GetCompanyStoreDetailResponse>(request).ConfigureAwait(false);
         
         return Ok(response);
     }
     
     [Route("company/store/create"), HttpPost]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(CreatePosCompanyStoreCommand))]
-    public async Task<IActionResult> CreatePosCompanyStoreAsync([FromBody] CreatePosCompanyStoreCommand command)
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(CreateCompanyStoreCommand))]
+    public async Task<IActionResult> CreatePosCompanyStoreAsync([FromBody] CreateCompanyStoreCommand command)
     {
-        var response = await _mediator.SendAsync<CreatePosCompanyStoreCommand, CreatePosCompanyStoreResponse>(command).ConfigureAwait(false);
+        var response = await _mediator.SendAsync<CreateCompanyStoreCommand, CreateCompanyStoreResponse>(command).ConfigureAwait(false);
         
         return Ok(response);
     }
     
     [Route("company/store/update"), HttpPost]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdatePosCompanyStoreCommand))]
-    public async Task<IActionResult> UpdatePosCompanyStoreAsync([FromBody] UpdatePosCompanyStoreCommand command)
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdateCompanyStoreCommand))]
+    public async Task<IActionResult> UpdatePosCompanyStoreAsync([FromBody] UpdateCompanyStoreCommand command)
     {
-        var response = await _mediator.SendAsync<UpdatePosCompanyStoreCommand, UpdatePosCompanyStoreResponse>(command).ConfigureAwait(false);
+        var response = await _mediator.SendAsync<UpdateCompanyStoreCommand, UpdateCompanyStoreResponse>(command).ConfigureAwait(false);
         
         return Ok(response);
     }
     
     [Route("company/store/delete"), HttpPost]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(DeletePosCompanyStoreCommand))]
-    public async Task<IActionResult> DeletePosCompanyStoreAsync([FromBody] DeletePosCompanyStoreCommand command)
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(DeleteCompanyStoreCommand))]
+    public async Task<IActionResult> DeletePosCompanyStoreAsync([FromBody] DeleteCompanyStoreCommand command)
     {
-        var response = await _mediator.SendAsync<DeletePosCompanyStoreCommand, DeletePosCompanyStoreResponse>(command).ConfigureAwait(false);
+        var response = await _mediator.SendAsync<DeleteCompanyStoreCommand, DeleteCompanyStoreResponse>(command).ConfigureAwait(false);
         
         return Ok(response);
     }
     
     [Route("store/status/update"), HttpPost]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdatePosCompanyStoreStatusResponse))]
-    public async Task<IActionResult> UpdatePosCompanyStoreStatusAsync([FromBody] UpdatePosCompanyStoreStatusCommand command)
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdateCompanyStoreStatusResponse))]
+    public async Task<IActionResult> UpdatePosCompanyStoreStatusAsync([FromBody] UpdateCompanyStoreStatusCommand command)
     {
-        var response = await _mediator.SendAsync<UpdatePosCompanyStoreStatusCommand, UpdatePosCompanyStoreStatusResponse>(command).ConfigureAwait(false);
+        var response = await _mediator.SendAsync<UpdateCompanyStoreStatusCommand, UpdateCompanyStoreStatusResponse>(command).ConfigureAwait(false);
         
         return Ok(response);
     }
     
     [Route("company/add"), HttpPost]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(CreatePosCompanyResponse))]
-    public async Task<IActionResult> CreatePosCompanyAsync([FromBody] CreatePosCompanyCommand command)
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(CreateCompanyResponse))]
+    public async Task<IActionResult> CreatePosCompanyAsync([FromBody] CreateCompanyCommand command)
     {
-        var response = await _mediator.SendAsync<CreatePosCompanyCommand, CreatePosCompanyResponse>(command).ConfigureAwait(false);
+        var response = await _mediator.SendAsync<CreateCompanyCommand, CreateCompanyResponse>(command).ConfigureAwait(false);
         
         return Ok(response);
     }
     
     [Route("company/update"), HttpPost]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdatePosCompanyResponse))]
-    public async Task<IActionResult> UpdatePosCompanyAsync([FromBody] UpdatePosCompanyCommand command)
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdateCompanyResponse))]
+    public async Task<IActionResult> UpdatePosCompanyAsync([FromBody] UpdateCompanyCommand command)
     {
-        var response = await _mediator.SendAsync<UpdatePosCompanyCommand, UpdatePosCompanyResponse>(command).ConfigureAwait(false);
+        var response = await _mediator.SendAsync<UpdateCompanyCommand, UpdateCompanyResponse>(command).ConfigureAwait(false);
         
         return Ok(response);
     }
     
     [Route("company/check"), HttpGet]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(CheckPosCompanyOrStoreResponse))]
-    public async Task<IActionResult> CheckPosCompanyAsync([FromQuery] CheckPosCompanyOrStoreRequest request)
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(CheckCompanyOrStoreResponse))]
+    public async Task<IActionResult> CheckPosCompanyAsync([FromQuery] CheckCompanyOrStoreRequest request)
     {
-        var response = await _mediator.RequestAsync<CheckPosCompanyOrStoreRequest, CheckPosCompanyOrStoreResponse>(request).ConfigureAwait(false);
+        var response = await _mediator.RequestAsync<CheckCompanyOrStoreRequest, CheckCompanyOrStoreResponse>(request).ConfigureAwait(false);
         
         return Ok(response);
     }
     
     [Route("company/delete"), HttpPost]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(DeletePosCompanyResponse))]
-    public async Task<IActionResult> DeletePosCompanyAsync([FromBody] DeletePosCompanyCommand command)
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(DeleteCompanyResponse))]
+    public async Task<IActionResult> DeletePosCompanyAsync([FromBody] DeleteCompanyCommand command)
     {
-        var response = await _mediator.SendAsync<DeletePosCompanyCommand, DeletePosCompanyResponse>(command).ConfigureAwait(false);
+        var response = await _mediator.SendAsync<DeleteCompanyCommand, DeleteCompanyResponse>(command).ConfigureAwait(false);
         
         return Ok(response);
     }
     
     [Route("company/update/status"), HttpPost]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdatePosCompanyStatusResponse))]
-    public async Task<IActionResult> UpdatePosCompanyStatusAsync([FromBody] UpdatePosCompanyStatusCommand command)
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdateCompanyStatusResponse))]
+    public async Task<IActionResult> UpdatePosCompanyStatusAsync([FromBody] UpdateCompanyStatusCommand command)
     {
-        var response = await _mediator.SendAsync<UpdatePosCompanyStatusCommand, UpdatePosCompanyStatusResponse>(command).ConfigureAwait(false);
+        var response = await _mediator.SendAsync<UpdateCompanyStatusCommand, UpdateCompanyStatusResponse>(command).ConfigureAwait(false);
         
         return Ok(response);
     }
@@ -127,19 +127,19 @@ public class PosController : ControllerBase
     }
     
     [Route("store/account/manage"), HttpPost]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(ManagePosCompanyStoreAccountsResponse))]
-    public async Task<IActionResult> ManagePosCompanyStoreAccountsAsync([FromBody] ManagePosCompanyStoreAccountsCommand command)
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(ManageCompanyStoreAccountsResponse))]
+    public async Task<IActionResult> ManagePosCompanyStoreAccountsAsync([FromBody] ManageCompanyStoreAccountsCommand command)
     {
-        var response = await _mediator.SendAsync<ManagePosCompanyStoreAccountsCommand, ManagePosCompanyStoreAccountsResponse>(command).ConfigureAwait(false);
+        var response = await _mediator.SendAsync<ManageCompanyStoreAccountsCommand, ManageCompanyStoreAccountsResponse>(command).ConfigureAwait(false);
         
         return Ok(response);
     }
     
     [Route("store/accounts"), HttpGet]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPosStoreUsersResponse))]
-    public async Task<IActionResult> GetPosStoreUsersAsync([FromQuery] GetPosStoreUsersRequest request)
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetStoreUsersResponse))]
+    public async Task<IActionResult> GetPosStoreUsersAsync([FromQuery] GetStoreUsersRequest request)
     {
-        var response = await _mediator.RequestAsync<GetPosStoreUsersRequest, GetPosStoreUsersResponse>(request).ConfigureAwait(false);
+        var response = await _mediator.RequestAsync<GetStoreUsersRequest, GetStoreUsersResponse>(request).ConfigureAwait(false);
         
         return Ok(response);
     }
@@ -263,9 +263,9 @@ public class PosController : ControllerBase
     
     [Route("stores"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPosStoresResponse))]
-    public async Task<IActionResult> GetPosStoresAsync([FromQuery] GetPosStoresRequest request)
+    public async Task<IActionResult> GetPosStoresAsync([FromQuery] GetStoresRequest request)
     {
-        var response = await _mediator.RequestAsync<GetPosStoresRequest, GetPosStoresResponse>(request).ConfigureAwait(false);
+        var response = await _mediator.RequestAsync<GetStoresRequest, GetPosStoresResponse>(request).ConfigureAwait(false);
         
         return Ok(response);
     }
@@ -338,6 +338,15 @@ public class PosController : ControllerBase
     public async Task<IActionResult> UpdateStoreCustomerAsync([FromBody] UpdateStoreCustomerCommand command)
     {
         var response = await _mediator.SendAsync<UpdateStoreCustomerCommand, UpdateStoreCustomerResponse>(command).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("store/agents"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetCurrentUserStoresResponse))]
+    public async Task<IActionResult> GetPosAgentsAsync([FromQuery] GetCurrentUserStoresRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetCurrentUserStoresRequest, GetCurrentUserStoresResponse>(request).ConfigureAwait(false);
         
         return Ok(response);
     }
