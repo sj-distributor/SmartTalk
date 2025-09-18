@@ -37,7 +37,7 @@ public class PosProcessJobService : IPosProcessJobService
             Latitude = x.Where(o => o.Type == PosOrderReceiveType.Delivery).FirstOrDefault()?.Latitude,
             Longitude = x.Where(o => o.Type == PosOrderReceiveType.Delivery).FirstOrDefault()?.Longitude,
             Room = x.Where(o => o.Type == PosOrderReceiveType.Delivery).FirstOrDefault()?.Room,
-            Notes = x.Where(o => o.Type == PosOrderReceiveType.Delivery).FirstOrDefault()?.Notes
+            Remarks = x.Where(o => o.Type == PosOrderReceiveType.Delivery).FirstOrDefault()?.Remarks
         }).ToList();
         
         Log.Information("Syncing customer info from order: {@CustomerInfos}]", customers);
