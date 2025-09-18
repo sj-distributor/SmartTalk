@@ -109,9 +109,9 @@ public partial class AccountService : IAccountService
             return account;
         }).ToList();
 
-        return new GetUserAccountsResponse
+        return new GetUserAccountsResponse()
         {
-            Data = new GetUserAccountsDto
+            Data = new GetUserAccountsDto()
             {
                 UserAccounts = processedAccounts,
                 Count = count
