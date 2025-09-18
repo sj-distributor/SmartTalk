@@ -16,6 +16,7 @@ using SmartTalk.Core.Services.Printer;
 using SmartTalk.Core.Services.RetrievalDb.VectorDb;
 using SmartTalk.Core.Services.Security;
 using SmartTalk.Messages.Commands.Pos;
+using SmartTalk.Messages.Constants;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Pos;
@@ -300,27 +301,52 @@ public partial class PosService : IPosService
         
         Log.Information("The current user: {CurrrentUser} is Admin: {IsSuperAdmin}", _currentUser, isSuperAdmin);
 
-        var storeUsers = isSuperAdmin ? null
-            : request.AuthorizedFilter ? await _posDataProvider.GetPosStoreUsersByUserIdAsync(_currentUser.Id.Value, cancellationToken).ConfigureAwait(false)
-            : [];
+        if (isSuperAdmin)
+        {
+            var stores = await _posDataProvider.GetPosCompanyStoresWithSortingAsync(null, request.CompanyId, request.ServiceProviderId, request.Keyword, request.IsNormalSort, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        Log.Information("Get store users: {StoreUsers}", storeUsers);
-        
-        var stores = await _posDataProvider.GetPosCompanyStoresWithSortingAsync(
-            storeUsers?.Select(x => x.StoreId).ToList(),
-            request.CompanyId, request.ServiceProviderId, request.Keyword, request.IsNormalSort, cancellationToken: cancellationToken).ConfigureAwait(false);
+            return new GetPosStoresResponse
+            {
+                Data = _mapper.Map<List<CompanyStoreDto>>(stores)
+            };
+        }
 
+        if (request.AuthorizedFilter)
+        {
+            var storeUsers = await _posDataProvider.GetPosStoreUsersByUserIdAsync(_currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
+        
+            Log.Information("Get store users: {StoreUsers}", storeUsers);
+
+            if (storeUsers == null || !storeUsers.Any())
+            {
+                return new GetPosStoresResponse
+                {
+                    Data = new List<CompanyStoreDto>()
+                };
+            }
+
+            var stores = await _posDataProvider.GetPosCompanyStoresWithSortingAsync(storeUsers.Select(x => x.StoreId).ToList(),
+                request.CompanyId, request.ServiceProviderId, request.Keyword, request.IsNormalSort, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+            return new GetPosStoresResponse
+            {
+                Data = _mapper.Map<List<CompanyStoreDto>>(stores)
+            };
+        }
+        
+        var allStores = await _posDataProvider.GetPosCompanyStoresWithSortingAsync([], request.CompanyId, request.ServiceProviderId, request.Keyword, request.IsNormalSort, cancellationToken: cancellationToken).ConfigureAwait(false);
+    
         return new GetPosStoresResponse
         {
-            Data = _mapper.Map<List<CompanyStoreDto>>(stores)
+            Data = _mapper.Map<List<CompanyStoreDto>>(allStores)
         };
     }
     
     public async Task<bool> CheckCurrentIsAdminAsync(CancellationToken cancellationToken)
     {
-        var roleUsers = await _accountDataProvider.GetRoleUserByRoleAccountLevelAsync(UserAccountLevel.ServiceProvider, cancellationToken).ConfigureAwait(false);
+        var roleUsers = await _securityDataProvider.GetRoleUsersAsync(null, SecurityStore.Roles.SuperAdministrator, cancellationToken).ConfigureAwait(false);
 
-        Log.Information("Get admin role users: {@roleUsers} by current user: {@currentUserId}", roleUsers, _currentUser.Id.Value);
+        Log.Information("Get SuperAdmin role users: {@roleUsers} by current user: {@currentUserId}", roleUsers, _currentUser.Id.Value);
         
         return roleUsers.Any(x => x.UserId == _currentUser.Id.Value);
     }

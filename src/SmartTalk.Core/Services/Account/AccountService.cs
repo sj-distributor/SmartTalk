@@ -97,16 +97,25 @@ public partial class AccountService : IAccountService
 
     public async Task<GetUserAccountsResponse> GetAccountsAsync(GetUserAccountsRequest request, CancellationToken cancellationToken)
     {
-        var (count, userAccount) = await _accountDataProvider.GetUserAccountDtosAsync(
+        var (count, userAccounts) = await _accountDataProvider.GetUserAccountDtosAsync(
             request.UserName, request.ServiceProviderId, request.UserAccountLevel, request.PageSize, request.PageIndex, true, cancellationToken).ConfigureAwait(false);
+
+        var processedAccounts = userAccounts.Select(account =>
+        {
+            if (account.AccountLevel == UserAccountLevel.ServiceProvider)
+            {
+                account.Stores = null;
+            }
+            return account;
+        }).ToList();
 
         return new GetUserAccountsResponse
         {
-           Data = new GetUserAccountsDto
-           {
-               UserAccounts = userAccount,
-               Count = count
-           }
+            Data = new GetUserAccountsDto
+            {
+                UserAccounts = processedAccounts,
+                Count = count
+            }
         };
     }
     
