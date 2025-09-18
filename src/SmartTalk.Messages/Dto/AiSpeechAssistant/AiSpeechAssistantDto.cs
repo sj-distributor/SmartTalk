@@ -17,7 +17,6 @@ public class AiSpeechAssistantDto
     public AiSpeechAssistantProvider ModelProvider { get; set; }
     
     public string ModelVoice { get; set; }
-    // public int AgentId { get; set; }
     
     public string CustomRecordAnalyzePrompt { get; set; }
     
