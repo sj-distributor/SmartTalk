@@ -46,6 +46,9 @@ public partial class EventHandlingService
             if (!string.IsNullOrEmpty(@event.Order.Longitude) && @event.Order.Longitude?.Trim() != customer.Longitude?.Trim())
                 customer.Longitude = @event.Order.Longitude;
             
+            if (!string.IsNullOrEmpty(@event.Order.Room) && @event.Order.Room?.Trim() != customer.Room?.Trim())
+                customer.Room = @event.Order.Room;
+            
             if (!string.IsNullOrEmpty(@event.Order.Notes) && @event.Order.Notes?.Trim() != customer.Notes?.Trim())
                 customer.Notes = @event.Order.Notes;
             
