@@ -32,8 +32,8 @@ public class StoreCustomer : IEntity, IHasCreatedFields, IHasModifiedFields
     [Column("room")]
     public string Room { get; set; }
 
-    [Column("notes"), StringLength(512)]
-    public string Notes { get; set; }
+    [Column("remarks"), StringLength(512)]
+    public string Remarks { get; set; }
     
     [Column("timezone"), StringLength(64)]
     public string Timezone { get; set; }

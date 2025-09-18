@@ -721,6 +721,24 @@ public partial class PhoneOrderService
             };
         }
 
+        if (report == null)
+        {
+            var record = await _phoneOrderDataProvider.GetPhoneOrderRecordBySessionIdAsync(request.CallSid, cancellationToken).ConfigureAwait(false);
+
+            var newReport = new PhoneOrderRecordReportDto()
+            {
+                RecordId = record.Id,
+                Language = (TranscriptionLanguage)request.Language,
+                Report = record.TranscriptionText,
+                IsOrigin = (TranscriptionLanguage)request.Language == record.Language,
+            };
+
+            return new GetPhoneOrderRecordReportResponse()
+            {
+                Data = newReport
+            };
+        }
+
         return new GetPhoneOrderRecordReportResponse()
         {
             Data = _mapper.Map<PhoneOrderRecordReportDto>(report)
