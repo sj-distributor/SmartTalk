@@ -89,6 +89,8 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
     
     Task<List<AgentAssistant>> GetAgentAssistantsAsync(List<int> agentIds = null, List<int> assistantIds = null, CancellationToken cancellationToken = default);
     
+    Task<List<(Agent, AgentAssistant)>> GetAgentWithAssistantsAsync(List<int> assistantIds = null, CancellationToken cancellationToken = default);
+    
     Task DeleteAgentAssistantsAsync(List<AgentAssistant> agentAssistants, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task<(List<AgentAssistant>, List<Domain.AISpeechAssistant.AiSpeechAssistant>)> GetAgentAssistantWithAssistantsAsync(int agentId, CancellationToken cancellationToken = default);
@@ -496,6 +498,19 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
             query = query.Where(x => assistantIds.Contains(x.AssistantId));
         
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<(Agent, AgentAssistant)>> GetAgentWithAssistantsAsync(List<int> assistantIds = null, CancellationToken cancellationToken = default)
+    {
+        var query = from agent in _repository.Query<Agent>()
+            join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId into agentAssistants
+            from agentAssistant in agentAssistants.DefaultIfEmpty()
+            where assistantIds.Contains(agentAssistant.AssistantId)
+            select new { agent, agentAssistant };
+        
+        var result = await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+        
+        return result.Select(x => (x.agent, x.agentAssistant)).ToList();
     }
 
     public async Task DeleteAgentAssistantsAsync(List<AgentAssistant> agentAssistants, bool forceSave = true, CancellationToken cancellationToken = default)

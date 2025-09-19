@@ -126,7 +126,7 @@ public partial class AiSpeechAssistantService
         if (storeUser == null)
             throw new Exception("Do not have the store permission to operate");
         
-        var assistants = await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantsAsync(command.AssistantIds, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var assistants = await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantByIdsAsync(command.AssistantIds, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (assistants.Count == 0) throw new Exception("Delete assistants failed.");
 
@@ -635,11 +635,17 @@ public partial class AiSpeechAssistantService
     
     private async Task<List<Agent>> DeleteAssistantRelatedInfoAsync(List<int> assistantIds, CancellationToken cancellationToken)
     {
-        var agentAssistants = await _aiSpeechAssistantDataProvider.GetAgentAssistantsAsync(assistantIds: assistantIds, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var result = await _aiSpeechAssistantDataProvider.GetAgentWithAssistantsAsync(assistantIds: assistantIds, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        if (agentAssistants.Count == 0) return [];
+        if (result.Count == 0) return [];
 
-        await _aiSpeechAssistantDataProvider.DeleteAgentAssistantsAsync(agentAssistants, cancellationToken: cancellationToken).ConfigureAwait(false);
+        await _aiSpeechAssistantDataProvider.DeleteAgentAssistantsAsync(result.Select(x => x.Item2).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var agents = result.Select(x => x.Item1).ToList();
+        
+        await _agentDataProvider.DeleteAgentsAsync(agents, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        return agents;
     }
 
     private async Task UpdateAgentIfRequiredAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, Agent agent, CancellationToken cancellationToken)
