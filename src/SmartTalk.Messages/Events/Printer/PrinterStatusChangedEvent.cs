@@ -16,7 +16,7 @@ namespace SmartTalk.Message.Events.Printer
 
         public bool Skip()
         {
-            return OldPrinterStatusInfo == null || NewPrinterStatusInfo == null;
+            return NewPrinterStatusInfo == null;
         }
     }
 }

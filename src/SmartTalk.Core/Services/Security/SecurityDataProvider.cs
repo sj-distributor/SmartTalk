@@ -133,7 +133,7 @@ public partial interface ISecurityDataProvider : IScopedDependency
     
     Task<RoleUser> GetRoleUserByIdAsync(int roleId, int userId, CancellationToken cancellationToken);
 
-    Task<List<RoleUser>> GetRoleUserByPermissionNameAsync(string permissionName, CancellationToken cancellationToken);
+    Task<List<RoleUser>> GetRoleUserByRoleNameAsync(string permissionName, CancellationToken cancellationToken);
 }
 
 public partial class SecurityDataProvider : ISecurityDataProvider

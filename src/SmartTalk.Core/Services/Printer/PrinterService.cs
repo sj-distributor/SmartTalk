@@ -15,6 +15,7 @@ using AutoMapper;
 using Newtonsoft.Json;
 using Serilog;
 using SmartTalk.Core.Services.AliYun;
+using SmartTalk.Core.Services.Caching.Redis;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Settings.Printer;
@@ -24,6 +25,7 @@ using SmartTalk.Messages.Commands.Printer;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Printer;
 using SmartTalk.Messages.Dto.WeChat;
+using SmartTalk.Messages.Enums.Caching;
 using SmartTalk.Messages.Enums.Printer;
 using SmartTalk.Messages.Events.Printer;
 using Color = SixLabors.ImageSharp.Color;
@@ -73,16 +75,18 @@ public class PrinterService : IPrinterService
     private readonly IWeChatClient _weChatClient;
     private readonly ICacheManager _cacheManager;
     private readonly IAliYunOssService _ossService;
+    private readonly IRedisSafeRunner _redisSafeRunner;
     private readonly IPosDataProvider _posDataProvider;
     private readonly IPrinterDataProvider _printerDataProvider;
     private readonly PrinterSendErrorLogSetting _printerSendErrorLogSetting;
 
-    public PrinterService(IMapper mapper, IWeChatClient weChatClient, ICacheManager cacheManager, IAliYunOssService ossService, IPosDataProvider posDataProvider, IPrinterDataProvider printerDataProvider, PrinterSendErrorLogSetting printerSendErrorLogSetting)
+    public PrinterService(IMapper mapper, IWeChatClient weChatClient, ICacheManager cacheManager, IAliYunOssService ossService, IRedisSafeRunner redisSafeRunner, IPosDataProvider posDataProvider, IPrinterDataProvider printerDataProvider, PrinterSendErrorLogSetting printerSendErrorLogSetting)
     {
         _mapper = mapper;
         _ossService = ossService;
         _weChatClient = weChatClient;
         _cacheManager = cacheManager;
+        _redisSafeRunner = redisSafeRunner;
         _posDataProvider = posDataProvider;
         _printerDataProvider = printerDataProvider;
         _printerSendErrorLogSetting = printerSendErrorLogSetting;
@@ -95,9 +99,7 @@ public class PrinterService : IPrinterService
         Log.Information($"key: {key}", key);
         
         if (await _cacheManager.GetAsync<object>(key, new RedisCachingSetting(), cancellationToken).ConfigureAwait(false) != null)
-        {
             return null;
-        }
 
         var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(request.PrinterMac, request.Token, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
 
@@ -106,15 +108,15 @@ public class PrinterService : IPrinterService
         if (merchPrinter == null)
         {
             await _cacheManager.SetAsync(key,1, new RedisCachingSetting(expiry: TimeSpan.FromMinutes(2)),cancellationToken).ConfigureAwait(false);
-            return null; 
+            return null;
         }
-            
+        
         var merchPrinterJob = await GetMerchPrinterJobAsync(merchPrinter, cancellationToken).ConfigureAwait(false);
 
         return new GetPrinterJobAvailableResponse()
         {
             JobReady = merchPrinterJob != null,
-            JobToken = merchPrinterJob?.Id,
+            JobToken = merchPrinterJob?.Id
         };
     }
     
@@ -125,19 +127,22 @@ public class PrinterService : IPrinterService
         Log.Information("Store: {@agent}", store);
         
         if (store is null) return null;
-        
+
         if (!merchPrinter.IsEnabled)
-            return (await _printerDataProvider.GetMerchPrinterOrdersAsync(null, merchPrinter.StoreId,  PrintStatus.Waiting, DateTimeOffset.Now, merchPrinter.PrinterMac, true, cancellationToken).ConfigureAwait(false)).FirstOrDefault();
-
-        var merchPrinterOrders = await  _printerDataProvider.GetMerchPrinterOrdersAsync(null, merchPrinter.StoreId,  PrintStatus.Waiting, DateTimeOffset.Now, null, true, cancellationToken: cancellationToken).ConfigureAwait(false);
+            return null;
         
-        foreach (var merchPrinterOrder in merchPrinterOrders)
-        {
-            if (string.IsNullOrEmpty(merchPrinterOrder.PrinterMac) || merchPrinterOrder.PrinterMac == merchPrinter.PrinterMac)
-                return merchPrinterOrder;
-        }
+        var merchPrinterOrder = (await _printerDataProvider.GetMerchPrinterOrdersAsync(null, merchPrinter.StoreId, PrintStatus.Waiting, DateTimeOffset.Now, null, true, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
 
-        return null;
+        if (merchPrinterOrder == null)
+            return null;
+        
+        return await _redisSafeRunner.ExecuteWithLockAsync(
+            $"merch-printer-order-{merchPrinterOrder.Id}",
+            async () => merchPrinterOrder,
+            wait: TimeSpan.FromSeconds(5),
+            retry: TimeSpan.FromSeconds(1),
+            server: RedisServer.System
+        ).ConfigureAwait(false);
     }
 
     public async Task<string> UploadOrderPrintImageAndUpdatePrintUrlAsync(
@@ -179,18 +184,20 @@ public class PrinterService : IPrinterService
             storeId: merchPrinterOrder.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
         
         var store = await _posDataProvider.GetPosCompanyStoreDetailAsync(order.StoreId, cancellationToken).ConfigureAwait(false);
+        var printerLog = await _printerDataProvider.GetMerchPrinterLogAsync(storeId: store.Id, printerMac: merchPrinter?.PrinterMac, orderId: merchPrinterOrder.OrderId).ConfigureAwait(false);
 
         var storeCreatedDate = "";
-        var storePrintDate = "";
+        var storePrintDate = DateTimeOffset.Now;
+        var storePrintDateString = "";
         if (!string.IsNullOrEmpty(store.Timezone))
         {
             storeCreatedDate = TimeZoneInfo.ConvertTimeFromUtc(order.CreatedDate.UtcDateTime, TimeZoneInfo.FindSystemTimeZoneById(store.Timezone)).ToString("yyyy-MM-dd HH:mm:ss");    
-            storePrintDate = TimeZoneInfo.ConvertTimeFromUtc(merchPrinterOrder.PrintDate.UtcDateTime, TimeZoneInfo.FindSystemTimeZoneById(store.Timezone)).ToString("yyyy-MM-dd HH:mm:ss");    
+            storePrintDateString = TimeZoneInfo.ConvertTimeFromUtc(storePrintDate.UtcDateTime, TimeZoneInfo.FindSystemTimeZoneById(store.Timezone)).ToString("yyyy-MM-dd HH:mm:ss");    
         }
         else
         {
             storeCreatedDate = order.CreatedDate.ToString("yyyy-MM-dd HH:mm:ss");
-            storePrintDate = merchPrinterOrder.PrintDate.ToString("yyyy-MM-dd HH:mm:ss");
+            storePrintDateString = storePrintDate.ToString("yyyy-MM-dd HH:mm:ss");
         }
         
         var img = await RenderReceiptAsync(order.OrderNo,  
@@ -208,7 +215,7 @@ public class PrinterService : IPrinterService
             order.SubTotal.ToString(),
             order.Tax.ToString(),
             order.Total.ToString(),
-            storePrintDate,
+            storePrintDateString,
             merchPrinter.PrinterLanguage).ConfigureAwait(false);
        
         var imageKey = Guid.NewGuid().ToString();
@@ -226,6 +233,7 @@ public class PrinterService : IPrinterService
         
         merchPrinterOrder.ImageKey = imageKey;
         merchPrinterOrder.ImageUrl = _ossService.GetFileUrl(imageKey);
+        merchPrinterOrder.PrintDate = storePrintDate;
 
         Log.Information(@"MerchPrinterOrder image key: {ImageKey}, url: {ImageUrl}", merchPrinterOrder.ImageKey,  merchPrinterOrder.ImageUrl);
         
@@ -345,6 +353,9 @@ public class PrinterService : IPrinterService
 
     public async Task PrinterStatusChangedAsync(PrinterStatusChangedEvent @event, CancellationToken cancellationToken)
     {
+        if (@event.Skip())
+            return;
+        
         var merchPrinterLog = await GenerateMerchPrinterLogAsync(@event, cancellationToken).ConfigureAwait(false);
         
         if (merchPrinterLog != null)
@@ -355,9 +366,30 @@ public class PrinterService : IPrinterService
     {
         var varianceList = GetVarianceList(@event);
         
+        Log.Information("VarianceList:{@varianceList}", varianceList);
+        
         if (!varianceList.Any()) return null;
-
+        
         var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(@event.PrinterMac, @event.Token, cancellationToken: cancellationToken)).FirstOrDefault();
+        
+        if (@event.OldPrinterStatusInfo == null && @event.NewPrinterStatusInfo.Online)
+        {
+            var store = await _posDataProvider.GetPosCompanyStoreAsync(id: merchPrinter.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            var storeName = JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(store.Names).GetValueOrDefault("en")?.GetValueOrDefault("name");
+
+            var text = new SendWorkWechatGroupRobotTextDto { Content = $"✅SMT Cloud Printer Online\nTime: {TimeZoneInfo.ConvertTimeFromUtc(DateTimeOffset.Now.UtcDateTime, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time")):yyyy-MM-dd HH:mm:ss}\nStore: {storeName}"};
+            text.MentionedMobileList = "@all";
+        
+            await _weChatClient.SendWorkWechatRobotMessagesAsync(_printerSendErrorLogSetting.CloudPrinterSendErrorLogRobotUrl, new SendWorkWechatGroupRobotMessageDto
+            {
+                MsgType = "text",
+                Text = text
+            }, cancellationToken).ConfigureAwait(false);
+        }
+        
+        Log.Information("Log merch printer:{@merchPrinter}", merchPrinter);
+        
         if (merchPrinter == null)
             return null;
 
@@ -384,7 +416,7 @@ public class PrinterService : IPrinterService
         {
             var variance = new Variance
             {
-                Name = propertyInfo.Name, OldValue = (bool) propertyInfo.GetValue(oldInfo), NewValue = (bool) propertyInfo.GetValue(newInfo)
+                Name = propertyInfo.Name, OldValue = oldInfo == null ? false : (bool) propertyInfo.GetValue(oldInfo), NewValue = (bool) propertyInfo.GetValue(newInfo)
             };
 
             if (variance.OldValue != variance.NewValue)
@@ -411,18 +443,18 @@ public class PrinterService : IPrinterService
         var merchPrinterLog = _mapper.Map<MerchPrinterLog>(@event);
         var printError = @event.IsPrintError();
         
-        var message = $"{(printError?"Print Error":"Print")}";
+        var order = await _posDataProvider.GetPosOrderByIdAsync(@event.MerchPrinterOrderDto.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var message = $"{(printError?"Print Error":"Print")}:{order.OrderNo}";
         merchPrinterLog.Message = message;
         
         if (message.Equals("Print Error"))
         {
             var store = await _posDataProvider.GetPosCompanyStoreAsync(id: @event.MerchPrinterOrderDto.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-            var order = await _posDataProvider.GetPosOrderByIdAsync(orderId: @event.MerchPrinterOrderDto.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false);
-        
             var storeName = JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(store.Names).GetValueOrDefault("en")?.GetValueOrDefault("name");
         
-            var text = new SendWorkWechatGroupRobotTextDto { Content = $"🆘SMT Cloud Print Error Infor🆘\n\nPrint Error: {merchPrinterLog.Message}\nPrint Time: {@event.MerchPrinterOrderDto.PrintDate.ToString("yyyy-MM-dd HH:mm:ss")}\nStore: {storeName}\nOrder Date:{order.CreatedDate.ToString("yyyy-MM-dd")}\nOrder NO: #{order.OrderNo}"};
+            var text = new SendWorkWechatGroupRobotTextDto { Content = $"🆘SMT Cloud Print Error Infor🆘\n\nPrint Error: {merchPrinterLog.Message}\nPrint Time: {TimeZoneInfo.ConvertTimeFromUtc(@event.MerchPrinterOrderDto.PrintDate.UtcDateTime, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time")):yyyy-MM-dd HH:mm:ss}\nStore: {storeName}\nOrder Date:{order.CreatedDate.ToString("yyyy-MM-dd")}\nOrder NO: #{order.OrderNo}"};
             text.MentionedMobileList = "@all";
         
             await _weChatClient.SendWorkWechatRobotMessagesAsync(_printerSendErrorLogSetting.CloudPrinterSendErrorLogRobotUrl, new SendWorkWechatGroupRobotMessageDto
@@ -629,7 +661,7 @@ public class PrinterService : IPrinterService
      {
          var (count, merchPrinterLogs) = await _printerDataProvider.GetMerchPrinterLogAsync(
              request.StoreId,request.PrinterMac, request.StartDate, request.EndDate, request.Code, request.PrintLogType,
-             request.PageIndex, request.PageSize, cancellationToken).ConfigureAwait(false);
+             request.PageIndex, request.PageSize, cancellationToken: cancellationToken).ConfigureAwait(false);
 
          return new GetMerchPrinterLogResponse 
          {
@@ -646,11 +678,39 @@ public class PrinterService : IPrinterService
          var allMaybeOfflinePrinters = await _printerDataProvider.GetMerchPrintersAsync(isEnabled: true,
              lastStatusInfoLastModifiedDate: DateTimeOffset.Now.AddMinutes(-2), IsStatusInfo: true,
              cancellationToken: cancellationToken).ConfigureAwait(false);
+
+         var storeIds = allMaybeOfflinePrinters.Select(x => x.StoreId).ToList();
+         
+         var stores = await _posDataProvider.GetPosCompanyStoresAsync(storeIds, cancellationToken: cancellationToken).ConfigureAwait(false);
          
          foreach (var printer in allMaybeOfflinePrinters)
          {
              printer.StatusInfo = null;
+             
              await _printerDataProvider.UpdateMerchPrinterMacAsync(printer, cancellationToken: cancellationToken).ConfigureAwait(false);
+             
+             var store = stores.FirstOrDefault(x => x.Id == printer.StoreId);
+             
+             var storeName = JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(store.Names).GetValueOrDefault("en")?.GetValueOrDefault("name");
+             
+             var text = new SendWorkWechatGroupRobotTextDto { Content = $"❌SMT Cloud Printer Offline\nTime: {TimeZoneInfo.ConvertTimeFromUtc(DateTimeOffset.Now.UtcDateTime, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time")):yyyy-MM-dd HH:mm:ss}\nStore: {storeName}"};
+             text.MentionedMobileList = "@all";
+        
+             await _weChatClient.SendWorkWechatRobotMessagesAsync(_printerSendErrorLogSetting.CloudPrinterSendErrorLogRobotUrl, new SendWorkWechatGroupRobotMessageDto
+             {
+                 MsgType = "text",
+                 Text = text
+             }, cancellationToken).ConfigureAwait(false);
+             
+             await _printerDataProvider.AddMerchPrinterLogAsync(new MerchPrinterLog
+             {
+                 Id = Guid.NewGuid(),
+                 StoreId = printer.StoreId,
+                 OrderId = null,
+                 PrinterMac = printer.PrinterMac,
+                 PrintLogType = PrintLogType.StatusChange,
+                 Message = "Online:True->False"
+             }, cancellationToken).ConfigureAwait(false);
          }
      } 
      

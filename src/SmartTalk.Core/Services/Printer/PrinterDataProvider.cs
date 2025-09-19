@@ -35,7 +35,7 @@ public interface IPrinterDataProvider : IScopedDependency
     Task DeleteMerchPrinterAsync(MerchPrinter merchPrinter, bool foreSave = true, CancellationToken cancellationToken = default);
 
     Task<(int, List<MerchPrinterLogDto>)> GetMerchPrinterLogAsync(int storeId, string printerMac = null, DateTimeOffset? startDate = null,
-        DateTimeOffset? endDate = null, int? code = null, PrintLogType? logType = null, int? pageIndex = null, int? pageSize = null, CancellationToken cancellationToken = default);
+        DateTimeOffset? endDate = null, int? code = null, PrintLogType? logType = null, int? pageIndex = null, int? pageSize = null, int? orderId = null, CancellationToken cancellationToken = default);
 }
 
 public class PrinterDataProvider : IPrinterDataProvider
@@ -167,7 +167,7 @@ public class PrinterDataProvider : IPrinterDataProvider
     }
 
     public async Task<(int, List<MerchPrinterLogDto>)> GetMerchPrinterLogAsync(int storeId, string printerMac = null, DateTimeOffset? startDate = null,
-        DateTimeOffset? endDate = null, int? code = null, PrintLogType? logType = null, int? pageIndex = null, int? pageSize = null, CancellationToken cancellationToken = default)
+        DateTimeOffset? endDate = null, int? code = null, PrintLogType? logType = null, int? pageIndex = null, int? pageSize = null, int? orderId = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<MerchPrinterLog>().Where(x => x.StoreId == storeId);
 
@@ -182,6 +182,9 @@ public class PrinterDataProvider : IPrinterDataProvider
 
         if (logType.HasValue)
             query = query.Where(x => x.PrintLogType == logType.Value);
+
+        if (orderId.HasValue)
+            query = query.Where(x => x.OrderId == orderId.Value);
 
         var count = query.Count();
 
