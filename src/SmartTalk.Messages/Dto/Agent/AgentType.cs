@@ -7,5 +7,6 @@ public enum AgentType
     Sales,
     AiKid,
     Assistant,
-    PosCompanyStore
+    PosCompanyStore,
+    Agent
 }

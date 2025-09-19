@@ -41,6 +41,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
     private readonly IRestaurantDataProvider _restaurantDataProvider;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly OpenAiAccountTrainingSettings _openAiAccountTrainingSettings;
+    private readonly IAiSpeechAssistantDataProvider _speechAssistantDataProvider;
 
     public AiSpeechAssistantProcessJobService(
         IMapper mapper,
@@ -50,7 +51,8 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         IRestaurantDataProvider restaurantDataProvider,
         OpenAiTrainingSettings openAiTrainingSettings, 
         IPhoneOrderDataProvider phoneOrderDataProvider,
-        OpenAiAccountTrainingSettings openAiAccountTrainingSettings)
+        OpenAiAccountTrainingSettings openAiAccountTrainingSettings,
+        IAiSpeechAssistantDataProvider speechAssistantDataProvider)
     {
         _mapper = mapper;
         _vectorDb = vectorDb;
@@ -60,20 +62,25 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         _openAiTrainingSettings = openAiTrainingSettings;
         _restaurantDataProvider = restaurantDataProvider;
         _openAiAccountTrainingSettings = openAiAccountTrainingSettings;
+        _speechAssistantDataProvider = speechAssistantDataProvider;
     }
 
     public async Task RecordAiSpeechAssistantCallAsync(AiSpeechAssistantStreamContextDto context, CancellationToken cancellationToken)
     {
         TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
         var callResource = await CallResource.FetchAsync(pathSid: context.CallSid).ConfigureAwait(false);
-
-        var (existRecord, agent, aiSpeechAssistant) = await _phoneOrderDataProvider.GetRecordWithAgentAndAssistantAsync(context.CallSid, cancellationToken).ConfigureAwait(false);
+        
+        var existRecord = await _phoneOrderDataProvider.GetPhoneOrderRecordBySessionIdAsync(context.CallSid, cancellationToken).ConfigureAwait(false);
 
         if (existRecord != null ) return;
         
+        var agentAssistant = await _speechAssistantDataProvider.GetAgentAssistantsAsync(assistantIds: [context.Assistant.Id], cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (agentAssistant == null || agentAssistant.Count == 0) throw new Exception("AgentAssistant is null");
+        
         var record = new PhoneOrderRecord
         {
-            AgentId = context.Assistant.AgentId,
+            AgentId = agentAssistant.First().AgentId,
             SessionId = context.CallSid,
             Status = PhoneOrderRecordStatus.Transcription,
             Tips = context.ConversationTranscription.FirstOrDefault().Item2,

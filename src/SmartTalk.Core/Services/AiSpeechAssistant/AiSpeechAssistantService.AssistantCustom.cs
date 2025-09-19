@@ -37,6 +37,14 @@ public partial interface IAiSpeechAssistantService
     Task<UpdateAiSpeechAssistantSessionResponse> UpdateAiSpeechAssistantSessionAsync(UpdateAiSpeechAssistantSessionCommand command, CancellationToken cancellationToken);
     
     Task<AddAiSpeechAssistantSessionResponse> AddAiSpeechAssistantSessionAsync(AddAiSpeechAssistantSessionCommand command, CancellationToken cancellationToken);
+    
+    Task<SwitchAiSpeechDefaultAssistantResponse> SwitchAiSpeechDefaultAssistantAsync(SwitchAiSpeechDefaultAssistantCommand command, CancellationToken cancellationToken);
+    
+    Task<AddAiSpeechAssistantInboundRoutesResponse> AddAiSpeechAssistantInboundRoutesAsync(AddAiSpeechAssistantInboundRoutesCommand command, CancellationToken cancellationToken);
+    
+    Task<UpdateAiSpeechAssistantInboundRouteResponse> UpdateAiSpeechAssistantInboundRouteAsync(UpdateAiSpeechAssistantInboundRouteCommand command, CancellationToken cancellationToken);
+    
+    Task<DeleteAiSpeechAssistantInboundRoutesResponse> DeleteAiSpeechAssistantInboundRoutesAsync(DeleteAiSpeechAssistantInboundRoutesCommand command, CancellationToken cancellationToken);
 }
 
 public partial class AiSpeechAssistantService
@@ -118,13 +126,13 @@ public partial class AiSpeechAssistantService
         if (storeUser == null)
             throw new Exception("Do not have the store permission to operate");
         
-        var assistants = await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantsAsync(command.AssistantIds, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var assistants = await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantByIdsAsync(command.AssistantIds, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (assistants.Count == 0) throw new Exception("Delete assistants failed.");
 
         await UpdateNumbersStatusAsync(assistants.Where(x => x.AnsweringNumberId.HasValue).Select(x => x.AnsweringNumberId.Value).ToList(), false, cancellationToken).ConfigureAwait(false);
         
-        var agents = await DeleteAssistantRelatedInfoAsync(assistants.Select(x => x.AgentId).ToList(), cancellationToken).ConfigureAwait(false);
+        var agents = await DeleteAssistantRelatedInfoAsync(assistants.Select(x => x.Id).ToList(), command.IsDeleteAgent, cancellationToken).ConfigureAwait(false);
 
         await _posDataProvider.DeletePosAgentsByAgentIdsAsync(agents.Select(x => x.Id).ToList(), true, cancellationToken).ConfigureAwait(false);
         
@@ -193,6 +201,75 @@ public partial class AiSpeechAssistantService
         return new AddAiSpeechAssistantSessionResponse { Data = sessionId };
     }
 
+    public async Task<SwitchAiSpeechDefaultAssistantResponse> SwitchAiSpeechDefaultAssistantAsync(SwitchAiSpeechDefaultAssistantCommand command, CancellationToken cancellationToken)
+    {
+        var assistants = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByIdsAsync([command.PreviousAssistantId, command.LatestAssistantId], cancellationToken).ConfigureAwait(false);
+
+        var previousDefaultAssistant = assistants.Where(x => x.Id == command.PreviousAssistantId).FirstOrDefault();
+        var latestDefaultAssistant = assistants.Where(x => x.Id == command.LatestAssistantId).FirstOrDefault();
+        
+        Log.Information("Get the default assistant, previous: {@PreviousDefaultAssistant}, latest: {@LatestDefaultAssistant}", previousDefaultAssistant, latestDefaultAssistant);
+
+        if (previousDefaultAssistant == null || latestDefaultAssistant == null)
+            throw new Exception("Could not find the previous or latest default assistant!");
+
+        previousDefaultAssistant.IsDefault = false;
+        latestDefaultAssistant.IsDefault = true;
+        
+        await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync([previousDefaultAssistant, latestDefaultAssistant], cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return new SwitchAiSpeechDefaultAssistantResponse
+        {
+            Data = _mapper.Map<AiSpeechAssistantDto>(latestDefaultAssistant)
+        };
+    }
+
+    public async Task<AddAiSpeechAssistantInboundRoutesResponse> AddAiSpeechAssistantInboundRoutesAsync(AddAiSpeechAssistantInboundRoutesCommand command, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(command.TargetNumber))
+            throw new NullReferenceException("Target number is required!");
+
+        var routes = command.Numbers.Select(x => new AiSpeechAssistantInboundRoute
+        {
+            From = x.PhoneNumber,
+            To = command.TargetNumber,
+            IsFullDay = true,
+            ForwardAssistantId = command.AssistantId,
+            Remarks = x.Remarks
+        }).ToList();
+        
+        await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantInboundRouteAsync(routes, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return new AddAiSpeechAssistantInboundRoutesResponse
+        {
+            Data = _mapper.Map<List<AiSpeechAssistantInboundRouteDto>>(routes)
+        };
+    }
+
+    public async Task<UpdateAiSpeechAssistantInboundRouteResponse> UpdateAiSpeechAssistantInboundRouteAsync(UpdateAiSpeechAssistantInboundRouteCommand command, CancellationToken cancellationToken)
+    {
+        var route = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantInboundRouteAsync(command.RouteId, cancellationToken).ConfigureAwait(false);
+
+        if (route == null) throw new Exception($"Could not find route with id {command.RouteId}");
+        
+        route.From = command.Number;
+        route.Remarks = command.Remarks;
+        
+        await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantInboundRouteAsync([route], cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return new UpdateAiSpeechAssistantInboundRouteResponse { Data = _mapper.Map<AiSpeechAssistantInboundRouteDto>(route) };
+    }
+
+    public async Task<DeleteAiSpeechAssistantInboundRoutesResponse> DeleteAiSpeechAssistantInboundRoutesAsync(DeleteAiSpeechAssistantInboundRoutesCommand command, CancellationToken cancellationToken)
+    {
+        var routes = await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantInboundRoutesAsync(command.RouteIds, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return new DeleteAiSpeechAssistantInboundRoutesResponse
+        {
+            Data = _mapper.Map<List<AiSpeechAssistantInboundRouteDto>>(routes)
+        };
+    }
+
     public async Task<UpdateAiSpeechAssistantSessionResponse> UpdateAiSpeechAssistantSessionAsync(UpdateAiSpeechAssistantSessionCommand command, CancellationToken cancellationToken)
     {
         var session = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantSessionBySessionIdAsync(command.SessionId, cancellationToken).ConfigureAwait(false);
@@ -250,6 +327,7 @@ public partial class AiSpeechAssistantService
         var (agent, number) = command.AgentType switch
         {
             AgentType.AiKid => await InitialAiKidInternalAsync(command, cancellationToken).ConfigureAwait(false),
+            AgentType.Agent => await InitialAiAgentInternalAsync(command, cancellationToken).ConfigureAwait(false),
             AgentType.Assistant => await InitialAssistantInternalAsync(command, cancellationToken).ConfigureAwait(false),
             AgentType.Restaurant => await InitialRestaurantInternalAsync(command, cancellationToken).ConfigureAwait(false),
             AgentType.PosCompanyStore => await InitialPosCompanyStoreInternalAsync(command, cancellationToken).ConfigureAwait(false),
@@ -269,10 +347,20 @@ public partial class AiSpeechAssistantService
             ModelName = command.ModelName,
             ModelLanguage = command.ModelLanguage,
             Channel = command.Channels == null ? null : string.Join(",", command.Channels.Select(x => (int)x)),
-            IsDisplay = command.IsDisplay
+            IsDisplay = command.IsDisplay,
+            IsDefault = command.IsDefault
         };
         
         await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantsAsync([assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var agentAssistant = new AgentAssistant
+        {
+            AgentId = agent.Id,
+            AssistantId = assistant.Id,
+            IsDisplay = command.IsEnabledMultiple
+        };
+        
+        await _aiSpeechAssistantDataProvider.AddAgentAssistantsAsync([agentAssistant], cancellationToken: cancellationToken).ConfigureAwait(false);
         
         await UpdateAgentIfRequiredAsync(assistant, agent, cancellationToken).ConfigureAwait(false);
         
@@ -311,7 +399,8 @@ public partial class AiSpeechAssistantService
             RelateId = relateId,
             ServiceProviderId = serviceProviderId,
             IsDisplay = isDisplay,
-            SourceSystem = sourceSystem
+            SourceSystem = sourceSystem,
+            IsReceiveCall = type != AgentType.AiKid
         };
         
         await _agentDataProvider.AddAgentAsync(agent, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -330,6 +419,19 @@ public partial class AiSpeechAssistantService
         }
         
         return number;
+    }
+    
+    private async Task<(Agent Agent, NumberPool Number)> InitialAiAgentInternalAsync(AddAiSpeechAssistantCommand command, CancellationToken cancellationToken)
+    {
+        if (!command.AgentId.HasValue) throw new ArgumentException("Agent id is required", nameof(command.AgentId));
+        
+        var agent = await _agentDataProvider.GetAgentAsync(id: command.AgentId.Value, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (agent == null) throw new Exception($"Agent {command.AgentId} not found");
+        
+        var number = command.IsDefault ? await DistributeNumberAsync(cancellationToken: cancellationToken).ConfigureAwait(false) : null;
+        
+        return (agent, number);
     }
 
     private async Task<(Agent Agent, NumberPool Number)> InitialRestaurantInternalAsync(AddAiSpeechAssistantCommand command, CancellationToken cancellationToken)
@@ -546,13 +648,20 @@ public partial class AiSpeechAssistantService
         return number;
     }
     
-    private async Task<List<Agent>> DeleteAssistantRelatedInfoAsync(List<int> agentIds, CancellationToken cancellationToken)
+    private async Task<List<Agent>> DeleteAssistantRelatedInfoAsync(List<int> assistantIds, bool isDeleteAgent, CancellationToken cancellationToken)
     {
-        var agents = await _agentDataProvider.GetAgentsAsync(agentIds: agentIds, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var result = await _aiSpeechAssistantDataProvider.GetAgentWithAssistantsAsync(assistantIds: assistantIds, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        if (agents.Count == 0) return [];
+        if (result.Count == 0) return [];
 
-        await _agentDataProvider.DeleteAgentsAsync(agents, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var agentAssistants = result.Select(x => x.Item2).Where(x => x != null).ToList();
+        
+        await _aiSpeechAssistantDataProvider.DeleteAgentAssistantsAsync(agentAssistants, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var agents = result.Select(x => x.Item1).Distinct().ToList();
+
+        if (isDeleteAgent)
+            await _agentDataProvider.DeleteAgentsAsync(agents, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         return agents;
     }

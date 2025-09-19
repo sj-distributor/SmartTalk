@@ -42,6 +42,9 @@ public class AiSpeechAssistantInboundRoute : IEntity, IHasCreatedFields
     [Column("priority")]
     public int Priority { get; set; }
     
+    [Column("remarks")]
+    public string Remarks { get; set; }
+    
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
 }
