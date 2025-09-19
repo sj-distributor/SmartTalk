@@ -24,12 +24,14 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
     }
 
-    public Dictionary<string, string> GetHeaders()
+    public Dictionary<string, string> GetHeaders(RealtimeAiServerRegion region)
     {
+        var apiKey = region == RealtimeAiServerRegion.US ? _openAiSettings.ApiKey : _openAiSettings.HkApiKey;
+        
         return new Dictionary<string, string>
         {
             { "OpenAI-Beta", "realtime=v1" },
-            { "Authorization", $"Bearer {_openAiSettings.ApiKey}" }
+            { "Authorization", $"Bearer {apiKey}" }
         };
     }
 
