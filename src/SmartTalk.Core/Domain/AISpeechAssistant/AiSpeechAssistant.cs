@@ -57,6 +57,9 @@ public class AiSpeechAssistant : IEntity<int>, IAgent, IHasCreatedFields
     [Column("group_key")]
     public int GroupKey { get; set; }
     
+    [Column("is_default")]
+    public bool IsDefault { get; set; }
+    
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
     
