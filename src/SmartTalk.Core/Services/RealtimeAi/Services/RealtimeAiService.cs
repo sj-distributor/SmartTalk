@@ -280,7 +280,7 @@ public class RealtimeAiService : IRealtimeAiService
                 }, CancellationToken.None).ConfigureAwait(false);
 
             Log.Information("audio uploaded, url: {Url}", audio?.Attachment?.FileUrl);
-            if (!string.IsNullOrEmpty(audio?.Attachment?.FileUrl) && _speechAssistant.AgentId != 0)
+            if (!string.IsNullOrEmpty(audio?.Attachment?.FileUrl) && _speechAssistant.Id != 0)
             {
                 _backgroundJobClient.Enqueue<IRealtimeProcessJobService>(x =>
                     x.RecordingRealtimeAiAsync(audio.Attachment.FileUrl, _speechAssistant.Id, CancellationToken.None));
