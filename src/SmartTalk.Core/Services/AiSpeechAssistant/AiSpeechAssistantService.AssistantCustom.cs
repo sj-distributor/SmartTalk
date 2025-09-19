@@ -2,6 +2,7 @@ using Serilog;
 using System.Text;
 using Newtonsoft.Json.Linq;
 using System.Globalization;
+using DocumentFormat.OpenXml.Office2010.ExcelAc;
 using Newtonsoft.Json;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.Pos;
@@ -39,6 +40,12 @@ public partial interface IAiSpeechAssistantService
     Task<AddAiSpeechAssistantSessionResponse> AddAiSpeechAssistantSessionAsync(AddAiSpeechAssistantSessionCommand command, CancellationToken cancellationToken);
     
     Task<SwitchAiSpeechDefaultAssistantResponse> SwitchAiSpeechDefaultAssistantAsync(SwitchAiSpeechDefaultAssistantCommand command, CancellationToken cancellationToken);
+    
+    Task<AddAiSpeechAssistantInboundRoutesResponse> AddAiSpeechAssistantInboundRoutesAsync(AddAiSpeechAssistantInboundRoutesCommand command, CancellationToken cancellationToken);
+    
+    Task<UpdateAiSpeechAssistantInboundRouteResponse> UpdateAiSpeechAssistantInboundRouteAsync(UpdateAiSpeechAssistantInboundRouteCommand command, CancellationToken cancellationToken);
+    
+    Task<DeleteAiSpeechAssistantInboundRoutesResponse> DeleteAiSpeechAssistantInboundRoutesAsync(DeleteAiSpeechAssistantInboundRoutesCommand command, CancellationToken cancellationToken);
 }
 
 public partial class AiSpeechAssistantService
@@ -213,6 +220,52 @@ public partial class AiSpeechAssistantService
         return new SwitchAiSpeechDefaultAssistantResponse
         {
             Data = _mapper.Map<AiSpeechAssistantDto>(latestDefaultAssistant)
+        };
+    }
+
+    public async Task<AddAiSpeechAssistantInboundRoutesResponse> AddAiSpeechAssistantInboundRoutesAsync(AddAiSpeechAssistantInboundRoutesCommand command, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(command.TargetNumber))
+            throw new NullReferenceException("Target number is required!");
+
+        var routes = command.Numbers.Select(x => new AiSpeechAssistantInboundRoute
+        {
+            From = x.PhoneNumber,
+            To = command.TargetNumber,
+            IsFullDay = true,
+            ForwardAssistantId = command.AssistantId,
+            Remarks = x.Remarks
+        }).ToList();
+        
+        await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantInboundRouteAsync(routes, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return new AddAiSpeechAssistantInboundRoutesResponse
+        {
+            Data = _mapper.Map<List<AiSpeechAssistantInboundRouteDto>>(routes)
+        };
+    }
+
+    public async Task<UpdateAiSpeechAssistantInboundRouteResponse> UpdateAiSpeechAssistantInboundRouteAsync(UpdateAiSpeechAssistantInboundRouteCommand command, CancellationToken cancellationToken)
+    {
+        var route = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantInboundRouteAsync(command.RouteId, cancellationToken).ConfigureAwait(false);
+
+        if (route == null) throw new Exception($"Could not find route with id {command.RouteId}");
+        
+        route.From = command.Number;
+        route.Remarks = command.Remarks;
+        
+        await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantInboundRouteAsync([route], cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return new UpdateAiSpeechAssistantInboundRouteResponse { Data = _mapper.Map<AiSpeechAssistantInboundRouteDto>(route) };
+    }
+
+    public async Task<DeleteAiSpeechAssistantInboundRoutesResponse> DeleteAiSpeechAssistantInboundRoutesAsync(DeleteAiSpeechAssistantInboundRoutesCommand command, CancellationToken cancellationToken)
+    {
+        var routes = await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantInboundRoutesAsync(command.RouteIds, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return new DeleteAiSpeechAssistantInboundRoutesResponse
+        {
+            Data = _mapper.Map<List<AiSpeechAssistantInboundRouteDto>>(routes)
         };
     }
 
