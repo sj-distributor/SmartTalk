@@ -248,7 +248,7 @@ public partial class PosService : IPosService
 
         return new GetPosProductsResponse
         {
-            Data = _mapper.Map<List<PosProductDto>>(products)
+            Data = _mapper.Map<List<PosProductDto>>(products.DistinctBy(x => x.ProductId))
         };
     }
 
