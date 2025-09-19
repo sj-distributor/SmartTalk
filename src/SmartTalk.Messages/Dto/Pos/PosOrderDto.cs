@@ -21,6 +21,8 @@ public class PosOrderDto
     public string Longitude { get; set; }
 
     public string Room { get; set; }
+    
+    public string Remarks { get; set; }
 
     public string OrderNo { get; set; }
     

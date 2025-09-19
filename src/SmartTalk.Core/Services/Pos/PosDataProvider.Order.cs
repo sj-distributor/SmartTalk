@@ -1,8 +1,6 @@
-using AutoMapper.QueryableExtensions;
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Messages.Dto.Pos;
-using SmartTalk.Messages.Requests.Pos;
 
 namespace SmartTalk.Core.Services.Pos;
 
@@ -19,7 +17,7 @@ public partial interface IPosDataProvider
 
     Task<PosOrder> GetPosOrderSortByOrderNoAsync(int storeId, DateTimeOffset utcStart, DateTimeOffset utcEnd, CancellationToken cancellationToken);
     
-    Task<List<PosCustomerInfoDto>> GetPosCustomerInfosAsync(string phone, CancellationToken cancellationToken);
+    Task<List<PosOrder>> GetPosCustomerInfosAsync(CancellationToken cancellationToken);
 }
 
 public partial class PosDataProvider
@@ -78,18 +76,15 @@ public partial class PosDataProvider
             .OrderByDescending(x => x.OrderNo).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<PosCustomerInfoDto>> GetPosCustomerInfosAsync(string phone, CancellationToken cancellationToken)
+    public async Task<List<PosOrder>> GetPosCustomerInfosAsync(CancellationToken cancellationToken)
     {
         var query = _repository.QueryNoTracking<PosOrder>().Where(x => !string.IsNullOrWhiteSpace(x.Phone));
-
-        if (!string.IsNullOrWhiteSpace(phone))
-            query = query.Where(x => x.Phone.Contains(phone));
         
         var latestOrders = await query
             .GroupBy(x => new { x.Phone, x.Type })
             .Select(g => g.OrderByDescending(x => x.CreatedDate).First())
             .ToListAsync(cancellationToken).ConfigureAwait(false);
 
-        return _mapper.Map<List<PosCustomerInfoDto>>(latestOrders);
+        return latestOrders;
     }
 }

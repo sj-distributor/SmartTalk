@@ -35,6 +35,9 @@ public class PosOrder : IEntity, IHasCreatedFields, IHasModifiedFields
 
     [Column("room"), StringLength(64)]
     public string Room { get; set; }
+    
+    [Column("remarks"), StringLength(512)]
+    public string Remarks { get; set; }
 
     [Column("order_no"), StringLength(16)]
     public string OrderNo { get; set; }
