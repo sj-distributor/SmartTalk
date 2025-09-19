@@ -434,8 +434,8 @@ public class RealtimeAiService : IRealtimeAiService
             Log.Information("audio uploaded, url: {Url}", audio?.Attachment?.FileUrl);
             if (!string.IsNullOrEmpty(audio?.Attachment?.FileUrl) && _speechAssistant.Id != 0)
             {
-                var agent = await _agentDataProvider.GetAgentByIdAsync(_speechAssistant.AgentId).ConfigureAwait(false);
-                if (agent is { IsSendAudioRecordWechat: 0 })
+                var agent = await _agentDataProvider.GetAgentByAssistantIdAsync(_speechAssistant.Id).ConfigureAwait(false);
+                if (agent is { IsSendAudioRecordWechat: true })
                     await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, agent.WechatRobotKey, $"您有一条新的AI通话录音：\n{audio?.Attachment?.FileUrl}", Array.Empty<string>(), CancellationToken.None).ConfigureAwait(false);
                 
                 _backgroundJobClient.Enqueue<IRealtimeProcessJobService>(x =>
