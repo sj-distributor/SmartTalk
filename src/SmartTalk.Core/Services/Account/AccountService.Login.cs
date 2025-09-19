@@ -1,4 +1,6 @@
 using System.Net;
+using Microsoft.AspNetCore.Http;
+using Serilog;
 using SmartTalk.Core.Extensions;
 using SmartTalk.Messages.Dto.System;
 using SmartTalk.Messages.Enums.Account;
@@ -17,7 +19,7 @@ public partial class AccountService
         {
             var code = HttpStatusCode.Unauthorized;
 
-            if (authenticateResult.CannotLoginReason == UserAccountCannotLoginReason.NoAssociatedStore)
+            if (authenticateResult.CannotLoginReason == UserAccountCannotLoginReason.NoAssociatedStore || authenticateResult.CannotLoginReason == UserAccountCannotLoginReason.IncorrectDomain)
             {
                 code = HttpStatusCode.Forbidden;
             }
@@ -71,6 +73,39 @@ public partial class AccountService
             authenticateInternalResult.CannotLoginReason = UserAccountCannotLoginReason.NotFound;
             authenticateInternalResult.IsAuthenticated = false;
             return;            
+        }
+        
+        var httpContext = _httpContextAccessor.HttpContext;
+        var currentDomain = httpContext?.Request.Headers.Origin.ToString();
+        
+        Log.Information("The domain is: {Domain}", currentDomain);
+        var domain = httpContext?.Request.Headers.Origin.ToString();
+
+        if (!string.IsNullOrEmpty(currentDomain))
+        {
+            var allServiceProviders = await _posDataProvider.GetServiceProviderByIdAsync(null, cancellationToken).ConfigureAwait(false);
+            
+            var registeredDomains = allServiceProviders?
+                .Where(sp => !string.IsNullOrEmpty(sp.Domain))
+                .Select(sp => sp.Domain!.Trim())
+                .ToList() ?? new List<string>();
+
+            if (registeredDomains.Contains(currentDomain, StringComparer.OrdinalIgnoreCase))
+            {
+                var userServiceProvider = await _posDataProvider.GetServiceProviderByIdAsync(account.ServiceProviderId, cancellationToken).ConfigureAwait(false);
+                
+                var userDomains = userServiceProvider?
+                    .Where(sp => !string.IsNullOrEmpty(sp.Domain))
+                    .Select(sp => sp.Domain!.Trim())
+                    .ToList() ?? new List<string>();
+
+                if (!userDomains.Contains(currentDomain, StringComparer.OrdinalIgnoreCase))
+                {
+                    authenticateInternalResult.CannotLoginReason = UserAccountCannotLoginReason.IncorrectDomain;
+                    authenticateInternalResult.IsAuthenticated = false;
+                    return;
+                }
+            }
         }
         
         if (loginVerificationType == UserAccountVerificationType.Password)
@@ -146,6 +181,8 @@ public partial class AccountService
     private string GetFriendlyErrorMessage(UserAccountCannotLoginReason reason) => reason switch
     {
         UserAccountCannotLoginReason.NoAssociatedStore => "The account is not associated with the store, please contact the administrator",
+        
+        UserAccountCannotLoginReason.IncorrectDomain => "Unable to login, please use the correct domain name to access",
     
         _ => reason.ToString()
     };

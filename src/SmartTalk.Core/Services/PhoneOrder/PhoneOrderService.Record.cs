@@ -60,9 +60,7 @@ public partial class PhoneOrderService
                 ? (await _posDataProvider.GetPosAgentsAsync(storeIds: [request.StoreId.Value], cancellationToken: cancellationToken).ConfigureAwait(false)).Select(x => x.AgentId).ToList()
                 : [];
 
-        var currentLanguage = (await _accountDataProvider.GetUserAccountByUserIdAsync(_currentUser.Id.Value, cancellationToken).ConfigureAwait(false)).SystemLanguage;
-
-        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds, request.Name, currentLanguage, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
+        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds, request.Name, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
 
         var enrichedRecords = _mapper.Map<List<PhoneOrderRecordDto>>(records);
 
@@ -699,6 +697,24 @@ public partial class PhoneOrderService
     public async Task<GetPhoneOrderRecordReportResponse> GetPhoneOrderRecordReportByCallSidAsync(GetPhoneOrderRecordReportRequest request, CancellationToken cancellationToken)
     {
         var report = await _phoneOrderDataProvider.GetPhoneOrderRecordReportAsync(request.CallSid, request.Language, cancellationToken).ConfigureAwait(false);
+
+        if (report == null)
+        {
+            var record = await _phoneOrderDataProvider.GetPhoneOrderRecordBySessionIdAsync(request.CallSid, cancellationToken).ConfigureAwait(false);
+
+            var newReport = new PhoneOrderRecordReportDto()
+            {
+                RecordId = record.Id,
+                Language = (TranscriptionLanguage)request.Language,
+                Report = record.TranscriptionText,
+                IsOrigin = (TranscriptionLanguage)request.Language == record.Language,
+            };
+
+            return new GetPhoneOrderRecordReportResponse()
+            {
+                Data = newReport
+            };
+        }
 
         return new GetPhoneOrderRecordReportResponse()
         {

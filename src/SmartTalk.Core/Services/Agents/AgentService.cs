@@ -3,10 +3,13 @@ using AutoMapper;
 using SmartTalk.Core.Domain;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Ioc;
+using SmartTalk.Core.Services.Account;
+using SmartTalk.Core.Services.Identity;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Restaurants;
 using SmartTalk.Messages.Commands.Agent;
 using SmartTalk.Messages.Dto.Agent;
+using SmartTalk.Messages.Enums.Account;
 using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Requests.Agent;
 
@@ -28,13 +31,19 @@ public interface IAgentService : IScopedDependency
 public class AgentService : IAgentService
 {
     private readonly IMapper _mapper;
+    private readonly ICurrentUser _currentUser;
     private readonly IAgentDataProvider _agentDataProvider;
+    private readonly IAccountDataProvider _accountDataProvider;
+    private readonly IRestaurantDataProvider _restaurantDataProvider;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
-
-    public AgentService(IMapper mapper, IAgentDataProvider agentDataProvider, IRestaurantDataProvider restaurantDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
+    
+    public AgentService(IMapper mapper, ICurrentUser currentUser, IAgentDataProvider agentDataProvider, IRestaurantDataProvider restaurantDataProvider, IAccountDataProvider accountDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
         _mapper = mapper;
+        _currentUser = currentUser;
         _agentDataProvider = agentDataProvider;
+        _accountDataProvider = accountDataProvider;
+        _restaurantDataProvider = restaurantDataProvider;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
     }
 
@@ -42,10 +51,21 @@ public class AgentService : IAgentService
     {
         var agentTypes = request.AgentType.HasValue
             ? [request.AgentType.Value] : Enum.GetValues(typeof(AgentType)).Cast<AgentType>().ToList();
+
+        var currentUser = await _accountDataProvider.GetUserAccountByUserIdAsync(_currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
+
+        List<AgentPreviewDto> agentInfos;
         
-        var agentInfo = await GetAllAgentsAsync(agentTypes, request.AgentIds, request.ServiceProviderId, cancellationToken).ConfigureAwait(false);
-        
-        return new GetAgentsResponse { Data = agentInfo.OrderBy(x => x.CreatedDate).ToList() };
+        if (currentUser.AccountLevel == UserAccountLevel.ServiceProvider)
+        {
+            agentInfos = await GetAllAgentsAsync(agentTypes, null, request.ServiceProviderId, cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            agentInfos = await GetAllAgentsAsync(agentTypes, request.AgentIds??[], request.ServiceProviderId, cancellationToken).ConfigureAwait(false);
+        }
+
+        return new GetAgentsResponse { Data = agentInfos.OrderBy(x => x.CreatedDate).ToList() };
     }
 
     public async Task<GetSurfaceAgentsResponse> GetSurfaceAgentsAsync(GetSurfaceAgentsRequest request, CancellationToken cancellationToken)

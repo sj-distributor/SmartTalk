@@ -17,7 +17,7 @@ public partial interface IPhoneOrderDataProvider
 {
     Task AddPhoneOrderRecordsAsync(List<PhoneOrderRecord> phoneOrderRecords, bool forceSave = true, CancellationToken cancellationToken = default);
     
-    Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(List<int> agentIds, string name, SystemLanguage systemLanguage, DateTimeOffset? utcStart = null, DateTimeOffset? utcEnd = null, CancellationToken cancellationToken = default);
+    Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(List<int> agentIds, string name, DateTimeOffset? utcStart = null, DateTimeOffset? utcEnd = null, CancellationToken cancellationToken = default);
 
     Task<List<PhoneOrderOrderItem>> AddPhoneOrderItemAsync(List<PhoneOrderOrderItem> phoneOrderOrderItems, bool forceSave = true, CancellationToken cancellationToken = default);
     
@@ -52,6 +52,8 @@ public partial interface IPhoneOrderDataProvider
     Task AddPhoneOrderRecordReportsAsync(List<PhoneOrderRecordReport> recordReports, bool forceSave = true, CancellationToken cancellationToken = default);
 
     Task<PhoneOrderRecordReport> GetPhoneOrderRecordReportAsync(string callSid, SystemLanguage language, CancellationToken cancellationToken);
+
+    Task UpdatePhoneOrderRecordReportsAsync(List<PhoneOrderRecordReport> reports, bool forceSave = true, CancellationToken cancellationToken = default);
 }
 
 public partial class PhoneOrderDataProvider
@@ -66,7 +68,7 @@ public partial class PhoneOrderDataProvider
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(List<int> agentIds, string name, SystemLanguage systemLanguage, DateTimeOffset? utcStart = null, DateTimeOffset? utcEnd = null, CancellationToken cancellationToken = default)
+    public async Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(List<int> agentIds, string name, DateTimeOffset? utcStart = null, DateTimeOffset? utcEnd = null, CancellationToken cancellationToken = default)
     {
         var query = from record in _repository.Query<PhoneOrderRecord>()
             join agent in _repository.Query<Agent>() on record.AgentId equals agent.Id
@@ -80,28 +82,7 @@ public partial class PhoneOrderDataProvider
         if (utcStart.HasValue && utcEnd.HasValue)
             query = query.Where(record => record.CreatedDate >= utcStart.Value && record.CreatedDate < utcEnd.Value);
 
-        var records = await query.Distinct().OrderByDescending(x => x.CreatedDate).ToListAsync(cancellationToken);
-
-        if (!records.Any()) 
-            return new List<PhoneOrderRecord>();
-
-        var recordIds = records.Select(x => x.Id).ToList();
-
-        var reportsQuery = from report in _repository.Query<PhoneOrderRecordReport>()
-            where recordIds.Contains(report.RecordId) && report.Language == (TranscriptionLanguage)systemLanguage
-            select new { report.RecordId, report.Report };
-
-        var targetReports = await reportsQuery.ToDictionaryAsync(x => x.RecordId, x => x.Report, cancellationToken);
-
-        foreach (var record in records)
-        {
-            if (targetReports.TryGetValue(record.Id, out var reportText))
-            {
-                record.TranscriptionText = reportText;
-            }
-        }
-
-        return records;
+        return await query.Distinct().OrderByDescending(record => record.CreatedDate).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task UpdatePhoneOrderRecordsAsync(PhoneOrderRecord record, bool forceSave = true, CancellationToken cancellationToken = default)
@@ -240,7 +221,8 @@ public partial class PhoneOrderDataProvider
     public async Task<(PhoneOrderRecord, Agent, Domain.AISpeechAssistant.AiSpeechAssistant)> GetRecordWithAgentAndAssistantAsync(string sessionId, CancellationToken cancellationToken)
     {
         var result = await (
-            from record in _repository.Query<PhoneOrderRecord>() where record.SessionId == sessionId
+            from record in _repository.Query<PhoneOrderRecord>().AsNoTracking()
+            where record.SessionId == sessionId
             join agent in _repository.Query<Agent>() on record.AgentId equals agent.Id into agentGroup
             from agent in agentGroup.DefaultIfEmpty()
             join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId into agentAssistantGroups
@@ -318,5 +300,12 @@ public partial class PhoneOrderDataProvider
             select report;
 
         return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task UpdatePhoneOrderRecordReportsAsync(List<PhoneOrderRecordReport> reports, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.UpdateAllAsync(reports, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 }

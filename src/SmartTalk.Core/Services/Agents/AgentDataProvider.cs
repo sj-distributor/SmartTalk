@@ -115,7 +115,7 @@ public class AgentDataProvider : IAgentDataProvider
     {
         var query = from agent in _repository.Query<Agent>().Where(x => x.IsDisplay)
             join domain in _repository.Query<T>() on agent.RelateId equals domain.Id
-            where agent.Type == agentType && (agentIds == null || agentIds.Count == 0 || agentIds.Contains(agent.Id)) 
+            where agent.Type == agentType && (agentIds == null || agentIds.Contains(agent.Id)) 
                                           && (!serviceProviderId.HasValue || agent.ServiceProviderId == serviceProviderId.Value)
             select new AgentPreviewDto
             {

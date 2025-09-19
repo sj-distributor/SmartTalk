@@ -2,7 +2,6 @@ using Serilog;
 using System.Text;
 using Newtonsoft.Json.Linq;
 using System.Globalization;
-using DocumentFormat.OpenXml.Office2010.ExcelAc;
 using Newtonsoft.Json;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.Pos;
@@ -98,17 +97,17 @@ public partial class AiSpeechAssistantService
 
     public async Task<UpdateAiSpeechAssistantResponse> UpdateAiSpeechAssistantAsync(UpdateAiSpeechAssistantCommand command, CancellationToken cancellationToken)
     {
+        var storeUser = await _posDataProvider.GetPosStoreUsersByUserIdAndAssistantIdAsync([command.AssistantId], _currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
+
+        if (storeUser == null)
+            throw new Exception("Do not have the store permission to operate");
+        
         var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantAsync(command.AssistantId, cancellationToken).ConfigureAwait(false);
         
         await UpdateAssistantNumberIfRequiredAsync(assistant.AnsweringNumberId, command.AnsweringNumberId, cancellationToken).ConfigureAwait(false);
         
         _mapper.Map(command, assistant);
         assistant.Channel = command.Channels == null ? null : string.Join(",", command.Channels.Select(x => (int)x));
-
-        var storeUser = await _posDataProvider.GetPosStoreUsersByUserIdAndAssistantIdAsync([command.AssistantId], _currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
-
-        if (storeUser == null)
-            throw new Exception("Do not have the store permission to operate");
 
         await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync([assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -122,18 +121,20 @@ public partial class AiSpeechAssistantService
 
     public async Task<DeleteAiSpeechAssistantResponse> DeleteAiSpeechAssistantAsync(DeleteAiSpeechAssistantCommand command, CancellationToken cancellationToken)
     {
-        var assistants = await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantByIdsAsync(command.AssistantIds, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        if (assistants.Count == 0) throw new Exception("Delete assistants failed.");
-
-        await UpdateNumbersStatusAsync(assistants.Where(x => x.AnsweringNumberId.HasValue).Select(x => x.AnsweringNumberId.Value).ToList(), false, cancellationToken).ConfigureAwait(false);
-
         var storeUser = await _posDataProvider.GetPosStoreUsersByUserIdAndAssistantIdAsync(command.AssistantIds, _currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
 
         if (storeUser == null)
             throw new Exception("Do not have the store permission to operate");
         
-        await DeleteAssistantRelatedInfoAsync(assistants.Select(x => x.Id).ToList(), cancellationToken).ConfigureAwait(false);
+        var assistants = await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantsAsync(command.AssistantIds, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (assistants.Count == 0) throw new Exception("Delete assistants failed.");
+
+        await UpdateNumbersStatusAsync(assistants.Where(x => x.AnsweringNumberId.HasValue).Select(x => x.AnsweringNumberId.Value).ToList(), false, cancellationToken).ConfigureAwait(false);
+        
+        var agents = await DeleteAssistantRelatedInfoAsync(assistants.Select(x => x.Id).ToList(), cancellationToken).ConfigureAwait(false);
+
+        await _posDataProvider.DeletePosAgentsByAgentIdsAsync(agents.Select(x => x.Id).ToList(), true, cancellationToken).ConfigureAwait(false);
         
         return new DeleteAiSpeechAssistantResponse
         {
@@ -346,7 +347,7 @@ public partial class AiSpeechAssistantService
         
         var assistant = new Domain.AISpeechAssistant.AiSpeechAssistant
         {
-            // AgentId = agent.Id,
+            AgentId = agent.Id,
             ModelVoice = ModelVoiceMapping(command.VoiceType),
             Name = command.AssistantName,
             AnsweringNumberId = number?.Id,
@@ -632,11 +633,11 @@ public partial class AiSpeechAssistantService
         return number;
     }
     
-    private async Task DeleteAssistantRelatedInfoAsync(List<int> assistantIds, CancellationToken cancellationToken)
+    private async Task<List<Agent>> DeleteAssistantRelatedInfoAsync(List<int> assistantIds, CancellationToken cancellationToken)
     {
         var agentAssistants = await _aiSpeechAssistantDataProvider.GetAgentAssistantsAsync(assistantIds: assistantIds, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        if (agentAssistants.Count == 0) return;
+        if (agentAssistants.Count == 0) return [];
 
         await _aiSpeechAssistantDataProvider.DeleteAgentAssistantsAsync(agentAssistants, cancellationToken: cancellationToken).ConfigureAwait(false);
     }

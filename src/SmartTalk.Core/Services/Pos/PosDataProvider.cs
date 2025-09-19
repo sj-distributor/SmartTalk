@@ -1,4 +1,6 @@
+using Autofac.Core;
 using AutoMapper;
+using DocumentFormat.OpenXml.Office2010.ExcelAc;
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Data;
 using SmartTalk.Core.Domain.Account;
@@ -48,6 +50,10 @@ public partial interface IPosDataProvider : IScopedDependency
     Task<StoreUser> GetPosStoreUsersByUserIdAndAssistantIdAsync(List<int> assistantIds, int userId, CancellationToken cancellationToken = default);
 
     Task<List<PosAgent>> GetPosAgentByUserIdAsync(int userId, CancellationToken cancellationToken);
+
+    Task DeletePosAgentsByAgentIdsAsync(List<int> agentIds, bool forceSave = true, CancellationToken cancellationToken = default);
+
+    Task<List<ServiceProvider>> GetServiceProviderByIdAsync(int? serviceProviderId = null, CancellationToken cancellationToken = default);
 }
 
 public partial class PosDataProvider : IPosDataProvider
@@ -66,17 +72,16 @@ public partial class PosDataProvider : IPosDataProvider
     public async Task<(int Count, List<Company> Companies)> GetPosCompaniesAsync(
         int? pageIndex = null, int? pageSize = null, List<int> companyIds = null, int? serviceProviderId = null, string keyword = null, CancellationToken cancellationToken = default)
     {
-        var query = _repository.Query<Company>();
+        var query = from company in _repository.Query<Company>()
+            join store in _repository.Query<CompanyStore>() on company.Id equals store.CompanyId into storeGroups
+            from store in storeGroups.DefaultIfEmpty()
+            where (!serviceProviderId.HasValue || company.ServiceProviderId == serviceProviderId.Value)
+                  && (companyIds == null || companyIds.Count == 0 || companyIds.Contains(company.Id))
+                  && (string.IsNullOrEmpty(keyword) || company.Name.Contains(keyword) || (store != null && store.Names.Contains(keyword)))
+            select company;
 
-        if (serviceProviderId.HasValue)
-            query = query.Where(x => x.ServiceProviderId == serviceProviderId.Value);
-
-        if (companyIds != null && companyIds.Count != 0)
-            query = query.Where(x => companyIds.Contains(x.Id));
-
-        if (!string.IsNullOrEmpty(keyword))
-            query = query.Where(x => x.Name.Contains(keyword));
-
+        query = query.Distinct();
+        
         var count = await query.CountAsync(cancellationToken).ConfigureAwait(false);
 
         if (pageIndex.HasValue && pageSize.HasValue)
@@ -329,6 +334,27 @@ public partial class PosDataProvider : IPosDataProvider
             join posAgent in _repository.Query<PosAgent>() on storeUsers.StoreId equals posAgent.StoreId
             where storeUsers.UserId == userId
             select posAgent;
+
+        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task DeletePosAgentsByAgentIdsAsync(List<int> agentIds, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        var posAgents = await _repository.Query<PosAgent>().Where(x => agentIds.Contains(x.Id)).ToListAsync(cancellationToken).ConfigureAwait(false);
+
+        await _repository.DeleteAllAsync(posAgents, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<ServiceProvider>> GetServiceProviderByIdAsync(int? serviceProviderId = null, CancellationToken cancellationToken = default)
+    {
+        var query = _repository.Query<ServiceProvider>();
+
+        if (serviceProviderId.HasValue)
+        {
+            query = query.Where(x => x.Id == serviceProviderId.Value);
+        }
 
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }

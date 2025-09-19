@@ -1,4 +1,5 @@
 using AutoMapper;
+using Microsoft.AspNetCore.Http;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.Restaurants;
 using SmartTalk.Core.Ioc;
@@ -41,10 +42,11 @@ public partial class AccountService : IAccountService
     private readonly ISecurityDataProvider _securityDataProvider;
     private readonly IVerificationCodeService _verificationCodeService;
     private readonly IPosDataProvider _posDataProvider;
+    private readonly IHttpContextAccessor _httpContextAccessor;
     
     public AccountService(
         IMapper mapper, ICurrentUser currentUser, ITokenProvider tokenProvider, IWiltechsService wiltechsService, IAccountDataProvider accountDataProvider, ISecurityDataProvider securityDataProvider, IVerificationCodeService verificationCodeService
-        ,IPosDataProvider posDataProvider)
+        ,IPosDataProvider posDataProvider, IHttpContextAccessor httpContextAccessor)
     {
         _mapper = mapper;
         _currentUser = currentUser;
@@ -54,13 +56,14 @@ public partial class AccountService : IAccountService
         _securityDataProvider = securityDataProvider;
         _verificationCodeService = verificationCodeService;
         _posDataProvider = posDataProvider;
+        _httpContextAccessor = httpContextAccessor;
     }
 
     public async Task<CreateUserAccountResponse> CreateUserAccountAsync(CreateUserAccountCommand userAccountCommand, CancellationToken cancellationToken)
     {
-        var existAccount = await _accountDataProvider.GetUserAccountAsync(username: userAccountCommand.UserName, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var existAccount = await _accountDataProvider.GetUserAccountByUserNameWithServiceProviderIdAsync(userAccountCommand.UserName, userAccountCommand.ServiceProviderId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        if (existAccount.Item1 > 0)
+        if (existAccount != null)
             throw new Exception("The name is already in use and cannot be created");
         
         var account = await _accountDataProvider.CreateUserAccountAsync(

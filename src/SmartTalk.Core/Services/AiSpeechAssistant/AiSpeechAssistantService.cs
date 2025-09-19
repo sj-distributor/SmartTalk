@@ -42,6 +42,7 @@ using SmartTalk.Messages.Events.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.Attachments;
 using SmartTalk.Messages.Dto.Attachments;
+using SmartTalk.Messages.Dto.Smarties;
 using SmartTalk.Messages.Enums.STT;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 using RecordingResource = Twilio.Rest.Api.V2010.Account.Call.RecordingResource;
@@ -172,8 +173,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         if (agent == null || agent.IsReceiveCall == false) return new AiSpeechAssistantConnectCloseEvent();
 
         InitAiSpeechAssistantStreamContext(command.Host, command.From);
-        
-        await BuildingAiSpeechAssistantKnowledgeBaseAsync(command.From, command.To, command.AssistantId, cancellationToken).ConfigureAwait(false);
+
+        await BuildingAiSpeechAssistantKnowledgeBaseAsync(command.From, command.To, command.AssistantId, command.NumberId, cancellationToken).ConfigureAwait(false);
         
         _aiSpeechAssistantStreamContext.HumanContactPhone = _aiSpeechAssistantStreamContext.ShouldForward ? null 
             : (await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantHumanContactByAssistantIdAsync(_aiSpeechAssistantStreamContext.Assistant.Id, cancellationToken).ConfigureAwait(false))?.HumanPhone;
@@ -207,9 +208,14 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     public async Task RecordAiSpeechAssistantCallAsync(RecordAiSpeechAssistantCallCommand command, CancellationToken cancellationToken)
     {
         TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
-        
-        await RecordingResource.CreateAsync(pathCallSid: command.CallSid, recordingStatusCallbackMethod: Twilio.Http.HttpMethod.Post,
-            recordingStatusCallback: new Uri($"https://{command.Host}/api/AiSpeechAssistant/recording/callback"));
+
+        await RetryAsync(async () =>
+        {
+            await RecordingResource.CreateAsync(
+                pathCallSid: command.CallSid,
+                recordingStatusCallbackMethod: Twilio.Http.HttpMethod.Post,
+                recordingStatusCallback: new Uri($"https://{command.Host}/api/AiSpeechAssistant/recording/callback"));
+        }, maxRetryCount: 3, delaySeconds: 1, cancellationToken);
     }
 
     public async Task ReceivePhoneRecordingStatusCallbackAsync(ReceivePhoneRecordingStatusCallbackCommand command, CancellationToken cancellationToken)
@@ -253,9 +259,20 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, _workWeChatKeySetting.Key, alertMessage, mentionedList: new[]{"@all"}, cancellationToken: cancellationToken).ConfigureAwait(false);
         }
         
+        record.Language = ConvertLanguageCode(language);
         record.TranscriptionJobId = await _phoneOrderService.CreateSpeechMaticsJobAsync(audioFileRawBytes, Guid.NewGuid().ToString("N") + ".wav", language, cancellationToken).ConfigureAwait(false);
 
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    private TranscriptionLanguage ConvertLanguageCode(string languageCode)
+    {
+        return languageCode switch
+        {
+            "en" => TranscriptionLanguage.English,
+            "es" => TranscriptionLanguage.Spanish,
+            _ => TranscriptionLanguage.Chinese
+        };
     }
     
     private async Task<string> DetectAudioLanguageAsync(byte[] audioContent, CancellationToken cancellationToken)
@@ -266,22 +283,33 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         List<ChatMessage> messages =
         [
             new SystemChatMessage("""
-                                  你是一名專業的語音識別分析員，請根據錄音內容的語音判斷所使用的語言，並從以下選項中**僅返回一個語言代碼**：
-                                  - zh-CN：普通話（簡體中文）
-                                  - zh：粵語
-                                  - zh-TW：台灣中文（繁體中文）
-                                  - en：英文
-
-                                  請根據語音內容準確判斷，不要預設為任何語言，也不要根據提示猜測。請不要返回任何多餘文字或說明，**只返回代碼**。
-                                  例如：
-                                  - 音頻中為普通話，返回：zh-CN
-                                  - 音頻中為粵語，返回：zh
-                                  - 音頻中為英文，返回：en
-
-                                  注意：如果語音中是英文，請不要誤判為中文。
+                                  You are a professional speech recognition analyst. Based on the audio content, determine the main language used and return only one language code from the following options:
+                                  zh-CN: Mandarin (Simplified Chinese)
+                                  zh: Cantonese
+                                  zh-TW: Taiwanese Chinese (Traditional Chinese)
+                                  en: English
+                                  es: Spanish
+                                                            
+                                  Rules:
+                                  1. Carefully analyze the speech content and identify the primary spoken language.
+                                  2. If the recording contains noise, background sounds, or non-standard pronunciation, focus on the linguistic features (tone, rhythm, common words) rather than misclassifying it.
+                                  3. For English with heavy accents or imperfect pronunciation, still classify as English (en).
+                                  4. Only return 'es' (Spanish) if the majority of the recording is clearly and consistently spoken in Spanish. Do NOT classify English with accents or noise as Spanish.
+                                  5. If the recording contains mixed languages, return the code of the language that dominates most of the speech.
+                                  6. Return only the code without any additional text or explanations.
+                                                            
+                                  Examples:
+                                  If the audio is in Mandarin, even with background noise, return: zh-CN
+                                  If the audio is in Cantonese, possibly with some Mandarin words, return: zh
+                                  If the audio is in Taiwanese Mandarin (Traditional Chinese), return: zh-TW
+                                  If the audio is in English, even with a strong accent or imperfect pronunciation, return: en
+                                  If the audio is in English with background noise, return: en
+                                  If the audio is predominantly in Spanish, spoken clearly and throughout most of the recording, return: es
+                                  If the audio has both Mandarin and English but Mandarin is the dominant language, return: zh-CN
+                                  If the audio has both Cantonese and English but English dominates, return: en
                                   """),
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
-            new UserChatMessage("請根據錄音內容判斷語言，並返回對應代碼。")
+            new UserChatMessage("Please determine the language based on the recording and return the corresponding code.")
         ];
 
         ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
@@ -314,8 +342,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             status: CallResource.UpdateStatusEnum.Completed
         );
     }
-
-    private async Task BuildingAiSpeechAssistantKnowledgeBaseAsync(string from, string to, int? assistantId, CancellationToken cancellationToken)
+    
+    private async Task BuildingAiSpeechAssistantKnowledgeBaseAsync(string from, string to, int? assistantId, int? numberId, CancellationToken cancellationToken)
     {
         var inboundRoute = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantInboundRouteAsync(from, to, cancellationToken).ConfigureAwait(false);
         
@@ -349,6 +377,12 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         Log.Information($"The final prompt: {finalPrompt}");
 
+        if (numberId.HasValue)
+        {
+            var greeting = await _smartiesClient.GetSaleAutoCallNumberAsync(new GetSaleAutoCallNumberRequest(){ Id = numberId.Value }, cancellationToken).ConfigureAwait(false);
+            knowledge.Greetings = string.IsNullOrEmpty(greeting.Data.Number.Greeting) ? knowledge.Greetings : greeting.Data.Number.Greeting;
+        }
+        
         _aiSpeechAssistantStreamContext.LastPrompt = finalPrompt;
         _aiSpeechAssistantStreamContext.Assistant = _mapper.Map<AiSpeechAssistantDto>(assistant);
         _aiSpeechAssistantStreamContext.Knowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge);
@@ -658,14 +692,21 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                                             await ProcessHangupAsync(outputElement, cancellationToken).ConfigureAwait(false);
                                             break;
                                         
+                                        case OpenAiToolConstants.Refund:
+                                        case OpenAiToolConstants.Complaint:
+                                        case OpenAiToolConstants.ReturnGoods:
                                         case OpenAiToolConstants.TransferCall:
+                                        case OpenAiToolConstants.DeliveryTracking:
+                                        case OpenAiToolConstants.LessGoodsDelivered:
+                                        case OpenAiToolConstants.RefuseToAcceptGoods:
+                                        case OpenAiToolConstants.HandlePromotionCalls:
                                         case OpenAiToolConstants.HandlePhoneOrderIssues:
-                                        case OpenAiToolConstants.HandleThirdPartyDelayedDelivery:
+                                        case OpenAiToolConstants.PickUpGoodsFromTheWarehouse:
                                         case OpenAiToolConstants.HandleThirdPartyFoodQuality:
+                                        case OpenAiToolConstants.HandleThirdPartyDelayedDelivery:
                                         case OpenAiToolConstants.HandleThirdPartyUnexpectedIssues:
                                         case OpenAiToolConstants.HandleThirdPartyPickupTimeChange:
-                                        case OpenAiToolConstants.HandlePromotionCalls:
-                                        case OpenAiToolConstants.CheckOrderStatus:
+                                        case OpenAiToolConstants.DriverDeliveryRelatedCommunication:
                                             await ProcessTransferCallAsync(outputElement, functionName, cancellationToken).ConfigureAwait(false);
                                             break;
                                     }
@@ -814,7 +855,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             {
                 CallSid = _aiSpeechAssistantStreamContext.CallSid,
                 HumanPhone = _aiSpeechAssistantStreamContext.HumanContactPhone
-            }, cancellationToken), TimeSpan.FromSeconds(replySeconds));
+            }, cancellationToken), TimeSpan.FromSeconds(replySeconds), HangfireConstants.InternalHostingTransfer);
             
             var transferringHumanService = new
             {
@@ -827,7 +868,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                 }
             };
             
-            await SendToWebSocketAsync(_openaiClientWebSocket, transferringHumanService, cancellationToken);
+            // await SendToWebSocketAsync(_openaiClientWebSocket, transferringHumanService, cancellationToken);
         }
 
         await SendToWebSocketAsync(_openaiClientWebSocket, new { type = "response.create" }, cancellationToken);
@@ -1039,5 +1080,26 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction => config.Config,
             _ => throw new NotSupportedException(nameof(type))
         };
+    }
+    
+    private async Task RetryAsync(
+        Func<Task> action,
+        int maxRetryCount,
+        int delaySeconds,
+        CancellationToken cancellationToken)
+    {
+        for (int attempt = 1; attempt <= maxRetryCount + 1; attempt++)
+        {
+            try
+            {
+                await action();
+                return;
+            }
+            catch (Exception ex) when (attempt <= maxRetryCount)
+            {
+                Log.Warning(ex, "重試第 {Attempt} 次失敗，稍後再試…", attempt);
+                await Task.Delay(TimeSpan.FromSeconds(delaySeconds), cancellationToken);
+            }
+        }
     }
 }
