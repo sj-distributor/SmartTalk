@@ -1,4 +1,5 @@
 using SmartTalk.Messages.Enums.Agent;
+using SmartTalk.Messages.Enums.AiSpeechAssistant;
 
 namespace SmartTalk.Messages.Dto.Agent;
 
@@ -27,6 +28,14 @@ public class AgentDto
     public bool IsSendAudioRecordWechat { get; set; } = false;
     
     public string Timezone { get; set; }
+    
+    public string Name { get; set; }
+    
+    public string Brief { get; set; }
+    
+    public AiSpeechAssistantChannel? Channel { get; set; }
+    
+    public bool IsReceiveCall { get; set; }
     
     public DateTimeOffset CreatedDate { get; set; }
 }

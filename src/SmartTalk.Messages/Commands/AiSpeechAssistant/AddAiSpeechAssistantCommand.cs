@@ -33,6 +33,8 @@ public class AddAiSpeechAssistantCommand : HasServiceProviderId, ICommand
     public int? StoreId { get; set; }
 
     public bool IsDefault { get; set; } = true;
+    
+    public  bool IsEnabledMultiple { get; set; } = false;
 }
 
 public class AddAiSpeechAssistantResponse : SmartTalkResponse<AiSpeechAssistantDto>
