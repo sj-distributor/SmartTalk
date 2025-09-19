@@ -132,7 +132,7 @@ public partial class AiSpeechAssistantService
 
         await UpdateNumbersStatusAsync(assistants.Where(x => x.AnsweringNumberId.HasValue).Select(x => x.AnsweringNumberId.Value).ToList(), false, cancellationToken).ConfigureAwait(false);
         
-        var agents = await DeleteAssistantRelatedInfoAsync(assistants.Select(x => x.Id).ToList(), cancellationToken).ConfigureAwait(false);
+        var agents = await DeleteAssistantRelatedInfoAsync(assistants.Select(x => x.Id).ToList(), command.IsDeleteAgent, cancellationToken).ConfigureAwait(false);
 
         await _posDataProvider.DeletePosAgentsByAgentIdsAsync(agents.Select(x => x.Id).ToList(), true, cancellationToken).ConfigureAwait(false);
         
@@ -633,17 +633,20 @@ public partial class AiSpeechAssistantService
         return number;
     }
     
-    private async Task<List<Agent>> DeleteAssistantRelatedInfoAsync(List<int> assistantIds, CancellationToken cancellationToken)
+    private async Task<List<Agent>> DeleteAssistantRelatedInfoAsync(List<int> assistantIds, bool isDeleteAgent, CancellationToken cancellationToken)
     {
         var result = await _aiSpeechAssistantDataProvider.GetAgentWithAssistantsAsync(assistantIds: assistantIds, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (result.Count == 0) return [];
 
-        await _aiSpeechAssistantDataProvider.DeleteAgentAssistantsAsync(result.Select(x => x.Item2).Where(x => x != null).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        var agents = result.Select(x => x.Item1).ToList();
+        var agentAssistants = result.Select(x => x.Item2).Where(x => x != null).ToList();
         
-        await _agentDataProvider.DeleteAgentsAsync(agents, cancellationToken: cancellationToken).ConfigureAwait(false);
+        await _aiSpeechAssistantDataProvider.DeleteAgentAssistantsAsync(agentAssistants, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var agents = result.Select(x => x.Item1).Distinct().ToList();
+
+        if (isDeleteAgent)
+            await _agentDataProvider.DeleteAgentsAsync(agents, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         return agents;
     }
