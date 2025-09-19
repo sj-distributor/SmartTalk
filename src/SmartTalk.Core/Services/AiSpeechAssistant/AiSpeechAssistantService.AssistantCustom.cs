@@ -639,7 +639,7 @@ public partial class AiSpeechAssistantService
 
         if (result.Count == 0) return [];
 
-        await _aiSpeechAssistantDataProvider.DeleteAgentAssistantsAsync(result.Select(x => x.Item2).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
+        await _aiSpeechAssistantDataProvider.DeleteAgentAssistantsAsync(result.Select(x => x.Item2).Where(x => x != null).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var agents = result.Select(x => x.Item1).ToList();
         
