@@ -22,5 +22,6 @@ public class AiSpeechAssistantMapping : Profile
             .ForMember(dest => dest.ModelVoice, opt => opt.MapFrom(src => src.Voice));
         
         CreateMap<AiSpeechAssistantSession, AiSpeechAssistantSessionDto>().ReverseMap();
+        CreateMap<AiSpeechAssistantInboundRoute, AiSpeechAssistantInboundRouteDto>().ReverseMap();
     }
 }
