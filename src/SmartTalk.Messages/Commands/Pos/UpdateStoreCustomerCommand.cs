@@ -15,8 +15,10 @@ public class UpdateStoreCustomerCommand : ICommand
     public string Latitude { get; set; }
 
     public string Longitude { get; set; }
+    
+    public string Room { get; set; }
 
-    public string Notes { get; set; }
+    public string Remarks { get; set; }
     
     public bool IsDeleted { get; set; }
 }
