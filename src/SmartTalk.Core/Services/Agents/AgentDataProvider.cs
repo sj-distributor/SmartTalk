@@ -131,10 +131,12 @@ public class AgentDataProvider : IAgentDataProvider
         int? agentId = null, string keyword = null, bool? isDefault = null, CancellationToken cancellationToken = default)
     {
         var query = from agent in _repository.Query<Agent>().Where(x => x.IsDisplay)
-            join agentAssistant in _repository.Query<AgentAssistant>().Where(x => x.IsDisplay) on agent.Id equals agentAssistant.AgentId
-            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agentAssistant.AssistantId equals assistant.Id
+            join agentAssistant in _repository.Query<AgentAssistant>().Where(x => x.IsDisplay) on agent.Id equals agentAssistant.AgentId into agentAssistantGroups
+            from agentAssistant in agentAssistantGroups.DefaultIfEmpty()
+            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agentAssistant.AssistantId equals assistant.Id into assistantGroups
+            from assistant in assistantGroups.DefaultIfEmpty()
             where !agentId.HasValue || agent.Id == agentId.Value
-            where !isDefault.HasValue || assistant.IsDefault == isDefault.Value
+            where !isDefault.HasValue || assistant == null || assistant.IsDefault == isDefault.Value
             where string.IsNullOrEmpty(keyword) || agent.Name.Contains(keyword)
             select new { agent, assistant };
         

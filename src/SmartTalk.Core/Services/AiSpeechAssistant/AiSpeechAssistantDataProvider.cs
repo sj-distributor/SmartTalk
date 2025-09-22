@@ -31,7 +31,7 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task UpdateNumberPoolAsync(List<NumberPool> numbers, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task<(int, List<Domain.AISpeechAssistant.AiSpeechAssistant>)> GetAiSpeechAssistantsAsync(
-        int? pageIndex = null, int? pageSize = null, string channel = null, string keyword = null, List<int> agentIds = null, CancellationToken cancellationToken = default);
+        int? pageIndex = null, int? pageSize = null, string channel = null, string keyword = null, List<int> agentIds = null, bool? isDefault = null, CancellationToken cancellationToken = default);
 
     Task AddAiSpeechAssistantsAsync(List<Domain.AISpeechAssistant.AiSpeechAssistant> assistants, bool forceSave = true, CancellationToken cancellationToken = default);
 
@@ -216,7 +216,7 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
     }
 
     public async Task<(int, List<Domain.AISpeechAssistant.AiSpeechAssistant>)> GetAiSpeechAssistantsAsync(
-        int? pageIndex = null, int? pageSize = null, string channel = null, string keyword = null, List<int> agentIds = null, CancellationToken cancellationToken = default)
+        int? pageIndex = null, int? pageSize = null, string channel = null, string keyword = null, List<int> agentIds = null, bool? isDefault = null,           CancellationToken cancellationToken = default)
     {
         var query = from agentAssistant in _repository.QueryNoTracking<AgentAssistant>()
             join assistant in _repository.QueryNoTracking<Domain.AISpeechAssistant.AiSpeechAssistant>()
@@ -231,6 +231,9 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
 
         if (agentIds != null && agentIds.Count != 0)
             query = query.Where(x => agentIds.Contains(x.agentAssistant.AgentId));
+        
+        if (isDefault.HasValue)
+            query = query.Where(x => x.assistant.IsDefault == isDefault.Value);
 
         var count = await query.CountAsync(cancellationToken).ConfigureAwait(false);
 
