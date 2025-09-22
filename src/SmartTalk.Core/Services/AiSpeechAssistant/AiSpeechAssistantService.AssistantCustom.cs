@@ -410,7 +410,7 @@ public partial class AiSpeechAssistantService
     {
         if (!command.AgentId.HasValue) throw new ArgumentException("Agent id is required", nameof(command.AgentId));
         
-        var agent = await _agentDataProvider.GetAgentAsync(id: command.AgentId.Value, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var agent = await _agentDataProvider.GetAgentByIdAsync(id: command.AgentId.Value, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (agent == null) throw new Exception($"Agent {command.AgentId} not found");
         
