@@ -220,7 +220,7 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
     {
         var query = from agentAssistant in _repository.QueryNoTracking<AgentAssistant>()
             join assistant in _repository.QueryNoTracking<Domain.AISpeechAssistant.AiSpeechAssistant>()
-                .Where(x => x.IsDisplay && x.IsDefault) on agentAssistant.AssistantId equals assistant.Id
+                .Where(x => x.IsDisplay) on agentAssistant.AssistantId equals assistant.Id
             select new { agentAssistant, assistant };
 
         if (!string.IsNullOrEmpty(channel))
