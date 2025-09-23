@@ -16,7 +16,7 @@ public partial class EventHandlingService
     {
         if (@event == null || string.IsNullOrEmpty(@event.Order?.Phone)) return;
         
-        var customer = await _posDataProvider.GetStoreCustomerAsync(phone: @event.Order.Phone, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var customer = await _posDataProvider.GetStoreCustomerAsync(storeId: @event.Order.StoreId, phone: @event.Order.Phone, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (customer == null)
         {

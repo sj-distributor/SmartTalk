@@ -6,7 +6,7 @@ namespace SmartTalk.Core.Services.Pos;
 
 public partial interface IPosDataProvider : IScopedDependency
 {
-    Task<StoreCustomer> GetStoreCustomerAsync(int? id = null, string phone = null, CancellationToken cancellationToken = default);
+    Task<StoreCustomer> GetStoreCustomerAsync(int? id = null, int? storeId = null, string phone = null, CancellationToken cancellationToken = default);
     
     Task<(int, List<StoreCustomer>)> GetStoreCustomersAsync(int storeId, int? pageIndex = null, int? pageSize = null, string phone = null, CancellationToken cancellationToken = default);
     
@@ -17,12 +17,15 @@ public partial interface IPosDataProvider : IScopedDependency
 
 public partial class PosDataProvider : IPosDataProvider
 {
-    public async Task<StoreCustomer> GetStoreCustomerAsync(int? id = null, string phone = null, CancellationToken cancellationToken = default)
+    public async Task<StoreCustomer> GetStoreCustomerAsync(int? id = null, int? storeId = null, string phone = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<StoreCustomer>();
 
         if (id.HasValue)
             query = query.Where(x => x.Id == id.Value);
+        
+        if (storeId.HasValue)
+            query = query.Where(x => x.StoreId == storeId.Value);
 
         if (!string.IsNullOrEmpty(phone))
             query = query.Where(x => x.Phone.Contains(phone));
