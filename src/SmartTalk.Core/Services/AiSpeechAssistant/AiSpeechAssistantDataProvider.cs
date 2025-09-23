@@ -107,7 +107,7 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
     
     Task<List<AiSpeechAssistantInboundRoute>> DeleteAiSpeechAssistantInboundRoutesAsync(List<int> routeIds, bool forceSave = true, CancellationToken cancellationToken = default);
     
-    Task<(int, List<AiSpeechAssistantInboundRoute>)> GetAiSpeechAssistantInboundRoutesAsync(int pageInddex, int pageSize, string keyword = null, CancellationToken cancellationToken = default);
+    Task<(int, List<AiSpeechAssistantInboundRoute>)> GetAiSpeechAssistantInboundRoutesAsync(int pageIndex, int pageSize, int assistantId, string keyword = null, CancellationToken cancellationToken = default);
 }
 
 public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
@@ -578,16 +578,17 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
         return routes;
     }
 
-    public async Task<(int, List<AiSpeechAssistantInboundRoute>)> GetAiSpeechAssistantInboundRoutesAsync(int pageInddex, int pageSize, string keyword = null, CancellationToken cancellationToken = default)
+    public async Task<(int, List<AiSpeechAssistantInboundRoute>)> GetAiSpeechAssistantInboundRoutesAsync(
+        int pageIndex, int pageSize, int assistantId, string keyword = null, CancellationToken cancellationToken = default)
     {
-        var query = _repository.Query<AiSpeechAssistantInboundRoute>();
+        var query = _repository.Query<AiSpeechAssistantInboundRoute>().Where(x => x.ForwardAssistantId == assistantId);
 
         if (!string.IsNullOrEmpty(keyword))
             query = query.Where(x => x.To.Contains(keyword));
         
         var count = await query.CountAsync(cancellationToken).ConfigureAwait(false);
         
-        var routes = await query.Skip((pageInddex - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken).ConfigureAwait(false);
+        var routes = await query.Skip((pageIndex - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken).ConfigureAwait(false);
         
         return (count, routes);
     }

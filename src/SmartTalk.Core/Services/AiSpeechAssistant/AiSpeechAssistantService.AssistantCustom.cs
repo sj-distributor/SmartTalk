@@ -237,7 +237,8 @@ public partial class AiSpeechAssistantService
             To = command.TargetNumber,
             IsFullDay = true,
             ForwardAssistantId = command.AssistantId,
-            Remarks = x.Remarks
+            Remarks = x.Remarks,
+            DayOfWeek = string.Empty
         }).ToList();
         
         await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantInboundRouteAsync(routes, cancellationToken: cancellationToken).ConfigureAwait(false);

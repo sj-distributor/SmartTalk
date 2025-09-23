@@ -135,7 +135,8 @@ public partial class AiSpeechAssistantService
 
     public async Task<GetAiSpeechAssistantInboundRoutesResponse> GetAiSpeechAssistantInboundRoutesAsync(GetAiSpeechAssistantInboundRoutesRequest request, CancellationToken cancellationToken)
     {
-        var (count, routes) = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantInboundRoutesAsync(request.PageIndex, request.PageSize, request.Keyword, cancellationToken).ConfigureAwait(false);
+        var (count, routes) = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantInboundRoutesAsync(
+            request.PageIndex, request.PageSize, request.AssistantId, request.Keyword, cancellationToken).ConfigureAwait(false);
 
         return new GetAiSpeechAssistantInboundRoutesResponse
         {
