@@ -28,7 +28,8 @@ public partial class EventHandlingService
                 Address = @event.Order.Address,
                 Latitude = @event.Order.Latitude,
                 Longitude = @event.Order.Longitude,
-                Remarks = @event.Order.Notes
+                Room = @event.Order.Room,
+                Remarks = @event.Order.Remarks
             };
             
             await _posDataProvider.AddStoreCustomersAsync([customer], cancellationToken: cancellationToken).ConfigureAwait(false);
