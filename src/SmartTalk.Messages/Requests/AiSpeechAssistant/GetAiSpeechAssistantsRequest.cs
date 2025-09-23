@@ -33,5 +33,7 @@ public class GetAiSpeechAssistantsResponseData
 {
     public int Count { get; set; }
     
+    public string AnsweringNumber { get; set; }
+    
     public List<AiSpeechAssistantDto> Assistants { get; set; }
 }

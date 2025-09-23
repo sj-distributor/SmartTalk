@@ -72,7 +72,8 @@ public partial class AiSpeechAssistantService
             Data = new GetAiSpeechAssistantsResponseData
             {
                 Count = count,
-                Assistants = enrichAssistants
+                Assistants = enrichAssistants,
+                AnsweringNumber = enrichAssistants.Where(x => x.IsDefault).FirstOrDefault()?.AnsweringNumber ?? string.Empty
             }
         };
     }
