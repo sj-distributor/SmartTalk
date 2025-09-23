@@ -1,3 +1,4 @@
+using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 
@@ -40,4 +41,6 @@ public class AgentDto
     public bool IsSurface { get; set; }
     
     public DateTimeOffset CreatedDate { get; set; }
+    
+    public List<AiSpeechAssistantDto> Assistants { get; set; }
 }
