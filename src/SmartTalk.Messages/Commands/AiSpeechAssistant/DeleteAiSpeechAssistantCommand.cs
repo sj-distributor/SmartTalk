@@ -7,6 +7,8 @@ namespace SmartTalk.Messages.Commands.AiSpeechAssistant;
 public class DeleteAiSpeechAssistantCommand : ICommand
 {
     public List<int> AssistantIds { get; set; }
+    
+    public bool IsDeleteAgent { get; set; } = true;
 }
 
 public class DeleteAiSpeechAssistantResponse : SmartTalkResponse<List<AiSpeechAssistantDto>>
