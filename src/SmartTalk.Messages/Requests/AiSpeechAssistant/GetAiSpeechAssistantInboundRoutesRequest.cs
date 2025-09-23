@@ -10,6 +10,8 @@ public class GetAiSpeechAssistantInboundRoutesRequest : IRequest
 
     public int PageSize { get; set; } = 10;
     
+    public int AssistantId { get; set; }
+    
     public string Keyword { get; set; }
 }
 
