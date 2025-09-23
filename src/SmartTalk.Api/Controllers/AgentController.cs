@@ -53,11 +53,12 @@ public class AgentController : ControllerBase
         return Ok(response);
     }
     
-    [Route("delete"), HttpDelete]
+    [Route("delete/{agentId:int}"), HttpDelete]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(DeleteAgentResponse))]
-    public async Task<IActionResult> DeleteAgentAsync([FromBody] DeleteAgentCommand command)
+    public async Task<IActionResult> DeleteAgentAsync(int agentId)
     {
-        var response = await _mediator.SendAsync<DeleteAgentCommand, DeleteAgentResponse>(command).ConfigureAwait(false);
+        var command = new DeleteAgentCommand { AgentId = agentId };
+        var response = await _mediator.SendAsync<DeleteAgentCommand, DeleteAgentResponse>(command);
 
         return Ok(response);
     }
