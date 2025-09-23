@@ -1091,15 +1091,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         var fileContent = memoryStream.ToArray();
         var audioData = BinaryData.FromBytes(fileContent);
-        
-        _backgroundJobClient.Enqueue<IAttachmentService>(x => x.UploadAttachmentAsync(new UploadAttachmentCommand
-        {
-            Attachment = new UploadAttachmentDto
-            {
-                FileContent = fileContent,
-                FileName = Guid.NewGuid() + ".wav"
-            }
-        }, CancellationToken.None));
 
         ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
         List<ChatMessage> messages =
@@ -1120,15 +1111,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         Log.Information("Analyze record to repeat order: {@completion}", completion);
 
         var responseAudio = completion.OutputAudio.AudioBytes.ToArray();
-
-        _backgroundJobClient.Enqueue<IAttachmentService>(x => x.UploadAttachmentAsync(new UploadAttachmentCommand
-        {
-            Attachment = new UploadAttachmentDto
-            {
-                FileContent = responseAudio,
-                FileName = Guid.NewGuid() + ".wav"
-            }
-        }, CancellationToken.None));
         
         var uLawAudio = await _ffmpegService.ConvertWavToULawAsync(responseAudio, cancellationToken);
 
