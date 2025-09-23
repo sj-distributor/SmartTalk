@@ -215,6 +215,8 @@ public partial class AiSpeechAssistantService
 
         previousDefaultAssistant.IsDefault = false;
         latestDefaultAssistant.IsDefault = true;
+        latestDefaultAssistant.AnsweringNumber = previousDefaultAssistant.AnsweringNumber;
+        latestDefaultAssistant.AnsweringNumberId = previousDefaultAssistant.AnsweringNumberId;
         
         await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync([previousDefaultAssistant, latestDefaultAssistant], cancellationToken: cancellationToken).ConfigureAwait(false);
 
