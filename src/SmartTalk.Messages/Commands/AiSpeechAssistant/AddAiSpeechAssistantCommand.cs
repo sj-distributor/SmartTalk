@@ -43,6 +43,10 @@ public class AddAiSpeechAssistantCommand : HasServiceProviderId, ICommand
     public AiSpeechAssistantProvider ModelProvider { get; set; } = AiSpeechAssistantProvider.OpenAi;
     
     public int? StoreId { get; set; }
+
+    public bool IsDefault { get; set; } = true;
+    
+    public  bool IsEnabledMultiple { get; set; } = false;
 }
 
 public class AddAiSpeechAssistantResponse : SmartTalkResponse<AiSpeechAssistantDto>

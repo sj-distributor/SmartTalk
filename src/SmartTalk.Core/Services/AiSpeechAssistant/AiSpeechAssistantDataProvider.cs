@@ -31,7 +31,7 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task UpdateNumberPoolAsync(List<NumberPool> numbers, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task<(int, List<Domain.AISpeechAssistant.AiSpeechAssistant>)> GetAiSpeechAssistantsAsync(
-        int? pageIndex = null, int? pageSize = null, string channel = null, string keyword = null, List<int> agentIds = null, CancellationToken cancellationToken = default);
+        int? pageIndex = null, int? pageSize = null, string channel = null, string keyword = null, List<int> agentIds = null, bool? isDefault = null, CancellationToken cancellationToken = default);
 
     Task AddAiSpeechAssistantsAsync(List<Domain.AISpeechAssistant.AiSpeechAssistant> assistants, bool forceSave = true, CancellationToken cancellationToken = default);
 
@@ -43,7 +43,7 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
     
     Task<(int, List<AiSpeechAssistantKnowledge>)> GetAiSpeechAssistantKnowledgesAsync(int assistantId, int? pageIndex = null, int? pageSize = null, string version = null, CancellationToken cancellationToken = default);
 
-    Task<List<Domain.AISpeechAssistant.AiSpeechAssistant>> DeleteAiSpeechAssistantsAsync(List<int> assistantIds, bool forceSave = true, CancellationToken cancellationToken = default);
+    Task<List<Domain.AISpeechAssistant.AiSpeechAssistant>> DeleteAiSpeechAssistantByIdsAsync(List<int> assistantIds, bool forceSave = true, CancellationToken cancellationToken = default);
 
     Task<Domain.AISpeechAssistant.AiSpeechAssistant> GetAiSpeechAssistantAsync(int assistantId, CancellationToken cancellationToken);
     
@@ -88,6 +88,30 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task UpdateAiSpeechAssistantHumanContactAsync(AiSpeechAssistantHumanContact humanContact, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task<List<AiSpeechAssistantHumanContact>> GetAiSpeechAssistantHumanContactsAsync(List<int> assistantIds, CancellationToken cancellationToken);
+    
+    Task AddAgentAssistantsAsync(List<AgentAssistant> agentAssistants, bool forceSave = true, CancellationToken cancellationToken = default);
+    
+    Task<List<AgentAssistant>> GetAgentAssistantsAsync(List<int> agentIds = null, List<int> assistantIds = null, CancellationToken cancellationToken = default);
+    
+    Task<List<(Agent, AgentAssistant)>> GetAgentWithAssistantsAsync(List<int> assistantIds = null, CancellationToken cancellationToken = default);
+    
+    Task DeleteAgentAssistantsAsync(List<AgentAssistant> agentAssistants, bool forceSave = true, CancellationToken cancellationToken = default);
+    
+    Task<(List<AgentAssistant>, List<Domain.AISpeechAssistant.AiSpeechAssistant>)> GetAgentAssistantWithAssistantsAsync(int agentId, CancellationToken cancellationToken = default);
+    
+    Task DeleteAiSpeechAssistantsAsync(List<Domain.AISpeechAssistant.AiSpeechAssistant> assistants, bool forceSave = true, CancellationToken cancellationToken = default);
+    
+    Task<List<Domain.AISpeechAssistant.AiSpeechAssistant>> GetAiSpeechAssistantByIdsAsync(List<int> assistantIds, CancellationToken cancellationToken = default);
+    
+    Task AddAiSpeechAssistantInboundRouteAsync(List<AiSpeechAssistantInboundRoute> routes, bool forceSave = true, CancellationToken cancellationToken = default);
+    
+    Task UpdateAiSpeechAssistantInboundRouteAsync(List<AiSpeechAssistantInboundRoute> routes, bool forceSave = true, CancellationToken cancellationToken = default);
+    
+    Task<AiSpeechAssistantInboundRoute> GetAiSpeechAssistantInboundRouteAsync(int routeId, CancellationToken cancellationToken = default);
+    
+    Task<List<AiSpeechAssistantInboundRoute>> DeleteAiSpeechAssistantInboundRoutesAsync(List<int> routeIds, bool forceSave = true, CancellationToken cancellationToken = default);
+    
+    Task<(int, List<AiSpeechAssistantInboundRoute>)> GetAiSpeechAssistantInboundRoutesAsync(int pageInddex, int pageSize, string keyword = null, CancellationToken cancellationToken = default);
 }
 
 public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
@@ -192,25 +216,31 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
     }
 
     public async Task<(int, List<Domain.AISpeechAssistant.AiSpeechAssistant>)> GetAiSpeechAssistantsAsync(
-        int? pageIndex = null, int? pageSize = null, string channel = null, string keyword = null, List<int> agentIds = null, CancellationToken cancellationToken = default)
+        int? pageIndex = null, int? pageSize = null, string channel = null, string keyword = null, List<int> agentIds = null, bool? isDefault = null,           CancellationToken cancellationToken = default)
     {
-        var query = _repository.QueryNoTracking<Domain.AISpeechAssistant.AiSpeechAssistant>().Where(x => x.IsDisplay);
+        var query = from agentAssistant in _repository.QueryNoTracking<AgentAssistant>()
+            join assistant in _repository.QueryNoTracking<Domain.AISpeechAssistant.AiSpeechAssistant>()
+                .Where(x => x.IsDisplay && x.IsDefault) on agentAssistant.AssistantId equals assistant.Id
+            select new { agentAssistant, assistant };
 
         if (!string.IsNullOrEmpty(channel))
-            query = query.Where(x => x.Channel.Contains(channel));
+            query = query.Where(x => x.assistant.Channel.Contains(channel));
         
         if (!string.IsNullOrEmpty(keyword))
-            query = query.Where(x => x.Name.Contains(keyword));
+            query = query.Where(x => x.assistant.Name.Contains(keyword));
 
         if (agentIds != null && agentIds.Count != 0)
-            query = query.Where(x => agentIds.Contains(x.AgentId));
+            query = query.Where(x => agentIds.Contains(x.agentAssistant.AgentId));
+        
+        if (isDefault.HasValue)
+            query = query.Where(x => x.assistant.IsDefault == isDefault.Value);
 
         var count = await query.CountAsync(cancellationToken).ConfigureAwait(false);
 
         if (pageIndex.HasValue && pageSize.HasValue)
             query = query.Skip((pageIndex.Value - 1) * pageSize.Value).Take(pageSize.Value);
         
-        var assistants = await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+        var assistants = await query.Select(x => x.assistant).ToListAsync(cancellationToken).ConfigureAwait(false);
 
         return (count, assistants);
     }
@@ -271,7 +301,7 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
         return (count, knowledges);
     }
 
-    public async Task<List<Domain.AISpeechAssistant.AiSpeechAssistant>> DeleteAiSpeechAssistantsAsync(
+    public async Task<List<Domain.AISpeechAssistant.AiSpeechAssistant>> DeleteAiSpeechAssistantByIdsAsync(
         List<int> assistantIds, bool forceSave = true, CancellationToken cancellationToken = default)
     {
         var assistants = await _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>()
@@ -391,7 +421,9 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
     public async Task<(Domain.AISpeechAssistant.AiSpeechAssistant Assistant, Agent Agent)> GetAiSpeechAssistantByAgentIdAsync(int agentId, CancellationToken cancellationToken)
     {
         var query = from agent in _repository.Query<Agent>()
-            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agent.Id equals assistant.AgentId into assistantGroups
+            join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
+            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>()
+                .Where(x => x.IsDefault) on agentAssistant.AssistantId equals assistant.Id into assistantGroups
             from assistant in assistantGroups.DefaultIfEmpty()
             where agent.Id == agentId
             select new { assistant, agent };
@@ -461,5 +493,114 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
     public async Task<List<AiSpeechAssistantHumanContact>> GetAiSpeechAssistantHumanContactsAsync(List<int> assistantIds, CancellationToken cancellationToken)
     {
         return await _repository.Query<AiSpeechAssistantHumanContact>().Where(x => assistantIds.Contains(x.AssistantId)).ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+    
+    public async Task AddAgentAssistantsAsync(List<AgentAssistant> agentAssistants, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.InsertAllAsync(agentAssistants, cancellationToken).ConfigureAwait(false);
+        
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<AgentAssistant>> GetAgentAssistantsAsync(List<int> agentIds = null, List<int> assistantIds = null, CancellationToken cancellationToken = default)
+    {
+        var query = _repository.Query<AgentAssistant>();
+
+        if (agentIds != null && agentIds.Count != 0)
+            query = query.Where(x => agentIds.Contains(x.AgentId));
+
+        if (assistantIds != null && assistantIds.Count != 0)
+            query = query.Where(x => assistantIds.Contains(x.AssistantId));
+        
+        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<(Agent, AgentAssistant)>> GetAgentWithAssistantsAsync(List<int> assistantIds = null, CancellationToken cancellationToken = default)
+    {
+        var query = from agent in _repository.Query<Agent>()
+            join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId into agentAssistants
+            from agentAssistant in agentAssistants.DefaultIfEmpty()
+            where assistantIds.Contains(agentAssistant.AssistantId)
+            select new { agent, agentAssistant };
+        
+        var result = await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+        
+        return result.Select(x => (x.agent, x.agentAssistant)).ToList();
+    }
+
+    public async Task DeleteAgentAssistantsAsync(List<AgentAssistant> agentAssistants, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.DeleteAllAsync(agentAssistants, cancellationToken).ConfigureAwait(false);
+        
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<(List<AgentAssistant>, List<Domain.AISpeechAssistant.AiSpeechAssistant>)> GetAgentAssistantWithAssistantsAsync(int agentId, CancellationToken cancellationToken = default)
+    {
+        var query = from agentAssistant in _repository.Query<AgentAssistant>()
+            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agentAssistant.AssistantId equals assistant.Id into assistantGroups
+            from assistant in assistantGroups.DefaultIfEmpty()
+            where agentAssistant.AgentId == agentId
+            select new { agentAssistant, assistant };
+
+        var result = await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+
+        return (result.Select(x => x.agentAssistant).ToList(), result.Select(x => x.assistant).ToList());
+    }
+
+    public async Task DeleteAiSpeechAssistantsAsync(List<Domain.AISpeechAssistant.AiSpeechAssistant> assistants, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.DeleteAllAsync(assistants, cancellationToken).ConfigureAwait(false);
+        
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<Domain.AISpeechAssistant.AiSpeechAssistant>> GetAiSpeechAssistantByIdsAsync(List<int> assistantIds, CancellationToken cancellationToken = default)
+    {
+        return await _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>().Where(x => assistantIds.Contains(x.Id)).ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task AddAiSpeechAssistantInboundRouteAsync(List<AiSpeechAssistantInboundRoute> routes, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.InsertAllAsync(routes, cancellationToken).ConfigureAwait(false);
+        
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task UpdateAiSpeechAssistantInboundRouteAsync(List<AiSpeechAssistantInboundRoute> routes, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.UpdateAllAsync(routes, cancellationToken).ConfigureAwait(false);
+        
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<AiSpeechAssistantInboundRoute> GetAiSpeechAssistantInboundRouteAsync(int routeId, CancellationToken cancellationToken = default)
+    {
+        return await _repository.Query<AiSpeechAssistantInboundRoute>().Where(x => x.Id == routeId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<AiSpeechAssistantInboundRoute>> DeleteAiSpeechAssistantInboundRoutesAsync(List<int> routeIds, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        var routes = await _repository.Query<AiSpeechAssistantInboundRoute>().Where(x => routeIds.Contains(x.Id)).ToListAsync(cancellationToken).ConfigureAwait(false);
+        
+        await _repository.DeleteAllAsync(routes, cancellationToken).ConfigureAwait(false);
+        
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        
+        return routes;
+    }
+
+    public async Task<(int, List<AiSpeechAssistantInboundRoute>)> GetAiSpeechAssistantInboundRoutesAsync(int pageInddex, int pageSize, string keyword = null, CancellationToken cancellationToken = default)
+    {
+        var query = _repository.Query<AiSpeechAssistantInboundRoute>();
+
+        if (!string.IsNullOrEmpty(keyword))
+            query = query.Where(x => x.To.Contains(keyword));
+        
+        var count = await query.CountAsync(cancellationToken).ConfigureAwait(false);
+        
+        var routes = await query.Skip((pageInddex - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken).ConfigureAwait(false);
+        
+        return (count, routes);
     }
 }

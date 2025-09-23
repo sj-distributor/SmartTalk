@@ -4,10 +4,10 @@ using DocumentFormat.OpenXml.Office2010.ExcelAc;
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Data;
 using SmartTalk.Core.Domain.Account;
+using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Ioc;
-using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Pos;
 
 namespace SmartTalk.Core.Services.Pos;
@@ -318,8 +318,9 @@ public partial class PosDataProvider : IPosDataProvider
 
     public async Task<StoreUser> GetPosStoreUsersByUserIdAndAssistantIdAsync(List<int> assistantIds, int userId, CancellationToken cancellationToken = default)
     {
-        var query = from assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>().Where(x => assistantIds.Contains(x.Id))
-            join posAgent in _repository.Query<PosAgent>() on assistant.AgentId equals posAgent.AgentId
+        var query = from assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>().Where(x => assistantIds.Contains(x.Id) && x.IsDefault)
+            join agentAssistant in _repository.Query<AgentAssistant>() on assistant.Id equals agentAssistant.AssistantId
+            join posAgent in _repository.Query<PosAgent>() on agentAssistant.AgentId equals posAgent.AgentId
             join posStoreUser in _repository.Query<StoreUser>() on posAgent.StoreId equals posStoreUser.StoreId
             where posStoreUser.UserId == userId
             select posStoreUser;

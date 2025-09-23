@@ -188,6 +188,12 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     {
         Log.Information($"The call from {command.From} to {command.To} is connected");
         
+        var agent = await _agentDataProvider.GetAgentByNumberAsync(command.To, command.AssistantId, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Get the agent: {@Agent} by {AssistantId} or {DidNumber}", agent, command.AssistantId, command.To);
+        
+        if (agent == null || agent.IsReceiveCall == false) return new AiSpeechAssistantConnectCloseEvent();
+        
         _aiSpeechAssistantStreamContext = new AiSpeechAssistantStreamContextDto
         {
             Host = command.Host,
@@ -238,7 +244,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     {
         Log.Information("Handling receive phone record: {@command}", command);
 
-        var (record, agent, _) = await _phoneOrderDataProvider.GetRecordWithAgentAndAssistantAsync(command.CallSid, cancellationToken).ConfigureAwait(false);
+        var (record, agent) = await _phoneOrderDataProvider.GetRecordWithAgentAsync(command.CallSid, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Get phone order record: {@record}", record);
         
