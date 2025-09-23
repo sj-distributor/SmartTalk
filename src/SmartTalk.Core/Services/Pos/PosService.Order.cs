@@ -50,6 +50,8 @@ public partial class PosService
 
         var token = await GetPosTokenAsync(store, order, cancellationToken).ConfigureAwait(false);
 
+        _smartTalkBackgroundJobClient.Enqueue(() => CreateMerchPrinterOrderAsync(command.StoreId, order.Id, cancellationToken));
+
         if (!store.IsLink && string.IsNullOrWhiteSpace(token))
         {
             order.Status = PosOrderStatus.Modified;
@@ -60,9 +62,7 @@ public partial class PosService
         }
         
         await SafetyPlaceOrderAsync(order, store, token, command.IsWithRetry, 0, cancellationToken).ConfigureAwait(false);
-
-        _smartTalkBackgroundJobClient.Enqueue(() => CreateMerchPrinterOrderAsync(command.StoreId, order.Id, cancellationToken));
-
+        
         return new PosOrderPlacedEvent
         {
             Order = _mapper.Map<PosOrderDto>(order)
