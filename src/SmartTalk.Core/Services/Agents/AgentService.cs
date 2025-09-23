@@ -89,7 +89,8 @@ public class AgentService : IAgentService
             Name = command.Name,
             Brief = command.Brief,
             Channel = command.Channel,
-            IsReceiveCall = command.IsReceivingCall
+            IsReceiveCall = command.IsReceivingCall,
+            IsSurface = true
         };
         
         await _agentDataProvider.AddAgentAsync(agent, cancellationToken: cancellationToken).ConfigureAwait(false);

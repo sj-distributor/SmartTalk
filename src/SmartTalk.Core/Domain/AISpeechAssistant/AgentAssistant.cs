@@ -16,9 +16,6 @@ public class AgentAssistant : IEntity, IHasCreatedFields
 
     [Column("assistant_id")]
     public int AssistantId { get; set; }
-    
-    [Column("is_display")]
-    public bool IsDisplay { get; set; }
 
     [Column("created_by")]
     public int? CreatedBy { get; set; }
