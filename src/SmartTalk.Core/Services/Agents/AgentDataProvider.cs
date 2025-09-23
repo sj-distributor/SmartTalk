@@ -145,7 +145,7 @@ public class AgentDataProvider : IAgentDataProvider
         return result.GroupBy(x => x.agent.Id).Select(x =>
         {
             var agentAssistantPair = x.First();
-            agentAssistantPair.agent.Assistants = x.Select(a => a.assistant).ToList();
+            agentAssistantPair.agent.Assistants = x.Select(a => a.assistant).Where(a => a != null).ToList();
             return agentAssistantPair.agent;
         }).ToList();
     }
