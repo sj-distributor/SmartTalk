@@ -112,7 +112,7 @@ public class PrinterController : ControllerBase
             stopwatch.Stop();
             Log.Information("Printer Get Convert run{@Ms}", stopwatch.ElapsedMilliseconds);
                             
-            return new EmptyResult();
+            return File(ms, outputFormat);
         }
         catch (Exception ex)
         {
