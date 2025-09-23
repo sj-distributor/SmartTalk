@@ -16,7 +16,7 @@ public partial class EventHandlingService
     {
         if (@event == null || string.IsNullOrEmpty(@event.Order?.Phone)) return;
         
-        var customer = await _posDataProvider.GetStoreCustomerAsync(phone: @event.Order.Phone, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var customer = await _posDataProvider.GetStoreCustomerAsync(storeId: @event.Order.StoreId, phone: @event.Order.Phone, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (customer == null)
         {
@@ -28,7 +28,8 @@ public partial class EventHandlingService
                 Address = @event.Order.Address,
                 Latitude = @event.Order.Latitude,
                 Longitude = @event.Order.Longitude,
-                Remarks = @event.Order.Notes
+                Room = @event.Order.Room,
+                Remarks = @event.Order.Remarks
             };
             
             await _posDataProvider.AddStoreCustomersAsync([customer], cancellationToken: cancellationToken).ConfigureAwait(false);
