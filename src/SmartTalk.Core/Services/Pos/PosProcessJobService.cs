@@ -28,16 +28,25 @@ public class PosProcessJobService : IPosProcessJobService
         
         if (orders == null || orders.Count == 0) return;
         
-        var customers = orders.GroupBy(x => x.Phone).Select(x => new StoreCustomer
+        var customers = orders.GroupBy(x => x.Phone).Select(x =>
         {
-            StoreId = x.First().StoreId,
-            Name = x.OrderByDescending(o => o.CreatedDate).First().Name,
-            Phone = x.Key,
-            Address = x.Where(o => o.Type == PosOrderReceiveType.Delivery).FirstOrDefault()?.Address,
-            Latitude = x.Where(o => o.Type == PosOrderReceiveType.Delivery).FirstOrDefault()?.Latitude,
-            Longitude = x.Where(o => o.Type == PosOrderReceiveType.Delivery).FirstOrDefault()?.Longitude,
-            Room = x.Where(o => o.Type == PosOrderReceiveType.Delivery).FirstOrDefault()?.Room,
-            Remarks = x.Where(o => o.Type == PosOrderReceiveType.Delivery).FirstOrDefault()?.Remarks
+            var order = x.Where(o => o.Type == PosOrderReceiveType.Delivery).FirstOrDefault();
+            
+            var remarks = string.IsNullOrWhiteSpace(order?.Remarks) ? string.IsNullOrWhiteSpace(order?.Notes) ? string.Empty : order.Notes : order.Remarks;
+            
+            var customer = new StoreCustomer
+            {
+                StoreId = x.First().StoreId,
+                Name = x.OrderByDescending(o => o.CreatedDate).First().Name,
+                Phone = x.Key,
+                Address = x.Where(o => o.Type == PosOrderReceiveType.Delivery).FirstOrDefault()?.Address,
+                Latitude = x.Where(o => o.Type == PosOrderReceiveType.Delivery).FirstOrDefault()?.Latitude,
+                Longitude = x.Where(o => o.Type == PosOrderReceiveType.Delivery).FirstOrDefault()?.Longitude,
+                Room = x.Where(o => o.Type == PosOrderReceiveType.Delivery).FirstOrDefault()?.Room,
+                Remarks = remarks
+            };
+
+            return customer;
         }).ToList();
         
         Log.Information("Syncing customer info from order: {@CustomerInfos}]", customers);
