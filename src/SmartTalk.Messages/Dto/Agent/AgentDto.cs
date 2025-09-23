@@ -37,5 +37,7 @@ public class AgentDto
     
     public bool IsReceiveCall { get; set; }
     
+    public bool IsSurface { get; set; }
+    
     public DateTimeOffset CreatedDate { get; set; }
 }

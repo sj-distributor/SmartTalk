@@ -130,8 +130,8 @@ public class AgentDataProvider : IAgentDataProvider
     public async Task<List<Agent>> GetAgentsWithAssistantsAsync(
         int? agentId = null, string keyword = null, bool? isDefault = null, CancellationToken cancellationToken = default)
     {
-        var query = from agent in _repository.Query<Agent>().Where(x => x.IsDisplay)
-            join agentAssistant in _repository.Query<AgentAssistant>().Where(x => x.IsDisplay) on agent.Id equals agentAssistant.AgentId into agentAssistantGroups
+        var query = from agent in _repository.Query<Agent>().Where(x => x.IsDisplay && x.IsSurface)
+            join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId into agentAssistantGroups
             from agentAssistant in agentAssistantGroups.DefaultIfEmpty()
             join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agentAssistant.AssistantId equals assistant.Id into assistantGroups
             from assistant in assistantGroups.DefaultIfEmpty()
@@ -153,7 +153,7 @@ public class AgentDataProvider : IAgentDataProvider
     public async Task<Agent> GetAgentByAssistantIdAsync(int assistantId, CancellationToken cancellationToken = default)
     {
         var query = from agent in _repository.Query<Agent>().Where(x => x.IsDisplay)
-            join agentAssistant in _repository.Query<AgentAssistant>().Where(x => x.IsDisplay) on agent.Id equals agentAssistant.AgentId
+            join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
             where agentAssistant.AssistantId == assistantId
             select agent;
         

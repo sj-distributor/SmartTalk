@@ -62,6 +62,9 @@ public class Agent : IAgent, IEntity<int>, IHasCreatedFields
     [Column("is_receive_call")]
     public bool IsReceiveCall { get; set; }
     
+    [Column("is_surface")]
+    public bool IsSurface { get; set; }
+    
     [NotMapped]
     public List<AISpeechAssistant.AiSpeechAssistant> Assistants { get; set; }
 }
