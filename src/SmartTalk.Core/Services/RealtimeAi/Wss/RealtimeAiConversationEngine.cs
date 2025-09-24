@@ -249,10 +249,10 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
         if (!IsSessionActive("发送音频块")) return; // Send audio chunk
         
         // _logger.LogTrace("AiConversationEngine: 准备发送 {Codec} @ {Rate}Hz 音频块。会话 ID: {SessionId}", audioData.Codec, audioData.SampleRate, _sessionId); // AiConversationEngine: Preparing to send {Codec} @ {Rate}Hz audio chunk. Session ID: {SessionId}
-        var (messageJson, isImage) = _aiAdapter.BuildAudioAppendMessage(audioData);
+        var (messageJson, isOpenAiImage) = _aiAdapter.BuildAudioAppendMessage(audioData);
         await _realtimeAiClient.SendMessageAsync(messageJson, _sessionCts.Token);
         
-        if (isImage)
+        if (isOpenAiImage)
         { 
             var responseCreate = new { type = "response.create" };
             var responseJson = JsonSerializer.Serialize(responseCreate);

@@ -11,7 +11,7 @@ public interface IRealtimeAiProviderAdapter : IRealtimeAiProvider
     Task<object> GetInitialSessionPayloadAsync(
         Domain.AISpeechAssistant.AiSpeechAssistant assistantProfile, RealtimeAiEngineContext context, string sessionId = null, CancellationToken cancellationToken = default);
 
-    (string MessageJson, bool IsImage) BuildAudioAppendMessage(RealtimeAiWssAudioData audioData);
+    (string MessageJson, bool IsOpenAiImage) BuildAudioAppendMessage(RealtimeAiWssAudioData audioData);
     
     string BuildTextUserMessage(string text, string sessionId);
 

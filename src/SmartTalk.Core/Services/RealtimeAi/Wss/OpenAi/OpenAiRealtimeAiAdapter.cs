@@ -63,7 +63,7 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
     }
     
     
-    public (string MessageJson, bool IsImage) BuildAudioAppendMessage(RealtimeAiWssAudioData audioData)
+    public (string MessageJson, bool IsOpenAiImage) BuildAudioAppendMessage(RealtimeAiWssAudioData audioData)
     {
         var inputFormatObj = audioData.CustomProperties.GetValueOrDefault(nameof(RealtimeAiEngineContext.InputFormat));
 

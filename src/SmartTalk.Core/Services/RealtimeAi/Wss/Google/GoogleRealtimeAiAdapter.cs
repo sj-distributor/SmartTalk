@@ -66,8 +66,10 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
         return sessionPayload;
     }
 
-    public string BuildAudioAppendMessage(RealtimeAiWssAudioData audioData)
+    public (string MessageJson, bool IsOpenAiImage) BuildAudioAppendMessage(RealtimeAiWssAudioData audioData)
     {
+        var isImage = false;
+        
         object message = audioData.CustomProperties.GetValueOrDefault(nameof(RealtimeAiEngineContext.InputFormat)) switch
         {
             RealtimeAiAudioCodec.PCM16 => new
@@ -88,7 +90,7 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
         };
         
         var json = JsonConvert.SerializeObject(message);
-        return json;
+        return (json, isImage);
     }
     
     public string BuildTextUserMessage(string text, string sessionId)
