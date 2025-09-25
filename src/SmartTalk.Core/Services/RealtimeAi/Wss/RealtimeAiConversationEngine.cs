@@ -252,13 +252,13 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
         var (messageJson, isOpenAiImage) = _aiAdapter.BuildAudioAppendMessage(audioData);
         await _realtimeAiClient.SendMessageAsync(messageJson, _sessionCts.Token);
         
-        if (isOpenAiImage)
-        { 
-            var responseCreate = new { type = "response.create" };
-            var responseJson = JsonSerializer.Serialize(responseCreate);
-
-            await _realtimeAiClient.SendMessageAsync(responseJson, _sessionCts.Token);
-        }
+        // if (isOpenAiImage)
+        // { 
+        //     var responseCreate = new { type = "response.create" };
+        //     var responseJson = JsonSerializer.Serialize(responseCreate);
+        //
+        //     await _realtimeAiClient.SendMessageAsync(responseJson, _sessionCts.Token);
+        // }
     }
 
     public async Task SendTextAsync(string text)
