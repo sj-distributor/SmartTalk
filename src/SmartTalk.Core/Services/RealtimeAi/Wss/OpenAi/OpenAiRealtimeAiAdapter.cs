@@ -62,18 +62,45 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
         
         return sessionPayload;
     }
-
-    public string BuildAudioAppendMessage(RealtimeAiWssAudioData audioData)
-    {
-        var message = new
-        {
-            type = "input_audio_buffer.append",
-            audio = audioData.Base64Payload
-        };
-        var json = JsonSerializer.Serialize(message);
-        return json;
-    }
     
+    
+    public (string MessageJson, bool IsOpenAiImage) BuildAudioAppendMessage(RealtimeAiWssAudioData audioData)
+    {
+        var inputFormatObj = audioData.CustomProperties.GetValueOrDefault(nameof(RealtimeAiEngineContext.InputFormat));
+
+        switch (inputFormatObj)
+        {
+            case RealtimeAiAudioCodec.IMAGE:
+                var imageMessage = new
+                {
+                    type = "conversation.item.create",
+                    item = new
+                    {
+                        type = "message",
+                        role = "user",
+                        content = new[]
+                        {
+                            new
+                            {
+                                type = "input_image",
+                                image_url = $"data:image/jpeg;base64,{audioData.Base64Payload}"
+                            }
+                        }
+                    }
+                };
+                var imageJson = JsonSerializer.Serialize(imageMessage);
+                return (imageJson, true);
+            default:
+                var audioMessage = new
+                {
+                    type = "input_audio_buffer.append",
+                    audio = audioData.Base64Payload
+                };
+                var audioJson = JsonSerializer.Serialize(audioMessage);
+                return (audioJson, false);
+        }
+    }
+
     public string BuildTextUserMessage(string text, string sessionId)
     {
         var message = new
