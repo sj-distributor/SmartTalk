@@ -140,7 +140,11 @@ public partial class AiSpeechAssistantService
 
         return new GetAiSpeechAssistantInboundRoutesResponse
         {
-            Data = _mapper.Map<List<AiSpeechAssistantInboundRouteDto>>(routes)
+            Data = new GetAiSpeechAssistantInboundRoutesResponseData
+            {
+                Count = count,
+                Routes = _mapper.Map<List<AiSpeechAssistantInboundRouteDto>>(routes)
+            }
         };
     }
 

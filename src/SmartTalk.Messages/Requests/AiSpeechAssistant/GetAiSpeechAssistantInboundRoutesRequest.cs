@@ -15,4 +15,11 @@ public class GetAiSpeechAssistantInboundRoutesRequest : IRequest
     public string Keyword { get; set; }
 }
 
-public class GetAiSpeechAssistantInboundRoutesResponse : SmartTalkResponse<List<AiSpeechAssistantInboundRouteDto>>;
+public class GetAiSpeechAssistantInboundRoutesResponse : SmartTalkResponse<GetAiSpeechAssistantInboundRoutesResponseData>;
+
+public class GetAiSpeechAssistantInboundRoutesResponseData
+{
+    public int Count { get; set; }
+    
+    public List<AiSpeechAssistantInboundRouteDto> Routes { get; set; }
+}
