@@ -135,14 +135,37 @@ public class SpeechMaticsService : ISpeechMaticsService
         var allItems = new List<string>();
         
         var askInfoResponse = await _salesClient.GetAskInfoDetailListByCustomerAsync(new GetAskInfoDetailListByCustomerRequestDto { CustomerNumbers = soldToIds }, cancellationToken).ConfigureAwait(false);
+        var askItems = askInfoResponse?.Data ?? new List<VwAskDetail>();
+        
+        var levelCodes = askItems.Where(x => !string.IsNullOrEmpty(x.LevelCode)).Select(x => x.LevelCode).Distinct().ToList();
+        
+        var aliasLookup = new Dictionary<string, List<string>>(); 
+        if (levelCodes.Any()) 
+        { 
+            var habitResponse = await _salesClient.GetCustomerLevel5HabitAsync(new GetCustomerLevel5HabitRequstDto { CustomerId = soldToIds.FirstOrDefault(), LevelCode5List = levelCodes }, cancellationToken).ConfigureAwait(false);
+            Log.Information("Habit API Response: {@habitResponse}", habitResponse);
+            
+            aliasLookup = habitResponse?.HistoryCustomerLevel5HabitDtos?.GroupBy(h => h.LevelCode5).ToDictionary(
+                g => g.Key,
+                g => g.Select(x => x.CustomerLikeName).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct().ToList()) ?? new Dictionary<string, List<string>>(); 
+        }
 
-        if (askInfoResponse?.Data != null && askInfoResponse.Data.Any())
-            allItems.AddRange(askInfoResponse.Data.Select(x => x.MaterialDesc));
+        string FormatItem(string material, string levelCode = null) 
+        { 
+            var parts = material?.Split('·', StringSplitOptions.RemoveEmptyEntries) ?? Array.Empty<string>(); 
+            var brand = parts.Length > 1 ? parts[1] : ""; 
+            var size = parts.Length > 3 ? parts[3] : ""; 
+            var name = parts.Length > 4 ? $"{parts[0]} {parts[4]}" : parts.FirstOrDefault() ?? ""; 
+            aliasLookup.TryGetValue(levelCode ?? "", out var aliases); 
+            return $"Item: {name}, Brand: {brand}, Size: {size}, Aliases: {string.Join('/', aliases ?? new List<string>())}";
+        }
+        
+        allItems.AddRange(askItems.Select(x => FormatItem(x.MaterialDesc, x.LevelCode)));
         
         var orderHistoryResponse = await _salesClient.GetOrderHistoryByCustomerAsync(new GetOrderHistoryByCustomerRequestDto { CustomerNumber = soldToIds.FirstOrDefault() }, cancellationToken).ConfigureAwait(false);
 
         if (orderHistoryResponse?.Data != null && orderHistoryResponse.Data.Any())
-            allItems.AddRange(orderHistoryResponse.Data.Select(x => x.MaterialDescription));
+            allItems.AddRange(orderHistoryResponse.Data.Select(x => FormatItem(x.MaterialDescription)));
 
         return string.Join(Environment.NewLine, allItems.Distinct());
     }
