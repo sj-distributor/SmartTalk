@@ -13,5 +13,5 @@ public class HistoryCustomerLevel5HabitDto
     
     public DateTime CreateDate { get; set; }
     
-    public string? CustomerLikeName { get; set; }
+    public string CustomerLikeName { get; set; }
 }
