@@ -62,44 +62,43 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
         return sessionPayload;
     }
     
-    
     public (string MessageJson, bool IsOpenAiImage) BuildAudioAppendMessage(RealtimeAiWssAudioData audioData)
     {
-        var inputFormatObj = audioData.CustomProperties.GetValueOrDefault(nameof(RealtimeAiEngineContext.InputFormat));
+        var imageBase64 = audioData.CustomProperties.GetValueOrDefault("image") as string;
+        var hasAudio = !string.IsNullOrWhiteSpace(audioData.Base64Payload);
 
-        switch (inputFormatObj)
+        if (!hasAudio)
+            return (null, false);
+
+        if (!string.IsNullOrWhiteSpace(imageBase64))
         {
-            case RealtimeAiAudioCodec.IMAGE:
-                var imageMessage = new
+            var mergedMessage = new
+            {
+                type = "conversation.item.create",
+                item = new
                 {
-                    type = "conversation.item.create",
-                    item = new
+                    type = "message",
+                    role = "user",
+                    content = new object[]
                     {
-                        type = "message",
-                        role = "user",
-                        content = new[]
-                        {
-                            new
-                            {
-                                type = "input_image",
-                                image_url = $"data:image/jpeg;base64,{audioData.Base64Payload}"
-                            }
-                        }
+                        new { type = "input_audio", audio = audioData.Base64Payload },
+                        new { type = "input_image", image_url = $"data:image/jpeg;base64,{imageBase64}" }
                     }
-                };
-                var imageJson = JsonSerializer.Serialize(imageMessage);
-                return (imageJson, true);
-            default:
-                var audioMessage = new
-                {
-                    type = "input_audio_buffer.append",
-                    audio = audioData.Base64Payload
-                };
-                var audioJson = JsonSerializer.Serialize(audioMessage);
-                return (audioJson, false);
+                }
+            };
+            return (JsonSerializer.Serialize(mergedMessage), true);
+        }
+        else
+        {
+            var audioMessage = new
+            {
+                type = "input_audio_buffer.append",
+                audio = audioData.Base64Payload
+            };
+            return (JsonSerializer.Serialize(audioMessage), false);
         }
     }
-
+    
     public string BuildTextUserMessage(string text, string sessionId)
     {
         var message = new

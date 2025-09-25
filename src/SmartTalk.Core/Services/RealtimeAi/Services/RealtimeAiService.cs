@@ -34,6 +34,8 @@ public class RealtimeAiService : IRealtimeAiService
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
 
     private string _streamSid;
+    private string _imageMessage;
+    private bool _cameraEnabled = false;
     private WebSocket _webSocket;
     private IRealtimeAiConversationEngine _conversationEngine;
     
@@ -145,6 +147,25 @@ public class RealtimeAiService : IRealtimeAiService
                 try
                 {
                     using var jsonDocument = JsonSerializer.Deserialize<JsonDocument>(rawMessage);
+                    
+                    if (jsonDocument.RootElement.ValueKind == JsonValueKind.String)
+                    {
+                        var evt = jsonDocument.RootElement.GetString();
+                        switch (evt)
+                        {
+                            case "start_camera":
+                                _cameraEnabled = true;
+                                Log.Information("Camera started");
+                                continue;
+
+                            case "stop_camera":
+                                _cameraEnabled = false;
+                                _imageMessage = null;
+                                Log.Information("Camera stopped");
+                                continue;
+                        }
+                    }
+                    
                     var payload = jsonDocument?.RootElement.GetProperty("media").GetProperty("payload").GetString();
                     
                     if (!string.IsNullOrWhiteSpace(payload))
@@ -160,15 +181,27 @@ public class RealtimeAiService : IRealtimeAiService
                                 "video" => RealtimeAiAudioCodec.IMAGE,
                                 _ => context.InputFormat
                             };
+
+                        if (inputFormat == RealtimeAiAudioCodec.IMAGE)
+                        {
+                            _imageMessage = payload;
+                        }
                         
+                        var customProps = new Dictionary<string, object>
+                        {
+                            { nameof(context.InputFormat), context.InputFormat }
+                        };
+
+                        if (!string.IsNullOrEmpty(_imageMessage))
+                            customProps["image"] = _imageMessage;
+
                         await _conversationEngine.SendAudioChunkAsync(new RealtimeAiWssAudioData
                         {
                             Base64Payload = payload,
-                            CustomProperties = new Dictionary<string, object>
-                            {
-                                { nameof(context.InputFormat), inputFormat }
-                            }
+                            CustomProperties = customProps
                         }).ConfigureAwait(false);
+
+                        _imageMessage = null;
                     }
                     else
                     {
