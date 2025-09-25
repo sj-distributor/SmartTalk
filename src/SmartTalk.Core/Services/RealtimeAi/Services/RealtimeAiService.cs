@@ -150,7 +150,6 @@ public class RealtimeAiService : IRealtimeAiService
                     
                     if (jsonDocument.RootElement.TryGetProperty("start_camera", out var cameraProp))
                     {
-                                _cameraEnabled = false;
                         _cameraEnabled = cameraProp.GetBoolean();
                         if (!_cameraEnabled)
                             _imageMessage = null;
