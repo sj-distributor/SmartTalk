@@ -16,8 +16,8 @@ public class HrInterViewSession : IEntity
     [Column("message")] 
     public string Message { get; set; }
     
-    [Column("bytes")]
-    public string Bytes { get; set; }
+    [Column("file_url")]
+    public string FileUrl { get; set; }
 
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; } = DateTimeOffset.Now;

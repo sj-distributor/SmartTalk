@@ -12,16 +12,22 @@ public interface IHrInterViewDataProvider : IScopedDependency
     Task UpdateHrInterViewSettingAsync(HrInterViewSetting setting, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task<HrInterViewSetting> GetHrInterViewSettingByIdAsync(int settingId, CancellationToken cancellationToken);
-    
-    Task<List<HrInterViewSetting>> GetHrInterViewSettingsAsync ( CancellationToken cancellationToken);
 
+    Task<(List<HrInterViewSetting>, int)> GetHrInterViewSettingsAsync(int? settingId, int? pageIndex = null, int? pageSize = null, CancellationToken cancellationToken = default);
+    
     Task AddHrInterViewSettingQuestionsAsync(List<HrInterViewSettingQuestion> questions, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task UpdateHrInterViewSettingQuestionsAsync(List<HrInterViewSettingQuestion> questions, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task DeleteHrInterViewSettingQuestionsAsync(List<HrInterViewSettingQuestion> questions, bool forceSave = true, CancellationToken cancellationToken = default);
     
-    Task<List<HrInterViewSettingQuestion>> GetHrInterViewSettingQuestionsAsync (List<int> questionIds, CancellationToken cancellationToken);
+    Task<List<HrInterViewSettingQuestion>> GetHrInterViewSettingQuestionsByIdAsync (List<int> questionIds, CancellationToken cancellationToken);
+    
+    Task<List<HrInterViewSettingQuestion>> GetHrInterViewSettingQuestionsBySessionIdAsync(Guid sessionId, CancellationToken cancellationToken);
+
+    Task AddHrInterViewSessionAsync(HrInterViewSession session, bool forceSave = true, CancellationToken cancellationToken = default);
+    
+    Task<(List<HrInterViewSession>, int)> GetHrInterViewSessionsAsync (Guid? sessionId, int? pageIndex = null, int? pageSize = null, CancellationToken cancellationToken = default);
 }
 
 public class HrInterViewDataProvider : IHrInterViewDataProvider
@@ -56,9 +62,19 @@ public class HrInterViewDataProvider : IHrInterViewDataProvider
         return await _repository.GetByIdAsync<HrInterViewSetting>(settingId, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<HrInterViewSetting>> GetHrInterViewSettingsAsync(CancellationToken cancellationToken)
+    public async Task<(List<HrInterViewSetting>, int)> GetHrInterViewSettingsAsync(int? settingId, int? pageIndex = null, int? pageSize = null, CancellationToken cancellationToken = default)
     {
-        return await _repository.QueryNoTracking<HrInterViewSetting>().ToListAsync(cancellationToken).ConfigureAwait(false);
+        var query = _repository.QueryNoTracking<HrInterViewSetting>();
+
+        if (settingId.HasValue)
+            query = query.Where(x => x.Id == settingId);
+        
+        var count = await query.CountAsync(cancellationToken).ConfigureAwait(false);
+        
+        if (pageIndex.HasValue && pageSize.HasValue)
+            query = query.Skip((pageIndex.Value - 1) * pageSize.Value).Take(pageSize.Value);
+        
+        return (await query.ToListAsync(cancellationToken).ConfigureAwait(false), count);
     }
 
     public async Task AddHrInterViewSettingQuestionsAsync(List<HrInterViewSettingQuestion> questions, bool forceSave = true, CancellationToken cancellationToken = default)
@@ -85,8 +101,36 @@ public class HrInterViewDataProvider : IHrInterViewDataProvider
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<HrInterViewSettingQuestion>> GetHrInterViewSettingQuestionsAsync(List<int> questionIds, CancellationToken cancellationToken)
+    public async Task<List<HrInterViewSettingQuestion>> GetHrInterViewSettingQuestionsBySessionIdAsync(Guid sessionId, CancellationToken cancellationToken)
+    {
+        return await _repository.Query<HrInterViewSettingQuestion>().Where(x => sessionId == x.SessionId).ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<HrInterViewSettingQuestion>> GetHrInterViewSettingQuestionsByIdAsync(List<int> questionIds, CancellationToken cancellationToken)
     {
         return await _repository.Query<HrInterViewSettingQuestion>().Where(x => questionIds.Contains(x.Id)).ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task AddHrInterViewSessionAsync(HrInterViewSession session, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.InsertAsync(session, cancellationToken).ConfigureAwait(false);
+        
+        if (forceSave)
+            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<(List<HrInterViewSession>, int)> GetHrInterViewSessionsAsync(Guid? sessionId, int? pageIndex = null, int? pageSize = null, CancellationToken cancellationToken = default)
+    {
+        var query = _repository.QueryNoTracking<HrInterViewSession>();
+
+        if (sessionId.HasValue)
+            query = query.Where(x => x.SessionId == sessionId);
+        
+        var count = await query.CountAsync(cancellationToken).ConfigureAwait(false);
+        
+        if (pageIndex.HasValue && pageSize.HasValue)
+            query = query.Skip((pageIndex.Value - 1) * pageSize.Value).Take(pageSize.Value);
+        
+        return (await query.ToListAsync(cancellationToken).ConfigureAwait(false), count);
     }
 }

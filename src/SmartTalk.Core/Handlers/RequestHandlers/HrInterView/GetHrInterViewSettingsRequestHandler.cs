@@ -5,7 +5,7 @@ using SmartTalk.Messages.Requests.HrInterView;
 
 namespace SmartTalk.Core.Handlers.RequestHandlers.HrInterView;
 
-public class GetHrInterViewSettingsRequestHandler: IRequestHandler<GetHrInterViewSettingsRequest, GetHrInterViewSettingsResponse>
+public class GetHrInterViewSettingsRequestHandler : IRequestHandler<GetHrInterViewSettingsRequest, GetHrInterViewSettingsResponse>
 {
     private readonly IHrInterViewService _hrInterViewService;
 

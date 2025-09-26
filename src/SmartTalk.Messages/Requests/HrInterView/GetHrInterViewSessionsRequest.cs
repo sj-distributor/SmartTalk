@@ -4,18 +4,18 @@ using SmartTalk.Messages.Responses;
 
 namespace SmartTalk.Messages.Requests.HrInterView;
 
-public class GetHrInterViewSettingsRequest : IRequest
+public class GetHrInterViewSessionsRequest : IRequest
 {
-    public int? SettingId { get; set; }
+    public Guid? SettingId { get; set; }
 
     public int? PageIndex { get; set; } = 1;
 
     public int? PageSzie { get; set; } = 15;
 }
 
-public class GetHrInterViewSettingsResponse : SmartTalkResponse
+public class GetHrInterViewSessionsResponse : SmartTalkResponse
 {
-    public List<HrInterViewSettingDto> Settings { get; set; }
+    public List<HrInterViewSessionDto> Sessions { get; set; }
     
     public int TotalCount { get; set; }
 }

@@ -8,7 +8,7 @@ public class HrInterViewSessionDto
 
     public string Message { get; set; }
 
-    public string Bytes { get; set; }
+    public string FileUrl { get; set; }
 
     public DateTimeOffset CreatedDate { get; set; } = DateTimeOffset.Now;
 }
