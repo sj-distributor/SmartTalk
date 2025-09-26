@@ -36,19 +36,15 @@ public class HrInterViewService : IHrInterViewService
     private readonly IAsrClient _asrClient;
     private readonly ISpeechClint _speechClint;
     private readonly ISmartiesClient _smartiesClient;
-    private readonly ClientWebSocket _clientWebSocket;
     private readonly IHrInterViewDataProvider _hrInterViewDataProvider;
-    private readonly ISmartTalkHttpClientFactory _smartTalkHttpClientFactory;
 
-    public HrInterViewService(IMapper mapper, IAsrClient asrClient, ISpeechClint speechClint, ISmartiesClient smartiesClient, ClientWebSocket clientWebSocket, IHrInterViewDataProvider hrInterViewDataProvider, ISmartTalkHttpClientFactory smartTalkHttpClientFactory)
+    public HrInterViewService(IMapper mapper, IAsrClient asrClient, ISpeechClint speechClint, ISmartiesClient smartiesClient, IHrInterViewDataProvider hrInterViewDataProvider)
     {
         _mapper = mapper;
         _asrClient = asrClient;
         _speechClint = speechClint;
         _smartiesClient = smartiesClient;
-        _clientWebSocket = clientWebSocket;
         _hrInterViewDataProvider = hrInterViewDataProvider;
-        _smartTalkHttpClientFactory = smartTalkHttpClientFactory;
     }
 
     public async Task<AddOrUpdateHrInterViewSettingResponse> AddOrUpdateHrInterViewSettingAsync(AddOrUpdateHrInterViewSettingCommand command, CancellationToken cancellationToken)
@@ -69,6 +65,8 @@ public class HrInterViewService : IHrInterViewService
         {
             firstQuestion.Count -= firstQuestion.Count;
         }
+        
+        command.Questions.ForEach(x => x.SettingId = setting.Id);
         
         await _hrInterViewDataProvider.AddHrInterViewSettingQuestionsAsync(_mapper.Map<List<HrInterViewSettingQuestion>>(command.Questions), cancellationToken: cancellationToken).ConfigureAwait(false);
         

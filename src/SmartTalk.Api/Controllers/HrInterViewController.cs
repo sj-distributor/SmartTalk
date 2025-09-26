@@ -13,12 +13,10 @@ namespace SmartTalk.Api.Controllers;
 public class HrInterViewController : ControllerBase
 {
     private readonly IMediator _mediator;
-    private readonly IHrInterViewService _hrInterViewService;
 
-    public HrInterViewController(IMediator mediator, IHrInterViewService hrInterViewService)
+    public HrInterViewController(IMediator mediator)
     {
         _mediator = mediator;
-        _hrInterViewService = hrInterViewService;
     }
     
         

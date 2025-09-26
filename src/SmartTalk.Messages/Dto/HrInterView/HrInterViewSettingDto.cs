@@ -10,5 +10,6 @@ public class HrInterViewSettingDto
     
     public Guid SessionId { get; set; }
     
+    
     public DateTimeOffset CreatedDate { get; set; } = DateTimeOffset.Now;
 }
