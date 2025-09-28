@@ -23,6 +23,7 @@ create table if not exists hr_interview_session (
     `session_id` char(36) NOT NULL,
     `message` text NOT NULL,
     `file_url` text NOT NULL,
+    `question_type` int NOT NULL,  
     `created_date` datetime(3) NOT NULL,
     PRIMARY KEY (`id`)
     )charset=utf8mb4;

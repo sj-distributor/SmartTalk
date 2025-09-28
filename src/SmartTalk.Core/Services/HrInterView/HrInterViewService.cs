@@ -15,6 +15,7 @@ using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Messages.Dto.Asr;
 using SmartTalk.Messages.Dto.WebSocket;
+using SmartTalk.Messages.Enums.HrInterView;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 
 namespace SmartTalk.Core.Services.HrInterView;
@@ -173,6 +174,7 @@ public class HrInterViewService : IHrInterViewService
                     SessionId = sessionId,
                     Message = answers.Text,
                     FileUrl = answersFile.Data.FileUrl,
+                    QuestionType = HrInterViewSessionQuestionType.User
                 }, cancellationToken:cancellationToken).ConfigureAwait(false);
                 
                 var questions = (await _hrInterViewDataProvider.GetHrInterViewSettingQuestionsBySessionIdAsync(sessionId, cancellationToken).ConfigureAwait(false)).Where(x => x.Count > 0).ToList();
@@ -187,14 +189,15 @@ public class HrInterViewService : IHrInterViewService
                 {
                     SessionId = sessionId,
                     EventType = "MESSAGE",
-                    Message = matchQuestionAudio, 
+                    Message = matchQuestionAudio,
                 }, cancellationToken).ConfigureAwait(false);
                 
                 await _hrInterViewDataProvider.AddHrInterViewSessionAsync(new HrInterViewSession
                 {
                     SessionId = sessionId,
                     Message = matchQuestion.Question,
-                    FileUrl = matchQuestionAudio
+                    FileUrl = matchQuestionAudio,
+                    QuestionType = HrInterViewSessionQuestionType.Assistant
                 }, cancellationToken:cancellationToken).ConfigureAwait(false);
                 
                 var updateQuestions = await _hrInterViewDataProvider.GetHrInterViewSettingQuestionsByIdAsync(new List<int> {matchQuestion.SettingQuestionId}, cancellationToken).ConfigureAwait(false);
@@ -216,7 +219,7 @@ public class HrInterViewService : IHrInterViewService
        
         var endMessageAudio = "";
        
-        if (endMessage != null && !string.IsNullOrEmpty(endMessage)) endMessageAudio= await ConvertTextToSpeechAsync(endMessage, cancellationToken).ConfigureAwait(false);
+        if (endMessage != null && !string.IsNullOrEmpty(endMessage)) endMessageAudio = await ConvertTextToSpeechAsync(endMessage, cancellationToken).ConfigureAwait(false);
             
         var welcomeEvent = new HrInterViewQuestionEventDto
         {
@@ -232,7 +235,8 @@ public class HrInterViewService : IHrInterViewService
         {
             SessionId = sessionId,
             Message = message,
-            FileUrl = messageAudio
+            FileUrl = messageAudio,
+            QuestionType = HrInterViewSessionQuestionType.Assistant
         }, cancellationToken:cancellationToken).ConfigureAwait(false);
         
         if (endMessage != null && !string.IsNullOrEmpty(endMessage))  
@@ -241,6 +245,7 @@ public class HrInterViewService : IHrInterViewService
                 SessionId = sessionId,
                 Message = endMessage,
                 FileUrl = endMessageAudio,
+                QuestionType = HrInterViewSessionQuestionType.Assistant,
                 CreatedDate = DateTimeOffset.MaxValue
             }, cancellationToken:cancellationToken).ConfigureAwait(false);
     }
@@ -336,7 +341,7 @@ public class HrInterViewService : IHrInterViewService
     {
         var (sessions, _) = await _hrInterViewDataProvider.GetHrInterViewSessionsAsync(sessionId: sessionId, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        return string.Join(" ", sessions.Where(x => x.CreatedDate != DateTimeOffset.MaxValue).Select(x => x.Message).ToList());
+        return string.Join(" ", sessions.Where(x => x.CreatedDate != DateTimeOffset.MaxValue).Select(x => x.QuestionType == HrInterViewSessionQuestionType.Assistant? $"问：{x.Message}\n" : $"答：{x.Message}\n" ).ToList());
     }
     
     private async Task<string> ConvertTextToSpeechAsync(string text, CancellationToken cancellationToken)

@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using SmartTalk.Messages.Enums.HrInterView;
 
 namespace SmartTalk.Core.Domain.HrInterView;
 
@@ -18,7 +19,10 @@ public class HrInterViewSession : IEntity
     
     [Column("file_url")]
     public string FileUrl { get; set; }
-
+    
+    [Column("question_type")]
+    public HrInterViewSessionQuestionType QuestionType { get; set; }
+    
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; } = DateTimeOffset.Now;
 }
