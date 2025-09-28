@@ -1,3 +1,5 @@
+using SmartTalk.Messages.Enums.HrInterView;
+
 namespace SmartTalk.Messages.Dto.HrInterView;
 
 public class HrInterViewSessionDto
@@ -9,6 +11,8 @@ public class HrInterViewSessionDto
     public string Message { get; set; }
 
     public string FileUrl { get; set; }
+    
+    public HrInterViewSessionQuestionType QuestionType { get; set; }
 
     public DateTimeOffset CreatedDate { get; set; } = DateTimeOffset.Now;
 }
