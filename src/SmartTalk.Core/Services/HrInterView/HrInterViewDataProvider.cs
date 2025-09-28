@@ -27,7 +27,7 @@ public interface IHrInterViewDataProvider : IScopedDependency
 
     Task AddHrInterViewSessionAsync(HrInterViewSession session, bool forceSave = true, CancellationToken cancellationToken = default);
     
-    Task<(List<HrInterViewSession>, int)> GetHrInterViewSessionsAsync (Guid? sessionId, int? pageIndex = null, int? pageSize = null, CancellationToken cancellationToken = default);
+    Task<(List<HrInterViewSession>, int)> GetHrInterViewSessionsAsync(Guid? sessionId, int? pageIndex = null, int? pageSize = null, CancellationToken cancellationToken = default);
 }
 
 public class HrInterViewDataProvider : IHrInterViewDataProvider
