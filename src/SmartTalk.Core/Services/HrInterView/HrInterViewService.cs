@@ -265,9 +265,45 @@ public class HrInterViewService : IHrInterViewService
     
     public async Task<MatchedQuestionResultDto> FindMostSimilarQuestionUsingLLMAsync(string userQuestion, List<HrInterViewSettingQuestion> candidateQuestions, string context, CancellationToken cancellationToken)
     {
-        //TODO
-        var prompt = "";
+        var promptPrefix = "你是一位专业的面试官，正在与面试者进行对话。请根据面试者的回答执行以下任务：\n" +
+                           "1. 对面试者的回答做出简短、专业的评价，可以肯定、指出亮点，或礼貌地指出可以补充/改进的地方；\n" +
+                           "2. 在自然的对话过渡中，从下方“问题列表”中选择一个合适的问题继续提问；\n" +
+                           "3. 每次只提一个问题；\n" +
+                           "4. 请以如下格式输出：\n" +
+                           " * chosen_question: 所选问题的内容；\n" +
+                           " * question_type: 问题的类型名称（如：性格类、专业类等）；\n" +
+                           " * question_type_id: 问题类型的唯一 ID（如：character、skill 等）；\n" +
+                           " * follow_up_message: 面试官的完整回复内容（包含对上一问题的评价 + 自然过渡 + 当前问题）。\n\n" +
+                           "问题列表如下：\n";
         
+        var questionListBuilder = new StringBuilder();
+        var grouped = candidateQuestions
+            .GroupBy(q => q.Type)
+            .OrderBy(g => g.Key);
+
+        var globalIndex = 1;
+        foreach (var group in grouped)
+        {
+            questionListBuilder.AppendLine();
+            questionListBuilder.AppendLine($"类型：{group.Key} | 类型 ID：{group.Key}");
+
+            foreach (var question in group)
+            {
+                questionListBuilder.AppendLine($"{globalIndex++}. {question.Questions}");
+            }
+        }
+        
+        var styleRequirements = "\n回复风格要求：\n" +
+                                "* 用语自然、口语化、不过度官方；\n" +
+                                "* 保持专业，但避免过于机械；\n" +
+                                "* 不要重复面试者刚才说过的内容；\n" +
+                                "* 若面试者回答不清晰，可委婉追问细节或举例说明；\n" +
+                                "* 过渡要自然，例如使用 “了解了，那我也想了解一下…”、“听起来很不错，那接下来我想问的是…” 等句式。" +
+                                "* 对于提问过的问题不进行二次提问" +
+                                $"以下是上下文帮助你过滤已经问过的问题：{context}";
+        
+        var fullPrompt = promptPrefix + questionListBuilder + styleRequirements;
+
         var request = new AskGptRequest
         {
             Model = OpenAiModel.Gpt4o,
@@ -276,12 +312,12 @@ public class HrInterViewService : IHrInterViewService
                 new CompletionsRequestMessageDto
                 {
                     Role = "system",
-                    Content = new CompletionsStringContent("你是一个专业的HR面试问题匹配助手。根据用户的问题和提供的上下文，从候选问题中找出最相似的问题。")
+                    Content = new CompletionsStringContent(fullPrompt)
                 },
                 new CompletionsRequestMessageDto
                 {
                     Role = "user",
-                    Content = new CompletionsStringContent(prompt)
+                    Content = new CompletionsStringContent(userQuestion)
                 }
             },
             Temperature = 0.1,
