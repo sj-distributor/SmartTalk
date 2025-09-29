@@ -28,6 +28,8 @@ public partial interface IAiSpeechAssistantService
 
     Task<UpdateAiSpeechAssistantResponse> UpdateAiSpeechAssistantAsync(UpdateAiSpeechAssistantCommand command, CancellationToken cancellationToken);
     
+    Task<UpdateAiSpeechAssistantDetailResponse> UpdateAiSpeechAssistantDetailAsync(UpdateAiSpeechAssistantDetailCommand command, CancellationToken cancellationToken);
+    
     Task<DeleteAiSpeechAssistantResponse> DeleteAiSpeechAssistantAsync(DeleteAiSpeechAssistantCommand command, CancellationToken cancellationToken);
 
     Task<UpdateAiSpeechAssistantNumberResponse> UpdateAiSpeechAssistantNumberAsync(UpdateAiSpeechAssistantNumberCommand command, CancellationToken cancellationToken);
@@ -126,6 +128,17 @@ public partial class AiSpeechAssistantService
         {
             Data = _mapper.Map<AiSpeechAssistantDto>(assistant)
         };
+    }
+
+    public async Task<UpdateAiSpeechAssistantDetailResponse> UpdateAiSpeechAssistantDetailAsync(UpdateAiSpeechAssistantDetailCommand command, CancellationToken cancellationToken)
+    {
+        var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByIdAsync(command.AssistantId, cancellationToken).ConfigureAwait(false);
+        
+        _mapper.Map(command, assistant);
+        
+        await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync([assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        return new UpdateAiSpeechAssistantDetailResponse { Data = _mapper.Map<AiSpeechAssistantDto>(assistant) };
     }
 
     public async Task<DeleteAiSpeechAssistantResponse> DeleteAiSpeechAssistantAsync(DeleteAiSpeechAssistantCommand command, CancellationToken cancellationToken)
