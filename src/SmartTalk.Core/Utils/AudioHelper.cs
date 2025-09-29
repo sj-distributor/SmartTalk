@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Security.Cryptography;
+using Serilog;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 
 namespace SmartTalk.Core.Utils;
@@ -16,8 +17,10 @@ public static class AudioHelper
         var resourcePrefix = $"Assets.Audio.RepeatOrderHoldon.{voiceName}.{languageName}";
 
         var assembly = Assembly.GetExecutingAssembly();
+        var manifestResourceNames = assembly.GetManifestResourceNames();
+        Log.Information("Loading assembly manifest: {@manifest}", manifestResourceNames);
         
-        var resourceNames = assembly.GetManifestResourceNames()
+        var resourceNames = manifestResourceNames
             .Where(name => name.StartsWith(resourcePrefix, StringComparison.OrdinalIgnoreCase) && AllowedExtensions.Contains(Path.GetExtension(name)))
             .ToArray();
 
