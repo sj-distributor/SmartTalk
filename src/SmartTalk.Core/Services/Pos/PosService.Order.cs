@@ -62,7 +62,7 @@ public partial class PosService
         }
         
         await SafetyPlaceOrderAsync(order, store, token, command.IsWithRetry, 0, cancellationToken).ConfigureAwait(false);
-
+        
         return new PosOrderPlacedEvent
         {
             Order = _mapper.Map<PosOrderDto>(order)

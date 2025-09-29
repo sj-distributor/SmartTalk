@@ -99,7 +99,7 @@ public partial class AccountService : IAccountService
     {
         var (count, userAccounts) = await _accountDataProvider.GetUserAccountDtosAsync(
             request.UserName, request.ServiceProviderId, request.UserAccountLevel, request.PageSize, request.PageIndex, true, cancellationToken).ConfigureAwait(false);
-
+        
         var processedAccounts = userAccounts.Select(account =>
         {
             if (account.AccountLevel == UserAccountLevel.ServiceProvider)

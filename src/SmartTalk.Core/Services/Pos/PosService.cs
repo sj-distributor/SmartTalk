@@ -304,7 +304,7 @@ public partial class PosService : IPosService
         if (isSuperAdmin)
         {
             var stores = await _posDataProvider.GetPosCompanyStoresWithSortingAsync(null, request.CompanyId, request.ServiceProviderId, request.Keyword, request.IsNormalSort, cancellationToken: cancellationToken).ConfigureAwait(false);
-
+        
             return new GetPosStoresResponse
             {
                 Data = _mapper.Map<List<CompanyStoreDto>>(stores)
@@ -314,7 +314,7 @@ public partial class PosService : IPosService
         if (request.AuthorizedFilter)
         {
             var storeUsers = await _posDataProvider.GetPosStoreUsersByUserIdAsync(_currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
-
+        
             Log.Information("Get store users: {StoreUsers}", storeUsers);
 
             if (storeUsers == null || !storeUsers.Any())
@@ -327,15 +327,15 @@ public partial class PosService : IPosService
 
             var stores = await _posDataProvider.GetPosCompanyStoresWithSortingAsync(storeUsers.Select(x => x.StoreId).ToList(),
                 request.CompanyId, request.ServiceProviderId, request.Keyword, request.IsNormalSort, cancellationToken: cancellationToken).ConfigureAwait(false);
-
+        
             return new GetPosStoresResponse
             {
                 Data = _mapper.Map<List<CompanyStoreDto>>(stores)
             };
         }
-
+        
         var allStores = await _posDataProvider.GetPosCompanyStoresWithSortingAsync([], request.CompanyId, request.ServiceProviderId, request.Keyword, request.IsNormalSort, cancellationToken: cancellationToken).ConfigureAwait(false);
-
+    
         return new GetPosStoresResponse
         {
             Data = _mapper.Map<List<CompanyStoreDto>>(allStores)

@@ -767,8 +767,9 @@ public partial class AiSpeechAssistantService
             else
             {
                 var content = JsonConvert.DeserializeObject<AiSpeechAssistantSessionTurnDetectionDto>(turnDetection.Content);
-                
-                content.SilenceDuratioMs = assistant.WaitInterval;
+
+                if (!string.Equals(content.Type, "semantic_vad", StringComparison.OrdinalIgnoreCase))
+                    content.SilenceDuratioMs = assistant.WaitInterval;
                 
                 turnDetection.Content = JsonConvert.SerializeObject(content);
                 
