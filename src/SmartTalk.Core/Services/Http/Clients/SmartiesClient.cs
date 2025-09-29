@@ -1,3 +1,5 @@
+using System.Net.Http.Headers;
+using Microsoft.AspNetCore.StaticFiles;
 using Serilog;
 using SmartTalk.Core.Ioc;
 using Smarties.Messages.Requests.Ask;
@@ -22,6 +24,8 @@ public interface ISmartiesClient : IScopedDependency
     Task CallBackSmartiesAiKidConversationsAsync(AiKidConversationCallBackRequestDto request, CancellationToken cancellationToken);
 
     Task<GetSaleAutoCallNumberResponse> GetSaleAutoCallNumberAsync(GetSaleAutoCallNumberRequest request, CancellationToken cancellationToken);
+
+    Task<UploadAttachmentResponse> UploadFileAsync(byte[] fileBytes, CancellationToken cancellationToken);
 }
 
 public class SmartiesClient : ISmartiesClient
@@ -87,5 +91,33 @@ public class SmartiesClient : ISmartiesClient
         Log.Information("GetSaleAutoCallNumber response: {@Response}", response);
 
         return response;
+    }
+    
+    public async Task<UploadAttachmentResponse> UploadFileAsync(byte[] fileBytes, CancellationToken cancellationToken)
+    {
+        var form = new MultipartFormDataContent();
+
+        using var memoryStream = new MemoryStream(fileBytes);
+        
+        var fileContent = new StreamContent(memoryStream);
+        
+        var fileName = $"hr-inter-view{Guid.NewGuid()}.wav";
+        
+        fileContent.Headers.ContentType = MediaTypeHeaderValue.Parse(GetMimeTypeFromExtension(fileName));
+
+        form.Add(fileContent, "file", fileName);
+        
+        var response = await _httpClientFactory.PostAsync<UploadAttachmentResponse>(_smartiesSettings.BaseUrl + "api/Attachment/upload", form, cancellationToken, headers: _headers).ConfigureAwait(false);
+        
+        Log.Information("UploadFileAsync response: {@Response}", response);
+        
+        return response;
+        
+    }
+    
+    public static string GetMimeTypeFromExtension(string fileName)
+    {
+        var provider = new FileExtensionContentTypeProvider();
+        return provider.TryGetContentType(fileName, out var contentType) ? contentType : "application/octet-stream";
     }
 }
