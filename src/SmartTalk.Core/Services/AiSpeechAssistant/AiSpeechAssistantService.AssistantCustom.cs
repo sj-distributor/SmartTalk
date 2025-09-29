@@ -360,7 +360,7 @@ public partial class AiSpeechAssistantService
     
     private async Task<Domain.AISpeechAssistant.AiSpeechAssistant> InitialAssistantRelatedInfoAsync(AddAiSpeechAssistantCommand command, CancellationToken cancellationToken)
     {
-        var (agent, number) = command.AgentType switch
+        var (agent, number, isDefault) = command.AgentType switch
         {
             AgentType.AiKid => await InitialAiKidInternalAsync(command, cancellationToken).ConfigureAwait(false),
             AgentType.Agent => await InitialAiAgentInternalAsync(command, cancellationToken).ConfigureAwait(false),
@@ -382,7 +382,7 @@ public partial class AiSpeechAssistantService
             ModelProvider = AiSpeechAssistantProvider.OpenAi,
             Channel = command.Channels == null ? null : string.Join(",", command.Channels.Select(x => (int)x)),
             IsDisplay = command.IsDisplay,
-            IsDefault = command.IsDefault,
+            IsDefault = isDefault,
             ModelLanguage = command.AgentType == AgentType.Agent ? "English" : null
         };
         
@@ -432,7 +432,7 @@ public partial class AiSpeechAssistantService
         return number;
     }
     
-    private async Task<(Agent Agent, NumberPool Number)> InitialAiAgentInternalAsync(AddAiSpeechAssistantCommand command, CancellationToken cancellationToken)
+    private async Task<(Agent Agent, NumberPool Number, bool IsDefault)> InitialAiAgentInternalAsync(AddAiSpeechAssistantCommand command, CancellationToken cancellationToken)
     {
         if (!command.AgentId.HasValue) throw new ArgumentException("Agent id is required", nameof(command.AgentId));
         
@@ -440,12 +440,14 @@ public partial class AiSpeechAssistantService
 
         if (agent == null) throw new Exception($"Agent {command.AgentId} not found");
         
-        var number = command.IsDefault ? await DistributeNumberAsync(cancellationToken: cancellationToken).ConfigureAwait(false) : null;
+        var isDefault = await CheckAssistantIsDefaultAsync(agent.Id, cancellationToken).ConfigureAwait(false);
         
-        return (agent, number);
+        var number = isDefault ? await DistributeNumberAsync(cancellationToken: cancellationToken).ConfigureAwait(false) : null;
+        
+        return (agent, number, isDefault);
     }
 
-    private async Task<(Agent Agent, NumberPool Number)> InitialRestaurantInternalAsync(AddAiSpeechAssistantCommand command, CancellationToken cancellationToken)
+    private async Task<(Agent Agent, NumberPool Number, bool IsDefault)> InitialRestaurantInternalAsync(AddAiSpeechAssistantCommand command, CancellationToken cancellationToken)
     {
         var restaurant = new Restaurant { Name = command.AssistantName };
 
@@ -455,10 +457,10 @@ public partial class AiSpeechAssistantService
         
         var number = await DistributeNumberAsync(cancellationToken).ConfigureAwait(false);
         
-        return (agent, number);
+        return (agent, number, true);
     }
 
-    private async Task<(Agent Agent, NumberPool Number)> InitialAiKidInternalAsync(AddAiSpeechAssistantCommand command, CancellationToken cancellationToken)
+    private async Task<(Agent Agent, NumberPool Number, bool IsDefault)> InitialAiKidInternalAsync(AddAiSpeechAssistantCommand command, CancellationToken cancellationToken)
     {
         var agent = await AddAgentAsync(null, command.ServiceProviderId, command.AgentType, command.SourceSystem, command.IsDisplay, false, cancellationToken).ConfigureAwait(false);
         
@@ -469,19 +471,19 @@ public partial class AiSpeechAssistantService
                 KidUuid = command.Uuid.Value
             }, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        return (agent, null);
+        return (agent, null, true);
     }
 
-    private async Task<(Agent Agent, NumberPool Number)> InitialAssistantInternalAsync(AddAiSpeechAssistantCommand command, CancellationToken cancellationToken)
+    private async Task<(Agent Agent, NumberPool Number, bool IsDefault)> InitialAssistantInternalAsync(AddAiSpeechAssistantCommand command, CancellationToken cancellationToken)
     {
         var agent = await AddAgentAsync(null, command.ServiceProviderId, command.AgentType, command.SourceSystem, command.IsDisplay, false, cancellationToken).ConfigureAwait(false);
         
         var number = await DistributeNumberAsync(cancellationToken).ConfigureAwait(false);
         
-        return (agent, number);
+        return (agent, number, true);
     }
     
-    private async Task<(Agent Agent, NumberPool Number)> InitialPosCompanyStoreInternalAsync(AddAiSpeechAssistantCommand command, CancellationToken cancellationToken)
+    private async Task<(Agent Agent, NumberPool Number, bool IsDefault)> InitialPosCompanyStoreInternalAsync(AddAiSpeechAssistantCommand command, CancellationToken cancellationToken)
     {
         if (!command.StoreId.HasValue) throw new ArgumentException("Store id is required", nameof(command.AgentId));
         
@@ -497,7 +499,7 @@ public partial class AiSpeechAssistantService
         
         var number = await DistributeNumberAsync(cancellationToken).ConfigureAwait(false);
         
-        return (agent, number);
+        return (agent, number, true);
     }
     
     private async Task InitialAssistantKnowledgeAsync(AddAiSpeechAssistantCommand command, Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken)
@@ -780,5 +782,14 @@ public partial class AiSpeechAssistantService
                 }
             }
         }
+    }
+
+    private async Task<bool> CheckAssistantIsDefaultAsync(int agentId, CancellationToken cancellationToken)
+    {
+        var agentAssistants = await _aiSpeechAssistantDataProvider.GetAgentAssistantsAsync(agentIds: [agentId], cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (agentAssistants == null) throw new Exception($"No agent assistant found with id {agentId}");
+        
+        return agentAssistants.Count == 0;
     }
 }
