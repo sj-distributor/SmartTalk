@@ -261,7 +261,7 @@ public class HrInterViewService : IHrInterViewService
                 Message = endMessage,
                 FileUrl = endMessageAudio,
                 QuestionType = HrInterViewSessionQuestionType.Assistant,
-                CreatedDate = DateTime.MaxValue
+                CreatedDate = new DateTimeOffset(DateTime.MaxValue)
             }, cancellationToken:cancellationToken).ConfigureAwait(false);
     }
     
@@ -360,7 +360,7 @@ public class HrInterViewService : IHrInterViewService
     {
         var (sessions, _) = await _hrInterViewDataProvider.GetHrInterViewSessionsAsync(sessionId: sessionId, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        return string.Join(" ", sessions.Where(x => x.CreatedDate != DateTime.MaxValue).Select(x => x.QuestionType == HrInterViewSessionQuestionType.Assistant? $"问：{x.Message}\n" : $"答：{x.Message}\n" ).ToList());
+        return string.Join(" ", sessions.Where(x => x.CreatedDate != new DateTimeOffset(DateTime.MaxValue)).Select(x => x.QuestionType == HrInterViewSessionQuestionType.Assistant? $"问：{x.Message}\n" : $"答：{x.Message}\n" ).ToList());
     }
     
     private async Task<string> ConvertTextToSpeechAsync(string text, CancellationToken cancellationToken)
