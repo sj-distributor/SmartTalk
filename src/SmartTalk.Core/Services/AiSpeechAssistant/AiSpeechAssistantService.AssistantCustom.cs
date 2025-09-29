@@ -69,6 +69,15 @@ public partial class AiSpeechAssistantService
 
         await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgesAsync([latestKnowledge], cancellationToken: cancellationToken).ConfigureAwait(false);
         
+        if (!string.IsNullOrEmpty(command.Language))
+        {
+            var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByIdAsync(command.AssistantId, cancellationToken).ConfigureAwait(false);
+            
+            assistant.ModelLanguage = command.Language;
+            
+            await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync([assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+        
         return new AiSpeechAssistantKnowledgeAddedEvent
         {
             PrevKnowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(prevKnowledge),
@@ -351,7 +360,8 @@ public partial class AiSpeechAssistantService
             ModelLanguage = command.ModelLanguage,
             Channel = command.Channels == null ? null : string.Join(",", command.Channels.Select(x => (int)x)),
             IsDisplay = command.IsDisplay,
-            IsDefault = command.IsDefault
+            IsDefault = command.IsDefault,
+            ModelLanguage = command.AgentType == AgentType.Agent ? "English" : null
         };
         
         await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantsAsync([assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
