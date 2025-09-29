@@ -70,10 +70,6 @@
     </ItemGroup>
 
     <ItemGroup>
-      <Folder Include="Assets\Audio\RepeatOrderHoldon\Alloy\En\" />
-    </ItemGroup>
-
-    <ItemGroup>
         <EmbeddedResource Include="Assets/Audio\**\*.wav" />
     </ItemGroup>
 
