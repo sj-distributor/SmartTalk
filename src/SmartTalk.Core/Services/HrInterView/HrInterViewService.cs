@@ -11,7 +11,6 @@ using Serilog;
 using Smarties.Messages.DTO.OpenAi;
 using Smarties.Messages.Enums.OpenAi;
 using Smarties.Messages.Requests.Ask;
-using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Messages.Dto.Asr;
 using SmartTalk.Messages.Dto.WebSocket;
@@ -122,11 +121,6 @@ public class HrInterViewService : IHrInterViewService
             Sessions = _mapper.Map<List<HrInterViewSessionDto>>(settings),
             TotalCount = count
         };
-    }
-
-    public async Task AddHrInterViewSessionsAsync(List<HrInterViewSessionDto> sessions, CancellationToken cancellationToken)
-    {
-        throw new NotImplementedException();
     }
 
     public async Task ConnectWebSocketAsync(ConnectHrInterViewCommand command, CancellationToken cancellationToken)
