@@ -18,6 +18,8 @@ public class AiSpeechAssistantDto
     
     public string ModelVoice { get; set; }
     
+    public string ModelLanguage { get; set; }
+    
     public string CustomRecordAnalyzePrompt { get; set; }
     
     public string Channel { get; set; }

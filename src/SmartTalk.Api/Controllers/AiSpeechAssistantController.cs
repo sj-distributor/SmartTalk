@@ -194,6 +194,15 @@ public class AiSpeechAssistantController : ControllerBase
         return Ok(response);
     }
     
+    [Route("assistant/detail/update"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdateAiSpeechAssistantDetailResponse))]
+    public async Task<IActionResult> UpdateAiSpeechAssistantDetailAsync([FromBody] UpdateAiSpeechAssistantDetailCommand command)
+    {
+        var response = await _mediator.SendAsync<UpdateAiSpeechAssistantDetailCommand, UpdateAiSpeechAssistantDetailResponse>(command).ConfigureAwait(false);
+
+        return Ok(response);
+    }
+    
     [Route("assistant/delete"), HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(DeleteAiSpeechAssistantResponse))]
     public async Task<IActionResult> DeleteAiSpeechAssistantAsync([FromBody] DeleteAiSpeechAssistantCommand command)
