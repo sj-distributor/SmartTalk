@@ -60,6 +60,9 @@ public class AiSpeechAssistant : IEntity<int>, IAgent, IHasCreatedFields
     [Column("is_default")]
     public bool IsDefault { get; set; }
     
+    [Column("main_language")]
+    public AiSpeechAssistantMainLanguage? MainLanguage { get; set; }
+    
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
     
