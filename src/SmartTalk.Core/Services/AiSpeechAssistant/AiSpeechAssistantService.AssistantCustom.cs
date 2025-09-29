@@ -236,6 +236,8 @@ public partial class AiSpeechAssistantService
             throw new Exception("Could not find the previous or latest default assistant!");
 
         previousDefaultAssistant.IsDefault = false;
+        previousDefaultAssistant.AnsweringNumber = null;
+        previousDefaultAssistant.AnsweringNumberId = null;
         latestDefaultAssistant.IsDefault = true;
         latestDefaultAssistant.AnsweringNumber = previousDefaultAssistant.AnsweringNumber;
         latestDefaultAssistant.AnsweringNumberId = previousDefaultAssistant.AnsweringNumberId;
