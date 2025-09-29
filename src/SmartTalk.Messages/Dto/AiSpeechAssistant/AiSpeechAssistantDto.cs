@@ -32,8 +32,6 @@ public class AiSpeechAssistantDto
     
     public bool IsDefault { get; set; }
     
-    public AiSpeechAssistantMainLanguage? MainLanguage { get; set; }
-    
     public DateTimeOffset CreatedDate { get; set; }
     
     public int CreatedBy { get; set; }
