@@ -10,6 +10,7 @@ public class AgentMapping : Profile
     public AgentMapping()
     {
         CreateMap<Agent, AgentDto>();
-        CreateMap<UpdateAgentCommand, Agent>();
+        CreateMap<UpdateAgentCommand, Agent>()
+            .ForMember(dest => dest.IsReceiveCall, opt => opt.MapFrom(src => src.IsReceivingCall));;
     }
 }
