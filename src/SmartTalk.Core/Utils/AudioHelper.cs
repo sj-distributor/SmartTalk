@@ -14,7 +14,7 @@ public static class AudioHelper
         var voiceName = voice.ToString();
         var languageName = language.ToString();
 
-        var resourcePrefix = $"Assets.Audio.RepeatOrderHoldon.{voiceName}.{languageName}";
+        var resourcePrefix = $"SmartTalk.Core.Assets.Audio.RepeatOrderHoldon.{voiceName}.{languageName}";
 
         var assembly = Assembly.GetExecutingAssembly();
         var manifestResourceNames = assembly.GetManifestResourceNames();
