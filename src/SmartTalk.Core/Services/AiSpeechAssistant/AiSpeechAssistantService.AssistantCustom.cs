@@ -2,7 +2,6 @@ using Serilog;
 using System.Text;
 using Newtonsoft.Json.Linq;
 using System.Globalization;
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Newtonsoft.Json;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.Pos;
