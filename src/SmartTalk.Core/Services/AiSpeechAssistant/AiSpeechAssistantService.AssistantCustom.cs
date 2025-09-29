@@ -68,15 +68,6 @@ public partial class AiSpeechAssistantService
         await InitialKnowledgeAsync(latestKnowledge, cancellationToken).ConfigureAwait(false);
 
         await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgesAsync([latestKnowledge], cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        if (command.Language.HasValue)
-        {
-            var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByIdAsync(command.AssistantId, cancellationToken).ConfigureAwait(false);
-            
-            assistant.MainLanguage = command.Language.Value;
-            
-            await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync([assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
-        }
         
         return new AiSpeechAssistantKnowledgeAddedEvent
         {
