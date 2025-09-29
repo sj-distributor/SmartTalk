@@ -12,7 +12,7 @@ create table if not exists hr_interview_setting_question (
     `setting_id` int NOT NULL,
     `session_id` char(36) NOT NULL,
     `type` text NOT NULL,
-    `questions` text NOT NULL,
+    `question` text NOT NULL,
     `count` int not null,
     `created_date` datetime(3) NOT NULL,
     PRIMARY KEY (`id`)

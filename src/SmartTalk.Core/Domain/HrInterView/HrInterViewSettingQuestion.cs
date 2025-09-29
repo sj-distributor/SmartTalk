@@ -19,8 +19,8 @@ public class HrInterViewSettingQuestion : IEntity
     [Column("type")] 
     public string Type { get; set; }
     
-    [Column("questions")] 
-    public string Questions { get; set; }
+    [Column("question")] 
+    public string Question { get; set; }
     
     [Column("count")]
     public int Count { get; set; }

@@ -8,8 +8,8 @@ public class HrInterViewMapping : Profile
 {
     public HrInterViewMapping()
     {
-        CreateMap<HrInterViewSetting, HrInterViewSettingDto>();
-        CreateMap<HrInterViewSettingQuestion, HrInterViewSettingQuestionDto>();
-        CreateMap<HrInterViewSession, HrInterViewSessionDto>();
+        CreateMap<HrInterViewSetting, HrInterViewSettingDto>().ReverseMap();
+        CreateMap<HrInterViewSettingQuestion, HrInterViewSettingQuestionDto>().ReverseMap();
+        CreateMap<HrInterViewSession, HrInterViewSessionDto>().ReverseMap();
     }
 }

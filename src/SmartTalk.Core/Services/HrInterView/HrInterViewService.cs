@@ -80,7 +80,7 @@ public class HrInterViewService : IHrInterViewService
         try
         {
             using var client = new ClientWebSocket();
-            await client.ConnectAsync(new Uri($"wss://{command.Host}/api/HrInterViewC/connect/{command.Setting.SessionId}"), cancellationToken).ConfigureAwait(false);
+            await client.ConnectAsync(new Uri($"wss://{command.Host}/api/HrInterView/websocket/{command.Setting.SessionId}"), cancellationToken).ConfigureAwait(false);
            
             if (client.State != WebSocketState.Open) return;
 
@@ -138,8 +138,29 @@ public class HrInterViewService : IHrInterViewService
                 if (result.MessageType == WebSocketMessageType.Text)
                 {
                     var message = Encoding.UTF8.GetString(buffer, 0, result.Count);
+                    var messageObj = JsonConvert.DeserializeObject<dynamic>(message);
+                    var responseDto = new HrInterViewQuestionEventResponseDto
+                    {
+                        SessionId = Guid.Parse(messageObj.SessionId.ToString()),
+                        EventType = messageObj.EventType?.ToString(),
+                        Message = null
+                    };
                     
-                    await HandleWebSocketMessageAsync(command.WebSocket, command.SessionId, JsonConvert.DeserializeObject<HrInterViewQuestionEventResponseDto>(message), cancellationToken).ConfigureAwait(false);
+                    if (messageObj.Message != null)
+                    {
+                        var messageStr = messageObj.Message.ToString();
+                        try
+                        {
+                            responseDto.Message = Convert.FromBase64String(messageStr);
+                        }
+                        catch (FormatException ex)
+                        {
+                            Log.Error("Invalid Base64 string received: {Message}. Error: {Error}", messageStr, ex.Message);
+                            continue;
+                        }
+                    }
+                    
+                    await HandleWebSocketMessageAsync(command.WebSocket, command.SessionId, responseDto, cancellationToken).ConfigureAwait(false);
                 }
                 else if (result.MessageType == WebSocketMessageType.Close)
                 {
@@ -219,8 +240,8 @@ public class HrInterViewService : IHrInterViewService
         {
             SessionId = sessionId,
             EventType = eventType,
-            Message = message, 
-            EndMessage = string.IsNullOrEmpty(endMessage) ? "" : endMessage, 
+            Message = messageAudio, 
+            EndMessage = string.IsNullOrEmpty(endMessage) ? "" : endMessageAudio, 
         };
 
         await SendWebSocketMessageAsync(webSocket, welcomeEvent, cancellationToken).ConfigureAwait(false);
@@ -240,7 +261,7 @@ public class HrInterViewService : IHrInterViewService
                 Message = endMessage,
                 FileUrl = endMessageAudio,
                 QuestionType = HrInterViewSessionQuestionType.Assistant,
-                CreatedDate = DateTimeOffset.MaxValue
+                CreatedDate = DateTime.MaxValue
             }, cancellationToken:cancellationToken).ConfigureAwait(false);
     }
     
@@ -289,7 +310,7 @@ public class HrInterViewService : IHrInterViewService
 
             foreach (var question in group)
             {
-                questionListBuilder.AppendLine($"{globalIndex++}. {question.Questions}");
+                questionListBuilder.AppendLine($"{globalIndex++}. {question.Question}");
             }
         }
 
@@ -338,7 +359,7 @@ public class HrInterViewService : IHrInterViewService
     {
         var (sessions, _) = await _hrInterViewDataProvider.GetHrInterViewSessionsAsync(sessionId: sessionId, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        return string.Join(" ", sessions.Where(x => x.CreatedDate != DateTimeOffset.MaxValue).Select(x => x.QuestionType == HrInterViewSessionQuestionType.Assistant? $"问：{x.Message}\n" : $"答：{x.Message}\n" ).ToList());
+        return string.Join(" ", sessions.Where(x => x.CreatedDate != DateTime.MaxValue).Select(x => x.QuestionType == HrInterViewSessionQuestionType.Assistant? $"问：{x.Message}\n" : $"答：{x.Message}\n" ).ToList());
     }
     
     private async Task<string> ConvertTextToSpeechAsync(string text, CancellationToken cancellationToken)
