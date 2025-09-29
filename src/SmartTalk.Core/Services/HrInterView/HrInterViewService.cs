@@ -183,7 +183,7 @@ public class HrInterViewService : IHrInterViewService
                 
                 var matchQuestion = await FindMostSimilarQuestionUsingLLMAsync(answers.Text, questions, context, cancellationToken).ConfigureAwait(false);
                 
-                var matchQuestionAudio = await ConvertTextToSpeechAsync(matchQuestion.Question, cancellationToken).ConfigureAwait(false);
+                var matchQuestionAudio = await ConvertTextToSpeechAsync(matchQuestion.Message, cancellationToken).ConfigureAwait(false);
                 
                 await SendWebSocketMessageAsync(webSocket, new HrInterViewQuestionEventDto
                 {
@@ -195,12 +195,12 @@ public class HrInterViewService : IHrInterViewService
                 await _hrInterViewDataProvider.AddHrInterViewSessionAsync(new HrInterViewSession
                 {
                     SessionId = sessionId,
-                    Message = matchQuestion.Question,
+                    Message = matchQuestion.Message,
                     FileUrl = matchQuestionAudio,
                     QuestionType = HrInterViewSessionQuestionType.Assistant
                 }, cancellationToken:cancellationToken).ConfigureAwait(false);
                 
-                var updateQuestions = await _hrInterViewDataProvider.GetHrInterViewSettingQuestionsByIdAsync(new List<int> {matchQuestion.SettingQuestionId}, cancellationToken).ConfigureAwait(false);
+                var updateQuestions = await _hrInterViewDataProvider.GetHrInterViewSettingQuestionsByIdAsync(new List<int> {matchQuestion.Id}, cancellationToken).ConfigureAwait(false);
              
                 updateQuestions.ForEach(x => x.Count -= x.Count);
                 
@@ -276,10 +276,8 @@ public class HrInterViewService : IHrInterViewService
                            2. 在自然的对话过渡中，从下方“问题列表”中选择一个合适的问题继续提问；
                            3. 每次只提一个问题；
                            4. 请以如下格式输出：
-                           * chosen_question: 所选问题的内容；
-                           * question_type: 问题的类型名称（如：性格类、专业类等）；
-                           * question_type_id: 问题类型的唯一 ID（如：character、skill 等）；
-                           * follow_up_message: 面试官的完整回复内容（包含对上一问题的评价 + 自然过渡 + 当前问题）。
+                           * id: 问题类型的唯一 ID；
+                           * message: 面试官的完整回复内容（包含对上一问题的评价 + 自然过渡 + 当前问题）。
 
                            问题列表如下：
                            """;
@@ -293,7 +291,7 @@ public class HrInterViewService : IHrInterViewService
         foreach (var group in grouped)
         {
             questionListBuilder.AppendLine();
-            questionListBuilder.AppendLine($"类型：{group.Key} | 类型 ID：{group.Key}");
+            questionListBuilder.AppendLine($"类型 ID：{group.Key}");
 
             foreach (var question in group)
             {
@@ -303,10 +301,8 @@ public class HrInterViewService : IHrInterViewService
 
         var styleRequirements = $"""
                                  回复风格要求：
-                                 * 用语自然、口语化、不过度官方；
-                                 * 保持专业，但避免过于机械；
+                                 * 用语自然、口语化、不过度官方，保持专业，但避免过于机械；
                                  * 不要重复面试者刚才说过的内容；
-                                 * 若面试者回答不清晰，可委婉追问细节或举例说明；
                                  * 过渡要自然，例如使用 “了解了，那我也想了解一下…”、“听起来很不错，那接下来我想问的是…” 等句式。
                                  * 对于提问过的问题不进行二次提问
                                  以下是上下文帮助你过滤已经问过的问题：{context}
@@ -338,6 +334,8 @@ public class HrInterViewService : IHrInterViewService
         };
 
         var response = await _smartiesClient.PerformQueryAsync(request, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("LLM Response: {@Response}", response.Data.Response);
         
         return JsonConvert.DeserializeObject<MatchedQuestionResultDto>(response.Data.Response);
     }
