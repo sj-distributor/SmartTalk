@@ -371,7 +371,7 @@ public class HrInterViewService : IHrInterViewService
         var fileResponse = await _speechClint.GetAudioFromTextAsync(new TextToSpeechDto
         {
             Text = text,
-            VoiceId = 415
+            VoiceId = 203
         }, cancellationToken).ConfigureAwait(false);
         
         return fileResponse.Result;
