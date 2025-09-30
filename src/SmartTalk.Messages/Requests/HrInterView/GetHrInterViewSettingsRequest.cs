@@ -8,9 +8,9 @@ public class GetHrInterViewSettingsRequest : IRequest
 {
     public int? SettingId { get; set; }
 
-    public int? PageIndex { get; set; } = 1;
+    public int? PageIndex { get; set; }
 
-    public int? PageSzie { get; set; } = 15;
+    public int? PageSzie { get; set; }
 }
 
 public class GetHrInterViewSettingsResponse : SmartTalkResponse
