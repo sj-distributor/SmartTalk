@@ -1,7 +1,10 @@
+using AutoMapper;
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Data;
 using SmartTalk.Core.Domain.HrInterView;
 using SmartTalk.Core.Ioc;
+using SmartTalk.Messages.Dto.HrInterView;
+using SmartTalk.Messages.Requests.HrInterView;
 
 namespace SmartTalk.Core.Services.HrInterView;
 
@@ -29,7 +32,7 @@ public interface IHrInterViewDataProvider : IScopedDependency
 
     Task AddHrInterViewSessionAsync(HrInterViewSession session, bool forceSave = true, CancellationToken cancellationToken = default);
     
-    Task<(List<HrInterViewSession>, int)> GetHrInterViewSessionsAsync(Guid? sessionId, int? pageIndex = null, int? pageSize = null, CancellationToken cancellationToken = default);
+    Task<(List<HrInterViewSessionGroupDto>, int)> GetHrInterViewSessionsAsync(Guid? sessionId, int? pageIndex = null, int? pageSize = null, CancellationToken cancellationToken = default);
 }
 
 public class HrInterViewDataProvider : IHrInterViewDataProvider
@@ -126,18 +129,34 @@ public class HrInterViewDataProvider : IHrInterViewDataProvider
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<(List<HrInterViewSession>, int)> GetHrInterViewSessionsAsync(Guid? sessionId, int? pageIndex = null, int? pageSize = null, CancellationToken cancellationToken = default)
+    public async Task<(List<HrInterViewSessionGroupDto>, int)> GetHrInterViewSessionsAsync(Guid? sessionId, int? pageIndex = null, int? pageSize = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.QueryNoTracking<HrInterViewSession>();
 
+        var groupedQuery = query
+            .GroupBy(x => x.SessionId)
+            .Select(g => new HrInterViewSessionGroupDto
+            {
+                SessionId = g.Key,
+                Sessions = g.OrderBy(x => x.CreatedDate).Select(x => new HrInterViewSessionDto
+                    {
+                        Id = x.Id,
+                        SessionId = x.SessionId,
+                        Message = x.Message,
+                        FileUrl = x.FileUrl,
+                        QuestionType = x.QuestionType,
+                        CreatedDate = x.CreatedDate
+                    }).ToList()
+            });
+        
         if (sessionId.HasValue)
-            query = query.Where(x => x.SessionId == sessionId);
+            groupedQuery = groupedQuery.Where(x => x.SessionId == sessionId);
         
-        var count = await query.CountAsync(cancellationToken).ConfigureAwait(false);
-        
+        var totalCount = await groupedQuery.CountAsync(cancellationToken).ConfigureAwait(false);
+
         if (pageIndex.HasValue && pageSize.HasValue)
-            query = query.Skip((pageIndex.Value - 1) * pageSize.Value).Take(pageSize.Value);
+            groupedQuery = groupedQuery.Skip((pageIndex.Value - 1) * pageSize.Value).Take(pageSize.Value);
         
-        return (await query.ToListAsync(cancellationToken).ConfigureAwait(false), count);
+        return (await groupedQuery.ToListAsync(cancellationToken).ConfigureAwait(false), totalCount);
     }
 }

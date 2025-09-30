@@ -80,11 +80,11 @@ public class HrInterViewService : IHrInterViewService
 
     public async Task<GetHrInterViewSessionsResponse> GetHrInterViewSessionsAsync(GetHrInterViewSessionsRequest request, CancellationToken cancellationToken)
     {
-        var (settings, count) = await _hrInterViewDataProvider.GetHrInterViewSessionsAsync(request.SettingId, request.PageIndex, request.PageSzie, cancellationToken).ConfigureAwait(false);
+        var (sessions, count) = await _hrInterViewDataProvider.GetHrInterViewSessionsAsync(request.SettingId, request.PageIndex, request.PageSzie, cancellationToken).ConfigureAwait(false);
         
         return new GetHrInterViewSessionsResponse
         {
-            Sessions = _mapper.Map<List<HrInterViewSessionDto>>(settings),
+            SessionGroups = sessions,
             TotalCount = count
         };
     }
@@ -363,7 +363,7 @@ public class HrInterViewService : IHrInterViewService
     {
         var (sessions, _) = await _hrInterViewDataProvider.GetHrInterViewSessionsAsync(sessionId: sessionId, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        return string.Join(" ", sessions.Where(x => x.CreatedDate !=  new DateTimeOffset(new DateTime(9999, 12, 31, 23, 59, 59, DateTimeKind.Utc))).Select(x => x.QuestionType == HrInterViewSessionQuestionType.Assistant? $"问：{x.Message}\n" : $"答：{x.Message}\n" ).ToList());
+        return string.Join("\n", sessions.FirstOrDefault()!.Sessions.Where(x => x.CreatedDate !=  new DateTimeOffset(new DateTime(9999, 12, 31, 23, 59, 59, DateTimeKind.Utc))).Select(x => x.QuestionType == HrInterViewSessionQuestionType.Assistant? $"问：{x.Message}" : $"答：{x.Message}" ).ToList());
     }
     
     private async Task<string> ConvertTextToSpeechAsync(string text, CancellationToken cancellationToken)
