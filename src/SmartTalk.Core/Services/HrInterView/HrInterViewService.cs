@@ -181,6 +181,8 @@ public class HrInterViewService : IHrInterViewService
         {
             if (message.EventType == "RESPONSE_EVENT")
             {
+                Log.Information("HandleWebSocketMessageAsync sessionId:{@sessionId}, message:{@message}", sessionId, message);
+                
                 var answers = await _asrClient.TranscriptionAsync(new AsrTranscriptionDto { File = message.Message }, cancellationToken).ConfigureAwait(false);
                 
                 var questions = (await _hrInterViewDataProvider.GetHrInterViewSettingQuestionsBySessionIdAsync(sessionId, cancellationToken).ConfigureAwait(false)).Where(x => x.Count > 0).ToList();
