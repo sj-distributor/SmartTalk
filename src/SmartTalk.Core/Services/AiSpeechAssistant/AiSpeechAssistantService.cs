@@ -1075,7 +1075,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         var customerItems = _aiSpeechAssistantStreamContext.CustomerItemsString;
         if (string.IsNullOrWhiteSpace(customerItems)) customerItems = "No items available.";
 
-        var systemPrompt = "You are a telephone recording analyst who is fluent in Chinese and can accurately and completely repeat the items that customers need to order.\n\nThe following is a list of items on sale: \n\n #{customerItems}";
+        var systemPrompt = "You are a call recording analyst who speaks fluent English and can accurately and completely repeat the items the customer wants to order.\\n\\nThe following is a list of items the customer is likely to purchase: \n\n #{customerItems}";
         systemPrompt = systemPrompt.Replace("#{customerItems}", customerItems);
         
         var prompt = "Help me to repeat the order completely, quickly and naturally in English:";
