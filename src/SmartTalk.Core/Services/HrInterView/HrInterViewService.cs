@@ -66,7 +66,7 @@ public class HrInterViewService : IHrInterViewService
         
         return new AddOrUpdateHrInterViewSettingResponse();
     }
-    
+
     public async Task<GetHrInterViewSettingsResponse> GetHrInterViewSettingsAsync(GetHrInterViewSettingsRequest request, CancellationToken cancellationToken)
     {
         var (settings, count) = await _hrInterViewDataProvider.GetHrInterViewSettingsAsync(request.SettingId, request.PageIndex, request.PageSzie, cancellationToken).ConfigureAwait(false);
