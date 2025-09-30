@@ -138,8 +138,6 @@ public class HrInterViewService : IHrInterViewService
                 }
                 else if (result.MessageType == WebSocketMessageType.Close) 
                 {
-                    await command.WebSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Closing", cancellationToken).ConfigureAwait(false);
-                    
                     await command.WebSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Client closed", cancellationToken).ConfigureAwait(false);
                     
                     break;
