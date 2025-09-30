@@ -238,7 +238,7 @@ public class HrInterViewService : IHrInterViewService
         }
     }
 
-    private async Task ConvertAndSendWebSocketMessageAsync(ClientWebSocket webSocket, Guid sessionId, string eventType, string message, string endMessage = null, CancellationToken cancellationToken = default)
+    private async Task ConvertAndSendWebSocketMessageAsync(WebSocket webSocket, Guid sessionId, string eventType, string message, string endMessage = null, CancellationToken cancellationToken = default)
     {
         var messageAudio = await ConvertTextToSpeechAsync(message, cancellationToken).ConfigureAwait(false);
        
