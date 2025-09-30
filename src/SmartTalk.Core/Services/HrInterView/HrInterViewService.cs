@@ -148,7 +148,7 @@ public class HrInterViewService : IHrInterViewService
         }
         catch (WebSocketException ex)
         {
-            throw new InvalidOperationException($"WebSocket connection error for session {command.SessionId}", ex);
+            throw new InvalidOperationException($"WebSocket connection error for session {command.SessionId}, ex: {ex.Message}", ex);
         }
     }
     
