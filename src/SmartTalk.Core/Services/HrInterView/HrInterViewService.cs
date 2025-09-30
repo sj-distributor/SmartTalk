@@ -66,19 +66,6 @@ public class HrInterViewService : IHrInterViewService
         
         return new AddOrUpdateHrInterViewSettingResponse();
     }
-     
-    private async Task StartWebSocketCommunicationAsync(AddOrUpdateHrInterViewSettingCommand command, CancellationToken cancellationToken)
-    {
-        try
-        {
-            using var client = new ClientWebSocket();
-            await client.ConnectAsync(new Uri($"wss://{command.Host}/api/HrInterView/websocket/{command.Setting.SessionId}"), cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            throw new InvalidOperationException($"Failed to start WebSocket communication for session {command.Setting.SessionId}", ex);
-        }
-    }
 
     public async Task<GetHrInterViewSettingsResponse> GetHrInterViewSettingsAsync(GetHrInterViewSettingsRequest request, CancellationToken cancellationToken)
     {
