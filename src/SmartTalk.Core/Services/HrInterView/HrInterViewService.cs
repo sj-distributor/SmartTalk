@@ -60,17 +60,9 @@ public class HrInterViewService : IHrInterViewService
         
         if (existsQuestion.Any()) await _hrInterViewDataProvider.DeleteHrInterViewSettingQuestionsAsync(existsQuestion, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        var firstQuestion = command.Questions.FirstOrDefault();
-        if (firstQuestion != null && firstQuestion.Question.Length > 0)
-        {
-            firstQuestion.Count -= firstQuestion.Count;
-        }
-        
         command.Questions.ForEach(x => x.SettingId = setting.Id);
         
         await _hrInterViewDataProvider.AddHrInterViewSettingQuestionsAsync(_mapper.Map<List<HrInterViewSettingQuestion>>(command.Questions), cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        await StartWebSocketCommunicationAsync(command, cancellationToken).ConfigureAwait(false);
         
         return new AddOrUpdateHrInterViewSettingResponse();
     }
@@ -81,19 +73,6 @@ public class HrInterViewService : IHrInterViewService
         {
             using var client = new ClientWebSocket();
             await client.ConnectAsync(new Uri($"wss://{command.Host}/api/HrInterView/websocket/{command.Setting.SessionId}"), cancellationToken).ConfigureAwait(false);
-           
-            if (client.State != WebSocketState.Open) return;
-
-            await ConvertAndSendWebSocketMessageAsync(client, command.Setting.SessionId, "WELCOME", command.Setting.Welcome, command.Setting.EndMessage, cancellationToken).ConfigureAwait(false);
-            
-            if (command.Questions?.Any() == true)
-            {
-                var questions = command.Questions.FirstOrDefault()!.Question;
-
-                var firstQuestion = JsonConvert.DeserializeObject<List<string>>(questions).FirstOrDefault();
-                
-                await ConvertAndSendWebSocketMessageAsync(client, command.Setting.SessionId, "MESSAGE", firstQuestion, cancellationToken: cancellationToken).ConfigureAwait(false);
-            }
         }
         catch (Exception ex)
         {
@@ -127,8 +106,10 @@ public class HrInterViewService : IHrInterViewService
     {
         try
         {
-            Log.Information("Connect to hr interview WebSocket");
+            Log.Information("Connect to hr interview WebSocket for session {SessionId} on host {Host}", command.SessionId, command.Host);
             
+            await SendWelcomeAndFirstQuestionAsync(command.WebSocket, command.SessionId, cancellationToken).ConfigureAwait(false);
+           
             var buffer = new byte[1024 * 30];
             
             while (command.WebSocket.State == WebSocketState.Open && !cancellationToken.IsCancellationRequested)
@@ -172,6 +153,35 @@ public class HrInterViewService : IHrInterViewService
         catch (WebSocketException ex)
         {
             throw new InvalidOperationException($"WebSocket connection error for session {command.SessionId}", ex);
+        }
+    }
+    
+    private async Task SendWelcomeAndFirstQuestionAsync(WebSocket webSocket, Guid sessionId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var setting = await _hrInterViewDataProvider.GetHrInterViewSettingBySessionIdAsync(sessionId, cancellationToken).ConfigureAwait(false);
+            
+            var questions = (await _hrInterViewDataProvider.GetHrInterViewSettingQuestionsBySessionIdAsync(sessionId, cancellationToken).ConfigureAwait(false)).Where(x => x.Count > 0).ToList();
+            
+            if (!questions.Any()) return;
+        
+            await ConvertAndSendWebSocketMessageAsync(webSocket, sessionId, "WELCOME", setting.Welcome, setting.EndMessage, cancellationToken).ConfigureAwait(false);
+
+            var firstQuestion = JsonConvert.DeserializeObject<List<string>>(questions.FirstOrDefault()!.Question).FirstOrDefault();
+
+            if (firstQuestion != null)
+            {
+                await ConvertAndSendWebSocketMessageAsync(webSocket, sessionId, "MESSAGE", firstQuestion, cancellationToken: cancellationToken).ConfigureAwait(false);
+                
+                questions.FirstOrDefault()!.Count -= 1;
+                
+                await _hrInterViewDataProvider.UpdateHrInterViewSettingQuestionsAsync(questions, cancellationToken:cancellationToken).ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to send welcome and first question for session {SessionId}", sessionId);
         }
     }
     
@@ -261,7 +271,7 @@ public class HrInterViewService : IHrInterViewService
                 Message = endMessage,
                 FileUrl = endMessageAudio,
                 QuestionType = HrInterViewSessionQuestionType.Assistant,
-                CreatedDate = new DateTimeOffset(DateTime.MaxValue)
+                CreatedDate =  new DateTimeOffset(new DateTime(9999, 12, 31, 23, 59, 59, DateTimeKind.Utc))
             }, cancellationToken:cancellationToken).ConfigureAwait(false);
     }
     
@@ -360,7 +370,7 @@ public class HrInterViewService : IHrInterViewService
     {
         var (sessions, _) = await _hrInterViewDataProvider.GetHrInterViewSessionsAsync(sessionId: sessionId, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        return string.Join(" ", sessions.Where(x => x.CreatedDate != new DateTimeOffset(DateTime.MaxValue)).Select(x => x.QuestionType == HrInterViewSessionQuestionType.Assistant? $"问：{x.Message}\n" : $"答：{x.Message}\n" ).ToList());
+        return string.Join(" ", sessions.Where(x => x.CreatedDate !=  new DateTimeOffset(new DateTime(9999, 12, 31, 23, 59, 59, DateTimeKind.Utc))).Select(x => x.QuestionType == HrInterViewSessionQuestionType.Assistant? $"问：{x.Message}\n" : $"答：{x.Message}\n" ).ToList());
     }
     
     private async Task<string> ConvertTextToSpeechAsync(string text, CancellationToken cancellationToken)

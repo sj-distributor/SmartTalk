@@ -12,6 +12,8 @@ public interface IHrInterViewDataProvider : IScopedDependency
     Task UpdateHrInterViewSettingAsync(HrInterViewSetting setting, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task<HrInterViewSetting> GetHrInterViewSettingByIdAsync(int settingId, CancellationToken cancellationToken);
+    
+    Task<HrInterViewSetting> GetHrInterViewSettingBySessionIdAsync(Guid sessionId, CancellationToken cancellationToken);
 
     Task<(List<HrInterViewSetting>, int)> GetHrInterViewSettingsAsync(int? settingId, int? pageIndex = null, int? pageSize = null, CancellationToken cancellationToken = default);
     
@@ -60,6 +62,11 @@ public class HrInterViewDataProvider : IHrInterViewDataProvider
     public async Task<HrInterViewSetting> GetHrInterViewSettingByIdAsync(int settingId, CancellationToken cancellationToken)
     {
         return await _repository.GetByIdAsync<HrInterViewSetting>(settingId, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<HrInterViewSetting> GetHrInterViewSettingBySessionIdAsync(Guid sessionId, CancellationToken cancellationToken)
+    {
+        return await _repository.QueryNoTracking<HrInterViewSetting>().Where(x => x.SessionId == sessionId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<(List<HrInterViewSetting>, int)> GetHrInterViewSettingsAsync(int? settingId, int? pageIndex = null, int? pageSize = null, CancellationToken cancellationToken = default)
