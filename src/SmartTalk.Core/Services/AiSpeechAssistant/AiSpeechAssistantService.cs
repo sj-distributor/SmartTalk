@@ -911,7 +911,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         };
     }
     
-   private async Task ProcessRepeatOrderAsync(WebSocket twilioWebSocket, CancellationToken cancellationToken)
+    private async Task ProcessRepeatOrderAsync(WebSocket twilioWebSocket, CancellationToken cancellationToken)
     {
         _shouldSendBuffToOpenAi = false;
 
