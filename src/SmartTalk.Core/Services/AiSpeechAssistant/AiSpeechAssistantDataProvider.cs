@@ -422,13 +422,12 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
     {
         var query = from agent in _repository.Query<Agent>()
             join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
-            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>()
-                .Where(x => x.IsDefault) on agentAssistant.AssistantId equals assistant.Id into assistantGroups
+            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agentAssistant.AssistantId equals assistant.Id into assistantGroups
             from assistant in assistantGroups.DefaultIfEmpty()
             where agent.Id == agentId
             select new { assistant, agent };
 
-        var result = await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        var result = await query.Where(x => x.assistant.IsDefault).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
 
         return (result?.assistant, result?.agent);
     }
