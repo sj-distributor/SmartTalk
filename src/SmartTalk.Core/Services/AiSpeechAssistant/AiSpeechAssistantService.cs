@@ -408,6 +408,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             var soldToIds = !string.IsNullOrEmpty(assistant.Name) ? assistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : new List<string>();
             
             var customerItemsString = await _speechMaticsService.BuildCustomerItemsStringAsync(soldToIds, cancellationToken).ConfigureAwait(false);
+            _aiSpeechAssistantStreamContext.CustomerItemsString = customerItemsString;
 
             finalPrompt = finalPrompt.Replace("#{customer_items}", customerItemsString ?? "");
         }
@@ -1071,7 +1072,11 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             await SendToWebSocketAsync(twilioWebSocket, holdOnAudio, cancellationToken);
         }
 
-        var systemPrompt = "You are a telephone recording analyst who is fluent in Chinese and can accurately and completely repeat the items that customers need to order.\n\nThe following is a list of items on sale:\n\n1. thirty-one/thirty-five shrimp  \n2.twenty-one/twenty-five shrimp \n3.twenty/thirty shrimp \n4. nine/twelve shrimp \n5. thirty-one/forty & thirty-six/forty shrimp \n6. golden pomfret  \n7. imitation crab stick  \n8. tilapia  \n9. tilapia fillet  \n10. round scad  \n11. catfish (gutted)  \n12.Chicken breast  \n13. whole-thigh mt skinless boneless  \n14.eggs  \n15. headless duck  \n16. beef eye round  \n17. beef brisket  \n18. cut beef bone  \n19. beef xl flank  \n20. beef ribeye \n21. beef tendon  \n22. beef tendon ball  \n23. boneless pork butt\n24. bone-in pork butt\n25. pork bone  \n26. pork loin  \n27. medium & light sparerib  \n28. bean sprout  \n29. green leaf  \n30. celery  \n31. lettuce  (also known as iceberg lettuce)\n32. broccoli  \n33. cabbage  \n34. bok choy  \n35. shanghai bok choy  \n36. peeled garlic  \n37. green onion  \n38. ginger  \n39. jalapeno  \n40. cilantro  \n41. green bell pepper  \n42. yellow onion  \n43. cucumber  \n44. taro  \n45. yam  \n46. carrot  \n47. daikon  \n48. lime  \n49. lemon  \n50. orange  \n51.chix bone  \n52. pho noodle  \n53. rice noodle  (Also known as chow fun)\n54. all purpose flour  \n55. salt  \n56. msg  \n57. white granulated sugar  \n58. baking soda  \n59. corn starch  \n60. white vinegar  \n61. oyster sauce  \n62. soy sauce  \n63. hoisin sauce  \n64. chili sauce  \n65. soy sauce pack  \n66. sriracha pack  \n67. hoisin pack  \n68. dried chili (crushed)  \n69. baking powder  \n70. vegetable oil  \n71. canned pineapple juice  \n72. canned mushroom slices  \n73. canned ketchup  \n74. canned baby corn (whole)  \n75. fork  \n76. spoon  \n77. chopstick  \n78. foam box_3 comp  \n79. portion cup 1oz  \n80. portion lid 1oz  \n81. napkin to go  \n82. diner check/takeaway order book(if customer mention check order means he want takeaway order book so please put into the order)\n83. calendar  \n84. spring roll wrappers  \n85. won ton wrappers (thin)  \n86. sparkling water  (Also known as COCO RICO DRINK)\n87. medium three compartments\n88. large three compartments";            
+        var customerItems = _aiSpeechAssistantStreamContext.CustomerItemsString;
+        if (string.IsNullOrWhiteSpace(customerItems)) customerItems = "No items available.";
+
+        var systemPrompt = "You are a telephone recording analyst who is fluent in Chinese and can accurately and completely repeat the items that customers need to order.\n\nThe following is a list of items on sale: \n\n #{customerItems}";
+        systemPrompt = systemPrompt.Replace("#{customerItems}", customerItems);
         
         var prompt = "Help me to repeat the order completely, quickly and naturally in English:";
         
