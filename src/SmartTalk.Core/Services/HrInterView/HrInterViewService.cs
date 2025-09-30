@@ -181,16 +181,7 @@ public class HrInterViewService : IHrInterViewService
         {
             if (message.EventType == "RESPONSE_EVENT")
             {
-                var answersFile = await _smartiesClient.UploadFileAsync(message.Message, cancellationToken).ConfigureAwait(false);
                 var answers = await _asrClient.TranscriptionAsync(new AsrTranscriptionDto { File = message.Message }, cancellationToken).ConfigureAwait(false);
-                
-                await _hrInterViewDataProvider.AddHrInterViewSessionAsync(new HrInterViewSession
-                {
-                    SessionId = sessionId,
-                    Message = answers.Text,
-                    FileUrl = answersFile.Data.FileUrl,
-                    QuestionType = HrInterViewSessionQuestionType.User
-                }, cancellationToken:cancellationToken).ConfigureAwait(false);
                 
                 var questions = (await _hrInterViewDataProvider.GetHrInterViewSettingQuestionsBySessionIdAsync(sessionId, cancellationToken).ConfigureAwait(false)).Where(x => x.Count > 0).ToList();
 
@@ -207,6 +198,16 @@ public class HrInterViewService : IHrInterViewService
                     Message = matchQuestion.Message,
                     MessageFileUrl = matchQuestionAudio
                 }, cancellationToken).ConfigureAwait(false);
+                
+                var answersFile = await _smartiesClient.UploadFileAsync(message.Message, cancellationToken).ConfigureAwait(false);
+                
+                await _hrInterViewDataProvider.AddHrInterViewSessionAsync(new HrInterViewSession
+                {
+                    SessionId = sessionId,
+                    Message = answers.Text,
+                    FileUrl = answersFile.Data.FileUrl,
+                    QuestionType = HrInterViewSessionQuestionType.User
+                }, cancellationToken:cancellationToken).ConfigureAwait(false);
                 
                 await _hrInterViewDataProvider.AddHrInterViewSessionAsync(new HrInterViewSession
                 {
