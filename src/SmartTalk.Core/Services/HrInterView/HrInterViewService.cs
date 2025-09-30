@@ -95,19 +95,13 @@ public class HrInterViewService : IHrInterViewService
         {
             Log.Information("Connect to hr interview WebSocket for session {SessionId} on host {Host}", command.SessionId, command.Host);
          
-            var welcomeSent = false;
+            await SendWelcomeAndFirstQuestionAsync(command.WebSocket, command.SessionId, cancellationToken).ConfigureAwait(false);
            
             var buffer = new byte[1024 * 30];
             
             while (command.WebSocket.State == WebSocketState.Open && !cancellationToken.IsCancellationRequested)
             {
                 var result = await command.WebSocket.ReceiveAsync(new ArraySegment<byte>(buffer), cancellationToken).ConfigureAwait(false);
-                
-                if (!welcomeSent)
-                {
-                    await SendWelcomeAndFirstQuestionAsync(command.WebSocket, command.SessionId, cancellationToken).ConfigureAwait(false);
-                    welcomeSent = true;
-                }
                 
                 if (result.MessageType == WebSocketMessageType.Text)
                 {
