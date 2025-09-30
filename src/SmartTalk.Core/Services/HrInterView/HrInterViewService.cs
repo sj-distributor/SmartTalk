@@ -214,7 +214,8 @@ public class HrInterViewService : IHrInterViewService
                 {
                     SessionId = sessionId,
                     EventType = "MESSAGE",
-                    Message = matchQuestionAudio,
+                    Message = matchQuestion.Message,
+                    MessageFileUrl = matchQuestionAudio
                 }, cancellationToken).ConfigureAwait(false);
                 
                 await _hrInterViewDataProvider.AddHrInterViewSessionAsync(new HrInterViewSession
@@ -250,8 +251,10 @@ public class HrInterViewService : IHrInterViewService
         {
             SessionId = sessionId,
             EventType = eventType,
-            Message = messageAudio, 
-            EndMessage = string.IsNullOrEmpty(endMessage) ? "" : endMessageAudio, 
+            Message = message, 
+            MessageFileUrl = messageAudio,
+            EndMessage = string.IsNullOrEmpty(endMessage) ? "" : endMessage,
+            EndMessageFileUrl = string.IsNullOrEmpty(endMessageAudio) ? "" : endMessageAudio
         };
 
         await SendWebSocketMessageAsync(webSocket, welcomeEvent, cancellationToken).ConfigureAwait(false);
