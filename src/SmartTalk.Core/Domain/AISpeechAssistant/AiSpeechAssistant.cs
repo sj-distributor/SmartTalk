@@ -42,6 +42,12 @@ public class AiSpeechAssistant : IEntity<int>, IAgent, IHasCreatedFields
     [Column("custom_record_analyze_prompt")]
     public string CustomRecordAnalyzePrompt { get; set; }
     
+    [Column("manual_record_whole_audio")]
+    public bool ManualRecordWholeAudio { get; set; }
+    
+    [Column("custom_repeat_order_prompt")]
+    public string CustomRepeatOrderPrompt { get; set; }
+    
     [Column("channel"), StringLength(36)]
     public string Channel { get; set; }
     

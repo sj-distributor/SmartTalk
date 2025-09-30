@@ -21,6 +21,10 @@ public class AiSpeechAssistantDto
     
     public string CustomRecordAnalyzePrompt { get; set; }
     
+    public bool ManualRecordWholeAudio { get; set; }
+    
+    public string CustomRepeatOrderPrompt { get; set; }
+    
     public string Channel { get; set; }
     
     public bool IsDisplay { get; set; }
