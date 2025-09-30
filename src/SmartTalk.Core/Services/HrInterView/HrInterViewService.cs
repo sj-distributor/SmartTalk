@@ -130,9 +130,12 @@ public class HrInterViewService : IHrInterViewService
                     
                     await HandleWebSocketMessageAsync(command.WebSocket, command.SessionId, responseDto, cancellationToken).ConfigureAwait(false);
                 }
-                else if (result.MessageType == WebSocketMessageType.Close)
+                else if (result.MessageType == WebSocketMessageType.Close) 
                 {
+                    await command.WebSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Closing", cancellationToken).ConfigureAwait(false);
+                    
                     await command.WebSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Client closed", cancellationToken).ConfigureAwait(false);
+                    
                     break;
                 }
             }
