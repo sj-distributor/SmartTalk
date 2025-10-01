@@ -11,6 +11,7 @@ using Serilog;
 using Smarties.Messages.DTO.OpenAi;
 using Smarties.Messages.Enums.OpenAi;
 using Smarties.Messages.Requests.Ask;
+using SmartTalk.Core.Extensions;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Messages.Dto.Asr;
@@ -302,11 +303,7 @@ public class HrInterViewService : IHrInterViewService
         {
             questionListBuilder.AppendLine();
             questionListBuilder.AppendLine($"类型 ID：{group.Key}");
-
-            foreach (var question in group)
-            {
-                questionListBuilder.AppendLine($"{globalIndex++}. {question.Question}");
-            }
+            group.ForEach(x => questionListBuilder.AppendLine($"{x.Id}: {x.Question}"));
         }
 
         var styleRequirements = $"""
