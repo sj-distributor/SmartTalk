@@ -105,8 +105,9 @@ public class HrInterViewService : IHrInterViewService
 
             while (command.WebSocket.State == WebSocketState.Open && !cancellationToken.IsCancellationRequested)
             {
-                var result = await command.WebSocket.ReceiveAsync(new ArraySegment<byte>(buffer), cancellationToken)
-                    .ConfigureAwait(false);
+                Log.Information("Connect to hr interview WebSocket start");
+                
+                var result = await command.WebSocket.ReceiveAsync(new ArraySegment<byte>(buffer), cancellationToken).ConfigureAwait(false);
 
                 if (result.MessageType == WebSocketMessageType.Text)
                 {
@@ -140,7 +141,15 @@ public class HrInterViewService : IHrInterViewService
         {
             var setting = await _hrInterViewDataProvider.GetHrInterViewSettingBySessionIdAsync(sessionId, cancellationToken).ConfigureAwait(false);
             
-            var questions = (await _hrInterViewDataProvider.GetHrInterViewSettingQuestionsBySessionIdAsync(sessionId, cancellationToken).ConfigureAwait(false)).Where(x => x.Count > 0).ToList();
+            if (setting == null) await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "No setting found", cancellationToken).ConfigureAwait(false);
+            
+            Log.Information("SendWelcomeAndFirstQuestionAsync setting:{@setting}", setting);
+            
+            var settingQuestions = await _hrInterViewDataProvider.GetHrInterViewSettingQuestionsBySessionIdAsync(sessionId, cancellationToken).ConfigureAwait(false);
+            
+            Log.Information("SendWelcomeAndFirstQuestionAsync settingQuestions:{@settingQuestions}", settingQuestions);
+            
+            var questions = settingQuestions.Where(x => x.Count > 0).ToList();
             
             if (!questions.Any()) await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "No questions found", cancellationToken).ConfigureAwait(false);
         
@@ -152,7 +161,11 @@ public class HrInterViewService : IHrInterViewService
             {
                 await ConvertAndSendWebSocketMessageAsync(webSocket, sessionId, "MESSAGE", firstQuestion, cancellationToken: cancellationToken).ConfigureAwait(false);
                 
-                questions.FirstOrDefault()!.Count -= 1;
+                Log.Information("SendWelcomeAndFirstQuestionAsync questions:{@questions}", questions);
+                
+                if (questions.FirstOrDefault() is not null) questions.FirstOrDefault()!.Count -= 1;
+                
+                Log.Information("SendWelcomeAndFirstQuestionAsync questions after:{@questions}", questions);
                 
                 await _hrInterViewDataProvider.UpdateHrInterViewSettingQuestionsAsync(questions, cancellationToken:cancellationToken).ConfigureAwait(false);
             }
@@ -241,7 +254,7 @@ public class HrInterViewService : IHrInterViewService
         };
 
         await SendWebSocketMessageAsync(webSocket, welcomeEvent, cancellationToken).ConfigureAwait(false);
-       
+        
         await _hrInterViewDataProvider.AddHrInterViewSessionAsync(new HrInterViewSession
         {
             SessionId = sessionId,
