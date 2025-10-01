@@ -286,7 +286,7 @@ public class HrInterViewService : IHrInterViewService
                            4. 请以如下JOSN格式输出：
                            * id: 问题类型的唯一 ID；
                            * message: 面试官的完整回复内容（包含对上一问题的评价 + 自然过渡 + 当前问题）。
-                           {\n  \"id\": \"问题类型的唯一 ID\",\n  \"message\": \"面试官的完整回复内容（已作为字符串处理）\"\n}
+                           {"id": "问题类型的唯一 ID","message": "面试官的完整回复内容（已作为字符串处理）"}
                            问题列表如下：
                            """;
         
@@ -341,14 +341,33 @@ public class HrInterViewService : IHrInterViewService
                 Type = "json_object" 
             }
         };
-
-        var response = await _smartiesClient.PerformQueryAsync(request, cancellationToken).ConfigureAwait(false);
         
-        Log.Information("LLM Response: {@Response}", response.Data.Response);
-        
-        return JsonConvert.DeserializeObject<MatchedQuestionResultDto>(response.Data.Response);
+        return await PerformQueryAsync(request, 0, cancellationToken).ConfigureAwait(false);
     }
 
+    private async Task<MatchedQuestionResultDto> PerformQueryAsync(AskGptRequest request, int attempt, CancellationToken cancellationToken)
+    {
+        var response = new MatchedQuestionResultDto();
+        try
+        { 
+            var  result = await _smartiesClient.PerformQueryAsync(request, cancellationToken).ConfigureAwait(false);
+
+            response = JsonConvert.DeserializeObject<MatchedQuestionResultDto>(result.Data.Response);
+        }
+        catch (Exception e)
+        {
+            attempt++;
+
+            if (attempt > 5) throw new Exception($"Failed to query LLM, Message: {e.Message}", e);
+            
+            await Task.Delay(500, cancellationToken).ConfigureAwait(false);
+            
+            response = await PerformQueryAsync(request, attempt, cancellationToken).ConfigureAwait(false);
+        }
+        
+        return response;
+    }
+    
     private async Task<string> GetHrInterViewSessionContextAsync(Guid sessionId, CancellationToken cancellationToken)
     {
         var (sessions, _) = await _hrInterViewDataProvider.GetHrInterViewSessionsAsync(sessionId: sessionId, cancellationToken: cancellationToken).ConfigureAwait(false);
