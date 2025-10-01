@@ -390,11 +390,28 @@ public class HrInterViewService : IHrInterViewService
     private async Task<string> ConvertTextToSpeechAsync(string text, CancellationToken cancellationToken)
     {
         var fileResponse = await _speechClint.GetAudioFromTextAsync(new TextToSpeechDto
-        {
-            Text = text,
-            VoiceId = 203
-        }, cancellationToken).ConfigureAwait(false);
+            {
+                Text = text,
+                VoiceId = 203
+            }, cancellationToken).ConfigureAwait(false);
         
-        return fileResponse.Result;
+        Log.Information("ConvertTextToSpeechAsync fileResponse:{@fileResponse}", fileResponse);
+
+        if (fileResponse == null)
+        {
+            await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
+            
+            fileResponse = await _speechClint.GetAudioFromTextAsync(new TextToSpeechDto
+            {
+                Text = text,
+                VoiceId = 203
+            }, cancellationToken).ConfigureAwait(false);
+            
+            Log.Information("ConvertTextToSpeechAsync fileResponse Retry:{@fileResponse}", fileResponse);
+            
+            return fileResponse?.Result;
+        }
+        
+        return fileResponse?.Result;
     }
 }
