@@ -11,6 +11,7 @@ using Serilog;
 using Smarties.Messages.DTO.OpenAi;
 using Smarties.Messages.Enums.OpenAi;
 using Smarties.Messages.Requests.Ask;
+using SmartTalk.Core.Extensions;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Messages.Dto.Asr;
@@ -141,7 +142,7 @@ public class HrInterViewService : IHrInterViewService
             
             var questions = (await _hrInterViewDataProvider.GetHrInterViewSettingQuestionsBySessionIdAsync(sessionId, cancellationToken).ConfigureAwait(false)).Where(x => x.Count > 0).ToList();
             
-            if (!questions.Any()) return;
+            if (!questions.Any()) await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "No questions found", cancellationToken).ConfigureAwait(false);
         
             await ConvertAndSendWebSocketMessageAsync(webSocket, sessionId, "WELCOME", setting.Welcome, setting.EndMessage, cancellationToken).ConfigureAwait(false);
 
@@ -302,11 +303,7 @@ public class HrInterViewService : IHrInterViewService
         {
             questionListBuilder.AppendLine();
             questionListBuilder.AppendLine($"类型 ID：{group.Key}");
-
-            foreach (var question in group)
-            {
-                questionListBuilder.AppendLine($"{globalIndex++}. {question.Question}");
-            }
+            group.ForEach(x => questionListBuilder.AppendLine($"{x.Id}: {x.Question}"));
         }
 
         var styleRequirements = $"""
