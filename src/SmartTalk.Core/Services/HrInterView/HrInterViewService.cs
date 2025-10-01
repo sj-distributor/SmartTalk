@@ -170,12 +170,14 @@ public class HrInterViewService : IHrInterViewService
             {
                 Log.Information("HandleWebSocketMessageAsync sessionId:{@sessionId}, message:{@message}", sessionId, message);
 
+                var questions = (await _hrInterViewDataProvider.GetHrInterViewSettingQuestionsBySessionIdAsync(sessionId, cancellationToken).ConfigureAwait(false)).Where(x => x.Count > 0).ToList();
+
+                if (!questions.Any()) return;
+                
                 var fileBytes = await _httpClientFactory.GetAsync<byte[]>(message.Message, cancellationToken).ConfigureAwait(false);
                 
                 var answers = await _asrClient.TranscriptionAsync(new AsrTranscriptionDto { File = fileBytes }, cancellationToken).ConfigureAwait(false);
                 
-                var questions = (await _hrInterViewDataProvider.GetHrInterViewSettingQuestionsBySessionIdAsync(sessionId, cancellationToken).ConfigureAwait(false)).Where(x => x.Count > 0).ToList();
-
                 var context = await GetHrInterViewSessionContextAsync(sessionId, cancellationToken).ConfigureAwait(false);
                 
                 var matchQuestion = await FindMostSimilarQuestionUsingLLMAsync(answers.Text, questions, context, cancellationToken).ConfigureAwait(false);
