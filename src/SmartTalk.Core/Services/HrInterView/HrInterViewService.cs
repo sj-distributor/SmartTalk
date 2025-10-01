@@ -159,7 +159,7 @@ public class HrInterViewService : IHrInterViewService
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Failed to send welcome and first question for session {SessionId}", sessionId);
+            throw new Exception($"SendWelcomeAndFirstQuestionAsync error message:{ex.Message}");
         }
     }
     
