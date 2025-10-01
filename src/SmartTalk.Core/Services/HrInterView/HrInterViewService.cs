@@ -11,6 +11,7 @@ using Serilog;
 using Smarties.Messages.DTO.OpenAi;
 using Smarties.Messages.Enums.OpenAi;
 using Smarties.Messages.Requests.Ask;
+using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Messages.Dto.Asr;
 using SmartTalk.Messages.Dto.WebSocket;
@@ -37,14 +38,16 @@ public class HrInterViewService : IHrInterViewService
     private readonly ISpeechClint _speechClint;
     private readonly ISmartiesClient _smartiesClient;
     private readonly IHrInterViewDataProvider _hrInterViewDataProvider;
+    private readonly ISmartiesHttpClientFactory _httpClientFactory;
 
-    public HrInterViewService(IMapper mapper, IAsrClient asrClient, ISpeechClint speechClint, ISmartiesClient smartiesClient, IHrInterViewDataProvider hrInterViewDataProvider)
+    public HrInterViewService(IMapper mapper, IAsrClient asrClient, ISpeechClint speechClint, ISmartiesClient smartiesClient, IHrInterViewDataProvider hrInterViewDataProvider, ISmartiesHttpClientFactory httpClientFactory)
     {
         _mapper = mapper;
         _asrClient = asrClient;
         _speechClint = speechClint;
         _smartiesClient = smartiesClient;
         _hrInterViewDataProvider = hrInterViewDataProvider;
+        _httpClientFactory = httpClientFactory;
     }
 
     public async Task<AddOrUpdateHrInterViewSettingResponse> AddOrUpdateHrInterViewSettingAsync(AddOrUpdateHrInterViewSettingCommand command, CancellationToken cancellationToken)
@@ -94,52 +97,32 @@ public class HrInterViewService : IHrInterViewService
         try
         {
             Log.Information("Connect to hr interview WebSocket for session {SessionId} on host {Host}", command.SessionId, command.Host);
-         
-            var welcomeSent = false;
-           
-            var buffer = new byte[1024 * 30];
             
+            await SendWelcomeAndFirstQuestionAsync(command.WebSocket, command.SessionId, cancellationToken).ConfigureAwait(false);
+            
+            var buffer = new byte[1024 * 30];
+
             while (command.WebSocket.State == WebSocketState.Open && !cancellationToken.IsCancellationRequested)
             {
-                var result = await command.WebSocket.ReceiveAsync(new ArraySegment<byte>(buffer), cancellationToken).ConfigureAwait(false);
-                
-                if (!welcomeSent)
-                {
-                    await SendWelcomeAndFirstQuestionAsync(command.WebSocket, command.SessionId, cancellationToken).ConfigureAwait(false);
-                    welcomeSent = true;
-                }
-                
+                var result = await command.WebSocket.ReceiveAsync(new ArraySegment<byte>(buffer), cancellationToken)
+                    .ConfigureAwait(false);
+
                 if (result.MessageType == WebSocketMessageType.Text)
                 {
                     var message = Encoding.UTF8.GetString(buffer, 0, result.Count);
-                    var messageObj = JsonConvert.DeserializeObject<dynamic>(message);
-                    var responseDto = new HrInterViewQuestionEventResponseDto
-                    {
-                        SessionId = Guid.Parse(messageObj.SessionId.ToString()),
-                        EventType = messageObj.EventType?.ToString(),
-                        Message = null
-                    };
-                    
-                    if (messageObj.Message != null)
-                    {
-                        var messageStr = messageObj.Message.ToString();
-                        try
-                        {
-                            responseDto.Message = Convert.FromBase64String(messageStr);
-                        }
-                        catch (FormatException ex)
-                        {
-                            Log.Error("Invalid Base64 string received: {Message}. Error: {Error}", messageStr, ex.Message);
-                            continue;
-                        }
-                    }
-                    
-                    await HandleWebSocketMessageAsync(command.WebSocket, command.SessionId, responseDto, cancellationToken).ConfigureAwait(false);
+
+                    Log.Information("WebSocket receive message {@message}", message);
+
+                    var messageObj = JsonConvert.DeserializeObject<HrInterViewQuestionEventResponseDto>(message);
+
+                    await HandleWebSocketMessageAsync(command.WebSocket, command.SessionId, messageObj, cancellationToken).ConfigureAwait(false);
                 }
-                else if (result.MessageType == WebSocketMessageType.Close) 
+                else if (result.MessageType == WebSocketMessageType.Close)
                 {
+                    Log.Information("WebSocket close message received for session {SessionId}", command.SessionId);
+
                     await command.WebSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Client closed", cancellationToken).ConfigureAwait(false);
-                    
+
                     break;
                 }
             }
@@ -186,8 +169,10 @@ public class HrInterViewService : IHrInterViewService
             if (message.EventType == "RESPONSE_EVENT")
             {
                 Log.Information("HandleWebSocketMessageAsync sessionId:{@sessionId}, message:{@message}", sessionId, message);
+
+                var fileBytes = await _httpClientFactory.GetAsync<byte[]>(message.Message, cancellationToken).ConfigureAwait(false);
                 
-                var answers = await _asrClient.TranscriptionAsync(new AsrTranscriptionDto { File = message.Message }, cancellationToken).ConfigureAwait(false);
+                var answers = await _asrClient.TranscriptionAsync(new AsrTranscriptionDto { File = fileBytes }, cancellationToken).ConfigureAwait(false);
                 
                 var questions = (await _hrInterViewDataProvider.GetHrInterViewSettingQuestionsBySessionIdAsync(sessionId, cancellationToken).ConfigureAwait(false)).Where(x => x.Count > 0).ToList();
 
@@ -205,13 +190,11 @@ public class HrInterViewService : IHrInterViewService
                     MessageFileUrl = matchQuestionAudio
                 }, cancellationToken).ConfigureAwait(false);
                 
-                var answersFile = await _smartiesClient.UploadFileAsync(message.Message, cancellationToken).ConfigureAwait(false);
-                
                 await _hrInterViewDataProvider.AddHrInterViewSessionAsync(new HrInterViewSession
                 {
                     SessionId = sessionId,
                     Message = answers.Text,
-                    FileUrl = answersFile.Data.FileUrl,
+                    FileUrl = message.Message,
                     QuestionType = HrInterViewSessionQuestionType.User
                 }, cancellationToken:cancellationToken).ConfigureAwait(false);
                 
@@ -225,7 +208,7 @@ public class HrInterViewService : IHrInterViewService
                 
                 var updateQuestions = await _hrInterViewDataProvider.GetHrInterViewSettingQuestionsByIdAsync(new List<int> {matchQuestion.Id}, cancellationToken).ConfigureAwait(false);
              
-                updateQuestions.ForEach(x => x.Count -= x.Count);
+                updateQuestions.ForEach(x => x.Count -= 1);
                 
                 await _hrInterViewDataProvider.UpdateHrInterViewSettingQuestionsAsync(updateQuestions, cancellationToken: cancellationToken).ConfigureAwait(false);
             }
@@ -281,7 +264,7 @@ public class HrInterViewService : IHrInterViewService
         {
             if (webSocket.State == WebSocketState.Open)
             {
-                var json = JsonSerializer.Serialize(message);
+                var json = JsonConvert.SerializeObject(message);
                 var bytes = Encoding.UTF8.GetBytes(json);
                 
                 await webSocket.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, cancellationToken).ConfigureAwait(false);

@@ -6,5 +6,5 @@ public class HrInterViewQuestionEventResponseDto
     
     public string EventType { get; set; }
     
-    public byte[] Message { get; set; }
+    public string Message { get; set; }
 }
