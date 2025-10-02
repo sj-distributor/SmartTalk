@@ -115,7 +115,7 @@ public class HrInterViewService : IHrInterViewService
 
                     Log.Information("WebSocket receive message {@message}", message);
 
-                    var messageObj = JsonConvert.DeserializeObject<HrInterViewQuestionEventResponseDto>(message);
+                    var messageObj = JsonConvert.DeserializeObject<HrInterViewQuestionEventDto>(message);
 
                     await HandleWebSocketMessageAsync(command.WebSocket, command.SessionId, messageObj, cancellationToken).ConfigureAwait(false);
                 }
@@ -176,7 +176,7 @@ public class HrInterViewService : IHrInterViewService
         }
     }
     
-    private async Task HandleWebSocketMessageAsync(WebSocket webSocket, Guid sessionId, HrInterViewQuestionEventResponseDto message, CancellationToken cancellationToken)
+    private async Task HandleWebSocketMessageAsync(WebSocket webSocket, Guid sessionId, HrInterViewQuestionEventDto message, CancellationToken cancellationToken)
     {
         try
         {
