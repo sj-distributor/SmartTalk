@@ -101,7 +101,7 @@ public class HrInterViewService : IHrInterViewService
             
             await SendWelcomeAndFirstQuestionAsync(command.WebSocket, command.SessionId, cancellationToken).ConfigureAwait(false);
             
-            var buffer = new byte[1024 * 1024 * 10];
+            var buffer = new byte[1024 * 30];
 
             while (command.WebSocket.State == WebSocketState.Open && !cancellationToken.IsCancellationRequested)
             {
