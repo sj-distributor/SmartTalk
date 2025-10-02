@@ -309,7 +309,7 @@ public class HrInterViewService : IHrInterViewService
         
         var questionListBuilder = new StringBuilder();
         var grouped = candidateQuestions
-            .GroupBy(q => q.Type)
+            .GroupBy(q => q.Id)
             .OrderBy(g => g.Key);
 
         var globalIndex = 1;
@@ -317,7 +317,7 @@ public class HrInterViewService : IHrInterViewService
         {
             questionListBuilder.AppendLine();
             questionListBuilder.AppendLine($"类型 ID：{group.Key}");
-            group.ForEach(x => questionListBuilder.AppendLine($"{x.Id}: {x.Question}"));
+            group.ForEach(x => questionListBuilder.AppendLine($"“{x.Type}”这类的问题有: {x.Question}"));
         }
 
         var styleRequirements = $"""
