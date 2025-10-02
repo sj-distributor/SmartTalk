@@ -303,7 +303,7 @@ public class HrInterViewService : IHrInterViewService
                            4. 请以如下JOSN格式输出：
                            * id: 问题类型的唯一 ID；
                            * message: 面试官的完整回复内容（包含对上一问题的评价 + 自然过渡 + 当前问题）。
-                           {"id": "问题类型的唯一 ID","message": "面试官的完整回复内容（已作为字符串处理）"}
+                           {"id": "问题类型的唯一 ID(int类型)","message": "面试官的完整回复内容（已作为字符串处理）"}
                            问题列表如下：
                            """;
         
@@ -365,6 +365,8 @@ public class HrInterViewService : IHrInterViewService
         { 
             var  result = await _smartiesClient.PerformQueryAsync(request, cancellationToken).ConfigureAwait(false);
 
+            Log.Information("LLM PerformQueryAsync result: {@result}", result);
+            
             response = JsonConvert.DeserializeObject<MatchedQuestionResultDto>(result.Data.Response);
         }
         catch (Exception e)
