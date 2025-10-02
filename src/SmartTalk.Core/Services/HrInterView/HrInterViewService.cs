@@ -355,6 +355,8 @@ public class HrInterViewService : IHrInterViewService
             }
         };
         
+        Log.Information("FindMostSimilarQuestionUsingLLMAsync PerformQueryAsync request: {@request}", request);
+        
         return await PerformQueryAsync(request, 0, cancellationToken).ConfigureAwait(false);
     }
 
