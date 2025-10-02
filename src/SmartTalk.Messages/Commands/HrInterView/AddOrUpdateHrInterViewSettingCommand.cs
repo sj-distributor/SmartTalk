@@ -10,8 +10,6 @@ public class AddOrUpdateHrInterViewSettingCommand : ICommand
     public HrInterViewSettingDto Setting { get; set; }
     
     public List<HrInterViewSettingQuestionDto> Questions { get; set; }
-    
-    public string Host { get; set; }
 }
 
 public class AddOrUpdateHrInterViewSettingResponse : SmartTalkResponse
