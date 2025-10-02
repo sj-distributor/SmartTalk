@@ -79,9 +79,9 @@ public class HrInterViewService : IHrInterViewService
             StartMessage = setting.Welcome,
             EndMessage = setting.EndMessage,
             FirstQuestionMessage = firstQuestion,
-            StartMessageFileUrl = await ConvertTextToSpeechAsync(setting.Welcome, cancellationToken).ConfigureAwait(false),
-            EndMessageFileUrl = await ConvertTextToSpeechAsync(setting.EndMessage, cancellationToken).ConfigureAwait(false),
-            FirstQuestionFileUrl = await ConvertTextToSpeechAsync(firstQuestion, cancellationToken).ConfigureAwait(false),
+            StartMessageFileUrl = await ConvertAndSaveMessageAsync(command.Setting.SessionId, setting.Welcome, cancellationToken:cancellationToken).ConfigureAwait(false),
+            EndMessageFileUrl = await ConvertAndSaveMessageAsync(command.Setting.SessionId, setting.EndMessage, true, cancellationToken).ConfigureAwait(false),
+            FirstQuestionFileUrl = await ConvertAndSaveMessageAsync(command.Setting.SessionId, firstQuestion, cancellationToken:cancellationToken).ConfigureAwait(false),
         };
     }
 
@@ -207,7 +207,7 @@ public class HrInterViewService : IHrInterViewService
         }
     }
 
-    private async Task ConvertAndSaveMessageAsync(Guid sessionId,string message, bool isEndMessage = false, CancellationToken cancellationToken = default)
+    private async Task<string> ConvertAndSaveMessageAsync(Guid sessionId, string message, bool isEndMessage = false, CancellationToken cancellationToken = default)
     {
         var messageAudio = await ConvertTextToSpeechAsync(message, cancellationToken).ConfigureAwait(false);
         
@@ -219,6 +219,8 @@ public class HrInterViewService : IHrInterViewService
             QuestionType = HrInterViewSessionQuestionType.Assistant,
             CreatedDate = isEndMessage? new DateTimeOffset(new DateTime(9999, 12, 31, 23, 59, 59, DateTimeKind.Utc)) : DateTimeOffset.Now
         }, cancellationToken:cancellationToken).ConfigureAwait(false);
+
+        return messageAudio;
     }
     
     private async Task SendWebSocketMessageAsync(WebSocket webSocket, HrInterViewQuestionEventDto message, CancellationToken cancellationToken)
