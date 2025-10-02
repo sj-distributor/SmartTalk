@@ -185,26 +185,10 @@ public class HrInterViewService : IHrInterViewService
                 Log.Information("HandleWebSocketMessageAsync sessionId:{@sessionId}, message:{@message}", sessionId, message);
 
                 var questions = (await _hrInterViewDataProvider.GetHrInterViewSettingQuestionsBySessionIdAsync(sessionId, cancellationToken).ConfigureAwait(false)).Where(x => x.Count > 0).ToList();
-
-                if (!questions.Any()) return;
                 
                 var fileBytes = await _httpClientFactory.GetAsync<byte[]>(message.Message, cancellationToken).ConfigureAwait(false);
                 
                 var answers = await _asrClient.TranscriptionAsync(new AsrTranscriptionDto { File = fileBytes }, cancellationToken).ConfigureAwait(false);
-                
-                var context = await GetHrInterViewSessionContextAsync(sessionId, cancellationToken).ConfigureAwait(false);
-                
-                var matchQuestion = await FindMostSimilarQuestionUsingLLMAsync(answers.Text, questions, context, cancellationToken).ConfigureAwait(false);
-                
-                var matchQuestionAudio = await ConvertTextToSpeechAsync(matchQuestion.Message, cancellationToken).ConfigureAwait(false);
-                
-                await SendWebSocketMessageAsync(webSocket, new HrInterViewQuestionEventDto
-                {
-                    SessionId = sessionId,
-                    EventType = "MESSAGE",
-                    Message = matchQuestion.Message,
-                    MessageFileUrl = matchQuestionAudio
-                }, cancellationToken).ConfigureAwait(false);
                 
                 await _hrInterViewDataProvider.AddHrInterViewSessionAsync(new HrInterViewSession
                 {
@@ -214,19 +198,36 @@ public class HrInterViewService : IHrInterViewService
                     QuestionType = HrInterViewSessionQuestionType.User
                 }, cancellationToken:cancellationToken).ConfigureAwait(false);
                 
-                await _hrInterViewDataProvider.AddHrInterViewSessionAsync(new HrInterViewSession
+                if (questions.Any())
                 {
-                    SessionId = sessionId,
-                    Message = matchQuestion.Message,
-                    FileUrl = matchQuestionAudio,
-                    QuestionType = HrInterViewSessionQuestionType.Assistant
-                }, cancellationToken:cancellationToken).ConfigureAwait(false);
+                    var context = await GetHrInterViewSessionContextAsync(sessionId, cancellationToken).ConfigureAwait(false);
                 
-                var updateQuestions = await _hrInterViewDataProvider.GetHrInterViewSettingQuestionsByIdAsync(new List<int> {matchQuestion.Id}, cancellationToken).ConfigureAwait(false);
+                    var matchQuestion = await FindMostSimilarQuestionUsingLLMAsync(answers.Text, questions, context, cancellationToken).ConfigureAwait(false);
+                
+                    var matchQuestionAudio = await ConvertTextToSpeechAsync(matchQuestion.Message, cancellationToken).ConfigureAwait(false);
+                
+                    await SendWebSocketMessageAsync(webSocket, new HrInterViewQuestionEventDto
+                    {
+                        SessionId = sessionId,
+                        EventType = "MESSAGE",
+                        Message = matchQuestion.Message,
+                        MessageFileUrl = matchQuestionAudio
+                    }, cancellationToken).ConfigureAwait(false);
+                    
+                    await _hrInterViewDataProvider.AddHrInterViewSessionAsync(new HrInterViewSession
+                    {
+                        SessionId = sessionId,
+                        Message = matchQuestion.Message,
+                        FileUrl = matchQuestionAudio,
+                        QuestionType = HrInterViewSessionQuestionType.Assistant
+                    }, cancellationToken:cancellationToken).ConfigureAwait(false);
+                
+                    var updateQuestions = await _hrInterViewDataProvider.GetHrInterViewSettingQuestionsByIdAsync(new List<int> {matchQuestion.Id}, cancellationToken).ConfigureAwait(false);
              
-                updateQuestions.ForEach(x => x.Count -= 1);
+                    updateQuestions.ForEach(x => x.Count -= 1);
                 
-                await _hrInterViewDataProvider.UpdateHrInterViewSettingQuestionsAsync(updateQuestions, cancellationToken: cancellationToken).ConfigureAwait(false);
+                    await _hrInterViewDataProvider.UpdateHrInterViewSettingQuestionsAsync(updateQuestions, cancellationToken: cancellationToken).ConfigureAwait(false);
+                }
             }
         }
         catch (Exception ex)
@@ -389,29 +390,24 @@ public class HrInterViewService : IHrInterViewService
     
     private async Task<string> ConvertTextToSpeechAsync(string text, CancellationToken cancellationToken)
     {
-        var fileResponse = await _speechClint.GetAudioFromTextAsync(new TextToSpeechDto
-            {
-                Text = text,
-                VoiceId = 203
-            }, cancellationToken).ConfigureAwait(false);
-        
-        Log.Information("ConvertTextToSpeechAsync fileResponse:{@fileResponse}", fileResponse);
-
-        if (fileResponse == null)
+        async Task<string?> GetAudioTextAsync()
         {
-            await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
-            
-            fileResponse = await _speechClint.GetAudioFromTextAsync(new TextToSpeechDto
-            {
-                Text = text,
-                VoiceId = 203
-            }, cancellationToken).ConfigureAwait(false);
-            
-            Log.Information("ConvertTextToSpeechAsync fileResponse Retry:{@fileResponse}", fileResponse);
-            
-            return fileResponse?.Result;
+            var response = await _speechClint.GetAudioFromTextAsync(
+                new TextToSpeechDto
+                {
+                    Text = text,
+                    VoiceId = 203
+                }, cancellationToken).ConfigureAwait(false);
+
+            Log.Information("ConvertTextToSpeechAsync response: {@Response}", response);
+            return response?.Result;
         }
+
+        var result = await GetAudioTextAsync().ConfigureAwait(false);
+        if (result != null)
+            return result;
         
-        return fileResponse?.Result;
+        await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
+        return await GetAudioTextAsync().ConfigureAwait(false);
     }
 }
