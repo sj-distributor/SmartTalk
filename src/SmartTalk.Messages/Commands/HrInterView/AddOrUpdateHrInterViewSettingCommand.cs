@@ -14,4 +14,17 @@ public class AddOrUpdateHrInterViewSettingCommand : ICommand
 
 public class AddOrUpdateHrInterViewSettingResponse : SmartTalkResponse
 {
+    public Guid SessionId { get; set; }
+    
+    public string StartMessage { get; set; }
+    
+    public string StartMessageFileUrl { get; set; }
+    
+    public string FirstQuestionMessage { get; set; }
+    
+    public string FirstQuestionFileUrl { get; set; }
+    
+    public string EndMessage { get; set; }
+    
+    public string EndMessageFileUrl { get; set; }
 }
