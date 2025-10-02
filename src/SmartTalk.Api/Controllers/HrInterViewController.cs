@@ -33,8 +33,6 @@ public class HrInterViewController : ControllerBase
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> AddOrUpdateHrInterViewSettingAsync([FromBody] AddOrUpdateHrInterViewSettingCommand command, CancellationToken cancellationToken)
     {
-        command.Host = HttpContext.Request.Host.Host;
-        
         var response = await _mediator.SendAsync<AddOrUpdateHrInterViewSettingCommand, AddOrUpdateHrInterViewSettingResponse>(command, cancellationToken).ConfigureAwait(false);
 
         return Ok(response);
