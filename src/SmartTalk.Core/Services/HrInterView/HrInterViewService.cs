@@ -150,7 +150,7 @@ public class HrInterViewService : IHrInterViewService
             
             Log.Information("SendWelcomeAndFirstQuestionAsync settingQuestions:{@settingQuestions}", settingQuestions);
             
-            var questions = settingQuestions.Where(x => x.Count >= 0).ToList();
+            var questions = settingQuestions.Where(x => x.Count > 0).ToList();
             
             if (!questions.Any()) await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "No questions found", cancellationToken).ConfigureAwait(false);
         
@@ -185,7 +185,7 @@ public class HrInterViewService : IHrInterViewService
             {
                 Log.Information("HandleWebSocketMessageAsync sessionId:{@sessionId}, message:{@message}", sessionId, message);
 
-                var questions = (await _hrInterViewDataProvider.GetHrInterViewSettingQuestionsBySessionIdAsync(sessionId, cancellationToken).ConfigureAwait(false)).Where(x => x.Count >= 0).ToList();
+                var questions = (await _hrInterViewDataProvider.GetHrInterViewSettingQuestionsBySessionIdAsync(sessionId, cancellationToken).ConfigureAwait(false)).Where(x => x.Count > 0).ToList();
                 
                 var fileBytes = await _httpClientFactory.GetAsync<byte[]>(message.Message, cancellationToken).ConfigureAwait(false);
                 
@@ -297,7 +297,7 @@ public class HrInterViewService : IHrInterViewService
     {
         var promptPrefix = """
                            你是一位专业的面试官，正在与面试者进行对话。请根据面试者的回答执行以下任务：
-                           1. 对面试者的回答做出简短、专业的评价，可以肯定、指出亮点，或礼貌地指出可以补充/改进的地方(补充改进的点要精短且不针对该问题做出二次提问)；
+                           1. 对面试者的回答做出简短、专业的评价，可以肯定、指出亮点，或礼貌地指出可以补充/改进的地方(补充改进的点要精短且不针对该问题做出二次提问),注意回复的整体语句要自然通顺且信息完整；
                            2. 在自然的对话过渡中，从下方“问题列表”中选择一个合适的问题继续提问；
                            3. 每次只提一个问题；
                            4. 请以如下JOSN格式输出：
