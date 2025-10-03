@@ -9,4 +9,8 @@ public class HrInterViewQuestionEventDto
     public string Message { get; set; }
     
     public string MessageFileUrl { get; set; }
+        
+    public string EndMessage { get; set; }
+    
+    public string EndMessageFileUrl { get; set; }
 }
