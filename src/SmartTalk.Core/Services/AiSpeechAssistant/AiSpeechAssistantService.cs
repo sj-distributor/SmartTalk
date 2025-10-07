@@ -1118,6 +1118,11 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                 writer.WriteSample(pcmSample / 32768f);
             }
         }
+
+        var customerItems = string.IsNullOrWhiteSpace(_aiSpeechAssistantStreamContext.CustomerItemsString)
+            ? "No items available."
+            : _aiSpeechAssistantStreamContext.CustomerItemsString;
+        _aiSpeechAssistantStreamContext.Assistant.CustomRepeatOrderPrompt = _aiSpeechAssistantStreamContext.Assistant.CustomRepeatOrderPrompt.Replace("#{customerItems}", customerItems);
         
         var fileContent = memoryStream.ToArray();
         var audioData = BinaryData.FromBytes(fileContent);
