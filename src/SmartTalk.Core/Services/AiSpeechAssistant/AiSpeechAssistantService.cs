@@ -295,6 +295,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         {
             "en" => TranscriptionLanguage.English,
             "es" => TranscriptionLanguage.Spanish,
+            "ko" => TranscriptionLanguage.English,
             _ => TranscriptionLanguage.Chinese
         };
     }
@@ -313,6 +314,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                                   zh-TW: Taiwanese Chinese (Traditional Chinese)
                                   en: English
                                   es: Spanish
+                                  ko: Korea
                                                             
                                   Rules:
                                   1. Carefully analyze the speech content and identify the primary spoken language.
@@ -329,6 +331,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                                   If the audio is in English, even with a strong accent or imperfect pronunciation, return: en
                                   If the audio is in English with background noise, return: en
                                   If the audio is predominantly in Spanish, spoken clearly and throughout most of the recording, return: es
+                                  If the audio is predominantly in Korean, spoken clearly and throughout most of the recording, return: ko
                                   If the audio has both Mandarin and English but Mandarin is the dominant language, return: zh-CN
                                   If the audio has both Cantonese and English but English dominates, return: en
                                   """),

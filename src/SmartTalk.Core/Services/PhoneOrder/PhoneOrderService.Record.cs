@@ -582,6 +582,8 @@ public partial class PhoneOrderService
             "en" => SpeechMaticsLanguageType.En,
             "zh" => SpeechMaticsLanguageType.Yue,
             "zh-CN" or "zh-TW" => SpeechMaticsLanguageType.Cmn,
+            "es" => SpeechMaticsLanguageType.En,
+            "ko" => SpeechMaticsLanguageType.Ko,
             _ => SpeechMaticsLanguageType.En
         };
     }
