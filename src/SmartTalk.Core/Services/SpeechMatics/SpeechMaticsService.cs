@@ -155,7 +155,7 @@ public class SpeechMaticsService : ISpeechMaticsService
             new UserChatMessage("幫我根據錄音生成分析報告：")
         ];
  
-        ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
+        ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text, MaxOutputTokenCount = 16384 };
 
         ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
         Log.Information("sales record analyze report:" + completion.Content.FirstOrDefault()?.Text);
