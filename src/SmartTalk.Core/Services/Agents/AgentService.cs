@@ -9,6 +9,7 @@ using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Restaurants;
 using SmartTalk.Messages.Commands.Agent;
 using SmartTalk.Messages.Dto.Agent;
+using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.Account;
 using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Requests.Agent;
@@ -70,11 +71,15 @@ public class AgentService : IAgentService
 
     public async Task<GetSurfaceAgentsResponse> GetSurfaceAgentsAsync(GetSurfaceAgentsRequest request, CancellationToken cancellationToken)
     {
-        var agents = await _agentDataProvider.GetAgentsWithAssistantsAsync(keyword: request.Keyword, isDefault: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var (count, agents) = await _agentDataProvider.GetAgentsPagingAsync(request.PageIndex, request.PageSize, request.Keyword, cancellationToken).ConfigureAwait(false);
+
+        var enrichAgents = _mapper.Map<List<AgentDto>>(agents);
+        
+        await EnrichAgentsAsync(enrichAgents, cancellationToken).ConfigureAwait(false);
 
         return new GetSurfaceAgentsResponse
         {
-            Data = _mapper.Map<List<AgentDto>>(agents)
+            Data = _mapper.Map<List<AgentDto>>(enrichAgents)
         };
     }
 
@@ -120,8 +125,6 @@ public class AgentService : IAgentService
         if (agent == null) throw new Exception($"Agent with id {command.AgentId} not found.");
         
         await _agentDataProvider.DeleteAgentsAsync([agent], cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        // if (agent.Assistants.Count == 0) return new DeleteAgentResponse { Data = _mapper.Map<AgentDto>(agent) };
         
         var (agentAssistants, assistants) = await _aiSpeechAssistantDataProvider.GetAgentAssistantWithAssistantsAsync(agent.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
         
@@ -191,5 +194,17 @@ public class AgentService : IAgentService
             AgentType = agentType,
             MatchingType = allAgentTypes.FirstOrDefault(t => t.Name.Contains(agentType.ToString(), StringComparison.OrdinalIgnoreCase))
         }).Where(x => x.MatchingType != null).Select(x => (x.AgentType, x.MatchingType)).ToList();
+    }
+
+    private async Task EnrichAgentsAsync(List<AgentDto> agents, CancellationToken cancellationToken)
+    {
+        var agentAssistantPairs = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantsByAgentIdsAsync(agents.Select(x => x.Id).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        foreach (var agent in agents)
+        {
+            var assistants = agentAssistantPairs.Where(x => x.Item1.AgentId == agent.Id).Select(x => x.Item2).ToList();
+            
+            agent.Assistants = _mapper.Map<List<AiSpeechAssistantDto>>(assistants);
+        }
     }
 }
