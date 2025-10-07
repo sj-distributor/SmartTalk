@@ -177,7 +177,7 @@ public class AgentDataProvider : IAgentDataProvider
 
     public async Task<(int Count, List<Agent> Agents)> GetAgentsPagingAsync(int pageIndex, int pageSize, string keyword = null, CancellationToken cancellationToken = default)
     {
-        var query = _repository.Query<Agent>();
+        var query = _repository.Query<Agent>().Where(x => x.IsDisplay && x.IsSurface);
 
         if (!string.IsNullOrEmpty(keyword))
             query = query.Where(x => x.Name.Contains(keyword));
