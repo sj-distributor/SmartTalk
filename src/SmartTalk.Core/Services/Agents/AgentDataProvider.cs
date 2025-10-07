@@ -31,6 +31,8 @@ public interface IAgentDataProvider : IScopedDependency
     Task<Agent> GetAgentByAssistantIdAsync(int assistantId, CancellationToken cancellationToken = default);
 
     Task<Agent> GetAgentByNumberAsync(string didNumber, int? assistantId = null, CancellationToken cancellationToken = default);
+    
+    Task<(int Count, List<Agent> Agents)> GetAgentsPagingAsync(int pageIndex, int pageSize, string keyword = null, CancellationToken cancellationToken = default);
 }
 
 public class AgentDataProvider : IAgentDataProvider
@@ -147,7 +149,7 @@ public class AgentDataProvider : IAgentDataProvider
             var agentAssistantPair = x.First();
             agentAssistantPair.agent.Assistants = x.Select(a => a.assistant).Where(a => a != null).ToList();
             return agentAssistantPair.agent;
-        }).OrderByDescending(x => x.IsSurface).ToList();
+        }).ToList();
     }
 
     public async Task<Agent> GetAgentByAssistantIdAsync(int assistantId, CancellationToken cancellationToken = default)
@@ -171,5 +173,19 @@ public class AgentDataProvider : IAgentDataProvider
         agentInfo = agentInfo.Where(x => assistantId.HasValue ? x.assistant.Id == assistantId.Value : x.assistant.AnsweringNumber == didNumber);
 
         return await agentInfo.Select(x => x.agent).FirstOrDefaultAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<(int Count, List<Agent> Agents)> GetAgentsPagingAsync(int pageIndex, int pageSize, string keyword = null, CancellationToken cancellationToken = default)
+    {
+        var query = _repository.Query<Agent>();
+
+        if (!string.IsNullOrEmpty(keyword))
+            query = query.Where(x => x.Name.Contains(keyword));
+        
+        var count = await query.CountAsync(cancellationToken).ConfigureAwait(false);
+
+        var agents = await query.OrderByDescending(x => x.CreatedDate).Skip((pageIndex - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken).ConfigureAwait(false);
+        
+        return (count, agents);
     }
 }

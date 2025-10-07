@@ -6,6 +6,10 @@ namespace SmartTalk.Messages.Requests.Agent;
 
 public class GetSurfaceAgentsRequest : IRequest
 {
+    public int PageIndex { get; set; } = 1;
+    
+    public int PageSize { get; set; } = 100;
+    
     public string Keyword { get; set; }
 }
 
