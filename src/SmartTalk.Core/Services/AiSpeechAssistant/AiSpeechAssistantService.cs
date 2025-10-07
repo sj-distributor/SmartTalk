@@ -258,11 +258,14 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         { 
             language = await DetectAudioLanguageAsync(audioFileRawBytes, cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception e) when (e.Message.Contains("quota"))
+        catch (Exception e)
         {
-            const string alertMessage = "服务器异常。";
+            if (e.Message.Contains("quota"))
+            {
+                const string alertMessage = "服务器异常。";
 
-            await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, _workWeChatKeySetting.Key, alertMessage, mentionedList: new[]{"@all"}, cancellationToken: cancellationToken).ConfigureAwait(false);
+                await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, _workWeChatKeySetting.Key, alertMessage, mentionedList: new[]{"@all"}, cancellationToken: cancellationToken).ConfigureAwait(false);
+            }
         }
         
         record.Language = ConvertLanguageCode(language);
