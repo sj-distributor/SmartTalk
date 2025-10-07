@@ -2,12 +2,15 @@ using Twilio;
 using Serilog;
 using System.Text;
 using Twilio.TwiML;
+using NAudio.Wave;
+using NAudio.Codecs;
 using Mediator.Net;
 using Newtonsoft.Json;
 using System.Text.Json;
 using Twilio.TwiML.Voice;
 using SmartTalk.Core.Ioc;
 using Twilio.AspNet.Core;
+using SmartTalk.Core.Utils;
 using System.Net.WebSockets;
 using AutoMapper;
 using Google.Cloud.Translation.V2;
@@ -163,13 +166,14 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _inactivityTimerManager = inactivityTimerManager;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
+        _ffmpegService = ffmpegService;
 
         _openaiEvent = new StringBuilder();
         _openaiClientWebSocket = new ClientWebSocket();
         _aiSpeechAssistantStreamContext = new AiSpeechAssistantStreamContextDto();
 
-        _shouldSendBuffToOpenAi = true;
         _wholeAudioBufferBytes = [];
+        _shouldSendBuffToOpenAi = true;
     }
 
     public CallAiSpeechAssistantResponse CallAiSpeechAssistant(CallAiSpeechAssistantCommand command)
@@ -646,9 +650,10 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                             {
                                 var fromBase64String = Convert.FromBase64String(payload);
 
-                                if (_shouldSendBuffToOpenAi)
-                                    _wholeAudioBufferBytes.AddRange([fromBase64String]);
-                                
+                                if (_shouldSendBuffToOpenAi && _aiSpeechAssistantStreamContext.Assistant.ManualRecordWholeAudio)
+                                    lock (_wholeAudioBufferBytes)
+                                        _wholeAudioBufferBytes.AddRange([fromBase64String]);
+
                                 var audioAppend = new
                                 {
                                     type = "input_audio_buffer.append",
@@ -813,6 +818,11 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                                         case OpenAiToolConstants.ConfirmPickupTime:
                                             await ProcessRecordOrderPickupTimeAsync(outputElement, cancellationToken).ConfigureAwait(false);
                                             break;
+                                        
+                                        case OpenAiToolConstants.RepeatOrder:
+                                        case OpenAiToolConstants.SatisfyOrder:
+                                            await ProcessRepeatOrderAsync(twilioWebSocket, cancellationToken).ConfigureAwait(false);
+                                            break;
 
                                         case OpenAiToolConstants.Hangup:
                                             await ProcessHangupAsync(outputElement, cancellationToken).ConfigureAwait(false);
@@ -820,11 +830,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                                         
                                         case OpenAiToolConstants.AddItem:
                                             await ProcessAddNewItemsToOrderAsync(outputElement, cancellationToken).ConfigureAwait(false);
-                                            break;
-                                        
-                                        case OpenAiToolConstants.RepeatOrder:
-                                        case OpenAiToolConstants.SatisfyOrder:
-                                            await ProcessRepeatOrderAsync(twilioWebSocket, outputElement, cancellationToken).ConfigureAwait(false);
                                             break;
                                             
                                         case OpenAiToolConstants.Refund:
@@ -1053,82 +1058,13 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         };
     }
     
-    private async Task ProcessRepeatOrderAsync(WebSocket twilioWebSocket, JsonElement jsonDocument, CancellationToken cancellationToken)
+    private async Task ProcessRepeatOrderAsync(WebSocket twilioWebSocket, CancellationToken cancellationToken)
     {
         _shouldSendBuffToOpenAi = false;
 
-        var stream = AudioHelper.GetRandomAudioStream(AiSpeechAssistantVoice.Alloy, AiSpeechAssistantMainLanguage.En);
-        
-        using (var holOnStream = new MemoryStream())
-        {
-            await stream.CopyToAsync(holOnStream, cancellationToken);
-            var bytes = holOnStream.ToArray();
-            var holdOn = Convert.ToBase64String(bytes);
-            
-            var holdOnAudio = new
-            {
-                @event = "media",
-                streamSid = _aiSpeechAssistantStreamContext.StreamSid,
-                media = new { payload = holdOn }
-            };
+        await RandomSendRepeatOrderHoldOnAudioAsync(twilioWebSocket, cancellationToken);
 
-            await SendToWebSocketAsync(twilioWebSocket, holdOnAudio, cancellationToken);
-        }
-
-        var customerItems = _aiSpeechAssistantStreamContext.CustomerItemsString;
-        if (string.IsNullOrWhiteSpace(customerItems)) customerItems = "No items available.";
-
-        var systemPrompt = "You are a call recording analyst who speaks fluent English and can accurately and completely repeat the items the customer wants to order.\\n\\nThe following is a list of items the customer is likely to purchase: \n\n #{customerItems}";
-        systemPrompt = systemPrompt.Replace("#{customerItems}", customerItems);
-        
-        var prompt = "Help me to repeat the order completely, quickly and naturally in English:";
-        
-        using var memoryStream = new MemoryStream();
-
-        await using (var writer = new WaveFileWriter(memoryStream, new WaveFormat(8000, 16, channels: 1)))
-        {
-            List<byte[]> bufferBytesCopy;
-
-            lock (_wholeAudioBufferBytes)
-            {
-                // 创建集合的副本
-                bufferBytesCopy = _wholeAudioBufferBytes.ToList();
-            }
-
-            // 对副本进行枚举
-            foreach (var audio in bufferBytesCopy)
-            {
-                for (int index = 0; index < audio.Length; index++)
-                {
-                    var t = audio[index];
-                    var pcmSample = MuLawDecoder.MuLawToLinearSample(t);
-                    writer.WriteSample(pcmSample / 32768f);
-                }
-            }
-        }
-        
-        var fileContent = memoryStream.ToArray();
-        var audioData = BinaryData.FromBytes(fileContent);
-
-        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
-        List<ChatMessage> messages =
-        [
-            new SystemChatMessage(systemPrompt),
-            new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
-            new UserChatMessage(prompt)
-        ];
-        
-        ChatCompletionOptions options = new()
-        {
-            ResponseModalities = ChatResponseModalities.Text | ChatResponseModalities.Audio,
-            AudioOptions = new ChatAudioOptions(new ChatOutputAudioVoice(_aiSpeechAssistantStreamContext.Assistant.ModelVoice), ChatOutputAudioFormat.Wav)
-        };
-
-        ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
-        
-        Log.Information("Analyze record to repeat order: {@completion}", completion);
-
-        var responseAudio = completion.OutputAudio.AudioBytes.ToArray();
+        var responseAudio = await GenerateRepeatOrderAudioAsync(cancellationToken);
         
         var uLawAudio = await _ffmpegService.ConvertWavToULawAsync(responseAudio, cancellationToken);
 
@@ -1142,6 +1078,69 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         await SendToWebSocketAsync(twilioWebSocket, repeatAudio, cancellationToken);
         
         _shouldSendBuffToOpenAi = true;
+    }
+
+    private async Task RandomSendRepeatOrderHoldOnAudioAsync(WebSocket twilioWebSocket, CancellationToken cancellationToken)
+    {
+        var stream = AudioHelper.GetRandomAudioStream(AiSpeechAssistantVoice.Alloy, AiSpeechAssistantMainLanguage.En);
+
+        using var holOnStream = new MemoryStream();
+        
+        await stream.CopyToAsync(holOnStream, cancellationToken);
+        var bytes = holOnStream.ToArray();
+        var holdOn = Convert.ToBase64String(bytes);
+            
+        var holdOnAudio = new
+        {
+            @event = "media",
+            streamSid = _aiSpeechAssistantStreamContext.StreamSid,
+            media = new { payload = holdOn }
+        };
+
+        await SendToWebSocketAsync(twilioWebSocket, holdOnAudio, cancellationToken);
+    }
+
+    private async Task<byte[]> GenerateRepeatOrderAudioAsync(CancellationToken cancellationToken)
+    {
+        using var memoryStream = new MemoryStream();
+
+        await using (var writer = new WaveFileWriter(memoryStream, new WaveFormat(8000, 16, channels: 1)))
+        {
+            List<byte[]> bufferBytesCopy;
+
+            lock (_wholeAudioBufferBytes)
+            {
+                bufferBytesCopy = _wholeAudioBufferBytes.ToList();
+            }
+
+            foreach (var pcmSample in from audio in bufferBytesCopy from t in audio select MuLawDecoder.MuLawToLinearSample(t))
+            {
+                writer.WriteSample(pcmSample / 32768f);
+            }
+        }
+        
+        var fileContent = memoryStream.ToArray();
+        var audioData = BinaryData.FromBytes(fileContent);
+
+        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
+        List<ChatMessage> messages =
+        [
+            new SystemChatMessage(_aiSpeechAssistantStreamContext.Assistant.CustomRepeatOrderPrompt),
+            new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
+            new UserChatMessage("Help me to repeat the order completely, quickly and naturally in English:")
+        ];
+        
+        ChatCompletionOptions options = new()
+        {
+            ResponseModalities = ChatResponseModalities.Text | ChatResponseModalities.Audio,
+            AudioOptions = new ChatAudioOptions(new ChatOutputAudioVoice(_aiSpeechAssistantStreamContext.Assistant.ModelVoice), ChatOutputAudioFormat.Wav)
+        };
+
+        ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
+        
+        Log.Information("Analyze record to repeat order: {@completion}", completion);
+
+        return completion.OutputAudio.AudioBytes.ToArray();
     }
     
     private async Task ProcessUpdateOrderAsync(AiSpeechAssistantStreamContextDto context, JsonElement jsonDocument, CancellationToken cancellationToken)
