@@ -198,7 +198,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         
         ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
         
-        ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
+        ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text, MaxOutputTokenCount = 16384 };
 
         ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
         Log.Information("sales record analyze report:" + completion.Content.FirstOrDefault()?.Text);
