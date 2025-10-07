@@ -147,7 +147,7 @@ public class AgentDataProvider : IAgentDataProvider
             var agentAssistantPair = x.First();
             agentAssistantPair.agent.Assistants = x.Select(a => a.assistant).Where(a => a != null).ToList();
             return agentAssistantPair.agent;
-        }).ToList();
+        }).OrderByDescending(x => x.IsSurface).ToList();
     }
 
     public async Task<Agent> GetAgentByAssistantIdAsync(int assistantId, CancellationToken cancellationToken = default)
