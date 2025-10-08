@@ -12,6 +12,7 @@ using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.Account;
 using SmartTalk.Messages.Enums.Agent;
+using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Requests.Agent;
 
 namespace SmartTalk.Core.Services.Agents;
@@ -111,6 +112,8 @@ public class AgentService : IAgentService
     {
         var agent = await _agentDataProvider.GetAgentByIdAsync(command.AgentId, cancellationToken).ConfigureAwait(false);
         
+        await ChangeNumberIfRequiredAsync(agent.Id, agent.Channel, command.Channel, cancellationToken).ConfigureAwait(false);
+        
         _mapper.Map(command, agent);
         
         await _agentDataProvider.UpdateAgentsAsync([agent], cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -206,5 +209,63 @@ public class AgentService : IAgentService
             
             agent.Assistants = _mapper.Map<List<AiSpeechAssistantDto>>(assistants);
         }
+    }
+
+    private async Task ChangeNumberIfRequiredAsync(int agentId, AiSpeechAssistantChannel? originalChannel, AiSpeechAssistantChannel newChannel, CancellationToken cancellationToken)
+    {
+        var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByAgentIdAsync(agentId, cancellationToken).ConfigureAwait(false);
+    
+        if (assistant == null) return;
+        
+        if (originalChannel == newChannel) return;
+        
+        await HandleChannelChangeAsync(assistant, newChannel, cancellationToken);
+    }
+    
+    private async Task HandleChannelChangeAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, AiSpeechAssistantChannel newChannel, CancellationToken cancellationToken)
+    {
+        switch (newChannel)
+        {
+            case AiSpeechAssistantChannel.Text:
+                await ReleaseNumberAsync(assistant, cancellationToken);
+                break;
+            case AiSpeechAssistantChannel.PhoneChat:
+                await AssignNumberAsync(assistant, cancellationToken);
+                break;
+        }
+    }
+    
+    private async Task ReleaseNumberAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken)
+    {
+        if (!assistant.AnsweringNumberId.HasValue) return;
+    
+        var number = await _aiSpeechAssistantDataProvider.GetNumberAsync(numberId: assistant.AnsweringNumberId, cancellationToken: cancellationToken).ConfigureAwait(false);
+    
+        if (number == null) return;
+    
+        number.IsUsed = false;
+        await _aiSpeechAssistantDataProvider.UpdateNumberPoolAsync([number], cancellationToken: cancellationToken).ConfigureAwait(false);
+    
+        assistant.AnsweringNumberId = null;
+        assistant.AnsweringNumber = string.Empty;
+    
+        await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync([assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+    
+    private async Task AssignNumberAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken)
+    {
+        if (assistant.AnsweringNumberId.HasValue) return;
+    
+        var number = await _aiSpeechAssistantDataProvider.GetNumberAsync(isUsed: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+    
+        if (number == null) return;
+    
+        number.IsUsed = true;
+        await _aiSpeechAssistantDataProvider.UpdateNumberPoolAsync([number], cancellationToken: cancellationToken).ConfigureAwait(false);
+    
+        assistant.AnsweringNumberId = number.Id;
+        assistant.AnsweringNumber = number.Number;
+    
+        await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync([assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 }
