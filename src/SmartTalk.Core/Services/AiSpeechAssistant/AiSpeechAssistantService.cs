@@ -980,7 +980,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         [
             new SystemChatMessage(_aiSpeechAssistantStreamContext.Assistant.CustomRepeatOrderPrompt),
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
-            new UserChatMessage("Help me to repeat the order completely, quickly and naturally in English:")
+            new UserChatMessage("Please repeat the order for me in the customer's language completely, quickly, and naturally:")
         ];
         
         ChatCompletionOptions options = new()
