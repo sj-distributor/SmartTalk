@@ -8,11 +8,18 @@ public class GetSurfaceAgentsRequest : IRequest
 {
     public int PageIndex { get; set; } = 1;
     
-    public int PageSize { get; set; } = 100;
+    public int PageSize { get; set; } = 10;
     
     public string Keyword { get; set; }
 }
 
-public class GetSurfaceAgentsResponse : SmartTalkResponse<List<AgentDto>>
+public class GetSurfaceAgentsResponse : SmartTalkResponse<GetSurfaceAgentsResponseData>
 {
+}
+
+public class GetSurfaceAgentsResponseData
+{
+    public int Count { get; set; }
+    
+    public List<AgentDto> Agents { get; set; }
 }
