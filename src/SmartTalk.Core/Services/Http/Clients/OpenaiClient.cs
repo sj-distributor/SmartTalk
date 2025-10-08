@@ -66,12 +66,6 @@ public class OpenaiClient : IOpenaiClient
 
     public async Task<OpenAiCompletionResponse> CreateChatCompletionAsync(object requestBody, CancellationToken cancellationToken)
     {
-        var headers = new Dictionary<string, string>
-        {
-            ["Authorization"] = $"Bearer {_openAiSettings.ApiKey}",
-            ["Accept"] = "application/json"
-        };
-
-        return await _smartTalkHttpClientFactory.PostAsJsonAsync<OpenAiCompletionResponse>("https://api.openai.com/v1/chat/completions", requestBody, cancellationToken, headers: headers, shouldLogError: true).ConfigureAwait(false);
+        return await _smartTalkHttpClientFactory.PostAsJsonAsync<OpenAiCompletionResponse>("https://api.openai.com/v1/chat/completions", requestBody, cancellationToken, shouldLogError: true).ConfigureAwait(false);
     }
 }

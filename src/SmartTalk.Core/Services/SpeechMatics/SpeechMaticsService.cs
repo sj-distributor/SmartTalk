@@ -27,6 +27,7 @@ using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.Account;
 using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Enums.STT;
+using SmartTalk.Messages.Requests.AiSpeechAssistant;
 using SmartTalk.Messages.Responses;
 using Twilio;
 using Twilio.Rest.Api.V2010.Account;
@@ -148,10 +149,10 @@ public class SpeechMaticsService : ISpeechMaticsService
         var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
 
-        var requestBody = new
+        var requestBody = new OpenAiAudioCompletionRequest
         {
-            model = "gpt-4o-audio-preview",
-            messages = new object[]
+            Model = "gpt-4o-audio-preview",
+            Messages = new object[]
             {
                 new
                 {

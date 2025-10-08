@@ -17,6 +17,7 @@ using AutoMapper;
 using Google.Cloud.Translation.V2;
 using SmartTalk.Core.Constants;
 using Microsoft.AspNetCore.Http;
+using Microsoft.SemanticKernel.Connectors.OpenAI;
 using OpenAI.Chat;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Services.Agents;
@@ -49,6 +50,7 @@ using SmartTalk.Messages.Commands.Attachments;
 using SmartTalk.Messages.Dto.Attachments;
 using SmartTalk.Messages.Dto.Smarties;
 using SmartTalk.Messages.Enums.STT;
+using SmartTalk.Messages.Requests.AiSpeechAssistant;
 using SmartTalk.Messages.Responses;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 using RecordingResource = Twilio.Rest.Api.V2010.Account.Call.RecordingResource;
@@ -285,10 +287,10 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
     private async Task<string> DetectAudioLanguageAsync(byte[] audioContent, CancellationToken cancellationToken)
     {
-        var requestBody = new
+        var requestBody = new OpenAiAudioCompletionRequest
         {
-            model = "gpt-4o-audio-preview",
-            messages = new object[]
+            Model = "gpt-4o-audio-preview",
+            Messages = new object[]
             {
                 new
                 {
@@ -343,7 +345,10 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                     }
                 }
             },
-            response_format = new { type = "text" }
+            ResponseFormat = new ResponseFormat()
+            {
+                Type = "text"
+            }
         };
 
         var completionResponse = await _openaiClient.CreateChatCompletionAsync(requestBody, cancellationToken);
@@ -1004,10 +1009,10 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         var fileContent = memoryStream.ToArray();
         var audioData = BinaryData.FromBytes(fileContent);
 
-        var requestBody = new
+        var requestBody = new OpenAiAudioCompletionRequest
         {
-            model = "gpt-4o-audio-preview",
-            messages = new object[]
+            Model = "gpt-4o-audio-preview",
+            Messages = new object[]
             {
                 new
                 {
@@ -1036,12 +1041,15 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                     }
                 }
             },
-            response_format = new { type = "text" },
-            modalities = new[] { "text", "audio" },
-            audio = new
+            ResponseFormat = new ResponseFormat()
             {
-                voice = _aiSpeechAssistantStreamContext.Assistant.ModelVoice,
-                format = "wav"
+                Type = "text"
+            },
+            Modalities = new[] { "text", "audio" },
+            Audio = new AudioSettings()
+            {
+                Voice = _aiSpeechAssistantStreamContext.Assistant.ModelVoice,
+                Format = "wav"
             }
         };
 
