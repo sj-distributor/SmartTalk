@@ -299,7 +299,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         {
             "en" => TranscriptionLanguage.English,
             "es" => TranscriptionLanguage.Spanish,
-            "ko" => TranscriptionLanguage.English,
+            "ko" => TranscriptionLanguage.Korean,
             _ => TranscriptionLanguage.Chinese
         };
     }
