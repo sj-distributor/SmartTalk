@@ -1025,25 +1025,77 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         var fileContent = memoryStream.ToArray();
         var audioData = BinaryData.FromBytes(fileContent);
 
-        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
-        List<ChatMessage> messages =
-        [
-            new SystemChatMessage(_aiSpeechAssistantStreamContext.Assistant.CustomRepeatOrderPrompt),
-            new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
-            new UserChatMessage("Help me to repeat the order completely, quickly and naturally in English:")
-        ];
-        
-        ChatCompletionOptions options = new()
+        using var httpClient = new HttpClient();
+        httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _openAiSettings.ApiKey);
+        httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+        var requestBody = new
         {
-            ResponseModalities = ChatResponseModalities.Text | ChatResponseModalities.Audio,
-            AudioOptions = new ChatAudioOptions(new ChatOutputAudioVoice(_aiSpeechAssistantStreamContext.Assistant.ModelVoice), ChatOutputAudioFormat.Wav)
+            model = "gpt-4o-audio-preview",
+            messages = new object[]
+            {
+                new
+                {
+                    role = "system",
+                    content = _aiSpeechAssistantStreamContext.Assistant.CustomRepeatOrderPrompt
+                },
+                new
+                {
+                    role = "user",
+                    content = new object[]
+                    {
+                        new
+                        {
+                            type = "input_audio",
+                            input_audio = new
+                            {
+                                data = audioData,
+                                format = "wav"
+                            }
+                        },
+                        new
+                        {
+                            type = "text",
+                            text = "Help me to repeat the order completely, quickly and naturally in English:"
+                        }
+                    }
+                }
+            },
+            response_format = new { type = "text" },
+            modalities = new[] { "text", "audio" },
+            audio = new
+            {
+                voice = _aiSpeechAssistantStreamContext.Assistant.ModelVoice,
+                format = "wav"
+            }
         };
 
-        ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
-        
-        Log.Information("Analyze record to repeat order: {@completion}", completion);
+        try
+        {
+            var response = await httpClient.PostAsJsonAsync("https://api.openai.com/v1/chat/completions", requestBody, cancellationToken);
 
-        return completion.OutputAudio.AudioBytes.ToArray();
+            response.EnsureSuccessStatusCode();
+
+            var responseJson = await response.Content.ReadAsStringAsync(cancellationToken);
+            Log.Information("Analyze record to repeat order response: {Response}", responseJson);
+
+            var result = JsonSerializer.Deserialize<OpenAiCompletionResponse>(responseJson);
+
+            if (result?.audio?.data != null)
+            {
+                return Convert.FromBase64String(result.audio.data);
+            }
+            else
+            {
+                Log.Warning("No audio data in response");
+                return Array.Empty<byte>();
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error generating repeat order audio");
+            return Array.Empty<byte>();
+        }
     }
     
     private async Task ProcessUpdateOrderAsync(AiSpeechAssistantStreamContextDto context, JsonElement jsonDocument, CancellationToken cancellationToken)
