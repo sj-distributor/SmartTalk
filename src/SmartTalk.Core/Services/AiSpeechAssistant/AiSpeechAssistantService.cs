@@ -350,30 +350,20 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             response_format = new { type = "text" }
         };
 
-        try
-        {
-            var response = await HttpClientExtensions.PostAsJsonAsync(
-                httpClient,
-                "https://api.openai.com/v1/chat/completions",
-                requestBody,
-                cancellationToken);
 
-            response.EnsureSuccessStatusCode();
+        var response = await HttpClientExtensions.PostAsJsonAsync(httpClient,
+            "https://api.openai.com/v1/chat/completions", requestBody, cancellationToken);
 
-            var responseJson = await response.Content.ReadAsStringAsync(cancellationToken);
-            var result = JsonSerializer.Deserialize<OpenAiCompletionResponse>(responseJson);
+        response.EnsureSuccessStatusCode();
 
-            string languageCode = result?.Choices?.FirstOrDefault()?.Message?.Content?.Trim() ?? "en";
+        var responseJson = await response.Content.ReadAsStringAsync(cancellationToken);
+        var result = JsonSerializer.Deserialize<OpenAiCompletionResponse>(responseJson);
 
-            Log.Information("Detected audio language: " + languageCode);
+        string languageCode = result?.Choices?.FirstOrDefault()?.Message?.Content?.Trim() ?? "en";
 
-            return languageCode;
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "Error detecting audio language");
-            return "en"; // 默认返回英文
-        }
+        Log.Information("Detected audio language: " + languageCode);
+
+        return languageCode;
     }
 
 
@@ -1070,32 +1060,18 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             }
         };
 
-        try
-        {
-            var response = await httpClient.PostAsJsonAsync("https://api.openai.com/v1/chat/completions", requestBody, cancellationToken);
+        var response = await httpClient.PostAsJsonAsync("https://api.openai.com/v1/chat/completions", requestBody, cancellationToken);
 
-            response.EnsureSuccessStatusCode();
+        response.EnsureSuccessStatusCode();
 
-            var responseJson = await response.Content.ReadAsStringAsync(cancellationToken);
-            Log.Information("Analyze record to repeat order response: {Response}", responseJson);
-
-            var result = JsonSerializer.Deserialize<OpenAiCompletionResponse>(responseJson);
-
-            if (result?.audio?.data != null)
-            {
-                return Convert.FromBase64String(result.audio.data);
-            }
-            else
-            {
-                Log.Warning("No audio data in response");
-                return Array.Empty<byte>();
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "Error generating repeat order audio");
-            return Array.Empty<byte>();
-        }
+        var responseJson = await response.Content.ReadAsStringAsync(cancellationToken);
+        var jsonDocument = JsonDocument.Parse(responseJson);
+    
+        var responseAudioData = jsonDocument.RootElement.GetProperty("output_audio").GetProperty("data").GetString();
+    
+        Log.Information("Analyze record to repeat order: {ResponseAudioData}", responseAudioData);
+        
+        return Convert.FromBase64String(responseAudioData);
     }
     
     private async Task ProcessUpdateOrderAsync(AiSpeechAssistantStreamContextDto context, JsonElement jsonDocument, CancellationToken cancellationToken)
