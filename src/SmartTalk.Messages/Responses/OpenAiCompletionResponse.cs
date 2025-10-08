@@ -3,7 +3,7 @@ namespace SmartTalk.Messages.Responses;
 public class OpenAiCompletionResponse
 {
     public List<Choice> Choices { get; set; }
-    public AudioOutput audio { get; set; }
+    public AudioOutput Audio { get; set; }
     
     public class Choice
     {
@@ -18,6 +18,6 @@ public class OpenAiCompletionResponse
     
     public class AudioOutput
     {
-        public string data { get; set; }
+        public byte[] AudioBytes { get; set; }
     }
 }

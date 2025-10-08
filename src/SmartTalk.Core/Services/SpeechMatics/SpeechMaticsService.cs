@@ -43,7 +43,6 @@ public class SpeechMaticsService : ISpeechMaticsService
     private readonly  IWeChatClient _weChatClient;
     private  readonly IFfmpegService _ffmpegService;
     private readonly OpenAiSettings _openAiSettings;
-    private readonly HttpClient _httpClient;
     private readonly TwilioSettings _twilioSettings;
     private readonly TranslationClient _translationClient;
     private readonly ISmartiesClient _smartiesClient;
@@ -58,7 +57,6 @@ public class SpeechMaticsService : ISpeechMaticsService
         IWeChatClient weChatClient,
         IFfmpegService ffmpegService,
         OpenAiSettings openAiSettings,
-        HttpClient httpClient,
         TwilioSettings twilioSettings,
         TranslationClient translationClient,
         ISmartiesClient smartiesClient,
@@ -72,7 +70,6 @@ public class SpeechMaticsService : ISpeechMaticsService
         _weChatClient = weChatClient;
         _ffmpegService = ffmpegService;
         _openAiSettings = openAiSettings;
-        _httpClient = httpClient;
         _twilioSettings = twilioSettings;
         _translationClient = translationClient;
         _smartiesClient = smartiesClient;
@@ -147,10 +144,6 @@ public class SpeechMaticsService : ISpeechMaticsService
 
         var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
-        
-        using var httpClient = new HttpClient();
-        httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _openAiSettings.ApiKey);
-        httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
         var requestBody = new
         {
@@ -194,11 +187,15 @@ public class SpeechMaticsService : ISpeechMaticsService
             }
         };
 
-        var response = await HttpClientExtensions.PostAsJsonAsync(httpClient,"https://api.openai.com/v1/chat/completions", requestBody, cancellationToken);
-        response.EnsureSuccessStatusCode();
+        var headers = new Dictionary<string, string>
+        {
+            ["Authorization"] = $"Bearer {_openAiSettings.ApiKey}",
+            ["Accept"] = "application/json"
+        };
+        
+        var response = await _smartTalkHttpClientFactory.PostAsJsonAsync<OpenAiCompletionResponse>("https://api.openai.com/v1/chat/completions", requestBody, cancellationToken, headers: headers, shouldLogError: true).ConfigureAwait(false);
 
-        var completionResponse = await response.Content.ReadFromJsonAsync<OpenAiCompletionResponse>(cancellationToken).ConfigureAwait(false);
-        var transcriptionText = completionResponse?.Choices?.FirstOrDefault()?.Message?.Content ?? "";
+        var transcriptionText = response?.Choices?.FirstOrDefault()?.Message?.Content ?? "";
 
         Log.Information("sales record analyze report:" + transcriptionText);
         

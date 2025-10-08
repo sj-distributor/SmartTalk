@@ -285,9 +285,11 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
     private async Task<string> DetectAudioLanguageAsync(byte[] audioContent, CancellationToken cancellationToken)
     {
-        using var httpClient = new HttpClient();
-        httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _openAiSettings.ApiKey);
-        httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        var headers = new Dictionary<string, string>
+        {
+            ["Authorization"] = $"Bearer {_openAiSettings.ApiKey}",
+            ["Accept"] = "application/json"
+        };
 
         var requestBody = new
         {
@@ -351,15 +353,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         };
 
 
-        var response = await HttpClientExtensions.PostAsJsonAsync(httpClient,
-            "https://api.openai.com/v1/chat/completions", requestBody, cancellationToken);
+        var response = await _httpClientFactory.PostAsJsonAsync<OpenAiCompletionResponse>("https://api.openai.com/v1/chat/completions", requestBody, cancellationToken, headers: headers, shouldLogError: true).ConfigureAwait(false);
 
-        response.EnsureSuccessStatusCode();
-
-        var responseJson = await response.Content.ReadAsStringAsync(cancellationToken);
-        var result = JsonSerializer.Deserialize<OpenAiCompletionResponse>(responseJson);
-
-        string languageCode = result?.Choices?.FirstOrDefault()?.Message?.Content?.Trim() ?? "en";
+        string languageCode = response?.Choices?.FirstOrDefault()?.Message?.Content?.Trim() ?? "en";
 
         Log.Information("Detected audio language: " + languageCode);
 
@@ -1015,9 +1011,11 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         var fileContent = memoryStream.ToArray();
         var audioData = BinaryData.FromBytes(fileContent);
 
-        using var httpClient = new HttpClient();
-        httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _openAiSettings.ApiKey);
-        httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        var headers = new Dictionary<string, string>
+        {
+            ["Authorization"] = $"Bearer {_openAiSettings.ApiKey}",
+            ["Accept"] = "application/json"
+        };
 
         var requestBody = new
         {
@@ -1060,18 +1058,11 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             }
         };
 
-        var response = await httpClient.PostAsJsonAsync("https://api.openai.com/v1/chat/completions", requestBody, cancellationToken);
+        var response = await _httpClientFactory.PostAsJsonAsync<OpenAiCompletionResponse>("https://api.openai.com/v1/chat/completions", requestBody, cancellationToken, headers: headers, shouldLogError: true).ConfigureAwait(false);
 
-        response.EnsureSuccessStatusCode();
+        Log.Information("Analyze record to repeat order: {ResponseAudioData}", response.Audio.AudioBytes);
 
-        var responseJson = await response.Content.ReadAsStringAsync(cancellationToken);
-        var jsonDocument = JsonDocument.Parse(responseJson);
-    
-        var responseAudioData = jsonDocument.RootElement.GetProperty("output_audio").GetProperty("data").GetString();
-    
-        Log.Information("Analyze record to repeat order: {ResponseAudioData}", responseAudioData);
-        
-        return Convert.FromBase64String(responseAudioData);
+        return response.Audio.AudioBytes.ToArray();
     }
     
     private async Task ProcessUpdateOrderAsync(AiSpeechAssistantStreamContextDto context, JsonElement jsonDocument, CancellationToken cancellationToken)
