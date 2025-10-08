@@ -24,6 +24,8 @@ public class AiSpeechAssistantInboundRouteDto
     
     public int Priority { get; set; }
     
+    public bool IsFallback { get; set; }
+    
     public string Remarks { get; set; }
     
     public DateTimeOffset CreatedDate { get; set; }
