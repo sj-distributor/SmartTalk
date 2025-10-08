@@ -5,11 +5,11 @@ using SmartTalk.Messages.Requests.Agent;
 
 namespace SmartTalk.Core.Handlers.RequestHandlers.Agent;
 
-public class GetAgentByIdRequestRequestHandler : IRequestHandler<GetAgentByIdRequest, GetAgentByIdResponse>
+public class GetAgentByIdRequestHandler : IRequestHandler<GetAgentByIdRequest, GetAgentByIdResponse>
 {
     private readonly IAgentService _agentService;
 
-    public GetAgentByIdRequestRequestHandler(IAgentService agentService)
+    public GetAgentByIdRequestHandler(IAgentService agentService)
     {
         _agentService = agentService;
     }
