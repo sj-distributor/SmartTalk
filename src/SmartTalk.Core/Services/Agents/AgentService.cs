@@ -28,6 +28,8 @@ public interface IAgentService : IScopedDependency
     Task<UpdateAgentResponse> UpdateAgentAsync(UpdateAgentCommand command, CancellationToken cancellationToken);
     
     Task<DeleteAgentResponse> DeleteAgentAsync(DeleteAgentCommand command, CancellationToken cancellationToken);
+    
+    Task<GetAgentByIdResponse> GetAgentByIdAsync(GetAgentByIdRequest request, CancellationToken cancellationToken);
 }
 
 public class AgentService : IAgentService
@@ -147,8 +149,21 @@ public class AgentService : IAgentService
         number.IsUsed = false;
                 
         await _aiSpeechAssistantDataProvider.UpdateNumberPoolAsync([number], cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var routes = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantInboundRoutesByAgentIdAsync(agent.Id, cancellationToken).ConfigureAwait(false);
+        
+        await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantInboundRoutesAsync(routes, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         return new DeleteAgentResponse { Data = _mapper.Map<AgentDto>(agent) };
+    }
+
+    public async Task<GetAgentByIdResponse> GetAgentByIdAsync(GetAgentByIdRequest request, CancellationToken cancellationToken)
+    {
+        var agent = await _agentDataProvider.GetAgentByIdAsync(request.AgentId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (agent == null) throw new Exception($"Agent with id {request.AgentId} not found.");
+        
+        return new GetAgentByIdResponse { Data = _mapper.Map<AgentDto>(agent) };
     }
 
     private async Task<List<AgentPreviewDto>> GetAllAgentsAsync(List<AgentType> agentTypes, List<int> agentIds, int? serviceProviderId, CancellationToken cancellationToken)
@@ -219,23 +234,23 @@ public class AgentService : IAgentService
         
         if (originalChannel == newChannel) return;
         
-        await HandleChannelChangeAsync(assistant, newChannel, cancellationToken);
+        await HandleChannelChangeAsync(agentId, assistant, newChannel, cancellationToken);
     }
     
-    private async Task HandleChannelChangeAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, AiSpeechAssistantChannel newChannel, CancellationToken cancellationToken)
+    private async Task HandleChannelChangeAsync(int agentId, Domain.AISpeechAssistant.AiSpeechAssistant assistant, AiSpeechAssistantChannel newChannel, CancellationToken cancellationToken)
     {
         switch (newChannel)
         {
             case AiSpeechAssistantChannel.Text:
-                await ReleaseNumberAsync(assistant, cancellationToken);
+                await ReleaseNumberAsync(agentId, assistant, cancellationToken);
                 break;
             case AiSpeechAssistantChannel.PhoneChat:
-                await AssignNumberAsync(assistant, cancellationToken);
+                await AssignNumberAsync(agentId, assistant, cancellationToken);
                 break;
         }
     }
     
-    private async Task ReleaseNumberAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken)
+    private async Task ReleaseNumberAsync(int agentId, Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken)
     {
         if (!assistant.AnsweringNumberId.HasValue) return;
     
@@ -250,9 +265,11 @@ public class AgentService : IAgentService
         assistant.AnsweringNumber = string.Empty;
     
         await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync([assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        await HandleAiSpeechInboundRoutesAsync(agentId, string.Empty, cancellationToken).ConfigureAwait(false);
     }
     
-    private async Task AssignNumberAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken)
+    private async Task AssignNumberAsync(int agentId, Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken)
     {
         if (assistant.AnsweringNumberId.HasValue) return;
     
@@ -267,5 +284,16 @@ public class AgentService : IAgentService
         assistant.AnsweringNumber = number.Number;
     
         await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync([assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        await HandleAiSpeechInboundRoutesAsync(agentId, number.Number, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task HandleAiSpeechInboundRoutesAsync(int agentId, string number, CancellationToken cancellationToken)
+    {
+        var routes = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantInboundRoutesByAgentIdAsync(agentId, cancellationToken).ConfigureAwait(false);
+        
+        routes.ForEach(x => x.To = number);
+        
+        await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantInboundRouteAsync(routes, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 }
