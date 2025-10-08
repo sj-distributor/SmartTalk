@@ -82,7 +82,11 @@ public class AgentService : IAgentService
 
         return new GetSurfaceAgentsResponse
         {
-            Data = _mapper.Map<List<AgentDto>>(enrichAgents)
+            Data = new GetSurfaceAgentsResponseData
+            {
+                Count = count,
+                Agents = _mapper.Map<List<AgentDto>>(enrichAgents)
+            }
         };
     }
 
