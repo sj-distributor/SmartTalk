@@ -260,12 +260,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         }
         catch (Exception e)
         {
-            if (e.Message.Contains("quota"))
-            {
-                const string alertMessage = "服务器异常。";
+            const string alertMessage = "服务器异常。";
 
-                await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, _workWeChatKeySetting.Key, alertMessage, mentionedList: new[]{"@all"}, cancellationToken: cancellationToken).ConfigureAwait(false);
-            }
+            await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, _workWeChatKeySetting.Key, alertMessage, mentionedList: new[]{"@all"}, cancellationToken: cancellationToken).ConfigureAwait(false);
         }
         
         record.Language = ConvertLanguageCode(language);
