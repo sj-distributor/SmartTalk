@@ -345,10 +345,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                     }
                 }
             },
-            ResponseFormat = new ResponseFormat()
-            {
-                Type = "text"
-            }
+            ResponseFormat = new { Type = "text" }
         };
 
         var completionResponse = await _openaiClient.CreateChatCompletionAsync(requestBody, cancellationToken);
@@ -1041,16 +1038,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                     }
                 }
             },
-            ResponseFormat = new ResponseFormat()
-            {
-                Type = "text"
-            },
-            Modalities = new[] { "text", "audio" },
-            Audio = new AudioSettings()
-            {
-                Voice = _aiSpeechAssistantStreamContext.Assistant.ModelVoice,
-                Format = "wav"
-            }
+            ResponseFormat = new { Type = "text" },
+            Modalities = ["text", "audio" ],
+            Audio = new { Voice = _aiSpeechAssistantStreamContext.Assistant.ModelVoice, Format = "wav" }
         };
 
         var completionResponse = await _openaiClient.CreateChatCompletionAsync(requestBody, cancellationToken);
