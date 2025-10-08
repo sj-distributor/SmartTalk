@@ -63,4 +63,13 @@ public class AgentController : ControllerBase
 
         return Ok(response);
     }
+    
+    [Route("agent"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetSurfaceAgentsResponse))]
+    public async Task<IActionResult> GetAgentByIdAsync([FromQuery] GetAgentByIdRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetAgentByIdRequest, GetAgentByIdResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
 }

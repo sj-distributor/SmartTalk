@@ -28,6 +28,8 @@ public interface IAgentService : IScopedDependency
     Task<UpdateAgentResponse> UpdateAgentAsync(UpdateAgentCommand command, CancellationToken cancellationToken);
     
     Task<DeleteAgentResponse> DeleteAgentAsync(DeleteAgentCommand command, CancellationToken cancellationToken);
+    
+    Task<GetAgentByIdResponse> GetAgentByIdAsync(GetAgentByIdRequest request, CancellationToken cancellationToken);
 }
 
 public class AgentService : IAgentService
@@ -153,6 +155,15 @@ public class AgentService : IAgentService
         await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantInboundRoutesAsync(routes, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         return new DeleteAgentResponse { Data = _mapper.Map<AgentDto>(agent) };
+    }
+
+    public async Task<GetAgentByIdResponse> GetAgentByIdAsync(GetAgentByIdRequest request, CancellationToken cancellationToken)
+    {
+        var agent = await _agentDataProvider.GetAgentByIdAsync(request.AgentId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (agent == null) throw new Exception($"Agent with id {request.AgentId} not found.");
+        
+        return new GetAgentByIdResponse { Data = _mapper.Map<AgentDto>(agent) };
     }
 
     private async Task<List<AgentPreviewDto>> GetAllAgentsAsync(List<AgentType> agentTypes, List<int> agentIds, int? serviceProviderId, CancellationToken cancellationToken)
