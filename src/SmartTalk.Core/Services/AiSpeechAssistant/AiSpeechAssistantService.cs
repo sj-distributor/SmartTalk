@@ -1,3 +1,4 @@
+using System.Net.Http.Headers;
 using Twilio;
 using Serilog;
 using System.Text;
@@ -48,6 +49,7 @@ using SmartTalk.Messages.Commands.Attachments;
 using SmartTalk.Messages.Dto.Attachments;
 using SmartTalk.Messages.Dto.Smarties;
 using SmartTalk.Messages.Enums.STT;
+using SmartTalk.Messages.Responses;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 using RecordingResource = Twilio.Rest.Api.V2010.Account.Call.RecordingResource;
 
@@ -280,52 +282,100 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             _ => TranscriptionLanguage.Chinese
         };
     }
-    
+
     private async Task<string> DetectAudioLanguageAsync(byte[] audioContent, CancellationToken cancellationToken)
     {
-        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
+        using var httpClient = new HttpClient();
+        httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _openAiSettings.ApiKey);
+        httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
-        var audioData = BinaryData.FromBytes(audioContent);
-        List<ChatMessage> messages =
-        [
-            new SystemChatMessage("""
-                                  You are a professional speech recognition analyst. Based on the audio content, determine the main language used and return only one language code from the following options:
-                                  zh-CN: Mandarin (Simplified Chinese)
-                                  zh: Cantonese
-                                  zh-TW: Taiwanese Chinese (Traditional Chinese)
-                                  en: English
-                                  es: Spanish
-                                                            
-                                  Rules:
-                                  1. Carefully analyze the speech content and identify the primary spoken language.
-                                  2. If the recording contains noise, background sounds, or non-standard pronunciation, focus on the linguistic features (tone, rhythm, common words) rather than misclassifying it.
-                                  3. For English with heavy accents or imperfect pronunciation, still classify as English (en).
-                                  4. Only return 'es' (Spanish) if the majority of the recording is clearly and consistently spoken in Spanish. Do NOT classify English with accents or noise as Spanish.
-                                  5. If the recording contains mixed languages, return the code of the language that dominates most of the speech.
-                                  6. Return only the code without any additional text or explanations.
-                                                            
-                                  Examples:
-                                  If the audio is in Mandarin, even with background noise, return: zh-CN
-                                  If the audio is in Cantonese, possibly with some Mandarin words, return: zh
-                                  If the audio is in Taiwanese Mandarin (Traditional Chinese), return: zh-TW
-                                  If the audio is in English, even with a strong accent or imperfect pronunciation, return: en
-                                  If the audio is in English with background noise, return: en
-                                  If the audio is predominantly in Spanish, spoken clearly and throughout most of the recording, return: es
-                                  If the audio has both Mandarin and English but Mandarin is the dominant language, return: zh-CN
-                                  If the audio has both Cantonese and English but English dominates, return: en
-                                  """),
-            new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
-            new UserChatMessage("Please determine the language based on the recording and return the corresponding code.")
-        ];
+        var requestBody = new
+        {
+            model = "gpt-4o-audio-preview",
+            messages = new object[]
+            {
+                new
+                {
+                    role = "system",
+                    content = """
+                              You are a professional speech recognition analyst. Based on the audio content, determine the main language used and return only one language code from the following options:
+                              zh-CN: Mandarin (Simplified Chinese)
+                              zh: Cantonese
+                              zh-TW: Taiwanese Chinese (Traditional Chinese)
+                              en: English
+                              es: Spanish
 
-        ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
+                              Rules:
+                              1. Carefully analyze the speech content and identify the primary spoken language.
+                              2. If the recording contains noise, background sounds, or non-standard pronunciation, focus on the linguistic features (tone, rhythm, common words) rather than misclassifying it.
+                              3. For English with heavy accents or imperfect pronunciation, still classify as English (en).
+                              4. Only return 'es' (Spanish) if the majority of the recording is clearly and consistently spoken in Spanish. Do NOT classify English with accents or noise as Spanish.
+                              5. If the recording contains mixed languages, return the code of the language that dominates most of the speech.
+                              6. Return only the code without any additional text or explanations.
 
-        ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
-        
-        Log.Information("Detect the audio language: " + completion.Content.FirstOrDefault()?.Text);
-        
-        return completion.Content.FirstOrDefault()?.Text ?? "en";
+                              Examples:
+                              If the audio is in Mandarin, even with background noise, return: zh-CN
+                              If the audio is in Cantonese, possibly with some Mandarin words, return: zh
+                              If the audio is in Taiwanese Mandarin (Traditional Chinese), return: zh-TW
+                              If the audio is in English, even with a strong accent or imperfect pronunciation, return: en
+                              If the audio is in English with background noise, return: en
+                              If the audio is predominantly in Spanish, spoken clearly and throughout most of the recording, return: es
+                              If the audio has both Mandarin and English but Mandarin is the dominant language, return: zh-CN
+                              If the audio has both Cantonese and English but English dominates, return: en
+                              """
+                },
+                new
+                {
+                    role = "user",
+                    content = new object[]
+                    {
+                        new
+                        {
+                            type = "input_audio",
+                            input_audio = new
+                            {
+                                data = Convert.ToBase64String(audioContent),
+                                format = "wav"
+                            }
+                        },
+                        new
+                        {
+                            type = "text",
+                            text =
+                                "Please determine the language based on the recording and return the corresponding code."
+                        }
+                    }
+                }
+            },
+            response_format = new { type = "text" }
+        };
+
+        try
+        {
+            var response = await HttpClientExtensions.PostAsJsonAsync(
+                httpClient,
+                "https://api.openai.com/v1/chat/completions",
+                requestBody,
+                cancellationToken);
+
+            response.EnsureSuccessStatusCode();
+
+            var responseJson = await response.Content.ReadAsStringAsync(cancellationToken);
+            var result = JsonSerializer.Deserialize<OpenAiCompletionResponse>(responseJson);
+
+            string languageCode = result?.Choices?.FirstOrDefault()?.Message?.Content?.Trim() ?? "en";
+
+            Log.Information("Detected audio language: " + languageCode);
+
+            return languageCode;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error detecting audio language");
+            return "en"; // 默认返回英文
+        }
     }
+
 
     public async Task TransferHumanServiceAsync(TransferHumanServiceCommand command, CancellationToken cancellationToken)
     {
