@@ -449,7 +449,7 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
         
         var specifyCallerNumber = routes.Where(x => x.From == callerNumber).OrderBy(x => x.Priority).ToList();
 
-        return specifyCallerNumber.Count != 0 ? specifyCallerNumber : routes;
+        return specifyCallerNumber.Count != 0 ? specifyCallerNumber : routes.Where(x => x.IsFallback).OrderBy(x => x.Priority).ToList();
     }
 
     public async Task<Sales> GetCallInSalesByNameAsync(string assistantName, SalesCallType? type, CancellationToken cancellationToken)
