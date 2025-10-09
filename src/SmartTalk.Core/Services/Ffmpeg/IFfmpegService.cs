@@ -1,5 +1,6 @@
 using Serilog;
 using System.Diagnostics;
+using System.Text;
 using SmartTalk.Core.Ioc;
 using System.Text.RegularExpressions;
 using SmartTalk.Core.Services.Http;
@@ -24,6 +25,8 @@ public interface IFfmpegService: IScopedDependency
     Task<byte[]> ConvertFileFormatAsync(byte[] file, TranscriptionFileType fileType, CancellationToken cancellationToken);
     
     Task<List<byte[]>> SpiltAudioAsync(byte[] audioBytes, double startTime, double endTime, CancellationToken cancellationToken);
+    
+    Task<byte[]> ConvertWavToULawAsync(byte[] wavBytes, CancellationToken cancellationToken);
 }
 
 public class FfmpegService : IFfmpegService
@@ -428,5 +431,61 @@ public class FfmpegService : IFfmpegService
         }
 
         return audioDataList;
+    }
+     
+     public async Task<byte[]> ConvertWavToULawAsync(byte[] wavBytes, CancellationToken cancellationToken = default)
+    {
+        var baseFileName = Guid.NewGuid().ToString();
+        var inputFileName = $"{baseFileName}.wav";
+        var outputFileName = $"{baseFileName}_ulaw.wav";
+        
+        try
+        {
+            await File.WriteAllBytesAsync(inputFileName, wavBytes, cancellationToken);
+        
+            using (var proc = new Process())
+            {
+                proc.StartInfo = new ProcessStartInfo
+                {
+                    FileName = "ffmpeg",
+                    Arguments = $"-y -i {inputFileName} -c:a pcm_mulaw -ar 8000 {outputFileName}",
+                    RedirectStandardError = true,
+                    RedirectStandardOutput = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+                
+                var errorBuilder = new StringBuilder();
+                proc.ErrorDataReceived += (_, e) =>
+                {
+                    if (string.IsNullOrEmpty(e.Data)) return;
+                    
+                    errorBuilder.AppendLine(e.Data);
+                    
+                    Log.Error("FFmpeg Error: {Error}", e.Data);
+                };
+
+                proc.Start();
+                proc.BeginErrorReadLine();
+                proc.BeginOutputReadLine();
+
+                await proc.WaitForExitAsync(cancellationToken);
+
+                if (proc.ExitCode != 0)
+                {
+                    Log.Error("FFmpeg exited with code {ExitCode}: {Error}", proc.ExitCode, errorBuilder.ToString());
+                    return [];
+                }
+            }
+
+            return File.Exists(outputFileName) 
+                ? await File.ReadAllBytesAsync(outputFileName, cancellationToken) 
+                : [];
+        }
+        finally
+        {
+            try { File.Delete(inputFileName); } catch { /* Ignore */ }
+            try { File.Delete(outputFileName); } catch { /* Ignore */ }
+        }
     }
 }

@@ -44,6 +44,8 @@ public partial interface IPhoneOrderService
     Task<GetPhoneCallUsagesPreviewResponse> GetPhoneCallUsagesPreviewAsync(GetPhoneCallUsagesPreviewRequest request, CancellationToken cancellationToken);
 
     Task<GetPhoneCallRecordDetailResponse> GetPhoneCallrecordDetailAsync(GetPhoneCallRecordDetailRequest request, CancellationToken cancellationToken);
+
+    Task<GetPhoneOrderRecordReportResponse> GetPhoneOrderRecordReportByCallSidAsync(GetPhoneOrderRecordReportRequest request, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderService
@@ -52,7 +54,13 @@ public partial class PhoneOrderService
     {
         var (utcStart, utcEnd) = ConvertPstDateToUtcRange(request.Date);
 
-        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(request.AgentId, request.Name, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
+        var agentIds = request.AgentId.HasValue
+            ? [request.AgentId.Value]
+            : request.StoreId.HasValue
+                ? (await _posDataProvider.GetPosAgentsAsync(storeIds: [request.StoreId.Value], cancellationToken: cancellationToken).ConfigureAwait(false)).Select(x => x.AgentId).ToList()
+                : [];
+
+        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds, request.Name, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
 
         var enrichedRecords = _mapper.Map<List<PhoneOrderRecordDto>>(records);
 
@@ -686,17 +694,50 @@ public partial class PhoneOrderService
         return new GetPhoneCallRecordDetailResponse { Data = fileUrl };
     }
 
-    private (DateTimeOffset Start, DateTimeOffset End) GetQueryTimeRange(int month)
+    public async Task<GetPhoneOrderRecordReportResponse> GetPhoneOrderRecordReportByCallSidAsync(GetPhoneOrderRecordReportRequest request, CancellationToken cancellationToken)
     {
-        var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
-        
-        var startLocal = new DateTime(2025, month, 1, 0, 0, 0);
-        var endLocal = new DateTime(2025, month, 31, 23, 59, 59);
-        
-        var startInPst = new DateTimeOffset(startLocal, pacificZone.GetUtcOffset(startLocal));
-        var endInPst = new DateTimeOffset(endLocal, pacificZone.GetUtcOffset(endLocal));
-        
-        return (startInPst.ToUniversalTime(), endInPst.ToUniversalTime());
+        var report = await _phoneOrderDataProvider.GetPhoneOrderRecordReportAsync(request.CallSid, request.Language, cancellationToken).ConfigureAwait(false);
+
+        if (report == null)
+        {
+            var record = await _phoneOrderDataProvider.GetPhoneOrderRecordBySessionIdAsync(request.CallSid, cancellationToken).ConfigureAwait(false);
+
+            var newReport = new PhoneOrderRecordReportDto()
+            {
+                RecordId = record.Id,
+                Language = (TranscriptionLanguage)request.Language,
+                Report = record.TranscriptionText,
+                IsOrigin = (TranscriptionLanguage)request.Language == record.Language,
+            };
+
+            return new GetPhoneOrderRecordReportResponse()
+            {
+                Data = newReport
+            };
+        }
+
+        return new GetPhoneOrderRecordReportResponse()
+        {
+            Data = _mapper.Map<PhoneOrderRecordReportDto>(report)
+        };
+    }
+
+    private (DateTimeOffset StartUtc, DateTimeOffset EndUtc) GetQueryTimeRange(int month)
+    {
+        if (month < 1 || month > 12) throw new ArgumentOutOfRangeException(nameof(month));
+
+        var tz = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"); // PT, 含 DST
+
+        var startLocal = new DateTime(2025, month, 1, 0, 0, 0, DateTimeKind.Unspecified);
+
+        var nextMonthLocal = (month == 12)
+            ? new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Unspecified)
+            : new DateTime(2025, month + 1, 1, 0, 0, 0, DateTimeKind.Unspecified);
+
+        var startUtc = TimeZoneInfo.ConvertTimeToUtc(startLocal, tz);
+        var endUtc = TimeZoneInfo.ConvertTimeToUtc(nextMonthLocal, tz);
+
+        return (new DateTimeOffset(startUtc), new DateTimeOffset(endUtc));
     }
     
     private string ConvertUtcToPst(DateTimeOffset utcTime)

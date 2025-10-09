@@ -11,4 +11,6 @@ public static class HangfireConstants
     public const string InternalHostingSipServer = "sip-server";
     
     public const string InternalHostingFfmpeg = "ffmpeg";
+    
+    public const string InternalHostingTransfer = "transfer";
 }

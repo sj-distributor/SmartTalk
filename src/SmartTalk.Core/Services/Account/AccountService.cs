@@ -1,9 +1,13 @@
 using AutoMapper;
+using Microsoft.AspNetCore.Http;
+using SmartTalk.Core.Domain.Pos;
+using SmartTalk.Core.Domain.Restaurants;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.System;
 using SmartTalk.Messages.Dto.Account;
 using SmartTalk.Core.Domain.Security;
 using SmartTalk.Core.Services.Identity;
+using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Services.Security;
 using SmartTalk.Core.Services.Wiltechs;
 using SmartTalk.Messages.Enums.Account;
@@ -37,9 +41,12 @@ public partial class AccountService : IAccountService
     private readonly IAccountDataProvider _accountDataProvider;
     private readonly ISecurityDataProvider _securityDataProvider;
     private readonly IVerificationCodeService _verificationCodeService;
+    private readonly IPosDataProvider _posDataProvider;
+    private readonly IHttpContextAccessor _httpContextAccessor;
     
     public AccountService(
-        IMapper mapper, ICurrentUser currentUser, ITokenProvider tokenProvider, IWiltechsService wiltechsService, IAccountDataProvider accountDataProvider, ISecurityDataProvider securityDataProvider, IVerificationCodeService verificationCodeService)
+        IMapper mapper, ICurrentUser currentUser, ITokenProvider tokenProvider, IWiltechsService wiltechsService, IAccountDataProvider accountDataProvider, ISecurityDataProvider securityDataProvider, IVerificationCodeService verificationCodeService
+        ,IPosDataProvider posDataProvider, IHttpContextAccessor httpContextAccessor)
     {
         _mapper = mapper;
         _currentUser = currentUser;
@@ -48,12 +55,19 @@ public partial class AccountService : IAccountService
         _accountDataProvider = accountDataProvider;
         _securityDataProvider = securityDataProvider;
         _verificationCodeService = verificationCodeService;
+        _posDataProvider = posDataProvider;
+        _httpContextAccessor = httpContextAccessor;
     }
 
     public async Task<CreateUserAccountResponse> CreateUserAccountAsync(CreateUserAccountCommand userAccountCommand, CancellationToken cancellationToken)
     {
+        var existAccount = await _accountDataProvider.GetUserAccountByUserNameWithServiceProviderIdAsync(userAccountCommand.UserName, userAccountCommand.ServiceProviderId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (existAccount != null)
+            throw new Exception("The name is already in use and cannot be created");
+        
         var account = await _accountDataProvider.CreateUserAccountAsync(
-            userAccountCommand.UserName, userAccountCommand.OriginalPassword, null,
+            userAccountCommand.UserName, userAccountCommand.OriginalPassword, userAccountCommand.AccountLevel, serviceProviderId: userAccountCommand.ServiceProviderId, null,
             UserAccountIssuer.Self, null, _currentUser.Name, isProfile: false, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         await _securityDataProvider.CreateRoleUsersAsync([new RoleUser
@@ -61,6 +75,19 @@ public partial class AccountService : IAccountService
             RoleId = userAccountCommand.RoleId,
             UserId = account.Id
         }], cancellationToken).ConfigureAwait(false);
+
+        if (userAccountCommand.StoreIds?.Count > 0 || userAccountCommand.CompanyIds?.Count > 0)
+        {
+            var stores = await _posDataProvider.GetPosCompanyStoresAsync(ids: userAccountCommand.StoreIds, companyIds: userAccountCommand.CompanyIds, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            var storeUsers = stores.Select(store => new StoreUser
+            {
+                UserId = account.Id,
+                StoreId = store.Id
+            }).ToList();
+
+            await _posDataProvider.CreatePosStoreUserAsync(storeUsers, forceSave: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
         
         return new CreateUserAccountResponse
         {
@@ -70,16 +97,25 @@ public partial class AccountService : IAccountService
 
     public async Task<GetUserAccountsResponse> GetAccountsAsync(GetUserAccountsRequest request, CancellationToken cancellationToken)
     {
-        var (count, userAccount) = await _accountDataProvider.GetUserAccountDtoAsync(
-            request.UserName, request.PageSize, request.PageIndex, true, cancellationToken).ConfigureAwait(false);
+        var (count, userAccounts) = await _accountDataProvider.GetUserAccountDtosAsync(
+            request.UserName, request.ServiceProviderId, request.UserAccountLevel, request.PageSize, request.PageIndex, true, cancellationToken).ConfigureAwait(false);
 
-        return new GetUserAccountsResponse
+        var processedAccounts = userAccounts.Select(account =>
         {
-           Data = new GetUserAccountsDto
-           {
-               UserAccounts = userAccount,
-               Count = count
-           }
+            if (account.AccountLevel == UserAccountLevel.ServiceProvider)
+            {
+                account.Stores = null;
+            }
+            return account;
+        }).ToList();
+
+        return new GetUserAccountsResponse()
+        {
+            Data = new GetUserAccountsDto()
+            {
+                UserAccounts = processedAccounts,
+                Count = count
+            }
         };
     }
     
@@ -94,6 +130,10 @@ public partial class AccountService : IAccountService
         await _accountDataProvider.DeleteUserAccountAsync(account, true, cancellationToken).ConfigureAwait(false);
         
         await _securityDataProvider.DeleteRoleUsersAsync(roleUsers, cancellationToken).ConfigureAwait(false);
+
+        var posStoreUsers = await _posDataProvider.GetPosStoreUsersByUserIdAsync(command.UserId, cancellationToken).ConfigureAwait(false);
+
+        await _posDataProvider.DeletePosStoreUsersAsync(posStoreUsers, true, cancellationToken).ConfigureAwait(false);
         
         return new DeleteUserAccountsResponse();
     }

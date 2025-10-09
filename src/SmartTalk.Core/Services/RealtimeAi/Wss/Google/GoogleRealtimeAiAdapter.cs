@@ -23,7 +23,7 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
     }
 
-    public Dictionary<string, string> GetHeaders()
+    public Dictionary<string, string> GetHeaders(RealtimeAiServerRegion region)
     {
         return new Dictionary<string, string>();
     }
@@ -174,7 +174,7 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
     
     private async Task<List<(AiSpeechAssistantSessionConfigType Type, object Config)>> InitialSessionConfigAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken = default)
     {
-        var functions = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallByAssistantIdAsync(assistant.Id, assistant.ModelProvider, cancellationToken).ConfigureAwait(false);
+        var functions = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallByAssistantIdAsync(assistant.Id, assistant.ModelProvider, true, cancellationToken).ConfigureAwait(false);
 
         return functions.Count == 0 ? [] : functions.Where(x => !string.IsNullOrWhiteSpace(x.Content)).Select(x => (x.Type, JsonConvert.DeserializeObject<object>(x.Content))).ToList();
     }

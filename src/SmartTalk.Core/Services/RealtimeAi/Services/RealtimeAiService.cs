@@ -1,3 +1,4 @@
+using System.Buffers;
 using Serilog;
 using System.Text;
 using Newtonsoft.Json;
@@ -82,12 +83,12 @@ public class RealtimeAiService : IRealtimeAiService
         _speechAssistant = assistant ?? throw new Exception($"Could not find a assistant by id: {command.AssistantId}");
         
         await RealtimeAiConnectInternalAsync(command.WebSocket, 
-            "You are a friendly assistant", command.InputFormat, command.OutputFormat, cancellationToken).ConfigureAwait(false);
+            "You are a friendly assistant", command.InputFormat, command.OutputFormat, command.Region, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task RealtimeAiConnectInternalAsync(
         WebSocket webSocket, string initialPrompt, RealtimeAiAudioCodec inputFormat,
-        RealtimeAiAudioCodec outputFormat, CancellationToken cancellationToken)
+        RealtimeAiAudioCodec outputFormat, RealtimeAiServerRegion region,  CancellationToken cancellationToken)
     {
         _webSocket = webSocket;
         _streamSid = Guid.NewGuid().ToString("N");
@@ -97,7 +98,7 @@ public class RealtimeAiService : IRealtimeAiService
         
         BuildConversationEngine(_speechAssistant.ModelProvider);
         
-        await _conversationEngine.StartSessionAsync(_speechAssistant, initialPrompt, inputFormat, outputFormat, cancellationToken).ConfigureAwait(false);
+        await _conversationEngine.StartSessionAsync(_speechAssistant, initialPrompt, inputFormat, outputFormat, region, cancellationToken).ConfigureAwait(false);
         
         await ReceiveFromWebSocketClientAsync(
             new RealtimeAiEngineContext { AgentId = _speechAssistant.AgentId, InitialPrompt = initialPrompt, InputFormat = inputFormat, OutputFormat = outputFormat }, cancellationToken).ConfigureAwait(false);
@@ -282,31 +283,50 @@ public class RealtimeAiService : IRealtimeAiService
 
     private async Task HandleWholeAudioBufferAsync()
     {
-        if (_wholeAudioBuffer is { Length: > 0 } && !_hasHandledAudioBuffer)
+        if (_wholeAudioBuffer is { CanRead: true } src && !_hasHandledAudioBuffer)
         {
             _hasHandledAudioBuffer = true;
-            
+
             var waveFormat = new WaveFormat(24000, 16, 1);
-            using (var wavStream = new MemoryStream())
+            using var wavStream = new MemoryStream();
+
             await using (var writer = new WaveFileWriter(wavStream, waveFormat))
             {
-                writer.Write(_wholeAudioBuffer.ToArray(), 0, (int)_wholeAudioBuffer.Length);
-                writer.Flush();
-                var audio = await _attachmentService.UploadAttachmentAsync(new UploadAttachmentCommand { Attachment = new UploadAttachmentDto { FileName = Guid.NewGuid() + ".wav", FileContent = wavStream.ToArray(), } }, CancellationToken.None).ConfigureAwait(false);
-                            
-                Log.Information("audio uploaded, url: {Url}", audio?.Attachment?.FileUrl);
-                
-                if (string.IsNullOrEmpty(audio?.Attachment?.FileUrl) || _speechAssistant.AgentId == 0) return;
-        
-                var agent = await _agentDataProvider.GetAgentByIdAsync(_speechAssistant.AgentId).ConfigureAwait(false);
-                if (agent is { IsSendAudioRecordWechat: true })
-                    await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, agent.WechatRobotKey, $"您有一条新的AI通话录音：\n{audio?.Attachment?.FileUrl}", Array.Empty<string>(), CancellationToken.None).ConfigureAwait(false);
-                
+                var rented = ArrayPool<byte>.Shared.Rent(64 * 1024);
+                try
+                {
+                    int read;
+                    if (src.CanSeek) src.Position = 0;
+                    while ((read = await src.ReadAsync(rented.AsMemory(0, rented.Length))) > 0)
+                    {
+                        writer.Write(rented, 0, read);
+                    }
+                    await writer.FlushAsync();
+                }
+                finally
+                {
+                    ArrayPool<byte>.Shared.Return(rented);
+                }
+            }
+            
+            var audio = await _attachmentService.UploadAttachmentAsync(
+                new UploadAttachmentCommand
+                {
+                    Attachment = new UploadAttachmentDto
+                    {
+                        FileName = Guid.NewGuid() + ".wav",
+                        FileContent = wavStream.ToArray(),
+                    }
+                }, CancellationToken.None).ConfigureAwait(false);
+
+            Log.Information("audio uploaded, url: {Url}", audio?.Attachment?.FileUrl);
+            if (!string.IsNullOrEmpty(audio?.Attachment?.FileUrl) && _speechAssistant.AgentId != 0)
+            {
                 _backgroundJobClient.Enqueue<IRealtimeProcessJobService>(x =>
                     x.RecordingRealtimeAiAsync(audio.Attachment.FileUrl, _speechAssistant.AgentId, _sessionId, CancellationToken.None));
             }
-                            
-            await _wholeAudioBuffer.DisposeAsync();
+
+            await src.DisposeAsync();
             _wholeAudioBuffer = null;
         }
         
