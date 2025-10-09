@@ -1,7 +1,6 @@
 using System.Reflection;
 using AutoMapper;
 using SmartTalk.Core.Domain;
-using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Account;
