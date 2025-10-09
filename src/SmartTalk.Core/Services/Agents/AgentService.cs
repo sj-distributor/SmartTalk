@@ -1,11 +1,13 @@
 using System.Reflection;
 using AutoMapper;
 using SmartTalk.Core.Domain;
+using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Account;
 using SmartTalk.Core.Services.Identity;
 using SmartTalk.Core.Services.AiSpeechAssistant;
+using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Services.Restaurants;
 using SmartTalk.Messages.Commands.Agent;
 using SmartTalk.Messages.Dto.Agent;
@@ -36,15 +38,17 @@ public class AgentService : IAgentService
 {
     private readonly IMapper _mapper;
     private readonly ICurrentUser _currentUser;
+    private readonly IPosDataProvider _posDataProvider;
     private readonly IAgentDataProvider _agentDataProvider;
     private readonly IAccountDataProvider _accountDataProvider;
     private readonly IRestaurantDataProvider _restaurantDataProvider;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
     
-    public AgentService(IMapper mapper, ICurrentUser currentUser, IAgentDataProvider agentDataProvider, IRestaurantDataProvider restaurantDataProvider, IAccountDataProvider accountDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
+    public AgentService(IMapper mapper, ICurrentUser currentUser, IPosDataProvider posDataProvider, IAgentDataProvider agentDataProvider, IRestaurantDataProvider restaurantDataProvider, IAccountDataProvider accountDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
         _mapper = mapper;
         _currentUser = currentUser;
+        _posDataProvider = posDataProvider;
         _agentDataProvider = agentDataProvider;
         _accountDataProvider = accountDataProvider;
         _restaurantDataProvider = restaurantDataProvider;
@@ -111,6 +115,14 @@ public class AgentService : IAgentService
         
         await _agentDataProvider.UpdateAgentsAsync([agent], cancellationToken: cancellationToken).ConfigureAwait(false);
         
+        // var posAgent = new PosAgent
+        // {
+        //     AgentId = agent.Id,
+        //     StoreId = command.StoreId
+        // };
+        //
+        // await _posDataProvider.AddPosAgentsAsync([posAgent], cancellationToken: cancellationToken).ConfigureAwait(false);
+
         return new AddAgentResponse { Data = _mapper.Map<AgentDto>(agent) };
     }
 
