@@ -524,13 +524,15 @@ public class SpeechMaticsService : ISpeechMaticsService
     { 
         var pacificDeliveryDate = storeOrder.DeliveryDate != default ? TimeZoneInfo.ConvertTimeFromUtc(storeOrder.DeliveryDate, pacificZone) : pacificNow.AddDays(1);
 
+        var assistantNameWithComma = aiSpeechAssistant.Name?.Replace('/', ',') ?? string.Empty;
+
         return new GenerateAiOrdersRequestDto
         {
             AiModel = "Smartalk",
             AiOrderInfoDto = new AiOrderInfoDto
             {
                 SoldToId = soldToId,
-                SoldToIds = string.IsNullOrEmpty(soldToId) ? aiSpeechAssistant.Name : soldToId,
+                SoldToIds = string.IsNullOrEmpty(soldToId) ? assistantNameWithComma : soldToId,
                 DocumentDate = pacificNow.Date,
                 DeliveryDate = pacificDeliveryDate.Date,
                 AiOrderItemDtoList = storeOrder.Orders.Select(i => new AiOrderItemDto
