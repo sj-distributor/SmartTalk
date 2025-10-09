@@ -135,6 +135,7 @@ public class AgentDataProvider : IAgentDataProvider
         var query = from agent in _repository.Query<Agent>().Where(x => x.IsDisplay && x.IsSurface)
             join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
             join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agentAssistant.AssistantId equals assistant.Id
+            where agentIds != null && agentIds.Contains(agent.Id)
             select new { agent, assistant };
         
         var result = await query.ToListAsync(cancellationToken).ConfigureAwait(false);
