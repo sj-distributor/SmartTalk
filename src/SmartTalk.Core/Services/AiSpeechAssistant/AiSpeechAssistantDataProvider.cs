@@ -448,6 +448,8 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
             .ToListAsync(cancellationToken).ConfigureAwait(false);
         
         var specifyCallerNumber = routes.Where(x => x.From == callerNumber).OrderBy(x => x.Priority).ToList();
+        
+        specifyCallerNumber.
 
         return specifyCallerNumber.Count != 0 ? specifyCallerNumber : routes.Where(x => x.IsFallback).OrderBy(x => x.Priority).ToList();
     }
@@ -610,7 +612,7 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
         var query = _repository.Query<AiSpeechAssistantInboundRoute>().Where(x => x.ForwardAssistantId == assistantId);
 
         if (!string.IsNullOrEmpty(keyword))
-            query = query.Where(x => x.To.Contains(keyword));
+            query = query.Where(x => x.From.Contains(keyword));
         
         var count = await query.CountAsync(cancellationToken).ConfigureAwait(false);
         

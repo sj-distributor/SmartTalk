@@ -8,6 +8,8 @@ namespace SmartTalk.Messages.Commands.Agent;
 
 public class AddAgentCommand : HasServiceProviderId, ICommand
 {
+    public int StoreId { get; set; }
+    
     public string Name { get; set; }
     
     public string Brief { get; set; }
