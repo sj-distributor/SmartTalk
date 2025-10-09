@@ -362,7 +362,6 @@ public class SpeechMaticsService : ISpeechMaticsService
             if (string.IsNullOrEmpty(soldToId)) 
             { 
                 Log.Warning("未能获取店铺 SoldToId, StoreName={StoreName}, StoreNumber={StoreNumber}", storeOrder.StoreName, storeOrder.StoreNumber); 
-                continue; 
             }
              
             foreach (var item in storeOrder.Orders)
