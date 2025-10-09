@@ -6,7 +6,7 @@ using SmartTalk.Messages.Responses;
 
 namespace SmartTalk.Messages.Commands.Agent;
 
-public class UpdateAgentCommand : HasServiceProviderId, ICommand
+public class UpdateAgentCommand : ICommand
 {
     public int AgentId { get; set; }
     

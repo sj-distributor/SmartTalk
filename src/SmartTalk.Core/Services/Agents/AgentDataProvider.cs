@@ -1,4 +1,5 @@
 using AutoMapper;
+using DocumentFormat.OpenXml.Office2010.ExcelAc;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Data;
 using SmartTalk.Core.Domain.System;
@@ -26,7 +27,7 @@ public interface IAgentDataProvider : IScopedDependency
 
     Task<List<AgentPreviewDto>> GetAgentsByAgentTypeAsync<T>(AgentType agentType, List<int> agentIds = null, int? serviceProviderId = null, CancellationToken cancellationToken = default) where T : class, IEntity<int>, IAgent;
 
-    Task<List<Agent>> GetAgentsWithAssistantsAsync(int? agentId = null, string keyword = null, bool? isDefault = null, CancellationToken cancellationToken = default);
+    Task<List<Agent>> GetAgentsWithAssistantsAsync(List<int> agentIds = null, string keyword = null, bool? isDefault = null, CancellationToken cancellationToken = default);
     
     Task<Agent> GetAgentByAssistantIdAsync(int assistantId, CancellationToken cancellationToken = default);
 
@@ -130,16 +131,11 @@ public class AgentDataProvider : IAgentDataProvider
     }
 
     public async Task<List<Agent>> GetAgentsWithAssistantsAsync(
-        int? agentId = null, string keyword = null, bool? isDefault = null, CancellationToken cancellationToken = default)
+        List<int> agentIds = null, string keyword = null, bool? isDefault = null, CancellationToken cancellationToken = default)
     {
         var query = from agent in _repository.Query<Agent>().Where(x => x.IsDisplay && x.IsSurface)
-            join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId into agentAssistantGroups
-            from agentAssistant in agentAssistantGroups.DefaultIfEmpty()
-            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agentAssistant.AssistantId equals assistant.Id into assistantGroups
-            from assistant in assistantGroups.DefaultIfEmpty()
-            where !agentId.HasValue || agent.Id == agentId.Value
-            where !isDefault.HasValue || assistant == null || assistant.IsDefault == isDefault.Value
-            where string.IsNullOrEmpty(keyword) || agent.Name.Contains(keyword)
+            join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
+            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agentAssistant.AssistantId equals assistant.Id
             select new { agent, assistant };
         
         var result = await query.ToListAsync(cancellationToken).ConfigureAwait(false);
