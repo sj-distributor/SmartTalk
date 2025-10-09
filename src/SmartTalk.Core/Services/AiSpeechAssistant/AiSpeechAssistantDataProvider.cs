@@ -445,8 +445,6 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
             .ToListAsync(cancellationToken).ConfigureAwait(false);
 
         var specifyCallerNumber = routes.Where(x => x.From == callerNumber).OrderBy(x => x.Priority).ToList();
-        
-        specifyCallerNumber.
 
         return specifyCallerNumber.Count != 0 ? specifyCallerNumber : routes.Where(x => x.IsFallback).OrderBy(x => x.Priority).ToList();
     }
