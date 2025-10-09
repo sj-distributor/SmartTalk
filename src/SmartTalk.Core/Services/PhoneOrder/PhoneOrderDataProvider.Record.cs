@@ -69,18 +69,25 @@ public partial class PhoneOrderDataProvider
 
     public async Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(List<int> agentIds, string name, DateTimeOffset? utcStart = null, DateTimeOffset? utcEnd = null, CancellationToken cancellationToken = default)
     {
-        var query = from record in _repository.Query<PhoneOrderRecord>()
-            join agent in _repository.Query<Agent>() on record.AgentId equals agent.Id
-            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agent.Id equals assistant.AgentId
-            where record.Status == PhoneOrderRecordStatus.Sent
-                  && (agentIds == null || !agentIds.Any() || agentIds.Contains(agent.Id))
+        var agentsQuery = from agent in _repository.Query<Agent>()
+            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agent.Id equals
+                assistant.AgentId
+            where (agentIds == null || !agentIds.Any() || agentIds.Contains(agent.Id))
                   && (string.IsNullOrEmpty(name) || assistant.Name.Contains(name))
+            select agent;
+
+        var agents = (await agentsQuery.ToListAsync(cancellationToken).ConfigureAwait(false)).Select(x => x.Id).ToList();
+
+        if (agents.Count == 0) return [];
+        
+        var query = from record in _repository.Query<PhoneOrderRecord>()
+            where record.Status == PhoneOrderRecordStatus.Sent && agents.Contains(record.AgentId)
             select record;
         
         if (utcStart.HasValue && utcEnd.HasValue)
             query = query.Where(record => record.CreatedDate >= utcStart.Value && record.CreatedDate < utcEnd.Value);
 
-        return await query.Distinct().OrderByDescending(record => record.CreatedDate).ToListAsync(cancellationToken).ConfigureAwait(false);
+        return await query.OrderByDescending(record => record.CreatedDate).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task UpdatePhoneOrderRecordsAsync(PhoneOrderRecord record, bool forceSave = true, CancellationToken cancellationToken = default)
