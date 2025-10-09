@@ -248,9 +248,13 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                 if (string.IsNullOrEmpty(audio?.Attachment?.FileUrl) || agent.Id == 0) return;
                 
                 recordingUrl = audio?.Attachment?.FileUrl;
+
+                await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, agent.WechatRobotKey, $"来电电话：{record.IncomingCallNumber ?? ""}\n\n您有一条新的AI通话录音：\n{recordingUrl}", Array.Empty<string>(), cancellationToken).ConfigureAwait(false);
             }
-            
-            await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, agent.WechatRobotKey, $"您有一条新的AI通话录音：\n{recordingUrl}", Array.Empty<string>(), cancellationToken).ConfigureAwait(false);
+            else
+            {
+                await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, agent.WechatRobotKey, $"您有一条新的AI通话录音：\n{recordingUrl}", Array.Empty<string>(), cancellationToken).ConfigureAwait(false);
+            }
         }
 
         var language = string.Empty;
