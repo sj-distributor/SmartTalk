@@ -72,4 +72,13 @@ public class AgentController : ControllerBase
         
         return Ok(response);
     }
+    
+    [Route("agents/assistants"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAgentsWithAssistantsResponse))]
+    public async Task<IActionResult> GetAgentsWithAssistantsAsync([FromQuery] GetAgentsWithAssistantsRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetAgentsWithAssistantsRequest, GetAgentsWithAssistantsResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
 }

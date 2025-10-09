@@ -32,6 +32,8 @@ public interface IAgentService : IScopedDependency
     Task<DeleteAgentResponse> DeleteAgentAsync(DeleteAgentCommand command, CancellationToken cancellationToken);
     
     Task<GetAgentByIdResponse> GetAgentByIdAsync(GetAgentByIdRequest request, CancellationToken cancellationToken);
+    
+    Task<GetAgentsWithAssistantsResponse> GetAgentsWithAssistantsAsync(GetAgentsWithAssistantsRequest request, CancellationToken cancellationToken);
 }
 
 public class AgentService : IAgentService
@@ -180,6 +182,15 @@ public class AgentService : IAgentService
         if (agent == null) throw new Exception($"Agent with id {request.AgentId} not found.");
         
         return new GetAgentByIdResponse { Data = _mapper.Map<AgentDto>(agent) };
+    }
+
+    public async Task<GetAgentsWithAssistantsResponse> GetAgentsWithAssistantsAsync(GetAgentsWithAssistantsRequest request, CancellationToken cancellationToken)
+    {
+        var storeAgents = await _posDataProvider.GetPosAgentsAsync(storeIds: [request.StoreId], cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var agents = await _agentDataProvider.GetAgentsWithAssistantsAsync(agentIds: storeAgents.Select(x => x.AgentId).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        return new GetAgentsWithAssistantsResponse { Data = _mapper.Map<List<AgentDto>>(agents) };
     }
 
     private async Task<List<AgentPreviewDto>> GetAllAgentsAsync(List<AgentType> agentTypes, List<int> agentIds, int? serviceProviderId, CancellationToken cancellationToken)
