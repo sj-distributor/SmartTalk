@@ -13,6 +13,9 @@ public class Agent : IEntity, IHasCreatedFields
     [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     public int Id { get; set; }
     
+    [Column("service_provider_id")]
+    public int? ServiceProviderId { get; set; }
+    
     [Column("wechat_robot_key"), StringLength(256)]
     public string WechatRobotKey { get; set; }
     
@@ -20,13 +23,16 @@ public class Agent : IEntity, IHasCreatedFields
     public string WechatRobotMessage { get; set; }
 
     [Column("relate_id")]
-    public int RelateId { get; set; }
+    public int? RelateId { get; set; }
 
     [Column("type")]
     public AgentType Type { get; set; }
     
     [Column("source_system")]
     public AgentSourceSystem SourceSystem { get; set; }
+    
+    [Column("is_display")]
+    public bool IsDisplay { get; set; }
     
     [Column("is_wecom_message_order")]
     public bool IsWecomMessageOrder { get; set; } = false;

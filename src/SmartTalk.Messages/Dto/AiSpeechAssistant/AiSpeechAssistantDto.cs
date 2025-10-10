@@ -21,9 +21,19 @@ public class AiSpeechAssistantDto
     
     public string CustomRecordAnalyzePrompt { get; set; }
     
+    public bool ManualRecordWholeAudio { get; set; }
+    
+    public string CustomRepeatOrderPrompt { get; set; }
+    
     public string Channel { get; set; }
     
     public bool IsDisplay { get; set; }
+    
+    public int WaitInterval { get; set; }
+    
+    public bool IsTransferHuman { get; set; }
+    
+    public string TransferCallNumber { get; set; }
     
     public DateTimeOffset CreatedDate { get; set; }
     

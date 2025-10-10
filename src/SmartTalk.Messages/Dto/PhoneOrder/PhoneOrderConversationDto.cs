@@ -15,5 +15,9 @@ public class PhoneOrderConversationDto
     
     public int Order { get; set; }
     
+    public double? StartTime { get; set; }
+    
+    public double? EndTime { get; set; }
+    
     public DateTimeOffset CreatedDate { get; set; }
 }

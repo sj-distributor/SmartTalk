@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Domain.Security;
+using SmartTalk.Messages.Enums.Account;
 using SmartTalk.Messages.Enums.Security;
 
 namespace SmartTalk.Core.Services.Security;
@@ -102,7 +103,7 @@ public partial class SecurityDataProvider
     }
     
     public async Task<(int, List<Role>)> GetRolesAsync(
-        int? pageIndex = null, int? pageSize = null, string keyword = null, int? userId = null,  RoleSystemSource? systemSource = null, CancellationToken cancellationToken = default)
+        int? pageIndex = null, int? pageSize = null, string keyword = null, int? userId = null, int? serviceProviderId = null, RoleSystemSource? systemSource = null, UserAccountLevel? accountLevel = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<Role>();
 
@@ -112,6 +113,12 @@ public partial class SecurityDataProvider
         if (systemSource.HasValue)
             query = query.Where(x => x.SystemSource == systemSource.Value || x.SystemSource == RoleSystemSource.System);
 
+        if (serviceProviderId.HasValue)
+            query = query.Where(x => x.ServiceProviderId == serviceProviderId.Value);
+
+        if (accountLevel.HasValue)
+            query = query.Where(x => x.UserAccountLevel == accountLevel);
+        
         var count = await query.CountAsync(cancellationToken).ConfigureAwait(false);
         
         if (pageIndex.HasValue && pageSize.HasValue)

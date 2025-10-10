@@ -1,5 +1,8 @@
+using SmartTalk.Messages.Dto.Agent;
+using SmartTalk.Messages.Dto.Pos;
 using SmartTalk.Messages.Dto.Security;
 using SmartTalk.Messages.DTO.Security;
+using SmartTalk.Messages.Enums;
 using SmartTalk.Messages.Enums.Account;
 
 namespace SmartTalk.Messages.Dto.Account;
@@ -18,6 +21,12 @@ public class UserAccountDto
     
     public bool IsActive { get; set; }
     
+    public int? ServiceProviderId { get; set; }
+    
+    public UserAccountLevel AccountLevel { get; set; }
+    
+    public SystemLanguage SystemLanguage { get; set; }
+    
     public string ThirdPartyUserId { get; set; }
     
     public UserAccountIssuer Issuer { get; set; }
@@ -33,4 +42,6 @@ public class UserAccountDto
     public List<PermissionDto> Permissions { get; set; } = new();
     
     public UserAccountProfileDto UserAccountProfile { get; set; }
+    
+    public List<CompanyStoreDto> Stores { get; set; }
 }

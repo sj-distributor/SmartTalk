@@ -1,0 +1,1 @@
+ALTER TABLE `phone_order_record_report` ADD COLUMN `is_origin` TINYINT(1) NULL;

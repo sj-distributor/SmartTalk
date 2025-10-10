@@ -12,20 +12,20 @@ namespace SmartTalk.Core.Services.PhoneOrder;
 
 public partial interface IPhoneOrderService
 {
-    Task<GetPhoneOrderOrderItemsRessponse> GetPhoneOrderOrderItemsAsync(GetPhoneOrderOrderItemsRequest request, CancellationToken cancellationToken);
+    Task<GetPhoneOrderOrderItemsResponse> GetPhoneOrderOrderItemsAsync(GetPhoneOrderOrderItemsRequest request, CancellationToken cancellationToken);
 
     Task<PlaceOrderAndModifyItemResponse> PlaceOrderAndModifyItemsAsync(PlaceOrderAndModifyItemCommand command, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderService
 {
-    public async Task<GetPhoneOrderOrderItemsRessponse> GetPhoneOrderOrderItemsAsync(GetPhoneOrderOrderItemsRequest request, CancellationToken cancellationToken)
+    public async Task<GetPhoneOrderOrderItemsResponse> GetPhoneOrderOrderItemsAsync(GetPhoneOrderOrderItemsRequest request, CancellationToken cancellationToken)
     {
         var orderItems = await _phoneOrderDataProvider.GetPhoneOrderOrderItemsAsync(request.RecordId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var record = (await _phoneOrderDataProvider.GetPhoneOrderRecordAsync(request.RecordId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
         
-        return new GetPhoneOrderOrderItemsRessponse
+        return new GetPhoneOrderOrderItemsResponse
         {
             Data = new GetPhoneOrderOrderItemsData
             {
@@ -61,13 +61,13 @@ public partial class PhoneOrderService
         {
             Type = 1,
             IsTaxFree = false,
-            Notes = record.Comments,
+            Notes = record.Comments ?? string.Empty,
             OrderItems = orderItems.Select(x => new PhoneCallOrderItem
             {
                 ProductId = x.ProductId ?? GetMenuItemByName(menuItems, x.FoodName)?.ProductId ?? 0,
                 Quantity = x.Quantity,
-                OriginalPrice = x.Price,
-                Price = x.Price,
+                OriginalPrice = (decimal)x.Price,
+                Price = (decimal)x.Price,
                 Notes = string.IsNullOrEmpty(x.Note) ? string.Empty : x.Note,
                 OrderItemModifiers = HandleSpecialMenuItems(menuItems, x)
             }).Where(x => x.ProductId != 0).ToList(),

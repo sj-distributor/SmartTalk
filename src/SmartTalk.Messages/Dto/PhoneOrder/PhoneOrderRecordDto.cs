@@ -1,5 +1,6 @@
 using SmartTalk.Messages.Dto.Account;
 using SmartTalk.Messages.Enums.PhoneOrder;
+using SmartTalk.Messages.Enums.STT;
 
 namespace SmartTalk.Messages.Dto.PhoneOrder;
 
@@ -34,4 +35,10 @@ public class PhoneOrderRecordDto
     public string CustomerName { get; set; }
     
     public string Comments { get; set; }
+    
+    public TranscriptionLanguage Language { get; set; }
+    
+    public double? Duration { get; set; }
+    
+    public bool? IsTransfer { get; set; }
 }

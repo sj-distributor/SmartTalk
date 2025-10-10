@@ -1,5 +1,6 @@
 using System.Text;
 using AutoMapper;
+using Google.Cloud.Translation.V2;
 using Newtonsoft.Json;
 using Serilog;
 using SmartTalk.Core.Domain.PhoneOrder;
@@ -30,6 +31,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
     private readonly IMapper _mapper;
     private readonly IVectorDb _vectorDb;
     private readonly TwilioSettings _twilioSettings;
+    private readonly TranslationClient _translationClient;
     private readonly IRestaurantDataProvider _restaurantDataProvider;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
 
@@ -37,12 +39,14 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         IMapper mapper,
         IVectorDb vectorDb,
         TwilioSettings twilioSettings,
+        TranslationClient translationClient,
         IRestaurantDataProvider restaurantDataProvider,
         IPhoneOrderDataProvider phoneOrderDataProvider)
     {
         _mapper = mapper;
         _vectorDb = vectorDb;
         _twilioSettings = twilioSettings;
+        _translationClient = translationClient;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _restaurantDataProvider = restaurantDataProvider;
     }
@@ -67,7 +71,9 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             CreatedDate = callResource.StartTime ?? DateTimeOffset.Now,
             OrderStatus = PhoneOrderOrderStatus.Pending,
             CustomerName = context.UserInfo?.UserName,
-            PhoneNumber = context.UserInfo?.PhoneNumber
+            PhoneNumber = context.UserInfo?.PhoneNumber,
+            IsTransfer = context.IsTransfer,
+            IncomingCallNumber = context.LastUserInfo.PhoneNumber
         };
 
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync([record], cancellationToken: cancellationToken).ConfigureAwait(false);

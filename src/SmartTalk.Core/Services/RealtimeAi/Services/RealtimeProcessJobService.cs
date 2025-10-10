@@ -4,6 +4,7 @@ using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.PhoneOrder;
+using SmartTalk.Core.Services.Security;
 using SmartTalk.Core.Services.STT;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.STT;
@@ -12,7 +13,7 @@ namespace SmartTalk.Core.Services.RealtimeAi.Services;
 
 public interface IRealtimeProcessJobService : IScopedDependency
 {
-    Task RecordingRealtimeAiAsync(string recordingUrl, int agentId, CancellationToken cancellationToken);
+    Task RecordingRealtimeAiAsync(string recordingUrl, int agentId, string sessionId, CancellationToken cancellationToken);
 }
 
 public class RealtimeProcessJobService : IRealtimeProcessJobService
@@ -30,6 +31,7 @@ public class RealtimeProcessJobService : IRealtimeProcessJobService
         IPhoneOrderService phoneOrderService,
         ISpeechToTextService speechToTextService,
         ISmartTalkHttpClientFactory httpClientFactory,
+        ISecurityDataProvider securityDataProvider,
         IPhoneOrderDataProvider phoneOrderDataProvider)
     {
         _phoneOrderService = phoneOrderService;
@@ -40,14 +42,12 @@ public class RealtimeProcessJobService : IRealtimeProcessJobService
         _phoneOrderDataProvider = phoneOrderDataProvider;
     }
 
-    public async Task RecordingRealtimeAiAsync(string recordingUrl, int agentId, CancellationToken cancellationToken)
+    public async Task RecordingRealtimeAiAsync(string recordingUrl, int agentId, string sessionId, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrEmpty(recordingUrl) || agentId == 0) return;
-        
-        var agent = await _agentDataProvider.GetAgentByIdAsync(agentId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var agent = await _agentDataProvider.GetAgentByIdAsync(agentId, cancellationToken).ConfigureAwait(false);
         if (agent is { IsSendAudioRecordWechat: true })
-            await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, agent.WechatRobotKey, $"您有一条新的AI通话录音：\n{recordingUrl}", Array.Empty<string>(), CancellationToken.None).ConfigureAwait(false);
-
+            await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, agent.WechatRobotKey, $"您有一条新的AI通话录音：\n{recordingUrl}", [], CancellationToken.None).ConfigureAwait(false);
+        
         var recordingContent = await _httpClientFactory.GetAsync<byte[]>(recordingUrl, cancellationToken).ConfigureAwait(false);
         if (recordingContent == null) return;
         
@@ -56,7 +56,7 @@ public class RealtimeProcessJobService : IRealtimeProcessJobService
         
         var detection = await _translationClient.DetectLanguageAsync(transcription, cancellationToken).ConfigureAwait(false);
         
-        var record = new PhoneOrderRecord { SessionId = Guid.NewGuid().ToString(), AgentId = agentId, Url = recordingUrl, Language = SelectLanguageEnum(detection.Language), CreatedDate = DateTimeOffset.Now, Status = PhoneOrderRecordStatus.Recieved };
+        var record = new PhoneOrderRecord { SessionId = sessionId, AgentId = agentId, Url = recordingUrl, Language = SelectLanguageEnum(detection.Language), CreatedDate = DateTimeOffset.Now, Status = PhoneOrderRecordStatus.Recieved };
         
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync([record], cancellationToken: cancellationToken).ConfigureAwait(false);
         

@@ -61,7 +61,17 @@ public partial class SecurityDataProvider
         
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
-    
+
+    public async Task<List<RoleUser>> GetRoleUserByRoleNameAsync(string roleName, CancellationToken cancellationToken)
+    {
+        var query = from ru in _repository.Query<RoleUser>()
+            join r in _repository.Query<Role>() on ru.RoleId equals r.Id
+            where r.Name.Contains(roleName)
+            select ru;
+
+        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task CreateRoleUsersAsync(
         List<RoleUser> roleUsers, CancellationToken cancellationToken, bool forceSave = true)
     {

@@ -3,12 +3,15 @@ using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
+using SmartTalk.Messages.Requests.Pos;
 using SmartTalk.Messages.Responses;
 
 namespace SmartTalk.Messages.Commands.AiSpeechAssistant;
 
-public class AddAiSpeechAssistantCommand : ICommand
+public class AddAiSpeechAssistantCommand : HasServiceProviderId, ICommand
 {
+    public int? AgentId { get; set; }
+    
     public string AssistantName { get; set; }
     
     public string Greetings { get; set; }
@@ -26,6 +29,8 @@ public class AddAiSpeechAssistantCommand : ICommand
     public AgentType AgentType { get; set; } = AgentType.Restaurant;
 
     public AgentSourceSystem SourceSystem { get; set; } = AgentSourceSystem.Self;
+    
+    public int? StoreId { get; set; }
 }
 
 public class AddAiSpeechAssistantResponse : SmartTalkResponse<AiSpeechAssistantDto>
