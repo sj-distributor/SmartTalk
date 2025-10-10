@@ -1005,15 +1005,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         var fileContent = memoryStream.ToArray();
         var audioData = BinaryData.FromBytes(fileContent);
 
-        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
-        List<ChatMessage> messages =
-        [
-            new SystemChatMessage(_aiSpeechAssistantStreamContext.Assistant.CustomRepeatOrderPrompt),
-            new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
-            new UserChatMessage("Please repeat the order for me in the customer's language completely, quickly, and naturally:")
-        ];
-        
-        ChatCompletionOptions options = new()
         var requestBody = new OpenAiAudioCompletionRequest
         {
             Model = "gpt-4o-audio-preview",
