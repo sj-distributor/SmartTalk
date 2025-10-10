@@ -4,5 +4,7 @@ public enum AiSpeechAssistantMainLanguage
 {
     En,
     Zh,
-    Cantonese
+    Cantonese,
+    Korean,
+    Spanish
 }
