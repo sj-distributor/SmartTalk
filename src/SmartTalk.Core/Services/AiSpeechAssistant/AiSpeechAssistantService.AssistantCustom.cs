@@ -254,6 +254,8 @@ public partial class AiSpeechAssistantService
     {
         if (string.IsNullOrWhiteSpace(command.TargetNumber))
             throw new NullReferenceException("Target number is required!");
+        
+        await CheckNumberIfExistAsync(command.AgentId, command.Numbers.Select(x => x.PhoneNumber).ToList(), cancellationToken).ConfigureAwait(false);
 
         var routes = command.Numbers.Select(x => new AiSpeechAssistantInboundRoute
         {
@@ -275,7 +277,7 @@ public partial class AiSpeechAssistantService
 
     public async Task<UpdateAiSpeechAssistantInboundRouteResponse> UpdateAiSpeechAssistantInboundRouteAsync(UpdateAiSpeechAssistantInboundRouteCommand command, CancellationToken cancellationToken)
     {
-        var route = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantInboundRouteAsync(command.RouteId, cancellationToken).ConfigureAwait(false);
+        var route = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantInboundRouteByIdAsync(command.RouteId, cancellationToken).ConfigureAwait(false);
 
         if (route == null) throw new Exception($"Could not find route with id {command.RouteId}");
         
@@ -808,5 +810,16 @@ public partial class AiSpeechAssistantService
         if (agentAssistants == null) throw new Exception($"No agent assistant found with id {agentId}");
         
         return agentAssistants.Count == 0;
+    }
+
+    private async Task CheckNumberIfExistAsync(int agentId, List<string> whitelistNumbers, CancellationToken cancellationToken)
+    {
+        var routes = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantInboundRoutesByAgentIdAsync(agentId, cancellationToken).ConfigureAwait(false);
+
+        foreach (var number in whitelistNumbers)
+        {
+            if(routes.Any(x => x.From.Trim() == number.Trim()))
+                throw new Exception($"Number {number} already exist");
+        }
     }
 }
