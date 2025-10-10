@@ -30,6 +30,7 @@ public class RingCentralClient : IRingCentralClient
         var nvc = new List<KeyValuePair<string, string>>
         {
             new("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer"),
+            new("client_id", _ringCentralAuthenticationSettings.ClientId),
             new("assertion", _ringCentralAuthenticationSettings.JwtAssertion)
         };
 
