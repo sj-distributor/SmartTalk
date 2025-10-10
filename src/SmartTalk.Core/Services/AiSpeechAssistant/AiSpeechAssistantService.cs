@@ -1082,7 +1082,15 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
     private async Task RandomSendRepeatOrderHoldOnAudioAsync(WebSocket twilioWebSocket, CancellationToken cancellationToken)
     {
-        var stream = AudioHelper.GetRandomAudioStream(AiSpeechAssistantVoice.Alloy, AiSpeechAssistantMainLanguage.En);
+        var assistant = _aiSpeechAssistantStreamContext.Assistant;
+        
+        Enum.TryParse(assistant.ModelVoice, true, out AiSpeechAssistantVoice voice);
+        voice = voice == default ? AiSpeechAssistantVoice.Alloy : voice;
+
+        Enum.TryParse(assistant.ModelLanguage, true, out AiSpeechAssistantMainLanguage language);
+        language = language == default ? AiSpeechAssistantMainLanguage.En : language;
+        
+        var stream = AudioHelper.GetRandomAudioStream(voice, language);
 
         using var holOnStream = new MemoryStream();
         

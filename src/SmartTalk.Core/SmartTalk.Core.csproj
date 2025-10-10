@@ -73,4 +73,11 @@
         <EmbeddedResource Include="Assets/Audio\**\*.wav" />
     </ItemGroup>
 
+
+    <ItemGroup>
+      <Folder Include="Assets\Audio\RepeatOrderHoldon\Alloy\Korean\" />
+      <Folder Include="Assets\Audio\RepeatOrderHoldon\Alloy\Spanish\" />
+      <Folder Include="Assets\Audio\RepeatOrderHoldon\Alloy\Zh\" />
+    </ItemGroup>
+    
 </Project>
