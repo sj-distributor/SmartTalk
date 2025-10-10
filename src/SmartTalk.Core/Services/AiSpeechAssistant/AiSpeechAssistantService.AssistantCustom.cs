@@ -801,6 +801,8 @@ public partial class AiSpeechAssistantService
     {
         var routes = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantInboundRoutesByAgentIdAsync(agentId, cancellationToken).ConfigureAwait(false);
 
+        Log.Information("Get the routes: {@Routes}", routes);
+        
         foreach (var number in whitelistNumbers)
         {
             if(routes.Any(x => x.From.Trim() == number.Trim()))
