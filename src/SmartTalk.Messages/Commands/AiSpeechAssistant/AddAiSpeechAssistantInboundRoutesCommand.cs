@@ -6,6 +6,8 @@ namespace SmartTalk.Messages.Commands.AiSpeechAssistant;
 
 public class AddAiSpeechAssistantInboundRoutesCommand : ICommand
 {
+    public int AgentId { get; set; }
+    
     public int AssistantId { get; set; }
     
     public string TargetNumber { get; set; }

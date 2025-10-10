@@ -103,7 +103,7 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
     
     Task UpdateAiSpeechAssistantInboundRouteAsync(List<AiSpeechAssistantInboundRoute> routes, bool forceSave = true, CancellationToken cancellationToken = default);
     
-    Task<AiSpeechAssistantInboundRoute> GetAiSpeechAssistantInboundRouteAsync(int routeId, CancellationToken cancellationToken = default);
+    Task<AiSpeechAssistantInboundRoute> GetAiSpeechAssistantInboundRouteByIdAsync(int routeId, CancellationToken cancellationToken = default);
     
     Task<List<AiSpeechAssistantInboundRoute>> DeleteAiSpeechAssistantInboundRoutesAsync(List<int> routeIds, bool forceSave = true, CancellationToken cancellationToken = default);
     
@@ -569,7 +569,7 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
         if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<AiSpeechAssistantInboundRoute> GetAiSpeechAssistantInboundRouteAsync(int routeId, CancellationToken cancellationToken = default)
+    public async Task<AiSpeechAssistantInboundRoute> GetAiSpeechAssistantInboundRouteByIdAsync(int routeId, CancellationToken cancellationToken = default)
     {
         return await _repository.Query<AiSpeechAssistantInboundRoute>().Where(x => x.Id == routeId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
