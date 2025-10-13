@@ -7,14 +7,19 @@ using SmartTalk.Messages.Requests.HrInterView;
 using System.Net.WebSockets;
 using System.Text;
 using Newtonsoft.Json;
+using OpenAI.Chat;
 using Serilog;
 using Smarties.Messages.DTO.OpenAi;
 using Smarties.Messages.Enums.OpenAi;
 using Smarties.Messages.Requests.Ask;
 using SmartTalk.Core.Extensions;
+using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
+using SmartTalk.Core.Settings.OpenAi;
+using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Asr;
+using SmartTalk.Messages.Dto.Smarties;
 using SmartTalk.Messages.Dto.WebSocket;
 using SmartTalk.Messages.Enums.HrInterView;
 using JsonSerializer = System.Text.Json.JsonSerializer;
@@ -37,16 +42,17 @@ public class HrInterViewService : IHrInterViewService
     private readonly IMapper _mapper;
     private readonly IAsrClient _asrClient;
     private readonly ISpeechClint _speechClint;
+    private readonly OpenAiSettings _openAiSettings;
     private readonly ISmartiesClient _smartiesClient;
     private readonly IHrInterViewDataProvider _hrInterViewDataProvider;
     private readonly ISmartiesHttpClientFactory _httpClientFactory;
-
-    public HrInterViewService(IMapper mapper, IAsrClient asrClient, ISpeechClint speechClint, ISmartiesClient smartiesClient, IHrInterViewDataProvider hrInterViewDataProvider, ISmartiesHttpClientFactory httpClientFactory)
+    public HrInterViewService(IMapper mapper, IAsrClient asrClient, ISpeechClint speechClint, ISmartiesClient smartiesClient, OpenAiSettings openAiSettings, IHrInterViewDataProvider hrInterViewDataProvider, ISmartiesHttpClientFactory httpClientFactory)
     {
         _mapper = mapper;
         _asrClient = asrClient;
         _speechClint = speechClint;
         _smartiesClient = smartiesClient;
+        _openAiSettings = openAiSettings;
         _hrInterViewDataProvider = hrInterViewDataProvider;
         _httpClientFactory = httpClientFactory;
     }
@@ -202,32 +208,26 @@ public class HrInterViewService : IHrInterViewService
                 if (questions.Any())
                 {
                     var context = await GetHrInterViewSessionContextAsync(sessionId, cancellationToken).ConfigureAwait(false);
-                
-                    var matchQuestion = await FindMostSimilarQuestionUsingLLMAsync(answers.Text, questions, context, cancellationToken).ConfigureAwait(false);
-                
-                    var matchQuestionAudio = await ConvertTextToSpeechAsync(matchQuestion.Message, cancellationToken).ConfigureAwait(false);
-                
+                    
+                    var chatOutputAudio = await DetectAudioLanguageAsync(answers.Text, questions, context, fileBytes, cancellationToken).ConfigureAwait(false);
+
+                    var fileUrl = await UploadAndRetryFileAsync(chatOutputAudio.AudioBytes.ToArray(), cancellationToken:cancellationToken).ConfigureAwait(false);
+
                     await SendWebSocketMessageAsync(webSocket, new HrInterViewQuestionEventDto
                     {
                         SessionId = sessionId,
                         EventType = "MESSAGE",
-                        Message = matchQuestion.Message,
-                        MessageFileUrl = matchQuestionAudio
+                        Message = chatOutputAudio.Transcript,
+                        MessageFileUrl = fileUrl
                     }, cancellationToken).ConfigureAwait(false);
                     
                     await _hrInterViewDataProvider.AddHrInterViewSessionAsync(new HrInterViewSession
                     {
                         SessionId = sessionId,
-                        Message = matchQuestion.Message,
-                        FileUrl = matchQuestionAudio,
+                        Message = chatOutputAudio.Transcript,
+                        FileUrl = fileUrl,
                         QuestionType = HrInterViewSessionQuestionType.Assistant
                     }, cancellationToken:cancellationToken).ConfigureAwait(false);
-                
-                    var updateQuestions = await _hrInterViewDataProvider.GetHrInterViewSettingQuestionsByIdAsync(new List<int> {matchQuestion.Id}, cancellationToken).ConfigureAwait(false);
-             
-                    updateQuestions.ForEach(x => x.Count -= 1);
-                
-                    await _hrInterViewDataProvider.UpdateHrInterViewSettingQuestionsAsync(updateQuestions, cancellationToken: cancellationToken).ConfigureAwait(false);
                 }
             }
         }
@@ -235,6 +235,57 @@ public class HrInterViewService : IHrInterViewService
         {
             throw new InvalidOperationException($"Failed to handle WebSocket message for session {sessionId}", ex);
         }
+    }
+    
+    private async Task<ChatOutputAudio> DetectAudioLanguageAsync(string userQuestion, List<HrInterViewSettingQuestion> candidateQuestions, string context, byte[] audioContent, CancellationToken cancellationToken)
+    {
+        var questionListBuilder = new StringBuilder();
+        var grouped = candidateQuestions
+            .GroupBy(q => q.Id)
+            .OrderBy(g => g.Key);
+
+        var globalIndex = 1;
+        foreach (var group in grouped)
+        {
+            questionListBuilder.AppendLine();
+            questionListBuilder.AppendLine($"类型 ID：{group.Key}");
+            group.ForEach(x => questionListBuilder.AppendLine($"“{x.Type}”这类的问题有: {x.Question}"));
+        }
+        
+        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
+        var audioData = BinaryData.FromBytes(audioContent);
+        List<ChatMessage> messages =
+        [
+            new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
+            new UserChatMessage($"""
+                                You are a professional interviewer, currently conducting a conversation with an interviewee. Based on the interviewee's responses, please perform the following tasks:
+                                1. Provide a brief, professional evaluation of the interviewee's response, including affirmation and highlighting key points (additional points for improvement should be brief and should not be repeated). Ensure your overall response is natural, coherent, and comprehensive.
+                                2. In a natural transition, select an appropriate question from the "Question List" below.
+                                3. **Regardless of the user's language, your final output message must be in English.**
+                                4. Ask only one question at a time.
+                                The question list is as follows: {questionListBuilder.ToString()}
+                                5. Response Style Requirements:
+                                * Use natural, colloquial language, not overly official. Maintain professionalism but avoid being mechanical.
+                                * Avoid repeating what the interviewee has just said.
+                                * Use natural transitions, including but not limited to using phrases like "I see. I'd also like to know..." and "That sounds great. My next question is..." Ensure the overall tone is consistent and the transitions are natural. Always use English. * Do not re-ask or re-describe questions that have already been asked.
+                                * **Regardless of the user's language, your final output message must be in English.**
+                                Before you output, take a deep breath and consider whether your response meets my formatting requirements.
+                                The following context helps you filter questions that have already been asked: {context}
+                                The current user's response is: {userQuestion}
+                                """)
+        ];
+
+        ChatCompletionOptions options = new()
+        {
+            ResponseModalities = ChatResponseModalities.Text | ChatResponseModalities.Audio,
+            AudioOptions = new ChatAudioOptions(new ChatOutputAudioVoice("cedar"), ChatOutputAudioFormat.Wav)
+        };
+
+        ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
+        
+        Log.Information("Detect the audio language: " + completion);
+
+        return completion.OutputAudio;
     }
 
     private async Task ConvertAndSendWebSocketMessageAsync(WebSocket webSocket, Guid sessionId, string eventType, string message, string endMessage = null, CancellationToken cancellationToken = default)
@@ -293,100 +344,6 @@ public class HrInterViewService : IHrInterViewService
         }
     }
     
-    public async Task<MatchedQuestionResultDto> FindMostSimilarQuestionUsingLLMAsync(string userQuestion, List<HrInterViewSettingQuestion> candidateQuestions, string context, CancellationToken cancellationToken)
-    {
-        var promptPrefix = """
-                           你是一位专业的面试官，正在与面试者进行对话。请根据面试者的回答执行以下任务：
-                           1. 对面试者的回答做出简短、专业的评价，可以肯定、指出亮点(补充改进的点要精短且不针对该问题做出二次提问),注意回复的整体语句要自然通顺且信息完整；
-                           2. 在自然的对话过渡中，从下方“问题列表”中选择一个合适的问题继续提问；
-                           3. **无论用户的语言是什么，你的最终输出 message 必须用英文表述。**
-                           4. 每次只提一个问题；
-                           5. 请以如下JOSN格式输出：
-                           * id: 问题类型的唯一 ID；
-                           * message: 面试官的完整回复内容（包含对上一问题的评价 + 自然过渡 + 当前问题）。
-                           {"id": "问题类型的唯一 ID(int类型)","message": "面试官的完整回复内容（已作为字符串处理）"}
-                           问题列表如下：
-                           """;
-        
-        var questionListBuilder = new StringBuilder();
-        var grouped = candidateQuestions
-            .GroupBy(q => q.Id)
-            .OrderBy(g => g.Key);
-
-        var globalIndex = 1;
-        foreach (var group in grouped)
-        {
-            questionListBuilder.AppendLine();
-            questionListBuilder.AppendLine($"类型 ID：{group.Key}");
-            group.ForEach(x => questionListBuilder.AppendLine($"“{x.Type}”这类的问题有: {x.Question}"));
-        }
-
-        var styleRequirements = $"""
-                                 回复风格要求：
-                                 * 用语自然、口语化、不过度官方，保持专业，但避免过于机械；
-                                 * 不要重复面试者刚才说过的内容；
-                                 * 过渡要自然，例如包括但不限于使用 “了解了，那我也想了解一下…”、“听起来很不错，那接下来我想问的是…” 等句式，只有语气听起来整体通常，转折自然, 要使用英文回复。
-                                 * 对于提问过的问题不进行二次提问和描述
-                                 * **无论用户的语言是什么，你的最终输出 message 必须用英文表述。**
-                                 在你输出之前，深呼吸一下，想一想你的JSON是否符合我的格式要求
-                                 以下是上下文帮助你过滤已经问过的问题：{context}
-                                 """;
-        
-        var fullPrompt = promptPrefix + questionListBuilder + "\n" + styleRequirements;
-
-        var request = new AskGptRequest
-        {
-            Model = OpenAiModel.Gpt4o,
-            Messages = new List<CompletionsRequestMessageDto>
-            {
-                new CompletionsRequestMessageDto
-                {
-                    Role = "system",
-                    Content = new CompletionsStringContent(fullPrompt)
-                },
-                new CompletionsRequestMessageDto
-                {
-                    Role = "user",
-                    Content = new CompletionsStringContent(userQuestion)
-                }
-            },
-            Temperature = 0.1,
-            ResponseFormat = new CompletionResponseFormatDto
-            {
-                Type = "json_object" 
-            }
-        };
-        
-        Log.Information("FindMostSimilarQuestionUsingLLMAsync PerformQueryAsync request: {@request}", request);
-        
-        return await PerformQueryAsync(request, 0, cancellationToken).ConfigureAwait(false);
-    }
-
-    private async Task<MatchedQuestionResultDto> PerformQueryAsync(AskGptRequest request, int attempt, CancellationToken cancellationToken)
-    {
-        var response = new MatchedQuestionResultDto();
-        try
-        { 
-            var  result = await _smartiesClient.PerformQueryAsync(request, cancellationToken).ConfigureAwait(false);
-
-            Log.Information("LLM PerformQueryAsync result: {@result}", result);
-            
-            response = JsonConvert.DeserializeObject<MatchedQuestionResultDto>(result.Data.Response);
-        }
-        catch (Exception e)
-        {
-            attempt++;
-
-            if (attempt > 5) throw new Exception($"Failed to query LLM, Message: {e.Message}", e);
-            
-            await Task.Delay(500, cancellationToken).ConfigureAwait(false);
-            
-            response = await PerformQueryAsync(request, attempt, cancellationToken).ConfigureAwait(false);
-        }
-        
-        return response;
-    }
-    
     private async Task<string> GetHrInterViewSessionContextAsync(Guid sessionId, CancellationToken cancellationToken)
     {
         var (sessions, _) = await _hrInterViewDataProvider.GetHrInterViewSessionsAsync(sessionId: sessionId, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -415,5 +372,23 @@ public class HrInterViewService : IHrInterViewService
         
         await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
         return await GetAudioTextAsync().ConfigureAwait(false);
+    }
+    
+    private async Task<string> UploadAndRetryFileAsync(byte[] fileBytes, int attempt = 0, CancellationToken cancellationToken = default)
+    {
+        var response = await _smartiesClient.UploadFileAsync(fileBytes, cancellationToken).ConfigureAwait(false);
+
+        if (response.Data is null || string.IsNullOrEmpty(response.Data.FileUrl))
+        {
+            attempt++;
+
+            if (attempt > 3) throw new Exception($"Failed to upload file after {attempt} attempts");
+            
+            await Task.Delay(500, cancellationToken).ConfigureAwait(false);
+            
+            return await UploadAndRetryFileAsync(fileBytes, attempt, cancellationToken).ConfigureAwait(false);
+        }
+        
+        return response.Data.FileUrl;
     }
 }
