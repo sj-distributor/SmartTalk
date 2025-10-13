@@ -3,6 +3,8 @@ using SmartTalk.Core.Ioc;
 using System.Net.Http.Headers;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Messages.Dto.OpenAi;
+using SmartTalk.Messages.Requests.AiSpeechAssistant;
+using SmartTalk.Messages.Responses;
 
 namespace SmartTalk.Core.Services.Http.Clients;
 
@@ -11,6 +13,8 @@ public interface IOpenaiClient : IScopedDependency
     Task<string> InitialRealtimeSessionsAsync(OpenAiRealtimeSessionDto request, CancellationToken cancellationToken);
     
     Task<string> RealtimeChatAsync(string sdp,  string ephemeralToken, CancellationToken cancellationToken);
+    
+    Task<OpenAiCompletionResponse> CreateChatCompletionAsync(OpenAiAudioCompletionRequest requestBody, CancellationToken cancellationToken);
 }
 
 public class OpenaiClient : IOpenaiClient
@@ -59,5 +63,10 @@ public class OpenaiClient : IOpenaiClient
         
         return await _smartTalkHttpClientFactory.PostAsync<string>(
             requestUrl, requestContent, headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<OpenAiCompletionResponse> CreateChatCompletionAsync(OpenAiAudioCompletionRequest requestBody, CancellationToken cancellationToken)
+    {
+        return await _smartTalkHttpClientFactory.PostAsJsonAsync<OpenAiCompletionResponse>("https://api.openai.com/v1/chat/completions", requestBody, cancellationToken, shouldLogError: true).ConfigureAwait(false);
     }
 }
