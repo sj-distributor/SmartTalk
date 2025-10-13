@@ -135,7 +135,7 @@ public class HrInterViewDataProvider : IHrInterViewDataProvider
 
         var groupedQuery = query
             .GroupBy(x => x.SessionId)
-            .Select(g => new HrInterViewSessionGroupDto
+            .Select(g => new 
             {
                 SessionId = g.Key,
                 Sessions = g.OrderBy(x => x.CreatedDate).Select(x => new HrInterViewSessionDto
@@ -146,17 +146,29 @@ public class HrInterViewDataProvider : IHrInterViewDataProvider
                         FileUrl = x.FileUrl,
                         QuestionType = x.QuestionType,
                         CreatedDate = x.CreatedDate
-                    }).ToList()
+                    }).ToList(),
+                FirstCreatedDate = g.Min(x => x.CreatedDate)
             });
         
         if (sessionId.HasValue)
             groupedQuery = groupedQuery.Where(x => x.SessionId == sessionId);
         
+        groupedQuery = groupedQuery.OrderByDescending(x => x.FirstCreatedDate);
+        
         var totalCount = await groupedQuery.CountAsync(cancellationToken).ConfigureAwait(false);
 
         if (pageIndex.HasValue && pageSize.HasValue)
             groupedQuery = groupedQuery.Skip((pageIndex.Value - 1) * pageSize.Value).Take(pageSize.Value);
-        
-        return (await groupedQuery.ToListAsync(cancellationToken).ConfigureAwait(false), totalCount);
+
+        var result = await groupedQuery
+            .Select(g => new HrInterViewSessionGroupDto
+            {
+                SessionId = g.SessionId,
+                Sessions = g.Sessions
+            })
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+            
+        return (result, totalCount);
     }
 }
