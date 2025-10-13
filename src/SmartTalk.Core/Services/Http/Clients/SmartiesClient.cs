@@ -93,7 +93,7 @@ public class SmartiesClient : ISmartiesClient
 
         form.Add(fileContent, "file", fileName);
         
-        var response = await _httpClientFactory.PostAsync<UploadAttachmentResponse>(_smartiesSettings.BaseUrl + "api/Attachment/upload", form, cancellationToken, headers: _headers).ConfigureAwait(false);
+        var response = await _httpClientFactory.PostAsync<UploadAttachmentResponse>(_smartiesSettings.BaseUrl + "/api/Attachment/upload", form, cancellationToken, headers: _headers).ConfigureAwait(false);
         
         Log.Information("UploadFileAsync response: {@Response}", response);
         

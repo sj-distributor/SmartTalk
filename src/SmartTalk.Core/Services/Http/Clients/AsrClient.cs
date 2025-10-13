@@ -42,7 +42,7 @@ public class AsrClient : IAsrClient
         };
         
         var response = await _httpClientFactory.PostAsMultipartAsync<AsrTranscriptionResponseDto>(
-            $"{_asrSettings.BaseUrl}/v1/audio/transcriptions", formData, fileData, headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
+            $"{_asrSettings.BaseUrl}/v1/audio/transcriptions", formData, fileData, headers: headers, timeout: TimeSpan.FromMinutes(10), cancellationToken: cancellationToken).ConfigureAwait(false);
 
         Log.Information("Audio Transcription Response: {@Response}", response);
         
