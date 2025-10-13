@@ -169,12 +169,6 @@ public class HrInterViewService : IHrInterViewService
                 await ConvertAndSendWebSocketMessageAsync(webSocket, sessionId, "MESSAGE", firstQuestion, cancellationToken: cancellationToken).ConfigureAwait(false);
                 
                 Log.Information("SendWelcomeAndFirstQuestionAsync questions:{@questions}", questions);
-                
-                if (questions.FirstOrDefault() is not null) questions.FirstOrDefault()!.Count -= 1;
-                
-                Log.Information("SendWelcomeAndFirstQuestionAsync questions after:{@questions}", questions);
-                
-                await _hrInterViewDataProvider.UpdateHrInterViewSettingQuestionsAsync(questions, cancellationToken:cancellationToken).ConfigureAwait(false);
             }
         }
         catch (Exception ex)
@@ -262,12 +256,13 @@ public class HrInterViewService : IHrInterViewService
                                 1. Provide a brief, professional evaluation of the interviewee's response, including affirmation and highlighting key points (additional points for improvement should be brief and should not be repeated). Ensure your overall response is natural, coherent, and comprehensive.
                                 2. In a natural transition, select an appropriate question from the "Question List" below.
                                 3. **Regardless of the user's language, your final output message must be in English.**
-                                4. Ask only one question at a time.
-                                The question list is as follows: {questionListBuilder.ToString()}
+                                4. Ask only one question at a time (and do not repeat questions that have already been asked).
+                                * The question list is as follows: {questionListBuilder}
                                 5. Response Style Requirements:
                                 * Use natural, colloquial language, not overly official. Maintain professionalism but avoid being mechanical.
                                 * Avoid repeating what the interviewee has just said.
                                 * Use natural transitions, including but not limited to using phrases like "I see. I'd also like to know..." and "That sounds great. My next question is..." Ensure the overall tone is consistent and the transitions are natural. Always use English. * Do not re-ask or re-describe questions that have already been asked.
+                                * Once all questions have been asked, you can generate an appropriate closing statement.
                                 * **Regardless of the user's language, your final output message must be in English.**
                                 Before you output, take a deep breath and consider whether your response meets my formatting requirements.
                                 The following context helps you filter questions that have already been asked: {context}
