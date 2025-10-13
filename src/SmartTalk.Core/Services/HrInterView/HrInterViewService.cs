@@ -193,8 +193,6 @@ public class HrInterViewService : IHrInterViewService
 
                 var questions = await _hrInterViewDataProvider.GetHrInterViewSettingQuestionsBySessionIdAsync(sessionId, cancellationToken).ConfigureAwait(false);
                 
-                if (questions.Any(x => x.Count <= 0)) return;
-                
                 var fileBytes = await _httpClientFactory.GetAsync<byte[]>(message.Message, cancellationToken).ConfigureAwait(false);
                 
                 var answers = await _asrClient.TranscriptionAsync(new AsrTranscriptionDto { File = fileBytes }, cancellationToken).ConfigureAwait(false);
@@ -207,36 +205,35 @@ public class HrInterViewService : IHrInterViewService
                     QuestionType = HrInterViewSessionQuestionType.User
                 }, cancellationToken:cancellationToken).ConfigureAwait(false);
                 
-                if (questions.Any())
+                if (questions.Any(x => x.Count <= 0)) return;
+                
+                var context = await GetHrInterViewSessionContextAsync(sessionId, cancellationToken).ConfigureAwait(false);
+                    
+                var chatOutputAudio = await DetectAudioLanguageAsync(answers.Text, questions, context, fileBytes, cancellationToken).ConfigureAwait(false);
+
+                var fileUrl = await UploadAndRetryFileAsync(chatOutputAudio.AudioBytes.ToArray(), cancellationToken:cancellationToken).ConfigureAwait(false);
+
+                await SendWebSocketMessageAsync(webSocket, new HrInterViewQuestionEventDto
                 {
-                    var context = await GetHrInterViewSessionContextAsync(sessionId, cancellationToken).ConfigureAwait(false);
+                    SessionId = sessionId,
+                    EventType = "MESSAGE",
+                    Message = chatOutputAudio.Transcript,
+                    MessageFileUrl = fileUrl
+                }, cancellationToken).ConfigureAwait(false);
                     
-                    var chatOutputAudio = await DetectAudioLanguageAsync(answers.Text, questions, context, fileBytes, cancellationToken).ConfigureAwait(false);
-
-                    var fileUrl = await UploadAndRetryFileAsync(chatOutputAudio.AudioBytes.ToArray(), cancellationToken:cancellationToken).ConfigureAwait(false);
-
-                    await SendWebSocketMessageAsync(webSocket, new HrInterViewQuestionEventDto
-                    {
-                        SessionId = sessionId,
-                        EventType = "MESSAGE",
-                        Message = chatOutputAudio.Transcript,
-                        MessageFileUrl = fileUrl
-                    }, cancellationToken).ConfigureAwait(false);
+                await _hrInterViewDataProvider.AddHrInterViewSessionAsync(new HrInterViewSession
+                {
+                    SessionId = sessionId,
+                    Message = chatOutputAudio.Transcript,
+                    FileUrl = fileUrl,
+                    QuestionType = HrInterViewSessionQuestionType.Assistant
+                }, cancellationToken:cancellationToken).ConfigureAwait(false);
                     
-                    await _hrInterViewDataProvider.AddHrInterViewSessionAsync(new HrInterViewSession
-                    {
-                        SessionId = sessionId,
-                        Message = chatOutputAudio.Transcript,
-                        FileUrl = fileUrl,
-                        QuestionType = HrInterViewSessionQuestionType.Assistant
-                    }, cancellationToken:cancellationToken).ConfigureAwait(false);
-                    
-                    var question = questions.Where(x => x.Count > 0).FirstOrDefault();
-                    if (question != null)
-                    {
-                        question.Count -= 1;
-                        await _hrInterViewDataProvider.UpdateHrInterViewSettingQuestionsAsync(questions, cancellationToken: cancellationToken).ConfigureAwait(false);
-                    }
+                var question = questions.Where(x => x.Count > 0).FirstOrDefault();
+                if (question != null)
+                {
+                    question.Count -= 1;
+                    await _hrInterViewDataProvider.UpdateHrInterViewSettingQuestionsAsync(questions, cancellationToken: cancellationToken).ConfigureAwait(false);
                 }
             }
         }
