@@ -25,4 +25,6 @@ public class SalesOrderHistoryDto
     public decimal Price { get; set; }
   
     public DateTime? LastInvoiceDate { get; set; }
+    
+    public string LevelCode { get; set; }
 }

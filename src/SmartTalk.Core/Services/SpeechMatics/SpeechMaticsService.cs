@@ -385,7 +385,6 @@ public class SpeechMaticsService : ISpeechMaticsService
             if (string.IsNullOrEmpty(soldToId)) 
             { 
                 Log.Warning("未能获取店铺 SoldToId, StoreName={StoreName}, StoreNumber={StoreNumber}", storeOrder.StoreName, storeOrder.StoreNumber); 
-                continue; 
             }
              
             foreach (var item in storeOrder.Orders)
@@ -393,7 +392,7 @@ public class SpeechMaticsService : ISpeechMaticsService
                 item.MaterialNumber = MatchMaterialNumber(item.Name, item.MaterialNumber, item.Unit, historyItems); 
             }
              
-            var draftOrder = CreateDraftOrder(storeOrder, soldToId, pacificZone, pacificNow);
+            var draftOrder = CreateDraftOrder(storeOrder, soldToId, aiSpeechAssistant, pacificZone, pacificNow);
             Log.Information("DraftOrder for Store {StoreName}/{StoreNumber}: {@DraftOrder}", storeOrder.StoreName, storeOrder.StoreNumber, draftOrder);
             
             var response = await _salesClient.GenerateAiOrdersAsync(draftOrder, cancellationToken).ConfigureAwait(false); 
@@ -544,9 +543,11 @@ public class SpeechMaticsService : ISpeechMaticsService
         return aiSpeechAssistant.Name; 
     }
     
-    private GenerateAiOrdersRequestDto CreateDraftOrder(ExtractedOrderDto storeOrder, string soldToId, TimeZoneInfo pacificZone, DateTime pacificNow) 
+    private GenerateAiOrdersRequestDto CreateDraftOrder(ExtractedOrderDto storeOrder, string soldToId, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, TimeZoneInfo pacificZone, DateTime pacificNow) 
     { 
         var pacificDeliveryDate = storeOrder.DeliveryDate != default ? TimeZoneInfo.ConvertTimeFromUtc(storeOrder.DeliveryDate, pacificZone) : pacificNow.AddDays(1);
+
+        var assistantNameWithComma = aiSpeechAssistant.Name?.Replace('/', ',') ?? string.Empty;
 
         return new GenerateAiOrdersRequestDto
         {
@@ -554,7 +555,7 @@ public class SpeechMaticsService : ISpeechMaticsService
             AiOrderInfoDto = new AiOrderInfoDto
             {
                 SoldToId = soldToId,
-                SoldToIds = soldToId,
+                SoldToIds = string.IsNullOrEmpty(soldToId) ? assistantNameWithComma : soldToId,
                 DocumentDate = pacificNow.Date,
                 DeliveryDate = pacificDeliveryDate.Date,
                 AiOrderItemDtoList = storeOrder.Orders.Select(i => new AiOrderItemDto
