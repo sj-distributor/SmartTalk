@@ -169,6 +169,12 @@ public class HrInterViewService : IHrInterViewService
                 await ConvertAndSendWebSocketMessageAsync(webSocket, sessionId, "MESSAGE", firstQuestion, cancellationToken: cancellationToken).ConfigureAwait(false);
                 
                 Log.Information("SendWelcomeAndFirstQuestionAsync questions:{@questions}", questions);
+                
+                if (questions.FirstOrDefault() is not null) questions.FirstOrDefault()!.Count -= 1;
+                
+                Log.Information("SendWelcomeAndFirstQuestionAsync questions after:{@questions}", questions);
+                
+                await _hrInterViewDataProvider.UpdateHrInterViewSettingQuestionsAsync(questions, cancellationToken:cancellationToken).ConfigureAwait(false);
             }
         }
         catch (Exception ex)
@@ -185,7 +191,9 @@ public class HrInterViewService : IHrInterViewService
             {
                 Log.Information("HandleWebSocketMessageAsync sessionId:{@sessionId}, message:{@message}", sessionId, message);
 
-                var questions = (await _hrInterViewDataProvider.GetHrInterViewSettingQuestionsBySessionIdAsync(sessionId, cancellationToken).ConfigureAwait(false)).Where(x => x.Count > 0).ToList();
+                var questions = await _hrInterViewDataProvider.GetHrInterViewSettingQuestionsBySessionIdAsync(sessionId, cancellationToken).ConfigureAwait(false);
+                
+                if (questions.Any(x => x.Count <= 0)) return;
                 
                 var fileBytes = await _httpClientFactory.GetAsync<byte[]>(message.Message, cancellationToken).ConfigureAwait(false);
                 
@@ -222,6 +230,13 @@ public class HrInterViewService : IHrInterViewService
                         FileUrl = fileUrl,
                         QuestionType = HrInterViewSessionQuestionType.Assistant
                     }, cancellationToken:cancellationToken).ConfigureAwait(false);
+                    
+                    var question = questions.Where(x => x.Count > 0).FirstOrDefault();
+                    if (question != null)
+                    {
+                        question.Count -= 1;
+                        await _hrInterViewDataProvider.UpdateHrInterViewSettingQuestionsAsync(questions, cancellationToken: cancellationToken).ConfigureAwait(false);
+                    }
                 }
             }
         }
