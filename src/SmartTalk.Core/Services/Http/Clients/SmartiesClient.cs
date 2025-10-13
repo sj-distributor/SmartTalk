@@ -16,6 +16,8 @@ public interface ISmartiesClient : IScopedDependency
     Task CallBackSmartiesAiSpeechAssistantRecordAsync(AiSpeechAssistantCallBackRequestDto request, CancellationToken cancellationToken);
     
     Task CallBackSmartiesAiKidRecordAsync(AiKidCallBackRequestDto request, CancellationToken cancellationToken);
+    
+    Task CallBackSmartiesAiKidConversationsAsync(AiKidConversationCallBackRequestDto request, CancellationToken cancellationToken);
 
     Task<GetSaleAutoCallNumberResponse> GetSaleAutoCallNumberAsync(GetSaleAutoCallNumberRequest request, CancellationToken cancellationToken);
 }
@@ -61,7 +63,12 @@ public class SmartiesClient : ISmartiesClient
 
     public async Task CallBackSmartiesAiKidRecordAsync(AiKidCallBackRequestDto request, CancellationToken cancellationToken)
     {
-        await _httpClientFactory.PostAsJsonAsync($"{_smartiesSettings.BaseUrl}/api/Ome/ai/kid/record/callback", request, cancellationToken, headers: _headers).ConfigureAwait(false);
+        await _httpClientFactory.PostAsJsonAsync($"{_smartiesSettings.BaseUrl}/api/AiKid/record/callback", request, cancellationToken, headers: _headers).ConfigureAwait(false);
+    }
+
+    public async Task CallBackSmartiesAiKidConversationsAsync(AiKidConversationCallBackRequestDto request, CancellationToken cancellationToken)
+    {
+        await _httpClientFactory.PostAsJsonAsync($"{_smartiesSettings.BaseUrl}/api/AiKid/conversation/callback", request, cancellationToken, headers: _headers).ConfigureAwait(false);
     }
     
     public async Task<GetSaleAutoCallNumberResponse> GetSaleAutoCallNumberAsync(GetSaleAutoCallNumberRequest request, CancellationToken cancellationToken)
