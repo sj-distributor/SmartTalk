@@ -210,22 +210,22 @@ public class HrInterViewService : IHrInterViewService
                 
                 var context = await GetHrInterViewSessionContextAsync(sessionId, cancellationToken).ConfigureAwait(false);
                     
-                var chatOutputAudio = await GetNextQuestionAsync(answers.Text, questions, context, fileBytes, cancellationToken).ConfigureAwait(false);
+                var responseNextQuestion = await MatchingReasonableNextQuestionAsync(answers.Text, questions, context, fileBytes, cancellationToken).ConfigureAwait(false);
 
-                var fileUrl = await UploadAndRetryFileAsync(chatOutputAudio.AudioBytes.ToArray(), cancellationToken:cancellationToken).ConfigureAwait(false);
+                var fileUrl = await UploadAndRetryFileAsync(responseNextQuestion.AudioBytes.ToArray(), cancellationToken:cancellationToken).ConfigureAwait(false);
 
                 await SendWebSocketMessageAsync(webSocket, new HrInterViewQuestionEventDto
                 {
                     SessionId = sessionId,
                     EventType = "MESSAGE",
-                    Message = chatOutputAudio.Transcript,
+                    Message = responseNextQuestion.Transcript,
                     MessageFileUrl = fileUrl
                 }, cancellationToken).ConfigureAwait(false);
                     
                 await _hrInterViewDataProvider.AddHrInterViewSessionAsync(new HrInterViewSession
                 {
                     SessionId = sessionId,
-                    Message = chatOutputAudio.Transcript,
+                    Message = responseNextQuestion.Transcript,
                     FileUrl = fileUrl,
                     QuestionType = HrInterViewSessionQuestionType.Assistant
                 }, cancellationToken:cancellationToken).ConfigureAwait(false);
@@ -244,7 +244,7 @@ public class HrInterViewService : IHrInterViewService
         }
     }
     
-    private async Task<ChatOutputAudio> GetNextQuestionAsync(string userQuestion, List<HrInterViewSettingQuestion> candidateQuestions, string context, byte[] audioContent, CancellationToken cancellationToken)
+    private async Task<ChatOutputAudio> MatchingReasonableNextQuestionAsync(string userQuestion, List<HrInterViewSettingQuestion> candidateQuestions, string context, byte[] audioContent, CancellationToken cancellationToken)
     {
         var questionListBuilder = new StringBuilder();
         var grouped = candidateQuestions
@@ -291,7 +291,7 @@ public class HrInterViewService : IHrInterViewService
 
         ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
         
-        Log.Information("Detect the audio language: " + completion);
+        Log.Information("MatchingReasonableNextQuestionAsync next question response:{@completion} ", completion);
 
         return completion.OutputAudio;
     }
