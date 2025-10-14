@@ -36,7 +36,6 @@ public class HrInterViewController : ControllerBase
 
         return Ok(response);
     }
-    
         
     [Route("session"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetHrInterViewSessionsResponse))]
