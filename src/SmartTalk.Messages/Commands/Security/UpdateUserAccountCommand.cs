@@ -2,11 +2,12 @@ using Mediator.Net.Contracts;
 using SmartTalk.Messages.Responses;
 using SmartTalk.Messages.Attributes;
 using SmartTalk.Messages.Constants;
+using SmartTalk.Messages.Requests.Pos;
 
 namespace SmartTalk.Messages.Commands.Security;
 
 [SmartTalkAuthorize(Permissions = new[] { SecurityStore.Permissions.CanUpdateAccount })]
-public class UpdateUserAccountCommand : ICommand
+public class UpdateUserAccountCommand : HasServiceProviderId, ICommand
 {
     public int UserId { get; set; }
 
