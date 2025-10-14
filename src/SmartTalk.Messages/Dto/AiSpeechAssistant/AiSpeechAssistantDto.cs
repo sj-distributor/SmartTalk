@@ -20,6 +20,8 @@ public class AiSpeechAssistantDto
     
     public string ModelLanguage { get; set; }
     
+    public int AgentId { get; set; }
+    
     public string CustomRecordAnalyzePrompt { get; set; }
     
     public bool ManualRecordWholeAudio { get; set; }
@@ -47,5 +49,4 @@ public class AiSpeechAssistantDto
     public List<AiSpeechAssistantChannel> Channels => string.IsNullOrWhiteSpace(Channel)
         ? [] : Channel.Split(',').Select(x => Enum.TryParse(x, out AiSpeechAssistantChannel channel)
                 ? channel : (AiSpeechAssistantChannel?)null).Where(x => x.HasValue).Select(x => x!.Value).ToList();
-
 }

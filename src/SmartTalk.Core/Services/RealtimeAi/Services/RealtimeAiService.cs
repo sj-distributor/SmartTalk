@@ -416,7 +416,7 @@ public class RealtimeAiService : IRealtimeAiService
 
         await _webSocket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(transcription))), WebSocketMessageType.Text, true, CancellationToken.None);
     }
-    
+
     private async Task HandleWholeAudioBufferAsync()
     {
         if (_wholeAudioBuffer is { CanRead: true } src && !_hasHandledAudioBuffer)

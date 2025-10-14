@@ -280,7 +280,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         { 
             language = await DetectAudioLanguageAsync(audioFileRawBytes, cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception e) when (e.Message.Contains("quota"))
+        catch (Exception e)
         {
             const string alertMessage = "服务器异常。";
 
@@ -318,7 +318,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                                   zh-TW: Taiwanese Chinese (Traditional Chinese)
                                   en: English
                                   es: Spanish
-                                  ko: Korea
+                                  ko: Korean
                                                             
                                   Rules:
                                   1. Carefully analyze the speech content and identify the primary spoken language.
