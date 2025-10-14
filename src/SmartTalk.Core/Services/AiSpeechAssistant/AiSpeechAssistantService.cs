@@ -438,6 +438,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     {
         if (routes == null || routes.Count == 0)
             return (null, null);
+        
+        if (routes.Any(x => x.Emergency))
+            routes = routes.Where(x => x.Emergency).ToList();
 
         foreach (var rule in routes)
         {
