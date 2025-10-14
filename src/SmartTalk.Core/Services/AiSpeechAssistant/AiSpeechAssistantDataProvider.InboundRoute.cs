@@ -5,7 +5,7 @@ namespace SmartTalk.Core.Services.AiSpeechAssistant;
 
 public partial interface IAiSpeechAssistantDataProvider
 {
-    Task<List<AiSpeechAssistantInboundRoute>> GetAiSpeechAssistantInboundRouteByTargetNumberAsync(string targetNumber, CancellationToken cancellationToken = default);
+    Task<List<AiSpeechAssistantInboundRoute>> GetAiSpeechAssistantInboundRoutesAsync(string targetNumber = null, bool? emergency = false, CancellationToken cancellationToken = default);
     
     Task AddAiSpeechAssistantInboundRoutesAsync(List<AiSpeechAssistantInboundRoute> inboundRoutes, bool forceSave = true, CancellationToken cancellationToken = default);
     
@@ -14,9 +14,17 @@ public partial interface IAiSpeechAssistantDataProvider
 
 public partial class AiSpeechAssistantDataProvider
 {
-    public async Task<List<AiSpeechAssistantInboundRoute>> GetAiSpeechAssistantInboundRouteByTargetNumberAsync(string targetNumber, CancellationToken cancellationToken = default)
+    public async Task<List<AiSpeechAssistantInboundRoute>> GetAiSpeechAssistantInboundRoutesAsync(string targetNumber = null, bool? emergency = false, CancellationToken cancellationToken = default)
     {
-        return await _repository.Query<AiSpeechAssistantInboundRoute>().Where(x => x.To == targetNumber).ToListAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+        var query = _repository.Query<AiSpeechAssistantInboundRoute>();
+
+        if (!string.IsNullOrEmpty(targetNumber))
+            query = query.Where(x => x.To == targetNumber);
+
+        if (emergency.HasValue)
+            query = query.Where(x => x.Emergency == emergency.Value);
+
+        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task AddAiSpeechAssistantInboundRoutesAsync(List<AiSpeechAssistantInboundRoute> inboundRoutes, bool forceSave = true, CancellationToken cancellationToken = default)

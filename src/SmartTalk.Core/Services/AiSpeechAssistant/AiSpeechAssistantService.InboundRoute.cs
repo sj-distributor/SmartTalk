@@ -12,7 +12,7 @@ public partial class AiSpeechAssistantService
 {
     public async Task ConfigureAiSpeechAssistantInboundRouteAsync(ConfigureAiSpeechAssistantInboundRouteCommand command, CancellationToken cancellationToken)
     {
-        var inboundRoutes = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantInboundRouteByTargetNumberAsync(command.TargetNumber, cancellationToken).ConfigureAwait(false);
+        var inboundRoutes = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantInboundRoutesAsync(command.TargetNumber, true, cancellationToken).ConfigureAwait(false);
 
         if (inboundRoutes.Count == 0) return;
 
@@ -27,7 +27,8 @@ public partial class AiSpeechAssistantService
                 ForwardNumber = command.ForwardNUmber,
                 TimeZone = "Asia/Shanghai",
                 DayOfWeek = "0,1,2,3,4,5,6",
-                IsFullDay = true
+                IsFullDay = true,
+                Emergency = true
             }
         ], true, cancellationToken).ConfigureAwait(false);
     }
