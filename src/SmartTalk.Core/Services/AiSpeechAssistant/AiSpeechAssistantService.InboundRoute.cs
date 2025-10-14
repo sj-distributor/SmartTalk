@@ -14,9 +14,8 @@ public partial class AiSpeechAssistantService
     {
         var inboundRoutes = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantInboundRoutesAsync(command.TargetNumber, true, cancellationToken).ConfigureAwait(false);
 
-        if (inboundRoutes.Count == 0) return;
-
-        await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantInboundRoutesAsync(inboundRoutes, true, cancellationToken).ConfigureAwait(false);
+        if (inboundRoutes.Count != 0)
+            await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantInboundRoutesAsync(inboundRoutes, true, cancellationToken).ConfigureAwait(false);
         
         if (command.Rollback) return;
 
