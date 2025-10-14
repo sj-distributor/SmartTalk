@@ -37,7 +37,7 @@ public class SystemController : ControllerBase
     }
 
     [Route("external/inbound/redirect"), HttpPost]
-    public async Task<IActionResult> ConfigureAiSpeechAssistantInboundRouteAsync([FromBody]ConfigureAiSpeechAssistantInboundRouteCommand command)
+    public async Task<IActionResult> ConfigureAiSpeechAssistantInboundRouteAsync([FromBody] ConfigureAiSpeechAssistantInboundRouteCommand command)
     {
         await _mediator.SendAsync(command).ConfigureAwait(false);
         
