@@ -32,9 +32,7 @@ public class AsrClient : IAsrClient
             {
                 ("language", transcription.Language),
                 ("response_format", transcription.ResponseFormat)
-            }
-            .Where(x => !string.IsNullOrEmpty(x.Value))
-            .ToDictionary(x => x.Key, x => x.Value);
+            }.Where(x => !string.IsNullOrEmpty(x.Value)).ToDictionary(x => x.Key, x => x.Value);
         
         var fileData = new Dictionary<string, (byte[], string)>
         {

@@ -32,10 +32,7 @@ public class SpeechClient : ISpeechClint
 
         Log.Information("Speech, text turn to voice :{textToSpeech}", JsonConvert.SerializeObject(textToSpeech));
 
-        return await _httpClientFactory
-            .PostAsJsonAsync<SpeechResponseDto>(
-                $"{_speechSettings.SugarTalk.BaseUrl}/api/speech/tts", textToSpeech, cancellationToken, headers: header)
-            .ConfigureAwait(false);
+        return await _httpClientFactory.PostAsJsonAsync<SpeechResponseDto>($"{_speechSettings.SugarTalk.BaseUrl}/api/speech/tts", textToSpeech, cancellationToken, headers: header).ConfigureAwait(false);
     }
     
     private Dictionary<string, string> ConstructSpeechClientHeader(SpeechServiceHeader serviceType)

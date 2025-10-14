@@ -5,7 +5,9 @@ namespace SmartTalk.Core.Settings.Speech;
 public class SpeechSettings : IConfigurationSetting
 {
     public EchoAvatarSettings EchoAvatar { get; set; }
+    
     public SugarTalkSettings SugarTalk { get; set; }
+    
     public TranscriptSettings Transcript { get; set; }
 
     public SpeechSettings(IConfiguration configuration)
@@ -34,14 +36,18 @@ public class SpeechSettings : IConfigurationSetting
     public class EchoAvatarSettings
     {
         public string BaseUrl { get; set; }
+        
         public string Apikey { get; set; }
+        
         public string CallBackUrl { get; set; }
+        
         public string CantonBaseUrl { get; set; }
     }
 
     public class SugarTalkSettings
     {
         public string BaseUrl { get; set; }
+        
         public string Apikey { get; set; }
     }
 

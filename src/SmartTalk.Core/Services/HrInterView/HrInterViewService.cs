@@ -60,6 +60,7 @@ public class HrInterViewService : IHrInterViewService
     public async Task<AddOrUpdateHrInterViewSettingResponse> AddOrUpdateHrInterViewSettingAsync(AddOrUpdateHrInterViewSettingCommand command, CancellationToken cancellationToken)
     {
         var newSetting = _mapper.Map<HrInterViewSetting>(command.Setting);
+        
         if (command.Setting.Id.HasValue)
         {
             var setting = await _hrInterViewDataProvider.GetHrInterViewSettingByIdAsync(command.Setting.Id.Value, cancellationToken).ConfigureAwait(false);
@@ -105,7 +106,7 @@ public class HrInterViewService : IHrInterViewService
     {
         try
         {
-            Log.Information("Connect to hr interview WebSocket for session {SessionId} on host {Host}", command.SessionId, command.Host);
+            Log.Information("Connect to hr interview WebSocket for session {@SessionId} on host {@Host}", command.SessionId, command.Host);
            
             await SendWelcomeAndFirstQuestionAsync(command.WebSocket, command.SessionId, cancellationToken).ConfigureAwait(false);
             
@@ -129,7 +130,7 @@ public class HrInterViewService : IHrInterViewService
                 }
                 else if (result.MessageType == WebSocketMessageType.Close)
                 {
-                    Log.Information("WebSocket close message received for session {SessionId}", command.SessionId);
+                    Log.Information("WebSocket close message received for session {@SessionId}", command.SessionId);
 
                     await command.WebSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Client closed", cancellationToken).ConfigureAwait(false);
 
@@ -247,23 +248,19 @@ public class HrInterViewService : IHrInterViewService
     private async Task<ChatOutputAudio> MatchingReasonableNextQuestionAsync(string userQuestion, List<HrInterViewSettingQuestion> candidateQuestions, string context, byte[] audioContent, CancellationToken cancellationToken)
     {
         var questionListBuilder = new StringBuilder();
-        var grouped = candidateQuestions
-            .GroupBy(q => q.Id)
-            .OrderBy(g => g.Key);
-
-        var globalIndex = 1;
-        foreach (var group in grouped)
+        
+        var grouped = candidateQuestions.GroupBy(q => q.Id).OrderBy(g => g.Key);
+        
+        grouped.ForEach(x =>
         {
             questionListBuilder.AppendLine();
-            questionListBuilder.AppendLine($"类型 ID：{group.Key}");
-            group.ForEach(x => questionListBuilder.AppendLine($"“{x.Type}”这类的问题有: {x.Question}"));
-        }
+            questionListBuilder.AppendLine($"类型 ID：{x.Key}");
+            x.ForEach(y => questionListBuilder.AppendLine($"“{y.Type}”这类的问题有: {y.Question}"));
+        });
         
-        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
-        var audioData = BinaryData.FromBytes(audioContent);
         List<ChatMessage> messages =
         [
-            new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
+            new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(BinaryData.FromBytes(audioContent), ChatInputAudioFormat.Wav)),
             new UserChatMessage($"""
                                 You are a professional interviewer, currently conducting a conversation with an interviewee. Based on the interviewee's responses, please perform the following tasks:
                                 1. Provide a brief, professional evaluation of the interviewee's response, including affirmation and highlighting key points (additional points for improvement should be brief and should not be repeated). Ensure your overall response is natural, coherent, and comprehensive.
@@ -282,13 +279,15 @@ public class HrInterViewService : IHrInterViewService
                                 The current user's response is: {userQuestion}
                                 """)
         ];
-
+        
         ChatCompletionOptions options = new()
         {
             ResponseModalities = ChatResponseModalities.Text | ChatResponseModalities.Audio,
             AudioOptions = new ChatAudioOptions(new ChatOutputAudioVoice("cedar"), ChatOutputAudioFormat.Wav)
         };
 
+        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
+        
         ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
         
         Log.Information("MatchingReasonableNextQuestionAsync next question response:{@completion} ", completion);
@@ -378,7 +377,7 @@ public class HrInterViewService : IHrInterViewService
         if (result != null)
             return result;
         
-        await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
+        await Task.Delay(500, cancellationToken).ConfigureAwait(false);
         return await GetAudioTextAsync().ConfigureAwait(false);
     }
     
