@@ -1,0 +1,1 @@
+ALTER TABLE `ai_speech_assistant_inbound_route` ADD COLUMN `emergency` tinyint(1) not null default 0;
