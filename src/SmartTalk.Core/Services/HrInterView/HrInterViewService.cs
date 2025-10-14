@@ -59,21 +59,23 @@ public class HrInterViewService : IHrInterViewService
 
     public async Task<AddOrUpdateHrInterViewSettingResponse> AddOrUpdateHrInterViewSettingAsync(AddOrUpdateHrInterViewSettingCommand command, CancellationToken cancellationToken)
     {
-        var setting = _mapper.Map<HrInterViewSetting>(command.Setting);
+        var newSetting = _mapper.Map<HrInterViewSetting>(command.Setting);
         
-        var exists = await _hrInterViewDataProvider.GetHrInterViewSettingByIdAsync(command.Setting.Id, cancellationToken).ConfigureAwait(false);
-
-        if (exists == null) await _hrInterViewDataProvider.AddHrInterViewSettingAsync(setting, cancellationToken:cancellationToken).ConfigureAwait(false);
-        else await _hrInterViewDataProvider.UpdateHrInterViewSettingAsync(setting, cancellationToken:cancellationToken).ConfigureAwait(false);
-
-        var existsQuestion = await _hrInterViewDataProvider.GetHrInterViewSettingQuestionsByIdAsync(command.Questions.Select(x => x.Id).ToList(), cancellationToken).ConfigureAwait(false);
+        if (command.Setting.Id.HasValue)
+        {
+            var setting = await _hrInterViewDataProvider.GetHrInterViewSettingByIdAsync(command.Setting.Id.Value, cancellationToken).ConfigureAwait(false);
+            
+            var oldQuestions = await _hrInterViewDataProvider.GetHrInterViewSettingQuestionsBySessionIdAsync(setting.SessionId, cancellationToken).ConfigureAwait(false);
         
-        if (existsQuestion.Any()) await _hrInterViewDataProvider.DeleteHrInterViewSettingQuestionsAsync(existsQuestion, cancellationToken: cancellationToken).ConfigureAwait(false);
+            if (oldQuestions.Any()) await _hrInterViewDataProvider.DeleteHrInterViewSettingQuestionsAsync(oldQuestions, cancellationToken: cancellationToken).ConfigureAwait(false);
+            
+            await _hrInterViewDataProvider.UpdateHrInterViewSettingAsync(newSetting, cancellationToken:cancellationToken).ConfigureAwait(false);
+        }
+        else await _hrInterViewDataProvider.AddHrInterViewSettingAsync(newSetting, cancellationToken:cancellationToken).ConfigureAwait(false);
         
-        command.Questions.ForEach(x => x.SettingId = setting.Id);
+        command.Questions.ForEach(x => x.SettingId = newSetting.Id);
         
         await _hrInterViewDataProvider.AddHrInterViewSettingQuestionsAsync(_mapper.Map<List<HrInterViewSettingQuestion>>(command.Questions), cancellationToken: cancellationToken).ConfigureAwait(false);
-
         
         return new AddOrUpdateHrInterViewSettingResponse();
     }
@@ -104,7 +106,7 @@ public class HrInterViewService : IHrInterViewService
     {
         try
         {
-            Log.Information("Connect to hr interview WebSocket for session {SessionId} on host {Host}", command.SessionId, command.Host);
+            Log.Information("Connect to hr interview WebSocket for session {@SessionId} on host {@Host}", command.SessionId, command.Host);
            
             await SendWelcomeAndFirstQuestionAsync(command.WebSocket, command.SessionId, cancellationToken).ConfigureAwait(false);
             
@@ -128,7 +130,7 @@ public class HrInterViewService : IHrInterViewService
                 }
                 else if (result.MessageType == WebSocketMessageType.Close)
                 {
-                    Log.Information("WebSocket close message received for session {SessionId}", command.SessionId);
+                    Log.Information("WebSocket close message received for session {@SessionId}", command.SessionId);
 
                     await command.WebSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Client closed", cancellationToken).ConfigureAwait(false);
 
@@ -209,22 +211,22 @@ public class HrInterViewService : IHrInterViewService
                 
                 var context = await GetHrInterViewSessionContextAsync(sessionId, cancellationToken).ConfigureAwait(false);
                     
-                var chatOutputAudio = await DetectAudioLanguageAsync(answers.Text, questions, context, fileBytes, cancellationToken).ConfigureAwait(false);
+                var responseNextQuestion = await MatchingReasonableNextQuestionAsync(answers.Text, questions, context, fileBytes, cancellationToken).ConfigureAwait(false);
 
-                var fileUrl = await UploadAndRetryFileAsync(chatOutputAudio.AudioBytes.ToArray(), cancellationToken:cancellationToken).ConfigureAwait(false);
+                var fileUrl = await UploadAndRetryFileAsync(responseNextQuestion.AudioBytes.ToArray(), cancellationToken:cancellationToken).ConfigureAwait(false);
 
                 await SendWebSocketMessageAsync(webSocket, new HrInterViewQuestionEventDto
                 {
                     SessionId = sessionId,
                     EventType = "MESSAGE",
-                    Message = chatOutputAudio.Transcript,
+                    Message = responseNextQuestion.Transcript,
                     MessageFileUrl = fileUrl
                 }, cancellationToken).ConfigureAwait(false);
                     
                 await _hrInterViewDataProvider.AddHrInterViewSessionAsync(new HrInterViewSession
                 {
                     SessionId = sessionId,
-                    Message = chatOutputAudio.Transcript,
+                    Message = responseNextQuestion.Transcript,
                     FileUrl = fileUrl,
                     QuestionType = HrInterViewSessionQuestionType.Assistant
                 }, cancellationToken:cancellationToken).ConfigureAwait(false);
@@ -243,26 +245,22 @@ public class HrInterViewService : IHrInterViewService
         }
     }
     
-    private async Task<ChatOutputAudio> DetectAudioLanguageAsync(string userQuestion, List<HrInterViewSettingQuestion> candidateQuestions, string context, byte[] audioContent, CancellationToken cancellationToken)
+    private async Task<ChatOutputAudio> MatchingReasonableNextQuestionAsync(string userQuestion, List<HrInterViewSettingQuestion> candidateQuestions, string context, byte[] audioContent, CancellationToken cancellationToken)
     {
         var questionListBuilder = new StringBuilder();
-        var grouped = candidateQuestions
-            .GroupBy(q => q.Id)
-            .OrderBy(g => g.Key);
-
-        var globalIndex = 1;
-        foreach (var group in grouped)
+        
+        var grouped = candidateQuestions.GroupBy(q => q.Id).OrderBy(g => g.Key);
+        
+        grouped.ForEach(x =>
         {
             questionListBuilder.AppendLine();
-            questionListBuilder.AppendLine($"类型 ID：{group.Key}");
-            group.ForEach(x => questionListBuilder.AppendLine($"“{x.Type}”这类的问题有: {x.Question}"));
-        }
+            questionListBuilder.AppendLine($"类型 ID：{x.Key}");
+            x.ForEach(y => questionListBuilder.AppendLine($"“{y.Type}”这类的问题有: {y.Question}"));
+        });
         
-        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
-        var audioData = BinaryData.FromBytes(audioContent);
         List<ChatMessage> messages =
         [
-            new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
+            new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(BinaryData.FromBytes(audioContent), ChatInputAudioFormat.Wav)),
             new UserChatMessage($"""
                                 You are a professional interviewer, currently conducting a conversation with an interviewee. Based on the interviewee's responses, please perform the following tasks:
                                 1. Provide a brief, professional evaluation of the interviewee's response, including affirmation and highlighting key points (additional points for improvement should be brief and should not be repeated). Ensure your overall response is natural, coherent, and comprehensive.
@@ -281,16 +279,18 @@ public class HrInterViewService : IHrInterViewService
                                 The current user's response is: {userQuestion}
                                 """)
         ];
-
+        
         ChatCompletionOptions options = new()
         {
             ResponseModalities = ChatResponseModalities.Text | ChatResponseModalities.Audio,
             AudioOptions = new ChatAudioOptions(new ChatOutputAudioVoice("cedar"), ChatOutputAudioFormat.Wav)
         };
 
+        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
+        
         ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
         
-        Log.Information("Detect the audio language: " + completion);
+        Log.Information("MatchingReasonableNextQuestionAsync next question response:{@completion} ", completion);
 
         return completion.OutputAudio;
     }
@@ -377,7 +377,7 @@ public class HrInterViewService : IHrInterViewService
         if (result != null)
             return result;
         
-        await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
+        await Task.Delay(500, cancellationToken).ConfigureAwait(false);
         return await GetAudioTextAsync().ConfigureAwait(false);
     }
     

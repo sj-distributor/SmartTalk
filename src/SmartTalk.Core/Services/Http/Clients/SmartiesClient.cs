@@ -112,12 +112,12 @@ public class SmartiesClient : ISmartiesClient
         Log.Information("UploadFileAsync response: {@Response}", response);
         
         return response;
-        
     }
     
     public static string GetMimeTypeFromExtension(string fileName)
     {
         var provider = new FileExtensionContentTypeProvider();
+        
         return provider.TryGetContentType(fileName, out var contentType) ? contentType : "application/octet-stream";
     }
 }

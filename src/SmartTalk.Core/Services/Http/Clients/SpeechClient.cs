@@ -1,10 +1,10 @@
 using Newtonsoft.Json;
 using Serilog;
+using Smarties.Messages.Enums.Speech;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Ffmpeg;
 using SmartTalk.Core.Settings.Speech;
 using SmartTalk.Messages.Dto.WebSocket;
-using SmartTalk.Messages.Enums.Speech;
 
 namespace SmartTalk.Core.Services.Http.Clients;
 
@@ -32,10 +32,7 @@ public class SpeechClient : ISpeechClint
 
         Log.Information("Speech, text turn to voice :{textToSpeech}", JsonConvert.SerializeObject(textToSpeech));
 
-        return await _httpClientFactory
-            .PostAsJsonAsync<SpeechResponseDto>(
-                $"{_speechSettings.SugarTalk.BaseUrl}/api/speech/tts", textToSpeech, cancellationToken, headers: header)
-            .ConfigureAwait(false);
+        return await _httpClientFactory.PostAsJsonAsync<SpeechResponseDto>($"{_speechSettings.SugarTalk.BaseUrl}/api/speech/tts", textToSpeech, cancellationToken, headers: header).ConfigureAwait(false);
     }
     
     private Dictionary<string, string> ConstructSpeechClientHeader(SpeechServiceHeader serviceType)
@@ -44,7 +41,6 @@ public class SpeechClient : ISpeechClint
         {
             SpeechServiceHeader.EchoAvatar => _speechSettings.EchoAvatar.Apikey,
             SpeechServiceHeader.SugarTalk => _speechSettings.SugarTalk.Apikey,
-            SpeechServiceHeader.Transcript => _speechSettings.Transcript.ApiKey,
             _ => throw new ArgumentException("Invalid service type")
         };
 
