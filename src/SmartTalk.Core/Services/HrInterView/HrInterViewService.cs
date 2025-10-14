@@ -14,11 +14,13 @@ using Smarties.Messages.Enums.OpenAi;
 using Smarties.Messages.Requests.Ask;
 using SmartTalk.Core.Extensions;
 using SmartTalk.Core.Services.AiSpeechAssistant;
+using SmartTalk.Core.Services.Attachments;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Asr;
+using SmartTalk.Messages.Dto.Attachments;
 using SmartTalk.Messages.Dto.Smarties;
 using SmartTalk.Messages.Dto.WebSocket;
 using SmartTalk.Messages.Enums.HrInterView;
@@ -44,14 +46,16 @@ public class HrInterViewService : IHrInterViewService
     private readonly ISpeechClint _speechClint;
     private readonly OpenAiSettings _openAiSettings;
     private readonly ISmartiesClient _smartiesClient;
+    private readonly IAttachmentUtilService _attachmentUtilService;
     private readonly IHrInterViewDataProvider _hrInterViewDataProvider;
     private readonly ISmartiesHttpClientFactory _httpClientFactory;
-    public HrInterViewService(IMapper mapper, IAsrClient asrClient, ISpeechClint speechClint, ISmartiesClient smartiesClient, OpenAiSettings openAiSettings, IHrInterViewDataProvider hrInterViewDataProvider, ISmartiesHttpClientFactory httpClientFactory)
+    public HrInterViewService(IMapper mapper, IAsrClient asrClient, ISpeechClint speechClint, ISmartiesClient smartiesClient, IAttachmentUtilService attachmentUtilService, OpenAiSettings openAiSettings, IHrInterViewDataProvider hrInterViewDataProvider, ISmartiesHttpClientFactory httpClientFactory)
     {
         _mapper = mapper;
         _asrClient = asrClient;
         _speechClint = speechClint;
         _smartiesClient = smartiesClient;
+        _attachmentUtilService = attachmentUtilService;
         _openAiSettings = openAiSettings;
         _hrInterViewDataProvider = hrInterViewDataProvider;
         _httpClientFactory = httpClientFactory;
@@ -213,7 +217,7 @@ public class HrInterViewService : IHrInterViewService
                     
                 var responseNextQuestion = await MatchingReasonableNextQuestionAsync(answers.Text, questions, context, fileBytes, cancellationToken).ConfigureAwait(false);
 
-                var fileUrl = await UploadAndRetryFileAsync(responseNextQuestion.AudioBytes.ToArray(), cancellationToken:cancellationToken).ConfigureAwait(false);
+                var fileUrl = await UploadFileAsync(responseNextQuestion.AudioBytes.ToArray(), sessionId, cancellationToken:cancellationToken).ConfigureAwait(false);
 
                 await SendWebSocketMessageAsync(webSocket, new HrInterViewQuestionEventDto
                 {
@@ -381,21 +385,12 @@ public class HrInterViewService : IHrInterViewService
         return await GetAudioTextAsync().ConfigureAwait(false);
     }
     
-    private async Task<string> UploadAndRetryFileAsync(byte[] fileBytes, int attempt = 0, CancellationToken cancellationToken = default)
+    private async Task<string> UploadFileAsync(byte[] fileBytes, Guid sessionId, CancellationToken cancellationToken = default)
     {
-        var response = await _smartiesClient.UploadFileAsync(fileBytes, cancellationToken).ConfigureAwait(false);
+        var response = await _attachmentUtilService.UploadFilesAsync(new List<UploadAttachmentDto> { new() { FileContent = fileBytes, FileName = $"hr_interview_question_audio_{sessionId}_{Guid.NewGuid()}.png" } }, cancellationToken).ConfigureAwait(false);
 
-        if (response.Data is null || string.IsNullOrEmpty(response.Data.FileUrl))
-        {
-            attempt++;
-
-            if (attempt > 3) throw new Exception($"Failed to upload file after {attempt} attempts");
-            
-            await Task.Delay(500, cancellationToken).ConfigureAwait(false);
-            
-            return await UploadAndRetryFileAsync(fileBytes, attempt, cancellationToken).ConfigureAwait(false);
-        }
+        Log.Information("UploadAndRetryFileAsync response: {@Response}", response);
         
-        return response.Data.FileUrl;
+        return response.FirstOrDefault()?.FileUrl;
     }
 }
