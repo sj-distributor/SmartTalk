@@ -59,21 +59,22 @@ public class HrInterViewService : IHrInterViewService
 
     public async Task<AddOrUpdateHrInterViewSettingResponse> AddOrUpdateHrInterViewSettingAsync(AddOrUpdateHrInterViewSettingCommand command, CancellationToken cancellationToken)
     {
-        var setting = _mapper.Map<HrInterViewSetting>(command.Setting);
+        var newSetting = _mapper.Map<HrInterViewSetting>(command.Setting);
+        if (command.Setting.Id.HasValue)
+        {
+            var setting = await _hrInterViewDataProvider.GetHrInterViewSettingByIdAsync(command.Setting.Id.Value, cancellationToken).ConfigureAwait(false);
+            
+            var oldQuestions = await _hrInterViewDataProvider.GetHrInterViewSettingQuestionsBySessionIdAsync(setting.SessionId, cancellationToken).ConfigureAwait(false);
         
-        var exists = await _hrInterViewDataProvider.GetHrInterViewSettingByIdAsync(command.Setting.Id, cancellationToken).ConfigureAwait(false);
-
-        if (exists == null) await _hrInterViewDataProvider.AddHrInterViewSettingAsync(setting, cancellationToken:cancellationToken).ConfigureAwait(false);
-        else await _hrInterViewDataProvider.UpdateHrInterViewSettingAsync(setting, cancellationToken:cancellationToken).ConfigureAwait(false);
-
-        var existsQuestion = await _hrInterViewDataProvider.GetHrInterViewSettingQuestionsByIdAsync(command.Questions.Select(x => x.Id).ToList(), cancellationToken).ConfigureAwait(false);
+            if (oldQuestions.Any()) await _hrInterViewDataProvider.DeleteHrInterViewSettingQuestionsAsync(oldQuestions, cancellationToken: cancellationToken).ConfigureAwait(false);
+            
+            await _hrInterViewDataProvider.UpdateHrInterViewSettingAsync(newSetting, cancellationToken:cancellationToken).ConfigureAwait(false);
+        }
+        else await _hrInterViewDataProvider.AddHrInterViewSettingAsync(newSetting, cancellationToken:cancellationToken).ConfigureAwait(false);
         
-        if (existsQuestion.Any()) await _hrInterViewDataProvider.DeleteHrInterViewSettingQuestionsAsync(existsQuestion, cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        command.Questions.ForEach(x => x.SettingId = setting.Id);
+        command.Questions.ForEach(x => x.SettingId = newSetting.Id);
         
         await _hrInterViewDataProvider.AddHrInterViewSettingQuestionsAsync(_mapper.Map<List<HrInterViewSettingQuestion>>(command.Questions), cancellationToken: cancellationToken).ConfigureAwait(false);
-
         
         return new AddOrUpdateHrInterViewSettingResponse();
     }
@@ -209,7 +210,7 @@ public class HrInterViewService : IHrInterViewService
                 
                 var context = await GetHrInterViewSessionContextAsync(sessionId, cancellationToken).ConfigureAwait(false);
                     
-                var chatOutputAudio = await DetectAudioLanguageAsync(answers.Text, questions, context, fileBytes, cancellationToken).ConfigureAwait(false);
+                var chatOutputAudio = await GetNextQuestionAsync(answers.Text, questions, context, fileBytes, cancellationToken).ConfigureAwait(false);
 
                 var fileUrl = await UploadAndRetryFileAsync(chatOutputAudio.AudioBytes.ToArray(), cancellationToken:cancellationToken).ConfigureAwait(false);
 
@@ -243,7 +244,7 @@ public class HrInterViewService : IHrInterViewService
         }
     }
     
-    private async Task<ChatOutputAudio> DetectAudioLanguageAsync(string userQuestion, List<HrInterViewSettingQuestion> candidateQuestions, string context, byte[] audioContent, CancellationToken cancellationToken)
+    private async Task<ChatOutputAudio> GetNextQuestionAsync(string userQuestion, List<HrInterViewSettingQuestion> candidateQuestions, string context, byte[] audioContent, CancellationToken cancellationToken)
     {
         var questionListBuilder = new StringBuilder();
         var grouped = candidateQuestions

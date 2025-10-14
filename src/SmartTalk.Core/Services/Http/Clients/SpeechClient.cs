@@ -1,10 +1,10 @@
 using Newtonsoft.Json;
 using Serilog;
+using Smarties.Messages.Enums.Speech;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Ffmpeg;
 using SmartTalk.Core.Settings.Speech;
 using SmartTalk.Messages.Dto.WebSocket;
-using SmartTalk.Messages.Enums.Speech;
 
 namespace SmartTalk.Core.Services.Http.Clients;
 
@@ -44,7 +44,6 @@ public class SpeechClient : ISpeechClint
         {
             SpeechServiceHeader.EchoAvatar => _speechSettings.EchoAvatar.Apikey,
             SpeechServiceHeader.SugarTalk => _speechSettings.SugarTalk.Apikey,
-            SpeechServiceHeader.Transcript => _speechSettings.Transcript.ApiKey,
             _ => throw new ArgumentException("Invalid service type")
         };
 

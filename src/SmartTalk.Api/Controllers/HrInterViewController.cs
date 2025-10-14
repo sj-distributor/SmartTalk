@@ -19,7 +19,6 @@ public class HrInterViewController : ControllerBase
         _mediator = mediator;
     }
     
-        
     [Route("setting"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetHrInterViewSettingsResponse))]
     public async Task<IActionResult> GetHrInterViewSettingsAsync([FromQuery] GetHrInterViewSettingsRequest request)
