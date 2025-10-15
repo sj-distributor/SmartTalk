@@ -159,7 +159,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         string FormatItem(string materialDesc, string levelCode = null)
         {
             var parts = materialDesc?.Split('·') ?? Array.Empty<string>();
-            var name = parts.Length > 4 ? parts[4] : parts.LastOrDefault() ?? "";
+            var name = parts.Length > 4 ? $"{parts[0]}{parts[4]}" : parts.FirstOrDefault() ?? "";
             var brand = parts.Length > 1 ? parts[1] : "";
             var size = parts.Length > 3 ? parts[3] : "";
             
