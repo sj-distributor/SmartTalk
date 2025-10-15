@@ -132,35 +132,48 @@ public class SpeechMaticsService : ISpeechMaticsService
         var askInfoResponse = await _salesClient.GetAskInfoDetailListByCustomerAsync(new GetAskInfoDetailListByCustomerRequestDto { CustomerNumbers = soldToIds }, cancellationToken).ConfigureAwait(false);
         var askItems = askInfoResponse?.Data ?? new List<VwAskDetail>();
         
-        var levelCodes = askItems.Where(x => !string.IsNullOrEmpty(x.LevelCode)).Select(x => x.LevelCode).Distinct().ToList();
-        
-        var aliasLookup = new Dictionary<string, List<string>>(); 
-        if (levelCodes.Any()) 
-        { 
-            var habitResponse = await _salesClient.GetCustomerLevel5HabitAsync(new GetCustomerLevel5HabitRequstDto { CustomerId = soldToIds.FirstOrDefault(), LevelCode5List = levelCodes }, cancellationToken).ConfigureAwait(false);
-            Log.Information("Habit API Response: {@habitResponse}", habitResponse);
-            
-            aliasLookup = habitResponse?.HistoryCustomerLevel5HabitDtos?.GroupBy(h => h.LevelCode5).ToDictionary(
-                g => g.Key,
-                g => g.Select(x => x.CustomerLikeName).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct().ToList()) ?? new Dictionary<string, List<string>>(); 
-        }
+        var orderItems = new List<SalesOrderHistoryDto>();
+        if (soldToIds?.Any() == true)
+        {
+            var tasks = soldToIds.Select(async soldToId =>
+            {
+                var response = await _salesClient.GetOrderHistoryByCustomerAsync(new GetOrderHistoryByCustomerRequestDto { CustomerNumber = soldToId }, cancellationToken);
+                return response?.Data ?? new List<SalesOrderHistoryDto>();
+            });
 
-        string FormatItem(string material, string levelCode = null) 
-        { 
-            var parts = material?.Split('·') ?? Array.Empty<string>(); 
-            var brand = parts.Length > 1 ? parts[1] : ""; 
-            var size = parts.Length > 3 ? parts[3] : ""; 
-            var name = parts.Length > 4 ? $"{parts[0]} {parts[4]}" : parts.FirstOrDefault() ?? ""; 
-            aliasLookup.TryGetValue(levelCode ?? "", out var aliases); 
-            return $"Item: {name}, Brand: {brand}, Size: {size}, Aliases: {string.Join('/', aliases ?? new List<string>())}";
+            var results = await Task.WhenAll(tasks);
+            orderItems = results.SelectMany(r => r).ToList();
+        }
+        
+        var levelCodes = askItems.Where(x => !string.IsNullOrEmpty(x.LevelCode)).Select(x => x.LevelCode)
+            .Concat(orderItems.Where(x => !string.IsNullOrEmpty(x.LevelCode)).Select(x => x.LevelCode)).Distinct().ToList();
+        
+        var habitResponse = levelCodes.Any() ? await _salesClient.GetCustomerLevel5HabitAsync(new GetCustomerLevel5HabitRequstDto { CustomerId = soldToIds.FirstOrDefault(), LevelCode5List = levelCodes }, cancellationToken).ConfigureAwait(false) : null;
+        var habitLookup = habitResponse?.HistoryCustomerLevel5HabitDtos?.ToDictionary(h => h.LevelCode5, h => h) ?? new Dictionary<string, HistoryCustomerLevel5HabitDto>();
+        
+        string FormatItem(string materialDesc, string levelCode = null)
+        {
+            var parts = materialDesc?.Split('·') ?? Array.Empty<string>();
+            var name = parts.Length > 4 ? parts[4] : parts.LastOrDefault() ?? "";
+            var brand = parts.Length > 1 ? parts[1] : "";
+            var size = parts.Length > 3 ? parts[3] : "";
+            
+            string aliasText = "";
+            MaterialPartInfoDto partInfo = null;
+            if (!string.IsNullOrEmpty(levelCode) && habitLookup.TryGetValue(levelCode, out var habit))
+            {
+                aliasText = habit.CustomerLikeName ?? "";
+                partInfo = habit.MaterialPartInfoDtos?.FirstOrDefault();
+            }
+
+            return $"Item: {name}, Brand: {brand}, Size: {size}, Aliases: {aliasText}, " +
+                   $"baseUnit: {partInfo?.BaseUnit ?? ""}, salesUnit: {partInfo?.SalesUnit ?? ""}, weights: {partInfo?.Weights ?? 0}, " +
+                   $"placeOfOrigin: {partInfo?.PlaceOfOrigin ?? ""}, packing: {partInfo?.Packing ?? ""}, specifications: {partInfo?.Specifications ?? ""}, " +
+                   $"ranks: {partInfo?.Ranks ?? ""}, atr: {partInfo?.Atr ?? 0}";
         }
         
         allItems.AddRange(askItems.Select(x => FormatItem(x.MaterialDesc, x.LevelCode)));
-        
-        var orderHistoryResponse = await _salesClient.GetOrderHistoryByCustomerAsync(new GetOrderHistoryByCustomerRequestDto { CustomerNumber = soldToIds.FirstOrDefault() }, cancellationToken).ConfigureAwait(false);
-
-        if (orderHistoryResponse?.Data != null && orderHistoryResponse.Data.Any())
-            allItems.AddRange(orderHistoryResponse.Data.Select(x => FormatItem(x.MaterialDescription)));
+        allItems.AddRange(orderItems.Select(x => FormatItem(x.MaterialDescription, x.LevelCode)));
 
         return string.Join(Environment.NewLine, allItems.Distinct());
     }
