@@ -11,6 +11,8 @@ public class GetSurfaceAgentsRequest : IRequest
     public int PageSize { get; set; } = 10;
     
     public string Keyword { get; set; }
+    
+    public List<int> AgentIds { get; set; }
 }
 
 public class GetSurfaceAgentsResponse : SmartTalkResponse<GetSurfaceAgentsResponseData>

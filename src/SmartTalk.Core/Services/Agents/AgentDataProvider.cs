@@ -32,7 +32,7 @@ public interface IAgentDataProvider : IScopedDependency
 
     Task<Agent> GetAgentByNumberAsync(string didNumber, int? assistantId = null, CancellationToken cancellationToken = default);
     
-    Task<(int Count, List<Agent> Agents)> GetAgentsPagingAsync(int pageIndex, int pageSize, string keyword = null, CancellationToken cancellationToken = default);
+    Task<(int Count, List<Agent> Agents)> GetAgentsPagingAsync(int pageIndex, int pageSize, List<int> agentIds, string keyword = null, CancellationToken cancellationToken = default);
 }
 
 public class AgentDataProvider : IAgentDataProvider
@@ -171,9 +171,12 @@ public class AgentDataProvider : IAgentDataProvider
         return await agentInfo.Select(x => x.agent).FirstOrDefaultAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<(int Count, List<Agent> Agents)> GetAgentsPagingAsync(int pageIndex, int pageSize, string keyword = null, CancellationToken cancellationToken = default)
+    public async Task<(int Count, List<Agent> Agents)> GetAgentsPagingAsync(int pageIndex, int pageSize, List<int> agentIds, string keyword = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<Agent>().Where(x => x.IsDisplay && x.IsSurface);
+        
+        if (agentIds is { Count: > 0 })
+            query = query.Where(x => agentIds.Contains(x.Id));
 
         if (!string.IsNullOrEmpty(keyword))
             query = query.Where(x => x.Name.Contains(keyword));
