@@ -248,7 +248,7 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
         if (pageIndex.HasValue && pageSize.HasValue)
             query = query.Skip((pageIndex.Value - 1) * pageSize.Value).Take(pageSize.Value);
         
-        var assistants = await query.Select(x => x.assistant).ToListAsync(cancellationToken).ConfigureAwait(false);
+        var assistants = await query.Select(x => x.assistant).OrderByDescending(x => x.CreatedDate).ToListAsync(cancellationToken).ConfigureAwait(false);
 
         return (count, assistants);
     }
