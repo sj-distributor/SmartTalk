@@ -197,7 +197,7 @@ public class HrInterViewService : IHrInterViewService
             {
                 Log.Information("HandleWebSocketMessageAsync sessionId:{@sessionId}, message:{@message}", sessionId, message);
 
-                var questions = await _hrInterViewDataProvider.GetHrInterViewSettingQuestionsBySessionIdAsync(sessionId, cancellationToken).ConfigureAwait(false);
+                var questions = (await _hrInterViewDataProvider.GetHrInterViewSettingQuestionsBySessionIdAsync(sessionId, cancellationToken).ConfigureAwait(false)).Where(x => x.Count > 0).ToList();
                 
                 var fileBytes = await _httpClientFactory.GetAsync<byte[]>(message.Message, cancellationToken).ConfigureAwait(false);
                 
@@ -211,7 +211,7 @@ public class HrInterViewService : IHrInterViewService
                     QuestionType = HrInterViewSessionQuestionType.User
                 }, cancellationToken:cancellationToken).ConfigureAwait(false);
                 
-                if (questions.Any(x => x.Count <= 0)) return;
+                if (!questions.Any()) return;
                 
                 var context = await GetHrInterViewSessionContextAsync(sessionId, cancellationToken).ConfigureAwait(false);
                     
@@ -234,8 +234,8 @@ public class HrInterViewService : IHrInterViewService
                     FileUrl = fileUrl,
                     QuestionType = HrInterViewSessionQuestionType.Assistant
                 }, cancellationToken:cancellationToken).ConfigureAwait(false);
-                    
-                var question = questions.Where(x => x.Count > 0).FirstOrDefault();
+
+                var question = questions.Where(x => JsonConvert.DeserializeObject<List<string>>(x.Question).Any(keyword => responseNextQuestion.Transcript.Contains(keyword, StringComparison.OrdinalIgnoreCase))).FirstOrDefault();
                 if (question != null)
                 {
                     question.Count -= 1;
@@ -259,28 +259,32 @@ public class HrInterViewService : IHrInterViewService
         {
             questionListBuilder.AppendLine();
             questionListBuilder.AppendLine($"类型 ID：{x.Key}");
-            x.ForEach(y => questionListBuilder.AppendLine($"“{y.Type}”这类的问题有: {y.Question}"));
+            x.ForEach(y => questionListBuilder.AppendLine($"“{y.Type}”这类的问题有: {y.Question}, 此类问题的最大可问题数量上限为: {y.Count}"));
         });
+        
+        var jsonString = """{"Id": "TypeId of the selected question type", "text": "English translation of the speech question"}""";
         
         List<ChatMessage> messages =
         [
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(BinaryData.FromBytes(audioContent), ChatInputAudioFormat.Wav)),
             new UserChatMessage($"""
-                                You are a professional interviewer, currently conducting a conversation with an interviewee. Based on the interviewee's responses, please perform the following tasks:
-                                1. Provide a brief, professional evaluation of the interviewee's response, including affirmation and highlighting key points (additional points for improvement should be brief and should not be repeated). Ensure your overall response is natural, coherent, and comprehensive.
-                                2. In a natural transition, select an appropriate question from the "Question List" below.
-                                3. **Regardless of the user's language, your final output message must be in English.**
-                                4. Ask only one question at a time (and do not repeat questions that have already been asked).
-                                * The question list is as follows: {questionListBuilder}
-                                5. Response Style Requirements:
-                                * Use natural, colloquial language, not overly official. Maintain professionalism but avoid being mechanical.
-                                * Avoid repeating what the interviewee has just said.
-                                * Use natural transitions, including but not limited to using phrases like "I see. I'd also like to know..." and "That sounds great. My next question is..." Ensure the overall tone is consistent and the transitions are natural. Always use English. * Do not re-ask or re-describe questions that have already been asked.
-                                * Once all questions have been asked, you can generate an appropriate closing statement.
-                                * **Regardless of the user's language, your final output message must be in English.**
-                                Before you output, take a deep breath and consider whether your response meets my formatting requirements.
-                                The following context helps you filter questions that have already been asked: {context}
-                                The current user's response is: {userQuestion}
+                                You are a professional interviewer currently conducting a conversation with a respondent. Based on the respondent's response, please perform the following tasks:
+                                1. Provide a brief, professional evaluation of the respondent's response, including affirmation and emphasis on key points (other areas for improvement should be brief and non-repetitive). Ensure your overall response is natural, coherent, and comprehensive.
+                                2. Based on the user's current response and the list of questions, select the most appropriate question from the "Question List," maintaining a natural transition.
+                                3. **Your final output must be in English, regardless of the user's language.**
+                                4. Ask only one question at a time (do not repeat questions you have already asked).
+                                5. Strictly enforce the limit on the number of questions of each type. You must track the number of questions of that type you have asked (based on contextual documentation). If you have reached the maximum number of questions of that type, do not select any more questions of that type. Select another eligible question type.
+                                * Question list: 
+                                {questionListBuilder}
+                                6. Answering style requirements:
+                                * Use natural, colloquial language, avoiding formality. Maintain professionalism without being robotic.
+                                * Avoid repeating what the respondent has just said.
+                                * Use natural transitions, including but not limited to phrases such as "I see. I'd also like to know..." and "Sounds good. My next question is..." Ensure a consistent overall tone and natural transitions. Always use English. * Do not repeat or rephrase questions that have already been asked.
+                                * After all questions have been asked, you can create a suitable closing statement.
+                                * **Your final output message must be in English, regardless of the user's language.**
+                                Before outputting, take a deep breath and consider whether your answer meets my formatting requirements：
+                                {context}
+                                The current user's answer is: {userQuestion}
                                 """)
         ];
         
