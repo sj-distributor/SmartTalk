@@ -175,7 +175,7 @@ public class AgentDataProvider : IAgentDataProvider
     {
         var query = _repository.Query<Agent>().Where(x => x.IsDisplay && x.IsSurface);
         
-        if (agentIds is { Count: > 0 })
+        if (agentIds != null)
             query = query.Where(x => agentIds.Contains(x.Id));
 
         if (!string.IsNullOrEmpty(keyword))
