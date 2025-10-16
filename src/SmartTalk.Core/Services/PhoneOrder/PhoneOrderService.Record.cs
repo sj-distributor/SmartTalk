@@ -24,6 +24,8 @@ using SmartTalk.Messages.Enums.SpeechMatics;
 using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Requests.PhoneOrder;
 using SmartTalk.Messages.Commands.Attachments;
+using SmartTalk.Messages.Enums.Account;
+using SmartTalk.Messages.Enums.Pos;
 using TranscriptionFileType = SmartTalk.Messages.Enums.STT.TranscriptionFileType;
 using TranscriptionResponseFormat = SmartTalk.Messages.Enums.STT.TranscriptionResponseFormat;
 
@@ -46,6 +48,8 @@ public partial interface IPhoneOrderService
     Task<GetPhoneCallRecordDetailResponse> GetPhoneCallrecordDetailAsync(GetPhoneCallRecordDetailRequest request, CancellationToken cancellationToken);
 
     Task<GetPhoneOrderRecordReportResponse> GetPhoneOrderRecordReportByCallSidAsync(GetPhoneOrderRecordReportRequest request, CancellationToken cancellationToken);
+    
+    Task<GetPhoneOrderDataDashboardResponse> GetPhoneOrderDataDashboardAsync(GetPhoneOrderDataDashboardRequest request, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderService
@@ -850,5 +854,93 @@ public partial class PhoneOrderService
             type == typeof(DateTimeOffset) ||
             type == typeof(Guid) ||
             type == typeof(TimeSpan);
+    }
+    
+    public async Task<GetPhoneOrderDataDashboardResponse> GetPhoneOrderDataDashboardAsync(GetPhoneOrderDataDashboardRequest request, CancellationToken cancellationToken)
+    {
+        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds: request.agentIds, null, utcStart: request.startDate, utcEnd: request.endDate, cancellationToken: cancellationToken).ConfigureAwait(false);
+       
+        if (records == null || records.Count == 0) 
+        { return new GetPhoneOrderDataDashboardResponse { Data = new GetPhoneOrderDataDashboardResponseData() }; }
+        
+        var posOrders = await _posDataProvider.GetPosOrdersByStoreIdsAsync(request.storeIds, null, true, request.startDate, request.endDate, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var cancelledOrders = await _posDataProvider.GetPosOrdersByStoreIdsAsync(request.storeIds, PosOrderModifiedStatus.Cancelled, true, request.startDate, request.endDate, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var phoneOrderReports = await _phoneOrderDataProvider.GetPhoneOrderRecordReportByRecordIdAsync(recordId: records.Select(x => x.Id).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var callInRecords = records.Where(x => !x.IsOutBount).ToList();
+        var callOutRecords = records.Where(x => x.IsOutBount).ToList();
+
+        var callInData = BuildCallInData(callInRecords, phoneOrderReports, request.invalidCallSeconds);
+        var callOutData = BuildCallOutData(callOutRecords, phoneOrderReports, request.invalidCallSeconds);
+        
+        var restaurantData = new RestaurantDataDto
+        {
+            OrderCount = posOrders.Count,
+            TotalOrderAmount = posOrders.Sum(x => x.Total) - cancelledOrders.Sum(x => x.Total),
+            CancelledOrderCount = cancelledOrders.Count
+        };
+
+        return new GetPhoneOrderDataDashboardResponse
+        {
+            Data = new GetPhoneOrderDataDashboardResponseData
+            {
+                CallInData = callInData,
+                CallOutData = callOutData,
+                Restaurant = restaurantData
+            }
+        };
+    }
+
+    private static CallInDataDto BuildCallInData(List<PhoneOrderRecord> callInRecords, List<PhoneOrderRecordReport> phoneOrderReports, int? invalidCallSeconds)
+    {
+        var answeredCount = callInRecords.Count;
+
+        var totalRepeatCalls = callInRecords.GroupBy(x => x.PhoneNumber).Select(g => Math.Max(0, g.Count() - 1)).Sum();
+
+        var effectiveCount = answeredCount - callInRecords.Count(x => (x.Duration ?? 0) <= invalidCallSeconds);
+        var averageDuration = callInRecords.DefaultIfEmpty().Average(x => x?.Duration ?? 0);
+        var totalDuration = callInRecords.Sum(x => x.Duration ?? 0);
+        var friendlyCount = phoneOrderReports.Count(x => x.IsCustomerFriendly);
+        var satisfactionRate = answeredCount > 0 ? (double)friendlyCount / answeredCount : 0;
+        var transferCount = callInRecords.Count(x => x.IsTransfer ?? false);
+        var transferRate = answeredCount > 0 ? (double)transferCount / answeredCount : 0;
+        var missedByHumanCount = callInRecords.Count(x => x.OrderStatus == PhoneOrderOrderStatus.Failed);
+        var repeatRate = answeredCount > 0 ? (double)totalRepeatCalls / answeredCount : 0;
+
+        return new CallInDataDto
+        {
+            AnsweredCallInCount = answeredCount,
+            AverageCallInDurationSeconds = averageDuration,
+            EffectiveCommunicationCallInCount = effectiveCount,
+            RepeatCallInRate = repeatRate,
+            CallInSatisfactionRate = satisfactionRate,
+            CallInMissedByHumanCount = missedByHumanCount,
+            CallinTransferToHumanRate = transferRate,
+            TotalCallInDurationSeconds = totalDuration
+        };
+    }
+
+    private static CallOutDataDto BuildCallOutData(List<PhoneOrderRecord> callOutRecords, List<PhoneOrderRecordReport> phoneOrderReports, int? invalidCallSeconds)
+    {
+        var answeredCount = callOutRecords.Count;
+        var effectiveCount = answeredCount - callOutRecords.Count(x => (x.Duration ?? 0) <= invalidCallSeconds);
+        var averageDuration = callOutRecords.DefaultIfEmpty().Average(x => x?.Duration ?? 0);
+        var totalDuration = callOutRecords.Sum(x => x.Duration ?? 0);
+        var friendlyCount = phoneOrderReports.Count(x => x.IsCustomerFriendly);
+        var satisfactionRate = answeredCount > 0 ? (double)friendlyCount / answeredCount : 0;
+        var transferCount = callOutRecords.Count(x => x.IsTransfer ?? false);
+        var notAnsweredCount = callOutRecords.Count(x => x.OrderStatus == PhoneOrderOrderStatus.Failed);
+
+        return new CallOutDataDto
+        {
+            AnsweredCallOutCount = answeredCount,
+            AverageCallOutDurationSeconds = averageDuration,
+            EffectiveCommunicationCallOutCount = effectiveCount,
+            CallOutNotAnsweredCount = notAnsweredCount,
+            CallOutAnsweredByHumanCount = transferCount,
+            CallOutSatisfactionRate = satisfactionRate,
+            TotalCallOutDurationSeconds = totalDuration
+        };
     }
 }

@@ -72,6 +72,9 @@ public class PhoneOrderRecord : IEntity
     [Column("incoming_call_number"), StringLength(36)]
     public string IncomingCallNumber { get; set; }
     
+    [Column("is_outbound")]
+    public bool IsOutBount { get; set; }
+    
     [NotMapped]
     public UserAccount UserAccount { get; set; }
     
