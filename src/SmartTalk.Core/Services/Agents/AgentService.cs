@@ -1,6 +1,7 @@
 using System.Reflection;
 using AutoMapper;
 using SmartTalk.Core.Domain;
+using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Account;
@@ -79,7 +80,7 @@ public class AgentService : IAgentService
 
     public async Task<GetSurfaceAgentsResponse> GetSurfaceAgentsAsync(GetSurfaceAgentsRequest request, CancellationToken cancellationToken)
     {
-        var (count, agents) = await _agentDataProvider.GetAgentsPagingAsync(request.PageIndex, request.PageSize, request.Keyword, cancellationToken).ConfigureAwait(false);
+        var (count, agents) = await _agentDataProvider.GetAgentsPagingAsync(request.PageIndex, request.PageSize, request.AgentIds, request.Keyword, cancellationToken).ConfigureAwait(false);
 
         var enrichAgents = _mapper.Map<List<AgentDto>>(agents);
         
@@ -116,13 +117,13 @@ public class AgentService : IAgentService
         
         await _agentDataProvider.UpdateAgentsAsync([agent], cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        // var posAgent = new PosAgent
-        // {
-        //     AgentId = agent.Id,
-        //     StoreId = command.StoreId
-        // };
-        //
-        // await _posDataProvider.AddPosAgentsAsync([posAgent], cancellationToken: cancellationToken).ConfigureAwait(false);
+        var posAgent = new PosAgent
+        {
+            AgentId = agent.Id,
+            StoreId = command.StoreId
+        };
+        
+        await _posDataProvider.AddPosAgentsAsync([posAgent], cancellationToken: cancellationToken).ConfigureAwait(false);
 
         return new AddAgentResponse { Data = _mapper.Map<AgentDto>(agent) };
     }
@@ -147,6 +148,8 @@ public class AgentService : IAgentService
         if (agent == null) throw new Exception($"Agent with id {command.AgentId} not found.");
         
         await _agentDataProvider.DeleteAgentsAsync([agent], cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        await _posDataProvider.DeletePosAgentsByAgentIdsAsync([agent.Id], cancellationToken: cancellationToken).ConfigureAwait(false);
         
         var (agentAssistants, assistants) = await _aiSpeechAssistantDataProvider.GetAgentAssistantWithAssistantsAsync(agent.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
         
