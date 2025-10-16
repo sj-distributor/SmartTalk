@@ -77,6 +77,9 @@ public class PhoneOrderRecord : IEntity
 
     [Column("conversation_text")]
     public string ConversationText { get; set; }
+
+    [Column("is_outbound")]
+    public bool IsOutBount { get; set; }
     
     [NotMapped]
     public UserAccount UserAccount { get; set; }

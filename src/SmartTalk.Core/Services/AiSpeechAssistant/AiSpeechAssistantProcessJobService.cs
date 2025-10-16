@@ -26,9 +26,9 @@ namespace SmartTalk.Core.Services.AiSpeechAssistant;
 
 public interface IAiSpeechAssistantProcessJobService : IScopedDependency
 {
-    Task RecordAiSpeechAssistantCallAsync(AiSpeechAssistantStreamContextDto context, CancellationToken cancellationToken);
-    
     Task OpenAiAccountTrainingAsync(OpenAiAccountTrainingCommand command, CancellationToken cancellationToken);
+    
+    Task RecordAiSpeechAssistantCallAsync(AiSpeechAssistantStreamContextDto context, bool isOutBount, CancellationToken cancellationToken);
 }
 
 public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobService
@@ -65,7 +65,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         _speechAssistantDataProvider = speechAssistantDataProvider;
     }
 
-    public async Task RecordAiSpeechAssistantCallAsync(AiSpeechAssistantStreamContextDto context, CancellationToken cancellationToken)
+    public async Task RecordAiSpeechAssistantCallAsync(AiSpeechAssistantStreamContextDto context, bool isOutBount, CancellationToken cancellationToken)
     {
         TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
         var callResource = await CallResource.FetchAsync(pathSid: context.CallSid).ConfigureAwait(false);
@@ -91,7 +91,8 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             CustomerName = context.UserInfo?.UserName,
             PhoneNumber = context.UserInfo?.PhoneNumber,
             IsTransfer = context.IsTransfer,
-            IncomingCallNumber = context.LastUserInfo.PhoneNumber
+            IncomingCallNumber = context.LastUserInfo.PhoneNumber,
+            IsOutBount = isOutBount,
         };
 
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync([record], cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -218,7 +219,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             ProductId = x.ProductId
         }).ToList();
     }
-    
+
     public async Task OpenAiAccountTrainingAsync(OpenAiAccountTrainingCommand command, CancellationToken cancellationToken)
     {
         var prompt = "生成3000字历史类论文，不要生成框架，要一篇完整的满3000字的论文";

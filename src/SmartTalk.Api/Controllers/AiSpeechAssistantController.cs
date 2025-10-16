@@ -78,7 +78,8 @@ public class AiSpeechAssistantController : ControllerBase
                 AssistantId = id,
                 Host = HttpContext.Request.Host.Host,
                 NumberId = numberId,
-                TwilioWebSocket = await HttpContext.WebSockets.AcceptWebSocketAsync()
+                TwilioWebSocket = await HttpContext.WebSockets.AcceptWebSocketAsync(),
+                IsOutBount = true,
             };
             await _mediator.SendAsync(command);
         }

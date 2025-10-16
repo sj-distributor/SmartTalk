@@ -16,4 +16,6 @@ public class ConnectAiSpeechAssistantCommand : ICommand
     public int? AssistantId { get; set; }
     
     public WebSocket TwilioWebSocket { get; set; }
+    
+    public bool IsOutBount { get; set; }
 }

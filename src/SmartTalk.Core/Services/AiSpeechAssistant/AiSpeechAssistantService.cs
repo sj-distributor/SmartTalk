@@ -16,12 +16,8 @@ using AutoMapper;
 using Google.Cloud.Translation.V2;
 using SmartTalk.Core.Constants;
 using Microsoft.AspNetCore.Http;
-using NAudio.Codecs;
-using NAudio.Wave;
 using OpenAI.Chat;
 using SmartTalk.Core.Domain.AISpeechAssistant;
-using SmartTalk.Core.Domain.OpenAi;
-using SmartTalk.Core.Extensions;
 using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.Attachments;
 using SmartTalk.Core.Services.Caching.Redis;
@@ -32,11 +28,9 @@ using SmartTalk.Core.Services.Identity;
 using SmartTalk.Core.Services.Infrastructure;
 using SmartTalk.Messages.Constants;
 using SmartTalk.Core.Services.Jobs;
-using SmartTalk.Core.Services.OpenAi;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Services.Restaurants;
-using SmartTalk.Core.Services.SpeechMatics;
 using SmartTalk.Core.Services.STT;
 using SmartTalk.Core.Services.Timer;
 using SmartTalk.Core.Settings.Azure;
@@ -45,7 +39,6 @@ using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Core.Settings.Twilio;
 using SmartTalk.Core.Settings.WorkWeChat;
 using SmartTalk.Core.Settings.ZhiPuAi;
-using SmartTalk.Core.Utils;
 using Task = System.Threading.Tasks.Task;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
@@ -93,7 +86,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly IPhoneOrderService _phoneOrderService;
     private readonly IAgentDataProvider _agentDataProvider;
     private readonly IAttachmentService _attachmentService;
-    private readonly ISpeechMaticsService _speechMaticsService;
     private readonly ISpeechToTextService _speechToTextService;
     private readonly WorkWeChatKeySetting _workWeChatKeySetting;
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
@@ -104,14 +96,11 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
 
     private StringBuilder _openaiEvent;
+    private bool _shouldSendBuffToOpenAi;
+    private readonly List<byte[]> _wholeAudioBufferBytes;
     private readonly ClientWebSocket _openaiClientWebSocket;
     private AiSpeechAssistantStreamContextDto _aiSpeechAssistantStreamContext;
 
-    private bool _shouldSendBuffToOpenAi;
-    private readonly List<byte[]> _wholeAudioBufferBytes;
-    private OpenAiApiKeyUsageStatus _status;
-    private readonly IOpenAiDataProvider _openAiDataProvider;
-    
     public AiSpeechAssistantService(
         IClock clock,
         IMapper mapper,
@@ -129,8 +118,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         IPhoneOrderService phoneOrderService,
         IAgentDataProvider agentDataProvider,
         IAttachmentService attachmentService,
-        IOpenAiDataProvider openAiDataProvider,
-        ISpeechMaticsService speechMaticsService,
         ISpeechToTextService speechToTextService,
         WorkWeChatKeySetting workWeChatKeySetting,
         ISmartTalkHttpClientFactory httpClientFactory,
@@ -145,7 +132,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _currentUser = currentUser;
         _openaiClient = openaiClient;
         _azureSetting = azureSetting;
-        _ffmpegService = ffmpegService;
         _openAiSettings = openAiSettings;
         _twilioSettings = twilioSettings;
         _smartiesClient = smartiesClient;
@@ -157,8 +143,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _httpClientFactory = httpClientFactory;
         _translationClient = translationClient;
         _attachmentService = attachmentService;
-        _openAiDataProvider = openAiDataProvider;
-        _speechMaticsService = speechMaticsService;
         _speechToTextService = speechToTextService;
         _workWeChatKeySetting = workWeChatKeySetting;
         _backgroundJobClient = backgroundJobClient;
@@ -171,7 +155,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _openaiEvent = new StringBuilder();
         _openaiClientWebSocket = new ClientWebSocket();
         _aiSpeechAssistantStreamContext = new AiSpeechAssistantStreamContextDto();
-
+        
         _wholeAudioBufferBytes = [];
         _shouldSendBuffToOpenAi = true;
     }
@@ -193,29 +177,17 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     public async Task<AiSpeechAssistantConnectCloseEvent> ConnectAiSpeechAssistantAsync(ConnectAiSpeechAssistantCommand command, CancellationToken cancellationToken)
     {
         Log.Information($"The call from {command.From} to {command.To} is connected");
-        
-        var agent = await _agentDataProvider.GetAgentByNumberAsync(command.To, command.AssistantId, cancellationToken).ConfigureAwait(false);
-        
-        Log.Information("Get the agent: {@Agent} by {AssistantId} or {DidNumber}", agent, command.AssistantId, command.To);
-        
-        if (agent == null || agent.IsReceiveCall == false) return new AiSpeechAssistantConnectCloseEvent();
-        
-        _aiSpeechAssistantStreamContext = new AiSpeechAssistantStreamContextDto
-        {
-            Host = command.Host,
-            LastUserInfo = new AiSpeechAssistantUserInfoDto
-            {
-                PhoneNumber = command.From
-            }
-        };
 
-        var (assistant, knowledge, prompt) = await BuildingAiSpeechAssistantKnowledgeBaseAsync(command.From, command.To, command.AssistantId, command.NumberId, cancellationToken).ConfigureAwait(false);
+        InitAiSpeechAssistantStreamContext(command.Host, command.From);
+
+        await BuildingAiSpeechAssistantKnowledgeBaseAsync(command.From, command.To, command.AssistantId, command.NumberId, cancellationToken).ConfigureAwait(false);
         
-        _aiSpeechAssistantStreamContext.HumanContactPhone = _aiSpeechAssistantStreamContext.ShouldForward ? null : (await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantHumanContactByAssistantIdAsync(assistant.Id, cancellationToken).ConfigureAwait(false))?.HumanPhone;
+        _aiSpeechAssistantStreamContext.HumanContactPhone = _aiSpeechAssistantStreamContext.ShouldForward ? null 
+            : (await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantHumanContactByAssistantIdAsync(_aiSpeechAssistantStreamContext.Assistant.Id, cancellationToken).ConfigureAwait(false))?.HumanPhone;
         
-        await ConnectOpenAiRealTimeSocketAsync(assistant, prompt, cancellationToken).ConfigureAwait(false);
+        await ConnectOpenAiRealTimeSocketAsync(cancellationToken).ConfigureAwait(false);
         
-        var receiveFromTwilioTask = ReceiveFromTwilioAsync(command.TwilioWebSocket, cancellationToken);
+        var receiveFromTwilioTask = ReceiveFromTwilioAsync(command.TwilioWebSocket, command.IsOutBount, cancellationToken);
         var sendToTwilioTask = SendToTwilioAsync(command.TwilioWebSocket, cancellationToken);
 
         try
@@ -227,10 +199,16 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         }
         catch (Exception ex)
         {
-            Log.Information("Error in one of the tasks {@Ex}", ex);
+            Log.Information("Error in one of the tasks: " + ex.Message);
         }
         
         return new AiSpeechAssistantConnectCloseEvent();
+    }
+
+    private void InitAiSpeechAssistantStreamContext(string host, string from)
+    {
+        _aiSpeechAssistantStreamContext.Host = host;
+        _aiSpeechAssistantStreamContext.LastUserInfo = new AiSpeechAssistantUserInfoDto { PhoneNumber = from };
     }
 
     public async Task RecordAiSpeechAssistantCallAsync(RecordAiSpeechAssistantCallCommand command, CancellationToken cancellationToken)
@@ -250,10 +228,10 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     {
         Log.Information("Handling receive phone record: {@command}", command);
 
-        var (record, agent) = await _phoneOrderDataProvider.GetRecordWithAgentAsync(command.CallSid, cancellationToken).ConfigureAwait(false);
+        var (record, agent, _) = await _phoneOrderDataProvider.GetRecordWithAgentAndAssistantAsync(command.CallSid, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Get phone order record: {@record}", record);
-        
+
         record.Url = command.RecordingUrl;
         
         var audioFileRawBytes = await _httpClientFactory.GetAsync<byte[]>(record.Url, cancellationToken).ConfigureAwait(false);
@@ -358,8 +336,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         var call = await CallResource.UpdateAsync(
             pathSid: command.CallSid,
-            twiml: $"<Response>\n    <Dial>\n      <Number>{command.HumanPhone}</Number>\n    </Dial>\n  </Response>",
-            timeLimit: 7200
+            twiml: $"<Response>\n    <Dial>\n      <Number>{command.HumanPhone}</Number>\n    </Dial>\n  </Response>"
         );
     }
 
@@ -374,8 +351,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             status: CallResource.UpdateStatusEnum.Completed
         );
     }
-
-    private async Task<(Domain.AISpeechAssistant.AiSpeechAssistant assistant, AiSpeechAssistantKnowledge knowledge, string finalPrompt)> BuildingAiSpeechAssistantKnowledgeBaseAsync(string from, string to, int? assistantId, int? numberId, CancellationToken cancellationToken)
+    
+    private async Task BuildingAiSpeechAssistantKnowledgeBaseAsync(string from, string to, int? assistantId, int? numberId, CancellationToken cancellationToken)
     {
         var inboundRoute = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantInboundRouteAsync(from, to, cancellationToken).ConfigureAwait(false);
         
@@ -391,16 +368,14 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             _aiSpeechAssistantStreamContext.ShouldForward = true;
             _aiSpeechAssistantStreamContext.ForwardPhoneNumber = forwardNumber;
 
-            return (null, null, null);
+            return;
         }
         
         var (assistant, knowledge, userProfile) = await _aiSpeechAssistantDataProvider
             .GetAiSpeechAssistantInfoByNumbersAsync(from, to, forwardAssistantId ?? assistantId, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Matching Ai speech assistant: {@Assistant}、{@Knowledge}、{@UserProfile}", assistant, knowledge, userProfile);
-
-        if (assistant == null || knowledge == null || string.IsNullOrEmpty(knowledge.Prompt)) return (assistant, knowledge, string.Empty);
-
+        
         var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
         
@@ -408,17 +383,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             .Replace("#{user_profile}", string.IsNullOrEmpty(userProfile?.ProfileJson) ? " " : userProfile.ProfileJson)
             .Replace("#{current_time}", currentTime)
             .Replace("#{customer_phone}", from.StartsWith("+1") ? from[2..] : from)
-            .Replace("#{pst_date}", $"{pstTime.Date:yyyy-MM-dd} {pstTime.DayOfWeek}"); 
-        
-        if (finalPrompt.Contains("#{customer_items}", StringComparison.OrdinalIgnoreCase))
-        {
-            var soldToIds = !string.IsNullOrEmpty(assistant.Name) ? assistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : new List<string>();
-            
-            var customerItemsString = await _speechMaticsService.BuildCustomerItemsStringAsync(soldToIds, cancellationToken).ConfigureAwait(false);
-            _aiSpeechAssistantStreamContext.CustomerItemsString = customerItemsString;
-
-            finalPrompt = finalPrompt.Replace("#{customer_items}", customerItemsString ?? "");
-        }
+            .Replace("#{pst_date}", $"{pstTime.Date:yyyy-MM-dd} {pstTime.DayOfWeek}");
         
         Log.Information($"The final prompt: {finalPrompt}");
 
@@ -428,10 +393,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             knowledge.Greetings = string.IsNullOrEmpty(greeting.Data.Number.Greeting) ? knowledge.Greetings : greeting.Data.Number.Greeting;
         }
         
+        _aiSpeechAssistantStreamContext.LastPrompt = finalPrompt;
         _aiSpeechAssistantStreamContext.Assistant = _mapper.Map<AiSpeechAssistantDto>(assistant);
         _aiSpeechAssistantStreamContext.Knowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge);
-        _aiSpeechAssistantStreamContext.LastPrompt = finalPrompt;
-        return (assistant, knowledge, finalPrompt);
     }
 
     public (string forwardNumber, int? forwardAssistantId) DecideDestinationByInboundRoute(List<AiSpeechAssistantInboundRoute> routes)
@@ -487,7 +451,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         var list = new List<DayOfWeek>();
         foreach (var token in dayString.Split(',', StringSplitOptions.RemoveEmptyEntries))
         {
-            if (int.TryParse(token, out var v) && v >= 0 && v <= 6)
+            if (int.TryParse(token, out var v) && v is >= 0 and <= 6)
                 list.Add((DayOfWeek)v);
         }
         return list;
@@ -505,30 +469,21 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         return localTime >= startTime || localTime <= endTime;
     }
     
-    private async Task ConnectOpenAiRealTimeSocketAsync(
-        Domain.AISpeechAssistant.AiSpeechAssistant assistant, string prompt, CancellationToken cancellationToken)
+    private async Task ConnectOpenAiRealTimeSocketAsync(CancellationToken cancellationToken)
     {
         if (_aiSpeechAssistantStreamContext.ShouldForward) return;
-        
-        await ConfigAuthorizationHeader(assistant, cancellationToken).ConfigureAwait(false);
-        
-        var url = string.IsNullOrEmpty(assistant.ModelUrl) ? AiSpeechAssistantStore.DefaultUrl : assistant.ModelUrl;
-        
-        try
-        {
-            await _openaiClientWebSocket.ConnectAsync(new Uri(url), cancellationToken).ConfigureAwait(false);
-        }
-        catch
-        {
-            await ReduceOpenAiApiKeyUsingNumberAsync(cancellationToken);
-        
-            throw;
-        }
 
-        await SendSessionUpdateAsync(assistant, prompt, cancellationToken).ConfigureAwait(false);
+        ConfigWebSocketRequestHeader(_mapper.Map<Domain.AISpeechAssistant.AiSpeechAssistant>(_aiSpeechAssistantStreamContext.Assistant));
+        
+        var url = string.IsNullOrEmpty(_aiSpeechAssistantStreamContext.Assistant.ModelUrl)
+            ? AiSpeechAssistantStore.DefaultUrl : _aiSpeechAssistantStreamContext.Assistant.ModelUrl;
+        
+        await _openaiClientWebSocket.ConnectAsync(new Uri(url), cancellationToken).ConfigureAwait(false);
+
+        await SendSessionUpdateAsync(cancellationToken).ConfigureAwait(false);
     }
-    
-    private async Task ConfigAuthorizationHeader(Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken)
+
+    private void ConfigWebSocketRequestHeader(Domain.AISpeechAssistant.AiSpeechAssistant assistant)
     {
         switch (assistant.ModelProvider)
         {
@@ -548,57 +503,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         }
     }
     
-    private async Task ReduceOpenAiApiKeyUsingNumberAsync(CancellationToken cancellationToken)
-    {
-        var statusList = await _openAiDataProvider.GetOpenAiApiKeyUsageStatusAsync(id: _status.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
-        var status = statusList.First();
-        
-        status.UsingNumber -= 1;
-        
-        await _openAiDataProvider.UpdateOpenAiApiKeyUsageStatusAsync(status, cancellationToken).ConfigureAwait(false);
-    }
-
-    private async Task<string> GetIdleOpenAiApiKeyAsync(CancellationToken cancellationToken)
-    {
-        var apiKeys = _openAiSettings.RealTimeApiKeys;
-
-        var statusList = await _openAiDataProvider.GetOpenAiApiKeyUsageStatusAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        await CheckStatusCountEnoughOrAddingAsync(cancellationToken, statusList, apiKeys);
-        
-        var minUsingNumberStatus = statusList.Take(apiKeys.Count).MinBy(x => x.UsingNumber);
-
-        minUsingNumberStatus.UsingNumber += 1;
-
-        _status = minUsingNumberStatus;
-
-        await _openAiDataProvider.UpdateOpenAiApiKeyUsageStatusAsync(minUsingNumberStatus, cancellationToken).ConfigureAwait(false);
-
-        return apiKeys[minUsingNumberStatus.Index];
-    }
-
-    private async Task CheckStatusCountEnoughOrAddingAsync(CancellationToken cancellationToken, List<OpenAiApiKeyUsageStatus> statusList, List<string> apiKeys)
-    {
-        if (statusList.Count < apiKeys.Count)
-        {
-            var newStatusList = new List<OpenAiApiKeyUsageStatus>();
-            var number = apiKeys.Count - statusList.Count;
-            var LastIndex = statusList.MaxBy(x => x.Index)?.Index ?? 0;
-
-            for (var i = 0; i < number; i++)
-            {
-                newStatusList.Add(new OpenAiApiKeyUsageStatus { Index = LastIndex, UsingNumber = 0 });
-
-                LastIndex++;
-            }
-            
-            await _openAiDataProvider.AddOpenAiApiKeyUsageStatusAsync(newStatusList, cancellationToken).ConfigureAwait(false);
-            
-            statusList.AddRange(newStatusList);
-        }
-    }
-
-    private async Task ReceiveFromTwilioAsync(WebSocket twilioWebSocket, CancellationToken cancellationToken)
+    private async Task ReceiveFromTwilioAsync(WebSocket twilioWebSocket, bool isOutBount, CancellationToken cancellationToken)
     {
         var buffer = new byte[1024 * 10];
         try
@@ -614,7 +519,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                     break;
                 }
 
-                if (result is { Count: > 0 })
+                if (result.Count > 0)
                 {
                     using var jsonDocument = JsonSerializer.Deserialize<JsonDocument>(buffer.AsSpan(0, result.Count));
                     var eventMessage = jsonDocument?.RootElement.GetProperty("event").GetString();
@@ -635,7 +540,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                                 CallSid = _aiSpeechAssistantStreamContext.CallSid, Host = _aiSpeechAssistantStreamContext.Host
                             }, CancellationToken.None));
 
-                            Log.Information("Should forward: {ShouldForward}", _aiSpeechAssistantStreamContext.ShouldForward);
                             if (_aiSpeechAssistantStreamContext.ShouldForward)
                                 _backgroundJobClient.Enqueue<IMediator>(x => x.SendAsync(new TransferHumanServiceCommand
                                 {
@@ -644,8 +548,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                                 }, cancellationToken));
                             break;
                         case "media":
-                            if (_aiSpeechAssistantStreamContext.ShouldForward) break;
-                            
                             var media = jsonDocument.RootElement.GetProperty("media");
                             
                             var payload = media.GetProperty("payload").GetString();
@@ -667,15 +569,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                                     await SendToWebSocketAsync(_openaiClientWebSocket, audioAppend, cancellationToken);
                             }
                             break;
-                        case "mark" when _aiSpeechAssistantStreamContext.MarkQueue.Count != 0:
-                            _aiSpeechAssistantStreamContext.MarkQueue.Dequeue();
-                            break;
                         case "stop":
-                            _backgroundJobClient.Enqueue<IAiSpeechAssistantProcessJobService>(x => x.RecordAiSpeechAssistantCallAsync(_aiSpeechAssistantStreamContext, CancellationToken.None));
-                            
-                            await ReduceOpenAiApiKeyUsingNumberAsync(cancellationToken).ConfigureAwait(false);
-                            
-                            Log.Information("Session Transcription: {@transcription}", _aiSpeechAssistantStreamContext.ConversationTranscription);
+                            _backgroundJobClient.Enqueue<IAiSpeechAssistantProcessJobService>(x => x.RecordAiSpeechAssistantCallAsync(_aiSpeechAssistantStreamContext, isOutBount, CancellationToken.None));
                             break;
                     }
                 }
@@ -683,16 +578,17 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         }
         catch (WebSocketException ex)
         {
-            _backgroundJobClient.Enqueue<IAiSpeechAssistantProcessJobService>(x => x.RecordAiSpeechAssistantCallAsync(_aiSpeechAssistantStreamContext, CancellationToken.None));
+            _backgroundJobClient.Enqueue<IAiSpeechAssistantProcessJobService>(x => x.RecordAiSpeechAssistantCallAsync(_aiSpeechAssistantStreamContext, isOutBount, CancellationToken.None));
             Log.Error("Receive from Twilio error: {@ex}", ex);
         }
     }
 
     private async Task SendToTwilioAsync(WebSocket twilioWebSocket, CancellationToken cancellationToken)
     {
+        if (_aiSpeechAssistantStreamContext.ShouldForward) return;
+       
         Log.Information("Sending to twilio.");
-        var buffer = new byte[1024 * 40];
-
+        var buffer = new byte[1024 * 30];
         try
         {
             while (_openaiClientWebSocket.State == WebSocketState.Open)
@@ -703,39 +599,33 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
                 if (result is { Count: > 0 })
                 {
-                    // try
-                    // {
-                    //     JsonSerializer.Deserialize<JsonDocument>(_openaiEvent.Length > 0 ? _openaiEvent + value : value);
-                    // }
-                    // catch (Exception)
-                    // {
-                    //     _openaiEvent.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
-                    //     continue;
-                    // }
+                    try
+                    {
+                        JsonSerializer.Deserialize<JsonDocument>(_openaiEvent.Length > 0 ? _openaiEvent + value : value);
+                    }
+                    catch (Exception)
+                    {
+                        _openaiEvent.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
+                        continue;
+                    }
                     
-                    var jsonDocument = JsonSerializer.Deserialize<JsonDocument>(value);
+                    var jsonDocument = JsonSerializer.Deserialize<JsonDocument>(_openaiEvent.Length > 0 ? _openaiEvent + value : value);
                     
-                    // _openaiEvent.Clear();
-                    
+                    _openaiEvent.Clear();
+
                     Log.Information($"Received event: {jsonDocument?.RootElement.GetProperty("type").GetString()}");
                     
                     if (jsonDocument?.RootElement.GetProperty("type").GetString() == "error" && jsonDocument.RootElement.TryGetProperty("error", out var error))
                     {
-                        Log.Error("Receive openai websocket error" + error.GetProperty("message").GetString());
+                        Log.Information("Receive openai websocket error" + error.GetProperty("message").GetString());
+                        
                     }
-
-                    if (jsonDocument?.RootElement.GetProperty("type").GetString() == "session.updated")
-                    {
-                        Log.Information("Session updated successfully");
-                    }
-
-                    if (jsonDocument?.RootElement.GetProperty("type").GetString() == "response.audio.done")
-                        _aiSpeechAssistantStreamContext.ResponseStartTimestampTwilio = null;
                     
+                    if (jsonDocument?.RootElement.GetProperty("type").GetString() == "session.updated")
+                        Log.Information("Session updated successfully");
+
                     if (jsonDocument?.RootElement.GetProperty("type").GetString() == "response.audio.delta" && jsonDocument.RootElement.TryGetProperty("delta", out var delta))
                     {
-                        Log.Information("Sending openai response to twilio now");
-                        
                         var audioDelta = new
                         {
                             @event = "media",
@@ -831,10 +721,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                                             await ProcessHangupAsync(outputElement, cancellationToken).ConfigureAwait(false);
                                             break;
                                         
-                                        case OpenAiToolConstants.AddItem:
-                                            await ProcessAddNewItemsToOrderAsync(outputElement, cancellationToken).ConfigureAwait(false);
-                                            break;
-                                            
                                         case OpenAiToolConstants.Refund:
                                         case OpenAiToolConstants.Complaint:
                                         case OpenAiToolConstants.ReturnGoods:
@@ -850,7 +736,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                                         case OpenAiToolConstants.HandleThirdPartyUnexpectedIssues:
                                         case OpenAiToolConstants.HandleThirdPartyPickupTimeChange:
                                         case OpenAiToolConstants.DriverDeliveryRelatedCommunication:
-                                        case OpenAiToolConstants.CheckOrderStatus:
                                             await ProcessTransferCallAsync(outputElement, functionName, cancellationToken).ConfigureAwait(false);
                                             break;
                                     }
@@ -863,7 +748,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                         Log.Information("start timer...");
                         StartInactivityTimer();
                     }
-
+                    
                     if (!_aiSpeechAssistantStreamContext.InitialConversationSent && !string.IsNullOrEmpty(_aiSpeechAssistantStreamContext.Knowledge.Greetings))
                     {
                         await SendInitialConversationItem(cancellationToken);
@@ -874,18 +759,12 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         }
         catch (WebSocketException ex)
         {
-            Log.Information($"Send to Twilio error: {ex.Message}");
+            Log.Error("WebSocketException: {ex}", ex);
         }
     }
     
     private void StartInactivityTimer()
     {
-        if (string.IsNullOrEmpty(_aiSpeechAssistantStreamContext.CallSid))
-        {
-            Log.Information("Starting inactivity timer interrupt, due to the callsid is invalid: {CallSid}", _aiSpeechAssistantStreamContext.CallSid);
-            return;
-        }
-        
         _inactivityTimerManager.StartTimer(_aiSpeechAssistantStreamContext.CallSid, TimeSpan.FromMinutes(2), async () =>
         {
             Log.Warning("No activity detected for 2 minutes.");
@@ -896,12 +775,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
     private void StopInactivityTimer()
     {
-        if (string.IsNullOrEmpty(_aiSpeechAssistantStreamContext.CallSid))
-        {
-            Log.Information("Stop inactivity timer interrupt, due to the callsid is invalid: {CallSid}", _aiSpeechAssistantStreamContext.CallSid);
-            return;
-        }
-        
         _inactivityTimerManager.StopTimer(_aiSpeechAssistantStreamContext.CallSid);
     }
     
@@ -982,23 +855,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         await SendToWebSocketAsync(_openaiClientWebSocket, new { type = "response.create" }, cancellationToken);
         
         _backgroundJobClient.Schedule<IAiSpeechAssistantService>(x => x.HangupCallAsync(_aiSpeechAssistantStreamContext.CallSid, cancellationToken), TimeSpan.FromSeconds(2));
-    }
-
-    private async Task ProcessAddNewItemsToOrderAsync(JsonElement jsonDocument, CancellationToken cancellationToken)
-    {
-        var recordSuccess = new
-        {
-            type = "conversation.item.create",
-            item = new
-            {
-                type = "function_call_output",
-                call_id = jsonDocument.GetProperty("call_id").GetString(),
-                output = jsonDocument.GetProperty("arguments").ToString()
-            }
-        };
-        
-        await SendToWebSocketAsync(_openaiClientWebSocket, recordSuccess, cancellationToken);
-        await SendToWebSocketAsync(_openaiClientWebSocket, new { type = "response.create" }, cancellationToken);
     }
     
     private async Task ProcessTransferCallAsync(JsonElement jsonDocument, string functionName, CancellationToken cancellationToken)
@@ -1129,11 +985,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                 writer.WriteSample(pcmSample / 32768f);
             }
         }
-
-        var customerItems = string.IsNullOrWhiteSpace(_aiSpeechAssistantStreamContext.CustomerItemsString)
-            ? "No items available."
-            : _aiSpeechAssistantStreamContext.CustomerItemsString;
-        _aiSpeechAssistantStreamContext.Assistant.CustomRepeatOrderPrompt = _aiSpeechAssistantStreamContext.Assistant.CustomRepeatOrderPrompt.Replace("#{customerItems}", customerItems);
         
         var fileContent = memoryStream.ToArray();
         var audioData = BinaryData.FromBytes(fileContent);
@@ -1141,8 +992,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
         List<ChatMessage> messages =
         [
+            new SystemChatMessage(_aiSpeechAssistantStreamContext.Assistant.CustomRepeatOrderPrompt),
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
-            new UserChatMessage(_aiSpeechAssistantStreamContext.Assistant.CustomRepeatOrderPrompt)
+            new UserChatMessage("Please repeat the order for me in the customer's language completely, quickly, and naturally:")
         ];
         
         ChatCompletionOptions options = new()
@@ -1203,7 +1055,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             {
                 if (_aiSpeechAssistantStreamContext.ShowTimingMath)
                     Log.Information($"Truncating item with ID: {_aiSpeechAssistantStreamContext.LastAssistantItem}, Truncated at: {elapsedTime}ms");
-                
+
                 var truncateEvent = new
                 {
                     type = "conversation.item.truncate",
@@ -1235,6 +1087,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                     {
                         type = "input_text",
                         text = $"Greet the user with: '{_aiSpeechAssistantStreamContext.Knowledge.Greetings}'"
+
                     }
                 }
             }
@@ -1264,9 +1117,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         await socket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(message))), WebSocketMessageType.Text, true, cancellationToken);
     }
     
-    private async Task SendSessionUpdateAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, string prompt, CancellationToken cancellationToken)
+    private async Task SendSessionUpdateAsync(CancellationToken cancellationToken)
     {
-        var session = await InitialSessionAsync(assistant, prompt, cancellationToken).ConfigureAwait(false);
+        var session = await InitialSessionAsync(cancellationToken).ConfigureAwait(false);
         
         var sessionUpdate = new
         {
@@ -1277,8 +1130,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         await SendToWebSocketAsync(_openaiClientWebSocket, sessionUpdate, cancellationToken);
     }
 
-    private async Task<object> InitialSessionAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, string prompt, CancellationToken cancellationToken)
+    private async Task<object> InitialSessionAsync(CancellationToken cancellationToken)
     {
+        var assistant = _mapper.Map<Domain.AISpeechAssistant.AiSpeechAssistant>(_aiSpeechAssistantStreamContext.Assistant);
         var configs = await InitialSessionConfigAsync(assistant, cancellationToken).ConfigureAwait(false);
         
         return assistant.ModelProvider switch
@@ -1289,10 +1143,10 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                 input_audio_format = "g711_ulaw",
                 output_audio_format = "g711_ulaw",
                 voice = string.IsNullOrEmpty(assistant.ModelVoice) ? "alloy" : assistant.ModelVoice,
-                instructions = prompt,
+                instructions = _aiSpeechAssistantStreamContext.LastPrompt,
                 modalities = new[] { "text", "audio" },
-                temperature = _openAiSettings.RealtimeTemperature,
-                input_audio_transcription = assistant.Id == 176 ? new { model = "gpt-4o-transcribe" } : new { model = "whisper-1" },
+                temperature = 0.8,
+                input_audio_transcription = new { model = "whisper-1" },
                 input_audio_noise_reduction = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction),
                 tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config)
             },
@@ -1302,9 +1156,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                 input_audio_format = "g711_ulaw",
                 output_audio_format = "g711_ulaw",
                 voice = string.IsNullOrEmpty(assistant.ModelVoice) ? "alloy" : assistant.ModelVoice,
-                instructions = prompt,
+                instructions = _aiSpeechAssistantStreamContext.LastPrompt,
                 modalities = new[] { "text", "audio" },
-                temperature = _openAiSettings.RealtimeTemperature,
+                temperature = 0.8,
                 input_audio_transcription = new { model = "whisper-1" },
                 tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config)
             },
