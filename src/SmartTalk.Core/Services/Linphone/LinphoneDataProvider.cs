@@ -36,7 +36,7 @@ public interface ILinphoneDataProvider : IScopedDependency
 
     Task<List<Cdr>> GetCdrsAsync(long startTime, long endTime, CancellationToken cancellationToken = default);
 
-    Task<List<Cdr>> GetCdrsByTimeAsync(long? startTime, long? endTime, CancellationToken cancellationToken = default);
+    Task<(int callInFailedCount, int callOutFailedCount)> GetCallFailedStatisticsAsync(long? startTime, long? endTime, List<string> sipNumbers, CancellationToken cancellationToken = default);
 
     Task<Dictionary<string, string>> GetRestaurantSipAsync(CancellationToken cancellationToken);
 }
@@ -203,6 +203,34 @@ public class LinphoneDataProvider : ILinphoneDataProvider
         }
         
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+    
+    public async Task<(int callInFailedCount, int callOutFailedCount)> GetCallFailedStatisticsAsync(long? startTime, long? endTime, List<string> sipNumbers, CancellationToken cancellationToken = default)
+    {
+        var query =  _repository.Query<Cdr>();
+
+        if (startTime.HasValue)
+        {
+            query = query.Where(x => x.Uniqueid > startTime.Value);
+        }
+        if (endTime.HasValue)
+        {
+            query = query.Where(x => x.Uniqueid < endTime.Value);
+        }
+        
+        var callInFailedCount = await query
+            .Where(x => sipNumbers.Contains(x.Did))
+            .GroupBy(x => x.Linkedid)
+            .Where(group => !group.Any(x => x.Disposition == "ANSWERED"))
+            .CountAsync(cancellationToken);
+        
+        var callOutFailedCount = await query
+            .Where(x => sipNumbers.Contains(x.Cnum))
+            .GroupBy(x => x.Linkedid)
+            .Where(group => !group.Any(x => x.Disposition == "ANSWERED"))
+            .CountAsync(cancellationToken);
+
+        return (callInFailedCount, callOutFailedCount);
     }
 
     public async Task<Dictionary<string, string>> GetRestaurantSipAsync(CancellationToken cancellationToken)
