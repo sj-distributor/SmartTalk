@@ -886,8 +886,19 @@ public partial class PhoneOrderService
     
     public async Task<GetPhoneOrderDataDashboardResponse> GetPhoneOrderDataDashboardAsync(GetPhoneOrderDataDashboardRequest request, CancellationToken cancellationToken)
     {
+        var unixStart = request.StartDate?.ToUnixTimeSeconds();
+        var unixEnd = request.EndDate?.ToUnixTimeSeconds();
+
         var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds: request.AgentIds, null, utcStart: request.StartDate, utcEnd: request.EndDate, cancellationToken: cancellationToken).ConfigureAwait(false);
-       
+
+        var linphoneSips = await _linphoneDataProvider.GetLinphoneSipsByAgentIdsAsync(agentIds: request.AgentIds, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var linphoneCdrs = await _linphoneDataProvider.GetCdrsByTimeAsync(unixStart, unixEnd, cancellationToken).ConfigureAwait(false);
+
+        var sipNumbers = linphoneSips.Select(y => y.Sip).ToList();
+    
+        var callInFailedCount = linphoneCdrs.Where(x => sipNumbers.Contains(x.Did)).GroupBy(x => x.Linkedid).Count(group => !group.Any(x => x.Disposition == "ANSWERED"));
+        var callOutFailedCount = linphoneCdrs.Where(x => sipNumbers.Contains(x.Cnum)).GroupBy(x => x.Linkedid).Count(group => !group.Any(x => x.Disposition == "ANSWERED"));
+        
         if (records == null || records.Count == 0) 
         { return new GetPhoneOrderDataDashboardResponse { Data = new GetPhoneOrderDataDashboardResponseData() }; }
         
@@ -899,8 +910,8 @@ public partial class PhoneOrderService
         var callInRecords = records.Where(x => !x.IsOutBount).ToList();
         var callOutRecords = records.Where(x => x.IsOutBount).ToList();
         
-        var callInData = BuildCallInData(callInRecords, phoneOrderReports, request.InvalidCallSeconds, request.StartDate, request.EndDate, request.DataType);
-        var callOutData = BuildCallOutData(callOutRecords, phoneOrderReports, request.InvalidCallSeconds, request.StartDate, request.EndDate, request.DataType);
+        var callInData = BuildCallInData(callInRecords, callInFailedCount, phoneOrderReports, request.InvalidCallSeconds, request.StartDate, request.EndDate, request.DataType);
+        var callOutData = BuildCallOutData(callOutRecords, callOutFailedCount, phoneOrderReports, request.InvalidCallSeconds, request.StartDate, request.EndDate, request.DataType);
         
         var orderCountPerPeriod = GroupCountByRequestType(posOrders, x => x.CreatedDate, request.StartDate, request.EndDate, request.DataType);
         var cancelledOrderCountPerPeriod = GroupCountByRequestType(cancelledOrders, x => x.CreatedDate, request.StartDate, request.EndDate, request.DataType);
@@ -925,7 +936,7 @@ public partial class PhoneOrderService
         };
     }
 
-    private static CallInDataDto BuildCallInData(List<PhoneOrderRecord> callInRecords, List<PhoneOrderRecordReport> phoneOrderReports, int? invalidCallSeconds, DateTimeOffset? start, DateTimeOffset? end, PhoneOrderDataDashDataType dataType)
+    private static CallInDataDto BuildCallInData(List<PhoneOrderRecord> callInRecords, int callInFailedCount, List<PhoneOrderRecordReport> phoneOrderReports, int? invalidCallSeconds, DateTimeOffset? start, DateTimeOffset? end, PhoneOrderDataDashDataType dataType)
     {
         var answeredCount = callInRecords.Count;
 
@@ -938,7 +949,6 @@ public partial class PhoneOrderService
         var satisfactionRate = answeredCount > 0 ? (double)friendlyCount / answeredCount : 0;
         var transferCount = callInRecords.Count(x => x.IsTransfer ?? false);
         var transferRate = answeredCount > 0 ? (double)transferCount / answeredCount : 0;
-        var missedByHumanCount = callInRecords.Count(x => x.OrderStatus == PhoneOrderOrderStatus.Failed);
         var repeatRate = answeredCount > 0 ? (double)totalRepeatCalls / answeredCount : 0;
 
         var totalDurationPerPeriod = GroupDurationByRequestType(callInRecords, start, end, dataType);
@@ -950,14 +960,14 @@ public partial class PhoneOrderService
             EffectiveCommunicationCallInCount = effectiveCount,
             RepeatCallInRate = repeatRate,
             CallInSatisfactionRate = satisfactionRate,
-            CallInMissedByHumanCount = missedByHumanCount,
+            CallInMissedByHumanCount = callInFailedCount,
             CallinTransferToHumanRate = transferRate,
             TotalCallInDurationSeconds = totalDuration,
             TotalCallInDurationPerPeriod = totalDurationPerPeriod
         };
     }
 
-    private static CallOutDataDto BuildCallOutData(List<PhoneOrderRecord> callOutRecords, List<PhoneOrderRecordReport> phoneOrderReports, int? invalidCallSeconds, DateTimeOffset? start, DateTimeOffset? end, PhoneOrderDataDashDataType dataType)
+    private static CallOutDataDto BuildCallOutData(List<PhoneOrderRecord> callOutRecords, int callInFailedCount, List<PhoneOrderRecordReport> phoneOrderReports, int? invalidCallSeconds, DateTimeOffset? start, DateTimeOffset? end, PhoneOrderDataDashDataType dataType)
     {
         var answeredCount = callOutRecords.Count;
         var effectiveCount = answeredCount - callOutRecords.Count(x => (x.Duration ?? 0) <= invalidCallSeconds);
@@ -966,7 +976,6 @@ public partial class PhoneOrderService
         var friendlyCount = phoneOrderReports.Count(x => x.IsCustomerFriendly);
         var satisfactionRate = answeredCount > 0 ? (double)friendlyCount / answeredCount : 0;
         var transferCount = callOutRecords.Count(x => x.IsTransfer ?? false);
-        var notAnsweredCount = callOutRecords.Count(x => x.OrderStatus == PhoneOrderOrderStatus.Failed);
 
         var totalDurationPerPeriod = GroupDurationByRequestType(callOutRecords, start, end, dataType);
 
@@ -975,7 +984,7 @@ public partial class PhoneOrderService
             AnsweredCallOutCount = answeredCount,
             AverageCallOutDurationSeconds = averageDuration,
             EffectiveCommunicationCallOutCount = effectiveCount,
-            CallOutNotAnsweredCount = notAnsweredCount,
+            CallOutNotAnsweredCount = callInFailedCount,
             CallOutAnsweredByHumanCount = transferCount,
             CallOutSatisfactionRate = satisfactionRate,
             TotalCallOutDurationSeconds = totalDuration,

@@ -18,6 +18,8 @@ public interface ILinphoneDataProvider : IScopedDependency
     Task AddLinphoneCdrAsync(List<LinphoneCdr> linphoneCdr, bool foreSave = true, CancellationToken cancellationToken = default);
 
     Task<List<LinphoneSip>> GetLinphoneSipAsync(CancellationToken cancellationToken = default);
+    
+    Task<List<LinphoneSip>> GetLinphoneSipsByAgentIdsAsync(List<int> agentIds, CancellationToken cancellationToken = default);
 
     Task<(int, List<LinphoneHistoryDto>)> GetLinphoneHistoryAsync(List<int> agentIds = null, string caller = null, string restaurantName = null, List<LinphoneStatus> status = null,
         int? pageSize = 10, int? pageIndex = 1, CancellationToken cancellationToken = default);
@@ -33,6 +35,8 @@ public interface ILinphoneDataProvider : IScopedDependency
     Task<List<Restaurant>> GetRestaurantPhoneNumberAsync(string toRestaurantName = null, CancellationToken cancellationToken = default);
 
     Task<List<Cdr>> GetCdrsAsync(long startTime, long endTime, CancellationToken cancellationToken = default);
+
+    Task<List<Cdr>> GetCdrsByTimeAsync(long? startTime, long? endTime, CancellationToken cancellationToken = default);
 
     Task<Dictionary<string, string>> GetRestaurantSipAsync(CancellationToken cancellationToken);
 }
@@ -61,6 +65,11 @@ public class LinphoneDataProvider : ILinphoneDataProvider
     public async Task<List<LinphoneSip>> GetLinphoneSipAsync(CancellationToken cancellationToken = default)
     {
         return await _repository.Query<LinphoneSip>().ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<LinphoneSip>> GetLinphoneSipsByAgentIdsAsync(List<int> agentIds, CancellationToken cancellationToken = default)
+    {
+        return await _repository.Query<LinphoneSip>().Where(x => agentIds.Contains(x.AgentId)).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<(int, List<LinphoneHistoryDto>)> GetLinphoneHistoryAsync(List<int> agentIds = null, string caller = null,
@@ -182,6 +191,18 @@ public class LinphoneDataProvider : ILinphoneDataProvider
     public async Task<List<Cdr>> GetCdrsAsync(long startTime, long endTime, CancellationToken cancellationToken = default)
     {
         return await _repository.Query<Cdr>().Where(x => x.Uniqueid > startTime && x.Uniqueid < endTime).ToListAsync(cancellationToken);
+    }
+    
+    public async Task<List<Cdr>> GetCdrsByTimeAsync(long? startTime, long? endTime, CancellationToken cancellationToken = default)
+    {
+        var query = _repository.QueryNoTracking<Cdr>();
+        
+        if (startTime == null && endTime == null)      
+        {
+           query = query.Where(x => x.CreatedDate >= DateTimeOffset.Now.AddDays(-7));
+        }
+        
+        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<Dictionary<string, string>> GetRestaurantSipAsync(CancellationToken cancellationToken)
