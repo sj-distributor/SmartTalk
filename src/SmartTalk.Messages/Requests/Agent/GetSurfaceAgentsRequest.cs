@@ -12,7 +12,7 @@ public class GetSurfaceAgentsRequest : IRequest
     
     public string Keyword { get; set; }
     
-    public List<int> AgentIds { get; set; }
+    public int StoreId { get; set; }
 }
 
 public class GetSurfaceAgentsResponse : SmartTalkResponse<GetSurfaceAgentsResponseData>
