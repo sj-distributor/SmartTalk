@@ -350,4 +350,13 @@ public class PosController : ControllerBase
         
         return Ok(response);
     }
+    
+    [Route("agents/store"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetStoreAgentsResponse))]
+    public async Task<IActionResult> GetPosAgentsAsync([FromQuery] GetStoreAgentsRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetStoreAgentsRequest, GetStoreAgentsResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
 }
