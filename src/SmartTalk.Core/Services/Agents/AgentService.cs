@@ -1,5 +1,6 @@
 using System.Reflection;
 using AutoMapper;
+using Serilog;
 using SmartTalk.Core.Domain;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.System;
@@ -80,7 +81,12 @@ public class AgentService : IAgentService
 
     public async Task<GetSurfaceAgentsResponse> GetSurfaceAgentsAsync(GetSurfaceAgentsRequest request, CancellationToken cancellationToken)
     {
-        var (count, agents) = await _agentDataProvider.GetAgentsPagingAsync(request.PageIndex, request.PageSize, request.AgentIds, request.Keyword, cancellationToken).ConfigureAwait(false);
+        var storeAgents = await _posDataProvider.GetPosAgentsAsync(storeIds: [request.StoreId], cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Get Surface Agent Ids: {@AgentIds}", storeAgents.Select(x => x.Id).ToList());
+        
+        var (count, agents) = await _agentDataProvider.GetAgentsPagingAsync(
+            request.PageIndex, request.PageSize, storeAgents.Select(x => x.AgentId).ToList(), request.Keyword, cancellationToken).ConfigureAwait(false);
 
         var enrichAgents = _mapper.Map<List<AgentDto>>(agents);
         
