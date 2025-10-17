@@ -9,22 +9,15 @@ using System.Text;
 using Newtonsoft.Json;
 using OpenAI.Chat;
 using Serilog;
-using Smarties.Messages.DTO.OpenAi;
-using Smarties.Messages.Enums.OpenAi;
-using Smarties.Messages.Requests.Ask;
-using SmartTalk.Core.Extensions;
-using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Attachments;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Settings.OpenAi;
-using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Asr;
 using SmartTalk.Messages.Dto.Attachments;
 using SmartTalk.Messages.Dto.Smarties;
 using SmartTalk.Messages.Dto.WebSocket;
 using SmartTalk.Messages.Enums.HrInterView;
-using JsonSerializer = System.Text.Json.JsonSerializer;
 
 namespace SmartTalk.Core.Services.HrInterView;
 
@@ -270,6 +263,7 @@ public class HrInterViewService : IHrInterViewService
                                 5. Strictly enforce the limit on the number of questions of each type. You must track the number of questions of that type you have asked (based on contextual documentation). If you have reached the maximum number of questions of that type, do not select any more questions of that type. Select another eligible question type.
                                 * Question list: 
                                 {questionListBuilder}
+                                ** ❌ Do not invent, rephrase, or create any new questions outside this list.
                                 6. Answering style requirements:
                                 * Use natural, colloquial language, avoiding formality. Maintain professionalism without being robotic.
                                 * Avoid repeating what the respondent has just said.
@@ -287,6 +281,8 @@ public class HrInterViewService : IHrInterViewService
             ResponseModalities = ChatResponseModalities.Text | ChatResponseModalities.Audio,
             AudioOptions = new ChatAudioOptions(new ChatOutputAudioVoice("cedar"), ChatOutputAudioFormat.Wav)
         };
+        
+        Log.Information("MatchingReasonableNextQuestionAsync system prompt:{@prompt} ", JsonConvert.SerializeObject(messages));
 
         ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
         
