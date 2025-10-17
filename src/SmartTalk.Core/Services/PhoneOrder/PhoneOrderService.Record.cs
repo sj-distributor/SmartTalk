@@ -15,6 +15,7 @@ using System.Text.RegularExpressions;
 using ClosedXML.Excel;
 using Newtonsoft.Json;
 using SmartTalk.Core.Domain.PhoneOrder;
+using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Services.Linphone;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Dto.Attachments;
@@ -858,27 +859,32 @@ public partial class PhoneOrderService
     
     public async Task<GetPhoneOrderDataDashboardResponse> GetPhoneOrderDataDashboardAsync(GetPhoneOrderDataDashboardRequest request, CancellationToken cancellationToken)
     {
-        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds: request.agentIds, null, utcStart: request.startDate, utcEnd: request.endDate, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds: request.AgentIds, null, utcStart: request.StartDate, utcEnd: request.EndDate, cancellationToken: cancellationToken).ConfigureAwait(false);
        
         if (records == null || records.Count == 0) 
         { return new GetPhoneOrderDataDashboardResponse { Data = new GetPhoneOrderDataDashboardResponseData() }; }
         
-        var posOrders = await _posDataProvider.GetPosOrdersByStoreIdsAsync(request.storeIds, null, true, request.startDate, request.endDate, cancellationToken: cancellationToken).ConfigureAwait(false);
-        var cancelledOrders = await _posDataProvider.GetPosOrdersByStoreIdsAsync(request.storeIds, PosOrderModifiedStatus.Cancelled, true, request.startDate, request.endDate, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var posOrders = await _posDataProvider.GetPosOrdersByStoreIdsAsync(request.StoreIds, null, true, request.StartDate, request.EndDate, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var cancelledOrders = await _posDataProvider.GetPosOrdersByStoreIdsAsync(request.StoreIds, PosOrderModifiedStatus.Cancelled, true, request.StartDate, request.EndDate, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         var phoneOrderReports = await _phoneOrderDataProvider.GetPhoneOrderRecordReportByRecordIdAsync(recordId: records.Select(x => x.Id).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
         
         var callInRecords = records.Where(x => !x.IsOutBount).ToList();
         var callOutRecords = records.Where(x => x.IsOutBount).ToList();
-
-        var callInData = BuildCallInData(callInRecords, phoneOrderReports, request.invalidCallSeconds);
-        var callOutData = BuildCallOutData(callOutRecords, phoneOrderReports, request.invalidCallSeconds);
+        
+        var callInData = BuildCallInData(callInRecords, phoneOrderReports, request.InvalidCallSeconds, request.StartDate, request.EndDate, request.DataType);
+        var callOutData = BuildCallOutData(callOutRecords, phoneOrderReports, request.InvalidCallSeconds, request.StartDate, request.EndDate, request.DataType);
+        
+        var orderCountPerPeriod = GroupCountByRequestType(posOrders, x => x.CreatedDate, request.StartDate, request.EndDate, request.DataType);
+        var cancelledOrderCountPerPeriod = GroupCountByRequestType(cancelledOrders, x => x.CreatedDate, request.StartDate, request.EndDate, request.DataType);
         
         var restaurantData = new RestaurantDataDto
         {
             OrderCount = posOrders.Count,
             TotalOrderAmount = posOrders.Sum(x => x.Total) - cancelledOrders.Sum(x => x.Total),
-            CancelledOrderCount = cancelledOrders.Count
+            CancelledOrderCount = cancelledOrders.Count,
+            OrderCountPerPeriod = orderCountPerPeriod,
+            CancelledOrderCountPerPeriod = cancelledOrderCountPerPeriod
         };
 
         return new GetPhoneOrderDataDashboardResponse
@@ -892,7 +898,7 @@ public partial class PhoneOrderService
         };
     }
 
-    private static CallInDataDto BuildCallInData(List<PhoneOrderRecord> callInRecords, List<PhoneOrderRecordReport> phoneOrderReports, int? invalidCallSeconds)
+    private static CallInDataDto BuildCallInData(List<PhoneOrderRecord> callInRecords, List<PhoneOrderRecordReport> phoneOrderReports, int? invalidCallSeconds, DateTimeOffset? start, DateTimeOffset? end, PhoneOrderDataDashDataType dataType)
     {
         var answeredCount = callInRecords.Count;
 
@@ -908,6 +914,8 @@ public partial class PhoneOrderService
         var missedByHumanCount = callInRecords.Count(x => x.OrderStatus == PhoneOrderOrderStatus.Failed);
         var repeatRate = answeredCount > 0 ? (double)totalRepeatCalls / answeredCount : 0;
 
+        var totalDurationPerPeriod = GroupDurationByRequestType(callInRecords, start, end, dataType);
+
         return new CallInDataDto
         {
             AnsweredCallInCount = answeredCount,
@@ -917,11 +925,12 @@ public partial class PhoneOrderService
             CallInSatisfactionRate = satisfactionRate,
             CallInMissedByHumanCount = missedByHumanCount,
             CallinTransferToHumanRate = transferRate,
-            TotalCallInDurationSeconds = totalDuration
+            TotalCallInDurationSeconds = totalDuration,
+            TotalCallInDurationPerPeriod = totalDurationPerPeriod
         };
     }
 
-    private static CallOutDataDto BuildCallOutData(List<PhoneOrderRecord> callOutRecords, List<PhoneOrderRecordReport> phoneOrderReports, int? invalidCallSeconds)
+    private static CallOutDataDto BuildCallOutData(List<PhoneOrderRecord> callOutRecords, List<PhoneOrderRecordReport> phoneOrderReports, int? invalidCallSeconds, DateTimeOffset? start, DateTimeOffset? end, PhoneOrderDataDashDataType dataType)
     {
         var answeredCount = callOutRecords.Count;
         var effectiveCount = answeredCount - callOutRecords.Count(x => (x.Duration ?? 0) <= invalidCallSeconds);
@@ -932,6 +941,8 @@ public partial class PhoneOrderService
         var transferCount = callOutRecords.Count(x => x.IsTransfer ?? false);
         var notAnsweredCount = callOutRecords.Count(x => x.OrderStatus == PhoneOrderOrderStatus.Failed);
 
+        var totalDurationPerPeriod = GroupDurationByRequestType(callOutRecords, start, end, dataType);
+
         return new CallOutDataDto
         {
             AnsweredCallOutCount = answeredCount,
@@ -940,7 +951,68 @@ public partial class PhoneOrderService
             CallOutNotAnsweredCount = notAnsweredCount,
             CallOutAnsweredByHumanCount = transferCount,
             CallOutSatisfactionRate = satisfactionRate,
-            TotalCallOutDurationSeconds = totalDuration
+            TotalCallOutDurationSeconds = totalDuration,
+            TotalCallOutDurationPerPeriod = totalDurationPerPeriod
         };
+    }
+    
+    private static Dictionary<string, double> GroupDurationByRequestType(List<PhoneOrderRecord> records, DateTimeOffset? startDate, DateTimeOffset? endDate, PhoneOrderDataDashDataType dataType)
+    {
+        if (startDate == null || endDate == null) return new Dictionary<string, double>();
+
+        var start = startDate.Value;
+        var end = endDate.Value;
+
+        var filteredRecords = records.Where(x => x.CreatedDate >= start && x.CreatedDate <= end);
+
+        if (dataType == PhoneOrderDataDashDataType.Month)
+        {
+            return filteredRecords
+                .GroupBy(x => new { x.CreatedDate.Year, x.CreatedDate.Month })
+                .OrderBy(g => g.Key.Year).ThenBy(g => g.Key.Month)
+                .ToDictionary(
+                    g => $"{g.Key.Year:D4}-{g.Key.Month:D2}",
+                    g => g.Sum(x => x.Duration ?? 0));
+        }
+        
+        return filteredRecords
+            .GroupBy(x => x.CreatedDate.Date)
+            .OrderBy(g => g.Key)
+            .ToDictionary(
+                g => g.Key.ToString("yyyy-MM-dd"),
+                g => g.Sum(x => x.Duration ?? 0));
+    }
+    
+    private static Dictionary<string, int> GroupCountByRequestType(List<PosOrder> orders, Func<PosOrder, DateTimeOffset> dateSelector, DateTimeOffset? startDate, DateTimeOffset? endDate, PhoneOrderDataDashDataType dataType)
+    {
+        if (startDate == null || endDate == null || orders == null) return new Dictionary<string, int>();
+
+        var start = startDate.Value;
+        var end = endDate.Value;
+
+        var filteredRecords = orders.Where(x => {
+            var dt = dateSelector(x);
+            return dt >= start && dt <= end;
+        });
+
+        if (dataType == PhoneOrderDataDashDataType.Month)
+        {
+            return filteredRecords
+                .GroupBy(x => {
+                    var dt = dateSelector(x);
+                    return new { dt.Year, dt.Month };
+                })
+                .OrderBy(g => g.Key.Year).ThenBy(g => g.Key.Month)
+                .ToDictionary(
+                    g => $"{g.Key.Year:D4}-{g.Key.Month:D2}",
+                    g => g.Count());
+        }
+        
+        return filteredRecords
+            .GroupBy(x => dateSelector(x).Date)
+            .OrderBy(g => g.Key)
+            .ToDictionary(
+                g => g.Key.ToString("yyyy-MM-dd"),
+                g => g.Count());
     }
 }

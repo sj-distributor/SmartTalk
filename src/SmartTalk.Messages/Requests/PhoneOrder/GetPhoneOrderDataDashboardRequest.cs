@@ -1,19 +1,22 @@
 using Mediator.Net.Contracts;
+using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Responses;
 
 namespace SmartTalk.Messages.Requests.PhoneOrder;
 
 public class GetPhoneOrderDataDashboardRequest : IRequest
 {
-    public DateTimeOffset? startDate { get; set; }
+    public DateTimeOffset? StartDate { get; set; }
     
-    public DateTimeOffset? endDate { get; set; }
+    public DateTimeOffset? EndDate { get; set; }
     
-    public List<int> storeIds { get; set; }
+    public PhoneOrderDataDashDataType DataType { get; set; }
     
-    public List<int> agentIds { get; set; }
+    public List<int> StoreIds { get; set; }
+    
+    public List<int> AgentIds { get; set; }
 
-    public int? invalidCallSeconds { get; set; } = 3;
+    public int? InvalidCallSeconds { get; set; } = 3;
 }
 
 public class GetPhoneOrderDataDashboardResponse : SmartTalkResponse<GetPhoneOrderDataDashboardResponseData>
@@ -47,6 +50,8 @@ public class CallInDataDto
 
     public double TotalCallInDurationSeconds { get; set; } 
     
+    public Dictionary<string, double> TotalCallInDurationPerPeriod { get; set; } = new();
+    
 }
 
 public class CallOutDataDto
@@ -64,6 +69,8 @@ public class CallOutDataDto
     public double CallOutSatisfactionRate { get; set; }
 
     public double TotalCallOutDurationSeconds { get; set; }
+    
+    public Dictionary<string, double> TotalCallOutDurationPerPeriod { get; set; } = new();
 }
 
 public class RestaurantDataDto
@@ -73,4 +80,8 @@ public class RestaurantDataDto
     public decimal TotalOrderAmount { get; set; }
     
     public int CancelledOrderCount { get; set; }
+    
+    public Dictionary<string,int> OrderCountPerPeriod { get; set; } = new();
+    
+    public Dictionary<string,int> CancelledOrderCountPerPeriod { get; set; } = new();
 }
