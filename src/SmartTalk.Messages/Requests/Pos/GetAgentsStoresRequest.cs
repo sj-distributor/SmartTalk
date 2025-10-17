@@ -4,16 +4,16 @@ using SmartTalk.Messages.Responses;
 
 namespace SmartTalk.Messages.Requests.Pos;
 
-public class GetStoreAgentsRequest : IRequest
+public class GetAgentsStoresRequest : IRequest
 {
     public List<int> AgentIds { get; set; }
 }
 
-public class GetStoreAgentsResponse : SmartTalkResponse<List<GetStoreAgentsResponseDataDto>>
+public class GetAgentsStoresResponse : SmartTalkResponse<List<GetAgentsStoresResponseDataDto>>
 {
 }
 
-public class GetStoreAgentsResponseDataDto
+public class GetAgentsStoresResponseDataDto
 {
     public CompanyStoreDto Store { get; set; }
 }
