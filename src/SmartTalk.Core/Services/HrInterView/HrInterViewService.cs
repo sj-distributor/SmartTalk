@@ -168,7 +168,7 @@ public class HrInterViewService : IHrInterViewService
         
             await ConvertAndSendWebSocketMessageAsync(webSocket, sessionId, "WELCOME", setting.Welcome, setting.EndMessage, cancellationToken).ConfigureAwait(false);
 
-            var firstQuestion = JsonConvert.DeserializeObject<List<string>>(questions.FirstOrDefault()!.Question).FirstOrDefault();
+            var firstQuestion = JsonConvert.DeserializeObject<List<string>>(questions.MinBy(x => x.Id)!.Question).FirstOrDefault();
 
             if (firstQuestion != null)
             {
@@ -176,7 +176,7 @@ public class HrInterViewService : IHrInterViewService
                 
                 Log.Information("SendWelcomeAndFirstQuestionAsync questions:{@questions}", questions);
                 
-                if (questions.FirstOrDefault() is not null) questions.FirstOrDefault()!.Count -= 1;
+                if (questions.FirstOrDefault() is not null) questions.MinBy(x => x.Id)!.Count -= 1;
                 
                 Log.Information("SendWelcomeAndFirstQuestionAsync questions after:{@questions}", questions);
                 
@@ -215,7 +215,7 @@ public class HrInterViewService : IHrInterViewService
                 
                 var context = await GetHrInterViewSessionContextAsync(sessionId, cancellationToken).ConfigureAwait(false);
                     
-                var responseNextQuestion = await MatchingReasonableNextQuestionAsync(answers.Text, questions, context, fileBytes, cancellationToken).ConfigureAwait(false);
+                var responseNextQuestion = await MatchingReasonableNextQuestionAsync(answers.Text, questions.MinBy(x => x.Id), context, fileBytes, cancellationToken).ConfigureAwait(false);
 
                 var fileUrl = await UploadFileAsync(responseNextQuestion.AudioBytes.ToArray(), sessionId, cancellationToken:cancellationToken).ConfigureAwait(false);
 
@@ -234,11 +234,10 @@ public class HrInterViewService : IHrInterViewService
                     FileUrl = fileUrl,
                     QuestionType = HrInterViewSessionQuestionType.Assistant
                 }, cancellationToken:cancellationToken).ConfigureAwait(false);
-
-                var question = questions.Where(x => JsonConvert.DeserializeObject<List<string>>(x.Question).Any(keyword => responseNextQuestion.Transcript.Contains(keyword, StringComparison.OrdinalIgnoreCase))).FirstOrDefault();
-                if (question != null)
+                
+                if (questions.MinBy(x => x.Id) != null)
                 {
-                    question.Count -= 1;
+                    questions.MinBy(x => x.Id).Count -= 1;
                     await _hrInterViewDataProvider.UpdateHrInterViewSettingQuestionsAsync(questions, cancellationToken: cancellationToken).ConfigureAwait(false);
                 }
             }
@@ -249,18 +248,13 @@ public class HrInterViewService : IHrInterViewService
         }
     }
     
-    private async Task<ChatOutputAudio> MatchingReasonableNextQuestionAsync(string userQuestion, List<HrInterViewSettingQuestion> candidateQuestions, string context, byte[] audioContent, CancellationToken cancellationToken)
+    private async Task<ChatOutputAudio> MatchingReasonableNextQuestionAsync(string userQuestion, HrInterViewSettingQuestion candidateQuestions, string context, byte[] audioContent, CancellationToken cancellationToken)
     {
         var questionListBuilder = new StringBuilder();
         
-        var grouped = candidateQuestions.GroupBy(q => q.Id).OrderBy(g => g.Key);
-        
-        grouped.ForEach(x =>
-        {
-            questionListBuilder.AppendLine();
-            questionListBuilder.AppendLine($"类型 ID：{x.Key}");
-            x.ForEach(y => questionListBuilder.AppendLine($"“{y.Type}”这类的问题有: {y.Question}, 此类问题的最大可问题数量上限为: {y.Count}"));
-        });
+        questionListBuilder.AppendLine();
+        questionListBuilder.AppendLine($"类型 ID：{candidateQuestions.Id}");
+        questionListBuilder.AppendLine($"“{candidateQuestions.Type}”这类的问题有: {candidateQuestions.Question}, 此类问题的最大可问题数量上限为: {candidateQuestions.Count}");
         
         var jsonString = """{"Id": "TypeId of the selected question type", "text": "English translation of the speech question"}""";
         
