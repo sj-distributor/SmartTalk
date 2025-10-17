@@ -892,12 +892,9 @@ public partial class PhoneOrderService
         var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds: request.AgentIds, null, utcStart: request.StartDate, utcEnd: request.EndDate, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var linphoneSips = await _linphoneDataProvider.GetLinphoneSipsByAgentIdsAsync(agentIds: request.AgentIds, cancellationToken: cancellationToken).ConfigureAwait(false);
-        var linphoneCdrs = await _linphoneDataProvider.GetCdrsByTimeAsync(unixStart, unixEnd, cancellationToken).ConfigureAwait(false);
-
         var sipNumbers = linphoneSips.Select(y => y.Sip).ToList();
-    
-        var callInFailedCount = linphoneCdrs.Where(x => sipNumbers.Contains(x.Did)).GroupBy(x => x.Linkedid).Count(group => !group.Any(x => x.Disposition == "ANSWERED"));
-        var callOutFailedCount = linphoneCdrs.Where(x => sipNumbers.Contains(x.Cnum)).GroupBy(x => x.Linkedid).Count(group => !group.Any(x => x.Disposition == "ANSWERED"));
+        
+        var (callInFailedCount, callOutFailedCount) = await _linphoneDataProvider.GetCallFailedStatisticsAsync(unixStart, unixEnd, sipNumbers, cancellationToken).ConfigureAwait(false);
         
         if (records == null || records.Count == 0) 
         { return new GetPhoneOrderDataDashboardResponse { Data = new GetPhoneOrderDataDashboardResponseData() }; }
