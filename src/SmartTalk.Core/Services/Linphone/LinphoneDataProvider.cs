@@ -195,11 +195,11 @@ public class LinphoneDataProvider : ILinphoneDataProvider
     
     public async Task<List<Cdr>> GetCdrsByTimeAsync(long? startTime, long? endTime, CancellationToken cancellationToken = default)
     {
-        var query = _repository.QueryNoTracking<Cdr>();
+        var query = _repository.Query<Cdr>();
         
-        if (startTime == null && endTime == null)      
+        if (startTime.HasValue && endTime.HasValue)      
         {
-           query = query.Where(x => x.CreatedDate >= DateTimeOffset.Now.AddDays(-7));
+           query = query.Where(x => x.Uniqueid > startTime && x.Uniqueid < endTime);
         }
         
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
