@@ -19,14 +19,4 @@ public partial class AutoTestService
         
         return new AutoTestImportDataResponse();
     }
-    
-    private static readonly Dictionary<AutoTestImportDataRecordType, Type> ImportDataHandlerTypeMap = new()
-    {
-        { AutoTestImportDataRecordType.Excel, typeof(ExcelDataImportHandler) },
-        { AutoTestImportDataRecordType.Api, typeof(ApiDataImportHandler) },
-        { AutoTestImportDataRecordType.Db, typeof(DbDataImportHandler) },
-        { AutoTestImportDataRecordType.Crawl, typeof(CrawlDataImportHandler) },
-        { AutoTestImportDataRecordType.Script, typeof(ScriptDataImportHandler) },
-        { AutoTestImportDataRecordType.Manual, typeof(ManualDataImportHandler) },
-    };
 }

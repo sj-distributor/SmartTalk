@@ -37,9 +37,4 @@ public partial class AutoTestService : IAutoTestService
         
         return new AutoTestRunningResponse() { Data = executionResult };
     }
-    
-    private static readonly Dictionary<AutoTestRunningType, Type> HandlerTypeMap = new()
-    {
-        { AutoTestRunningType.AiOrder, typeof(AiOrderAutoTestHandler) },
-    };
 }
