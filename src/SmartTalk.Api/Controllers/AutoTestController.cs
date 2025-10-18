@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using SmartTalk.Messages.Commands.AutoTest;
 
 namespace SmartTalk.Api.Controllers;
+
 [Authorize]
 [ApiController]
 [Route("api/[controller]")]
