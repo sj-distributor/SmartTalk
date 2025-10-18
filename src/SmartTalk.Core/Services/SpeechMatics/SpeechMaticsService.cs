@@ -130,14 +130,50 @@ public class SpeechMaticsService : ISpeechMaticsService
         var allItems = new List<string>();
         
         var askInfoResponse = await _salesClient.GetAskInfoDetailListByCustomerAsync(new GetAskInfoDetailListByCustomerRequestDto { CustomerNumbers = soldToIds }, cancellationToken).ConfigureAwait(false);
-
-        if (askInfoResponse?.Data != null && askInfoResponse.Data.Any())
-            allItems.AddRange(askInfoResponse.Data.Select(x => x.MaterialDesc));
+        var askItems = askInfoResponse?.Data ?? new List<VwAskDetail>();
         
-        var orderHistoryResponse = await _salesClient.GetOrderHistoryByCustomerAsync(new GetOrderHistoryByCustomerRequestDto { CustomerNumber = soldToIds.FirstOrDefault() }, cancellationToken).ConfigureAwait(false);
+        var orderItems = new List<SalesOrderHistoryDto>();
+        if (soldToIds?.Any() == true)
+        {
+            var tasks = soldToIds.Select(async soldToId =>
+            {
+                var response = await _salesClient.GetOrderHistoryByCustomerAsync(new GetOrderHistoryByCustomerRequestDto { CustomerNumber = soldToId }, cancellationToken);
+                return response?.Data ?? new List<SalesOrderHistoryDto>();
+            });
 
-        if (orderHistoryResponse?.Data != null && orderHistoryResponse.Data.Any())
-            allItems.AddRange(orderHistoryResponse.Data.Select(x => x.MaterialDescription));
+            var results = await Task.WhenAll(tasks);
+            orderItems = results.SelectMany(r => r).ToList();
+        }
+        
+        var levelCodes = askItems.Where(x => !string.IsNullOrEmpty(x.LevelCode)).Select(x => x.LevelCode)
+            .Concat(orderItems.Where(x => !string.IsNullOrEmpty(x.LevelCode)).Select(x => x.LevelCode)).Distinct().ToList();
+        
+        var habitResponse = levelCodes.Any() ? await _salesClient.GetCustomerLevel5HabitAsync(new GetCustomerLevel5HabitRequstDto { CustomerId = soldToIds.FirstOrDefault(), LevelCode5List = levelCodes }, cancellationToken).ConfigureAwait(false) : null;
+        var habitLookup = habitResponse?.HistoryCustomerLevel5HabitDtos?.ToDictionary(h => h.LevelCode5, h => h) ?? new Dictionary<string, HistoryCustomerLevel5HabitDto>();
+        
+        string FormatItem(string materialDesc, string levelCode = null)
+        {
+            var parts = materialDesc?.Split('·') ?? Array.Empty<string>();
+            var name = parts.Length > 4 ? $"{parts[0]}{parts[4]}" : parts.FirstOrDefault() ?? "";
+            var brand = parts.Length > 1 ? parts[1] : "";
+            var size = parts.Length > 3 ? parts[3] : "";
+            
+            string aliasText = "";
+            MaterialPartInfoDto partInfo = null;
+            if (!string.IsNullOrEmpty(levelCode) && habitLookup.TryGetValue(levelCode, out var habit))
+            {
+                aliasText = habit.CustomerLikeName ?? "";
+                partInfo = habit.MaterialPartInfoDtos?.FirstOrDefault();
+            }
+
+            return $"Item: {name}, Brand: {brand}, Size: {size}, Aliases: {aliasText}, " +
+                   $"baseUnit: {partInfo?.BaseUnit ?? ""}, salesUnit: {partInfo?.SalesUnit ?? ""}, weights: {partInfo?.Weights ?? 0}, " +
+                   $"placeOfOrigin: {partInfo?.PlaceOfOrigin ?? ""}, packing: {partInfo?.Packing ?? ""}, specifications: {partInfo?.Specifications ?? ""}, " +
+                   $"ranks: {partInfo?.Ranks ?? ""}, atr: {partInfo?.Atr ?? 0}";
+        }
+        
+        allItems.AddRange(askItems.Select(x => FormatItem(x.MaterialDesc, x.LevelCode)));
+        allItems.AddRange(orderItems.Select(x => FormatItem(x.MaterialDescription, x.LevelCode)));
 
         return string.Join(Environment.NewLine, allItems.Distinct());
     }
