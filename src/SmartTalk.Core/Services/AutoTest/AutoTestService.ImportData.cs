@@ -13,11 +13,9 @@ public partial class AutoTestService
 {
     public async Task<AutoTestImportDataResponse> AutoTestImportDataAsync(AutoTestImportDataCommand command, CancellationToken cancellationToken)
     {
-        if (!ImportDataHandlerTypeMap.TryGetValue(command.ImportType, out var handlerType)) throw new NotSupportedException($"not support auto test import data type {command.ImportType}");
-        
-        var handlerInstance = Activator.CreateInstance(handlerType) as IAutoTestDataImportHandler;
-
-        await handlerInstance.ImportAsync(command, cancellationToken).ConfigureAwait(false);
+        var handler = _autoTestDataImportHandlerSwitcher.GetHandler(command.ImportType);
+       
+        await handler.ImportAsync(command, cancellationToken);
         
         return new AutoTestImportDataResponse();
     }

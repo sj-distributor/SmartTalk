@@ -1,15 +1,21 @@
 using SmartTalk.Core.Domain.AutoTest;
+using SmartTalk.Core.Ioc;
 using SmartTalk.Messages.Commands.AutoTest;
+using SmartTalk.Messages.Enums.AutoTest;
 
 namespace SmartTalk.Core.Services.AutoTest;
 
-public interface IAutoTestDataImportHandler
+public interface IAutoTestDataImportHandler : IScopedDependency
 {
+    AutoTestImportDataRecordType ImportType { get; }
+    
     Task ImportAsync(AutoTestImportDataCommand command, CancellationToken cancellationToken = default); 
 }
 
 public class ExcelDataImportHandler : IAutoTestDataImportHandler
 {
+    public AutoTestImportDataRecordType ImportType => AutoTestImportDataRecordType.Excel;
+    
     public ExcelDataImportHandler()
     {
     }
@@ -22,6 +28,8 @@ public class ExcelDataImportHandler : IAutoTestDataImportHandler
 
 public class ApiDataImportHandler : IAutoTestDataImportHandler
 {
+    public AutoTestImportDataRecordType ImportType => AutoTestImportDataRecordType.Api;
+    
     public ApiDataImportHandler()
     {
     }
@@ -34,6 +42,8 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
 
 public class DbDataImportHandler : IAutoTestDataImportHandler
 {
+    public AutoTestImportDataRecordType ImportType => AutoTestImportDataRecordType.Db;
+    
     public DbDataImportHandler()
     {
     }
@@ -46,6 +56,8 @@ public class DbDataImportHandler : IAutoTestDataImportHandler
 
 public class CrawlDataImportHandler : IAutoTestDataImportHandler
 {
+    public AutoTestImportDataRecordType ImportType => AutoTestImportDataRecordType.Crawl;
+    
     public CrawlDataImportHandler()
     {
     }
@@ -58,6 +70,8 @@ public class CrawlDataImportHandler : IAutoTestDataImportHandler
 
 public class ScriptDataImportHandler : IAutoTestDataImportHandler
 {
+    public AutoTestImportDataRecordType ImportType => AutoTestImportDataRecordType.Script;
+    
     public ScriptDataImportHandler()
     {
     }
@@ -70,6 +84,8 @@ public class ScriptDataImportHandler : IAutoTestDataImportHandler
 
 public class ManualDataImportHandler : IAutoTestDataImportHandler
 {
+    public AutoTestImportDataRecordType ImportType => AutoTestImportDataRecordType.Manual;
+    
     public ManualDataImportHandler()
     {
     }
