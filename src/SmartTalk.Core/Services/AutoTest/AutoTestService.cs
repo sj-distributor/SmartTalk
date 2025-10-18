@@ -31,9 +31,7 @@ public partial class AutoTestService : IAutoTestService
     {
         var scenario = await _autoTestDataProvider.GetAutoTestScenarioByIdAsync(command.ScenarioId, cancellationToken).ConfigureAwait(false);
         
-        var handler = _autoTestRunningHandlerSwitcher.GetHandler(command.TestRunningType);
-
-        var executionResult = await handler.ActionHandleAsync(scenario, cancellationToken).ConfigureAwait(false);
+        var executionResult = await _autoTestRunningHandlerSwitcher.GetHandler(command.TestRunningType).ActionHandleAsync(scenario, cancellationToken).ConfigureAwait(false);
         
         return new AutoTestRunningResponse() { Data = executionResult };
     }

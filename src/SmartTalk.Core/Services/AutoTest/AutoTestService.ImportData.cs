@@ -13,9 +13,7 @@ public partial class AutoTestService
 {
     public async Task<AutoTestImportDataResponse> AutoTestImportDataAsync(AutoTestImportDataCommand command, CancellationToken cancellationToken)
     {
-        var handler = _autoTestDataImportHandlerSwitcher.GetHandler(command.ImportType);
-       
-        await handler.ImportAsync(command, cancellationToken);
+        await _autoTestDataImportHandlerSwitcher.GetHandler(command.ImportType).ImportAsync(command, cancellationToken).ConfigureAwait(false);
         
         return new AutoTestImportDataResponse();
     }
