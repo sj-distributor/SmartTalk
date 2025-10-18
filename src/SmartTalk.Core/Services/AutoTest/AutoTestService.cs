@@ -30,18 +30,8 @@ public partial class AutoTestService : IAutoTestService
         if (!HandlerTypeMap.TryGetValue(command.TestRunningType, out var handlerType)) throw new NotSupportedException($"not support auto test project type {command.TestRunningType}");
         
         var handlerInstance = Activator.CreateInstance(handlerType) as IAutoTestRunningHandler;
-
-        var inputHandleAsyncMethod = handlerType.GetMethod("InputHandleAsync", new Type[] { typeof(AutoTestScenario), typeof(CancellationToken) });
         
-        var inputTask = (Task<string>)inputHandleAsyncMethod.Invoke(handlerInstance, new object[] { scenario, cancellationToken });
-        
-        var inputJson = await inputTask.ConfigureAwait(false);
-        
-        var actionHandleAsyncMethod = handlerType.GetMethod("ActionHandleAsync", new Type[] { typeof(AutoTestScenario), typeof(string), typeof(CancellationToken) });
-        
-        var actionTask = (Task<string>)actionHandleAsyncMethod.Invoke(handlerInstance, new object[] { scenario, inputJson, cancellationToken });
-        
-        var executionResult = await actionTask.ConfigureAwait(false);
+        var executionResult = await handlerInstance.ActionHandleAsync(scenario, cancellationToken).ConfigureAwait(false);
         
         return new AutoTestRunningResponse() { Data = executionResult };
     }

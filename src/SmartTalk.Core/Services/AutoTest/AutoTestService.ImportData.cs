@@ -17,11 +17,7 @@ public partial class AutoTestService
         
         var handlerInstance = Activator.CreateInstance(handlerType) as IAutoTestDataImportHandler;
 
-        var handleAsyncMethod = handlerType.GetMethod("ImportAsync", new Type[] { typeof(AutoTestScenario), typeof(CancellationToken) });
-        
-        var task = (Task)handleAsyncMethod.Invoke(handlerInstance, new object[] { command, cancellationToken });
-        
-        await task.ConfigureAwait(false);
+        await handlerInstance.ImportAsync(command, cancellationToken).ConfigureAwait(false);
         
         return new AutoTestImportDataResponse();
     }

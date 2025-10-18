@@ -4,12 +4,7 @@ namespace SmartTalk.Core.Services.AutoTest.AiOrder;
 
 public class AiOrderAutoTestHandler : IAutoTestRunningHandler
 {
-    public async Task<string> InputHandleAsync(AutoTestScenario scenario, CancellationToken cancellationToken = default)
-    {
-        throw new NotImplementedException();
-    }
-
-    public async Task<string> ActionHandleAsync(AutoTestScenario scenario, string inputJson, CancellationToken cancellationToken = default)
+    public async Task<string> ActionHandleAsync(AutoTestScenario scenario, CancellationToken cancellationToken = default)
     {
         throw new NotImplementedException();
     }
