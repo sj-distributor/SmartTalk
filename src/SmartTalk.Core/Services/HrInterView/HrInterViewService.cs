@@ -256,23 +256,17 @@ public class HrInterViewService : IHrInterViewService
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(BinaryData.FromBytes(audioContent), ChatInputAudioFormat.Wav)),
             new UserChatMessage($"""
                                 You are a professional interviewer currently conducting a conversation with a respondent. Based on the respondent's response, please perform the following tasks:
-                                1. Provide a brief, professional evaluation of the respondent's response, including affirmation and emphasis on key points (other areas for improvement should be brief and non-repetitive). Ensure your overall response is natural, coherent, and comprehensive.
-                                2. Based on the user's current response and the list of questions, select the most appropriate question from the "Question List," maintaining a natural transition.
-                                3. **Your final output must be in English, regardless of the user's language.**
-                                4. Ask only one question at a time (do not repeat questions you have already asked).
-                                5. Strictly enforce the limit on the number of questions of each type. You must track the number of questions of that type you have asked (based on contextual documentation). If you have reached the maximum number of questions of that type, do not select any more questions of that type. Select another eligible question type.
+                                1.You must respond with a full sentence that offers support, professional and affirmation. Use different phrasing each time to express this and keep it short and simple.
+                                2.Based on the user's current response and the list of questions, select the most appropriate question from the "Question List," maintaining a natural transition.
+                                3.Your final output must be in English, regardless of the user's language.
+                                4.Ask only one question at a time (do not repeat questions you have already asked).
+                                5.Strictly enforce the limit on the number of questions of each type. You must track the number of questions of that type you have asked (based on contextual documentation). If you have reached the maximum number of questions of that type, do not select any more questions of that type. Select another eligible question type.
                                 * Question list: 
                                 {questionListBuilder}
-                                ** ❌ Do not invent, rephrase, or create any new questions outside this list.
+                                ** Do not invent, rephrase, or create any new questions outside this list.
                                 6. Answering style requirements:
-                                * Use natural, colloquial language, avoiding formality. Maintain professionalism without being robotic.
-                                * Avoid repeating what the respondent has just said.
-                                * Use natural transitions, including but not limited to phrases such as "I see. I'd also like to know..." and "Sounds good. My next question is..." Ensure a consistent overall tone and natural transitions. Always use English. * Do not repeat or rephrase questions that have already been asked.
-                                * After all questions have been asked, you can create a suitable closing statement.
-                                * **Your final output message must be in English, regardless of the user's language.**
-                                Before outputting, take a deep breath and consider whether your answer meets my formatting requirements：
-                                {context}
-                                The current user's answer is: {userQuestion}
+                                Please speak in a slow, gentle, warm, and sweet tone. Your voice should sound polite, calm, and caring.
+                                Always use friendly language and keep your speaking speed moderate, natural, patient and kind.
                                 """)
         ];
         
