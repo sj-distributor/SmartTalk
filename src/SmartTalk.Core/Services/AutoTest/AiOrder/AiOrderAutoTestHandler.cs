@@ -3,9 +3,9 @@ using SmartTalk.Messages.Enums.AutoTest;
 
 namespace SmartTalk.Core.Services.AutoTest.AiOrder;
 
-public class AiOrderAutoTestHandler : IAutoTestRunningHandler
+public class AiOrderAutoTestHandler : IAutoTestActionHandler
 {
-    public AutoTestRunningType RunningType => AutoTestRunningType.AiOrder;
+    public AutoTestActionType ActionType => AutoTestActionType.Webhook;
     
     public async Task<string> ActionHandleAsync(AutoTestScenario scenario, CancellationToken cancellationToken = default)
     {

@@ -16,14 +16,14 @@ public partial class AutoTestService : IAutoTestService
 {
     private readonly IMapper _mapper;
     private readonly IAutoTestDataProvider _autoTestDataProvider;
-    private readonly IAutoTestRunningHandlerSwitcher _autoTestRunningHandlerSwitcher;
+    private readonly IAutoTestActionHandlerSwitcher _autoTestActionHandlerSwitcher;
     private readonly IAutoTestDataImportHandlerSwitcher _autoTestDataImportHandlerSwitcher;
 
-    public AutoTestService(IMapper mapper, IAutoTestDataProvider autoTestDataProvider, IAutoTestRunningHandlerSwitcher autoTestRunningHandlerSwitcher, IAutoTestDataImportHandlerSwitcher autoTestDataImportHandlerSwitcher)
+    public AutoTestService(IMapper mapper, IAutoTestDataProvider autoTestDataProvider, IAutoTestActionHandlerSwitcher autoTestActionHandlerSwitcher, IAutoTestDataImportHandlerSwitcher autoTestDataImportHandlerSwitcher)
     {
         _mapper = mapper;
         _autoTestDataProvider = autoTestDataProvider;
-        _autoTestRunningHandlerSwitcher = autoTestRunningHandlerSwitcher;
+        _autoTestActionHandlerSwitcher = autoTestActionHandlerSwitcher;
         _autoTestDataImportHandlerSwitcher = autoTestDataImportHandlerSwitcher;
     }
     
@@ -31,7 +31,7 @@ public partial class AutoTestService : IAutoTestService
     {
         var scenario = await _autoTestDataProvider.GetAutoTestScenarioByIdAsync(command.ScenarioId, cancellationToken).ConfigureAwait(false);
         
-        var executionResult = await _autoTestRunningHandlerSwitcher.GetHandler(command.TestRunningType).ActionHandleAsync(scenario, cancellationToken).ConfigureAwait(false);
+        var executionResult = await _autoTestActionHandlerSwitcher.GetHandler(command.TestActionType).ActionHandleAsync(scenario, cancellationToken).ConfigureAwait(false);
         
         return new AutoTestRunningResponse() { Data = executionResult };
     }

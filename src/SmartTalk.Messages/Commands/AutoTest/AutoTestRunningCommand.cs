@@ -6,7 +6,7 @@ namespace SmartTalk.Messages.Commands.AutoTest;
 
 public class AutoTestRunningCommand : ICommand
 {
-    public AutoTestRunningType TestRunningType { get; set; }
+    public AutoTestActionType TestActionType { get; set; }
     
     public int ScenarioId { get; set; }
 }

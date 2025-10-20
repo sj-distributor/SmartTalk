@@ -2,8 +2,7 @@ using System.ComponentModel;
 
 namespace SmartTalk.Messages.Enums.AutoTest;
 
-public enum AutoTestRunningType
+public enum AutoTestActionType
 {
-    [Description("Ai下单")]
-    AiOrder = 0,
+    Webhook = 0,
 }
