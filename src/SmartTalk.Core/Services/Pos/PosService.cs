@@ -52,7 +52,7 @@ public partial interface IPosService : IScopedDependency
 
     Task<GetCurrentUserStoresResponse> GetCurrentUserStoresAsync(GetCurrentUserStoresRequest request, CancellationToken cancellationToken);
     
-    Task<GetAgentsStoresResponse> GetAgentsStoresAsync(GetAgentsStoresRequest storesRequest, CancellationToken cancellationToken);
+    Task<GetStoresAgentsResponse> GetStoresAgentsAsync(GetStoresAgentsRequest request, CancellationToken cancellationToken);
 }
 
 public partial class PosService : IPosService
@@ -374,25 +374,20 @@ public partial class PosService : IPosService
         return new GetCurrentUserStoresResponse { Data = enrichStores };
     }
 
-    public async Task<GetAgentsStoresResponse> GetAgentsStoresAsync(GetAgentsStoresRequest storesRequest, CancellationToken cancellationToken)
+    public async Task<GetStoresAgentsResponse> GetStoresAgentsAsync(GetStoresAgentsRequest request, CancellationToken cancellationToken)
     {
-        var agents = await _posDataProvider.GetPosStoresByAgentIdsAsync(agentIds: storesRequest.AgentIds, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        if (agents == null || agents.Count == 0)
-            return new GetAgentsStoresResponse { Data = [] };
+        var stores = _mapper.Map<List<CompanyStoreDto>>(
+            await _posDataProvider.GetPosCompanyStoresAsync(ids: request.StoreIds, cancellationToken: cancellationToken).ConfigureAwait(false));
         
-        var storeIds = agents.Select(a => a.Id).Distinct().ToList();
+        var allAgents = await _posDataProvider.GetPosAgentsAsync(storeIds: request.StoreIds, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        var stores = await _posDataProvider.GetPosCompanyStoresAsync(ids: storeIds, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        var storeDtos = _mapper.Map<List<CompanyStoreDto>>(stores);
-        
-        var result = storeDtos.Select(store => new GetAgentsStoresResponseDataDto()
+        var enrichStores = stores.Select(store => new GetStoresAgentsResponseDataDto
         {
-            Store = store
+            Store = store,
+            AgentIds = allAgents.Where(x => x.StoreId == store.Id).Select(x => x.AgentId).ToList()
         }).ToList();
 
-        return new GetAgentsStoresResponse { Data = result };
+        return new GetStoresAgentsResponse { Data = enrichStores };
     }
 
     private async Task<List<GetCompanyWithStoresData>> EnrichPosCompaniesAsync(List<CompanyDto> companies, CancellationToken cancellationToken)
