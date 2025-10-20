@@ -35,6 +35,8 @@ public class GetPhoneOrderDataDashboardResponseData
 public class CallInDataDto
 {
     public int AnsweredCallInCount { get; set; }
+    
+    public int CountChange { get; set; }
 
     public double AverageCallInDurationSeconds { get; set; }
 
@@ -58,6 +60,8 @@ public class CallOutDataDto
 {
     public int AnsweredCallOutCount { get; set; }
 
+    public int CountChange { get; set; }
+    
     public double AverageCallOutDurationSeconds { get; set; }
 
     public int CallOutNotAnsweredCount { get; set; } 
@@ -78,6 +82,8 @@ public class RestaurantDataDto
     public int OrderCount { get; set; }
 
     public decimal TotalOrderAmount { get; set; }
+    
+    public int OrderCountChange { get; set; }
     
     public int CancelledOrderCount { get; set; }
     
