@@ -165,7 +165,7 @@ public class HrInterViewService : IHrInterViewService
 
             if (firstQuestion != null)
             {
-                await ConvertAndSendWebSocketMessageAsync(webSocket, sessionId, "MESSAGE", $"Now comes the first round of questions:{firstQuestion}", cancellationToken: cancellationToken).ConfigureAwait(false);
+                await ConvertAndSendWebSocketMessageAsync(webSocket, sessionId, "MESSAGE", $"Now entering the first stage, about: {questions.MinBy(x => x.Id).Type},First:{firstQuestion}", cancellationToken: cancellationToken).ConfigureAwait(false);
                 
                 Log.Information("SendWelcomeAndFirstQuestionAsync questions:{@questions}", questions);
                 
