@@ -1,7 +1,9 @@
 using System.Reflection;
 using AutoMapper;
+using Newtonsoft.Json;
 using Serilog;
 using SmartTalk.Core.Domain;
+using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Ioc;
@@ -114,7 +116,11 @@ public class AgentService : IAgentService
             Brief = command.Brief,
             Channel = command.Channel,
             IsReceiveCall = command.IsReceivingCall,
-            IsSurface = true
+            IsSurface = true,
+            Voice = command.Voice,
+            WaitInterval = command.WaitInterval,
+            IsTransferHuman = command.IsTransferHuman,
+            TransferCallNumber = command.TransferCallNumber
         };
         
         await _agentDataProvider.AddAgentAsync(agent, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -143,6 +149,8 @@ public class AgentService : IAgentService
         _mapper.Map(command, agent);
         
         await _agentDataProvider.UpdateAgentsAsync([agent], cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        await HandleAiSpeechAssistantsAsync(agent, cancellationToken).ConfigureAwait(false);
         
         return new UpdateAgentResponse { Data = _mapper.Map<AgentDto>(agent) };
     }
@@ -330,5 +338,131 @@ public class AgentService : IAgentService
         routes.ForEach(x => x.To = number);
         
         await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantInboundRouteAsync(routes, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task HandleAiSpeechAssistantsAsync(Agent agent, CancellationToken cancellationToken)
+    {
+        var assistants = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantsByAgentIdAsync(agent.Id, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Handle(update) default assistant info: {@Assistants}", assistants);
+        
+        if (assistants == null || assistants.Count == 0) return;
+        
+        assistants.ForEach(x =>
+        {
+            x.ModelVoice = agent.Voice;
+            x.WaitInterval = agent.WaitInterval;
+            x.IsTransferHuman = agent.IsTransferHuman;
+        });
+        
+        await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync(assistants, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        await HandleAiSpeechAssistantHumanContactAsync(assistants, agent.TransferCallNumber, cancellationToken).ConfigureAwait(false);
+        
+        await HandleAiSpeechAssistantConfigsAsync(agent, assistants, cancellationToken).ConfigureAwait(false);
+    }
+    
+    private async Task HandleAiSpeechAssistantHumanContactAsync(List<Domain.AISpeechAssistant.AiSpeechAssistant> assistants, string number, CancellationToken cancellationToken)
+    {
+        var humanContacts = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantHumanContactsAsync(
+            assistants.Select(x => x.Id).ToList(), cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Get default assistant human contacts: {@HumanContacts}", humanContacts);
+        
+        if (humanContacts == null || humanContacts.Count == 0 || string.IsNullOrWhiteSpace(number)) return;
+        
+        humanContacts.ForEach(x => x.HumanPhone = number);
+        
+        await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantHumanContactsAsync(humanContacts, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task HandleAiSpeechAssistantConfigsAsync(Agent agent, List<Domain.AISpeechAssistant.AiSpeechAssistant> assistants, CancellationToken cancellationToken)
+    {
+        var specificAssistants = assistants.Where(x => x.ModelProvider == AiSpeechAssistantProvider.OpenAi).ToList();
+        
+        var configs = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallByAssistantIdsAsync(
+            assistants.Select(x => x.Id).ToList(), AiSpeechAssistantProvider.OpenAi, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var turnDetections = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.TurnDirection).ToList();
+        var transferCallTools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool && x.Name == "transfer_call").ToList();
+        
+        Log.Information("Getting AI Speech Assistant Configs: {@TurnDetections} {@TransferCallTools}", turnDetections, transferCallTools);
+        
+        if (transferCallTools.Select(x => x.AssistantId).Distinct().Count() == specificAssistants.Count)
+        {
+            Log.Information("Normal isActive update");
+            
+            transferCallTools.ForEach(x => x.IsActive = agent.IsTransferHuman);
+            
+            await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantFunctionCallAsync(transferCallTools, cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            Log.Information("TransferCall Tools Compatibility Check");
+            
+            await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantFunctionCalls(transferCallTools, cancellationToken: cancellationToken).ConfigureAwait(false);
+            
+            var content = new 
+            {
+                type = "function",
+                name = "transfer_call",
+                description = "Triggered when the customer requests to transfer the call to a real person(e.g. 用户说 '转人工', '找真人', '接客服'), or when the customer is not satisfied with the current answer and wants someone else to serve him/her"
+            };
+
+            var newTools = specificAssistants.Select(x => new AiSpeechAssistantFunctionCall
+            {
+                AssistantId = x.Id,
+                Name = "transfer_call",
+                Content = JsonConvert.SerializeObject(content),
+                Type = AiSpeechAssistantSessionConfigType.Tool,
+                ModelProvider = AiSpeechAssistantProvider.OpenAi,
+                IsActive = agent.IsTransferHuman
+            }).ToList();
+            
+            await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantFunctionCallsAsync(newTools, cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+        
+        if (turnDetections.Any(x => x.Content.Contains("semantic_vad"))) return;
+        
+        if (turnDetections.Select(x => x.AssistantId).Distinct().Count() == specificAssistants.Count)
+        {
+            Log.Information("Server vad update");
+            
+            var content = JsonConvert.DeserializeObject<AiSpeechAssistantSessionTurnDetectionDto>(turnDetections.First().Content);
+
+            if (content.SilenceDuratioMs == agent.WaitInterval) return;
+                
+            content.SilenceDuratioMs = agent.WaitInterval;
+            var contentJson = JsonConvert.SerializeObject(content);
+                
+            turnDetections.ForEach(x => x.Content = contentJson);
+            
+            await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantFunctionCallAsync(turnDetections, cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            Log.Information("Turn Detections Compatibility Check");
+            
+            await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantFunctionCalls(turnDetections, cancellationToken: cancellationToken).ConfigureAwait(false);
+            
+            var content = new 
+            {
+                type = "server_vad",
+                threshold = 0.8f,
+                silence_duration_ms = agent.WaitInterval == 0 ? 500 : agent.WaitInterval
+            };
+                
+            var newDetections = specificAssistants.Select(x => new AiSpeechAssistantFunctionCall
+            {
+                AssistantId = x.Id,
+                Name = "turn_detection",
+                Content = JsonConvert.SerializeObject(content),
+                Type = AiSpeechAssistantSessionConfigType.TurnDirection,
+                ModelProvider = AiSpeechAssistantProvider.OpenAi,
+                IsActive = true
+            }).ToList();
+                
+            await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantFunctionCallsAsync(newDetections, cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
     }
 }
