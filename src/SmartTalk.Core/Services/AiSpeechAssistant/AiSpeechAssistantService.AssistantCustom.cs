@@ -326,7 +326,7 @@ public partial class AiSpeechAssistantService
 
         if (assistant != null)
         {
-            assistant.ModelVoice = ModelVoiceMapping(voiceType);
+            assistant.ModelVoice = ModelVoiceMapping(null, voiceType);
                 
             await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync([assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
         }
@@ -351,8 +351,10 @@ public partial class AiSpeechAssistantService
         return assistant;
     }
 
-    private string ModelVoiceMapping(AiKidVoiceType? voiceType)
+    private string ModelVoiceMapping(string voice, AiKidVoiceType? voiceType)
     {
+        if (!string.IsNullOrWhiteSpace(voice)) return voice;
+        
         if (!voiceType.HasValue) return "alloy";
         
         return voiceType.Value switch
@@ -377,7 +379,7 @@ public partial class AiSpeechAssistantService
         var assistant = new Domain.AISpeechAssistant.AiSpeechAssistant
         {
             AgentId = agent.Id,
-            ModelVoice = ModelVoiceMapping(command.VoiceType),
+            ModelVoice = ModelVoiceMapping(agent.Voice, command.VoiceType),
             Name = command.AssistantName,
             AnsweringNumberId = number?.Id,
             AnsweringNumber = number?.Number,
@@ -387,7 +389,9 @@ public partial class AiSpeechAssistantService
             Channel = command.Channels == null ? null : string.Join(",", command.Channels.Select(x => (int)x)),
             IsDisplay = command.IsDisplay,
             IsDefault = isDefault,
-            ModelLanguage = command.AgentType == AgentType.Agent ? "English" : null
+            ModelLanguage = command.AgentType == AgentType.Agent ? "English" : null,
+            WaitInterval = agent.WaitInterval,
+            IsTransferHuman = agent.IsTransferHuman
         };
         
         await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantsAsync([assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -401,6 +405,8 @@ public partial class AiSpeechAssistantService
         await _aiSpeechAssistantDataProvider.AddAgentAssistantsAsync([agentAssistant], cancellationToken: cancellationToken).ConfigureAwait(false);
         
         await UpdateAgentIfRequiredAsync(assistant, agent, cancellationToken).ConfigureAwait(false);
+
+        await UpdateAiSpeechAssistantConfigsAsync(assistant, agent.TransferCallNumber, cancellationToken).ConfigureAwait(false);
         
         return assistant;
     }
@@ -695,7 +701,7 @@ public partial class AiSpeechAssistantService
     private async Task UpdateAiSpeechAssistantConfigsAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, string transferCallNumber, CancellationToken cancellationToken)
     {
         var configs = await _aiSpeechAssistantDataProvider
-            .GetAiSpeechAssistantFunctionCallByAssistantIdAsync(assistant.Id, assistant.ModelProvider, cancellationToken: cancellationToken).ConfigureAwait(false);
+            .GetAiSpeechAssistantFunctionCallByAssistantIdsAsync([assistant.Id], assistant.ModelProvider, cancellationToken: cancellationToken).ConfigureAwait(false);
         var humanConcat = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantHumanContactByAssistantIdAsync(assistant.Id, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Get the human concat: {@HumanConcat}", humanConcat);
@@ -726,13 +732,13 @@ public partial class AiSpeechAssistantService
                     IsActive = assistant.IsTransferHuman,
                 };
             
-                await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantFunctionCall(transferCallTool, cancellationToken: cancellationToken).ConfigureAwait(false);
+                await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantFunctionCallsAsync([transferCallTool], cancellationToken: cancellationToken).ConfigureAwait(false);
             }
             else
             {
                 transferCallTool.IsActive = assistant.IsTransferHuman;
                 
-                await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantFunctionCall([transferCallTool], cancellationToken: cancellationToken).ConfigureAwait(false);
+                await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantFunctionCallAsync([transferCallTool], cancellationToken: cancellationToken).ConfigureAwait(false);
             }
 
             if (turnDetection == null)
@@ -741,7 +747,7 @@ public partial class AiSpeechAssistantService
                 {
                     type = "server_vad",
                     threshold = 0.8f,
-                    silence_duration_ms = 500
+                    silence_duration_ms = assistant.WaitInterval == 0 ? 500 : assistant.WaitInterval
                 };
                 
                 turnDetection = new AiSpeechAssistantFunctionCall
@@ -754,7 +760,7 @@ public partial class AiSpeechAssistantService
                     IsActive = true
                 };
                 
-                await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantFunctionCall(turnDetection, cancellationToken: cancellationToken).ConfigureAwait(false);
+                await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantFunctionCallsAsync([turnDetection], cancellationToken: cancellationToken).ConfigureAwait(false);
             }
             else
             {
@@ -764,7 +770,7 @@ public partial class AiSpeechAssistantService
                 
                 turnDetection.Content = JsonConvert.SerializeObject(content);
                 
-                await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantFunctionCall([turnDetection], cancellationToken: cancellationToken).ConfigureAwait(false);
+                await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantFunctionCallAsync([turnDetection], cancellationToken: cancellationToken).ConfigureAwait(false);
             }
 
             if (assistant.IsTransferHuman)
@@ -782,7 +788,7 @@ public partial class AiSpeechAssistantService
                 else
                 {
                     humanConcat.HumanPhone = transferCallNumber;
-                    await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantHumanContactAsync(humanConcat, cancellationToken: cancellationToken).ConfigureAwait(false);
+                    await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantHumanContactsAsync([humanConcat], cancellationToken: cancellationToken).ConfigureAwait(false);
                 }
             }
         }
