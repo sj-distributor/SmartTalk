@@ -12,6 +12,8 @@ public interface ISalesClient : IScopedDependency
     Task<GetOrderHistoryByCustomerResponseDto> GetOrderHistoryByCustomerAsync(GetOrderHistoryByCustomerRequestDto request, CancellationToken cancellationToken);
     
     Task<SalesResponseDto> GenerateAiOrdersAsync(GenerateAiOrdersRequestDto request, CancellationToken cancellationToken);
+    
+    Task<GetOrderArrivalTimeResponseDto> GetOrderArrivalTimeAsync(GetOrderArrivalTimeRequestDto request, CancellationToken cancellationToken);
 }
 
 public class SalesClient : ISalesClient
@@ -61,5 +63,22 @@ public class SalesClient : ISalesClient
     public async Task<SalesResponseDto> GenerateAiOrdersAsync(GenerateAiOrdersRequestDto request, CancellationToken cancellationToken)
     {
         return await _httpClientFactory.PostAsJsonAsync<SalesResponseDto>($"{_salesSetting.BaseUrl}/api/SalesOrder/GenerateAiOrders", request, headers: _headers, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+    
+    public async Task<GetOrderArrivalTimeResponseDto> GetOrderArrivalTimeAsync(GetOrderArrivalTimeRequestDto request, CancellationToken cancellationToken)
+    {
+        if (request.CustomerIds == null || request.CustomerIds.Count == 0)
+            throw new ArgumentException("CustomerIds cannot be null or empty.");
+        
+        var queryString = new StringBuilder("?");
+        
+        foreach (var customerNumber in request.CustomerIds)
+        {
+            queryString.Append("CustomerIds=").Append(Uri.EscapeDataString(customerNumber)).Append('&');
+        }
+        
+        var url = $"{_salesSetting.BaseUrl}/api/order/GetOderArrivalTime" + queryString.ToString().TrimEnd('&');
+
+        return await _httpClientFactory.GetAsync<GetOrderArrivalTimeResponseDto>(url, headers: _headers, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 }
