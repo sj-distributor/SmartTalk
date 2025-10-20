@@ -159,13 +159,13 @@ public class HrInterViewService : IHrInterViewService
             
             if (!questions.Any()) await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "No questions found", cancellationToken).ConfigureAwait(false);
         
-            await ConvertAndSendWebSocketMessageAsync(webSocket, sessionId, "WELCOME", "Now comes the first round of questions:" + setting.Welcome, setting.EndMessage, cancellationToken).ConfigureAwait(false);
+            await ConvertAndSendWebSocketMessageAsync(webSocket, sessionId, "WELCOME",  setting.Welcome, setting.EndMessage, cancellationToken).ConfigureAwait(false);
 
             var firstQuestion = JsonConvert.DeserializeObject<List<string>>(questions.MinBy(x => x.Id)!.Question).FirstOrDefault();
 
             if (firstQuestion != null)
             {
-                await ConvertAndSendWebSocketMessageAsync(webSocket, sessionId, "MESSAGE", firstQuestion, cancellationToken: cancellationToken).ConfigureAwait(false);
+                await ConvertAndSendWebSocketMessageAsync(webSocket, sessionId, "MESSAGE", $"Now comes the first round of questions:{firstQuestion}", cancellationToken: cancellationToken).ConfigureAwait(false);
                 
                 Log.Information("SendWelcomeAndFirstQuestionAsync questions:{@questions}", questions);
                 
