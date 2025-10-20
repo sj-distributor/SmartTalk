@@ -16,6 +16,6 @@ public class GetStoreAgentsRequestHandler : IRequestHandler<GetStoresAgentsReque
     
     public async Task<GetStoresAgentsResponse> Handle(IReceiveContext<GetStoresAgentsRequest> context, CancellationToken cancellationToken)
     {
-        return await _posService.GetAgentsStoresAsync(context.Message, cancellationToken).ConfigureAwait(false);
+        return await _posService.GetStoresAgentsAsync(context.Message, cancellationToken).ConfigureAwait(false);
     }
 }
