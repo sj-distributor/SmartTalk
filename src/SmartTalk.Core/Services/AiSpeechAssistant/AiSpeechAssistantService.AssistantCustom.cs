@@ -318,7 +318,7 @@ public partial class AiSpeechAssistantService
         };
     }
 
-    private async Task UpdateAssistantVoiceIfRequiredAsync(int assistantId, AiKidVoiceType voiceType, CancellationToken cancellationToken)
+    private async Task UpdateAssistantVoiceIfRequiredAsync(int assistantId, AiSpeechAssistantVoiceType voiceType, CancellationToken cancellationToken)
     {
         var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantAsync(assistantId, cancellationToken).ConfigureAwait(false);
         
@@ -351,7 +351,7 @@ public partial class AiSpeechAssistantService
         return assistant;
     }
 
-    private string ModelVoiceMapping(string voice, AiKidVoiceType? voiceType)
+    private string ModelVoiceMapping(string voice, AiSpeechAssistantVoiceType? voiceType)
     {
         if (!string.IsNullOrWhiteSpace(voice)) return voice;
         
@@ -359,7 +359,7 @@ public partial class AiSpeechAssistantService
         
         return voiceType.Value switch
         {
-            AiKidVoiceType.Male => "ash",
+            AiSpeechAssistantVoiceType.Male => "ash",
             _ => "alloy"
         };
     }
