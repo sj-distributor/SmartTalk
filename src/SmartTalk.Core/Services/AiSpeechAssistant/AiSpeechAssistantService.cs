@@ -397,6 +397,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         if (finalPrompt.Contains("#{customer_items}", StringComparison.OrdinalIgnoreCase))
         {
             var soldToIds = !string.IsNullOrEmpty(assistant.Name) ? assistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : new List<string>();
+            Log.Information("SoldToIds to be sent to BuildCustomerItemsStringAsync: {@SoldToIds}", soldToIds);
             
             finalPrompt = finalPrompt.Replace("#{customer_items}", "");
 
@@ -417,7 +418,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                     {
                         Log.Error(task.Exception, "Failed to build customer items string");
                     }
-                }); 
+                }, cancellationToken); 
         }
         
         Log.Information($"The final prompt: {finalPrompt}");

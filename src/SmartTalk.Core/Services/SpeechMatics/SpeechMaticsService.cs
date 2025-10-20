@@ -162,6 +162,10 @@ public class SpeechMaticsService : ISpeechMaticsService
             .Concat(orderItems.Where(x => !string.IsNullOrEmpty(x.LevelCode)).Select(x => x.LevelCode)).Distinct().ToList();
         
         var habitResponse = levelCodes.Any() ? await _salesClient.GetCustomerLevel5HabitAsync(new GetCustomerLevel5HabitRequstDto { CustomerId = soldToIds.FirstOrDefault(), LevelCode5List = levelCodes }, cancellationToken).ConfigureAwait(false) : null;
+        
+        Log.Information("Calling GetCustomerLevel5HabitAsync with CustomerId: {CustomerId}, LevelCodes: {@LevelCodes}", soldToIds?.FirstOrDefault(), levelCodes);
+        Log.Information("Habit Response: {@HabitResponse}, HistoryCustomerLevel5HabitDtos count: {Count}", habitResponse, habitResponse?.HistoryCustomerLevel5HabitDtos?.Count ?? 0);
+        
         var habitLookup = habitResponse?.HistoryCustomerLevel5HabitDtos?.ToDictionary(h => h.LevelCode5, h => h) ?? new Dictionary<string, HistoryCustomerLevel5HabitDto>();
         
         string FormatItem(string materialDesc, string levelCode = null)
@@ -188,7 +192,10 @@ public class SpeechMaticsService : ISpeechMaticsService
         allItems.AddRange(askItems.Select(x => FormatItem(x.MaterialDesc, x.LevelCode)));
         allItems.AddRange(orderItems.Select(x => FormatItem(x.MaterialDescription, x.LevelCode)));
 
-        return string.Join(Environment.NewLine, allItems.Distinct());
+        var result = string.Join(Environment.NewLine, allItems.Distinct());
+        Log.Information("BuildCustomerItemsStringAsync final result:\n{Result}", result);
+
+        return result;
     }
 
     private async Task SummarizeConversationContentAsync(PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken)
