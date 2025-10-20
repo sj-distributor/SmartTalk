@@ -345,9 +345,26 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         {
             var soldToIds = !string.IsNullOrEmpty(assistant.Name) ? assistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : new List<string>();
             
-            var customerItemsString = await _speechMaticsService.BuildCustomerItemsStringAsync(soldToIds, cancellationToken).ConfigureAwait(false);
+            finalPrompt = finalPrompt.Replace("#{customer_items}", ""); // 先清空，占位
 
-            finalPrompt = finalPrompt.Replace("#{customer_items}", customerItemsString ?? "");
+            _ = _speechMaticsService.BuildCustomerItemsStringAsync(soldToIds, cancellationToken)
+                .ContinueWith(task =>
+                {
+                    if (task.Status == TaskStatus.RanToCompletion && !string.IsNullOrEmpty(task.Result))
+                    {
+                        var completedPrompt = _aiSpeechAssistantStreamContext.LastPrompt 
+                                              + Environment.NewLine 
+                                              + task.Result;
+
+                        Log.Information("Final completed prompt: {Prompt}", completedPrompt);
+
+                        _aiSpeechAssistantStreamContext.LastPrompt = completedPrompt;
+                    }
+                    else if (task.IsFaulted)
+                    {
+                        Log.Error(task.Exception, "Failed to build customer items string");
+                    }
+                }); 
         }
         
         Log.Information($"The final prompt: {finalPrompt}");
