@@ -6,7 +6,7 @@ using SmartTalk.Messages.Responses;
 
 namespace SmartTalk.Messages.Commands.Agent;
 
-public class UpdateAgentCommand : ICommand
+public class UpdateAgentCommand : HasServiceProviderId, ICommand
 {
     public int AgentId { get; set; }
     
@@ -16,7 +16,13 @@ public class UpdateAgentCommand : ICommand
     
     public bool IsReceivingCall { get; set; }
     
-    public int ServiceProviderId { get; set; }
+    public string Voice { get; set; }
+    
+    public int WaitInterval { get; set; }
+
+    public bool IsTransferHuman { get; set; } = false;
+    
+    public string TransferCallNumber { get; set; }
     
     public AiSpeechAssistantChannel Channel { get; set; }
 }

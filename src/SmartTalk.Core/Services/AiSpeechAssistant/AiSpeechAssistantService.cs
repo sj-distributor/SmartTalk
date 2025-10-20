@@ -394,15 +394,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             .Replace("#{customer_phone}", from.StartsWith("+1") ? from[2..] : from)
             .Replace("#{pst_date}", $"{pstTime.Date:yyyy-MM-dd} {pstTime.DayOfWeek}");
         
-        if (finalPrompt.Contains("#{customer_items}", StringComparison.OrdinalIgnoreCase))
-        {
-            var soldToIds = !string.IsNullOrEmpty(assistant.Name) ? assistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : new List<string>();
-
-            var customerItemsString = await _speechMaticsService.BuildCustomerItemsStringAsync(soldToIds, cancellationToken).ConfigureAwait(false);
-
-            finalPrompt = finalPrompt.Replace("#{customer_items}", customerItemsString ?? "");
-        }
-        
         Log.Information($"The final prompt: {finalPrompt}");
 
         if (numberId.HasValue)
@@ -1186,7 +1177,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
     private async Task<List<(AiSpeechAssistantSessionConfigType Type, object Config)>> InitialSessionConfigAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken = default)
     {
-        var functions = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallByAssistantIdAsync(assistant.Id, assistant.ModelProvider, true, cancellationToken).ConfigureAwait(false);
+        var functions = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallByAssistantIdsAsync([assistant.Id], assistant.ModelProvider, true, cancellationToken).ConfigureAwait(false);
 
         return functions.Count == 0 ? [] : functions.Where(x => !string.IsNullOrWhiteSpace(x.Content)).Select(x => (x.Type, JsonConvert.DeserializeObject<object>(x.Content))).ToList();
     }

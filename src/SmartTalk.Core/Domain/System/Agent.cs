@@ -65,6 +65,18 @@ public class Agent : IAgent, IEntity<int>, IHasCreatedFields
     [Column("is_surface")]
     public bool IsSurface { get; set; }
     
+    [Column("voice"), StringLength(64)]
+    public string Voice { get; set; }
+    
+    [Column("wait_interval")]
+    public int WaitInterval { get; set; } = 500;
+    
+    [Column("is_transfer_human")]
+    public bool IsTransferHuman { get; set; } = false;
+        
+    [Column("transfer_call_number"), StringLength(128)]
+    public string TransferCallNumber { get; set; }
+    
     [NotMapped]
     public List<AISpeechAssistant.AiSpeechAssistant> Assistants { get; set; }
 }

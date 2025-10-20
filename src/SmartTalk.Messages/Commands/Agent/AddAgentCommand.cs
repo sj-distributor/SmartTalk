@@ -15,6 +15,14 @@ public class AddAgentCommand : HasServiceProviderId, ICommand
     public string Brief { get; set; }
     
     public bool IsReceivingCall { get; set; }
+    
+    public string Voice { get; set; }
+    
+    public int WaitInterval { get; set; }
+
+    public bool IsTransferHuman { get; set; } = false;
+    
+    public string TransferCallNumber { get; set; }
 
     public AiSpeechAssistantChannel Channel { get; set; } = AiSpeechAssistantChannel.PhoneChat;
 }

@@ -40,6 +40,14 @@ public class AgentDto
     
     public bool IsSurface { get; set; }
     
+    public string Voice { get; set; }
+    
+    public int WaitInterval { get; set; }
+    
+    public bool IsTransferHuman { get; set; }
+    
+    public string TransferCallNumber { get; set; }
+    
     public DateTimeOffset CreatedDate { get; set; }
     
     public List<AiSpeechAssistantDto> Assistants { get; set; }
