@@ -159,7 +159,7 @@ public class HrInterViewService : IHrInterViewService
             
             if (!questions.Any()) await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "No questions found", cancellationToken).ConfigureAwait(false);
         
-            await ConvertAndSendWebSocketMessageAsync(webSocket, sessionId, "WELCOME", setting.Welcome, setting.EndMessage, cancellationToken).ConfigureAwait(false);
+            await ConvertAndSendWebSocketMessageAsync(webSocket, sessionId, "WELCOME", "Now comes the first round of questions:" + setting.Welcome, setting.EndMessage, cancellationToken).ConfigureAwait(false);
 
             var firstQuestion = JsonConvert.DeserializeObject<List<string>>(questions.MinBy(x => x.Id)!.Question).FirstOrDefault();
 
@@ -190,7 +190,9 @@ public class HrInterViewService : IHrInterViewService
             {
                 Log.Information("HandleWebSocketMessageAsync sessionId:{@sessionId}, message:{@message}", sessionId, message);
 
-                var questions = (await _hrInterViewDataProvider.GetHrInterViewSettingQuestionsBySessionIdAsync(sessionId, cancellationToken).ConfigureAwait(false)).Where(x => x.Count > 0).ToList();
+                var questions = await _hrInterViewDataProvider.GetHrInterViewSettingQuestionsBySessionIdAsync(sessionId, cancellationToken).ConfigureAwait(false);
+                
+                var remainQuestions = questions.Where(x => x.Count > 0).ToList();
                 
                 var fileBytes = await _httpClientFactory.GetAsync<byte[]>(message.Message, cancellationToken).ConfigureAwait(false);
                 
@@ -202,13 +204,15 @@ public class HrInterViewService : IHrInterViewService
                     Message = answers.Text,
                     FileUrl = message.Message,
                     QuestionType = HrInterViewSessionQuestionType.User
-                }, cancellationToken:cancellationToken).ConfigureAwait(false);
+                }, cancellationToken: cancellationToken).ConfigureAwait(false);
                 
-                if (!questions.Any()) return;
+                if (!remainQuestions.Any()) return;
                 
                 var context = await GetHrInterViewSessionContextAsync(sessionId, cancellationToken).ConfigureAwait(false);
                     
-                var responseNextQuestion = await MatchingReasonableNextQuestionAsync(answers.Text, questions.MinBy(x => x.Id), context, fileBytes, cancellationToken).ConfigureAwait(false);
+                var responseNextQuestion = await MatchingReasonableNextQuestionAsync(answers.Text, remainQuestions.MinBy(x => x.Id), 
+                    questions.Select((q, index) => new { q.Id, Index = index }).FirstOrDefault(item => item.Id == remainQuestions.MinBy(x => x.Id)!.Id)!.Index,
+                    context, fileBytes, cancellationToken).ConfigureAwait(false);
 
                 var fileUrl = await UploadFileAsync(responseNextQuestion.AudioBytes.ToArray(), sessionId, cancellationToken:cancellationToken).ConfigureAwait(false);
 
@@ -241,13 +245,13 @@ public class HrInterViewService : IHrInterViewService
         }
     }
     
-    private async Task<ChatOutputAudio> MatchingReasonableNextQuestionAsync(string userQuestion, HrInterViewSettingQuestion candidateQuestions, string context, byte[] audioContent, CancellationToken cancellationToken)
+    private async Task<ChatOutputAudio> MatchingReasonableNextQuestionAsync(string userQuestion, HrInterViewSettingQuestion candidateQuestions, int currentStage, string context, byte[] audioContent, CancellationToken cancellationToken)
     {
         var questionListBuilder = new StringBuilder();
         
         questionListBuilder.AppendLine();
-        questionListBuilder.AppendLine($"类型 ID：{candidateQuestions.Id}");
-        questionListBuilder.AppendLine($"“{candidateQuestions.Type}”这类的问题有: {candidateQuestions.Question}, 此类问题的最大可问题数量上限为: {candidateQuestions.Count}");
+        questionListBuilder.AppendLine($"Question Type ID：{candidateQuestions.Id}");
+        questionListBuilder.AppendLine($"“{candidateQuestions.Type}”The specific types of problems include: {candidateQuestions.Question}, The maximum number of such specific problems is:{candidateQuestions.Count}");
         
         var jsonString = """{"Id": "TypeId of the selected question type", "text": "English translation of the speech question"}""";
         
@@ -258,13 +262,18 @@ public class HrInterViewService : IHrInterViewService
                                 You are a professional interviewer currently conducting a conversation with a respondent. Based on the respondent's response, please perform the following tasks:
                                 1. Provide a brief, professional evaluation of the respondent's response, including affirmation and emphasis on key points (other areas for improvement should be brief and non-repetitive). Ensure your overall response is natural, coherent, and comprehensive.
                                 2. Based on the user's current response and the list of questions, select the most appropriate question from the "Question List," maintaining a natural transition.
-                                3. **Your final output must be in English, regardless of the user's language.**
-                                4. Ask only one question at a time (do not repeat questions you have already asked).
-                                5. Strictly enforce the limit on the number of questions of each type. You must track the number of questions of that type you have asked (based on contextual documentation). If you have reached the maximum number of questions of that type, do not select any more questions of that type. Select another eligible question type.
+                                3. Stage awareness requirement:
+                                - The interview is divided into multiple stages (e.g., Stage 1, Stage 2, etc.).
+                                - You will receive the current stage number as : {currentStage}
+                                - When entering a stage for the first time, you must include a brief introductory sentence before asking the next question, to indicate the transition. For example: “Now we’re entering the {currentStage} stage, about {candidateQuestions.Type}.”
+                                - You must determine from the context and previously asked questions whether this is the first question in the current stage. Only include the introductory sentence the first time. Do not repeat it for later questions in the same stage.
+                                4. **Your final output must be in English, regardless of the user's language.**
+                                5. Ask only one question at a time (do not repeat questions you have already asked).
+                                6. Strictly enforce the limit on the number of questions of each type. You must track the number of questions of that type you have asked (based on contextual documentation). If you have reached the maximum number of questions of that type, do not select any more questions of that type. Select another eligible question type.
                                 * Question list: 
                                 {questionListBuilder}
                                 ** ❌ Do not invent, rephrase, or create any new questions outside this list.
-                                6. Answering style requirements:
+                                7. Answering style requirements:
                                 * Use natural, colloquial language, avoiding formality. Maintain professionalism without being robotic.
                                 * Avoid repeating what the respondent has just said.
                                 * Use natural transitions, including but not limited to phrases such as "I see. I'd also like to know..." and "Sounds good. My next question is..." Ensure a consistent overall tone and natural transitions. Always use English. * Do not repeat or rephrase questions that have already been asked.
