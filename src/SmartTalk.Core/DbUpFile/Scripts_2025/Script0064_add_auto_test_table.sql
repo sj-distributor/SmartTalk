@@ -6,6 +6,7 @@ create table if not exists auto_test_scenario
     `input_schema` text not null,
     `output_schema` text not null,
     `action_config` text not null,
+    `action_type` int not null,
     `created_at` dateTime(3) not null,
     `updated_at` dateTime(3) null
     ) charset=utf8mb4;

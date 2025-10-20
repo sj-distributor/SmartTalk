@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using SmartTalk.Messages.Enums.AutoTest;
 
 namespace SmartTalk.Core.Domain.AutoTest;
 
@@ -25,6 +26,9 @@ public class AutoTestScenario : IEntity
     
     [Column("action_config")]
     public string ActionConfig { get; set; }
+    
+    [Column("action_type")]
+    public AutoTestActionType ActionType { get; set; }
     
     [Column("created_at")]
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.Now;

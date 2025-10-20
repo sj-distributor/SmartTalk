@@ -1,3 +1,5 @@
+using SmartTalk.Messages.Enums.AutoTest;
+
 namespace SmartTalk.Messages.Dto.AutoTest;
 
 public class AutoTestScenarioDto
@@ -13,6 +15,8 @@ public class AutoTestScenarioDto
     public string OutputSchema { get; set; }
     
     public string ActionConfig { get; set; }
+    
+    public AutoTestActionType ActionType { get; set; }
     
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.Now;
     

@@ -10,3 +10,13 @@ public interface IAutoTestActionHandler : IScopedDependency
     
     Task<string> ActionHandleAsync(AutoTestScenario scenario, CancellationToken cancellationToken = default);
 }
+
+public class WebhookAutoTestHandler : IAutoTestActionHandler
+{
+    public AutoTestActionType ActionType => AutoTestActionType.Webhook;
+    
+    public async Task<string> ActionHandleAsync(AutoTestScenario scenario, CancellationToken cancellationToken = default)
+    {
+        throw new NotImplementedException();
+    }
+}
