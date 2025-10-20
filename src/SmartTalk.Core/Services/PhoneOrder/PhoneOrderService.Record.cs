@@ -921,6 +921,8 @@ public partial class PhoneOrderService
             OrderCountPerPeriod = orderCountPerPeriod,
             CancelledOrderCountPerPeriod = cancelledOrderCountPerPeriod
         };
+        
+        await ApplyPeriodComparisonAsync(request, callInRecords, callOutRecords, restaurantData, callInData, callOutData, cancellationToken).ConfigureAwait(false);
 
         return new GetPhoneOrderDataDashboardResponse
         {
@@ -1047,5 +1049,29 @@ public partial class PhoneOrderService
             .ToDictionary(
                 g => g.Key.ToString("yyyy-MM-dd"),
                 g => g.Count());
+    }
+
+    private async Task ApplyPeriodComparisonAsync(GetPhoneOrderDataDashboardRequest request,
+        List<PhoneOrderRecord> callInRecords, List<PhoneOrderRecord> callOutRecords, RestaurantDataDto restaurantData,
+        CallInDataDto callInData, CallOutDataDto callOutData, CancellationToken cancellationToken)
+    {
+        var periodDays = (request.EndDate - request.StartDate)?.TotalDays ?? 0;
+        if (periodDays <= 0 || request.StartDate == null || request.EndDate == null) return;
+
+        var prevStartDate = request.StartDate.Value.AddDays(-periodDays);
+        var prevEndDate = request.StartDate.Value;
+
+        var prevRecords = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(
+            agentIds: request.AgentIds, null, utcStart: prevStartDate, utcEnd: prevEndDate, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var prevCallInRecords = prevRecords?.Where(x => !x.IsOutBount).ToList() ?? new List<PhoneOrderRecord>();
+        var prevCallOutRecords = prevRecords?.Where(x => x.IsOutBount).ToList() ?? new List<PhoneOrderRecord>();
+
+        var prevPosOrders = await _posDataProvider.GetPosOrdersByStoreIdsAsync(request.StoreIds, null, true, prevStartDate, prevEndDate, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        callInData.CountChange = callInRecords.Count - prevCallInRecords.Count;
+        callOutData.CountChange = callOutRecords.Count - prevCallOutRecords.Count;
+
+        restaurantData.OrderCountChange = restaurantData.OrderCount - prevPosOrders.Count;
     }
 }
