@@ -6,7 +6,7 @@ namespace SmartTalk.Messages.Commands.AutoTest;
 
 public class AutoTestImportDataCommand : ICommand
 {
-    public byte[] FileBytes { get; set; }
+    public Dictionary<string, object> ImportData { get; set; }
     
     public AutoTestImportDataRecordType ImportType { get; set; }
 }
