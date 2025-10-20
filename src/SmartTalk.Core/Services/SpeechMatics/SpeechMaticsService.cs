@@ -35,6 +35,9 @@ using SmartTalk.Messages.Dto.Sales;
 using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Enums.Sales;
 using SmartTalk.Messages.Enums.STT;
+using Twilio;
+using Twilio.Rest.Api.V2010.Account;
+using Exception = System.Exception;
 
 namespace SmartTalk.Core.Services.SpeechMatics;
 
@@ -719,7 +722,7 @@ public class SpeechMaticsService : ISpeechMaticsService
 
         var result = JsonConvert.DeserializeObject<CustomerFriendlyResponse>(response);
 
-        if (result == null) throw new InvalidOperationException($"无法反序列化模型返回结果: {response}");
+        if (result == null) throw new Exception($"无法反序列化模型返回结果: {response}");
 
         return result.IsCustomerFriendly;
     }
