@@ -207,28 +207,23 @@ public class LinphoneDataProvider : ILinphoneDataProvider
     
     public async Task<(int callInFailedCount, int callOutFailedCount)> GetCallFailedStatisticsAsync(long? startTime, long? endTime, List<string> sipNumbers, CancellationToken cancellationToken = default)
     {
-        var query =  _repository.Query<Cdr>();
+        if (sipNumbers == null || !sipNumbers.Any())
+            return (0, 0);
 
-        if (startTime.HasValue)
-        {
-            query = query.Where(x => x.Uniqueid > startTime.Value);
-        }
-        if (endTime.HasValue)
-        {
-            query = query.Where(x => x.Uniqueid < endTime.Value);
-        }
-        
-        var callInFailedCount = await query
-            .Where(x => sipNumbers.Contains(x.Did))
+        var start = startTime ?? 0;
+        var end = endTime ?? DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+        var callInFailedCount = await _repository.Query<Cdr>()
+            .Where(x => x.Uniqueid > start && x.Uniqueid < end && sipNumbers.Contains(x.Did))
             .GroupBy(x => x.Linkedid)
-            .Where(group => !group.Any(x => x.Disposition == "ANSWERED"))
-            .CountAsync(cancellationToken);
+            .Select(g => g.All(x => x.Disposition != "ANSWERED") ? 1 : 0)
+            .SumAsync(cancellationToken);
         
-        var callOutFailedCount = await query
-            .Where(x => sipNumbers.Contains(x.Cnum))
+        var callOutFailedCount = await _repository.Query<Cdr>()
+            .Where(x => x.Uniqueid > start && x.Uniqueid < end && sipNumbers.Contains(x.Cnum))
             .GroupBy(x => x.Linkedid)
-            .Where(group => !group.Any(x => x.Disposition == "ANSWERED"))
-            .CountAsync(cancellationToken);
+            .Select(g => g.All(x => x.Disposition != "ANSWERED") ? 1 : 0)
+            .SumAsync(cancellationToken);
 
         return (callInFailedCount, callOutFailedCount);
     }
