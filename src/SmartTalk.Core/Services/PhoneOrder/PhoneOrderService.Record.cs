@@ -724,17 +724,22 @@ public partial class PhoneOrderService
         };
     }
     
-    private (DateTimeOffset Start, DateTimeOffset End) GetQueryTimeRange(int month)
+    private (DateTimeOffset StartUtc, DateTimeOffset EndUtc) GetQueryTimeRange(int month)
     {
-        var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
-        
-        var startLocal = new DateTime(2025, month, 1, 0, 0, 0);
-        var endLocal = new DateTime(2025, month, 31, 23, 59, 59);
-        
-        var startInPst = new DateTimeOffset(startLocal, pacificZone.GetUtcOffset(startLocal));
-        var endInPst = new DateTimeOffset(endLocal, pacificZone.GetUtcOffset(endLocal));
-        
-        return (startInPst.ToUniversalTime(), endInPst.ToUniversalTime());
+        if (month < 1 || month > 12) throw new ArgumentOutOfRangeException(nameof(month));
+
+        var tz = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"); // PT, 含 DST
+
+        var startLocal = new DateTime(2025, month, 1, 0, 0, 0, DateTimeKind.Unspecified);
+
+        var nextMonthLocal = (month == 12)
+            ? new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Unspecified)
+            : new DateTime(2025, month + 1, 1, 0, 0, 0, DateTimeKind.Unspecified);
+
+        var startUtc = TimeZoneInfo.ConvertTimeToUtc(startLocal, tz);
+        var endUtc = TimeZoneInfo.ConvertTimeToUtc(nextMonthLocal, tz);
+
+        return (new DateTimeOffset(startUtc), new DateTimeOffset(endUtc));
     }
     
     private string ConvertUtcToPst(DateTimeOffset utcTime)
