@@ -1,6 +1,7 @@
 using Mediator.Net;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Requests.PhoneOrder;
 
 namespace SmartTalk.Api.Controllers;
@@ -33,5 +34,13 @@ public class SystemController : ControllerBase
         var response = await _mediator.RequestAsync<GetPhoneCallRecordDetailRequest, GetPhoneCallRecordDetailResponse>(command).ConfigureAwait(false);
 
         return Ok(response);
+    }
+
+    [Route("external/inbound/redirect"), HttpPost]
+    public async Task<IActionResult> ConfigureAiSpeechAssistantInboundRouteAsync([FromBody] ConfigureAiSpeechAssistantInboundRouteCommand command)
+    {
+        await _mediator.SendAsync(command).ConfigureAwait(false);
+        
+        return Ok();
     }
 }

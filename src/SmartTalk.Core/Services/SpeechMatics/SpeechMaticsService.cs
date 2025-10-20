@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using AutoMapper;
+using Google.Cloud.Translation.V2;
 using Serilog;
 using SmartTalk.Core.Ioc;
 using Microsoft.IdentityModel.Tokens;
@@ -22,10 +23,13 @@ using SmartTalk.Core.Settings.Twilio;
 using SmartTalk.Messages.Dto.SpeechMatics;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Commands.PhoneOrder;
+using SmartTalk.Messages.Commands.SpeechMatics;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
+using SmartTalk.Messages.Enums.Account;
 using SmartTalk.Messages.Dto.Sales;
 using SmartTalk.Messages.Enums.Agent;
+using SmartTalk.Messages.Enums.STT;
 using SmartTalk.Messages.Enums.Sales;
 using Twilio;
 using Twilio.Rest.Api.V2010.Account;
@@ -47,6 +51,7 @@ public class SpeechMaticsService : ISpeechMaticsService
     private readonly IFfmpegService _ffmpegService;
     private readonly OpenAiSettings _openAiSettings;
     private readonly TwilioSettings _twilioSettings;
+    private readonly TranslationClient _translationClient;
     private readonly ISmartiesClient _smartiesClient;
     private readonly PhoneOrderSetting _phoneOrderSetting;
     private readonly IPhoneOrderService _phoneOrderService;
@@ -62,6 +67,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         IFfmpegService ffmpegService,
         OpenAiSettings openAiSettings,
         TwilioSettings twilioSettings,
+        TranslationClient translationClient,
         ISmartiesClient smartiesClient,
         PhoneOrderSetting phoneOrderSetting,
         IPhoneOrderService phoneOrderService,
@@ -76,6 +82,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         _ffmpegService = ffmpegService;
         _openAiSettings = openAiSettings;
         _twilioSettings = twilioSettings;
+        _translationClient = translationClient;
         _smartiesClient = smartiesClient;
         _phoneOrderSetting = phoneOrderSetting;
         _phoneOrderService = phoneOrderService;
@@ -87,7 +94,7 @@ public class SpeechMaticsService : ISpeechMaticsService
 
     public async Task HandleTranscriptionCallbackAsync(HandleTranscriptionCallbackCommand command, CancellationToken cancellationToken)
     {
-        if (command.Transcription == null || command.Transcription.Results.IsNullOrEmpty() || command.Transcription.Job == null || command.Transcription.Job.Id.IsNullOrEmpty()) return;
+        if (command.Transcription == null || command.Transcription.Job == null || command.Transcription.Job.Id.IsNullOrEmpty()) return;
 
         var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByTranscriptionJobIdAsync(command.Transcription.Job.Id, cancellationToken).ConfigureAwait(false);
 
@@ -176,11 +183,42 @@ public class SpeechMaticsService : ISpeechMaticsService
         
         record.Status = PhoneOrderRecordStatus.Sent;
         record.TranscriptionText = completion.Content.FirstOrDefault()?.Text ?? "";
+        
+        var detection = await _translationClient.DetectLanguageAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
 
         await MultiScenarioCustomProcessingAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
         
         if (agent.SourceSystem == AgentSourceSystem.Smarties)
             await CallBackSmartiesRecordAsync(agent, record, cancellationToken).ConfigureAwait(false);
+        var reports = new List<PhoneOrderRecordReport>();
+
+        reports.Add(new PhoneOrderRecordReport
+        {
+            RecordId = record.Id,
+            Report = record.TranscriptionText,
+            Language = SelectReportLanguageEnum(detection.Language),
+            IsOrigin = SelectReportLanguageEnum(detection.Language) == record.Language,
+            CreatedDate = DateTimeOffset.Now
+        });
+        
+        var targetLanguage = SelectReportLanguageEnum(detection.Language) == TranscriptionLanguage.Chinese ? "en" : "zh";
+        
+        var reportLanguage = SelectReportLanguageEnum(detection.Language) == TranscriptionLanguage.Chinese ? TranscriptionLanguage.English : TranscriptionLanguage.Chinese;
+        
+        var translatedText = await _translationClient.TranslateTextAsync(record.TranscriptionText, targetLanguage, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        reports.Add(new PhoneOrderRecordReport
+        {
+            RecordId = record.Id,
+            Report = translatedText.TranslatedText,
+            Language = reportLanguage,
+            IsOrigin = reportLanguage == record.Language,
+            CreatedDate = DateTimeOffset.Now
+        });
+
+        await _phoneOrderDataProvider.AddPhoneOrderRecordReportsAsync(reports, true, cancellationToken).ConfigureAwait(false);
+        
+        await CallBackSmartiesRecordAsync(agent, record, cancellationToken).ConfigureAwait(false);
 
         var message = agent.WechatRobotMessage?.Replace("#{assistant_name}", aiSpeechAssistant?.Name ?? "").Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString()).Replace("#{assistant_file_url}", record.Url);
 
@@ -210,7 +248,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         {
             if (agent.IsWecomMessageOrder && aiSpeechAssistant != null)
             {
-                var messageNumber = await SendAgentMessageRecordAsync(agent, record.Id, aiSpeechAssistant.GroupKey, cancellationToken).ConfigureAwait(false);
+                var messageNumber = await SendAgentMessageRecordAsync(agent, record.Id, aiSpeechAssistant.GroupKey, cancellationToken);
                 message = $"【第{messageNumber}條】\n" + message;
             }
 
@@ -554,5 +592,13 @@ public class SpeechMaticsService : ISpeechMaticsService
         record.OrderId = JsonSerializer.Serialize(orderIds);
         
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken).ConfigureAwait(false); 
+    }
+    
+    private TranscriptionLanguage SelectReportLanguageEnum(string language)
+    {
+        if (language.StartsWith("zh", StringComparison.OrdinalIgnoreCase))
+            return TranscriptionLanguage.Chinese;
+    
+        return TranscriptionLanguage.English;
     }
 }

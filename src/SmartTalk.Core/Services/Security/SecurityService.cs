@@ -1,6 +1,7 @@
 using System.Net;
 using AutoMapper;
 using Serilog;
+using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Domain.Security;
 using SmartTalk.Core.Middlewares.Security;
@@ -8,8 +9,11 @@ using SmartTalk.Core.Services.Account;
 using SmartTalk.Messages.Dto.Security;
 using SmartTalk.Messages.DTO.Security;
 using SmartTalk.Core.Services.Identity;
+using SmartTalk.Core.Services.Pos;
 using SmartTalk.Messages.Requests.Security;
 using SmartTalk.Messages.Commands.Security;
+using SmartTalk.Messages.Constants;
+using SmartTalk.Messages.Dto.Account;
 using SmartTalk.Messages.Enums.Security;
 using SmartTalk.Messages.Events.Security;
 
@@ -29,6 +33,8 @@ public interface ISecurityService : IScopedDependency
      
      Task<UserPermissionsCreatedEvent> CreateUserPermissionsAsync(
          CreateUserPermissionsCommand command, CancellationToken cancellationToken);
+
+     Task<SwitchLanguageResponse> SwitchLanguageAsync(SwitchLanguageCommand command, CancellationToken cancellationToken);
 }
 
 public class SecurityService : ISecurityService
@@ -37,13 +43,15 @@ public class SecurityService : ISecurityService
     private readonly ICurrentUser _currentUser;
     private readonly IAccountDataProvider _accountDataProvider;
     private readonly ISecurityDataProvider _securityDataProvider;
+    private readonly IPosDataProvider _posDataProvider;
     
-    public SecurityService(IMapper mapper, ICurrentUser currentUser, IAccountDataProvider accountDataProvider, ISecurityDataProvider securityDataProvider)
+    public SecurityService(IMapper mapper, ICurrentUser currentUser, IAccountDataProvider accountDataProvider, ISecurityDataProvider securityDataProvider, IPosDataProvider posDataProvider)
     {
         _mapper = mapper;
         _currentUser = currentUser;
         _accountDataProvider = accountDataProvider;
         _securityDataProvider = securityDataProvider;
+        _posDataProvider = posDataProvider;
     }
                             
     public async Task<UpdateUserAccountResponse> UpdateRoleUserAsync(UpdateUserAccountCommand command, CancellationToken cancellationToken)
@@ -54,6 +62,50 @@ public class SecurityService : ISecurityService
         
         await _securityDataProvider.UpdateRoleUsersAsync([roleUser], cancellationToken).ConfigureAwait(false);
 
+        if (!string.IsNullOrEmpty(command.NewName))
+        {
+            var user = await _accountDataProvider.GetUserAccountByUserNameWithServiceProviderIdAsync(command.NewName, command.ServiceProviderId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            if (user != null)
+                throw new Exception("Username already in use");
+
+            var oldUser = await _accountDataProvider.GetUserAccountByUserIdAsync(command.UserId, cancellationToken).ConfigureAwait(false);
+
+            oldUser.UserName = command.NewName;
+
+            await _accountDataProvider.UpdateUserAccountAsync(oldUser, true, cancellationToken).ConfigureAwait(false);
+        }
+
+        var oldStoreUsers = await _posDataProvider.GetPosStoreUsersByUserIdAsync(command.UserId, cancellationToken).ConfigureAwait(false);
+
+        await _posDataProvider.DeletePosStoreUsersAsync(oldStoreUsers, true, cancellationToken).ConfigureAwait(false);
+
+        if (command.CompanyIds?.Count > 0)
+        {
+            var companyStores = await _posDataProvider.GetPosCompanyStoresAsync(companyIds: command.CompanyIds, cancellationToken: cancellationToken).ConfigureAwait(false);
+            
+            var companyStoreUsers = companyStores.Select(store => new StoreUser
+            {
+                UserId = command.UserId,
+                StoreId = store.Id
+            }).ToList();
+
+            await _posDataProvider.CreatePosStoreUserAsync(companyStoreUsers, forceSave: true, cancellationToken: cancellationToken).ConfigureAwait(false); 
+        }
+
+        if (command.StoreIds?.Count > 0)
+        {
+            var posStores = await _posDataProvider.GetPosCompanyStoresAsync(ids: command.StoreIds, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+            var posStoreUsers = posStores.Select(store => new StoreUser
+            {
+                UserId = command.UserId,
+                StoreId = store.Id
+            }).ToList();
+
+            await _posDataProvider.CreatePosStoreUserAsync(posStoreUsers, forceSave: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+        
         return new UpdateUserAccountResponse
         {
             Data = _mapper.Map<UpdateUserAccountDto>(roleUser)
@@ -149,8 +201,8 @@ public class SecurityService : ISecurityService
 
     public async Task<GetRolesResponse> GetRolesAsync(GetRolesRequest request, CancellationToken cancellationToken)
     {
-        var (count, roles) = await _securityDataProvider.GetRolesAsync(pageSize: request.PageSize, pageIndex: request.PageIndex, systemSource: RoleSystemSource.System, cancellationToken: cancellationToken).ConfigureAwait(false);
-
+        var (count, roles) = await _securityDataProvider.GetRolesAsync(pageSize: request.PageSize, pageIndex: request.PageIndex, serviceProviderId: request.ServiceProviderId, systemSource: RoleSystemSource.System, accountLevel: request.AccountLevel, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
         return new GetRolesResponse
         {
             Data = new GetRolesResponseData
@@ -170,6 +222,20 @@ public class SecurityService : ISecurityService
         return new UserPermissionsCreatedEvent
         {
             UserPermissions = _mapper.Map<List<UserPermissionDto>>(userPermissions)
+        };
+    }
+
+    public async Task<SwitchLanguageResponse> SwitchLanguageAsync(SwitchLanguageCommand command, CancellationToken cancellationToken)
+    {
+        var userAccount = await _accountDataProvider.GetUserAccountByUserIdAsync(_currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
+
+        userAccount.SystemLanguage = command.Language;
+
+        await _accountDataProvider.UpdateUserAccountAsync(userAccount, true, cancellationToken).ConfigureAwait(false);
+
+        return new SwitchLanguageResponse()
+        {
+            Data = _mapper.Map<UserAccountDto>(userAccount)
         };
     }
 }
