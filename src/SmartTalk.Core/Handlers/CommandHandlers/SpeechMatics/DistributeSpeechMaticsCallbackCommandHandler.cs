@@ -3,6 +3,7 @@ using Newtonsoft.Json;
 using Mediator.Net.Context;
 using Mediator.Net.Contracts;
 using SmartTalk.Core.Constants;
+using SmartTalk.Core.Services.AutoTest;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Messages.Dto.SpeechMatics;
@@ -43,7 +44,7 @@ public class DistributeSpeechMaticsCallbackCommandHandler : ICommandHandler<Dist
                 break;
             
             case SpeechMaticsJobScenario.Testing:
-                // todo
+                _backgroundJobClient.Enqueue<IAutoTestProcessJobService>(x => x.HandleTestingSpeechMaticsCallBackAsync(job.JobId, cancellationToken));
                 break;
         }
     }
