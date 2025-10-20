@@ -267,6 +267,9 @@ public class HrInterViewService : IHrInterViewService
                                 6. Answering style requirements:
                                 Please speak in a slow, gentle, warm, and sweet tone. Your voice should sound polite, calm, and caring.
                                 Always use friendly language and keep your speaking speed moderate, natural, patient and kind.
+                                Current context:
+                                {context}
+                                The current user's answer is: {userQuestion}
                                 """)
         ];
         
