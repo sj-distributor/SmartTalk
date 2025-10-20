@@ -29,6 +29,7 @@ create table if not exists auto_test_data_set
     `scenario_id` int not null,
     `key_name` varchar(128) unique null,
     `name` varchar(256) null,
+    `is_delete` tinyint(1) not null,
     `created_at` dateTime(3) not null
     ) charset=utf8mb4;
 

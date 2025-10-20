@@ -9,6 +9,8 @@ public class AutoTestDataSetDto
     public string KeyName { get; set; }
     
     public string Name { get; set; }
+
+    public bool IsDelete { get; set; } = false;
     
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.Now;
 }

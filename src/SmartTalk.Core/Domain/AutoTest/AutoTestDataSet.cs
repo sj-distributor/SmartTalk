@@ -20,6 +20,9 @@ public class AutoTestDataSet : IEntity
     
     [Column("name")]
     public string Name { get; set; }
+
+    [Column("is_delete")] 
+    public bool IsDelete { get; set; } = false;
     
     [Column("created_at")]
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.Now;
