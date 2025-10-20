@@ -363,10 +363,12 @@ public partial class AiSpeechAssistantService
             _ => throw new NotSupportedException(nameof(command.AgentType))
         };
         
+        var voice = string.IsNullOrWhiteSpace(command.ModelVoice) ? agent.Voice : command.ModelVoice;
+        
         var assistant = new Domain.AISpeechAssistant.AiSpeechAssistant
         {
             AgentId = agent.Id,
-            ModelVoice = ModelVoiceMapping(command.ModelVoice, command.VoiceType, command.MediaType),
+            ModelVoice = ModelVoiceMapping(voice, command.VoiceType, command.MediaType),
             Name = command.AssistantName,
             AnsweringNumberId = number?.Id,
             AnsweringNumber = number?.Number,
