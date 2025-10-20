@@ -85,6 +85,8 @@ public class RestaurantDataDto
     
     public int OrderCountChange { get; set; }
     
+    public decimal OrderAmountChange { get; set; }
+    
     public int CancelledOrderCount { get; set; }
     
     public Dictionary<string,int> OrderCountPerPeriod { get; set; } = new();

@@ -1069,9 +1069,13 @@ public partial class PhoneOrderService
 
         var prevPosOrders = await _posDataProvider.GetPosOrdersByStoreIdsAsync(request.StoreIds, null, true, prevStartDate, prevEndDate, cancellationToken: cancellationToken).ConfigureAwait(false);
         
+        var prevCancelledOrders = await _posDataProvider.GetPosOrdersByStoreIdsAsync(
+            request.StoreIds, PosOrderModifiedStatus.Cancelled, true, prevStartDate, prevEndDate, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
         callInData.CountChange = callInRecords.Count - prevCallInRecords.Count;
         callOutData.CountChange = callOutRecords.Count - prevCallOutRecords.Count;
 
         restaurantData.OrderCountChange = restaurantData.OrderCount - prevPosOrders.Count;
+        restaurantData.OrderAmountChange = restaurantData.TotalOrderAmount - (prevPosOrders.Sum(x => x.Total) - prevCancelledOrders.Sum(x => x.Total));
     }
 }
