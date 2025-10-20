@@ -279,8 +279,8 @@ public class HrInterViewService : IHrInterViewService
                                 * Use natural transitions, including but not limited to phrases such as "I see. I'd also like to know..." and "Sounds good. My next question is..." Ensure a consistent overall tone and natural transitions. Always use English. * Do not repeat or rephrase questions that have already been asked.
                                 * After all questions have been asked, you can create a suitable closing statement.
                                 * **Your final output message must be in English, regardless of the user's language.**
-                                Before outputting, take a deep breath and consider whether your answer meets my formatting requirements：
-                                {context}
+                                Before outputting, take a deep breath and consider whether your answer meets my formatting requirements
+                                Current context:{context}
                                 The current user's answer is: {userQuestion}
                                 """)
         ];
