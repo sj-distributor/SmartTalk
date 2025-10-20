@@ -146,6 +146,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _httpClientFactory = httpClientFactory;
         _translationClient = translationClient;
         _attachmentService = attachmentService;
+        _speechMaticsService = speechMaticsService;
         _speechToTextService = speechToTextService;
         _workWeChatKeySetting = workWeChatKeySetting;
         _backgroundJobClient = backgroundJobClient;
