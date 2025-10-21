@@ -398,38 +398,14 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         if (finalPrompt.Contains("#{customer_items}", StringComparison.OrdinalIgnoreCase))
         {
             var soldToIds = !string.IsNullOrEmpty(assistant.Name) ? assistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : new List<string>();
-            Log.Information("SoldToIds to be sent to BuildCustomerItemsStringAsync: {@SoldToIds}", soldToIds);
             
-            finalPrompt = finalPrompt.Replace("#{customer_items}", "");
+            var customerItemsString = await _speechMaticsService.BuildCustomerItemsStringAsync(soldToIds, cancellationToken).ConfigureAwait(false);
 
-            _ = _speechMaticsService.BuildCustomerItemsStringAsync(soldToIds, cancellationToken)
-                .ContinueWith(task =>
-                {
-                    if (task.Status == TaskStatus.RanToCompletion && !string.IsNullOrEmpty(task.Result))
-                    {
-                        var completedPrompt = _aiSpeechAssistantStreamContext.LastPrompt 
-                                              + Environment.NewLine 
-                                              + task.Result;
-
-                        Log.Information("Final completed prompt: {Prompt}", completedPrompt);
-
-                        _aiSpeechAssistantStreamContext.LastPrompt = completedPrompt;
-                    }
-                    else if (task.IsFaulted)
-                    {
-                        Log.Error(task.Exception, "Failed to build customer items string");
-                    }
-                }, cancellationToken); 
+            finalPrompt = finalPrompt.Replace("#{customer_items}", customerItemsString ?? "");
         }
         
         Log.Information($"The final prompt: {finalPrompt}");
 
-        if (numberId.HasValue)
-        {
-            var greeting = await _smartiesClient.GetSaleAutoCallNumberAsync(new GetSaleAutoCallNumberRequest(){ Id = numberId.Value }, cancellationToken).ConfigureAwait(false);
-            knowledge.Greetings = string.IsNullOrEmpty(greeting.Data.Number.Greeting) ? knowledge.Greetings : greeting.Data.Number.Greeting;
-        }
-        
         _aiSpeechAssistantStreamContext.LastPrompt = finalPrompt;
         _aiSpeechAssistantStreamContext.Assistant = _mapper.Map<AiSpeechAssistantDto>(assistant);
         _aiSpeechAssistantStreamContext.Knowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge);
