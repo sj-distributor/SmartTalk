@@ -17,25 +17,13 @@ public class AiSpeechAssistantDto
     public AiSpeechAssistantProvider ModelProvider { get; set; }
     
     public string ModelVoice { get; set; }
-    
-    public string ModelLanguage { get; set; }
     public int AgentId { get; set; }
     
     public string CustomRecordAnalyzePrompt { get; set; }
     
-    public bool ManualRecordWholeAudio { get; set; }
-    
-    public string CustomRepeatOrderPrompt { get; set; }
-    
     public string Channel { get; set; }
     
     public bool IsDisplay { get; set; }
-    
-    public int WaitInterval { get; set; }
-    
-    public bool IsTransferHuman { get; set; }
-    
-    public string TransferCallNumber { get; set; }
     
     public DateTimeOffset CreatedDate { get; set; }
     

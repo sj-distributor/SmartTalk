@@ -15,6 +15,6 @@ public class BindPosCompanyStoreCommand : ICommand
     public string AppSecret { get; set; }
 }
 
-public class BindPosCompanyStoreResponse : SmartTalkResponse<CompanyStoreDto>
+public class BindPosCompanyStoreResponse : SmartTalkResponse<PosCompanyStoreDto>
 {
 }

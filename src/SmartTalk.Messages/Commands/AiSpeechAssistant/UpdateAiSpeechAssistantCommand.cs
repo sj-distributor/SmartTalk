@@ -16,14 +16,6 @@ public class UpdateAiSpeechAssistantCommand : ICommand
     public string AnsweringNumber { get; set; }
 
     public List<AiSpeechAssistantChannel> Channels { get; set; }
-    
-    public string Voice { get; set; }
-    
-    public int WaitInterval { get; set; }
-
-    public bool IsTransferHuman  { get; set; }
-    
-    public string TransferCallNumber { get; set; }
 }
 
 public class UpdateAiSpeechAssistantResponse : SmartTalkResponse<AiSpeechAssistantDto>

@@ -5,5 +5,5 @@ namespace SmartTalk.Messages.Events.Pos;
 
 public class PosCompanyDeletedEvent : IEvent
 {
-    public CompanyDto Company { get; set; }
+    public PosCompanyDto Company { get; set; }
 }

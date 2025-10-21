@@ -19,8 +19,7 @@ public class AiSpeechAssistantMapping : Profile
         CreateMap<NumberPool, NumberPoolDto>().ReverseMap();
 
         CreateMap<UpdateAiSpeechAssistantCommand, AiSpeechAssistant>()
-            .ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.AssistantName))
-            .ForMember(dest => dest.ModelVoice, opt => opt.MapFrom(src => src.Voice));
+            .ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.AssistantName));
         
         CreateMap<AiSpeechAssistantSession, AiSpeechAssistantSessionDto>().ReverseMap();
         CreateMap<ExtractedOrderItemDto, AiOrderItemDto>()

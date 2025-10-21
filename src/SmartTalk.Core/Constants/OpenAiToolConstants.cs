@@ -16,15 +16,4 @@ public static class OpenAiToolConstants
     public const string RequestOrderDelivery = "request_order_delivery";
     public const string ConfirmCustomerInformation = "confirm_customer_name_phone";
     public const string ConfirmPickupTime = "confirm_pickup_time";
-    public const string RepeatOrder = "repeat_order";
-    public const string SatisfyOrder = "satisfy_order";
-    
-    public const string Complaint = "complaint";
-    public const string DeliveryTracking = "delivery_tracking";
-    public const string DriverDeliveryRelatedCommunication = "driver_delivery_related_communication";
-    public const string LessGoodsDelivered = "less_goods_delivered";
-    public const string ReturnGoods = "return_goods";
-    public const string Refund = "refund";
-    public const string RefuseToAcceptGoods = "refuse_to_accept_goods";
-    public const string PickUpGoodsFromTheWarehouse = "pick_up_goods_from_the_warehouse";
 }

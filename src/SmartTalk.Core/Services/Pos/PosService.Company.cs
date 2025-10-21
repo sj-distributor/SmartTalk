@@ -11,13 +11,13 @@ namespace SmartTalk.Core.Services.Pos;
 
 public partial interface IPosService : IScopedDependency
 {
-    Task<PosCompanyCreatedEvent> CreatePosCompanyAsync(CreateCompanyCommand command, CancellationToken cancellationToken);
+    Task<PosCompanyCreatedEvent> CreatePosCompanyAsync(CreatePosCompanyCommand command, CancellationToken cancellationToken);
 
-    Task<PosCompanyUpdatedEvent> UpdatePosCompanyAsync(UpdateCompanyCommand command, CancellationToken cancellationToken);
+    Task<PosCompanyUpdatedEvent> UpdatePosCompanyAsync(UpdatePosCompanyCommand command, CancellationToken cancellationToken);
 
-    Task<PosCompanyUpdatedStatusEvent> UpdatePosCompanyStatusAsync(UpdateCompanyStatusCommand command, CancellationToken cancellationToken);
+    Task<PosCompanyUpdatedStatusEvent> UpdatePosCompanyStatusAsync(UpdatePosCompanyStatusCommand command, CancellationToken cancellationToken);
     
-    Task<PosCompanyDeletedEvent> DeletePosCompanyAsync(DeleteCompanyCommand command, CancellationToken cancellationToken);
+    Task<PosCompanyDeletedEvent> DeletePosCompanyAsync(DeletePosCompanyCommand command, CancellationToken cancellationToken);
 
     Task<GetPosCompanyDetailResponse> GetPosCompanyDetailAsync(GetPosCompanyDetailRequest request, CancellationToken cancellationToken);
 
@@ -43,27 +43,27 @@ public partial interface IPosService : IScopedDependency
 
     Task<AdjustPosMenuContentSortResponse> AdjustPosMenuContentSortAsync(AdjustPosMenuContentSortCommand command, CancellationToken cancellationToken);
     
-    Task<CheckCompanyOrStoreResponse> CheckPosCompanyOrStoreAsync(CheckCompanyOrStoreRequest request, CancellationToken cancellationToken);
+    Task<CheckPosCompanyOrStoreResponse> CheckPosCompanyOrStoreAsync(CheckPosCompanyOrStoreRequest request, CancellationToken cancellationToken);
 }
 
 public partial class PosService : IPosService
 {
-    public async Task<PosCompanyCreatedEvent> CreatePosCompanyAsync(CreateCompanyCommand command, CancellationToken cancellationToken)
+    public async Task<PosCompanyCreatedEvent> CreatePosCompanyAsync(CreatePosCompanyCommand command, CancellationToken cancellationToken)
     {
-        var company = new Company
+        var company = new PosCompany
         {
-            Name = command.Name, ServiceProviderId = command.ServiceProviderId, Description = command.Description, Status = false
+            Name = command.Name, Description = command.Description, Status = false
         };
 
         await _posDataProvider.CreatePosCompanyAsync(company, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         return new PosCompanyCreatedEvent
         {
-            Company = _mapper.Map<CompanyDto>(company)
+            Company = _mapper.Map<PosCompanyDto>(company)
         };
     }
 
-    public async Task<PosCompanyUpdatedEvent> UpdatePosCompanyAsync(UpdateCompanyCommand command, CancellationToken cancellationToken)
+    public async Task<PosCompanyUpdatedEvent> UpdatePosCompanyAsync(UpdatePosCompanyCommand command, CancellationToken cancellationToken)
     {
         var company = await _posDataProvider.GetPosCompanyAsync(command.Id, cancellationToken).ConfigureAwait(false);
 
@@ -74,11 +74,11 @@ public partial class PosService : IPosService
 
         return new PosCompanyUpdatedEvent
         {
-            Company = _mapper.Map<CompanyDto>(company)
+            Company = _mapper.Map<PosCompanyDto>(company)
         };
     }
 
-    public async Task<PosCompanyUpdatedStatusEvent> UpdatePosCompanyStatusAsync(UpdateCompanyStatusCommand command, CancellationToken cancellationToken)
+    public async Task<PosCompanyUpdatedStatusEvent> UpdatePosCompanyStatusAsync(UpdatePosCompanyStatusCommand command, CancellationToken cancellationToken)
     {
         var company = await _posDataProvider.GetPosCompanyAsync(command.Id, cancellationToken).ConfigureAwait(false);
 
@@ -88,11 +88,11 @@ public partial class PosService : IPosService
 
         return new PosCompanyUpdatedStatusEvent
         {
-            Company = _mapper.Map<CompanyDto>(company)
+            Company = _mapper.Map<PosCompanyDto>(company)
         };
     }
 
-    public async Task<PosCompanyDeletedEvent> DeletePosCompanyAsync(DeleteCompanyCommand command, CancellationToken cancellationToken)
+    public async Task<PosCompanyDeletedEvent> DeletePosCompanyAsync(DeletePosCompanyCommand command, CancellationToken cancellationToken)
     {
         var company = await _posDataProvider.GetPosCompanyAsync(command.Id, cancellationToken).ConfigureAwait(false);
 
@@ -105,7 +105,7 @@ public partial class PosService : IPosService
 
         return new PosCompanyDeletedEvent
         {
-            Company = _mapper.Map<CompanyDto>(company)
+            Company = _mapper.Map<PosCompanyDto>(company)
         };
     }
 
@@ -117,7 +117,7 @@ public partial class PosService : IPosService
         
         return new GetPosCompanyDetailResponse
         {
-            Data = _mapper.Map<CompanyDto>(company)
+            Data = _mapper.Map<PosCompanyDto>(company)
         };
     }
 
@@ -241,14 +241,13 @@ public partial class PosService : IPosService
     
     public async Task<GetPosProductsResponse> GetPosProductsAsync(GetPosProductsRequest request, CancellationToken cancellationToken)
     {
-        var products = await _posDataProvider.GetPosProductsAsync(
-            categoryId: request.CategoryId, keyWord: request.KeyWord, isActive: request.IsActive, storeId: request.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var products = await _posDataProvider.GetPosProductsAsync(categoryId: request.CategoryId, keyWord: request.KeyWord, isActive: request.IsActive, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         if (products == null || products.Count == 0) products = [];
 
         return new GetPosProductsResponse
         {
-            Data = _mapper.Map<List<PosProductDto>>(products.DistinctBy(x => x.ProductId))
+            Data = _mapper.Map<List<PosProductDto>>(products)
         };
     }
 
@@ -341,7 +340,7 @@ public partial class PosService : IPosService
         return new AdjustPosMenuContentSortResponse();
     }
 
-    public async Task<CheckCompanyOrStoreResponse> CheckPosCompanyOrStoreAsync(CheckCompanyOrStoreRequest request, CancellationToken cancellationToken)
+    public async Task<CheckPosCompanyOrStoreResponse> CheckPosCompanyOrStoreAsync(CheckPosCompanyOrStoreRequest request, CancellationToken cancellationToken)
     {
         var orders = request.ComapnyId.HasValue
             ? await _posDataProvider.GetPosOrdersByCompanyIdAsync(request.ComapnyId.Value, cancellationToken).ConfigureAwait(false)
@@ -352,9 +351,9 @@ public partial class PosService : IPosService
         
         var domain = request.ComapnyId.HasValue ? "Company" : "Store";
         
-        return new CheckCompanyOrStoreResponse
+        return new CheckPosCompanyOrStoreResponse
         {
-            Data = new CheckCompanyOrStoreResponseData
+            Data = new CheckPosCompanyOrStoreResponseData
             {
                 IsAllow = isAllow,
                 Message = isAllow ? string.Empty : $"{domain} with existing order data cannot be deleted."

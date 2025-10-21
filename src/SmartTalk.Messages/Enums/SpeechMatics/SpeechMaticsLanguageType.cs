@@ -5,7 +5,5 @@ public enum SpeechMaticsLanguageType
     Cmn,
     Yue,
     Auto,
-    En,
-    Es,
-    Ko
+    En
 }

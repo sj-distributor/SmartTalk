@@ -45,31 +45,7 @@ public class RealtimeAiController : ControllerBase
                 AssistantId = assistantId,
                 InputFormat = RealtimeAiAudioCodec.PCM16,
                 OutputFormat = RealtimeAiAudioCodec.PCM16,
-                WebSocket = await HttpContext.WebSockets.AcceptWebSocketAsync(),
-                Region = RealtimeAiServerRegion.US
-            };
-            
-            await _mediator.SendAsync(command).ConfigureAwait(false);
-        }
-        else
-        {
-            HttpContext.Response.StatusCode = 400;
-        }
-    }
-    
-    [AllowAnonymous]
-    [HttpGet("connect/{assistantId}/{region}")]
-    public async Task HkRealtimeAiConnectAsync(int assistantId, RealtimeAiServerRegion region)
-    {
-        if (HttpContext.WebSockets.IsWebSocketRequest)
-        {
-            var command = new RealtimeAiConnectCommand
-            {
-                AssistantId = assistantId,
-                InputFormat = RealtimeAiAudioCodec.PCM16,
-                OutputFormat = RealtimeAiAudioCodec.PCM16,
-                WebSocket = await HttpContext.WebSockets.AcceptWebSocketAsync(),
-                Region = region
+                WebSocket = await HttpContext.WebSockets.AcceptWebSocketAsync()
             };
             
             await _mediator.SendAsync(command).ConfigureAwait(false);

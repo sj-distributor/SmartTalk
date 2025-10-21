@@ -1,13 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.Security;
-using SmartTalk.Core.Domain.System;
-using SmartTalk.Messages.Dto.Agent;
-using SmartTalk.Messages.Dto.Pos;
-using SmartTalk.Messages.Enums;
 using SmartTalk.Messages.Enums.Account;
-using SmartTalk.Messages.Enums.STT;
 
 namespace SmartTalk.Core.Domain.Account
 {
@@ -57,15 +51,6 @@ namespace SmartTalk.Core.Domain.Account
         [Column("active", TypeName = "tinyint(1)")]
         public bool IsActive { get; set; }
         
-        [Column("account_level")]
-        public UserAccountLevel AccountLevel { get; set; }
-
-        [Column("Language")] 
-        public SystemLanguage SystemLanguage { get; set; } = SystemLanguage.English;
-        
-        [Column("service_provider_id")]
-        public int? ServiceProviderId { get; set; }
-        
         [Column("creator")]
         public string Creator { get; set; }
         
@@ -83,8 +68,5 @@ namespace SmartTalk.Core.Domain.Account
     
         [NotMapped]
         public UserAccountProfile UserAccountProfile { get; set; }
-        
-        [NotMapped]
-        public List<CompanyStore> Stores { get; set; }
     }
 }

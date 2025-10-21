@@ -9,7 +9,7 @@ public class GetPhoneOrderOrderItemsRequest : IRequest
     public int RecordId { get; set; }
 }
 
-public class GetPhoneOrderOrderItemsResponse : SmartTalkResponse<GetPhoneOrderOrderItemsData>
+public class GetPhoneOrderOrderItemsRessponse : SmartTalkResponse<GetPhoneOrderOrderItemsData>
 {
 }
 

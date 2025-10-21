@@ -6,7 +6,7 @@ namespace SmartTalk.Core.Services.RealtimeAi.wss;
 
 public interface IRealtimeAiProviderAdapter : IRealtimeAiProvider
 {
-    Dictionary<string, string> GetHeaders(RealtimeAiServerRegion region);
+    Dictionary<string, string> GetHeaders();
     
     Task<object> GetInitialSessionPayloadAsync(
         Domain.AISpeechAssistant.AiSpeechAssistant assistantProfile, RealtimeAiEngineContext context, string sessionId = null, CancellationToken cancellationToken = default);

@@ -195,7 +195,7 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
         }).ToList();
     }
 
-    private async Task BuildPosOrderAsync(PhoneOrderRecord record, CompanyStore store, List<SimilarResult> similarResults, CancellationToken cancellationToken)
+    private async Task BuildPosOrderAsync(PhoneOrderRecord record, PosCompanyStore store, List<SimilarResult> similarResults, CancellationToken cancellationToken)
     {
         var products = await _posDataProvider.GetPosProductsAsync(
             storeId: store.Id, ids: similarResults.Select(x => x.Id).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -229,7 +229,7 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
         }, wait: TimeSpan.FromSeconds(10), retry: TimeSpan.FromSeconds(1), server: RedisServer.System).ConfigureAwait(false);
     }
 
-    private async Task<string> GenerateOrderNumberAsync(CompanyStore store, CancellationToken cancellationToken)
+    private async Task<string> GenerateOrderNumberAsync(PosCompanyStore store, CancellationToken cancellationToken)
     {
         var (utcStart,utcEnd) = GetUtcMidnightForTimeZone(DateTimeOffset.UtcNow, store.Timezone);
         

@@ -12,20 +12,20 @@ namespace SmartTalk.Core.Services.PhoneOrder;
 
 public partial interface IPhoneOrderService
 {
-    Task<GetPhoneOrderOrderItemsResponse> GetPhoneOrderOrderItemsAsync(GetPhoneOrderOrderItemsRequest request, CancellationToken cancellationToken);
+    Task<GetPhoneOrderOrderItemsRessponse> GetPhoneOrderOrderItemsAsync(GetPhoneOrderOrderItemsRequest request, CancellationToken cancellationToken);
 
     Task<PlaceOrderAndModifyItemResponse> PlaceOrderAndModifyItemsAsync(PlaceOrderAndModifyItemCommand command, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderService
 {
-    public async Task<GetPhoneOrderOrderItemsResponse> GetPhoneOrderOrderItemsAsync(GetPhoneOrderOrderItemsRequest request, CancellationToken cancellationToken)
+    public async Task<GetPhoneOrderOrderItemsRessponse> GetPhoneOrderOrderItemsAsync(GetPhoneOrderOrderItemsRequest request, CancellationToken cancellationToken)
     {
         var orderItems = await _phoneOrderDataProvider.GetPhoneOrderOrderItemsAsync(request.RecordId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var record = (await _phoneOrderDataProvider.GetPhoneOrderRecordAsync(request.RecordId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
         
-        return new GetPhoneOrderOrderItemsResponse
+        return new GetPhoneOrderOrderItemsRessponse
         {
             Data = new GetPhoneOrderOrderItemsData
             {
@@ -61,7 +61,7 @@ public partial class PhoneOrderService
         {
             Type = 1,
             IsTaxFree = false,
-            Notes = record.Comments ?? string.Empty,
+            Notes = record.Comments,
             OrderItems = orderItems.Select(x => new PhoneCallOrderItem
             {
                 ProductId = x.ProductId ?? GetMenuItemByName(menuItems, x.FoodName)?.ProductId ?? 0,

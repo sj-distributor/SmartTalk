@@ -51,10 +51,10 @@ public class PhoneOrderController : ControllerBase
     }
     
     [Route("items"), HttpGet]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPhoneOrderOrderItemsResponse))]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPhoneOrderOrderItemsRessponse))]
     public async Task<IActionResult> GetPhoneOrderOrderItemsAsync([FromQuery] GetPhoneOrderOrderItemsRequest request)
     {
-        var response = await _mediator.RequestAsync<GetPhoneOrderOrderItemsRequest, GetPhoneOrderOrderItemsResponse>(request).ConfigureAwait(false);
+        var response = await _mediator.RequestAsync<GetPhoneOrderOrderItemsRequest, GetPhoneOrderOrderItemsRessponse>(request).ConfigureAwait(false);
         
         return Ok(response);
     }
@@ -115,15 +115,6 @@ public class PhoneOrderController : ControllerBase
 
         return Ok(response);
     }
-    
-    [Route("record/report"), HttpGet]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPhoneOrderRecordReportResponse))]
-    public async Task<IActionResult> GetPhoneOrderRecordReportAsync([FromQuery] GetPhoneOrderRecordReportRequest request)
-    {
-        var response = await _mediator.RequestAsync<GetPhoneOrderRecordReportRequest, GetPhoneOrderRecordReportResponse>(request).ConfigureAwait(false);
-        
-        return Ok(response);
-    }
 
     #region Linphone
     
@@ -176,13 +167,5 @@ public class PhoneOrderController : ControllerBase
         return Ok(response);
     }
 
-    [Route("linphone/data"), HttpGet]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetLinphoneDataResponse))]
-    public async Task<IActionResult> GetLinphoneDataAsync([FromQuery] GetLinphoneDataRequest request)
-    {
-        var response = await _mediator.RequestAsync<GetLinphoneDataRequest, GetLinphoneDataResponse>(request).ConfigureAwait(false);
-        
-        return Ok(response);
-    }
     #endregion
 }

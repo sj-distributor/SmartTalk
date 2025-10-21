@@ -6,13 +6,11 @@ namespace SmartTalk.Messages.Requests.Pos;
 
 public class GetPosProductsRequest : IRequest
 {
-    public int? CategoryId { get; set; }
+    public int CategoryId { get; set; }
     
     public string KeyWord { get; set; }
     
     public bool? IsActive { get; set; }
-    
-    public int? StoreId { get; set; }
 }
 
 public class GetPosProductsResponse : SmartTalkResponse<List<PosProductDto>>;

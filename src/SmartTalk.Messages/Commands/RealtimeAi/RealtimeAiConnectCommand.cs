@@ -13,6 +13,4 @@ public class RealtimeAiConnectCommand : ICommand
     public RealtimeAiAudioCodec InputFormat { get; set; }
     
     public RealtimeAiAudioCodec OutputFormat { get; set; }
-    
-    public RealtimeAiServerRegion Region { get; set; }
 }

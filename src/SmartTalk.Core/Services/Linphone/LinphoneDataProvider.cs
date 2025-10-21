@@ -31,10 +31,6 @@ public interface ILinphoneDataProvider : IScopedDependency
     Task AddCdrAsync(List<Cdr> cdrs, bool foreSave = true, CancellationToken cancellationToken = default);
 
     Task<List<Restaurant>> GetRestaurantPhoneNumberAsync(string toRestaurantName = null, CancellationToken cancellationToken = default);
-
-    Task<List<Cdr>> GetCdrsAsync(long startTime, long endTime, CancellationToken cancellationToken = default);
-
-    Task<Dictionary<string, string>> GetRestaurantSipAsync(CancellationToken cancellationToken);
 }
 
 public class LinphoneDataProvider : ILinphoneDataProvider
@@ -177,24 +173,5 @@ public class LinphoneDataProvider : ILinphoneDataProvider
             query = query.Where(x => x.AnotherName == toRestaurantName);
 
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task<List<Cdr>> GetCdrsAsync(long startTime, long endTime, CancellationToken cancellationToken = default)
-    {
-        return await _repository.Query<Cdr>().Where(x => x.Uniqueid > startTime && x.Uniqueid < endTime).ToListAsync(cancellationToken);
-    }
-
-    public async Task<Dictionary<string, string>> GetRestaurantSipAsync(CancellationToken cancellationToken)
-    {
-        var query = from sips in _repository.Query<LinphoneSip>()
-            join agents in _repository.Query<Agent>() on sips.AgentId equals agents.Id
-            join restaurants in _repository.Query<Restaurant>() on agents.RelateId equals restaurants.Id
-            select new
-            {
-                sips.Sip,
-                restaurants.Name
-            };
-        
-        return await query.ToDictionaryAsync(x => x.Sip, x => x.Name, cancellationToken).ConfigureAwait(false);
     }
 }

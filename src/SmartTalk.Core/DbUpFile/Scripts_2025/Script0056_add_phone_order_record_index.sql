@@ -1,1 +1,0 @@
-CREATE INDEX `idx_session_id` ON `phone_order_record` (session_id);

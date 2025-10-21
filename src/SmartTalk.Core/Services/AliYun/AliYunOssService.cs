@@ -1,5 +1,4 @@
 using Aliyun.OSS;
-using JetBrains.Annotations;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Settings.AliYun;
 
@@ -11,7 +10,7 @@ public interface IAliYunOssService : IScopedDependency
 
     Task<byte[]> GetFileByteArray(string fileName);
 
-    void UploadFile(string fileName, byte[] fileContent, ObjectMetadata metadata = null);
+    void UploadFile(string fileName, byte[] fileContent);
 }
 
 public class AliYunOssService : IAliYunOssService
@@ -42,12 +41,9 @@ public class AliYunOssService : IAliYunOssService
         return stream.ToArray();
     }
 
-    public void UploadFile(string fileName, byte[] fileContent, ObjectMetadata metadata = null)
+    public void UploadFile(string fileName, byte[] fileContent)
     {
-        if (metadata == null)
-            _ossClient.PutObject(_aliYunSettings.OssBucketName, fileName, new MemoryStream(fileContent));
-        else
-            _ossClient.PutObject(_aliYunSettings.OssBucketName, fileName, new MemoryStream(fileContent), metadata);
+        _ossClient.PutObject(_aliYunSettings.OssBucketName, fileName, new MemoryStream(fileContent));
     }
     
     public static string SplitFileUrl(string mediaUrl)

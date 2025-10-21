@@ -1,8 +1,6 @@
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Commands.PhoneOrder;
-using SmartTalk.Messages.Enums;
-using SmartTalk.Messages.Enums.STT;
 using SmartTalk.Messages.Requests.PhoneOrder;
 
 namespace SmartTalk.Core.Services.PhoneOrder;
@@ -60,13 +58,5 @@ public partial class PhoneOrderService
         if (restaurant == null) return;
 
         record.RestaurantInfo = restaurant;
-    }
-    
-    private SystemLanguage SelectReportLanguageEnum(string language)
-    {
-        if (language.StartsWith("zh", StringComparison.OrdinalIgnoreCase))
-            return SystemLanguage.Chinese;
-    
-        return SystemLanguage.English;
     }
 }

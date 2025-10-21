@@ -1,1 +1,0 @@
-alter table `user_account` modify column `language` int null;

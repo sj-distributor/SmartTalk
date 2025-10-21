@@ -42,7 +42,7 @@ public partial class PosService
         
         var products = await SyncMenuDataAsync(store, posConfiguration?.Data, cancellationToken).ConfigureAwait(false);
         
-        await PosProductsVectorizationAsync(products, store, cancellationToken).ConfigureAwait(false);
+        // await PosProductsVectorizationAsync(products, store, cancellationToken).ConfigureAwait(false);
         
         return new SyncPosConfigurationResponse
         {
@@ -50,13 +50,13 @@ public partial class PosService
         };
     }
 
-    private async Task UpdateStoreBusinessTimePeriodsAsync(CompanyStore store, List<StoreTimePeriod> timePeriods, CancellationToken cancellationToken)
+    private async Task UpdateStoreBusinessTimePeriodsAsync(PosCompanyStore store, List<StoreTimePeriod> timePeriods, CancellationToken cancellationToken)
     {
         store.TimePeriod = timePeriods != null && timePeriods.Count != 0 ? JsonConvert.SerializeObject(timePeriods) : string.Empty;
         await _posDataProvider.UpdateStoreAsync(store, true, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<List<PosProduct>> SyncMenuDataAsync(CompanyStore store, EasyPosResponseData data, CancellationToken cancellationToken)
+    private async Task<List<PosProduct>> SyncMenuDataAsync(PosCompanyStore store, EasyPosResponseData data, CancellationToken cancellationToken)
     {
         if (data?.Menus == null) throw new NullReferenceException("Pos Resource Data or Menus is null");
         
@@ -73,12 +73,12 @@ public partial class PosService
         return await AddPosProductsAsync(data, categoriesMap, oldProducts, store.Id, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<List<PosProduct>> DeletePosMenuDataAsync(CompanyStore store, CancellationToken cancellationToken)
+    private async Task<List<PosProduct>> DeletePosMenuDataAsync(PosCompanyStore store, CancellationToken cancellationToken)
     {
         var products = await _posDataProvider.DeletePosMenuInfosAsync(store.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        foreach (var product in products)
-            await DeleteInternalAsync(store, product, cancellationToken).ConfigureAwait(false);
+        // foreach (var product in products)
+        //     await DeleteInternalAsync(store, product, cancellationToken).ConfigureAwait(false);
         
         return products;
     }
@@ -241,7 +241,7 @@ public partial class PosService
         return result;
     }
 
-    public async Task PosProductsVectorizationAsync(List<PosProduct> products, CompanyStore store, CancellationToken cancellationToken)
+    public async Task PosProductsVectorizationAsync(List<PosProduct> products, PosCompanyStore store, CancellationToken cancellationToken)
     {
         await CheckIndexIfExistsAsync(store, cancellationToken).ConfigureAwait(false);
         
@@ -249,7 +249,7 @@ public partial class PosService
             _smartTalkBackgroundJobClient.Enqueue(() => StoreAsync(store, product, cancellationToken), HangfireConstants.InternalHostingRestaurant);
     }
 
-    public async Task CheckIndexIfExistsAsync(CompanyStore store, CancellationToken cancellationToken)
+    public async Task CheckIndexIfExistsAsync(PosCompanyStore store, CancellationToken cancellationToken)
     {
         var indexes = await _vectorDb.GetIndexesAsync(cancellationToken).ConfigureAwait(false);
         
@@ -257,7 +257,7 @@ public partial class PosService
             await _vectorDb.CreateIndexAsync($"pos-{store.Id}", 3072, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task DeleteInternalAsync(CompanyStore store, PosProduct product, CancellationToken cancellationToken)
+    public async Task DeleteInternalAsync(PosCompanyStore store, PosProduct product, CancellationToken cancellationToken)
     {
         var productNames = ParseProductNames(product.Names);
 
@@ -267,7 +267,7 @@ public partial class PosService
             await _vectorDb.DeleteAsync($"pos-{store.Id}", new VectorRecordDto { Id = $"{languageCode}{product.Id}" }, cancellationToken).ConfigureAwait(false);
     }
     
-    public async Task StoreAsync(CompanyStore store, PosProduct product, CancellationToken cancellationToken)
+    public async Task StoreAsync(PosCompanyStore store, PosProduct product, CancellationToken cancellationToken)
     {
         var productNames = ParseProductNames(product.Names);
         
@@ -275,7 +275,7 @@ public partial class PosService
             _smartTalkBackgroundJobClient.Enqueue(() => StoreInternalAsync(store, product, productName.Key, productName.Value, cancellationToken), HangfireConstants.InternalHostingRestaurant);
     }
 
-    public async Task StoreInternalAsync(CompanyStore store, PosProduct product, string languageCode, string productName, CancellationToken cancellationToken)
+    public async Task StoreInternalAsync(PosCompanyStore store, PosProduct product, string languageCode, string productName, CancellationToken cancellationToken)
     {
         var record = new VectorRecordDto { Id = $"{languageCode}{product.Id}" };
         

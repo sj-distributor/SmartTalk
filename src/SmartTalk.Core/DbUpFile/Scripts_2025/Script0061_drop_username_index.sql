@@ -1,1 +1,0 @@
-DROP INDEX username ON user_account;

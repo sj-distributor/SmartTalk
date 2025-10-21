@@ -26,9 +26,6 @@ public class AiSpeechAssistantFunctionCall : IEntity, IHasCreatedFields
     
     [Column("model_provider")]
     public AiSpeechAssistantProvider ModelProvider { get; set; }
-
-    [Column("is_active")]
-    public bool IsActive { get; set; } = true;
     
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }

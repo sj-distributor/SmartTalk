@@ -46,7 +46,7 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
     }
 
     public async Task StartSessionAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistantProfile,
-        string initialUserPrompt, RealtimeAiAudioCodec inputFormat, RealtimeAiAudioCodec outputFormat, RealtimeAiServerRegion region, CancellationToken cancellationToken)
+        string initialUserPrompt, RealtimeAiAudioCodec inputFormat, RealtimeAiAudioCodec outputFormat, CancellationToken cancellationToken)
     {
         // ... (启动逻辑同前) ...
         // ... (Startup logic same as before) ...
@@ -62,7 +62,7 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
         }
         _currentAssistantProfile = assistantProfile; // 保存配置 (Save profile)
         var aiProviderServiceUri = new Uri(_currentAssistantProfile.ModelUrl);
-        var connectionHeaders = _aiAdapter.GetHeaders(region);
+        var connectionHeaders = _aiAdapter.GetHeaders();
 
         _sessionId = Guid.NewGuid().ToString("N"); // 生成一个新的会话 ID (Generate a new session ID)
         _sessionCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -173,11 +173,11 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
                      break;
                  case RealtimeAiWssEventType.OutputAudioTranscriptionPartial:
                      if (parsedEvent.Data is RealtimeAiWssTranscriptionData outputTranscriptionPartialData)
-                         await (OutputAudioTranscriptionPartialAsync?.Invoke(outputTranscriptionPartialData) ?? Task.CompletedTask);
+                         await (InputAudioTranscriptionPartialAsync?.Invoke(outputTranscriptionPartialData) ?? Task.CompletedTask);
                      break;
                  case RealtimeAiWssEventType.OutputAudioTranscriptionCompleted:
                      if (parsedEvent.Data is RealtimeAiWssTranscriptionData outputTranscriptionCompletedData)
-                         await (OutputAudioTranscriptionCompletedyAsync?.Invoke(outputTranscriptionCompletedData) ?? Task.CompletedTask);
+                         await (InputAudioTranscriptionPartialAsync?.Invoke(outputTranscriptionCompletedData) ?? Task.CompletedTask);
                      break;
                  case RealtimeAiWssEventType.SpeechDetected:
                      await (AiDetectedUserSpeechAsync?.Invoke() ?? Task.CompletedTask);

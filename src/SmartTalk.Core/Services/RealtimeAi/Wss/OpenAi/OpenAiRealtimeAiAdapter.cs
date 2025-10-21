@@ -24,14 +24,12 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
     }
 
-    public Dictionary<string, string> GetHeaders(RealtimeAiServerRegion region)
+    public Dictionary<string, string> GetHeaders()
     {
-        var apiKey = region == RealtimeAiServerRegion.US ? _openAiSettings.ApiKey : _openAiSettings.HkApiKey;
-        
         return new Dictionary<string, string>
         {
             { "OpenAI-Beta", "realtime=v1" },
-            { "Authorization", $"Bearer {apiKey}" }
+            { "Authorization", $"Bearer {_openAiSettings.ApiKey}" }
         };
     }
 
@@ -191,7 +189,7 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
     
     private async Task<List<(AiSpeechAssistantSessionConfigType Type, object Config)>> InitialSessionConfigAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken = default)
     {
-        var functions = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallByAssistantIdAsync(assistant.Id, assistant.ModelProvider, true, cancellationToken).ConfigureAwait(false);
+        var functions = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallByAssistantIdAsync(assistant.Id, assistant.ModelProvider, cancellationToken).ConfigureAwait(false);
 
         return functions.Count == 0 ? [] : functions.Where(x => !string.IsNullOrWhiteSpace(x.Content)).Select(x => (x.Type, JsonConvert.DeserializeObject<object>(x.Content))).ToList();
     }

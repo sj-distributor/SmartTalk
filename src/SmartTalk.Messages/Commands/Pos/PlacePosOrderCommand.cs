@@ -27,8 +27,6 @@ public class PlacePosOrderCommand : ICommand
     
     public string Room { get; set; }
     
-    public string Remarks { get; set; }
-    
     public string Notes { get; set; }
     
     public decimal Tax { get; set; }

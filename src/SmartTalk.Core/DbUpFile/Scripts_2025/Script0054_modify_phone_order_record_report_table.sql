@@ -1,1 +1,0 @@
-ALTER TABLE phnoe_order_record_report RENAME TO phone_order_record_report;
