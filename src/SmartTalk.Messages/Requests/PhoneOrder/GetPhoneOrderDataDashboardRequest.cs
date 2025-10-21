@@ -6,9 +6,9 @@ namespace SmartTalk.Messages.Requests.PhoneOrder;
 
 public class GetPhoneOrderDataDashboardRequest : IRequest
 {
-    public DateTimeOffset? StartDate { get; set; }
+    public DateTimeOffset StartDate { get; set; }
     
-    public DateTimeOffset? EndDate { get; set; }
+    public DateTimeOffset EndDate { get; set; }
     
     public PhoneOrderDataDashDataType DataType { get; set; }
     

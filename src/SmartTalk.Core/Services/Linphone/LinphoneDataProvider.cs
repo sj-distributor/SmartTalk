@@ -36,7 +36,7 @@ public interface ILinphoneDataProvider : IScopedDependency
 
     Task<List<Cdr>> GetCdrsAsync(long startTime, long endTime, CancellationToken cancellationToken = default);
 
-    Task<(int callInFailedCount, int callOutFailedCount)> GetCallFailedStatisticsAsync(long? startTime, long? endTime, List<string> sipNumbers, CancellationToken cancellationToken = default);
+    Task<(int callInFailedCount, int callOutFailedCount)> GetCallFailedStatisticsAsync(long startTime, long endTime, List<string> sipNumbers, CancellationToken cancellationToken = default);
 
     Task<Dictionary<string, string>> GetRestaurantSipAsync(CancellationToken cancellationToken);
 }
@@ -205,25 +205,31 @@ public class LinphoneDataProvider : ILinphoneDataProvider
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
     
-    public async Task<(int callInFailedCount, int callOutFailedCount)> GetCallFailedStatisticsAsync(long? startTime, long? endTime, List<string> sipNumbers, CancellationToken cancellationToken = default)
+    public async Task<(int callInFailedCount, int callOutFailedCount)> GetCallFailedStatisticsAsync(
+        long startTime, long endTime, List<string> sipNumbers, CancellationToken cancellationToken = default)
     {
-        if (sipNumbers == null || !sipNumbers.Any())
+        if (sipNumbers == null || sipNumbers.Count == 0)
             return (0, 0);
 
-        var start = startTime ?? 0;
-        var end = endTime ?? DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var query = _repository.Query<LinphoneCdr>();
 
-        var callInFailedCount = await _repository.Query<Cdr>()
-            .Where(x => x.Uniqueid > start && x.Uniqueid < end && sipNumbers.Contains(x.Did))
-            .GroupBy(x => x.Linkedid)
-            .Select(g => g.All(x => x.Disposition != "ANSWERED") ? 1 : 0)
-            .SumAsync(cancellationToken);
+        if (startTime > 0)
+            query = query.Where(x => x.CallDate >= startTime);
+
+        if (endTime > 0)
+            query = query.Where(x => x.CallDate <= endTime);
+
+        query = query.Where(x => x.Status == LinphoneStatus.Missed);
         
-        var callOutFailedCount = await _repository.Query<Cdr>()
-            .Where(x => x.Uniqueid > start && x.Uniqueid < end && sipNumbers.Contains(x.Cnum))
-            .GroupBy(x => x.Linkedid)
-            .Select(g => g.All(x => x.Disposition != "ANSWERED") ? 1 : 0)
-            .SumAsync(cancellationToken);
+        var callOutFailedCount = await query
+            .Where(x => sipNumbers.Contains(x.Caller))
+            .CountAsync(cancellationToken)
+            .ConfigureAwait(false);
+        
+        var callInFailedCount = await query
+            .Where(x => sipNumbers.Contains(x.Targetter))
+            .CountAsync(cancellationToken)
+            .ConfigureAwait(false);
 
         return (callInFailedCount, callOutFailedCount);
     }
