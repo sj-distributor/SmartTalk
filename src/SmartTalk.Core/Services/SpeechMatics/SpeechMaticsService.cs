@@ -2,8 +2,12 @@ using Google.Cloud.Translation.V2;
 using Serilog;
 using SmartTalk.Core.Ioc;
 using Microsoft.IdentityModel.Tokens;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using OpenAI.Chat;
+using Smarties.Messages.DTO.OpenAi;
+using Smarties.Messages.Enums.OpenAi;
+using Smarties.Messages.Requests.Ask;
 using SmartTalk.Core.Constants;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.PhoneOrder;
@@ -28,6 +32,7 @@ using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Enums.STT;
 using Twilio;
 using Twilio.Rest.Api.V2010.Account;
+using Exception = System.Exception;
 
 namespace SmartTalk.Core.Services.SpeechMatics;
 
@@ -162,6 +167,8 @@ public class SpeechMaticsService : ISpeechMaticsService
         
         record.Status = PhoneOrderRecordStatus.Sent;
         record.TranscriptionText = completion.Content.FirstOrDefault()?.Text ?? "";
+    
+        var isCustomerFriendly = await CheckCustomerFriendlyAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
         
         var detection = await _translationClient.DetectLanguageAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
 
@@ -173,7 +180,8 @@ public class SpeechMaticsService : ISpeechMaticsService
             Report = record.TranscriptionText,
             Language = SelectReportLanguageEnum(detection.Language),
             IsOrigin = SelectReportLanguageEnum(detection.Language) == record.Language,
-            CreatedDate = DateTimeOffset.Now
+            CreatedDate = DateTimeOffset.Now,
+            IsCustomerFriendly = isCustomerFriendly
         });
         
         var targetLanguage = SelectReportLanguageEnum(detection.Language) == TranscriptionLanguage.Chinese ? "en" : "zh";
@@ -188,7 +196,8 @@ public class SpeechMaticsService : ISpeechMaticsService
             Report = translatedText.TranslatedText,
             Language = reportLanguage,
             IsOrigin = reportLanguage == record.Language,
-            CreatedDate = DateTimeOffset.Now
+            CreatedDate = DateTimeOffset.Now,
+            IsCustomerFriendly = isCustomerFriendly
         });
 
         await _phoneOrderDataProvider.AddPhoneOrderRecordReportsAsync(reports, true, cancellationToken).ConfigureAwait(false);
@@ -327,5 +336,45 @@ public class SpeechMaticsService : ISpeechMaticsService
             return TranscriptionLanguage.Chinese;
     
         return TranscriptionLanguage.English;
+    }
+    
+    private async Task<bool> CheckCustomerFriendlyAsync(string transcriptionText, CancellationToken cancellationToken)
+    {
+        var completionResult = await _smartiesClient.PerformQueryAsync(new AskGptRequest
+        {
+            Messages = new List<CompletionsRequestMessageDto>
+            {
+                new()
+                {
+                    Role = "system",
+                    Content = new CompletionsStringContent("你需要帮我从电话录音报告中提取出客人态度是否友好，态度友好返回true，态度恶劣，有负面情绪返回false" + 
+                                                           "注意用json格式返回；" + "规则：{\"IsCustomerFriendly\": true}" + 
+                                                           "- 样本与输出：\n" + 
+                                                           "input:" + 
+                                                           "通話主題：客戶下單雞脾肉\n內容摘要：客戶表示想要下一張訂單，並訂購了一箱雞脾肉，隨後表示沒有其他需要，結束通話。\n\n客戶情緒與語氣：語氣平和，態度明確。" +
+                                                           "output:true\n")
+                },
+                new()
+                {
+                    Role = "user",
+                    Content = new CompletionsStringContent($"input: {transcriptionText}, output:")
+                }
+            },
+            Model = OpenAiModel.Gpt4o,
+            ResponseFormat = new () { Type = "json_object" }
+        }, cancellationToken).ConfigureAwait(false);
+
+        var response = completionResult.Data.Response?.Trim();
+
+        var result = JsonConvert.DeserializeObject<CustomerFriendlyResponse>(response);
+
+        if (result == null) throw new Exception($"无法反序列化模型返回结果: {response}");
+
+        return result.IsCustomerFriendly;
+    }
+
+    public class CustomerFriendlyResponse
+    {
+        public bool IsCustomerFriendly { get; set; }
     }
 }
