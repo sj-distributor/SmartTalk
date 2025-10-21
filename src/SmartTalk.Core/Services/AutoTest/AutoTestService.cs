@@ -38,19 +38,17 @@ public partial class AutoTestService : IAutoTestService
         return new AutoTestRunningResponse() { Data = executionResult };
     }
     
-    public async Task<byte[]> ProcessAudioConversationAsync(List<byte[]> customerAudioList, CancellationToken cancellationToken)
+    public async Task<byte[]> ProcessAudioConversationAsync(List<byte[]> customerAudioList, string prompt, CancellationToken cancellationToken)
     {
         var conversationHistory = new List<ChatMessage>();
-        conversationHistory.Add(new SystemChatMessage("你是专业客服助手，请用简洁友好的语气回答用户问题。"));
+        conversationHistory.Add(new SystemChatMessage($"{prompt}"));
     
         var allAudioSegments = new List<byte[]>();
         var client = new ChatClient("gpt-4o-audio-preview", _openAiSettings.ApiKey);
 
         foreach (var customerAudio in customerAudioList)
         {
-            byte[] wavAudio = ConvertPcmToWav(customerAudio);
-
-            conversationHistory.Add(new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(BinaryData.FromBytes(wavAudio), ChatInputAudioFormat.Wav)));
+            conversationHistory.Add(new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(BinaryData.FromBytes(customerAudio), ChatInputAudioFormat.Wav)));
             conversationHistory.Add(new UserChatMessage("请用客户语言自然地回复："));
             var options = new ChatCompletionOptions { ResponseModalities = ChatResponseModalities.Text | ChatResponseModalities.Audio };
             var completion = await client.CompleteChatAsync(conversationHistory, options, cancellationToken);
@@ -61,25 +59,12 @@ public partial class AutoTestService : IAutoTestService
             
             var aiReplyAudio = completion.Value.OutputAudio.AudioBytes.ToArray();
 
-            allAudioSegments.Add(wavAudio);
+            allAudioSegments.Add(customerAudio);
             
             allAudioSegments.Add(aiReplyAudio);
         }
 
         return await MergeAudiosAsync(allAudioSegments, cancellationToken);
-    }
-    
-    private static byte[] ConvertPcmToWav(byte[] pcmData, int sampleRate = 8000, int bitsPerSample = 16, int channels = 1)
-    {
-        using var memoryStream = new MemoryStream();
-        var waveFormat = new WaveFormat(sampleRate, bitsPerSample, channels);
-
-        using (var writer = new WaveFileWriter(memoryStream, waveFormat))
-        {
-            writer.Write(pcmData, 0, pcmData.Length);
-        }
-
-        return memoryStream.ToArray();
     }
     
     private static async Task<byte[]> MergeAudiosAsync(List<byte[]> audioSegments, CancellationToken cancellationToken)
@@ -96,8 +81,6 @@ public partial class AutoTestService : IAutoTestService
         {
             foreach (var segment in audioSegments)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-
                 var ms = new MemoryStream(segment);
                 var reader = new WaveFileReader(ms);
 
