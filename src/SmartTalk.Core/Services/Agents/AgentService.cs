@@ -367,13 +367,31 @@ public class AgentService : IAgentService
         var humanContacts = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantHumanContactsAsync(
             assistants.Select(x => x.Id).ToList(), cancellationToken).ConfigureAwait(false);
         
-        Log.Information("Get default assistant human contacts: {@HumanContacts}", humanContacts);
+        Log.Information("Get assistants human contacts: {@HumanContacts}", humanContacts);
         
-        if (humanContacts == null || humanContacts.Count == 0 || string.IsNullOrWhiteSpace(number)) return;
+        if (string.IsNullOrWhiteSpace(number)) return;
+
+        if (humanContacts?.Select(x => x.AssistantId).Distinct().Count() == assistants.Count)
+        {
+            humanContacts.ForEach(x => x.HumanPhone = number);
+    
+            await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantHumanContactsAsync(humanContacts, cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            Log.Information("Human contacts Compatibility Check");
+
+            if (humanContacts != null && humanContacts.Count != 0)
+                await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantHumanContactsAsync(humanContacts, cancellationToken: cancellationToken).ConfigureAwait(false);
+            
+            humanContacts = assistants.Select(x => new AiSpeechAssistantHumanContact
+            {
+                AssistantId = x.Id,
+                HumanPhone = number
+            }).ToList();
         
-        humanContacts.ForEach(x => x.HumanPhone = number);
-        
-        await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantHumanContactsAsync(humanContacts, cancellationToken: cancellationToken).ConfigureAwait(false);
+            await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantHumanContactAsync(humanContacts, cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
     }
 
     private async Task HandleAiSpeechAssistantConfigsAsync(Agent agent, List<Domain.AISpeechAssistant.AiSpeechAssistant> assistants, CancellationToken cancellationToken)
@@ -400,7 +418,7 @@ public class AgentService : IAgentService
         {
             Log.Information("TransferCall Tools Compatibility Check");
             
-            await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantFunctionCalls(transferCallTools, cancellationToken: cancellationToken).ConfigureAwait(false);
+            await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantFunctionCallsAsync(transferCallTools, cancellationToken: cancellationToken).ConfigureAwait(false);
             
             var content = new 
             {
@@ -443,7 +461,7 @@ public class AgentService : IAgentService
         {
             Log.Information("Turn Detections Compatibility Check");
             
-            await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantFunctionCalls(turnDetections, cancellationToken: cancellationToken).ConfigureAwait(false);
+            await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantFunctionCallsAsync(turnDetections, cancellationToken: cancellationToken).ConfigureAwait(false);
             
             var content = new 
             {

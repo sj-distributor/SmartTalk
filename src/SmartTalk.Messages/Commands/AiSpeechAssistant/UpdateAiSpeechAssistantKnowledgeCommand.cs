@@ -17,7 +17,7 @@ public class UpdateAiSpeechAssistantKnowledgeCommand : ICommand
     
     public string ModelVoice { get; set; }
     
-    public AiKidVoiceType? VoiceType { get; set; }
+    public AiSpeechAssistantVoiceType? VoiceType { get; set; }
     
     public AiSpeechAssistantMediaType? MediaType { get; set; }
 }

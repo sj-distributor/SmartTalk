@@ -24,7 +24,7 @@ public class AddAiSpeechAssistantCommand : HasServiceProviderId, ICommand
     
     public bool IsDisplay { get; set; } = true;
     
-    public AiKidVoiceType? VoiceType { get; set; }
+    public AiSpeechAssistantVoiceType? VoiceType { get; set; }
     
     public AgentType AgentType { get; set; } = AgentType.Restaurant;
 

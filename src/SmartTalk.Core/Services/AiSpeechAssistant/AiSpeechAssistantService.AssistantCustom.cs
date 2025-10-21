@@ -318,7 +318,7 @@ public partial class AiSpeechAssistantService
         };
     }
 
-    private async Task UpdateAssistantVoiceIfRequiredAsync(int assistantId, string modelVoice, AiKidVoiceType? voiceType, AiSpeechAssistantMediaType? mediaType, CancellationToken cancellationToken)
+    private async Task UpdateAssistantVoiceIfRequiredAsync(int assistantId, string modelVoice, AiSpeechAssistantVoiceType? voiceType, AiSpeechAssistantMediaType? mediaType, CancellationToken cancellationToken)
     {
         var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantAsync(assistantId, cancellationToken).ConfigureAwait(false);
         
@@ -349,6 +349,19 @@ public partial class AiSpeechAssistantService
         await InitialAssistantKnowledgeAsync(command, assistant, cancellationToken).ConfigureAwait(false);
 
         return assistant;
+    }
+
+    private string ModelVoiceMapping(string voice, AiSpeechAssistantVoiceType? voiceType)
+    {
+        if (!string.IsNullOrWhiteSpace(voice)) return voice;
+        
+        if (!voiceType.HasValue) return "alloy";
+        
+        return voiceType.Value switch
+        {
+            AiSpeechAssistantVoiceType.Male => "ash",
+            _ => "alloy"
+        };
     }
     
     private async Task<Domain.AISpeechAssistant.AiSpeechAssistant> InitialAssistantRelatedInfoAsync(AddAiSpeechAssistantCommand command, CancellationToken cancellationToken)
@@ -412,7 +425,7 @@ public partial class AiSpeechAssistantService
         };
     }
 
-    private string ModelVoiceMapping(string modelVoice, AiKidVoiceType? voiceType, AiSpeechAssistantMediaType? mediaType)
+    private string ModelVoiceMapping(string modelVoice, AiSpeechAssistantVoiceType? voiceType, AiSpeechAssistantMediaType? mediaType)
     {
         if (!string.IsNullOrEmpty(modelVoice)) return modelVoice;
         
@@ -420,7 +433,7 @@ public partial class AiSpeechAssistantService
         
         return voiceType.Value switch
         {
-            AiKidVoiceType.Male => mediaType.HasValue ? (mediaType == AiSpeechAssistantMediaType.Audio ? "ash" : "Puck") : "ash",
+            AiSpeechAssistantVoiceType.Male => mediaType.HasValue ? (mediaType == AiSpeechAssistantMediaType.Audio ? "ash" : "Puck") : "ash",
             _ => mediaType.HasValue ? (mediaType == AiSpeechAssistantMediaType.Audio ? "alloy" : "Aoede") : "alloy"
         };
     }
@@ -798,7 +811,7 @@ public partial class AiSpeechAssistantService
                         HumanPhone = transferCallNumber
                     };
                     
-                    await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantHumanContactAsync(humanConcat, cancellationToken: cancellationToken).ConfigureAwait(false);
+                    await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantHumanContactAsync([humanConcat], cancellationToken: cancellationToken).ConfigureAwait(false);
                 }
                 else
                 {
