@@ -5,12 +5,12 @@ using SmartTalk.Core.Ioc;
 
 namespace SmartTalk.Core.Services.AutoTest;
 
-public interface IAutoTestDataProvider : IScopedDependency
+public partial interface IAutoTestDataProvider : IScopedDependency
 {
     Task<AutoTestScenario> GetAutoTestScenarioByIdAsync(int id, CancellationToken cancellationToken);
 }
 
-public class AutoTestDataProvider : IAutoTestDataProvider
+public partial class AutoTestDataProvider : IAutoTestDataProvider
 {
     private readonly IMapper _mapper;
     private readonly IRepository _repository;
