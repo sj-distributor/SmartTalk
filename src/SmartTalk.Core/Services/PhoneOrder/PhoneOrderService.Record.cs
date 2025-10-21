@@ -886,8 +886,8 @@ public partial class PhoneOrderService
     
     public async Task<GetPhoneOrderDataDashboardResponse> GetPhoneOrderDataDashboardAsync(GetPhoneOrderDataDashboardRequest request, CancellationToken cancellationToken)
     {
-        var unixStart = request.StartDate?.ToUnixTimeSeconds();
-        var unixEnd = request.EndDate?.ToUnixTimeSeconds();
+        var unixStart = request.StartDate.ToUnixTimeSeconds();
+        var unixEnd = request.EndDate.ToUnixTimeSeconds();
 
         var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds: request.AgentIds, null, utcStart: request.StartDate, utcEnd: request.EndDate, cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -1055,11 +1055,11 @@ public partial class PhoneOrderService
         List<PhoneOrderRecord> callInRecords, List<PhoneOrderRecord> callOutRecords, RestaurantDataDto restaurantData,
         CallInDataDto callInData, CallOutDataDto callOutData, CancellationToken cancellationToken)
     {
-        var periodDays = (request.EndDate - request.StartDate)?.TotalDays ?? 0;
-        if (periodDays <= 0 || request.StartDate == null || request.EndDate == null) return;
+        var periodDays = (request.EndDate - request.StartDate).TotalDays;
+        if (periodDays <= 0) return;
 
-        var prevStartDate = request.StartDate.Value.AddDays(-periodDays);
-        var prevEndDate = request.StartDate.Value;
+        var prevStartDate = request.StartDate.AddDays(-periodDays);
+        var prevEndDate = request.StartDate;
 
         var prevRecords = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(
             agentIds: request.AgentIds, null, utcStart: prevStartDate, utcEnd: prevEndDate, cancellationToken: cancellationToken).ConfigureAwait(false);
