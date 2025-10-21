@@ -2,10 +2,10 @@ namespace SmartTalk.Messages.Dto.Sales;
 
 public class GetOrderArrivalTimeRequestDto
 {
-    public List<string> CustomerIds { get; set; } = [];
+    public List<string> CustomerIds { get; set; }
 }
 
-public class GetOrderArrivalTimeResponseDto : SalesResponseDto
+public class GetOrderArrivalTimeResponseDto :SalesResponseDto
 {
     public List<GetOrderArrivalTimeDataDto> Data { get; set; }
 }

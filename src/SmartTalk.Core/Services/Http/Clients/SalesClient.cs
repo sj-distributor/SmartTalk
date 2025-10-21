@@ -21,12 +21,14 @@ public class SalesClient : ISalesClient
     private readonly SalesSetting _salesSetting;
     private readonly Dictionary<string, string> _headers;
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
+    public readonly SalesOrderArrivalSetting _salesOrderArrivalSetting;
 
-    public SalesClient(SalesSetting salesSetting, ISmartTalkHttpClientFactory httpClientFactory)
+    public SalesClient(SalesSetting salesSetting, ISmartTalkHttpClientFactory httpClientFactory, SalesOrderArrivalSetting salesOrderArrivalSetting)
     {
         _salesSetting = salesSetting;
         _httpClientFactory = httpClientFactory;
-        
+        _salesOrderArrivalSetting = salesOrderArrivalSetting;
+
         _headers = new Dictionary<string, string>
         {
             { "X-API-KEY", _salesSetting.ApiKey }
@@ -67,18 +69,15 @@ public class SalesClient : ISalesClient
     
     public async Task<GetOrderArrivalTimeResponseDto> GetOrderArrivalTimeAsync(GetOrderArrivalTimeRequestDto request, CancellationToken cancellationToken)
     {
+        var header = new Dictionary<string, string>
+        {
+            { "apikey", _salesOrderArrivalSetting.ApiKey },
+            { "Organizationid", _salesOrderArrivalSetting.Organizationid },
+        };
+        
         if (request.CustomerIds == null || request.CustomerIds.Count == 0)
             throw new ArgumentException("CustomerIds cannot be null or empty.");
-        
-        var queryString = new StringBuilder("?");
-        
-        foreach (var customerNumber in request.CustomerIds)
-        {
-            queryString.Append("CustomerIds=").Append(Uri.EscapeDataString(customerNumber)).Append('&');
-        }
-        
-        var url = $"{_salesSetting.BaseUrl}/api/order/GetOderArrivalTime" + queryString.ToString().TrimEnd('&');
 
-        return await _httpClientFactory.GetAsync<GetOrderArrivalTimeResponseDto>(url, headers: _headers, cancellationToken: cancellationToken).ConfigureAwait(false);
+        return await _httpClientFactory.PostAsJsonAsync<GetOrderArrivalTimeResponseDto>($"{_salesOrderArrivalSetting.BaseUrl}/api/order/getOrderArrivalTime", request, headers: header, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 }
