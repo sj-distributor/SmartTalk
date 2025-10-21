@@ -211,7 +211,7 @@ public class HrInterViewService : IHrInterViewService
                 var context = await GetHrInterViewSessionContextAsync(sessionId, cancellationToken).ConfigureAwait(false);
                     
                 var responseNextQuestion = await MatchingReasonableNextQuestionAsync(answers.Text, remainQuestions.MinBy(x => x.Id), 
-                    questions.Select((q, index) => new { q.Id, Index = index }).FirstOrDefault(item => item.Id == remainQuestions.MinBy(x => x.Id)!.Id)!.Index,
+                    questions.Select((q, index) => new { q.Id, Index = index + 1 }).FirstOrDefault(item => item.Id == remainQuestions.MinBy(x => x.Id)!.Id)!.Index,
                     context, fileBytes, cancellationToken).ConfigureAwait(false);
 
                 var fileUrl = await UploadFileAsync(responseNextQuestion.AudioBytes.ToArray(), sessionId, cancellationToken:cancellationToken).ConfigureAwait(false);
