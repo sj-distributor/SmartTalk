@@ -148,10 +148,23 @@ public class SpeechMaticsService : ISpeechMaticsService
         var levelCodes = askItems.Where(x => !string.IsNullOrEmpty(x.LevelCode)).Select(x => x.LevelCode)
             .Concat(orderItems.Where(x => !string.IsNullOrEmpty(x.LevelCode)).Select(x => x.LevelCode)).Distinct().ToList();
         
-        var habitResponse = levelCodes.Any() ? await _salesClient.GetCustomerLevel5HabitAsync(new GetCustomerLevel5HabitRequstDto { CustomerId = soldToIds.FirstOrDefault(), LevelCode5List = levelCodes }, cancellationToken).ConfigureAwait(false) : null;
+        var materials = askItems.Where(x => !string.IsNullOrEmpty(x.Material)).Select(x => x.Material).Concat(orderItems.Where(x => !string.IsNullOrEmpty(x.MaterialNumber))
+                .Select(x => x.MaterialNumber)).Distinct().ToList();
+        
+        var requestDto = new GetCustomerLevel5HabitRequstDto
+        {
+            CustomerId = soldToIds.FirstOrDefault(),
+            LevelCode5List = levelCodes,
+            Material = materials
+        };
+        Log.Information("Sending GetCustomerLevel5HabitAsync with: {@RequestDto}", requestDto);
+        
+        var habitResponse = levelCodes.Any() ? await _salesClient.GetCustomerLevel5HabitAsync(requestDto, cancellationToken).ConfigureAwait(false) : null;
+        Log.Information("Sending GetCustomerLevel5HabitAsync with: {@RequestDto}", requestDto);
+        
         var habitLookup = habitResponse?.HistoryCustomerLevel5HabitDtos?.ToDictionary(h => h.LevelCode5, h => h) ?? new Dictionary<string, HistoryCustomerLevel5HabitDto>();
         
-        string FormatItem(string materialDesc, string levelCode = null)
+        string FormatItem(string materialDesc, string levelCode = null, string materialNumber = null)
         {
             var parts = materialDesc?.Split('·') ?? Array.Empty<string>();
             var name = parts.Length > 4 ? $"{parts[0]}{parts[4]}" : parts.FirstOrDefault() ?? "";
@@ -160,10 +173,12 @@ public class SpeechMaticsService : ISpeechMaticsService
             
             string aliasText = "";
             MaterialPartInfoDto partInfo = null;
+
             if (!string.IsNullOrEmpty(levelCode) && habitLookup.TryGetValue(levelCode, out var habit))
             {
-                aliasText = habit.CustomerLikeName ?? "";
-                partInfo = habit.MaterialPartInfoDtos?.FirstOrDefault();
+                aliasText = habit.CustomerLikeNames != null && habit.CustomerLikeNames.Any() ? string.Join(", ", habit.CustomerLikeNames.Select(n => n.CustomerLikeName)) : "";
+
+                partInfo = habit.MaterialPartInfoDtos?.FirstOrDefault(p => string.Equals(p.MaterialNumber, materialNumber, StringComparison.OrdinalIgnoreCase));
             }
 
             return $"Item: {name}, Brand: {brand}, Size: {size}, Aliases: {aliasText}, " +
@@ -172,8 +187,8 @@ public class SpeechMaticsService : ISpeechMaticsService
                    $"ranks: {partInfo?.Ranks ?? ""}, atr: {partInfo?.Atr ?? 0}";
         }
         
-        allItems.AddRange(askItems.Select(x => FormatItem(x.MaterialDesc, x.LevelCode)));
-        allItems.AddRange(orderItems.Select(x => FormatItem(x.MaterialDescription, x.LevelCode)));
+        allItems.AddRange(askItems.Select(x => FormatItem(x.MaterialDesc, x.LevelCode, x.Material)));
+        allItems.AddRange(orderItems.Select(x => FormatItem(x.MaterialDescription, x.LevelCode, x.MaterialNumber)));
 
         return string.Join(Environment.NewLine, allItems.Distinct());
     }

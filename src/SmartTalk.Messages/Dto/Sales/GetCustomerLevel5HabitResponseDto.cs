@@ -11,9 +11,7 @@ public class HistoryCustomerLevel5HabitDto
     
     public string LevelCode5 { get; set; }
     
-    public DateTime CreateDate { get; set; }
-    
-    public string CustomerLikeName { get; set; }
+    public List<CustomerLikeNameDto> CustomerLikeNames { get; set; } = new();
     
     public List<MaterialPartInfoDto> MaterialPartInfoDtos { get; set; }
 }
@@ -37,4 +35,11 @@ public class MaterialPartInfoDto
     public string Ranks { get; set; }
     
     public int Atr { get; set; }
+}
+
+public class CustomerLikeNameDto
+{
+    public DateTime CreateDate { get; set; }
+    
+    public string CustomerLikeName { get; set; }
 }
