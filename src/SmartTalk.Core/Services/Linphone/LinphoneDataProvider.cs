@@ -212,25 +212,15 @@ public class LinphoneDataProvider : ILinphoneDataProvider
             return (0, 0);
 
         var query = _repository.Query<LinphoneCdr>();
-
-        if (startTime > 0)
-            query = query.Where(x => x.CallDate >= startTime);
-
-        if (endTime > 0)
-            query = query.Where(x => x.CallDate <= endTime);
-
-        query = query.Where(x => x.Status == LinphoneStatus.Missed);
         
-        var callOutFailedCount = await query
-            .Where(x => sipNumbers.Contains(x.Caller))
-            .CountAsync(cancellationToken)
-            .ConfigureAwait(false);
-        
-        var callInFailedCount = await query
-            .Where(x => sipNumbers.Contains(x.Targetter))
-            .CountAsync(cancellationToken)
-            .ConfigureAwait(false);
+        var missedCalls = query.Where(x =>
+            x.Status == LinphoneStatus.Missed &&
+            x.CallDate >= startTime &&
+            x.CallDate <= endTime);
 
+        var callOutFailedCount = await missedCalls.CountAsync(x => sipNumbers.Contains(x.Caller), cancellationToken);
+        var callInFailedCount  = await missedCalls.CountAsync(x => sipNumbers.Contains(x.Targetter), cancellationToken);
+        
         return (callInFailedCount, callOutFailedCount);
     }
 
