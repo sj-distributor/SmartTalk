@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations.Schema;
+
 namespace SmartTalk.Messages.Dto.HrInterView;
 
 public class HrInterViewSettingDto
@@ -11,4 +13,7 @@ public class HrInterViewSettingDto
     public Guid SessionId { get; set; }
     
     public DateTimeOffset CreatedDate { get; set; } = DateTimeOffset.Now;
+    
+    [NotMapped]
+    public List<HrInterViewSettingQuestionDto> Questions { get; set; }
 }

@@ -70,7 +70,11 @@ public class HrInterViewService : IHrInterViewService
         }
         else await _hrInterViewDataProvider.AddHrInterViewSettingAsync(newSetting, cancellationToken:cancellationToken).ConfigureAwait(false);
         
-        command.Questions.ForEach(x => x.SettingId = newSetting.Id);
+        command.Questions.ForEach(x =>
+        {
+            x.SettingId = newSetting.Id;
+            x.OriginCount = x.Count;
+        });
         
         await _hrInterViewDataProvider.AddHrInterViewSettingQuestionsAsync(_mapper.Map<List<HrInterViewSettingQuestion>>(command.Questions), cancellationToken: cancellationToken).ConfigureAwait(false);
         
@@ -83,7 +87,7 @@ public class HrInterViewService : IHrInterViewService
         
         return new GetHrInterViewSettingsResponse
         {
-            Settings = _mapper.Map<List<HrInterViewSettingDto>>(settings),
+            Settings = settings,
             TotalCount = count
         };
     }
@@ -165,7 +169,7 @@ public class HrInterViewService : IHrInterViewService
 
             if (firstQuestion != null)
             {
-                await ConvertAndSendWebSocketMessageAsync(webSocket, sessionId, "MESSAGE", $"Now entering the first stage, about: {questions.MinBy(x => x.Id).Type},First:{firstQuestion}", cancellationToken: cancellationToken).ConfigureAwait(false);
+                await ConvertAndSendWebSocketMessageAsync(webSocket, sessionId, "MESSAGE", $"{questions.MinBy(x => x.Id).Type}.{firstQuestion}", cancellationToken: cancellationToken).ConfigureAwait(false);
                 
                 Log.Information("SendWelcomeAndFirstQuestionAsync questions:{@questions}", questions);
                 
@@ -208,41 +212,54 @@ public class HrInterViewService : IHrInterViewService
                 
                 if (!remainQuestions.Any()) return;
                 
-                var context = await GetHrInterViewSessionContextAsync(sessionId, cancellationToken).ConfigureAwait(false);
-                    
-                var responseNextQuestion = await MatchingReasonableNextQuestionAsync(answers.Text, remainQuestions.MinBy(x => x.Id), 
-                    questions.Select((q, index) => new { q.Id, Index = index + 1 }).FirstOrDefault(item => item.Id == remainQuestions.MinBy(x => x.Id)!.Id)!.Index,
-                    context, fileBytes, cancellationToken).ConfigureAwait(false);
-
-                var fileUrl = await UploadFileAsync(responseNextQuestion.AudioBytes.ToArray(), sessionId, cancellationToken:cancellationToken).ConfigureAwait(false);
-
+                var questionPart = remainQuestions.MinBy(x => x.Id);
+                
+                var (nextQuestion, questionList) = GetAndRemoveRandomQuestion(JsonConvert.DeserializeObject<List<string>>(questionPart.Question));
+               
+                if (questionPart.OriginCount == questionPart.Count) nextQuestion = questionPart.Type + "\n" + nextQuestion;
+                
+                var messageAudio = await ConvertTextToSpeechAsync(nextQuestion, cancellationToken).ConfigureAwait(false);
+                
                 await SendWebSocketMessageAsync(webSocket, new HrInterViewQuestionEventDto
                 {
                     SessionId = sessionId,
                     EventType = "MESSAGE",
-                    Message = responseNextQuestion.Transcript,
-                    MessageFileUrl = fileUrl
+                    Message = nextQuestion,
+                    MessageFileUrl = messageAudio
                 }, cancellationToken).ConfigureAwait(false);
                     
                 await _hrInterViewDataProvider.AddHrInterViewSessionAsync(new HrInterViewSession
                 {
                     SessionId = sessionId,
-                    Message = responseNextQuestion.Transcript,
-                    FileUrl = fileUrl,
+                    Message = nextQuestion,
+                    FileUrl = messageAudio,
                     QuestionType = HrInterViewSessionQuestionType.Assistant
                 }, cancellationToken:cancellationToken).ConfigureAwait(false);
                 
-                if (questions.MinBy(x => x.Id) != null)
-                {
-                    questions.MinBy(x => x.Id).Count -= 1;
-                    await _hrInterViewDataProvider.UpdateHrInterViewSettingQuestionsAsync(questions, cancellationToken: cancellationToken).ConfigureAwait(false);
-                }
+                questionPart.Count -= 1;
+                questionPart.Question = JsonConvert.SerializeObject(questionList);
+                
+                await _hrInterViewDataProvider.UpdateHrInterViewSettingQuestionsAsync(questions, cancellationToken: cancellationToken).ConfigureAwait(false);
             }
         }
         catch (Exception ex)
         {
             throw new InvalidOperationException($"Failed to handle WebSocket message for session {sessionId}", ex);
         }
+    }
+    
+    public (string, List<string>) GetAndRemoveRandomQuestion(List<string> remainQuestions)
+    {
+        if (remainQuestions == null || remainQuestions.Count == 0) return (null, null);
+
+        var random = new Random();
+        int index = random.Next(remainQuestions.Count);
+        
+        var selectedQuestion = remainQuestions[index];
+        
+        remainQuestions.RemoveAt(index);
+
+        return (selectedQuestion, remainQuestions);
     }
     
     private async Task<ChatOutputAudio> MatchingReasonableNextQuestionAsync(string userQuestion, HrInterViewSettingQuestion candidateQuestions, int currentStage, string context, byte[] audioContent, CancellationToken cancellationToken)

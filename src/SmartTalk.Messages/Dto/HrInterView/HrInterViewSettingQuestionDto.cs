@@ -13,6 +13,8 @@ public class HrInterViewSettingQuestionDto
     public string Question { get; set; }
     
     public int Count { get; set; }
+    
+    public int OriginCount { get; set; }
 
     public DateTimeOffset CreatedDate { get; set; } = DateTimeOffset.Now;
 }

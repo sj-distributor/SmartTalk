@@ -25,6 +25,9 @@ public class HrInterViewSettingQuestion : IEntity
     
     [Column("count")]
     public int Count { get; set; }
+    
+    [Column("origin_count")]
+    public int OriginCount { get; set; }
 
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; } = DateTimeOffset.Now;
