@@ -79,7 +79,7 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
     
     Task UpdateAiSpeechAssistantFunctionCallAsync(List<AiSpeechAssistantFunctionCall> tools, bool forceSave = true, CancellationToken cancellationToken = default);
     
-    Task AddAiSpeechAssistantHumanContactAsync(AiSpeechAssistantHumanContact humanContact, bool forceSave = true, CancellationToken cancellationToken = default);
+    Task AddAiSpeechAssistantHumanContactAsync(List<AiSpeechAssistantHumanContact> humanContacts, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task UpdateAiSpeechAssistantHumanContactsAsync(List<AiSpeechAssistantHumanContact> humanContacts, bool forceSave = true, CancellationToken cancellationToken = default);
     
@@ -119,7 +119,9 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
     
     Task<List<AiSpeechAssistantInboundRoute>> GetAiSpeechAssistantInboundRoutesByAgentIdAsync(int agentId, CancellationToken cancellationToken = default);
     
-    Task DeleteAiSpeechAssistantFunctionCalls(List<AiSpeechAssistantFunctionCall> tools, bool forceSave = true, CancellationToken cancellationToken = default);
+    Task DeleteAiSpeechAssistantFunctionCallsAsync(List<AiSpeechAssistantFunctionCall> tools, bool forceSave = true, CancellationToken cancellationToken = default);
+    
+    Task DeleteAiSpeechAssistantHumanContactsAsync(List<AiSpeechAssistantHumanContact> humanContacts, bool forceSave = true, CancellationToken cancellationToken = default);
 }
 
 public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
@@ -475,9 +477,9 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
         if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task AddAiSpeechAssistantHumanContactAsync(AiSpeechAssistantHumanContact humanContact, bool forceSave = true, CancellationToken cancellationToken = default)
+    public async Task AddAiSpeechAssistantHumanContactAsync(List<AiSpeechAssistantHumanContact> humanContacts, bool forceSave = true, CancellationToken cancellationToken = default)
     {
-        await _repository.InsertAsync(humanContact, cancellationToken).ConfigureAwait(false);
+        await _repository.InsertAllAsync(humanContacts, cancellationToken).ConfigureAwait(false);
         
         if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -654,9 +656,16 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task DeleteAiSpeechAssistantFunctionCalls(List<AiSpeechAssistantFunctionCall> tools, bool forceSave = true, CancellationToken cancellationToken = default)
+    public async Task DeleteAiSpeechAssistantFunctionCallsAsync(List<AiSpeechAssistantFunctionCall> tools, bool forceSave = true, CancellationToken cancellationToken = default)
     {
         await _repository.DeleteAllAsync(tools, cancellationToken).ConfigureAwait(false);
+        
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task DeleteAiSpeechAssistantHumanContactsAsync(List<AiSpeechAssistantHumanContact> humanContacts, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.DeleteAllAsync(humanContacts, cancellationToken).ConfigureAwait(false);
         
         if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }

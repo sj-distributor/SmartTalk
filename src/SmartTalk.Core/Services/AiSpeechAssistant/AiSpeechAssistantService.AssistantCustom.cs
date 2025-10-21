@@ -783,7 +783,7 @@ public partial class AiSpeechAssistantService
                         HumanPhone = transferCallNumber
                     };
                     
-                    await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantHumanContactAsync(humanConcat, cancellationToken: cancellationToken).ConfigureAwait(false);
+                    await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantHumanContactAsync([humanConcat], cancellationToken: cancellationToken).ConfigureAwait(false);
                 }
                 else
                 {
