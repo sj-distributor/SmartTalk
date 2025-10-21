@@ -12,6 +12,8 @@ public interface ISalesClient : IScopedDependency
     Task<GetOrderHistoryByCustomerResponseDto> GetOrderHistoryByCustomerAsync(GetOrderHistoryByCustomerRequestDto request, CancellationToken cancellationToken);
     
     Task<SalesResponseDto> GenerateAiOrdersAsync(GenerateAiOrdersRequestDto request, CancellationToken cancellationToken);
+    
+    Task<GetOrderArrivalTimeResponseDto> GetOrderArrivalTimeAsync(GetOrderArrivalTimeRequestDto request, CancellationToken cancellationToken);
 }
 
 public class SalesClient : ISalesClient
@@ -19,12 +21,14 @@ public class SalesClient : ISalesClient
     private readonly SalesSetting _salesSetting;
     private readonly Dictionary<string, string> _headers;
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
+    public readonly SalesOrderArrivalSetting _salesOrderArrivalSetting;
 
-    public SalesClient(SalesSetting salesSetting, ISmartTalkHttpClientFactory httpClientFactory)
+    public SalesClient(SalesSetting salesSetting, ISmartTalkHttpClientFactory httpClientFactory, SalesOrderArrivalSetting salesOrderArrivalSetting)
     {
         _salesSetting = salesSetting;
         _httpClientFactory = httpClientFactory;
-        
+        _salesOrderArrivalSetting = salesOrderArrivalSetting;
+
         _headers = new Dictionary<string, string>
         {
             { "X-API-KEY", _salesSetting.ApiKey }
@@ -61,5 +65,19 @@ public class SalesClient : ISalesClient
     public async Task<SalesResponseDto> GenerateAiOrdersAsync(GenerateAiOrdersRequestDto request, CancellationToken cancellationToken)
     {
         return await _httpClientFactory.PostAsJsonAsync<SalesResponseDto>($"{_salesSetting.BaseUrl}/api/SalesOrder/GenerateAiOrders", request, headers: _headers, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+    
+    public async Task<GetOrderArrivalTimeResponseDto> GetOrderArrivalTimeAsync(GetOrderArrivalTimeRequestDto request, CancellationToken cancellationToken)
+    {
+        var header = new Dictionary<string, string>
+        {
+            { "apikey", _salesOrderArrivalSetting.ApiKey },
+            { "Organizationid", _salesOrderArrivalSetting.Organizationid },
+        };
+        
+        if (request.CustomerIds == null || request.CustomerIds.Count == 0)
+            throw new ArgumentException("CustomerIds cannot be null or empty.");
+
+        return await _httpClientFactory.PostAsJsonAsync<GetOrderArrivalTimeResponseDto>($"{_salesOrderArrivalSetting.BaseUrl}/api/order/getOrderArrivalTime", request, headers: header, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 }
