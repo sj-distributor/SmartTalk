@@ -1,3 +1,4 @@
+using SmartTalk.Messages.Enums.Account;
 using SmartTalk.Messages.Enums.Security;
 
 namespace SmartTalk.Messages.DTO.Security;
@@ -11,6 +12,10 @@ public class RoleDto
     }
     
     public int Id { get; set; }
+    
+    public int? ServiceProviderId { get; set; }
+    
+    public UserAccountLevel UserAccountLevel { get; set; }
     
     public DateTimeOffset CreatedDate { get; set; }
     
@@ -33,6 +38,12 @@ public class RoleDto
             "SuperAdministrator" => "超级管理员",
             "Administrator" => "管理员",
             "User" => "操作员",
+            "Operator" => "操作员",
+            "ServiceProviderOperator" => "操作员",
+            "TestAdmin" => "管理员",
+            "TestOperator" => "操作员",
+            "TestSuperAdministrator" => "超级管理员",
+            "TestServiceProviderOperator" => "操作员",
             _ => null
         };
     }

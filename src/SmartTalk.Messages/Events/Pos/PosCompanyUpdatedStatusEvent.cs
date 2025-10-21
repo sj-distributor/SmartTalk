@@ -5,5 +5,5 @@ namespace SmartTalk.Messages.Events.Pos;
 
 public class PosCompanyUpdatedStatusEvent : IEvent
 {
-    public PosCompanyDto Company { get; set; }
+    public CompanyDto Company { get; set; }
 }

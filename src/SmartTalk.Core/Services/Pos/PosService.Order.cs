@@ -3,11 +3,13 @@ using Newtonsoft.Json;
 using System.Globalization;
 using SmartTalk.Core.Constants;
 using SmartTalk.Core.Domain.Pos;
+using SmartTalk.Core.Domain.Printer;
 using SmartTalk.Messages.Commands.Pos;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Pos;
 using SmartTalk.Messages.Enums.Caching;
 using SmartTalk.Messages.Enums.Pos;
+using SmartTalk.Messages.Events.Pos;
 using SmartTalk.Messages.Requests.Pos;
 
 namespace SmartTalk.Core.Services.Pos;
@@ -16,15 +18,13 @@ public partial interface IPosService
 {
     Task<GetPosStoreOrdersResponse> GetPosStoreOrdersAsync(GetPosStoreOrdersRequest request, CancellationToken cancellationToken = default);
     
-    Task<PlacePosOrderResponse> PlacePosStoreOrdersAsync(PlacePosOrderCommand command, CancellationToken cancellationToken = default);
+    Task<PosOrderPlacedEvent> PlacePosStoreOrdersAsync(PlacePosOrderCommand command, CancellationToken cancellationToken = default);
     
     Task UpdatePosOrderAsync(UpdatePosOrderCommand command, CancellationToken cancellationToken);
     
     Task<GetPosOrderProductsResponse> GetPosOrderProductsAsync(GetPosOrderProductsRequest request, CancellationToken cancellationToken);
     
     Task<GetPosStoreOrderResponse> GetPosStoreOrderAsync(GetPosStoreOrderRequest request, CancellationToken cancellationToken);
-    
-    Task<GetPosCustomerInfoResponse> GetPosCustomerInfosAsync(GetPosCustomerInfoRequest request, CancellationToken cancellationToken);
 }
 
 public partial class PosService
@@ -40,7 +40,7 @@ public partial class PosService
         };
     }
 
-    public async Task<PlacePosOrderResponse> PlacePosStoreOrdersAsync(PlacePosOrderCommand command, CancellationToken cancellationToken = default)
+    public async Task<PosOrderPlacedEvent> PlacePosStoreOrdersAsync(PlacePosOrderCommand command, CancellationToken cancellationToken = default)
     {
         var order = await GetOrAddPosOrderAsync(command, cancellationToken).ConfigureAwait(false);
         
@@ -50,21 +50,40 @@ public partial class PosService
 
         var token = await GetPosTokenAsync(store, order, cancellationToken).ConfigureAwait(false);
 
+        _smartTalkBackgroundJobClient.Enqueue(() => CreateMerchPrinterOrderAsync(command.StoreId, order.Id, cancellationToken));
+
         if (!store.IsLink && string.IsNullOrWhiteSpace(token))
         {
             order.Status = PosOrderStatus.Modified;
             
             await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
             
-            return new PlacePosOrderResponse { Data = _mapper.Map<PosOrderDto>(order) };
+            return new PosOrderPlacedEvent { Order = _mapper.Map<PosOrderDto>(order) };
         }
         
         await SafetyPlaceOrderAsync(order, store, token, command.IsWithRetry, 0, cancellationToken).ConfigureAwait(false);
-
-        return new PlacePosOrderResponse
+        
+        return new PosOrderPlacedEvent
         {
-            Data = _mapper.Map<PosOrderDto>(order)
+            Order = _mapper.Map<PosOrderDto>(order)
         };
+    }
+
+    public async Task CreateMerchPrinterOrderAsync(int storeId, int orderId, CancellationToken cancellationToken)
+    {
+        Log.Information("storeId:{storeId}, orderId:{orderId}", storeId, orderId);
+        
+        var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(storeId: storeId, isEnabled: true, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+
+        Log.Information("get merch printer:{@merchPrinter}", merchPrinter);
+        
+        await _printerDataProvider.AddMerchPrinterOrderAsync(new MerchPrinterOrder
+        {
+            OrderId = orderId,
+            StoreId = storeId,
+            PrinterMac = merchPrinter?.PrinterMac,
+            PrintDate = DateTimeOffset.Now
+        }, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task UpdatePosOrderAsync(UpdatePosOrderCommand command, CancellationToken cancellationToken)
@@ -153,13 +172,6 @@ public partial class PosService
         };
     }
 
-    public async Task<GetPosCustomerInfoResponse> GetPosCustomerInfosAsync(GetPosCustomerInfoRequest request, CancellationToken cancellationToken)
-    {
-        var customerInfos = await _posDataProvider.GetPosCustomerInfosAsync(request.Phone, cancellationToken).ConfigureAwait(false);
-
-        return new GetPosCustomerInfoResponse { Data = customerInfos };
-    }
-
     private List<GetPosOrderProductsResponseData> BuildPosOrderProductsData(List<PosProduct> products, List<(PosMenu Menu, PosCategory Category)> menuWithCategories)
     {
         return products.Select(product =>
@@ -174,45 +186,6 @@ public partial class PosService
             };
         }).ToList();
     }
-
-    // private List<PosOrderItemDto> BuildMergedOrderItemsWithStatus(List<EasyPosOrderItemDto> orderItems, string originalItemJson)
-    // {
-    //     var originalItems = JsonConvert.DeserializeObject<List<PosOrderItemDto>>(originalItemJson) ?? [];
-    //     var originalItemDict = originalItems.GroupBy(x => x.ProductId).Select(g =>
-    //     {
-    //         var item = g.First();
-    //         item.Status = PosOrderItemStatus.Missed;
-    //         return item;
-    //     }).ToDictionary(x => x.ProductId, x => x);
-    //     
-    //     var newItems = orderItems.Select(item =>
-    //     {
-    //         var status = originalItemDict.ContainsKey(item.ProductId) ? item.Quantity > 0 ? PosOrderItemStatus.Normal : PosOrderItemStatus.Missed : PosOrderItemStatus.Added;
-    //
-    //         return new PosOrderItemDto
-    //         {
-    //             Id = item.Id,
-    //             ProductId = item.ProductId,
-    //             Quantity = item.Quantity,
-    //             OriginalPrice = item.OriginalPrice,
-    //             Price = item.Price,
-    //             Notes = string.IsNullOrEmpty(item.Notes) ? string.Empty : item.Notes,
-    //             OrderItemModifiers = _mapper.Map<List<PhoneCallOrderItemModifiers>>(item.OrderItemModifiers),
-    //             Status = status
-    //         };
-    //     }).ToList();
-    //
-    //     foreach (var item in originalItemDict)
-    //     {
-    //         var matched = newItems.FirstOrDefault(x => x.ProductId == item.Key);
-    //
-    //         if (matched != null) continue;
-    //         
-    //         newItems.Add(item.Value);
-    //     }
-    //
-    //     return newItems;
-    // }
 
     private List<PosOrderItemDto> BuildMergedOrderItemsWithStatus(List<EasyPosOrderItemDto> newItems, string originalItemJson)
     {
@@ -447,7 +420,7 @@ public partial class PosService
         return (utcStart, utcEnd);
     }
     
-    private async Task<string> GetPosTokenAsync(PosCompanyStore store, PosOrder order, CancellationToken cancellationToken)
+    private async Task<string> GetPosTokenAsync(CompanyStore store, PosOrder order, CancellationToken cancellationToken)
     {
         var authorization = await _easyPosClient.GetEasyPosTokenAsync(new EasyPosTokenRequestDto
         {
@@ -461,7 +434,7 @@ public partial class PosService
         return authorization?.Data;
     }
 
-    private async Task<(bool IsAvailable, PosOrderStatus Status)> ValidatePosProductsAsync(PosOrder order, PosCompanyStore store, string token, CancellationToken cancellationToken)
+    private async Task<(bool IsAvailable, PosOrderStatus Status)> ValidatePosProductsAsync(PosOrder order, CompanyStore store, string token, CancellationToken cancellationToken)
     {
         try
         {
@@ -508,7 +481,7 @@ public partial class PosService
         }
     }
 
-    public async Task SafetyPlaceOrderAsync(PosOrder order, PosCompanyStore store, string token, bool isWithRetry, int retryCount, CancellationToken cancellationToken)
+    public async Task SafetyPlaceOrderAsync(PosOrder order, CompanyStore store, string token, bool isWithRetry, int retryCount, CancellationToken cancellationToken)
     {
         const int MaxRetryCount = 3;
         var lockKey = $"place-order-key-{order.Id}";
@@ -540,14 +513,14 @@ public partial class PosService
         }, wait: TimeSpan.FromSeconds(10), retry: TimeSpan.FromSeconds(1), server: RedisServer.System).ConfigureAwait(false);
     }
 
-    private async Task<PlaceOrderToEasyPosResponseDto> PlaceOrderAsync(PosOrder order, PosCompanyStore store, string token, CancellationToken cancellationToken)
+    private async Task<PlaceOrderToEasyPosResponseDto> PlaceOrderAsync(PosOrder order, CompanyStore store, string token, CancellationToken cancellationToken)
     {
         var response = await _easyPosClient.PlaceOrderAsync(new PlaceOrderToEasyPosRequestDto
         {
             Type = order.Type == PosOrderReceiveType.Pickup ? 1 : 3,
             Guests = 1,
             IsTaxFree = false,
-            Notes = string.IsNullOrEmpty(order.Notes) ? string.Empty : order.Notes,
+            Notes = string.IsNullOrEmpty(order.Notes) ? string.IsNullOrEmpty(order.Remarks) ? string.Empty : order.Remarks : order.Notes,
             SourceType = 3,
             OrderItems = JsonConvert.DeserializeObject<List<PhoneCallOrderItem>>(order.Items),
             Customer = new PhoneCallOrderCustomer
@@ -579,7 +552,7 @@ public partial class PosService
         return response;
     }
 
-    private async Task SafetyPlaceOrderWithRetryAsync(PosOrder order, PosCompanyStore store, string token, bool isRetry, CancellationToken cancellationToken)
+    private async Task SafetyPlaceOrderWithRetryAsync(PosOrder order, CompanyStore store, string token, bool isRetry, CancellationToken cancellationToken)
     {
         const int MaxRetryCount = 3;
         
