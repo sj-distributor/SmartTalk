@@ -18,7 +18,7 @@ public interface IHrInterViewDataProvider : IScopedDependency
     
     Task<HrInterViewSetting> GetHrInterViewSettingBySessionIdAsync(Guid sessionId, CancellationToken cancellationToken);
 
-    Task<(List<HrInterViewSetting>, int)> GetHrInterViewSettingsAsync(int? settingId, int? pageIndex = null, int? pageSize = null, CancellationToken cancellationToken = default);
+    Task<(List<HrInterViewSettingDto>, int)> GetHrInterViewSettingsAsync(int? settingId, int? pageIndex = null, int? pageSize = null, CancellationToken cancellationToken = default);
     
     Task AddHrInterViewSettingQuestionsAsync(List<HrInterViewSettingQuestion> questions, bool forceSave = true, CancellationToken cancellationToken = default);
     
@@ -37,11 +37,13 @@ public interface IHrInterViewDataProvider : IScopedDependency
 
 public class HrInterViewDataProvider : IHrInterViewDataProvider
 {
+    private readonly IMapper _mapper;
     private readonly IRepository _repository;
     private readonly IUnitOfWork _unitOfWork;
     
-    public HrInterViewDataProvider(IRepository repository, IUnitOfWork unitOfWork)
+    public HrInterViewDataProvider(IMapper mapper, IRepository repository, IUnitOfWork unitOfWork)
     {
+        _mapper = mapper;
         _repository = repository;
         _unitOfWork = unitOfWork;
     }
@@ -72,9 +74,22 @@ public class HrInterViewDataProvider : IHrInterViewDataProvider
         return await _repository.QueryNoTracking<HrInterViewSetting>().Where(x => x.SessionId == sessionId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<(List<HrInterViewSetting>, int)> GetHrInterViewSettingsAsync(int? settingId, int? pageIndex = null, int? pageSize = null, CancellationToken cancellationToken = default)
+    public async Task<(List<HrInterViewSettingDto>, int)> GetHrInterViewSettingsAsync(int? settingId, int? pageIndex = null, int? pageSize = null, CancellationToken cancellationToken = default)
     {
-        var query = _repository.QueryNoTracking<HrInterViewSetting>();
+        var query = from setting in _repository.QueryNoTracking<HrInterViewSetting>()
+                join question in _repository.QueryNoTracking<HrInterViewSettingQuestion>() 
+                    on setting.Id equals question.SettingId into questions 
+                from question in questions.DefaultIfEmpty()
+                group question by setting into grouped 
+                select new HrInterViewSettingDto
+                {
+                    Id = grouped.Key.Id,
+                    Welcome = grouped.Key.Welcome,
+                    EndMessage = grouped.Key.EndMessage,
+                    SessionId = grouped.Key.SessionId,
+                    CreatedDate = grouped.Key.CreatedDate,
+                    Questions = grouped.Select(x => _mapper.Map<HrInterViewSettingQuestionDto>(x)).ToList()
+                };
 
         if (settingId.HasValue)
             query = query.Where(x => x.Id == settingId);
