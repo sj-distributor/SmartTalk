@@ -49,7 +49,6 @@ public partial class AutoTestService : IAutoTestService
         foreach (var customerAudio in customerAudioList)
         {
             conversationHistory.Add(new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(BinaryData.FromBytes(customerAudio), ChatInputAudioFormat.Wav)));
-            conversationHistory.Add(new UserChatMessage("请用客户语言自然地回复："));
             var options = new ChatCompletionOptions { ResponseModalities = ChatResponseModalities.Text | ChatResponseModalities.Audio };
             var completion = await client.CompleteChatAsync(conversationHistory, options, cancellationToken);
 
