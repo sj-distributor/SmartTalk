@@ -10,7 +10,7 @@ public class GetHrInterViewSettingsRequest : IRequest
 
     public int? PageIndex { get; set; }
 
-    public int? PageSzie { get; set; }
+    public int? PageSize { get; set; }
 }
 
 public class GetHrInterViewSettingsResponse : SmartTalkResponse
