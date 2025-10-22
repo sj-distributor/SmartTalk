@@ -38,6 +38,8 @@ public class AgentDto
     
     public bool IsReceiveCall { get; set; }
     
+    public bool IsSurface { get; set; }
+    
     public string Voice { get; set; }
     
     public int WaitInterval { get; set; }

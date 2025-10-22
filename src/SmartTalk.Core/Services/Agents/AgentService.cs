@@ -116,6 +116,7 @@ public class AgentService : IAgentService
             Brief = command.Brief,
             Channel = command.Channel,
             IsReceiveCall = command.IsReceivingCall,
+            IsSurface = true,
             Voice = command.Voice,
             WaitInterval = command.WaitInterval,
             IsTransferHuman = command.IsTransferHuman,
