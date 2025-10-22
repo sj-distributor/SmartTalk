@@ -132,7 +132,7 @@ public class AgentDataProvider : IAgentDataProvider
     public async Task<List<Agent>> GetAgentsWithAssistantsAsync(
         List<int> agentIds = null, string keyword = null, bool? isDefault = null, CancellationToken cancellationToken = default)
     {
-        var query = from agent in _repository.Query<Agent>().Where(x => x.IsDisplay)
+        var query = from agent in _repository.Query<Agent>().Where(x => x.IsDisplay && x.IsSurface)
             join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
             join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agentAssistant.AssistantId equals assistant.Id
             where agentIds != null && agentIds.Contains(agent.Id)
@@ -173,7 +173,7 @@ public class AgentDataProvider : IAgentDataProvider
 
     public async Task<(int Count, List<Agent> Agents)> GetAgentsPagingAsync(int pageIndex, int pageSize, List<int> agentIds, string keyword = null, CancellationToken cancellationToken = default)
     {
-        var query = _repository.Query<Agent>().Where(x => x.IsDisplay);
+        var query = _repository.Query<Agent>().Where(x => x.IsDisplay && x.IsSurface);
         
         if (agentIds != null)
             query = query.Where(x => agentIds.Contains(x.Id));
