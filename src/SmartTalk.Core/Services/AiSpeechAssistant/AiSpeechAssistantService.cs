@@ -79,6 +79,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly IPhoneOrderService _phoneOrderService;
     private readonly IAgentDataProvider _agentDataProvider;
     private readonly IAttachmentService _attachmentService;
+    private readonly CustomerItemsCache _customerItemsCache;
     private readonly ISpeechMaticsService _speechMaticsService;
     private readonly ISpeechToTextService _speechToTextService;
     private readonly WorkWeChatKeySetting _workWeChatKeySetting;
@@ -108,6 +109,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         IPhoneOrderService phoneOrderService,
         IAgentDataProvider agentDataProvider,
         IAttachmentService attachmentService,
+        CustomerItemsCache customerItemsCache,
         ISpeechMaticsService speechMaticsService,
         ISpeechToTextService speechToTextService,
         WorkWeChatKeySetting workWeChatKeySetting,
@@ -133,6 +135,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _httpClientFactory = httpClientFactory;
         _translationClient = translationClient;
         _attachmentService = attachmentService;
+        _customerItemsCache = customerItemsCache;
         _speechMaticsService = speechMaticsService;
         _speechToTextService = speechToTextService;
         _workWeChatKeySetting = workWeChatKeySetting;
@@ -345,9 +348,10 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         {
             var soldToIds = !string.IsNullOrEmpty(assistant.Name) ? assistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : new List<string>();
             
-            var customerItemsString = await _speechMaticsService.BuildCustomerItemsStringAsync(soldToIds, cancellationToken).ConfigureAwait(false);
+            var customerItems = await _customerItemsCache.GetCustomerItemsAsync(soldToIds, cancellationToken).ConfigureAwait(false);
 
-            finalPrompt = finalPrompt.Replace("#{customer_items}", customerItemsString ?? "");
+            finalPrompt = finalPrompt.Replace("#{customer_items}", string.Join(Environment.NewLine, customerItems));
+            Log.Information("Customer items loaded from cache, count: {Count}", customerItems.Count);
         }
         
         Log.Information($"The final prompt: {finalPrompt}");
