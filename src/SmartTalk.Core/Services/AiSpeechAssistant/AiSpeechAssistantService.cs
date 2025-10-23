@@ -20,6 +20,7 @@ using OpenAI.Chat;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.Attachments;
+using SmartTalk.Core.Services.Caching;
 using SmartTalk.Core.Services.Caching.Redis;
 using SmartTalk.Core.Services.Ffmpeg;
 using SmartTalk.Core.Services.Http;
@@ -47,6 +48,7 @@ using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.Attachments;
 using SmartTalk.Messages.Dto.Attachments;
 using SmartTalk.Messages.Dto.Smarties;
+using SmartTalk.Messages.Enums.Caching;
 using SmartTalk.Messages.Enums.STT;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 using RecordingResource = Twilio.Rest.Api.V2010.Account.Call.RecordingResource;
@@ -74,6 +76,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly IMapper _mapper;
     private readonly ICurrentUser _currentUser;
     private readonly AzureSetting _azureSetting;
+    private readonly ICacheManager _cacheManager;
     private readonly IOpenaiClient _openaiClient;
     private readonly IFfmpegService _ffmpegService;
     private readonly OpenAiSettings _openAiSettings;
@@ -106,6 +109,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         IMapper mapper,
         ICurrentUser currentUser,
         AzureSetting azureSetting,
+        ICacheManager cacheManager,
         IOpenaiClient openaiClient,
         IFfmpegService ffmpegService,
         OpenAiSettings openAiSettings,
@@ -131,7 +135,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _mapper = mapper;
         _currentUser = currentUser;
         _openaiClient = openaiClient;
+        _cacheManager = cacheManager;
         _azureSetting = azureSetting;
+        _ffmpegService = ffmpegService;
         _openAiSettings = openAiSettings;
         _twilioSettings = twilioSettings;
         _smartiesClient = smartiesClient;
@@ -150,7 +156,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _inactivityTimerManager = inactivityTimerManager;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
-        _ffmpegService = ffmpegService;
 
         _openaiEvent = new StringBuilder();
         _openaiClientWebSocket = new ClientWebSocket();
@@ -255,14 +260,17 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
         var language = string.Empty;
         try
-        { 
+        {
             language = await DetectAudioLanguageAsync(audioFileRawBytes, cancellationToken).ConfigureAwait(false);
+
+            await SendServerRestoreMessageIfNecessaryAsync(cancellationToken).ConfigureAwait(false);
         }
         catch (Exception e)
         {
             const string alertMessage = "服务器异常。";
 
             await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, _workWeChatKeySetting.Key, alertMessage, mentionedList: new[]{"@all"}, cancellationToken: cancellationToken).ConfigureAwait(false);
+            await _cacheManager.GetOrAddAsync("gpt-4o-audio-exception", _ => Task.FromResult(Task.FromResult(alertMessage)), new RedisCachingSetting(RedisServer.System, TimeSpan.FromDays(1)), cancellationToken).ConfigureAwait(false);
         }
         
         record.Language = ConvertLanguageCode(language);
@@ -297,15 +305,16 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                                   en: English
                                   es: Spanish
                                   ko: Korean
-                                                            
+                                                         
                                   Rules:
-                                  1. Carefully analyze the speech content and identify the primary spoken language.
-                                  2. If the recording contains noise, background sounds, or non-standard pronunciation, focus on the linguistic features (tone, rhythm, common words) rather than misclassifying it.
-                                  3. For English with heavy accents or imperfect pronunciation, still classify as English (en).
-                                  4. Only return 'es' (Spanish) if the majority of the recording is clearly and consistently spoken in Spanish. Do NOT classify English with accents or noise as Spanish.
-                                  5. If the recording contains mixed languages, return the code of the language that dominates most of the speech.
-                                  6. Return only the code without any additional text or explanations.
-                                                            
+                                  1. Carefully analyze the entire speech content and identify the **dominant spoken language**, not just occasional words or short phrases.
+                                  2. If the recording contains noise, background sounds, or non-standard pronunciation, focus on consistent linguistic features such as tone, rhythm, and pronunciation pattern.
+                                  3. **Do NOT confuse accented English with Chinese.** English spoken with a Chinese accent or non-standard pronunciation must still be classified as English (en).
+                                  4. Only return 'es' (Spanish) if the majority of the recording is clearly and consistently spoken in Spanish. Do NOT classify English with Spanish-like sounds or background as Spanish.
+                                  5. If the recording mixes languages, return the code of the language that dominates the majority of the speaking time.
+                                  6. **If you are uncertain between English and Chinese, always choose English (en).**
+                                  7. Return only the code without any additional text, punctuation, or explanations.
+                                                   
                                   Examples:
                                   If the audio is in Mandarin, even with background noise, return: zh-CN
                                   If the audio is in Cantonese, possibly with some Mandarin words, return: zh
@@ -316,6 +325,13 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                                   If the audio is predominantly in Korean, spoken clearly and throughout most of the recording, return: ko
                                   If the audio has both Mandarin and English but Mandarin is the dominant language, return: zh-CN
                                   If the audio has both Cantonese and English but English dominates, return: en
+                                  If the audio is in English but contains occasional Chinese filler words such as "啊", "嗯", or "對", return: en
+                                  If the audio is mainly in Chinese but the speaker occasionally uses short English words like "OK", "yeah", or "sorry", return: zh-CN
+                                  If the recording has Chinese background speech but the main speaker talks in English, return: en
+                                  If the recording has multiple speakers where one speaks English and others speak Mandarin, determine which language dominates most of the speaking time and return that language code.
+                                  If the audio is short and contains only a few clear English words, classify as English (en).
+                                  If the audio is mostly silent, unclear, or contains indistinguishable sounds, choose the language that can be most confidently recognized based on speech features, not noise.
+                                  
                                   """),
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
             new UserChatMessage("Please determine the language based on the recording and return the corresponding code.")
@@ -328,6 +344,27 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         Log.Information("Detect the audio language: " + completion.Content.FirstOrDefault()?.Text);
         
         return completion.Content.FirstOrDefault()?.Text ?? "en";
+    }
+
+    private async Task SendServerRestoreMessageIfNecessaryAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var exceptionAlert = await _cacheManager.GetAsync<string>("gpt-4o-audio-exception", new RedisCachingSetting(), cancellationToken).ConfigureAwait(false);
+
+            if (!string.IsNullOrEmpty(exceptionAlert))
+            {
+                const string restoreMessage = "服务器恢复。";
+
+                await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, _workWeChatKeySetting.Key, restoreMessage, mentionedList: new[]{"@all"}, cancellationToken: cancellationToken).ConfigureAwait(false);
+                
+                await _cacheManager.RemoveAsync("gpt-4o-audio-exception", new RedisCachingSetting(), cancellationToken).ConfigureAwait(false);
+            }
+        }
+        catch (Exception e)
+        {
+            // ignored
+        }
     }
 
     public async Task TransferHumanServiceAsync(TransferHumanServiceCommand command, CancellationToken cancellationToken)
