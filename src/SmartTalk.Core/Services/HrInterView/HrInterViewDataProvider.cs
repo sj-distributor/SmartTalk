@@ -1,7 +1,9 @@
 using AutoMapper;
 using Microsoft.EntityFrameworkCore;
+using Newtonsoft.Json;
 using SmartTalk.Core.Data;
 using SmartTalk.Core.Domain.HrInterView;
+using SmartTalk.Core.Extensions;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Messages.Dto.HrInterView;
 using SmartTalk.Messages.Requests.HrInterView;
