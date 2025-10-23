@@ -77,8 +77,8 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task<List<AiSpeechAssistantInboundRoute>> GetAiSpeechAssistantInboundRouteAsync(string callerNumber, string didNumber, CancellationToken cancellationToken);
     
     Task<AiSpeechAssistantUserProfile> GetAiSpeechAssistantUserProfileAsync(int assistantId, string callerNumber, CancellationToken cancellationToken);
-    
-    Task<CustomerItemsCache> GetCustomerItemsCacheBySoldToIdAsync(string soldToId, CancellationToken cancellationToken);
+
+    Task<List<CustomerItemsCache>> GetCustomerItemsCacheBySoldToIdsAsync(List<string> soldToIds, CancellationToken cancellationToken);
 }
 
 public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
@@ -415,8 +415,8 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
         return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<CustomerItemsCache> GetCustomerItemsCacheBySoldToIdAsync(string soldToId, CancellationToken cancellationToken)
+    public async Task<List<CustomerItemsCache>> GetCustomerItemsCacheBySoldToIdsAsync(List<string> soldToIds, CancellationToken cancellationToken)
     {
-        return await _repository.FirstOrDefaultAsync<CustomerItemsCache>(x => x.CacheKey == soldToId, cancellationToken);
+        return await _repository.Query<CustomerItemsCache>().Where(x => soldToIds.Contains(x.CacheKey)).ToListAsync(cancellationToken);
     }
 }

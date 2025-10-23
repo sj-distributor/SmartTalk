@@ -21,13 +21,12 @@ public interface ISpeechMaticsJobService : IScopedDependency
 
 public class SpeechMaticsJobService : ISpeechMaticsJobService
 {
-    private readonly IRepository _repository;
     private readonly AiSpeechAssistantService _aiSpeechAssistantService;
+    private readonly IBackgroundJobClient _backgroundJobClient;
     private readonly ISpeechMaticsDataProvider _speechMaticsDataProvider;
 
-    public SpeechMaticsJobService(IRepository repository, AiSpeechAssistantService aiSpeechAssistantService, ISpeechMaticsDataProvider speechMaticsDataProvider)
+    public SpeechMaticsJobService(AiSpeechAssistantService aiSpeechAssistantService, ISpeechMaticsDataProvider speechMaticsDataProvider)
     {
-        _repository = repository;
         _aiSpeechAssistantService = aiSpeechAssistantService;
         _speechMaticsDataProvider = speechMaticsDataProvider;
     }
@@ -52,12 +51,12 @@ public class SpeechMaticsJobService : ISpeechMaticsJobService
     {
         Log.Information("Start full customer items cache refresh...");
 
-        var allSales = await _repository.GetAllAsync<Sales>(cancellationToken);
+        var allSales = await _speechMaticsDataProvider.GetAllSalesAsync(cancellationToken).ConfigureAwait(false);
         var allSoldToIds = allSales.Select(s => s.Name).Where(n => !string.IsNullOrEmpty(n)).ToList();
 
         foreach (var soldToId in allSoldToIds)
         {
-            BackgroundJob.Enqueue<ISpeechMaticsJobService>(x => x.RefreshCustomerItemsCacheBySoldToIdAsync(soldToId, CancellationToken.None));
+            _backgroundJobClient.Enqueue<ISpeechMaticsJobService>(x => x.RefreshCustomerItemsCacheBySoldToIdAsync(soldToId, CancellationToken.None));
         }
 
         Log.Information("All customer items cache refresh jobs scheduled. Count: {Count}", allSoldToIds.Count);
@@ -70,26 +69,8 @@ public class SpeechMaticsJobService : ISpeechMaticsJobService
             Log.Information("Refreshing cache for soldToId: {SoldToId}", soldToId);
 
             var itemsString = await _aiSpeechAssistantService.BuildCustomerItemsStringAsync(new List<string> { soldToId }, cancellationToken);
-            var serialized = JsonSerializer.Serialize(itemsString.Split(Environment.NewLine));
-
-            var cache = await _repository.FirstOrDefaultAsync<CustomerItemsCache>(x => x.CacheKey == soldToId, cancellationToken);
-
-            if (cache == null)
-            {
-                cache = new CustomerItemsCache
-                {
-                    CacheKey = soldToId,
-                    CacheValue = serialized,
-                    LastUpdated = DateTimeOffset.UtcNow
-                };
-                await _repository.InsertAsync(cache, cancellationToken);
-            }
-            else
-            {
-                cache.CacheValue = serialized;
-                cache.LastUpdated = DateTimeOffset.UtcNow;
-                await _repository.UpdateAsync(cache, cancellationToken);
-            }
+            
+            await _speechMaticsDataProvider.UpsertCustomerItemsCacheAsync(soldToId, itemsString, cancellationToken).ConfigureAwait(false);
 
             Log.Information("Cache refreshed successfully for soldToId: {SoldToId}", soldToId);
         }

@@ -347,20 +347,18 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         {
             var soldToIds = !string.IsNullOrEmpty(assistant.Name) ? assistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : new List<string>();
             
-            var customerItems = new List<string>();
-
-            foreach (var soldToId in soldToIds)
+            if (soldToIds.Any())
             {
-                var cache = await _aiSpeechAssistantDataProvider.GetCustomerItemsCacheBySoldToIdAsync(soldToId, cancellationToken).ConfigureAwait(false);
+                var caches = await _aiSpeechAssistantDataProvider.GetCustomerItemsCacheBySoldToIdsAsync(soldToIds, cancellationToken).ConfigureAwait(false);
 
-                if (cache != null && !string.IsNullOrEmpty(cache.CacheValue))
-                {
-                    var cachedList = JsonSerializer.Deserialize<List<string>>(cache.CacheValue);
-                    if (cachedList != null) customerItems.AddRange(cachedList);
-                }
+                var customerItems = caches
+                    .Where(c => !string.IsNullOrEmpty(c.CacheValue))
+                    .SelectMany(c => JsonSerializer.Deserialize<List<string>>(c.CacheValue) ?? new List<string>())
+                    .Distinct()
+                    .ToList();
+
+                finalPrompt = finalPrompt.Replace("#{customer_items}", string.Join(Environment.NewLine, customerItems));
             }
-            
-            finalPrompt = finalPrompt.Replace("#{customer_items}", string.Join(Environment.NewLine, customerItems.Distinct()));
         }
         
         Log.Information($"The final prompt: {finalPrompt}");
