@@ -3,7 +3,7 @@ using SmartTalk.Messages.Enums.AutoTest;
 
 namespace SmartTalk.Messages.Dto.AutoTest;
 
-public class AutoTestTestTaskDto
+public class AutoTestTaskDto
 {
     public int Id { get; set; }
     
@@ -13,7 +13,7 @@ public class AutoTestTestTaskDto
     
     public string Params { get; set; }
 
-    public AutoTestTestTaskStatus Status { get; set; } = AutoTestTestTaskStatus.Pending;
+    public AutoTestTaskStatus Status { get; set; } = AutoTestTaskStatus.Pending;
     
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.Now;
     

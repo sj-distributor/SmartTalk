@@ -5,7 +5,7 @@ using SmartTalk.Messages.Commands.AutoTest;
 
 namespace SmartTalk.Core.Handlers.CommandHandlers.AutoTest;
 
-public class DeleteAutoTestTestTaskCommandHandler : ICommandHandler<DeleteAutoTestTestTaskCommand, DeleteAutoTestTestTaskResponse>
+public class DeleteAutoTestTestTaskCommandHandler : ICommandHandler<DeleteAutoTestTaskCommand, DeleteAutoTestTaskResponse>
 {
     private readonly IAutoTestService _autoTestService;
 
@@ -14,8 +14,8 @@ public class DeleteAutoTestTestTaskCommandHandler : ICommandHandler<DeleteAutoTe
         _autoTestService = autoTestService;
     }
 
-    public async Task<DeleteAutoTestTestTaskResponse> Handle(IReceiveContext<DeleteAutoTestTestTaskCommand> context, CancellationToken cancellationToken)
+    public async Task<DeleteAutoTestTaskResponse> Handle(IReceiveContext<DeleteAutoTestTaskCommand> context, CancellationToken cancellationToken)
     {
-        return await _autoTestService.DeleteAutoTestTestTaskAsync(context.Message, cancellationToken).ConfigureAwait(false);
+        return await _autoTestService.DeleteAutoTestTaskAsync(context.Message, cancellationToken).ConfigureAwait(false);
     }
 }

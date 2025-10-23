@@ -29,11 +29,11 @@ public partial class AutoTestService : IAutoTestService
     {
         var scenario = await _autoTestDataProvider.GetAutoTestScenarioByIdAsync(command.ScenarioId, cancellationToken).ConfigureAwait(false);
         
-        var taskRecords = await _autoTestDataProvider.GetPendingTestTaskRecordsByTaskIdAsync(command.TaskId, cancellationToken).ConfigureAwait(false);
+        var taskRecords = await _autoTestDataProvider.GetPendingTaskRecordsByTaskIdAsync(command.TaskId, cancellationToken).ConfigureAwait(false);
         
-        taskRecords.ForEach(x => x.Status = AutoTestTestTaskRecordStatus.Ongoing);
+        taskRecords.ForEach(x => x.Status = AutoTestTaskRecordStatus.Ongoing);
         
-        await _autoTestDataProvider.UpdateTestTaskRecordsAsync(taskRecords, cancellationToken: cancellationToken).ConfigureAwait(false);
+        await _autoTestDataProvider.UpdateTaskRecordsAsync(taskRecords, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         var executionResult = await _autoTestActionHandlerSwitcher.GetHandler(scenario.ActionType).ActionHandleAsync(scenario, command.TaskId, cancellationToken).ConfigureAwait(false);
         

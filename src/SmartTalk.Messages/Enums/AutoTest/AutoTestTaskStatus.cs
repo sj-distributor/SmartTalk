@@ -1,6 +1,6 @@
 namespace SmartTalk.Messages.Enums.AutoTest;
 
-public enum AutoTestTestTaskStatus
+public enum AutoTestTaskStatus
 {
     Pending,
     Pause,

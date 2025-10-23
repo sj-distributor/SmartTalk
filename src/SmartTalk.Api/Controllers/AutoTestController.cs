@@ -36,38 +36,38 @@ public class AutoTestController : ControllerBase
         return Ok(response);
     }
     
-    [Route("testTask"), HttpGet]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAutoTestTestTaskResponse))]
-    public async Task<IActionResult> GetAutoTestTestTasksAsync([FromQuery]  GetAutoTestTestTaskRequest command)
+    [Route("task"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAutoTestTaskResponse))]
+    public async Task<IActionResult> GetAutoTestTasksAsync([FromQuery] GetAutoTestTaskRequest command)
     {
-        var response = await _mediator.RequestAsync<GetAutoTestTestTaskRequest, GetAutoTestTestTaskResponse>(command).ConfigureAwait(false);
+        var response = await _mediator.RequestAsync<GetAutoTestTaskRequest, GetAutoTestTaskResponse>(command).ConfigureAwait(false);
     
         return Ok(response);
     }
     
-    [Route("testTask/create"), HttpPost]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(CreateAutoTestTestTaskResponse))]
-    public async Task<IActionResult> CreateAutoTestTestTaskAsync([FromBody] CreateAutoTestTestTaskCommand command) 
+    [Route("task"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(CreateAutoTestTaskResponse))]
+    public async Task<IActionResult> CreateAutoTestTaskAsync([FromBody] CreateAutoTestTaskCommand command) 
     {
-        var response = await _mediator.SendAsync<CreateAutoTestTestTaskCommand, CreateAutoTestTestTaskResponse>(command).ConfigureAwait(false);
+        var response = await _mediator.SendAsync<CreateAutoTestTaskCommand, CreateAutoTestTaskResponse>(command).ConfigureAwait(false);
         
         return Ok(response);
     }
     
-    [Route("testTask/update"), HttpPost]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdateAutoTestTestTaskResponse))]
-    public async Task<IActionResult> UpdateAutoTestTestTaskAsync([FromBody] UpdateAutoTestTestTaskCommand command) 
+    [Route("task"), HttpPut]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdateAutoTestTaskResponse))]
+    public async Task<IActionResult> UpdateAutoTestTaskAsync([FromBody] UpdateAutoTestTaskCommand command) 
     {
-        var response = await _mediator.SendAsync<UpdateAutoTestTestTaskCommand, UpdateAutoTestTestTaskResponse>(command).ConfigureAwait(false);
+        var response = await _mediator.SendAsync<UpdateAutoTestTaskCommand, UpdateAutoTestTaskResponse>(command).ConfigureAwait(false);
         
         return Ok(response);
     }
     
-    [Route("testTask/delete"), HttpPost]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(DeleteAutoTestTestTaskResponse))]
-    public async Task<IActionResult> DeleteAutoTestTestTaskAsync([FromBody] DeleteAutoTestTestTaskCommand command) 
+    [Route("task"), HttpDelete]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(DeleteAutoTestTaskResponse))]
+    public async Task<IActionResult> DeleteAutoTestTaskAsync([FromBody] DeleteAutoTestTaskCommand command) 
     {
-        var response = await _mediator.SendAsync<DeleteAutoTestTestTaskCommand, DeleteAutoTestTestTaskResponse>(command).ConfigureAwait(false);
+        var response = await _mediator.SendAsync<DeleteAutoTestTaskCommand, DeleteAutoTestTaskResponse>(command).ConfigureAwait(false);
         
         return Ok(response);
     }

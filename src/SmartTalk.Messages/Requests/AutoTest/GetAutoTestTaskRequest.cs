@@ -4,7 +4,7 @@ using SmartTalk.Messages.Responses;
 
 namespace SmartTalk.Messages.Requests.AutoTest;
 
-public class GetAutoTestTestTaskRequest : IRequest
+public class GetAutoTestTaskRequest : IRequest
 {
     public int ScenarioId { get; set; }
     
@@ -15,9 +15,9 @@ public class GetAutoTestTestTaskRequest : IRequest
     public int? PageSize { get; set; }
 }
 
-public class GetAutoTestTestTaskResponse : SmartTalkResponse
+public class GetAutoTestTaskResponse : SmartTalkResponse
 {
-    public List<AutoTestTestTaskDto> Data { get; set; }
+    public List<AutoTestTaskDto> Data { get; set; }
     
     public int TotalCount { get; set; }
 }

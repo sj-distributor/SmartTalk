@@ -8,133 +8,133 @@ namespace SmartTalk.Core.Services.AutoTest;
 
 public partial interface IAutoTestService
 {
-    Task<GetAutoTestTestTaskResponse> GetAutoTestTestTasksAsync(GetAutoTestTestTaskRequest request, CancellationToken cancellationToken);
+    Task<GetAutoTestTaskResponse> GetAutoTestTasksAsync(GetAutoTestTaskRequest request, CancellationToken cancellationToken);
     
-    Task<CreateAutoTestTestTaskResponse> CreateAutoTestTestTaskAsync(CreateAutoTestTestTaskCommand command, CancellationToken cancellationToken);
+    Task<CreateAutoTestTaskResponse> CreateAutoTestTaskAsync(CreateAutoTestTaskCommand command, CancellationToken cancellationToken);
     
-    Task<UpdateAutoTestTestTaskResponse> UpdateAutoTestTestTaskAsync(UpdateAutoTestTestTaskCommand command, CancellationToken cancellationToken);
+    Task<UpdateAutoTestTaskResponse> UpdateAutoTestTaskAsync(UpdateAutoTestTaskCommand command, CancellationToken cancellationToken);
     
-    Task<DeleteAutoTestTestTaskResponse> DeleteAutoTestTestTaskAsync(DeleteAutoTestTestTaskCommand command, CancellationToken cancellationToken);
+    Task<DeleteAutoTestTaskResponse> DeleteAutoTestTaskAsync(DeleteAutoTestTaskCommand command, CancellationToken cancellationToken);
 }
 
 public partial class AutoTestService
 {
-    public async Task<GetAutoTestTestTaskResponse> GetAutoTestTestTasksAsync(GetAutoTestTestTaskRequest request, CancellationToken cancellationToken)
+    public async Task<GetAutoTestTaskResponse> GetAutoTestTasksAsync(GetAutoTestTaskRequest request, CancellationToken cancellationToken)
     {
-        var (testTasks, count) = await _autoTestDataProvider.GetAutoTestTestTasksAsync(request.KeyWord, request.ScenarioId, request.PageIndex, request.PageSize, cancellationToken).ConfigureAwait(false);
+        var (tasks, count) = await _autoTestDataProvider.GetAutoTestTasksAsync(request.KeyWord, request.ScenarioId, request.PageIndex, request.PageSize, cancellationToken).ConfigureAwait(false);
         
-        return new GetAutoTestTestTaskResponse
+        return new GetAutoTestTaskResponse
         {
-            Data = testTasks,
+            Data = tasks,
             TotalCount = count
         };
     }
 
-    public async Task<CreateAutoTestTestTaskResponse> CreateAutoTestTestTaskAsync(CreateAutoTestTestTaskCommand command, CancellationToken cancellationToken)
+    public async Task<CreateAutoTestTaskResponse> CreateAutoTestTaskAsync(CreateAutoTestTaskCommand command, CancellationToken cancellationToken)
     {
-        var scenario = await _autoTestDataProvider.GetAutoTestScenarioByIdAsync(command.TestTask.ScenarioId, cancellationToken).ConfigureAwait(false);
+        var scenario = await _autoTestDataProvider.GetAutoTestScenarioByIdAsync(command.Task.ScenarioId, cancellationToken).ConfigureAwait(false);
         
         if (scenario == null) throw new Exception("Scenario not found");
 
-        var testTask = _mapper.Map<AutoTestTestTask>(command.TestTask);
+        var task = _mapper.Map<AutoTestTask>(command.Task);
         
-        await _autoTestDataProvider.AddAutoTestTestTaskAsync(testTask, cancellationToken: cancellationToken).ConfigureAwait(false);
+        await _autoTestDataProvider.AddAutoTestTaskAsync(task, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        var dataItems = await _autoTestDataProvider.GetAutoTestDataItemsBySetIdAsync(testTask.DataSetId, cancellationToken).ConfigureAwait(false);
+        var dataItems = await _autoTestDataProvider.GetAutoTestDataItemsBySetIdAsync(task.DataSetId, cancellationToken).ConfigureAwait(false);
 
-        var testTaskRecords = dataItems.Select(x => new AutoTestTaskRecord
+        var records = dataItems.Select(x => new AutoTestTaskRecord
         {
-            TestTaskId = testTask.Id,
-            ScenarioId = testTask.ScenarioId,
-            DataSetId = testTask.DataSetId,
+            TestTaskId = task.Id,
+            ScenarioId = task.ScenarioId,
+            DataSetId = task.DataSetId,
             DataSetItemId = x.Id,
             InputSnapshot = x.InputJson,
-            RequestJson = testTask.Params,
-            Status = AutoTestTestTaskRecordStatus.Pending,
+            RequestJson = task.Params,
+            Status = AutoTestTaskRecordStatus.Pending,
             CreatedAt = DateTimeOffset.Now
         }).ToList();
                     
-        await _autoTestDataProvider.AddAutoTestTestTaskRecordsAsync(testTaskRecords, cancellationToken: cancellationToken).ConfigureAwait(false);
+        await _autoTestDataProvider.AddAutoTestTaskRecordsAsync(records, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        var task = _mapper.Map<AutoTestTestTaskDto>(testTask);
-        task.TotalCount = testTaskRecords.Count;
-        task.InProgressCount = 0;
+        var result = _mapper.Map<AutoTestTaskDto>(task);
+        result.TotalCount = records.Count;
+        result.InProgressCount = 0;
         
-        return new CreateAutoTestTestTaskResponse
+        return new CreateAutoTestTaskResponse
         {
-            Data = task
+            Data = result
         };
     }
 
-    public async Task<UpdateAutoTestTestTaskResponse> UpdateAutoTestTestTaskAsync(UpdateAutoTestTestTaskCommand command, CancellationToken cancellationToken)
+    public async Task<UpdateAutoTestTaskResponse> UpdateAutoTestTaskAsync(UpdateAutoTestTaskCommand command, CancellationToken cancellationToken)
     {
-        var testTask = await _autoTestDataProvider.GetAutoTestTestTaskByIdAsync(command.TestTaskId, cancellationToken).ConfigureAwait(false);
+        var task = await _autoTestDataProvider.GetAutoTestTaskByIdAsync(command.TaskId, cancellationToken).ConfigureAwait(false);
         
-        if (testTask == null) throw new Exception("UpdateAutoTestTestTaskAsync Test task not found");
+        if (task == null) throw new Exception("UpdateAutoTestTaskAsync Test task not found");
 
-        var (dataItemCount, testRecordDoneCount) = await HandleStatusChangeAsync(testTask, command.Status, cancellationToken).ConfigureAwait(false);
+        var (dataItemCount, recordDoneCount) = await HandleStatusChangeAsync(task, command.Status, cancellationToken).ConfigureAwait(false);
 
-        var task = _mapper.Map<AutoTestTestTaskDto>(testTask);
-        task.TotalCount = dataItemCount;
-        task.InProgressCount = testRecordDoneCount;
+        var result = _mapper.Map<AutoTestTaskDto>(task);
+        result.TotalCount = dataItemCount;
+        result.InProgressCount = recordDoneCount;
         
-        return new UpdateAutoTestTestTaskResponse
+        return new UpdateAutoTestTaskResponse
         {
-            Data = task
+            Data = result
         };
     }
 
-    private async Task<(int dataItemCount, int testRecordDoneCount)> HandleStatusChangeAsync(AutoTestTestTask testTask, AutoTestTestTaskStatus newStatus, CancellationToken cancellationToken)
+    private async Task<(int dataItemCount, int recordDoneCount)> HandleStatusChangeAsync(AutoTestTask task, AutoTestTaskStatus newStatus, CancellationToken cancellationToken)
     {
-        testTask.Status = newStatus;
+        task.Status = newStatus;
         
-        testTask.StartedAt ??= DateTimeOffset.Now; 
+        task.StartedAt ??= DateTimeOffset.Now; 
         
-        await _autoTestDataProvider.UpdateAutoTestTestTaskAsync(testTask, cancellationToken: cancellationToken).ConfigureAwait(false); 
+        await _autoTestDataProvider.UpdateAutoTestTaskAsync(task, cancellationToken: cancellationToken).ConfigureAwait(false); 
         
         switch (newStatus)
         {
-            case AutoTestTestTaskStatus.Pause:
-                await UpdateTestTaskRecordsStatusAsync(testTask.Id, AutoTestTestTaskRecordStatus.Pause, cancellationToken).ConfigureAwait(false);
+            case AutoTestTaskStatus.Pause:
+                await UpdateTaskRecordsStatusAsync(task.Id, AutoTestTaskRecordStatus.Pause, cancellationToken).ConfigureAwait(false);
                 break;
 
-            case AutoTestTestTaskStatus.Ongoing:
-                if (testTask.StartedAt is not null) await UpdateTestTaskRecordsStatusAsync(testTask.Id, AutoTestTestTaskRecordStatus.Pending, cancellationToken).ConfigureAwait(false);
+            case AutoTestTaskStatus.Ongoing:
+                if (task.StartedAt is not null) await UpdateTaskRecordsStatusAsync(task.Id, AutoTestTaskRecordStatus.Pending, cancellationToken).ConfigureAwait(false);
                 await AutoTestRunningAsync(new AutoTestRunningCommand
                 {
-                    TaskId = testTask.Id,
-                    ScenarioId = testTask.ScenarioId,
+                    TaskId = task.Id,
+                    ScenarioId = task.ScenarioId,
                 }, cancellationToken).ConfigureAwait(false);
                 break;
         }
         
-        var (dataItemCount, testRecordDoneCount) = await _autoTestDataProvider.GetDoneTestTaskRecordCountAsync(testTask.DataSetId, testTask.Id, cancellationToken).ConfigureAwait(false);
+        var (dataItemCount, recordDoneCount) = await _autoTestDataProvider.GetDoneTaskRecordCountAsync(task.DataSetId, task.Id, cancellationToken).ConfigureAwait(false);
 
-        if (dataItemCount == testRecordDoneCount)
+        if (dataItemCount == recordDoneCount)
         {
-            testTask.FinishedAt = DateTimeOffset.Now; 
-            testTask.Status = AutoTestTestTaskStatus.Done;
-            await _autoTestDataProvider.UpdateAutoTestTestTaskAsync(testTask, cancellationToken: cancellationToken).ConfigureAwait(false); 
+            task.FinishedAt = DateTimeOffset.Now; 
+            task.Status = AutoTestTaskStatus.Done;
+            await _autoTestDataProvider.UpdateAutoTestTaskAsync(task, cancellationToken: cancellationToken).ConfigureAwait(false); 
         }
         
-        return (dataItemCount, testRecordDoneCount);
+        return (dataItemCount, recordDoneCount);
     }
 
-    private async Task UpdateTestTaskRecordsStatusAsync(int testTaskId, AutoTestTestTaskRecordStatus status, CancellationToken cancellationToken)
+    private async Task UpdateTaskRecordsStatusAsync(int testTaskId, AutoTestTaskRecordStatus status, CancellationToken cancellationToken)
     {
-        var taskRecords = await _autoTestDataProvider.GetPendingTestTaskRecordsByTaskIdAsync(testTaskId, cancellationToken).ConfigureAwait(false);
+        var records = await _autoTestDataProvider.GetPendingTaskRecordsByTaskIdAsync(testTaskId, cancellationToken).ConfigureAwait(false);
 
-        taskRecords.ForEach(x => x.Status = status);
+        records.ForEach(x => x.Status = status);
         
-        await _autoTestDataProvider.UpdateTestTaskRecordsAsync(taskRecords, cancellationToken: cancellationToken).ConfigureAwait(false);
+        await _autoTestDataProvider.UpdateTaskRecordsAsync(records, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
     
-    public async Task<DeleteAutoTestTestTaskResponse> DeleteAutoTestTestTaskAsync(DeleteAutoTestTestTaskCommand command, CancellationToken cancellationToken)
+    public async Task<DeleteAutoTestTaskResponse> DeleteAutoTestTaskAsync(DeleteAutoTestTaskCommand command, CancellationToken cancellationToken)
     {
-        var testTask = await _autoTestDataProvider.GetAutoTestTestTaskByIdAsync(command.TestTaskId, cancellationToken).ConfigureAwait(false);
+        var testTask = await _autoTestDataProvider.GetAutoTestTaskByIdAsync(command.TaskId, cancellationToken).ConfigureAwait(false);
         
-        if (testTask != null) await _autoTestDataProvider.DeleteAutoTestTestTaskAsync(testTask, cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (testTask != null) await _autoTestDataProvider.DeleteAutoTestTaskAsync(testTask, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        return new DeleteAutoTestTestTaskResponse();
+        return new DeleteAutoTestTaskResponse();
     }
 }
