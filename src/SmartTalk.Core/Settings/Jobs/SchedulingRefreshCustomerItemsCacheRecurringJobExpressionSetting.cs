@@ -6,7 +6,7 @@ public class SchedulingRefreshCustomerItemsCacheRecurringJobExpressionSetting : 
 {
     public SchedulingRefreshCustomerItemsCacheRecurringJobExpressionSetting(IConfiguration configuration)
     {
-        Value = configuration.GetValue<string>("SchedulingRefreshCustomerItemsCacheRecurringJobExpression");
+        Value = configuration.GetValue<string>("SchedulingRefreshCustomerItemsCacheRecurringJobCronExpression");
     }
     
     public string Value { get; set; }

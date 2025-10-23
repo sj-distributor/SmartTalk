@@ -1,3 +1,4 @@
+using System.Text.Json;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Data;
 using Microsoft.EntityFrameworkCore;
@@ -79,6 +80,8 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task<AiSpeechAssistantUserProfile> GetAiSpeechAssistantUserProfileAsync(int assistantId, string callerNumber, CancellationToken cancellationToken);
 
     Task<List<CustomerItemsCache>> GetCustomerItemsCacheBySoldToIdsAsync(List<string> soldToIds, CancellationToken cancellationToken);
+    
+    Task UpsertCustomerItemsCacheAsync(string soldToId, string itemsString, bool forceSave, CancellationToken cancellationToken);
 }
 
 public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
@@ -418,5 +421,28 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
     public async Task<List<CustomerItemsCache>> GetCustomerItemsCacheBySoldToIdsAsync(List<string> soldToIds, CancellationToken cancellationToken)
     {
         return await _repository.Query<CustomerItemsCache>().Where(x => soldToIds.Contains(x.CacheKey)).ToListAsync(cancellationToken);
+    }
+
+    public async Task UpsertCustomerItemsCacheAsync(string soldToId, string itemsString, bool forceSave, CancellationToken cancellationToken)
+    {
+        var serialized = JsonSerializer.Serialize(itemsString.Split(Environment.NewLine));
+    
+        var cache = await _repository.FirstOrDefaultAsync<CustomerItemsCache>(x => x.CacheKey == soldToId, cancellationToken);
+        if (cache == null)
+        {
+            cache = new CustomerItemsCache
+            {
+                CacheKey = soldToId,
+                CacheValue = serialized,
+                LastUpdated = DateTimeOffset.UtcNow
+            };
+            await _repository.InsertAsync(cache, cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            cache.CacheValue = serialized;
+            cache.LastUpdated = DateTimeOffset.UtcNow;
+            await _repository.UpdateAsync(cache, cancellationToken).ConfigureAwait(false);
+        }
     }
 }

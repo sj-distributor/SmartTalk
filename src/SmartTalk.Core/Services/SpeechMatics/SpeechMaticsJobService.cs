@@ -24,11 +24,15 @@ public class SpeechMaticsJobService : ISpeechMaticsJobService
     private readonly AiSpeechAssistantService _aiSpeechAssistantService;
     private readonly IBackgroundJobClient _backgroundJobClient;
     private readonly ISpeechMaticsDataProvider _speechMaticsDataProvider;
+    private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
 
-    public SpeechMaticsJobService(AiSpeechAssistantService aiSpeechAssistantService, ISpeechMaticsDataProvider speechMaticsDataProvider)
+    public SpeechMaticsJobService(AiSpeechAssistantService aiSpeechAssistantService, IBackgroundJobClient backgroundJobClient, 
+        ISpeechMaticsDataProvider speechMaticsDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
         _aiSpeechAssistantService = aiSpeechAssistantService;
+        _backgroundJobClient = backgroundJobClient;
         _speechMaticsDataProvider = speechMaticsDataProvider;
+        _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
     }
 
     public async Task UploadSpeechMaticsKeysAsync(CancellationToken cancellationToken)
@@ -70,7 +74,7 @@ public class SpeechMaticsJobService : ISpeechMaticsJobService
 
             var itemsString = await _aiSpeechAssistantService.BuildCustomerItemsStringAsync(new List<string> { soldToId }, cancellationToken);
             
-            await _speechMaticsDataProvider.UpsertCustomerItemsCacheAsync(soldToId, itemsString, cancellationToken).ConfigureAwait(false);
+            await _aiSpeechAssistantDataProvider.UpsertCustomerItemsCacheAsync(soldToId, itemsString, true, cancellationToken).ConfigureAwait(false);
 
             Log.Information("Cache refreshed successfully for soldToId: {SoldToId}", soldToId);
         }
