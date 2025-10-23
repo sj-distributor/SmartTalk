@@ -349,6 +349,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                 const string restoreMessage = "服务器恢复。";
 
                 await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, _workWeChatKeySetting.Key, restoreMessage, mentionedList: new[]{"@all"}, cancellationToken: cancellationToken).ConfigureAwait(false);
+                
+                await _cacheManager.RemoveAsync("gpt-4o-audio-exception", new RedisCachingSetting(), cancellationToken).ConfigureAwait(false);
             }
         }
         catch (Exception e)
