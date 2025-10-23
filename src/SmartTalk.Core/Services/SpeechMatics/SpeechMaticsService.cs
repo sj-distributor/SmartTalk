@@ -407,18 +407,14 @@ public class SpeechMaticsService : ISpeechMaticsService
             await _smartiesClient.CallBackSmartiesAiSpeechAssistantRecordAsync(new AiSpeechAssistantCallBackRequestDto { CallSid = record.SessionId, RecordUrl = record.Url, RecordAnalyzeReport =  record.TranscriptionText }, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<int> SendAgentMessageRecordAsync(Agent agent, int recordId, int groupKey,
-        CancellationToken cancellationToken)
+    private async Task<int> SendAgentMessageRecordAsync(Agent agent, int recordId, int groupKey, CancellationToken cancellationToken)
     {
-        var timezone = !string.IsNullOrWhiteSpace(agent.Timezone)
-            ? TimeZoneInfo.FindSystemTimeZoneById(agent.Timezone)
-            : TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+        var timezone = !string.IsNullOrWhiteSpace(agent.Timezone) ? TimeZoneInfo.FindSystemTimeZoneById(agent.Timezone) : TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
         var nowDate = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, timezone);
 
         var utcDate = TimeZoneInfo.ConvertTimeToUtc(nowDate.Date, timezone);
 
-        var existingCount = await _aiSpeechAssistantDataProvider
-            .GetMessageCountByAgentAndDateAsync(groupKey, utcDate, cancellationToken).ConfigureAwait(false);
+        var existingCount = await _aiSpeechAssistantDataProvider.GetMessageCountByAgentAndDateAsync(groupKey, utcDate, cancellationToken).ConfigureAwait(false);
 
         var messageNumber = existingCount + 1;
 
@@ -429,6 +425,10 @@ public class SpeechMaticsService : ISpeechMaticsService
             RecordId = recordId,
             MessageNumber = messageNumber
         };
+
+        await _aiSpeechAssistantDataProvider.AddAgentMessageRecordAsync(newRecord, cancellationToken).ConfigureAwait(false);
+
+        return messageNumber;
     }
 
     private async Task<string> CreateTranscriptionJobAsync(byte[] data, string fileName, string language, CancellationToken cancellationToken)
