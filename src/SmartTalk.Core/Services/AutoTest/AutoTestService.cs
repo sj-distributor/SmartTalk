@@ -9,6 +9,8 @@ namespace SmartTalk.Core.Services.AutoTest;
 public partial interface IAutoTestService : IScopedDependency
 {
     Task<AutoTestRunningResponse> AutoTestRunningAsync(AutoTestRunningCommand command, CancellationToken cancellationToken);
+
+    Task<AutoTestConversationAudioProcessReponse> AutoTestConversationAudioProcessAsync(AutoTestConversationAudioProcessCommand command, CancellationToken cancellationToken);
 }
 
 public partial class AutoTestService : IAutoTestService
@@ -36,6 +38,17 @@ public partial class AutoTestService : IAutoTestService
         var executionResult = await _autoTestActionHandlerSwitcher.GetHandler(scenario.ActionType).ActionHandleAsync(scenario, cancellationToken).ConfigureAwait(false);
         
         return new AutoTestRunningResponse() { Data = executionResult };
+    }
+
+    public async Task<AutoTestConversationAudioProcessReponse> AutoTestConversationAudioProcessAsync(AutoTestConversationAudioProcessCommand command,
+        CancellationToken cancellationToken)
+    {
+        var audio = await ProcessAudioConversationAsync(command.CustomerAudioList, command.Prompt, cancellationToken).ConfigureAwait(false);
+
+        return new AutoTestConversationAudioProcessReponse()
+        {
+            Data = audio
+        };
     }
 
     public async Task<byte[]> ProcessAudioConversationAsync(List<byte[]> customerAudioList, string prompt, CancellationToken cancellationToken)
