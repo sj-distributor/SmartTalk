@@ -37,51 +37,77 @@ public partial class AutoTestService : IAutoTestService
         
         return new AutoTestRunningResponse() { Data = executionResult };
     }
-    
+
     public async Task<byte[]> ProcessAudioConversationAsync(List<byte[]> customerAudioList, string prompt, CancellationToken cancellationToken)
     {
         var conversationHistory = new List<ChatMessage>();
         conversationHistory.Add(new SystemChatMessage($"{prompt}"));
-    
-        var allAudioSegments = new List<byte[]>();
+
+        var allPcmSegments = new List<byte[]>();
         var client = new ChatClient("gpt-4o-audio-preview", _openAiSettings.ApiKey);
+
+        int sampleRate = 16000;
+        int bitsPerSample = 16;
+        int channels = 1;
 
         foreach (var customerAudio in customerAudioList)
         {
-            conversationHistory.Add(new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(BinaryData.FromBytes(customerAudio), ChatInputAudioFormat.Wav)));
-            var options = new ChatCompletionOptions { ResponseModalities = ChatResponseModalities.Audio, AudioOptions = new ChatAudioOptions(ChatOutputAudioVoice.Alloy, ChatOutputAudioFormat.Pcm16)};
+            var customerWav = PcmToWav(customerAudio, sampleRate, bitsPerSample, channels);
+            
+            conversationHistory.Add(new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(BinaryData.FromBytes(customerWav), ChatInputAudioFormat.Wav)));
+            
+            var options = new ChatCompletionOptions { ResponseModalities = ChatResponseModalities.Audio, AudioOptions = new ChatAudioOptions(ChatOutputAudioVoice.Alloy, ChatOutputAudioFormat.Wav) };
+            
             var completion = await client.CompleteChatAsync(conversationHistory, options, cancellationToken);
 
             var aiReplyText = completion.Value.Content.FirstOrDefault()?.Text;
             
             conversationHistory.Add(new AssistantChatMessage(aiReplyText));
-            
+
             var aiReplyAudio = completion.Value.OutputAudio.AudioBytes.ToArray();
 
-            allAudioSegments.Add(customerAudio);
+            allPcmSegments.Add(customerAudio);
+
+            var aiPcm = ExtractPcmFromWav(aiReplyAudio);
             
-            allAudioSegments.Add(aiReplyAudio);
+            allPcmSegments.Add(aiPcm);
         }
 
-        return await MergePcmSegmentsAsync(allAudioSegments, cancellationToken);
+        return PcmToWav(ConcatPcmSegments(allPcmSegments), sampleRate, bitsPerSample, channels);
+    }
+
+    private static byte[] PcmToWav(byte[] pcmData, int sampleRate, int bitsPerSample, int channels)
+    {
+        using var ms = new MemoryStream();
+        var waveFormat = new WaveFormat(sampleRate, bitsPerSample, channels);
+        using (var writer = new WaveFileWriter(ms, waveFormat))
+        {
+            writer.Write(pcmData, 0, pcmData.Length);
+            writer.Flush();
+        }
+        return ms.ToArray();
     }
     
-    private static Task<byte[]> MergePcmSegmentsAsync(List<byte[]> pcmSegments, CancellationToken cancellationToken)
+    private static byte[] ExtractPcmFromWav(byte[] wavData)
     {
-        if (pcmSegments == null || pcmSegments.Count == 0)
-            throw new ArgumentException("pcmSegments is empty");
-
-        int totalLength = pcmSegments.Sum(seg => seg.Length);
-        byte[] merged = new byte[totalLength];
-        int offset = 0;
-
-        foreach (var segment in pcmSegments)
-        {
-            Buffer.BlockCopy(segment, 0, merged, offset, segment.Length);
-            offset += segment.Length;
-        }
-
-        return Task.FromResult(merged);
+        using var ms = new MemoryStream(wavData);
+        using var rdr = new WaveFileReader(ms);
+        using var pcmStream = new MemoryStream();
+        rdr.CopyTo(pcmStream);
+        return pcmStream.ToArray();
     }
 
+    private static byte[] ConcatPcmSegments(List<byte[]> segments)
+    {
+        int totalLength = segments.Sum(s => s.Length);
+        byte[] result = new byte[totalLength];
+        int offset = 0;
+        foreach (var s in segments)
+        {
+            Buffer.BlockCopy(s, 0, result, offset, s.Length);
+            offset += s.Length;
+        }
+
+        return result;
+    }
 }
