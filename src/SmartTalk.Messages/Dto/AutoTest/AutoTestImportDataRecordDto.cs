@@ -16,7 +16,7 @@ public class AutoTestImportDataRecordDto
     
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.Now;
 
-    public DateTimeOffset StartedAt { get; set; }
+    public DateTimeOffset? StartedAt { get; set; }
     
-    public DateTimeOffset FinishedAt { get; set; }
+    public DateTimeOffset? FinishedAt { get; set; }
 }
