@@ -77,6 +77,8 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task<List<AiSpeechAssistantInboundRoute>> GetAiSpeechAssistantInboundRouteAsync(string callerNumber, string didNumber, CancellationToken cancellationToken);
     
     Task<AiSpeechAssistantUserProfile> GetAiSpeechAssistantUserProfileAsync(int assistantId, string callerNumber, CancellationToken cancellationToken);
+    
+    Task<CustomerItemsCache> GetCustomerItemsCacheBySoldToIdAsync(string soldToId, CancellationToken cancellationToken);
 }
 
 public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
@@ -411,5 +413,10 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
             .Where(x => x.AssistantId == assistantId && x.CallerNumber == callerNumber);
 
         return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<CustomerItemsCache> GetCustomerItemsCacheBySoldToIdAsync(string soldToId, CancellationToken cancellationToken)
+    {
+        return await _repository.FirstOrDefaultAsync<CustomerItemsCache>(x => x.CacheKey == soldToId, cancellationToken);
     }
 }
