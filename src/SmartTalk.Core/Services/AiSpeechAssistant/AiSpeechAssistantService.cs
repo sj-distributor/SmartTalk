@@ -20,6 +20,7 @@ using OpenAI.Chat;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.Attachments;
+using SmartTalk.Core.Services.Caching;
 using SmartTalk.Core.Services.Caching.Redis;
 using SmartTalk.Core.Services.Ffmpeg;
 using SmartTalk.Core.Services.Http;
@@ -47,6 +48,7 @@ using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.Attachments;
 using SmartTalk.Messages.Dto.Attachments;
 using SmartTalk.Messages.Dto.Smarties;
+using SmartTalk.Messages.Enums.Caching;
 using SmartTalk.Messages.Enums.STT;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 using RecordingResource = Twilio.Rest.Api.V2010.Account.Call.RecordingResource;
@@ -74,6 +76,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly IMapper _mapper;
     private readonly ICurrentUser _currentUser;
     private readonly AzureSetting _azureSetting;
+    private readonly ICacheManager _cacheManager;
     private readonly IOpenaiClient _openaiClient;
     private readonly IFfmpegService _ffmpegService;
     private readonly OpenAiSettings _openAiSettings;
@@ -106,6 +109,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         IMapper mapper,
         ICurrentUser currentUser,
         AzureSetting azureSetting,
+        ICacheManager cacheManager,
         IOpenaiClient openaiClient,
         IFfmpegService ffmpegService,
         OpenAiSettings openAiSettings,
@@ -131,7 +135,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _mapper = mapper;
         _currentUser = currentUser;
         _openaiClient = openaiClient;
+        _cacheManager = cacheManager;
         _azureSetting = azureSetting;
+        _ffmpegService = ffmpegService;
         _openAiSettings = openAiSettings;
         _twilioSettings = twilioSettings;
         _smartiesClient = smartiesClient;
@@ -150,7 +156,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _inactivityTimerManager = inactivityTimerManager;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
-        _ffmpegService = ffmpegService;
 
         _openaiEvent = new StringBuilder();
         _openaiClientWebSocket = new ClientWebSocket();
@@ -255,14 +260,17 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
         var language = string.Empty;
         try
-        { 
+        {
             language = await DetectAudioLanguageAsync(audioFileRawBytes, cancellationToken).ConfigureAwait(false);
+
+            await SendServerRestoreMessageIfNecessaryAsync(cancellationToken).ConfigureAwait(false);
         }
         catch (Exception e)
         {
             const string alertMessage = "服务器异常。";
 
             await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, _workWeChatKeySetting.Key, alertMessage, mentionedList: new[]{"@all"}, cancellationToken: cancellationToken).ConfigureAwait(false);
+            await _cacheManager.GetOrAddAsync("gpt-4o-audio-exception", _ => Task.FromResult(Task.FromResult(alertMessage)), new RedisCachingSetting(RedisServer.System, TimeSpan.FromDays(1)), cancellationToken).ConfigureAwait(false);
         }
         
         record.Language = ConvertLanguageCode(language);
@@ -336,6 +344,27 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         Log.Information("Detect the audio language: " + completion.Content.FirstOrDefault()?.Text);
         
         return completion.Content.FirstOrDefault()?.Text ?? "en";
+    }
+
+    private async Task SendServerRestoreMessageIfNecessaryAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var exceptionAlert = await _cacheManager.GetAsync<string>("gpt-4o-audio-exception", new RedisCachingSetting(), cancellationToken).ConfigureAwait(false);
+
+            if (!string.IsNullOrEmpty(exceptionAlert))
+            {
+                const string restoreMessage = "服务器恢复。";
+
+                await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, _workWeChatKeySetting.Key, restoreMessage, mentionedList: new[]{"@all"}, cancellationToken: cancellationToken).ConfigureAwait(false);
+                
+                await _cacheManager.RemoveAsync("gpt-4o-audio-exception", new RedisCachingSetting(), cancellationToken).ConfigureAwait(false);
+            }
+        }
+        catch (Exception e)
+        {
+            // ignored
+        }
     }
 
     public async Task TransferHumanServiceAsync(TransferHumanServiceCommand command, CancellationToken cancellationToken)
