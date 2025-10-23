@@ -17,7 +17,6 @@ using OpenAI.Chat;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.Attachments;
-using SmartTalk.Core.Services.Caching;
 using SmartTalk.Core.Services.Caching.Redis;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
@@ -43,7 +42,6 @@ using SmartTalk.Messages.Events.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.Attachments;
 using SmartTalk.Messages.Dto.Attachments;
-using SmartTalk.Messages.Enums.STT;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 using RecordingResource = Twilio.Rest.Api.V2010.Account.Call.RecordingResource;
 
@@ -69,6 +67,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly IClock _clock;
     private readonly IMapper _mapper;
     private readonly ICurrentUser _currentUser;
+    private readonly ISalesClient _salesClient;
     private readonly AzureSetting _azureSetting;
     private readonly IOpenaiClient _openaiClient;
     private readonly OpenAiSettings _openAiSettings;
@@ -98,6 +97,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         IClock clock,
         IMapper mapper,
         ICurrentUser currentUser,
+        ISalesClient salesClient,
         AzureSetting azureSetting,
         IOpenaiClient openaiClient,
         OpenAiSettings openAiSettings,
@@ -122,6 +122,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _clock = clock;
         _mapper = mapper;
         _currentUser = currentUser;
+        _salesClient = salesClient;
         _openaiClient = openaiClient;
         _azureSetting = azureSetting;
         _openAiSettings = openAiSettings;
