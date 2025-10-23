@@ -44,8 +44,6 @@ namespace SmartTalk.Core.Services.SpeechMatics;
 public interface ISpeechMaticsService : IScopedDependency
 {
     Task HandleTranscriptionCallbackAsync(HandleTranscriptionCallbackCommand command, CancellationToken cancellationToken);
-
-    Task<string> BuildCustomerItemsStringAsync(List<string> soldToIds, CancellationToken cancellationToken);
 }
 
 public class SpeechMaticsService : ISpeechMaticsService
@@ -61,6 +59,7 @@ public class SpeechMaticsService : ISpeechMaticsService
     private readonly PhoneOrderSetting _phoneOrderSetting;
     private readonly IPhoneOrderService _phoneOrderService;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
+    private readonly AiSpeechAssistantService _aiSpeechAssistantService;
     private readonly ISmartTalkHttpClientFactory _smartTalkHttpClientFactory;
     private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
@@ -77,6 +76,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         PhoneOrderSetting phoneOrderSetting,
         IPhoneOrderService phoneOrderService,
         IPhoneOrderDataProvider phoneOrderDataProvider,
+        AiSpeechAssistantService aiSpeechAssistantService,
         ISmartTalkHttpClientFactory smartTalkHttpClientFactory,
         ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient,
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
@@ -92,6 +92,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         _phoneOrderSetting = phoneOrderSetting;
         _phoneOrderService = phoneOrderService;
         _phoneOrderDataProvider = phoneOrderDataProvider;
+        _aiSpeechAssistantService = aiSpeechAssistantService;
         _smartTalkHttpClientFactory = smartTalkHttpClientFactory;
         _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
@@ -460,7 +461,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         
         var soldToIds = !string.IsNullOrEmpty(aiSpeechAssistant.Name) ? aiSpeechAssistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : new List<string>();
         
-        var customerItemsString = await BuildCustomerItemsStringAsync(soldToIds, cancellationToken);
+        var customerItemsString = await _aiSpeechAssistantService.BuildCustomerItemsStringAsync(soldToIds, cancellationToken);
 
         var audioData = BinaryData.FromBytes(audioContent);
         List<ChatMessage> messages =

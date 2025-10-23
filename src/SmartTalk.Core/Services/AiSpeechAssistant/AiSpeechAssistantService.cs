@@ -76,6 +76,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly IClock _clock;
     private readonly IMapper _mapper;
     private readonly ICurrentUser _currentUser;
+    private readonly ISalesClient _salesClient;
     private readonly AzureSetting _azureSetting;
     private readonly ICacheManager _cacheManager;
     private readonly IOpenaiClient _openaiClient;
@@ -110,6 +111,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         IClock clock,
         IMapper mapper,
         ICurrentUser currentUser,
+        ISalesClient salesClient,
         AzureSetting azureSetting,
         ICacheManager cacheManager,
         IOpenaiClient openaiClient,
@@ -137,6 +139,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _clock = clock;
         _mapper = mapper;
         _currentUser = currentUser;
+        _salesClient = salesClient;
         _openaiClient = openaiClient;
         _cacheManager = cacheManager;
         _azureSetting = azureSetting;
@@ -435,28 +438,17 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         if (finalPrompt.Contains("#{customer_items}", StringComparison.OrdinalIgnoreCase))
         {
             var soldToIds = !string.IsNullOrEmpty(assistant.Name) ? assistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : new List<string>();
-            Log.Information("SoldToIds to be sent to BuildCustomerItemsStringAsync: {@SoldToIds}", soldToIds);
             
-            finalPrompt = finalPrompt.Replace("#{customer_items}", "");
-            
-            _ = _speechMaticsService.BuildCustomerItemsStringAsync(soldToIds, cancellationToken)
-                .ContinueWith(task =>
-                {
-                    if (task.Status == TaskStatus.RanToCompletion && !string.IsNullOrEmpty(task.Result))
-                    {
-                        var completedPrompt = _aiSpeechAssistantStreamContext.LastPrompt 
-                                              + Environment.NewLine 
-                                              + task.Result;
+            if (soldToIds.Any())
+            {
+                var caches = await _aiSpeechAssistantDataProvider.GetCustomerItemsCacheBySoldToIdsAsync(soldToIds, cancellationToken).ConfigureAwait(false);
 
-                        Log.Information("Final completed prompt: {Prompt}", completedPrompt);
+                var customerItems = caches.Where(c => !string.IsNullOrEmpty(c.CacheValue))
+                    .SelectMany(c => JsonSerializer.Deserialize<List<string>>(c.CacheValue) ?? new List<string>())
+                    .Distinct().ToList();
 
-                        _aiSpeechAssistantStreamContext.LastPrompt = completedPrompt;
-                    }
-                    else if (task.IsFaulted)
-                    {
-                        Log.Error(task.Exception, "Failed to build customer items string");
-                    }
-                }, cancellationToken); 
+                finalPrompt = finalPrompt.Replace("#{customer_items}", string.Join(Environment.NewLine, customerItems));
+            }
         }
         
         Log.Information($"The final prompt: {finalPrompt}");
