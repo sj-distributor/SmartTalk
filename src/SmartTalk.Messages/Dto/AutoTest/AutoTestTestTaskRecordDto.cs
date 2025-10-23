@@ -25,8 +25,8 @@ public class AutoTestTestTaskRecordDto
     public string EvaluationSummary { get; set; }
     
     public string ValidationErrors { get; set; }
-    
-    public AutoTestStatus Status { get; set; }
+
+    public AutoTestTestTaskRecordStatus Status { get; set; } = AutoTestTestTaskRecordStatus.Pending;
         
     public string ErrorText { get; set; }
     

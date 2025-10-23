@@ -41,9 +41,9 @@ public class AutoTestTestTaskRecord : IEntity
     
     [Column("validation_errors")]
     public string ValidationErrors { get; set; }
-    
-    [Column("status")]
-    public AutoTestStatus Status { get; set; }
+
+    [Column("status")] 
+    public AutoTestTestTaskRecordStatus Status { get; set; } = AutoTestTestTaskRecordStatus.Pending;
         
     [Column("error_text")]
     public string ErrorText { get; set; }

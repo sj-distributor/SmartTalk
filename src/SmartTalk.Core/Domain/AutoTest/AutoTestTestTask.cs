@@ -22,14 +22,14 @@ public class AutoTestTestTask : IEntity
     public string Params { get; set; }
     
     [Column("status")]
-    public AutoTestStatus Status { get; set; }
+    public AutoTestTestTaskStatus Status { get; set; } = AutoTestTestTaskStatus.Pending;
     
     [Column("created_at")]
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.Now;
     
     [Column("started_at")]
-    public DateTimeOffset StartedAt { get; set; }
+    public DateTimeOffset? StartedAt { get; set; }
     
     [Column("finished_at")]
-    public DateTimeOffset FinishedAt { get; set; }
+    public DateTimeOffset? FinishedAt { get; set; }
 }

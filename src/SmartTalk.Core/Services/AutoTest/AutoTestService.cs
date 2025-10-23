@@ -1,6 +1,8 @@
 using AutoMapper;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Messages.Commands.AutoTest;
+using SmartTalk.Messages.Enums.AutoTest;
+
 namespace SmartTalk.Core.Services.AutoTest;
 
 public partial interface IAutoTestService : IScopedDependency
@@ -27,7 +29,13 @@ public partial class AutoTestService : IAutoTestService
     {
         var scenario = await _autoTestDataProvider.GetAutoTestScenarioByIdAsync(command.ScenarioId, cancellationToken).ConfigureAwait(false);
         
-        var executionResult = await _autoTestActionHandlerSwitcher.GetHandler(scenario.ActionType).ActionHandleAsync(scenario, cancellationToken).ConfigureAwait(false);
+        var taskRecords = await _autoTestDataProvider.GetPendingTestTaskRecordsByTaskIdAsync(command.TaskId, cancellationToken).ConfigureAwait(false);
+        
+        taskRecords.ForEach(x => x.Status = AutoTestTestTaskRecordStatus.Ongoing);
+        
+        await _autoTestDataProvider.UpdateTestTaskRecordsAsync(taskRecords, cancellationToken).ConfigureAwait(false);
+        
+        var executionResult = await _autoTestActionHandlerSwitcher.GetHandler(scenario.ActionType).ActionHandleAsync(scenario, command.TaskId, cancellationToken).ConfigureAwait(false);
         
         return new AutoTestRunningResponse() { Data = executionResult };
     }

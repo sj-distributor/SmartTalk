@@ -1,11 +1,10 @@
-using System.ComponentModel;
-
 namespace SmartTalk.Messages.Enums.AutoTest;
 
-public enum AutoTestStatus
+public enum AutoTestTestTaskRecordStatus
 {
     Pending,
-    Running,
+    Pause,
+    Ongoing,
     Done,
     Failed
 }
