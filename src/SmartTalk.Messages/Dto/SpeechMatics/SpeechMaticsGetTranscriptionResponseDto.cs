@@ -2,7 +2,7 @@ using Newtonsoft.Json;
 
 namespace SmartTalk.Messages.Dto.SpeechMatics;
 
-public class SpeechMaticsGetTranscriptionResponseDto
+public class SpeechMaticsCallBackResponseDto
 {
     [JsonProperty("format")]
     public string Format { get; set; }

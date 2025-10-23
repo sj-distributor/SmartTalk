@@ -31,6 +31,7 @@ using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Services.Restaurants;
+using SmartTalk.Core.Services.SpeechMatics;
 using SmartTalk.Core.Services.STT;
 using SmartTalk.Core.Services.Timer;
 using SmartTalk.Core.Settings.Azure;
@@ -47,6 +48,7 @@ using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.Attachments;
 using SmartTalk.Messages.Dto.Attachments;
 using SmartTalk.Messages.Dto.Smarties;
+using SmartTalk.Messages.Enums.SpeechMatics;
 using SmartTalk.Messages.Enums.STT;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 using RecordingResource = Twilio.Rest.Api.V2010.Account.Call.RecordingResource;
@@ -86,6 +88,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly IPhoneOrderService _phoneOrderService;
     private readonly IAgentDataProvider _agentDataProvider;
     private readonly IAttachmentService _attachmentService;
+    private readonly ISpeechMaticsService _speechMaticsService;
     private readonly ISpeechToTextService _speechToTextService;
     private readonly WorkWeChatKeySetting _workWeChatKeySetting;
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
@@ -118,6 +121,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         IPhoneOrderService phoneOrderService,
         IAgentDataProvider agentDataProvider,
         IAttachmentService attachmentService,
+        ISpeechMaticsService speechMaticsService,
         ISpeechToTextService speechToTextService,
         WorkWeChatKeySetting workWeChatKeySetting,
         ISmartTalkHttpClientFactory httpClientFactory,
@@ -144,6 +148,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _translationClient = translationClient;
         _attachmentService = attachmentService;
         _speechToTextService = speechToTextService;
+        _speechMaticsService = speechMaticsService;
         _workWeChatKeySetting = workWeChatKeySetting;
         _backgroundJobClient = backgroundJobClient;
         _restaurantDataProvider = restaurantDataProvider;
@@ -266,7 +271,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         }
         
         record.Language = ConvertLanguageCode(language);
-        record.TranscriptionJobId = await _phoneOrderService.CreateSpeechMaticsJobAsync(audioFileRawBytes, Guid.NewGuid().ToString("N") + ".wav", language, cancellationToken).ConfigureAwait(false);
+        record.TranscriptionJobId = await _speechMaticsService.CreateSpeechMaticsJobAsync(audioFileRawBytes, Guid.NewGuid().ToString("N") + ".wav", language, SpeechMaticsJobScenario.Released, cancellationToken).ConfigureAwait(false);
 
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
@@ -992,9 +997,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
         List<ChatMessage> messages =
         [
-            new SystemChatMessage(_aiSpeechAssistantStreamContext.Assistant.CustomRepeatOrderPrompt),
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
-            new UserChatMessage("Please repeat the order for me in the customer's language completely, quickly, and naturally:")
+            new UserChatMessage(_aiSpeechAssistantStreamContext.Assistant.CustomRepeatOrderPrompt)
         ];
         
         ChatCompletionOptions options = new()
