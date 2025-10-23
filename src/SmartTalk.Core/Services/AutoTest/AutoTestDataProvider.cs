@@ -16,17 +16,17 @@ public partial interface IAutoTestDataProvider : IScopedDependency
     
     Task<AutoTestTestTask> GetAutoTestTestTaskByIdAsync(int id, CancellationToken cancellationToken);
     
-    Task AddAutoTestTestTaskAsync(AutoTestTestTask testTask, CancellationToken cancellationToken);
+    Task AddAutoTestTestTaskAsync(AutoTestTestTask testTask, bool forceSave = true, CancellationToken cancellationToken = default);
     
-    Task UpdateAutoTestTestTaskAsync(AutoTestTestTask testTask, CancellationToken cancellationToken);
+    Task UpdateAutoTestTestTaskAsync(AutoTestTestTask testTask, bool forceSave = true, CancellationToken cancellationToken = default);
 
-    Task DeleteAutoTestTestTaskAsync(AutoTestTestTask testTask, CancellationToken cancellationToken);
+    Task DeleteAutoTestTestTaskAsync(AutoTestTestTask testTask, bool forceSave = true, CancellationToken cancellationToken = default);
 
     Task<List<AutoTestDataItem>> GetAutoTestDataItemsBySetIdAsync(int testDataSetId, CancellationToken cancellationToken);
 
-    Task AddAutoTestTestTaskRecordsAsync(List<AutoTestTaskRecord> records, CancellationToken cancellationToken);
+    Task AddAutoTestTestTaskRecordsAsync(List<AutoTestTaskRecord> records, bool forceSave = true, CancellationToken cancellationToken = default);
     
-    Task UpdateAutoTestTestTaskRecordAsync(AutoTestTaskRecord record, CancellationToken cancellationToken);
+    Task UpdateAutoTestTestTaskRecordAsync(AutoTestTaskRecord record, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task<AutoTestTaskRecord> GetTestTaskRecordsByIdAsync(int id, CancellationToken cancellationToken);
     
@@ -34,7 +34,7 @@ public partial interface IAutoTestDataProvider : IScopedDependency
 
     Task<(int dataItemCount, int testRecordDoneCount)> GetDoneTestTaskRecordCountAsync(int testDataSetId, int taskId, CancellationToken cancellationToken);
     
-    Task UpdateTestTaskRecordsAsync(List<AutoTestTaskRecord> records, CancellationToken cancellationToken);
+    Task UpdateTestTaskRecordsAsync(List<AutoTestTaskRecord> records, bool forceSave = true, CancellationToken cancellationToken = default);
 }
 
 public partial class AutoTestDataProvider : IAutoTestDataProvider
@@ -57,7 +57,23 @@ public partial class AutoTestDataProvider : IAutoTestDataProvider
 
     public async Task<(List<AutoTestTestTaskDto>, int)> GetAutoTestTestTasksAsync(string keyword, int? scenarioId = null, int? pageIndex = null, int? pageSize = null, CancellationToken cancellationToken = default)
     {
-        var query = _repository.Query<AutoTestTestTask>();
+        var query =
+            from task in _repository.QueryNoTracking<AutoTestTestTask>()
+            join dataSetItem in _repository.QueryNoTracking<AutoTestDataSetItem>()
+                on task.DataSetId equals dataSetItem.DataSetId into dataSetItems
+            join record in _repository.QueryNoTracking<AutoTestTaskRecord>().Where(x => x.Status == AutoTestTestTaskRecordStatus.Done)
+                on task.Id equals record.TestTaskId into taskRecords
+            select new AutoTestTestTaskDto
+            {
+                Id = task.Id,
+                ScenarioId = task.ScenarioId,
+                DataSetId = task.DataSetId,
+                Params = task.Params,
+                Status = task.Status,
+                CreatedAt = task.CreatedAt,
+                TotalCount = dataSetItems.Count(),
+                InProgressCount = taskRecords.Count()
+            };
         
         if (scenarioId.HasValue)
             query = query.Where(x => x.ScenarioId == scenarioId.Value);
@@ -69,37 +85,8 @@ public partial class AutoTestDataProvider : IAutoTestDataProvider
         
         if (pageIndex.HasValue && pageSize.HasValue)
             query = query.Skip((pageIndex.Value - 1) * pageSize.Value).Take(pageSize.Value);
-       
-        var tasks = await query.ToListAsync(cancellationToken).ConfigureAwait(false);
-         
-         var taskIds = tasks.Select(t => t.Id).ToList();
-         var dataSetIds = tasks.Select(t => t.DataSetId).Distinct().ToList();
-         
-         var dataItemCounts = await _repository.QueryNoTracking<AutoTestDataSetItem>()
-             .Where(x => dataSetIds.Contains(x.DataSetId))
-             .GroupBy(x => x.DataSetId)
-             .Select(g => new { g.Key, Count = g.Count() })
-             .ToDictionaryAsync(x => x.Key, x => x.Count, cancellationToken);
-         
-         var doneCounts = await _repository.QueryNoTracking<AutoTestTaskRecord>()
-             .Where(x => taskIds.Contains(x.TestTaskId) && x.Status == AutoTestTestTaskRecordStatus.Done)
-             .GroupBy(x => x.TestTaskId)
-             .Select(g => new { g.Key, Count = g.Count() })
-             .ToDictionaryAsync(x => x.Key, x => x.Count, cancellationToken);
-
-         var result = tasks.Select(t => new AutoTestTestTaskDto
-         {
-             Id = t.Id,
-             ScenarioId = t.ScenarioId,
-             DataSetId = t.DataSetId,
-             Params = t.Params,
-             Status = t.Status,
-             CreatedAt = t.CreatedAt,
-             TotalCount = dataItemCounts.TryGetValue(t.DataSetId, out var totalCount) ? totalCount : 0,
-             InProgressCount = doneCounts.TryGetValue(t.Id, out var doneCount) ? doneCount : 0
-         }).ToList();
         
-        return (result, count);
+        return (await query.ToListAsync(cancellationToken).ConfigureAwait(false), count);
     }
 
     public async Task<AutoTestTestTask> GetAutoTestTestTaskByIdAsync(int id, CancellationToken cancellationToken)
@@ -107,25 +94,25 @@ public partial class AutoTestDataProvider : IAutoTestDataProvider
         return await _repository.GetByIdAsync<AutoTestTestTask>(id, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task AddAutoTestTestTaskAsync(AutoTestTestTask testTask, CancellationToken cancellationToken)
+    public async Task AddAutoTestTestTaskAsync(AutoTestTestTask testTask, bool forceSave = true, CancellationToken cancellationToken = default)
     {
         await _repository.InsertAsync(testTask, cancellationToken).ConfigureAwait(false);
         
-        await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task UpdateAutoTestTestTaskAsync(AutoTestTestTask testTask, CancellationToken cancellationToken)
+    public async Task UpdateAutoTestTestTaskAsync(AutoTestTestTask testTask, bool forceSave = true, CancellationToken cancellationToken = default)
     {
         await _repository.UpdateAsync(testTask, cancellationToken).ConfigureAwait(false);
         
-        await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task DeleteAutoTestTestTaskAsync(AutoTestTestTask testTask, CancellationToken cancellationToken)
+    public async Task DeleteAutoTestTestTaskAsync(AutoTestTestTask testTask, bool forceSave = true, CancellationToken cancellationToken = default)
     {
         await _repository.DeleteAsync(testTask, cancellationToken).ConfigureAwait(false);
         
-        await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<List<AutoTestDataItem>> GetAutoTestDataItemsBySetIdAsync(int testDataSetId, CancellationToken cancellationToken)
@@ -135,18 +122,18 @@ public partial class AutoTestDataProvider : IAutoTestDataProvider
             select testDataItem).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task AddAutoTestTestTaskRecordsAsync(List<AutoTestTaskRecord> records, CancellationToken cancellationToken)
+    public async Task AddAutoTestTestTaskRecordsAsync(List<AutoTestTaskRecord> records, bool forceSave = true, CancellationToken cancellationToken = default)
     {
         await _repository.InsertAllAsync(records, cancellationToken).ConfigureAwait(false);
         
-        await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task UpdateAutoTestTestTaskRecordAsync(AutoTestTaskRecord record, CancellationToken cancellationToken)
+    public async Task UpdateAutoTestTestTaskRecordAsync(AutoTestTaskRecord record, bool forceSave = true, CancellationToken cancellationToken = default)
     {
         await _repository.UpdateAsync(record, cancellationToken).ConfigureAwait(false);
         
-        await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<AutoTestTaskRecord> GetTestTaskRecordsByIdAsync(int id, CancellationToken cancellationToken)
@@ -173,10 +160,10 @@ public partial class AutoTestDataProvider : IAutoTestDataProvider
         return (dataItemCount, testRecordDoneCount);
     }
 
-    public async Task UpdateTestTaskRecordsAsync(List<AutoTestTaskRecord> records, CancellationToken cancellationToken)
+    public async Task UpdateTestTaskRecordsAsync(List<AutoTestTaskRecord> records, bool forceSave = true, CancellationToken cancellationToken = default)
     {
         await _repository.UpdateAllAsync(records, cancellationToken).ConfigureAwait(false);
         
-        await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 }

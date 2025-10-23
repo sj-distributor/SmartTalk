@@ -33,7 +33,7 @@ public partial class AutoTestService : IAutoTestService
         
         taskRecords.ForEach(x => x.Status = AutoTestTestTaskRecordStatus.Ongoing);
         
-        await _autoTestDataProvider.UpdateTestTaskRecordsAsync(taskRecords, cancellationToken).ConfigureAwait(false);
+        await _autoTestDataProvider.UpdateTestTaskRecordsAsync(taskRecords, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         var executionResult = await _autoTestActionHandlerSwitcher.GetHandler(scenario.ActionType).ActionHandleAsync(scenario, command.TaskId, cancellationToken).ConfigureAwait(false);
         

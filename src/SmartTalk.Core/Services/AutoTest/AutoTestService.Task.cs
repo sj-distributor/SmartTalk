@@ -38,7 +38,7 @@ public partial class AutoTestService
 
         var testTask = _mapper.Map<AutoTestTestTask>(command.TestTask);
         
-        await _autoTestDataProvider.AddAutoTestTestTaskAsync(testTask, cancellationToken).ConfigureAwait(false);
+        await _autoTestDataProvider.AddAutoTestTestTaskAsync(testTask, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var dataItems = await _autoTestDataProvider.GetAutoTestDataItemsBySetIdAsync(testTask.DataSetId, cancellationToken).ConfigureAwait(false);
 
@@ -54,7 +54,7 @@ public partial class AutoTestService
             CreatedAt = DateTimeOffset.Now
         }).ToList();
                     
-        await _autoTestDataProvider.AddAutoTestTestTaskRecordsAsync(testTaskRecords, cancellationToken).ConfigureAwait(false);
+        await _autoTestDataProvider.AddAutoTestTestTaskRecordsAsync(testTaskRecords, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var task = _mapper.Map<AutoTestTestTaskDto>(testTask);
         task.TotalCount = testTaskRecords.Count;
@@ -90,7 +90,7 @@ public partial class AutoTestService
         
         testTask.StartedAt ??= DateTimeOffset.Now; 
         
-        await _autoTestDataProvider.UpdateAutoTestTestTaskAsync(testTask, cancellationToken).ConfigureAwait(false); 
+        await _autoTestDataProvider.UpdateAutoTestTestTaskAsync(testTask, cancellationToken: cancellationToken).ConfigureAwait(false); 
         
         switch (newStatus)
         {
@@ -114,7 +114,7 @@ public partial class AutoTestService
         {
             testTask.FinishedAt = DateTimeOffset.Now; 
             testTask.Status = AutoTestTestTaskStatus.Done;
-            await _autoTestDataProvider.UpdateAutoTestTestTaskAsync(testTask, cancellationToken).ConfigureAwait(false); 
+            await _autoTestDataProvider.UpdateAutoTestTestTaskAsync(testTask, cancellationToken: cancellationToken).ConfigureAwait(false); 
         }
         
         return (dataItemCount, testRecordDoneCount);
@@ -126,14 +126,14 @@ public partial class AutoTestService
 
         taskRecords.ForEach(x => x.Status = status);
         
-        await _autoTestDataProvider.UpdateTestTaskRecordsAsync(taskRecords, cancellationToken).ConfigureAwait(false);
+        await _autoTestDataProvider.UpdateTestTaskRecordsAsync(taskRecords, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
     
     public async Task<DeleteAutoTestTestTaskResponse> DeleteAutoTestTestTaskAsync(DeleteAutoTestTestTaskCommand command, CancellationToken cancellationToken)
     {
         var testTask = await _autoTestDataProvider.GetAutoTestTestTaskByIdAsync(command.TestTaskId, cancellationToken).ConfigureAwait(false);
         
-        if (testTask != null) await _autoTestDataProvider.DeleteAutoTestTestTaskAsync(testTask, cancellationToken).ConfigureAwait(false);
+        if (testTask != null) await _autoTestDataProvider.DeleteAutoTestTestTaskAsync(testTask, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         return new DeleteAutoTestTestTaskResponse();
     }
