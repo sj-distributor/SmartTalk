@@ -216,13 +216,20 @@ public class SpeechMaticsService : ISpeechMaticsService
         
         var callFrom = string.Empty;
         TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
-        
-        await RetryAsync(async () =>
+
+        try
         {
-            var call = await CallResource.FetchAsync(record.SessionId);
-            callFrom = call?.From;
-            Log.Information("Fetched incoming phone number from Twilio: {callFrom}", callFrom);
-        }, maxRetryCount: 3, delaySeconds: 60, cancellationToken);
+            await RetryAsync(async () =>
+            {
+                var call = await CallResource.FetchAsync(record.SessionId);
+                callFrom = call?.From;
+                Log.Information("Fetched incoming phone number from Twilio: {callFrom}", callFrom);
+            }, maxRetryCount: 3, delaySeconds: 3, cancellationToken);
+        }
+        catch (Exception e)
+        {
+            Log.Warning($"Twilio not found this record, cid:{record.SessionId}");
+        }
         
         var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
