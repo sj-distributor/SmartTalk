@@ -58,6 +58,18 @@ public class HrInterViewService : IHrInterViewService
     {
         var newSetting = _mapper.Map<HrInterViewSetting>(command.Setting);
         
+        newSetting.Welcome = JsonConvert.SerializeObject(new HrInterViewQuestionsDto
+        {
+            Question = newSetting.Welcome,
+            Url = await ConvertTextToSpeechAsync(newSetting.Welcome, cancellationToken).ConfigureAwait(false)
+        });
+            
+        newSetting.Welcome = JsonConvert.SerializeObject(new HrInterViewQuestionsDto
+        {
+            Question = newSetting.EndMessage,
+            Url = await ConvertTextToSpeechAsync(newSetting.EndMessage, cancellationToken).ConfigureAwait(false)
+        });
+        
         if (command.Setting.Id.HasValue)
         {
             var setting = await _hrInterViewDataProvider.GetHrInterViewSettingByIdAsync(command.Setting.Id.Value, cancellationToken).ConfigureAwait(false);
@@ -66,21 +78,10 @@ public class HrInterViewService : IHrInterViewService
         
             if (oldQuestions.Any()) await _hrInterViewDataProvider.DeleteHrInterViewSettingQuestionsAsync(oldQuestions, cancellationToken: cancellationToken).ConfigureAwait(false);
             
-            newSetting.Welcome = JsonConvert.SerializeObject(new HrInterViewQuestionsDto
-            {
-                Question = newSetting.Welcome,
-                Url = await ConvertTextToSpeechAsync(newSetting.Welcome, cancellationToken).ConfigureAwait(false)
-            });
-            
-            newSetting.Welcome = JsonConvert.SerializeObject(new HrInterViewQuestionsDto
-            {
-                Question = newSetting.EndMessage,
-                Url = await ConvertTextToSpeechAsync(newSetting.EndMessage, cancellationToken).ConfigureAwait(false)
-            });
-            
             await _hrInterViewDataProvider.UpdateHrInterViewSettingAsync(newSetting, cancellationToken:cancellationToken).ConfigureAwait(false);
         }
         else await _hrInterViewDataProvider.AddHrInterViewSettingAsync(newSetting, cancellationToken:cancellationToken).ConfigureAwait(false);
+        
 
         foreach (var questionList in command.Questions)
         {
