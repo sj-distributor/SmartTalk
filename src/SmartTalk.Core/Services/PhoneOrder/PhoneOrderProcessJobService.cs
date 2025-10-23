@@ -1,10 +1,15 @@
 using Serilog;
+using Google.Cloud.Translation.V2;
 using SmartTalk.Core.Constants;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Ioc;
+using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Ffmpeg;
 using SmartTalk.Core.Services.Http;
+using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
+using SmartTalk.Core.Services.SpeechMatics;
+using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Core.Settings.Twilio;
 using SmartTalk.Messages.Commands.PhoneOrder;
 using Twilio;
@@ -12,28 +17,54 @@ using Twilio.Rest.Api.V2010.Account;
 
 namespace SmartTalk.Core.Services.PhoneOrder;
 
-public interface IPhoneOrderProcessJobService : IScopedDependency
+public partial interface IPhoneOrderProcessJobService : IScopedDependency
 {
     Task CalculatePhoneOrderRecodingDurationAsync(SchedulingCalculatePhoneOrderRecodingDurationCommand command, CancellationToken cancellationToken);
 
     Task CalculateRecordingDurationAsync(PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken = default);
 }
 
-public class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
+public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
 {
     private readonly IFfmpegService _ffmpegService;
+    private readonly OpenAiSettings _openAiSettings;
     private readonly TwilioSettings _twilioSettings;
+    private readonly ISmartiesClient _smartiesClient;
+    private readonly TranslationClient _translationClient;
+    private readonly IPhoneOrderService _phoneOrderService;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly ISmartTalkHttpClientFactory _smartTalkHttpClient;
+    private readonly ISpeechMaticsDataProvider _speechMaticsDataProvider;
+    private readonly ISmartTalkHttpClientFactory _smartTalkHttpClientFactory;
     private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
+    private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
 
-    public PhoneOrderProcessJobService(IFfmpegService ffmpegService, TwilioSettings twilioSettings, IPhoneOrderDataProvider phoneOrderDataProvider, ISmartTalkHttpClientFactory smartTalkHttpClient, ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient)
+    public PhoneOrderProcessJobService(
+        IFfmpegService ffmpegService,
+        TwilioSettings twilioSettings,
+        OpenAiSettings openAiSettings,
+        ISmartiesClient smartiesClient,
+        TranslationClient translationClient,
+        IPhoneOrderService phoneOrderService,
+        IPhoneOrderDataProvider phoneOrderDataProvider,
+        ISmartTalkHttpClientFactory smartTalkHttpClient,
+        ISpeechMaticsDataProvider speechMaticsDataProvider,
+        ISmartTalkHttpClientFactory smartTalkHttpClientFactory,
+        ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient,
+        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
         _ffmpegService = ffmpegService;
         _twilioSettings = twilioSettings;
+        _openAiSettings = openAiSettings;
+        _smartiesClient = smartiesClient;
+        _translationClient = translationClient;
+        _phoneOrderService = phoneOrderService;
         _smartTalkHttpClient = smartTalkHttpClient;
         _phoneOrderDataProvider = phoneOrderDataProvider;
+        _speechMaticsDataProvider = speechMaticsDataProvider;
+        _smartTalkHttpClientFactory = smartTalkHttpClientFactory;
         _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
+        _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
     }
 
     public async Task CalculatePhoneOrderRecodingDurationAsync(SchedulingCalculatePhoneOrderRecodingDurationCommand command, CancellationToken cancellationToken)

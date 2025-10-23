@@ -8,7 +8,7 @@ using SmartTalk.Messages.Enums.SpeechMatics;
 
 namespace SmartTalk.Core.Services.SpeechMatics;
 
-public interface ISpeechMaticsDataProvider : IScopedDependency
+public partial interface ISpeechMaticsDataProvider : IScopedDependency
 {
     Task<List<SpeechMaticsKey>> GetSpeechMaticsKeysAsync(List<SpeechMaticsKeyStatus> status = null, DateTimeOffset? lastModifiedDate = null, CancellationToken cancellationToken = default);
 
@@ -17,7 +17,7 @@ public interface ISpeechMaticsDataProvider : IScopedDependency
     Task<List<Sales>> GetAllSalesAsync(CancellationToken cancellationToken);
 }
 
-public class SpeechMaticsDataProvider : ISpeechMaticsDataProvider
+public partial class SpeechMaticsDataProvider : ISpeechMaticsDataProvider
 {
     private readonly IRepository _repository;
     private readonly IUnitOfWork _unitOfWork;

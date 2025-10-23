@@ -50,6 +50,7 @@ using SmartTalk.Messages.Commands.Attachments;
 using SmartTalk.Messages.Dto.Attachments;
 using SmartTalk.Messages.Dto.Smarties;
 using SmartTalk.Messages.Enums.Caching;
+using SmartTalk.Messages.Enums.SpeechMatics;
 using SmartTalk.Messages.Enums.STT;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 using RecordingResource = Twilio.Rest.Api.V2010.Account.Call.RecordingResource;
@@ -91,6 +92,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly IPhoneOrderService _phoneOrderService;
     private readonly IAgentDataProvider _agentDataProvider;
     private readonly IAttachmentService _attachmentService;
+    private readonly ISpeechMaticsService _speechMaticsService;
     private readonly ISpeechToTextService _speechToTextService;
     private readonly WorkWeChatKeySetting _workWeChatKeySetting;
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
@@ -125,6 +127,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         IPhoneOrderService phoneOrderService,
         IAgentDataProvider agentDataProvider,
         IAttachmentService attachmentService,
+        ISpeechMaticsService speechMaticsService,
         ISpeechToTextService speechToTextService,
         WorkWeChatKeySetting workWeChatKeySetting,
         ISmartTalkHttpClientFactory httpClientFactory,
@@ -154,6 +157,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _translationClient = translationClient;
         _attachmentService = attachmentService;
         _speechToTextService = speechToTextService;
+        _speechMaticsService = speechMaticsService;
         _workWeChatKeySetting = workWeChatKeySetting;
         _backgroundJobClient = backgroundJobClient;
         _restaurantDataProvider = restaurantDataProvider;
@@ -284,7 +288,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         }
         
         record.Language = ConvertLanguageCode(language);
-        record.TranscriptionJobId = await _phoneOrderService.CreateSpeechMaticsJobAsync(audioFileRawBytes, Guid.NewGuid().ToString("N") + ".wav", language, cancellationToken).ConfigureAwait(false);
+        record.TranscriptionJobId = await _speechMaticsService.CreateSpeechMaticsJobAsync(audioFileRawBytes, Guid.NewGuid().ToString("N") + ".wav", language, SpeechMaticsJobScenario.Released, cancellationToken).ConfigureAwait(false);
 
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
