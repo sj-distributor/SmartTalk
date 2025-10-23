@@ -126,7 +126,11 @@ public class HrInterViewService : IHrInterViewService
         settings.ForEach(x =>
         {
             x.Questions.ForEach(y =>
-                y.Question = JsonConvert.SerializeObject(JsonConvert.DeserializeObject<List<HrInterViewQuestionsDto>>(y.Question).Select(z => z.Question)));
+            {
+                y.Question = JsonConvert.SerializeObject(JsonConvert
+                    .DeserializeObject<List<HrInterViewQuestionsDto>>(y.Question).Select(z => z.Question));
+                y.Type = JsonConvert.DeserializeObject<HrInterViewQuestionsDto>(y.Type).Question;
+            });
             x.Welcome = JsonConvert.DeserializeObject<HrInterViewQuestionsDto>(x.Welcome).Question;
             x.EndMessage = JsonConvert.DeserializeObject<HrInterViewQuestionsDto>(x.EndMessage).Question;
         });
