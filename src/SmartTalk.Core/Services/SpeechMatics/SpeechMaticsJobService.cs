@@ -73,6 +73,7 @@ public class SpeechMaticsJobService : ISpeechMaticsJobService
             Log.Information("Refreshing cache for soldToId: {SoldToId}", soldToId);
 
             var itemsString = await _aiSpeechAssistantService.BuildCustomerItemsStringAsync(new List<string> { soldToId }, cancellationToken);
+            Log.Information("Customer items result: {ItemsString}", itemsString);
             
             await _aiSpeechAssistantDataProvider.UpsertCustomerItemsCacheAsync(soldToId, itemsString, true, cancellationToken).ConfigureAwait(false);
 
