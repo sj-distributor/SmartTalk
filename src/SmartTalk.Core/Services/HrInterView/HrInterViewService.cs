@@ -64,7 +64,7 @@ public class HrInterViewService : IHrInterViewService
             Url = await ConvertTextToSpeechAsync(newSetting.Welcome, cancellationToken).ConfigureAwait(false)
         });
             
-        newSetting.Welcome = JsonConvert.SerializeObject(new HrInterViewQuestionsDto
+        newSetting.EndMessage = JsonConvert.SerializeObject(new HrInterViewQuestionsDto
         {
             Question = newSetting.EndMessage,
             Url = await ConvertTextToSpeechAsync(newSetting.EndMessage, cancellationToken).ConfigureAwait(false)
