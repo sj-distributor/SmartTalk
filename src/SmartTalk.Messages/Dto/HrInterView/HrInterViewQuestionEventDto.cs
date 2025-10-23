@@ -6,7 +6,7 @@ public class HrInterViewQuestionEventDto
     
     public string EventType { get; set; }
     
-    public string Message { get; set; }
+    public string Message { get; set; } 
     
     public string MessageFileUrl { get; set; }
         
