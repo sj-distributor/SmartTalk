@@ -42,7 +42,7 @@ public partial class AutoTestService
 
         var dataItems = await _autoTestDataProvider.GetAutoTestDataItemsBySetIdAsync(testTask.DataSetId, cancellationToken).ConfigureAwait(false);
 
-        var testTaskRecords = dataItems.Select(x => new AutoTestTestTaskRecord
+        var testTaskRecords = dataItems.Select(x => new AutoTestTaskRecord
         {
             TestTaskId = testTask.Id,
             ScenarioId = testTask.ScenarioId,

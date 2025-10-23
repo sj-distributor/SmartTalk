@@ -2,7 +2,7 @@ using SmartTalk.Messages.Enums.AutoTest;
 
 namespace SmartTalk.Messages.Dto.AutoTest;
 
-public class AutoTestTestTaskRecordDto
+public class AutoTestTaskRecordDto
 {
     public int Id { get; set; }
     
