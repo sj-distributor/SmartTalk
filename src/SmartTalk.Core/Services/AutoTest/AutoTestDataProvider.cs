@@ -12,8 +12,6 @@ namespace SmartTalk.Core.Services.AutoTest;
 
 public partial interface IAutoTestDataProvider : IScopedDependency
 {
-    Task<AutoTestScenario> GetAutoTestScenarioByIdAsync(int id, CancellationToken cancellationToken);
-
     Task<(int count, List<AutoTestDataSet>)> GetAutoTestDataSetsAsync(int? page, int? pageSize, CancellationToken cancellationToken);
 
     Task<(int count, List<AutoTestDataItem>)> GetAutoTestDataItemsByIdAsync(int dataSetId, int? page, int? pageSize, CancellationToken cancellationToken);
@@ -35,19 +33,6 @@ public partial class AutoTestDataProvider : IAutoTestDataProvider
         _unitOfWork = unitOfWork;
         _repository = repository;
     }
-    
-
- 
-
-   
-    
-
-
-
-    public async Task<AutoTestScenario> GetAutoTestScenarioByIdAsync(int id, CancellationToken cancellationToken)
-    {
-        return await _repository.GetByIdAsync<AutoTestScenario>(id, cancellationToken).ConfigureAwait(false);
-    }          
     
     public async Task<(int count, List<AutoTestDataSet>)> GetAutoTestDataSetsAsync(int? page, int? pageSize, CancellationToken cancellationToken)
     {
