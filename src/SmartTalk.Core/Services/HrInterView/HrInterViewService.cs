@@ -415,12 +415,16 @@ public class HrInterViewService : IHrInterViewService
 
     private async Task ConvertAndSendWebSocketMessageAsync(WebSocket webSocket, Guid sessionId, string eventType, string message, string endMessage = null, string firstQuestionPart = null, string firstQuestionPartUrl = null, CancellationToken cancellationToken = default)
     {
+        Log.Information("ConvertAndSendWebSocketMessageAsync message:{@message}, endMessage:{@endMessage}", message,endMessage);
+        
         var welcomeMessageDto = JsonConvert.DeserializeObject<HrInterViewQuestionsDto>(message);
         
         var endMessageDto = new HrInterViewQuestionsDto();
 
-        if (endMessage != null && !string.IsNullOrEmpty(endMessageDto.Question)) endMessageDto = JsonConvert.DeserializeObject<HrInterViewQuestionsDto>(endMessage);
+        if (endMessage != null && !string.IsNullOrEmpty(endMessage)) endMessageDto = JsonConvert.DeserializeObject<HrInterViewQuestionsDto>(endMessage);
 
+        Log.Information("ConvertAndSendWebSocketMessageAsync welcomeMessageDto:{@welcomeMessageDto}, endMessage:{@welcomeMessageDto}", message,endMessageDto);
+        
         var messageFileUrl = JsonConvert.SerializeObject(string.IsNullOrEmpty(firstQuestionPartUrl)
             ? new List<string> { welcomeMessageDto.Url }
             : new List<string> { firstQuestionPartUrl, welcomeMessageDto.Url });
@@ -437,12 +441,16 @@ public class HrInterViewService : IHrInterViewService
 
         await SendWebSocketMessageAsync(webSocket, welcomeEvent, cancellationToken).ConfigureAwait(false);
         
+        Log.Information("ConvertAndSendWebSocketMessageAsync messageFileUrl:{@messageFileUrl}, Message:{@Message}", messageFileUrl,firstQuestionPart + welcomeMessageDto.Question);
+        
         await _hrInterViewDataProvider.AddHrInterViewSessionAsync(new HrInterViewSession
         {
             SessionId = sessionId,
             Message = string.IsNullOrEmpty(firstQuestionPart)? firstQuestionPart + welcomeMessageDto.Question : welcomeMessageDto.Question, 
             FileUrl = messageFileUrl,
             QuestionType = HrInterViewSessionQuestionType.Assistant }, cancellationToken:cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("ConvertAndSendWebSocketMessageAsync endMessageDto:{@endMessageDto}",endMessageDto);
         
         if (endMessage != null && !string.IsNullOrEmpty(endMessageDto.Question))  
             await _hrInterViewDataProvider.AddHrInterViewSessionAsync(new HrInterViewSession
