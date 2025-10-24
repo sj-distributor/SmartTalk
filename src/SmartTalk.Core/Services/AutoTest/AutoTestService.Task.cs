@@ -168,7 +168,7 @@ public partial class AutoTestService
 
         if (record == null) throw new Exception("MarkAutoTestTaskRecordAsync Test task not found");
         
-        record.IsArchived = true;
+        record.IsArchived = command.IsArchived;
         
         await _autoTestDataProvider.UpdateAutoTestTaskRecordAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
 
