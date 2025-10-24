@@ -62,12 +62,18 @@ public class HrInterViewService : IHrInterViewService
         {
             Question = newSetting.Welcome,
             Url = await ConvertTextToSpeechAsync(newSetting.Welcome, cancellationToken).ConfigureAwait(false)
+        }, new JsonSerializerSettings
+        {
+            NullValueHandling = NullValueHandling.Ignore
         });
             
         newSetting.EndMessage = JsonConvert.SerializeObject(new HrInterViewQuestionsDto
         {
             Question = newSetting.EndMessage,
             Url = await ConvertTextToSpeechAsync(newSetting.EndMessage, cancellationToken).ConfigureAwait(false)
+        }, new JsonSerializerSettings
+        {
+            NullValueHandling = NullValueHandling.Ignore
         });
         
         if (command.Setting.Id.HasValue)
@@ -91,6 +97,9 @@ public class HrInterViewService : IHrInterViewService
             {
                 Question = questionList.Type,
                 Url = await ConvertTextToSpeechAsync(questionList.Type, cancellationToken).ConfigureAwait(false)
+            }, new JsonSerializerSettings
+            {
+                NullValueHandling = NullValueHandling.Ignore
             });
             
             var questions = JsonConvert.DeserializeObject<List<string>>(questionList.Question);
