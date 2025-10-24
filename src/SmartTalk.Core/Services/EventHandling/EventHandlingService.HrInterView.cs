@@ -1,4 +1,5 @@
 using Newtonsoft.Json;
+using Serilog;
 using SmartTalk.Messages.Dto.Asr;
 using SmartTalk.Messages.Enums.HrInterView;
 using SmartTalk.Messages.Events.HrInterView;
@@ -11,10 +12,20 @@ public partial class EventHandlingService
     {
         var sessions = await _hrInterViewDataProvider.GetHrInterViewSessionsBySessionIdAsync(@event.SessionId, cancellationToken).ConfigureAwait(false);
         
+        Log.Information("HandlingEventAsync ConnectWebSocketEvent sessions:{@sessions}",sessions);
+        
         foreach (var session in sessions.Where(x => x.QuestionType == HrInterViewSessionQuestionType.User))
         {
-            var bytes = await _httpClientFactory.GetAsync<byte[]>(JsonConvert.DeserializeObject<List<string>>(session.FileUrl).FirstOrDefault(), cancellationToken:cancellationToken).ConfigureAwait(false);
+            Log.Information("HandlingEventAsync ConnectWebSocketEvent before fileUrl:{@fileUrl}",session.FileUrl);
+            
+            var fileUrl = JsonConvert.DeserializeObject<List<string>>(session.FileUrl).FirstOrDefault();
+            
+            Log.Information("HandlingEventAsync ConnectWebSocketEvent fileUrl:{@fileUrl}",fileUrl);
+            
+            var bytes = await _httpClientFactory.GetAsync<byte[]>(fileUrl, cancellationToken:cancellationToken).ConfigureAwait(false);
+           
             var answers = await _asrClient.TranscriptionAsync(new AsrTranscriptionDto { File = bytes }, cancellationToken).ConfigureAwait(false);
+            
             session.Message = answers.Text;
         }
         
