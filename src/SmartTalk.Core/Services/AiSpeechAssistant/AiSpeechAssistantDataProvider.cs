@@ -425,22 +425,20 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
 
     public async Task UpsertCustomerItemsCacheAsync(string soldToId, string itemsString, bool forceSave, CancellationToken cancellationToken)
     {
-        var serialized = JsonSerializer.Serialize(itemsString.Split(Environment.NewLine));
-    
         var cache = await _repository.FirstOrDefaultAsync<CustomerItemsCache>(x => x.CacheKey == soldToId, cancellationToken);
         if (cache == null)
         {
             cache = new CustomerItemsCache
             {
                 CacheKey = soldToId,
-                CacheValue = serialized,
+                CacheValue = itemsString,
                 LastUpdated = DateTimeOffset.UtcNow
             };
             await _repository.InsertAsync(cache, cancellationToken).ConfigureAwait(false);
         }
         else
         {
-            cache.CacheValue = serialized;
+            cache.CacheValue = itemsString;
             cache.LastUpdated = DateTimeOffset.UtcNow;
             await _repository.UpdateAsync(cache, cancellationToken).ConfigureAwait(false);
         }
