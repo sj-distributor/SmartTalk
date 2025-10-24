@@ -421,7 +421,7 @@ public class HrInterViewService : IHrInterViewService
         
         var endMessageDto = new HrInterViewQuestionsDto();
 
-        if (endMessage != null && !string.IsNullOrEmpty(endMessage)) endMessageDto = JsonConvert.DeserializeObject<HrInterViewQuestionsDto>(endMessage);
+        if (!string.IsNullOrEmpty(endMessage)) endMessageDto = JsonConvert.DeserializeObject<HrInterViewQuestionsDto>(endMessage);
 
         Log.Information("ConvertAndSendWebSocketMessageAsync welcomeMessageDto:{@welcomeMessageDto}, endMessage:{@welcomeMessageDto}", message,endMessageDto);
         
@@ -452,7 +452,7 @@ public class HrInterViewService : IHrInterViewService
         
         Log.Information("ConvertAndSendWebSocketMessageAsync endMessageDto:{@endMessageDto}",endMessageDto);
         
-        if (endMessage != null && !string.IsNullOrEmpty(endMessageDto.Question))  
+        if (!string.IsNullOrEmpty(endMessage))  
             await _hrInterViewDataProvider.AddHrInterViewSessionAsync(new HrInterViewSession
             {
                 SessionId = sessionId,
@@ -513,7 +513,7 @@ public class HrInterViewService : IHrInterViewService
     
     private async Task<string> UploadFileAsync(byte[] fileBytes, Guid sessionId, CancellationToken cancellationToken = default)
     {
-        var response = await _attachmentUtilService.UploadFilesAsync(new List<UploadAttachmentDto> { new() { FileContent = fileBytes, FileName = $"hr_interview_question_audio_{sessionId}_{Guid.NewGuid()}.png" } }, cancellationToken).ConfigureAwait(false);
+        var response = await _attachmentUtilService.UploadFilesAsync(new List<UploadAttachmentDto> { new() { FileContent = fileBytes, FileName = $"hr_interview_question_audio_{sessionId}_{Guid.NewGuid()}.wav" } }, cancellationToken).ConfigureAwait(false);
 
         Log.Information("UploadAndRetryFileAsync response: {@Response}", response);
         
