@@ -2,7 +2,7 @@ using SmartTalk.Messages.Enums.AutoTest;
 
 namespace SmartTalk.Messages.Dto.AutoTest;
 
-public class AutoTestTestTaskRecordDto
+public class AutoTestTaskRecordDto
 {
     public int Id { get; set; }
     
@@ -25,8 +25,8 @@ public class AutoTestTestTaskRecordDto
     public string EvaluationSummary { get; set; }
     
     public string ValidationErrors { get; set; }
-    
-    public AutoTestStatus Status { get; set; }
+
+    public AutoTestTaskRecordStatus Status { get; set; } = AutoTestTaskRecordStatus.Pending;
         
     public string ErrorText { get; set; }
     

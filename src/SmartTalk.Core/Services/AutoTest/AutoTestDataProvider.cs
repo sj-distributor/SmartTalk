@@ -1,13 +1,16 @@
 using AutoMapper;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
+using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Data;
 using SmartTalk.Core.Domain.AutoTest;
 using SmartTalk.Core.Ioc;
+using SmartTalk.Messages.Dto.AutoTest;
+using SmartTalk.Messages.Enums.AutoTest;
 
 namespace SmartTalk.Core.Services.AutoTest;
 
-public interface IAutoTestDataProvider : IScopedDependency
+public partial interface IAutoTestDataProvider : IScopedDependency
 {
     Task<AutoTestScenario> GetAutoTestScenarioByIdAsync(int id, CancellationToken cancellationToken);
 
@@ -20,7 +23,7 @@ public interface IAutoTestDataProvider : IScopedDependency
     Task DeleteAutoTestDataSetAsync(int dataSetId, CancellationToken cancellationToken);
 }
 
-public class AutoTestDataProvider : IAutoTestDataProvider
+public partial class AutoTestDataProvider : IAutoTestDataProvider
 {
     private readonly IMapper _mapper;
     private readonly IRepository _repository;
@@ -32,6 +35,14 @@ public class AutoTestDataProvider : IAutoTestDataProvider
         _unitOfWork = unitOfWork;
         _repository = repository;
     }
+    
+
+ 
+
+   
+    
+
+
 
     public async Task<AutoTestScenario> GetAutoTestScenarioByIdAsync(int id, CancellationToken cancellationToken)
     {

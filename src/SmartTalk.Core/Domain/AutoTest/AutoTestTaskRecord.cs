@@ -4,8 +4,8 @@ using SmartTalk.Messages.Enums.AutoTest;
 
 namespace SmartTalk.Core.Domain.AutoTest;
 
-[Table("auto_test_test_task_record")]
-public class AutoTestTestTaskRecord : IEntity
+[Table("auto_test_task_record")]
+public class AutoTestTaskRecord : IEntity
 {
     [Key]
     [Column("id")]
@@ -41,12 +41,15 @@ public class AutoTestTestTaskRecord : IEntity
     
     [Column("validation_errors")]
     public string ValidationErrors { get; set; }
-    
+
     [Column("status")]
-    public AutoTestStatus Status { get; set; }
+    public AutoTestTaskRecordStatus Status { get; set; } = AutoTestTaskRecordStatus.Pending;
         
     [Column("error_text")]
     public string ErrorText { get; set; }
+    
+    [Column("speech_matics_job_id")]
+    public string SpeechMaticsJobId { get; set; }
     
     [Column("created_at")]
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.Now;
