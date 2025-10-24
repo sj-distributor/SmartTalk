@@ -24,6 +24,8 @@ public partial class EventHandlingService
             
             var bytes = await _httpClientFactory.GetAsync<byte[]>(fileUrl, cancellationToken:cancellationToken).ConfigureAwait(false);
            
+            Log.Information("HandlingEventAsync ConnectWebSocketEvent bytes:{@bytes}",bytes);
+            
             var answers = await _asrClient.TranscriptionAsync(new AsrTranscriptionDto { File = bytes }, cancellationToken).ConfigureAwait(false);
             
             session.Message = answers.Text;

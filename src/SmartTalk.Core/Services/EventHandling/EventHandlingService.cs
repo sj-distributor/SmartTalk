@@ -24,11 +24,11 @@ public partial class EventHandlingService : IEventHandlingService
     private readonly IAsrClient _asrClient;
     private readonly SmartiesClient _smartiesClient;
     private readonly IPosDataProvider _posDataProvider;
-    private readonly ISmartiesHttpClientFactory _httpClientFactory;
+    private readonly ISmartTalkHttpClientFactory _httpClientFactory;
     private readonly IHrInterViewDataProvider _hrInterViewDataProvider;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
 
-    public EventHandlingService(IAsrClient asrClient, SmartiesClient smartiesClient, IPosDataProvider posDataProvider,ISmartiesHttpClientFactory httpClientFactory, IHrInterViewDataProvider hrInterViewDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
+    public EventHandlingService(IAsrClient asrClient, SmartiesClient smartiesClient, IPosDataProvider posDataProvider,ISmartTalkHttpClientFactory httpClientFactory, IHrInterViewDataProvider hrInterViewDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
         _asrClient = asrClient;
         _smartiesClient = smartiesClient;
