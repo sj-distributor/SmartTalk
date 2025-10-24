@@ -1,3 +1,4 @@
+using System.Net;
 using Newtonsoft.Json.Linq;
 using Serilog;
 using SmartTalk.Core.Domain.AutoTest;
@@ -19,6 +20,8 @@ public partial interface IAutoTestService
     Task<DeleteAutoTestTaskResponse> DeleteAutoTestTaskAsync(DeleteAutoTestTaskCommand command, CancellationToken cancellationToken);
     
     Task<GetAutoTestTaskRecordsResponse> GetAutoTestTaskRecordsAsync(GetAutoTestTaskRecordsRequest request, CancellationToken cancellationToken);
+    
+    Task<MarkAutoTestTaskRecordResponse> MarkAutoTestTaskRecordAsync(MarkAutoTestTaskRecordCommand command, CancellationToken cancellationToken);
 }
 
 public partial class AutoTestService
@@ -157,6 +160,19 @@ public partial class AutoTestService
                 TaskRecords = _mapper.Map<List<AutoTestTaskRecordDto>>(records)
             }
         };
+    }
+    
+    public async Task<MarkAutoTestTaskRecordResponse> MarkAutoTestTaskRecordAsync(MarkAutoTestTaskRecordCommand command, CancellationToken cancellationToken)
+    {
+        var record = await _autoTestDataProvider.GetTestTaskRecordsByIdAsync(command.RecordId, cancellationToken).ConfigureAwait(false);
+
+        if (record == null) throw new Exception("MarkAutoTestTaskRecordAsync Test task not found");
+        
+        record.IsArchived = true;
+        
+        await _autoTestDataProvider.UpdateAutoTestTaskRecordAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return new MarkAutoTestTaskRecordResponse { Data = _mapper.Map<AutoTestTaskRecordDto>(record) };
     }
     
     private async Task<AutoTestTaskInfoDto> BuildAutoTestTaskInfoAsync(int taskId, CancellationToken cancellationToken)
