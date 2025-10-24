@@ -287,8 +287,20 @@ public class HrInterViewService : IHrInterViewService
                 var questions = await _hrInterViewDataProvider.GetHrInterViewSettingQuestionsBySessionIdAsync(sessionId, cancellationToken).ConfigureAwait(false);
                 
                 var remainQuestions = questions.Where(x => x.Count > 0).ToList();
+
+                if (!remainQuestions.Any())
+                {
+                    var lastQuestionFileUrl = await UploadFileAsync(message.Message, sessionId, cancellationToken).ConfigureAwait(false);
                 
-                if (!remainQuestions.Any()) return;
+                    await _hrInterViewDataProvider.AddHrInterViewSessionAsync(new HrInterViewSession
+                    {
+                        SessionId = sessionId,
+                        Message = " ",
+                        FileUrl = JsonConvert.SerializeObject(new List<string>(){lastQuestionFileUrl}),
+                        QuestionType = HrInterViewSessionQuestionType.User
+                    }, cancellationToken: cancellationToken).ConfigureAwait(false);
+                    return;
+                }
                 
                 var questionPart = remainQuestions.MinBy(x => x.Id);
                 
