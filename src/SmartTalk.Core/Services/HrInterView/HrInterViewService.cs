@@ -237,7 +237,7 @@ public class HrInterViewService : IHrInterViewService
             {
                 var firstQuestionPart = JsonConvert.DeserializeObject<HrInterViewQuestionsDto>(questions.MinBy(x => x.Id).Type);
                 
-                await ConvertAndSendWebSocketMessageAsync(webSocket, sessionId, "MESSAGE", $"{firstQuestionPart.Question}.{firstQuestion}", firstQuestionPartUrl: firstQuestionPart.Url, cancellationToken: cancellationToken).ConfigureAwait(false);
+                await ConvertAndSendWebSocketMessageAsync(webSocket, sessionId, "MESSAGE", firstQuestion.Question, firstQuestionPart.Question, firstQuestionPartUrl: firstQuestionPart.Url, cancellationToken: cancellationToken).ConfigureAwait(false);
                 
                 Log.Information("SendWelcomeAndFirstQuestionAsync questions:{@questions}", questions);
                 
@@ -390,7 +390,7 @@ public class HrInterViewService : IHrInterViewService
         return completion.OutputAudio;
     }
 
-    private async Task ConvertAndSendWebSocketMessageAsync(WebSocket webSocket, Guid sessionId, string eventType, string message, string endMessage = null, string firstQuestionPartUrl = null, CancellationToken cancellationToken = default)
+    private async Task ConvertAndSendWebSocketMessageAsync(WebSocket webSocket, Guid sessionId, string eventType, string message, string endMessage = null, string firstQuestionPart = null, string firstQuestionPartUrl = null, CancellationToken cancellationToken = default)
     {
         var welcomeMessageDto = JsonConvert.DeserializeObject<HrInterViewQuestionsDto>(message);
         
@@ -406,7 +406,7 @@ public class HrInterViewService : IHrInterViewService
         {
             SessionId = sessionId,
             EventType = eventType,
-            Message = welcomeMessageDto.Question, 
+            Message = string.IsNullOrEmpty(firstQuestionPart)? firstQuestionPart + welcomeMessageDto.Question : welcomeMessageDto.Question, 
             MessageFileUrl = messageFileUrl,
             EndMessage = string.IsNullOrEmpty(endMessageDto.Question) ? "" : endMessageDto.Question,
             EndMessageFileUrl = string.IsNullOrEmpty(endMessageDto.Question) ? "" : endMessageDto.Url
