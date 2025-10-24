@@ -77,7 +77,7 @@ public class HrInterViewDataProvider : IHrInterViewDataProvider
 
     public async Task<HrInterViewSetting> GetHrInterViewSettingBySessionIdAsync(Guid sessionId, CancellationToken cancellationToken)
     {
-        return await _repository.QueryNoTracking<HrInterViewSetting>().Where(x => x.SessionId == sessionId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        return await _repository.Query<HrInterViewSetting>().Where(x => x.SessionId == sessionId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<(List<HrInterViewSettingDto>, int)> GetHrInterViewSettingsAsync(int? settingId, int? pageIndex = null, int? pageSize = null, CancellationToken cancellationToken = default)

@@ -19,5 +19,11 @@ public partial class EventHandlingService
         }
         
         await _hrInterViewDataProvider.UpdateHrInterViewSessionsAsync(sessions, cancellationToken:cancellationToken).ConfigureAwait(false);
+        
+       var setting = await _hrInterViewDataProvider.GetHrInterViewSettingBySessionIdAsync(@event.SessionId, cancellationToken).ConfigureAwait(false);
+
+       setting.IsConvertText = true;
+       
+       await _hrInterViewDataProvider.UpdateHrInterViewSettingAsync(setting, cancellationToken:cancellationToken).ConfigureAwait(false);
     }
 }
