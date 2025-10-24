@@ -1,6 +1,7 @@
 using Mediator.Net;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SmartTalk.Core.Services.AutoTest;
 using SmartTalk.Messages.Commands.AutoTest;
 using SmartTalk.Messages.Requests.AutoTest;
 
@@ -12,10 +13,12 @@ namespace SmartTalk.Api.Controllers;
 public class AutoTestController : ControllerBase
 {
     private readonly IMediator _mediator;
+    private readonly IAutoTestService _autoTestService;
 
-    public AutoTestController(IMediator mediator)
+    public AutoTestController(IMediator mediator, IAutoTestService autoTestService)
     {
         _mediator = mediator;
+        _autoTestService = autoTestService;
     }
     
     [Route("run"), HttpPost]
@@ -37,12 +40,27 @@ public class AutoTestController : ControllerBase
     }
     
     [Route("conversation"), HttpPost]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(AutoTestConversationAudioProcessReponse))]
-    public async Task<IActionResult> AutoTestConversationAudioProcessAsync([FromBody] AutoTestConversationAudioProcessCommand command) 
+    public async Task<IActionResult> AutoTestConversationAudioProcessAsync([FromForm] List<IFormFile> pcmFiles, [FromForm] string prompt, CancellationToken cancellationToken)
     {
-        var response = await _mediator.SendAsync<AutoTestConversationAudioProcessCommand, AutoTestConversationAudioProcessReponse>(command).ConfigureAwait(false);
-        
-        return Ok(response);
+        var customerAudioList = new List<byte[]>();
+
+        foreach (var file in pcmFiles)
+        {
+            using (var ms = new MemoryStream())
+            {
+                await file.CopyToAsync(ms);
+                customerAudioList.Add(ms.ToArray());
+            }
+        }
+
+        var resultWavBytes = await _autoTestService.AutoTestConversationAudioProcessAsync(
+            new AutoTestConversationAudioProcessCommand()
+            {
+                CustomerAudioList = customerAudioList,
+                Prompt = prompt
+            }, cancellationToken).ConfigureAwait(false);
+
+        return File(resultWavBytes.Data, "audio/wav", "result.wav");
     }
     
     [Route("task"), HttpGet]
