@@ -931,8 +931,8 @@ public class PrinterService : IPrinterService
      private static string? GetProductName(Dictionary<string, Dictionary<string, string>> names, string lang)
      {
          var dict = names.GetValueOrDefault(lang);
-         return dict?.GetValueOrDefault("Name")
-                ?? dict?.GetValueOrDefault("posName")
+         return dict?.GetValueOrDefault("posName")
+                ?? dict?.GetValueOrDefault("name")
                 ?? dict?.GetValueOrDefault("sendChefName");
      }
      
