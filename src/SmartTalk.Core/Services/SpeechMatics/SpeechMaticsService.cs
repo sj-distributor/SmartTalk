@@ -11,27 +11,20 @@ using OpenAI.Chat;
 using Smarties.Messages.DTO.OpenAi;
 using Smarties.Messages.Enums.OpenAi;
 using Smarties.Messages.Requests.Ask;
-using SmartTalk.Core.Constants;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using Twilio.Rest.Api.V2010.Account;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Services.AiSpeechAssistant;
-using SmartTalk.Core.Services.Ffmpeg;
-using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
-using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Settings.OpenAi;
-using Serilog;
-using SmartTalk.Core.Ioc;
-using Newtonsoft.Json.Linq;
 using SmartTalk.Messages.Dto.WeChat;
 using SmartTalk.Core.Settings.PhoneOrder;
 using SmartTalk.Core.Domain.SpeechMatics;
+using SmartTalk.Core.Settings.Twilio;
 using SmartTalk.Messages.Dto.SpeechMatics;
 using SmartTalk.Messages.Enums.PhoneOrder;
-using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Sales;
@@ -39,12 +32,9 @@ using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Enums.Sales;
 using SmartTalk.Messages.Enums.STT;
 using Twilio;
-using Twilio.Rest.Api.V2010.Account;
 using Exception = System.Exception;
 using JsonSerializer = System.Text.Json.JsonSerializer;
-using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Settings.SpeechMatics;
-using SmartTalk.Core.Settings.Twilio;
 using SmartTalk.Messages.Enums.SpeechMatics;
 
 namespace SmartTalk.Core.Services.SpeechMatics;
@@ -63,7 +53,6 @@ public class SpeechMaticsService : ISpeechMaticsService
     private readonly TranslationClient _translationClient;
     private readonly ISmartiesClient _smartiesClient;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
-    private readonly AiSpeechAssistantService _aiSpeechAssistantService;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
     
     private readonly ISpeechMaticsClient _speechMaticsClient;
@@ -79,7 +68,6 @@ public class SpeechMaticsService : ISpeechMaticsService
         TranslationClient translationClient,
         ISmartiesClient smartiesClient,
         IPhoneOrderDataProvider phoneOrderDataProvider,
-        AiSpeechAssistantService aiSpeechAssistantService,
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider,
         ISpeechMaticsClient speechMaticsClient,
         SpeechMaticsKeySetting speechMaticsKeySetting,
@@ -93,7 +81,6 @@ public class SpeechMaticsService : ISpeechMaticsService
         _translationClient = translationClient;
         _smartiesClient = smartiesClient;
         _phoneOrderDataProvider = phoneOrderDataProvider;
-        _aiSpeechAssistantService = aiSpeechAssistantService;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
         _speechMaticsClient = speechMaticsClient;
         _speechMaticsKeySetting = speechMaticsKeySetting;
@@ -241,7 +228,7 @@ public class SpeechMaticsService : ISpeechMaticsService
 
         return result;
     }
-
+    
     private async Task SummarizeConversationContentAsync(PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken)
     {
         var (aiSpeechAssistant, agent) = await _aiSpeechAssistantDataProvider.GetAgentAndAiSpeechAssistantAsync(record.AgentId, cancellationToken).ConfigureAwait(false);
@@ -494,7 +481,8 @@ public class SpeechMaticsService : ISpeechMaticsService
         
         var soldToIds = !string.IsNullOrEmpty(aiSpeechAssistant.Name) ? aiSpeechAssistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : new List<string>();
         
-        var customerItemsString = await _aiSpeechAssistantService.BuildCustomerItemsStringAsync(soldToIds, cancellationToken);
+        var customerItemsCacheList = await _aiSpeechAssistantDataProvider.GetCustomerItemsCacheBySoldToIdsAsync(soldToIds, cancellationToken);
+        var customerItemsString = string.Join(Environment.NewLine, soldToIds.Select(id => customerItemsCacheList.FirstOrDefault(c => c.CacheKey == id)?.CacheValue ?? ""));
 
         var audioData = BinaryData.FromBytes(audioContent);
         List<ChatMessage> messages =
