@@ -33,6 +33,7 @@ public partial class EventHandlingService : IEventHandlingService
         _asrClient = asrClient;
         _smartiesClient = smartiesClient;
         _posDataProvider = posDataProvider;
+        _httpClientFactory = httpClientFactory;
         _hrInterViewDataProvider = hrInterViewDataProvider;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
     }
