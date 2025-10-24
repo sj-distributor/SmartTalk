@@ -18,6 +18,7 @@ using SmartTalk.Messages.Dto.Attachments;
 using SmartTalk.Messages.Dto.Smarties;
 using SmartTalk.Messages.Dto.WebSocket;
 using SmartTalk.Messages.Enums.HrInterView;
+using SmartTalk.Messages.Events.HrInterView;
 
 namespace SmartTalk.Core.Services.HrInterView;
 
@@ -29,7 +30,7 @@ public interface IHrInterViewService : IScopedDependency
     
     Task<GetHrInterViewSessionsResponse> GetHrInterViewSessionsAsync(GetHrInterViewSessionsRequest request, CancellationToken cancellationToken);
     
-    Task ConnectWebSocketAsync(ConnectHrInterViewCommand command, CancellationToken cancellationToken);
+    Task<ConnectWebSocketEvent> ConnectWebSocketAsync(ConnectHrInterViewCommand command, CancellationToken cancellationToken);
 }
 
 public class HrInterViewService : IHrInterViewService
@@ -162,7 +163,7 @@ public class HrInterViewService : IHrInterViewService
         };
     }
 
-    public async Task ConnectWebSocketAsync(ConnectHrInterViewCommand command, CancellationToken cancellationToken)
+    public async Task<ConnectWebSocketEvent> ConnectWebSocketAsync(ConnectHrInterViewCommand command, CancellationToken cancellationToken)
     {
         try
         {
@@ -186,7 +187,10 @@ public class HrInterViewService : IHrInterViewService
                     if (result.MessageType == WebSocketMessageType.Close)
                     {
                         await command.WebSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Client closed", cancellationToken).ConfigureAwait(false);
-                        return;
+                        return new ConnectWebSocketEvent
+                        {
+                            SessionId = command.SessionId
+                        };;
                     }
                     
                     ms.Write(buffer, 0, result.Count);
@@ -213,6 +217,11 @@ public class HrInterViewService : IHrInterViewService
                     break;
                 }
             }
+            
+            return new ConnectWebSocketEvent
+            {
+                SessionId = command.SessionId
+            };
         }
         catch (WebSocketException ex)
         {
@@ -298,12 +307,10 @@ public class HrInterViewService : IHrInterViewService
                 
                 var fileUrl = await UploadFileAsync(message.Message, sessionId, cancellationToken).ConfigureAwait(false);
                 
-                var answers = await _asrClient.TranscriptionAsync(new AsrTranscriptionDto { File = message.Message }, cancellationToken).ConfigureAwait(false);
-                
                 await _hrInterViewDataProvider.AddHrInterViewSessionAsync(new HrInterViewSession
                 {
                     SessionId = sessionId,
-                    Message = answers.Text,
+                    Message = " ",
                     FileUrl = JsonConvert.SerializeObject(new List<string>(){fileUrl}),
                     QuestionType = HrInterViewSessionQuestionType.User
                 }, cancellationToken: cancellationToken).ConfigureAwait(false);

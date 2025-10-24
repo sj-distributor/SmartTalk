@@ -16,6 +16,8 @@ public class ConnectHrInterViewCommandHandler : ICommandHandler<ConnectHrInterVi
 
     public async Task Handle(IReceiveContext<ConnectHrInterViewCommand> context, CancellationToken cancellationToken)
     {
-        await _hrInterViewService.ConnectWebSocketAsync(context.Message, cancellationToken).ConfigureAwait(false);
+        var @event =await _hrInterViewService.ConnectWebSocketAsync(context.Message, cancellationToken).ConfigureAwait(false);
+        
+        await context.PublishAsync(@event, cancellationToken).ConfigureAwait(false);
     }
 }
