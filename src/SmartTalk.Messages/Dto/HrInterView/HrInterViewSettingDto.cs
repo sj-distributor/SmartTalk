@@ -12,6 +12,8 @@ public class HrInterViewSettingDto
     
     public Guid SessionId { get; set; }
     
+    public bool IsConvertText { get; set; } = false;
+    
     public DateTimeOffset CreatedDate { get; set; } = DateTimeOffset.Now;
     
     [NotMapped]

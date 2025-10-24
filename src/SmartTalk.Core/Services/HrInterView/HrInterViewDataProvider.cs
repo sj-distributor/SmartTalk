@@ -34,7 +34,11 @@ public interface IHrInterViewDataProvider : IScopedDependency
 
     Task AddHrInterViewSessionAsync(HrInterViewSession session, bool forceSave = true, CancellationToken cancellationToken = default);
     
+    Task UpdateHrInterViewSessionsAsync(List<HrInterViewSession> session, bool forceSave = true, CancellationToken cancellationToken = default);
+    
     Task<(List<HrInterViewSessionGroupDto>, int)> GetHrInterViewSessionsAsync(Guid? sessionId, int? pageIndex = null, int? pageSize = null, CancellationToken cancellationToken = default);
+   
+    Task<List<HrInterViewSession>> GetHrInterViewSessionsBySessionIdAsync(Guid sessionId, CancellationToken cancellationToken = default);
 }
 
 public class HrInterViewDataProvider : IHrInterViewDataProvider
@@ -146,9 +150,20 @@ public class HrInterViewDataProvider : IHrInterViewDataProvider
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task UpdateHrInterViewSessionsAsync(List<HrInterViewSession> session, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.UpdateAllAsync(session, cancellationToken).ConfigureAwait(false);
+        
+        if (forceSave)
+            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task<(List<HrInterViewSessionGroupDto>, int)> GetHrInterViewSessionsAsync(Guid? sessionId, int? pageIndex = null, int? pageSize = null, CancellationToken cancellationToken = default)
     {
-        var query = _repository.QueryNoTracking<HrInterViewSession>();
+        var query = from  setting in _repository.QueryNoTracking<HrInterViewSetting>().Where(x => x.IsConvertText == true)
+            join session in  _repository.QueryNoTracking<HrInterViewSession>()
+                on setting.SessionId equals session.SessionId
+                select session;
 
         var groupedQuery = query
             .GroupBy(x => x.SessionId)
@@ -187,5 +202,10 @@ public class HrInterViewDataProvider : IHrInterViewDataProvider
             .ConfigureAwait(false);
             
         return (result, totalCount);
+    }
+
+    public async Task<List<HrInterViewSession>> GetHrInterViewSessionsBySessionIdAsync(Guid sessionId, CancellationToken cancellationToken = default)
+    {
+        return await _repository.Query<HrInterViewSession>().Where(x => sessionId == x.SessionId).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }

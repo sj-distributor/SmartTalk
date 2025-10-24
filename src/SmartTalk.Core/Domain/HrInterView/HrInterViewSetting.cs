@@ -20,6 +20,9 @@ public class HrInterViewSetting : IEntity
     [Column("session_id")]
     public Guid SessionId { get; set; }
 
+    [Column("is_convert_text")]
+    public bool IsConvertText { get; set; } = false;
+
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; } = DateTimeOffset.Now;
 }
