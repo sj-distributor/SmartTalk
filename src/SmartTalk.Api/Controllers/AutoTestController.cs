@@ -60,7 +60,8 @@ public class AutoTestController : ControllerBase
                 Prompt = prompt
             }, cancellationToken).ConfigureAwait(false);
 
-        return File(resultWavBytes.Data, "audio/wav", "result.wav");
+        return File(resultWavBytes.Data ,"application/octet-stream", "result.pcm");
+
     }
     
     [Route("task"), HttpGet]

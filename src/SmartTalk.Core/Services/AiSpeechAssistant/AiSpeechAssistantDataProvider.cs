@@ -2,6 +2,7 @@ using System.Text.Json;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Data;
 using Microsoft.EntityFrameworkCore;
+using Serilog;
 using SmartTalk.Core.Domain.AIAssistant;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
@@ -694,29 +695,28 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
 
     public async Task UpsertCustomerItemsCacheAsync(string soldToId, string itemsString, bool forceSave, CancellationToken cancellationToken)
     {
-        var serialized = JsonSerializer.Serialize(itemsString.Split(Environment.NewLine));
-    
         var cache = await _repository.FirstOrDefaultAsync<CustomerItemsCache>(x => x.CacheKey == soldToId, cancellationToken);
         if (cache == null)
         {
             cache = new CustomerItemsCache
             {
                 CacheKey = soldToId,
-                CacheValue = serialized,
+                CacheValue = itemsString,
                 LastUpdated = DateTimeOffset.UtcNow
             };
             await _repository.InsertAsync(cache, cancellationToken).ConfigureAwait(false);
         }
         else
         {
-            cache.CacheValue = serialized;
+            cache.CacheValue = itemsString;
             cache.LastUpdated = DateTimeOffset.UtcNow;
             await _repository.UpdateAsync(cache, cancellationToken).ConfigureAwait(false);
         }
         
         if (forceSave)
         {
-            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            var count = await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            Log.Information("SaveChangesAsync affected {Count} rows for soldToId: {SoldToId}", count, soldToId);
         }
     }
 }
