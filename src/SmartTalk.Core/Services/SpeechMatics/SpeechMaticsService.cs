@@ -56,20 +56,14 @@ public interface ISpeechMaticsService : IScopedDependency
 
 public class SpeechMaticsService : ISpeechMaticsService
 {
-    private readonly IMapper _mapper;
     private readonly ISalesClient _salesClient;
     private readonly IWeChatClient _weChatClient;
-    private readonly IFfmpegService _ffmpegService;
     private readonly OpenAiSettings _openAiSettings;
     private readonly TwilioSettings _twilioSettings;
     private readonly TranslationClient _translationClient;
     private readonly ISmartiesClient _smartiesClient;
-    private readonly PhoneOrderSetting _phoneOrderSetting;
-    private readonly IPhoneOrderService _phoneOrderService;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly AiSpeechAssistantService _aiSpeechAssistantService;
-    private readonly ISmartTalkHttpClientFactory _smartTalkHttpClientFactory;
-    private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
     
     private readonly ISpeechMaticsClient _speechMaticsClient;
@@ -81,37 +75,26 @@ public class SpeechMaticsService : ISpeechMaticsService
         IMapper mapper,
         ISalesClient salesClient,
         IWeChatClient weChatClient,
-        IFfmpegService ffmpegService,
         OpenAiSettings openAiSettings,
         TwilioSettings twilioSettings,
         TranslationClient translationClient,
         ISmartiesClient smartiesClient,
-        PhoneOrderSetting phoneOrderSetting,
-        IPhoneOrderService phoneOrderService,
         IPhoneOrderDataProvider phoneOrderDataProvider,
         AiSpeechAssistantService aiSpeechAssistantService,
-        ISmartTalkHttpClientFactory smartTalkHttpClientFactory,
-        ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient,
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider,
         ISpeechMaticsClient speechMaticsClient,
         SpeechMaticsKeySetting speechMaticsKeySetting,
         ISpeechMaticsDataProvider speechMaticsDataProvider,
         TranscriptionCallbackSetting transcriptionCallbackSetting)
     {
-        _mapper = mapper;
         _salesClient = salesClient;
         _weChatClient = weChatClient;
-        _ffmpegService = ffmpegService;
         _openAiSettings = openAiSettings;
         _twilioSettings = twilioSettings;
         _translationClient = translationClient;
         _smartiesClient = smartiesClient;
-        _phoneOrderSetting = phoneOrderSetting;
-        _phoneOrderService = phoneOrderService;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _aiSpeechAssistantService = aiSpeechAssistantService;
-        _smartTalkHttpClientFactory = smartTalkHttpClientFactory;
-        _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
         _speechMaticsClient = speechMaticsClient;
         _speechMaticsKeySetting = speechMaticsKeySetting;
@@ -378,7 +361,7 @@ public class SpeechMaticsService : ISpeechMaticsService
                 message += "\n\n" + record.TranscriptionText;
             }
 
-            await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(audioContent, agent.WechatRobotKey, message, Array.Empty<string>(), cancellationToken).ConfigureAwait(false);
+            await SendWorkWeChatRobotNotifyAsync(audioContent, agent.WechatRobotKey, message, Array.Empty<string>(), cancellationToken).ConfigureAwait(false);
         }
     }
 
@@ -797,6 +780,37 @@ public class SpeechMaticsService : ISpeechMaticsService
         if (result == null) throw new Exception($"无法反序列化模型返回结果: {response}");
 
         return result.IsCustomerFriendly;
+    }
+    
+    public async Task SendWorkWeChatRobotNotifyAsync(byte[] recordContent, string key, string transcription, string[] mentionedList, CancellationToken cancellationToken)
+    {
+        var robotUrl = $"https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key={key}";
+        
+        // await _weChatClient.SendWorkWechatRobotMessagesAsync(robotUrl,
+        //     new SendWorkWechatGroupRobotMessageDto
+        //     {
+        //         MsgType = "text",
+        //         Text = new SendWorkWechatGroupRobotTextDto
+        //         {
+        //             Content = $"-------------------------Start-------------------------"
+        //         }
+        //     }, cancellationToken);
+        
+        // var splitAudios = await ConvertAndSplitAudioAsync(recordContent, secondsPerAudio: 60, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        // await SendMultiAudioMessagesAsync(splitAudios, key, cancellationToken).ConfigureAwait(false);
+
+        await _weChatClient.SendWorkWechatRobotMessagesAsync(
+            robotUrl, new SendWorkWechatGroupRobotMessageDto
+            {
+                MsgType = "text", Text = new SendWorkWechatGroupRobotTextDto { Content = transcription, MentionedList = mentionedList }
+            }, CancellationToken.None);
+        
+        // await _weChatClient.SendWorkWechatRobotMessagesAsync(
+        //     robotUrl, new SendWorkWechatGroupRobotMessageDto
+        //     {
+        //         MsgType = "text", Text = new SendWorkWechatGroupRobotTextDto { Content = "-------------------------End-------------------------" }
+        //     }, CancellationToken.None);
     }
 
     public class CustomerFriendlyResponse
