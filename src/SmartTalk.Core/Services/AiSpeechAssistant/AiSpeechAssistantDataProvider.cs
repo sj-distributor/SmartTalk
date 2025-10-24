@@ -2,6 +2,7 @@ using System.Text.Json;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Data;
 using Microsoft.EntityFrameworkCore;
+using Serilog;
 using SmartTalk.Core.Domain.AIAssistant;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
@@ -716,7 +717,8 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
         
         if (forceSave)
         {
-            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            var count = await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            Log.Information("SaveChangesAsync affected {Count} rows for soldToId: {SoldToId}", count, soldToId);
         }
     }
 }
