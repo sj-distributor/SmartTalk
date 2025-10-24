@@ -887,8 +887,8 @@ public class PrinterService : IPrinterService
          {
              var itema = new OrderItemsDto()
              {
-                 EnName = IsGetLanguageValue(printerLanguageType, "en") ? orderItem.ProductNames.GetValueOrDefault("en")?.GetValueOrDefault("posName") : null,
-                 CnName = IsGetLanguageValue(printerLanguageType, "cn") ? orderItem.ProductNames.GetValueOrDefault("cn")?.GetValueOrDefault("posName") : null,
+                 EnName = IsGetLanguageValue(printerLanguageType, "en") ? GetProductName(orderItem.ProductNames, "en") : null,
+                 CnName = IsGetLanguageValue(printerLanguageType, "cn") ? GetProductName(orderItem.ProductNames, "cn") : null,
              };
 
              decimal itembMoney = 0;
@@ -928,6 +928,14 @@ public class PrinterService : IPrinterService
          return y;
      }
 
+     private static string? GetProductName(Dictionary<string, Dictionary<string, string>> names, string lang)
+     {
+         var dict = names.GetValueOrDefault(lang);
+         return dict?.GetValueOrDefault("Name")
+                ?? dict?.GetValueOrDefault("posName")
+                ?? dict?.GetValueOrDefault("sendChefName");
+     }
+     
      private static bool IsGetLanguageValue(PrinterLanguageType? languageType, string language)
      {
          switch (languageType)
