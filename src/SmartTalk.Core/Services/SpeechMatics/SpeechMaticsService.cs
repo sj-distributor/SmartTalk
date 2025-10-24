@@ -72,7 +72,6 @@ public class SpeechMaticsService : ISpeechMaticsService
     private readonly TranscriptionCallbackSetting _transcriptionCallbackSetting;
 
     public SpeechMaticsService(
-        IMapper mapper,
         ISalesClient salesClient,
         IWeChatClient weChatClient,
         OpenAiSettings openAiSettings,
