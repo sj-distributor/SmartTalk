@@ -5,11 +5,11 @@ using SmartTalk.Messages.Requests.AutoTest;
 
 namespace SmartTalk.Core.Handlers.RequestHandlers.AutoTest;
 
-public class GetAutoTestTestTaskRequestHandler : IRequestHandler<GetAutoTestTaskRequest, GetAutoTestTaskResponse>
+public class GetAutoTestTaskRequestHandler : IRequestHandler<GetAutoTestTaskRequest, GetAutoTestTaskResponse>
 {
     private readonly IAutoTestService _autoTestService;
 
-    public GetAutoTestTestTaskRequestHandler(IAutoTestService autoTestService)
+    public GetAutoTestTaskRequestHandler(IAutoTestService autoTestService)
     {
         _autoTestService = autoTestService;
     }
