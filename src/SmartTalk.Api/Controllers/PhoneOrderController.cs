@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using SmartTalk.Messages.Commands.Linphone;
 using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Dto.SpeechMatics;
+using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Requests.Linphone;
 using SmartTalk.Messages.Requests.PhoneOrder;
 
@@ -78,7 +79,7 @@ public class PhoneOrderController : ControllerBase
 
         var fileContent = ms.ToArray();
         
-        await _mediator.SendAsync(new ReceivePhoneOrderRecordCommand { RecordName = file.FileName, RecordContent = fileContent, AgentId = agentId }).ConfigureAwait(false);
+        await _mediator.SendAsync(new ReceivePhoneOrderRecordCommand { RecordName = file.FileName, RecordContent = fileContent, AgentId = agentId, OrderRecordType = PhoneOrderRecordType.Other}).ConfigureAwait(false);
         
         return Ok();
     }

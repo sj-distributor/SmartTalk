@@ -23,7 +23,7 @@ namespace SmartTalk.Core.Services.AiSpeechAssistant;
 
 public interface IAiSpeechAssistantProcessJobService : IScopedDependency
 {
-    Task RecordAiSpeechAssistantCallAsync(AiSpeechAssistantStreamContextDto context, bool isOutBount, CancellationToken cancellationToken);
+    Task RecordAiSpeechAssistantCallAsync(AiSpeechAssistantStreamContextDto context, PhoneOrderRecordType orderRecordType, CancellationToken cancellationToken);
 }
 
 public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobService
@@ -51,7 +51,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         _restaurantDataProvider = restaurantDataProvider;
     }
 
-    public async Task RecordAiSpeechAssistantCallAsync(AiSpeechAssistantStreamContextDto context, bool isOutBount, CancellationToken cancellationToken)
+    public async Task RecordAiSpeechAssistantCallAsync(AiSpeechAssistantStreamContextDto context, PhoneOrderRecordType orderRecordType, CancellationToken cancellationToken)
     {
         TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
         var callResource = await CallResource.FetchAsync(pathSid: context.CallSid).ConfigureAwait(false);
@@ -74,7 +74,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             PhoneNumber = context.UserInfo?.PhoneNumber,
             IsTransfer = context.IsTransfer,
             IncomingCallNumber = context.LastUserInfo.PhoneNumber,
-            IsOutBount = isOutBount,
+            OrderRecordType = orderRecordType,
         };
 
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync([record], cancellationToken: cancellationToken).ConfigureAwait(false);
