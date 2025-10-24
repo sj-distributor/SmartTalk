@@ -53,4 +53,7 @@ public class AutoTestTaskRecord : IEntity
     
     [Column("created_at")]
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.Now;
+    
+    [Column("is_archived")]
+    public bool IsArchived { get; set; }
 }

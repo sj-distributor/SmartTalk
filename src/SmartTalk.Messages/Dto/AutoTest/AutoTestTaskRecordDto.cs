@@ -31,4 +31,6 @@ public class AutoTestTaskRecordDto
     public string ErrorText { get; set; }
     
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.Now;
+    
+    public bool IsArchived { get; set; }
 }
