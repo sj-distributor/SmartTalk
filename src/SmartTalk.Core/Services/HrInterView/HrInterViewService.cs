@@ -296,14 +296,6 @@ public class HrInterViewService : IHrInterViewService
                     messageAudio = JsonConvert.SerializeObject(new List<string>(){partType.Url, nextQuestionDto.Url});
                 }
                 
-                await SendWebSocketMessageAsync(webSocket, new HrInterViewQuestionEventDto
-                {
-                    SessionId = sessionId,
-                    EventType = "MESSAGE",
-                    Message = nextQuestion,
-                    MessageFileUrl = messageAudio
-                }, cancellationToken).ConfigureAwait(false);
-                
                 var fileUrl = await UploadFileAsync(message.Message, sessionId, cancellationToken).ConfigureAwait(false);
                 
                 var answers = await _asrClient.TranscriptionAsync(new AsrTranscriptionDto { File = message.Message }, cancellationToken).ConfigureAwait(false);
@@ -315,6 +307,14 @@ public class HrInterViewService : IHrInterViewService
                     FileUrl = JsonConvert.SerializeObject(new List<string>(){fileUrl}),
                     QuestionType = HrInterViewSessionQuestionType.User
                 }, cancellationToken: cancellationToken).ConfigureAwait(false);
+                
+                await SendWebSocketMessageAsync(webSocket, new HrInterViewQuestionEventDto
+                {
+                    SessionId = sessionId,
+                    EventType = "MESSAGE",
+                    Message = nextQuestion,
+                    MessageFileUrl = messageAudio
+                }, cancellationToken).ConfigureAwait(false);
                 
                 await _hrInterViewDataProvider.AddHrInterViewSessionAsync(new HrInterViewSession
                 {
