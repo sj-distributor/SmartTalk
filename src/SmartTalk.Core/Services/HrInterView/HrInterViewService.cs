@@ -240,13 +240,17 @@ public class HrInterViewService : IHrInterViewService
         
             await ConvertAndSendWebSocketMessageAsync(webSocket, sessionId, "WELCOME",  setting.Welcome, setting.EndMessage, cancellationToken:cancellationToken).ConfigureAwait(false);
 
+            Log.Information("SendWelcomeAndFirstQuestionAsync questions:{@questions}", questions.MinBy(x => x.Id)!.Question);
+            
             var firstQuestion = JsonConvert.DeserializeObject<List<HrInterViewQuestionsDto>>(questions.MinBy(x => x.Id)!.Question).FirstOrDefault();
 
             if (firstQuestion != null)
             {
                 var firstQuestionPart = JsonConvert.DeserializeObject<HrInterViewQuestionsDto>(questions.MinBy(x => x.Id).Type);
                 
-                await ConvertAndSendWebSocketMessageAsync(webSocket, sessionId, "MESSAGE", firstQuestion.Question, firstQuestionPart.Question, firstQuestionPartUrl: firstQuestionPart.Url, cancellationToken: cancellationToken).ConfigureAwait(false);
+                Log.Information("SendWelcomeAndFirstQuestionAsync firstQuestionPart:{@firstQuestionPart}, firstQuestion:{@firstQuestion}", firstQuestionPart, firstQuestion);
+                
+                await ConvertAndSendWebSocketMessageAsync(webSocket, sessionId, "MESSAGE", JsonConvert.SerializeObject(firstQuestion), firstQuestionPart:firstQuestionPart.Question, firstQuestionPartUrl: firstQuestionPart.Url, cancellationToken: cancellationToken).ConfigureAwait(false);
                 
                 Log.Information("SendWelcomeAndFirstQuestionAsync questions:{@questions}", questions);
                 
@@ -426,7 +430,7 @@ public class HrInterViewService : IHrInterViewService
         await _hrInterViewDataProvider.AddHrInterViewSessionAsync(new HrInterViewSession
         {
             SessionId = sessionId,
-            Message = welcomeMessageDto.Question,
+            Message = string.IsNullOrEmpty(firstQuestionPart)? firstQuestionPart + welcomeMessageDto.Question : welcomeMessageDto.Question, 
             FileUrl = messageFileUrl,
             QuestionType = HrInterViewSessionQuestionType.Assistant }, cancellationToken:cancellationToken).ConfigureAwait(false);
         
@@ -437,7 +441,7 @@ public class HrInterViewService : IHrInterViewService
                 Message = string.IsNullOrEmpty(endMessageDto.Question) ? "" : endMessageDto.Question,
                 FileUrl = JsonConvert.SerializeObject(new List<string>{endMessageDto.Url}),
                 QuestionType = HrInterViewSessionQuestionType.Assistant,
-                CreatedDate =  new DateTimeOffset(new DateTime(9999, 12, 31, 23, 59, 59, DateTimeKind.Utc))
+                CreatedDate = new DateTimeOffset(new DateTime(9999, 12, 31, 23, 59, 59, DateTimeKind.Utc))
             }, cancellationToken:cancellationToken).ConfigureAwait(false);
     }
     
