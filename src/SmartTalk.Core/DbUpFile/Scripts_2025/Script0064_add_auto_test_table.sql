@@ -51,7 +51,7 @@ create table if not exists auto_test_data_set_item
     `created_at` dateTime(3) not null
     ) charset=utf8mb4;
 
-create table if not exists auto_test_test_task
+create table if not exists auto_test_task
 (
     `id` int primary key auto_increment,
     `scenario_id` int not null,

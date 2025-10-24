@@ -1,13 +1,15 @@
 using AutoMapper;
+using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Data;
 using SmartTalk.Core.Domain.AutoTest;
 using SmartTalk.Core.Ioc;
+using SmartTalk.Messages.Dto.AutoTest;
+using SmartTalk.Messages.Enums.AutoTest;
 
 namespace SmartTalk.Core.Services.AutoTest;
 
 public partial interface IAutoTestDataProvider : IScopedDependency
 {
-    Task<AutoTestScenario> GetAutoTestScenarioByIdAsync(int id, CancellationToken cancellationToken);
 }
 
 public partial class AutoTestDataProvider : IAutoTestDataProvider
@@ -22,9 +24,13 @@ public partial class AutoTestDataProvider : IAutoTestDataProvider
         _unitOfWork = unitOfWork;
         _repository = repository;
     }
+    
 
-    public async Task<AutoTestScenario> GetAutoTestScenarioByIdAsync(int id, CancellationToken cancellationToken)
-    {
-        return await _repository.GetByIdAsync<AutoTestScenario>(id, cancellationToken).ConfigureAwait(false);
-    }
+ 
+
+   
+    
+
+
+
 }

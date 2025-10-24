@@ -34,5 +34,5 @@ public class AutoTestScenario : IEntity
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.Now;
     
     [Column("updated_at")]
-    public DateTimeOffset UpdatedAt { get; set; }
+    public DateTimeOffset? UpdatedAt { get; set; }
 }

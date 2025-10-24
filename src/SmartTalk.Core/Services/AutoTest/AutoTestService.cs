@@ -4,6 +4,8 @@ using OpenAI.Chat;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Messages.Commands.AutoTest;
+using SmartTalk.Messages.Enums.AutoTest;
+
 namespace SmartTalk.Core.Services.AutoTest;
 
 public partial interface IAutoTestService : IScopedDependency
@@ -35,7 +37,13 @@ public partial class AutoTestService : IAutoTestService
     {
         var scenario = await _autoTestDataProvider.GetAutoTestScenarioByIdAsync(command.ScenarioId, cancellationToken).ConfigureAwait(false);
         
-        var executionResult = await _autoTestActionHandlerSwitcher.GetHandler(scenario.ActionType).ActionHandleAsync(scenario, cancellationToken).ConfigureAwait(false);
+        var taskRecords = await _autoTestDataProvider.GetPendingTaskRecordsByTaskIdAsync(command.TaskId, cancellationToken).ConfigureAwait(false);
+        
+        taskRecords.ForEach(x => x.Status = AutoTestTaskRecordStatus.Ongoing);
+        
+        await _autoTestDataProvider.UpdateTaskRecordsAsync(taskRecords, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var executionResult = await _autoTestActionHandlerSwitcher.GetHandler(scenario.ActionType).ActionHandleAsync(scenario, command.TaskId, cancellationToken).ConfigureAwait(false);
         
         return new AutoTestRunningResponse() { Data = executionResult };
     }

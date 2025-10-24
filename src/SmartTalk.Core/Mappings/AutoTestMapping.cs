@@ -13,7 +13,7 @@ public class AutoTestMapping : Profile
         CreateMap<AutoTestDataSetItem, AutoTestDataSetItemDto>().ReverseMap();
         CreateMap<AutoTestImportDataRecord, AutoTestImportDataRecordDto>().ReverseMap();
         CreateMap<AutoTestScenario, AutoTestScenarioDto>().ReverseMap();
-        CreateMap<AutoTestTestTask, AutoTestTestTaskDto>().ReverseMap();
-        CreateMap<AutoTestTaskRecord, AutoTestTestTaskRecordDto>().ReverseMap();
+        CreateMap<AutoTestTask, AutoTestTaskDto>().ReverseMap();
+        CreateMap<AutoTestTaskRecord, AutoTestTaskRecordDto>().ReverseMap();
     }
 }

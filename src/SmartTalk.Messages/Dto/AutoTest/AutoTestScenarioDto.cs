@@ -20,5 +20,5 @@ public class AutoTestScenarioDto
     
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.Now;
     
-    public DateTimeOffset UpdatedAt { get; set; }
+    public DateTimeOffset? UpdatedAt { get; set; }
 }
