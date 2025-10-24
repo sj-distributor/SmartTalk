@@ -444,5 +444,10 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
             cache.LastUpdated = DateTimeOffset.UtcNow;
             await _repository.UpdateAsync(cache, cancellationToken).ConfigureAwait(false);
         }
+        
+        if (forceSave)
+        {
+            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
     }
 }
