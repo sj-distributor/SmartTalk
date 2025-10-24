@@ -71,4 +71,13 @@ public class AutoTestController : ControllerBase
         
         return Ok(response);
     }
+    
+    [Route("task/records"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(DeleteAutoTestTaskResponse))]
+    public async Task<IActionResult> GetAutoTestTaskRecordsAsync([FromQuery] GetAutoTestTaskRecordsRequest request) 
+    {
+        var response = await _mediator.RequestAsync<GetAutoTestTaskRecordsRequest, GetAutoTestTaskRecordsResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
 }

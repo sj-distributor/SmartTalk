@@ -1,3 +1,5 @@
+using Newtonsoft.Json.Linq;
+using Serilog;
 using SmartTalk.Core.Domain.AutoTest;
 using SmartTalk.Messages.Commands.AutoTest;
 using SmartTalk.Messages.Dto.AutoTest;
@@ -15,6 +17,8 @@ public partial interface IAutoTestService
     Task<UpdateAutoTestTaskResponse> UpdateAutoTestTaskAsync(UpdateAutoTestTaskCommand command, CancellationToken cancellationToken);
     
     Task<DeleteAutoTestTaskResponse> DeleteAutoTestTaskAsync(DeleteAutoTestTaskCommand command, CancellationToken cancellationToken);
+    
+    Task<GetAutoTestTaskRecordsResponse> GetAutoTestTaskRecordsAsync(GetAutoTestTaskRecordsRequest request, CancellationToken cancellationToken);
 }
 
 public partial class AutoTestService
@@ -136,5 +140,44 @@ public partial class AutoTestService
         if (testTask != null) await _autoTestDataProvider.DeleteAutoTestTaskAsync(testTask, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         return new DeleteAutoTestTaskResponse();
+    }
+    
+    public async Task<GetAutoTestTaskRecordsResponse> GetAutoTestTaskRecordsAsync(GetAutoTestTaskRecordsRequest request, CancellationToken cancellationToken)
+    {
+        var (count, records) = await _autoTestDataProvider.GetAutoTestTaskRecordsAsync(request.TaskId, request.PageIndex, request.PageSize, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var taskInfo = await BuildAutoTestTaskInfoAsync(request.TaskId, cancellationToken).ConfigureAwait(false);
+        
+        return new GetAutoTestTaskRecordsResponse
+        {
+            Data = new GetAutoTestTaskRecordsResponseData
+            {
+                Count = count,
+                TaskInfo = _mapper.Map<AutoTestTaskInfoDto>(taskInfo),
+                TaskRecords = _mapper.Map<List<AutoTestTaskRecordDto>>(records)
+            }
+        };
+    }
+    
+    private async Task<AutoTestTaskInfoDto> BuildAutoTestTaskInfoAsync(int taskId, CancellationToken cancellationToken)
+    {
+        var (task, dataset) = await _autoTestDataProvider.GetAutoTestTaskInfoByIdAsync(taskId, cancellationToken).ConfigureAwait(false);
+        
+        var taskParams = JObject.Parse(task.Params);
+        
+        var assistantId = taskParams["assistantId"]?.Value<int>();
+        
+        Log.Information("Get the assistantId from task params: {AssistantId}", assistantId);
+        
+        var assistant = assistantId.HasValue ? await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByIdAsync(assistantId.Value, cancellationToken).ConfigureAwait(false) : null;
+
+        Log.Information("Source assistant for executing the current task: {@Assistant}", assistant);
+        
+        return new AutoTestTaskInfoDto
+        {
+            AssistantName = assistant?.Name ?? string.Empty,
+            TestDataName = dataset.Name,
+            CreadtedAt = task.CreatedAt.ToString("MM/dd/yyyy hh:mm tt")
+        };
     }
 }
