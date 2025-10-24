@@ -36,6 +36,15 @@ public class AutoTestController : ControllerBase
         return Ok(response);
     }
     
+    [Route("conversation"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(AutoTestConversationAudioProcessReponse))]
+    public async Task<IActionResult> AutoTestConversationAudioProcessAsync([FromBody] AutoTestConversationAudioProcessCommand command) 
+    {
+        var response = await _mediator.SendAsync<AutoTestConversationAudioProcessCommand, AutoTestConversationAudioProcessReponse>(command).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
     [Route("task"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAutoTestTaskResponse))]
     public async Task<IActionResult> GetAutoTestTasksAsync([FromQuery] GetAutoTestTaskRequest request)
