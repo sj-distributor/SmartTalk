@@ -26,6 +26,7 @@ public partial interface IPhoneOrderProcessJobService : IScopedDependency
 
 public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
 {
+    private readonly ISalesClient _salesClient;
     private readonly IFfmpegService _ffmpegService;
     private readonly OpenAiSettings _openAiSettings;
     private readonly TwilioSettings _twilioSettings;
@@ -40,6 +41,7 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
 
     public PhoneOrderProcessJobService(
+        ISalesClient salesClient,
         IFfmpegService ffmpegService,
         TwilioSettings twilioSettings,
         OpenAiSettings openAiSettings,
@@ -53,6 +55,7 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
         ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient,
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
+        _salesClient = salesClient;
         _ffmpegService = ffmpegService;
         _twilioSettings = twilioSettings;
         _openAiSettings = openAiSettings;
