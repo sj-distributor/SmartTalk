@@ -443,12 +443,10 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             if (soldToIds.Any())
             {
                 var caches = await _aiSpeechAssistantDataProvider.GetCustomerItemsCacheBySoldToIdsAsync(soldToIds, cancellationToken).ConfigureAwait(false);
+                
+                var customerItems = caches.Where(c => !string.IsNullOrEmpty(c.CacheValue)).Select(c => c.CacheValue.Trim()).Distinct().ToList();
 
-                var customerItems = caches.Where(c => !string.IsNullOrEmpty(c.CacheValue))
-                    .SelectMany(c => JsonSerializer.Deserialize<List<string>>(c.CacheValue) ?? new List<string>())
-                    .Distinct().ToList();
-
-                finalPrompt = finalPrompt.Replace("#{customer_items}", string.Join(Environment.NewLine, customerItems));
+                finalPrompt = finalPrompt.Replace("#{customer_items}", customerItems.Any() ? string.Join(Environment.NewLine + Environment.NewLine, customerItems.Take(50)) : " ");
             }
         }
         
