@@ -19,14 +19,14 @@ namespace SmartTalk.Core.Services.PhoneOrder;
 
 public partial interface IPhoneOrderProcessJobService
 {
-    Task HandleReleasedSpeechMaticsCallBackAsync(string jobId, string phoneOrderId, CancellationToken cancellationToken);
+    Task HandleReleasedSpeechMaticsCallBackAsync(string jobId, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderProcessJobService
 {
-    public async Task HandleReleasedSpeechMaticsCallBackAsync(string jobId, string phoneOrderId, CancellationToken cancellationToken)
+    public async Task HandleReleasedSpeechMaticsCallBackAsync(string jobId, CancellationToken cancellationToken)
     {
-        if (jobId == null || phoneOrderId == null) return;
+        if (jobId == null) return;
         
         var speechMaticsJob = await _speechMaticsDataProvider.GetSpeechMaticsJobAsync(jobId, cancellationToken).ConfigureAwait(false);
         
