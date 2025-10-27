@@ -231,9 +231,11 @@ public partial class PhoneOrderProcessJobService
 
             if (sales != null)
             {
+                var customerNumbers = aiSpeechAssistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()).ToList();
+                
                 var requestDto = new GetAskInfoDetailListByCustomerRequestDto
                 {
-                    CustomerNumbers = new List<string> { aiSpeechAssistant.Name }
+                    CustomerNumbers = customerNumbers
                 };
 
                 var askedItems = await _salesClient.GetAskInfoDetailListByCustomerAsync(requestDto, cancellationToken).ConfigureAwait(false);
