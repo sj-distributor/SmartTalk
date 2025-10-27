@@ -64,37 +64,35 @@ public partial class AutoTestService : IAutoTestService
         var conversationHistory = new List<ChatMessage>();
         conversationHistory.Add(new SystemChatMessage($"{prompt}"));
 
-        var allPcmSegments = new List<byte[]>();
-        var client = new ChatClient("gpt-4o-audio-preview", _openAiSettings.ApiKey);
-
-        int sampleRate = 16000;
-        int bitsPerSample = 16;
-        int channels = 1;
+        var allAudioSegments = new List<byte[]>();
+        var client = new ChatClient("gpt-audio", _openAiSettings.ApiKey);
 
         foreach (var customerAudio in customerAudioList)
         {
-            var customerWav = PcmToWav(customerAudio, sampleRate, bitsPerSample, channels);
-            
-            conversationHistory.Add(new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(BinaryData.FromBytes(customerWav), ChatInputAudioFormat.Wav)));
-            
-            var options = new ChatCompletionOptions { ResponseModalities = ChatResponseModalities.Audio, AudioOptions = new ChatAudioOptions(ChatOutputAudioVoice.Alloy, ChatOutputAudioFormat.Wav) };
-            
+            conversationHistory.Add(new UserChatMessage(
+                ChatMessageContentPart.CreateInputAudioPart(
+                    BinaryData.FromBytes(customerAudio), 
+                    ChatInputAudioFormat.Wav)));
+        
+            var options = new ChatCompletionOptions 
+            { 
+                ResponseModalities = ChatResponseModalities.Audio, 
+                AudioOptions = new ChatAudioOptions(ChatOutputAudioVoice.Alloy, ChatOutputAudioFormat.Wav) 
+            };
+        
             var completion = await client.CompleteChatAsync(conversationHistory, options, cancellationToken);
 
             var aiReplyText = completion.Value.Content.FirstOrDefault()?.Text;
-            
+        
             conversationHistory.Add(new AssistantChatMessage(aiReplyText));
 
             var aiReplyAudio = completion.Value.OutputAudio.AudioBytes.ToArray();
-
-            allPcmSegments.Add(customerAudio);
-
-            var aiPcm = ExtractPcmFromWav(aiReplyAudio);
-            
-            allPcmSegments.Add(aiPcm);
+        
+            allAudioSegments.Add(customerAudio);
+            allAudioSegments.Add(aiReplyAudio);
         }
-
-        return PcmToWav(ConcatPcmSegments(allPcmSegments), sampleRate, bitsPerSample, channels);
+        
+        return allAudioSegments.LastOrDefault() ?? Array.Empty<byte>();
     }
 
     private static byte[] PcmToWav(byte[] pcmData, int sampleRate, int bitsPerSample, int channels)
