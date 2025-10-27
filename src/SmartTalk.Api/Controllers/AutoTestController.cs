@@ -1,6 +1,7 @@
 using Mediator.Net;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NAudio.Wave;
 using SmartTalk.Core.Services.AutoTest;
 using SmartTalk.Messages.Commands.AutoTest;
 using SmartTalk.Messages.Requests.AutoTest;
@@ -40,11 +41,11 @@ public class AutoTestController : ControllerBase
     }
     
     [Route("conversation"), HttpPost]
-    public async Task<IActionResult> AutoTestConversationAudioProcessAsync([FromForm] List<IFormFile> pcmFiles, [FromForm] string prompt, CancellationToken cancellationToken)
+    public async Task<IActionResult> AutoTestConversationAudioProcessAsync([FromForm] List<IFormFile> wavFiles, [FromForm] string prompt, CancellationToken cancellationToken)
     {
         var customerAudioList = new List<byte[]>();
 
-        foreach (var file in pcmFiles)
+        foreach (var file in wavFiles)
         {
             using (var ms = new MemoryStream())
             {
@@ -60,8 +61,7 @@ public class AutoTestController : ControllerBase
                 Prompt = prompt
             }, cancellationToken).ConfigureAwait(false);
 
-        return File(resultWavBytes.Data ,"application/octet-stream", "result.pcm");
-
+        return File(resultWavBytes.Data, "audio/wav", "result.wav");
     }
     
     [Route("task"), HttpGet]
