@@ -413,7 +413,7 @@ public class HrInterViewService : IHrInterViewService
         
         Log.Information("MatchingReasonableNextQuestionAsync system prompt:{@prompt} ", JsonConvert.SerializeObject(messages));
 
-        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
+        ChatClient client = new("gpt-audio", _openAiSettings.ApiKey);
         
         ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
         

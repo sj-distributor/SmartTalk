@@ -65,7 +65,7 @@ public partial class AutoTestService : IAutoTestService
         conversationHistory.Add(new SystemChatMessage($"{prompt}"));
 
         var allPcmSegments = new List<byte[]>();
-        var client = new ChatClient("gpt-4o-audio-preview", _openAiSettings.ApiKey);
+        var client = new ChatClient("gpt-audio", _openAiSettings.ApiKey);
 
         int sampleRate = 16000;
         int bitsPerSample = 16;

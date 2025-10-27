@@ -105,7 +105,7 @@ public partial class PhoneOrderProcessJobService
         
         var messages = await ConfigureRecordAnalyzePromptAsync(agent, aiSpeechAssistant, callFrom ?? "", currentTime, audioContent, cancellationToken);
         
-        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
+        ChatClient client = new("gpt-audio", _openAiSettings.ApiKey);
         
         ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text, MaxOutputTokenCount = 16384 };
 
