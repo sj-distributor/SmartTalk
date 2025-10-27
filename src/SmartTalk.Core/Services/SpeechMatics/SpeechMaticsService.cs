@@ -145,7 +145,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
 
-        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
+        ChatClient client = new("gpt-audio", _openAiSettings.ApiKey);
 
         var audioData = BinaryData.FromBytes(audioContent);
         List<ChatMessage> messages =
