@@ -77,7 +77,7 @@ public partial class AutoTestService : IAutoTestService
 
         var options = new ChatCompletionOptions
         {
-            ResponseModalities = ChatResponseModalities.Audio,
+            ResponseModalities = ChatResponseModalities.Text | ChatResponseModalities.Audio,
             AudioOptions = new ChatAudioOptions(ChatOutputAudioVoice.Alloy, ChatOutputAudioFormat.Wav)
         };
 
