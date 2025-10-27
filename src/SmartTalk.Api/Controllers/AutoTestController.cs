@@ -54,14 +54,19 @@ public class AutoTestController : ControllerBase
             }
         }
 
-        var resultWavBytes = await _autoTestService.AutoTestConversationAudioProcessAsync(
+        var result = await _autoTestService.AutoTestConversationAudioProcessAsync(
             new AutoTestConversationAudioProcessCommand()
             {
                 CustomerAudioList = customerAudioList,
                 Prompt = prompt
             }, cancellationToken).ConfigureAwait(false);
 
-        return File(resultWavBytes.Data, "audio/wav", "result.wav");
+        if (result.Data.Count == 0)
+            return BadRequest("没有生成音频");
+
+        var lastAiAudio = result.Data.Last().AiAudio;
+
+        return File(lastAiAudio, "audio/wav", "result.wav");
     }
     
     [HttpPost("pcm-to-wav")]

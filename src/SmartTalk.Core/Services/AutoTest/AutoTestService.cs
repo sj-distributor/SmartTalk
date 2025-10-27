@@ -1,5 +1,6 @@
 using AutoMapper;
 using NAudio.Wave;
+using OpenAI.Audio;
 using OpenAI.Chat;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Settings.OpenAi;
@@ -48,51 +49,86 @@ public partial class AutoTestService : IAutoTestService
         return new AutoTestRunningResponse() { Data = executionResult };
     }
 
-    public async Task<AutoTestConversationAudioProcessReponse> AutoTestConversationAudioProcessAsync(AutoTestConversationAudioProcessCommand command,
-        CancellationToken cancellationToken)
+    public async Task<AutoTestConversationAudioProcessReponse> AutoTestConversationAudioProcessAsync(AutoTestConversationAudioProcessCommand command, CancellationToken cancellationToken)
     {
-        var audio = await ProcessAudioConversationAsync(command.CustomerAudioList, command.Prompt, cancellationToken).ConfigureAwait(false);
+        var coreAudioRecords = await ProcessAudioConversationAsync(command.CustomerAudioList, command.Prompt, cancellationToken);
+
+        var responseRecords = coreAudioRecords.Select(r => new SmartTalk.Messages.Commands.AutoTest.AudioConversationRecord
+        {
+            UserAudio = r.UserAudio,
+            AiAudio = r.AiAudio,
+            AiText = r.AiText
+        }).ToList();
 
         return new AutoTestConversationAudioProcessReponse()
         {
-            Data = audio
+            Data = responseRecords
         };
     }
 
-    public async Task<byte[]> ProcessAudioConversationAsync(List<byte[]> customerAudioList, string prompt, CancellationToken cancellationToken)
+    public async Task<List<AudioConversationRecord>> ProcessAudioConversationAsync(List<byte[]> customerAudioList, string prompt, CancellationToken cancellationToken)
     {
-        var conversationHistory = new List<ChatMessage>();
-        conversationHistory.Add(new SystemChatMessage($"{prompt}"));
+        var conversationHistory = new List<ChatMessage>
+        {
+            new SystemChatMessage(prompt)
+        };
 
-        var allAudioSegments = new List<byte[]>();
         var client = new ChatClient("gpt-audio", _openAiSettings.ApiKey);
+
+        var options = new ChatCompletionOptions
+        {
+            ResponseModalities = ChatResponseModalities.Audio,
+            AudioOptions = new ChatAudioOptions(ChatOutputAudioVoice.Alloy, ChatOutputAudioFormat.Wav)
+        };
+
+        ChatCompletion? lastCompletion = null;
+
+        var transcriptionClient = new AudioClient("gpt-audio", _openAiSettings.ApiKey);
+        
+        var transcriptionOptions = new AudioTranscriptionOptions
+        {
+            Language = "zh",
+            ResponseFormat = AudioTranscriptionFormat.Text
+        };
+
+        var conversationRecords = new List<AudioConversationRecord>();
 
         foreach (var customerAudio in customerAudioList)
         {
-            conversationHistory.Add(new UserChatMessage(
-                ChatMessageContentPart.CreateInputAudioPart(
-                    BinaryData.FromBytes(customerAudio), 
-                    ChatInputAudioFormat.Wav)));
-        
-            var options = new ChatCompletionOptions 
-            { 
-                ResponseModalities = ChatResponseModalities.Text | ChatResponseModalities.Audio, 
-                AudioOptions = new ChatAudioOptions(ChatOutputAudioVoice.Alloy, ChatOutputAudioFormat.Wav) 
-            };
-        
+            conversationHistory.Add(
+                new UserChatMessage(
+                    ChatMessageContentPart.CreateInputAudioPart(
+                        BinaryData.FromBytes(customerAudio),
+                        ChatInputAudioFormat.Wav
+                    )
+                )
+            );
+
             var completion = await client.CompleteChatAsync(conversationHistory, options, cancellationToken);
+            var aiAudioBytes = completion.Value.OutputAudio.AudioBytes.ToArray();
+            
+            using var audioStream = new MemoryStream(aiAudioBytes);
 
-            var aiReplyText = completion.Value.Content.FirstOrDefault()?.Text;
-        
-            conversationHistory.Add(new AssistantChatMessage(aiReplyText));
+            var transcription = await transcriptionClient.TranscribeAudioAsync(
+                audioStream,
+                "audio.wav",
+                transcriptionOptions,
+                cancellationToken: cancellationToken
+            ).ConfigureAwait(false);
 
-            var aiReplyAudio = completion.Value.OutputAudio.AudioBytes.ToArray();
-        
-            allAudioSegments.Add(customerAudio);
-            allAudioSegments.Add(aiReplyAudio);
+            var aiText = transcription.Value.Text;
+
+            conversationHistory.Add(new AssistantChatMessage(aiText));
+
+            conversationRecords.Add(new AudioConversationRecord
+            {
+                UserAudio = customerAudio,
+                AiAudio = aiAudioBytes,
+                AiText = aiText
+            });
         }
-        
-        return allAudioSegments.LastOrDefault() ?? Array.Empty<byte>();
+
+        return conversationRecords;
     }
 
     private static byte[] PcmToWav(byte[] pcmData, int sampleRate, int bitsPerSample, int channels)
@@ -128,5 +164,12 @@ public partial class AutoTestService : IAutoTestService
         }
 
         return result;
+    }
+    
+    public class AudioConversationRecord
+    {
+        public byte[] UserAudio { get; set; }
+        public byte[] AiAudio { get; set; }
+        public string AiText { get; set; }
     }
 }
