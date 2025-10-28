@@ -228,7 +228,7 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
     {
         var functions = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallByAssistantIdsAsync([assistant.Id], assistant.ModelProvider, true, cancellationToken).ConfigureAwait(false);
 
-        return functions.Count == 0 ? [] : functions.Where(x => !string.IsNullOrWhiteSpace(x.Content)).Select(x => (x.Type, JsonConvert.DeserializeObject<object>(x.Content))).ToList();
+        return functions.Count == 0 ? [] : functions.Select(x => (x.Type, JsonConvert.DeserializeObject<object>(x.Content))).ToList();
     }
 
     private object InitialSessionParameters(List<(AiSpeechAssistantSessionConfigType Type, object Config)> configs, AiSpeechAssistantSessionConfigType type)
