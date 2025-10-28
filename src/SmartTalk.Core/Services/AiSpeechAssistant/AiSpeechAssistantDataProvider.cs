@@ -5,6 +5,8 @@ using Microsoft.EntityFrameworkCore;
 using Serilog;
 using SmartTalk.Core.Domain.AIAssistant;
 using SmartTalk.Core.Domain.AISpeechAssistant;
+using SmartTalk.Core.Domain.System;
+using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Domain.Sales;
@@ -132,6 +134,8 @@ public partial interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task<List<CustomerItemsCache>> GetCustomerItemsCacheBySoldToIdsAsync(List<string> soldToIds, CancellationToken cancellationToken);
     
     Task UpsertCustomerItemsCacheAsync(string soldToId, string itemsString, bool forceSave, CancellationToken cancellationToken);
+    
+    Task<List<(Agent, Domain.AISpeechAssistant.AiSpeechAssistant)>> GetAgentAndAiSpeechAssistantPairsAsync(CancellationToken cancellationToken);
 }
 
 public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
@@ -718,5 +722,17 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
             var count = await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
             Log.Information("SaveChangesAsync affected {Count} rows for soldToId: {SoldToId}", count, soldToId);
         }
+    }
+
+    public async Task<List<(Agent, Domain.AISpeechAssistant.AiSpeechAssistant)>> GetAgentAndAiSpeechAssistantPairsAsync(CancellationToken cancellationToken)
+    {
+        var query = from agent in _repository.Query<Agent>().Where(x => x.Type == AgentType.Assistant)
+            join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
+            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agentAssistant.AssistantId equals assistant.Id
+            select new { agent, assistant };
+        
+        var result = await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+        
+        return result.Select(x => (x.agent, x.assistant)).ToList();
     }
 }

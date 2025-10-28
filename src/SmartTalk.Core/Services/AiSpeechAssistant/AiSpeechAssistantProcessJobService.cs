@@ -6,6 +6,7 @@ using OpenAI.Chat;
 using Serilog;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Ioc;
+using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.Restaurants;
 using SmartTalk.Core.Services.RetrievalDb.VectorDb;
@@ -13,6 +14,7 @@ using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Core.Settings.Twilio;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Constants;
+using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Restaurant;
 using SmartTalk.Messages.Dto.WebSocket;
@@ -29,6 +31,8 @@ public interface IAiSpeechAssistantProcessJobService : IScopedDependency
     Task OpenAiAccountTrainingAsync(OpenAiAccountTrainingCommand command, CancellationToken cancellationToken);
     
     Task RecordAiSpeechAssistantCallAsync(AiSpeechAssistantStreamContextDto context, bool isOutBount, CancellationToken cancellationToken);
+    
+    Task SyncAiSpeechAssistantInfoToAgentAsync(SyncAiSpeechAssistantInfoToAgentCommand command, CancellationToken cancellationToken);
 }
 
 public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobService
@@ -38,6 +42,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
     private readonly TwilioSettings _twilioSettings;
     private readonly OpenAiTrainingSettings _openAiTrainingSettings;
     private readonly TranslationClient _translationClient;
+    private readonly IAgentDataProvider _agentDataProvider;
     private readonly IRestaurantDataProvider _restaurantDataProvider;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly OpenAiAccountTrainingSettings _openAiAccountTrainingSettings;
@@ -48,6 +53,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         IVectorDb vectorDb,
         TwilioSettings twilioSettings,
         TranslationClient translationClient,
+        IAgentDataProvider agentDataProvider,
         IRestaurantDataProvider restaurantDataProvider,
         OpenAiTrainingSettings openAiTrainingSettings, 
         IPhoneOrderDataProvider phoneOrderDataProvider,
@@ -58,6 +64,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         _vectorDb = vectorDb;
         _twilioSettings = twilioSettings;
         _translationClient = translationClient;
+        _agentDataProvider = agentDataProvider;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _openAiTrainingSettings = openAiTrainingSettings;
         _restaurantDataProvider = restaurantDataProvider;
@@ -98,6 +105,27 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync([record], cancellationToken: cancellationToken).ConfigureAwait(false);
         
         Log.Information("Ai Speech Assistant Conversation Transcription: {@Transcription}", context.ConversationTranscription);
+    }
+
+    public async Task SyncAiSpeechAssistantInfoToAgentAsync(SyncAiSpeechAssistantInfoToAgentCommand command, CancellationToken cancellationToken)
+    {
+        var agentAndAssistantPairs = await _speechAssistantDataProvider.GetAgentAndAiSpeechAssistantPairsAsync(cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Getting agent and assistant pairs: {AgentAndAssistantPairs}", agentAndAssistantPairs);
+        
+        foreach (var (agent, assistant) in agentAndAssistantPairs)
+        {
+            agent.IsSurface = true;
+            agent.RelateId = agent.Id;
+            agent.Name = assistant.Name;
+            agent.Type = AgentType.Agent;
+            agent.Voice = assistant.ModelVoice;
+            agent.WaitInterval = assistant.WaitInterval;
+            agent.IsTransferHuman = assistant.IsTransferHuman;
+            agent.Channel = AiSpeechAssistantChannel.PhoneChat;
+        }
+        
+        await _agentDataProvider.UpdateAgentsAsync(agentAndAssistantPairs.Select(x => x.Item1).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
     private static string FormattedConversation(List<(AiSpeechAssistantSpeaker, string)> conversationTranscription)
