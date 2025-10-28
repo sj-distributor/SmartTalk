@@ -61,12 +61,7 @@ public class AutoTestController : ControllerBase
                 Prompt = prompt
             }, cancellationToken).ConfigureAwait(false);
 
-        if (result.Data.Count == 0)
-            return BadRequest("没有生成音频");
-
-        var lastAiAudio = result.Data.Last().AiAudio;
-
-        return File(lastAiAudio, "audio/wav", "result.wav");
+        return File(result.Data, "audio/wav", "result.wav");
     }
     
     [HttpPost("pcm-to-wav")]
