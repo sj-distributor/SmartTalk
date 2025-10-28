@@ -12,6 +12,7 @@ using SmartTalk.Core.Services.RetrievalDb.VectorDb;
 using SmartTalk.Core.Settings.Twilio;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Constants;
+using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Restaurant;
 using SmartTalk.Messages.Dto.WebSocket;
@@ -102,11 +103,13 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         foreach (var (agent, assistant) in agentAndAssistantPairs)
         {
             agent.IsSurface = true;
+            agent.RelateId = agent.Id;
             agent.Name = assistant.Name;
+            agent.Type = AgentType.Agent;
             agent.Voice = assistant.ModelVoice;
             agent.WaitInterval = assistant.WaitInterval;
             agent.IsTransferHuman = assistant.IsTransferHuman;
-            agent.Channel = AiSpeechAssistantChannel.LiveChat;
+            agent.Channel = AiSpeechAssistantChannel.PhoneChat;
         }
         
         await _agentDataProvider.UpdateAgentsAsync(agentAndAssistantPairs.Select(x => x.Item1).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
