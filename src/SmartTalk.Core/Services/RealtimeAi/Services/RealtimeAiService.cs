@@ -249,7 +249,12 @@ public class RealtimeAiService : IRealtimeAiService
                         Log.Information("Camera {Status}", _cameraEnabled ? "started" : "stopped");
                         continue;
                     }
-
+                    
+                    if (jsonDocument.RootElement.TryGetProperty("commit_audio", out var commit))
+                    {
+                        await _conversationEngine.CommitAudioAsync().ConfigureAwait(false);
+                    }
+                    
                     var payload = jsonDocument?.RootElement.GetProperty("media").GetProperty("payload").GetString();
                     
                     if (!string.IsNullOrWhiteSpace(payload))

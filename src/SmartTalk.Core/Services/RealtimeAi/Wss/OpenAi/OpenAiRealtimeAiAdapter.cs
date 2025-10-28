@@ -99,7 +99,17 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
             return (JsonSerializer.Serialize(audioMessage), false);
         }
     }
-    
+
+    public string BuildCommitAudioMessage()
+    {
+        var commitAudioMessage = new
+        {
+            type = "input_audio_buffer.commit"
+        };
+        
+        return JsonSerializer.Serialize(commitAudioMessage);
+    }
+
     public string BuildTextUserMessage(string text, string sessionId)
     {
         var message = new

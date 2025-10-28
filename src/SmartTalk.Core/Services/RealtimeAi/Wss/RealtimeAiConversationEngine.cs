@@ -264,6 +264,13 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
         // }
     }
 
+    public async Task CommitAudioAsync()
+    {
+        var messageJson = _aiAdapter.BuildCommitAudioMessage();
+        await _realtimeAiClient.SendMessageAsync(messageJson, _sessionCts.Token);
+        await _realtimeAiClient.SendMessageAsync(JsonSerializer.Serialize(new { type = "response.create" }), _sessionCts.Token);
+    }
+
     public async Task SendTextAsync(string text)
     {
         Log.Information("AiConversationEngine: 准备发送文本消息: '{Text}'. 会话 ID: {SessionId}", text, _sessionId); // AiConversationEngine: Preparing to send text message: '{Text}'. Session ID: {SessionId}

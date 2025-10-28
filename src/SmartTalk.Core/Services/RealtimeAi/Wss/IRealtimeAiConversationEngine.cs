@@ -29,6 +29,7 @@ public interface IRealtimeAiConversationEngine : IAsyncDisposable, IScopedDepend
     /// **Note:** The audioData received by this method should be in the format expected by the AI service provider (potentially converted externally).
     /// </summary>
     Task SendAudioChunkAsync(RealtimeAiWssAudioData audioData);
+    Task CommitAudioAsync();
     Task SendTextAsync(string text);
     Task NotifyUserSpeechStartedAsync(string lastAssistantItemIdToInterrupt = null);
     Task EndSessionAsync(string reason);

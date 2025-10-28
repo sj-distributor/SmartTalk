@@ -89,7 +89,12 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
         var json = JsonConvert.SerializeObject(message);
         return (json, false);
     }
-    
+
+    public string BuildCommitAudioMessage()
+    {
+        throw new NotImplementedException();
+    }
+
     public string BuildTextUserMessage(string text, string sessionId)
     {
         var message = new

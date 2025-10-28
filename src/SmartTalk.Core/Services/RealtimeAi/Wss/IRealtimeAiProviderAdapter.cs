@@ -12,6 +12,8 @@ public interface IRealtimeAiProviderAdapter : IRealtimeAiProvider
         Domain.AISpeechAssistant.AiSpeechAssistant assistantProfile, RealtimeAiEngineContext context, string sessionId = null, CancellationToken cancellationToken = default);
 
     (string MessageJson, bool IsOpenAiImage) BuildAudioAppendMessage(RealtimeAiWssAudioData audioData);
+
+    string BuildCommitAudioMessage();
     
     string BuildTextUserMessage(string text, string sessionId);
 
