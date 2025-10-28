@@ -60,97 +60,56 @@ public partial class AutoTestService : IAutoTestService
         };
     }
 
-    private async Task<byte[]> ProcessAudioConversationAsync(List<byte[]> customerAudioList, string prompt, CancellationToken cancellationToken)
+    private async Task<byte[]> ProcessAudioConversationAsync(List<byte[]> customerPcmList, string prompt, CancellationToken cancellationToken)
     {
+        if (customerPcmList == null || customerPcmList.Count == 0)
+            throw new ArgumentException("没有音频输入");
+
         var conversationHistory = new List<ChatMessage>
         {
             new SystemChatMessage(prompt)
         };
 
         var client = new ChatClient("gpt-audio", _openAiSettings.ApiKey);
-
         var options = new ChatCompletionOptions
         {
-            ResponseModalities = ChatResponseModalities.Audio,
-            AudioOptions = new ChatAudioOptions(ChatOutputAudioVoice.Alloy, ChatOutputAudioFormat.Wav)
+            ResponseModalities = ChatResponseModalities.Text | ChatResponseModalities.Audio,
+            AudioOptions = new ChatAudioOptions(ChatOutputAudioVoice.Alloy, ChatOutputAudioFormat.Pcm16)
         };
-        
-        string outputFilePath = "combined_conversation.wav";
-        WaveFileWriter? waveWriter = null;
 
-        foreach (var customerAudio in customerAudioList)
+        using var combinedStream = new MemoryStream();
+
+        foreach (var userPcm in customerPcmList)
         {
-            if (customerAudio == null || customerAudio.Length == 0)
-            {
-                Log.Warning("跳过空音频文件");
-                continue;
-            }
-            
-            conversationHistory.Add(
-                new UserChatMessage(
-                    ChatMessageContentPart.CreateInputAudioPart(
-                        BinaryData.FromBytes(customerAudio),
-                        ChatInputAudioFormat.Wav
-                    )
-                )
-            );
+            var userWav = PcmToWav(userPcm, 16000, 16, 1);
+
+            conversationHistory.Add(new UserChatMessage(
+                ChatMessageContentPart.CreateInputAudioPart(BinaryData.FromBytes(userWav), ChatInputAudioFormat.Wav)
+            ));
 
             var completion = await client.CompleteChatAsync(conversationHistory, options, cancellationToken);
-            var aiAudioBytes = completion.Value.OutputAudio.AudioBytes.ToArray();
+            var aiPcmBytes = completion.Value.OutputAudio.AudioBytes.ToArray();
             var aiReplyText = completion.Value.OutputAudio.Transcript;
-            
-            try
-            {
-                using var aiStream = new MemoryStream(aiAudioBytes);
-                using var reader = new WaveFileReader(aiStream);
 
-                Log.Information(
-                    "AI 回复音频参数：采样率 {SampleRate}Hz, 位深 {Bits}bit, 声道 {Channels}",
-                    reader.WaveFormat.SampleRate,
-                    reader.WaveFormat.BitsPerSample,
-                    reader.WaveFormat.Channels
-                );
-
-                if (waveWriter == null)
-                {
-                    waveWriter = new WaveFileWriter(outputFilePath, reader.WaveFormat);
-                }
-
-                AppendAudioToWave(customerAudio, waveWriter);
-
-                reader.Position = 0;
-                reader.CopyTo(waveWriter);
-            }
-            catch (Exception ex)
-            {
-                Log.Error("处理音频失败: {Message}", ex.Message);
-                continue;
-            }
+            combinedStream.Write(userPcm, 0, userPcm.Length);
+            combinedStream.Write(aiPcmBytes, 0, aiPcmBytes.Length);
 
             conversationHistory.Add(new AssistantChatMessage(aiReplyText));
         }
 
-        waveWriter?.Dispose();
-
-        Log.Information("拼接完成，输出文件：{File}", outputFilePath);
-
-        return await File.ReadAllBytesAsync(outputFilePath, cancellationToken);
+        return combinedStream.ToArray();
     }
-    
-    private void AppendAudioToWave(byte[] audioBytes, WaveFileWriter waveWriter)
-    {
-        using var ms = new MemoryStream(audioBytes);
-        using var reader = new WaveFileReader(ms);
 
-        if (!reader.WaveFormat.Equals(waveWriter.WaveFormat))
+
+    private static byte[] PcmToWav(byte[] pcmData, int sampleRate, int bitsPerSample, int channels)
+    {
+        using var ms = new MemoryStream();
+        var waveFormat = new WaveFormat(sampleRate, bitsPerSample, channels);
+        using (var writer = new WaveFileWriter(ms, waveFormat))
         {
-            using var resampler = new MediaFoundationResampler(reader, waveWriter.WaveFormat);
-            resampler.ResamplerQuality = 60;
-            WaveFileWriter.WriteWavFileToStream(waveWriter, resampler);
+            writer.Write(pcmData, 0, pcmData.Length);
+            writer.Flush();
         }
-        else
-        {
-            reader.CopyTo(waveWriter);
-        }
+        return ms.ToArray();
     }
 }
