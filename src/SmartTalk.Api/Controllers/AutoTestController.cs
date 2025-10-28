@@ -1,6 +1,8 @@
 using Mediator.Net;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NAudio.Wave;
+using SmartTalk.Core.Services.AutoTest;
 using SmartTalk.Messages.Commands.AutoTest;
 using SmartTalk.Messages.Requests.AutoTest;
 
@@ -12,10 +14,12 @@ namespace SmartTalk.Api.Controllers;
 public class AutoTestController : ControllerBase
 {
     private readonly IMediator _mediator;
+    private readonly IAutoTestService _autoTestService;
 
-    public AutoTestController(IMediator mediator)
+    public AutoTestController(IMediator mediator, IAutoTestService autoTestService)
     {
         _mediator = mediator;
+        _autoTestService = autoTestService;
     }
     
     [Route("run"), HttpPost]
@@ -35,6 +39,29 @@ public class AutoTestController : ControllerBase
         
         return Ok(response);
     }
+    
+    [Route("conversation"), HttpPost]
+    public async Task<IActionResult> AutoTestConversationAudioProcessAsync([FromForm] List<IFormFile> pcmFiles, [FromForm] string prompt, CancellationToken cancellationToken)
+    {
+        var customerPcmList = new List<byte[]>();
+
+        foreach (var file in pcmFiles)
+        {
+            using var ms = new MemoryStream();
+            await file.CopyToAsync(ms);
+            customerPcmList.Add(ms.ToArray());
+        }
+
+        var result = await _autoTestService.AutoTestConversationAudioProcessAsync(
+            new AutoTestConversationAudioProcessCommand
+            {
+                CustomerAudioList = customerPcmList,
+                Prompt = prompt
+            }, cancellationToken).ConfigureAwait(false);
+
+        return File(result.Data, "application/octet-stream", "conversation.pcm");
+    }
+
     
     [Route("task"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAutoTestTaskResponse))]
