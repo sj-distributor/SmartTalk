@@ -41,28 +41,27 @@ public class AutoTestController : ControllerBase
     }
     
     [Route("conversation"), HttpPost]
-    public async Task<IActionResult> AutoTestConversationAudioProcessAsync([FromForm] List<IFormFile> wavFiles, [FromForm] string prompt, CancellationToken cancellationToken)
+    public async Task<IActionResult> AutoTestConversationAudioProcessAsync([FromForm] List<IFormFile> pcmFiles, [FromForm] string prompt, CancellationToken cancellationToken)
     {
-        var customerAudioList = new List<byte[]>();
+        var customerPcmList = new List<byte[]>();
 
-        foreach (var file in wavFiles)
+        foreach (var file in pcmFiles)
         {
-            using (var ms = new MemoryStream())
-            {
-                await file.CopyToAsync(ms);
-                customerAudioList.Add(ms.ToArray());
-            }
+            using var ms = new MemoryStream();
+            await file.CopyToAsync(ms);
+            customerPcmList.Add(ms.ToArray());
         }
 
         var result = await _autoTestService.AutoTestConversationAudioProcessAsync(
-            new AutoTestConversationAudioProcessCommand()
+            new AutoTestConversationAudioProcessCommand
             {
-                CustomerAudioList = customerAudioList,
+                CustomerAudioList = customerPcmList,
                 Prompt = prompt
             }, cancellationToken).ConfigureAwait(false);
 
-        return File(result.Data, "audio/wav", "result.wav");
+        return File(result.Data, "application/octet-stream", "conversation.pcm");
     }
+
     
     [HttpPost("pcm-to-wav")]
     public async Task<IActionResult> ConvertPcmToWavAsync([FromForm] IFormFile pcmFile, [FromForm] int sampleRate = 16000, [FromForm] int bitsPerSample = 16, [FromForm] int channels = 1, CancellationToken cancellationToken = default)
