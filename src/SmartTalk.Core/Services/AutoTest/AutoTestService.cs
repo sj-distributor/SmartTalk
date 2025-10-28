@@ -104,45 +104,35 @@ public partial class AutoTestService : IAutoTestService
 
             LogAudioParameters("AI 回复音频", aiAudioBytes);
 
-            AppendAudioToWave(customerAudio, waveWriter, targetFormat);
-            AppendAudioToWave(aiAudioBytes, waveWriter, targetFormat);
+            using (var reader = new WaveFileReader(new MemoryStream(customerAudio)))
+            {
+                AppendAudioToWave(reader, waveWriter, targetFormat);
+            }
+            
+            using (var reader = new WaveFileReader(new MemoryStream(aiAudioBytes)))
+            {
+                AppendAudioToWave(reader, waveWriter, targetFormat);
+            }
 
             conversationHistory.Add(new AssistantChatMessage(aiReplyText));
         }
         
-        waveWriter.Dispose();
+        waveWriter.Flush();
 
         return combinedStream.ToArray();
     }
 
-    private void AppendAudioToWave(byte[] audioBytes, WaveFileWriter waveWriter, WaveFormat targetFormat)
+    private void AppendAudioToWave(WaveFileReader reader, WaveFileWriter waveWriter, WaveFormat targetFormat)
     {
-        if (audioBytes == null || audioBytes.Length == 0)
-            return;
+        ISampleProvider sampleProvider = reader.WaveFormat.Equals(targetFormat)
+            ? reader.ToSampleProvider()
+            : new MediaFoundationResampler(reader, targetFormat) { ResamplerQuality = 60 }.ToSampleProvider();
 
-        using var ms = new MemoryStream(audioBytes);
-        using var reader = new WaveFileReader(ms);
-
-        IWaveProvider provider;
-
-        if (!reader.WaveFormat.Equals(targetFormat))
+        float[] buffer = new float[2_097_152];
+        int read;
+        while ((read = sampleProvider.Read(buffer, 0, buffer.Length)) > 0)
         {
-            var resampler = new MediaFoundationResampler(reader, targetFormat)
-            {
-                ResamplerQuality = 60
-            };
-            provider = resampler;
-        }
-        else
-        {
-            provider = reader;
-        }
-
-        byte[] buffer = new byte[2_097_152];
-        int bytesRead;
-        while ((bytesRead = provider.Read(buffer, 0, buffer.Length)) > 0)
-        {
-            waveWriter.Write(buffer, 0, bytesRead);
+            waveWriter.WriteSamples(buffer, 0, read);
         }
     }
 
