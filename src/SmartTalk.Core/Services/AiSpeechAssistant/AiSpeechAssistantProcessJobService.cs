@@ -5,10 +5,12 @@ using Newtonsoft.Json;
 using Serilog;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Ioc;
+using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.Restaurants;
 using SmartTalk.Core.Services.RetrievalDb.VectorDb;
 using SmartTalk.Core.Settings.Twilio;
+using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Constants;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Restaurant;
@@ -24,6 +26,8 @@ namespace SmartTalk.Core.Services.AiSpeechAssistant;
 public interface IAiSpeechAssistantProcessJobService : IScopedDependency
 {
     Task RecordAiSpeechAssistantCallAsync(AiSpeechAssistantStreamContextDto context, CancellationToken cancellationToken);
+    
+    Task SyncAiSpeechAssistantInfoToAgentAsync(SyncAiSpeechAssistantInfoToAgentCommand command, CancellationToken cancellationToken);
 }
 
 public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobService
@@ -32,6 +36,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
     private readonly IVectorDb _vectorDb;
     private readonly TwilioSettings _twilioSettings;
     private readonly TranslationClient _translationClient;
+    private readonly IAgentDataProvider _agentDataProvider;
     private readonly IRestaurantDataProvider _restaurantDataProvider;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly IAiSpeechAssistantDataProvider _speechAssistantDataProvider;
@@ -41,6 +46,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         IVectorDb vectorDb,
         TwilioSettings twilioSettings,
         TranslationClient translationClient,
+        IAgentDataProvider agentDataProvider,
         IRestaurantDataProvider restaurantDataProvider,
         IPhoneOrderDataProvider phoneOrderDataProvider,
         IAiSpeechAssistantDataProvider speechAssistantDataProvider)
@@ -49,6 +55,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         _vectorDb = vectorDb;
         _twilioSettings = twilioSettings;
         _translationClient = translationClient;
+        _agentDataProvider = agentDataProvider;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _restaurantDataProvider = restaurantDataProvider;
         _speechAssistantDataProvider = speechAssistantDataProvider;
@@ -84,6 +91,25 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         };
 
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync([record], cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task SyncAiSpeechAssistantInfoToAgentAsync(SyncAiSpeechAssistantInfoToAgentCommand command, CancellationToken cancellationToken)
+    {
+        var agentAndAssistantPairs = await _speechAssistantDataProvider.GetAgentAndAiSpeechAssistantPairsAsync(cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Getting agent and assistant pairs: {AgentAndAssistantPairs}", agentAndAssistantPairs);
+        
+        foreach (var (agent, assistant) in agentAndAssistantPairs)
+        {
+            agent.IsSurface = true;
+            agent.Name = assistant.Name;
+            agent.Voice = assistant.ModelVoice;
+            agent.WaitInterval = assistant.WaitInterval;
+            agent.IsTransferHuman = assistant.IsTransferHuman;
+            agent.Channel = AiSpeechAssistantChannel.LiveChat;
+        }
+        
+        await _agentDataProvider.UpdateAgentsAsync(agentAndAssistantPairs.Select(x => x.Item1).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
     private static string FormattedConversation(List<(AiSpeechAssistantSpeaker, string)> conversationTranscription)

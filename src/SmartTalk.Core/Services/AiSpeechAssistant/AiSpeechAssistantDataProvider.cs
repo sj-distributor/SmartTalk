@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Domain.AIAssistant;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.System;
+using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
@@ -122,6 +123,8 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task DeleteAiSpeechAssistantFunctionCallsAsync(List<AiSpeechAssistantFunctionCall> tools, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task DeleteAiSpeechAssistantHumanContactsAsync(List<AiSpeechAssistantHumanContact> humanContacts, bool forceSave = true, CancellationToken cancellationToken = default);
+    
+    Task<List<(Agent, Domain.AISpeechAssistant.AiSpeechAssistant)>> GetAgentAndAiSpeechAssistantPairsAsync(CancellationToken cancellationToken);
 }
 
 public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
@@ -668,5 +671,17 @@ public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
         await _repository.DeleteAllAsync(humanContacts, cancellationToken).ConfigureAwait(false);
         
         if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<(Agent, Domain.AISpeechAssistant.AiSpeechAssistant)>> GetAgentAndAiSpeechAssistantPairsAsync(CancellationToken cancellationToken)
+    {
+        var query = from agent in _repository.Query<Agent>().Where(x => x.Type == AgentType.Assistant)
+            join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
+            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agentAssistant.AssistantId equals assistant.Id
+            select new { agent, assistant };
+        
+        var result = await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+        
+        return result.Select(x => (x.agent, x.assistant)).ToList();
     }
 }
