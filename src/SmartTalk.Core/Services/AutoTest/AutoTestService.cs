@@ -117,6 +117,8 @@ public partial class AutoTestService : IAutoTestService
                 }
 
                 AppendAudioToWave(customerAudio, waveWriter);
+                
+                AppendAudioToWave(aiAudioBytes, waveWriter);
 
                 reader.Position = 0;
                 reader.CopyTo(waveWriter);
@@ -137,18 +139,32 @@ public partial class AutoTestService : IAutoTestService
     
     private void AppendAudioToWave(byte[] audioBytes, WaveFileWriter waveWriter)
     {
+        if (audioBytes == null || audioBytes.Length == 0)
+            return;
+
         using var ms = new MemoryStream(audioBytes);
         using var reader = new WaveFileReader(ms);
 
+        ISampleProvider sampleProvider;
+
         if (!reader.WaveFormat.Equals(waveWriter.WaveFormat))
         {
-            using var resampler = new MediaFoundationResampler(reader, waveWriter.WaveFormat);
-            resampler.ResamplerQuality = 60;
-            WaveFileWriter.WriteWavFileToStream(waveWriter, resampler);
+            var resampler = new MediaFoundationResampler(reader, waveWriter.WaveFormat)
+            {
+                ResamplerQuality = 60
+            };
+            sampleProvider = resampler.ToSampleProvider();
         }
         else
         {
-            reader.CopyTo(waveWriter);
+            sampleProvider = reader.ToSampleProvider();
+        }
+
+        float[] buffer = new float[waveWriter.WaveFormat.SampleRate * waveWriter.WaveFormat.Channels];
+        int read;
+        while ((read = sampleProvider.Read(buffer, 0, buffer.Length)) > 0)
+        {
+            waveWriter.WriteSamples(buffer, 0, read);
         }
     }
 }
