@@ -62,22 +62,24 @@ public partial class AutoTestService : IAutoTestService
 
     private async Task<byte[]> ProcessAudioConversationAsync(List<byte[]> customerAudioList, string prompt, CancellationToken cancellationToken)
     {
+        if (customerAudioList == null || customerAudioList.Count == 0)
+            throw new ArgumentException("没有音频输入");
+
         var conversationHistory = new List<ChatMessage>
         {
             new SystemChatMessage(prompt)
         };
 
         var client = new ChatClient("gpt-audio", _openAiSettings.ApiKey);
-
         var options = new ChatCompletionOptions
         {
             ResponseModalities = ChatResponseModalities.Text | ChatResponseModalities.Audio,
             AudioOptions = new ChatAudioOptions(ChatOutputAudioVoice.Alloy, ChatOutputAudioFormat.Wav)
         };
-        
+
         using var combinedStream = new MemoryStream();
-        WaveFileWriter? waveWriter = null;
-        WaveFormat baseFormat = null;
+        var targetFormat = new WaveFormat(16000, 16, 1);
+        WaveFileWriter waveWriter = new WaveFileWriter(combinedStream, targetFormat);
 
         foreach (var customerAudio in customerAudioList)
         {
@@ -86,49 +88,42 @@ public partial class AutoTestService : IAutoTestService
                 Log.Warning("跳过空音频文件");
                 continue;
             }
-            
-            conversationHistory.Add(
-                new UserChatMessage(
-                    ChatMessageContentPart.CreateInputAudioPart(
-                        BinaryData.FromBytes(customerAudio),
-                        ChatInputAudioFormat.Wav
-                    )
+
+            LogAudioParameters("用户输入音频", customerAudio);
+
+            conversationHistory.Add(new UserChatMessage(
+                ChatMessageContentPart.CreateInputAudioPart(
+                    BinaryData.FromBytes(customerAudio),
+                    ChatInputAudioFormat.Wav
                 )
-            );
+            ));
 
             var completion = await client.CompleteChatAsync(conversationHistory, options, cancellationToken);
             var aiAudioBytes = completion.Value.OutputAudio.AudioBytes.ToArray();
             var aiReplyText = completion.Value.OutputAudio.Transcript;
-            
+
             LogAudioParameters("AI 回复音频", aiAudioBytes);
-            
-            if (waveWriter == null)
-            {
-                using var reader = new WaveFileReader(new MemoryStream(customerAudio));
-                baseFormat = reader.WaveFormat;
-                waveWriter = new WaveFileWriter(combinedStream, baseFormat);
-            }
 
-            AppendAudioToWave(customerAudio, waveWriter, baseFormat);
-
-            AppendAudioToWave(aiAudioBytes, waveWriter, baseFormat);
+            AppendAudioToWave(customerAudio, waveWriter, targetFormat);
+            AppendAudioToWave(aiAudioBytes, waveWriter, targetFormat);
 
             conversationHistory.Add(new AssistantChatMessage(aiReplyText));
         }
-
-        waveWriter?.DisposeAsync();
+        
+        waveWriter.Dispose();
 
         return combinedStream.ToArray();
     }
-    
+
     private void AppendAudioToWave(byte[] audioBytes, WaveFileWriter waveWriter, WaveFormat targetFormat)
     {
-        if (audioBytes == null || audioBytes.Length == 0) return;
+        if (audioBytes == null || audioBytes.Length == 0)
+            return;
 
         using var ms = new MemoryStream(audioBytes);
         using var reader = new WaveFileReader(ms);
 
-        ISampleProvider sampleProvider;
+        IWaveProvider provider;
 
         if (!reader.WaveFormat.Equals(targetFormat))
         {
@@ -136,23 +131,21 @@ public partial class AutoTestService : IAutoTestService
             {
                 ResamplerQuality = 60
             };
-            sampleProvider = resampler.ToSampleProvider();
+            provider = resampler;
         }
         else
         {
-            sampleProvider = reader.ToSampleProvider();
+            provider = reader;
         }
 
-        float[] buffer = new float[4096 * targetFormat.Channels];
-        
-        int read;
-        
-        while ((read = sampleProvider.Read(buffer, 0, buffer.Length)) > 0)
+        byte[] buffer = new byte[2_097_152];
+        int bytesRead;
+        while ((bytesRead = provider.Read(buffer, 0, buffer.Length)) > 0)
         {
-            waveWriter.WriteSamples(buffer, 0, read);
+            waveWriter.Write(buffer, 0, bytesRead);
         }
     }
-    
+
     private void LogAudioParameters(string tag, byte[] audioBytes)
     {
         if (audioBytes == null || audioBytes.Length == 0) return;
@@ -168,4 +161,5 @@ public partial class AutoTestService : IAutoTestService
             reader.WaveFormat.Channels
         );
     }
+
 }
