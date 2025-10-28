@@ -106,25 +106,17 @@ public partial class AutoTestService : IAutoTestService
 
             var completion = await client.CompleteChatAsync(conversationHistory, options, cancellationToken);
             var aiAudioBytes = completion.Value.OutputAudio.AudioBytes.ToArray();
+            var aiReplyText = completion.Value.OutputAudio.Transcript;
             
             using var audioStream = new MemoryStream(aiAudioBytes);
 
-            var transcription = await transcriptionClient.TranscribeAudioAsync(
-                audioStream,
-                "audio.wav",
-                transcriptionOptions,
-                cancellationToken: cancellationToken
-            ).ConfigureAwait(false);
-
-            var aiText = transcription.Value.Text;
-
-            conversationHistory.Add(new AssistantChatMessage(aiText));
+            conversationHistory.Add(new AssistantChatMessage(aiReplyText));
 
             conversationRecords.Add(new AudioConversationRecord
             {
                 UserAudio = customerAudio,
                 AiAudio = aiAudioBytes,
-                AiText = aiText
+                AiText = aiReplyText
             });
         }
 
