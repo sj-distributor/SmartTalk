@@ -77,6 +77,7 @@ public partial class AutoTestService : IAutoTestService
         
         using var combinedStream = new MemoryStream();
         WaveFileWriter? waveWriter = null;
+        WaveFormat baseFormat = null;
 
         foreach (var customerAudio in customerAudioList)
         {
@@ -99,54 +100,39 @@ public partial class AutoTestService : IAutoTestService
             var aiAudioBytes = completion.Value.OutputAudio.AudioBytes.ToArray();
             var aiReplyText = completion.Value.OutputAudio.Transcript;
             
-            try
+            LogAudioParameters("AI 回复音频", aiAudioBytes);
+            
+            if (waveWriter == null)
             {
-                using var aiStream = new MemoryStream(aiAudioBytes);
-                using var reader = new WaveFileReader(aiStream);
-
-                Log.Information(
-                    "AI 回复音频参数：采样率 {SampleRate}Hz, 位深 {Bits}bit, 声道 {Channels}",
-                    reader.WaveFormat.SampleRate,
-                    reader.WaveFormat.BitsPerSample,
-                    reader.WaveFormat.Channels
-                );
-
-                if (waveWriter == null)
-                {
-                    waveWriter = new WaveFileWriter(combinedStream, reader.WaveFormat);
-                }
-
-                AppendAudioToWave(customerAudio, waveWriter);
-                
-                AppendAudioToWave(aiAudioBytes, waveWriter);
+                using var reader = new WaveFileReader(new MemoryStream(customerAudio));
+                baseFormat = reader.WaveFormat;
+                waveWriter = new WaveFileWriter(combinedStream, baseFormat);
             }
-            catch (Exception ex)
-            {
-                Log.Error("处理音频失败: {Message}", ex.Message);
-                continue;
-            }
+
+            AppendAudioToWave(customerAudio, waveWriter, baseFormat);
+
+            AppendAudioToWave(aiAudioBytes, waveWriter, baseFormat);
 
             conversationHistory.Add(new AssistantChatMessage(aiReplyText));
         }
 
-        waveWriter?.Dispose();
+        waveWriter?.DisposeAsync();
 
         return combinedStream.ToArray();
     }
     
-    private void AppendAudioToWave(byte[] audioBytes, WaveFileWriter waveWriter)
+    private void AppendAudioToWave(byte[] audioBytes, WaveFileWriter waveWriter, WaveFormat targetFormat)
     {
-        if (audioBytes == null || audioBytes.Length == 0)
-            return;
+        if (audioBytes == null || audioBytes.Length == 0) return;
 
         using var ms = new MemoryStream(audioBytes);
         using var reader = new WaveFileReader(ms);
 
         ISampleProvider sampleProvider;
 
-        if (!reader.WaveFormat.Equals(waveWriter.WaveFormat))
+        if (!reader.WaveFormat.Equals(targetFormat))
         {
-            var resampler = new MediaFoundationResampler(reader, waveWriter.WaveFormat)
+            var resampler = new MediaFoundationResampler(reader, targetFormat)
             {
                 ResamplerQuality = 60
             };
@@ -157,11 +143,29 @@ public partial class AutoTestService : IAutoTestService
             sampleProvider = reader.ToSampleProvider();
         }
 
-        float[] buffer = new float[waveWriter.WaveFormat.SampleRate * waveWriter.WaveFormat.Channels];
+        float[] buffer = new float[4096 * targetFormat.Channels];
+        
         int read;
+        
         while ((read = sampleProvider.Read(buffer, 0, buffer.Length)) > 0)
         {
             waveWriter.WriteSamples(buffer, 0, read);
         }
+    }
+    
+    private void LogAudioParameters(string tag, byte[] audioBytes)
+    {
+        if (audioBytes == null || audioBytes.Length == 0) return;
+
+        using var ms = new MemoryStream(audioBytes);
+        using var reader = new WaveFileReader(ms);
+
+        Log.Information(
+            "{Tag} 参数：采样率 {SampleRate}Hz, 位深 {Bits}bit, 声道 {Channels}",
+            tag,
+            reader.WaveFormat.SampleRate,
+            reader.WaveFormat.BitsPerSample,
+            reader.WaveFormat.Channels
+        );
     }
 }
