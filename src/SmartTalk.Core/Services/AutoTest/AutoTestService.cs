@@ -2,6 +2,7 @@ using AutoMapper;
 using NAudio.Wave;
 using OpenAI.Audio;
 using OpenAI.Chat;
+using Serilog;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Messages.Commands.AutoTest;
@@ -53,20 +54,13 @@ public partial class AutoTestService : IAutoTestService
     {
         var coreAudioRecords = await ProcessAudioConversationAsync(command.CustomerAudioList, command.Prompt, cancellationToken);
 
-        var responseRecords = coreAudioRecords.Select(r => new SmartTalk.Messages.Commands.AutoTest.AudioConversationRecord
-        {
-            UserAudio = r.UserAudio,
-            AiAudio = r.AiAudio,
-            AiText = r.AiText
-        }).ToList();
-
         return new AutoTestConversationAudioProcessReponse()
         {
-            Data = responseRecords
+            Data = coreAudioRecords
         };
     }
 
-    public async Task<List<AudioConversationRecord>> ProcessAudioConversationAsync(List<byte[]> customerAudioList, string prompt, CancellationToken cancellationToken)
+    private async Task<byte[]> ProcessAudioConversationAsync(List<byte[]> customerAudioList, string prompt, CancellationToken cancellationToken)
     {
         var conversationHistory = new List<ChatMessage>
         {
@@ -81,17 +75,8 @@ public partial class AutoTestService : IAutoTestService
             AudioOptions = new ChatAudioOptions(ChatOutputAudioVoice.Alloy, ChatOutputAudioFormat.Wav)
         };
 
-        ChatCompletion? lastCompletion = null;
-
-        var transcriptionClient = new AudioClient("gpt-audio", _openAiSettings.ApiKey);
-        
-        var transcriptionOptions = new AudioTranscriptionOptions
-        {
-            Language = "zh",
-            ResponseFormat = AudioTranscriptionFormat.Text
-        };
-
-        var conversationRecords = new List<AudioConversationRecord>();
+        using var combinedStream = new MemoryStream();
+        WaveFileWriter? waveWriter = null;
 
         foreach (var customerAudio in customerAudioList)
         {
@@ -109,59 +94,53 @@ public partial class AutoTestService : IAutoTestService
             var aiReplyText = completion.Value.OutputAudio.Transcript;
             
             using var audioStream = new MemoryStream(aiAudioBytes);
+            
+            using (var reader = new WaveFileReader(audioStream))
+            {
+                Log.Information(
+                    "AI 回复音频参数：采样率 {SampleRate}Hz, 位深 {Bits}bit, 声道 {Channels}",
+                    reader.WaveFormat.SampleRate,
+                    reader.WaveFormat.BitsPerSample,
+                    reader.WaveFormat.Channels
+                );
+
+                if (waveWriter == null)
+                {
+                    waveWriter = new WaveFileWriter(combinedStream, reader.WaveFormat);
+                }
+
+                AppendAudioToWave(customerAudio, waveWriter);
+
+                reader.Position = 0;
+                reader.CopyTo(waveWriter);
+            }
 
             conversationHistory.Add(new AssistantChatMessage(aiReplyText));
-
-            conversationRecords.Add(new AudioConversationRecord
-            {
-                UserAudio = customerAudio,
-                AiAudio = aiAudioBytes,
-                AiText = aiReplyText
-            });
         }
+        
+        waveWriter?.Dispose();
+        
+        File.WriteAllBytes("combined_conversation.wav", combinedStream.ToArray());
+        Log.Information("拼接完成，输出文件：combined_conversation.wav");
 
-        return conversationRecords;
-    }
+        return combinedStream.ToArray();
 
-    private static byte[] PcmToWav(byte[] pcmData, int sampleRate, int bitsPerSample, int channels)
-    {
-        using var ms = new MemoryStream();
-        var waveFormat = new WaveFormat(sampleRate, bitsPerSample, channels);
-        using (var writer = new WaveFileWriter(ms, waveFormat))
-        {
-            writer.Write(pcmData, 0, pcmData.Length);
-            writer.Flush();
-        }
-        return ms.ToArray();
     }
     
-    private static byte[] ExtractPcmFromWav(byte[] wavData)
+    private void AppendAudioToWave(byte[] audioBytes, WaveFileWriter waveWriter)
     {
-        using var ms = new MemoryStream(wavData);
-        using var rdr = new WaveFileReader(ms);
-        using var pcmStream = new MemoryStream();
-        rdr.CopyTo(pcmStream);
-        return pcmStream.ToArray();
-    }
+        using var ms = new MemoryStream(audioBytes);
+        using var reader = new WaveFileReader(ms);
 
-    private static byte[] ConcatPcmSegments(List<byte[]> segments)
-    {
-        int totalLength = segments.Sum(s => s.Length);
-        byte[] result = new byte[totalLength];
-        int offset = 0;
-        foreach (var s in segments)
+        if (!reader.WaveFormat.Equals(waveWriter.WaveFormat))
         {
-            Buffer.BlockCopy(s, 0, result, offset, s.Length);
-            offset += s.Length;
+            using var resampler = new MediaFoundationResampler(reader, waveWriter.WaveFormat);
+            resampler.ResamplerQuality = 60;
+            WaveFileWriter.WriteWavFileToStream(waveWriter, resampler);
         }
-
-        return result;
-    }
-    
-    public class AudioConversationRecord
-    {
-        public byte[] UserAudio { get; set; }
-        public byte[] AiAudio { get; set; }
-        public string AiText { get; set; }
+        else
+        {
+            reader.CopyTo(waveWriter);
+        }
     }
 }

@@ -10,15 +10,6 @@ public class AutoTestConversationAudioProcessCommand : ICommand
     public string Prompt { get; set; }
 }
 
-public class AutoTestConversationAudioProcessReponse : SmartTalkResponse<List<AudioConversationRecord>>
+public class AutoTestConversationAudioProcessReponse : SmartTalkResponse<byte[]>
 {
-}
-
-public class AudioConversationRecord
-{
-    public byte[] UserAudio { get; set; }
-    
-    public byte[] AiAudio { get; set; }
-    
-    public string AiText { get; set; }
 }
