@@ -119,9 +119,6 @@ public partial class AutoTestService : IAutoTestService
                 AppendAudioToWave(customerAudio, waveWriter);
                 
                 AppendAudioToWave(aiAudioBytes, waveWriter);
-
-                reader.Position = 0;
-                reader.CopyTo(waveWriter);
             }
             catch (Exception ex)
             {
