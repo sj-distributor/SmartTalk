@@ -74,12 +74,18 @@ public partial class AutoTestService : IAutoTestService
             ResponseModalities = ChatResponseModalities.Text | ChatResponseModalities.Audio,
             AudioOptions = new ChatAudioOptions(ChatOutputAudioVoice.Alloy, ChatOutputAudioFormat.Wav)
         };
-
-        using var combinedStream = new MemoryStream();
+        
+        string outputFilePath = "combined_conversation.wav";
         WaveFileWriter? waveWriter = null;
 
         foreach (var customerAudio in customerAudioList)
         {
+            if (customerAudio == null || customerAudio.Length == 0)
+            {
+                Log.Warning("跳过空音频文件");
+                continue;
+            }
+            
             conversationHistory.Add(
                 new UserChatMessage(
                     ChatMessageContentPart.CreateInputAudioPart(
@@ -93,10 +99,11 @@ public partial class AutoTestService : IAutoTestService
             var aiAudioBytes = completion.Value.OutputAudio.AudioBytes.ToArray();
             var aiReplyText = completion.Value.OutputAudio.Transcript;
             
-            using var audioStream = new MemoryStream(aiAudioBytes);
-            
-            using (var reader = new WaveFileReader(audioStream))
+            try
             {
+                using var aiStream = new MemoryStream(aiAudioBytes);
+                using var reader = new WaveFileReader(aiStream);
+
                 Log.Information(
                     "AI 回复音频参数：采样率 {SampleRate}Hz, 位深 {Bits}bit, 声道 {Channels}",
                     reader.WaveFormat.SampleRate,
@@ -106,7 +113,7 @@ public partial class AutoTestService : IAutoTestService
 
                 if (waveWriter == null)
                 {
-                    waveWriter = new WaveFileWriter(combinedStream, reader.WaveFormat);
+                    waveWriter = new WaveFileWriter(outputFilePath, reader.WaveFormat);
                 }
 
                 AppendAudioToWave(customerAudio, waveWriter);
@@ -114,17 +121,20 @@ public partial class AutoTestService : IAutoTestService
                 reader.Position = 0;
                 reader.CopyTo(waveWriter);
             }
+            catch (Exception ex)
+            {
+                Log.Error("处理音频失败: {Message}", ex.Message);
+                continue;
+            }
 
             conversationHistory.Add(new AssistantChatMessage(aiReplyText));
         }
-        
+
         waveWriter?.Dispose();
-        
-        File.WriteAllBytes("combined_conversation.wav", combinedStream.ToArray());
-        Log.Information("拼接完成，输出文件：combined_conversation.wav");
 
-        return combinedStream.ToArray();
+        Log.Information("拼接完成，输出文件：{File}", outputFilePath);
 
+        return await File.ReadAllBytesAsync(outputFilePath, cancellationToken);
     }
     
     private void AppendAudioToWave(byte[] audioBytes, WaveFileWriter waveWriter)
