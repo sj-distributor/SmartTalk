@@ -82,6 +82,10 @@ public partial class AutoTestService : IAutoTestService
 
         foreach (var userPcm in customerPcmList)
         {
+            if (userPcm == null || userPcm.Length == 0) continue;
+
+            combinedStream.Write(userPcm, 0, userPcm.Length);
+
             var userWav = PcmToWav(userPcm, 16000, 16, 1);
 
             conversationHistory.Add(new UserChatMessage(
@@ -89,13 +93,11 @@ public partial class AutoTestService : IAutoTestService
             ));
 
             var completion = await client.CompleteChatAsync(conversationHistory, options, cancellationToken);
-            var aiPcmBytes = completion.Value.OutputAudio.AudioBytes.ToArray();
-            var aiReplyText = completion.Value.OutputAudio.Transcript;
+            var aiPcm = completion.Value.OutputAudio.AudioBytes.ToArray();
 
-            combinedStream.Write(userPcm, 0, userPcm.Length);
-            combinedStream.Write(aiPcmBytes, 0, aiPcmBytes.Length);
+            combinedStream.Write(aiPcm, 0, aiPcm.Length);
 
-            conversationHistory.Add(new AssistantChatMessage(aiReplyText));
+            conversationHistory.Add(new AssistantChatMessage(completion.Value.OutputAudio.Transcript));
         }
 
         return combinedStream.ToArray();
