@@ -75,7 +75,7 @@ public partial class AutoTestService : IAutoTestService
             AudioOptions = new ChatAudioOptions(ChatOutputAudioVoice.Alloy, ChatOutputAudioFormat.Wav)
         };
         
-        string outputFilePath = "combined_conversation.wav";
+        using var combinedStream = new MemoryStream();
         WaveFileWriter? waveWriter = null;
 
         foreach (var customerAudio in customerAudioList)
@@ -113,7 +113,7 @@ public partial class AutoTestService : IAutoTestService
 
                 if (waveWriter == null)
                 {
-                    waveWriter = new WaveFileWriter(outputFilePath, reader.WaveFormat);
+                    waveWriter = new WaveFileWriter(combinedStream, reader.WaveFormat);
                 }
 
                 AppendAudioToWave(customerAudio, waveWriter);
@@ -132,9 +132,7 @@ public partial class AutoTestService : IAutoTestService
 
         waveWriter?.Dispose();
 
-        Log.Information("拼接完成，输出文件：{File}", outputFilePath);
-
-        return await File.ReadAllBytesAsync(outputFilePath, cancellationToken);
+        return combinedStream.ToArray();
     }
     
     private void AppendAudioToWave(byte[] audioBytes, WaveFileWriter waveWriter)
