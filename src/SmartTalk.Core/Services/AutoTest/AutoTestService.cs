@@ -1,6 +1,8 @@
 using AutoMapper;
 using NAudio.Wave;
+using OpenAI.Audio;
 using OpenAI.Chat;
+using Serilog;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Messages.Commands.AutoTest;
@@ -48,54 +50,59 @@ public partial class AutoTestService : IAutoTestService
         return new AutoTestRunningResponse() { Data = executionResult };
     }
 
-    public async Task<AutoTestConversationAudioProcessReponse> AutoTestConversationAudioProcessAsync(AutoTestConversationAudioProcessCommand command,
-        CancellationToken cancellationToken)
+    public async Task<AutoTestConversationAudioProcessReponse> AutoTestConversationAudioProcessAsync(AutoTestConversationAudioProcessCommand command, CancellationToken cancellationToken)
     {
-        var audio = await ProcessAudioConversationAsync(command.CustomerAudioList, command.Prompt, cancellationToken).ConfigureAwait(false);
+        var coreAudioRecords = await ProcessAudioConversationAsync(command.CustomerAudioList, command.Prompt, cancellationToken);
 
         return new AutoTestConversationAudioProcessReponse()
         {
-            Data = audio
+            Data = coreAudioRecords
         };
     }
 
-    public async Task<byte[]> ProcessAudioConversationAsync(List<byte[]> customerAudioList, string prompt, CancellationToken cancellationToken)
+    private async Task<byte[]> ProcessAudioConversationAsync(List<byte[]> customerPcmList, string prompt, CancellationToken cancellationToken)
     {
-        var conversationHistory = new List<ChatMessage>();
-        conversationHistory.Add(new SystemChatMessage($"{prompt}"));
+        if (customerPcmList == null || customerPcmList.Count == 0)
+            throw new ArgumentException("没有音频输入");
 
-        var allPcmSegments = new List<byte[]>();
+        var conversationHistory = new List<ChatMessage>
+        {
+            new SystemChatMessage(prompt)
+        };
+
         var client = new ChatClient("gpt-audio", _openAiSettings.ApiKey);
 
-        int sampleRate = 16000;
-        int bitsPerSample = 16;
-        int channels = 1;
-
-        foreach (var customerAudio in customerAudioList)
+        var options = new ChatCompletionOptions
         {
-            var customerWav = PcmToWav(customerAudio, sampleRate, bitsPerSample, channels);
-            
-            conversationHistory.Add(new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(BinaryData.FromBytes(customerWav), ChatInputAudioFormat.Wav)));
-            
-            var options = new ChatCompletionOptions { ResponseModalities = ChatResponseModalities.Audio, AudioOptions = new ChatAudioOptions(ChatOutputAudioVoice.Alloy, ChatOutputAudioFormat.Wav) };
-            
+            ResponseModalities = ChatResponseModalities.Text | ChatResponseModalities.Audio,
+            AudioOptions = new ChatAudioOptions(ChatOutputAudioVoice.Alloy, ChatOutputAudioFormat.Pcm16)
+        };
+
+        using var combinedStream = new MemoryStream();
+
+        foreach (var userPcm in customerPcmList)
+        {
+            if (userPcm == null || userPcm.Length == 0) continue;
+
+            combinedStream.Write(userPcm, 0, userPcm.Length);
+
+            var userWav = PcmToWav(userPcm, 16000, 16, 1);
+
+            conversationHistory.Add(new UserChatMessage(
+                ChatMessageContentPart.CreateInputAudioPart(BinaryData.FromBytes(userWav), ChatInputAudioFormat.Wav)
+            ));
+
             var completion = await client.CompleteChatAsync(conversationHistory, options, cancellationToken);
+            var aiPcm = completion.Value.OutputAudio.AudioBytes.ToArray();
 
-            var aiReplyText = completion.Value.Content.FirstOrDefault()?.Text;
-            
-            conversationHistory.Add(new AssistantChatMessage(aiReplyText));
+            combinedStream.Write(aiPcm, 0, aiPcm.Length);
 
-            var aiReplyAudio = completion.Value.OutputAudio.AudioBytes.ToArray();
-
-            allPcmSegments.Add(customerAudio);
-
-            var aiPcm = ExtractPcmFromWav(aiReplyAudio);
-            
-            allPcmSegments.Add(aiPcm);
+            conversationHistory.Add(new AssistantChatMessage(completion.Value.OutputAudio.Transcript));
         }
 
-        return PcmToWav(ConcatPcmSegments(allPcmSegments), sampleRate, bitsPerSample, channels);
+        return combinedStream.ToArray();
     }
+
 
     private static byte[] PcmToWav(byte[] pcmData, int sampleRate, int bitsPerSample, int channels)
     {
@@ -107,28 +114,5 @@ public partial class AutoTestService : IAutoTestService
             writer.Flush();
         }
         return ms.ToArray();
-    }
-    
-    private static byte[] ExtractPcmFromWav(byte[] wavData)
-    {
-        using var ms = new MemoryStream(wavData);
-        using var rdr = new WaveFileReader(ms);
-        using var pcmStream = new MemoryStream();
-        rdr.CopyTo(pcmStream);
-        return pcmStream.ToArray();
-    }
-
-    private static byte[] ConcatPcmSegments(List<byte[]> segments)
-    {
-        int totalLength = segments.Sum(s => s.Length);
-        byte[] result = new byte[totalLength];
-        int offset = 0;
-        foreach (var s in segments)
-        {
-            Buffer.BlockCopy(s, 0, result, offset, s.Length);
-            offset += s.Length;
-        }
-
-        return result;
     }
 }
