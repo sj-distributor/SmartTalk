@@ -2,7 +2,7 @@ namespace SmartTalk.Messages.Dto.HrInterView;
 
 public class HrInterViewQuestionsDto
 {
-    public int? QuestionId { set; get; }
+    public int QuestionId { set; get; }
     
     public string Question { set; get; }
     
