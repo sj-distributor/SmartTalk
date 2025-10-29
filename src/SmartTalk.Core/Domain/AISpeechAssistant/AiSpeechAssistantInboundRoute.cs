@@ -42,14 +42,14 @@ public class AiSpeechAssistantInboundRoute : IEntity, IHasCreatedFields
     [Column("priority")]
     public int Priority { get; set; }
     
+    [Column("emergency")]
+    public bool Emergency { get; set; }
+    
     [Column("is_fallback")]
     public bool IsFallback { get; set; }
     
     [Column("remarks")]
     public string Remarks { get; set; }
-
-    [Column("emergency")]
-    public bool Emergency { get; set; }
     
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }

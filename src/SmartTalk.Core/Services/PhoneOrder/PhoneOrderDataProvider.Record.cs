@@ -73,13 +73,12 @@ public partial class PhoneOrderDataProvider
     public async Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(List<int> agentIds, string name, string orderId, DateTimeOffset? utcStart = null, DateTimeOffset? utcEnd = null, CancellationToken cancellationToken = default)
     {
         var agentsQuery = from agent in _repository.Query<Agent>()
-            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agent.Id equals
-                assistant.AgentId
-            where (agentIds == null || !agentIds.Any() || agentIds.Contains(agent.Id))
-                  && (string.IsNullOrEmpty(name) || assistant.Name.Contains(name))
+            join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
+            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agentAssistant.AssistantId equals assistant.Id
+            where (agentIds == null || !agentIds.Any() || agentIds.Contains(agent.Id)) && (string.IsNullOrEmpty(name) || assistant.Name.Contains(name))
             select agent;
 
-        var agents = (await agentsQuery.ToListAsync(cancellationToken).ConfigureAwait(false)).Select(x => x.Id).ToList();
+        var agents = (await agentsQuery.ToListAsync(cancellationToken).ConfigureAwait(false)).Select(x => x.Id).Distinct().ToList();
 
         if (agents.Count == 0) return [];
         

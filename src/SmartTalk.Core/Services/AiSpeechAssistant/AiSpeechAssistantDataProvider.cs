@@ -115,8 +115,6 @@ public partial interface IAiSpeechAssistantDataProvider : IScopedDependency
     
     Task<List<AiSpeechAssistantInboundRoute>> DeleteAiSpeechAssistantInboundRoutesAsync(List<int> routeIds, bool forceSave = true, CancellationToken cancellationToken = default);
     
-    Task DeleteAiSpeechAssistantInboundRoutesAsync(List<AiSpeechAssistantInboundRoute> routes, bool forceSave = true, CancellationToken cancellationToken = default);
-    
     Task<(int, List<AiSpeechAssistantInboundRoute>)> GetAiSpeechAssistantInboundRoutesAsync(int pageIndex, int pageSize, int assistantId, string keyword = null, CancellationToken cancellationToken = default);
     
     Task<List<(AgentAssistant, Domain.AISpeechAssistant.AiSpeechAssistant)>> GetAiSpeechAssistantsByAgentIdsAsync(List<int> agentIds, CancellationToken cancellationToken = default);
@@ -611,13 +609,6 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
         if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         
         return routes;
-    }
-
-    public async Task DeleteAiSpeechAssistantInboundRoutesAsync(List<AiSpeechAssistantInboundRoute> routes, bool forceSave = true, CancellationToken cancellationToken = default)
-    {
-        await _repository.DeleteAllAsync(routes, cancellationToken).ConfigureAwait(false);
-        
-        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<(int, List<AiSpeechAssistantInboundRoute>)> GetAiSpeechAssistantInboundRoutesAsync(

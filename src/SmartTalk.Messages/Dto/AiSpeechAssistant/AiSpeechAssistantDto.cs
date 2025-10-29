@@ -20,8 +20,6 @@ public class AiSpeechAssistantDto
     
     public string ModelLanguage { get; set; }
     
-    public int AgentId { get; set; }
-    
     public string CustomRecordAnalyzePrompt { get; set; }
     
     public bool ManualRecordWholeAudio { get; set; }
