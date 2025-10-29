@@ -253,6 +253,7 @@ public class RealtimeAiService : IRealtimeAiService
                     if (jsonDocument.RootElement.TryGetProperty("commit_audio", out var commit))
                     {
                         await _conversationEngine.CommitAudioAsync().ConfigureAwait(false);
+                        continue;
                     }
                     
                     var payload = jsonDocument?.RootElement.GetProperty("media").GetProperty("payload").GetString();
