@@ -152,7 +152,7 @@ public class RealtimeAiService : IRealtimeAiService
                 try
                 {
                     var response = await _smartiesClient.GetCrmCustomerInfoAsync(aiKid.KidUuid, cancellationToken).ConfigureAwait(false);
-                    
+                     
                     Log.Information("Get crm customer info response: {@Response}", response);
 
                     var result = SplicingCrmCustomerResponse(response?.Data?.FirstOrDefault());
