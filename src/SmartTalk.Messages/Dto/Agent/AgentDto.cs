@@ -1,4 +1,6 @@
+using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.Agent;
+using SmartTalk.Messages.Enums.AiSpeechAssistant;
 
 namespace SmartTalk.Messages.Dto.Agent;
 
@@ -28,5 +30,25 @@ public class AgentDto
     
     public string Timezone { get; set; }
     
+    public string Name { get; set; }
+    
+    public string Brief { get; set; }
+    
+    public AiSpeechAssistantChannel? Channel { get; set; }
+    
+    public bool IsReceiveCall { get; set; }
+    
+    public bool IsSurface { get; set; }
+    
+    public string Voice { get; set; }
+    
+    public int WaitInterval { get; set; }
+    
+    public bool IsTransferHuman { get; set; }
+    
+    public string TransferCallNumber { get; set; }
+    
     public DateTimeOffset CreatedDate { get; set; }
+    
+    public List<AiSpeechAssistantDto> Assistants { get; set; }
 }
