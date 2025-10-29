@@ -42,6 +42,9 @@ public class AiSpeechAssistantInboundRoute : IEntity, IHasCreatedFields
     [Column("priority")]
     public int Priority { get; set; }
     
+    [Column("emergency")]
+    public bool Emergency { get; set; }
+    
     [Column("is_fallback")]
     public bool IsFallback { get; set; }
     

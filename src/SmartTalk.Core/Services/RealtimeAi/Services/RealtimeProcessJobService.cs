@@ -13,7 +13,7 @@ namespace SmartTalk.Core.Services.RealtimeAi.Services;
 
 public interface IRealtimeProcessJobService : IScopedDependency
 {
-    Task RecordingRealtimeAiAsync(string recordingUrl, int assistantId, CancellationToken cancellationToken);
+    Task RecordingRealtimeAiAsync(string recordingUrl, int assistantId, string sessionId, CancellationToken cancellationToken);
 }
 
 public class RealtimeProcessJobService : IRealtimeProcessJobService
@@ -44,9 +44,11 @@ public class RealtimeProcessJobService : IRealtimeProcessJobService
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
     }
 
-    public async Task RecordingRealtimeAiAsync(string recordingUrl, int assistantId, CancellationToken cancellationToken)
+    public async Task RecordingRealtimeAiAsync(string recordingUrl, int assistantId, string sessionId, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrEmpty(recordingUrl) || assistantId == 0) return;
+        var agent = await _agentDataProvider.GetAgentByIdAsync(agentId, cancellationToken).ConfigureAwait(false);
+        if (agent is { IsSendAudioRecordWechat: true })
+            await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, agent.WechatRobotKey, $"您有一条新的AI通话录音：\n{recordingUrl}", [], CancellationToken.None).ConfigureAwait(false);
         
         var agentAssistant = await _aiSpeechAssistantDataProvider.GetAgentAssistantsAsync(assistantIds: [assistantId], cancellationToken: cancellationToken).ConfigureAwait(false);
         
@@ -60,7 +62,7 @@ public class RealtimeProcessJobService : IRealtimeProcessJobService
         
         var detection = await _translationClient.DetectLanguageAsync(transcription, cancellationToken).ConfigureAwait(false);
         
-        var record = new PhoneOrderRecord { SessionId = Guid.NewGuid().ToString(), AgentId = agentAssistant.First().AgentId, TranscriptionText = transcription, Url = recordingUrl, Language = SelectLanguageEnum(detection.Language), CreatedDate = DateTimeOffset.Now, Status = PhoneOrderRecordStatus.Recieved };
+        var record = new PhoneOrderRecord { SessionId = sessionId, AgentId = agentAssistant.First().AgentId, TranscriptionText = transcription, Url = recordingUrl, Language = SelectLanguageEnum(detection.Language), CreatedDate = DateTimeOffset.Now, Status = PhoneOrderRecordStatus.Recieved };
 
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync([record], cancellationToken: cancellationToken).ConfigureAwait(false);
         

@@ -12,6 +12,7 @@ using SmartTalk.Messages.Enums.RealtimeAi;
 using SmartTalk.Core.Services.RealtimeAi.Wss;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Attachments;
+using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
@@ -19,6 +20,7 @@ using SmartTalk.Core.Services.RealtimeAi.Adapters;
 using SmartTalk.Messages.Commands.Attachments;
 using SmartTalk.Messages.Commands.RealtimeAi;
 using SmartTalk.Messages.Dto.Attachments;
+using SmartTalk.Messages.Dto.Smarties;
 using JsonException = System.Text.Json.JsonException;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 
@@ -43,9 +45,11 @@ public class RealtimeAiService : IRealtimeAiService
     private IRealtimeAiConversationEngine _conversationEngine;
     private Domain.AISpeechAssistant.AiSpeechAssistant _speechAssistant;
     
+    private string _sessionId;
     private volatile bool _isAiSpeaking;
     private bool _hasHandledAudioBuffer;
     private MemoryStream _wholeAudioBuffer;
+    private List<(AiSpeechAssistantSpeaker, string)> _conversationTranscription;
 
     public RealtimeAiService(
         IPhoneOrderService phoneOrderService,
@@ -68,6 +72,8 @@ public class RealtimeAiService : IRealtimeAiService
         _isAiSpeaking = false;
         _speechAssistant = null;
         _hasHandledAudioBuffer = false;
+        _conversationTranscription = [];
+        _sessionId = Guid.NewGuid().ToString();
     }
 
     public async Task RealtimeAiConnectAsync(RealtimeAiConnectCommand command, CancellationToken cancellationToken)
@@ -110,6 +116,8 @@ public class RealtimeAiService : IRealtimeAiService
         _conversationEngine.AiDetectedUserSpeechAsync += OnAiDetectedUserSpeechAsync;
         _conversationEngine.AiTurnCompletedAsync += OnAiTurnCompletedAsync;
         _conversationEngine.ErrorOccurredAsync += OnErrorOccurredAsync;
+        _conversationEngine.InputAudioTranscriptionCompletedAsync += InputAudioTranscriptionCompletedAsync;
+        _conversationEngine.OutputAudioTranscriptionCompletedyAsync += OutputAudioTranscriptionCompletedAsync;
     }
     
     private async Task ReceiveFromWebSocketClientAsync(RealtimeAiEngineContext context, CancellationToken cancellationToken)
@@ -240,7 +248,41 @@ public class RealtimeAiService : IRealtimeAiService
         await _webSocket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(turnCompleted))), WebSocketMessageType.Text, true, CancellationToken.None);
         Log.Information("Realtime turn completed, {@data}", data);
     }
+
+    private async Task InputAudioTranscriptionCompletedAsync(RealtimeAiWssTranscriptionData transcriptionData)
+    {
+        _conversationTranscription.Add((transcriptionData.Speaker, transcriptionData.Transcript));
+        
+        var transcription = new
+        {
+            type = "InputAudioTranscriptionCompleted",
+            Data = new
+            { 
+                transcriptionData
+            },
+            session_id = _streamSid
+        };
+
+        await _webSocket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(transcription))), WebSocketMessageType.Text, true, CancellationToken.None);
+    }
     
+    private async Task OutputAudioTranscriptionCompletedAsync(RealtimeAiWssTranscriptionData transcriptionData)
+    {
+        _conversationTranscription.Add((transcriptionData.Speaker, transcriptionData.Transcript));
+        
+        var transcription = new
+        {
+            type = "OutputAudioTranscriptionCompleted",
+            Data = new
+            { 
+                transcriptionData
+            },
+            session_id = _streamSid
+        };
+
+        await _webSocket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(transcription))), WebSocketMessageType.Text, true, CancellationToken.None);
+    }
+
     private async Task HandleWholeAudioBufferAsync()
     {
         if (_wholeAudioBuffer is { CanRead: true } src && !_hasHandledAudioBuffer)
@@ -283,11 +325,32 @@ public class RealtimeAiService : IRealtimeAiService
             if (!string.IsNullOrEmpty(audio?.Attachment?.FileUrl) && _speechAssistant.Id != 0)
             {
                 _backgroundJobClient.Enqueue<IRealtimeProcessJobService>(x =>
-                    x.RecordingRealtimeAiAsync(audio.Attachment.FileUrl, _speechAssistant.Id, CancellationToken.None));
+                    x.RecordingRealtimeAiAsync(audio.Attachment.FileUrl, _speechAssistant.Id, _sessionId, CancellationToken.None));
             }
 
             await src.DisposeAsync();
             _wholeAudioBuffer = null;
         }
+        
+        await HandleTranscriptionsAsync().ConfigureAwait(false);
+    }
+
+    private async Task HandleTranscriptionsAsync()
+    {
+        var kid = await _aiSpeechAssistantDataProvider.GetAiKidAsync(agentId: _speechAssistant.AgentId).ConfigureAwait(false);
+
+        if (kid == null) return;
+        
+        _backgroundJobClient.Enqueue<ISmartiesClient>(x =>
+            x.CallBackSmartiesAiKidConversationsAsync(new AiKidConversationCallBackRequestDto
+            {
+                Uuid = kid.KidUuid,
+                SessionId = _sessionId,
+                Transcriptions = _conversationTranscription.Select(t => new RealtimeAiTranscriptionDto
+                {
+                    Speaker = t.Item1,
+                    Transcription = t.Item2
+                }).ToList()
+            }, CancellationToken.None));
     }
 }

@@ -64,9 +64,9 @@ public class SecurityService : ISecurityService
 
         if (!string.IsNullOrEmpty(command.NewName))
         {
-            var user = await _accountDataProvider.GetUserAccountDtoAsync(username: command.NewName, cancellationToken: cancellationToken).ConfigureAwait(false);
+            var user = await _accountDataProvider.GetUserAccountByUserNameWithServiceProviderIdAsync(command.NewName, command.ServiceProviderId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-            if (user.Item1 > 0)
+            if (user != null)
                 throw new Exception("Username already in use");
 
             var oldUser = await _accountDataProvider.GetUserAccountByUserIdAsync(command.UserId, cancellationToken).ConfigureAwait(false);

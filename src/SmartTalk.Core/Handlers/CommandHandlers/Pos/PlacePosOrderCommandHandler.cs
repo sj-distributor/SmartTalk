@@ -16,6 +16,13 @@ public class PlacePosOrderCommandHandler :ICommandHandler<PlacePosOrderCommand, 
 
     public async Task<PlacePosOrderResponse> Handle(IReceiveContext<PlacePosOrderCommand> context, CancellationToken cancellationToken)
     {
-        return await _posService.PlacePosStoreOrdersAsync(context.Message, cancellationToken).ConfigureAwait(false);
+        var @event = await _posService.PlacePosStoreOrdersAsync(context.Message, cancellationToken).ConfigureAwait(false);
+
+        await context.PublishAsync(@event, cancellationToken).ConfigureAwait(false);
+        
+        return new PlacePosOrderResponse
+        {
+            Data = @event.Order
+        };
     }
 }

@@ -9,7 +9,7 @@ using SmartTalk.Messages.Enums.AiSpeechAssistant;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
 
-public interface IAiSpeechAssistantDataProvider : IScopedDependency
+public partial interface IAiSpeechAssistantDataProvider : IScopedDependency
 {
     Task<(Domain.AISpeechAssistant.AiSpeechAssistant, AiSpeechAssistantKnowledge, AiSpeechAssistantUserProfile)>
         GetAiSpeechAssistantInfoByNumbersAsync(string callerNumber, string didNumber, int? assistantId = null, CancellationToken cancellationToken = default);
@@ -127,7 +127,7 @@ public interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task<List<(Agent, Domain.AISpeechAssistant.AiSpeechAssistant)>> GetAgentAndAiSpeechAssistantPairsAsync(CancellationToken cancellationToken);
 }
 
-public class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
+public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
 {
     private readonly IRepository _repository;
     private readonly IUnitOfWork _unitOfWork;
