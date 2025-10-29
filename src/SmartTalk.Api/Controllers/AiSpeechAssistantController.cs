@@ -183,7 +183,7 @@ public class AiSpeechAssistantController : ControllerBase
         return Ok(response);
     }
     
-    [Route("assistant/detail/update"), HttpPost]
+    [Route("assistant/detail"), HttpPut]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdateAiSpeechAssistantDetailResponse))]
     public async Task<IActionResult> UpdateAiSpeechAssistantDetailAsync([FromBody] UpdateAiSpeechAssistantDetailCommand command)
     {
@@ -273,7 +273,7 @@ public class AiSpeechAssistantController : ControllerBase
         return Ok(response);
     }
     
-    [Route("route/modify"), HttpPost]
+    [Route("route"), HttpPut]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdateAiSpeechAssistantInboundRouteResponse))]
     public async Task<IActionResult> UpdateAiSpeechAssistantSessionAsync([FromBody] UpdateAiSpeechAssistantInboundRouteCommand command)
     {
