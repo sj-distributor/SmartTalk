@@ -1,4 +1,5 @@
 using Google.Cloud.Translation.V2;
+using Serilog;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.AiSpeechAssistant;
@@ -46,13 +47,16 @@ public class RealtimeProcessJobService : IRealtimeProcessJobService
 
     public async Task RecordingRealtimeAiAsync(string recordingUrl, int assistantId, string sessionId, CancellationToken cancellationToken)
     {
-        var agent = await _agentDataProvider.GetAgentByIdAsync(agentId, cancellationToken).ConfigureAwait(false);
-        if (agent is { IsSendAudioRecordWechat: true })
+        Log.Information("RecordingRealtimeAiAsync recording url: {recordingUrl}", recordingUrl);
+        
+        var agent = await _agentDataProvider.GetAgentByAssistantIdAsync(assistantId, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Get the agent by assistantId: {@Agent}", agent);
+
+        if (agent == null) return;
+        
+        if (agent.IsSendAudioRecordWechat)
             await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, agent.WechatRobotKey, $"您有一条新的AI通话录音：\n{recordingUrl}", [], CancellationToken.None).ConfigureAwait(false);
-        
-        var agentAssistant = await _aiSpeechAssistantDataProvider.GetAgentAssistantsAsync(assistantIds: [assistantId], cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        if (agentAssistant == null || agentAssistant.Count == 0) return;
 
         var recordingContent = await _httpClientFactory.GetAsync<byte[]>(recordingUrl, cancellationToken).ConfigureAwait(false);
         if (recordingContent == null) return;
@@ -62,7 +66,7 @@ public class RealtimeProcessJobService : IRealtimeProcessJobService
         
         var detection = await _translationClient.DetectLanguageAsync(transcription, cancellationToken).ConfigureAwait(false);
         
-        var record = new PhoneOrderRecord { SessionId = sessionId, AgentId = agentAssistant.First().AgentId, TranscriptionText = transcription, Url = recordingUrl, Language = SelectLanguageEnum(detection.Language), CreatedDate = DateTimeOffset.Now, Status = PhoneOrderRecordStatus.Recieved };
+        var record = new PhoneOrderRecord { SessionId = sessionId, AgentId = agent?.Id ?? 0, TranscriptionText = transcription, Url = recordingUrl, Language = SelectLanguageEnum(detection.Language), CreatedDate = DateTimeOffset.Now, Status = PhoneOrderRecordStatus.Recieved };
 
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync([record], cancellationToken: cancellationToken).ConfigureAwait(false);
         
