@@ -127,18 +127,6 @@ public class HrInterViewService : IHrInterViewService
     {
         var (settings, count) = await _hrInterViewDataProvider.GetHrInterViewSettingsAsync(request.SettingId, request.PageIndex, request.PageSize, cancellationToken).ConfigureAwait(false);
         
-        settings.ForEach(x =>
-        {
-            x.Questions.ForEach(y =>
-            {
-                y.Question = JsonConvert.SerializeObject(JsonConvert
-                    .DeserializeObject<List<HrInterViewQuestionsDto>>(y.Question).Select(z => z.Question));
-                y.Type = JsonConvert.DeserializeObject<HrInterViewQuestionsDto>(y.Type).Question;
-            });
-            x.Welcome = JsonConvert.DeserializeObject<HrInterViewQuestionsDto>(x.Welcome).Question;
-            x.EndMessage = JsonConvert.DeserializeObject<HrInterViewQuestionsDto>(x.EndMessage).Question;
-        });
-        
         return new GetHrInterViewSettingsResponse
         {
             Settings = settings,
