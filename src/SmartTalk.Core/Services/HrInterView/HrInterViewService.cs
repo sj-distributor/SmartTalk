@@ -58,24 +58,30 @@ public class HrInterViewService : IHrInterViewService
     public async Task<AddOrUpdateHrInterViewSettingResponse> AddOrUpdateHrInterViewSettingAsync(AddOrUpdateHrInterViewSettingCommand command, CancellationToken cancellationToken)
     {
         var newSetting = _mapper.Map<HrInterViewSetting>(command.Setting);
+
+        var changeAudioList = new Dictionary<int, string>();
+
+        if (command.ChangeQusetionIds != null && command.ChangeQusetionIds.Any())
+        {
+            foreach (var change in command.ChangeQusetionIds) 
+                changeAudioList.Add(change.Id, await ConvertTextToSpeechAsync(change.Questions, cancellationToken).ConfigureAwait(false));
+        }
+
+        var welcome = JsonConvert.DeserializeObject<HrInterViewQuestionsDto>(newSetting.Welcome);
+
+        if (changeAudioList.TryGetValue(welcome.QuestionId, out var audioWelcomeUrl))
+        {
+            welcome.Url = audioWelcomeUrl;
+            newSetting.Welcome = JsonConvert.SerializeObject(welcome);
+        }
         
-        newSetting.Welcome = JsonConvert.SerializeObject(new HrInterViewQuestionsDto
+        var endMessage = JsonConvert.DeserializeObject<HrInterViewQuestionsDto>(newSetting.EndMessage);
+
+        if (changeAudioList.TryGetValue(endMessage.QuestionId, out var audioEndMessageUrl))
         {
-            Question = newSetting.Welcome,
-            Url = await ConvertTextToSpeechAsync(newSetting.Welcome, cancellationToken).ConfigureAwait(false)
-        }, new JsonSerializerSettings
-        {
-            NullValueHandling = NullValueHandling.Ignore
-        });
-            
-        newSetting.EndMessage = JsonConvert.SerializeObject(new HrInterViewQuestionsDto
-        {
-            Question = newSetting.EndMessage,
-            Url = await ConvertTextToSpeechAsync(newSetting.EndMessage, cancellationToken).ConfigureAwait(false)
-        }, new JsonSerializerSettings
-        {
-            NullValueHandling = NullValueHandling.Ignore
-        });
+            endMessage.Url = audioEndMessageUrl;
+            newSetting.EndMessage = JsonConvert.SerializeObject(welcome);
+        }
         
         if (command.Setting.Id.HasValue)
         {
@@ -94,34 +100,22 @@ public class HrInterViewService : IHrInterViewService
         {
             questionList.SettingId = newSetting.Id;
             questionList.OriginCount = questionList.Count;
-            questionList.Type = JsonConvert.SerializeObject(new HrInterViewQuestionsDto
+            var type = JsonConvert.DeserializeObject<HrInterViewQuestionsDto>(questionList.Type);
+
+            if (changeAudioList.TryGetValue(type.QuestionId, out var audioTypeUrl))
             {
-                Question = questionList.Type,
-                Url = await ConvertTextToSpeechAsync(questionList.Type, cancellationToken).ConfigureAwait(false)
-            }, new JsonSerializerSettings
+                type.Url = audioTypeUrl;
+                questionList.Type = JsonConvert.SerializeObject(type);
+            }
+
+            var questions = JsonConvert.DeserializeObject<List<HrInterViewQuestionsDto>>(questionList.Question);
+            
+            questions.ForEach(question =>
             {
-                NullValueHandling = NullValueHandling.Ignore
+                if (changeAudioList.TryGetValue(question.QuestionId, out var audioQuestionUrl)) question.Url = audioQuestionUrl;
             });
             
-            var questions = JsonConvert.DeserializeObject<List<string>>(questionList.Question);
-
-            var ttsTasks = questions.Select((q, i) => new
-            {
-                Index = i + 1,
-                Text = q,
-                Task = ConvertTextToSpeechAsync(q, cancellationToken)
-            }).ToList();
-
-            await Task.WhenAll(ttsTasks.Select(x => x.Task)).ConfigureAwait(false);
-            
-            var questionDtos = ttsTasks.Select(x => new HrInterViewQuestionsDto
-            {
-                QuestionId = x.Index,
-                Question = x.Text,
-                Url = x.Task.Result
-            }).ToList();
-            
-            questionList.Question = JsonConvert.SerializeObject(questionDtos);
+            questionList.Question = JsonConvert.SerializeObject(questions);
         }
         
         await _hrInterViewDataProvider.AddHrInterViewSettingQuestionsAsync(_mapper.Map<List<HrInterViewSettingQuestion>>(command.Questions), cancellationToken: cancellationToken).ConfigureAwait(false);
