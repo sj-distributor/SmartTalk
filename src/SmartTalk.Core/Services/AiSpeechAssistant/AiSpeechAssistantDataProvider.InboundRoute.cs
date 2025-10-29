@@ -8,6 +8,8 @@ public partial interface IAiSpeechAssistantDataProvider
     Task<List<AiSpeechAssistantInboundRoute>> GetAiSpeechAssistantInboundRoutesAsync(string targetNumber = null, bool? emergency = false, CancellationToken cancellationToken = default);
     
     Task AddAiSpeechAssistantInboundRoutesAsync(List<AiSpeechAssistantInboundRoute> inboundRoutes, bool forceSave = true, CancellationToken cancellationToken = default);
+    
+    Task DeleteAiSpeechAssistantInboundRoutesAsync(List<AiSpeechAssistantInboundRoute> routes, bool forceSave = true, CancellationToken cancellationToken = default);
 }
 
 public partial class AiSpeechAssistantDataProvider
@@ -28,6 +30,13 @@ public partial class AiSpeechAssistantDataProvider
     public async Task AddAiSpeechAssistantInboundRoutesAsync(List<AiSpeechAssistantInboundRoute> inboundRoutes, bool forceSave = true, CancellationToken cancellationToken = default)
     {
         await _repository.InsertAllAsync(inboundRoutes, cancellationToken).ConfigureAwait(false);
+        
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task DeleteAiSpeechAssistantInboundRoutesAsync(List<AiSpeechAssistantInboundRoute> routes, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.DeleteAllAsync(routes, cancellationToken).ConfigureAwait(false);
         
         if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
