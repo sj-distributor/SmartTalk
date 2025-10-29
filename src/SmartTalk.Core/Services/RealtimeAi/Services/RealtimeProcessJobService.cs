@@ -13,7 +13,7 @@ namespace SmartTalk.Core.Services.RealtimeAi.Services;
 
 public interface IRealtimeProcessJobService : IScopedDependency
 {
-    Task RecordingRealtimeAiAsync(string recordingUrl, int agentId, CancellationToken cancellationToken);
+    Task RecordingRealtimeAiAsync(string recordingUrl, int assistantId, CancellationToken cancellationToken);
 }
 
 public class RealtimeProcessJobService : IRealtimeProcessJobService
