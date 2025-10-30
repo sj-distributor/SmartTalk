@@ -5,6 +5,7 @@ using SmartTalk.Core.Domain.System;
 using SmartTalk.Messages.Dto.Agent;
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Domain;
+using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.Restaurants;
 
 namespace SmartTalk.Core.Services.Agents;
@@ -15,7 +16,7 @@ public interface IAgentDataProvider : IScopedDependency
     
     Task<Agent> GetAgentByIdAsync(int id, CancellationToken cancellationToken = default);
 
-    Task<List<Agent>> GetAgentsAsync(List<int> agentIds = null, AgentType? type = null, CancellationToken cancellationToken = default);
+    Task<List<Agent>> GetAgentsAsync(List<int> agentIds = null, List<int> assistantIds = null, AgentType? type = null, CancellationToken cancellationToken = default);
 
     Task AddAgentAsync(Agent agent, bool forceSave = true, CancellationToken cancellationToken = default);
     
@@ -24,6 +25,14 @@ public interface IAgentDataProvider : IScopedDependency
     Task UpdateAgentsAsync(List<Agent> agents, bool forceSave = true, CancellationToken cancellationToken = default);
 
     Task<List<AgentPreviewDto>> GetAgentsByAgentTypeAsync<T>(AgentType agentType, List<int> agentIds = null, int? serviceProviderId = null, CancellationToken cancellationToken = default) where T : class, IEntity<int>, IAgent;
+
+    Task<List<Agent>> GetAgentsWithAssistantsAsync(List<int> agentIds = null, string keyword = null, bool? isDefault = null, CancellationToken cancellationToken = default);
+    
+    Task<Agent> GetAgentByAssistantIdAsync(int assistantId, CancellationToken cancellationToken = default);
+
+    Task<Agent> GetAgentByNumberAsync(string didNumber, int? assistantId = null, CancellationToken cancellationToken = default);
+    
+    Task<(int Count, List<Agent> Agents)> GetAgentsPagingAsync(int pageIndex, int pageSize, List<int> agentIds, string keyword = null, CancellationToken cancellationToken = default);
 }
 
 public class AgentDataProvider : IAgentDataProvider
@@ -64,17 +73,22 @@ public class AgentDataProvider : IAgentDataProvider
         return await _repository.Query<Agent>().Where(x => x.Id == id).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<Agent>> GetAgentsAsync(List<int> agentIds = null, AgentType? type = null, CancellationToken cancellationToken = default)
+    public async Task<List<Agent>> GetAgentsAsync(List<int> agentIds = null, List<int> assistantIds = null, AgentType? type = null, CancellationToken cancellationToken = default)
     {
-        var query = _repository.Query<Agent>();
+        var query = from agent in _repository.Query<Agent>()
+            join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
+            select new { agent, agentAssistant };
 
         if (agentIds is { Count: > 0 })
-            query = query.Where(x => agentIds.Contains(x.Id));
+            query = query.Where(x => agentIds.Contains(x.agent.Id));
+        
+        if (assistantIds is { Count: > 0 })
+            query = query.Where(x => assistantIds.Contains(x.agentAssistant.AssistantId));
 
         if (type.HasValue)
-            query = query.Where(x => x.Type == type.Value);
+            query = query.Where(x => x.agent.Type == type.Value);
         
-        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+        return await query.Select(x => x.agent).Distinct().ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task AddAgentAsync(Agent agent, bool forceSave = true, CancellationToken cancellationToken = default)
@@ -113,5 +127,64 @@ public class AgentDataProvider : IAgentDataProvider
             };
         
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<Agent>> GetAgentsWithAssistantsAsync(
+        List<int> agentIds = null, string keyword = null, bool? isDefault = null, CancellationToken cancellationToken = default)
+    {
+        var query = from agent in _repository.Query<Agent>().Where(x => x.IsDisplay && x.IsSurface)
+            join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
+            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agentAssistant.AssistantId equals assistant.Id
+            where agentIds != null && agentIds.Contains(agent.Id)
+            select new { agent, assistant };
+        
+        var result = await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+        
+        return result.GroupBy(x => x.agent.Id).Select(x =>
+        {
+            var agentAssistantPair = x.First();
+            agentAssistantPair.agent.Assistants = x.Select(a => a.assistant).Where(a => a != null).ToList();
+            return agentAssistantPair.agent;
+        }).ToList();
+    }
+
+    public async Task<Agent> GetAgentByAssistantIdAsync(int assistantId, CancellationToken cancellationToken = default)
+    {
+        var query = from agent in _repository.Query<Agent>().Where(x => x.IsDisplay)
+            join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
+            where agentAssistant.AssistantId == assistantId
+            select agent;
+        
+        return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+    
+    public async Task<Agent> GetAgentByNumberAsync(string didNumber, int? assistantId = null, CancellationToken cancellationToken = default)
+    {
+        var agentInfo =
+            from agent in _repository.Query<Agent>()
+            join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
+            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>().Where(x => x.IsDefault) on agentAssistant.AssistantId equals assistant.Id
+            select new { agent, assistant };
+
+        agentInfo = agentInfo.Where(x => assistantId.HasValue ? x.assistant.Id == assistantId.Value : x.assistant.AnsweringNumber == didNumber);
+
+        return await agentInfo.Select(x => x.agent).FirstOrDefaultAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<(int Count, List<Agent> Agents)> GetAgentsPagingAsync(int pageIndex, int pageSize, List<int> agentIds, string keyword = null, CancellationToken cancellationToken = default)
+    {
+        var query = _repository.Query<Agent>().Where(x => x.IsDisplay && x.IsSurface);
+        
+        if (agentIds != null)
+            query = query.Where(x => agentIds.Contains(x.Id));
+
+        if (!string.IsNullOrEmpty(keyword))
+            query = query.Where(x => x.Name.Contains(keyword));
+        
+        var count = await query.CountAsync(cancellationToken).ConfigureAwait(false);
+
+        var agents = await query.OrderByDescending(x => x.CreatedDate).Skip((pageIndex - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken).ConfigureAwait(false);
+        
+        return (count, agents);
     }
 }
