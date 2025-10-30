@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using Newtonsoft.Json;
 using SmartTalk.Core.Domain.AutoTest;
+using SmartTalk.Core.Extensions;
 using SmartTalk.Messages.Dto.AutoTest;
 using SmartTalk.Messages.Enums.AutoTest;
 
@@ -47,15 +49,42 @@ public partial class AutoTestDataProvider
         if (scenarioId.HasValue)
             query = query.Where(x => x.ScenarioId == scenarioId.Value);
         
-        if (!string.IsNullOrEmpty(keyword))
-            query = query.Where(x => x.Params.Contains(keyword));
+        var paramList = query.Select(x => new {x.Id, ParamsDto = JsonConvert.DeserializeObject<AutoTestTaskParamsDto>(x.Params)}).ToList();
+
+        var agentIds = paramList.Select(x => x.ParamsDto.AgentId).ToList();
+        var assistantIds = paramList.Select(x => x.ParamsDto.AssistantId).ToList();
+        
+        var agents = await _agentDataProvider.GetAgentsByIdsAsync(agentIds, cancellationToken).ConfigureAwait(false);
+        var assistants = await _agentDataProvider.GetAiSpeechAssistantsByIdsAsync(assistantIds, cancellationToken).ConfigureAwait(false);
+        
+        var filteredTaskIds = paramList
+            .Where(x => 
+            {
+                var agentName = agents.FirstOrDefault(a => a.Id == x.ParamsDto.AgentId)?.Name ?? "";
+                var assistantName = assistants.FirstOrDefault(asst => asst.Id == x.ParamsDto.AssistantId)?.Name ?? "";
+                return agentName.Contains(keyword) || assistantName.Contains(keyword);
+            })
+            .Select(x => x.Id)
+            .ToList();
+        
+        query = query.Where(x => filteredTaskIds.Contains(x.Id));
         
         var count = await query.CountAsync(cancellationToken).ConfigureAwait(false);
         
         if (pageIndex.HasValue && pageSize.HasValue)
             query = query.Skip((pageIndex.Value - 1) * pageSize.Value).Take(pageSize.Value);
         
-        return (await query.ToListAsync(cancellationToken).ConfigureAwait(false), count);
+        var result = await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+
+        foreach (var dto in result)
+        {
+            var paramsDto = JsonConvert.DeserializeObject<AutoTestTaskParamsDto>(dto.Params);
+            paramsDto.AgentName = agents.FirstOrDefault(a => a.Id == paramsDto.AgentId)?.Name ?? "";
+            paramsDto.AssistantName = assistants.FirstOrDefault(asst => asst.Id == paramsDto.AssistantId)?.Name ?? "";
+            dto.Params = JsonConvert.SerializeObject(paramsDto);
+        }
+        
+        return (result, count);
     }
 
     public async Task<AutoTestTask> GetAutoTestTaskByIdAsync(int id, CancellationToken cancellationToken)

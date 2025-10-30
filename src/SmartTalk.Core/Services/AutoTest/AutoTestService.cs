@@ -1,5 +1,6 @@
 using AutoMapper;
 using SmartTalk.Core.Ioc;
+using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.AutoTest;
 using SmartTalk.Messages.Enums.AutoTest;
@@ -19,7 +20,7 @@ public partial class AutoTestService : IAutoTestService
     private readonly IAutoTestActionHandlerSwitcher _autoTestActionHandlerSwitcher;
     private readonly IAutoTestDataImportHandlerSwitcher _autoTestDataImportHandlerSwitcher;
 
-    public AutoTestService(IMapper mapper, IAutoTestDataProvider autoTestDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, IAutoTestActionHandlerSwitcher autoTestActionHandlerSwitcher, IAutoTestDataImportHandlerSwitcher autoTestDataImportHandlerSwitcher)
+    public AutoTestService(IMapper mapper, IAgentDataProvider agentDataProvider, IAutoTestDataProvider autoTestDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, IAutoTestActionHandlerSwitcher autoTestActionHandlerSwitcher, IAutoTestDataImportHandlerSwitcher autoTestDataImportHandlerSwitcher)
     {
         _mapper = mapper;
         _autoTestDataProvider = autoTestDataProvider;
