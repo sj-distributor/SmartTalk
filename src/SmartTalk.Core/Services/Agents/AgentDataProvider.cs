@@ -163,7 +163,7 @@ public class AgentDataProvider : IAgentDataProvider
         var agentInfo =
             from agent in _repository.Query<Agent>()
             join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
-            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>().Where(x => x.IsDefault) on agentAssistant.AssistantId equals assistant.Id
+            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agentAssistant.AssistantId equals assistant.Id
             select new { agent, assistant };
 
         agentInfo = agentInfo.Where(x => assistantId.HasValue ? x.assistant.Id == assistantId.Value : x.assistant.AnsweringNumber == didNumber);

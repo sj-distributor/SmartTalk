@@ -275,7 +275,7 @@ public partial class PhoneOrderDataProvider
         var query = from record in _repository.Query<PhoneOrderRecord>().Where(x => x.CreatedDate >= startTime && x.CreatedDate <= endTime)
             join agent in _repository.Query<Agent>().Where(x => !includeExternalData && x.Type != AgentType.AiKid) on record.AgentId equals agent.Id
             join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
-            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>().Where(x => x.IsDefault) on agentAssistant.AssistantId equals assistant.Id into assistantGroups
+            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agentAssistant.AssistantId equals assistant.Id into assistantGroups
             from assistant in assistantGroups.DefaultIfEmpty()
             select new { assistant, record };
         
