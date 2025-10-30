@@ -1,7 +1,7 @@
 using Mediator.Net.Contracts;
 using SmartTalk.Messages.Responses;
 
-namespace SmartTalk.Messages.Requests.AutoTest;
+namespace SmartTalk.Messages.Commands.AutoTest;
 
 public class DeleteAutoTestDataSetCommand : ICommand
 {

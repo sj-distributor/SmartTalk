@@ -19,6 +19,8 @@ public partial interface IAutoTestService : IScopedDependency
     Task<CopyAutoTestDataSetResponse> CopyAutoTestDataItemsAsync(CopyAutoTestDataSetRequest request, CancellationToken cancellationToken);
 
     Task<DeleteAutoTestDataSetResponse> DeleteAutoTestDataSetAsync(DeleteAutoTestDataSetCommand command, CancellationToken cancellationToken);
+
+    Task<AddAutoTestDataSetByQuoteResponse> AddAutoTestDataSetByQuoteAsync(AddAutoTestDataSetByQuoteCommand byQuoteCommand, CancellationToken cancellationToken);
 }
 
 public partial class AutoTestService : IAutoTestService
@@ -53,7 +55,7 @@ public partial class AutoTestService : IAutoTestService
 
     public async Task<GetAutoTestDataSetResponse> GetAutoTestDataSetsAsync(GetAutoTestDataSetRequest request, CancellationToken cancellationToken)
     {
-        var (count, dataSets) = await _autoTestDataProvider.GetAutoTestDataSetsAsync(request?.Page, request?.PageSize, cancellationToken).ConfigureAwait(false);
+        var (count, dataSets) = await _autoTestDataProvider.GetAutoTestDataSetsAsync(request?.Page, request?.PageSize, request?.KeyName, cancellationToken).ConfigureAwait(false);
         
         return new GetAutoTestDataSetResponse
         {
@@ -85,5 +87,12 @@ public partial class AutoTestService : IAutoTestService
         await _autoTestDataProvider.DeleteAutoTestDataSetAsync(command.AutoTestDataSetId, cancellationToken).ConfigureAwait(false);
        
         return new DeleteAutoTestDataSetResponse();
+    }
+
+    public async Task<AddAutoTestDataSetByQuoteResponse> AddAutoTestDataSetByQuoteAsync(AddAutoTestDataSetByQuoteCommand byQuoteCommand, CancellationToken cancellationToken)
+    {
+        await _autoTestDataProvider.AddAutoTestDataSetByQuoteAsync(byQuoteCommand.DataSetId, cancellationToken).ConfigureAwait(false);
+
+        return new AddAutoTestDataSetByQuoteResponse();
     }
 }

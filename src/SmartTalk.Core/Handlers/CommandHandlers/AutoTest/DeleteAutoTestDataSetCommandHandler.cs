@@ -1,6 +1,7 @@
 using Mediator.Net.Context;
 using Mediator.Net.Contracts;
 using SmartTalk.Core.Services.AutoTest;
+using SmartTalk.Messages.Commands.AutoTest;
 using SmartTalk.Messages.Requests.AutoTest;
 
 namespace SmartTalk.Core.Handlers.CommandHandlers.AutoTest;

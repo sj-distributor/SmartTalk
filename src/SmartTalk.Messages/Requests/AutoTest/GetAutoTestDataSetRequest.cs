@@ -9,6 +9,8 @@ public class GetAutoTestDataSetRequest : IRequest
     public int? Page { get; set; }
     
     public int? PageSize { get; set; }
+    
+    public string? KeyName { get; set; }
 }
 
 public class GetAutoTestDataSetResponse : SmartTalkResponse

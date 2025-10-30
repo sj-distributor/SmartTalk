@@ -91,7 +91,7 @@ public class AutoTestController : ControllerBase
     }
     
     [Route("autoTestDataSet/delete"), HttpPost]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(AutoTestRunningResponse))]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(DeleteAutoTestDataSetResponse))]
     public async Task<IActionResult> DeleteAutoTestDataSetAsync([FromBody] DeleteAutoTestDataSetCommand command) 
     {
         var response = await _mediator.SendAsync<DeleteAutoTestDataSetCommand, DeleteAutoTestDataSetResponse>(command).ConfigureAwait(false);
@@ -104,6 +104,15 @@ public class AutoTestController : ControllerBase
     public async Task<IActionResult> GetAutoTestDataItemsByIdAsync([FromQuery] GetAutoTestDataItemsByIdRequest request)
     {
         var response = await _mediator.RequestAsync<GetAutoTestDataItemsByIdRequest, GetAutoTestDataItemsByIdResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("autoTestDataSet/add/quote"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(AddAutoTestDataSetByQuoteResponse))]
+    public async Task<IActionResult> AddAutoTestDataSetByQuoteAsync([FromBody] AddAutoTestDataSetByQuoteCommand command) 
+    {
+        var response = await _mediator.SendAsync<AddAutoTestDataSetByQuoteCommand, AddAutoTestDataSetByQuoteResponse>(command).ConfigureAwait(false);
         
         return Ok(response);
     }
