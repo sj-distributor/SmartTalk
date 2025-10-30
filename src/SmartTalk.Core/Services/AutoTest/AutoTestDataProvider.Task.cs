@@ -64,6 +64,8 @@ public partial class AutoTestDataProvider
         var filteredTaskIds = paramList
             .Where(x => 
             {
+                if (keyword is null || string.IsNullOrEmpty(keyword)) return true;
+                
                 var agentName = agents.FirstOrDefault(a => a.Id == x.ParamsDto.AgentId)?.Name ?? "";
                 var assistantName = assistants.FirstOrDefault(asst => asst.Id == x.ParamsDto.AssistantId)?.Name ?? "";
                 return agentName.Contains(keyword) || assistantName.Contains(keyword);
