@@ -7,13 +7,14 @@ using SmartTalk.Core.Domain.SpeechMatics;
 using SmartTalk.Messages.Dto.SpeechMatics;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Settings.SpeechMatics;
+using SmartTalk.Messages.Commands.SpeechMatics;
 using SmartTalk.Messages.Enums.SpeechMatics;
 
 namespace SmartTalk.Core.Services.SpeechMatics;
 
 public interface ISpeechMaticsService : IScopedDependency
 {
-    Task<string> CreateSpeechMaticsJobAsync(byte[] recordContent, string recordName, string language, SpeechMaticsJobScenario scenario, CancellationToken cancellationToken);
+    Task<CreateSpeechmaticsJobResponse> CreateSpeechMaticsJobAsync(CreateSpeechmaticsJobCommand command, CancellationToken cancellationToken);
 }
 
 public class SpeechMaticsService : ISpeechMaticsService
@@ -38,13 +39,13 @@ public class SpeechMaticsService : ISpeechMaticsService
         _transcriptionCallbackSetting = transcriptionCallbackSetting;
     }
 
-    public async Task<string> CreateSpeechMaticsJobAsync(byte[] recordContent, string recordName, string language, SpeechMaticsJobScenario scenario, CancellationToken cancellationToken)
+    public async Task<CreateSpeechmaticsJobResponse> CreateSpeechMaticsJobAsync(CreateSpeechmaticsJobCommand command, CancellationToken cancellationToken)
     {
         var retryCount = 2;
 
         while (true)
         {
-            var transcriptionJobIdJObject = JObject.Parse(await CreateTranscriptionJobAsync(recordContent, recordName, language, cancellationToken).ConfigureAwait(false));
+            var transcriptionJobIdJObject = JObject.Parse(await CreateTranscriptionJobAsync(command.recordContent, command.recordName, command.language, cancellationToken).ConfigureAwait(false));
 
             var transcriptionJobId = transcriptionJobIdJObject["id"]?.ToString();
 
@@ -54,14 +55,17 @@ public class SpeechMaticsService : ISpeechMaticsService
             {
                 var speechMaticsJob = new SpeechMaticsJob
                 {
-                    Scenario = scenario,
+                    Scenario = command.scenario,
                     JobId = transcriptionJobId,
                     CallbackUrl = _transcriptionCallbackSetting.Url
                 };
                 
                 await _speechMaticsDataProvider.AddSpeechMaticsJobAsync(speechMaticsJob, true, cancellationToken).ConfigureAwait(false);
                 
-                return transcriptionJobId;
+                return new CreateSpeechmaticsJobResponse()
+                {
+                    Data = transcriptionJobId
+                };
             }
 
             Log.Information("Create speechMatics job abnormal, start replacement key");
