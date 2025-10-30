@@ -162,6 +162,51 @@ public class AutoTestController : ControllerBase
         return Ok(response);
     }
     
+    [Route("autoTestDataSet/records"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAutoTestDataSetResponse))]
+    public async Task<IActionResult> GetAutoTestDataSetAsync([FromQuery] GetAutoTestDataSetRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetAutoTestDataSetRequest, GetAutoTestDataSetResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("autoTestDataSet/copy"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(CopyAutoTestDataSetResponse))]
+    public async Task<IActionResult> CopyAutoTestDataItemsAsync([FromQuery] CopyAutoTestDataSetRequest request)
+    {
+        var response = await _mediator.RequestAsync<CopyAutoTestDataSetRequest, CopyAutoTestDataSetResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("autoTestDataSet/delete"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(DeleteAutoTestDataSetResponse))]
+    public async Task<IActionResult> DeleteAutoTestDataSetAsync([FromBody] DeleteAutoTestDataSetCommand command) 
+    {
+        var response = await _mediator.SendAsync<DeleteAutoTestDataSetCommand, DeleteAutoTestDataSetResponse>(command).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("autoTestDataItem/records"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAutoTestDataItemsByIdResponse))]
+    public async Task<IActionResult> GetAutoTestDataItemsByIdAsync([FromQuery] GetAutoTestDataItemsByIdRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetAutoTestDataItemsByIdRequest, GetAutoTestDataItemsByIdResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("autoTestDataSet/add/quote"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(AddAutoTestDataSetByQuoteResponse))]
+    public async Task<IActionResult> AddAutoTestDataSetByQuoteAsync([FromBody] AddAutoTestDataSetByQuoteCommand command) 
+    {
+        var response = await _mediator.SendAsync<AddAutoTestDataSetByQuoteCommand, AddAutoTestDataSetByQuoteResponse>(command).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
     [Route("task/records"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAutoTestTaskRecordsResponse))]
     public async Task<IActionResult> GetAutoTestTaskRecordsAsync([FromQuery] GetAutoTestTaskRecordsRequest request) 
