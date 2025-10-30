@@ -31,6 +31,8 @@ public class AddAiSpeechAssistantCommand : HasServiceProviderId, ICommand
     public AgentSourceSystem SourceSystem { get; set; } = AgentSourceSystem.Self;
     
     public int? StoreId { get; set; }
+    
+    public string ModelLanguage { get; set; }
 }
 
 public class AddAiSpeechAssistantResponse : SmartTalkResponse<AiSpeechAssistantDto>
