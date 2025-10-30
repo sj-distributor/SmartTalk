@@ -5,6 +5,7 @@ using OpenAI.Chat;
 using Serilog;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Settings.OpenAi;
+using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.AutoTest;
 using SmartTalk.Messages.Enums.AutoTest;
 
@@ -20,19 +21,20 @@ public partial interface IAutoTestService : IScopedDependency
 public partial class AutoTestService : IAutoTestService
 {
     private readonly IMapper _mapper;
+    private readonly OpenAiSettings _openAiSettings;
     private readonly IAutoTestDataProvider _autoTestDataProvider;
+    private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
     private readonly IAutoTestActionHandlerSwitcher _autoTestActionHandlerSwitcher;
     private readonly IAutoTestDataImportHandlerSwitcher _autoTestDataImportHandlerSwitcher;
-    private readonly OpenAiSettings _openAiSettings;
 
-    public AutoTestService(IMapper mapper, IAutoTestDataProvider autoTestDataProvider, IAutoTestActionHandlerSwitcher autoTestActionHandlerSwitcher, IAutoTestDataImportHandlerSwitcher autoTestDataImportHandlerSwitcher,
-        OpenAiSettings openAiSettings)
+    public AutoTestService(IMapper mapper, OpenAiSettings openAiSettings, IAutoTestDataProvider autoTestDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, IAutoTestActionHandlerSwitcher autoTestActionHandlerSwitcher, IAutoTestDataImportHandlerSwitcher autoTestDataImportHandlerSwitcher)
     {
         _mapper = mapper;
+        _openAiSettings = openAiSettings;
         _autoTestDataProvider = autoTestDataProvider;
+        _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
         _autoTestActionHandlerSwitcher = autoTestActionHandlerSwitcher;
         _autoTestDataImportHandlerSwitcher = autoTestDataImportHandlerSwitcher;
-        _openAiSettings = openAiSettings;
     }
     
     public async Task<AutoTestRunningResponse> AutoTestRunningAsync(AutoTestRunningCommand command, CancellationToken cancellationToken)

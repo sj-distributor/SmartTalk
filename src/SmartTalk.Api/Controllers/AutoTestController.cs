@@ -162,6 +162,24 @@ public class AutoTestController : ControllerBase
         return Ok(response);
     }
     
+    [Route("task/records"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAutoTestTaskRecordsResponse))]
+    public async Task<IActionResult> GetAutoTestTaskRecordsAsync([FromQuery] GetAutoTestTaskRecordsRequest request) 
+    {
+        var response = await _mediator.RequestAsync<GetAutoTestTaskRecordsRequest, GetAutoTestTaskRecordsResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("task/record/mark"), HttpPut]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(MarkAutoTestTaskRecordResponse))]
+    public async Task<IActionResult> MarkAutoTestTaskRecordAsync([FromBody] MarkAutoTestTaskRecordCommand command) 
+    {
+        var response = await _mediator.SendAsync<MarkAutoTestTaskRecordCommand, MarkAutoTestTaskRecordResponse>(command).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
     private static byte[] PcmToWav(byte[] pcmData, int sampleRate, int bitsPerSample, int channels)
     {
         using var ms = new MemoryStream();

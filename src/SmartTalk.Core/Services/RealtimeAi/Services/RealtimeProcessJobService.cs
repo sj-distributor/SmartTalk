@@ -63,7 +63,7 @@ public class RealtimeProcessJobService : IRealtimeProcessJobService
         
         if (agent.IsSendAudioRecordWechat)
             await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, agent.WechatRobotKey, $"您有一条新的AI通话录音：\n{recordingUrl}", [], CancellationToken.None).ConfigureAwait(false);
-
+        
         var recordingContent = await _httpClientFactory.GetAsync<byte[]>(recordingUrl, cancellationToken).ConfigureAwait(false);
         if (recordingContent == null) return;
         
