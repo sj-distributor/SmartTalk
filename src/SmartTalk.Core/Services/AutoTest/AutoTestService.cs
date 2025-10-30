@@ -5,6 +5,7 @@ using OpenAI.Chat;
 using Serilog;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Settings.OpenAi;
+using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.AutoTest;
 using SmartTalk.Messages.Enums.AutoTest;

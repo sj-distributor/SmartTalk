@@ -202,7 +202,7 @@ public class AgentService : IAgentService
 
     public async Task<GetAgentsWithAssistantsResponse> GetAgentsWithAssistantsAsync(GetAgentsWithAssistantsRequest request, CancellationToken cancellationToken)
     {
-        var storeAgents = await _posDataProvider.GetPosAgentsAsync(storeIds: [request.StoreId], cancellationToken: cancellationToken).ConfigureAwait(false);
+        var storeAgents = await _posDataProvider.GetPosAgentsAsync(storeIds: request.StoreId.HasValue? new List<int>(request.StoreId.Value): null, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         var agents = await _agentDataProvider.GetAgentsWithAssistantsAsync(agentIds: storeAgents.Select(x => x.AgentId).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
         
