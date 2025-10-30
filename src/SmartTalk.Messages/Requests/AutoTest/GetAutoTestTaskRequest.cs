@@ -25,4 +25,3 @@ public class GetAutoTestTaskResponseDataDto
     
     public int TotalCount { get; set; }
 }
-
