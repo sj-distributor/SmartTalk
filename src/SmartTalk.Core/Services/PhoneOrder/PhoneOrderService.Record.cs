@@ -25,6 +25,7 @@ using SmartTalk.Messages.Enums.SpeechMatics;
 using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Requests.PhoneOrder;
 using SmartTalk.Messages.Commands.Attachments;
+using SmartTalk.Messages.Commands.SpeechMatics;
 using TranscriptionFileType = SmartTalk.Messages.Enums.STT.TranscriptionFileType;
 using TranscriptionResponseFormat = SmartTalk.Messages.Enums.STT.TranscriptionResponseFormat;
 
@@ -110,8 +111,14 @@ public partial class PhoneOrderService
             return;
         }
 
-        record.TranscriptionJobId = await _speechMaticsService.CreateSpeechMaticsJobAsync(command.RecordContent, command.RecordName ?? Guid.NewGuid().ToString("N") + ".wav", detection.Language, SpeechMaticsJobScenario.Released, cancellationToken).ConfigureAwait(false);
-
+        record.TranscriptionJobId = (await _speechMaticsService.CreateSpeechMaticsJobAsync(new CreateSpeechmaticsJobCommand
+        {
+            recordContent = command.RecordContent,
+            recordName = command.RecordName ?? Guid.NewGuid().ToString("N") + ".wav",
+            language = detection.Language,
+            scenario =  SpeechMaticsJobScenario.Released
+        }, cancellationToken).ConfigureAwait(false)).Data;
+        
         await AddPhoneOrderRecordAsync(record, PhoneOrderRecordStatus.Diarization, cancellationToken).ConfigureAwait(false);
     }
 
@@ -223,8 +230,13 @@ public partial class PhoneOrderService
     {
         var originText = await SplitAudioAsync(audioContent, record, phoneOrderInfos[0].StartTime * 1000,
             phoneOrderInfos[0].EndTime * 1000, TranscriptionFileType.Wav, cancellationToken).ConfigureAwait(false);
+        
+        var checkFirstSentencePrompt = await _phoneOrderDataProvider.GetCheckFirstSentencePromptAsync(record.AgentId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        if (await CheckAudioFirstSentenceIsRestaurantAsync(originText, cancellationToken).ConfigureAwait(false))
+        if (checkFirstSentencePrompt == null)
+            return phoneOrderInfos;
+        
+        if (await CheckAudioFirstSentenceIsRestaurantAsync(originText, prompt: checkFirstSentencePrompt.Prompt, cancellationToken).ConfigureAwait(false))
             return phoneOrderInfos;
 
         foreach (var phoneOrderInfo in phoneOrderInfos)
@@ -344,7 +356,7 @@ public partial class PhoneOrderService
         return goalTextsString;
     }
 
-    private async Task<bool> CheckAudioFirstSentenceIsRestaurantAsync(string query, CancellationToken cancellationToken)
+    private async Task<bool> CheckAudioFirstSentenceIsRestaurantAsync(string query, string prompt, CancellationToken cancellationToken)
     {
         var completionResult = await _smartiesClient.PerformQueryAsync(new AskGptRequest
         {
@@ -353,20 +365,7 @@ public partial class PhoneOrderService
                 new()
                 {
                     Role = "system",
-                    Content = new CompletionsStringContent("你是一款餐厅订餐语句高度理解的智能助手，专门用于分辨语句是顾客还是餐厅说的。" +
-                                                           "请根据我提供的语句，判断语句是属于餐厅还是顾客说的，如果是餐厅的话，请返回\"true\"，如果是顾客的话，请返回\"false\"，" +
-                                                           "注意:\n" +
-                                                           "1. 如果语句中没有提及餐馆或或者点餐意图的，只是单纯的打招呼，则判断为餐厅说的，返回true。\n" +
-                                                           "2. 如果是比较短的语句且是一些莫名其妙的字眼，例如Hamras（实际是Hello, Moon house），可以判断是餐厅说的\n" +
-                                                           "- 样本与输出：\n" +
-                                                           "input:你好,江南春 output:true\n" +
-                                                           "input:hello,MoonHouse output:true\n" +
-                                                           "input:你好,湘里人家 output:true\n" +
-                                                           "input:喂,out:true\n" +
-                                                           "input:Hamras, output:true" +
-                                                           "input:你好，我要点单 output:false\n" +
-                                                           "input:你好，这里是江南春吗 output:false\n" +
-                                                           "input:你好，我是小明，我可以订餐吗 output:false")
+                    Content = new CompletionsStringContent(prompt)
                 },
                 new()
                 {

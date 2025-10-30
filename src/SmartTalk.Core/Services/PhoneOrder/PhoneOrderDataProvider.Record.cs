@@ -3,6 +3,7 @@ using SmartTalk.Core.Domain.Account;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Domain.Restaurants;
+using SmartTalk.Core.Domain.SpeechMatics;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.PhoneOrder;
@@ -53,6 +54,8 @@ public partial interface IPhoneOrderDataProvider
     Task<PhoneOrderRecordReport> GetPhoneOrderRecordReportAsync(string callSid, SystemLanguage language, CancellationToken cancellationToken);
 
     Task UpdatePhoneOrderRecordReportsAsync(List<PhoneOrderRecordReport> reports, bool forceSave = true, CancellationToken cancellationToken = default);
+
+    Task<CheckFirstSentencePrompt> GetCheckFirstSentencePromptAsync(int agentId, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderDataProvider
@@ -301,5 +304,10 @@ public partial class PhoneOrderDataProvider
         await _repository.UpdateAllAsync(reports, cancellationToken).ConfigureAwait(false);
 
         if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<CheckFirstSentencePrompt> GetCheckFirstSentencePromptAsync(int agentId, CancellationToken cancellationToken)
+    {
+        return await _repository.QueryNoTracking<CheckFirstSentencePrompt>().FirstOrDefaultAsync(x => x.AgentId == agentId, cancellationToken).ConfigureAwait(false);
     }
 }

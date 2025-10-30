@@ -46,6 +46,7 @@ using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.Attachments;
+using SmartTalk.Messages.Commands.SpeechMatics;
 using SmartTalk.Messages.Dto.Attachments;
 using SmartTalk.Messages.Dto.Smarties;
 using SmartTalk.Messages.Enums.SpeechMatics;
@@ -271,8 +272,14 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         }
         
         record.Language = ConvertLanguageCode(language);
-        record.TranscriptionJobId = await _speechMaticsService.CreateSpeechMaticsJobAsync(audioFileRawBytes, Guid.NewGuid().ToString("N") + ".wav", language, SpeechMaticsJobScenario.Released, cancellationToken).ConfigureAwait(false);
-
+        record.TranscriptionJobId = (await _speechMaticsService.CreateSpeechMaticsJobAsync(new CreateSpeechmaticsJobCommand
+        {
+            recordContent = audioFileRawBytes,
+            recordName = Guid.NewGuid().ToString("N") + ".wav",
+            language = language,
+            scenario = SpeechMaticsJobScenario.Released
+        }, cancellationToken).ConfigureAwait(false)).Data;
+        
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 

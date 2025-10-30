@@ -30,4 +30,13 @@ public class SpeechMaticsController : ControllerBase
 
         return Ok();
     }
+    
+    [HttpPost("create")]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(CreateSpeechmaticsJobResponse))]
+    public async Task<IActionResult> CreateSpeechMaticsJobAsync([FromBody] CreateSpeechmaticsJobCommand command)
+    {
+        var response = await _mediator.SendAsync<CreateSpeechmaticsJobCommand, CreateSpeechmaticsJobResponse>(command).ConfigureAwait(false);
+
+        return Ok(response);
+    }
 }

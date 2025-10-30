@@ -7,6 +7,7 @@ using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.Security;
 using SmartTalk.Core.Services.SpeechMatics;
 using SmartTalk.Core.Services.STT;
+using SmartTalk.Messages.Commands.SpeechMatics;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.SpeechMatics;
 using SmartTalk.Messages.Enums.STT;
@@ -65,7 +66,13 @@ public class RealtimeProcessJobService : IRealtimeProcessJobService
         
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync([record], cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        record.TranscriptionJobId = await _speechMaticsService.CreateSpeechMaticsJobAsync(recordingContent, Guid.NewGuid().ToString("N") + ".wav", detection.Language, SpeechMaticsJobScenario.Released, cancellationToken).ConfigureAwait(false);
+        record.TranscriptionJobId = (await _speechMaticsService.CreateSpeechMaticsJobAsync(new CreateSpeechmaticsJobCommand
+        {
+            recordContent = recordingContent,
+            recordName = Guid.NewGuid().ToString("N") + ".wav",
+            language = detection.Language,
+            scenario = SpeechMaticsJobScenario.Released
+        }, cancellationToken).ConfigureAwait(false)).Data;
         record.Status = PhoneOrderRecordStatus.Diarization;
         
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken).ConfigureAwait(false);
