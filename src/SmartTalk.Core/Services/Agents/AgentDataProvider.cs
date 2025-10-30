@@ -36,8 +36,6 @@ public interface IAgentDataProvider : IScopedDependency
     
     Task<(int Count, List<Agent> Agents)> GetAgentsPagingAsync(int pageIndex, int pageSize, List<int> agentIds, string keyword = null, CancellationToken cancellationToken = default);
     
-    Task<GetAutoTestAgentAndAssistantsResponseData> GetAutoTestAgentAndAssistantsAsync(int? agentAssistantIds, List<int> agentIds = null, CancellationToken cancellationToken = default);
-    
     Task<List<Agent>> GetAgentsByIdsAsync(List<int> ids, CancellationToken cancellationToken = default);
 
     Task<List<Domain.AISpeechAssistant.AiSpeechAssistant>> GetAiSpeechAssistantsByIdsAsync(List<int> assistantIds, CancellationToken cancellationToken = default);
@@ -194,33 +192,6 @@ public class AgentDataProvider : IAgentDataProvider
         var agents = await query.OrderByDescending(x => x.CreatedDate).Skip((pageIndex - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken).ConfigureAwait(false);
         
         return (count, agents);
-    }
-
-    public async Task<GetAutoTestAgentAndAssistantsResponseData> GetAutoTestAgentAndAssistantsAsync(int? agentAssistantIds, List<int> agentIds = null, CancellationToken cancellationToken = default)
-    {
-        var query = from agent in _repository.Query<Agent>().Where(x => x.IsDisplay && x.IsSurface)
-            join agentAssistant in _repository.Query<AgentAssistant>()
-                on agent.Id equals agentAssistant.AgentId 
-            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>()
-                on agentAssistant.AssistantId equals assistant.Id 
-            select new { agent, agentAssistant, assistant }; 
-        
-        if ((agentIds == null || !agentIds.Any()) && agentAssistantIds.HasValue) 
-            query = query.Where(x => x.agentAssistant.Id == agentAssistantIds.Value); 
-        
-        if ((agentIds == null || !agentIds.Any()) && !agentAssistantIds.HasValue) 
-            query = query.Where(x => agentIds.Contains(x.agent.Id));
-        
-        if (agentIds != null && agentIds.Any() && agentAssistantIds.HasValue) 
-            query = query.Where(x => agentIds.Contains(x.agent.Id) && x.agentAssistant.Id == agentAssistantIds.Value); 
-        
-        var result = await query.Select(x => new { x.agent, x.assistant }).Distinct().ToListAsync(cancellationToken).ConfigureAwait(false);
-
-        return new GetAutoTestAgentAndAssistantsResponseData()
-        {
-            Agents = result.Select(x => _mapper.Map<AgentDto>(x.agent)).ToList(),
-            Assistants = result.Select(x => _mapper.Map<AiSpeechAssistantDto>(x.assistant)).ToList()
-        };
     }
 
     public async Task<List<Agent>> GetAgentsByIdsAsync(List<int> ids, CancellationToken cancellationToken = default)

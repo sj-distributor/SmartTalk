@@ -81,13 +81,4 @@ public class AgentController : ControllerBase
         
         return Ok(response);
     }
-        
-    [Route("autoTest/agents/assistants"), HttpGet]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAutoTestAgentAndAssistantsResponse))]
-    public async Task<IActionResult> GetAutoTestAgentAndAssistantsAsync([FromQuery] GetAutoTestAgentAndAssistantsRequest request)
-    {
-        var response = await _mediator.RequestAsync<GetAutoTestAgentAndAssistantsRequest, GetAutoTestAgentAndAssistantsResponse>(request).ConfigureAwait(false);
-        
-        return Ok(response);
-    }
 }

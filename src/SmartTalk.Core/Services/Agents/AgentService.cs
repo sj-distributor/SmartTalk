@@ -37,8 +37,6 @@ public interface IAgentService : IScopedDependency
     Task<GetAgentByIdResponse> GetAgentByIdAsync(GetAgentByIdRequest request, CancellationToken cancellationToken);
     
     Task<GetAgentsWithAssistantsResponse> GetAgentsWithAssistantsAsync(GetAgentsWithAssistantsRequest request, CancellationToken cancellationToken);
-
-    Task<GetAutoTestAgentAndAssistantsResponse> GetAutoTestAgentAndAssistantsAsync(GetAutoTestAgentAndAssistantsRequest request, CancellationToken cancellationToken);
 }
 
 public class AgentService : IAgentService
@@ -204,27 +202,11 @@ public class AgentService : IAgentService
 
     public async Task<GetAgentsWithAssistantsResponse> GetAgentsWithAssistantsAsync(GetAgentsWithAssistantsRequest request, CancellationToken cancellationToken)
     {
-        var storeAgents = await _posDataProvider.GetPosAgentsAsync(storeIds: [request.StoreId], cancellationToken: cancellationToken).ConfigureAwait(false);
+        var storeAgents = await _posDataProvider.GetPosAgentsAsync(storeIds: request.StoreId.HasValue? new List<int>(request.StoreId.Value): null, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         var agents = await _agentDataProvider.GetAgentsWithAssistantsAsync(agentIds: storeAgents.Select(x => x.AgentId).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
         
         return new GetAgentsWithAssistantsResponse { Data = _mapper.Map<List<AgentDto>>(agents) };
-    }
-
-    public async Task<GetAutoTestAgentAndAssistantsResponse> GetAutoTestAgentAndAssistantsAsync(GetAutoTestAgentAndAssistantsRequest request, CancellationToken cancellationToken)
-    {
-        var storeAgents = await _posDataProvider.GetPosAgentsAsync(storeIds: request.StoreId.HasValue? new List<int>(request.StoreId.Value): null, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        var agentIds = storeAgents.Select(x => x.AgentId).ToList();
-
-        if (request.AgentId.HasValue) agentIds.Add(request.AgentId.Value);
-    
-        var result = await _agentDataProvider.GetAutoTestAgentAndAssistantsAsync(request.AssistantId, agentIds, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        return new GetAutoTestAgentAndAssistantsResponse
-        {
-            Data = result
-        };
     }
 
     private async Task<List<AgentPreviewDto>> GetAllAgentsAsync(List<AgentType> agentTypes, List<int> agentIds, int? serviceProviderId, CancellationToken cancellationToken)

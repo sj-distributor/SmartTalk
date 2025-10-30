@@ -30,10 +30,13 @@ public partial class AutoTestDataProvider
             join dataSetItem in _repository.QueryNoTracking<AutoTestDataSetItem>() 
                 on task.DataSetId equals dataSetItem.DataSetId into dataSetItems
             from dataSetItem in dataSetItems.DefaultIfEmpty()
+            join dataSet in _repository.QueryNoTracking<AutoTestDataSet>() 
+                on dataSetItem.DataSetId equals dataSet.Id into dataSets
+            from dataSet in dataSets.DefaultIfEmpty()
             join record in _repository.QueryNoTracking<AutoTestTaskRecord>().Where(x => x.Status == AutoTestTaskRecordStatus.Done)
                 on task.Id equals record.TestTaskId into taskRecords
                 from record in taskRecords.DefaultIfEmpty()
-                group new { task, dataSetItem, record } by task.Id into taskGroup
+                group new { task, dataSet, dataSetItem, record } by task.Id into taskGroup
             select new AutoTestTaskDto
             {
                 Id = taskGroup.Key,
@@ -43,7 +46,8 @@ public partial class AutoTestDataProvider
                 Status = taskGroup.Select(x => x.task.Status).FirstOrDefault(),
                 CreatedAt = taskGroup.Select(x => x.task.CreatedAt).FirstOrDefault(),
                 TotalCount = taskGroup.Count(x => x.dataSetItem != null),
-                InProgressCount = taskGroup.Count(x => x.record != null)
+                InProgressCount = taskGroup.Count(x => x.record != null),
+                DataSetName =  taskGroup.Select(x => x.dataSet.Name).FirstOrDefault(),
             };
         
         if (scenarioId.HasValue)
