@@ -389,9 +389,9 @@ public partial class AiSpeechAssistantService
             Channel = command.Channels == null ? null : string.Join(",", command.Channels.Select(x => (int)x)),
             IsDisplay = command.IsDisplay,
             IsDefault = isDefault,
-            ModelLanguage = command.AgentType == AgentType.Agent ? string.IsNullOrWhiteSpace(command.Language) ? "English" : command.Language : null,
+            ModelLanguage = command.AgentType == AgentType.Agent ? string.IsNullOrWhiteSpace(command.ModelLanguage) ? "English" : command.ModelLanguage : null,
             WaitInterval = agent.WaitInterval,
-            IsTransferHuman = agent.IsTransferHuman,
+            IsTransferHuman = agent.IsTransferHuman
         };
         
         await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantsAsync([assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
