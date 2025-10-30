@@ -389,10 +389,10 @@ public partial class AiSpeechAssistantService
             ModelUrl = GetDefaultModuleUrl(command.ModelUrl, command.ModelProvider, command.AgentType),
             ModelProvider = command.ModelProvider,
             ModelName = command.ModelName,
-            ModelLanguage = command.AgentType == AgentType.Agent ? "English" : command.ModelLanguage,
             Channel = command.Channels == null ? null : string.Join(",", command.Channels.Select(x => (int)x)),
             IsDisplay = command.IsDisplay,
             IsDefault = isDefault,
+            ModelLanguage = command.AgentType == AgentType.Agent ? string.IsNullOrWhiteSpace(command.Language) ? "English" : command.ModelLanguage : null,
             WaitInterval = agent.WaitInterval,
             IsTransferHuman = agent.IsTransferHuman
         };
