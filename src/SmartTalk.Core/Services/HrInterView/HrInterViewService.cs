@@ -200,9 +200,13 @@ public class HrInterViewService : IHrInterViewService
 
                     var messageObj = JsonConvert.DeserializeObject<HrInterViewQuestionEventDto>(message);
 
-                    if (messageObj.EventType == "START_EVENT") fileAudio.Add(messageObj.Message);
+                    Log.Information("WebSocket receive messageObj {@messageObj}", messageObj);
+                    
+                    if (messageObj.EventType == "START_EVENT" && string.IsNullOrEmpty(messageObj.Message)) fileAudio.Add(messageObj.Message);
 
                     if (messageObj.EventType != "RESPONSE_EVENT") continue;
+                    
+                    Log.Information("WebSocket receive fileAudio {@fileAudio}", fileAudio);
                     
                     var fileBytes = GetFileBytes(fileAudio);
                     await HandleWebSocketMessageAsync(command.WebSocket, command.SessionId, fileBytes, cancellationToken).ConfigureAwait(false);
@@ -372,6 +376,9 @@ public class HrInterViewService : IHrInterViewService
     {
         var totalLength = 0; 
         var pcmList = new List<byte[]>();
+        
+        Log.Information("WebSocket receive audios {@audios}", audios);
+        
         foreach (var base64 in audios)
         {
             var pcm = Convert.FromBase64String(base64);
