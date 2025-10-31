@@ -50,7 +50,7 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
                 output_audio_format = context.OutputFormat.GetDescription(),
                 voice = string.IsNullOrEmpty(assistantProfile.ModelVoice) ? "alloy" : assistantProfile.ModelVoice,
                 instructions = context.InitialPrompt,
-                modalities = new[] { "text", "audio" },
+                modalities = configs.Any(x => x is { Type: AiSpeechAssistantSessionConfigType.TurnDirection, Config: null }) ? new[] { "text" } : new[] { "text", "audio" },
                 temperature = 0.8,
                 input_audio_transcription = new { model = "whisper-1" },
                 input_audio_noise_reduction = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction),
