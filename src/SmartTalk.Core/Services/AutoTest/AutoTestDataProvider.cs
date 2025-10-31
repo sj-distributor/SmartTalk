@@ -26,7 +26,7 @@ public partial interface IAutoTestDataProvider : IScopedDependency
     
     Task<List<int>> GetDataItemIdsByDataSetIdAsync(int dataSetId, CancellationToken cancellationToken);
 
-    Task DeleteAutoTestDataItemAsync(List<int> delIds, CancellationToken cancellationToken);
+    Task DeleteAutoTestDataItemAsync(List<int> delIds, int dataSetId, CancellationToken cancellationToken);
 }
 
 public partial class AutoTestDataProvider : IAutoTestDataProvider
@@ -146,10 +146,10 @@ public partial class AutoTestDataProvider : IAutoTestDataProvider
     }
     
     
-    public async Task DeleteAutoTestDataItemAsync(List<int> delIds, CancellationToken cancellationToken)
+    public async Task DeleteAutoTestDataItemAsync(List<int> delIds, int dataSetId, CancellationToken cancellationToken)
     {
-        var deleteItems = await _repository.Query<AutoTestDataItem>()
-            .Where(x => delIds.Contains(x.Id))
+        var deleteItems = await _repository.Query<AutoTestDataSetItem>()
+            .Where(x => delIds.Contains(x.DataItemId) && x.DataSetId == dataSetId)
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 

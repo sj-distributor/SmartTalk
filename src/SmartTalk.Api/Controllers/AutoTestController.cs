@@ -6,7 +6,7 @@ using SmartTalk.Messages.Requests.AutoTest;
 
 namespace SmartTalk.Api.Controllers;
 
-// [Authorize]
+[Authorize]
 [ApiController]
 [Route("api/[controller]")]
 public class AutoTestController : ControllerBase
