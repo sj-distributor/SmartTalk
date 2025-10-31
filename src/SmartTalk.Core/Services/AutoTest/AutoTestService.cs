@@ -165,7 +165,7 @@ public partial class AutoTestService : IAutoTestService
         
         var sourceItemIds = await _autoTestDataProvider.GetDataItemIdsByDataSetIdAsync(command.SourceDataSetId, cancellationToken).ConfigureAwait(false);
         
-        var pickIds = command.ItemIds.Distinct().Intersect(sourceItemIds).ToList();
+        var pickIds = command.ItemIds.Distinct().ToList();
         
         if (pickIds.Count == 0) throw new Exception("The selected DataItem does not exist in the source dataset.");
         
@@ -193,7 +193,7 @@ public partial class AutoTestService : IAutoTestService
         
         if (invalidItemIds.Any()) throw new Exception("The selected DataItem does not exist in the source dataset.");
         
-        await _autoTestDataProvider.DeleteAutoTestDataItemAsync(command.ItemsIds, cancellationToken).ConfigureAwait(false);
+        await _autoTestDataProvider.DeleteAutoTestDataItemAsync(command.ItemsIds, command.DataSetId, cancellationToken).ConfigureAwait(false);
         
         return new DeleteAutoTestDataSetResponse();
     }
