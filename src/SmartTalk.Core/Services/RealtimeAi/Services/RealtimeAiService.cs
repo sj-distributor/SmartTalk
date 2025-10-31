@@ -130,6 +130,7 @@ public class RealtimeAiService : IRealtimeAiService
         _conversationEngine.ErrorOccurredAsync += OnErrorOccurredAsync;
         _conversationEngine.InputAudioTranscriptionCompletedAsync += InputAudioTranscriptionCompletedAsync;
         _conversationEngine.OutputAudioTranscriptionCompletedyAsync += OutputAudioTranscriptionCompletedAsync;
+        _conversationEngine.OutputAudioTranscriptionPartialAsync += OutputAudioTranscriptionPartialAsync;
     }
     
     private async Task<string> BuildingAiSpeechAssistantKnowledgeBaseAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken)
@@ -403,6 +404,21 @@ public class RealtimeAiService : IRealtimeAiService
             session_id = _streamSid
         };
 
+        await _webSocket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(transcription))), WebSocketMessageType.Text, true, CancellationToken.None);
+    }
+
+    private async Task OutputAudioTranscriptionPartialAsync(RealtimeAiWssTranscriptionData transcriptionData)
+    {
+        var transcription = new
+        {
+            type = "OutputAudioTranscriptionPartial",
+            Data = new
+            { 
+                transcriptionData
+            },
+            session_id = _streamSid
+        };
+        
         await _webSocket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(transcription))), WebSocketMessageType.Text, true, CancellationToken.None);
     }
     
