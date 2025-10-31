@@ -39,18 +39,19 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
         Domain.AISpeechAssistant.AiSpeechAssistant assistantProfile, RealtimeAiEngineContext context, string sessionId, CancellationToken cancellationToken)
     {
         var configs = await InitialSessionConfigAsync(assistantProfile, cancellationToken).ConfigureAwait(false);
+        var turnDetection = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection);
         
         var sessionPayload = new
         {
             type = "session.update",
             session = new
             {
-                turn_detection = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection),
+                turn_detection = turnDetection,
                 input_audio_format = context.InputFormat.GetDescription(),
                 output_audio_format = context.OutputFormat.GetDescription(),
                 voice = string.IsNullOrEmpty(assistantProfile.ModelVoice) ? "alloy" : assistantProfile.ModelVoice,
                 instructions = context.InitialPrompt,
-                modalities = configs.Any(x => x is { Type: AiSpeechAssistantSessionConfigType.TurnDirection, Config: null }) ? new[] { "text" } : new[] { "text", "audio" },
+                modalities = turnDetection == null ? new[] { "text" } : new[] { "text", "audio" },
                 temperature = 0.8,
                 input_audio_transcription = new { model = "whisper-1" },
                 input_audio_noise_reduction = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction),
