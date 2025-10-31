@@ -13,8 +13,8 @@ public class Script0065AddAutoTestScenarioData : IScript
         stringBuilder.AppendLine($@"
             INSERT INTO auto_test_scenario ( key_name, name,  input_schema, output_schema,  action_config, action_type, created_at) 
             VALUES ('AiOrder', 'AiOrder', 
-                    '{{ ""recording"": {{ ""type"": ""string"", ""required"": true, ""desc"": ""录音信息（如URL或标识）"" }},""orderId"": {{ ""type"": ""string"", ""required"": true, ""desc"": ""订单唯一编号"" }},
-                 ""customerId"": {{ ""type"": ""string"", ""required"": true, ""desc"": ""客户唯一编号"" }},""detail"": {{
+                    '{{ ""Recording"": {{ ""type"": ""string"", ""required"": true, ""desc"": ""录音信息（如URL或标识）"" }},""OrderId"": {{ ""type"": ""string"", ""required"": true, ""desc"": ""订单唯一编号"" }},
+                 ""CustomerId"": {{ ""type"": ""string"", ""required"": true, ""desc"": ""客户唯一编号"" }},""Detail"": {{
                         ""type"": ""array"",
                         ""required"": true,
                         ""items"": {{
