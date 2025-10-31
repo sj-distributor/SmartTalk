@@ -17,6 +17,6 @@ public class DeleteAutoTestDataSetCommandHandler : ICommandHandler<DeleteAutoTes
 
     public async Task<DeleteAutoTestDataSetResponse> Handle(IReceiveContext<DeleteAutoTestDataSetCommand> context, CancellationToken cancellationToken)
     {
-        return await _autoTestService.DeleteAutoTestDataSetAsync(context.Message, cancellationToken).ConfigureAwait(false);
+        return await _autoTestService.DeleteAutoTestDataItemAsync(context.Message, cancellationToken).ConfigureAwait(false);
     }
 }

@@ -8,7 +8,7 @@ using SmartTalk.Messages.Requests.AutoTest;
 
 namespace SmartTalk.Api.Controllers;
 
-// [Authorize]
+[Authorize]
 [ApiController]
 [Route("api/[controller]")]
 public class AutoTestController : ControllerBase
@@ -171,18 +171,18 @@ public class AutoTestController : ControllerBase
         return Ok(response);
     }
     
-    [Route("DataSet/copy"), HttpGet]
+    [Route("DataSet/copy"), HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(CopyAutoTestDataSetResponse))]
-    public async Task<IActionResult> CopyAutoTestDataItemsAsync([FromQuery] CopyAutoTestDataSetRequest request)
+    public async Task<IActionResult> CopyAutoTestDataItemsAsync([FromBody] CopyAutoTestDataSetCommand command)
     {
-        var response = await _mediator.RequestAsync<CopyAutoTestDataSetRequest, CopyAutoTestDataSetResponse>(request).ConfigureAwait(false);
+        var response = await _mediator.SendAsync<CopyAutoTestDataSetCommand, CopyAutoTestDataSetResponse>(command).ConfigureAwait(false);
         
         return Ok(response);
     }
     
-    [Route("DataSet/delete"), HttpPost]
+    [Route("DataItem/delete"), HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(DeleteAutoTestDataSetResponse))]
-    public async Task<IActionResult> DeleteAutoTestDataSetAsync([FromBody] DeleteAutoTestDataSetCommand command) 
+    public async Task<IActionResult> DeleteAutoTestDataItemAsync([FromBody] DeleteAutoTestDataSetCommand command) 
     {
         var response = await _mediator.SendAsync<DeleteAutoTestDataSetCommand, DeleteAutoTestDataSetResponse>(command).ConfigureAwait(false);
         
