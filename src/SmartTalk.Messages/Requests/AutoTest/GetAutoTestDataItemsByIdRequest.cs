@@ -15,7 +15,13 @@ public class GetAutoTestDataItemsByIdRequest : IRequest
 
 public class GetAutoTestDataItemsByIdResponse : SmartTalkResponse
 {
+    
+    public GetAutoTestDataItemsByIdData Data { get; set; }
+}
+
+public class GetAutoTestDataItemsByIdData
+{
     public int Count { get; set; }
     
-    public List<AutoTestDataItemDto> Data { get; set; }
+    public List<AutoTestDataItemDto> Records { get; set; }
 }

@@ -131,8 +131,7 @@ public partial class AutoTestDataProvider : IAutoTestDataProvider
 
         return (count, resultItems);
     }
-
-
+    
     public async Task<List<int>> GetDataItemIdsByDataSetIdAsync(int dataSetId, CancellationToken cancellationToken)
     {
         return await _repository.Query<AutoTestDataSetItem>()

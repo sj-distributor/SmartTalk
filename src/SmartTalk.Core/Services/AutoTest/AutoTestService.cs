@@ -60,8 +60,11 @@ public partial class AutoTestService : IAutoTestService
         
         return new GetAutoTestDataSetResponse
         {
-            Count = count,
-            Data = dataSets.Select(x => _mapper.Map<AutoTestDataSetDto>(x)).ToList()
+            Data = new GetAutoTestDataSetData()
+            {
+                Count = count,
+                Records = dataSets.Select(x => _mapper.Map<AutoTestDataSetDto>(x)).ToList()
+            }
         };
     }
 
@@ -71,8 +74,11 @@ public partial class AutoTestService : IAutoTestService
 
         return new GetAutoTestDataItemsByIdResponse
         {
-            Count = count,
-            Data = dataItems.Select(x => _mapper.Map<AutoTestDataItemDto>(x)).ToList()
+            Data = new GetAutoTestDataItemsByIdData
+            {
+                Count = count,
+                Records = dataItems.Select(x => _mapper.Map<AutoTestDataItemDto>(x)).ToList()
+            }
         };
     }
 
@@ -129,6 +135,7 @@ public partial class AutoTestService : IAutoTestService
             DataItemId = dataItemId,
             CreatedAt = DateTimeOffset.UtcNow
         }).ToList();
+        
         await _autoTestDataProvider.AddAutoTestDataSetByQuoteAsync(newDataItems, cancellationToken).ConfigureAwait(false);
 
         return new AddAutoTestDataSetByQuoteResponse();

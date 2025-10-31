@@ -15,7 +15,13 @@ public class GetAutoTestDataSetRequest : IRequest
 
 public class GetAutoTestDataSetResponse : SmartTalkResponse
 {
-    public int Count { get; set; }
+   public GetAutoTestDataSetData Data { get; set; }
 
-    public List<AutoTestDataSetDto> Data { get; set; }
+}
+
+public class GetAutoTestDataSetData
+{
+    public int Count { get; set; }
+    
+    public List<AutoTestDataSetDto> Records { get; set; }
 }
