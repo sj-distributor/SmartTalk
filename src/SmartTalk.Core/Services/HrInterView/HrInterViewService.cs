@@ -202,7 +202,7 @@ public class HrInterViewService : IHrInterViewService
 
                     Log.Information("WebSocket receive messageObj {@messageObj}", messageObj);
                     
-                    if (messageObj.EventType == "START_EVENT" && string.IsNullOrEmpty(messageObj.Message)) fileAudio.Add(messageObj.Message);
+                    if (messageObj.EventType == "START_EVENT" && !string.IsNullOrEmpty(messageObj.Message)) fileAudio.Add(messageObj.Message);
 
                     if (messageObj.EventType != "RESPONSE_EVENT") continue;
                     
