@@ -9,6 +9,7 @@ using System.Text;
 using Newtonsoft.Json;
 using OpenAI.Chat;
 using Serilog;
+using SmartTalk.Core.Extensions;
 using SmartTalk.Core.Services.Attachments;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
@@ -60,28 +61,14 @@ public class HrInterViewService : IHrInterViewService
         var newSetting = _mapper.Map<HrInterViewSetting>(command.Setting);
 
         var changeAudioList = new Dictionary<int, string>();
-
         if (command.ChangeQusetionIds != null && command.ChangeQusetionIds.Any())
         {
             foreach (var change in command.ChangeQusetionIds) 
                 changeAudioList.Add(change.Id, await ConvertTextToSpeechAsync(change.Questions, cancellationToken).ConfigureAwait(false));
         }
-
-        var welcome = JsonConvert.DeserializeObject<HrInterViewQuestionsDto>(newSetting.Welcome);
-
-        if (changeAudioList.TryGetValue(welcome.QuestionId, out var audioWelcomeUrl))
-        {
-            welcome.Url = audioWelcomeUrl;
-            newSetting.Welcome = JsonConvert.SerializeObject(welcome);
-        }
         
-        var endMessage = JsonConvert.DeserializeObject<HrInterViewQuestionsDto>(newSetting.EndMessage);
-
-        if (changeAudioList.TryGetValue(endMessage.QuestionId, out var audioEndMessageUrl))
-        {
-            endMessage.Url = audioEndMessageUrl;
-            newSetting.EndMessage = JsonConvert.SerializeObject(welcome);
-        }
+        newSetting.Welcome = UpdateSpeechIfChanged(newSetting.Welcome, changeAudioList);
+        newSetting.EndMessage = UpdateSpeechIfChanged(newSetting.EndMessage, changeAudioList);
         
         if (command.Setting.Id.HasValue)
         {
@@ -94,15 +81,17 @@ public class HrInterViewService : IHrInterViewService
             await _hrInterViewDataProvider.UpdateHrInterViewSettingAsync(newSetting, cancellationToken:cancellationToken).ConfigureAwait(false);
         }
         else await _hrInterViewDataProvider.AddHrInterViewSettingAsync(newSetting, cancellationToken:cancellationToken).ConfigureAwait(false);
-        
 
+        var insertAudioList = new Dictionary<int, List<HrInterViewQuestionsDto>>();
+        var maxQuestionId = 0;
+        
         foreach (var questionList in command.Questions)
         {
             questionList.SettingId = newSetting.Id;
             questionList.OriginCount = questionList.Count;
             var type = JsonConvert.DeserializeObject<HrInterViewQuestionsDto>(questionList.Type);
 
-            if (changeAudioList.TryGetValue(type.QuestionId, out var audioTypeUrl))
+            if (type.QuestionId.HasValue && changeAudioList.TryGetValue(type.QuestionId.Value, out var audioTypeUrl))
             {
                 type.Url = audioTypeUrl;
                 questionList.Type = JsonConvert.SerializeObject(type);
@@ -110,19 +99,60 @@ public class HrInterViewService : IHrInterViewService
 
             var questions = JsonConvert.DeserializeObject<List<HrInterViewQuestionsDto>>(questionList.Question);
             
+            if (questions == null || !questions.Any()) continue;
+            
+            maxQuestionId = Math.Max(maxQuestionId, questions.Where(x => x.QuestionId.HasValue).Max(x => x.QuestionId.Value));
+            var toInsert = questions.Where(x => !x.QuestionId.HasValue).ToList();
+            if (toInsert.Any())
+            {
+                if (!insertAudioList.ContainsKey(questionList.Id))
+                    insertAudioList[questionList.Id] = new List<HrInterViewQuestionsDto>();
+                insertAudioList[questionList.Id].AddRange(toInsert);
+            }
+            
             questions.ForEach(question =>
             {
-                if (changeAudioList.TryGetValue(question.QuestionId, out var audioQuestionUrl)) question.Url = audioQuestionUrl;
+                if (question.QuestionId.HasValue && changeAudioList.TryGetValue(question.QuestionId.Value, out var audioQuestionUrl)) question.Url = audioQuestionUrl;
             });
-            
             questionList.Question = JsonConvert.SerializeObject(questions);
+        }
+        
+        foreach (var (key, values) in insertAudioList)
+        {
+            var questionSetting = command.Questions.First(x => x.Id == key);
+            var questions = JsonConvert.DeserializeObject<List<HrInterViewQuestionsDto>>(questionSetting.Question) ?? new();
+
+            foreach (var value in values)
+            {
+                value.Url = await ConvertTextToSpeechAsync(value.Question, cancellationToken).ConfigureAwait(false);
+                value.QuestionId = ++maxQuestionId;
+                questions.Add(value);
+            }
+
+            questionSetting.Question = JsonConvert.SerializeObject(questions);
         }
         
         await _hrInterViewDataProvider.AddHrInterViewSettingQuestionsAsync(_mapper.Map<List<HrInterViewSettingQuestion>>(command.Questions), cancellationToken: cancellationToken).ConfigureAwait(false);
         
         return new AddOrUpdateHrInterViewSettingResponse();
     }
+    
+    private static string UpdateSpeechIfChanged(string jsonField, Dictionary<int, string> changeAudioList)
+    {
+        if (string.IsNullOrWhiteSpace(jsonField)) return jsonField;
 
+        var dto = JsonConvert.DeserializeObject<HrInterViewQuestionsDto>(jsonField);
+        if (dto?.QuestionId is null) return jsonField;
+
+        if (changeAudioList.TryGetValue(dto.QuestionId.Value, out var url))
+        {
+            dto.Url = url;
+            return JsonConvert.SerializeObject(dto);
+        }
+
+        return jsonField;
+    }
+    
     public async Task<GetHrInterViewSettingsResponse> GetHrInterViewSettingsAsync(GetHrInterViewSettingsRequest request, CancellationToken cancellationToken)
     {
         var (settings, count) = await _hrInterViewDataProvider.GetHrInterViewSettingsAsync(request.SettingId, request.PageIndex, request.PageSize, cancellationToken).ConfigureAwait(false);
