@@ -1,4 +1,5 @@
 using AutoMapper;
+using SmartTalk.Core.Domain.AutoTest;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Messages.Commands.AutoTest;
 using SmartTalk.Messages.Dto.AutoTest;
@@ -77,21 +78,58 @@ public partial class AutoTestService : IAutoTestService
 
     public async Task<CopyAutoTestDataSetResponse> CopyAutoTestDataItemsAsync(CopyAutoTestDataSetRequest request, CancellationToken cancellationToken)
     { 
-        await _autoTestDataProvider.CopyAutoTestDataItemsAsync(request.SourceDataSetId, request.TargetDataSetId, cancellationToken).ConfigureAwait(false);
+        var itemIds = await _autoTestDataProvider.GetDataItemIdsByDataSetIdAsync(request.SourceDataSetId, cancellationToken).ConfigureAwait(false);
+        
+        if (itemIds.Count == 0) return new CopyAutoTestDataSetResponse();
+        
+        var newTargetItems = itemIds.Select(dataItemId => new AutoTestDataSetItem
+        {
+            DataSetId = request.TargetDataSetId,
+            CreatedAt = DateTimeOffset.UtcNow
+        }).ToList();
+        
+        await _autoTestDataProvider.AddAutoTestDataItemsAsync(newTargetItems, cancellationToken).ConfigureAwait(false);
         
         return new CopyAutoTestDataSetResponse();
     }
 
     public async Task<DeleteAutoTestDataSetResponse> DeleteAutoTestDataSetAsync(DeleteAutoTestDataSetCommand command, CancellationToken cancellationToken)
     {
-        await _autoTestDataProvider.DeleteAutoTestDataSetAsync(command.AutoTestDataSetId, cancellationToken).ConfigureAwait(false);
+        var dataSet = await _autoTestDataProvider.GetAutoTestDataSetByIdAsync(command.AutoTestDataSetId, cancellationToken).ConfigureAwait(false);
+
+        if (dataSet == null) throw new Exception("DataSet not found");
+        
+        await _autoTestDataProvider.DeleteAutoTestDataSetAsync(dataSet, cancellationToken).ConfigureAwait(false);
        
         return new DeleteAutoTestDataSetResponse();
     }
 
-    public async Task<AddAutoTestDataSetByQuoteResponse> AddAutoTestDataSetByQuoteAsync(AddAutoTestDataSetByQuoteCommand byQuoteCommand, CancellationToken cancellationToken)
+    public async Task<AddAutoTestDataSetByQuoteResponse> AddAutoTestDataSetByQuoteAsync(AddAutoTestDataSetByQuoteCommand command, CancellationToken cancellationToken)
     {
-        await _autoTestDataProvider.AddAutoTestDataSetByQuoteAsync(byQuoteCommand.DataSetId, cancellationToken).ConfigureAwait(false);
+        var sets = await _autoTestDataProvider.GetAutoTestDataSetByIdAsync(command.DataSetId, cancellationToken).ConfigureAwait(false);
+        
+        if(sets == null) throw new Exception("DataSet not found");
+        
+        var newDataSet = new AutoTestDataSet
+        {
+            ScenarioId = sets.ScenarioId,
+            KeyName = sets.KeyName + "-" + DateTimeOffset.UtcNow.ToString("yyyy:MM:dd:HH:mm:ss"),
+            Name = sets.Name + "-" + DateTimeOffset.UtcNow.ToString("yyyy:MM:dd:HH:mm:ss"),
+            IsDelete = false,
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+        
+        await _autoTestDataProvider.AddAutoTestDataSetAsync(newDataSet, cancellationToken).ConfigureAwait(false);
+        
+        var dataItemIds = await _autoTestDataProvider.GetDataItemIdsByDataSetIdAsync(command.DataSetId, cancellationToken).ConfigureAwait(false);
+        
+        var newDataItems = dataItemIds.Select(dataItemId => new AutoTestDataSetItem
+        {
+            DataSetId = newDataSet.Id,
+            DataItemId = dataItemId,
+            CreatedAt = DateTimeOffset.UtcNow
+        }).ToList();
+        await _autoTestDataProvider.AddAutoTestDataSetByQuoteAsync(newDataItems, cancellationToken).ConfigureAwait(false);
 
         return new AddAutoTestDataSetByQuoteResponse();
     }

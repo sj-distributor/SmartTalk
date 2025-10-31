@@ -6,7 +6,7 @@ using SmartTalk.Messages.Requests.AutoTest;
 
 namespace SmartTalk.Api.Controllers;
 
-[Authorize]
+// [Authorize]
 [ApiController]
 [Route("api/[controller]")]
 public class AutoTestController : ControllerBase
@@ -72,7 +72,7 @@ public class AutoTestController : ControllerBase
         return Ok(response);
     }
     
-    [Route("autoTestDataSet/records"), HttpGet]
+    [Route("DataSet/records"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAutoTestDataSetResponse))]
     public async Task<IActionResult> GetAutoTestDataSetAsync([FromQuery] GetAutoTestDataSetRequest request)
     {
@@ -81,7 +81,7 @@ public class AutoTestController : ControllerBase
         return Ok(response);
     }
     
-    [Route("autoTestDataSet/copy"), HttpGet]
+    [Route("DataSet/copy"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(CopyAutoTestDataSetResponse))]
     public async Task<IActionResult> CopyAutoTestDataItemsAsync([FromQuery] CopyAutoTestDataSetRequest request)
     {
@@ -90,7 +90,7 @@ public class AutoTestController : ControllerBase
         return Ok(response);
     }
     
-    [Route("autoTestDataSet/delete"), HttpPost]
+    [Route("DataSet/delete"), HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(DeleteAutoTestDataSetResponse))]
     public async Task<IActionResult> DeleteAutoTestDataSetAsync([FromBody] DeleteAutoTestDataSetCommand command) 
     {
@@ -99,7 +99,7 @@ public class AutoTestController : ControllerBase
         return Ok(response);
     }
     
-    [Route("autoTestDataItem/records"), HttpGet]
+    [Route("DataItem/records"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAutoTestDataItemsByIdResponse))]
     public async Task<IActionResult> GetAutoTestDataItemsByIdAsync([FromQuery] GetAutoTestDataItemsByIdRequest request)
     {
@@ -108,7 +108,7 @@ public class AutoTestController : ControllerBase
         return Ok(response);
     }
     
-    [Route("autoTestDataSet/add/quote"), HttpPost]
+    [Route("DataSet/add/quote"), HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(AddAutoTestDataSetByQuoteResponse))]
     public async Task<IActionResult> AddAutoTestDataSetByQuoteAsync([FromBody] AddAutoTestDataSetByQuoteCommand command) 
     {
