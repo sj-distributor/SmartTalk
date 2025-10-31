@@ -4,6 +4,7 @@ using Newtonsoft.Json;
 using SmartTalk.Core.Data;
 using SmartTalk.Core.Domain.AutoTest;
 using SmartTalk.Core.Ioc;
+using SmartTalk.Messages.Commands.AutoTest;
 
 namespace SmartTalk.Core.Services.AutoTest;
 
@@ -17,13 +18,15 @@ public partial interface IAutoTestDataProvider : IScopedDependency
     
     Task<(int count, List<AutoTestDataSet>)> GetAutoTestDataSetsAsync(int? page, int? pageSize, string? keyName, CancellationToken cancellationToken);
 
-    Task<(int count, List<AutoTestDataItem>)> GetAutoTestDataItemsByIdAsync(int dataSetId, int? page, int? pageSize, CancellationToken cancellationToken);
+    Task<(int count, List<AutoTestDataItem>)> GetAutoTestDataItemsBySetIdAsync(int dataSetId, int? page, int? pageSize, CancellationToken cancellationToken);
     
     Task<AutoTestDataSet> GetAutoTestDataSetByIdAsync(int dataSetId, CancellationToken cancellationToken = default);
 
     Task DeleteAutoTestDataSetAsync(AutoTestDataSet dataSet, CancellationToken cancellationToken);
     
     Task<List<int>> GetDataItemIdsByDataSetIdAsync(int dataSetId, CancellationToken cancellationToken);
+
+    Task DeleteAutoTestDataItemAsync(List<int> delIds, CancellationToken cancellationToken);
 }
 
 public partial class AutoTestDataProvider : IAutoTestDataProvider
@@ -86,16 +89,14 @@ public partial class AutoTestDataProvider : IAutoTestDataProvider
         return (count, dataSets);
     }
 
-    public async Task<(int count, List<AutoTestDataItem>)> GetAutoTestDataItemsByIdAsync(int dataSetId, int? page, int? pageSize, CancellationToken cancellationToken)
+    public async Task<(int count, List<AutoTestDataItem>)> GetAutoTestDataItemsBySetIdAsync(int dataSetId, int? page, int? pageSize, CancellationToken cancellationToken)
     {
         var query =
             from autoTestDataSetItem in _repository.Query<AutoTestDataSetItem>()
             join autoTestDataItem in _repository.Query<AutoTestDataItem>()
                 on autoTestDataSetItem.DataItemId equals autoTestDataItem.Id
-            join importRecord in _repository.Query<AutoTestImportDataRecord>()
-                on autoTestDataItem.ImportRecordId equals importRecord.Id
             where autoTestDataSetItem.DataSetId == dataSetId
-            select new { autoTestDataItem, importRecord };
+            select autoTestDataItem;
 
         var count = await query.CountAsync(cancellationToken).ConfigureAwait(false);
 
@@ -103,30 +104,18 @@ public partial class AutoTestDataProvider : IAutoTestDataProvider
 
         if (page.HasValue && pageSize.HasValue)
         {
-            var list = await query
-                .OrderByDescending(x => x.autoTestDataItem.CreatedAt)
+            resultItems = await query
+                .OrderByDescending(x => x.CreatedAt)
                 .Skip((page.Value - 1) * pageSize.Value)
                 .Take(pageSize.Value)
                 .ToListAsync(cancellationToken).ConfigureAwait(false);
-
-            resultItems = list.Select(x =>
-            {
-                x.autoTestDataItem.InputJson = JsonConvert.SerializeObject(x.importRecord);
-                return x.autoTestDataItem;
-            }).ToList();
         }
         else
         {
-            var items = await query
-                .OrderByDescending(x => x.autoTestDataItem.CreatedAt)
+            resultItems = await query
+                .OrderByDescending(x => x.CreatedAt)
                 .ToListAsync(cancellationToken)
                 .ConfigureAwait(false);
-
-            resultItems = items.Select(x =>
-            {
-                x.autoTestDataItem.InputJson = JsonConvert.SerializeObject(x.importRecord);
-                return x.autoTestDataItem;
-            }).ToList();
         }
 
         return (count, resultItems);
@@ -153,6 +142,19 @@ public partial class AutoTestDataProvider : IAutoTestDataProvider
         dataSet.IsDelete = true;
         
         await _repository.UpdateAsync(dataSet, cancellationToken).ConfigureAwait(false);
+        await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+    
+    
+    public async Task DeleteAutoTestDataItemAsync(List<int> delIds, CancellationToken cancellationToken)
+    {
+        var deleteItems = await _repository.Query<AutoTestDataItem>()
+            .Where(x => delIds.Contains(x.Id))
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        await _repository.DeleteAllAsync(deleteItems, cancellationToken).ConfigureAwait(false);
+        
         await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 }

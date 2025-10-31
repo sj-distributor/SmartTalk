@@ -5,7 +5,9 @@ namespace SmartTalk.Messages.Commands.AutoTest;
 
 public class DeleteAutoTestDataSetCommand : ICommand
 {
-    public int AutoTestDataSetId { get; set; }
+    public int DataSetId { get; set; }
+    
+    public List<int> ItemsIds { get; set; }
 }
 
 public class DeleteAutoTestDataSetResponse : SmartTalkResponse

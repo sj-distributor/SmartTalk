@@ -1,4 +1,5 @@
 using AutoMapper;
+using Newtonsoft.Json;
 using SmartTalk.Core.Domain.AutoTest;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Messages.Commands.AutoTest;
@@ -17,9 +18,9 @@ public partial interface IAutoTestService : IScopedDependency
     
     Task<GetAutoTestDataItemsByIdResponse> GetAutoTestDataItemsByIdAsync(GetAutoTestDataItemsByIdRequest request, CancellationToken cancellationToken);
 
-    Task<CopyAutoTestDataSetResponse> CopyAutoTestDataItemsAsync(CopyAutoTestDataSetRequest request, CancellationToken cancellationToken);
+    Task<CopyAutoTestDataSetResponse> CopyAutoTestDataItemsAsync(CopyAutoTestDataSetCommand command, CancellationToken cancellationToken);
 
-    Task<DeleteAutoTestDataSetResponse> DeleteAutoTestDataSetAsync(DeleteAutoTestDataSetCommand command, CancellationToken cancellationToken);
+    Task<DeleteAutoTestDataSetResponse> DeleteAutoTestDataItemAsync(DeleteAutoTestDataSetCommand command, CancellationToken cancellationToken);
 
     Task<AddAutoTestDataSetByQuoteResponse> AddAutoTestDataSetByQuoteAsync(AddAutoTestDataSetByQuoteCommand byQuoteCommand, CancellationToken cancellationToken);
 }
@@ -60,7 +61,7 @@ public partial class AutoTestService : IAutoTestService
         
         return new GetAutoTestDataSetResponse
         {
-            Data = new GetAutoTestDataSetData()
+            Data = new GetAutoTestDataSetData
             {
                 Count = count,
                 Records = dataSets.Select(x => _mapper.Map<AutoTestDataSetDto>(x)).ToList()
@@ -70,7 +71,7 @@ public partial class AutoTestService : IAutoTestService
 
     public async Task<GetAutoTestDataItemsByIdResponse> GetAutoTestDataItemsByIdAsync(GetAutoTestDataItemsByIdRequest request, CancellationToken cancellationToken)
     {
-        var (count, dataItems) = await _autoTestDataProvider.GetAutoTestDataItemsByIdAsync(request.DataSetId, request.Page, request.PageSize, cancellationToken).ConfigureAwait(false);
+        var (count, dataItems) = await _autoTestDataProvider.GetAutoTestDataItemsBySetIdAsync(request.DataSetId, request.Page, request.PageSize, cancellationToken).ConfigureAwait(false);
 
         return new GetAutoTestDataItemsByIdResponse
         {
@@ -82,15 +83,20 @@ public partial class AutoTestService : IAutoTestService
         };
     }
 
-    public async Task<CopyAutoTestDataSetResponse> CopyAutoTestDataItemsAsync(CopyAutoTestDataSetRequest request, CancellationToken cancellationToken)
+    public async Task<CopyAutoTestDataSetResponse> CopyAutoTestDataItemsAsync(CopyAutoTestDataSetCommand command, CancellationToken cancellationToken)
     { 
-        var itemIds = await _autoTestDataProvider.GetDataItemIdsByDataSetIdAsync(request.SourceDataSetId, cancellationToken).ConfigureAwait(false);
+        if (command.ItemIds is null || command.ItemIds.Count == 0) throw new Exception("Please select the DataItem you want to copy.");
         
-        if (itemIds.Count == 0) return new CopyAutoTestDataSetResponse();
+        var sourceItemIds = await _autoTestDataProvider.GetDataItemIdsByDataSetIdAsync(command.SourceDataSetId, cancellationToken).ConfigureAwait(false);
         
-        var newTargetItems = itemIds.Select(dataItemId => new AutoTestDataSetItem
+        var pickIds = command.ItemIds.Distinct().Intersect(sourceItemIds).ToList();
+        
+        if (pickIds.Count == 0) throw new Exception("The selected DataItem does not exist in the source dataset.");
+        
+        var newTargetItems = pickIds.Select(id => new AutoTestDataSetItem
         {
-            DataSetId = request.TargetDataSetId,
+            DataSetId = command.TargetDataSetId,
+            DataItemId = id, 
             CreatedAt = DateTimeOffset.UtcNow
         }).ToList();
         
@@ -99,14 +105,20 @@ public partial class AutoTestService : IAutoTestService
         return new CopyAutoTestDataSetResponse();
     }
 
-    public async Task<DeleteAutoTestDataSetResponse> DeleteAutoTestDataSetAsync(DeleteAutoTestDataSetCommand command, CancellationToken cancellationToken)
+    public async Task<DeleteAutoTestDataSetResponse> DeleteAutoTestDataItemAsync(DeleteAutoTestDataSetCommand command, CancellationToken cancellationToken)
     {
-        var dataSet = await _autoTestDataProvider.GetAutoTestDataSetByIdAsync(command.AutoTestDataSetId, cancellationToken).ConfigureAwait(false);
-
-        if (dataSet == null) throw new Exception("DataSet not found");
+        var itemIds = await _autoTestDataProvider.GetDataItemIdsByDataSetIdAsync(command.DataSetId, cancellationToken).ConfigureAwait(false);
         
-        await _autoTestDataProvider.DeleteAutoTestDataSetAsync(dataSet, cancellationToken).ConfigureAwait(false);
-       
+        if(itemIds.Count == 0) throw new Exception("DataItem not found."); 
+        
+        var invalidItemIds = command.ItemsIds
+            .Where(itemId => !itemIds.Contains(itemId))
+            .ToList();
+        
+        if (invalidItemIds.Any()) throw new Exception("The selected DataItem does not exist in the source dataset.");
+        
+        await _autoTestDataProvider.DeleteAutoTestDataItemAsync(command.ItemsIds, cancellationToken).ConfigureAwait(false);
+        
         return new DeleteAutoTestDataSetResponse();
     }
 
@@ -136,7 +148,7 @@ public partial class AutoTestService : IAutoTestService
             CreatedAt = DateTimeOffset.UtcNow
         }).ToList();
         
-        await _autoTestDataProvider.AddAutoTestDataSetByQuoteAsync(newDataItems, cancellationToken).ConfigureAwait(false);
+        await _autoTestDataProvider.AddAutoTestDataItemsAsync(newDataItems, cancellationToken).ConfigureAwait(false);
 
         return new AddAutoTestDataSetByQuoteResponse();
     }
