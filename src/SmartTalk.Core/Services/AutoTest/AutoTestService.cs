@@ -85,7 +85,7 @@ public partial class AutoTestService : IAutoTestService
             new SystemChatMessage(prompt)
         };
 
-        var client = new ChatClient("gpt-audio", _openAiSettings.ApiKey);
+        var client = new ChatClient("gpt-4o-audio-preview", _openAiSettings.ApiKey);
 
         var options = new ChatCompletionOptions
         {

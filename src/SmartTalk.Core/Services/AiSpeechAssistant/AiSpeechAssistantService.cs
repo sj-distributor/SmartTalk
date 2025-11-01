@@ -307,7 +307,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     
     private async Task<string> DetectAudioLanguageAsync(byte[] audioContent, CancellationToken cancellationToken)
     {
-        ChatClient client = new("gpt-audio", _openAiSettings.ApiKey);
+        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
 
         var audioData = BinaryData.FromBytes(audioContent);
         List<ChatMessage> messages =
@@ -1055,7 +1055,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         var fileContent = memoryStream.ToArray();
         var audioData = BinaryData.FromBytes(fileContent);
 
-        ChatClient client = new("gpt-audio", _openAiSettings.ApiKey);
+        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
         List<ChatMessage> messages =
         [
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
