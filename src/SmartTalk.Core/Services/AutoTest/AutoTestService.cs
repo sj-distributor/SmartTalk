@@ -1,5 +1,6 @@
 using AutoMapper;
 using SmartTalk.Core.Ioc;
+using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.AutoTest;
 using SmartTalk.Messages.Enums.AutoTest;

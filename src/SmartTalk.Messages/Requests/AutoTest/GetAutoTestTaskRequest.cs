@@ -15,9 +15,13 @@ public class GetAutoTestTaskRequest : IRequest
     public int? PageSize { get; set; }
 }
 
-public class GetAutoTestTaskResponse : SmartTalkResponse
+public class GetAutoTestTaskResponse : SmartTalkResponse<GetAutoTestTaskResponseDataDto>
 {
-    public List<AutoTestTaskDto> Data { get; set; }
+}
+
+public class GetAutoTestTaskResponseDataDto
+{
+    public List<AutoTestTaskDto> Tasks { get; set; }
     
     public int TotalCount { get; set; }
 }

@@ -32,8 +32,11 @@ public partial class AutoTestService
         
         return new GetAutoTestTaskResponse
         {
-            Data = tasks,
-            TotalCount = count
+            Data = new GetAutoTestTaskResponseDataDto()
+            {
+                TotalCount = count,
+                Tasks = tasks
+            }
         };
     }
 
