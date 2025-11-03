@@ -12,3 +12,12 @@ public class SpeechMaticsSpeakInfoDto
     
     public PhoneOrderRole Role { get; set; }
 }
+
+public class SpeechMaticsSpeakInfoForAutoTestDto
+{
+    public double StartTime { get; set; }
+    
+    public double EndTime { get; set; }
+    
+    public string Speaker { get; set; }
+}
