@@ -24,7 +24,9 @@ public partial class EventHandlingService
             
             var bytes = await _httpClientFactory.GetAsync<byte[]>(fileUrl, cancellationToken).ConfigureAwait(false);
 
-            if (IsWavFile(bytes)) continue;
+            Log.Information("HandlingEventAsync ConnectWebSocketEvent bytes:{@bytes}",bytes);
+            
+            if (!IsWavFile(bytes)) continue;
             
             var answers = await _asrClient.TranscriptionAsync(new AsrTranscriptionDto { File = bytes }, cancellationToken).ConfigureAwait(false);
             
@@ -50,6 +52,8 @@ public partial class EventHandlingService
         
         if (data[8] != 'W' || data[9] != 'A' || data[10] != 'V' || data[11] != 'E')
             return false;
+
+        Log.Information("HandlingEventAsync ConnectWebSocketEvent IsWavFile: true");
 
         return true;
     }
