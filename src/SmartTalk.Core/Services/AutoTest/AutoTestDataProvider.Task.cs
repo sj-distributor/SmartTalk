@@ -59,7 +59,7 @@ public partial class AutoTestDataProvider
         var assistantIds = paramList.Select(x => x.ParamsDto.AssistantId).ToList();
         
         var agents = await _agentDataProvider.GetAgentsByIdsAsync(agentIds, cancellationToken).ConfigureAwait(false);
-        var assistants = await _agentDataProvider.GetAiSpeechAssistantsByIdsAsync(assistantIds, cancellationToken).ConfigureAwait(false);
+        var assistants = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByIdsAsync(assistantIds, cancellationToken).ConfigureAwait(false);
         
         var filteredTaskIds = paramList
             .Where(x => 

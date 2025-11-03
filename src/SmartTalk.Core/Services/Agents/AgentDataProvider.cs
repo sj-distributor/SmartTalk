@@ -37,8 +37,6 @@ public interface IAgentDataProvider : IScopedDependency
     Task<(int Count, List<Agent> Agents)> GetAgentsPagingAsync(int pageIndex, int pageSize, List<int> agentIds, string keyword = null, CancellationToken cancellationToken = default);
     
     Task<List<Agent>> GetAgentsByIdsAsync(List<int> ids, CancellationToken cancellationToken = default);
-
-    Task<List<Domain.AISpeechAssistant.AiSpeechAssistant>> GetAiSpeechAssistantsByIdsAsync(List<int> assistantIds, CancellationToken cancellationToken = default);
 }
 
 public class AgentDataProvider : IAgentDataProvider
@@ -197,10 +195,5 @@ public class AgentDataProvider : IAgentDataProvider
     public async Task<List<Agent>> GetAgentsByIdsAsync(List<int> ids, CancellationToken cancellationToken = default)
     {
         return await _repository.Query<Agent>().Where(x => ids.Contains(x.Id)).ToListAsync(cancellationToken).ConfigureAwait(false);
-    }
-    
-    public async Task<List<Domain.AISpeechAssistant.AiSpeechAssistant>> GetAiSpeechAssistantsByIdsAsync(List<int> assistantIds, CancellationToken cancellationToken = default)
-    {
-        return await _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>().Where(x => assistantIds.Contains(x.Id)).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }
