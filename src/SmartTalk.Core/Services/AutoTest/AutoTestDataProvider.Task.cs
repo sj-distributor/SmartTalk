@@ -51,29 +51,31 @@ public partial class AutoTestDataProvider
         
         var result = await query.ToListAsync(cancellationToken).ConfigureAwait(false);
         
-        var paramList = result.Select(x => new {x.Id, ParamsDto = JsonConvert.DeserializeObject<AutoTestTaskParamsDto>(x.Params)}).ToList();
-
-        var agentIds = paramList.Select(x => x.ParamsDto.AgentId).ToList();
-        var assistantIds = paramList.Select(x => x.ParamsDto.AssistantId).ToList();
+        var paramDict = result.Select(x => new {x.Id, ParamsDto = JsonConvert.DeserializeObject<AutoTestTaskParamsDto>(x.Params)}).ToDictionary(x => x.Id);
         
-        var agents = await _agentDataProvider.GetAgentsByIdsAsync(agentIds, cancellationToken).ConfigureAwait(false);
-        var assistants = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByIdsAsync(assistantIds, cancellationToken).ConfigureAwait(false);
+        var agents = await _agentDataProvider.GetAgentsByIdsAsync(
+            paramDict.Select(x => x.Value.ParamsDto.AgentId).ToList(),
+            cancellationToken).ConfigureAwait(false);
+        
+        var assistants = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByIdsAsync(
+            paramDict.Select(x => x.Value.ParamsDto.AssistantId).ToList(),
+            cancellationToken).ConfigureAwait(false);
        
-        var taskRecords = await _repository.QueryNoTracking<AutoTestTaskRecord>().Where(x => x.Status == AutoTestTaskRecordStatus.Done).ToListAsync(cancellationToken).ConfigureAwait(false);
-
+        var taskRecordCounts = await _repository.QueryNoTracking<AutoTestTaskRecord>().Where(r => r.Status == AutoTestTaskRecordStatus.Done).GroupBy(r => r.TestTaskId).Select(g => new { TaskId = g.Key, Count = g.Count() }).ToDictionaryAsync(g => g.TaskId, g => g.Count, cancellationToken).ConfigureAwait(false);
+        
         var autoTestTasks = result.Where(x =>
         {
-            x.InProgressCount = taskRecords.Count(r => r.TestTaskId == x.Id);
-
-            if (keyword is null || string.IsNullOrEmpty(keyword)) return true;
+            x.InProgressCount = taskRecordCounts.TryGetValue(x.Id, out var inProgressCount) ? inProgressCount : 0;
             
-            var task = paramList.FirstOrDefault(y => y.Id == x.Id);
-            if (task is null) return false;
+            if (!paramDict.TryGetValue(x.Id, out var task)) return false; 
            
             task.ParamsDto.AgentName = agents.FirstOrDefault(a => a.Id == task.ParamsDto.AgentId)?.Name ?? "";
             task.ParamsDto.AssistantName = assistants.FirstOrDefault(asst => asst.Id == task.ParamsDto.AssistantId)?.Name ?? "";
             x.Params = JsonConvert.SerializeObject(task.ParamsDto);
-            return task.ParamsDto.AgentName.Contains(keyword) || task.ParamsDto.AssistantName.Contains(keyword);
+            
+            if (keyword is null || string.IsNullOrEmpty(keyword)) return true;
+            
+            return task.ParamsDto.AgentName.Contains(keyword, StringComparison.OrdinalIgnoreCase) || task.ParamsDto.AssistantName.Contains(keyword, StringComparison.OrdinalIgnoreCase);
         }).ToList();
         
         var count = autoTestTasks.Count;
