@@ -19,6 +19,6 @@ public class WebhookAutoTestHandler : IAutoTestActionHandler
     {
         // TODO：要实时获取 taskId 相关数据集，即要实时 TestTaskRecord 状态为 Ongoing 的 dataItem 去执行
         // TODO: 执行完成需要 update 每条 TestTaskRecord 的状态为done
-        throw new NotImplementedException();
+        return await Task.FromResult("");
     }
 }
