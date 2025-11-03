@@ -22,7 +22,19 @@ public partial class EventHandlingService
             
             Log.Information("HandlingEventAsync ConnectWebSocketEvent fileUrl:{@fileUrl}",fileUrl);
             
-            var bytes = await _httpClientFactory.GetAsync<byte[]>(fileUrl, cancellationToken).ConfigureAwait(false);
+            using var client = _httpClientFactory.CreateClient();
+            
+            using var response = await client.GetAsync(fileUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+            
+            response.EnsureSuccessStatusCode();
+            
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+            
+            await using var memoryStream = new MemoryStream();
+            
+            await stream.CopyToAsync(memoryStream, 81920, cancellationToken).ConfigureAwait(false);
+            
+            var bytes = memoryStream.ToArray();
            
             Log.Information("HandlingEventAsync ConnectWebSocketEvent bytes:{@bytes}",bytes);
             
