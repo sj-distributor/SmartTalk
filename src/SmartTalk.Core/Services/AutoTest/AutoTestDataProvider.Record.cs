@@ -66,7 +66,7 @@ public partial class AutoTestDataProvider
     public async Task<(int Count, List<AutoTestTaskRecord> Records)> GetAutoTestTaskRecordsAsync(
         int taskId, int? pageIndex = null, int? pageSize = null, CancellationToken cancellationToken = default)
     {
-        var query = _repository.QueryNoTracking<AutoTestTaskRecord>(x => x.Id == taskId);
+        var query = _repository.QueryNoTracking<AutoTestTaskRecord>(x => x.TestTaskId == taskId);
         
         var count = await query.CountAsync(cancellationToken).ConfigureAwait(false);
 
