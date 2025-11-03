@@ -4,6 +4,7 @@ using Newtonsoft.Json;
 using Serilog;
 using Smarties.Messages.DTO.OpenAi;
 using Smarties.Messages.Enums.OpenAi;
+using Smarties.Messages.Requests.Ask;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Ffmpeg;
 using SmartTalk.Core.Services.Http;
