@@ -22,21 +22,9 @@ public partial class EventHandlingService
             
             Log.Information("HandlingEventAsync ConnectWebSocketEvent fileUrl:{@fileUrl}",fileUrl);
             
-            using var client = _httpClientFactory.CreateClient();
-            
-            using var response = await client.GetAsync(fileUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
-            
-            response.EnsureSuccessStatusCode();
-            
-            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-            
-            await using var memoryStream = new MemoryStream();
-            
-            await stream.CopyToAsync(memoryStream, 81920, cancellationToken).ConfigureAwait(false);
-            
-            var bytes = memoryStream.ToArray();
-           
-            Log.Information("HandlingEventAsync ConnectWebSocketEvent bytes:{@bytes}",bytes);
+            var bytes = await _httpClientFactory.GetAsync<byte[]>(fileUrl, cancellationToken).ConfigureAwait(false);
+
+            if (IsWavFile(bytes)) continue;
             
             var answers = await _asrClient.TranscriptionAsync(new AsrTranscriptionDto { File = bytes }, cancellationToken).ConfigureAwait(false);
             
@@ -50,5 +38,19 @@ public partial class EventHandlingService
        setting.IsConvertText = true;
        
        await _hrInterViewDataProvider.UpdateHrInterViewSettingAsync(setting, cancellationToken:cancellationToken).ConfigureAwait(false);
+    }
+    
+    public static bool IsWavFile(byte[] data)
+    {
+        if (data == null || data.Length < 12)
+            return false;
+        
+        if (data[0] != 'R' || data[1] != 'I' || data[2] != 'F' || data[3] != 'F')
+            return false;
+        
+        if (data[8] != 'W' || data[9] != 'A' || data[10] != 'V' || data[11] != 'E')
+            return false;
+
+        return true;
     }
 }
