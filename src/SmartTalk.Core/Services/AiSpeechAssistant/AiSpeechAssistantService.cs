@@ -77,8 +77,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 {
     private readonly IClock _clock;
     private readonly IMapper _mapper;
-    private readonly ICurrentUser _currentUser;
     private readonly ISalesClient _salesClient;
+    private readonly ICurrentUser _currentUser;
     private readonly AzureSetting _azureSetting;
     private readonly ICacheManager _cacheManager;
     private readonly IOpenaiClient _openaiClient;
@@ -113,7 +113,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         IClock clock,
         IMapper mapper,
         ICurrentUser currentUser,
-        ISalesClient salesClient,
         AzureSetting azureSetting,
         ICacheManager cacheManager,
         IOpenaiClient openaiClient,
@@ -136,7 +135,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         IPhoneOrderDataProvider phoneOrderDataProvider,
         IInactivityTimerManager inactivityTimerManager,
         ISmartTalkBackgroundJobClient backgroundJobClient,
-        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
+        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, ISalesClient salesClient)
     {
         _clock = clock;
         _mapper = mapper;
