@@ -12,9 +12,11 @@ public partial class AiSpeechAssistantService
 {
     public async Task<string> HandleOrderArrivalTimeList(List<string> customerIds, CancellationToken cancellationToken)
     {
+        var processedCustomerIds = customerIds.Select(id => "0000" + id).ToList();
+
         var getOrderArrivalTimeList = await _salesClient.GetOrderArrivalTimeAsync(new GetOrderArrivalTimeRequestDto
         {
-            CustomerIds = customerIds
+            CustomerIds = processedCustomerIds
         }, cancellationToken).ConfigureAwait(false);
 
         if (getOrderArrivalTimeList.Data.Count == 0) return "这位客户暂时没有订单。";
