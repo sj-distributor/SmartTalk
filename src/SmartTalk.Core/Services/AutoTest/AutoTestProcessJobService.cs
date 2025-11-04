@@ -11,6 +11,7 @@ using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.SpeechMatics;
 using SmartTalk.Core.Services.STT;
+using SmartTalk.Messages.Dto.AutoTest;
 using SmartTalk.Messages.Dto.SpeechMatics;
 using TranscriptionFileType = SmartTalk.Messages.Enums.STT.TranscriptionFileType;
 using TranscriptionResponseFormat = SmartTalk.Messages.Enums.STT.TranscriptionResponseFormat;
@@ -47,16 +48,17 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
 
         if (record == null) return;
         
+        var scenario = await _autoTestDataProvider.GetAutoTestScenarioByIdAsync(record.ScenarioId, cancellationToken).ConfigureAwait(false);
+        
         var speechMaticsJob = await _speechMaticsDataProvider.GetSpeechMaticsJobAsync(jobId, cancellationToken).ConfigureAwait(false);
         
         var callBack = JsonConvert.DeserializeObject<SpeechMaticsCallBackResponseDto>(speechMaticsJob.CallbackMessage);
         
         var speakInfos = StructureDiarizationResults(callBack.Results);
+
+        var inputJsonDto = JsonConvert.DeserializeObject<AutoTestDataItemInputJsonDto>(scenario.InputSchema);
         
-        //反序列化
-        var url = record.InputSnapshot;
-        
-        var audioContent = await _smartTalkHttpClientFactory.GetAsync<byte[]>(url, cancellationToken).ConfigureAwait(false);
+        var audioContent = await _smartTalkHttpClientFactory.GetAsync<byte[]>(inputJsonDto.Recording, cancellationToken).ConfigureAwait(false);
         
         var sixSentences = speakInfos.Count > 6 ? speakInfos[..6] : speakInfos.ToList();
 
