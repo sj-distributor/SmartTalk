@@ -19,10 +19,8 @@ public class AutoTestInputJsonDto
 
 public class AutoTestInputDetail
 {
-    [JsonConverter(typeof(EmptyStringConverter))]
     public int SerialNumber { get; set; }
     
-    [JsonConverter(typeof(EmptyStringConverter))]
     public decimal Quantity { get; set; }
     
     [JsonConverter(typeof(EmptyStringConverter))]
