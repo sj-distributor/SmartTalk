@@ -14,4 +14,6 @@ public class ReceivePhoneOrderRecordCommand : ICommand
     public DateTimeOffset? CreatedDate { get; set; }
     
     public int AgentId { get; set; }
+    
+    public PhoneOrderRecordType OrderRecordType { get; set; }
 }
