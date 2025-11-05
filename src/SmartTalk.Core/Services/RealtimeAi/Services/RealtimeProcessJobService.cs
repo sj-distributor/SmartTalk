@@ -17,7 +17,7 @@ namespace SmartTalk.Core.Services.RealtimeAi.Services;
 
 public interface IRealtimeProcessJobService : IScopedDependency
 {
-    Task RecordingRealtimeAiAsync(string recordingUrl, int assistantId, string sessionId, CancellationToken cancellationToken);
+    Task RecordingRealtimeAiAsync(string recordingUrl, int assistantId, string sessionId, PhoneOrderRecordType orderRecordType, CancellationToken cancellationToken);
 }
 
 public class RealtimeProcessJobService : IRealtimeProcessJobService
@@ -51,8 +51,8 @@ public class RealtimeProcessJobService : IRealtimeProcessJobService
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
     }
 
-    public async Task RecordingRealtimeAiAsync(string recordingUrl, int assistantId, string sessionId, CancellationToken cancellationToken)
-    {
+    public async Task RecordingRealtimeAiAsync(string recordingUrl, int assistantId, string sessionId,  PhoneOrderRecordType orderRecordType, CancellationToken cancellationToken)
+   {
         Log.Information("RecordingRealtimeAiAsync recording url: {recordingUrl}", recordingUrl);
         
         var agent = await _agentDataProvider.GetAgentByAssistantIdAsync(assistantId, cancellationToken).ConfigureAwait(false);
@@ -72,7 +72,7 @@ public class RealtimeProcessJobService : IRealtimeProcessJobService
         
         var detection = await _translationClient.DetectLanguageAsync(transcription, cancellationToken).ConfigureAwait(false);
         
-        var record = new PhoneOrderRecord { SessionId = sessionId, AgentId = agent?.Id ?? 0, TranscriptionText = transcription, Url = recordingUrl, Language = SelectLanguageEnum(detection.Language), CreatedDate = DateTimeOffset.Now, Status = PhoneOrderRecordStatus.Recieved };
+        var record = new PhoneOrderRecord { SessionId = sessionId, AgentId = agent?.Id ?? 0, TranscriptionText = transcription, Url = recordingUrl, Language = SelectLanguageEnum(detection.Language), CreatedDate = DateTimeOffset.Now, Status = PhoneOrderRecordStatus.Recieved, OrderRecordType = orderRecordType };
 
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync([record], cancellationToken: cancellationToken).ConfigureAwait(false);
         

@@ -30,9 +30,9 @@ public interface IAiSpeechAssistantProcessJobService : IScopedDependency
 {
     Task OpenAiAccountTrainingAsync(OpenAiAccountTrainingCommand command, CancellationToken cancellationToken);
     
-    Task RecordAiSpeechAssistantCallAsync(AiSpeechAssistantStreamContextDto context, bool isOutBount, CancellationToken cancellationToken);
-    
     Task SyncAiSpeechAssistantInfoToAgentAsync(SyncAiSpeechAssistantInfoToAgentCommand command, CancellationToken cancellationToken);
+    
+    Task RecordAiSpeechAssistantCallAsync(AiSpeechAssistantStreamContextDto context, PhoneOrderRecordType orderRecordType, CancellationToken cancellationToken);
 }
 
 public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobService
@@ -72,7 +72,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         _speechAssistantDataProvider = speechAssistantDataProvider;
     }
 
-    public async Task RecordAiSpeechAssistantCallAsync(AiSpeechAssistantStreamContextDto context, bool isOutBount, CancellationToken cancellationToken)
+    public async Task RecordAiSpeechAssistantCallAsync(AiSpeechAssistantStreamContextDto context, PhoneOrderRecordType orderRecordType, CancellationToken cancellationToken)
     {
         TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
         var callResource = await CallResource.FetchAsync(pathSid: context.CallSid).ConfigureAwait(false);
@@ -99,7 +99,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             PhoneNumber = context.UserInfo?.PhoneNumber,
             IsTransfer = context.IsTransfer,
             IncomingCallNumber = context.LastUserInfo.PhoneNumber,
-            IsOutBount = isOutBount,
+            OrderRecordType = orderRecordType,
         };
 
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync([record], cancellationToken: cancellationToken).ConfigureAwait(false);

@@ -16,7 +16,7 @@ public class GetPhoneOrderDataDashboardRequest : IRequest
     
     public List<int> AgentIds { get; set; }
 
-    public int? InvalidCallSeconds { get; set; } = 3;
+    public int? InvalidCallSeconds { get; set; } = 10;
 }
 
 public class GetPhoneOrderDataDashboardResponse : SmartTalkResponse<GetPhoneOrderDataDashboardResponseData>

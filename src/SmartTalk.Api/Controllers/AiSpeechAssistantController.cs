@@ -10,6 +10,7 @@ using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.RealtimeAi;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.RealtimeAi;
+using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Requests.AiSpeechAssistant;
 
 namespace SmartTalk.Api.Controllers;
@@ -79,7 +80,7 @@ public class AiSpeechAssistantController : ControllerBase
                 Host = HttpContext.Request.Host.Host,
                 NumberId = numberId,
                 TwilioWebSocket = await HttpContext.WebSockets.AcceptWebSocketAsync(),
-                IsOutBount = true,
+                OrderRecordType = PhoneOrderRecordType.OutBount,
             };
             await _mediator.SendAsync(command);
         }
