@@ -1,6 +1,6 @@
 namespace SmartTalk.Messages.Dto.AutoTest;
 
-public class AutoTestDataItemInputJsonDto
+public class SalesOrderDto
 {
     public string Recording { get; set; }
     
@@ -8,12 +8,12 @@ public class AutoTestDataItemInputJsonDto
     
     public string CustomerId { get; set; }
     
-    public List<OrderDetailItem> Detail { get; set; }
+    public List<SalesOrderDetailItem> Detail { get; set; }
 
     public string Desc { get; set; }
 }
 
-public class OrderDetailItem
+public class SalesOrderDetailItem
 {
     public int SerialNumber { get; set; }
     

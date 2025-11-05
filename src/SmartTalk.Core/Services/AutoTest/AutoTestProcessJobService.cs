@@ -56,15 +56,28 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
         
         var speakInfos = StructureDiarizationResults(callBack.Results);
 
-        var inputJsonDto = JsonConvert.DeserializeObject<AutoTestDataItemInputJsonDto>(scenario.InputSchema);
+        var salesOrder = JsonConvert.DeserializeObject<SalesOrderDto>(scenario.InputSchema);
         
-        var audioContent = await _smartTalkHttpClientFactory.GetAsync<byte[]>(inputJsonDto.Recording, cancellationToken).ConfigureAwait(false);
+        var audioContent = await _smartTalkHttpClientFactory.GetAsync<byte[]>(salesOrder.Recording, cancellationToken).ConfigureAwait(false);
         
         var sixSentences = speakInfos.Count > 6 ? speakInfos[..6] : speakInfos.ToList();
+        
+        if (audioContent == null) return;
+        
+        var audioBytes = await _ffmpegService.ConvertFileFormatAsync(audioContent, TranscriptionFileType.Wav, cancellationToken).ConfigureAwait(false);
+        
+        var (customerSpeaker, audios) = await HandlerConversationSpeakerIsCustomerAsync(sixSentences, audioBytes, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        var customerSpeaker = await HandlerConversationSpeakerIsCustomerAsync(sixSentences, audioContent, cancellationToken: cancellationToken);
+        var customerAudioInfos = speakInfos.Where(x => x.Speaker == customerSpeaker && !sixSentences.Any(s => s.StartTime == x.StartTime)).ToList();
 
-        var customerVideos = speakInfos.Where(x => x.Speaker == customerSpeaker).ToList();
+        foreach (var audioInfo in customerAudioInfos)
+        {
+            audioInfo.Audio = await _ffmpegService.SpiltAudioAsync(audioBytes, audioInfo.StartTime * 1000, audioInfo.EndTime * 1000, cancellationToken).ConfigureAwait(false);
+        }
+        
+        customerAudioInfos.AddRange(audios);
+
+        var customerAudios = customerAudioInfos.OrderBy(x => x.StartTime).Select(x => x.Audio).ToList();
     }
     
     private List<SpeechMaticsSpeakInfoForAutoTestDto> StructureDiarizationResults(List<SpeechMaticsResultDto> results)
@@ -104,28 +117,28 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
         return speakInfos;
     }
     
-    private async Task<string> HandlerConversationSpeakerIsCustomerAsync(
-        List<SpeechMaticsSpeakInfoForAutoTestDto> audioInfos, byte[] audioContent, CancellationToken cancellationToken)
+    private async Task<(string, List<SpeechMaticsSpeakInfoForAutoTestDto>)> HandlerConversationSpeakerIsCustomerAsync(
+        List<SpeechMaticsSpeakInfoForAutoTestDto> audioInfos, byte[] audioBytes, CancellationToken cancellationToken)
     {
         var originText = "";
-        
+     
         foreach (var audioInfo in audioInfos)
         {
-            originText += $"{audioInfo.Speaker}:" + await SplitAudioAsync(audioContent, audioInfo.StartTime * 1000,
-                audioInfo.EndTime * 1000, TranscriptionFileType.Wav, cancellationToken).ConfigureAwait(false) + "; ";
+            var (audioText, audio) = await SplitAudioAsync(
+                    audioBytes, audioInfo.StartTime * 1000, audioInfo.EndTime * 1000, cancellationToken).ConfigureAwait(false);
+          
+            originText += $"{audioInfo.Speaker}:" + audioText + "; ";
+
+            audioInfo.Audio = audio;
         }
 
-        return await CheckAudioSpeakerIsCustomerAsync(originText, cancellationToken).ConfigureAwait(false);
+        var speaker = await CheckAudioSpeakerIsCustomerAsync(originText, cancellationToken).ConfigureAwait(false);
+        
+        return (speaker, audioInfos.Where(x => x.Speaker == speaker).OrderBy(x => x.StartTime).ToList());
     }
     
-    public async Task<string> SplitAudioAsync(
-        byte[] file, double speakStartTimeVideo, double speakEndTimeVideo
-        , TranscriptionFileType fileType = TranscriptionFileType.Wav, CancellationToken cancellationToken = default)
+    private async Task<(string, List<byte[]>)> SplitAudioAsync(byte[] audioBytes, double speakStartTimeVideo, double speakEndTimeVideo, CancellationToken cancellationToken = default)
     {
-        if (file == null) return null;
-
-        var audioBytes = await _ffmpegService.ConvertFileFormatAsync(file, fileType, cancellationToken).ConfigureAwait(false);
-
         var splitAudios = await _ffmpegService.SpiltAudioAsync(audioBytes, speakStartTimeVideo, speakEndTimeVideo, cancellationToken).ConfigureAwait(false);
 
         var transcriptionResult = new StringBuilder();
@@ -148,7 +161,7 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
 
         Log.Information("Transcription result {Transcription}", transcriptionResult.ToString());
 
-        return transcriptionResult.ToString();
+        return (transcriptionResult.ToString(), splitAudios);
     }
     
     private async Task<string> CheckAudioSpeakerIsCustomerAsync(string query, CancellationToken cancellationToken)
@@ -160,14 +173,14 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
                 new()
                 {
                     Role = "system",
-                    Content = new CompletionsStringContent("你是一款餐厅订餐对话高度理解的智能助手，专门用于分辨那个对话角色是客户。" +
-                                                           "请根据我提供的对话，判断那个角色是属于是顾客，如果S1是顾客的话，请返回\"S1\"，如果S2是顾客的话，请返回\"S2\"" +
+                    Content = new CompletionsStringContent("你是一款销售与餐厅老板对话高度理解的智能助手，专门用于分辨那个对话角色是餐厅老板。" +
+                                                           "请根据我提供的对话，判断那个角色是属于是餐厅老板，如果S1是餐厅老板的话，请返回\"S1\"，如果S2是餐厅老板的话，请返回\"S2\"" +
                                                            "- 样本与输出：\n" +
-                                                           "S1:你好,江南春; S2:你好, 我可以订餐吗; S1:请问你需要什么; S2:我要一份咖喱牛腩; S1:好的，还有什么需要的; S2:没有了，什么时候取餐; output:S2\n" +
-                                                           "S1:你好，请问是XX餐厅吗; S2:您好，是的，这里是XX餐厅，请问需要点什么; S1:我要外卖一份麻婆豆腐; S2:好的，地址是？; S1:XX小区3号楼; S2:好的，马上安排; output:S1\n" +
-                                                           "S1:您好，这里是香满楼餐厅; S2:你好，我想取消刚刚的订单; S1:请问是哪个订单; S2:电话尾号8888; S1:收到，已为您取消; output:S2\n" +
-                                                           "S1:喂，请问还有位置吗; S2:您好，我们今天晚上客满了; S1:好的，谢谢; output:S1\n" +
-                                                           "S1:你好，我要订餐; S2:您好，请问要点些什么; S1:一份宫保鸡丁套餐; S2:好的，请稍等; output:S2")
+                                                           "S1:你好，今天我要订货; S2: 今日想订些什么 S1:一箱西兰花 S2: 好的 output:S1\n" +
+                                                           "S1: 老板您好，我们今天有新到的牛腩; S2: 嗯，给我留三斤; S1: 没问题; output:S2\n" +
+                                                           "S1: 最近土豆怎么样，质量好吗; S2: 很好，新货刚到; S1: 那给我两箱; S2: 好的; output:S1\n" +
+                                                           "S1: 我这边的猪肉库存不多了; S2: 那我给您安排两箱明早送; S1: 可以，谢谢; output:S1\n" +
+                                                           "S1: 老板，您这周还要西红柿吗; S2: 要的，送十箱; S1: 好的; output:S2")
                 },
                 new()
                 {

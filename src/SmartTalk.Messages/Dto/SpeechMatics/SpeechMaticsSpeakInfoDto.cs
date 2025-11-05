@@ -20,4 +20,6 @@ public class SpeechMaticsSpeakInfoForAutoTestDto
     public double EndTime { get; set; }
     
     public string Speaker { get; set; }
+
+    public List<byte[]> Audio { get; set; }
 }
