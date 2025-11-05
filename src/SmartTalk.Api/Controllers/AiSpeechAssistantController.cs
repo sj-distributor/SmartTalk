@@ -185,6 +185,15 @@ public class AiSpeechAssistantController : ControllerBase
         return Ok(response);
     }
     
+    [Route("assistant/detail"), HttpPut]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdateAiSpeechAssistantDetailResponse))]
+    public async Task<IActionResult> UpdateAiSpeechAssistantDetailAsync([FromBody] UpdateAiSpeechAssistantDetailCommand command)
+    {
+        var response = await _mediator.SendAsync<UpdateAiSpeechAssistantDetailCommand, UpdateAiSpeechAssistantDetailResponse>(command).ConfigureAwait(false);
+
+        return Ok(response);
+    }
+    
     [Route("assistant/delete"), HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(DeleteAiSpeechAssistantResponse))]
     public async Task<IActionResult> DeleteAiSpeechAssistantAsync([FromBody] DeleteAiSpeechAssistantCommand command)
@@ -245,6 +254,51 @@ public class AiSpeechAssistantController : ControllerBase
     {
         var response = await _mediator.SendAsync<UpdateAiSpeechAssistantSessionCommand, UpdateAiSpeechAssistantSessionResponse>(command).ConfigureAwait(false);
 
+        return Ok(response);
+    }
+    
+    [Route("assistant/switch"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(SwitchAiSpeechDefaultAssistantResponse))]
+    public async Task<IActionResult> SwitchAiSpeechDefaultAssistantAsync([FromBody] SwitchAiSpeechDefaultAssistantCommand command)
+    {
+        var response = await _mediator.SendAsync<SwitchAiSpeechDefaultAssistantCommand, SwitchAiSpeechDefaultAssistantResponse>(command).ConfigureAwait(false);
+
+        return Ok(response);
+    }
+    
+    [Route("route"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(AddAiSpeechAssistantInboundRoutesResponse))]
+    public async Task<IActionResult> AddAiSpeechAssistantSessionAsync([FromBody] AddAiSpeechAssistantInboundRoutesCommand command)
+    {
+        var response = await _mediator.SendAsync<AddAiSpeechAssistantInboundRoutesCommand, AddAiSpeechAssistantInboundRoutesResponse>(command).ConfigureAwait(false);
+
+        return Ok(response);
+    }
+    
+    [Route("route"), HttpPut]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdateAiSpeechAssistantInboundRouteResponse))]
+    public async Task<IActionResult> UpdateAiSpeechAssistantSessionAsync([FromBody] UpdateAiSpeechAssistantInboundRouteCommand command)
+    {
+        var response = await _mediator.SendAsync<UpdateAiSpeechAssistantInboundRouteCommand, UpdateAiSpeechAssistantInboundRouteResponse>(command).ConfigureAwait(false);
+
+        return Ok(response);
+    }
+    
+    [Route("routes"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(DeleteAiSpeechAssistantInboundRoutesResponse))]
+    public async Task<IActionResult> DeleteAiSpeechAssistantSessionAsync([FromBody] DeleteAiSpeechAssistantInboundRoutesCommand command)
+    {
+        var response = await _mediator.SendAsync<DeleteAiSpeechAssistantInboundRoutesCommand, DeleteAiSpeechAssistantInboundRoutesResponse>(command).ConfigureAwait(false);
+
+        return Ok(response);
+    }
+    
+    [Route("routes"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAiSpeechAssistantInboundRoutesResponse))]
+    public async Task<IActionResult> GetGetAiSpeechAssistantKnowledgeAsync([FromQuery] GetAiSpeechAssistantInboundRoutesRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetAiSpeechAssistantInboundRoutesRequest, GetAiSpeechAssistantInboundRoutesResponse>(request).ConfigureAwait(false);
+        
         return Ok(response);
     }
 }

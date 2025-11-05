@@ -126,25 +126,27 @@ public class SpeechMaticsService : ISpeechMaticsService
     
     private async Task SummarizeConversationContentAsync(PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken)
     {
-        var (aiSpeechAssistant, agent) = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByAgentIdAsync(record.AgentId, cancellationToken).ConfigureAwait(false);
+        var (aiSpeechAssistant, agent) = await _aiSpeechAssistantDataProvider.GetAgentAndAiSpeechAssistantAsync(record.AgentId, cancellationToken).ConfigureAwait(false);
 
         Log.Information("Get Assistant: {@Assistant} and Agent: {@Agent} by agent id {agentId}", aiSpeechAssistant, agent, record.AgentId);
         
         var callFrom = string.Empty;
+        TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
+
         try
         {
-            TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
-
-            var call = await CallResource.FetchAsync(record.SessionId);
-            callFrom = call?.From;
-            
-            Log.Information("Fetched incoming phone number from Twilio: {callFrom}", callFrom);
+            await RetryAsync(async () =>
+            {
+                var call = await CallResource.FetchAsync(record.SessionId);
+                callFrom = call?.From;
+                Log.Information("Fetched incoming phone number from Twilio: {callFrom}", callFrom);
+            }, maxRetryCount: 3, delaySeconds: 3, cancellationToken);
         }
         catch (Exception e)
         {
             Log.Warning("Fetched incoming phone number from Twilio failed: {Message}", e.Message);
         }
-
+        
         var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
 
@@ -336,6 +338,27 @@ public class SpeechMaticsService : ISpeechMaticsService
             return TranscriptionLanguage.Chinese;
     
         return TranscriptionLanguage.English;
+    }
+    
+    private async Task RetryAsync(
+        Func<Task> action,
+        int maxRetryCount,
+        int delaySeconds,
+        CancellationToken cancellationToken)
+    {
+        for (int attempt = 1; attempt <= maxRetryCount + 1; attempt++)
+        {
+            try
+            {
+                await action();
+                return;
+            }
+            catch (Exception ex) when (attempt <= maxRetryCount)
+            {
+                Log.Warning(ex, "重試第 {Attempt} 次失敗，稍後再試…", attempt);
+                await Task.Delay(TimeSpan.FromSeconds(delaySeconds), cancellationToken);
+            }
+        }
     }
     
     private async Task<bool> CheckCustomerFriendlyAsync(string transcriptionText, CancellationToken cancellationToken)

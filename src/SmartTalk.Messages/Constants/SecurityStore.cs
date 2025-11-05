@@ -41,6 +41,8 @@ public static class SecurityStore
 
         public const string CanViewMerchPrinter = nameof(CanViewMerchPrinter);
         
+        public const string CanViewAiAgent = nameof(CanViewAiAgent);
+        
         private static List<string> _allPermissions;
 
         public static List<string> AllPermissions
@@ -79,6 +81,7 @@ public static class SecurityStore
                 nameof(CanCopyAccount) => "复制账户",
                 nameof(CanUpdateAccount) => "更新账户",
                 nameof(CanViewMerchPrinter) => "进入打印设置",
+                nameof(CanViewAiAgent) => "进入AiAgent模块",
                 _ => throw new ArgumentOutOfRangeException(nameof(permission), permission, null)
             };
     }
