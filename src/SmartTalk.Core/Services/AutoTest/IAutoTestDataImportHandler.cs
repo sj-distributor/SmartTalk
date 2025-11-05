@@ -108,7 +108,7 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
             }
             
             var singleCallNumbers = allRecords.GroupBy(r => r.From?.PhoneNumber ?? r.To?.PhoneNumber).Where(g => g.Count() == 1)
-            .Select(g => g.Key).Where(p => !string.IsNullOrWhiteSpace(p)).ToList();
+                .Select(g => g.Key).Where(p => !string.IsNullOrWhiteSpace(p)).ToList();
             
             if (!singleCallNumbers.Any()) 
             { 
@@ -119,7 +119,7 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
             }
             
             var tasks = singleCallNumbers.Select(phone => allRecords.First(r => (r.From?.PhoneNumber ?? r.To?.PhoneNumber) == phone))
-            .Select(record => MatchOrderAndRecordingAsync(customerId, record, scenarioId, importRecord.Id, cancellationToken)).ToList();
+                .Select(record => MatchOrderAndRecordingAsync(customerId, record, scenarioId, importRecord.Id, cancellationToken)).ToList();
             
             var matchedItems = (await Task.WhenAll(tasks)).Where(x => x != null).ToList()!;
             
