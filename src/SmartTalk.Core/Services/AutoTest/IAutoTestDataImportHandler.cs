@@ -82,29 +82,34 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
             }
             
             var allRecords = new List<RingCentralRecordDto>(); 
-            foreach (var phone in phoneNumbers) 
-            { 
-                var rcRequest = new RingCentralCallLogRequestDto 
-                { 
-                    PhoneNumber = phone, 
-                    DateFrom = startDate, 
-                    DateTo = endDate, 
-                    WithRecording = true, 
-                    Page = 1, 
-                    PerPage = 200
-                };
-                
-                try 
-                { 
-                    var rcResponse = await _ringCentralClient.GetRingCentralRecordAsync(rcRequest, token, cancellationToken).ConfigureAwait(false);
-                    
-                    if (rcResponse?.Records != null) 
-                        allRecords.AddRange(rcResponse.Records); 
-                }
-                catch (Exception ex)
-                { 
-                    Log.Error(ex, "查询客户 {CustomerId} 电话 {PhoneNumber} 录音失败。", customerId, phone); 
-                } 
+            var ringCentralTasks = phoneNumbers.Select(phone =>
+            {
+                return RetryAsync(async () =>
+                {
+                    var rcRequest = new RingCentralCallLogRequestDto
+                    {
+                        PhoneNumber = phone,
+                        DateFrom = startDate,
+                        DateTo = endDate,
+                        WithRecording = true,
+                        Page = 1,
+                        PerPage = 200
+                    };
+
+                    var resp = await _ringCentralClient.GetRingCentralRecordAsync(rcRequest, token, cancellationToken)
+                        .ConfigureAwait(false);
+
+                    return new { phone, response = resp };
+
+                });
+            }).ToList();
+
+            var results = await Task.WhenAll(ringCentralTasks).ConfigureAwait(false);
+
+            foreach (var result in results)
+            {
+                if (result?.response?.Records != null)
+                    allRecords.AddRange(result.response.Records);
             }
             
             var singleCallNumbers = allRecords.GroupBy(r => r.From?.PhoneNumber ?? r.To?.PhoneNumber).Where(g => g.Count() == 1)
@@ -146,13 +151,13 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
             var sapStartDate = record.StartTime.Date;
             var sapEndDate = sapStartDate.AddDays(1);
 
-            var sapResp = await _sapGatewayClient.QueryRecordingDataAsync(
-                new QueryRecordingDataRequest
+            var sapResp = await RetryAsync(() 
+                => _sapGatewayClient.QueryRecordingDataAsync(new QueryRecordingDataRequest
                 {
                     CustomerId = new List<string> { customerId },
                     StartDate = sapStartDate,
                     EndDate = sapEndDate
-                }, cancellationToken).ConfigureAwait(false);
+                }, cancellationToken)).ConfigureAwait(false);
 
             var sapOrders = sapResp?.Data?.RecordingData ?? new List<RecordingDataItem>();
             if (!sapOrders.Any()) return null;
@@ -160,7 +165,7 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
             var oneOrderGroup = sapOrders.GroupBy(x => x.SalesDocument).SingleOrDefault();
             if (oneOrderGroup == null) return null;
 
-            var dto = new AutoTestInputJsonDto
+            var inputJsonDto = new AutoTestInputJsonDto
             {
                 Recording = record.Recording?.Uri ?? "",
                 OrderId = oneOrderGroup.Key,
@@ -177,7 +182,7 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
             {
                 ScenarioId = scenarioId,
                 ImportRecordId = importRecordId,
-                InputJson = JsonSerializer.Serialize(dto),
+                InputJson = JsonSerializer.Serialize(inputJsonDto),
                 CreatedAt = DateTimeOffset.Now
             };
         }
@@ -185,6 +190,24 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
         {
             Log.Error(ex, "匹配订单和录音失败 {CustomerId}", customerId);
             return null;
+        }
+    }
+    
+    private async Task<T> RetryAsync<T>(Func<Task<T>> action, int retryCount = 2, int delayMs = 2000)
+    {
+        int currentTry = 0;
+        while (true)
+        {
+            try
+            {
+                return await action();
+            }
+            catch
+            {
+                currentTry++;
+                if (currentTry > retryCount) throw;
+                await Task.Delay(delayMs);
+            }
         }
     }
 }
