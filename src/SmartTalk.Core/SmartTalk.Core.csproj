@@ -43,7 +43,6 @@
         <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="7.0.0" />
         <PackageReference Include="Qiniu" Version="8.7.0" />
         <PackageReference Include="RedLock.net" Version="2.3.2" />
-        <PackageReference Include="SapGateway.Client" Version="8276.0.1" />
         <PackageReference Include="Serilog" Version="2.12.0" />
         <PackageReference Include="Serilog.AspNetCore" Version="6.1.0" />
         <PackageReference Include="Serilog.Enrichers.CorrelationId" Version="3.0.1" />
