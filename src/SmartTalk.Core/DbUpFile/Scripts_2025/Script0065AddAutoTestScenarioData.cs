@@ -22,7 +22,7 @@ public class Script0065AddAutoTestScenarioData : IScript
                             ""properties"": {{
                                 ""SerialNumber"": {{ ""type"": ""integer"", ""desc"": ""序号"" }},
                                 ""Quantity"": {{ ""type"": ""decimal"", ""desc"": ""数量"" }},
-                                ""ItemName"": {{ ""type"": ""string"", ""desc"": ""内容"" }}
+                                ""ItemName"": {{ ""type"": ""string"", ""desc"": ""内容"" }},
                                 ""ItemId"": {{ ""type"": ""string"", ""desc"": ""Id"" }}
                             }}
                         }},
