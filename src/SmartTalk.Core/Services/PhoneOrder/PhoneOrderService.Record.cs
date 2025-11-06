@@ -862,18 +862,24 @@ public partial class PhoneOrderService
         var unixStart = request.StartDate.ToUnixTimeSeconds();
         var unixEnd = request.EndDate.ToUnixTimeSeconds();
 
+        Log.Information("[PhoneDashboard] Fetch phone order records: Agents={AgentIds}, Range={Start}-{End}", request.AgentIds, request.StartDate, request.EndDate);
+
         var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds: request.AgentIds, null, utcStart: request.StartDate, utcEnd: request.EndDate, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        Log.Information("[PhoneDashboard] Phone order records fetched: {Count}", records?.Count ?? 0);
 
         var linphoneSips = await _linphoneDataProvider.GetLinphoneSipsByAgentIdsAsync(agentIds: request.AgentIds, cancellationToken: cancellationToken).ConfigureAwait(false);
         var sipNumbers = linphoneSips.Select(y => y.Sip).ToList();
-        
+
         var (callInFailedCount, callOutFailedCount) = await _linphoneDataProvider.GetCallFailedStatisticsAsync(unixStart, unixEnd, sipNumbers, cancellationToken).ConfigureAwait(false);
-        
+ 
         if (records == null || records.Count == 0) 
         { return new GetPhoneOrderDataDashboardResponse { Data = new GetPhoneOrderDataDashboardResponseData() }; }
         
         var posOrders = await _posDataProvider.GetPosOrdersByStoreIdsAsync(request.StoreIds, null, true, request.StartDate, request.EndDate, cancellationToken: cancellationToken).ConfigureAwait(false);
         var cancelledOrders = await _posDataProvider.GetPosOrdersByStoreIdsAsync(request.StoreIds, PosOrderModifiedStatus.Cancelled, true, request.StartDate, request.EndDate, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("[PhoneDashboard] POS orders loaded: Total={Total}, Cancelled={Cancelled}", posOrders.Count, cancelledOrders.Count);
         
         var phoneOrderReports = await _phoneOrderDataProvider.GetPhoneOrderRecordReportByRecordIdAsync(recordId: records.Select(x => x.Id).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
         
