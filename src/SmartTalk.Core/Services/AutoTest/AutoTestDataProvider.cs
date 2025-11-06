@@ -24,13 +24,4 @@ public partial class AutoTestDataProvider : IAutoTestDataProvider
         _unitOfWork = unitOfWork;
         _repository = repository;
     }
-    
-
- 
-
-   
-    
-
-
-
 }
