@@ -862,16 +862,16 @@ public partial class PhoneOrderService
         var unixStart = request.StartDate.ToUnixTimeSeconds();
         var unixEnd = request.EndDate.ToUnixTimeSeconds();
 
-        Log.Information("[PhoneDashboard] Fetch phone order records: Agents={AgentIds}, Range={Start}-{End}", request.AgentIds, request.StartDate, request.EndDate);
+        Log.Information("[PhoneDashboard] Fetch phone order records: Agents={@AgentIds}, Range={@Start}-{@End}", request.AgentIds, request.StartDate, request.EndDate);
 
         var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds: request.AgentIds, null, utcStart: request.StartDate, utcEnd: request.EndDate, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        Log.Information("[PhoneDashboard] Phone order records fetched: {Count}", records?.Count ?? 0);
+        Log.Information("[PhoneDashboard] Phone order records fetched: {@Count}", records?.Count ?? 0);
 
         var posOrders = await _posDataProvider.GetPosOrdersByStoreIdsAsync(request.StoreIds, null, true, request.StartDate, request.EndDate, cancellationToken: cancellationToken).ConfigureAwait(false);
         var cancelledOrders = await _posDataProvider.GetPosOrdersByStoreIdsAsync(request.StoreIds, PosOrderModifiedStatus.Cancelled, true, request.StartDate, request.EndDate, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        Log.Information("[PhoneDashboard] POS orders loaded: Total={Total}, Cancelled={Cancelled}", posOrders.Count, cancelledOrders.Count);
+        Log.Information("[PhoneDashboard] POS orders loaded: Total={@Total}, Cancelled={@Cancelled}", posOrders.Count, cancelledOrders.Count);
               
         var orderCountPerPeriod = GroupCountByRequestType(posOrders, x => x.CreatedDate, request.StartDate, request.EndDate, request.DataType);
         var cancelledOrderCountPerPeriod = GroupCountByRequestType(cancelledOrders, x => x.CreatedDate, request.StartDate, request.EndDate, request.DataType);
@@ -904,14 +904,17 @@ public partial class PhoneOrderService
         var callInRecords = records.Where(x => x.OrderRecordType == PhoneOrderRecordType.InBound).ToList();
         var callOutRecords = records.Where(x => x.OrderRecordType == PhoneOrderRecordType.OutBount).ToList();
         
+        Log.Information("[PhoneDashboard] Phone order records loaded: CallIn={@CallIn}, CallOut={@CallOut}", callInRecords.Count, callOutRecords.Count);
+        
         var callInReports = phoneOrderReports.Where(r => callInRecords.Any(c => c.Id == r.RecordId)).ToList();
         var callOutReports = phoneOrderReports.Where(r => callOutRecords.Any(c => c.Id == r.RecordId)).ToList();
-        
-        Log.Information("[PhoneDashboard] Phone order reports loaded: CallIn={CallIn}, CallOut={CallOut}", callInReports.Count, callOutReports.Count);
-        
+
+        Log.Information("[PhoneDashboard] Phone order records loaded: CallIn={@CountIn}, CallOut={@CountOut}, CallInIds={@CallInIds}, CallOutIds={@CallOutIds}",
+            callInRecords.Count, callOutRecords.Count, callInRecords.Select(r => r.Id).ToList(), callOutRecords.Select(r => r.Id).ToList());
+            
         var callInData = BuildCallInData(callInRecords, callInFailedCount, callInReports, request.InvalidCallSeconds, request.StartDate, request.EndDate, request.DataType);
         var callOutData = BuildCallOutData(callOutRecords, callOutFailedCount, callOutReports, request.InvalidCallSeconds, request.StartDate, request.EndDate, request.DataType);
-        
+  
         await ApplyPeriodComparisonAsync(request, callInRecords, callOutRecords, restaurantData, callInData, callOutData, cancellationToken).ConfigureAwait(false);
 
         return new GetPhoneOrderDataDashboardResponse
