@@ -174,7 +174,8 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
                 {
                     SerialNumber = index + 1,
                     Quantity = i.Qty,
-                    ItemDesc = i.Description ?? ""
+                    ItemDesc = i.Description ?? "",
+                    Material = i.Material
                 }).ToList()
             };
 
