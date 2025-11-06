@@ -25,6 +25,9 @@ public class AutoTestInputDetail
     
     [JsonConverter(typeof(EmptyStringConverter))]
     public string ItemDesc { get; set; }
+    
+    [JsonConverter(typeof(EmptyStringConverter))]
+    public string Material { get; set; }
 }
 
 public class EmptyStringConverter : JsonConverter<string>
