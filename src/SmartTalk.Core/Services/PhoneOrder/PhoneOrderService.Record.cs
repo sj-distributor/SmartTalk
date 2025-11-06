@@ -886,8 +886,11 @@ public partial class PhoneOrderService
         var callInRecords = records.Where(x => x.OrderRecordType == PhoneOrderRecordType.InBound).ToList();
         var callOutRecords = records.Where(x => x.OrderRecordType == PhoneOrderRecordType.OutBount).ToList();
         
-        var callInData = BuildCallInData(callInRecords, callInFailedCount, phoneOrderReports, request.InvalidCallSeconds, request.StartDate, request.EndDate, request.DataType);
-        var callOutData = BuildCallOutData(callOutRecords, callOutFailedCount, phoneOrderReports, request.InvalidCallSeconds, request.StartDate, request.EndDate, request.DataType);
+        var callInReports = phoneOrderReports.Where(r => callInRecords.Any(c => c.Id == r.RecordId)).ToList();
+        var callOutReports = phoneOrderReports.Where(r => callOutRecords.Any(c => c.Id == r.RecordId)).ToList();
+        
+        var callInData = BuildCallInData(callInRecords, callInFailedCount, callInReports, request.InvalidCallSeconds, request.StartDate, request.EndDate, request.DataType);
+        var callOutData = BuildCallOutData(callOutRecords, callOutFailedCount, callOutReports, request.InvalidCallSeconds, request.StartDate, request.EndDate, request.DataType);
         
         var orderCountPerPeriod = GroupCountByRequestType(posOrders, x => x.CreatedDate, request.StartDate, request.EndDate, request.DataType);
         var cancelledOrderCountPerPeriod = GroupCountByRequestType(cancelledOrders, x => x.CreatedDate, request.StartDate, request.EndDate, request.DataType);
