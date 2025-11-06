@@ -24,10 +24,10 @@ public class AutoTestInputDetail
     public decimal Quantity { get; set; }
     
     [JsonConverter(typeof(EmptyStringConverter))]
-    public string ItemDesc { get; set; }
+    public string ItemName { get; set; }
     
     [JsonConverter(typeof(EmptyStringConverter))]
-    public string Material { get; set; }
+    public string ItemId { get; set; }
 }
 
 public class EmptyStringConverter : JsonConverter<string>

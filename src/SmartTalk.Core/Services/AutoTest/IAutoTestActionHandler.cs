@@ -33,15 +33,15 @@ public class WebhookAutoTestHandler : IAutoTestActionHandler
         
         foreach (var realOrderItem in realOrderItems)
         {
-            var item = aiOrderItems.FirstOrDefault(x => x.Material == realOrderItem.Material);
+            var item = aiOrderItems.FirstOrDefault(x => x.ItemId == realOrderItem.ItemId);
 
             if (item == null)
             {
                 orderItems.Add(new AutoTestOrderItemDto
                 {
-                    Material = realOrderItem.Material,
+                    MaterialNumber = realOrderItem.ItemId,
                     Quantity = realOrderItem.Quantity,
-                    MaterialName = realOrderItem.ItemDesc,
+                    MaterialName = realOrderItem.ItemName,
                     ItemStatus = AutoTestOrderItemStatus.Missed
                 });
                 
@@ -50,22 +50,22 @@ public class WebhookAutoTestHandler : IAutoTestActionHandler
             
             orderItems.Add(new AutoTestOrderItemDto
             {
-                Material = item.Material,
+                MaterialNumber = item.ItemId,
                 Quantity = item.Quantity,
-                MaterialName = item.ItemDesc,
+                MaterialName = item.ItemName,
                 ItemStatus = realOrderItem.Quantity == item.Quantity ? AutoTestOrderItemStatus.Normal : AutoTestOrderItemStatus.Abnormal
             });
         }
 
         foreach (var aiItem in aiOrderItems)
         {
-            if (!realOrderItems.Any(x => x.Material == aiItem.Material))
+            if (!realOrderItems.Any(x => x.ItemId == aiItem.ItemId))
             {
                 orderItems.Add(new AutoTestOrderItemDto
                 {
-                    Material = aiItem.Material,
+                    MaterialNumber = aiItem.ItemId,
                     Quantity = aiItem.Quantity,
-                    MaterialName = aiItem.ItemDesc,
+                    MaterialName = aiItem.ItemName,
                     ItemStatus = AutoTestOrderItemStatus.Abnormal
                 });
             }

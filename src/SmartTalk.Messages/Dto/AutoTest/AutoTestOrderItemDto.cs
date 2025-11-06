@@ -4,7 +4,7 @@ namespace SmartTalk.Messages.Dto.AutoTest;
 
 public class AutoTestOrderItemDto
 {
-    public string Material { get; set; }
+    public string MaterialNumber { get; set; }
     
     public decimal Quantity { get; set; }
     
