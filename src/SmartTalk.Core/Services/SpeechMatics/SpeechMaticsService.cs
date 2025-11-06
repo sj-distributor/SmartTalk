@@ -2,8 +2,12 @@ using Google.Cloud.Translation.V2;
 using Serilog;
 using SmartTalk.Core.Ioc;
 using Microsoft.IdentityModel.Tokens;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using OpenAI.Chat;
+using Smarties.Messages.DTO.OpenAi;
+using Smarties.Messages.Enums.OpenAi;
+using Smarties.Messages.Requests.Ask;
 using SmartTalk.Core.Constants;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.PhoneOrder;
@@ -23,6 +27,7 @@ using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Commands.SpeechMatics;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
+using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Enums.Account;
 using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Enums.STT;
@@ -148,11 +153,33 @@ public class SpeechMaticsService : ISpeechMaticsService
         ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
 
         var audioData = BinaryData.FromBytes(audioContent);
+        
+        var defaultPrompt = "你是一名電話錄音的分析員，通過聽取錄音內容和語氣情緒作出精確分析，寫出一份分析報告。\n\n" +
+                           "請以 JSON 格式返回結果，包含三個字段：\n" +
+                           "1. \"report\": 分析報告文本，格式如下：\n" +
+                           "   交談主題：xxx\n" +
+                           "   來電號碼：#{call_from}\n" +
+                           "   內容摘要:xxx\n" +
+                           "   客人情感與情緒: xxx\n" +
+                           "   待辦事件:\n" +
+                           "   1.xxx\n" +
+                           "   2.xxx\n" +
+                           "   客人下單內容(如果沒有則忽略)：1. 牛肉(1箱)\n 2.雞腿肉(1箱)\n\n" +
+                           "2. \"scenario\": 對話場景分類，必須是以下之一：\n" +
+                           "   Reservation（預訂）、Order（下單）、Inquiry（詢問）、ThirdPartyOrderNotification（第三方訂單通知）、\n" +
+                           "   ComplaintFeedback（投訴反饋）、InformationNotification（信息通知）、\n" +
+                           "   TransferToHuman（轉人工）、SalesCall（銷售電話）、InvalidCall（無效通話）、Other（其他）\n\n" +
+                           "3. \"remark\": 備註信息，如果場景為 Other 或其他特殊情況，請在此說明具體原因；否則可為空字符串。\n\n" +
+                           "輸出格式：{\"report\": \"分析報告內容\", \"scenario\": \"場景分類\", \"remark\": \"備註\"}\n" +
+                           "只輸出 JSON，不要包含其他文字或解釋。";
+        
+        var systemPrompt = string.IsNullOrEmpty(aiSpeechAssistant?.CustomRecordAnalyzePrompt)
+            ? defaultPrompt.Replace("#{call_from}", callFrom ?? "")
+            : aiSpeechAssistant.CustomRecordAnalyzePrompt.Replace("#{call_from}", callFrom ?? "").Replace("#{current_time}", currentTime);
+        
         List<ChatMessage> messages =
         [
-            new SystemChatMessage(string.IsNullOrEmpty(aiSpeechAssistant?.CustomRecordAnalyzePrompt)
-                ? "你是一名電話錄音的分析員，通過聽取錄音內容和語氣情緒作出精確分析，冩出一份分析報告。\n\n分析報告的格式：交談主題：xxx\n\n 來電號碼：#{call_from}\n\n 內容摘要:xxx \n\n 客人情感與情緒: xxx \n\n 待辦事件: \n1.xxx\n2.xxx \n\n 客人下單內容(如果沒有則忽略)：1. 牛肉(1箱)\n2.雞腿肉(1箱)".Replace("#{call_from}", callFrom ?? "")
-                : aiSpeechAssistant.CustomRecordAnalyzePrompt.Replace("#{call_from}", callFrom ?? "").Replace("#{current_time}", currentTime)),
+            new SystemChatMessage(systemPrompt),
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
             new UserChatMessage("幫我根據錄音生成分析報告：")
         ];
@@ -160,10 +187,15 @@ public class SpeechMaticsService : ISpeechMaticsService
         ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
 
         ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
-        Log.Information("sales record analyze report:" + completion.Content.FirstOrDefault()?.Text);
+        var rawResponse = completion.Content.FirstOrDefault()?.Text ?? "";
+        Log.Information("sales record analyze report:" + rawResponse);
+
+        var (reportText, scenario, remark) = ParseAnalysisResponse(rawResponse);
         
         record.Status = PhoneOrderRecordStatus.Sent;
-        record.TranscriptionText = completion.Content.FirstOrDefault()?.Text ?? "";
+        record.TranscriptionText = reportText;
+        record.Scenario = scenario;
+        record.Remark = remark;
         
         var detection = await _translationClient.DetectLanguageAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
 
@@ -329,6 +361,44 @@ public class SpeechMaticsService : ISpeechMaticsService
             return TranscriptionLanguage.Chinese;
     
         return TranscriptionLanguage.English;
+    }
+    
+    private (string reportText, DialogueScenarios? scenario, string remark) ParseAnalysisResponse(string rawResponse)
+    {
+        if (string.IsNullOrWhiteSpace(rawResponse))
+        {
+            return (string.Empty, null, null);
+        }
+        
+        try
+        {
+            var cleanedResponse = rawResponse.Trim();
+            
+            var jsonObject = JObject.Parse(cleanedResponse);
+            
+            var reportText = jsonObject["report"]?.ToString() ?? rawResponse;
+            
+            var scenarioText = jsonObject["scenario"]?.ToString();
+            var remark = jsonObject["remark"]?.ToString();
+
+            DialogueScenarios? scenario = null;
+            if (string.IsNullOrWhiteSpace(scenarioText)) return (reportText, null, remark);
+            if (Enum.TryParse<DialogueScenarios>(scenarioText, true, out var parsedScenario))
+            {
+                scenario = parsedScenario;
+            }
+            else
+            {
+                Log.Warning("无法解析场景值: {ScenarioText}", scenarioText);
+            }
+
+            return (reportText, scenario, remark);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "无场景区分 使用原始报告");
+            return (rawResponse, null, null);
+        }
     }
     
     private async Task RetryAsync(
