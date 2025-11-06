@@ -5,11 +5,11 @@ using SmartTalk.Messages.Commands.AutoTest;
 
 namespace SmartTalk.Core.Handlers.CommandHandlers.AutoTest;
 
-public class DeleteAutoTestTestTaskCommandHandler : ICommandHandler<DeleteAutoTestTaskCommand, DeleteAutoTestTaskResponse>
+public class DeleteAutoTestTaskCommandHandler : ICommandHandler<DeleteAutoTestTaskCommand, DeleteAutoTestTaskResponse>
 {
     private readonly IAutoTestService _autoTestService;
 
-    public DeleteAutoTestTestTaskCommandHandler(IAutoTestService autoTestService)
+    public DeleteAutoTestTaskCommandHandler(IAutoTestService autoTestService)
     {
         _autoTestService = autoTestService;
     }

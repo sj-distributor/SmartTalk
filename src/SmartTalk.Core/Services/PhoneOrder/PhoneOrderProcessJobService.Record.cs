@@ -19,14 +19,14 @@ namespace SmartTalk.Core.Services.PhoneOrder;
 
 public partial interface IPhoneOrderProcessJobService
 {
-    Task HandleReleasedSpeechMaticsCallBackAsync(string jobId, string phoneOrderId, CancellationToken cancellationToken);
+    Task HandleReleasedSpeechMaticsCallBackAsync(string jobId, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderProcessJobService
 {
-    public async Task HandleReleasedSpeechMaticsCallBackAsync(string jobId, string phoneOrderId, CancellationToken cancellationToken)
+    public async Task HandleReleasedSpeechMaticsCallBackAsync(string jobId, CancellationToken cancellationToken)
     {
-        if (jobId == null || phoneOrderId == null) return;
+        if (jobId == null) return;
         
         var speechMaticsJob = await _speechMaticsDataProvider.GetSpeechMaticsJobAsync(jobId, cancellationToken).ConfigureAwait(false);
         
@@ -70,7 +70,7 @@ public partial class PhoneOrderProcessJobService
     
     private async Task SummarizeConversationContentAsync(PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken)
     {
-        var (aiSpeechAssistant, agent) = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByAgentIdAsync(record.AgentId, cancellationToken).ConfigureAwait(false);
+        var (aiSpeechAssistant, agent) = await _aiSpeechAssistantDataProvider.GetAgentAndAiSpeechAssistantAsync(record.AgentId, cancellationToken).ConfigureAwait(false);
 
         Log.Information("Get Assistant: {@Assistant} and Agent: {@Agent} by agent id {agentId}", aiSpeechAssistant, agent, record.AgentId);
         

@@ -17,6 +17,10 @@ public partial interface IAutoTestDataProvider
     Task UpdateTaskRecordsAsync(List<AutoTestTaskRecord> records, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task<AutoTestTaskRecord> GetAutoTestTaskRecordBySpeechMaticsJobIdAsync(string speechMaticsJobId, CancellationToken cancellationToken = default);
+    
+    Task<(int Count, List<AutoTestTaskRecord> Records)> GetAutoTestTaskRecordsAsync(int taskId, int? pageIndex = null, int? pageSize = null, CancellationToken cancellationToken = default);
+    
+    Task<(AutoTestTask Task, AutoTestDataSet DataSet)> GetAutoTestTaskInfoByIdAsync(int taskId, CancellationToken cancellationToken);
 
     Task AddAutoTestDataItemsAsync(List<AutoTestDataItem> items, bool forceSave = true, CancellationToken cancellationToken = default);
 
@@ -75,5 +79,31 @@ public partial class AutoTestDataProvider
         await _repository.UpdateAllAsync(records, cancellationToken).ConfigureAwait(false);
         
         if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+    
+    public async Task<(int Count, List<AutoTestTaskRecord> Records)> GetAutoTestTaskRecordsAsync(
+        int taskId, int? pageIndex = null, int? pageSize = null, CancellationToken cancellationToken = default)
+    {
+        var query = _repository.QueryNoTracking<AutoTestTaskRecord>(x => x.TestTaskId == taskId);
+        
+        var count = await query.CountAsync(cancellationToken).ConfigureAwait(false);
+
+        if (pageIndex.HasValue && pageSize.HasValue)
+            query = query.OrderBy(x => x.IsArchived).ThenBy(x => x.DataSetItemId).Skip((pageIndex.Value - 1) * pageSize.Value).Take(pageSize.Value);
+        
+        var records = await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+
+        return (count, records);
+    }
+
+    public async Task<(AutoTestTask Task, AutoTestDataSet DataSet)> GetAutoTestTaskInfoByIdAsync(int taskId, CancellationToken cancellationToken)
+    {
+        var query = from dataset in _repository.QueryNoTracking<AutoTestDataSet>()
+            join task in _repository.QueryNoTracking<AutoTestTask>().Where(x => x.Id == taskId) on dataset.Id equals task.DataSetId
+            select new { task, dataset };
+        
+        var result = await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+
+        return (result?.task, result?.dataset);
     }
 }
