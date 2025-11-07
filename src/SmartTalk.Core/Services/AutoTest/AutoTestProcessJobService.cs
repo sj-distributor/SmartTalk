@@ -214,7 +214,7 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
             new SystemChatMessage(prompt)
         };
 
-        var client = new ChatClient("gpt-audio", _openAiSettings.ApiKey);
+        var client = new ChatClient("gpt-4o-audio-preview", _openAiSettings.ApiKey);
         var options = new ChatCompletionOptions
         {
             ResponseModalities = ChatResponseModalities.Text | ChatResponseModalities.Audio,
