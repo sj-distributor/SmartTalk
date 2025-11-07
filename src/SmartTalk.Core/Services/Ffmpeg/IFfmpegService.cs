@@ -25,8 +25,8 @@ public interface IFfmpegService: IScopedDependency
     
     Task<byte[]> ConvertFileFormatAsync(byte[] file, TranscriptionFileType fileType, CancellationToken cancellationToken);
     
-    Task<List<byte[]>> SpiltAudioAsync(byte[] audioBytes, double startTime, double endTime, CancellationToken cancellationToken);
-
+    Task<byte[]> SpiltAudioAsync(byte[] audioBytes, double startTime, double endTime, CancellationToken cancellationToken);
+    
     Task<byte[]> ConvertWavToULawAsync(byte[] wavBytes, CancellationToken cancellationToken);
 }
 
@@ -363,9 +363,8 @@ public class FfmpegService : IFfmpegService
         };
     }
     
-     public async  Task<List<byte[]>> SpiltAudioAsync(byte[] audioBytes, double startTime, double endTime, CancellationToken cancellationToken)
+     public async  Task<byte[]> SpiltAudioAsync(byte[] audioBytes, double startTime, double endTime, CancellationToken cancellationToken)
     {
-        var audioDataList = new List<byte[]>();
         var baseFileName = Guid.NewGuid().ToString();
         var inputFileName = $"{baseFileName}.wav";
         var outputFileName = $"{baseFileName}-spilt.wav";
@@ -385,7 +384,7 @@ public class FfmpegService : IFfmpegService
             if (!File.Exists(inputFileName))
             {
                 Log.Error("Splitting audio, persisted failed");
-                return audioDataList;
+                return null;
             }
 
             var spiltArguments =
@@ -413,10 +412,7 @@ public class FfmpegService : IFfmpegService
 
             if (File.Exists(outputFileName))
             {
-                audioDataList.Add(await File.ReadAllBytesAsync(outputFileName, cancellationToken)
-                    .ConfigureAwait(false));
-
-                File.Delete(outputFileName);
+                return await File.ReadAllBytesAsync(outputFileName, cancellationToken).ConfigureAwait(false);
             }
         }
         catch (Exception ex)
@@ -429,9 +425,12 @@ public class FfmpegService : IFfmpegService
 
             if (File.Exists(inputFileName))
                 File.Delete(inputFileName);
+
+            if (File.Exists(outputFileName))
+                File.Delete(outputFileName);
         }
 
-        return audioDataList;
+        return null;
     }
      
     public async Task<byte[]> ConvertWavToULawAsync(byte[] wavBytes, CancellationToken cancellationToken = default)
