@@ -71,7 +71,7 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
             var token = tokenResponse.AccessToken;
             
             var contacts = await _crmClient.GetCustomerContactsAsync(customerId, cancellationToken).ConfigureAwait(false); 
-            var phoneNumbers = contacts.Select(c => c.Phone).Where(p => !string.IsNullOrWhiteSpace(p)).Distinct().ToList();
+            var phoneNumbers = contacts.Select(c => NormalizePhone(c.Phone)).Where(p => !string.IsNullOrWhiteSpace(p)).Distinct().ToList();
             
             if (!phoneNumbers.Any()) 
             { 
@@ -210,6 +210,17 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
                 await Task.Delay(delayMs);
             }
         }
+    }
+    
+    private static string NormalizePhone(string phone)
+    {
+        if (string.IsNullOrWhiteSpace(phone)) return "";
+        
+        var digits = new string(phone.Where(char.IsDigit).ToArray());
+
+        if (digits.Length == 10) return "1" + digits;
+
+        return digits;
     }
 }
 
