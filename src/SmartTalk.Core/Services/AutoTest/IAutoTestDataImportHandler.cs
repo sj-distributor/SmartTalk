@@ -39,8 +39,7 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
     private readonly IRingCentralClient _ringCentralClient;
     private readonly IAutoTestDataProvider _autoTestDataProvider;
 
-    public ApiDataImportHandler(ISapGatewayClients sapGatewayClient, ICrmClient crmClient,
-        IRingCentralClient ringCentralClient, IAutoTestDataProvider autoTestDataProvider)
+    public ApiDataImportHandler(ISapGatewayClients sapGatewayClient, ICrmClient crmClient, IRingCentralClient ringCentralClient, IAutoTestDataProvider autoTestDataProvider)
     {
         _sapGatewayClient = sapGatewayClient;
         _crmClient = crmClient;
@@ -54,6 +53,7 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
         var startDate = (DateTime)import["StartDate"]; 
         var endDate = (DateTime)import["EndDate"]; 
         var scenarioId = Convert.ToInt32(import["ScenarioId"]);
+        var promptText = import.ContainsKey("PromptText") ? import["PromptText"]?.ToString():"";
         
         var importRecord = new AutoTestImportDataRecord 
         { 
@@ -96,8 +96,7 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
                         PerPage = 200
                     };
 
-                    var resp = await _ringCentralClient.GetRingCentralRecordAsync(rcRequest, token, cancellationToken)
-                        .ConfigureAwait(false);
+                    var resp = await _ringCentralClient.GetRingCentralRecordAsync(rcRequest, token, cancellationToken).ConfigureAwait(false);
 
                     return new { phone, response = resp };
 
@@ -124,7 +123,7 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
             }
             
             var tasks = singleCallNumbers.Select(phone => allRecords.First(r => (r.From?.PhoneNumber ?? r.To?.PhoneNumber) == phone))
-                .Select(record => MatchOrderAndRecordingAsync(customerId, record, scenarioId, importRecord.Id, cancellationToken)).ToList();
+                .Select(record => MatchOrderAndRecordingAsync(customerId, record, scenarioId, importRecord.Id, promptText, cancellationToken)).ToList();
             
             var matchedItems = (await Task.WhenAll(tasks)).Where(x => x != null).ToList()!;
             
@@ -144,7 +143,7 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
         } 
     }
     
-    private async Task<AutoTestDataItem> MatchOrderAndRecordingAsync(string customerId, RingCentralRecordDto record, int scenarioId, int importRecordId, CancellationToken cancellationToken)
+    private async Task<AutoTestDataItem> MatchOrderAndRecordingAsync(string customerId, RingCentralRecordDto record, int scenarioId, int importRecordId, string promptText, CancellationToken cancellationToken)
     {
         try
         {
@@ -170,6 +169,7 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
                 Recording = record.Recording?.Uri ?? "",
                 OrderId = oneOrderGroup.Key,
                 CustomerId = customerId,
+                PromptText = promptText,
                 Detail = oneOrderGroup.Select((i, index) => new AutoTestInputDetail
                 {
                     SerialNumber = index + 1,
