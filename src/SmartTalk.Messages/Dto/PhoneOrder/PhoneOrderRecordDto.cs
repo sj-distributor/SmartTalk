@@ -38,7 +38,13 @@ public class PhoneOrderRecordDto
     
     public TranscriptionLanguage Language { get; set; }
     
+    public PhoneOrderRecordType OrderRecordType { get; set; }
+    
     public double? Duration { get; set; }
     
     public bool? IsTransfer { get; set; }
+    
+    public bool? IsCustomerFriendly { get; set; }
+    
+    public bool? IsHumanAnswered { get; set; }
 }
