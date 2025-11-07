@@ -27,14 +27,14 @@ public class CrmClient : ICrmClient
     {
         var url = $"{_crmSetting.BaseUrl}/oauth/token";
 
-        var body = new
+        var form = new Dictionary<string, string>
         {
-            grant_type = "client_credentials",
-            client_id = _crmSetting.ClientId,
-            client_secret = _crmSetting.ClientSecret
+            { "grant_type", "client_credentials" },
+            { "client_id", _crmSetting.ClientId },
+            { "client_secret", _crmSetting.ClientSecret }
         };
 
-        var resp = await _httpClient.PostAsync<CrmTokenResponse>(url, body, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var resp = await _httpClient.PostAsync<CrmTokenResponse>(url, new FormUrlEncodedContent(form), cancellationToken: cancellationToken).ConfigureAwait(false);
 
         return resp.access_token;
     }
