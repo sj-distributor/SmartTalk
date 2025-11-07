@@ -907,13 +907,11 @@ public partial class PhoneOrderService
         Log.Information("[PhoneDashboard] Phone order records loaded: CallIn={@CallIn}, CallOut={@CallOut}", callInRecords.Count, callOutRecords.Count);
         
         var callInReports = phoneOrderReports.Where(r => callInRecords.Any(c => c.Id == r.RecordId)).ToList();
-        var callOutReports = phoneOrderReports.Where(r => callOutRecords.Any(c => c.Id == r.RecordId)).ToList();
-
         Log.Information("[PhoneDashboard] Phone order records loaded: CallIn={@CountIn}, CallOut={@CountOut}, CallInIds={@CallInIds}, CallOutIds={@CallOutIds}",
             callInRecords.Count, callOutRecords.Count, callInRecords.Select(r => r.Id).ToList(), callOutRecords.Select(r => r.Id).ToList());
             
-        var callInData = BuildCallInData(callInRecords, callInFailedCount, callInReports, request.InvalidCallSeconds, request.StartDate, request.EndDate, request.DataType);
-        var callOutData = BuildCallOutData(callOutRecords, callOutFailedCount, callOutReports, request.InvalidCallSeconds, request.StartDate, request.EndDate, request.DataType);
+        var callInData = BuildCallInData(callInRecords, callInFailedCount, request.InvalidCallSeconds, request.StartDate, request.EndDate, request.DataType);
+        var callOutData = BuildCallOutData(callOutRecords, callOutFailedCount, request.InvalidCallSeconds, request.StartDate, request.EndDate, request.DataType);
   
         await ApplyPeriodComparisonAsync(request, callInRecords, callOutRecords, restaurantData, callInData, callOutData, cancellationToken).ConfigureAwait(false);
 
@@ -928,7 +926,7 @@ public partial class PhoneOrderService
         };
     }
 
-    private static CallInDataDto BuildCallInData(List<PhoneOrderRecord> callInRecords, int callInFailedCount, List<PhoneOrderRecordReport> phoneOrderReports, int? invalidCallSeconds, DateTimeOffset? start, DateTimeOffset? end, PhoneOrderDataDashDataType dataType)
+    private static CallInDataDto BuildCallInData(List<PhoneOrderRecord> callInRecords, int callInFailedCount, int? invalidCallSeconds, DateTimeOffset? start, DateTimeOffset? end, PhoneOrderDataDashDataType dataType)
     {
         var answeredCount = callInRecords.Count;
 
@@ -937,9 +935,9 @@ public partial class PhoneOrderService
         var effectiveCount = answeredCount - callInRecords.Count(x => (x.Duration ?? 0) <= invalidCallSeconds);
         var averageDuration = callInRecords.DefaultIfEmpty().Average(x => x?.Duration ?? 0);
         var totalDuration = callInRecords.Sum(x => x.Duration ?? 0);
-        var friendlyCount = phoneOrderReports.Count(x => x.IsCustomerFriendly);
+        var friendlyCount = callInRecords.Count(x => x.IsCustomerFriendly == true);
         var satisfactionRate = answeredCount > 0 ? (double)friendlyCount / answeredCount : 0;
-        var transferCount = callInRecords.Count(x => x.IsTransfer ?? false);
+        var transferCount = callInRecords.Count(x => x.IsTransfer == true);
         var transferRate = answeredCount > 0 ? (double)transferCount / answeredCount : 0;
         var repeatRate = answeredCount > 0 ? (double)totalRepeatCalls / answeredCount : 0;
 
@@ -959,15 +957,15 @@ public partial class PhoneOrderService
         };
     }
 
-    private static CallOutDataDto BuildCallOutData(List<PhoneOrderRecord> callOutRecords, int callInFailedCount, List<PhoneOrderRecordReport> phoneOrderReports, int? invalidCallSeconds, DateTimeOffset? start, DateTimeOffset? end, PhoneOrderDataDashDataType dataType)
+    private static CallOutDataDto BuildCallOutData(List<PhoneOrderRecord> callOutRecords, int callInFailedCount, int? invalidCallSeconds, DateTimeOffset? start, DateTimeOffset? end, PhoneOrderDataDashDataType dataType)
     {
         var answeredCount = callOutRecords.Count;
         var effectiveCount = answeredCount - callOutRecords.Count(x => (x.Duration ?? 0) <= invalidCallSeconds);
         var averageDuration = callOutRecords.DefaultIfEmpty().Average(x => x?.Duration ?? 0);
         var totalDuration = callOutRecords.Sum(x => x.Duration ?? 0);
-        var friendlyCount = phoneOrderReports.Count(x => x.IsCustomerFriendly);
+        var friendlyCount = callOutRecords.Count(x => x.IsCustomerFriendly == true);
         var satisfactionRate = answeredCount > 0 ? (double)friendlyCount / answeredCount : 0;
-        var transferCount = callOutRecords.Count(x => x.IsTransfer ?? false);
+        var transferCount = callOutRecords.Count(x => x.IsHumanAnswered == true);
 
         var totalDurationPerPeriod = GroupDurationByRequestType(callOutRecords, start, end, dataType);
 
