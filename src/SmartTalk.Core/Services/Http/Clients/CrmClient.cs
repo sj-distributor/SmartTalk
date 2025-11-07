@@ -36,13 +36,14 @@ public class CrmClient : ICrmClient
             { "client_secret", _crmSetting.ClientSecret }
         };
         
+        var content = new StringContent(JsonConvert.SerializeObject(payload), Encoding.UTF8, "application/json");
+        
         var headers = new Dictionary<string, string>
         {
-            { "Accept", "application/json" },
-            { "Content-Type", "application/json" }
+            { "Accept", "application/json" }
         };
 
-        var resp = await _httpClient.PostAsync<CrmTokenResponse>(url, new StringContent(JsonConvert.SerializeObject(payload), Encoding.UTF8, "application/json"), headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var resp = await _httpClient.PostAsync<CrmTokenResponse>(url, content, headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         return resp.access_token;
     }
