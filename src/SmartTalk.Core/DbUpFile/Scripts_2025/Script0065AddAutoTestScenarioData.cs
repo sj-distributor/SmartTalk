@@ -14,7 +14,7 @@ public class Script0065AddAutoTestScenarioData : IScript
             INSERT INTO auto_test_scenario ( key_name, name,  input_schema, output_schema,  action_config, action_type, created_at) 
             VALUES ('AiOrder', 'AiOrder', 
                     '{{ ""Recording"": {{ ""type"": ""string"", ""required"": true, ""desc"": ""录音信息（如URL或标识）"" }},""OrderId"": {{ ""type"": ""string"", ""required"": true, ""desc"": ""订单唯一编号"" }},
-                 ""CustomerId"": {{ ""type"": ""string"", ""required"": true, ""desc"": ""客户唯一编号"" }},""Detail"": {{
+                 ""CustomerId"": {{ ""type"": ""string"", ""required"": true, ""desc"": ""客户唯一编号"" }},""PromptText"": {{ ""type"": ""string"", ""required"": true, ""desc"": ""prompt 内容"" }},""Detail"": {{
                         ""type"": ""array"",
                         ""required"": true,
                         ""items"": {{
