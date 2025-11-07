@@ -1,3 +1,5 @@
+using System.Text;
+using Newtonsoft.Json;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Settings.Crm;
 using SmartTalk.Messages.Dto.Crm;
@@ -27,14 +29,20 @@ public class CrmClient : ICrmClient
     {
         var url = $"{_crmSetting.BaseUrl}/oauth/token";
 
-        var form = new Dictionary<string, string>
+        var payload = new Dictionary<string, string>
         {
             { "grant_type", "client_credentials" },
             { "client_id", _crmSetting.ClientId },
             { "client_secret", _crmSetting.ClientSecret }
         };
+        
+        var headers = new Dictionary<string, string>
+        {
+            { "Accept", "application/json" },
+            { "Content-Type", "application/json" }
+        };
 
-        var resp = await _httpClient.PostAsync<CrmTokenResponse>(url, new FormUrlEncodedContent(form), cancellationToken: cancellationToken).ConfigureAwait(false);
+        var resp = await _httpClient.PostAsync<CrmTokenResponse>(url, new StringContent(JsonConvert.SerializeObject(payload), Encoding.UTF8, "application/json"), headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         return resp.access_token;
     }
@@ -45,6 +53,7 @@ public class CrmClient : ICrmClient
 
         var headers = new Dictionary<string, string>
         {
+            { "Accept", "application/json" },
             { "Authorization", $"Bearer {token}" }
         };
         
