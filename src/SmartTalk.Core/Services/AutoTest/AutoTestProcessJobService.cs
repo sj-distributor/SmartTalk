@@ -30,23 +30,23 @@ public interface IAutoTestProcessJobService : IScopedDependency
 public class AutoTestProcessJobService : IAutoTestProcessJobService
 {
     private readonly IFfmpegService _ffmpegService;
+    private readonly OpenAiSettings _openAiSettings;
     private readonly ISmartiesClient _smartiesClient;
     private readonly ISpeechToTextService _speechToTextService;
     private readonly IAutoTestDataProvider _autoTestDataProvider;
     private readonly ISpeechMaticsDataProvider _speechMaticsDataProvider;
     private readonly ISmartTalkHttpClientFactory _smartTalkHttpClientFactory;
-    private readonly OpenAiSettings _openAiSettings;
 
-    public AutoTestProcessJobService(IFfmpegService ffmpegService, ISmartiesClient smartiesClient, ISpeechToTextService speechToTextService, IAutoTestDataProvider autoTestDataProvider, ISpeechMaticsDataProvider speechMaticsDataProvider, ISmartTalkHttpClientFactory smartTalkHttpClientFactory
-        , OpenAiSettings openAiSettings)
+    public AutoTestProcessJobService(IFfmpegService ffmpegService, OpenAiSettings openAiSettings, ISmartiesClient smartiesClient, ISpeechToTextService speechToTextService, IAutoTestDataProvider autoTestDataProvider, ISpeechMaticsDataProvider speechMaticsDataProvider, ISmartTalkHttpClientFactory smartTalkHttpClientFactory
+        )
     {
         _ffmpegService = ffmpegService;
+        _openAiSettings = openAiSettings;
         _smartiesClient = smartiesClient;
         _speechToTextService = speechToTextService;
         _autoTestDataProvider = autoTestDataProvider;
         _speechMaticsDataProvider = speechMaticsDataProvider;
         _smartTalkHttpClientFactory = smartTalkHttpClientFactory;
-        _openAiSettings = openAiSettings;
     }
 
     public async Task HandleTestingSpeechMaticsCallBackAsync(string jobId, CancellationToken cancellationToken)
@@ -88,7 +88,7 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
 
         var jObject = JObject.Parse(record.InputSnapshot);
 
-        string promptDesc = jObject["PromptText"]?["desc"]?.ToString();
+        var promptDesc = jObject["PromptText"]?["desc"]?.ToString();
         
         var conversationAudios = await ProcessAudioConversationAsync(customerAudios, promptDesc, cancellationToken).ConfigureAwait(false);
     }
