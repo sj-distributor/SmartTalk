@@ -150,26 +150,23 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
         return (speaker, audioInfos.Where(x => x.Speaker == speaker).OrderBy(x => x.StartTime).ToList());
     }
     
-    private async Task<(string, List<byte[]>)> SplitAudioAsync(byte[] audioBytes, double speakStartTimeVideo, double speakEndTimeVideo, CancellationToken cancellationToken = default)
+    private async Task<(string, byte[])> SplitAudioAsync(byte[] audioBytes, double speakStartTimeVideo, double speakEndTimeVideo, CancellationToken cancellationToken = default)
     {
         var splitAudios = await _ffmpegService.SpiltAudioAsync(audioBytes, speakStartTimeVideo, speakEndTimeVideo, cancellationToken).ConfigureAwait(false);
 
         var transcriptionResult = new StringBuilder();
-
-        foreach (var reSplitAudio in splitAudios)
+        
+        try
         {
-            try
-            {
-                var transcriptionResponse = await _speechToTextService.SpeechToTextAsync(
-                    reSplitAudio, null, TranscriptionFileType.Wav, TranscriptionResponseFormat.Text,
-                    string.Empty, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-                transcriptionResult.Append(transcriptionResponse);
-            }
-            catch (Exception e)
-            {
-                Log.Warning("Audio segment transcription error: {@Exception}", e);
-            }
+            var transcriptionResponse = await _speechToTextService.SpeechToTextAsync(
+                splitAudios, null, TranscriptionFileType.Wav, TranscriptionResponseFormat.Text,
+                string.Empty, cancellationToken: cancellationToken).ConfigureAwait(false); 
+            
+            transcriptionResult.Append(transcriptionResponse); 
+        }
+        catch (Exception e)
+        {
+            Log.Warning("Audio segment transcription error: {@Exception}", e);
         }
 
         Log.Information("Transcription result {Transcription}", transcriptionResult.ToString());
