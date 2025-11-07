@@ -2,6 +2,7 @@ using System.Text;
 using Microsoft.IdentityModel.Tokens;
 using NAudio.Wave;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using OpenAI.Chat;
 using Serilog;
 using Smarties.Messages.DTO.OpenAi;
@@ -85,7 +86,11 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
 
         var customerAudios = customerAudioInfos.OrderBy(x => x.StartTime).Select(x => x.Audio).ToList();
 
-        var conversationAudios = await ProcessAudioConversationAsync(customerAudios, null, cancellationToken).ConfigureAwait(false);
+        var jObject = JObject.Parse(record.InputSnapshot);
+
+        string promptDesc = jObject["PromptText"]?["desc"]?.ToString();
+        
+        var conversationAudios = await ProcessAudioConversationAsync(customerAudios, promptDesc, cancellationToken).ConfigureAwait(false);
     }
     
     private List<SpeechMaticsSpeakInfoForAutoTestDto> StructureDiarizationResults(List<SpeechMaticsResultDto> results)
