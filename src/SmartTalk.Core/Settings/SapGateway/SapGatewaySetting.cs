@@ -2,7 +2,7 @@ using Microsoft.Extensions.Configuration;
 
 namespace SmartTalk.Core.Settings.SapGateway;
 
-public class SapGatewaySetting
+public class SapGatewaySetting : IConfigurationSetting
 {
     public SapGatewaySetting(IConfiguration configuration)
     {

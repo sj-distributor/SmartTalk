@@ -26,6 +26,8 @@ using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Sales;
+using SmartTalk.Messages.Dto.PhoneOrder;
+using SmartTalk.Messages.Enums.Account;
 using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Enums.Sales;
 using SmartTalk.Messages.Enums.STT;
@@ -264,8 +266,11 @@ public class SpeechMaticsService : ISpeechMaticsService
         
         record.Status = PhoneOrderRecordStatus.Sent;
         record.TranscriptionText = completion.Content.FirstOrDefault()?.Text ?? "";
-    
-        var isCustomerFriendly = await CheckCustomerFriendlyAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
+
+        var checkCustomerFriendly = await CheckCustomerFriendlyAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
+
+        record.IsCustomerFriendly = checkCustomerFriendly.IsCustomerFriendly;
+        record.IsHumanAnswered = checkCustomerFriendly.IsHumanAnswered;
         
         var detection = await _translationClient.DetectLanguageAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
 
@@ -278,7 +283,6 @@ public class SpeechMaticsService : ISpeechMaticsService
             Language = SelectReportLanguageEnum(detection.Language),
             IsOrigin = SelectReportLanguageEnum(detection.Language) == record.Language,
             CreatedDate = DateTimeOffset.Now,
-            IsCustomerFriendly = isCustomerFriendly
         });
         
         var targetLanguage = SelectReportLanguageEnum(detection.Language) == TranscriptionLanguage.Chinese ? "en" : "zh";
@@ -294,7 +298,6 @@ public class SpeechMaticsService : ISpeechMaticsService
             Language = reportLanguage,
             IsOrigin = reportLanguage == record.Language,
             CreatedDate = DateTimeOffset.Now,
-            IsCustomerFriendly = isCustomerFriendly
         });
 
         await _phoneOrderDataProvider.AddPhoneOrderRecordReportsAsync(reports, true, cancellationToken).ConfigureAwait(false);
@@ -732,7 +735,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken).ConfigureAwait(false); 
     }
     
-    private async Task<bool> CheckCustomerFriendlyAsync(string transcriptionText, CancellationToken cancellationToken)
+   private async Task<(bool IsHumanAnswered, bool IsCustomerFriendly)> CheckCustomerFriendlyAsync(string transcriptionText, CancellationToken cancellationToken)
     {
         var completionResult = await _smartiesClient.PerformQueryAsync(new AskGptRequest
         {
@@ -741,12 +744,20 @@ public class SpeechMaticsService : ISpeechMaticsService
                 new()
                 {
                     Role = "system",
-                    Content = new CompletionsStringContent("你需要帮我从电话录音报告中提取出客人态度是否友好，态度友好返回true，态度恶劣，有负面情绪返回false" + 
-                                                           "注意用json格式返回；" + "规则：{\"IsCustomerFriendly\": true}" + 
-                                                           "- 样本与输出：\n" + 
-                                                           "input:" + 
-                                                           "通話主題：客戶下單雞脾肉\n內容摘要：客戶表示想要下一張訂單，並訂購了一箱雞脾肉，隨後表示沒有其他需要，結束通話。\n\n客戶情緒與語氣：語氣平和，態度明確。" +
-                                                           "output:true\n")
+                    Content = new CompletionsStringContent(
+                        "你需要帮我从电话录音报告中判断两个维度：" +
+                        "1. 是否真人接听（IsHumanAnswered）：" +
+                        "   - 如果客户有自然对话、提问、回应、表达等语气，说明是真人接听，返回 true。" +
+                        "   - 如果是语音信箱、系统提示、无人应答，返回 false。" +
+                        "2. 客人态度是否友好（IsCustomerFriendly）：" +
+                        "   - 如果语气平和、客气、积极配合，返回 true。" +
+                        "   - 如果语气恶劣、冷淡、负面或不耐烦，返回 false。" +
+                        "输出格式务必是 JSON：" +
+                        "{\"IsHumanAnswered\": true, \"IsCustomerFriendly\": true}" +
+                        "\n\n样例：\n" +
+                        "input: 通話主題：客戶查詢價格。\n內容摘要：客戶開場問候並詢問價格，語氣平和，最後表示感謝。\noutput: {\"IsHumanAnswered\": true, \"IsCustomerFriendly\": true}\n" +
+                        "input: 通話主題：外呼無人接聽。\n內容摘要：撥號後自動語音提示‘您撥打的電話暫時無法接通’。\noutput: {\"IsHumanAnswered\": false, \"IsCustomerFriendly\": false}\n"
+                    )
                 },
                 new()
                 {
@@ -755,16 +766,16 @@ public class SpeechMaticsService : ISpeechMaticsService
                 }
             },
             Model = OpenAiModel.Gpt4o,
-            ResponseFormat = new () { Type = "json_object" }
+            ResponseFormat = new() { Type = "json_object" }
         }, cancellationToken).ConfigureAwait(false);
 
         var response = completionResult.Data.Response?.Trim();
 
-        var result = JsonConvert.DeserializeObject<CustomerFriendlyResponse>(response);
+        var result = JsonConvert.DeserializeObject<PhoneOrderCustomerAttitudeAnalysis>(response);
 
         if (result == null) throw new Exception($"无法反序列化模型返回结果: {response}");
 
-        return result.IsCustomerFriendly;
+        return (result.IsHumanAnswered, result.IsCustomerFriendly);
     }
     
     public async Task SendWorkWeChatRobotNotifyAsync(byte[] recordContent, string key, string transcription, string[] mentionedList, CancellationToken cancellationToken)
@@ -796,11 +807,6 @@ public class SpeechMaticsService : ISpeechMaticsService
         //     {
         //         MsgType = "text", Text = new SendWorkWechatGroupRobotTextDto { Content = "-------------------------End-------------------------" }
         //     }, CancellationToken.None);
-    }
-
-    public class CustomerFriendlyResponse
-    {
-        public bool IsCustomerFriendly { get; set; }
     }
 
     private async Task RetryAsync(
