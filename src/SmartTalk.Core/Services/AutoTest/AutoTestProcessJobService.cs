@@ -90,6 +90,9 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
 
         var promptDesc = jObject["PromptText"]?["desc"]?.ToString();
         
+        if (string.IsNullOrWhiteSpace(promptDesc))
+            throw new Exception("PromptText.desc为空或缺失");
+        
         var conversationAudios = await ProcessAudioConversationAsync(customerAudios, promptDesc, cancellationToken).ConfigureAwait(false);
     }
     
