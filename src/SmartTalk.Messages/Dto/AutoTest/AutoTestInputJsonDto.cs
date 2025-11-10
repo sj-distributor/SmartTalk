@@ -14,6 +14,9 @@ public class AutoTestInputJsonDto
     [JsonConverter(typeof(EmptyStringConverter))]
     public string CustomerId { get; set; }
     
+    [JsonConverter(typeof(EmptyStringConverter))]
+    public string PromptText { get; set; }
+    
     public List<AutoTestInputDetail> Detail { get; set; } = new();
 }
 

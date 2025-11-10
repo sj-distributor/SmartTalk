@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using Newtonsoft.Json;
 using SmartTalk.Core.Domain.AutoTest;
+using SmartTalk.Core.Extensions;
 using SmartTalk.Messages.Dto.AutoTest;
 using SmartTalk.Messages.Enums.AutoTest;
 
@@ -28,10 +30,10 @@ public partial class AutoTestDataProvider
             join dataSetItem in _repository.QueryNoTracking<AutoTestDataSetItem>() 
                 on task.DataSetId equals dataSetItem.DataSetId into dataSetItems
             from dataSetItem in dataSetItems.DefaultIfEmpty()
-            join record in _repository.QueryNoTracking<AutoTestTaskRecord>().Where(x => x.Status == AutoTestTaskRecordStatus.Done)
-                on task.Id equals record.TestTaskId into taskRecords
-                from record in taskRecords.DefaultIfEmpty()
-                group new { task, dataSetItem, record } by task.Id into taskGroup
+            join dataSet in _repository.QueryNoTracking<AutoTestDataSet>() 
+                on dataSetItem.DataSetId equals dataSet.Id into dataSets
+            from dataSet in dataSets.DefaultIfEmpty()
+                group new { task, dataSet, dataSetItem } by task.Id into taskGroup
             select new AutoTestTaskDto
             {
                 Id = taskGroup.Key,
@@ -41,21 +43,47 @@ public partial class AutoTestDataProvider
                 Status = taskGroup.Select(x => x.task.Status).FirstOrDefault(),
                 CreatedAt = taskGroup.Select(x => x.task.CreatedAt).FirstOrDefault(),
                 TotalCount = taskGroup.Count(x => x.dataSetItem != null),
-                InProgressCount = taskGroup.Count(x => x.record != null)
+                DataSetName =  taskGroup.Select(x => x.dataSet.Name).FirstOrDefault(),
             };
-        
+
         if (scenarioId.HasValue)
             query = query.Where(x => x.ScenarioId == scenarioId.Value);
         
-        if (!string.IsNullOrEmpty(keyword))
-            query = query.Where(x => x.Params.Contains(keyword));
+        var result = await query.ToListAsync(cancellationToken).ConfigureAwait(false);
         
-        var count = await query.CountAsync(cancellationToken).ConfigureAwait(false);
+        var paramDict = result.Select(x => new {x.Id, ParamsDto = JsonConvert.DeserializeObject<AutoTestTaskParamsDto>(x.Params)}).ToDictionary(x => x.Id);
+        
+        var agents = await _agentDataProvider.GetAgentsByIdsAsync(
+            paramDict.Select(x => x.Value.ParamsDto.AgentId).ToList(),
+            cancellationToken).ConfigureAwait(false);
+        
+        var assistants = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByIdsAsync(
+            paramDict.Select(x => x.Value.ParamsDto.AssistantId).ToList(),
+            cancellationToken).ConfigureAwait(false);
+       
+        var taskRecordCounts = await _repository.QueryNoTracking<AutoTestTaskRecord>().Where(r => r.Status == AutoTestTaskRecordStatus.Done).GroupBy(r => r.TestTaskId).Select(g => new { TaskId = g.Key, Count = g.Count() }).ToDictionaryAsync(g => g.TaskId, g => g.Count, cancellationToken).ConfigureAwait(false);
+        
+        var autoTestTasks = result.Where(x =>
+        {
+            x.InProgressCount = taskRecordCounts.TryGetValue(x.Id, out var inProgressCount) ? inProgressCount : 0;
+            
+            if (!paramDict.TryGetValue(x.Id, out var task)) return false; 
+           
+            task.ParamsDto.AgentName = agents.FirstOrDefault(a => a.Id == task.ParamsDto.AgentId)?.Name ?? "";
+            task.ParamsDto.AssistantName = assistants.FirstOrDefault(asst => asst.Id == task.ParamsDto.AssistantId)?.Name ?? "";
+            x.Params = JsonConvert.SerializeObject(task.ParamsDto);
+            
+            if (keyword is null || string.IsNullOrEmpty(keyword)) return true;
+            
+            return task.ParamsDto.AgentName.Contains(keyword, StringComparison.OrdinalIgnoreCase) || task.ParamsDto.AssistantName.Contains(keyword, StringComparison.OrdinalIgnoreCase);
+        }).ToList();
+        
+        var count = autoTestTasks.Count;
         
         if (pageIndex.HasValue && pageSize.HasValue)
-            query = query.Skip((pageIndex.Value - 1) * pageSize.Value).Take(pageSize.Value);
+            autoTestTasks = autoTestTasks.Skip((pageIndex.Value - 1) * pageSize.Value).Take(pageSize.Value).ToList();
         
-        return (await query.ToListAsync(cancellationToken).ConfigureAwait(false), count);
+        return (autoTestTasks, count);
     }
 
     public async Task<AutoTestTask> GetAutoTestTaskByIdAsync(int id, CancellationToken cancellationToken)
