@@ -41,25 +41,25 @@ public class AutoTestController : ControllerBase
     }
     
     [Route("conversation"), HttpPost]
-    public async Task<IActionResult> AutoTestConversationAudioProcessAsync([FromForm] List<IFormFile> pcmFiles, [FromForm] string prompt, CancellationToken cancellationToken)
+    public async Task<IActionResult> AutoTestConversationAudioProcessAsync([FromForm] List<IFormFile> mp3Files, [FromForm] string prompt, CancellationToken cancellationToken)
     {
-        var customerPcmList = new List<byte[]>();
+        var customerMp3List = new List<byte[]>();
 
-        foreach (var file in pcmFiles)
+        foreach (var file in mp3Files)
         {
             using var ms = new MemoryStream();
             await file.CopyToAsync(ms);
-            customerPcmList.Add(ms.ToArray());
+            customerMp3List.Add(ms.ToArray());
         }
 
         var result = await _autoTestService.AutoTestConversationAudioProcessAsync(
             new AutoTestConversationAudioProcessCommand
             {
-                CustomerAudioList = customerPcmList,
+                CustomerAudioList = customerMp3List,
                 Prompt = prompt
             }, cancellationToken).ConfigureAwait(false);
 
-        return File(result.Data, "application/octet-stream", "conversation.pcm");
+        return File(result.Data, "audio/mpeg", "conversation.mp3");
     }
 
     
