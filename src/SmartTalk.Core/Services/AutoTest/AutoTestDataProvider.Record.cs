@@ -25,6 +25,8 @@ public partial interface IAutoTestDataProvider
     Task AddAutoTestDataItemsAsync(List<AutoTestDataItem> items, bool forceSave = true, CancellationToken cancellationToken = default);
 
     Task AddAutoTestImportRecordAsync(AutoTestImportDataRecord record, bool forceSave = true, CancellationToken cancellationToken = default);
+    
+    Task<List<AutoTestTaskRecord>> GetAllAutoTestTaskRecordsByTaskIdAsync(int taskId, CancellationToken cancellationToken);
 }
 
 public partial class AutoTestDataProvider
@@ -72,6 +74,11 @@ public partial class AutoTestDataProvider
     {
         await _repository.InsertAsync(record, cancellationToken).ConfigureAwait(false);
         if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<AutoTestTaskRecord>> GetAllAutoTestTaskRecordsByTaskIdAsync(int taskId, CancellationToken cancellationToken)
+    {
+        return await _repository.Query<AutoTestTaskRecord>().Where(x => x.TestTaskId == taskId).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task UpdateTaskRecordsAsync(List<AutoTestTaskRecord> records, bool forceSave = true, CancellationToken cancellationToken = default)

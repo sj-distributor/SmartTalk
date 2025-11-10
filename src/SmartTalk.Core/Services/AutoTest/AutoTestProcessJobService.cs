@@ -8,7 +8,10 @@ using Serilog;
 using Smarties.Messages.DTO.OpenAi;
 using Smarties.Messages.Enums.OpenAi;
 using Smarties.Messages.Requests.Ask;
+using SmartTalk.Core.Domain.AutoTest;
 using SmartTalk.Core.Ioc;
+using SmartTalk.Core.Services.AiSpeechAssistant;
+using SmartTalk.Core.Services.Caching.Redis;
 using SmartTalk.Core.Services.Ffmpeg;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
@@ -17,6 +20,8 @@ using SmartTalk.Core.Services.STT;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Messages.Dto.AutoTest;
 using SmartTalk.Messages.Dto.SpeechMatics;
+using SmartTalk.Messages.Enums.AutoTest;
+using SmartTalk.Messages.Enums.Caching;
 using TranscriptionFileType = SmartTalk.Messages.Enums.STT.TranscriptionFileType;
 using TranscriptionResponseFormat = SmartTalk.Messages.Enums.STT.TranscriptionResponseFormat;
 
@@ -32,21 +37,24 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
     private readonly IFfmpegService _ffmpegService;
     private readonly OpenAiSettings _openAiSettings;
     private readonly ISmartiesClient _smartiesClient;
+    private readonly IRedisSafeRunner _redisSafeRunner;
     private readonly ISpeechToTextService _speechToTextService;
     private readonly IAutoTestDataProvider _autoTestDataProvider;
     private readonly ISpeechMaticsDataProvider _speechMaticsDataProvider;
     private readonly ISmartTalkHttpClientFactory _smartTalkHttpClientFactory;
+    private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
 
-    public AutoTestProcessJobService(IFfmpegService ffmpegService, OpenAiSettings openAiSettings, ISmartiesClient smartiesClient, ISpeechToTextService speechToTextService, IAutoTestDataProvider autoTestDataProvider, ISpeechMaticsDataProvider speechMaticsDataProvider, ISmartTalkHttpClientFactory smartTalkHttpClientFactory
-        )
+    public AutoTestProcessJobService(IFfmpegService ffmpegService, OpenAiSettings openAiSettings, ISmartiesClient smartiesClient, IRedisSafeRunner redisSafeRunner, ISpeechToTextService speechToTextService, IAutoTestDataProvider autoTestDataProvider, ISpeechMaticsDataProvider speechMaticsDataProvider, ISmartTalkHttpClientFactory smartTalkHttpClientFactory, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
         _ffmpegService = ffmpegService;
         _openAiSettings = openAiSettings;
         _smartiesClient = smartiesClient;
+        _redisSafeRunner = redisSafeRunner;
         _speechToTextService = speechToTextService;
         _autoTestDataProvider = autoTestDataProvider;
         _speechMaticsDataProvider = speechMaticsDataProvider;
         _smartTalkHttpClientFactory = smartTalkHttpClientFactory;
+        _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
     }
 
     public async Task HandleTestingSpeechMaticsCallBackAsync(string jobId, CancellationToken cancellationToken)
@@ -85,20 +93,26 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
         customerAudioInfos.AddRange(audios);
 
         var customerAudios = customerAudioInfos.OrderBy(x => x.StartTime).Select(x => x.Audio).ToList();
-
-        var jObject = JObject.Parse(record.InputSnapshot);
-
-        // assistant id 找is active的knowledge 的prompt
         
-        var conversationAudios = await ProcessAudioConversationAsync(customerAudios, promptDesc, cancellationToken).ConfigureAwait(false);
+        var task  = await _autoTestDataProvider.GetAutoTestTaskByIdAsync(record.TestTaskId, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("HandleTestingSpeechMaticsCallBackAsync: Get auto test task: {@Task}", task);
+        
+        if (task == null) throw new Exception($"Could not find task with id: {record.TestTaskId}!");
+        
+        var taskParams = JsonConvert.DeserializeObject<AutoTestTaskParamsDto>(task.Params);
+
+        var prompt = await BuildConversationPromptAsync(taskParams.AssistantId, cancellationToken).ConfigureAwait(false);
+        
+        var conversationAudios = await ProcessAudioConversationAsync(customerAudios, prompt, cancellationToken).ConfigureAwait(false);
         
         // 生成ai订单
         
         // 对比订单
         
         // record 修改
-        
-        // 检查总体task 状态（红锁）
+
+        await HandleAutoTestTaskStatusChangeAsync(task, cancellationToken).ConfigureAwait(false);
     }
     
     private List<SpeechMaticsSpeakInfoForAutoTestDto> StructureDiarizationResults(List<SpeechMaticsResultDto> results)
@@ -253,8 +267,7 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
 
         return combinedStream.ToArray();
     }
-
-
+    
     private static byte[] PcmToWav(byte[] pcmData, int sampleRate, int bitsPerSample, int channels)
     {
         using var ms = new MemoryStream();
@@ -265,5 +278,30 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
             writer.Flush();
         }
         return ms.ToArray();
+    }
+
+    private async Task<string> BuildConversationPromptAsync(int assistantId, CancellationToken cancellationToken)
+    {
+        if (assistantId == 0) throw new ArgumentException("assistantId could not be 0");
+        
+        var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(assistantId: assistantId, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return knowledge != null ? knowledge.Prompt : "You are a helpful assistant";
+    }
+
+    private async Task HandleAutoTestTaskStatusChangeAsync(AutoTestTask task, CancellationToken cancellationToken)
+    {
+        await _redisSafeRunner.ExecuteWithLockAsync($"auto-test-task-status-handle-{task.Id}", async () =>
+        {
+            var taskRecords = await _autoTestDataProvider.GetAllAutoTestTaskRecordsByTaskIdAsync(task.Id, cancellationToken).ConfigureAwait(false);
+
+            if (taskRecords.All(x => x.Status == AutoTestTaskRecordStatus.Done))
+            {
+                task.Status = AutoTestTaskStatus.Done;
+                
+                await _autoTestDataProvider.UpdateAutoTestTaskAsync(task, cancellationToken: cancellationToken).ConfigureAwait(false);
+            }
+            
+        }, wait: TimeSpan.FromSeconds(10), retry: TimeSpan.FromSeconds(1), server: RedisServer.System).ConfigureAwait(false);
     }
 }
