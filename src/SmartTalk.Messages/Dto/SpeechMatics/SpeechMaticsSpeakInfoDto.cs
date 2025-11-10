@@ -21,5 +21,5 @@ public class SpeechMaticsSpeakInfoForAutoTestDto
     
     public string Speaker { get; set; }
 
-    public List<byte[]> Audio { get; set; }
+    public byte[] Audio { get; set; }
 }

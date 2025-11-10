@@ -1,6 +1,9 @@
 using System.Text;
 using Microsoft.IdentityModel.Tokens;
+using NAudio.Wave;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using OpenAI.Chat;
 using Serilog;
 using Smarties.Messages.DTO.OpenAi;
 using Smarties.Messages.Enums.OpenAi;
@@ -11,6 +14,7 @@ using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.SpeechMatics;
 using SmartTalk.Core.Services.STT;
+using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Messages.Dto.AutoTest;
 using SmartTalk.Messages.Dto.SpeechMatics;
 using TranscriptionFileType = SmartTalk.Messages.Enums.STT.TranscriptionFileType;
@@ -26,15 +30,18 @@ public interface IAutoTestProcessJobService : IScopedDependency
 public class AutoTestProcessJobService : IAutoTestProcessJobService
 {
     private readonly IFfmpegService _ffmpegService;
+    private readonly OpenAiSettings _openAiSettings;
     private readonly ISmartiesClient _smartiesClient;
     private readonly ISpeechToTextService _speechToTextService;
     private readonly IAutoTestDataProvider _autoTestDataProvider;
     private readonly ISpeechMaticsDataProvider _speechMaticsDataProvider;
     private readonly ISmartTalkHttpClientFactory _smartTalkHttpClientFactory;
 
-    public AutoTestProcessJobService(IFfmpegService ffmpegService, ISmartiesClient smartiesClient, ISpeechToTextService speechToTextService, IAutoTestDataProvider autoTestDataProvider, ISpeechMaticsDataProvider speechMaticsDataProvider, ISmartTalkHttpClientFactory smartTalkHttpClientFactory)
+    public AutoTestProcessJobService(IFfmpegService ffmpegService, OpenAiSettings openAiSettings, ISmartiesClient smartiesClient, ISpeechToTextService speechToTextService, IAutoTestDataProvider autoTestDataProvider, ISpeechMaticsDataProvider speechMaticsDataProvider, ISmartTalkHttpClientFactory smartTalkHttpClientFactory
+        )
     {
         _ffmpegService = ffmpegService;
+        _openAiSettings = openAiSettings;
         _smartiesClient = smartiesClient;
         _speechToTextService = speechToTextService;
         _autoTestDataProvider = autoTestDataProvider;
@@ -78,6 +85,20 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
         customerAudioInfos.AddRange(audios);
 
         var customerAudios = customerAudioInfos.OrderBy(x => x.StartTime).Select(x => x.Audio).ToList();
+
+        var jObject = JObject.Parse(record.InputSnapshot);
+
+        // assistant id 找is active的knowledge 的prompt
+        
+        var conversationAudios = await ProcessAudioConversationAsync(customerAudios, promptDesc, cancellationToken).ConfigureAwait(false);
+        
+        // 生成ai订单
+        
+        // 对比订单
+        
+        // record 修改
+        
+        // 检查总体task 状态（红锁）
     }
     
     private List<SpeechMaticsSpeakInfoForAutoTestDto> StructureDiarizationResults(List<SpeechMaticsResultDto> results)
@@ -137,26 +158,23 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
         return (speaker, audioInfos.Where(x => x.Speaker == speaker).OrderBy(x => x.StartTime).ToList());
     }
     
-    private async Task<(string, List<byte[]>)> SplitAudioAsync(byte[] audioBytes, double speakStartTimeVideo, double speakEndTimeVideo, CancellationToken cancellationToken = default)
+    private async Task<(string, byte[])> SplitAudioAsync(byte[] audioBytes, double speakStartTimeVideo, double speakEndTimeVideo, CancellationToken cancellationToken = default)
     {
         var splitAudios = await _ffmpegService.SpiltAudioAsync(audioBytes, speakStartTimeVideo, speakEndTimeVideo, cancellationToken).ConfigureAwait(false);
 
         var transcriptionResult = new StringBuilder();
-
-        foreach (var reSplitAudio in splitAudios)
+        
+        try
         {
-            try
-            {
-                var transcriptionResponse = await _speechToTextService.SpeechToTextAsync(
-                    reSplitAudio, null, TranscriptionFileType.Wav, TranscriptionResponseFormat.Text,
-                    string.Empty, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-                transcriptionResult.Append(transcriptionResponse);
-            }
-            catch (Exception e)
-            {
-                Log.Warning("Audio segment transcription error: {@Exception}", e);
-            }
+            var transcriptionResponse = await _speechToTextService.SpeechToTextAsync(
+                splitAudios, null, TranscriptionFileType.Wav, TranscriptionResponseFormat.Text,
+                string.Empty, cancellationToken: cancellationToken).ConfigureAwait(false); 
+            
+            transcriptionResult.Append(transcriptionResponse); 
+        }
+        catch (Exception e)
+        {
+            Log.Warning("Audio segment transcription error: {@Exception}", e);
         }
 
         Log.Information("Transcription result {Transcription}", transcriptionResult.ToString());
@@ -192,5 +210,60 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
         }, cancellationToken).ConfigureAwait(false);
 
         return completionResult.Data.Response;
+    }
+    
+    private async Task<byte[]> ProcessAudioConversationAsync(List<byte[]> customerPcmList, string prompt, CancellationToken cancellationToken)
+    {
+        if (customerPcmList == null || customerPcmList.Count == 0)
+            throw new ArgumentException("没有音频输入");
+
+        var conversationHistory = new List<ChatMessage>
+        {
+            new SystemChatMessage(prompt)
+        };
+
+        var client = new ChatClient("gpt-4o-audio-preview", _openAiSettings.ApiKey);
+        var options = new ChatCompletionOptions
+        {
+            ResponseModalities = ChatResponseModalities.Text | ChatResponseModalities.Audio,
+            AudioOptions = new ChatAudioOptions(ChatOutputAudioVoice.Alloy, ChatOutputAudioFormat.Pcm16)
+        };
+
+        using var combinedStream = new MemoryStream();
+
+        foreach (var userPcm in customerPcmList)
+        {
+            if (userPcm == null || userPcm.Length == 0) continue;
+
+            combinedStream.Write(userPcm, 0, userPcm.Length);
+
+            var userWav = PcmToWav(userPcm, 16000, 16, 1);
+
+            conversationHistory.Add(new UserChatMessage(
+                ChatMessageContentPart.CreateInputAudioPart(BinaryData.FromBytes(userWav), ChatInputAudioFormat.Wav)
+            ));
+
+            var completion = await client.CompleteChatAsync(conversationHistory, options, cancellationToken);
+            var aiPcm = completion.Value.OutputAudio.AudioBytes.ToArray();
+
+            combinedStream.Write(aiPcm, 0, aiPcm.Length);
+
+            conversationHistory.Add(new AssistantChatMessage(completion.Value.OutputAudio.Transcript));
+        }
+
+        return combinedStream.ToArray();
+    }
+
+
+    private static byte[] PcmToWav(byte[] pcmData, int sampleRate, int bitsPerSample, int channels)
+    {
+        using var ms = new MemoryStream();
+        var waveFormat = new WaveFormat(sampleRate, bitsPerSample, channels);
+        using (var writer = new WaveFileWriter(ms, waveFormat))
+        {
+            writer.Write(pcmData, 0, pcmData.Length);
+            writer.Flush();
+        }
+        return ms.ToArray();
     }
 }
