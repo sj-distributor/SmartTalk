@@ -88,12 +88,11 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
 
         var jObject = JObject.Parse(record.InputSnapshot);
 
-        var promptDesc = jObject["PromptText"]?["desc"]?.ToString();
-        
-        if (string.IsNullOrWhiteSpace(promptDesc))
-            throw new Exception("PromptText.desc为空或缺失");
+        // assistant id 找is active的knowledge 的prompt
         
         var conversationAudios = await ProcessAudioConversationAsync(customerAudios, promptDesc, cancellationToken).ConfigureAwait(false);
+        
+        // record 状态修改
     }
     
     private List<SpeechMaticsSpeakInfoForAutoTestDto> StructureDiarizationResults(List<SpeechMaticsResultDto> results)
