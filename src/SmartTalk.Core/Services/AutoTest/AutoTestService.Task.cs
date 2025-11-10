@@ -105,11 +105,11 @@ public partial class AutoTestService
         switch (newStatus)
         {
             case AutoTestTaskStatus.Pause:
-                await UpdateTaskRecordsStatusAsync(task.Id, AutoTestTaskRecordStatus.Pause, cancellationToken).ConfigureAwait(false);
+                await UpdateTaskRecordsStatusAsync(task.Id, AutoTestTaskRecordStatus.Pending,AutoTestTaskRecordStatus.Pause,  cancellationToken).ConfigureAwait(false);
                 break;
 
             case AutoTestTaskStatus.Ongoing:
-                if (task.StartedAt is not null) await UpdateTaskRecordsStatusAsync(task.Id, AutoTestTaskRecordStatus.Pending, cancellationToken).ConfigureAwait(false);
+                if (task.StartedAt is not null) await UpdateTaskRecordsStatusAsync(task.Id, AutoTestTaskRecordStatus.Pause, AutoTestTaskRecordStatus.Pending,  cancellationToken).ConfigureAwait(false);
                 await AutoTestRunningAsync(new AutoTestRunningCommand
                 {
                     TaskId = task.Id,
@@ -130,11 +130,11 @@ public partial class AutoTestService
         return (dataItemCount, recordDoneCount);
     }
 
-    private async Task UpdateTaskRecordsStatusAsync(int testTaskId, AutoTestTaskRecordStatus status, CancellationToken cancellationToken)
+    private async Task UpdateTaskRecordsStatusAsync(int testTaskId, AutoTestTaskRecordStatus status, AutoTestTaskRecordStatus updateStatus, CancellationToken cancellationToken)
     {
-        var records = await _autoTestDataProvider.GetStatusTaskRecordsByTaskIdAsync(testTaskId, AutoTestTaskRecordStatus.Pending, cancellationToken).ConfigureAwait(false);
+        var records = await _autoTestDataProvider.GetStatusTaskRecordsByTaskIdAsync(testTaskId, status, cancellationToken).ConfigureAwait(false);
 
-        records.ForEach(x => x.Status = status);
+        records.ForEach(x => x.Status = updateStatus);
         
         await _autoTestDataProvider.UpdateTaskRecordsAsync(records, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
