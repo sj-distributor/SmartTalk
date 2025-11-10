@@ -11,5 +11,6 @@ public enum DialogueScenarios
     TransferToHuman,
     SalesCall,
     InvalidCall,
+    TransferVoicemail,
     Other    
 }

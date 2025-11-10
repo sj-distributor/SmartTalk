@@ -17,7 +17,7 @@ public partial interface IPhoneOrderDataProvider
 {
     Task AddPhoneOrderRecordsAsync(List<PhoneOrderRecord> phoneOrderRecords, bool forceSave = true, CancellationToken cancellationToken = default);
     
-    Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(List<int> agentIds, string name, DateTimeOffset? utcStart = null, DateTimeOffset? utcEnd = null, CancellationToken cancellationToken = default);
+    Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(List<int> agentIds, string name, DateTimeOffset? utcStart = null, DateTimeOffset? utcEnd = null, DialogueScenarios? scenarios = null, CancellationToken cancellationToken = default);
 
     Task<List<PhoneOrderOrderItem>> AddPhoneOrderItemAsync(List<PhoneOrderOrderItem> phoneOrderOrderItems, bool forceSave = true, CancellationToken cancellationToken = default);
     
@@ -68,7 +68,7 @@ public partial class PhoneOrderDataProvider
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(List<int> agentIds, string name, DateTimeOffset? utcStart = null, DateTimeOffset? utcEnd = null, CancellationToken cancellationToken = default)
+    public async Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(List<int> agentIds, string name, DateTimeOffset? utcStart = null, DateTimeOffset? utcEnd = null, DialogueScenarios? scenarios = null, CancellationToken cancellationToken = default)
     {
         var agentsQuery = from agent in _repository.Query<Agent>()
             join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
@@ -83,6 +83,9 @@ public partial class PhoneOrderDataProvider
         var query = from record in _repository.Query<PhoneOrderRecord>()
             where record.Status == PhoneOrderRecordStatus.Sent && agents.Contains(record.AgentId)
             select record;
+
+        if (scenarios.HasValue)
+            query = query.Where(record => record.Scenario == scenarios);
 
         if (utcStart.HasValue && utcEnd.HasValue)
         {

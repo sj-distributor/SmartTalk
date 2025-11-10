@@ -167,7 +167,7 @@ public class SpeechMaticsService : ISpeechMaticsService
                            "   客人下單內容(如果沒有則忽略)：1. 牛肉(1箱)\n 2.雞腿肉(1箱)\n\n" +
                            "2. \"scenario\": 對話場景分類，必須是以下之一：\n" +
                            "   Reservation（預訂）、Order（下單）、Inquiry（詢問）、ThirdPartyOrderNotification（第三方訂單通知）、\n" +
-                           "   ComplaintFeedback（投訴反饋）、InformationNotification（信息通知）、\n" +
+                           "   ComplaintFeedback（投訴反饋）、InformationNotification（信息通知）、TransferVoicemail(转接语音信箱)\n" +
                            "   TransferToHuman（轉人工）、SalesCall（銷售電話）、InvalidCall（無效通話）、Other（其他）\n\n" +
                            "3. \"remark\": 備註信息，如果場景為 Other 或其他特殊情況，請在此說明具體原因；否則可為空字符串。\n\n" +
                            "輸出格式：{\"report\": \"分析報告內容\", \"scenario\": \"場景分類\", \"remark\": \"備註\"}\n" +
