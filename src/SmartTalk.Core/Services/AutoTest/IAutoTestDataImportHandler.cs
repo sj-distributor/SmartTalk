@@ -116,10 +116,9 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
             Log.Warning("导入数据中缺少 customerId，跳过处理"); 
             return null; 
         } 
-        var customerId = customerObj.ToString();
-        
-        DateTime startDate = import.TryGetValue("startDate", out var startObj) && DateTime.TryParse(startObj?.ToString(), out var s) ? s : DateTime.Now.Date;
-        DateTime endDate   = import.TryGetValue("endDate", out var endObj) && DateTime.TryParse(endObj?.ToString(), out var e) ? e : startDate.AddDays(1);
+        var customerId = import["CustomerId"].ToString(); 
+        var startDate = (DateTime)import["StartDate"]; 
+        var endDate = (DateTime)import["EndDate"]; 
         
         var tokenResponse = await _ringCentralClient.TokenAsync(cancellationToken).ConfigureAwait(false); 
         var token = tokenResponse.AccessToken;
