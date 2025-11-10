@@ -100,32 +100,6 @@ public partial class AutoTestService : IAutoTestService
 
         return MergeMp3Segments(allAudioSegments);
     }
-
-// ---------------- 8kHz WAV -> 16kHz MP3 ----------------
-    private byte[] ConvertWav8kToMp3_16k(byte[] wavBytes)
-    {
-        using var wavStream = new MemoryStream(wavBytes);
-        using var reader = new WaveFileReader(wavStream);
-
-        var outFormat = new WaveFormat(16000, 16, 1);
-        using var resampler = new MediaFoundationResampler(reader, outFormat)
-        {
-            ResamplerQuality = 60
-        };
-
-        using var mp3Stream = new MemoryStream();
-        using (var mp3Writer = new LameMP3FileWriter(mp3Stream, resampler.WaveFormat, LAMEPreset.STANDARD))
-        {
-            var buffer = new byte[resampler.WaveFormat.AverageBytesPerSecond];
-            int read;
-            while ((read = resampler.Read(buffer, 0, buffer.Length)) > 0)
-            {
-                mp3Writer.Write(buffer, 0, read);
-            }
-        }
-
-        return mp3Stream.ToArray();
-    }
     
     private byte[] MergeMp3Segments(List<byte[]> mp3Segments)
     {
