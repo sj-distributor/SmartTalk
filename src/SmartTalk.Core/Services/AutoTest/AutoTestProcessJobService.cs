@@ -93,18 +93,18 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
         customerAudioInfos.AddRange(audios);
 
         var customerAudios = customerAudioInfos.OrderBy(x => x.StartTime).Select(x => x.Audio).ToList();
-
-        var inputSnapshot = JObject.Parse(record.InputSnapshot);
-
-        var prompt = await BuildConversationPromptAsync(inputSnapshot["assistantId"]?.Value<int>() ?? 0, cancellationToken).ConfigureAwait(false);
-        
-        var conversationAudios = await ProcessAudioConversationAsync(customerAudios, prompt, cancellationToken).ConfigureAwait(false);
         
         var task  = await _autoTestDataProvider.GetAutoTestTaskByIdAsync(record.TestTaskId, cancellationToken).ConfigureAwait(false);
         
         Log.Information("HandleTestingSpeechMaticsCallBackAsync: Get auto test task: {@Task}", task);
         
         if (task == null) throw new Exception($"Could not find task with id: {record.TestTaskId}!");
+        
+        var taskParams = JObject.Parse(task.Params);
+
+        var prompt = await BuildConversationPromptAsync(taskParams["assistantId"]?.Value<int>() ?? 0, cancellationToken).ConfigureAwait(false);
+        
+        var conversationAudios = await ProcessAudioConversationAsync(customerAudios, prompt, cancellationToken).ConfigureAwait(false);
         
         // 生成ai订单
         
