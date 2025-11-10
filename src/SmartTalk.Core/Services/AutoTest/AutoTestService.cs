@@ -3,6 +3,7 @@ using Newtonsoft.Json;
 using SmartTalk.Core.Domain.AutoTest;
 using NAudio.Wave;
 using NAudio.Lame;
+using NAudio.Wave.SampleProviders;
 using OpenAI.Audio;
 using OpenAI.Chat;
 using SmartTalk.Core.Ioc;
@@ -105,7 +106,7 @@ public partial class AutoTestService : IAutoTestService
                 continue;
 
             // Step 1: 转成 16kHz MP3
-            var mp316kBytes = ConvertWav8kToMp3_16k(wavBytes);
+            var mp316kBytes = ConvertAudioToMp3_16k_CrossPlatform(wavBytes);
             allAudioSegments.Add(mp316kBytes);
 
             // Step 2: 发送给 Chat
@@ -127,23 +128,28 @@ public partial class AutoTestService : IAutoTestService
     }
 
 // ---------------- 8kHz WAV -> 16kHz MP3 ----------------
-    private byte[] ConvertWav8kToMp3_16k(byte[] wavBytes)
+    private byte[] ConvertAudioToMp3_16k_CrossPlatform(byte[] audioBytes)
     {
-        using var wavStream = new MemoryStream(wavBytes);
-        using var reader = new WaveFileReader(wavStream);
+        using var ms = new MemoryStream(audioBytes);
+        WaveStream reader;
+        
+        reader = new WaveFileReader(ms);
 
-        var outFormat = new WaveFormat(16000, 16, 1);
-        using var resampler = new MediaFoundationResampler(reader, outFormat)
-        {
-            ResamplerQuality = 60
-        };
+        // 转成 ISampleProvider
+        var sampleProvider = reader.ToSampleProvider();
+
+        // 重采样到 16kHz
+        var resampler = new WdlResamplingSampleProvider(sampleProvider, 16000);
+
+        // 转回 WaveStream 写 MP3
+        var resampledWave = new SampleToWaveProvider16(resampler);
 
         using var mp3Stream = new MemoryStream();
-        using (var mp3Writer = new LameMP3FileWriter(mp3Stream, resampler.WaveFormat, LAMEPreset.STANDARD))
+        using (var mp3Writer = new LameMP3FileWriter(mp3Stream, resampledWave.WaveFormat, LAMEPreset.STANDARD))
         {
-            var buffer = new byte[resampler.WaveFormat.AverageBytesPerSecond];
+            var buffer = new byte[resampledWave.WaveFormat.AverageBytesPerSecond];
             int read;
-            while ((read = resampler.Read(buffer, 0, buffer.Length)) > 0)
+            while ((read = resampledWave.Read(buffer, 0, buffer.Length)) > 0)
             {
                 mp3Writer.Write(buffer, 0, read);
             }
