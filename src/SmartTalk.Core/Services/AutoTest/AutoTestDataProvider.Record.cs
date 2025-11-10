@@ -21,6 +21,10 @@ public partial interface IAutoTestDataProvider
     Task<(int Count, List<AutoTestTaskRecord> Records)> GetAutoTestTaskRecordsAsync(int taskId, int? pageIndex = null, int? pageSize = null, CancellationToken cancellationToken = default);
     
     Task<(AutoTestTask Task, AutoTestDataSet DataSet)> GetAutoTestTaskInfoByIdAsync(int taskId, CancellationToken cancellationToken);
+
+    Task AddAutoTestDataItemsAsync(List<AutoTestDataItem> items, bool forceSave = true, CancellationToken cancellationToken = default);
+
+    Task AddAutoTestImportRecordAsync(AutoTestImportDataRecord record, bool forceSave = true, CancellationToken cancellationToken = default);
 }
 
 public partial class AutoTestDataProvider
@@ -56,6 +60,20 @@ public partial class AutoTestDataProvider
             .FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
     
+    public async Task AddAutoTestDataItemsAsync(List<AutoTestDataItem> items, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        if (items == null || !items.Any()) return;
+
+        await _repository.InsertAllAsync(items, cancellationToken).ConfigureAwait(false);
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task AddAutoTestImportRecordAsync(AutoTestImportDataRecord record, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.InsertAsync(record, cancellationToken).ConfigureAwait(false);
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task UpdateTaskRecordsAsync(List<AutoTestTaskRecord> records, bool forceSave = true, CancellationToken cancellationToken = default)
     {
         await _repository.UpdateAllAsync(records, cancellationToken).ConfigureAwait(false);
@@ -66,7 +84,7 @@ public partial class AutoTestDataProvider
     public async Task<(int Count, List<AutoTestTaskRecord> Records)> GetAutoTestTaskRecordsAsync(
         int taskId, int? pageIndex = null, int? pageSize = null, CancellationToken cancellationToken = default)
     {
-        var query = _repository.QueryNoTracking<AutoTestTaskRecord>(x => x.Id == taskId);
+        var query = _repository.QueryNoTracking<AutoTestTaskRecord>(x => x.TestTaskId == taskId);
         
         var count = await query.CountAsync(cancellationToken).ConfigureAwait(false);
 
