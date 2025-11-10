@@ -39,7 +39,7 @@ public partial class AutoTestService
         
         await _autoTestDataProvider.AddAutoTestImportRecordAsync(importRecord, true, cancellationToken).ConfigureAwait(false);
         
-        await _autoTestDataImportHandlerSwitcher.GetHandler(command.ImportType).ImportAsync(command.ImportData, dataSet.Id, command.AssistandId, command.AgentId, cancellationToken).ConfigureAwait(false);
+        await _autoTestDataImportHandlerSwitcher.GetHandler(command.ImportType).ImportAsync(command.ImportData, dataSet.Id, cancellationToken).ConfigureAwait(false);
 
         return new AutoTestImportDataResponse()
         {

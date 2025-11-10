@@ -13,10 +13,6 @@ public class AutoTestImportDataCommand : ICommand
     
     public string KeyName { get; set; }
     
-    public int AssistandId { get; set; }
-    
-    public int AgentId { get; set; }
-    
     public AutoTestImportDataRecordType ImportType { get; set; }
 }
 
