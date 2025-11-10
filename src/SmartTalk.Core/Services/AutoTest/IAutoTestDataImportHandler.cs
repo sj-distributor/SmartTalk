@@ -61,15 +61,15 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
         // 4. 方法返回的是matchedItems
         // 5. 统一add matchedItems 以及add 到set中
         
-        var importRecord = new AutoTestImportDataRecord 
-        { 
-            ScenarioId = scenarioId, 
-            Type = AutoTestImportDataRecordType.Api, 
-            Status = AutoTestStatus.Running, 
-            OpConfig = JsonSerializer.Serialize(import), 
-            CreatedAt = DateTimeOffset.Now 
-        }; 
-        await _autoTestDataProvider.AddAutoTestImportRecordAsync(importRecord, true, cancellationToken).ConfigureAwait(false);
+        // var importRecord = new AutoTestImportDataRecord 
+        // { 
+        //     ScenarioId = scenarioId, 
+        //     Type = AutoTestImportDataRecordType.Api, 
+        //     Status = AutoTestStatus.Running, 
+        //     OpConfig = JsonSerializer.Serialize(import), 
+        //     CreatedAt = DateTimeOffset.Now 
+        // }; 
+        // await _autoTestDataProvider.AddAutoTestImportRecordAsync(importRecord, true, cancellationToken).ConfigureAwait(false);
         
         try 
         { 
@@ -173,6 +173,8 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
 
             var inputJsonDto = new AutoTestInputJsonDto
             {
+                // agentId
+                // assistantId
                 Recording = record.Recording?.Uri ?? "",
                 OrderId = oneOrderGroup.Key,
                 CustomerId = customerId,
