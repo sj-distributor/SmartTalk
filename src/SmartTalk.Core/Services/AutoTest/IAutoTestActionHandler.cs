@@ -1,5 +1,7 @@
+using Newtonsoft.Json;
 using SmartTalk.Core.Domain.AutoTest;
 using SmartTalk.Core.Ioc;
+using SmartTalk.Messages.Dto.AutoTest;
 using SmartTalk.Messages.Enums.AutoTest;
 
 namespace SmartTalk.Core.Services.AutoTest;
@@ -8,20 +10,39 @@ public interface IAutoTestActionHandler : IScopedDependency
 {
     AutoTestActionType ActionType { get; }
     
-    Task<string> ActionHandleAsync(AutoTestScenario scenario, int taskId, CancellationToken cancellationToken = default);
+    Task ActionHandleAsync(AutoTestScenario scenario, int taskId, CancellationToken cancellationToken = default);
 }
 
-public class WebhookAutoTestHandler : IAutoTestActionHandler
+public class ApiAutoTestHandler : IAutoTestActionHandler
 {
     // API
     public AutoTestActionType ActionType => AutoTestActionType.Api;
     
     // SalesOrder scenario
+    public string ScenarioName => "AiOrder";
     
-    public async Task<string> ActionHandleAsync(AutoTestScenario scenario, int taskId, CancellationToken cancellationToken = default)
+    private readonly IAutoTestDataProvider _autoTestDataProvider;
+    
+    public ApiAutoTestHandler(IAutoTestDataProvider autoTestDataProvider)
     {
-        // 1. 判断scenario的ActionConfig是否为空
-        // 2. 根据ActionConfig去执行（提取url、headers、http_method、body字段）
-        return await Task.FromResult("");
+        _autoTestDataProvider = autoTestDataProvider;
+    }
+    
+    public async Task ActionHandleAsync(AutoTestScenario scenario, int taskId, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(scenario.ActionConfig)) throw new Exception("ActionConfig is empty");
+        
+        var actionConfig = JsonConvert.DeserializeObject<AutoTestSalesOrderActionConfigDto>(scenario.ActionConfig);
+        
+        var taskRecords = await _autoTestDataProvider.GetStatusTaskRecordsByTaskIdAsync(taskId, AutoTestTaskRecordStatus.Pending, cancellationToken).ConfigureAwait(false);
+        
+        foreach (var record in taskRecords)
+        {
+            record.Status = AutoTestTaskRecordStatus.Ongoing;
+            
+            await _autoTestDataProvider.UpdateTaskRecordsAsync(taskRecords, cancellationToken: cancellationToken).ConfigureAwait(false);
+            
+            // TODO: 执行API请求
+        }
     }
 }

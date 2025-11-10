@@ -119,13 +119,6 @@ public partial class AutoTestService
         }
         
         var (dataItemCount, recordDoneCount) = await _autoTestDataProvider.GetDoneTaskRecordCountAsync(task.DataSetId, task.Id, cancellationToken).ConfigureAwait(false);
-
-        if (dataItemCount == recordDoneCount)
-        {
-            task.FinishedAt = DateTimeOffset.Now; 
-            task.Status = AutoTestTaskStatus.Done;
-            await _autoTestDataProvider.UpdateAutoTestTaskAsync(task, cancellationToken: cancellationToken).ConfigureAwait(false); 
-        }
         
         return (dataItemCount, recordDoneCount);
     }
