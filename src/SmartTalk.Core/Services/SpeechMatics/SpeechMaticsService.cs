@@ -176,6 +176,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
 
         ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
+        Log.Information("sales record analyze report:" + completion.Content.FirstOrDefault()?.Text);
       
         record.Status = PhoneOrderRecordStatus.Sent;
         record.TranscriptionText = completion.Content.FirstOrDefault()?.Text ?? "";
