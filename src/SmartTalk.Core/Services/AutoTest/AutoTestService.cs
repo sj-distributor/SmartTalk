@@ -35,7 +35,7 @@ public partial class AutoTestService : IAutoTestService
         
         if (scenario == null) throw new Exception("Scenario not found");
         
-        await _autoTestActionHandlerSwitcher.GetHandler(scenario.ActionType).ActionHandleAsync(scenario, command.TaskId, cancellationToken).ConfigureAwait(false);
+        await _autoTestActionHandlerSwitcher.GetHandler(scenario.ActionType, scenario.KeyName).ActionHandleAsync(scenario, command.TaskId, cancellationToken).ConfigureAwait(false);
         
         return new AutoTestRunningResponse();
     }

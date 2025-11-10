@@ -10,15 +10,15 @@ public interface IAutoTestActionHandler : IScopedDependency
 {
     AutoTestActionType ActionType { get; }
     
+    public string ScenarioName => "";
+    
     Task ActionHandleAsync(AutoTestScenario scenario, int taskId, CancellationToken cancellationToken = default);
 }
 
 public class ApiAutoTestHandler : IAutoTestActionHandler
 {
-    // API
     public AutoTestActionType ActionType => AutoTestActionType.Api;
     
-    // SalesOrder scenario
     public string ScenarioName => "AiOrder";
     
     private readonly IAutoTestDataProvider _autoTestDataProvider;
