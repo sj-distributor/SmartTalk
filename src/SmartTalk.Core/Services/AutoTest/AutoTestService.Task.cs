@@ -1,4 +1,5 @@
 using System.Net;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Serilog;
 using SmartTalk.Core.Domain.AutoTest;
@@ -175,13 +176,11 @@ public partial class AutoTestService
     {
         var (task, dataset) = await _autoTestDataProvider.GetAutoTestTaskInfoByIdAsync(taskId, cancellationToken).ConfigureAwait(false);
         
-        var taskParams = JObject.Parse(task.Params);
+        var taskParams = JsonConvert.DeserializeObject<AutoTestTaskParamsDto>(task.Params);
         
-        var assistantId = taskParams["assistantId"]?.Value<int>();
+        Log.Information("Get task params: {AssistantId}", taskParams);
         
-        Log.Information("Get the assistantId from task params: {AssistantId}", assistantId);
-        
-        var assistant = assistantId.HasValue ? await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByIdAsync(assistantId.Value, cancellationToken).ConfigureAwait(false) : null;
+        var assistant = taskParams != null && taskParams.AssistantId != 0 ? await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByIdAsync(taskParams.AssistantId, cancellationToken).ConfigureAwait(false) : null;
 
         Log.Information("Source assistant for executing the current task: {@Assistant}", assistant);
         

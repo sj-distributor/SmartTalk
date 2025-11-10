@@ -100,9 +100,9 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
         
         if (task == null) throw new Exception($"Could not find task with id: {record.TestTaskId}!");
         
-        var taskParams = JObject.Parse(task.Params);
+        var taskParams = JsonConvert.DeserializeObject<AutoTestTaskParamsDto>(task.Params);
 
-        var prompt = await BuildConversationPromptAsync(taskParams["assistantId"]?.Value<int>() ?? 0, cancellationToken).ConfigureAwait(false);
+        var prompt = await BuildConversationPromptAsync(taskParams.AssistantId, cancellationToken).ConfigureAwait(false);
         
         var conversationAudios = await ProcessAudioConversationAsync(customerAudios, prompt, cancellationToken).ConfigureAwait(false);
         
