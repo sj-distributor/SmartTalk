@@ -132,7 +132,7 @@ public partial class AutoTestService
 
     private async Task UpdateTaskRecordsStatusAsync(int testTaskId, AutoTestTaskRecordStatus status, CancellationToken cancellationToken)
     {
-        var records = await _autoTestDataProvider.GetPendingTaskRecordsByTaskIdAsync(testTaskId, cancellationToken).ConfigureAwait(false);
+        var records = await _autoTestDataProvider.GetStatusTaskRecordsByTaskIdAsync(testTaskId, AutoTestTaskRecordStatus.Pending, cancellationToken).ConfigureAwait(false);
 
         records.ForEach(x => x.Status = status);
         

@@ -12,7 +12,7 @@ public partial interface IAutoTestDataProvider
     
     Task<AutoTestTaskRecord> GetTestTaskRecordsByIdAsync(int id, CancellationToken cancellationToken);
     
-    Task<List<AutoTestTaskRecord>> GetPendingTaskRecordsByTaskIdAsync(int taskId, CancellationToken cancellationToken);
+    Task<List<AutoTestTaskRecord>> GetStatusTaskRecordsByTaskIdAsync(int taskId, AutoTestTaskRecordStatus status, CancellationToken cancellationToken);
     
     Task UpdateTaskRecordsAsync(List<AutoTestTaskRecord> records, bool forceSave = true, CancellationToken cancellationToken = default);
     
@@ -44,9 +44,9 @@ public partial class AutoTestDataProvider
         return await _repository.GetByIdAsync<AutoTestTaskRecord>(id, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<AutoTestTaskRecord>> GetPendingTaskRecordsByTaskIdAsync(int taskId, CancellationToken cancellationToken)
+    public async Task<List<AutoTestTaskRecord>> GetStatusTaskRecordsByTaskIdAsync(int taskId, AutoTestTaskRecordStatus status,  CancellationToken cancellationToken)
     {
-        return await _repository.Query<AutoTestTaskRecord>().Where(x => x.TestTaskId == taskId && x.Status == AutoTestTaskRecordStatus.Pending).ToListAsync(cancellationToken).ConfigureAwait(false);
+        return await _repository.Query<AutoTestTaskRecord>().Where(x => x.TestTaskId == taskId && x.Status == status).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
     
     public async Task<AutoTestTaskRecord> GetAutoTestTaskRecordBySpeechMaticsJobIdAsync(string speechMaticsJobId, CancellationToken cancellationToken = default)
