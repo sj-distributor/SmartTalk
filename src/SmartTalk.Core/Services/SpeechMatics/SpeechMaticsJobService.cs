@@ -70,12 +70,18 @@ public class SpeechMaticsJobService : ISpeechMaticsJobService
     {
         try
         {
-            Log.Information("Refreshing cache for soldToId: {SoldToId}", soldToId);
+            var ids = soldToId.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()).ToList();
+            Log.Information("Refreshing cache for soldToId: {SoldToId}", ids);
 
-            var itemsString = await _aiSpeechAssistantService.BuildCustomerItemsStringAsync(new List<string> { soldToId }, cancellationToken);
-            Log.Information("Customer items result: {ItemsString}", itemsString);
-            
-            await _aiSpeechAssistantDataProvider.UpsertCustomerItemsCacheAsync(soldToId, itemsString, true, cancellationToken).ConfigureAwait(false);
+            var allItems = new List<string>();
+            foreach (var id in ids)
+            {
+                var items = await _aiSpeechAssistantService.BuildCustomerItemsStringAsync(new List<string> { id }, cancellationToken).ConfigureAwait(false);
+                allItems.Add(items);
+            }
+
+            var combinedItems = string.Join(";", allItems);
+            await _aiSpeechAssistantDataProvider.UpsertCustomerItemsCacheAsync(soldToId, combinedItems, true, cancellationToken).ConfigureAwait(false);
 
             Log.Information("Cache refreshed successfully for soldToId: {SoldToId}", soldToId);
         }
