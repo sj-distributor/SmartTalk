@@ -79,7 +79,8 @@ public partial class AutoTestService : IAutoTestService
         };
     }
 
-    private async Task<byte[]> ProcessAudioConversationAsync(List<byte[]> customerMp3List, string prompt, CancellationToken cancellationToken)
+    private async Task<byte[]> ProcessAudioConversationAsync(List<byte[]> customerMp3List, string prompt,
+        CancellationToken cancellationToken)
     {
         if (customerMp3List == null || customerMp3List.Count == 0)
             throw new ArgumentException("没有音频输入");
@@ -93,47 +94,74 @@ public partial class AutoTestService : IAutoTestService
         var options = new ChatCompletionOptions
         {
             ResponseModalities = ChatResponseModalities.Text | ChatResponseModalities.Audio,
-            AudioOptions = new ChatAudioOptions(ChatOutputAudioVoice.Alloy, ChatOutputAudioFormat.Mp3)
+            AudioOptions = new ChatAudioOptions(ChatOutputAudioVoice.Alloy, ChatOutputAudioFormat.Wav)
         };
 
-        var allAudioSegments = new List<byte[]>();
+        var allWavSegments = new List<byte[]>();
 
         foreach (var userMp3 in customerMp3List)
         {
             if (userMp3 == null || userMp3.Length == 0)
                 continue;
 
-            allAudioSegments.Add(userMp3);
+            byte[] wavBytes;
+            using (var mp3Stream = new MemoryStream(userMp3))
+            using (var reader = new Mp3FileReader(mp3Stream))
+            using (var msWav = new MemoryStream())
+            {
+                WaveFileWriter.WriteWavFileToStream(msWav, reader);
+                wavBytes = msWav.ToArray();
+            }
 
-            conversationHistory.Add(new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(BinaryData.FromBytes(userMp3), ChatInputAudioFormat.Mp3)));
+            allWavSegments.Add(wavBytes);
+
+            conversationHistory.Add(new UserChatMessage(
+                ChatMessageContentPart.CreateInputAudioPart(BinaryData.FromBytes(wavBytes), ChatInputAudioFormat.Wav)
+            ));
 
             var completion = await client.CompleteChatAsync(conversationHistory, options, cancellationToken);
-            var aiMp3 = completion.Value.OutputAudio.AudioBytes.ToArray();
 
-            allAudioSegments.Add(aiMp3);
+            var aiWav = completion.Value.OutputAudio.AudioBytes.ToArray();
+
+            allWavSegments.Add(aiWav);
 
             conversationHistory.Add(new AssistantChatMessage(completion.Value.OutputAudio.Transcript));
         }
 
-        return MergeMp3Segments(allAudioSegments);
+        return MergeWavSegments(allWavSegments);
     }
-    
-    private byte[] MergeMp3Segments(List<byte[]> mp3Segments)
+
+    private byte[] MergeWavSegments(List<byte[]> wavSegments)
     {
-        if (mp3Segments == null || mp3Segments.Count == 0)
+        if (wavSegments == null || wavSegments.Count == 0)
             throw new ArgumentException("没有音频输入");
 
-        using var finalStream = new MemoryStream();
+        using var outputStream = new MemoryStream();
+        WaveFileWriter? writer = null;
 
-        foreach (var segment in mp3Segments)
+        foreach (var wavBytes in wavSegments)
         {
-            if (segment == null || segment.Length == 0)
+            if (wavBytes == null || wavBytes.Length == 0)
                 continue;
 
-            finalStream.Write(segment, 0, segment.Length);
+            using var ms = new MemoryStream(wavBytes);
+            using var reader = new WaveFileReader(ms);
+
+            if (writer == null)
+            {
+                writer = new WaveFileWriter(outputStream, reader.WaveFormat);
+            }
+
+            var buffer = new byte[reader.WaveFormat.AverageBytesPerSecond];
+            int bytesRead;
+            while ((bytesRead = reader.Read(buffer, 0, buffer.Length)) > 0)
+            {
+                writer.Write(buffer, 0, bytesRead);
+            }
         }
 
-        return finalStream.ToArray();
+        writer?.Flush();
+        return outputStream.ToArray();
     }
 
     public async Task<GetAutoTestDataSetResponse> GetAutoTestDataSetsAsync(GetAutoTestDataSetRequest request, CancellationToken cancellationToken)
