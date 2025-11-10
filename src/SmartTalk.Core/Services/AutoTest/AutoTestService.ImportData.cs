@@ -13,8 +13,12 @@ public partial class AutoTestService
 {
     public async Task<AutoTestImportDataResponse> AutoTestImportDataAsync(AutoTestImportDataCommand command, CancellationToken cancellationToken)
     {
+        // set
+        
+        // job
         await _autoTestDataImportHandlerSwitcher.GetHandler(command.ImportType).ImportAsync(command.ImportData, cancellationToken).ConfigureAwait(false);
         
+        // set
         return new AutoTestImportDataResponse();
     }
 }
