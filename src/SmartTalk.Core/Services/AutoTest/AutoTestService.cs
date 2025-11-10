@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using AutoMapper;
 using NAudio.Wave;
 using NAudio.Lame;
@@ -61,12 +62,9 @@ public partial class AutoTestService : IAutoTestService
         };
     }
 
-    private async Task<byte[]> ProcessAudioConversationAsync(
-        List<byte[]> customerWav8kList,
-        string prompt,
-        CancellationToken cancellationToken)
+    private async Task<byte[]> ProcessAudioConversationAsync(List<byte[]> customerMp3List, string prompt, CancellationToken cancellationToken)
     {
-        if (customerWav8kList == null || customerWav8kList.Count == 0)
+        if (customerMp3List == null || customerMp3List.Count == 0)
             throw new ArgumentException("没有音频输入");
 
         var conversationHistory = new List<ChatMessage>
@@ -83,30 +81,23 @@ public partial class AutoTestService : IAutoTestService
 
         var allAudioSegments = new List<byte[]>();
 
-        foreach (var wavBytes in customerWav8kList)
+        foreach (var userMp3 in customerMp3List)
         {
-            if (wavBytes == null || wavBytes.Length == 0)
+            if (userMp3 == null || userMp3.Length == 0)
                 continue;
 
-            // Step 1: 转成 16kHz MP3
-            var mp316kBytes = ConvertWav8kToMp3_16k(wavBytes);
-            allAudioSegments.Add(mp316kBytes);
+            allAudioSegments.Add(userMp3);
 
-            // Step 2: 发送给 Chat
-            conversationHistory.Add(new UserChatMessage(
-                ChatMessageContentPart.CreateInputAudioPart(BinaryData.FromBytes(mp316kBytes), ChatInputAudioFormat.Mp3)
-            ));
+            conversationHistory.Add(new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(BinaryData.FromBytes(userMp3), ChatInputAudioFormat.Mp3)));
 
             var completion = await client.CompleteChatAsync(conversationHistory, options, cancellationToken);
             var aiMp3 = completion.Value.OutputAudio.AudioBytes.ToArray();
 
             allAudioSegments.Add(aiMp3);
 
-            // 文本记录
             conversationHistory.Add(new AssistantChatMessage(completion.Value.OutputAudio.Transcript));
         }
 
-        // Step 3: 拼接所有 MP3
         return MergeMp3Segments(allAudioSegments);
     }
 
@@ -135,8 +126,7 @@ public partial class AutoTestService : IAutoTestService
 
         return mp3Stream.ToArray();
     }
-
-// ---------------- MP3 拼接 ----------------
+    
     private byte[] MergeMp3Segments(List<byte[]> mp3Segments)
     {
         if (mp3Segments == null || mp3Segments.Count == 0)

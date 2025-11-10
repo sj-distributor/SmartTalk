@@ -43,6 +43,9 @@ public class AutoTestController : ControllerBase
     [Route("conversation"), HttpPost]
     public async Task<IActionResult> AutoTestConversationAudioProcessAsync([FromForm] List<IFormFile> mp3Files, [FromForm] string prompt, CancellationToken cancellationToken)
     {
+        if (mp3Files == null || mp3Files.Count == 0)
+            return BadRequest("没有上传音频文件");
+
         var customerMp3List = new List<byte[]>();
 
         foreach (var file in mp3Files)
@@ -52,12 +55,11 @@ public class AutoTestController : ControllerBase
             customerMp3List.Add(ms.ToArray());
         }
 
-        var result = await _autoTestService.AutoTestConversationAudioProcessAsync(
-            new AutoTestConversationAudioProcessCommand
-            {
-                CustomerAudioList = customerMp3List,
-                Prompt = prompt
-            }, cancellationToken).ConfigureAwait(false);
+        var result = await _autoTestService.AutoTestConversationAudioProcessAsync(new AutoTestConversationAudioProcessCommand
+        {
+            CustomerAudioList = customerMp3List,
+            Prompt = prompt
+        }, cancellationToken).ConfigureAwait(false);
 
         return File(result.Data, "audio/mpeg", "conversation.mp3");
     }
