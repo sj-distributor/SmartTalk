@@ -14,7 +14,7 @@ public interface IAutoTestDataImportHandler : IScopedDependency
 {
     AutoTestImportDataRecordType ImportType { get; }
     
-    Task ImportAsync(Dictionary<string, object> import, int scenarioId, int dataSetId, int agentId, int assistantId, CancellationToken cancellationToken = default); 
+    Task ImportAsync(Dictionary<string, object> import, CancellationToken cancellationToken = default); 
 }
 
 public class ExcelDataImportHandler : IAutoTestDataImportHandler
@@ -52,8 +52,14 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
         var customerId = import["CustomerId"].ToString(); 
         var startDate = (DateTime)import["StartDate"]; 
         var endDate = (DateTime)import["EndDate"]; 
-        var scenarioId = Convert.ToInt32(import["ScenarioId"]);
-        var promptText = import.ContainsKey("PromptText") ? import["PromptText"]?.ToString():"";
+        var scenarioId = Convert.ToInt32(import["ScenarioId"]); // 这里变成参数
+        // var promptText = import.ContainsKey("PromptText") ? import["PromptText"]?.ToString():"";
+        
+        // 1. 获取AutoTestScenario通过scenarioId
+        // 2. 如果没有就直接return
+        // 3. 目前理论只有AiOrder，然后专门有个方法是处理这个场景的
+        // 4. 方法返回的是matchedItems
+        // 5. 统一add matchedItems 以及add 到set中
         
         var importRecord = new AutoTestImportDataRecord 
         { 
@@ -123,13 +129,14 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
             }
             
             var tasks = singleCallNumbers.Select(phone => allRecords.First(r => (r.From?.PhoneNumber ?? r.To?.PhoneNumber) == phone))
-                .Select(record => MatchOrderAndRecordingAsync(customerId, record, scenarioId, importRecord.Id, promptText, cancellationToken)).ToList();
+                .Select(record => MatchOrderAndRecordingAsync(customerId, record, scenarioId, importRecord.Id, cancellationToken)).ToList();
             
             var matchedItems = (await Task.WhenAll(tasks)).Where(x => x != null).ToList()!;
             
             if (matchedItems.Any()) 
             { 
                 await _autoTestDataProvider.AddAutoTestDataItemsAsync(matchedItems, true, cancellationToken).ConfigureAwait(false); 
+                // add itemset 关联表
             }
             
             importRecord.Status = AutoTestStatus.Done; 
@@ -143,7 +150,7 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
         } 
     }
     
-    private async Task<AutoTestDataItem> MatchOrderAndRecordingAsync(string customerId, RingCentralRecordDto record, int scenarioId, int importRecordId, string promptText, CancellationToken cancellationToken)
+    private async Task<AutoTestDataItem> MatchOrderAndRecordingAsync(string customerId, RingCentralRecordDto record, int scenarioId, int importRecordId, CancellationToken cancellationToken)
     {
         try
         {
@@ -169,7 +176,6 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
                 Recording = record.Recording?.Uri ?? "",
                 OrderId = oneOrderGroup.Key,
                 CustomerId = customerId,
-                PromptText = promptText,
                 Detail = oneOrderGroup.Select((i, index) => new AutoTestInputDetail
                 {
                     SerialNumber = index + 1,
