@@ -149,6 +149,8 @@ public class SpeechMaticsService : ISpeechMaticsService
         
         var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
+        var callSubjectCn = "通话主题:";
+        var callSubjectEn = "Conversation topic:";
 
         ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
 
@@ -163,7 +165,10 @@ public class SpeechMaticsService : ISpeechMaticsService
                   "內容摘要:xxx \n\n " +
                   "客人情感與情緒: xxx \n\n " +
                   "待辦事件: \n1.xxx\n2.xxx \n\n 客人下單內容(如果沒有則忽略)：1. 牛肉(1箱)\n2.雞腿肉(1箱)".Replace("#{call_from}", callFrom ?? "")
-                : aiSpeechAssistant.CustomRecordAnalyzePrompt.Replace("#{call_from}", callFrom ?? "").Replace("#{current_time}", currentTime)),
+                : aiSpeechAssistant.CustomRecordAnalyzePrompt.Replace("#{call_from}", callFrom ?? "")
+                    .Replace("#{current_time}", currentTime)
+                    .Replace("#{call_subject_cn}", callSubjectCn)
+                    .Replace("#{call_subject_us}", callSubjectEn)),
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
             new UserChatMessage("幫我根據錄音生成分析報告：")
         ];
@@ -178,13 +183,6 @@ public class SpeechMaticsService : ISpeechMaticsService
         var scenarioInformation = await IdentifyDialogueScenariosAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
         record.Scenario = scenarioInformation.Category;
         record.Remark = scenarioInformation.Remark;
-
-        if (!string.IsNullOrEmpty(aiSpeechAssistant?.CustomRecordAnalyzePrompt))
-        {
-            var scenarioText = $"\n\n【通話場景分類】：{record.Scenario}" + (!string.IsNullOrEmpty(record.Remark) ? $"\n【备注】：{record.Remark}" : "");
-
-            record.TranscriptionText += scenarioText;
-        }
 
         var detection = await _translationClient.DetectLanguageAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
 
