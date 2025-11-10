@@ -14,7 +14,7 @@ public interface IAutoTestDataImportHandler : IScopedDependency
 {
     AutoTestImportDataRecordType ImportType { get; }
     
-    Task ImportAsync(Dictionary<string, object> import, CancellationToken cancellationToken = default); 
+    Task ImportAsync(Dictionary<string, object> import, int scenarioId, int dataSetId, CancellationToken cancellationToken = default); 
 }
 
 public class ExcelDataImportHandler : IAutoTestDataImportHandler
