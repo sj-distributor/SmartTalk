@@ -2,6 +2,8 @@ using AutoMapper;
 using Newtonsoft.Json;
 using SmartTalk.Core.Domain.AutoTest;
 using NAudio.Wave;
+using NAudio.Lame;
+using OpenAI.Audio;
 using OpenAI.Chat;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Settings.OpenAi;
@@ -75,9 +77,12 @@ public partial class AutoTestService : IAutoTestService
         };
     }
 
-    private async Task<byte[]> ProcessAudioConversationAsync(List<byte[]> customerPcmList, string prompt, CancellationToken cancellationToken)
+    private async Task<byte[]> ProcessAudioConversationAsync(
+        List<byte[]> customerWav8kList,
+        string prompt,
+        CancellationToken cancellationToken)
     {
-        if (customerPcmList == null || customerPcmList.Count == 0)
+        if (customerWav8kList == null || customerWav8kList.Count == 0)
             throw new ArgumentException("没有音频输入");
 
         var conversationHistory = new List<ChatMessage>
@@ -86,49 +91,84 @@ public partial class AutoTestService : IAutoTestService
         };
 
         var client = new ChatClient("gpt-4o-audio-preview", _openAiSettings.ApiKey);
-
         var options = new ChatCompletionOptions
         {
             ResponseModalities = ChatResponseModalities.Text | ChatResponseModalities.Audio,
-            AudioOptions = new ChatAudioOptions(ChatOutputAudioVoice.Alloy, ChatOutputAudioFormat.Pcm16)
+            AudioOptions = new ChatAudioOptions(ChatOutputAudioVoice.Alloy, ChatOutputAudioFormat.Mp3)
         };
 
-        using var combinedStream = new MemoryStream();
+        var allAudioSegments = new List<byte[]>();
 
-        foreach (var userPcm in customerPcmList)
+        foreach (var wavBytes in customerWav8kList)
         {
-            if (userPcm == null || userPcm.Length == 0) continue;
+            if (wavBytes == null || wavBytes.Length == 0)
+                continue;
 
-            combinedStream.Write(userPcm, 0, userPcm.Length);
+            // Step 1: 转成 16kHz MP3
+            var mp316kBytes = ConvertWav8kToMp3_16k(wavBytes);
+            allAudioSegments.Add(mp316kBytes);
 
-            var userWav = PcmToWav(userPcm, 16000, 16, 1);
-
+            // Step 2: 发送给 Chat
             conversationHistory.Add(new UserChatMessage(
-                ChatMessageContentPart.CreateInputAudioPart(BinaryData.FromBytes(userWav), ChatInputAudioFormat.Wav)
+                ChatMessageContentPart.CreateInputAudioPart(BinaryData.FromBytes(mp316kBytes), ChatInputAudioFormat.Mp3)
             ));
 
             var completion = await client.CompleteChatAsync(conversationHistory, options, cancellationToken);
-            var aiPcm = completion.Value.OutputAudio.AudioBytes.ToArray();
+            var aiMp3 = completion.Value.OutputAudio.AudioBytes.ToArray();
 
-            combinedStream.Write(aiPcm, 0, aiPcm.Length);
+            allAudioSegments.Add(aiMp3);
 
+            // 文本记录
             conversationHistory.Add(new AssistantChatMessage(completion.Value.OutputAudio.Transcript));
         }
 
-        return combinedStream.ToArray();
+        // Step 3: 拼接所有 MP3
+        return MergeMp3Segments(allAudioSegments);
     }
 
-
-    private static byte[] PcmToWav(byte[] pcmData, int sampleRate, int bitsPerSample, int channels)
+// ---------------- 8kHz WAV -> 16kHz MP3 ----------------
+    private byte[] ConvertWav8kToMp3_16k(byte[] wavBytes)
     {
-        using var ms = new MemoryStream();
-        var waveFormat = new WaveFormat(sampleRate, bitsPerSample, channels);
-        using (var writer = new WaveFileWriter(ms, waveFormat))
+        using var wavStream = new MemoryStream(wavBytes);
+        using var reader = new WaveFileReader(wavStream);
+
+        var outFormat = new WaveFormat(16000, 16, 1);
+        using var resampler = new MediaFoundationResampler(reader, outFormat)
         {
-            writer.Write(pcmData, 0, pcmData.Length);
-            writer.Flush();
+            ResamplerQuality = 60
+        };
+
+        using var mp3Stream = new MemoryStream();
+        using (var mp3Writer = new LameMP3FileWriter(mp3Stream, resampler.WaveFormat, LAMEPreset.STANDARD))
+        {
+            var buffer = new byte[resampler.WaveFormat.AverageBytesPerSecond];
+            int read;
+            while ((read = resampler.Read(buffer, 0, buffer.Length)) > 0)
+            {
+                mp3Writer.Write(buffer, 0, read);
+            }
         }
-        return ms.ToArray();
+
+        return mp3Stream.ToArray();
+    }
+
+// ---------------- MP3 拼接 ----------------
+    private byte[] MergeMp3Segments(List<byte[]> mp3Segments)
+    {
+        if (mp3Segments == null || mp3Segments.Count == 0)
+            throw new ArgumentException("没有音频输入");
+
+        using var finalStream = new MemoryStream();
+
+        foreach (var segment in mp3Segments)
+        {
+            if (segment == null || segment.Length == 0)
+                continue;
+
+            finalStream.Write(segment, 0, segment.Length);
+        }
+
+        return finalStream.ToArray();
     }
 
     public async Task<GetAutoTestDataSetResponse> GetAutoTestDataSetsAsync(GetAutoTestDataSetRequest request, CancellationToken cancellationToken)
