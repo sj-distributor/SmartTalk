@@ -295,7 +295,7 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
         {
             var taskRecords = await _autoTestDataProvider.GetAllAutoTestTaskRecordsByTaskIdAsync(task.Id, cancellationToken).ConfigureAwait(false);
 
-            if (taskRecords.All(x => x.Status == AutoTestTaskRecordStatus.Done))
+            if (taskRecords.All(x => x.Status is AutoTestTaskRecordStatus.Done or AutoTestTaskRecordStatus.Failed))
             {
                 task.Status = AutoTestTaskStatus.Done;
                 
