@@ -92,7 +92,11 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
         
         var conversationAudios = await ProcessAudioConversationAsync(customerAudios, promptDesc, cancellationToken).ConfigureAwait(false);
         
-        // record 状态修改
+        // 生成ai订单
+        
+        // 对比订单
+        
+        // record 修改
         
         // 检查总体task 状态（红锁）
     }
