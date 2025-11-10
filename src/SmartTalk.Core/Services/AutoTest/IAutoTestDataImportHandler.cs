@@ -14,7 +14,7 @@ public interface IAutoTestDataImportHandler : IScopedDependency
 {
     AutoTestImportDataRecordType ImportType { get; }
     
-    Task ImportAsync(Dictionary<string, object> import, CancellationToken cancellationToken = default); 
+    Task ImportAsync(Dictionary<string, object> import, int dataSetId, CancellationToken cancellationToken = default); 
 }
 
 public class ExcelDataImportHandler : IAutoTestDataImportHandler
@@ -25,7 +25,7 @@ public class ExcelDataImportHandler : IAutoTestDataImportHandler
     {
     }
 
-    public async Task ImportAsync(Dictionary<string, object> import, CancellationToken cancellationToken)
+    public async Task ImportAsync(Dictionary<string, object> import, int dataSetId, CancellationToken cancellationToken)
     {
         throw new NotImplementedException();
     }
@@ -39,8 +39,7 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
     private readonly IRingCentralClient _ringCentralClient;
     private readonly IAutoTestDataProvider _autoTestDataProvider;
 
-    public ApiDataImportHandler(ISapGatewayClients sapGatewayClient, ICrmClient crmClient,
-        IRingCentralClient ringCentralClient, IAutoTestDataProvider autoTestDataProvider)
+    public ApiDataImportHandler(ISapGatewayClients sapGatewayClient, ICrmClient crmClient, IRingCentralClient ringCentralClient, IAutoTestDataProvider autoTestDataProvider)
     {
         _sapGatewayClient = sapGatewayClient;
         _crmClient = crmClient;
@@ -48,22 +47,29 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
         _autoTestDataProvider = autoTestDataProvider;
     }
     
-    public async Task ImportAsync(Dictionary<string, object> import, CancellationToken cancellationToken) 
+    public async Task ImportAsync(Dictionary<string, object> import, int dataSetId, CancellationToken cancellationToken) 
     { 
         var customerId = import["CustomerId"].ToString(); 
         var startDate = (DateTime)import["StartDate"]; 
         var endDate = (DateTime)import["EndDate"]; 
-        var scenarioId = Convert.ToInt32(import["ScenarioId"]);
+        var scenarioId = Convert.ToInt32(import["ScenarioId"]); // 这里变成参数
+        // var promptText = import.ContainsKey("PromptText") ? import["PromptText"]?.ToString():"";
         
-        var importRecord = new AutoTestImportDataRecord 
-        { 
-            ScenarioId = scenarioId, 
-            Type = AutoTestImportDataRecordType.Api, 
-            Status = AutoTestStatus.Running, 
-            OpConfig = JsonSerializer.Serialize(import), 
-            CreatedAt = DateTimeOffset.Now 
-        }; 
-        await _autoTestDataProvider.AddAutoTestImportRecordAsync(importRecord, true, cancellationToken).ConfigureAwait(false);
+        // 1. 获取AutoTestScenario通过scenarioId
+        // 2. 如果没有就直接return
+        // 3. 目前理论只有AiOrder，然后专门有个方法是处理这个场景的
+        // 4. 方法返回的是matchedItems
+        // 5. 统一add matchedItems 以及add 到set中
+        
+        // var importRecord = new AutoTestImportDataRecord 
+        // { 
+        //     ScenarioId = scenarioId, 
+        //     Type = AutoTestImportDataRecordType.Api, 
+        //     Status = AutoTestStatus.Running, 
+        //     OpConfig = JsonSerializer.Serialize(import), 
+        //     CreatedAt = DateTimeOffset.Now 
+        // }; 
+        // await _autoTestDataProvider.AddAutoTestImportRecordAsync(importRecord, true, cancellationToken).ConfigureAwait(false);
         
         try 
         { 
@@ -96,8 +102,7 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
                         PerPage = 200
                     };
 
-                    var resp = await _ringCentralClient.GetRingCentralRecordAsync(rcRequest, token, cancellationToken)
-                        .ConfigureAwait(false);
+                    var resp = await _ringCentralClient.GetRingCentralRecordAsync(rcRequest, token, cancellationToken).ConfigureAwait(false);
 
                     return new { phone, response = resp };
 
@@ -131,6 +136,7 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
             if (matchedItems.Any()) 
             { 
                 await _autoTestDataProvider.AddAutoTestDataItemsAsync(matchedItems, true, cancellationToken).ConfigureAwait(false); 
+                // add itemset 关联表
             }
             
             importRecord.Status = AutoTestStatus.Done; 
@@ -167,6 +173,8 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
 
             var inputJsonDto = new AutoTestInputJsonDto
             {
+                // agentId
+                // assistantId
                 Recording = record.Recording?.Uri ?? "",
                 OrderId = oneOrderGroup.Key,
                 CustomerId = customerId,
@@ -221,7 +229,7 @@ public class DbDataImportHandler : IAutoTestDataImportHandler
     {
     }
     
-    public async Task ImportAsync(Dictionary<string, object> import, CancellationToken cancellationToken)
+    public async Task ImportAsync(Dictionary<string, object> import, int dataSetId, CancellationToken cancellationToken)
     {
         throw new NotImplementedException();
     }
@@ -235,7 +243,7 @@ public class CrawlDataImportHandler : IAutoTestDataImportHandler
     {
     }
     
-    public async Task ImportAsync(Dictionary<string, object> import, CancellationToken cancellationToken)
+    public async Task ImportAsync(Dictionary<string, object> import, int dataSetId, CancellationToken cancellationToken)
     {
         throw new NotImplementedException();
     }
@@ -249,7 +257,7 @@ public class ScriptDataImportHandler : IAutoTestDataImportHandler
     {
     }
     
-    public async Task ImportAsync(Dictionary<string, object> import, CancellationToken cancellationToken)
+    public async Task ImportAsync(Dictionary<string, object> import, int dataSetId, CancellationToken cancellationToken)
     {
         throw new NotImplementedException();
     }
@@ -263,7 +271,7 @@ public class ManualDataImportHandler : IAutoTestDataImportHandler
     {
     }
     
-    public async Task ImportAsync(Dictionary<string, object> import, CancellationToken cancellationToken)
+    public async Task ImportAsync(Dictionary<string, object> import, int dataSetId, CancellationToken cancellationToken)
     {
         throw new NotImplementedException();
     }

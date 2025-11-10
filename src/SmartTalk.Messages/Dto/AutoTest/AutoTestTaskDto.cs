@@ -26,4 +26,7 @@ public class AutoTestTaskDto
     
     [NotMapped]
     public int InProgressCount  { get; set; }
+    
+    [NotMapped]
+    public string DataSetName  { get; set; }
 }
