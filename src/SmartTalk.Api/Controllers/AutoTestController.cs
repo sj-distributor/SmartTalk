@@ -72,7 +72,7 @@ public class AutoTestController : ControllerBase
         return Ok(response);
     }
     
-    [Route("DataSet/records"), HttpGet]
+    [Route("dataSet/records"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAutoTestDataSetResponse))]
     public async Task<IActionResult> GetAutoTestDataSetAsync([FromQuery] GetAutoTestDataSetRequest request)
     {
@@ -81,7 +81,7 @@ public class AutoTestController : ControllerBase
         return Ok(response);
     }
     
-    [Route("DataSet/copy"), HttpPost]
+    [Route("dataSet/copy"), HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(CopyAutoTestDataSetResponse))]
     public async Task<IActionResult> CopyAutoTestDataItemsAsync([FromBody] CopyAutoTestDataSetCommand command)
     {
@@ -90,7 +90,7 @@ public class AutoTestController : ControllerBase
         return Ok(response);
     }
     
-    [Route("DataItem/delete"), HttpPost]
+    [Route("dataItem/delete"), HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(DeleteAutoTestDataSetResponse))]
     public async Task<IActionResult> DeleteAutoTestDataItemAsync([FromBody] DeleteAutoTestDataSetCommand command) 
     {
@@ -99,7 +99,7 @@ public class AutoTestController : ControllerBase
         return Ok(response);
     }
     
-    [Route("DataItem/records"), HttpGet]
+    [Route("dataItem/records"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAutoTestDataItemsByIdResponse))]
     public async Task<IActionResult> GetAutoTestDataItemsByIdAsync([FromQuery] GetAutoTestDataItemsByIdRequest request)
     {
@@ -108,7 +108,7 @@ public class AutoTestController : ControllerBase
         return Ok(response);
     }
     
-    [Route("DataSet/add/quote"), HttpPost]
+    [Route("dataSet/add/quote"), HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(AddAutoTestDataSetByQuoteResponse))]
     public async Task<IActionResult> AddAutoTestDataSetByQuoteAsync([FromBody] AddAutoTestDataSetByQuoteCommand command) 
     {
