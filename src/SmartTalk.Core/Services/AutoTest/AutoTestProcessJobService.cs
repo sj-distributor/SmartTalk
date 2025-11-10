@@ -2,7 +2,6 @@ using System.Text;
 using Microsoft.IdentityModel.Tokens;
 using NAudio.Wave;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using OpenAI.Chat;
 using Serilog;
 using Smarties.Messages.DTO.OpenAi;
