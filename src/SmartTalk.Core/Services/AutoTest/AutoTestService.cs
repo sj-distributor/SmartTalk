@@ -103,7 +103,7 @@ public partial class AutoTestService : IAutoTestService
             CreatedAt = DateTimeOffset.UtcNow
         }).ToList();
         
-        await _autoTestDataProvider.AddAutoTestDataItemsAsync(newTargetItems, cancellationToken).ConfigureAwait(false);
+        await _autoTestDataProvider.AddAutoTestDataSetItemsAsync(newTargetItems, cancellationToken).ConfigureAwait(false);
         
         return new CopyAutoTestDataSetResponse();
     }
@@ -151,7 +151,7 @@ public partial class AutoTestService : IAutoTestService
             CreatedAt = DateTimeOffset.UtcNow
         }).ToList();
         
-        await _autoTestDataProvider.AddAutoTestDataItemsAsync(newDataItems, cancellationToken).ConfigureAwait(false);
+        await _autoTestDataProvider.AddAutoTestDataSetItemsAsync(newDataItems, cancellationToken).ConfigureAwait(false);
 
         return new AddAutoTestDataSetByQuoteResponse();
     }
