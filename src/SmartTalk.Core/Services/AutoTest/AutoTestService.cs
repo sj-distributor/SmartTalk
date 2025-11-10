@@ -2,6 +2,7 @@ using AutoMapper;
 using Newtonsoft.Json;
 using SmartTalk.Core.Domain.AutoTest;
 using SmartTalk.Core.Ioc;
+using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.AutoTest;
 using SmartTalk.Messages.Dto.AutoTest;
@@ -47,17 +48,11 @@ public partial class AutoTestService : IAutoTestService
     {
         var scenario = await _autoTestDataProvider.GetAutoTestScenarioByIdAsync(command.ScenarioId, cancellationToken).ConfigureAwait(false);
         
-        // 判空scenario
+        if (scenario == null) throw new Exception("Scenario not found");
         
-        var taskRecords = await _autoTestDataProvider.GetPendingTaskRecordsByTaskIdAsync(command.TaskId, cancellationToken).ConfigureAwait(false);
+        await _autoTestActionHandlerSwitcher.GetHandler(scenario.ActionType, scenario.KeyName).ActionHandleAsync(scenario, command.TaskId, cancellationToken).ConfigureAwait(false);
         
-        taskRecords.ForEach(x => x.Status = AutoTestTaskRecordStatus.Ongoing);
-        
-        await _autoTestDataProvider.UpdateTaskRecordsAsync(taskRecords, cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        var executionResult = await _autoTestActionHandlerSwitcher.GetHandler(scenario.ActionType).ActionHandleAsync(scenario, command.TaskId, cancellationToken).ConfigureAwait(false);
-        
-        return new AutoTestRunningResponse() { Data = executionResult };
+        return new AutoTestRunningResponse();
     }
 
     public async Task<GetAutoTestDataSetResponse> GetAutoTestDataSetsAsync(GetAutoTestDataSetRequest request, CancellationToken cancellationToken)

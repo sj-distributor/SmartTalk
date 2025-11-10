@@ -14,7 +14,7 @@ public interface IAutoTestDataImportHandler : IScopedDependency
 {
     AutoTestImportDataRecordType ImportType { get; }
     
-    Task ImportAsync(Dictionary<string, object> import, CancellationToken cancellationToken = default); 
+    Task ImportAsync(Dictionary<string, object> import, int dataSetId, CancellationToken cancellationToken = default); 
 }
 
 public class ExcelDataImportHandler : IAutoTestDataImportHandler
@@ -25,7 +25,7 @@ public class ExcelDataImportHandler : IAutoTestDataImportHandler
     {
     }
 
-    public async Task ImportAsync(Dictionary<string, object> import, CancellationToken cancellationToken)
+    public async Task ImportAsync(Dictionary<string, object> import, int dataSetId, CancellationToken cancellationToken)
     {
         throw new NotImplementedException();
     }
@@ -47,7 +47,7 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
         _autoTestDataProvider = autoTestDataProvider;
     }
     
-    public async Task ImportAsync(Dictionary<string, object> import, CancellationToken cancellationToken) 
+    public async Task ImportAsync(Dictionary<string, object> import, int dataSetId, CancellationToken cancellationToken) 
     { 
         var customerId = import["CustomerId"].ToString(); 
         var startDate = (DateTime)import["StartDate"]; 
@@ -229,7 +229,7 @@ public class DbDataImportHandler : IAutoTestDataImportHandler
     {
     }
     
-    public async Task ImportAsync(Dictionary<string, object> import, CancellationToken cancellationToken)
+    public async Task ImportAsync(Dictionary<string, object> import, int dataSetId, CancellationToken cancellationToken)
     {
         throw new NotImplementedException();
     }
@@ -243,7 +243,7 @@ public class CrawlDataImportHandler : IAutoTestDataImportHandler
     {
     }
     
-    public async Task ImportAsync(Dictionary<string, object> import, CancellationToken cancellationToken)
+    public async Task ImportAsync(Dictionary<string, object> import, int dataSetId, CancellationToken cancellationToken)
     {
         throw new NotImplementedException();
     }
@@ -257,7 +257,7 @@ public class ScriptDataImportHandler : IAutoTestDataImportHandler
     {
     }
     
-    public async Task ImportAsync(Dictionary<string, object> import, CancellationToken cancellationToken)
+    public async Task ImportAsync(Dictionary<string, object> import, int dataSetId, CancellationToken cancellationToken)
     {
         throw new NotImplementedException();
     }
@@ -271,7 +271,7 @@ public class ManualDataImportHandler : IAutoTestDataImportHandler
     {
     }
     
-    public async Task ImportAsync(Dictionary<string, object> import, CancellationToken cancellationToken)
+    public async Task ImportAsync(Dictionary<string, object> import, int dataSetId, CancellationToken cancellationToken)
     {
         throw new NotImplementedException();
     }

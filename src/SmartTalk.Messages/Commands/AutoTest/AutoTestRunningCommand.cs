@@ -11,6 +11,6 @@ public class AutoTestRunningCommand : ICommand
     public int ScenarioId { get; set; }
 }
 
-public class AutoTestRunningResponse : SmartTalkResponse<string>
+public class AutoTestRunningResponse : SmartTalkResponse
 {
 }
