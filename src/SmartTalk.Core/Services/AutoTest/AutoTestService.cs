@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using AutoMapper;
 using Newtonsoft.Json;
+using Serilog;
 using SmartTalk.Core.Domain.AutoTest;
 using NAudio.Wave;
 using NAudio.Lame;
@@ -10,6 +11,7 @@ using OpenAI.Chat;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Core.Services.AiSpeechAssistant;
+using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Messages.Commands.AutoTest;
 using SmartTalk.Messages.Dto.AutoTest;
 using SmartTalk.Messages.Requests.AutoTest;
@@ -40,15 +42,17 @@ public partial class AutoTestService : IAutoTestService
     private readonly IMapper _mapper;
     private readonly OpenAiSettings _openAiSettings;
     private readonly IAutoTestDataProvider _autoTestDataProvider;
+    private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
     private readonly IAutoTestActionHandlerSwitcher _autoTestActionHandlerSwitcher;
     private readonly IAutoTestDataImportHandlerSwitcher _autoTestDataImportHandlerSwitcher;
-
-    public AutoTestService(IMapper mapper, OpenAiSettings openAiSettings, IAutoTestDataProvider autoTestDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, IAutoTestActionHandlerSwitcher autoTestActionHandlerSwitcher, IAutoTestDataImportHandlerSwitcher autoTestDataImportHandlerSwitcher)
+    
+    public AutoTestService(IMapper mapper, OpenAiSettings openAiSettings, IAutoTestDataProvider autoTestDataProvider, ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, IAutoTestActionHandlerSwitcher autoTestActionHandlerSwitcher, IAutoTestDataImportHandlerSwitcher autoTestDataImportHandlerSwitcher)
     {
         _mapper = mapper;
         _openAiSettings = openAiSettings;
         _autoTestDataProvider = autoTestDataProvider;
+        _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
         _autoTestActionHandlerSwitcher = autoTestActionHandlerSwitcher;
         _autoTestDataImportHandlerSwitcher = autoTestDataImportHandlerSwitcher;
@@ -56,17 +60,17 @@ public partial class AutoTestService : IAutoTestService
     
     public async Task<AutoTestRunningResponse> AutoTestRunningAsync(AutoTestRunningCommand command, CancellationToken cancellationToken)
     {
+        Log.Warning("AutoTestRunningAsync command:{@command}", command);
+        
         var scenario = await _autoTestDataProvider.GetAutoTestScenarioByIdAsync(command.ScenarioId, cancellationToken).ConfigureAwait(false);
         
-        var taskRecords = await _autoTestDataProvider.GetStatusTaskRecordsByTaskIdAsync(command.TaskId, AutoTestTaskRecordStatus.Pending, cancellationToken).ConfigureAwait(false);
+        if (scenario == null) throw new Exception("Scenario not found");
         
-        taskRecords.ForEach(x => x.Status = AutoTestTaskRecordStatus.Ongoing);
+        Log.Warning("AutoTestRunningAsync scenario:{@scenario}", scenario);
         
-        await _autoTestDataProvider.UpdateTaskRecordsAsync(taskRecords, cancellationToken: cancellationToken).ConfigureAwait(false);
+        await _autoTestActionHandlerSwitcher.GetHandler(scenario.ActionType, scenario.KeyName).ActionHandleAsync(scenario, command.TaskId, cancellationToken).ConfigureAwait(false);
         
-        var executionResult = await _autoTestActionHandlerSwitcher.GetHandler(scenario.ActionType).ActionHandleAsync(scenario, command.TaskId, cancellationToken).ConfigureAwait(false);
-        
-        return new AutoTestRunningResponse() { Data = executionResult };
+        return new AutoTestRunningResponse();
     }
 
     public async Task<AutoTestConversationAudioProcessReponse> AutoTestConversationAudioProcessAsync(AutoTestConversationAudioProcessCommand command, CancellationToken cancellationToken)
@@ -232,7 +236,7 @@ public partial class AutoTestService : IAutoTestService
             CreatedAt = DateTimeOffset.UtcNow
         }).ToList();
         
-        await _autoTestDataProvider.AddAutoTestDataItemsAsync(newTargetItems, cancellationToken).ConfigureAwait(false);
+        await _autoTestDataProvider.AddAutoTestDataSetItemsAsync(newTargetItems, cancellationToken).ConfigureAwait(false);
         
         return new CopyAutoTestDataSetResponse();
     }
@@ -280,7 +284,7 @@ public partial class AutoTestService : IAutoTestService
             CreatedAt = DateTimeOffset.UtcNow
         }).ToList();
         
-        await _autoTestDataProvider.AddAutoTestDataItemsAsync(newDataItems, cancellationToken).ConfigureAwait(false);
+        await _autoTestDataProvider.AddAutoTestDataSetItemsAsync(newDataItems, cancellationToken).ConfigureAwait(false);
 
         return new AddAutoTestDataSetByQuoteResponse();
     }

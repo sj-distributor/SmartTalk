@@ -14,7 +14,7 @@ namespace SmartTalk.Core.Services.AutoTest;
 
 public partial interface IAutoTestDataProvider : IScopedDependency
 {
-    Task AddAutoTestDataItemsAsync(List<AutoTestDataSetItem> setItems, CancellationToken cancellationToken);
+    Task AddAutoTestDataSetItemsAsync(List<AutoTestDataSetItem> setItems, CancellationToken cancellationToken);
     
     Task AddAutoTestDataSetAsync(AutoTestDataSet dataSet, CancellationToken cancellationToken);
 
@@ -50,7 +50,7 @@ public partial class AutoTestDataProvider : IAutoTestDataProvider
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
     }
 
-    public async Task AddAutoTestDataItemsAsync(List<AutoTestDataSetItem> setItems, CancellationToken cancellationToken)
+    public async Task AddAutoTestDataSetItemsAsync(List<AutoTestDataSetItem> setItems, CancellationToken cancellationToken)
     {
         await _repository.InsertAllAsync(setItems, cancellationToken).ConfigureAwait(false);
         await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
