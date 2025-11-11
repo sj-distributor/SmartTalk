@@ -1,4 +1,5 @@
 using Newtonsoft.Json;
+using Serilog;
 using SmartTalk.Core.Domain.AutoTest;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Messages.Dto.AutoTest;
@@ -33,6 +34,8 @@ public class ApiAutoTestHandler : IAutoTestActionHandler
         if (string.IsNullOrWhiteSpace(scenario.ActionConfig)) throw new Exception("ActionConfig is empty");
         
         var actionConfig = JsonConvert.DeserializeObject<AutoTestSalesOrderActionConfigDto>(scenario.ActionConfig);
+        
+        Log.Warning("ApiAutoTestHandler ActionHandleAsync actionConfig:{@actionConfig}", actionConfig);
         
         var taskRecords = await _autoTestDataProvider.GetStatusTaskRecordsByTaskIdAsync(taskId, AutoTestTaskRecordStatus.Pending, cancellationToken).ConfigureAwait(false);
         

@@ -1,5 +1,6 @@
 using AutoMapper;
 using Newtonsoft.Json;
+using Serilog;
 using SmartTalk.Core.Domain.AutoTest;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Agents;
@@ -49,9 +50,13 @@ public partial class AutoTestService : IAutoTestService
     
     public async Task<AutoTestRunningResponse> AutoTestRunningAsync(AutoTestRunningCommand command, CancellationToken cancellationToken)
     {
+        Log.Warning("AutoTestRunningAsync command:{@command}", command);
+        
         var scenario = await _autoTestDataProvider.GetAutoTestScenarioByIdAsync(command.ScenarioId, cancellationToken).ConfigureAwait(false);
         
         if (scenario == null) throw new Exception("Scenario not found");
+        
+        Log.Warning("AutoTestRunningAsync scenario:{@scenario}", scenario);
         
         await _autoTestActionHandlerSwitcher.GetHandler(scenario.ActionType, scenario.KeyName).ActionHandleAsync(scenario, command.TaskId, cancellationToken).ConfigureAwait(false);
         
