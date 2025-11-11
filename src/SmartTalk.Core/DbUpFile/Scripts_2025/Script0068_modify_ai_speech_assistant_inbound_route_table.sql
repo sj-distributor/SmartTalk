@@ -1,1 +1,0 @@
-alter table `ai_speech_assistant` modify column `user_name` tinyint(1) not null default 0;
