@@ -864,6 +864,7 @@ public partial class PhoneOrderService
         {
             AnsweredCallInCount = answeredCount,
             AverageCallInDurationSeconds = averageDuration,
+            CallInAnsweredByHumanCount = transferCount,
             EffectiveCommunicationCallInCount = effectiveCount,
             RepeatCallInRate = repeatRate,
             CallInSatisfactionRate = satisfactionRate,

@@ -37,6 +37,8 @@ public class CallInDataDto
     public int AnsweredCallInCount { get; set; }
     
     public int CountChange { get; set; }
+    
+    public int CallInAnsweredByHumanCount { get; set; }
 
     public double AverageCallInDurationSeconds { get; set; }
 
