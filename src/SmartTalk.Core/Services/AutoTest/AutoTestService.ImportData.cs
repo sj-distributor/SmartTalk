@@ -17,11 +17,20 @@ public partial class AutoTestService
 {
     public async Task<AutoTestImportDataResponse> AutoTestImportDataAsync(AutoTestImportDataCommand command, CancellationToken cancellationToken)
     {
+        if (!command.ImportData.TryGetValue("customerId", out var customerObj)) 
+            throw new Exception($"The imported data is missing customerId, so processing is skipped. command: {command}");
+        
+        var customerId = command.ImportData["CustomerId"].ToString(); 
+        var startDate = (DateTime)command.ImportData["StartDate"]; 
+        var endDate = (DateTime)command.ImportData["EndDate"]; 
+        
+        var keyName = $"{customerId}-{startDate:yyMMdd}-{endDate:yyMMdd}-{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
+        
         var dataSet = new AutoTestDataSet()
         {
             ScenarioId = command.ScenarioId,
-            KeyName = command.KeyName,
-            Name = command.KeyName,
+            KeyName = keyName,
+            Name = keyName,
             IsDelete = false
         };
 
