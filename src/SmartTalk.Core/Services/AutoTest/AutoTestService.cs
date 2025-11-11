@@ -79,8 +79,7 @@ public partial class AutoTestService : IAutoTestService
         };
     }
 
-    private async Task<byte[]> ProcessAudioConversationAsync(List<byte[]> customerMp3List, string prompt,
-        CancellationToken cancellationToken)
+    private async Task<byte[]> ProcessAudioConversationAsync(List<byte[]> customerMp3List, string prompt, CancellationToken cancellationToken)
     {
         if (customerMp3List == null || customerMp3List.Count == 0)
             throw new ArgumentException("没有音频输入");
@@ -97,71 +96,87 @@ public partial class AutoTestService : IAutoTestService
             AudioOptions = new ChatAudioOptions(ChatOutputAudioVoice.Alloy, ChatOutputAudioFormat.Wav)
         };
 
-        var allWavSegments = new List<byte[]>();
+        var wavFiles = new List<string>();
 
-        foreach (var userMp3 in customerMp3List)
+        try
         {
-            if (userMp3 == null || userMp3.Length == 0)
-                continue;
-
-            byte[] wavBytes;
-            using (var mp3Stream = new MemoryStream(userMp3))
-            using (var reader = new Mp3FileReader(mp3Stream))
-            using (var msWav = new MemoryStream())
+            foreach (var userMp3 in customerMp3List)
             {
-                WaveFileWriter.WriteWavFileToStream(msWav, reader);
-                wavBytes = msWav.ToArray();
+                if (userMp3 == null || userMp3.Length == 0)
+                    continue;
+
+                var wavFile = Path.GetTempFileName() + ".wav";
+                ConvertMp3ToWav(userMp3, wavFile);
+                wavFiles.Add(wavFile);
+
+                conversationHistory.Add(new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(BinaryData.FromBytes(File.ReadAllBytes(wavFile)), ChatInputAudioFormat.Wav)));
+
+                var completion = await client.CompleteChatAsync(conversationHistory, options, cancellationToken);
+
+                var aiWavFile = Path.GetTempFileName() + ".wav";
+                await File.WriteAllBytesAsync(aiWavFile, completion.Value.OutputAudio.AudioBytes.ToArray(), cancellationToken);
+                wavFiles.Add(aiWavFile);
+
+                conversationHistory.Add(new AssistantChatMessage(completion.Value.OutputAudio.Transcript));
             }
 
-            allWavSegments.Add(wavBytes);
+            var mergedWavFile = Path.GetTempFileName() + ".wav";
+            MergeWavFiles(wavFiles, mergedWavFile);
 
-            conversationHistory.Add(new UserChatMessage(
-                ChatMessageContentPart.CreateInputAudioPart(BinaryData.FromBytes(wavBytes), ChatInputAudioFormat.Wav)
-            ));
-
-            var completion = await client.CompleteChatAsync(conversationHistory, options, cancellationToken);
-
-            var aiWav = completion.Value.OutputAudio.AudioBytes.ToArray();
-
-            allWavSegments.Add(aiWav);
-
-            conversationHistory.Add(new AssistantChatMessage(completion.Value.OutputAudio.Transcript));
+            return await File.ReadAllBytesAsync(mergedWavFile, cancellationToken);
         }
-
-        return MergeWavSegments(allWavSegments);
+        finally
+        {
+            foreach (var f in wavFiles)
+            {
+                if (File.Exists(f)) File.Delete(f);
+            }
+        }
     }
 
-    private byte[] MergeWavSegments(List<byte[]> wavSegments)
+    private void ConvertMp3ToWav(byte[] mp3Bytes, string outputWavFile)
     {
-        if (wavSegments == null || wavSegments.Count == 0)
-            throw new ArgumentException("没有音频输入");
+        var tempMp3 = Path.GetTempFileName() + ".mp3";
+        File.WriteAllBytes(tempMp3, mp3Bytes);
 
-        using var outputStream = new MemoryStream();
-        WaveFileWriter? writer = null;
-
-        foreach (var wavBytes in wavSegments)
+        var startInfo = new ProcessStartInfo
         {
-            if (wavBytes == null || wavBytes.Length == 0)
-                continue;
+            FileName = "ffmpeg",
+            Arguments = $"-y -i \"{tempMp3}\" \"{outputWavFile}\"",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
 
-            using var ms = new MemoryStream(wavBytes);
-            using var reader = new WaveFileReader(ms);
+        using var process = Process.Start(startInfo)!;
+        process.WaitForExit();
 
-            if (writer == null)
-            {
-                writer = new WaveFileWriter(outputStream, reader.WaveFormat);
-            }
+        File.Delete(tempMp3);
+    }
 
-            var buffer = new byte[reader.WaveFormat.AverageBytesPerSecond];
-            int bytesRead;
-            while ((bytesRead = reader.Read(buffer, 0, buffer.Length)) > 0)
-            {
-                writer.Write(buffer, 0, bytesRead);
-            }
-        }
+    private void MergeWavFiles(List<string> wavFiles, string outputFile)
+    {
+        if (wavFiles.Count == 0)
+            throw new ArgumentException("没有 WAV 文件可合并");
 
-        writer?.Flush();
-        return outputStream.ToArray();
+        var listFile = Path.GetTempFileName();
+        File.WriteAllLines(listFile, wavFiles.Select(f => $"file '{f.Replace("'", "'\\''")}'"));
+
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "ffmpeg",
+            Arguments = $"-y -f concat -safe 0 -i \"{listFile}\" -c copy \"{outputFile}\"",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using var process = Process.Start(startInfo)!;
+        process.WaitForExit();
+
+        File.Delete(listFile);
     }
 
     public async Task<GetAutoTestDataSetResponse> GetAutoTestDataSetsAsync(GetAutoTestDataSetRequest request, CancellationToken cancellationToken)
