@@ -14,7 +14,7 @@ public interface IAutoTestDataImportHandler : IScopedDependency
 {
     AutoTestImportDataRecordType ImportType { get; }
     
-    Task ImportAsync(Dictionary<string, object> import, int scenarioId, int dataSetId, CancellationToken cancellationToken = default); 
+    Task ImportAsync(Dictionary<string, object> import, int scenarioId, int dataSetId, int recordId, CancellationToken cancellationToken = default); 
 }
 
 public class ExcelDataImportHandler : IAutoTestDataImportHandler
@@ -25,7 +25,7 @@ public class ExcelDataImportHandler : IAutoTestDataImportHandler
     {
     }
 
-    public async Task ImportAsync(Dictionary<string, object> import, int scenarioId, int dataSetId, CancellationToken cancellationToken)
+    public async Task ImportAsync(Dictionary<string, object> import, int scenarioId, int dataSetId, int recordId, CancellationToken cancellationToken)
     {
         throw new NotImplementedException();
     }
@@ -47,109 +47,106 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
         _autoTestDataProvider = autoTestDataProvider;
     }
     
-    public async Task ImportAsync(Dictionary<string, object> import, int scenarioId, int dataSetId, CancellationToken cancellationToken) 
+    public async Task ImportAsync(Dictionary<string, object> import, int scenarioId, int dataSetId, int recordId, CancellationToken cancellationToken = default)
     { 
+        var record = await _autoTestDataProvider.GetAutoTestImportDataRecordAsync(recordId, cancellationToken).ConfigureAwait(false);
+        var scenario = await _autoTestDataProvider.GetAutoTestScenarioByIdAsync(scenarioId, cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            List<AutoTestDataItem> matchedItems = null;
+
+            switch (scenario.KeyName)
+            {
+                case "AiOrder":
+                    matchedItems = await HandleAiOrderScenarioAsync(import, scenario, recordId, cancellationToken).ConfigureAwait(false);
+                    break;
+
+                default:
+                    Log.Warning("未知 Scenario KeyName {KeyName}，跳过处理", scenario.KeyName);
+                    break;
+            }
+
+            if (matchedItems == null || !matchedItems.Any())
+            {
+                record.Status = AutoTestStatus.Failed;
+                await _autoTestDataProvider.UpdateAutoTestImportRecordAsync(record, true, cancellationToken).ConfigureAwait(false);
+                Log.Information("Scenario {ScenarioId} 没有匹配的记录", scenarioId);
+                return;
+            }
+
+            var setItems = matchedItems.Select(item => new AutoTestDataSetItem { DataSetId = dataSetId, DataItemId = item.Id, CreatedAt = DateTimeOffset.Now }).ToList();
+
+            await _autoTestDataProvider.AddAutoTestDataItemsAsync(matchedItems, true, cancellationToken).ConfigureAwait(false);
+            if (setItems.Any())
+                await _autoTestDataProvider.AddAutoTestDataSetItemsAsync(setItems, cancellationToken).ConfigureAwait(false); 
+            
+            record.Status = AutoTestStatus.Done;
+            await _autoTestDataProvider.UpdateAutoTestImportRecordAsync(record, true, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "ImportAsync 失败 ScenarioId={ScenarioId}", scenarioId);
+        }
+    }
+
+    private async Task<List<AutoTestDataItem>> HandleAiOrderScenarioAsync(Dictionary<string, object> import, AutoTestScenario scenario, int recordId, CancellationToken cancellationToken)
+    {
+        if (!import.TryGetValue("customerId", out var customerObj)) 
+        { 
+            Log.Warning("导入数据中缺少 customerId，跳过处理"); 
+            return null; 
+        } 
         var customerId = import["CustomerId"].ToString(); 
         var startDate = (DateTime)import["StartDate"]; 
         var endDate = (DateTime)import["EndDate"]; 
-        var scenarioId = Convert.ToInt32(import["ScenarioId"]); // 这里变成参数
-        // var promptText = import.ContainsKey("PromptText") ? import["PromptText"]?.ToString():"";
         
-        // 1. 获取AutoTestScenario通过scenarioId
-        // 2. 如果没有就直接return
-        // 3. 目前理论只有AiOrder，然后专门有个方法是处理这个场景的
-        // 4. 方法返回的是matchedItems
-        // 5. 统一add matchedItems 以及add 到set中
+        var tokenResponse = await _ringCentralClient.TokenAsync(cancellationToken).ConfigureAwait(false); 
+        var token = tokenResponse.AccessToken;
         
-        // var importRecord = new AutoTestImportDataRecord 
-        // { 
-        //     ScenarioId = scenarioId, 
-        //     Type = AutoTestImportDataRecordType.Api, 
-        //     Status = AutoTestStatus.Running, 
-        //     OpConfig = JsonSerializer.Serialize(import), 
-        //     CreatedAt = DateTimeOffset.Now 
-        // }; 
-        // await _autoTestDataProvider.AddAutoTestImportRecordAsync(importRecord, true, cancellationToken).ConfigureAwait(false);
+        var contacts = await _crmClient.GetCustomerContactsAsync(customerId, cancellationToken).ConfigureAwait(false); 
+        var phoneNumbers = contacts.Select(c => c.Phone).Where(p => !string.IsNullOrWhiteSpace(p)).Distinct().ToList();
         
-        try 
+        if (!phoneNumbers.Any()) 
         { 
-            var tokenResponse = await _ringCentralClient.TokenAsync(cancellationToken).ConfigureAwait(false); 
-            var token = tokenResponse.AccessToken;
-            
-            var contacts = await _crmClient.GetCustomerContactsAsync(customerId, cancellationToken).ConfigureAwait(false); 
-            var phoneNumbers = contacts.Select(c => NormalizePhone(c.Phone)).Where(p => !string.IsNullOrWhiteSpace(p)).Distinct().ToList();
-            
-            if (!phoneNumbers.Any()) 
-            { 
-                Log.Warning("客户 {CustomerId} 没有有效电话号码，任务结束。", customerId); 
-                importRecord.Status = AutoTestStatus.Done; 
-                await _autoTestDataProvider.AddAutoTestImportRecordAsync(importRecord, true, cancellationToken); 
-                return; 
-            }
-            
-            var allRecords = new List<RingCentralRecordDto>(); 
-            var ringCentralTasks = phoneNumbers.Select(phone =>
-            {
-                return RetryAsync(async () =>
-                {
-                    var rcRequest = new RingCentralCallLogRequestDto
-                    {
-                        PhoneNumber = phone,
-                        DateFrom = startDate,
-                        DateTo = endDate,
-                        WithRecording = true,
-                        Page = 1,
-                        PerPage = 200
-                    };
-
-                    var resp = await _ringCentralClient.GetRingCentralRecordAsync(rcRequest, token, cancellationToken).ConfigureAwait(false);
-
-                    return new { phone, response = resp };
-
-                });
-            }).ToList();
-
-            var results = await Task.WhenAll(ringCentralTasks).ConfigureAwait(false);
-
-            foreach (var result in results)
-            {
-                if (result?.response?.Records != null)
-                    allRecords.AddRange(result.response.Records);
-            }
-            
-            var singleCallNumbers = allRecords.GroupBy(r => r.From?.PhoneNumber ?? r.To?.PhoneNumber).Where(g => g.Count() == 1)
-                .Select(g => g.Key).Where(p => !string.IsNullOrWhiteSpace(p)).ToList();
-            
-            if (!singleCallNumbers.Any()) 
-            { 
-                Log.Information("客户 {CustomerId} 没有一天仅一通电话的录音，任务结束。", customerId); 
-                importRecord.Status = AutoTestStatus.Done; 
-                await _autoTestDataProvider.AddAutoTestImportRecordAsync(importRecord, true, cancellationToken); 
-                return; 
-            }
-            
-            var tasks = singleCallNumbers.Select(phone => allRecords.First(r => (r.From?.PhoneNumber ?? r.To?.PhoneNumber) == phone))
-                .Select(record => MatchOrderAndRecordingAsync(customerId, record, scenarioId, importRecord.Id, cancellationToken)).ToList();
-            
-            var matchedItems = (await Task.WhenAll(tasks)).Where(x => x != null).ToList()!;
-            
-            if (matchedItems.Any()) 
-            { 
-                await _autoTestDataProvider.AddAutoTestDataItemsAsync(matchedItems, true, cancellationToken).ConfigureAwait(false); 
-                // add itemset 关联表
-            }
-            
-            importRecord.Status = AutoTestStatus.Done; 
-            await _autoTestDataProvider.AddAutoTestImportRecordAsync(importRecord, true, cancellationToken).ConfigureAwait(false); 
+            Log.Warning("客户 {CustomerId} 没有有效电话号码，结束处理", customerId); 
+            return null; 
         }
-        catch (Exception ex) 
-        { 
-            Log.Error(ex, "ImportAsync 失败 {CustomerId}", customerId); 
-            importRecord.Status = AutoTestStatus.Failed; 
-            await _autoTestDataProvider.AddAutoTestImportRecordAsync(importRecord, true, cancellationToken).ConfigureAwait(false); 
-        } 
+        
+        var allRecords = new List<RingCentralRecordDto>();
+        var tasks = phoneNumbers.Select(phone => RetryAsync(async () =>
+        {
+            var rcRequest = new RingCentralCallLogRequestDto
+            {
+                PhoneNumber = phone,
+                DateFrom = startDate,
+                DateTo = endDate,
+                WithRecording = true,
+                Page = 1,
+                PerPage = 200
+            };
+
+            var resp = await _ringCentralClient.GetRingCentralRecordAsync(rcRequest, token, cancellationToken).ConfigureAwait(false);
+            return resp?.Records ?? new List<RingCentralRecordDto>();
+        })).ToList();
+        
+        var results = await Task.WhenAll(tasks); 
+        foreach (var records in results) 
+            allRecords.AddRange(records);
+        
+        var singleCallNumbers = allRecords.GroupBy(r => r.From?.PhoneNumber ?? r.To?.PhoneNumber).Where(g => g.Count() == 1)
+            .Select(g => g.Key).Where(p => !string.IsNullOrWhiteSpace(p)).ToList();
+        
+        if (!singleCallNumbers.Any()) return null;
+        
+        var matchedTasks = singleCallNumbers.Select(phone => allRecords.First(r => NormalizePhone(r.From?.PhoneNumber ?? r.To?.PhoneNumber) == phone))
+            .Select(record => MatchOrderAndRecordingAsync(customerId, record, scenario.Id, recordId, cancellationToken)).ToList();
+        
+        var matchedItems = (await Task.WhenAll(matchedTasks)).Where(x => x != null).ToList();
+        
+        return matchedItems;
     }
-    
+
     private async Task<AutoTestDataItem> MatchOrderAndRecordingAsync(string customerId, RingCentralRecordDto record, int scenarioId, int importRecordId, CancellationToken cancellationToken)
     {
         try
@@ -173,8 +170,6 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
 
             var inputJsonDto = new AutoTestInputJsonDto
             {
-                // agentId
-                // assistantId
                 Recording = record.Recording?.Uri ?? "",
                 OrderId = oneOrderGroup.Key,
                 CustomerId = customerId,
@@ -240,7 +235,7 @@ public class DbDataImportHandler : IAutoTestDataImportHandler
     {
     }
     
-    public async Task ImportAsync(Dictionary<string, object> import, int scenarioId, int dataSetId, CancellationToken cancellationToken)
+    public async Task ImportAsync(Dictionary<string, object> import, int scenarioId, int dataSetId, int recordId, CancellationToken cancellationToken)
     {
         throw new NotImplementedException();
     }
@@ -254,7 +249,7 @@ public class CrawlDataImportHandler : IAutoTestDataImportHandler
     {
     }
     
-    public async Task ImportAsync(Dictionary<string, object> import, int scenarioId, int dataSetId, CancellationToken cancellationToken)
+    public async Task ImportAsync(Dictionary<string, object> import, int scenarioId, int dataSetId, int recordId, CancellationToken cancellationToken)
     {
         throw new NotImplementedException();
     }
@@ -268,7 +263,7 @@ public class ScriptDataImportHandler : IAutoTestDataImportHandler
     {
     }
     
-    public async Task ImportAsync(Dictionary<string, object> import, int scenarioId, int dataSetId, CancellationToken cancellationToken)
+    public async Task ImportAsync(Dictionary<string, object> import, int scenarioId, int dataSetId, int recordId, CancellationToken cancellationToken)
     {
         throw new NotImplementedException();
     }
@@ -282,7 +277,7 @@ public class ManualDataImportHandler : IAutoTestDataImportHandler
     {
     }
     
-    public async Task ImportAsync(Dictionary<string, object> import, int scenarioId, int dataSetId, CancellationToken cancellationToken)
+    public async Task ImportAsync(Dictionary<string, object> import, int scenarioId, int dataSetId, int recordId, CancellationToken cancellationToken)
     {
         throw new NotImplementedException();
     }
