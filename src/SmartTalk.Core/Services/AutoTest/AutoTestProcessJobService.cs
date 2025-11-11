@@ -79,7 +79,7 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
         
         if (audioContent == null) return;
         
-        var audioBytes = await _ffmpegService.ConvertFileFormatAsync(audioContent, TranscriptionFileType.Wav, cancellationToken).ConfigureAwait(false);
+        var audioBytes = await _ffmpegService.ConvertFileFormatAsync(audioContent, TranscriptionFileType.Mp3, cancellationToken).ConfigureAwait(false);
         
         var (customerSpeaker, audios) = await HandlerConversationSpeakerIsCustomerAsync(sixSentences, audioBytes, cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -87,7 +87,7 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
 
         foreach (var audioInfo in customerAudioInfos)
         {
-            audioInfo.Audio = await _ffmpegService.SpiltAudioAsync(audioBytes, audioInfo.StartTime * 1000, audioInfo.EndTime * 1000, cancellationToken).ConfigureAwait(false);
+            audioInfo.Audio = await _ffmpegService.SpiltAudioAsync(audioBytes, audioInfo.StartTime * 1000, audioInfo.EndTime * 1000, "mp3", cancellationToken).ConfigureAwait(false);
         }
         
         customerAudioInfos.AddRange(audios);
@@ -176,7 +176,7 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
     
     private async Task<(string, byte[])> SplitAudioAsync(byte[] audioBytes, double speakStartTimeVideo, double speakEndTimeVideo, CancellationToken cancellationToken = default)
     {
-        var splitAudios = await _ffmpegService.SpiltAudioAsync(audioBytes, speakStartTimeVideo, speakEndTimeVideo, cancellationToken).ConfigureAwait(false);
+        var splitAudios = await _ffmpegService.SpiltAudioAsync(audioBytes, speakStartTimeVideo, speakEndTimeVideo, "mp3", cancellationToken).ConfigureAwait(false);
 
         var transcriptionResult = new StringBuilder();
         
