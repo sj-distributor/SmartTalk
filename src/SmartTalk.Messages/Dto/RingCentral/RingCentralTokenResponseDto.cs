@@ -1,36 +1,36 @@
-using System.Text.Json.Serialization;
+using Newtonsoft.Json;
 
 namespace SmartTalk.Messages.Dto.RingCentral;
 
 public class RingCentralTokenResponseDto
 {
-    [JsonPropertyName("access_token")]
+    [JsonProperty("access_token")]
     public string AccessToken { get; set; }
     
-    [JsonPropertyName("token_type")]
+    [JsonProperty("token_type")]
     public string TokenType { get; set; }
     
-    [JsonPropertyName("expires_in")]
+    [JsonProperty("expires_in")]
     public int ExpiresIn { get; set; }
     
-    [JsonPropertyName("refresh_token")]
+    [JsonProperty("refresh_token")]
     public string RefreshToken { get; set; }
     
-    [JsonPropertyName("refresh_token_expires_in")]
+    [JsonProperty("refresh_token_expires_in")]
     public int RefreshTokenExpiresIn { get; set; }
     
-    [JsonPropertyName("scope")]
+    [JsonProperty("scope")]
     public string Scope { get; set; }
     
-    [JsonPropertyName("owner_id")]
+    [JsonProperty("owner_id")]
     public string OwnerId { get; set; }
     
-    [JsonPropertyName("endpoint_id")]
+    [JsonProperty("endpoint_id")]
     public string EndpointId { get; set; }
     
-    [JsonPropertyName("session_id")]
+    [JsonProperty("session_id")]
     public string SessionId { get; set; }
     
-    [JsonPropertyName("session_idle_timeout")]
+    [JsonProperty("session_idle_timeout")]
     public int SessionIdleTimeout { get; set; }
 }
