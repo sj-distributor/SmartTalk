@@ -1056,10 +1056,20 @@ public partial class PhoneOrderService
         var prevCancelledOrders = await _posDataProvider.GetPosOrdersByStoreIdsAsync(
             request.StoreIds, PosOrderModifiedStatus.Cancelled, true, prevStartDate, prevEndDate, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        callInData.CountChange = callInRecords.Count - prevCallInRecords.Count;
-        callOutData.CountChange = callOutRecords.Count - prevCallOutRecords.Count;
+        var prevCallInCount = prevCallInRecords.Count;
+        var currCallInCount = callInRecords.Count;
+        callInData.CountChange = prevCallInCount == 0 && currCallInCount > 0 ? currCallInCount : currCallInCount - prevCallInCount;
 
-        restaurantData.OrderCountChange = restaurantData.OrderCount - prevPosOrders.Count;
-        restaurantData.OrderAmountChange = restaurantData.TotalOrderAmount - (prevPosOrders.Sum(x => x.Total) - prevCancelledOrders.Sum(x => x.Total));
+        var prevCallOutCount = prevCallOutRecords.Count;
+        var currCallOutCount = callOutRecords.Count;
+        callOutData.CountChange = prevCallOutCount == 0 && currCallOutCount > 0 ? currCallOutCount : currCallOutCount - prevCallOutCount;
+
+        var prevOrderCount = prevPosOrders.Count;
+        var currOrderCount = restaurantData.OrderCount;
+        restaurantData.OrderCountChange = prevOrderCount == 0 && currOrderCount > 0 ? currOrderCount : currOrderCount - prevOrderCount;
+        
+        var prevOrderAmount = prevPosOrders.Sum(x => x.Total) - prevCancelledOrders.Sum(x => x.Total);
+        var currOrderAmount = restaurantData.TotalOrderAmount;
+        restaurantData.OrderAmountChange = prevOrderAmount == 0 && currOrderAmount > 0 ? currOrderAmount : currOrderAmount - prevOrderAmount;
     }
 }
