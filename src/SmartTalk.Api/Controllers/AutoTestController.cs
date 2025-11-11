@@ -61,7 +61,7 @@ public class AutoTestController : ControllerBase
             Prompt = prompt
         }, cancellationToken).ConfigureAwait(false);
 
-        return File(result.Data, "audio/mpeg", "conversation.mp3");
+        return File(result.Data, "audio/wav", "conversation.wav");
     }
 
     
