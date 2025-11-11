@@ -1043,7 +1043,7 @@ public partial class PhoneOrderService
         if (periodDays <= 0) return;
 
         var prevStartDate = request.StartDate.AddDays(-periodDays);
-        var prevEndDate = request.StartDate;
+        var prevEndDate = request.EndDate.AddDays(-periodDays);
 
         var prevRecords = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(
             agentIds: request.AgentIds, null, utcStart: prevStartDate, utcEnd: prevEndDate, cancellationToken: cancellationToken).ConfigureAwait(false);
