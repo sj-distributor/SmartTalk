@@ -49,30 +49,13 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
     
     public async Task ImportAsync(Dictionary<string, object> import, int scenarioId, int dataSetId, int recordId, CancellationToken cancellationToken = default)
     { 
-        // 1. 获取AutoTestScenario通过scenarioId
-        // 2. 如果没有就直接return
-        // 3. 目前理论只有AiOrder，然后专门有个方法是处理这个场景的
-        // 4. 方法返回的是matchedItems
-        // 5. 统一add matchedItems 以及add 到set中
-        
         var record = await _autoTestDataProvider.GetAutoTestImportDataRecordAsync(recordId, cancellationToken).ConfigureAwait(false);
-        
-        // 1. 获取 AutoTestScenario 通过 scenarioId
         var scenario = await _autoTestDataProvider.GetAutoTestScenarioByIdAsync(scenarioId, cancellationToken).ConfigureAwait(false);
-        if (scenario == null)
-        {
-            // 2. 如果没有就直接 return
-            Log.Warning("Scenario {ScenarioId} 不存在，跳过导入。", scenarioId);
-            record.Status = AutoTestStatus.Failed;
-            await _autoTestDataProvider.UpdateAutoTestImportRecordAsync(record, true, cancellationToken).ConfigureAwait(false);
-            return;
-        }
 
         try
         {
             List<AutoTestDataItem> matchedItems = null;
 
-            // 3. 按 KeyName 分场景处理
             switch (scenario.KeyName)
             {
                 case "AiOrder":
@@ -84,7 +67,6 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
                     break;
             }
 
-            // 4. 方法返回的是 matchedItems
             if (matchedItems == null || !matchedItems.Any())
             {
                 record.Status = AutoTestStatus.Failed;
@@ -95,7 +77,6 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
 
             var setItems = matchedItems.Select(item => new AutoTestDataSetItem { DataSetId = dataSetId, DataItemId = item.Id, CreatedAt = DateTimeOffset.Now }).ToList();
 
-            // 5. 统一add matchedItems 以及add 到set中
             await _autoTestDataProvider.AddAutoTestDataItemsAsync(matchedItems, true, cancellationToken).ConfigureAwait(false);
             if (setItems.Any())
                 await _autoTestDataProvider.AddAutoTestDataSetItemsAsync(setItems, cancellationToken).ConfigureAwait(false); 
