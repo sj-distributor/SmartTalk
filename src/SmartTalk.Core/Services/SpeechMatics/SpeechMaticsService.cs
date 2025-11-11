@@ -20,6 +20,7 @@ using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Core.Settings.PhoneOrder;
 using SmartTalk.Core.Settings.Twilio;
+using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Dto.SpeechMatics;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Commands.PhoneOrder;
@@ -33,14 +34,13 @@ using SmartTalk.Messages.Enums.STT;
 using SmartTalk.Messages.Enums.Sales;
 using Twilio;
 using Twilio.Rest.Api.V2010.Account;
+using WebSocketSharp;
 
 namespace SmartTalk.Core.Services.SpeechMatics;
 
 public interface ISpeechMaticsService : IScopedDependency
 {
     Task HandleTranscriptionCallbackAsync(HandleTranscriptionCallbackCommand command, CancellationToken cancellationToken);
-
-    Task<string> BuildCustomerItemsStringAsync(List<string> soldToIds, CancellationToken cancellationToken);
 }
 
 public class SpeechMaticsService : ISpeechMaticsService
@@ -130,23 +130,6 @@ public class SpeechMaticsService : ISpeechMaticsService
 
             Log.Warning("Handle transcription callback failed: {@Exception}", e);
         }
-    }
-
-    public async Task<string> BuildCustomerItemsStringAsync(List<string> soldToIds, CancellationToken cancellationToken)
-    {
-        var allItems = new List<string>();
-        
-        var askInfoResponse = await _salesClient.GetAskInfoDetailListByCustomerAsync(new GetAskInfoDetailListByCustomerRequestDto { CustomerNumbers = soldToIds }, cancellationToken).ConfigureAwait(false);
-
-        if (askInfoResponse?.Data != null && askInfoResponse.Data.Any())
-            allItems.AddRange(askInfoResponse.Data.Select(x => x.MaterialDesc));
-        
-        var orderHistoryResponse = await _salesClient.GetOrderHistoryByCustomerAsync(new GetOrderHistoryByCustomerRequestDto { CustomerNumber = soldToIds.FirstOrDefault() }, cancellationToken).ConfigureAwait(false);
-
-        if (orderHistoryResponse?.Data != null && orderHistoryResponse.Data.Any())
-            allItems.AddRange(orderHistoryResponse.Data.Select(x => x.MaterialDescription));
-
-        return string.Join(Environment.NewLine, allItems.Distinct());
     }
 
     private async Task SummarizeConversationContentAsync(PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken)
@@ -350,7 +333,8 @@ public class SpeechMaticsService : ISpeechMaticsService
     {
         var soldToIds = !string.IsNullOrEmpty(aiSpeechAssistant.Name) ? aiSpeechAssistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : new List<string>();
         
-        var customerItemsString = await BuildCustomerItemsStringAsync(soldToIds, cancellationToken);
+        var customerItemsCacheList = await _aiSpeechAssistantDataProvider.GetCustomerItemsCacheBySoldToIdsAsync(soldToIds, cancellationToken);
+        var customerItemsString = string.Join(Environment.NewLine, soldToIds.Select(id => customerItemsCacheList.FirstOrDefault(c => c.CacheKey == id)?.CacheValue ?? ""));
 
         var audioData = BinaryData.FromBytes(audioContent);
         List<ChatMessage> messages =

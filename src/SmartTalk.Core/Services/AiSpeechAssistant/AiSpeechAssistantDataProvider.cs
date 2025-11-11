@@ -1,3 +1,4 @@
+using System.Text.Json;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Data;
 using Microsoft.EntityFrameworkCore;
@@ -89,6 +90,10 @@ public partial interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task UpdateAiSpeechAssistantHumanContactAsync(AiSpeechAssistantHumanContact humanContact, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task<List<AiSpeechAssistantHumanContact>> GetAiSpeechAssistantHumanContactsAsync(List<int> assistantIds, CancellationToken cancellationToken);
+
+    Task<List<CustomerItemsCache>> GetCustomerItemsCacheBySoldToIdsAsync(List<string> soldToIds, CancellationToken cancellationToken);
+    
+    Task UpsertCustomerItemsCacheAsync(string soldToId, string itemsString, bool forceSave, CancellationToken cancellationToken);
 }
 
 public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
@@ -464,5 +469,36 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
     public async Task<List<AiSpeechAssistantHumanContact>> GetAiSpeechAssistantHumanContactsAsync(List<int> assistantIds, CancellationToken cancellationToken)
     {
         return await _repository.Query<AiSpeechAssistantHumanContact>().Where(x => assistantIds.Contains(x.AssistantId)).ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<CustomerItemsCache>> GetCustomerItemsCacheBySoldToIdsAsync(List<string> soldToIds, CancellationToken cancellationToken)
+    {
+        return await _repository.Query<CustomerItemsCache>().Where(x => soldToIds.Contains(x.CacheKey)).ToListAsync(cancellationToken);
+    }
+
+    public async Task UpsertCustomerItemsCacheAsync(string soldToId, string itemsString, bool forceSave, CancellationToken cancellationToken)
+    {
+        var cache = await _repository.FirstOrDefaultAsync<CustomerItemsCache>(x => x.CacheKey == soldToId, cancellationToken);
+        if (cache == null)
+        {
+            cache = new CustomerItemsCache
+            {
+                CacheKey = soldToId,
+                CacheValue = itemsString,
+                LastUpdated = DateTimeOffset.UtcNow
+            };
+            await _repository.InsertAsync(cache, cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            cache.CacheValue = itemsString;
+            cache.LastUpdated = DateTimeOffset.UtcNow;
+            await _repository.UpdateAsync(cache, cancellationToken).ConfigureAwait(false);
+        }
+        
+        if (forceSave)
+        {
+            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
     }
 }
