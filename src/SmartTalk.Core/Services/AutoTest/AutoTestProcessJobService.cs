@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using Microsoft.IdentityModel.Tokens;
 using NAudio.Wave;
@@ -108,8 +109,10 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
         // 生成ai订单
         
         // 对比订单
-        
-        // record 修改
+
+        record.Status = AutoTestTaskRecordStatus.Done;
+
+        await _autoTestDataProvider.UpdateAutoTestTaskRecordAsync(record, true, cancellationToken).ConfigureAwait(false);
 
         await HandleAutoTestTaskStatusChangeAsync(task, cancellationToken).ConfigureAwait(false);
     }
@@ -225,9 +228,9 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
         return completionResult.Data.Response;
     }
     
-    private async Task<byte[]> ProcessAudioConversationAsync(List<byte[]> customerPcmList, string prompt, CancellationToken cancellationToken)
+    private async Task<byte[]> ProcessAudioConversationAsync(List<byte[]> customerMp3List, string prompt, CancellationToken cancellationToken)
     {
-        if (customerPcmList == null || customerPcmList.Count == 0)
+        if (customerMp3List == null || customerMp3List.Count == 0)
             throw new ArgumentException("没有音频输入");
 
         var conversationHistory = new List<ChatMessage>
@@ -239,44 +242,92 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
         var options = new ChatCompletionOptions
         {
             ResponseModalities = ChatResponseModalities.Text | ChatResponseModalities.Audio,
-            AudioOptions = new ChatAudioOptions(ChatOutputAudioVoice.Alloy, ChatOutputAudioFormat.Pcm16)
+            AudioOptions = new ChatAudioOptions(ChatOutputAudioVoice.Alloy, ChatOutputAudioFormat.Wav)
         };
 
-        using var combinedStream = new MemoryStream();
+        var wavFiles = new List<string>();
 
-        foreach (var userPcm in customerPcmList)
+        try
         {
-            if (userPcm == null || userPcm.Length == 0) continue;
+            foreach (var userMp3 in customerMp3List)
+            {
+                if (userMp3 == null || userMp3.Length == 0)
+                    continue;
 
-            combinedStream.Write(userPcm, 0, userPcm.Length);
+                var wavFile = Path.GetTempFileName() + ".wav";
+                ConvertMp3ToUniformWav(userMp3, wavFile);
+                wavFiles.Add(wavFile);
 
-            var userWav = PcmToWav(userPcm, 16000, 16, 1);
+                conversationHistory.Add(new UserChatMessage(
+                    ChatMessageContentPart.CreateInputAudioPart(
+                        BinaryData.FromBytes(await File.ReadAllBytesAsync(wavFile, cancellationToken)),
+                        ChatInputAudioFormat.Wav)));
 
-            conversationHistory.Add(new UserChatMessage(
-                ChatMessageContentPart.CreateInputAudioPart(BinaryData.FromBytes(userWav), ChatInputAudioFormat.Wav)
-            ));
+                var completion = await client.CompleteChatAsync(conversationHistory, options, cancellationToken);
 
-            var completion = await client.CompleteChatAsync(conversationHistory, options, cancellationToken);
-            var aiPcm = completion.Value.OutputAudio.AudioBytes.ToArray();
+                var aiWavFile = Path.GetTempFileName() + ".wav";
+                await File.WriteAllBytesAsync(aiWavFile, completion.Value.OutputAudio.AudioBytes.ToArray(),
+                    cancellationToken);
+                wavFiles.Add(aiWavFile);
 
-            combinedStream.Write(aiPcm, 0, aiPcm.Length);
+                conversationHistory.Add(new AssistantChatMessage(completion.Value.OutputAudio.Transcript));
+            }
 
-            conversationHistory.Add(new AssistantChatMessage(completion.Value.OutputAudio.Transcript));
+            var mergedWavFile = Path.GetTempFileName() + ".wav";
+            MergeWavFilesToUniformFormat(wavFiles, mergedWavFile);
+
+            return await File.ReadAllBytesAsync(mergedWavFile, cancellationToken);
         }
-
-        return combinedStream.ToArray();
+        finally
+        {
+            foreach (var f in wavFiles)
+            {
+                if (File.Exists(f)) File.Delete(f);
+            }
+        }
     }
-    
-    private static byte[] PcmToWav(byte[] pcmData, int sampleRate, int bitsPerSample, int channels)
+
+    private void ConvertMp3ToUniformWav(byte[] mp3Bytes, string outputWavFile)
     {
-        using var ms = new MemoryStream();
-        var waveFormat = new WaveFormat(sampleRate, bitsPerSample, channels);
-        using (var writer = new WaveFileWriter(ms, waveFormat))
+        var tempMp3 = Path.GetTempFileName() + ".mp3";
+        File.WriteAllBytes(tempMp3, mp3Bytes);
+        var args = $"-y -i \"{tempMp3}\" -ar 16000 -ac 1 -acodec pcm_s16le \"{outputWavFile}\"";
+        RunFfmpeg(args);
+        File.Delete(tempMp3);
+    }
+
+    private void MergeWavFilesToUniformFormat(List<string> wavFiles, string outputFile)
+    {
+        if (wavFiles.Count == 0)
+            throw new ArgumentException("没有 WAV 文件可合并");
+
+        var listFile = Path.GetTempFileName();
+        File.WriteAllLines(listFile, wavFiles.Select(f => $"file '{f}'"));
+        var args = $"-y -f concat -safe 0 -i \"{listFile}\" -ar 16000 -ac 1 -acodec pcm_s16le \"{outputFile}\"";
+        RunFfmpeg(args);
+        File.Delete(listFile);
+    }
+
+    private void RunFfmpeg(string arguments)
+    {
+        var startInfo = new ProcessStartInfo
         {
-            writer.Write(pcmData, 0, pcmData.Length);
-            writer.Flush();
+            FileName = "ffmpeg",
+            Arguments = arguments,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using var process = Process.Start(startInfo)!;
+        process.WaitForExit();
+
+        if (process.ExitCode != 0)
+        {
+            var err = process.StandardError.ReadToEnd();
+            throw new Exception($"ffmpeg 执行失败：{err}");
         }
-        return ms.ToArray();
     }
 
     private async Task<string> BuildConversationPromptAsync(int assistantId, CancellationToken cancellationToken)
