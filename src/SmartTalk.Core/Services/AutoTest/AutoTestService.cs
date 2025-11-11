@@ -88,23 +88,33 @@ public partial class AutoTestService : IAutoTestService
                 if (userMp3 == null || userMp3.Length == 0)
                     continue;
 
+                // 转换 mp3 -> wav（统一采样率和单声道）
                 var wavFile = Path.GetTempFileName() + ".wav";
-                ConvertMp3ToWav(userMp3, wavFile);
+                ConvertMp3ToUniformWav(userMp3, wavFile);
                 wavFiles.Add(wavFile);
 
-                conversationHistory.Add(new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(BinaryData.FromBytes(File.ReadAllBytes(wavFile)), ChatInputAudioFormat.Wav)));
+                // 用户语音加入对话历史
+                conversationHistory.Add(new UserChatMessage(
+                    ChatMessageContentPart.CreateInputAudioPart(
+                        BinaryData.FromBytes(await File.ReadAllBytesAsync(wavFile, cancellationToken)),
+                        ChatInputAudioFormat.Wav)));
 
+                // 调用 AI
                 var completion = await client.CompleteChatAsync(conversationHistory, options, cancellationToken);
 
+                // 保存 AI 回复 wav
                 var aiWavFile = Path.GetTempFileName() + ".wav";
-                await File.WriteAllBytesAsync(aiWavFile, completion.Value.OutputAudio.AudioBytes.ToArray(), cancellationToken);
+                await File.WriteAllBytesAsync(aiWavFile, completion.Value.OutputAudio.AudioBytes.ToArray(),
+                    cancellationToken);
                 wavFiles.Add(aiWavFile);
 
+                // 保存 AI 文本，保持上下文
                 conversationHistory.Add(new AssistantChatMessage(completion.Value.OutputAudio.Transcript));
             }
 
+            // 拼接所有 wav
             var mergedWavFile = Path.GetTempFileName() + ".wav";
-            MergeWavFiles(wavFiles, mergedWavFile);
+            MergeWavFilesToUniformFormat(wavFiles, mergedWavFile);
 
             return await File.ReadAllBytesAsync(mergedWavFile, cancellationToken);
         }
@@ -117,39 +127,33 @@ public partial class AutoTestService : IAutoTestService
         }
     }
 
-    private void ConvertMp3ToWav(byte[] mp3Bytes, string outputWavFile)
+    private void ConvertMp3ToUniformWav(byte[] mp3Bytes, string outputWavFile)
     {
         var tempMp3 = Path.GetTempFileName() + ".mp3";
         File.WriteAllBytes(tempMp3, mp3Bytes);
-
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = "ffmpeg",
-            Arguments = $"-y -i \"{tempMp3}\" \"{outputWavFile}\"",
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-
-        using var process = Process.Start(startInfo)!;
-        process.WaitForExit();
-
+        var args = $"-y -i \"{tempMp3}\" -ar 16000 -ac 1 -acodec pcm_s16le \"{outputWavFile}\"";
+        RunFfmpeg(args);
         File.Delete(tempMp3);
     }
 
-    private void MergeWavFiles(List<string> wavFiles, string outputFile)
+    private void MergeWavFilesToUniformFormat(List<string> wavFiles, string outputFile)
     {
         if (wavFiles.Count == 0)
             throw new ArgumentException("没有 WAV 文件可合并");
 
         var listFile = Path.GetTempFileName();
-        File.WriteAllLines(listFile, wavFiles.Select(f => $"file '{f.Replace("'", "'\\''")}'"));
+        File.WriteAllLines(listFile, wavFiles.Select(f => $"file '{f}'"));
+        var args = $"-y -f concat -safe 0 -i \"{listFile}\" -ar 16000 -ac 1 -acodec pcm_s16le \"{outputFile}\"";
+        RunFfmpeg(args);
+        File.Delete(listFile);
+    }
 
+    private void RunFfmpeg(string arguments)
+    {
         var startInfo = new ProcessStartInfo
         {
             FileName = "ffmpeg",
-            Arguments = $"-y -f concat -safe 0 -i \"{listFile}\" -c copy \"{outputFile}\"",
+            Arguments = arguments,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -159,6 +163,10 @@ public partial class AutoTestService : IAutoTestService
         using var process = Process.Start(startInfo)!;
         process.WaitForExit();
 
-        File.Delete(listFile);
+        if (process.ExitCode != 0)
+        {
+            var err = process.StandardError.ReadToEnd();
+            throw new Exception($"ffmpeg 执行失败：{err}");
+        }
     }
 }
