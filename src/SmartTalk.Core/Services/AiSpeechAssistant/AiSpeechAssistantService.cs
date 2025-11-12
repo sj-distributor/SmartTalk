@@ -152,6 +152,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _smartiesClient = smartiesClient;
         _zhiPuAiSettings = zhiPuAiSettings;
         _redisSafeRunner = redisSafeRunner;
+        _posDataProvider = posDataProvider;
         _agentDataProvider = agentDataProvider;
         _phoneOrderService = phoneOrderService;
         _httpClientFactory = httpClientFactory;
@@ -169,6 +170,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _openaiEvent = new StringBuilder();
         _openaiClientWebSocket = new ClientWebSocket();
         _aiSpeechAssistantStreamContext = new AiSpeechAssistantStreamContextDto();
+        
+        _wholeAudioBufferBytes = [];
+        _shouldSendBuffToOpenAi = true;
     }
 
     public CallAiSpeechAssistantResponse CallAiSpeechAssistant(CallAiSpeechAssistantCommand command)
@@ -277,7 +281,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
             await SendServerRestoreMessageIfNecessaryAsync(cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception e) when (e.Message.Contains("quota"))
+        catch (Exception e)
         {
             const string alertMessage = "服务器异常。";
 
@@ -412,6 +416,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         if (!string.IsNullOrEmpty(forwardNumber))
         {
+            _shouldSendBuffToOpenAi = false;
             _aiSpeechAssistantStreamContext.ShouldForward = true;
             _aiSpeechAssistantStreamContext.ForwardPhoneNumber = forwardNumber;
 
@@ -465,6 +470,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     {
         if (routes == null || routes.Count == 0)
             return (null, null);
+        
+        if (routes.Any(x => x.Emergency))
+            routes = routes.Where(x => x.Emergency).ToList();
 
         foreach (var rule in routes)
         {
