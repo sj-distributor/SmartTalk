@@ -49,7 +49,7 @@ public partial class AutoTestService
         
         if (scenario == null)
         {
-            Log.Warning("Scenario {ScenarioId} does not exist, skip importing.", scenario.Id);
+            Log.Information("Scenario {ScenarioId} does not exist, skip importing.", command.ScenarioId);
             
             importRecord.Status = AutoTestStatus.Failed;
             
