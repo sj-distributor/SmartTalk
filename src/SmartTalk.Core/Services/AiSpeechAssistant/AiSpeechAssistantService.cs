@@ -435,7 +435,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             .Replace("#{current_time}", currentTime)
             .Replace("#{customer_phone}", from.StartsWith("+1") ? from[2..] : from)
             .Replace("#{pst_date}", $"{pstTime.Date:yyyy-MM-dd} {pstTime.DayOfWeek}")
-            .Replace("#{pst_time}", $"{pstTime:HH:mm:ss}")
             .Replace("#{ai_greeting}", $"{knowledge.Greetings}");
         
         Log.Information($"The final prompt: {finalPrompt}");
