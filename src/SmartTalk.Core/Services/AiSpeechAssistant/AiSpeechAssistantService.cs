@@ -13,8 +13,6 @@ using AutoMapper;
 using Google.Cloud.Translation.V2;
 using SmartTalk.Core.Constants;
 using Microsoft.AspNetCore.Http;
-using NAudio.Codecs;
-using NAudio.Wave;
 using OpenAI.Chat;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Services.Agents;
@@ -40,7 +38,6 @@ using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Core.Settings.Twilio;
 using SmartTalk.Core.Settings.WorkWeChat;
 using SmartTalk.Core.Settings.ZhiPuAi;
-using SmartTalk.Core.Utils;
 using Task = System.Threading.Tasks.Task;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
@@ -608,15 +605,26 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                                 }, cancellationToken));
                             break;
                         case "media":
-                            if (_aiSpeechAssistantStreamContext.ShouldForward) break;
-                           
-                            var payload = jsonDocument?.RootElement.GetProperty("media").GetProperty("payload").GetString();
-                            var audioAppend = new
+                            var media = jsonDocument.RootElement.GetProperty("media");
+                            
+                            var payload = media.GetProperty("payload").GetString();
+                            if (!string.IsNullOrEmpty(payload)) 
                             {
-                                type = "input_audio_buffer.append",
-                                audio = payload
-                            };
-                            await SendToWebSocketAsync(_openaiClientWebSocket, audioAppend, cancellationToken);
+                                var fromBase64String = Convert.FromBase64String(payload);
+
+                                if (_shouldSendBuffToOpenAi && _aiSpeechAssistantStreamContext.Assistant.ManualRecordWholeAudio) 
+                                    lock (_wholeAudioBufferBytes) 
+                                        _wholeAudioBufferBytes.AddRange([fromBase64String]);
+
+                                var audioAppend = new
+                                { 
+                                    type = "input_audio_buffer.append", 
+                                    audio = payload
+                                };
+
+                                if (_shouldSendBuffToOpenAi) 
+                                    await SendToWebSocketAsync(_openaiClientWebSocket, audioAppend, cancellationToken);
+                            }
                             break;
                         case "stop":
                             _backgroundJobClient.Enqueue<IAiSpeechAssistantProcessJobService>(x => x.RecordAiSpeechAssistantCallAsync(_aiSpeechAssistantStreamContext, orderRecordType, CancellationToken.None));
@@ -933,7 +941,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             {
                 CallSid = _aiSpeechAssistantStreamContext.CallSid,
                 HumanPhone = _aiSpeechAssistantStreamContext.HumanContactPhone
-            }, cancellationToken), TimeSpan.FromSeconds(replySeconds));
+            }, cancellationToken), TimeSpan.FromSeconds(replySeconds), HangfireConstants.InternalHostingTransfer);
             
             var transferringHumanService = new
             {
@@ -946,7 +954,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                 }
             };
             
-            await SendToWebSocketAsync(_openaiClientWebSocket, transferringHumanService, cancellationToken);
+            // await SendToWebSocketAsync(_openaiClientWebSocket, transferringHumanService, cancellationToken);
         }
 
         await SendToWebSocketAsync(_openaiClientWebSocket, new { type = "response.create" }, cancellationToken);
