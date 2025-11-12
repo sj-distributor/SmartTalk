@@ -61,9 +61,9 @@ public class AutoTestController : ControllerBase
             Prompt = prompt
         }, cancellationToken).ConfigureAwait(false);
 
-        return File(result.Data, "audio/wav", "conversation.wav");
+        // 返回 MP3
+        return File(result.Data, "audio/mpeg", "gpt.mp3");
     }
-
     
     [Route("task"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAutoTestTaskResponse))]
