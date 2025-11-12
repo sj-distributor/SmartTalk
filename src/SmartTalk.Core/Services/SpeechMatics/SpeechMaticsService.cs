@@ -492,7 +492,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         var materialListText = string.Join("\n", historyItems.Select(x => $"{x.MaterialDesc} ({x.Material})【{x.invoiceDate}】"));
         
         var systemPrompt =
-            "你是一名訂單分析助手。請從下面的客戶分析報告文字中提取所有下單的物料名稱、數量、單位，並且用歷史物料列表盡力匹配每個物料的materialNumber。" +
+            "你是一名訂單分析助手。請從下面的客戶分析報告文字中提取所有下單的物料名稱、數量、單位，並且用歷史物料列表盡力匹配每個物料的materialNumber，即使沒有匹配到materialNumber也需要提取物料的name和quantity以及unit。" +
             "如果報告中提到了預約送貨時間，請提取送貨時間（格式yyyy-MM-dd）。" +
             "如果客戶提到了分店名，請提取 StoreName；如果提到第幾家店，請提取 StoreNumber。\n" +
             "請嚴格傳回一個 JSON 對象，頂層字段為 \"stores\"，每个店铺对象包含：StoreName（可空字符串）, StoreNumber（可空字符串）, DeliveryDate（可空字符串），orders（数组，元素包含 name, quantity, unit, materialNumber, deliveryDate）。\n" +
