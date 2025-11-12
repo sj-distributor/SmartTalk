@@ -102,56 +102,38 @@ public partial class AutoTestService : IAutoTestService
         var client = new ChatClient("gpt-4o-audio-preview", _openAiSettings.ApiKey);
         var options = new ChatCompletionOptions
         {
+            // 让 AI 返回文本 + 音频
             ResponseModalities = ChatResponseModalities.Text | ChatResponseModalities.Audio,
-            AudioOptions = new ChatAudioOptions(ChatOutputAudioVoice.Alloy, ChatOutputAudioFormat.Wav)
+            AudioOptions = new ChatAudioOptions(ChatOutputAudioVoice.Alloy, ChatOutputAudioFormat.Mp3) // 直接输出 MP3
         };
 
-        var wavFiles = new List<string>();
+        byte[] lastAiMp3 = null;
 
-        try
+        foreach (var userMp3 in customerMp3List)
         {
-            foreach (var userMp3 in customerMp3List)
-            {
-                if (userMp3 == null || userMp3.Length == 0)
-                    continue;
+            if (userMp3 == null || userMp3.Length == 0)
+                continue;
 
-                // 转换 mp3 -> wav（统一采样率和单声道）
-                var wavFile = Path.GetTempFileName() + ".wav";
-                ConvertMp3ToUniformWav(userMp3, wavFile);
-                wavFiles.Add(wavFile);
+            // 用户语音加入对话历史（MP3 格式直接传入）
+            conversationHistory.Add(new UserChatMessage(
+                ChatMessageContentPart.CreateInputAudioPart(
+                    BinaryData.FromBytes(userMp3),
+                    ChatInputAudioFormat.Mp3)));
 
-                // 用户语音加入对话历史
-                conversationHistory.Add(new UserChatMessage(
-                    ChatMessageContentPart.CreateInputAudioPart(
-                        BinaryData.FromBytes(await File.ReadAllBytesAsync(wavFile, cancellationToken)),
-                        ChatInputAudioFormat.Wav)));
+            // 调用 AI
+            var completion = await client.CompleteChatAsync(conversationHistory, options, cancellationToken);
 
-                // 调用 AI
-                var completion = await client.CompleteChatAsync(conversationHistory, options, cancellationToken);
+            // 保存 AI 回复 MP3
+            lastAiMp3 = completion.Value.OutputAudio.AudioBytes.ToArray();
 
-                // 保存 AI 回复 wav
-                var aiWavFile = Path.GetTempFileName() + ".wav";
-                await File.WriteAllBytesAsync(aiWavFile, completion.Value.OutputAudio.AudioBytes.ToArray(),
-                    cancellationToken);
-                wavFiles.Add(aiWavFile);
-
-                // 保存 AI 文本，保持上下文
-                conversationHistory.Add(new AssistantChatMessage(completion.Value.OutputAudio.Transcript));
-            }
-
-            // 拼接所有 wav
-            var mergedWavFile = Path.GetTempFileName() + ".wav";
-            MergeWavFilesToUniformFormat(wavFiles, mergedWavFile);
-
-            return await File.ReadAllBytesAsync(mergedWavFile, cancellationToken);
+            // 保存 AI 文本，保持上下文
+            conversationHistory.Add(new AssistantChatMessage(completion.Value.OutputAudio.Transcript));
         }
-        finally
-        {
-            foreach (var f in wavFiles)
-            {
-                if (File.Exists(f)) File.Delete(f);
-            }
-        }
+
+        if (lastAiMp3 == null)
+            throw new InvalidOperationException("AI 没有返回音频");
+
+        return lastAiMp3;
     }
 
     private void ConvertMp3ToUniformWav(byte[] mp3Bytes, string outputWavFile)
