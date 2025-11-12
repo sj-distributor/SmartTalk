@@ -62,7 +62,7 @@ public class AutoTestController : ControllerBase
         }, cancellationToken).ConfigureAwait(false);
 
         // 返回 MP3
-        return File(result.Data, "audio/mpeg", "gpt.mp3");
+        return File(result.Data, "audio/mpeg", "gpt.wav");
     }
     
     [Route("task"), HttpGet]

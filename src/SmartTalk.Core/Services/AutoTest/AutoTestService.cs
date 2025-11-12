@@ -77,7 +77,7 @@ public partial class AutoTestService : IAutoTestService
         {
             // 让 AI 返回文本 + 音频
             ResponseModalities = ChatResponseModalities.Text | ChatResponseModalities.Audio,
-            AudioOptions = new ChatAudioOptions(ChatOutputAudioVoice.Alloy, ChatOutputAudioFormat.Mp3) // 直接输出 MP3
+            AudioOptions = new ChatAudioOptions(ChatOutputAudioVoice.Alloy, ChatOutputAudioFormat.Wav) // 直接输出 MP3
         };
 
         byte[] lastAiMp3 = null;
