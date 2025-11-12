@@ -236,6 +236,8 @@ public class SpeechMaticsService : ISpeechMaticsService
         Log.Information("Get Assistant: {@Assistant} and Agent: {@Agent} by agent id {agentId}", aiSpeechAssistant, agent, record.AgentId);
         
         var callFrom = string.Empty;
+        var callTo = string.Empty;
+        
         TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
 
         try
@@ -244,6 +246,7 @@ public class SpeechMaticsService : ISpeechMaticsService
             {
                 var call = await CallResource.FetchAsync(record.SessionId);
                 callFrom = call?.From;
+                callTo = call?.To;
                 Log.Information("Fetched incoming phone number from Twilio: {callFrom}", callFrom);
             }, maxRetryCount: 3, delaySeconds: 3, cancellationToken);
         }
@@ -255,8 +258,8 @@ public class SpeechMaticsService : ISpeechMaticsService
         var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
         
-        var messages = await ConfigureRecordAnalyzePromptAsync(agent, aiSpeechAssistant, callFrom ?? "", currentTime, audioContent, cancellationToken);
-        
+        var messages = await ConfigureRecordAnalyzePromptAsync(agent, aiSpeechAssistant, callFrom ?? "", callTo ?? "", currentTime, audioContent, cancellationToken);
+
         ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
         
         ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text, MaxOutputTokenCount = 16384 };
@@ -441,7 +444,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         };
     }
     
-    private async Task<List<ChatMessage>> ConfigureRecordAnalyzePromptAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, string callFrom, string currentTime, byte[] audioContent, CancellationToken cancellationToken) 
+    private async Task<List<ChatMessage>> ConfigureRecordAnalyzePromptAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, string callFrom, string callTo, string currentTime, byte[] audioContent, CancellationToken cancellationToken) 
     {
         var askItemsJson = string.Empty;
         
@@ -490,7 +493,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         [
             new SystemChatMessage( (string.IsNullOrEmpty(aiSpeechAssistant?.CustomRecordAnalyzePrompt)
                 ? "你是一名電話錄音的分析員，通過聽取錄音內容和語氣情緒作出精確分析，冩出一份分析報告。\n\n分析報告的格式：交談主題：xxx\n\n 來電號碼：#{call_from}\n\n 內容摘要:xxx \n\n 客人情感與情緒: xxx \n\n 待辦事件: \n1.xxx\n2.xxx \n\n 客人下單內容(如果沒有則忽略)：1. 牛肉(1箱)\n2. 雞腿肉(1箱)"
-                : aiSpeechAssistant.CustomRecordAnalyzePrompt).Replace("#{call_from}", callFrom ?? "").Replace("#{current_time}", currentTime ?? "").Replace("#{customer_items}", customerItemsString ?? "")),
+                : aiSpeechAssistant.CustomRecordAnalyzePrompt).Replace("#{call_from}", callFrom ?? "").Replace("#{current_time}", currentTime ?? "").Replace("#{customer_items}", customerItemsString ?? "").Replace("#{call_to}", callTo ?? "")),
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
             new UserChatMessage("幫我根據錄音生成分析報告：")
         ];
