@@ -681,6 +681,8 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
         await _repository.DeleteAllAsync(humanContacts, cancellationToken).ConfigureAwait(false);
         
         if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        
+        await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<List<CustomerItemsCache>> GetCustomerItemsCacheBySoldToIdsAsync(List<string> soldToIds, CancellationToken cancellationToken)

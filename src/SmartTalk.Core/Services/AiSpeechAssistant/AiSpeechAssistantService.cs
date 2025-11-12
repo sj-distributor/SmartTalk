@@ -2,20 +2,19 @@ using Twilio;
 using Serilog;
 using System.Text;
 using Twilio.TwiML;
-using NAudio.Wave;
-using NAudio.Codecs;
 using Mediator.Net;
 using Newtonsoft.Json;
 using System.Text.Json;
 using Twilio.TwiML.Voice;
 using SmartTalk.Core.Ioc;
 using Twilio.AspNet.Core;
-using SmartTalk.Core.Utils;
 using System.Net.WebSockets;
 using AutoMapper;
 using Google.Cloud.Translation.V2;
 using SmartTalk.Core.Constants;
 using Microsoft.AspNetCore.Http;
+using NAudio.Codecs;
+using NAudio.Wave;
 using OpenAI.Chat;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Services.Agents;
@@ -41,6 +40,7 @@ using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Core.Settings.Twilio;
 using SmartTalk.Core.Settings.WorkWeChat;
 using SmartTalk.Core.Settings.ZhiPuAi;
+using SmartTalk.Core.Utils;
 using Task = System.Threading.Tasks.Task;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
@@ -141,8 +141,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     {
         _clock = clock;
         _mapper = mapper;
-        _currentUser = currentUser;
         _salesClient = salesClient;
+        _currentUser = currentUser;
         _openaiClient = openaiClient;
         _cacheManager = cacheManager;
         _azureSetting = azureSetting;
@@ -152,7 +152,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _smartiesClient = smartiesClient;
         _zhiPuAiSettings = zhiPuAiSettings;
         _redisSafeRunner = redisSafeRunner;
-        _posDataProvider = posDataProvider;
         _agentDataProvider = agentDataProvider;
         _phoneOrderService = phoneOrderService;
         _httpClientFactory = httpClientFactory;
@@ -170,9 +169,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _openaiEvent = new StringBuilder();
         _openaiClientWebSocket = new ClientWebSocket();
         _aiSpeechAssistantStreamContext = new AiSpeechAssistantStreamContextDto();
-        
-        _wholeAudioBufferBytes = [];
-        _shouldSendBuffToOpenAi = true;
     }
 
     public CallAiSpeechAssistantResponse CallAiSpeechAssistant(CallAiSpeechAssistantCommand command)
@@ -281,7 +277,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
             await SendServerRestoreMessageIfNecessaryAsync(cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception e)
+        catch (Exception e) when (e.Message.Contains("quota"))
         {
             const string alertMessage = "服务器异常。";
 
@@ -347,7 +343,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                                   If the recording has multiple speakers where one speaks English and others speak Mandarin, determine which language dominates most of the speaking time and return that language code.
                                   If the audio is short and contains only a few clear English words, classify as English (en).
                                   If the audio is mostly silent, unclear, or contains indistinguishable sounds, choose the language that can be most confidently recognized based on speech features, not noise.
-                                  
                                   """),
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
             new UserChatMessage("Please determine the language based on the recording and return the corresponding code.")
@@ -417,7 +412,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         if (!string.IsNullOrEmpty(forwardNumber))
         {
-            _shouldSendBuffToOpenAi = false;
             _aiSpeechAssistantStreamContext.ShouldForward = true;
             _aiSpeechAssistantStreamContext.ForwardPhoneNumber = forwardNumber;
 
@@ -471,9 +465,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     {
         if (routes == null || routes.Count == 0)
             return (null, null);
-        
-        if (routes.Any(x => x.Emergency))
-            routes = routes.Where(x => x.Emergency).ToList();
 
         foreach (var rule in routes)
         {
@@ -617,26 +608,15 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                                 }, cancellationToken));
                             break;
                         case "media":
-                            var media = jsonDocument.RootElement.GetProperty("media");
-                            
-                            var payload = media.GetProperty("payload").GetString();
-                            if (!string.IsNullOrEmpty(payload))
+                            if (_aiSpeechAssistantStreamContext.ShouldForward) break;
+                           
+                            var payload = jsonDocument?.RootElement.GetProperty("media").GetProperty("payload").GetString();
+                            var audioAppend = new
                             {
-                                var fromBase64String = Convert.FromBase64String(payload);
-
-                                if (_shouldSendBuffToOpenAi && _aiSpeechAssistantStreamContext.Assistant.ManualRecordWholeAudio)
-                                    lock (_wholeAudioBufferBytes)
-                                        _wholeAudioBufferBytes.AddRange([fromBase64String]);
-
-                                var audioAppend = new
-                                {
-                                    type = "input_audio_buffer.append",
-                                    audio = payload
-                                };
-
-                                if (_shouldSendBuffToOpenAi)
-                                    await SendToWebSocketAsync(_openaiClientWebSocket, audioAppend, cancellationToken);
-                            }
+                                type = "input_audio_buffer.append",
+                                audio = payload
+                            };
+                            await SendToWebSocketAsync(_openaiClientWebSocket, audioAppend, cancellationToken);
                             break;
                         case "stop":
                             _backgroundJobClient.Enqueue<IAiSpeechAssistantProcessJobService>(x => x.RecordAiSpeechAssistantCallAsync(_aiSpeechAssistantStreamContext, orderRecordType, CancellationToken.None));
@@ -953,7 +933,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             {
                 CallSid = _aiSpeechAssistantStreamContext.CallSid,
                 HumanPhone = _aiSpeechAssistantStreamContext.HumanContactPhone
-            }, cancellationToken), TimeSpan.FromSeconds(replySeconds), HangfireConstants.InternalHostingTransfer);
+            }, cancellationToken), TimeSpan.FromSeconds(replySeconds));
             
             var transferringHumanService = new
             {
@@ -966,7 +946,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                 }
             };
             
-            // await SendToWebSocketAsync(_openaiClientWebSocket, transferringHumanService, cancellationToken);
+            await SendToWebSocketAsync(_openaiClientWebSocket, transferringHumanService, cancellationToken);
         }
 
         await SendToWebSocketAsync(_openaiClientWebSocket, new { type = "response.create" }, cancellationToken);

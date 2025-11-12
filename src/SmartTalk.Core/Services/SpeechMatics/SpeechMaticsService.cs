@@ -158,77 +158,6 @@ public class SpeechMaticsService : ISpeechMaticsService
         }
     }
 
-    public async Task<string> BuildCustomerItemsStringAsync(List<string> soldToIds, CancellationToken cancellationToken)
-    {
-        var allItems = new List<string>();
-        
-        var askInfoResponse = await _salesClient.GetAskInfoDetailListByCustomerAsync(new GetAskInfoDetailListByCustomerRequestDto { CustomerNumbers = soldToIds }, cancellationToken).ConfigureAwait(false);
-        var askItems = askInfoResponse?.Data ?? new List<VwAskDetail>();
-        
-        var orderItems = new List<SalesOrderHistoryDto>();
-        if (soldToIds?.Any() == true)
-        {
-            var tasks = soldToIds.Select(async soldToId =>
-            {
-                var response = await _salesClient.GetOrderHistoryByCustomerAsync(new GetOrderHistoryByCustomerRequestDto { CustomerNumber = soldToId }, cancellationToken);
-                return response?.Data ?? new List<SalesOrderHistoryDto>();
-            });
-
-            var results = await Task.WhenAll(tasks);
-            orderItems = results.SelectMany(r => r).ToList();
-        }
-        
-        var levelCodes = askItems.Where(x => !string.IsNullOrEmpty(x.LevelCode)).Select(x => x.LevelCode)
-            .Concat(orderItems.Where(x => !string.IsNullOrEmpty(x.LevelCode)).Select(x => x.LevelCode)).Distinct().ToList();
-        
-        var materials = askItems.Where(x => !string.IsNullOrEmpty(x.Material)).Select(x => x.Material).Concat(orderItems.Where(x => !string.IsNullOrEmpty(x.MaterialNumber))
-                .Select(x => x.MaterialNumber)).Distinct().ToList();
-        
-        var requestDto = new GetCustomerLevel5HabitRequstDto
-        {
-            CustomerId = soldToIds.FirstOrDefault(),
-            LevelCode5List = levelCodes,
-            Material = materials
-        };
-        Log.Information("Sending GetCustomerLevel5HabitAsync with: {@RequestDto}", requestDto);
-        
-        var habitResponse = levelCodes.Any() ? await _salesClient.GetCustomerLevel5HabitAsync(requestDto, cancellationToken).ConfigureAwait(false) : null;
-        Log.Information("Sending GetCustomerLevel5HabitAsync with: {@RequestDto}", requestDto);
-        
-        var habitLookup = habitResponse?.HistoryCustomerLevel5HabitDtos?.ToDictionary(h => h.LevelCode5, h => h) ?? new Dictionary<string, HistoryCustomerLevel5HabitDto>();
-        
-        string FormatItem(string materialDesc, string levelCode = null, string materialNumber = null)
-        {
-            var parts = materialDesc?.Split('·') ?? Array.Empty<string>();
-            var name = parts.Length > 4 ? $"{parts[0]}{parts[4]}" : parts.FirstOrDefault() ?? "";
-            var brand = parts.Length > 1 ? parts[1] : "";
-            var size = parts.Length > 3 ? parts[3] : "";
-            
-            string aliasText = "";
-            MaterialPartInfoDto partInfo = null;
-
-            if (!string.IsNullOrEmpty(levelCode) && habitLookup.TryGetValue(levelCode, out var habit))
-            {
-                aliasText = habit.CustomerLikeNames != null && habit.CustomerLikeNames.Any() ? string.Join(", ", habit.CustomerLikeNames.Select(n => n.CustomerLikeName)) : "";
-
-                partInfo = habit.MaterialPartInfoDtos?.FirstOrDefault(p => string.Equals(p.MaterialNumber, materialNumber, StringComparison.OrdinalIgnoreCase));
-            }
-
-            return $"Item: {name}, Brand: {brand}, Size: {size}, Aliases: {aliasText}, " +
-                   $"baseUnit: {partInfo?.BaseUnit ?? ""}, salesUnit: {partInfo?.SalesUnit ?? ""}, weights: {partInfo?.Weights ?? 0}, " +
-                   $"placeOfOrigin: {partInfo?.PlaceOfOrigin ?? ""}, packing: {partInfo?.Packing ?? ""}, specifications: {partInfo?.Specifications ?? ""}, " +
-                   $"ranks: {partInfo?.Ranks ?? ""}, atr: {partInfo?.Atr ?? 0}";
-        }
-        
-        allItems.AddRange(askItems.Select(x => FormatItem(x.MaterialDesc, x.LevelCode, x.Material)));
-        allItems.AddRange(orderItems.Select(x => FormatItem(x.MaterialDescription, x.LevelCode, x.MaterialNumber)));
-
-        var result = string.Join(Environment.NewLine, allItems.Distinct());
-        Log.Information("BuildCustomerItemsStringAsync final result:\n{Result}", result);
-
-        return result;
-    }
-    
     private async Task SummarizeConversationContentAsync(PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken)
     {
         var (aiSpeechAssistant, agent) = await _aiSpeechAssistantDataProvider.GetAgentAndAiSpeechAssistantAsync(record.AgentId, cancellationToken).ConfigureAwait(false);
@@ -276,7 +205,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         record.IsHumanAnswered = checkCustomerFriendly.IsHumanAnswered;
         
         var detection = await _translationClient.DetectLanguageAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
-
+        
         var reports = new List<PhoneOrderRecordReport>();
 
         reports.Add(new PhoneOrderRecordReport
@@ -342,7 +271,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         {
             if (agent.IsWecomMessageOrder && aiSpeechAssistant != null)
             {
-                var messageNumber = await SendAgentMessageRecordAsync(agent, record.Id, aiSpeechAssistant.GroupKey, cancellationToken).ConfigureAwait(false);
+                var messageNumber = await SendAgentMessageRecordAsync(agent, record.Id, aiSpeechAssistant.GroupKey, cancellationToken);
                 message = $"【第{messageNumber}條】\n" + message;
             }
 
@@ -524,7 +453,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         
         var historyItems = await GetCustomerHistoryItemsBySoldToIdAsync(soldToIds, cancellationToken).ConfigureAwait(false);
 
-        var extractedOrders = await ExtractAndMatchOrderItemsFromReportAsync(record.TranscriptionText, historyItems, DateTime.Today, cancellationToken).ConfigureAwait(false); 
+        var extractedOrders = await ExtractAndMatchOrderItemsFromReportAsync(record.TranscriptionText, historyItems, cancellationToken).ConfigureAwait(false); 
         if (!extractedOrders.Any()) return;
         
         var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
@@ -556,11 +485,11 @@ public class SpeechMaticsService : ISpeechMaticsService
         }
     }
 
-    private async Task<List<ExtractedOrderDto>> ExtractAndMatchOrderItemsFromReportAsync(string reportText, List<(string Material, string MaterialDesc)> historyItems, DateTime orderDate, CancellationToken cancellationToken) 
+    private async Task<List<ExtractedOrderDto>> ExtractAndMatchOrderItemsFromReportAsync(string reportText, List<(string Material, string MaterialDesc, DateTime? invoiceDate)> historyItems, CancellationToken cancellationToken) 
     { 
         var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
         
-        var materialListText = string.Join("\n", historyItems.Select(x => $"{x.MaterialDesc} ({x.Material})"));
+        var materialListText = string.Join("\n", historyItems.Select(x => $"{x.MaterialDesc} ({x.Material})【{x.invoiceDate}】"));
         
         var systemPrompt =
             "你是一名訂單分析助手。請從下面的客戶分析報告文字中提取所有下單的物料名稱、數量、單位，並且用歷史物料列表盡力匹配每個物料的materialNumber。" +
@@ -570,6 +499,7 @@ public class SpeechMaticsService : ISpeechMaticsService
             "範例：\n" +
             "{\n    \"stores\": [\n        {\n            \"StoreName\": \"HaiDiLao\",\n            \"StoreNumber\": \"1\",\n            \"DeliveryDate\": \"2025-08-20\",\n            \"orders\": [\n                {\n                    \"name\": \"雞胸肉\",\n                    \"quantity\": 1,\n                    \"unit\": \"箱\",\n                    \"materialNumber\": \"000000000010010253\"\n                }\n            ]\n        }\n    ]\n}" +
             "歷史物料列表：\n" + materialListText + "\n\n" +
+            "每個物料的格式為「物料名稱（物料號碼）」，部分物料會包含日期\n 當有多個相似的物料名稱時，請根據以下規則選擇匹配的物料號碼：1. **優先選擇沒有日期的物料。**\n 2. 如果所有相似物料都有日期，請選擇日期**最新** 的那個物料。\n\n  "+
             "注意：\n1. 必須嚴格輸出 JSON，物件頂層字段必須是 \"stores\"，不要有其他字段或額外說明。\n2. 提取的物料名稱需要為繁體中文。\n3. 如果没有提到店铺信息，但是有下单内容，则StoreName和StoreNumber可为空值，orders要正常提取。\n4. **如果客戶分析文本中沒有任何可識別的下單信息，請返回：{ \"stores\": [] }。不得臆造或猜測物料。** \n" +
             "請務必完整提取報告中每一個提到的物料";
         Log.Information("Sending prompt to GPT: {Prompt}", systemPrompt);
@@ -633,18 +563,18 @@ public class SpeechMaticsService : ISpeechMaticsService
         } 
     }
     
-    private async Task<List<(string Material, string MaterialDesc)>> GetCustomerHistoryItemsBySoldToIdAsync(List<string> soldToIds, CancellationToken cancellationToken)
+    private async Task<List<(string Material, string MaterialDesc, DateTime? InvoiceDate)>> GetCustomerHistoryItemsBySoldToIdAsync(List<string> soldToIds, CancellationToken cancellationToken)
     {
-        List<(string Material, string MaterialDesc)> historyItems = new List<(string, string)>();
+        List<(string Material, string MaterialDesc, DateTime? InvoiceDate)> historyItems = new List<(string, string, DateTime?)>();
 
         var askInfoResponse = await _salesClient.GetAskInfoDetailListByCustomerAsync(new GetAskInfoDetailListByCustomerRequestDto { CustomerNumbers = soldToIds }, cancellationToken).ConfigureAwait(false);
         var orderHistoryResponse = await _salesClient.GetOrderHistoryByCustomerAsync(new GetOrderHistoryByCustomerRequestDto { CustomerNumber = soldToIds.FirstOrDefault() }, cancellationToken).ConfigureAwait(false);
         
         if (askInfoResponse?.Data != null && askInfoResponse.Data.Any())
-            historyItems.AddRange(askInfoResponse.Data.Where(x => !string.IsNullOrWhiteSpace(x.Material)).Select(x => (x.Material, x.MaterialDesc)));
+            historyItems.AddRange(askInfoResponse.Data.Where(x => !string.IsNullOrWhiteSpace(x.Material)).Select(x => (x.Material, x.MaterialDesc, (DateTime?)null)));
         
         if (orderHistoryResponse?.Data != null && orderHistoryResponse.Data.Any())
-            historyItems.AddRange(orderHistoryResponse?.Data.Where(x => !string.IsNullOrWhiteSpace(x.MaterialNumber)).Select(x => (x.MaterialNumber, x.MaterialDescription)) ?? new List<(string, string)>());
+            historyItems.AddRange(orderHistoryResponse?.Data.Where(x => !string.IsNullOrWhiteSpace(x.MaterialNumber)).Select(x => (x.MaterialNumber, x.MaterialDescription, x.LastInvoiceDate)) ?? new List<(string, string, DateTime?)>());
 
         return historyItems;
     }
@@ -657,7 +587,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         return TranscriptionLanguage.English;
     }
     
-    private string MatchMaterialNumber(string itemName, string baseNumber, string unit, List<(string Material, string MaterialDesc)> historyItems)
+    private string MatchMaterialNumber(string itemName, string baseNumber, string unit, List<(string Material, string MaterialDesc, DateTime? invoiceDate)> historyItems)
     {
         var candidates = historyItems.Where(x => x.MaterialDesc != null && x.MaterialDesc.Contains(itemName, StringComparison.OrdinalIgnoreCase)).Select(x => x.Material).ToList();
         Log.Information("Candidate material code list: {@Candidates}", candidates);
