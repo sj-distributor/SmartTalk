@@ -61,9 +61,9 @@ public class AutoTestController : ControllerBase
             Prompt = prompt
         }, cancellationToken).ConfigureAwait(false);
 
-        return File(result.Data, "audio/wav", "conversation.wav");
+        // 返回 MP3
+        return File(result.Data, "audio/mpeg", "gpt.mp3");
     }
-
     
     [HttpPost("pcm-to-wav")]
     public async Task<IActionResult> ConvertPcmToWavAsync([FromForm] IFormFile pcmFile, [FromForm] int sampleRate = 16000, [FromForm] int bitsPerSample = 16, [FromForm] int channels = 1, CancellationToken cancellationToken = default)
