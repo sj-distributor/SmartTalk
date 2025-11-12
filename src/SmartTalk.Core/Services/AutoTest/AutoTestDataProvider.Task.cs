@@ -88,7 +88,7 @@ public partial class AutoTestDataProvider
 
     public async Task<AutoTestTask> GetAutoTestTaskByIdAsync(int id, CancellationToken cancellationToken)
     {
-        return await _repository.GetByIdAsync<AutoTestTask>(id, cancellationToken).ConfigureAwait(false);
+        return await _repository.Query<AutoTestTask>().Where(x => x.Id == id).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task AddAutoTestTaskAsync(AutoTestTask task, bool forceSave = true, CancellationToken cancellationToken = default)
