@@ -451,10 +451,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                 finalPrompt = finalPrompt.Replace("#{customer_items}", customerItems.Any() ? string.Join(Environment.NewLine + Environment.NewLine, customerItems.Take(50)) : " ");
             }
         }
-        
-        Log.Information($"The final prompt: {finalPrompt}");
 
-        if (numberId.HasValue)
+        if (numberId.HasValue && finalPrompt.Contains("#{greeting}"))
         {
             var greeting = await _smartiesClient.GetSaleAutoCallNumberAsync(new GetSaleAutoCallNumberRequest(){ Id = numberId.Value }, cancellationToken).ConfigureAwait(false);
             knowledge.Greetings = string.IsNullOrEmpty(greeting.Data.Number.Greeting) ? knowledge.Greetings : greeting.Data.Number.Greeting;
