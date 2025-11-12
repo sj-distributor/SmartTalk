@@ -8,7 +8,7 @@ using SmartTalk.Messages.Enums.AutoTest;
 namespace SmartTalk.Core.Services.AutoTest;
 public partial interface IAutoTestDataProvider
 {
-    Task<(List<AutoTestTaskDto>, int)> GetAutoTestTasksAsync(string keyword, int? scenarioId = null, int? pageIndex = null, int? pageSize = null, CancellationToken cancellationToken = default);
+    Task<(List<AutoTestTaskDto>, int)> GetAutoTestTasksAsync(string keyword, int? scenarioId, int? pageIndex, int? pageSize, CancellationToken cancellationToken = default);
     
     Task<AutoTestTask> GetAutoTestTaskByIdAsync(int id, CancellationToken cancellationToken);
     
@@ -23,7 +23,7 @@ public partial interface IAutoTestDataProvider
 
 public partial class AutoTestDataProvider
 {
-    public async Task<(List<AutoTestTaskDto>, int)> GetAutoTestTasksAsync(string keyword, int? scenarioId = null, int? pageIndex = null, int? pageSize = null, CancellationToken cancellationToken = default)
+    public async Task<(List<AutoTestTaskDto>, int)> GetAutoTestTasksAsync(string keyword, int? scenarioId, int? pageIndex, int? pageSize, CancellationToken cancellationToken = default)
     {
         var query =
             from task in _repository.QueryNoTracking<AutoTestTask>()
