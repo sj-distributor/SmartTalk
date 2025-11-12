@@ -35,17 +35,8 @@ public class ApiAutoTestHandler : IAutoTestActionHandler
         
         var actionConfig = JsonConvert.DeserializeObject<AutoTestSalesOrderActionConfigDto>(scenario.ActionConfig);
         
-        Log.Warning("ApiAutoTestHandler ActionHandleAsync actionConfig:{@actionConfig}", actionConfig);
+        Log.Information("ApiAutoTestHandler ActionHandleAsync actionConfig:{@actionConfig}", actionConfig);
         
-        var taskRecords = await _autoTestDataProvider.GetStatusTaskRecordsByTaskIdAsync(taskId, AutoTestTaskRecordStatus.Pending, cancellationToken).ConfigureAwait(false);
-        
-        foreach (var record in taskRecords)
-        {
-            record.Status = AutoTestTaskRecordStatus.Ongoing;
-            
-            await _autoTestDataProvider.UpdateTaskRecordsAsync(taskRecords, cancellationToken: cancellationToken).ConfigureAwait(false);
-            
-            // TODO: 执行API请求
-        }
+        // TODO: 执行API请求
     }
 }

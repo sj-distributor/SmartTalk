@@ -60,13 +60,19 @@ public partial class AutoTestService : IAutoTestService
     
     public async Task<AutoTestRunningResponse> AutoTestRunningAsync(AutoTestRunningCommand command, CancellationToken cancellationToken)
     {
-        Log.Warning("AutoTestRunningAsync command:{@command}", command);
+        Log.Information("AutoTestRunningAsync command:{@command}", command);
         
         var scenario = await _autoTestDataProvider.GetAutoTestScenarioByIdAsync(command.ScenarioId, cancellationToken).ConfigureAwait(false);
         
         if (scenario == null) throw new Exception("Scenario not found");
         
-        Log.Warning("AutoTestRunningAsync scenario:{@scenario}", scenario);
+        Log.Information("AutoTestRunningAsync scenario:{@scenario}", scenario);
+        
+        var taskRecords = await _autoTestDataProvider.GetStatusTaskRecordsByTaskIdAsync(command.TaskId, AutoTestTaskRecordStatus.Pending, cancellationToken).ConfigureAwait(false);
+        
+        taskRecords.ForEach(x => x.Status = AutoTestTaskRecordStatus.Ongoing);
+        
+        await _autoTestDataProvider.UpdateTaskRecordsAsync(taskRecords, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         await _autoTestActionHandlerSwitcher.GetHandler(scenario.ActionType, scenario.KeyName).ActionHandleAsync(scenario, command.TaskId, cancellationToken).ConfigureAwait(false);
         

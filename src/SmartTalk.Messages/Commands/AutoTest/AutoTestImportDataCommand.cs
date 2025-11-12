@@ -11,8 +11,6 @@ public class AutoTestImportDataCommand : ICommand
     
     public int ScenarioId { get; set; }
     
-    public string KeyName { get; set; }
-    
     public AutoTestImportDataRecordType ImportType { get; set; }
 }
 
