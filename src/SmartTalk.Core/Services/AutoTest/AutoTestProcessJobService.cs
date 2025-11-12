@@ -254,23 +254,27 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
                 if (userMp3 == null || userMp3.Length == 0)
                     continue;
 
-                var wavFile = Path.GetTempFileName() + ".wav";
-                ConvertMp3ToUniformWav(userMp3, wavFile);
-                wavFiles.Add(wavFile);
+                var userWavFile = Path.GetTempFileName() + ".wav";
+                ConvertMp3ToUniformWav(userMp3, userWavFile);
+                wavFiles.Add(userWavFile);
 
                 conversationHistory.Add(new UserChatMessage(
                     ChatMessageContentPart.CreateInputAudioPart(
-                        BinaryData.FromBytes(await File.ReadAllBytesAsync(wavFile, cancellationToken)),
+                        BinaryData.FromBytes(await File.ReadAllBytesAsync(userWavFile, cancellationToken)),
                         ChatInputAudioFormat.Wav)));
 
                 var completion = await client.CompleteChatAsync(conversationHistory, options, cancellationToken);
 
                 var aiWavFile = Path.GetTempFileName() + ".wav";
-                await File.WriteAllBytesAsync(aiWavFile, completion.Value.OutputAudio.AudioBytes.ToArray(),
-                    cancellationToken);
-                wavFiles.Add(aiWavFile);
+                await File.WriteAllBytesAsync(aiWavFile, completion.Value.OutputAudio.AudioBytes.ToArray(), cancellationToken);
+
+                var normalizedAiWavFile = Path.GetTempFileName() + ".wav";
+                NormalizeWavFormat(aiWavFile, normalizedAiWavFile);
+                wavFiles.Add(normalizedAiWavFile);
 
                 conversationHistory.Add(new AssistantChatMessage(completion.Value.OutputAudio.Transcript));
+
+                File.Delete(aiWavFile);
             }
 
             var mergedWavFile = Path.GetTempFileName() + ".wav";
@@ -291,9 +295,15 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
     {
         var tempMp3 = Path.GetTempFileName() + ".mp3";
         File.WriteAllBytes(tempMp3, mp3Bytes);
-        var args = $"-y -i \"{tempMp3}\" -ar 16000 -ac 1 -acodec pcm_s16le \"{outputWavFile}\"";
+        var args = $"-y -i \"{tempMp3}\" -ar 24000 -ac 1 -acodec pcm_s16le \"{outputWavFile}\"";
         RunFfmpeg(args);
         File.Delete(tempMp3);
+    }
+
+    private void NormalizeWavFormat(string inputFile, string outputFile)
+    {
+        var args = $"-y -i \"{inputFile}\" -ar 24000 -ac 1 -acodec pcm_s16le \"{outputFile}\"";
+        RunFfmpeg(args);
     }
 
     private void MergeWavFilesToUniformFormat(List<string> wavFiles, string outputFile)
@@ -303,7 +313,7 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
 
         var listFile = Path.GetTempFileName();
         File.WriteAllLines(listFile, wavFiles.Select(f => $"file '{f}'"));
-        var args = $"-y -f concat -safe 0 -i \"{listFile}\" -ar 16000 -ac 1 -acodec pcm_s16le \"{outputFile}\"";
+        var args = $"-y -f concat -safe 0 -i \"{listFile}\" -ar 24000 -ac 1 -acodec pcm_s16le \"{outputFile}\"";
         RunFfmpeg(args);
         File.Delete(listFile);
     }
