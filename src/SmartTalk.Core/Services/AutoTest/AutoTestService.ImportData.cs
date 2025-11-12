@@ -17,7 +17,7 @@ public partial class AutoTestService
 {
     public async Task<AutoTestImportDataResponse> AutoTestImportDataAsync(AutoTestImportDataCommand command, CancellationToken cancellationToken)
     {
-        if (!command.ImportData.TryGetValue("customerId", out var customerObj)) 
+        if (!command.ImportData.TryGetValue("CustomerId", out var customerObj)) 
             throw new Exception($"The imported data is missing customerId, so processing is skipped. command: {command}");
         
         var customerId = command.ImportData["CustomerId"].ToString(); 
