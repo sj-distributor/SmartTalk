@@ -424,20 +424,22 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
         
-        var finalPrompt = knowledge.Prompt
-            .Replace("#{user_profile}", string.IsNullOrEmpty(userProfile?.ProfileJson) ? " " : userProfile.ProfileJson)
-            .Replace("#{current_time}", currentTime)
-            .Replace("#{customer_phone}", from.StartsWith("+1") ? from[2..] : from)
-            .Replace("#{pst_date}", $"{pstTime.Date:yyyy-MM-dd} {pstTime.DayOfWeek}");
-        
-        Log.Information($"The final prompt: {finalPrompt}");
-
         if (numberId.HasValue)
         {
             var greeting = await _smartiesClient.GetSaleAutoCallNumberAsync(new GetSaleAutoCallNumberRequest(){ Id = numberId.Value }, cancellationToken).ConfigureAwait(false);
             knowledge.Greetings = string.IsNullOrEmpty(greeting.Data.Number.Greeting) ? knowledge.Greetings : greeting.Data.Number.Greeting;
         }
+
+        var finalPrompt = knowledge.Prompt
+            .Replace("#{user_profile}", string.IsNullOrEmpty(userProfile?.ProfileJson) ? " " : userProfile.ProfileJson)
+            .Replace("#{current_time}", currentTime)
+            .Replace("#{customer_phone}", from.StartsWith("+1") ? from[2..] : from)
+            .Replace("#{pst_date}", $"{pstTime.Date:yyyy-MM-dd} {pstTime.DayOfWeek}")
+            .Replace("#{pst_time}", $"{pstTime:HH:mm:ss}")
+            .Replace("#{ai_greeting}", $"{knowledge.Greetings}");
         
+        Log.Information($"The final prompt: {finalPrompt}");
+
         _aiSpeechAssistantStreamContext.LastPrompt = finalPrompt;
         _aiSpeechAssistantStreamContext.Assistant = _mapper.Map<AiSpeechAssistantDto>(assistant);
         _aiSpeechAssistantStreamContext.Knowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge);
