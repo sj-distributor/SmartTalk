@@ -32,17 +32,11 @@ public class RingCentralClient : IRingCentralClient
             new KeyValuePair<string, string>("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer"),
             new KeyValuePair<string, string>("assertion", _ringCentralAuthenticationSettings.JwtAssertion)
         });
-        
-        var rawRequestBody = await content.ReadAsStringAsync();
-        Log.Warning("RingCentral Token Request Body: {RawRequestBody}", rawRequestBody);
 
         var headers = new Dictionary<string, string>
         {
             { "Authorization", $"Basic {_ringCentralAuthenticationSettings.BasicAuth}" }
         };
-        
-        Log.Information("RingCentral Token Request URL: {Url}", url);
-        Log.Information("RingCentral Token Request Headers: {@Headers}", headers);
 
         var response = await _httpClientFactory.PostAsync<RingCentralTokenResponseDto>(url, content, headers: headers, cancellationToken: cancellationToken, isNeedToReadErrorContent: true).ConfigureAwait(false);
 
