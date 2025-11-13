@@ -136,7 +136,7 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
         foreach (var records in results) 
             allRecords.AddRange(records);
         
-        var singleCallNumbers = allRecords.GroupBy(r => r.From?.PhoneNumber ?? r.To?.PhoneNumber).Where(g => g.Count() == 1)
+        var singleCallNumbers = allRecords.GroupBy(r => NormalizePhone(r.From?.PhoneNumber ?? r.To?.PhoneNumber)).Where(g => g.Count() == 1)
             .Select(g => g.Key).Where(p => !string.IsNullOrWhiteSpace(p)).ToList();
         
         if (!singleCallNumbers.Any())
