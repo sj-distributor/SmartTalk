@@ -31,7 +31,7 @@ public partial class AutoTestDataProvider
                 on task.DataSetId equals dataSetItem.DataSetId into dataSetItems
             from dataSetItem in dataSetItems.DefaultIfEmpty()
             join dataSet in _repository.QueryNoTracking<AutoTestDataSet>() 
-                on dataSetItem.DataSetId equals dataSet.Id into dataSets
+                on task.DataSetId equals dataSet.Id into dataSets
             from dataSet in dataSets.DefaultIfEmpty()
                 group new { task, dataSet, dataSetItem } by task.Id into taskGroup
             select new AutoTestTaskDto

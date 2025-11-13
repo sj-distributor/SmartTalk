@@ -6,7 +6,7 @@ namespace SmartTalk.Messages.Requests.AutoTest;
 
 public class GetAutoTestTaskRequest : IRequest
 {
-    public int ScenarioId { get; set; }
+    public int? ScenarioId { get; set; }
     
     public string KeyWord { get; set; }
     
