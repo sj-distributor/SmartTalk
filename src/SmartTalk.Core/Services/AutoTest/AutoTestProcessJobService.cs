@@ -107,7 +107,9 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
         
         // 生成ai订单
         
-        AutoTestOrderCompare(record.InputSnapshot, []);  // todo: 输入 Ai 订单
+        var inputSnapshot = JsonConvert.DeserializeObject<AutoTestInputJsonDto>(record.InputSnapshot);
+        
+        AutoTestOrderCompare(inputSnapshot.Detail, []);  // todo: 输入 Ai 订单
 
         record.Status = AutoTestTaskRecordStatus.Done;
 
@@ -364,10 +366,10 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
         }, wait: TimeSpan.FromSeconds(10), retry: TimeSpan.FromSeconds(1), server: RedisServer.System).ConfigureAwait(false);
     }
     
-    private string AutoTestOrderCompare(string inputSnapshot, List<AutoTestInputDetail> aiOrderItems)
+    private string AutoTestOrderCompare(List<AutoTestInputDetail> realOrderItems, List<AutoTestInputDetail> aiOrderItems)
     {
         aiOrderItems ??= []; 
-        var realOrderItems = JsonConvert.DeserializeObject<AutoTestInputJsonDto>(inputSnapshot)?.Detail ?? [];
+        realOrderItems ??= [];
         
         var orderItems = new List<AutoTestOrderItemDto>();
         
