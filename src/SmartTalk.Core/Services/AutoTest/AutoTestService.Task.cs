@@ -1,4 +1,5 @@
 using System.Net;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Serilog;
 using SmartTalk.Core.Domain.AutoTest;
@@ -32,8 +33,11 @@ public partial class AutoTestService
         
         return new GetAutoTestTaskResponse
         {
-            Data = tasks,
-            TotalCount = count
+            Data = new GetAutoTestTaskResponseDataDto()
+            {
+                TotalCount = count,
+                Tasks = tasks
+            }
         };
     }
 
@@ -102,11 +106,11 @@ public partial class AutoTestService
         switch (newStatus)
         {
             case AutoTestTaskStatus.Pause:
-                await UpdateTaskRecordsStatusAsync(task.Id, AutoTestTaskRecordStatus.Pause, cancellationToken).ConfigureAwait(false);
+                await UpdateTaskRecordsStatusAsync(task.Id, AutoTestTaskRecordStatus.Pending,AutoTestTaskRecordStatus.Pause,  cancellationToken).ConfigureAwait(false);
                 break;
 
             case AutoTestTaskStatus.Ongoing:
-                if (task.StartedAt is not null) await UpdateTaskRecordsStatusAsync(task.Id, AutoTestTaskRecordStatus.Pending, cancellationToken).ConfigureAwait(false);
+                if (task.StartedAt is not null) await UpdateTaskRecordsStatusAsync(task.Id, AutoTestTaskRecordStatus.Pause, AutoTestTaskRecordStatus.Pending,  cancellationToken).ConfigureAwait(false);
                 await AutoTestRunningAsync(new AutoTestRunningCommand
                 {
                     TaskId = task.Id,
@@ -116,22 +120,15 @@ public partial class AutoTestService
         }
         
         var (dataItemCount, recordDoneCount) = await _autoTestDataProvider.GetDoneTaskRecordCountAsync(task.DataSetId, task.Id, cancellationToken).ConfigureAwait(false);
-
-        if (dataItemCount == recordDoneCount)
-        {
-            task.FinishedAt = DateTimeOffset.Now; 
-            task.Status = AutoTestTaskStatus.Done;
-            await _autoTestDataProvider.UpdateAutoTestTaskAsync(task, cancellationToken: cancellationToken).ConfigureAwait(false); 
-        }
         
         return (dataItemCount, recordDoneCount);
     }
 
-    private async Task UpdateTaskRecordsStatusAsync(int testTaskId, AutoTestTaskRecordStatus status, CancellationToken cancellationToken)
+    private async Task UpdateTaskRecordsStatusAsync(int testTaskId, AutoTestTaskRecordStatus status, AutoTestTaskRecordStatus updateStatus, CancellationToken cancellationToken)
     {
-        var records = await _autoTestDataProvider.GetPendingTaskRecordsByTaskIdAsync(testTaskId, cancellationToken).ConfigureAwait(false);
+        var records = await _autoTestDataProvider.GetStatusTaskRecordsByTaskIdAsync(testTaskId, status, cancellationToken).ConfigureAwait(false);
 
-        records.ForEach(x => x.Status = status);
+        records.ForEach(x => x.Status = updateStatus);
         
         await _autoTestDataProvider.UpdateTaskRecordsAsync(records, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
@@ -179,13 +176,11 @@ public partial class AutoTestService
     {
         var (task, dataset) = await _autoTestDataProvider.GetAutoTestTaskInfoByIdAsync(taskId, cancellationToken).ConfigureAwait(false);
         
-        var taskParams = JObject.Parse(task.Params);
+        var taskParams = JsonConvert.DeserializeObject<AutoTestTaskParamsDto>(task.Params);
         
-        var assistantId = taskParams["assistantId"]?.Value<int>();
+        Log.Information("Get task params: {AssistantId}", taskParams);
         
-        Log.Information("Get the assistantId from task params: {AssistantId}", assistantId);
-        
-        var assistant = assistantId.HasValue ? await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByIdAsync(assistantId.Value, cancellationToken).ConfigureAwait(false) : null;
+        var assistant = taskParams != null && taskParams.AssistantId != 0 ? await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByIdAsync(taskParams.AssistantId, cancellationToken).ConfigureAwait(false) : null;
 
         Log.Information("Source assistant for executing the current task: {@Assistant}", assistant);
         

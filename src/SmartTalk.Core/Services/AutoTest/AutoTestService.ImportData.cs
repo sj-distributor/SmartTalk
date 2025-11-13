@@ -1,5 +1,9 @@
+using System.Text.Json;
+using Newtonsoft.Json;
+using Serilog;
 using SmartTalk.Core.Domain.AutoTest;
 using SmartTalk.Messages.Commands.AutoTest;
+using SmartTalk.Messages.Dto.AutoTest;
 using SmartTalk.Messages.Enums.AutoTest;
 
 namespace SmartTalk.Core.Services.AutoTest;
@@ -13,8 +17,48 @@ public partial class AutoTestService
 {
     public async Task<AutoTestImportDataResponse> AutoTestImportDataAsync(AutoTestImportDataCommand command, CancellationToken cancellationToken)
     {
-        await _autoTestDataImportHandlerSwitcher.GetHandler(command.ImportType).ImportAsync(command.ImportData, cancellationToken).ConfigureAwait(false);
+        var dataSet = new AutoTestDataSet()
+        {
+            ScenarioId = command.ScenarioId,
+            KeyName = command.KeyName,
+            Name = command.KeyName,
+            IsDelete = false
+        };
+
+        await _autoTestDataProvider.AddAutoTestDataSetAsync(dataSet, cancellationToken:cancellationToken).ConfigureAwait(false);
         
-        return new AutoTestImportDataResponse();
+        var scenario = await _autoTestDataProvider.GetAutoTestScenarioByIdAsync(command.ScenarioId, cancellationToken).ConfigureAwait(false);
+        
+        var importRecord = new AutoTestImportDataRecord 
+        { 
+            ScenarioId = command.ScenarioId, 
+            Type = AutoTestImportDataRecordType.Api, 
+            Status = AutoTestStatus.Running, 
+            OpConfig = JsonConvert.SerializeObject(command.ImportData), 
+            CreatedAt = DateTimeOffset.Now 
+        }; 
+        
+        if (scenario == null)
+        {
+            Log.Warning("Scenario {ScenarioId} does not exist, skip importing.", scenario.Id);
+            
+            importRecord.Status = AutoTestStatus.Failed;
+            
+            await _autoTestDataProvider.AddAutoTestImportRecordAsync(importRecord, true, cancellationToken).ConfigureAwait(false);
+
+            return new AutoTestImportDataResponse()
+            {
+                Data = _mapper.Map<AutoTestDataSetDto>(dataSet),
+            };
+        }
+        
+        await _autoTestDataProvider.AddAutoTestImportRecordAsync(importRecord, true, cancellationToken).ConfigureAwait(false);
+
+        _smartTalkBackgroundJobClient.Enqueue(() => _autoTestDataImportHandlerSwitcher.GetHandler(command.ImportType).ImportAsync(command.ImportData, command.ScenarioId, dataSet.Id, importRecord.Id,cancellationToken));
+
+        return new AutoTestImportDataResponse()
+        {
+            Data = _mapper.Map<AutoTestDataSetDto>(dataSet),
+        };
     }
 }

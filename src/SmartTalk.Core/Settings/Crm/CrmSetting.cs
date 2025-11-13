@@ -6,12 +6,16 @@ public class CrmSetting : IConfigurationSetting
 {
     public CrmSetting(IConfiguration configuration)
     {
-        BaseUrl = configuration.GetValue<string>("crm:BaseUrl");
+        BaseUrl = configuration.GetValue<string>("Crm:BaseUrl");
         
-        AccessToken = configuration.GetValue<string>("crm:AccessToken");
+        ClientId = configuration.GetValue<string>("Crm:ClientId");
+        
+        ClientSecret = configuration.GetValue<string>("Crm:ClientSecret");
     }
-    
+
     public string BaseUrl { get; set; }
     
-    public string AccessToken { get; set; } = string.Empty;
+    public string ClientId { get; set; }
+    
+    public string ClientSecret { get; set; }
 }

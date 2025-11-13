@@ -27,20 +27,18 @@ public class RingCentralClient : IRingCentralClient
     {
         var url = $"{_ringCentralAuthenticationSettings.BaseUrl}/restapi/oauth/token";
 
-        var nvc = new List<KeyValuePair<string, string>>
+        var body = new Dictionary<string, string>
         {
-            new("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer"),
-            new("client_id", _ringCentralAuthenticationSettings.ClientId),
-            new("assertion", _ringCentralAuthenticationSettings.JwtAssertion)
+            { "grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer" },
+            { "assertion", _ringCentralAuthenticationSettings.JwtAssertion }
         };
 
         var headers = new Dictionary<string, string>
         {
-            { "Authorization", $"Basic {_ringCentralAuthenticationSettings.BasicAuth}" },
-            { "Content-Type", "application/x-www-form-urlencoded" }
+            { "Authorization", $"Basic {_ringCentralAuthenticationSettings.BasicAuth}" }
         };
 
-        var response = await _httpClientFactory.PostAsync<RingCentralTokenResponseDto>(url, new FormUrlEncodedContent(nvc), headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var response = await _httpClientFactory.PostAsync<RingCentralTokenResponseDto>(url, new FormUrlEncodedContent(body), headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         Log.Information("RingCentral token response {@Response}", response);
 

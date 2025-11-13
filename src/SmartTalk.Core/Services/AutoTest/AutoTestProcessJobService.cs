@@ -1,14 +1,17 @@
+using System.Diagnostics;
 using System.Text;
 using Microsoft.IdentityModel.Tokens;
 using NAudio.Wave;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using OpenAI.Chat;
 using Serilog;
 using Smarties.Messages.DTO.OpenAi;
 using Smarties.Messages.Enums.OpenAi;
 using Smarties.Messages.Requests.Ask;
+using SmartTalk.Core.Domain.AutoTest;
 using SmartTalk.Core.Ioc;
+using SmartTalk.Core.Services.AiSpeechAssistant;
+using SmartTalk.Core.Services.Caching.Redis;
 using SmartTalk.Core.Services.Ffmpeg;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
@@ -17,6 +20,8 @@ using SmartTalk.Core.Services.STT;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Messages.Dto.AutoTest;
 using SmartTalk.Messages.Dto.SpeechMatics;
+using SmartTalk.Messages.Enums.AutoTest;
+using SmartTalk.Messages.Enums.Caching;
 using TranscriptionFileType = SmartTalk.Messages.Enums.STT.TranscriptionFileType;
 using TranscriptionResponseFormat = SmartTalk.Messages.Enums.STT.TranscriptionResponseFormat;
 
@@ -32,21 +37,24 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
     private readonly IFfmpegService _ffmpegService;
     private readonly OpenAiSettings _openAiSettings;
     private readonly ISmartiesClient _smartiesClient;
+    private readonly IRedisSafeRunner _redisSafeRunner;
     private readonly ISpeechToTextService _speechToTextService;
     private readonly IAutoTestDataProvider _autoTestDataProvider;
     private readonly ISpeechMaticsDataProvider _speechMaticsDataProvider;
     private readonly ISmartTalkHttpClientFactory _smartTalkHttpClientFactory;
+    private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
 
-    public AutoTestProcessJobService(IFfmpegService ffmpegService, OpenAiSettings openAiSettings, ISmartiesClient smartiesClient, ISpeechToTextService speechToTextService, IAutoTestDataProvider autoTestDataProvider, ISpeechMaticsDataProvider speechMaticsDataProvider, ISmartTalkHttpClientFactory smartTalkHttpClientFactory
-        )
+    public AutoTestProcessJobService(IFfmpegService ffmpegService, OpenAiSettings openAiSettings, ISmartiesClient smartiesClient, IRedisSafeRunner redisSafeRunner, ISpeechToTextService speechToTextService, IAutoTestDataProvider autoTestDataProvider, ISpeechMaticsDataProvider speechMaticsDataProvider, ISmartTalkHttpClientFactory smartTalkHttpClientFactory, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
         _ffmpegService = ffmpegService;
         _openAiSettings = openAiSettings;
         _smartiesClient = smartiesClient;
+        _redisSafeRunner = redisSafeRunner;
         _speechToTextService = speechToTextService;
         _autoTestDataProvider = autoTestDataProvider;
         _speechMaticsDataProvider = speechMaticsDataProvider;
         _smartTalkHttpClientFactory = smartTalkHttpClientFactory;
+        _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
     }
 
     public async Task HandleTestingSpeechMaticsCallBackAsync(string jobId, CancellationToken cancellationToken)
@@ -71,7 +79,7 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
         
         if (audioContent == null) return;
         
-        var audioBytes = await _ffmpegService.ConvertFileFormatAsync(audioContent, TranscriptionFileType.Wav, cancellationToken).ConfigureAwait(false);
+        var audioBytes = await _ffmpegService.ConvertFileFormatAsync(audioContent, TranscriptionFileType.Mp3, cancellationToken).ConfigureAwait(false);
         
         var (customerSpeaker, audios) = await HandlerConversationSpeakerIsCustomerAsync(sixSentences, audioBytes, cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -79,26 +87,34 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
 
         foreach (var audioInfo in customerAudioInfos)
         {
-            audioInfo.Audio = await _ffmpegService.SpiltAudioAsync(audioBytes, audioInfo.StartTime * 1000, audioInfo.EndTime * 1000, cancellationToken).ConfigureAwait(false);
+            audioInfo.Audio = await _ffmpegService.SpiltAudioAsync(audioBytes, audioInfo.StartTime * 1000, audioInfo.EndTime * 1000, "mp3", cancellationToken).ConfigureAwait(false);
         }
         
         customerAudioInfos.AddRange(audios);
 
         var customerAudios = customerAudioInfos.OrderBy(x => x.StartTime).Select(x => x.Audio).ToList();
-
-        var jObject = JObject.Parse(record.InputSnapshot);
-
-        // assistant id 找is active的knowledge 的prompt
         
-        var conversationAudios = await ProcessAudioConversationAsync(customerAudios, promptDesc, cancellationToken).ConfigureAwait(false);
+        var task  = await _autoTestDataProvider.GetAutoTestTaskByIdAsync(record.TestTaskId, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("HandleTestingSpeechMaticsCallBackAsync: Get auto test task: {@Task}", task);
+        
+        if (task == null) throw new Exception($"Could not find task with id: {record.TestTaskId}!");
+        
+        var taskParams = JsonConvert.DeserializeObject<AutoTestTaskParamsDto>(task.Params);
+
+        var prompt = await BuildConversationPromptAsync(taskParams.AssistantId, cancellationToken).ConfigureAwait(false);
+        
+        var conversationAudios = await ProcessAudioConversationAsync(customerAudios, prompt, cancellationToken).ConfigureAwait(false);
         
         // 生成ai订单
         
         // 对比订单
-        
-        // record 修改
-        
-        // 检查总体task 状态（红锁）
+
+        record.Status = AutoTestTaskRecordStatus.Done;
+
+        await _autoTestDataProvider.UpdateAutoTestTaskRecordAsync(record, true, cancellationToken).ConfigureAwait(false);
+
+        await HandleAutoTestTaskStatusChangeAsync(task, cancellationToken).ConfigureAwait(false);
     }
     
     private List<SpeechMaticsSpeakInfoForAutoTestDto> StructureDiarizationResults(List<SpeechMaticsResultDto> results)
@@ -160,7 +176,7 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
     
     private async Task<(string, byte[])> SplitAudioAsync(byte[] audioBytes, double speakStartTimeVideo, double speakEndTimeVideo, CancellationToken cancellationToken = default)
     {
-        var splitAudios = await _ffmpegService.SpiltAudioAsync(audioBytes, speakStartTimeVideo, speakEndTimeVideo, cancellationToken).ConfigureAwait(false);
+        var splitAudios = await _ffmpegService.SpiltAudioAsync(audioBytes, speakStartTimeVideo, speakEndTimeVideo, "mp3", cancellationToken).ConfigureAwait(false);
 
         var transcriptionResult = new StringBuilder();
         
@@ -212,9 +228,9 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
         return completionResult.Data.Response;
     }
     
-    private async Task<byte[]> ProcessAudioConversationAsync(List<byte[]> customerPcmList, string prompt, CancellationToken cancellationToken)
+    private async Task<byte[]> ProcessAudioConversationAsync(List<byte[]> customerMp3List, string prompt, CancellationToken cancellationToken)
     {
-        if (customerPcmList == null || customerPcmList.Count == 0)
+        if (customerMp3List == null || customerMp3List.Count == 0)
             throw new ArgumentException("没有音频输入");
 
         var conversationHistory = new List<ChatMessage>
@@ -226,44 +242,126 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
         var options = new ChatCompletionOptions
         {
             ResponseModalities = ChatResponseModalities.Text | ChatResponseModalities.Audio,
-            AudioOptions = new ChatAudioOptions(ChatOutputAudioVoice.Alloy, ChatOutputAudioFormat.Pcm16)
+            AudioOptions = new ChatAudioOptions(ChatOutputAudioVoice.Alloy, ChatOutputAudioFormat.Wav)
         };
 
-        using var combinedStream = new MemoryStream();
+        var wavFiles = new List<string>();
 
-        foreach (var userPcm in customerPcmList)
+        try
         {
-            if (userPcm == null || userPcm.Length == 0) continue;
+            foreach (var userMp3 in customerMp3List)
+            {
+                if (userMp3 == null || userMp3.Length == 0)
+                    continue;
 
-            combinedStream.Write(userPcm, 0, userPcm.Length);
+                var userWavFile = Path.GetTempFileName() + ".wav";
+                ConvertMp3ToUniformWav(userMp3, userWavFile);
+                wavFiles.Add(userWavFile);
 
-            var userWav = PcmToWav(userPcm, 16000, 16, 1);
+                conversationHistory.Add(new UserChatMessage(
+                    ChatMessageContentPart.CreateInputAudioPart(
+                        BinaryData.FromBytes(await File.ReadAllBytesAsync(userWavFile, cancellationToken)),
+                        ChatInputAudioFormat.Wav)));
 
-            conversationHistory.Add(new UserChatMessage(
-                ChatMessageContentPart.CreateInputAudioPart(BinaryData.FromBytes(userWav), ChatInputAudioFormat.Wav)
-            ));
+                var completion = await client.CompleteChatAsync(conversationHistory, options, cancellationToken);
 
-            var completion = await client.CompleteChatAsync(conversationHistory, options, cancellationToken);
-            var aiPcm = completion.Value.OutputAudio.AudioBytes.ToArray();
+                var aiWavFile = Path.GetTempFileName() + ".wav";
+                await File.WriteAllBytesAsync(aiWavFile, completion.Value.OutputAudio.AudioBytes.ToArray(), cancellationToken);
 
-            combinedStream.Write(aiPcm, 0, aiPcm.Length);
+                var normalizedAiWavFile = Path.GetTempFileName() + ".wav";
+                NormalizeWavFormat(aiWavFile, normalizedAiWavFile);
+                wavFiles.Add(normalizedAiWavFile);
 
-            conversationHistory.Add(new AssistantChatMessage(completion.Value.OutputAudio.Transcript));
+                conversationHistory.Add(new AssistantChatMessage(completion.Value.OutputAudio.Transcript));
+
+                File.Delete(aiWavFile);
+            }
+
+            var mergedWavFile = Path.GetTempFileName() + ".wav";
+            MergeWavFilesToUniformFormat(wavFiles, mergedWavFile);
+
+            return await File.ReadAllBytesAsync(mergedWavFile, cancellationToken);
         }
-
-        return combinedStream.ToArray();
+        finally
+        {
+            foreach (var f in wavFiles)
+            {
+                if (File.Exists(f)) File.Delete(f);
+            }
+        }
     }
 
-
-    private static byte[] PcmToWav(byte[] pcmData, int sampleRate, int bitsPerSample, int channels)
+    private void ConvertMp3ToUniformWav(byte[] mp3Bytes, string outputWavFile)
     {
-        using var ms = new MemoryStream();
-        var waveFormat = new WaveFormat(sampleRate, bitsPerSample, channels);
-        using (var writer = new WaveFileWriter(ms, waveFormat))
+        var tempMp3 = Path.GetTempFileName() + ".mp3";
+        File.WriteAllBytes(tempMp3, mp3Bytes);
+        var args = $"-y -i \"{tempMp3}\" -ar 24000 -ac 1 -acodec pcm_s16le \"{outputWavFile}\"";
+        RunFfmpeg(args);
+        File.Delete(tempMp3);
+    }
+
+    private void NormalizeWavFormat(string inputFile, string outputFile)
+    {
+        var args = $"-y -i \"{inputFile}\" -ar 24000 -ac 1 -acodec pcm_s16le \"{outputFile}\"";
+        RunFfmpeg(args);
+    }
+
+    private void MergeWavFilesToUniformFormat(List<string> wavFiles, string outputFile)
+    {
+        if (wavFiles.Count == 0)
+            throw new ArgumentException("没有 WAV 文件可合并");
+
+        var listFile = Path.GetTempFileName();
+        File.WriteAllLines(listFile, wavFiles.Select(f => $"file '{f}'"));
+        var args = $"-y -f concat -safe 0 -i \"{listFile}\" -ar 24000 -ac 1 -acodec pcm_s16le \"{outputFile}\"";
+        RunFfmpeg(args);
+        File.Delete(listFile);
+    }
+
+    private void RunFfmpeg(string arguments)
+    {
+        var startInfo = new ProcessStartInfo
         {
-            writer.Write(pcmData, 0, pcmData.Length);
-            writer.Flush();
+            FileName = "ffmpeg",
+            Arguments = arguments,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using var process = Process.Start(startInfo)!;
+        process.WaitForExit();
+
+        if (process.ExitCode != 0)
+        {
+            var err = process.StandardError.ReadToEnd();
+            throw new Exception($"ffmpeg 执行失败：{err}");
         }
-        return ms.ToArray();
+    }
+
+    private async Task<string> BuildConversationPromptAsync(int assistantId, CancellationToken cancellationToken)
+    {
+        if (assistantId == 0) throw new ArgumentException("assistantId could not be 0");
+        
+        var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(assistantId: assistantId, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return knowledge != null ? knowledge.Prompt : "You are a helpful assistant";
+    }
+
+    private async Task HandleAutoTestTaskStatusChangeAsync(AutoTestTask task, CancellationToken cancellationToken)
+    {
+        await _redisSafeRunner.ExecuteWithLockAsync($"auto-test-task-status-handle-{task.Id}", async () =>
+        {
+            var taskRecords = await _autoTestDataProvider.GetAllAutoTestTaskRecordsByTaskIdAsync(task.Id, cancellationToken).ConfigureAwait(false);
+
+            if (taskRecords.All(x => x.Status is AutoTestTaskRecordStatus.Done or AutoTestTaskRecordStatus.Failed))
+            {
+                task.Status = AutoTestTaskStatus.Done;
+                
+                await _autoTestDataProvider.UpdateAutoTestTaskAsync(task, cancellationToken: cancellationToken).ConfigureAwait(false);
+            }
+            
+        }, wait: TimeSpan.FromSeconds(10), retry: TimeSpan.FromSeconds(1), server: RedisServer.System).ConfigureAwait(false);
     }
 }
