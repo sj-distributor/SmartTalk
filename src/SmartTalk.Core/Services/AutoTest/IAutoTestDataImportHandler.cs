@@ -105,7 +105,7 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
         var token = tokenResponse.AccessToken;
         
         var contacts = await _crmClient.GetCustomerContactsAsync(customerId, cancellationToken).ConfigureAwait(false); 
-        var phoneNumbers = contacts.Select(c => c.Phone).Where(p => !string.IsNullOrWhiteSpace(p)).Distinct().ToList();
+        var phoneNumbers = contacts.Select(c => NormalizePhone(c.Phone)).Where(p => !string.IsNullOrWhiteSpace(p)).Distinct().ToList();
         
         if (!phoneNumbers.Any()) 
         { 
@@ -116,6 +116,7 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
         var allRecords = new List<RingCentralRecordDto>();
         var tasks = phoneNumbers.Select(phone => RetryAsync(async () =>
         {
+            Log.Information("请求 RingCentral 通话记录: Customer={CustomerId}, Phone={Phone}, Start={StartDate}, End={EndDate}", customerId, phone, startDate, endDate);
             var rcRequest = new RingCentralCallLogRequestDto
             {
                 PhoneNumber = phone,
@@ -127,6 +128,7 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
             };
 
             var resp = await _ringCentralClient.GetRingCentralRecordAsync(rcRequest, token, cancellationToken).ConfigureAwait(false);
+            Log.Information("RingCentral 返回 {Count} 条通话记录, Phone={Phone}", resp?.Records?.Count ?? 0, phone);
             return resp?.Records ?? new List<RingCentralRecordDto>();
         })).ToList();
         
@@ -137,7 +139,11 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
         var singleCallNumbers = allRecords.GroupBy(r => r.From?.PhoneNumber ?? r.To?.PhoneNumber).Where(g => g.Count() == 1)
             .Select(g => g.Key).Where(p => !string.IsNullOrWhiteSpace(p)).ToList();
         
-        if (!singleCallNumbers.Any()) return null;
+        if (!singleCallNumbers.Any())
+        {
+            Log.Warning("没有符合条件的单通话号码，跳过匹配");
+            return null;
+        }
         
         var matchedTasks = singleCallNumbers.Select(phone => allRecords.First(r => NormalizePhone(r.From?.PhoneNumber ?? r.To?.PhoneNumber) == phone))
             .Select(record => MatchOrderAndRecordingAsync(customerId, record, scenario.Id, recordId, cancellationToken)).ToList();
@@ -163,11 +169,17 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
                 }, cancellationToken)).ConfigureAwait(false);
 
             var sapOrders = sapResp?.Data?.RecordingData ?? new List<RecordingDataItem>();
+            Log.Information("SAP 返回 {Count} 条订单记录, Customer={CustomerId}, Date={Date}", sapOrders.Count, customerId, sapStartDate);
             if (!sapOrders.Any()) return null;
             
             var oneOrderGroup = sapOrders.GroupBy(x => x.SalesDocument).SingleOrDefault();
-            if (oneOrderGroup == null) return null;
-
+            if (oneOrderGroup == null)
+            {
+                Log.Warning("SAP 没有找到唯一订单记录, Customer={CustomerId}", customerId);
+                return null;
+            }
+            Log.Information("匹配成功: Customer={CustomerId}, Order={OrderId}, 项目数={ItemCount}", customerId, oneOrderGroup.Key, oneOrderGroup.Count());
+            
             var inputJsonDto = new AutoTestInputJsonDto
             {
                 Recording = record.Recording?.Uri ?? "",
@@ -217,7 +229,7 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
     
     private static string NormalizePhone(string phone)
     {
-        if (string.IsNullOrWhiteSpace(phone)) return "";
+        if (string.IsNullOrWhiteSpace(phone)) return phone;
         
         var digits = new string(phone.Where(char.IsDigit).ToArray());
 
