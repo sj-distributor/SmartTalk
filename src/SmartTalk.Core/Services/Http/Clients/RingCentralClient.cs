@@ -38,6 +38,9 @@ public class RingCentralClient : IRingCentralClient
             { "Authorization", $"Basic {_ringCentralAuthenticationSettings.BasicAuth}" }
         };
 
+        Log.Information("RingCentral Token Request URL: {Url}", url);
+        Log.Information("RingCentral Token Request Headers: {@Headers}", headers);
+
         var response = await _httpClientFactory.PostAsync<RingCentralTokenResponseDto>(url, content, headers: headers, cancellationToken: cancellationToken, isNeedToReadErrorContent: true).ConfigureAwait(false);
 
         Log.Information("RingCentral token response {@Response}", response);
