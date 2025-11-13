@@ -109,7 +109,7 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
         
         var inputSnapshot = JsonConvert.DeserializeObject<AutoTestInputJsonDto>(record.InputSnapshot);
         
-        AutoTestOrderCompare(inputSnapshot.Detail, []);  // todo: 输入 Ai 订单
+        var orderSnapshot = AutoTestOrderCompare(inputSnapshot.Detail, []);  // todo: 输入 Ai 订单
 
         record.Status = AutoTestTaskRecordStatus.Done;
 
