@@ -5,6 +5,7 @@ using Smarties.Messages.Responses;
 using SmartTalk.Core.Domain.AutoTest;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Http;
+using SmartTalk.Messages.Commands.AutoTest.SalesPhoneOrder;
 using SmartTalk.Messages.Dto.AutoTest;
 using SmartTalk.Messages.Enums.AutoTest;
 
@@ -41,7 +42,11 @@ public class ApiAutoTestHandler : IAutoTestActionHandler
         var actionConfig = JsonConvert.DeserializeObject<AutoTestSalesOrderActionConfigDto>(scenario.ActionConfig);
         
         Log.Information("ApiAutoTestHandler ActionHandleAsync actionConfig:{@actionConfig}", actionConfig);
+        
+        var body = JsonConvert.DeserializeObject<ExecuteSalesPhoneOrderTestCommand>(actionConfig.Body);
 
+        body.TaskId = taskId;
+        
         await ExecuteAsync(actionConfig, cancellationToken).ConfigureAwait(false);
     }
     
@@ -81,3 +86,4 @@ public class ApiAutoTestHandler : IAutoTestActionHandler
         }
     }
 }
+
