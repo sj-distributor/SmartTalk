@@ -138,6 +138,7 @@ public class AutoTestController : ControllerBase
 
     #region Testing Sales Phone Order Scenario
 
+    [AllowAnonymous]
     [Route("sales/phone/order"), HttpPost]
     public async Task<IActionResult> ExecuteSalesPhoneOrderTestAsync([FromBody] ExecuteSalesPhoneOrderTestCommand command) 
     {
