@@ -13,4 +13,6 @@ public static class HangfireConstants
     public const string InternalHostingFfmpeg = "ffmpeg";
     
     public const string InternalHostingTransfer = "transfer";
+    
+    public const string InternalHostingTestingSalesPhoneOrder = "auto-testing-sales-phone-order";
 }
