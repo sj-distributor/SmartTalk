@@ -2,6 +2,7 @@ using Newtonsoft.Json;
 using Serilog;
 using SmartTalk.Core.Domain.AutoTest;
 using SmartTalk.Core.Ioc;
+using SmartTalk.Messages.Dto.AutoTest;
 using SmartTalk.Messages.Enums.AutoTest;
 
 namespace SmartTalk.Core.Services.AutoTest;
