@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using DocumentFormat.OpenXml.Drawing;
 using Microsoft.IdentityModel.Tokens;
 using Newtonsoft.Json;
 using OpenAI.Chat;
@@ -21,6 +22,7 @@ using SmartTalk.Messages.Dto.AutoTest;
 using SmartTalk.Messages.Dto.SpeechMatics;
 using SmartTalk.Messages.Enums.AutoTest;
 using SmartTalk.Messages.Enums.Caching;
+using Path = System.IO.Path;
 using TranscriptionFileType = SmartTalk.Messages.Enums.STT.TranscriptionFileType;
 using TranscriptionResponseFormat = SmartTalk.Messages.Enums.STT.TranscriptionResponseFormat;
 
@@ -111,7 +113,10 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
         
         var comparedAiOrderItems = AutoTestOrderCompare(inputSnapshot.Detail, []);  // todo: 输入 Ai 订单
 
+        var normalizedOutput = HandleAutoTestNormalizedOutput("", "", inputSnapshot.Detail, comparedAiOrderItems); // todo: 输入 test 产生的录音 url、report
+
         record.Status = AutoTestTaskRecordStatus.Done;
+        record.NormalizedOutput = normalizedOutput;
 
         await _autoTestDataProvider.UpdateAutoTestTaskRecordAsync(record, true, cancellationToken).ConfigureAwait(false);
 
@@ -414,5 +419,19 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
         }
         
         return orderItems;
+    }
+
+    private string HandleAutoTestNormalizedOutput(string recording, string report, List<AutoTestInputDetail> realOrderItems,List<AutoTestOrderItemDto> aiOrderItems)
+    {
+        var normalizedOutput = new AutoTestNormalizedOutputDto
+        {
+            IsMatched = aiOrderItems.All(x => x.Status == AutoTestOrderItemStatus.Normal),
+            Recording = recording,
+            AiOrder = aiOrderItems,
+            ActualOrder = realOrderItems,
+            Report = report
+        };
+        
+        return JsonConvert.SerializeObject(normalizedOutput);
     }
 }
