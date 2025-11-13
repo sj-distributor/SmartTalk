@@ -116,6 +116,7 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
         var allRecords = new List<RingCentralRecordDto>();
         var tasks = phoneNumbers.Select(phone => RetryAsync(async () =>
         {
+            Log.Information("请求 RingCentral 通话记录: Customer={CustomerId}, Phone={Phone}, Start={StartDate}, End={EndDate}", customerId, phone, startDate, endDate);
             var rcRequest = new RingCentralCallLogRequestDto
             {
                 PhoneNumber = phone,
@@ -127,6 +128,7 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
             };
 
             var resp = await _ringCentralClient.GetRingCentralRecordAsync(rcRequest, token, cancellationToken).ConfigureAwait(false);
+            Log.Information("RingCentral 返回 {Count} 条通话记录, Phone={Phone}", resp?.Records?.Count ?? 0, phone);
             return resp?.Records ?? new List<RingCentralRecordDto>();
         })).ToList();
         
