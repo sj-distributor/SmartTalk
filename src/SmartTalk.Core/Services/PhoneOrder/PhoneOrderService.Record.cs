@@ -814,22 +814,14 @@ public partial class PhoneOrderService
 
         var (callInFailedCount, callOutFailedCount) = await _linphoneDataProvider.GetCallFailedStatisticsAsync(unixStart, unixEnd, sipNumbers, cancellationToken).ConfigureAwait(false);
  
-        if (records == null || records.Count == 0) 
-            return new GetPhoneOrderDataDashboardResponse 
-            { 
-                Data = new GetPhoneOrderDataDashboardResponseData() 
-                { 
-                    Restaurant = restaurantData, 
-                } 
-            }; 
-        var callInRecords = records.Where(x => x.OrderRecordType == PhoneOrderRecordType.InBound).ToList();
-        var callOutRecords = records.Where(x => x.OrderRecordType == PhoneOrderRecordType.OutBount).ToList();
+        var callInRecords = records?.Where(x => x.OrderRecordType == PhoneOrderRecordType.InBound).ToList() ?? new List<PhoneOrderRecord>();
+        var callOutRecords = records?.Where(x => x.OrderRecordType == PhoneOrderRecordType.OutBount).ToList() ?? new List<PhoneOrderRecord>();
         
         Log.Information("[PhoneDashboard] Phone order records loaded: CallIn={@CallIn}, CallOut={@CallOut}", callInRecords.Count, callOutRecords.Count);
         
         var callInData = BuildCallInData(callInRecords, callInFailedCount, request.InvalidCallSeconds, request.StartDate, request.EndDate, request.DataType);
         var callOutData = BuildCallOutData(callOutRecords, callOutFailedCount, request.InvalidCallSeconds, request.StartDate, request.EndDate, request.DataType);
-  
+   
         await ApplyPeriodComparisonAsync(request, callInRecords, callOutRecords, restaurantData, callInData, callOutData, cancellationToken).ConfigureAwait(false);
 
         return new GetPhoneOrderDataDashboardResponse
