@@ -92,7 +92,7 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
 
     private async Task<List<AutoTestDataItem>> HandleAiOrderScenarioAsync(Dictionary<string, object> import, AutoTestScenario scenario, int recordId, CancellationToken cancellationToken)
     {
-        if (!import.TryGetValue("customerId", out var customerObj)) 
+        if (!import.TryGetValue("CustomerId", out var customerObj)) 
         { 
             Log.Warning("导入数据中缺少 customerId，跳过处理"); 
             return null; 
