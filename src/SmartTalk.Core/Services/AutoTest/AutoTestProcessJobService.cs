@@ -2,7 +2,6 @@ using System.Diagnostics;
 using System.Text;
 using Microsoft.IdentityModel.Tokens;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using OpenAI.Chat;
 using Serilog;
 using Smarties.Messages.DTO.OpenAi;
@@ -380,10 +379,10 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
             {
                 orderItems.Add(new AutoTestOrderItemDto
                 {
-                    MaterialNumber = realOrderItem.ItemId,
+                    ItemId = realOrderItem.ItemId,
                     Quantity = realOrderItem.Quantity,
-                    MaterialName = realOrderItem.ItemName,
-                    ItemStatus = AutoTestOrderItemStatus.Missed
+                    ItemName = realOrderItem.ItemName,
+                    Status = AutoTestOrderItemStatus.Missed
                 });
                 
                 continue;
@@ -391,10 +390,10 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
             
             orderItems.Add(new AutoTestOrderItemDto
             {
-                MaterialNumber = item.ItemId,
+                ItemId = item.ItemId,
                 Quantity = item.Quantity,
-                MaterialName = item.ItemName,
-                ItemStatus = realOrderItem.Quantity == item.Quantity ? AutoTestOrderItemStatus.Normal : AutoTestOrderItemStatus.Abnormal
+                ItemName = item.ItemName,
+                Status = realOrderItem.Quantity == item.Quantity ? AutoTestOrderItemStatus.Normal : AutoTestOrderItemStatus.Abnormal
             });
         }
 
@@ -404,10 +403,10 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
             {
                 orderItems.Add(new AutoTestOrderItemDto
                 {
-                    MaterialNumber = aiItem.ItemId,
+                    ItemId = aiItem.ItemId,
                     Quantity = aiItem.Quantity,
-                    MaterialName = aiItem.ItemName,
-                    ItemStatus = AutoTestOrderItemStatus.Abnormal
+                    ItemName = aiItem.ItemName,
+                    Status = AutoTestOrderItemStatus.Abnormal
                 });
             }
         }

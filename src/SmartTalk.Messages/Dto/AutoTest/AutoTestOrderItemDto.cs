@@ -4,11 +4,11 @@ namespace SmartTalk.Messages.Dto.AutoTest;
 
 public class AutoTestOrderItemDto
 {
-    public string MaterialNumber { get; set; }
+    public string ItemId { get; set; }
     
     public decimal Quantity { get; set; }
     
-    public string MaterialName { get; set; }
+    public string ItemName { get; set; }
     
-    public AutoTestOrderItemStatus ItemStatus { get; set; }
+    public AutoTestOrderItemStatus Status { get; set; }
 }
