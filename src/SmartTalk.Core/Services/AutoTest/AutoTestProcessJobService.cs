@@ -1,8 +1,8 @@
 using System.Diagnostics;
 using System.Text;
 using Microsoft.IdentityModel.Tokens;
-using NAudio.Wave;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using OpenAI.Chat;
 using Serilog;
 using Smarties.Messages.DTO.OpenAi;
@@ -108,7 +108,7 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
         
         // 生成ai订单
         
-        // 对比订单
+        AutoTestOrderCompare(record.InputSnapshot, []);  // todo: 输入 Ai 订单
 
         record.Status = AutoTestTaskRecordStatus.Done;
 
@@ -363,5 +363,55 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
             }
             
         }, wait: TimeSpan.FromSeconds(10), retry: TimeSpan.FromSeconds(1), server: RedisServer.System).ConfigureAwait(false);
+    }
+    
+    private string AutoTestOrderCompare(string inputSnapshot, List<AutoTestInputDetail> aiOrderItems)
+    {
+        aiOrderItems ??= []; 
+        var realOrderItems = JsonConvert.DeserializeObject<AutoTestInputJsonDto>(inputSnapshot)?.Detail ?? [];
+        
+        var orderItems = new List<AutoTestOrderItemDto>();
+        
+        foreach (var realOrderItem in realOrderItems)
+        {
+            var item = aiOrderItems.FirstOrDefault(x => x.ItemId == realOrderItem.ItemId);
+
+            if (item == null)
+            {
+                orderItems.Add(new AutoTestOrderItemDto
+                {
+                    MaterialNumber = realOrderItem.ItemId,
+                    Quantity = realOrderItem.Quantity,
+                    MaterialName = realOrderItem.ItemName,
+                    ItemStatus = AutoTestOrderItemStatus.Missed
+                });
+                
+                continue;
+            }
+            
+            orderItems.Add(new AutoTestOrderItemDto
+            {
+                MaterialNumber = item.ItemId,
+                Quantity = item.Quantity,
+                MaterialName = item.ItemName,
+                ItemStatus = realOrderItem.Quantity == item.Quantity ? AutoTestOrderItemStatus.Normal : AutoTestOrderItemStatus.Abnormal
+            });
+        }
+
+        foreach (var aiItem in aiOrderItems)
+        {
+            if (!realOrderItems.Any(x => x.ItemId == aiItem.ItemId))
+            {
+                orderItems.Add(new AutoTestOrderItemDto
+                {
+                    MaterialNumber = aiItem.ItemId,
+                    Quantity = aiItem.Quantity,
+                    MaterialName = aiItem.ItemName,
+                    ItemStatus = AutoTestOrderItemStatus.Abnormal
+                });
+            }
+        }
+        
+        return JsonConvert.SerializeObject(orderItems);
     }
 }
