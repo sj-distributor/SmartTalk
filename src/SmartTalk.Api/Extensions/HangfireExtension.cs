@@ -64,6 +64,14 @@ public static class HangfireExtension
             opt.Queues = new[] { HangfireConstants.InternalHostingTransfer };
             opt.ServerName = $"DEPLOY-{HangfireConstants.InternalHostingTransfer.ToUpper()}-{Guid.NewGuid()}";
         });
+        
+        services.AddHangfireServer(opt =>
+        {
+            opt.WorkerCount = 2;
+            opt.Queues = new[] { HangfireConstants.InternalHostingTestingSalesPhoneOrder };
+            opt.ServerName = $"DEPLOY-{HangfireConstants.InternalHostingTestingSalesPhoneOrder.ToUpper()}-{Guid.NewGuid()}";
+        });
+
     }
     
     public static void UseHangfireInternal(this IApplicationBuilder app)

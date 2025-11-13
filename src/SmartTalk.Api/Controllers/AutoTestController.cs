@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using NAudio.Wave;
 using SmartTalk.Core.Services.AutoTest;
 using SmartTalk.Messages.Commands.AutoTest;
+using SmartTalk.Messages.Commands.AutoTest.SalesPhoneOrder;
 using SmartTalk.Messages.Requests.AutoTest;
 
 namespace SmartTalk.Api.Controllers;
@@ -261,4 +262,17 @@ public class AutoTestController : ControllerBase
 
         return result;
     }
+
+    #region Testing Sales Phone Order Scenario
+
+    [AllowAnonymous]
+    [Route("sales/phone/order"), HttpPost]
+    public async Task<IActionResult> ExecuteSalesPhoneOrderTestAsync([FromBody] ExecuteSalesPhoneOrderTestCommand command) 
+    {
+        await _mediator.SendAsync(command).ConfigureAwait(false);
+        
+        return Ok();
+    }
+
+    #endregion
 }

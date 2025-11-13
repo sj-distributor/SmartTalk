@@ -4,6 +4,7 @@ using Mediator.Net.Context;
 using Mediator.Net.Contracts;
 using SmartTalk.Core.Constants;
 using SmartTalk.Core.Services.AutoTest;
+using SmartTalk.Core.Services.AutoTest.SalesAiOrder;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Messages.Dto.SpeechMatics;
@@ -43,8 +44,9 @@ public class DistributeSpeechMaticsCallbackCommandHandler : ICommandHandler<Dist
                 _backgroundJobClient.Enqueue<IPhoneOrderProcessJobService>(x => x.HandleReleasedSpeechMaticsCallBackAsync(job.JobId, cancellationToken), HangfireConstants.InternalHostingPhoneOrder);
                 break;
             
-            case SpeechMaticsJobScenario.Testing:
-                _backgroundJobClient.Enqueue<IAutoTestProcessJobService>(x => x.HandleTestingSpeechMaticsCallBackAsync(job.JobId, cancellationToken));
+            case SpeechMaticsJobScenario.TestingSalesPhoneOrder:
+                _backgroundJobClient.Enqueue<IAutoTestSalesPhoneOrderProcessJobService>(x =>
+                    x.HandleTestingSalesPhoneOrderSpeechMaticsCallBackAsync(job.JobId, cancellationToken), HangfireConstants.InternalHostingTestingSalesPhoneOrder);
                 break;
         }
     }
