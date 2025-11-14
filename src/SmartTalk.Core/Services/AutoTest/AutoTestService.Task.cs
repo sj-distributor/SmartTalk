@@ -51,8 +51,12 @@ public partial class AutoTestService
         
         await _autoTestDataProvider.AddAutoTestTaskAsync(task, cancellationToken: cancellationToken).ConfigureAwait(false);
 
+        Log.Information("CreateAutoTestTaskAsync task :{@task}", task);
+        
         var dataItems = await _autoTestDataProvider.GetAutoTestDataItemsBySetIdAsync(task.DataSetId, cancellationToken).ConfigureAwait(false);
 
+        Log.Information("CreateAutoTestTaskAsync dataItems :{@dataItems}", dataItems);
+        
         var records = dataItems.Select(x => new AutoTestTaskRecord
         {
             TestTaskId = task.Id,
@@ -65,8 +69,12 @@ public partial class AutoTestService
             CreatedAt = DateTimeOffset.Now
         }).ToList();
                     
+        Log.Information("CreateAutoTestTaskAsync records :{@records}", records);
+        
         await _autoTestDataProvider.AddAutoTestTaskRecordsAsync(records, cancellationToken: cancellationToken).ConfigureAwait(false);
 
+        Log.Information("CreateAutoTestTaskAsync records after :{@records}", records);
+        
         var result = _mapper.Map<AutoTestTaskDto>(task);
         result.TotalCount = records.Count;
         result.InProgressCount = 0;
@@ -103,6 +111,8 @@ public partial class AutoTestService
         
         await _autoTestDataProvider.UpdateAutoTestTaskAsync(task, cancellationToken: cancellationToken).ConfigureAwait(false); 
         
+        Log.Information("HandleStatusChangeAsync task :{@task}", task);
+        
         switch (newStatus)
         {
             case AutoTestTaskStatus.Pause:
@@ -134,6 +144,8 @@ public partial class AutoTestService
         
             await _autoTestDataProvider.UpdateTaskRecordsAsync(records, cancellationToken: cancellationToken).ConfigureAwait(false);
         }
+        
+        Log.Information("UpdateTaskRecordsStatusAsync records :{@records}", records);
     }
     
     public async Task<DeleteAutoTestTaskResponse> DeleteAutoTestTaskAsync(DeleteAutoTestTaskCommand command, CancellationToken cancellationToken)
