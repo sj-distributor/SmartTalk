@@ -50,7 +50,8 @@ public class CrmClient : ICrmClient
         return resp.AccessToken;
     }
 
-    public async Task<List<CrmContactDto>> GetCustomerContactsAsync(string customerId, CancellationToken cancellationToken)
+    public async Task<List<CrmContactDto>> GetCustomerContactsAsync(string customerId,
+        CancellationToken cancellationToken)
     {
         var token = await GetCrmTokenAsync(cancellationToken).ConfigureAwait(false);
 
