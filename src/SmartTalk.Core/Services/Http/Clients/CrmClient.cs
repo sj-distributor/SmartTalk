@@ -45,7 +45,7 @@ public class CrmClient : ICrmClient
 
         var resp = await _httpClient.PostAsync<CrmTokenResponse>(url, content, headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        return resp.access_token;
+        return resp.AccessToken;
     }
 
     public async Task<List<CrmContactDto>> GetCustomerContactsAsync(string customerId, CancellationToken cancellationToken)
