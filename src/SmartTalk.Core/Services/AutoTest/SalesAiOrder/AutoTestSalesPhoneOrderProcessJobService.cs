@@ -278,10 +278,10 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
 
         return completionResult.Data.Response;
     }
-    
-    private async Task<byte[]> ProcessAudioConversationAsync(List<byte[]> customerMp3List, string prompt, CancellationToken cancellationToken)
+
+    private async Task<byte[]> ProcessAudioConversationAsync(List<byte[]> customerWavList, string prompt, CancellationToken cancellationToken)
     {
-        if (customerMp3List == null || customerMp3List.Count == 0)
+        if (customerWavList == null || customerWavList.Count == 0)
             throw new ArgumentException("没有音频输入");
 
         var conversationHistory = new List<ChatMessage>
@@ -290,6 +290,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         };
 
         var client = new ChatClient("gpt-4o-audio-preview", _openAiSettings.ApiKey);
+
         var options = new ChatCompletionOptions
         {
             ResponseModalities = ChatResponseModalities.Text | ChatResponseModalities.Audio,
@@ -300,13 +301,13 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
 
         try
         {
-            foreach (var userMp3 in customerMp3List)
+            foreach (var wavBytes in customerWavList)
             {
-                if (userMp3 == null || userMp3.Length == 0)
+                if (wavBytes == null || wavBytes.Length == 0)
                     continue;
 
                 var userWavFile = Path.GetTempFileName() + ".wav";
-                ConvertMp3ToUniformWav(userMp3, userWavFile);
+                await File.WriteAllBytesAsync(userWavFile, wavBytes, cancellationToken);
                 wavFiles.Add(userWavFile);
 
                 conversationHistory.Add(new UserChatMessage(
@@ -317,11 +318,10 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
                 var completion = await client.CompleteChatAsync(conversationHistory, options, cancellationToken);
 
                 var aiWavFile = Path.GetTempFileName() + ".wav";
-                await File.WriteAllBytesAsync(aiWavFile, completion.Value.OutputAudio.AudioBytes.ToArray(), cancellationToken);
+                await File.WriteAllBytesAsync(aiWavFile, completion.Value.OutputAudio.AudioBytes.ToArray(),
+                    cancellationToken);
 
-                var normalizedAiWavFile = Path.GetTempFileName() + ".wav";
-                NormalizeWavFormat(aiWavFile, normalizedAiWavFile);
-                wavFiles.Add(normalizedAiWavFile);
+                wavFiles.Add(aiWavFile);
 
                 conversationHistory.Add(new AssistantChatMessage(completion.Value.OutputAudio.Transcript));
 
@@ -329,7 +329,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
             }
 
             var mergedWavFile = Path.GetTempFileName() + ".wav";
-            MergeWavFilesToUniformFormat(wavFiles, mergedWavFile);
+            await _ffmpegService.MergeWavFilesToUniformFormat(wavFiles, mergedWavFile, cancellationToken);
 
             return await File.ReadAllBytesAsync(mergedWavFile, cancellationToken);
         }

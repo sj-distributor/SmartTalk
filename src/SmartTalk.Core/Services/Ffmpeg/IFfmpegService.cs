@@ -29,6 +29,8 @@ public interface IFfmpegService: IScopedDependency
     Task<byte[]> ConvertWavToULawAsync(byte[] wavBytes, CancellationToken cancellationToken);
 
     Task<byte[]> ConvertUlawWavToMp3Async(byte[] wavBytes, CancellationToken cancellationToken);
+
+    Task MergeWavFilesToUniformFormat(List<string> wavFiles, string outputFile, CancellationToken cancellationToken);
 }
 
 public class FfmpegService : IFfmpegService
@@ -561,6 +563,40 @@ public class FfmpegService : IFfmpegService
 
              if (File.Exists(inputFileName)) File.Delete(inputFileName);
              if (File.Exists(outputFileName)) File.Delete(outputFileName);
+         }
+     }
+
+     public async Task MergeWavFilesToUniformFormat(List<string> wavFiles, string outputFile, CancellationToken cancellationToken)
+     {
+         if (wavFiles.Count == 0)
+             throw new ArgumentException("没有 WAV 文件可合并");
+
+         var listFile = Path.GetTempFileName();
+         await File.WriteAllLinesAsync(listFile, wavFiles.Select(f => $"file '{f}'"), cancellationToken).ConfigureAwait(false);
+         var args = $"-y -f concat -safe 0 -i \"{listFile}\" -ar 24000 -ac 1 -acodec pcm_s16le \"{outputFile}\"";
+         RunFfmpeg(args);
+         File.Delete(listFile);
+     }
+     
+     private void RunFfmpeg(string arguments)
+     {
+         var startInfo = new ProcessStartInfo
+         {
+             FileName = "ffmpeg",
+             Arguments = arguments,
+             RedirectStandardOutput = true,
+             RedirectStandardError = true,
+             UseShellExecute = false,
+             CreateNoWindow = true
+         };
+
+         using var process = Process.Start(startInfo)!;
+         process.WaitForExit();
+
+         if (process.ExitCode != 0)
+         {
+             var err = process.StandardError.ReadToEnd();
+             throw new Exception($"ffmpeg 执行失败：{err}");
          }
      }
 }
