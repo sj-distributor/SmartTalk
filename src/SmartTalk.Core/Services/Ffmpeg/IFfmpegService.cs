@@ -29,6 +29,8 @@ public interface IFfmpegService: IScopedDependency
     Task<byte[]> ConvertWavToULawAsync(byte[] wavBytes, CancellationToken cancellationToken);
 
     Task<byte[]> ConvertUlawWavToMp3Async(byte[] wavBytes, CancellationToken cancellationToken);
+
+    Task<byte[]> Convert8KHzWavTo24KHzWavAsync(byte[] bytes, CancellationToken cancellationToken);
 }
 
 public class FfmpegService : IFfmpegService
@@ -559,6 +561,73 @@ public class FfmpegService : IFfmpegService
          {
              Log.Information("Cleaning up temporary files");
 
+             if (File.Exists(inputFileName)) File.Delete(inputFileName);
+             if (File.Exists(outputFileName)) File.Delete(outputFileName);
+         }
+     }
+     
+     public async Task<byte[]> Convert8KHzWavTo24KHzWavAsync(byte[] bytes, CancellationToken cancellationToken)
+     {
+         var baseFileName = Guid.NewGuid().ToString();
+         var inputFileName = $"{baseFileName}.wav";
+         var outputFileName = $"{baseFileName}_out.wav";
+
+         try
+         {
+             await File.WriteAllBytesAsync(inputFileName, bytes, cancellationToken).ConfigureAwait(false);
+
+             if (!File.Exists(inputFileName))
+             {
+                 Log.Warning("Failed to persist ulaw WAV file");
+                 return Array.Empty<byte>();
+             }
+
+             using (var proc = new Process())
+             {
+                 proc.StartInfo = new ProcessStartInfo
+                 {
+                     FileName = "ffmpeg",
+                     RedirectStandardError = true,
+                     RedirectStandardOutput = true,
+                     UseShellExecute = false,
+                     CreateNoWindow = true,
+                     Arguments = $"-i {inputFileName} -ar 24000 {outputFileName}"
+                 };
+
+                 proc.OutputDataReceived += (_, e) =>
+                 {
+                     if (!string.IsNullOrEmpty(e.Data))
+                         Log.Information("ffmpeg output: {Data}", e.Data);
+                 };
+
+                 proc.ErrorDataReceived += (_, e) =>
+                 {
+                     if (!string.IsNullOrEmpty(e.Data))
+                         Log.Warning("ffmpeg error: {Data}", e.Data);
+                 };
+
+                 proc.Start();
+                 proc.BeginErrorReadLine();
+                 proc.BeginOutputReadLine();
+
+                 await proc.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+             }
+
+             if (File.Exists(outputFileName))
+             {
+                 var wavBytes = await File.ReadAllBytesAsync(outputFileName, cancellationToken).ConfigureAwait(false); 
+                 return wavBytes;
+             }
+             
+             return Array.Empty<byte>();
+         }
+         catch (Exception ex)
+         {
+             Log.Error(ex, "Error converting ulaw WAV(8kHz) to WAV(24kHz)");
+             return Array.Empty<byte>();
+         }
+         finally
+         {
              if (File.Exists(inputFileName)) File.Delete(inputFileName);
              if (File.Exists(outputFileName)) File.Delete(outputFileName);
          }

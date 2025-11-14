@@ -133,15 +133,15 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         
         if (audioContent == null) return;
         
-        var audioBytes = await _ffmpegService.ConvertFileFormatAsync(audioContent, TranscriptionFileType.Mp3, cancellationToken).ConfigureAwait(false);
+        var audioBytes = await _ffmpegService.Convert8KHzWavTo24KHzWavAsync(audioContent, cancellationToken).ConfigureAwait(false);
         
         var (customerSpeaker, audios) = await HandlerConversationSpeakerIsCustomerAsync(sixSentences, audioBytes, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        var customerAudioInfos = speakInfos.Where(x => x.Speaker == customerSpeaker && !sixSentences.Any(s => s.StartTime == x.StartTime)).ToList();
+        var customerAudioInfos = speakInfos.Where(x => x.Speaker == customerSpeaker && !sixSentences.Any(s => Math.Abs(s.StartTime - x.StartTime) == 0)).ToList();
 
         foreach (var audioInfo in customerAudioInfos)
         {
-            audioInfo.Audio = await _ffmpegService.SpiltAudioAsync(audioBytes, audioInfo.StartTime * 1000, audioInfo.EndTime * 1000, "mp3", cancellationToken).ConfigureAwait(false);
+            audioInfo.Audio = await _ffmpegService.SpiltAudioAsync(audioBytes, audioInfo.StartTime * 1000, audioInfo.EndTime * 1000, cancellationToken: cancellationToken).ConfigureAwait(false);
         }
         
         customerAudioInfos.AddRange(audios);
@@ -227,7 +227,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
     
     private async Task<(string, byte[])> SplitAudioAsync(byte[] audioBytes, double speakStartTimeVideo, double speakEndTimeVideo, CancellationToken cancellationToken = default)
     {
-        var splitAudios = await _ffmpegService.SpiltAudioAsync(audioBytes, speakStartTimeVideo, speakEndTimeVideo, "mp3", cancellationToken).ConfigureAwait(false);
+        var splitAudios = await _ffmpegService.SpiltAudioAsync(audioBytes, speakStartTimeVideo, speakEndTimeVideo, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var transcriptionResult = new StringBuilder();
         
