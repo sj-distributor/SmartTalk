@@ -72,6 +72,12 @@ public class PhoneOrderRecord : IEntity
     [Column("incoming_call_number"), StringLength(36)]
     public string IncomingCallNumber { get; set; }
     
+    [Column("scenario")]
+    public DialogueScenarios? Scenario { get; set; }
+    
+    [Column("remark")]
+    public string Remark { get; set; }
+    
     [NotMapped]
     public UserAccount UserAccount { get; set; }
     
