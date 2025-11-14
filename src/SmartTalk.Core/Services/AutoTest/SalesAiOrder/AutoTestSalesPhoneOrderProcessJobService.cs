@@ -3,6 +3,9 @@ using System.Text;
 using OpenAI.Chat;
 using Newtonsoft.Json;
 using System.Diagnostics;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using AutoMapper;
 using SmartTalk.Core.Ioc;
 using Google.Cloud.Translation.V2;
 using SmartTalk.Core.Services.STT;
@@ -14,6 +17,7 @@ using SmartTalk.Core.Settings.OpenAi;
 using Smarties.Messages.Requests.Ask;
 using SmartTalk.Core.Domain.AutoTest;
 using SmartTalk.Core.Domain.SpeechMatics;
+using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Services.Ffmpeg;
 using SmartTalk.Messages.Dto.AutoTest;
 using SmartTalk.Messages.Enums.Caching;
@@ -24,6 +28,10 @@ using SmartTalk.Core.Services.SpeechMatics;
 using SmartTalk.Core.Services.Caching.Redis;
 using SmartTalk.Messages.Enums.SpeechMatics;
 using SmartTalk.Core.Services.AiSpeechAssistant;
+using SmartTalk.Core.Services.Attachments;
+using SmartTalk.Messages.Commands.Attachments;
+using SmartTalk.Messages.Dto.Attachments;
+using SmartTalk.Messages.Dto.Sales;
 using TranscriptionFileType = SmartTalk.Messages.Enums.STT.TranscriptionFileType;
 using TranscriptionResponseFormat = SmartTalk.Messages.Enums.STT.TranscriptionResponseFormat;
 
@@ -38,11 +46,14 @@ public interface IAutoTestSalesPhoneOrderProcessJobService : IScopedDependency
 
 public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrderProcessJobService
 {
+    private readonly IMapper _mapper;
+    private readonly ISalesClient _salesClient;
     private readonly IFfmpegService _ffmpegService;
     private readonly OpenAiSettings _openAiSettings;
     private readonly ISmartiesClient _smartiesClient;
     private readonly IRedisSafeRunner _redisSafeRunner;
     private readonly TranslationClient _translationClient;
+    private readonly IAttachmentService _attachmentService;
     private readonly ISpeechToTextService _speechToTextService;
     private readonly ISpeechMaticsService _speechMaticsService;
     private readonly IAutoTestDataProvider _autoTestDataProvider;
@@ -52,11 +63,14 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
 
     public AutoTestSalesPhoneOrderProcessJobService(
+        IMapper mapper,
+        ISalesClient salesClient,
         IFfmpegService ffmpegService,
         OpenAiSettings openAiSettings,
         ISmartiesClient smartiesClient,
         IRedisSafeRunner redisSafeRunner,
         TranslationClient translationClient,
+        IAttachmentService attachmentService,
         ISpeechMaticsService speechMaticsService,
         ISpeechToTextService speechToTextService,
         IAutoTestDataProvider autoTestDataProvider,
@@ -65,10 +79,13 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         ISmartTalkHttpClientFactory smartTalkHttpClientFactory,
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
+        _mapper = mapper;
+        _salesClient = salesClient;
         _ffmpegService = ffmpegService;
         _openAiSettings = openAiSettings;
         _smartiesClient = smartiesClient;
         _redisSafeRunner = redisSafeRunner;
+        _attachmentService = attachmentService;
         _translationClient = translationClient;
         _httpClientFactory = httpClientFactory;
         _speechToTextService = speechToTextService;
@@ -106,8 +123,8 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
 
     public async Task HandleTestingSalesPhoneOrderSpeechMaticsCallBackAsync(string jobId, CancellationToken cancellationToken)
     {
-        var (scenario, task, record, speechMaticsJob) = await CollectAutoTestDataByJobIdAsync(jobId, cancellationToken);
-        if (scenario == null || task == null || record == null || speechMaticsJob == null) return;
+        var (scenario, task, record, assistant, speechMaticsJob) = await CollectAutoTestDataByJobIdAsync(jobId, cancellationToken);
+        if (scenario == null || task == null || record == null || assistant == null || speechMaticsJob == null) return;
 
         var audioBytes = await FetchingRecordAudioAsync(scenario, cancellationToken).ConfigureAwait(false);
         if (audioBytes == null) return;
@@ -115,14 +132,14 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         var customerAudios = await ExtractingCustomerAudioAsync(speechMaticsJob, audioBytes, cancellationToken).ConfigureAwait(false);
         if (customerAudios == null || customerAudios.Count == 0) return;
  
-        var conversationAudios = await ProcessAudioConversationAsync(customerAudios, task, cancellationToken).ConfigureAwait(false);
+        var conversationAudios = await ProcessAudioConversationAsync(customerAudios, assistant, cancellationToken).ConfigureAwait(false);
         if (conversationAudios == null || conversationAudios.Length == 0) return;
         
-        // 生成ai订单
-        
+        var (report, aiOrder) = await GenerateSalesAiOrderAsync(assistant, conversationAudios, cancellationToken).ConfigureAwait(false);
+
         var inputSnapshot = JsonConvert.DeserializeObject<AutoTestInputJsonDto>(record.InputSnapshot);
-        var comparedAiOrderItems = AutoTestOrderCompare(inputSnapshot.Detail, []);  // todo: 输入 Ai 订单
-        var normalizedOutput = HandleAutoTestNormalizedOutput("", "", inputSnapshot.Detail, comparedAiOrderItems); // todo: 输入 test 产生的录音 url、report
+        var comparedAiOrderItems = AutoTestOrderCompare(inputSnapshot.Detail, aiOrder);
+        var normalizedOutput = await HandleAutoTestNormalizedOutput(conversationAudios, report, inputSnapshot.Detail, comparedAiOrderItems, cancellationToken).ConfigureAwait(false);
 
         record.Status = AutoTestTaskRecordStatus.Done;
         record.NormalizedOutput = normalizedOutput;
@@ -131,25 +148,29 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         await HandleAutoTestTaskStatusChangeAsync(task, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<(AutoTestScenario, AutoTestTask, AutoTestTaskRecord, SpeechMaticsJob)> CollectAutoTestDataByJobIdAsync(string jobId, CancellationToken cancellationToken)
+    private async Task<(AutoTestScenario, AutoTestTask, AutoTestTaskRecord, Domain.AISpeechAssistant.AiSpeechAssistant, SpeechMaticsJob)> CollectAutoTestDataByJobIdAsync(string jobId, CancellationToken cancellationToken)
     {
         var record = await _autoTestDataProvider.GetAutoTestTaskRecordBySpeechMaticsJobIdAsync(jobId, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Handling auto test task record: {@Record}", record);
 
-        if (record == null) return (null, null, null, null);
+        if (record == null) return (null, null, null, null, null);
         
         var task  = await _autoTestDataProvider.GetAutoTestTaskByIdAsync(record.TestTaskId, cancellationToken).ConfigureAwait(false);
         
-        if (task == null) return (null, null, null, null);
+        if (task == null) return (null, null, null, null, null);
         
         var scenario = await _autoTestDataProvider.GetAutoTestScenarioByIdAsync(record.ScenarioId, cancellationToken).ConfigureAwait(false);
         
         var speechMaticsJob = await _speechMaticsDataProvider.GetSpeechMaticsJobAsync(jobId, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Related scenario: {@Scenario}, task: {@Task}, speechmatics job:{@SpeechMaticsJob}", scenario, task, speechMaticsJob);
+        
+        var taskParams = JsonConvert.DeserializeObject<AutoTestTaskParamsDto>(task.Params);
 
-        return (scenario, task, record, speechMaticsJob);
+        var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByIdAsync(taskParams.AssistantId, cancellationToken).ConfigureAwait(false);
+
+        return (scenario, task, record, assistant, speechMaticsJob);
     }
 
     private async Task<byte[]> FetchingRecordAudioAsync(AutoTestScenario scenario, CancellationToken cancellationToken)
@@ -296,11 +317,9 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         return completionResult.Data.Response;
     }
 
-    private async Task<byte[]> ProcessAudioConversationAsync(List<byte[]> customerWavList, AutoTestTask task, CancellationToken cancellationToken)
+    private async Task<byte[]> ProcessAudioConversationAsync(List<byte[]> customerWavList, Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken)
     {
-        var taskParams = JsonConvert.DeserializeObject<AutoTestTaskParamsDto>(task.Params);
-        
-        var prompt = await BuildConversationPromptAsync(taskParams.AssistantId, cancellationToken).ConfigureAwait(false);
+        var prompt = await BuildConversationPromptAsync(assistant, cancellationToken).ConfigureAwait(false);
 
         var conversationHistory = new List<ChatMessage>
         {
@@ -359,13 +378,229 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         }
     }
 
-    private async Task<string> BuildConversationPromptAsync(int assistantId, CancellationToken cancellationToken)
+    private async Task<(string Report, List<AutoTestInputDetail> Order)> GenerateSalesAiOrderAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, byte[] audio, CancellationToken cancellationToken)
     {
-        if (assistantId == 0) throw new ArgumentException("assistantId could not be 0");
+        var messages = await ConfigureRecordAnalyzePromptAsync(assistant, audio, cancellationToken).ConfigureAwait(false);
         
-        var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(assistantId: assistantId, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
 
-        return knowledge != null ? knowledge.Prompt : "You are a helpful assistant";
+        ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
+
+        ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
+        var report = completion.Content.FirstOrDefault()?.Text;
+        Log.Information("sales record analyze report:" + report);
+
+        var soldToIds = new List<string>();
+        if (!string.IsNullOrEmpty(assistant.Name)) soldToIds = assistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList();
+        var historyItems = await GetCustomerHistoryItemsBySoldToIdAsync(soldToIds, cancellationToken);
+
+        var originOrder = await ExtractAndMatchOrderItemsFromReportAsync(report, historyItems, cancellationToken);
+
+        var order = _mapper.Map<List<AutoTestInputDetail>>(originOrder);
+        Log.Information("sales ai order: {@Order}", order);
+        
+        return (report, order);
+    }
+    
+    private async Task<List<ChatMessage>> ConfigureRecordAnalyzePromptAsync(
+        Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, byte[] audioContent, CancellationToken cancellationToken)
+    {
+        var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow,
+            TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
+        var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
+        
+        var soldToIds = !string.IsNullOrEmpty(aiSpeechAssistant.Name)
+            ? aiSpeechAssistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList()
+            : new List<string>();
+
+        var customerItemsCacheList = await _aiSpeechAssistantDataProvider.GetCustomerItemsCacheBySoldToIdsAsync(soldToIds, cancellationToken);
+        var customerItemsString = string.Join(Environment.NewLine, soldToIds.Select(id => customerItemsCacheList.FirstOrDefault(c => c.CacheKey == id)?.CacheValue ?? ""));
+
+        var audioData = BinaryData.FromBytes(audioContent);
+        List<ChatMessage> messages =
+        [
+            new SystemChatMessage(( aiSpeechAssistant.CustomRecordAnalyzePrompt).Replace("#{call_from}", "").Replace("#{current_time}", currentTime ?? "").Replace("#{customer_items}", customerItemsString)),
+            new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
+            new UserChatMessage("幫我根據錄音生成分析報告：")
+        ];
+
+        return messages;
+    }
+    
+    private async Task<List<(string Material, string MaterialDesc, DateTime? InvoiceDate)>> GetCustomerHistoryItemsBySoldToIdAsync(List<string> soldToIds, CancellationToken cancellationToken)
+    {
+        List<(string Material, string MaterialDesc, DateTime? InvoiceDate)> historyItems = [];
+
+        var askInfoResponse = await _salesClient
+            .GetAskInfoDetailListByCustomerAsync(
+                new GetAskInfoDetailListByCustomerRequestDto { CustomerNumbers = soldToIds }, cancellationToken)
+            .ConfigureAwait(false);
+        var orderHistoryResponse = await _salesClient
+            .GetOrderHistoryByCustomerAsync(
+                new GetOrderHistoryByCustomerRequestDto { CustomerNumber = soldToIds.FirstOrDefault() },
+                cancellationToken).ConfigureAwait(false);
+
+        if (askInfoResponse?.Data != null && askInfoResponse.Data.Any())
+            historyItems.AddRange(askInfoResponse.Data.Where(x => !string.IsNullOrWhiteSpace(x.Material))
+                .Select(x => (x.Material, x.MaterialDesc, (DateTime?)null)));
+
+        if (orderHistoryResponse?.Data != null && orderHistoryResponse.Data.Any())
+            historyItems.AddRange(
+                orderHistoryResponse?.Data.Where(x => !string.IsNullOrWhiteSpace(x.MaterialNumber))
+                    .Select(x => (x.MaterialNumber, x.MaterialDescription, x.LastInvoiceDate)) ??
+                new List<(string, string, DateTime?)>());
+
+        return historyItems;
+    }
+    
+    private async Task<List<ExtractedOrderDto>> ExtractAndMatchOrderItemsFromReportAsync(string reportText, List<(string Material, string MaterialDesc, DateTime? invoiceDate)> historyItems, CancellationToken cancellationToken)
+    {
+        var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
+
+        var materialListText = string.Join("\n",
+            historyItems.Select(x => $"{x.MaterialDesc} ({x.Material})【{x.invoiceDate}】"));
+
+        var systemPrompt =
+            "你是一名訂單分析助手。請從下面的客戶分析報告文字中提取所有下單的物料名稱、數量、單位，並且用歷史物料列表盡力匹配每個物料的materialNumber。" +
+            "如果報告中提到了預約送貨時間，請提取送貨時間（格式yyyy-MM-dd）。" +
+            "如果客戶提到了分店名，請提取 StoreName；如果提到第幾家店，請提取 StoreNumber。\n" +
+            "請嚴格傳回一個 JSON 對象，頂層字段為 \"stores\"，每个店铺对象包含：StoreName（可空字符串）, StoreNumber（可空字符串）, DeliveryDate（可空字符串），orders（数组，元素包含 name, quantity, unit, materialNumber, deliveryDate）。\n" +
+            "範例：\n" +
+            "{\n    \"stores\": [\n        {\n            \"StoreName\": \"HaiDiLao\",\n            \"StoreNumber\": \"1\",\n            \"DeliveryDate\": \"2025-08-20\",\n            \"orders\": [\n                {\n                    \"name\": \"雞胸肉\",\n                    \"quantity\": 1,\n                    \"unit\": \"箱\",\n                    \"materialNumber\": \"000000000010010253\"\n                }\n            ]\n        }\n    ]\n}" +
+            "歷史物料列表：\n" + materialListText + "\n\n" +
+            "每個物料的格式為「物料名稱（物料號碼）」，部分物料會包含日期\n 當有多個相似的物料名稱時，請根據以下規則選擇匹配的物料號碼：1. **優先選擇沒有日期的物料。**\n 2. 如果所有相似物料都有日期，請選擇日期**最新** 的那個物料。\n\n  " +
+            "注意：\n1. 必須嚴格輸出 JSON，物件頂層字段必須是 \"stores\"，不要有其他字段或額外說明。\n2. 提取的物料名稱需要為繁體中文。\n3. 如果没有提到店铺信息，但是有下单内容，则StoreName和StoreNumber可为空值，orders要正常提取。\n4. **如果客戶分析文本中沒有任何可識別的下單信息，請返回：{ \"stores\": [] }。不得臆造或猜測物料。** \n" +
+            "請務必完整提取報告中每一個提到的物料";
+        Log.Information("Sending prompt to GPT: {Prompt}", systemPrompt);
+
+        var messages = new List<ChatMessage>
+        {
+            new SystemChatMessage(systemPrompt),
+            new UserChatMessage("客戶分析報告文本：\n" + reportText + "\n\n")
+        };
+
+        var completion = await client.CompleteChatAsync(messages,
+            new ChatCompletionOptions
+            {
+                ResponseModalities = ChatResponseModalities.Text,
+                ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
+            }, cancellationToken).ConfigureAwait(false);
+        var jsonResponse = completion.Value.Content.FirstOrDefault()?.Text ?? "";
+
+        Log.Information("AI JSON Response: {JsonResponse}", jsonResponse);
+
+        try
+        {
+            using var jsonDoc = JsonDocument.Parse(jsonResponse);
+
+            var storesArray = jsonDoc.RootElement.GetProperty("stores");
+            var results = new List<ExtractedOrderDto>();
+
+            foreach (var storeElement in storesArray.EnumerateArray())
+            {
+                var storeDto = new ExtractedOrderDto
+                {
+                    StoreName = storeElement.TryGetProperty("StoreName", out var sn) ? sn.GetString() ?? "" : "",
+                    StoreNumber =
+                        storeElement.TryGetProperty("StoreNumber", out var snum) ? snum.GetString() ?? "" : "",
+                    DeliveryDate =
+                        storeElement.TryGetProperty("DeliveryDate", out var dd) &&
+                        DateTime.TryParse(dd.GetString(), out var dt)
+                            ? DateTime.SpecifyKind(dt, DateTimeKind.Utc)
+                            : DateTime.UtcNow.AddDays(1)
+                };
+
+                if (storeElement.TryGetProperty("orders", out var ordersArray))
+                {
+                    foreach (var orderItem in ordersArray.EnumerateArray())
+                    {
+                        var name = orderItem.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
+                        var qty = orderItem.TryGetProperty("quantity", out var q) && q.TryGetDecimal(out var dec)
+                            ? dec
+                            : 0;
+                        var unit = orderItem.TryGetProperty("unit", out var u) ? u.GetString() ?? "" : "";
+                        var materialNumber = orderItem.TryGetProperty("materialNumber", out var mn)
+                            ? mn.GetString() ?? ""
+                            : "";
+
+                        materialNumber = MatchMaterialNumber(name, materialNumber, unit, historyItems);
+
+                        storeDto.Orders.Add(new ExtractedOrderItemDto
+                        {
+                            Name = name,
+                            Quantity = (int)qty,
+                            MaterialNumber = materialNumber,
+                            Unit = unit
+                        });
+                    }
+                }
+
+                results.Add(storeDto);
+            }
+
+            return results;
+        }
+        catch (Exception ex)
+        {
+            Log.Warning("解析GPT返回JSON失败: {Message}", ex.Message);
+            return new List<ExtractedOrderDto>();
+        }
+    }
+    
+    private string MatchMaterialNumber(string itemName, string baseNumber, string unit,
+        List<(string Material, string MaterialDesc, DateTime? invoiceDate)> historyItems)
+    {
+        var candidates = historyItems
+            .Where(x => x.MaterialDesc != null && x.MaterialDesc.Contains(itemName, StringComparison.OrdinalIgnoreCase))
+            .Select(x => x.Material).ToList();
+        Log.Information("Candidate material code list: {@Candidates}", candidates);
+
+        if (!candidates.Any()) return string.IsNullOrEmpty(baseNumber) ? "" : baseNumber;
+        ;
+        if (candidates.Count == 1) return candidates.First();
+
+        if (!string.IsNullOrWhiteSpace(unit))
+        {
+            var u = unit.ToLower();
+            if (u.Contains("case") || u.Contains("箱"))
+            {
+                var csItem = candidates.FirstOrDefault(x => x.EndsWith("CS", StringComparison.OrdinalIgnoreCase));
+                if (!string.IsNullOrEmpty(csItem)) return csItem;
+            }
+            else
+            {
+                var pcItem = candidates.FirstOrDefault(x => x.EndsWith("PC", StringComparison.OrdinalIgnoreCase));
+                if (!string.IsNullOrEmpty(pcItem)) return pcItem;
+            }
+        }
+
+        var pureNumber = candidates.FirstOrDefault(x => Regex.IsMatch(x, @"^\d+$"));
+        return pureNumber ?? candidates.First();
+    }
+
+    private async Task<string> BuildConversationPromptAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken)
+    {
+        var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(assistantId: assistant.Id, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (knowledge == null) return null;
+        
+        var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
+        var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
+        var finalPrompt = knowledge.Prompt
+            .Replace("#{current_time}", currentTime)
+            .Replace("#{pst_date}", $"{pstTime.Date:yyyy-MM-dd} {pstTime.DayOfWeek}");
+
+        if (!finalPrompt.Contains("#{customer_items}", StringComparison.OrdinalIgnoreCase)) return finalPrompt;
+        
+        var soldToIds = !string.IsNullOrEmpty(assistant.Name) ? assistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : [];
+        
+        if (soldToIds.Count == 0) return finalPrompt;
+        
+        var caches = await _aiSpeechAssistantDataProvider.GetCustomerItemsCacheBySoldToIdsAsync(soldToIds, cancellationToken).ConfigureAwait(false);
+        var customerItems = caches.Where(c => !string.IsNullOrEmpty(c.CacheValue)).Select(c => c.CacheValue.Trim()).Distinct().ToList();
+        finalPrompt = finalPrompt.Replace("#{customer_items}", customerItems.Any() ? string.Join(Environment.NewLine + Environment.NewLine, customerItems.Take(50)) : " ");
+
+        Log.Information("Build conversation prompt: " + finalPrompt);
+        return finalPrompt;
     }
 
     private async Task HandleAutoTestTaskStatusChangeAsync(AutoTestTask task, CancellationToken cancellationToken)
@@ -434,12 +669,15 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         return orderItems;
     }
 
-    private string HandleAutoTestNormalizedOutput(string recording, string report, List<AutoTestInputDetail> realOrderItems,List<AutoTestOrderItemDto> aiOrderItems)
+    private async Task<string> HandleAutoTestNormalizedOutput(byte[] recording, string report, List<AutoTestInputDetail> realOrderItems,List<AutoTestOrderItemDto> aiOrderItems, CancellationToken cancellationToken)
     {
+        var audio = await _attachmentService.UploadAttachmentAsync(new UploadAttachmentCommand { Attachment = new UploadAttachmentDto { FileName = Guid.NewGuid() + ".wav", FileContent = recording } }, cancellationToken).ConfigureAwait(false);
+        Log.Information("Audio uploaded, url: {Url}", audio?.Attachment?.FileUrl);
+        
         var normalizedOutput = new AutoTestNormalizedOutputDto
         {
             IsMatched = aiOrderItems.All(x => x.Status == AutoTestOrderItemStatus.Normal),
-            Recording = recording,
+            Recording = audio.Attachment.FileUrl,
             AiOrder = aiOrderItems,
             ActualOrder = realOrderItems,
             Report = report

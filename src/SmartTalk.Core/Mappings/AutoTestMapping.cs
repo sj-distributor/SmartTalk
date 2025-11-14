@@ -1,6 +1,7 @@
 using AutoMapper;
 using SmartTalk.Core.Domain.AutoTest;
 using SmartTalk.Messages.Dto.AutoTest;
+using SmartTalk.Messages.Dto.Sales;
 
 namespace SmartTalk.Core.Mappings;
 
@@ -15,5 +16,10 @@ public class AutoTestMapping : Profile
         CreateMap<AutoTestScenario, AutoTestScenarioDto>().ReverseMap();
         CreateMap<AutoTestTask, AutoTestTaskDto>().ReverseMap();
         CreateMap<AutoTestTaskRecord, AutoTestTaskRecordDto>().ReverseMap();
+
+        CreateMap<ExtractedOrderItemDto, AutoTestInputDetail>()
+            .ForMember(dest => dest.ItemName, opt => opt.MapFrom(src => src.Name))
+            .ForMember(dest => dest.Quantity, opt => opt.MapFrom(src => src.Quantity))
+            .ForMember(dest => dest.ItemId, opt => opt.MapFrom(src => src.MaterialNumber));
     }
 }
