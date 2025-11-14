@@ -15,7 +15,6 @@ using System.Text.RegularExpressions;
 using ClosedXML.Excel;
 using Newtonsoft.Json;
 using SmartTalk.Core.Domain.PhoneOrder;
-using SmartTalk.Core.Services.Linphone;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Dto.Attachments;
 using SmartTalk.Messages.Enums.PhoneOrder;
@@ -60,7 +59,7 @@ public partial class PhoneOrderService
                 ? (await _posDataProvider.GetPosAgentsAsync(storeIds: [request.StoreId.Value], cancellationToken: cancellationToken).ConfigureAwait(false)).Select(x => x.AgentId).ToList()
                 : [];
 
-        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds, request.Name, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
+        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds, request.Name, utcStart, utcEnd, null, cancellationToken).ConfigureAwait(false);
 
         var enrichedRecords = _mapper.Map<List<PhoneOrderRecordDto>>(records);
 
@@ -144,9 +143,12 @@ public partial class PhoneOrderService
 
             var (goalText, tip) = await PhoneOrderTranscriptionAsync(phoneOrderInfo, record, audioContent, cancellationToken).ConfigureAwait(false);
 
+            record.ConversationText = goalText;
+
             await _phoneOrderUtilService.ExtractPhoneOrderShoppingCartAsync(goalText, record, cancellationToken).ConfigureAwait(false);
 
             record.Tips = tip;
+            await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception e)
         {
@@ -574,8 +576,6 @@ public partial class PhoneOrderService
             "en" => SpeechMaticsLanguageType.En,
             "zh" => SpeechMaticsLanguageType.Yue,
             "zh-CN" or "zh-TW" => SpeechMaticsLanguageType.Cmn,
-            "es" => SpeechMaticsLanguageType.Es,
-            "ko" => SpeechMaticsLanguageType.Ko,
             _ => SpeechMaticsLanguageType.En
         };
     }
@@ -723,7 +723,7 @@ public partial class PhoneOrderService
             Data = _mapper.Map<PhoneOrderRecordReportDto>(report)
         };
     }
-
+    
     private (DateTimeOffset StartUtc, DateTimeOffset EndUtc) GetQueryTimeRange(int month)
     {
         if (month < 1 || month > 12) throw new ArgumentOutOfRangeException(nameof(month));
