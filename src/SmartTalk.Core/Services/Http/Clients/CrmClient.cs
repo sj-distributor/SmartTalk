@@ -8,30 +8,57 @@ namespace SmartTalk.Core.Services.Http.Clients;
 
 public interface ICrmClient : IScopedDependency
 {
+    Task<string> GetCrmTokenAsync(CancellationToken cancellationToken);
+    
     Task<List<GetCustomersPhoneNumberDataDto>> GetCustomersByPhoneNumberAsync(GetCustmoersByPhoneNumberRequestDto numberRequest, CancellationToken cancellationToken);
 }
 
 public class CrmClient : ICrmClient
 {
+    private readonly CrmSetting _crmSetting;
     private readonly Dictionary<string, string> _headers;
-    private readonly CrmV3Setting _crmV3Setting;
     private readonly ISmartTalkHttpClientFactory _httpClient;
 
-    public CrmClient(ISmartTalkHttpClientFactory httpClient, CrmV3Setting crmV3Setting)
+    public CrmClient(ISmartTalkHttpClientFactory httpClient, CrmSetting crmSetting)
     {
         _httpClient = httpClient;
-        _crmV3Setting = crmV3Setting;
+        _crmSetting = crmSetting;
+    }
+    
+    public async Task<string> GetCrmTokenAsync(CancellationToken cancellationToken)
+    {
+        var url = $"{_crmSetting.BaseUrl}/oauth/token";
+
+        var payload = new Dictionary<string, string>
+        {
+            { "grant_type", "client_credentials" },
+            { "client_id", _crmSetting.ClientId },
+            { "client_secret", _crmSetting.ClientSecret }
+        };
+        
+        var content = new StringContent(JsonConvert.SerializeObject(payload), Encoding.UTF8, "application/json");
+        
+        var headers = new Dictionary<string, string>
+        {
+            { "Accept", "application/json" }
+        };
+
+        var resp = await _httpClient.PostAsync<CrmTokenResponse>(url, content, headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return resp.AccessToken;
     }
     
     public async Task<List<GetCustomersPhoneNumberDataDto>> GetCustomersByPhoneNumberAsync(GetCustmoersByPhoneNumberRequestDto numberRequest, CancellationToken cancellationToken)
     {
+        var  token = await GetCrmTokenAsync(cancellationToken);
+        
         var headers = new Dictionary<string, string>
         {
             { "Accept", "application/json" },
-            { "X-API-KEY", _crmV3Setting.ApiKey }
+            { "Authorization", $"Bearer {token}"}
         };
         
-        var url = $"{_crmV3Setting.BaseUrl}/api/external/get-customers-by-phone-number?phone_number={numberRequest.PhoneNumber}";
+        var url = $"{_crmSetting.BaseUrl}/api/external/get-customers-by-phone-number?phone_number={numberRequest.PhoneNumber}";
 
         return await _httpClient
             .GetAsync<List<GetCustomersPhoneNumberDataDto>>(url, headers: headers, cancellationToken: cancellationToken)
