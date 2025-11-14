@@ -5,14 +5,11 @@ using Newtonsoft.Json;
 using Serilog;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Ioc;
-using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.Restaurants;
 using SmartTalk.Core.Services.RetrievalDb.VectorDb;
 using SmartTalk.Core.Settings.Twilio;
-using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Constants;
-using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Restaurant;
 using SmartTalk.Messages.Dto.WebSocket;
@@ -27,8 +24,6 @@ namespace SmartTalk.Core.Services.AiSpeechAssistant;
 public interface IAiSpeechAssistantProcessJobService : IScopedDependency
 {
     Task RecordAiSpeechAssistantCallAsync(AiSpeechAssistantStreamContextDto context, CancellationToken cancellationToken);
-    
-    Task SyncAiSpeechAssistantInfoToAgentAsync(SyncAiSpeechAssistantInfoToAgentCommand command, CancellationToken cancellationToken);
 }
 
 public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobService
@@ -37,47 +32,37 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
     private readonly IVectorDb _vectorDb;
     private readonly TwilioSettings _twilioSettings;
     private readonly TranslationClient _translationClient;
-    private readonly IAgentDataProvider _agentDataProvider;
     private readonly IRestaurantDataProvider _restaurantDataProvider;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
-    private readonly IAiSpeechAssistantDataProvider _speechAssistantDataProvider;
 
     public AiSpeechAssistantProcessJobService(
         IMapper mapper,
         IVectorDb vectorDb,
         TwilioSettings twilioSettings,
         TranslationClient translationClient,
-        IAgentDataProvider agentDataProvider,
         IRestaurantDataProvider restaurantDataProvider,
-        IPhoneOrderDataProvider phoneOrderDataProvider,
-        IAiSpeechAssistantDataProvider speechAssistantDataProvider)
+        IPhoneOrderDataProvider phoneOrderDataProvider)
     {
         _mapper = mapper;
         _vectorDb = vectorDb;
         _twilioSettings = twilioSettings;
         _translationClient = translationClient;
-        _agentDataProvider = agentDataProvider;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _restaurantDataProvider = restaurantDataProvider;
-        _speechAssistantDataProvider = speechAssistantDataProvider;
     }
 
     public async Task RecordAiSpeechAssistantCallAsync(AiSpeechAssistantStreamContextDto context, CancellationToken cancellationToken)
     {
         TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
         var callResource = await CallResource.FetchAsync(pathSid: context.CallSid).ConfigureAwait(false);
-        
-        var existRecord = await _phoneOrderDataProvider.GetPhoneOrderRecordBySessionIdAsync(context.CallSid, cancellationToken).ConfigureAwait(false);
+
+        var (existRecord, agent, aiSpeechAssistant) = await _phoneOrderDataProvider.GetRecordWithAgentAndAssistantAsync(context.CallSid, cancellationToken).ConfigureAwait(false);
 
         if (existRecord != null ) return;
         
-        var agentAssistant = await _speechAssistantDataProvider.GetAgentAssistantsAsync(assistantIds: [context.Assistant.Id], cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        if (agentAssistant == null || agentAssistant.Count == 0) throw new Exception("AgentAssistant is null");
-        
         var record = new PhoneOrderRecord
         {
-            AgentId = agentAssistant.First().AgentId,
+            AgentId = context.Assistant.AgentId,
             SessionId = context.CallSid,
             Status = PhoneOrderRecordStatus.Transcription,
             Tips = context.ConversationTranscription.FirstOrDefault().Item2,
@@ -92,27 +77,6 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         };
 
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync([record], cancellationToken: cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task SyncAiSpeechAssistantInfoToAgentAsync(SyncAiSpeechAssistantInfoToAgentCommand command, CancellationToken cancellationToken)
-    {
-        var agentAndAssistantPairs = await _speechAssistantDataProvider.GetAgentAndAiSpeechAssistantPairsAsync(cancellationToken).ConfigureAwait(false);
-        
-        Log.Information("Getting agent and assistant pairs: {AgentAndAssistantPairs}", agentAndAssistantPairs);
-        
-        foreach (var (agent, assistant) in agentAndAssistantPairs)
-        {
-            agent.IsSurface = true;
-            agent.RelateId = agent.Id;
-            agent.Name = assistant.Name;
-            agent.Type = AgentType.Agent;
-            agent.Voice = assistant.ModelVoice;
-            agent.WaitInterval = assistant.WaitInterval;
-            agent.IsTransferHuman = assistant.IsTransferHuman;
-            agent.Channel = AiSpeechAssistantChannel.PhoneChat;
-        }
-        
-        await _agentDataProvider.UpdateAgentsAsync(agentAndAssistantPairs.Select(x => x.Item1).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
     private static string FormattedConversation(List<(AiSpeechAssistantSpeaker, string)> conversationTranscription)

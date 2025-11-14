@@ -21,8 +21,6 @@ public class GetAiSpeechAssistantsRequest : IRequest
     public int? AgentId { get; set; }
     
     public int? StoreId { get; set; }
-    
-    public bool? IsDefault { get; set; }
 }
 
 public class GetAiSpeechAssistantsResponse : SmartTalkResponse<GetAiSpeechAssistantsResponseData>
@@ -32,8 +30,6 @@ public class GetAiSpeechAssistantsResponse : SmartTalkResponse<GetAiSpeechAssist
 public class GetAiSpeechAssistantsResponseData
 {
     public int Count { get; set; }
-    
-    public string AnsweringNumber { get; set; }
     
     public List<AiSpeechAssistantDto> Assistants { get; set; }
 }

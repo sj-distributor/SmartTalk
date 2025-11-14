@@ -17,7 +17,6 @@ using OpenAI.Chat;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.Attachments;
-using SmartTalk.Core.Services.Caching;
 using SmartTalk.Core.Services.Caching.Redis;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
@@ -44,8 +43,6 @@ using SmartTalk.Messages.Events.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.Attachments;
 using SmartTalk.Messages.Dto.Attachments;
-using SmartTalk.Messages.Dto.Smarties;
-using SmartTalk.Messages.Enums.Caching;
 using SmartTalk.Messages.Enums.STT;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 using RecordingResource = Twilio.Rest.Api.V2010.Account.Call.RecordingResource;
@@ -74,7 +71,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly ISalesClient _salesClient;
     private readonly ICurrentUser _currentUser;
     private readonly AzureSetting _azureSetting;
-    private readonly ICacheManager _cacheManager;
     private readonly IOpenaiClient _openaiClient;
     private readonly OpenAiSettings _openAiSettings;
     private readonly TwilioSettings _twilioSettings;
@@ -108,7 +104,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         SalesClient salesClient,
         ICurrentUser currentUser,
         AzureSetting azureSetting,
-        ICacheManager cacheManager,
         IOpenaiClient openaiClient,
         OpenAiSettings openAiSettings,
         TwilioSettings twilioSettings,
@@ -134,9 +129,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _mapper = mapper;
         _salesClient = salesClient;
         _currentUser = currentUser;
-        _salesClient = salesClient;
         _openaiClient = openaiClient;
-        _cacheManager = cacheManager;
         _azureSetting = azureSetting;
         _openAiSettings = openAiSettings;
         _twilioSettings = twilioSettings;
@@ -179,16 +172,10 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     public async Task<AiSpeechAssistantConnectCloseEvent> ConnectAiSpeechAssistantAsync(ConnectAiSpeechAssistantCommand command, CancellationToken cancellationToken)
     {
         Log.Information($"The call from {command.From} to {command.To} is connected");
-        
-        var agent = await _agentDataProvider.GetAgentByNumberAsync(command.To, command.AssistantId, cancellationToken).ConfigureAwait(false);
-        
-        Log.Information("Get the agent: {@Agent} by {AssistantId} or {DidNumber}", agent, command.AssistantId, command.To);
-        
-        if (agent == null || agent.IsReceiveCall == false) return new AiSpeechAssistantConnectCloseEvent();
 
         InitAiSpeechAssistantStreamContext(command.Host, command.From);
         
-        await BuildingAiSpeechAssistantKnowledgeBaseAsync(command.From, command.To, command.AssistantId, command.NumberId, cancellationToken).ConfigureAwait(false);
+        await BuildingAiSpeechAssistantKnowledgeBaseAsync(command.From, command.To, command.AssistantId, cancellationToken).ConfigureAwait(false);
         
         _aiSpeechAssistantStreamContext.HumanContactPhone = _aiSpeechAssistantStreamContext.ShouldForward ? null 
             : (await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantHumanContactByAssistantIdAsync(_aiSpeechAssistantStreamContext.Assistant.Id, cancellationToken).ConfigureAwait(false))?.HumanPhone;
@@ -231,7 +218,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     {
         Log.Information("Handling receive phone record: {@command}", command);
 
-        var (record, agent) = await _phoneOrderDataProvider.GetRecordWithAgentAsync(command.CallSid, cancellationToken).ConfigureAwait(false);
+        var (record, agent, _) = await _phoneOrderDataProvider.GetRecordWithAgentAndAssistantAsync(command.CallSid, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Get phone order record: {@record}", record);
 
@@ -258,17 +245,14 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
         var language = string.Empty;
         try
-        {
+        { 
             language = await DetectAudioLanguageAsync(audioFileRawBytes, cancellationToken).ConfigureAwait(false);
-
-            await SendServerRestoreMessageIfNecessaryAsync(cancellationToken).ConfigureAwait(false);
         }
         catch (Exception e) when (e.Message.Contains("quota"))
         {
             const string alertMessage = "服务器异常。";
 
             await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, _workWeChatKeySetting.Key, alertMessage, mentionedList: new[]{"@all"}, cancellationToken: cancellationToken).ConfigureAwait(false);
-            await _cacheManager.GetOrAddAsync("gpt-4o-audio-exception", _ => Task.FromResult(Task.FromResult(alertMessage)), new RedisCachingSetting(RedisServer.System, TimeSpan.FromDays(1)), cancellationToken).ConfigureAwait(false);
         }
         
         record.TranscriptionJobId = await _phoneOrderService.CreateSpeechMaticsJobAsync(audioFileRawBytes, Guid.NewGuid().ToString("N") + ".wav", language, cancellationToken).ConfigureAwait(false);
@@ -284,39 +268,19 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         List<ChatMessage> messages =
         [
             new SystemChatMessage("""
-                                  You are a professional speech recognition analyst. Based on the audio content, determine the main language used and return only one language code from the following options:
-                                  zh-CN: Mandarin (Simplified Chinese)
-                                  zh: Cantonese
-                                  zh-TW: Taiwanese Chinese (Traditional Chinese)
-                                  en: English
-                                  es: Spanish
-                                  ko: Korean
-                                                         
-                                  Rules:
-                                  1. Carefully analyze the entire speech content and identify the **dominant spoken language**, not just occasional words or short phrases.
-                                  2. If the recording contains noise, background sounds, or non-standard pronunciation, focus on consistent linguistic features such as tone, rhythm, and pronunciation pattern.
-                                  3. **Do NOT confuse accented English with Chinese.** English spoken with a Chinese accent or non-standard pronunciation must still be classified as English (en).
-                                  4. Only return 'es' (Spanish) if the majority of the recording is clearly and consistently spoken in Spanish. Do NOT classify English with Spanish-like sounds or background as Spanish.
-                                  5. If the recording mixes languages, return the code of the language that dominates the majority of the speaking time.
-                                  6. **If you are uncertain between English and Chinese, always choose English (en).**
-                                  7. Return only the code without any additional text, punctuation, or explanations.
-                                                   
-                                  Examples:
-                                  If the audio is in Mandarin, even with background noise, return: zh-CN
-                                  If the audio is in Cantonese, possibly with some Mandarin words, return: zh
-                                  If the audio is in Taiwanese Mandarin (Traditional Chinese), return: zh-TW
-                                  If the audio is in English, even with a strong accent or imperfect pronunciation, return: en
-                                  If the audio is in English with background noise, return: en
-                                  If the audio is predominantly in Spanish, spoken clearly and throughout most of the recording, return: es
-                                  If the audio is predominantly in Korean, spoken clearly and throughout most of the recording, return: ko
-                                  If the audio has both Mandarin and English but Mandarin is the dominant language, return: zh-CN
-                                  If the audio has both Cantonese and English but English dominates, return: en
-                                  If the audio is in English but contains occasional Chinese filler words such as "啊", "嗯", or "對", return: en
-                                  If the audio is mainly in Chinese but the speaker occasionally uses short English words like "OK", "yeah", or "sorry", return: zh-CN
-                                  If the recording has Chinese background speech but the main speaker talks in English, return: en
-                                  If the recording has multiple speakers where one speaks English and others speak Mandarin, determine which language dominates most of the speaking time and return that language code.
-                                  If the audio is short and contains only a few clear English words, classify as English (en).
-                                  If the audio is mostly silent, unclear, or contains indistinguishable sounds, choose the language that can be most confidently recognized based on speech features, not noise.
+                                  你是一名專業的語音識別分析員，請根據錄音內容的語音判斷所使用的語言，並從以下選項中**僅返回一個語言代碼**：
+                                  - zh-CN：普通話（簡體中文）
+                                  - zh：粵語
+                                  - zh-TW：台灣中文（繁體中文）
+                                  - en：英文
+
+                                  請根據語音內容準確判斷，不要預設為任何語言，也不要根據提示猜測。請不要返回任何多餘文字或說明，**只返回代碼**。
+                                  例如：
+                                  - 音頻中為普通話，返回：zh-CN
+                                  - 音頻中為粵語，返回：zh
+                                  - 音頻中為英文，返回：en
+
+                                  注意：如果語音中是英文，請不要誤判為中文。
                                   """),
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
             new UserChatMessage("請根據錄音內容判斷語言，並返回對應代碼。")
@@ -329,27 +293,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         Log.Information("Detect the audio language: " + completion.Content.FirstOrDefault()?.Text);
         
         return completion.Content.FirstOrDefault()?.Text ?? "en";
-    }
-
-    private async Task SendServerRestoreMessageIfNecessaryAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            var exceptionAlert = await _cacheManager.GetAsync<string>("gpt-4o-audio-exception", new RedisCachingSetting(), cancellationToken).ConfigureAwait(false);
-
-            if (!string.IsNullOrEmpty(exceptionAlert))
-            {
-                const string restoreMessage = "服务器恢复。";
-
-                await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, _workWeChatKeySetting.Key, restoreMessage, mentionedList: new[]{"@all"}, cancellationToken: cancellationToken).ConfigureAwait(false);
-                
-                await _cacheManager.RemoveAsync("gpt-4o-audio-exception", new RedisCachingSetting(), cancellationToken).ConfigureAwait(false);
-            }
-        }
-        catch (Exception e)
-        {
-            // ignored
-        }
     }
 
     public async Task TransferHumanServiceAsync(TransferHumanServiceCommand command, CancellationToken cancellationToken)
@@ -374,7 +317,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         );
     }
 
-    private async Task BuildingAiSpeechAssistantKnowledgeBaseAsync(string from, string to, int? assistantId, int? numberId, CancellationToken cancellationToken)
+    private async Task BuildingAiSpeechAssistantKnowledgeBaseAsync(string from, string to, int? assistantId, CancellationToken cancellationToken)
     {
         var inboundRoute = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantInboundRouteAsync(from, to, cancellationToken).ConfigureAwait(false);
         
@@ -399,20 +342,12 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
-
+        
         var finalPrompt = knowledge.Prompt
             .Replace("#{user_profile}", string.IsNullOrEmpty(userProfile?.ProfileJson) ? " " : userProfile.ProfileJson)
             .Replace("#{current_time}", currentTime)
             .Replace("#{customer_phone}", from.StartsWith("+1") ? from[2..] : from)
             .Replace("#{pst_date}", $"{pstTime.Date:yyyy-MM-dd} {pstTime.DayOfWeek}"); 
-                
-        if (numberId.HasValue && finalPrompt.Contains("#{greeting}"))
-        {
-            var greeting = await _smartiesClient.GetSaleAutoCallNumberAsync(new GetSaleAutoCallNumberRequest(){ Id = numberId.Value }, cancellationToken).ConfigureAwait(false);
-            knowledge.Greetings = string.IsNullOrEmpty(greeting.Data.Number.Greeting) ? knowledge.Greetings : greeting.Data.Number.Greeting;
-            
-            finalPrompt = finalPrompt.Replace("#{greeting}", knowledge.Greetings ?? string.Empty);
-        }
         
         if (finalPrompt.Contains("#{customer_items}", StringComparison.OrdinalIgnoreCase))
         {
@@ -429,7 +364,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         }
         
         Log.Information($"The final prompt: {finalPrompt}");
-        
+
         _aiSpeechAssistantStreamContext.LastPrompt = finalPrompt;
         _aiSpeechAssistantStreamContext.Assistant = _mapper.Map<AiSpeechAssistantDto>(assistant);
         _aiSpeechAssistantStreamContext.Knowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge);
@@ -1105,7 +1040,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
     private async Task<List<(AiSpeechAssistantSessionConfigType Type, object Config)>> InitialSessionConfigAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken = default)
     {
-        var functions = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallByAssistantIdsAsync([assistant.Id], assistant.ModelProvider, true, cancellationToken).ConfigureAwait(false);
+        var functions = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallByAssistantIdAsync(assistant.Id, assistant.ModelProvider, true, cancellationToken).ConfigureAwait(false);
 
         return functions.Count == 0 ? [] : functions.Where(x => !string.IsNullOrWhiteSpace(x.Content)).Select(x => (x.Type, JsonConvert.DeserializeObject<object>(x.Content))).ToList();
     }

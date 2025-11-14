@@ -1,6 +1,6 @@
 namespace SmartTalk.Messages.Enums.AiSpeechAssistant;
 
-public enum AiSpeechAssistantVoiceType
+public enum AiKidVoiceType
 {
     Male,
     Female

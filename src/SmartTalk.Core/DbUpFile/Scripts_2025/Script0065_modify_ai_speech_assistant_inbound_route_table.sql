@@ -1,1 +1,0 @@
-alter table `ai_speech_assistant_inbound_route` modify `from`VARCHAR(48) NULL;

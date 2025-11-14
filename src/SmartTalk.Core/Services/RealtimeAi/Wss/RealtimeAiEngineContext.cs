@@ -4,7 +4,7 @@ namespace SmartTalk.Core.Services.RealtimeAi.Wss;
 
 public class RealtimeAiEngineContext
 {
-    public int AssistantId { get; set; }
+    public int AgentId { get; set; }
     
     public string InitialPrompt { get; set; }
 

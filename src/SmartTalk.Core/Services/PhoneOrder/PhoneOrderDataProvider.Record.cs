@@ -8,6 +8,7 @@ using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Dto.Restaurant;
 using SmartTalk.Messages.Enums;
+using SmartTalk.Messages.Enums.Account;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.STT;
 
@@ -36,8 +37,6 @@ public partial interface IPhoneOrderDataProvider
     Task<PhoneOrderRecord> GetPhoneOrderRecordByIdAsync(int recordId, CancellationToken cancellationToken);
     
     Task<PhoneOrderRecord> GetPhoneOrderRecordBySessionIdAsync(string sessionId, CancellationToken cancellationToken);
-    
-    Task<(PhoneOrderRecord, Agent)> GetRecordWithAgentAsync(string sessionId, CancellationToken cancellationToken);
     
     Task<(PhoneOrderRecord, Agent, Domain.AISpeechAssistant.AiSpeechAssistant)> GetRecordWithAgentAndAssistantAsync(string sessionId, CancellationToken cancellationToken);
     
@@ -71,12 +70,13 @@ public partial class PhoneOrderDataProvider
     public async Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsAsync(List<int> agentIds, string name, DateTimeOffset? utcStart = null, DateTimeOffset? utcEnd = null, string orderId = null, CancellationToken cancellationToken = default)
     {
         var agentsQuery = from agent in _repository.Query<Agent>()
-            join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
-            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agentAssistant.AssistantId equals assistant.Id
-            where (agentIds == null || !agentIds.Any() || agentIds.Contains(agent.Id)) && (string.IsNullOrEmpty(name) || assistant.Name.Contains(name))
+            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agent.Id equals
+                assistant.AgentId
+            where (agentIds == null || !agentIds.Any() || agentIds.Contains(agent.Id))
+                  && (string.IsNullOrEmpty(name) || assistant.Name.Contains(name))
             select agent;
 
-        var agents = (await agentsQuery.ToListAsync(cancellationToken).ConfigureAwait(false)).Select(x => x.Id).Distinct().ToList();
+        var agents = (await agentsQuery.ToListAsync(cancellationToken).ConfigureAwait(false)).Select(x => x.Id).ToList();
 
         if (agents.Count == 0) return [];
         
@@ -214,18 +214,6 @@ public partial class PhoneOrderDataProvider
         return await _repository.Query<PhoneOrderRecord>().Where(x => x.SessionId == sessionId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
     
-    public async Task<(PhoneOrderRecord, Agent)> GetRecordWithAgentAsync(string sessionId, CancellationToken cancellationToken)
-    {
-        var result = await (
-            from record in _repository.Query<PhoneOrderRecord>() where record.SessionId == sessionId
-            join agent in _repository.Query<Agent>() on record.AgentId equals agent.Id into agentGroup
-            from agent in agentGroup.DefaultIfEmpty()
-            select new { record, agent }
-        ).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
-
-        return (result?.record, result?.agent);
-    }
-
     public async Task<(PhoneOrderRecord, Agent, Domain.AISpeechAssistant.AiSpeechAssistant)> GetRecordWithAgentAndAssistantAsync(string sessionId, CancellationToken cancellationToken)
     {
         var result = await (
@@ -233,9 +221,7 @@ public partial class PhoneOrderDataProvider
             where record.SessionId == sessionId
             join agent in _repository.Query<Agent>() on record.AgentId equals agent.Id into agentGroup
             from agent in agentGroup.DefaultIfEmpty()
-            join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId into agentAssistantGroups
-            from agentAssistant in agentAssistantGroups.DefaultIfEmpty()
-            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>().Where(x => x.IsDefault) on agentAssistant.AssistantId equals assistant.Id into assistantGroup
+            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on record.AgentId equals assistant.AgentId into assistantGroup
             from assistant in assistantGroup.DefaultIfEmpty()
             select new { record, agent, assistant }
         ).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
@@ -273,8 +259,7 @@ public partial class PhoneOrderDataProvider
     {
         var query = from record in _repository.Query<PhoneOrderRecord>().Where(x => x.CreatedDate >= startTime && x.CreatedDate <= endTime)
             join agent in _repository.Query<Agent>().Where(x => !includeExternalData && x.Type != AgentType.AiKid) on record.AgentId equals agent.Id
-            join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
-            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>().Where(x => x.IsDefault) on agentAssistant.AssistantId equals assistant.Id into assistantGroups
+            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agent.Id equals assistant.AgentId into assistantGroups
             from assistant in assistantGroups.DefaultIfEmpty()
             select new { assistant, record };
         

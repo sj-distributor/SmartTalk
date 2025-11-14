@@ -79,9 +79,7 @@ public class RealtimeAiService : IRealtimeAiService
     public async Task RealtimeAiConnectAsync(RealtimeAiConnectCommand command, CancellationToken cancellationToken)
     {
         var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantWithKnowledgeAsync(command.AssistantId, cancellationToken).ConfigureAwait(false);
-        
-        Log.Information("Get realtime ai assistant: {@Assistant}", assistant);
-        
+
         _speechAssistant = assistant ?? throw new Exception($"Could not find a assistant by id: {command.AssistantId}");
         
         await RealtimeAiConnectInternalAsync(command.WebSocket, 
@@ -103,7 +101,7 @@ public class RealtimeAiService : IRealtimeAiService
         await _conversationEngine.StartSessionAsync(_speechAssistant, initialPrompt, inputFormat, outputFormat, region, cancellationToken).ConfigureAwait(false);
         
         await ReceiveFromWebSocketClientAsync(
-            new RealtimeAiEngineContext { AssistantId = _speechAssistant.Id, InitialPrompt = initialPrompt, InputFormat = inputFormat, OutputFormat = outputFormat }, cancellationToken).ConfigureAwait(false);
+            new RealtimeAiEngineContext { AgentId = _speechAssistant.AgentId, InitialPrompt = initialPrompt, InputFormat = inputFormat, OutputFormat = outputFormat }, cancellationToken).ConfigureAwait(false);
     }
 
     private void BuildConversationEngine(AiSpeechAssistantProvider provider)
@@ -322,10 +320,10 @@ public class RealtimeAiService : IRealtimeAiService
                 }, CancellationToken.None).ConfigureAwait(false);
 
             Log.Information("audio uploaded, url: {Url}", audio?.Attachment?.FileUrl);
-            if (!string.IsNullOrEmpty(audio?.Attachment?.FileUrl) && _speechAssistant.Id != 0)
+            if (!string.IsNullOrEmpty(audio?.Attachment?.FileUrl) && _speechAssistant.AgentId != 0)
             {
                 _backgroundJobClient.Enqueue<IRealtimeProcessJobService>(x =>
-                    x.RecordingRealtimeAiAsync(audio.Attachment.FileUrl, _speechAssistant.Id, _sessionId, CancellationToken.None));
+                    x.RecordingRealtimeAiAsync(audio.Attachment.FileUrl, _speechAssistant.AgentId, _sessionId, CancellationToken.None));
             }
 
             await src.DisposeAsync();

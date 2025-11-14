@@ -2,12 +2,11 @@ using SmartTalk.Messages.Dto.Agent;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using SmartTalk.Messages.Enums.Agent;
-using SmartTalk.Messages.Enums.AiSpeechAssistant;
 
 namespace SmartTalk.Core.Domain.System;
 
 [Table("agent")]
-public class Agent : IAgent, IEntity<int>, IHasCreatedFields
+public class Agent : IEntity, IHasCreatedFields
 {
     [Key]
     [Column("id")]
@@ -49,34 +48,4 @@ public class Agent : IAgent, IEntity<int>, IHasCreatedFields
     
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
-    
-    [Column("name")]
-    public string Name { get; set; }
-    
-    [Column("brief")]
-    public string Brief { get; set; }
-    
-    [Column("channel")]
-    public AiSpeechAssistantChannel? Channel { get; set; }
-    
-    [Column("is_receive_call")]
-    public bool IsReceiveCall { get; set; }
-    
-    [Column("is_surface")]
-    public bool IsSurface { get; set; }
-    
-    [Column("voice"), StringLength(64)]
-    public string Voice { get; set; }
-    
-    [Column("wait_interval")]
-    public int WaitInterval { get; set; } = 500;
-    
-    [Column("is_transfer_human")]
-    public bool IsTransferHuman { get; set; } = false;
-        
-    [Column("transfer_call_number"), StringLength(128)]
-    public string TransferCallNumber { get; set; }
-    
-    [NotMapped]
-    public List<AISpeechAssistant.AiSpeechAssistant> Assistants { get; set; }
 }

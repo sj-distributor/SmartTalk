@@ -1,4 +1,3 @@
-using DocumentFormat.OpenXml.Office2010.ExcelAc;
 using Serilog;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Requests.AiSpeechAssistant;
@@ -18,8 +17,6 @@ public partial interface IAiSpeechAssistantService
     Task<GetAiSpeechAssistantByIdResponse> GetAiSpeechAssistantByIdAsync(GetAiSpeechAssistantByIdRequest request, CancellationToken cancellationToken);
     
     Task<GetAiSpeechAssistantSessionResponse> GetAiSpeechAssistantSessionAsync(GetAiSpeechAssistantSessionRequest request, CancellationToken cancellationToken);
-    
-    Task<GetAiSpeechAssistantInboundRoutesResponse> GetAiSpeechAssistantInboundRoutesAsync(GetAiSpeechAssistantInboundRoutesRequest request, CancellationToken cancellationToken);
 }
 
 public partial class AiSpeechAssistantService
@@ -62,7 +59,7 @@ public partial class AiSpeechAssistantService
         }
 
         var (count, assistants) = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantsAsync(
-            request.PageIndex, request.PageSize, request.Channel.HasValue ? request.Channel.Value.ToString("D") : string.Empty, request.Keyword, agentIds, request.IsDefault, cancellationToken).ConfigureAwait(false);
+            request.PageIndex, request.PageSize, request.Channel.HasValue ? request.Channel.Value.ToString("D") : string.Empty, request.Keyword, agentIds, cancellationToken).ConfigureAwait(false);
 
         var enrichAssistants = _mapper.Map<List<AiSpeechAssistantDto>>(assistants);
         await EnrichAssistantsInfoAsync(enrichAssistants, cancellationToken).ConfigureAwait(false);
@@ -72,8 +69,7 @@ public partial class AiSpeechAssistantService
             Data = new GetAiSpeechAssistantsResponseData
             {
                 Count = count,
-                Assistants = enrichAssistants,
-                AnsweringNumber = enrichAssistants.Where(x => x.IsDefault).FirstOrDefault()?.AnsweringNumber ?? string.Empty
+                Assistants = enrichAssistants
             }
         };
     }
@@ -130,21 +126,6 @@ public partial class AiSpeechAssistantService
         return new GetAiSpeechAssistantSessionResponse
         {
             Data = _mapper.Map<AiSpeechAssistantSessionDto>(session)
-        };
-    }
-
-    public async Task<GetAiSpeechAssistantInboundRoutesResponse> GetAiSpeechAssistantInboundRoutesAsync(GetAiSpeechAssistantInboundRoutesRequest request, CancellationToken cancellationToken)
-    {
-        var (count, routes) = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantInboundRoutesAsync(
-            request.PageIndex, request.PageSize, request.AssistantId, request.Keyword, cancellationToken).ConfigureAwait(false);
-
-        return new GetAiSpeechAssistantInboundRoutesResponse
-        {
-            Data = new GetAiSpeechAssistantInboundRoutesResponseData
-            {
-                Count = count,
-                Routes = _mapper.Map<List<AiSpeechAssistantInboundRouteDto>>(routes)
-            }
         };
     }
 

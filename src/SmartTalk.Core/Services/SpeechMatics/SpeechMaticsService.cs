@@ -134,37 +134,31 @@ public class SpeechMaticsService : ISpeechMaticsService
 
     private async Task SummarizeConversationContentAsync(PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken)
     {
-        var (aiSpeechAssistant, agent) = await _aiSpeechAssistantDataProvider.GetAgentAndAiSpeechAssistantAsync(record.AgentId, cancellationToken).ConfigureAwait(false);
+        var (aiSpeechAssistant, agent) = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByAgentIdAsync(record.AgentId, cancellationToken).ConfigureAwait(false);
 
         Log.Information("Get Assistant: {@Assistant} and Agent: {@Agent} by agent id {agentId}", aiSpeechAssistant, agent, record.AgentId);
         
         var callFrom = string.Empty;
-        var callTo = string.Empty;
-        
-        TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
-
         try
         {
-            await RetryAsync(async () =>
-            {
-                var call = await CallResource.FetchAsync(record.SessionId);
-                callFrom = call?.From;
-                callTo = call?.To;
-                Log.Information("Fetched incoming phone number from Twilio: {callFrom}", callFrom);
-            }, maxRetryCount: 3, delaySeconds: 3, cancellationToken);
+            TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
+
+            var call = await CallResource.FetchAsync(record.SessionId);
+            callFrom = call?.From;
+            
+            Log.Information("Fetched incoming phone number from Twilio: {callFrom}", callFrom);
         }
         catch (Exception e)
         {
             Log.Warning("Fetched incoming phone number from Twilio failed: {Message}", e.Message);
         }
-        
+
         var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
         
         var messages = await ConfigureRecordAnalyzePromptAsync(agent, aiSpeechAssistant, callFrom ?? "", currentTime, audioContent, cancellationToken);
         
         ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
-
         ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
 
         ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
@@ -592,26 +586,5 @@ public class SpeechMaticsService : ISpeechMaticsService
             return TranscriptionLanguage.Chinese;
     
         return TranscriptionLanguage.English;
-    }
-    
-    private async Task RetryAsync(
-        Func<Task> action,
-        int maxRetryCount,
-        int delaySeconds,
-        CancellationToken cancellationToken)
-    {
-        for (int attempt = 1; attempt <= maxRetryCount + 1; attempt++)
-        {
-            try
-            {
-                await action();
-                return;
-            }
-            catch (Exception ex) when (attempt <= maxRetryCount)
-            {
-                Log.Warning(ex, "重試第 {Attempt} 次失敗，稍後再試…", attempt);
-                await Task.Delay(TimeSpan.FromSeconds(delaySeconds), cancellationToken);
-            }
-        }
     }
 }
