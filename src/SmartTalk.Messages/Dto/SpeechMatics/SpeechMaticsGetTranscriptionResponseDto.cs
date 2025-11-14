@@ -39,6 +39,9 @@ public class SpeechMaticsMetadataDto
 
     [JsonProperty("type")]
     public string Type { get; set; }
+    
+    [JsonProperty("transcription_config", NullValueHandling = NullValueHandling.Ignore)]
+    public SpeechMaticsTranscriptionConfigDto TranscriptionConfig { get; set; }
 }
 
 public class SpeechMaticsResultDto
