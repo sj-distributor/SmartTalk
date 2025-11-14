@@ -49,6 +49,7 @@ using SmartTalk.Messages.Commands.Attachments;
 using SmartTalk.Messages.Dto.Attachments;
 using SmartTalk.Messages.Dto.Smarties;
 using SmartTalk.Messages.Enums.Caching;
+using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.STT;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 using RecordingResource = Twilio.Rest.Api.V2010.Account.Call.RecordingResource;
@@ -200,7 +201,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         await ConnectOpenAiRealTimeSocketAsync(cancellationToken).ConfigureAwait(false);
         
-        var receiveFromTwilioTask = ReceiveFromTwilioAsync(command.TwilioWebSocket, cancellationToken);
+        var receiveFromTwilioTask = ReceiveFromTwilioAsync(command.TwilioWebSocket, command.OrderRecordType, cancellationToken);
         var sendToTwilioTask = SendToTwilioAsync(command.TwilioWebSocket, cancellationToken);
 
         try
@@ -550,7 +551,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         }
     }
     
-    private async Task ReceiveFromTwilioAsync(WebSocket twilioWebSocket, CancellationToken cancellationToken)
+    private async Task ReceiveFromTwilioAsync(WebSocket twilioWebSocket, PhoneOrderRecordType orderRecordType, CancellationToken cancellationToken)
     {
         var buffer = new byte[1024 * 10];
         try
@@ -617,7 +618,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                             }
                             break;
                         case "stop":
-                            _backgroundJobClient.Enqueue<IAiSpeechAssistantProcessJobService>(x => x.RecordAiSpeechAssistantCallAsync(_aiSpeechAssistantStreamContext, CancellationToken.None));
+                            _backgroundJobClient.Enqueue<IAiSpeechAssistantProcessJobService>(x => x.RecordAiSpeechAssistantCallAsync(_aiSpeechAssistantStreamContext, orderRecordType, CancellationToken.None));
                             break;
                     }
                 }
@@ -625,7 +626,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         }
         catch (WebSocketException ex)
         {
-            _backgroundJobClient.Enqueue<IAiSpeechAssistantProcessJobService>(x => x.RecordAiSpeechAssistantCallAsync(_aiSpeechAssistantStreamContext, CancellationToken.None));
+            _backgroundJobClient.Enqueue<IAiSpeechAssistantProcessJobService>(x => x.RecordAiSpeechAssistantCallAsync(_aiSpeechAssistantStreamContext, orderRecordType, CancellationToken.None));
             Log.Error("Receive from Twilio error: {@ex}", ex);
         }
     }

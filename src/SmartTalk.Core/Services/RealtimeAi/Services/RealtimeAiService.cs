@@ -21,6 +21,7 @@ using SmartTalk.Messages.Commands.Attachments;
 using SmartTalk.Messages.Commands.RealtimeAi;
 using SmartTalk.Messages.Dto.Attachments;
 using SmartTalk.Messages.Dto.Smarties;
+using SmartTalk.Messages.Enums.PhoneOrder;
 using JsonException = System.Text.Json.JsonException;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 
@@ -85,12 +86,12 @@ public class RealtimeAiService : IRealtimeAiService
         _speechAssistant = assistant ?? throw new Exception($"Could not find a assistant by id: {command.AssistantId}");
         
         await RealtimeAiConnectInternalAsync(command.WebSocket, 
-            "You are a friendly assistant", command.InputFormat, command.OutputFormat, command.Region, cancellationToken).ConfigureAwait(false);
+            "You are a friendly assistant", command.InputFormat, command.OutputFormat, command.Region, command.OrderRecordType, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task RealtimeAiConnectInternalAsync(
         WebSocket webSocket, string initialPrompt, RealtimeAiAudioCodec inputFormat,
-        RealtimeAiAudioCodec outputFormat, RealtimeAiServerRegion region,  CancellationToken cancellationToken)
+        RealtimeAiAudioCodec outputFormat, RealtimeAiServerRegion region, PhoneOrderRecordType orderRecordType, CancellationToken cancellationToken)
     {
         _webSocket = webSocket;
         _streamSid = Guid.NewGuid().ToString("N");
@@ -103,7 +104,7 @@ public class RealtimeAiService : IRealtimeAiService
         await _conversationEngine.StartSessionAsync(_speechAssistant, initialPrompt, inputFormat, outputFormat, region, cancellationToken).ConfigureAwait(false);
         
         await ReceiveFromWebSocketClientAsync(
-            new RealtimeAiEngineContext { AssistantId = _speechAssistant.Id, InitialPrompt = initialPrompt, InputFormat = inputFormat, OutputFormat = outputFormat }, cancellationToken).ConfigureAwait(false);
+            new RealtimeAiEngineContext { AssistantId = _speechAssistant.Id, InitialPrompt = initialPrompt, InputFormat = inputFormat, OutputFormat = outputFormat }, orderRecordType, cancellationToken).ConfigureAwait(false);
     }
 
     private void BuildConversationEngine(AiSpeechAssistantProvider provider)
@@ -120,7 +121,7 @@ public class RealtimeAiService : IRealtimeAiService
         _conversationEngine.OutputAudioTranscriptionCompletedyAsync += OutputAudioTranscriptionCompletedAsync;
     }
     
-    private async Task ReceiveFromWebSocketClientAsync(RealtimeAiEngineContext context, CancellationToken cancellationToken)
+    private async Task ReceiveFromWebSocketClientAsync(RealtimeAiEngineContext context, PhoneOrderRecordType orderRecordType, CancellationToken cancellationToken)
     {
         var buffer = new byte[8192];
         try
@@ -136,7 +137,7 @@ public class RealtimeAiService : IRealtimeAiService
                     
                     if (result.MessageType == WebSocketMessageType.Close)
                     {
-                        await HandleWholeAudioBufferAsync().ConfigureAwait(false);
+                        await HandleWholeAudioBufferAsync(orderRecordType).ConfigureAwait(false);
                         
                         await _conversationEngine.EndSessionAsync("Disconnect From RealtimeAi");
                         await _webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Client acknowledges close", CancellationToken.None);
@@ -224,7 +225,7 @@ public class RealtimeAiService : IRealtimeAiService
     
     private async Task OnErrorOccurredAsync(RealtimeAiErrorData errorData)
     {
-        await HandleWholeAudioBufferAsync().ConfigureAwait(false);
+        await HandleWholeAudioBufferAsync(orderRecordType: PhoneOrderRecordType.TestLink).ConfigureAwait(false);
         
         var clientError = new
         {
@@ -283,7 +284,7 @@ public class RealtimeAiService : IRealtimeAiService
         await _webSocket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(transcription))), WebSocketMessageType.Text, true, CancellationToken.None);
     }
 
-    private async Task HandleWholeAudioBufferAsync()
+    private async Task HandleWholeAudioBufferAsync(PhoneOrderRecordType orderRecordType)
     {
         if (_wholeAudioBuffer is { CanRead: true } src && !_hasHandledAudioBuffer)
         {
@@ -325,7 +326,7 @@ public class RealtimeAiService : IRealtimeAiService
             if (!string.IsNullOrEmpty(audio?.Attachment?.FileUrl) && _speechAssistant.Id != 0)
             {
                 _backgroundJobClient.Enqueue<IRealtimeProcessJobService>(x =>
-                    x.RecordingRealtimeAiAsync(audio.Attachment.FileUrl, _speechAssistant.Id, _sessionId, CancellationToken.None));
+                    x.RecordingRealtimeAiAsync(audio.Attachment.FileUrl, _speechAssistant.Id, _sessionId, orderRecordType, CancellationToken.None));
             }
 
             await src.DisposeAsync();
