@@ -41,8 +41,7 @@ public partial class SpeechMaticsDataProvider : ISpeechMaticsDataProvider
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task UpdateSpeechMaticsKeysAsync(
-        List<SpeechMaticsKey> speechMaticsKeys, bool forceSave = true, CancellationToken cancellationToken = default)
+    public async Task UpdateSpeechMaticsKeysAsync(List<SpeechMaticsKey> speechMaticsKeys, bool forceSave = true, CancellationToken cancellationToken = default)
     {
         await _repository.UpdateAllAsync(speechMaticsKeys, cancellationToken).ConfigureAwait(false);
         

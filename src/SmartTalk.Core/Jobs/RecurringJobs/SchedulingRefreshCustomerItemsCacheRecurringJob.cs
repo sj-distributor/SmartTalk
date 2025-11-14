@@ -1,6 +1,6 @@
 using Mediator.Net;
 using SmartTalk.Core.Settings.Jobs;
-using SmartTalk.Messages.Commands.AiSpeechAssistant;
+using SmartTalk.Messages.Commands.Sales;
 
 namespace SmartTalk.Core.Jobs.RecurringJobs;
 

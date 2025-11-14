@@ -74,7 +74,7 @@ public class PhoneOrderRecord : IEntity
     
     [Column("order_record_type")]
     public PhoneOrderRecordType OrderRecordType { get; set; }
-
+    
     [Column("order_id"), StringLength(1024)]
     public string OrderId { get; set; }
 

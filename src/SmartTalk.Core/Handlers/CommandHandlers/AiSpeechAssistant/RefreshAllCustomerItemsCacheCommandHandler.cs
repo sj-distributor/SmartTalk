@@ -2,6 +2,7 @@ using Mediator.Net.Context;
 using Mediator.Net.Contracts;
 using SmartTalk.Core.Services.SpeechMatics;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
+using SmartTalk.Messages.Commands.Sales;
 
 namespace SmartTalk.Core.Handlers.CommandHandlers.AiSpeechAssistant;
 
@@ -11,7 +12,7 @@ public class RefreshAllCustomerItemsCacheCommandHandler : ICommandHandler<Refres
     
     public RefreshAllCustomerItemsCacheCommandHandler(ISpeechMaticsJobService speechMaticsJobService)
     {
-         _speechMaticsJobService = speechMaticsJobService;
+        _speechMaticsJobService = speechMaticsJobService;
     }
     
     public async Task Handle(IReceiveContext<RefreshAllCustomerItemsCacheCommand> context, CancellationToken cancellationToken)

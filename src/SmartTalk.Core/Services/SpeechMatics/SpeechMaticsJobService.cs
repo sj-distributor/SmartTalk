@@ -6,6 +6,11 @@ using SmartTalk.Core.Domain.Sales;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
+using Hangfire;
+using Serilog;
+using SmartTalk.Core.Ioc;
+using SmartTalk.Core.Services.AiSpeechAssistant;
+using SmartTalk.Messages.Commands.Sales;
 using SmartTalk.Messages.Enums.SpeechMatics;
 
 namespace SmartTalk.Core.Services.SpeechMatics;
@@ -32,6 +37,9 @@ public class SpeechMaticsJobService : ISpeechMaticsJobService
         _aiSpeechAssistantService = aiSpeechAssistantService;
         _backgroundJobClient = backgroundJobClient;
         _speechMaticsDataProvider = speechMaticsDataProvider;
+        _backgroundJobClient = backgroundJobClient;
+        _speechMaticsDataProvider = speechMaticsDataProvider;
+        _aiSpeechAssistantService = aiSpeechAssistantService;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
     }
 

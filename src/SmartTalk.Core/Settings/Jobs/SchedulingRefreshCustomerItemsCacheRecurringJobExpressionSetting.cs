@@ -8,6 +8,6 @@ public class SchedulingRefreshCustomerItemsCacheRecurringJobExpressionSetting : 
     {
         Value = configuration.GetValue<string>("SchedulingRefreshCustomerItemsCacheRecurringJobCronExpression");
     }
-    
+
     public string Value { get; set; }
 }
