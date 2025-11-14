@@ -47,6 +47,7 @@ using SmartTalk.Messages.Events.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.Attachments;
 using SmartTalk.Messages.Dto.Attachments;
+using SmartTalk.Messages.Dto.Crm;
 using SmartTalk.Messages.Dto.Smarties;
 using SmartTalk.Messages.Enums.Caching;
 using SmartTalk.Messages.Enums.STT;
@@ -74,6 +75,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 {
     private readonly IClock _clock;
     private readonly IMapper _mapper;
+    private readonly ICrmClient _crmClient;
     private readonly ISalesClient _salesClient;
     private readonly ICurrentUser _currentUser;
     private readonly AzureSetting _azureSetting;
@@ -108,6 +110,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     public AiSpeechAssistantService(
         IClock clock,
         IMapper mapper,
+        ICrmClient crmClient,
         ICurrentUser currentUser,
         AzureSetting azureSetting,
         ICacheManager cacheManager,
@@ -134,6 +137,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     {
         _clock = clock;
         _mapper = mapper;
+        _crmClient = crmClient;
         _currentUser = currentUser;
         _salesClient = salesClient;
         _openaiClient = openaiClient;
@@ -420,6 +424,14 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             .GetAiSpeechAssistantInfoByNumbersAsync(from, to, forwardAssistantId ?? assistantId, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Matching Ai speech assistant: {@Assistant}、{@Knowledge}、{@UserProfile}", assistant, knowledge, userProfile);
+        
+        var crmProfile = await GetCrmCustomerProfileAsync(from, cancellationToken).ConfigureAwait(false);
+
+        if (!string.IsNullOrEmpty(crmProfile))
+        {
+            userProfile.ProfileJson = crmProfile;
+            Log.Information("User profile updated from CRM: {Profile}", userProfile.ProfileJson);
+        }
         
         var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
@@ -1250,5 +1262,63 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                 await Task.Delay(TimeSpan.FromSeconds(delaySeconds), cancellationToken);
             }
         }
+    }
+
+    public async Task<string> GetCrmCustomerProfileAsync(string fromPhone, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var crmResult = await _crmClient.GetCustomersByPhoneNumberAsync(new GetCustmoersByPhoneNumberRequestDto { PhoneNumber = fromPhone }, cancellationToken).ConfigureAwait(false);
+
+            Log.Information("CRM result for phone {Phone}: {@CRM}", crmResult);
+
+            if (crmResult == null || !crmResult.Any())
+                return null;
+
+            if (crmResult.Count == 1)
+            {
+                return BuildCrmUserProfile(crmResult.First());
+            }
+            
+            return BuildCrmMultiCustomerProfile(crmResult);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "CRM fetch failed for phone {Phone}", fromPhone);
+            return null;
+        }
+    }
+    
+    private string BuildCrmUserProfile(GetCustomersPhoneNumberDataDto dto)
+    {
+        var profile = new
+        {
+            sapId = dto.SapId,
+            customerName = dto.CustomerName,
+            street = dto.Street,
+            warehouse = dto.Warehouse,
+            headerNote = dto.HeaderNote1,
+            contacts = dto.Contacts
+        };
+
+        return JsonConvert.SerializeObject(profile);
+    }
+    
+    private string BuildCrmMultiCustomerProfile(List<GetCustomersPhoneNumberDataDto> list)
+    {
+        var profile = new
+        {
+            multiple = true,
+            candidates = list.Select(x => new
+            {
+                sapId = x.SapId,
+                customerName = x.CustomerName,
+                street = x.Street,
+                warehouse = x.Warehouse,
+                headerNote = x.HeaderNote1
+            }).ToList()
+        };
+
+        return JsonConvert.SerializeObject(profile);
     }
 }
