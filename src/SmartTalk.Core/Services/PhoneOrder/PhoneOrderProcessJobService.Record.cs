@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using Twilio;
 using Serilog;
 using OpenAI.Chat;
@@ -9,15 +8,17 @@ using SmartTalk.Core.Domain.System;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Enums.STT;
 using Twilio.Rest.Api.V2010.Account;
+using SmartTalk.Messages.Dto.Sales;
 using Microsoft.IdentityModel.Tokens;
+using System.Text.RegularExpressions;
+using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Messages.Dto.SpeechMatics;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
-using SmartTalk.Messages.Dto.Sales;
-using SmartTalk.Messages.Enums.Agent;
 using JsonDocument = System.Text.Json.JsonDocument;
+using JsonSerializer = System.Text.Json.JsonSerializer;
 
 namespace SmartTalk.Core.Services.PhoneOrder;
 
