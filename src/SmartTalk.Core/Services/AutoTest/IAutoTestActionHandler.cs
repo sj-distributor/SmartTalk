@@ -47,6 +47,8 @@ public class ApiAutoTestHandler : IAutoTestActionHandler
 
         body.TaskId = taskId;
         
+        actionConfig.Body = JsonConvert.SerializeObject(body);
+        
         Log.Information("ApiAutoTestHandler ActionHandleAsync after actionConfig:{@actionConfig}", actionConfig);
         
         await ExecuteAsync(actionConfig, cancellationToken).ConfigureAwait(false);
