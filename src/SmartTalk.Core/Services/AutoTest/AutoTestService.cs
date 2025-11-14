@@ -121,6 +121,8 @@ public partial class AutoTestService : IAutoTestService
         // ⭐ 合并所有 WAV
         var mergedWavFile = Path.GetTempFileName() + ".wav";
         MergeWavFilesToUniformFormat(wavFiles, mergedWavFile);
+        
+        wavFiles.Add(mergedWavFile);
 
         return await File.ReadAllBytesAsync(mergedWavFile, cancellationToken);
     }
@@ -141,7 +143,7 @@ public partial class AutoTestService : IAutoTestService
 
         var listFile = Path.GetTempFileName();
         File.WriteAllLines(listFile, wavFiles.Select(f => $"file '{f}'"));
-        var args = $"-y -f concat -safe 0 -i \"{listFile}\" -ar 16000 -ac 1 -acodec pcm_s16le \"{outputFile}\"";
+        var args = $"-y -f concat -safe 0 -i \"{listFile}\" -ar 24000 -ac 1 -acodec pcm_s16le \"{outputFile}\"";
         RunFfmpeg(args);
         File.Delete(listFile);
     }
