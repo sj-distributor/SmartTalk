@@ -82,7 +82,11 @@ public class ApiAutoTestHandler : IAutoTestActionHandler
                 break;
 
             case "POST":
-                await _httpClientFactory.PostAsJsonAsync(config.Url, config.Body ?? "", headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
+                var bodyObj = JsonConvert.DeserializeObject<object>(config.Body);
+                
+                Log.Information("ApiAutoTestHandler ActionHandleAsync ExecuteAsync bodyObj:{@bodyObj}", bodyObj);
+                
+                await _httpClientFactory.PostAsJsonAsync(config.Url, bodyObj?? "", headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
                 break;
             
             default:
