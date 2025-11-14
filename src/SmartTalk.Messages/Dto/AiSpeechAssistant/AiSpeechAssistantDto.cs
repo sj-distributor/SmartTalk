@@ -19,7 +19,6 @@ public class AiSpeechAssistantDto
     public string ModelVoice { get; set; }
     
     public string ModelLanguage { get; set; }
-    public int AgentId { get; set; }
     
     public string CustomRecordAnalyzePrompt { get; set; }
     
@@ -36,6 +35,8 @@ public class AiSpeechAssistantDto
     public bool IsTransferHuman { get; set; }
     
     public string TransferCallNumber { get; set; }
+    
+    public bool IsDefault { get; set; }
     
     public DateTimeOffset CreatedDate { get; set; }
     

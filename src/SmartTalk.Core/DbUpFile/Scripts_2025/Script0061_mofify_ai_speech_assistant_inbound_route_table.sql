@@ -1,0 +1,1 @@
+alter table `ai_speech_assistant_inbound_route` add column `remarks` varchar(512) null;
