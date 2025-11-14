@@ -141,8 +141,6 @@ public partial class AutoTestService : IAutoTestService
 
             // 将文本加入上下文
             conversationHistory.Add(new AssistantChatMessage(completion.Value.OutputAudio.Transcript));
-
-            File.Delete(aiWavFile);
         }
 
         // ⭐ 合并所有 WAV
