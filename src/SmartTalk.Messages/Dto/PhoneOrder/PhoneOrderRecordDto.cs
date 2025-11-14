@@ -41,4 +41,8 @@ public class PhoneOrderRecordDto
     public double? Duration { get; set; }
     
     public bool? IsTransfer { get; set; }
+    
+    public string IncomingCallNumber { get; set; }
+
+    public string ConversationText { get; set; }
 }
