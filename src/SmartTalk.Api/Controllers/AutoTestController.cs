@@ -41,29 +41,35 @@ public class AutoTestController : ControllerBase
     }
     
     [Route("conversation"), HttpPost]
-    public async Task<IActionResult> AutoTestConversationAudioProcessAsync([FromForm] List<IFormFile> mp3Files, [FromForm] string prompt, CancellationToken cancellationToken)
+    public async Task<IActionResult> AutoTestConversationAudioProcessAsync(
+        [FromForm] List<IFormFile> wavFiles,
+        [FromForm] string prompt,
+        CancellationToken cancellationToken)
     {
-        if (mp3Files == null || mp3Files.Count == 0)
+        if (wavFiles == null || wavFiles.Count == 0)
             return BadRequest("没有上传音频文件");
 
-        var customerMp3List = new List<byte[]>();
+        var customerWavList = new List<byte[]>();
 
-        foreach (var file in mp3Files)
+        foreach (var file in wavFiles)
         {
             using var ms = new MemoryStream();
-            await file.CopyToAsync(ms);
-            customerMp3List.Add(ms.ToArray());
+            await file.CopyToAsync(ms, cancellationToken);
+            customerWavList.Add(ms.ToArray());
         }
 
-        var result = await _autoTestService.AutoTestConversationAudioProcessAsync(new AutoTestConversationAudioProcessCommand
-        {
-            CustomerAudioList = customerMp3List,
-            Prompt = prompt
-        }, cancellationToken).ConfigureAwait(false);
+        var result = await _autoTestService.AutoTestConversationAudioProcessAsync(
+            new AutoTestConversationAudioProcessCommand
+            {
+                CustomerAudioList = customerWavList,
+                Prompt = prompt
+            },
+            cancellationToken
+        ).ConfigureAwait(false);
 
-        // 返回 MP3
-        return File(result.Data, "audio/mpeg", "gpt.wav");
+        return File(result.Data, "audio/wav", "gpt-output.wav");
     }
+
     
     [Route("task"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAutoTestTaskResponse))]
