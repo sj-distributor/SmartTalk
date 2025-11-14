@@ -325,7 +325,6 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
 
                 conversationHistory.Add(new AssistantChatMessage(completion.Value.OutputAudio.Transcript));
 
-                File.Delete(aiWavFile);
             }
 
             var mergedWavFile = Path.GetTempFileName() + ".wav";
