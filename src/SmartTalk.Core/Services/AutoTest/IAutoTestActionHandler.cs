@@ -47,6 +47,8 @@ public class ApiAutoTestHandler : IAutoTestActionHandler
 
         body.TaskId = taskId;
         
+        Log.Information("ApiAutoTestHandler ActionHandleAsync after actionConfig:{@actionConfig}", actionConfig);
+        
         await ExecuteAsync(actionConfig, cancellationToken).ConfigureAwait(false);
     }
     
