@@ -106,8 +106,8 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
 
     public async Task HandleTestingSalesPhoneOrderSpeechMaticsCallBackAsync(string jobId, CancellationToken cancellationToken)
     {
-        var (scenario, task, record, speechMaticsJob) = await CollectAutoTestDataByJobIdAsync(jobId, cancellationToken);
-        if (scenario == null || task == null || record == null || speechMaticsJob == null) return;
+        var (scenario, task, record, assistant, speechMaticsJob) = await CollectAutoTestDataByJobIdAsync(jobId, cancellationToken);
+        if (scenario == null || task == null || record == null || assistant == null || speechMaticsJob == null) return;
 
         var audioBytes = await FetchingRecordAudioAsync(scenario, cancellationToken).ConfigureAwait(false);
         if (audioBytes == null) return;
@@ -115,7 +115,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         var customerAudios = await ExtractingCustomerAudioAsync(speechMaticsJob, audioBytes, cancellationToken).ConfigureAwait(false);
         if (customerAudios == null || customerAudios.Count == 0) return;
  
-        var conversationAudios = await ProcessAudioConversationAsync(customerAudios, task, cancellationToken).ConfigureAwait(false);
+        var conversationAudios = await ProcessAudioConversationAsync(customerAudios, assistant, cancellationToken).ConfigureAwait(false);
         if (conversationAudios == null || conversationAudios.Length == 0) return;
         
         // 生成ai订单
@@ -131,25 +131,29 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         await HandleAutoTestTaskStatusChangeAsync(task, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<(AutoTestScenario, AutoTestTask, AutoTestTaskRecord, SpeechMaticsJob)> CollectAutoTestDataByJobIdAsync(string jobId, CancellationToken cancellationToken)
+    private async Task<(AutoTestScenario, AutoTestTask, AutoTestTaskRecord, Domain.AISpeechAssistant.AiSpeechAssistant, SpeechMaticsJob)> CollectAutoTestDataByJobIdAsync(string jobId, CancellationToken cancellationToken)
     {
         var record = await _autoTestDataProvider.GetAutoTestTaskRecordBySpeechMaticsJobIdAsync(jobId, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Handling auto test task record: {@Record}", record);
 
-        if (record == null) return (null, null, null, null);
+        if (record == null) return (null, null, null, null, null);
         
         var task  = await _autoTestDataProvider.GetAutoTestTaskByIdAsync(record.TestTaskId, cancellationToken).ConfigureAwait(false);
         
-        if (task == null) return (null, null, null, null);
+        if (task == null) return (null, null, null, null, null);
         
         var scenario = await _autoTestDataProvider.GetAutoTestScenarioByIdAsync(record.ScenarioId, cancellationToken).ConfigureAwait(false);
         
         var speechMaticsJob = await _speechMaticsDataProvider.GetSpeechMaticsJobAsync(jobId, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Related scenario: {@Scenario}, task: {@Task}, speechmatics job:{@SpeechMaticsJob}", scenario, task, speechMaticsJob);
+        
+        var taskParams = JsonConvert.DeserializeObject<AutoTestTaskParamsDto>(task.Params);
 
-        return (scenario, task, record, speechMaticsJob);
+        var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByIdAsync(taskParams.AssistantId, cancellationToken).ConfigureAwait(false);
+
+        return (scenario, task, record, assistant, speechMaticsJob);
     }
 
     private async Task<byte[]> FetchingRecordAudioAsync(AutoTestScenario scenario, CancellationToken cancellationToken)
@@ -296,11 +300,9 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         return completionResult.Data.Response;
     }
 
-    private async Task<byte[]> ProcessAudioConversationAsync(List<byte[]> customerWavList, AutoTestTask task, CancellationToken cancellationToken)
+    private async Task<byte[]> ProcessAudioConversationAsync(List<byte[]> customerWavList, Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken)
     {
-        var taskParams = JsonConvert.DeserializeObject<AutoTestTaskParamsDto>(task.Params);
-        
-        var prompt = await BuildConversationPromptAsync(taskParams.AssistantId, cancellationToken).ConfigureAwait(false);
+        var prompt = await BuildConversationPromptAsync(assistant, cancellationToken).ConfigureAwait(false);
 
         var conversationHistory = new List<ChatMessage>
         {
@@ -359,13 +361,29 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         }
     }
 
-    private async Task<string> BuildConversationPromptAsync(int assistantId, CancellationToken cancellationToken)
+    private async Task<string> BuildConversationPromptAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken)
     {
-        if (assistantId == 0) throw new ArgumentException("assistantId could not be 0");
+        var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(assistantId: assistant.Id, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (knowledge == null) return null;
         
-        var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(assistantId: assistantId, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
+        var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
+        var finalPrompt = knowledge.Prompt
+            .Replace("#{current_time}", currentTime)
+            .Replace("#{pst_date}", $"{pstTime.Date:yyyy-MM-dd} {pstTime.DayOfWeek}");
 
-        return knowledge != null ? knowledge.Prompt : "You are a helpful assistant";
+        if (!finalPrompt.Contains("#{customer_items}", StringComparison.OrdinalIgnoreCase)) return finalPrompt;
+        
+        var soldToIds = !string.IsNullOrEmpty(assistant.Name) ? assistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : [];
+        
+        if (soldToIds.Count == 0) return finalPrompt;
+        
+        var caches = await _aiSpeechAssistantDataProvider.GetCustomerItemsCacheBySoldToIdsAsync(soldToIds, cancellationToken).ConfigureAwait(false);
+        var customerItems = caches.Where(c => !string.IsNullOrEmpty(c.CacheValue)).Select(c => c.CacheValue.Trim()).Distinct().ToList();
+        finalPrompt = finalPrompt.Replace("#{customer_items}", customerItems.Any() ? string.Join(Environment.NewLine + Environment.NewLine, customerItems.Take(50)) : " ");
+
+        Log.Information("Build conversation prompt: " + finalPrompt);
+        return finalPrompt;
     }
 
     private async Task HandleAutoTestTaskStatusChangeAsync(AutoTestTask task, CancellationToken cancellationToken)
