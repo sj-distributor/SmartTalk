@@ -13,6 +13,7 @@ using Smarties.Messages.Enums.OpenAi;
 using SmartTalk.Core.Settings.OpenAi;
 using Smarties.Messages.Requests.Ask;
 using SmartTalk.Core.Domain.AutoTest;
+using SmartTalk.Core.Domain.SpeechMatics;
 using SmartTalk.Core.Services.Ffmpeg;
 using SmartTalk.Messages.Dto.AutoTest;
 using SmartTalk.Messages.Enums.Caching;
@@ -105,52 +106,15 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
 
     public async Task HandleTestingSalesPhoneOrderSpeechMaticsCallBackAsync(string jobId, CancellationToken cancellationToken)
     {
-        var record = await _autoTestDataProvider.GetAutoTestTaskRecordBySpeechMaticsJobIdAsync(jobId, cancellationToken).ConfigureAwait(false);
+        var (scenario, task, record, speechMaticsJob) = await CollectAutoTestDataByJobIdAsync(jobId, cancellationToken);
+        if (scenario == null || task == null || record == null || speechMaticsJob == null) return;
 
-        if (record == null) return;
-        
-        var task  = await _autoTestDataProvider.GetAutoTestTaskByIdAsync(record.TestTaskId, cancellationToken).ConfigureAwait(false);
-        
-        Log.Information("HandleTestingSpeechMaticsCallBackAsync: Get auto test task: {@Task}", task);
-        
-        if (task == null) throw new Exception($"Could not find task with id: {record.TestTaskId}!");
-        
-        var taskParams = JsonConvert.DeserializeObject<AutoTestTaskParamsDto>(task.Params);
-        
-        var scenario = await _autoTestDataProvider.GetAutoTestScenarioByIdAsync(record.ScenarioId, cancellationToken).ConfigureAwait(false);
-        
-        var speechMaticsJob = await _speechMaticsDataProvider.GetSpeechMaticsJobAsync(jobId, cancellationToken).ConfigureAwait(false);
-        
-        var callBack = JsonConvert.DeserializeObject<SpeechMaticsCallBackResponseDto>(speechMaticsJob.CallbackMessage);
-        
-        var speakInfos = StructureDiarizationResults(callBack.Results);
+        var audioBytes = await FetchingRecordAudioAsync(scenario, cancellationToken).ConfigureAwait(false);
+        if (audioBytes == null) return;
 
-        var salesOrder = JsonConvert.DeserializeObject<SalesOrderDto>(scenario.InputSchema);
+        var customerAudios = await ExtractingCustomerAudioAsync(speechMaticsJob, audioBytes, cancellationToken).ConfigureAwait(false);
         
-        var audioContent = await _smartTalkHttpClientFactory.GetAsync<byte[]>(salesOrder.Recording, cancellationToken).ConfigureAwait(false);
-        
-        var sixSentences = speakInfos.Count > 6 ? speakInfos[..6] : speakInfos.ToList();
-        
-        if (audioContent == null) return;
-        
-        var audioBytes = await _ffmpegService.Convert8KHzWavTo24KHzWavAsync(audioContent, cancellationToken).ConfigureAwait(false);
-        
-        var (customerSpeaker, audios) = await HandlerConversationSpeakerIsCustomerAsync(sixSentences, audioBytes, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        var customerAudioInfos = speakInfos.Where(x => x.Speaker == customerSpeaker && !sixSentences.Any(s => Math.Abs(s.StartTime - x.StartTime) == 0)).ToList();
-
-        foreach (var audioInfo in customerAudioInfos)
-        {
-            audioInfo.Audio = await _ffmpegService.SpiltAudioAsync(audioBytes, audioInfo.StartTime * 1000, audioInfo.EndTime * 1000, cancellationToken: cancellationToken).ConfigureAwait(false);
-        }
-        
-        customerAudioInfos.AddRange(audios);
-
-        var customerAudios = customerAudioInfos.OrderBy(x => x.StartTime).Select(x => x.Audio).ToList();
-
-        var prompt = await BuildConversationPromptAsync(taskParams.AssistantId, cancellationToken).ConfigureAwait(false);
-        
-        var conversationAudios = await ProcessAudioConversationAsync(customerAudios, prompt, cancellationToken).ConfigureAwait(false);
+        var conversationAudios = await ProcessAudioConversationAsync(customerAudios, task, cancellationToken).ConfigureAwait(false);
         
         // 生成ai订单
         
@@ -166,6 +130,60 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         await _autoTestDataProvider.UpdateAutoTestTaskRecordAsync(record, true, cancellationToken).ConfigureAwait(false);
 
         await HandleAutoTestTaskStatusChangeAsync(task, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<(AutoTestScenario, AutoTestTask, AutoTestTaskRecord, SpeechMaticsJob)> CollectAutoTestDataByJobIdAsync(string jobId, CancellationToken cancellationToken)
+    {
+        var record = await _autoTestDataProvider.GetAutoTestTaskRecordBySpeechMaticsJobIdAsync(jobId, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Handling auto test task record: {@Record}", record);
+
+        if (record == null) return (null, null, null, null);
+        
+        var task  = await _autoTestDataProvider.GetAutoTestTaskByIdAsync(record.TestTaskId, cancellationToken).ConfigureAwait(false);
+        
+        if (task == null) return (null, null, null, null);
+        
+        var scenario = await _autoTestDataProvider.GetAutoTestScenarioByIdAsync(record.ScenarioId, cancellationToken).ConfigureAwait(false);
+        
+        var speechMaticsJob = await _speechMaticsDataProvider.GetSpeechMaticsJobAsync(jobId, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Related scenario: {@Scenario}, task: {@Task}, speechmatics job:{@SpeechMaticsJob}", scenario, task, speechMaticsJob);
+
+        return (scenario, task, record, speechMaticsJob);
+    }
+
+    private async Task<byte[]> FetchingRecordAudioAsync(AutoTestScenario scenario, CancellationToken cancellationToken)
+    {
+        var salesOrder = JsonConvert.DeserializeObject<SalesOrderDto>(scenario.InputSchema);
+        
+        var audioContent = await _smartTalkHttpClientFactory.GetAsync<byte[]>(salesOrder.Recording, cancellationToken).ConfigureAwait(false);
+        
+        if (audioContent == null) return null;
+        
+        return await _ffmpegService.Convert8KHzWavTo24KHzWavAsync(audioContent, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<List<byte[]>> ExtractingCustomerAudioAsync(SpeechMaticsJob speechMaticsJob, byte[] audioBytes, CancellationToken cancellationToken)
+    {
+        var callBack = JsonConvert.DeserializeObject<SpeechMaticsCallBackResponseDto>(speechMaticsJob.CallbackMessage);
+        
+        var speakInfos = StructureDiarizationResults(callBack.Results);
+        
+        var sixSentences = speakInfos.Count > 6 ? speakInfos[..6] : speakInfos.ToList();
+        
+        var (customerSpeaker, audios) = await HandlerConversationSpeakerIsCustomerAsync(sixSentences, audioBytes, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var customerAudioInfos = speakInfos.Where(x => x.Speaker == customerSpeaker && !sixSentences.Any(s => Math.Abs(s.StartTime - x.StartTime) == 0)).ToList();
+        
+        foreach (var audioInfo in customerAudioInfos)
+        {
+            audioInfo.Audio = await _ffmpegService.SpiltAudioAsync(audioBytes, audioInfo.StartTime * 1000, audioInfo.EndTime * 1000, cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+        customerAudioInfos.AddRange(audios);
+        var customerAudios = customerAudioInfos.OrderBy(x => x.StartTime).Select(x => x.Audio).ToList();
+
+        return customerAudios;
     }
     
     private List<SpeechMaticsSpeakInfoForAutoTestDto> StructureDiarizationResults(List<SpeechMaticsResultDto> results)
@@ -279,10 +297,11 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         return completionResult.Data.Response;
     }
 
-    private async Task<byte[]> ProcessAudioConversationAsync(List<byte[]> customerWavList, string prompt, CancellationToken cancellationToken)
+    private async Task<byte[]> ProcessAudioConversationAsync(List<byte[]> customerWavList, AutoTestTask task, CancellationToken cancellationToken)
     {
-        if (customerWavList == null || customerWavList.Count == 0)
-            throw new ArgumentException("没有音频输入");
+        var taskParams = JsonConvert.DeserializeObject<AutoTestTaskParamsDto>(task.Params);
+        
+        var prompt = await BuildConversationPromptAsync(taskParams.AssistantId, cancellationToken).ConfigureAwait(false);
 
         var conversationHistory = new List<ChatMessage>
         {
