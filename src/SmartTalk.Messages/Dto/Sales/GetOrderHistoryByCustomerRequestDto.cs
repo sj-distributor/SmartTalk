@@ -12,23 +12,19 @@ public class GetOrderHistoryByCustomerResponseDto : SalesResponseDto
 
 public class SalesOrderHistoryDto
 {
+    public string InvoiceNumber { get; set; }
+    
     public string MaterialNumber { get; set; }
+    
+    public string IsAssign { get; set; }
+
+    public string MaterialDescription{ get ; set; }
      
     public string SalesUnit { get; set; }
      
-    public string LatestSoNumber { get; set; }
-     
-    public decimal LatestSoCost { get; set; }
-     
-    public DateTime LatestSoDocDate { get; set; }
-     
-    public decimal PriceLatestOrderPrice { get; set; }
-     
-    public decimal Qty2WkAgo { get; set; }
-     
-    public decimal Qty3WkAgo { get; set; }
-     
-    public decimal Qty4WkAgo { get; set; }
-     
-    public decimal QtyLastWeek { get; set; }
+    public decimal Price { get; set; }
+
+    public DateTime? LastInvoiceDate { get; set; }
+
+    public string LevelCode { get; set; }
 }

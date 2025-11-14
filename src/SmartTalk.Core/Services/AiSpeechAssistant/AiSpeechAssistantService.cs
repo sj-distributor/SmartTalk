@@ -438,6 +438,20 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             finalPrompt = finalPrompt.Replace("#{greeting}", knowledge.Greetings ?? string.Empty);
         }
         
+        if (finalPrompt.Contains("#{customer_items}", StringComparison.OrdinalIgnoreCase))
+        {
+            var soldToIds = !string.IsNullOrEmpty(assistant.Name) ? assistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : new List<string>();
+
+            if (soldToIds.Any())
+            {
+                var caches = await _aiSpeechAssistantDataProvider.GetCustomerItemsCacheBySoldToIdsAsync(soldToIds, cancellationToken).ConfigureAwait(false);
+
+                var customerItems = caches.Where(c => !string.IsNullOrEmpty(c.CacheValue)).Select(c => c.CacheValue.Trim()).Distinct().ToList();
+
+                finalPrompt = finalPrompt.Replace("#{customer_items}", customerItems.Any() ? string.Join(Environment.NewLine + Environment.NewLine, customerItems.Take(50)) : " ");
+            }
+        }
+        
         Log.Information($"The final prompt: {finalPrompt}");
         
         _aiSpeechAssistantStreamContext.LastPrompt = finalPrompt;

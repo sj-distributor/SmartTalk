@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Data;
+using SmartTalk.Core.Domain.Sales;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Domain.SpeechMatics;
 using SmartTalk.Messages.Enums.SpeechMatics;
@@ -11,6 +12,8 @@ public interface ISpeechMaticsDataProvider : IScopedDependency
     Task<List<SpeechMaticsKey>> GetSpeechMaticsKeysAsync(List<SpeechMaticsKeyStatus> status = null, DateTimeOffset? lastModifiedDate = null, CancellationToken cancellationToken = default);
 
     Task UpdateSpeechMaticsKeysAsync(List<SpeechMaticsKey> speechMaticsKeys, bool forceSave = true, CancellationToken cancellationToken = default);
+    
+    Task<List<Sales>> GetAllSalesAsync(CancellationToken cancellationToken);
 }
 
 public class SpeechMaticsDataProvider : ISpeechMaticsDataProvider
@@ -44,5 +47,10 @@ public class SpeechMaticsDataProvider : ISpeechMaticsDataProvider
         
         if (forceSave)
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+    
+    public async Task<List<Sales>> GetAllSalesAsync(CancellationToken cancellationToken)
+    {
+        return await _repository.GetAllAsync<Sales>(cancellationToken).ConfigureAwait(false);
     }
 }
