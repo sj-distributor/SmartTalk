@@ -113,20 +113,19 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         if (audioBytes == null) return;
 
         var customerAudios = await ExtractingCustomerAudioAsync(speechMaticsJob, audioBytes, cancellationToken).ConfigureAwait(false);
-        
+        if (customerAudios == null || customerAudios.Count == 0) return;
+ 
         var conversationAudios = await ProcessAudioConversationAsync(customerAudios, task, cancellationToken).ConfigureAwait(false);
+        if (conversationAudios == null || conversationAudios.Length == 0) return;
         
         // 生成ai订单
         
         var inputSnapshot = JsonConvert.DeserializeObject<AutoTestInputJsonDto>(record.InputSnapshot);
-        
         var comparedAiOrderItems = AutoTestOrderCompare(inputSnapshot.Detail, []);  // todo: 输入 Ai 订单
-
         var normalizedOutput = HandleAutoTestNormalizedOutput("", "", inputSnapshot.Detail, comparedAiOrderItems); // todo: 输入 test 产生的录音 url、report
 
         record.Status = AutoTestTaskRecordStatus.Done;
         record.NormalizedOutput = normalizedOutput;
-
         await _autoTestDataProvider.UpdateAutoTestTaskRecordAsync(record, true, cancellationToken).ConfigureAwait(false);
 
         await HandleAutoTestTaskStatusChangeAsync(task, cancellationToken).ConfigureAwait(false);
