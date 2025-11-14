@@ -74,6 +74,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 {
     private readonly IClock _clock;
     private readonly IMapper _mapper;
+    private readonly ISalesClient _salesClient;
     private readonly ICurrentUser _currentUser;
     private readonly AzureSetting _azureSetting;
     private readonly ICacheManager _cacheManager;
@@ -129,11 +130,12 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         IPhoneOrderDataProvider phoneOrderDataProvider,
         IInactivityTimerManager inactivityTimerManager,
         ISmartTalkBackgroundJobClient backgroundJobClient,
-        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
+        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, ISalesClient salesClient)
     {
         _clock = clock;
         _mapper = mapper;
         _currentUser = currentUser;
+        _salesClient = salesClient;
         _openaiClient = openaiClient;
         _cacheManager = cacheManager;
         _azureSetting = azureSetting;
@@ -421,20 +423,22 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
-        
+
         var finalPrompt = knowledge.Prompt
             .Replace("#{user_profile}", string.IsNullOrEmpty(userProfile?.ProfileJson) ? " " : userProfile.ProfileJson)
             .Replace("#{current_time}", currentTime)
             .Replace("#{customer_phone}", from.StartsWith("+1") ? from[2..] : from)
             .Replace("#{pst_date}", $"{pstTime.Date:yyyy-MM-dd} {pstTime.DayOfWeek}");
-        
-        Log.Information($"The final prompt: {finalPrompt}");
-
-        if (numberId.HasValue)
+                
+        if (numberId.HasValue && finalPrompt.Contains("#{greeting}"))
         {
             var greeting = await _smartiesClient.GetSaleAutoCallNumberAsync(new GetSaleAutoCallNumberRequest(){ Id = numberId.Value }, cancellationToken).ConfigureAwait(false);
             knowledge.Greetings = string.IsNullOrEmpty(greeting.Data.Number.Greeting) ? knowledge.Greetings : greeting.Data.Number.Greeting;
+            
+            finalPrompt = finalPrompt.Replace("#{greeting}", knowledge.Greetings ?? string.Empty);
         }
+        
+        Log.Information($"The final prompt: {finalPrompt}");
         
         _aiSpeechAssistantStreamContext.LastPrompt = finalPrompt;
         _aiSpeechAssistantStreamContext.Assistant = _mapper.Map<AiSpeechAssistantDto>(assistant);
