@@ -90,11 +90,9 @@ public partial class PhoneOrderProcessJobService
         var (aiSpeechAssistant, agent) = await _aiSpeechAssistantDataProvider
             .GetAgentAndAiSpeechAssistantAsync(record.AgentId, cancellationToken).ConfigureAwait(false);
 
-        Log.Information("Get Assistant: {@Assistant} and Agent: {@Agent} by agent id {agentId}", aiSpeechAssistant,
-            agent, record.AgentId);
+        Log.Information("Get Assistant: {@Assistant} and Agent: {@Agent} by agent id {agentId}", aiSpeechAssistant, agent, record.AgentId);
 
         var callFrom = string.Empty;
-        var callTo = string.Empty;
 
         TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
 
@@ -104,7 +102,7 @@ public partial class PhoneOrderProcessJobService
             {
                 var call = await CallResource.FetchAsync(record.SessionId);
                 callFrom = call?.From;
-                callTo = call?.To;
+                _ = call?.To;
                 Log.Information("Fetched incoming phone number from Twilio: {callFrom}", callFrom);
             }, maxRetryCount: 3, delaySeconds: 3, cancellationToken);
         }
@@ -117,8 +115,7 @@ public partial class PhoneOrderProcessJobService
             TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
 
-        var messages = await ConfigureRecordAnalyzePromptAsync(agent, aiSpeechAssistant, callFrom ?? "", currentTime,
-            audioContent, cancellationToken);
+        var messages = await ConfigureRecordAnalyzePromptAsync(agent, aiSpeechAssistant, callFrom ?? "", currentTime, audioContent, cancellationToken);
 
         ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
 
@@ -443,8 +440,7 @@ public partial class PhoneOrderProcessJobService
             Log.Information("DraftOrder for Store {StoreName}/{StoreNumber}: {@DraftOrder}", storeOrder.StoreName,
                 storeOrder.StoreNumber, draftOrder);
 
-            var response = await _salesClient.GenerateAiOrdersAsync(draftOrder, cancellationToken)
-                .ConfigureAwait(false);
+            var response = await _salesClient.GenerateAiOrdersAsync(draftOrder, cancellationToken).ConfigureAwait(false);
             Log.Information("Generate Ai Order response for Store {StoreName}/{StoreNumber}: {@response}",
                 storeOrder.StoreName, storeOrder.StoreNumber, response);
 
