@@ -342,55 +342,6 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         }
     }
 
-    private void ConvertMp3ToUniformWav(byte[] mp3Bytes, string outputWavFile)
-    {
-        var tempMp3 = Path.GetTempFileName() + ".mp3";
-        File.WriteAllBytes(tempMp3, mp3Bytes);
-        var args = $"-y -i \"{tempMp3}\" -ar 24000 -ac 1 -acodec pcm_s16le \"{outputWavFile}\"";
-        RunFfmpeg(args);
-        File.Delete(tempMp3);
-    }
-
-    private void NormalizeWavFormat(string inputFile, string outputFile)
-    {
-        var args = $"-y -i \"{inputFile}\" -ar 24000 -ac 1 -acodec pcm_s16le \"{outputFile}\"";
-        RunFfmpeg(args);
-    }
-
-    private void MergeWavFilesToUniformFormat(List<string> wavFiles, string outputFile)
-    {
-        if (wavFiles.Count == 0)
-            throw new ArgumentException("没有 WAV 文件可合并");
-
-        var listFile = Path.GetTempFileName();
-        File.WriteAllLines(listFile, wavFiles.Select(f => $"file '{f}'"));
-        var args = $"-y -f concat -safe 0 -i \"{listFile}\" -ar 24000 -ac 1 -acodec pcm_s16le \"{outputFile}\"";
-        RunFfmpeg(args);
-        File.Delete(listFile);
-    }
-
-    private void RunFfmpeg(string arguments)
-    {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = "ffmpeg",
-            Arguments = arguments,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-
-        using var process = Process.Start(startInfo)!;
-        process.WaitForExit();
-
-        if (process.ExitCode != 0)
-        {
-            var err = process.StandardError.ReadToEnd();
-            throw new Exception($"ffmpeg 执行失败：{err}");
-        }
-    }
-
     private async Task<string> BuildConversationPromptAsync(int assistantId, CancellationToken cancellationToken)
     {
         if (assistantId == 0) throw new ArgumentException("assistantId could not be 0");
