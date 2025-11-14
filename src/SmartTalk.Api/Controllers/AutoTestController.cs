@@ -41,10 +41,7 @@ public class AutoTestController : ControllerBase
     }
     
     [Route("conversation"), HttpPost]
-    public async Task<IActionResult> AutoTestConversationAudioProcessAsync(
-        [FromForm] List<IFormFile> wavFiles,
-        [FromForm] string prompt,
-        CancellationToken cancellationToken)
+    public async Task<IActionResult> AutoTestConversationAudioProcessAsync([FromForm] List<IFormFile> wavFiles, [FromForm] string prompt, CancellationToken cancellationToken)
     {
         if (wavFiles == null || wavFiles.Count == 0)
             return BadRequest("没有上传音频文件");

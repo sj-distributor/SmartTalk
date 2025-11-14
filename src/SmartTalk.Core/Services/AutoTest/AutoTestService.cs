@@ -62,111 +62,88 @@ public partial class AutoTestService : IAutoTestService
         };
     }
 
-    private async Task<byte[]> ProcessAudioConversationAsync(
-    List<byte[]> customerWavList, 
-    string prompt, 
-    CancellationToken cancellationToken)
-{
-    if (customerWavList == null || customerWavList.Count == 0)
-        throw new ArgumentException("没有音频输入");
-
-    var conversationHistory = new List<ChatMessage>
+    private async Task<byte[]> ProcessAudioConversationAsync(List<byte[]> customerWavList, string prompt, CancellationToken cancellationToken)
     {
-        new SystemChatMessage(prompt)
-    };
+        if (customerWavList == null || customerWavList.Count == 0)
+            throw new ArgumentException("没有音频输入");
 
-    var client = new ChatClient("gpt-4o-audio-preview", _openAiSettings.ApiKey);
-
-    var options = new ChatCompletionOptions
-    {
-        ResponseModalities = ChatResponseModalities.Text | ChatResponseModalities.Audio,
-        AudioOptions = new ChatAudioOptions(ChatOutputAudioVoice.Alloy, ChatOutputAudioFormat.Wav)
-    };
-
-    var wavFiles = new List<string>();
-
-    try
-    {
-        foreach (var wavBytes in customerWavList)
+        var conversationHistory = new List<ChatMessage>
         {
-            if (wavBytes == null || wavBytes.Length == 0)
-                continue;
-
-            // ⭐ 直接保存用户传入的 WAV
-            var userWavFile = Path.GetTempFileName() + ".wav";
-            await File.WriteAllBytesAsync(userWavFile, wavBytes, cancellationToken);
-            wavFiles.Add(userWavFile);
-
-            // ⭐ 输入 WAV 直接加入对话
-            conversationHistory.Add(new UserChatMessage(
-                ChatMessageContentPart.CreateInputAudioPart(
-                    BinaryData.FromBytes(await File.ReadAllBytesAsync(userWavFile, cancellationToken)),
-                    ChatInputAudioFormat.Wav)));
-
-            // 调用 AI
-            var completion = await client.CompleteChatAsync(conversationHistory, options, cancellationToken);
-
-            // AI 原始输出 WAV
-            var aiWavFile = Path.GetTempFileName() + ".wav";
-            await File.WriteAllBytesAsync(aiWavFile, completion.Value.OutputAudio.AudioBytes.ToArray(), cancellationToken);
-
-            wavFiles.Add(aiWavFile);
-
-            // 将文本加入上下文
-            conversationHistory.Add(new AssistantChatMessage(completion.Value.OutputAudio.Transcript));
-
-            File.Delete(aiWavFile);
-        }
-
-        // ⭐ 合并所有 WAV
-        var mergedWavFile = Path.GetTempFileName() + ".wav";
-        MergeWavFilesToUniformFormat(wavFiles, mergedWavFile);
-        
-        wavFiles.Add(mergedWavFile);
-
-        return await File.ReadAllBytesAsync(mergedWavFile, cancellationToken);
-    }
-    finally
-    {
-        foreach (var f in wavFiles)
-        {
-            if (File.Exists(f)) File.Delete(f);
-        }
-    }
-}
-
-
-    private void MergeWavFilesToUniformFormat(List<string> wavFiles, string outputFile)
-    {
-        if (wavFiles.Count == 0)
-            throw new ArgumentException("没有 WAV 文件可合并");
-
-        var listFile = Path.GetTempFileName();
-        File.WriteAllLines(listFile, wavFiles.Select(f => $"file '{f}'"));
-        var args = $"-y -f concat -safe 0 -i \"{listFile}\" -ar 24000 -ac 1 -acodec pcm_s16le \"{outputFile}\"";
-        RunFfmpeg(args);
-        File.Delete(listFile);
-    }
-
-    private void RunFfmpeg(string arguments)
-    {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = "ffmpeg",
-            Arguments = arguments,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
+            new SystemChatMessage(prompt)
         };
 
-        using var process = Process.Start(startInfo)!;
-        process.WaitForExit();
+        var client = new ChatClient("gpt-4o-audio-preview", _openAiSettings.ApiKey);
 
-        if (process.ExitCode != 0)
+        var options = new ChatCompletionOptions
         {
-            var err = process.StandardError.ReadToEnd();
-            throw new Exception($"ffmpeg 执行失败：{err}");
+            ResponseModalities = ChatResponseModalities.Text | ChatResponseModalities.Audio,
+            AudioOptions = new ChatAudioOptions(ChatOutputAudioVoice.Alloy, ChatOutputAudioFormat.Wav)
+        };
+
+        var allWavBytes = new List<byte[]>();
+
+        foreach (var wavBytes in customerWavList)
+        {
+            if (wavBytes == null || wavBytes.Length == 0) continue;
+
+            conversationHistory.Add(new UserChatMessage(
+                ChatMessageContentPart.CreateInputAudioPart(
+                    BinaryData.FromBytes(wavBytes),
+                    ChatInputAudioFormat.Wav)));
+
+            var completion = await client.CompleteChatAsync(conversationHistory, options, cancellationToken);
+
+            allWavBytes.Add(completion.Value.OutputAudio.AudioBytes.ToArray());
+
+            conversationHistory.Add(new AssistantChatMessage(completion.Value.OutputAudio.Transcript));
         }
+
+        var mergedWavBytes = MergeWavBytes(allWavBytes);
+
+        return mergedWavBytes;
+    }
+
+
+    public static byte[] MergeWavBytes(List<byte[]> wavByteList)
+    {
+        if (wavByteList == null || wavByteList.Count == 0)
+            throw new ArgumentException("没有 WAV 数据可合并");
+
+        using var outputStream = new MemoryStream();
+
+        byte[] header = null;
+        var pcmDataList = new List<byte[]>();
+
+        foreach (var wavBytes in wavByteList)
+        {
+            if (wavBytes == null || wavBytes.Length == 0) continue;
+
+            var pcmData = wavBytes.Skip(44).ToArray();
+            pcmDataList.Add(pcmData);
+
+            if (header == null)
+            {
+                header = wavBytes.Take(44).ToArray();
+            }
+        }
+
+        int totalPcmLength = pcmDataList.Sum(p => p.Length);
+
+        byte[] outputHeader = new byte[44];
+        Array.Copy(header, outputHeader, 44);
+
+        int chunkSize = 36 + totalPcmLength;
+        BitConverter.GetBytes(chunkSize).CopyTo(outputHeader, 4);
+
+        BitConverter.GetBytes(totalPcmLength).CopyTo(outputHeader, 40);
+
+        outputStream.Write(outputHeader, 0, 44);
+
+        foreach (var pcm in pcmDataList)
+        {
+            outputStream.Write(pcm, 0, pcm.Length);
+        }
+
+        return outputStream.ToArray();
     }
 }
