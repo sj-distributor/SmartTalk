@@ -125,27 +125,43 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
     {
         var (scenario, task, record, assistant, speechMaticsJob) = await CollectAutoTestDataByJobIdAsync(jobId, cancellationToken);
         if (scenario == null || task == null || record == null || assistant == null || speechMaticsJob == null) return;
-
-        var audioBytes = await FetchingRecordAudioAsync(record, cancellationToken).ConfigureAwait(false);
-        if (audioBytes == null) return;
-
-        var customerAudios = await ExtractingCustomerAudioAsync(speechMaticsJob, audioBytes, cancellationToken).ConfigureAwait(false);
-        if (customerAudios == null || customerAudios.Count == 0) return;
- 
-        var conversationAudios = await ProcessAudioConversationAsync(customerAudios, assistant, cancellationToken).ConfigureAwait(false);
-        if (conversationAudios == null || conversationAudios.Length == 0) return;
         
-        var (report, aiOrder) = await GenerateSalesAiOrderAsync(assistant, conversationAudios, cancellationToken).ConfigureAwait(false);
-
-        var inputSnapshot = JsonConvert.DeserializeObject<AutoTestInputJsonDto>(record.InputSnapshot);
-        var comparedAiOrderItems = AutoTestOrderCompare(inputSnapshot.Detail, aiOrder);
-        var normalizedOutput = await HandleAutoTestNormalizedOutput(conversationAudios, report, inputSnapshot.Detail, comparedAiOrderItems, cancellationToken).ConfigureAwait(false);
-
-        record.Status = AutoTestTaskRecordStatus.Done;
-        record.NormalizedOutput = normalizedOutput;
+        await ProcessingTestSalesPhoneOrderSpeechMaticsCallBackAsync(record, assistant, speechMaticsJob, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Processed record : {@Record}", record);
+        
         await _autoTestDataProvider.UpdateAutoTestTaskRecordAsync(record, true, cancellationToken).ConfigureAwait(false);
-
+        
         await HandleAutoTestTaskStatusChangeAsync(task, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task ProcessingTestSalesPhoneOrderSpeechMaticsCallBackAsync(
+        AutoTestTaskRecord record, Domain.AISpeechAssistant.AiSpeechAssistant assistant, SpeechMaticsJob speechMaticsJob, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var audioBytes = await FetchingRecordAudioAsync(record, cancellationToken).ConfigureAwait(false);
+            if (audioBytes == null) record.Status = AutoTestTaskRecordStatus.Failed;
+
+            var customerAudios = await ExtractingCustomerAudioAsync(speechMaticsJob, audioBytes, cancellationToken).ConfigureAwait(false);
+            if (customerAudios == null || customerAudios.Count == 0) record.Status = AutoTestTaskRecordStatus.Failed;
+ 
+            var conversationAudios = await ProcessAudioConversationAsync(customerAudios, assistant, cancellationToken).ConfigureAwait(false);
+            if (conversationAudios == null || conversationAudios.Length == 0) record.Status = AutoTestTaskRecordStatus.Failed;
+        
+            var (report, aiOrder) = await GenerateSalesAiOrderAsync(assistant, conversationAudios, cancellationToken).ConfigureAwait(false);
+
+            var inputSnapshot = JsonConvert.DeserializeObject<AutoTestInputJsonDto>(record.InputSnapshot);
+            var comparedAiOrderItems = AutoTestOrderCompare(inputSnapshot.Detail, aiOrder);
+            var normalizedOutput = await HandleAutoTestNormalizedOutput(conversationAudios, report, inputSnapshot.Detail, comparedAiOrderItems, cancellationToken).ConfigureAwait(false);
+
+            record.Status = AutoTestTaskRecordStatus.Done;
+            record.NormalizedOutput = normalizedOutput;
+        }
+        catch (Exception e)
+        {
+            record.Status = AutoTestTaskRecordStatus.Failed;            
+        }
     }
 
     private async Task<(AutoTestScenario, AutoTestTask, AutoTestTaskRecord, Domain.AISpeechAssistant.AiSpeechAssistant, SpeechMaticsJob)> CollectAutoTestDataByJobIdAsync(string jobId, CancellationToken cancellationToken)
@@ -215,6 +231,8 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         customerAudioInfos.AddRange(audios);
         var customerAudios = customerAudioInfos.OrderBy(x => x.StartTime).Select(x => x.Audio).ToList();
 
+        Log.Information("Extracted customer audio, audio count: {Count}", customerAudios.Count);
+        
         return customerAudios;
     }
     
@@ -367,8 +385,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
                 var completion = await client.CompleteChatAsync(conversationHistory, options, cancellationToken);
 
                 var aiWavFile = Path.GetTempFileName() + ".wav";
-                await File.WriteAllBytesAsync(aiWavFile, completion.Value.OutputAudio.AudioBytes.ToArray(),
-                    cancellationToken);
+                await File.WriteAllBytesAsync(aiWavFile, completion.Value.OutputAudio.AudioBytes.ToArray(), cancellationToken);
 
                 wavFiles.Add(aiWavFile);
 
@@ -696,5 +713,12 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         };
         
         return JsonConvert.SerializeObject(normalizedOutput);
+    }
+
+    private async Task MarkAutoTestRecordStatusAsync(AutoTestTaskRecord record, AutoTestTaskRecordStatus status, CancellationToken cancellationToken)
+    {
+        record.Status = status;
+        
+        await _autoTestDataProvider.UpdateTaskRecordsAsync([record], true, cancellationToken).ConfigureAwait(false);
     }
 }
