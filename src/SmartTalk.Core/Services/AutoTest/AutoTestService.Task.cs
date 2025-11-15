@@ -120,7 +120,7 @@ public partial class AutoTestService
                 break;
 
             case AutoTestTaskStatus.Ongoing:
-                if (task.StartedAt is not null) await UpdateTaskRecordsStatusAsync(task.Id, AutoTestTaskRecordStatus.Pause, AutoTestTaskRecordStatus.Ongoing,  cancellationToken).ConfigureAwait(false);
+                if (task.StartedAt is not null) await UpdateTaskRecordsStatusAsync(task.Id, AutoTestTaskRecordStatus.Pause, AutoTestTaskRecordStatus.Ongoing, cancellationToken).ConfigureAwait(false);
                 await AutoTestRunningAsync(new AutoTestRunningCommand
                 {
                     TaskId = task.Id,
