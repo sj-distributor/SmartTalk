@@ -6,8 +6,11 @@ using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.PhoneOrder;
+using SmartTalk.Core.Services.Security;
+using SmartTalk.Core.Services.SpeechMatics;
 using SmartTalk.Core.Services.STT;
 using SmartTalk.Messages.Enums.PhoneOrder;
+using SmartTalk.Messages.Enums.SpeechMatics;
 using SmartTalk.Messages.Enums.STT;
 
 namespace SmartTalk.Core.Services.RealtimeAi.Services;
@@ -22,6 +25,7 @@ public class RealtimeProcessJobService : IRealtimeProcessJobService
     private readonly TranslationClient _translationClient;
     private readonly IAgentDataProvider _agentDataProvider;
     private readonly IPhoneOrderService _phoneOrderService;
+    private readonly ISpeechMaticsService _speechMaticsService;
     private readonly ISpeechToTextService _speechToTextService;
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
@@ -32,6 +36,7 @@ public class RealtimeProcessJobService : IRealtimeProcessJobService
         IAgentDataProvider agentDataProvider,
         IPhoneOrderService phoneOrderService,
         ISpeechToTextService speechToTextService,
+        ISpeechMaticsService speechMaticsService,
         ISmartTalkHttpClientFactory httpClientFactory,
         IPhoneOrderDataProvider phoneOrderDataProvider,
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
@@ -41,6 +46,7 @@ public class RealtimeProcessJobService : IRealtimeProcessJobService
         _translationClient = translationClient;
         _httpClientFactory = httpClientFactory;
         _speechToTextService = speechToTextService;
+        _speechMaticsService = speechMaticsService;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
     }
@@ -57,7 +63,7 @@ public class RealtimeProcessJobService : IRealtimeProcessJobService
         
         if (agent.IsSendAudioRecordWechat)
             await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, agent.WechatRobotKey, $"您有一条新的AI通话录音：\n{recordingUrl}", [], CancellationToken.None).ConfigureAwait(false);
-
+        
         var recordingContent = await _httpClientFactory.GetAsync<byte[]>(recordingUrl, cancellationToken).ConfigureAwait(false);
         if (recordingContent == null) return;
         
@@ -70,7 +76,7 @@ public class RealtimeProcessJobService : IRealtimeProcessJobService
 
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync([record], cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        record.TranscriptionJobId = await _phoneOrderService.CreateSpeechMaticsJobAsync(recordingContent, Guid.NewGuid().ToString("N") + ".wav", detection.Language, cancellationToken).ConfigureAwait(false);
+        record.TranscriptionJobId = await _speechMaticsService.CreateSpeechMaticsJobAsync(recordingContent, Guid.NewGuid().ToString("N") + ".wav", detection.Language, SpeechMaticsJobScenario.Released, cancellationToken).ConfigureAwait(false);
         record.Status = PhoneOrderRecordStatus.Diarization;
         
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken).ConfigureAwait(false);

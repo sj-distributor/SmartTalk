@@ -83,21 +83,6 @@ public class PhoneOrderController : ControllerBase
         return Ok();
     }
 
-    [HttpPost("transcription/callback")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> TranscriptionCallbackAsync(JObject jObject)
-    {
-        Log.Information("Receive parameter : {jObject}", jObject.ToString());
-        
-        var transcription = jObject.ToObject<SpeechMaticsGetTranscriptionResponseDto>();
-        
-        Log.Information("Transcription : {@transcription}", transcription);
-        
-        await _mediator.SendAsync(new HandleTranscriptionCallbackCommand { Transcription = transcription }).ConfigureAwait(false);
-
-        return Ok();
-    }
-
     [Route("manual/order"), HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(AddOrUpdateManualOrderResponse))]
     public async Task<IActionResult> AddOrUpdateManualOrderAsync([FromBody] AddOrUpdateManualOrderCommand command)

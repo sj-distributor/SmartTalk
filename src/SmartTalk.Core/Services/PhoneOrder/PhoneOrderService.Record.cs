@@ -15,6 +15,7 @@ using System.Text.RegularExpressions;
 using ClosedXML.Excel;
 using Newtonsoft.Json;
 using SmartTalk.Core.Domain.PhoneOrder;
+using SmartTalk.Core.Domain.SpeechMatics;
 using SmartTalk.Core.Services.Linphone;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Dto.Attachments;
@@ -38,8 +39,6 @@ public partial interface IPhoneOrderService
     Task ExtractPhoneOrderRecordAiMenuAsync(List<SpeechMaticsSpeakInfoDto> phoneOrderInfo, PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken);
 
     Task<AddOrUpdateManualOrderResponse> AddOrUpdateManualOrderAsync(AddOrUpdateManualOrderCommand command, CancellationToken cancellationToken);
-
-    Task<string> CreateSpeechMaticsJobAsync(byte[] recordContent, string recordName, string language, CancellationToken cancellationToken);
     
     Task<GetPhoneCallUsagesPreviewResponse> GetPhoneCallUsagesPreviewAsync(GetPhoneCallUsagesPreviewRequest request, CancellationToken cancellationToken);
 
@@ -60,7 +59,7 @@ public partial class PhoneOrderService
                 ? (await _posDataProvider.GetPosAgentsAsync(storeIds: [request.StoreId.Value], cancellationToken: cancellationToken).ConfigureAwait(false)).Select(x => x.AgentId).ToList()
                 : [];
 
-        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds, request.Name, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
+        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds, request.Name, utcStart, utcEnd, request.OrderId, cancellationToken).ConfigureAwait(false);
 
         var enrichedRecords = _mapper.Map<List<PhoneOrderRecordDto>>(records);
 
@@ -111,7 +110,7 @@ public partial class PhoneOrderService
             return;
         }
 
-        record.TranscriptionJobId = await CreateSpeechMaticsJobAsync(command.RecordContent, command.RecordName ?? Guid.NewGuid().ToString("N") + ".wav", detection.Language, cancellationToken).ConfigureAwait(false);
+        record.TranscriptionJobId = await _speechMaticsService.CreateSpeechMaticsJobAsync(command.RecordContent, command.RecordName ?? Guid.NewGuid().ToString("N") + ".wav", detection.Language, SpeechMaticsJobScenario.Released, cancellationToken).ConfigureAwait(false);
 
         await AddPhoneOrderRecordAsync(record, PhoneOrderRecordStatus.Diarization, cancellationToken).ConfigureAwait(false);
     }
@@ -515,131 +514,28 @@ public partial class PhoneOrderService
 
         var audioBytes = await _ffmpegService.ConvertFileFormatAsync(file, fileType, cancellationToken).ConfigureAwait(false);
 
-        var splitAudios = await _ffmpegService.SpiltAudioAsync(audioBytes, speakStartTimeVideo, speakEndTimeVideo, cancellationToken).ConfigureAwait(false);
+        var splitAudios = await _ffmpegService.SpiltAudioAsync(audioBytes, speakStartTimeVideo, speakEndTimeVideo, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var transcriptionResult = new StringBuilder();
-
-        foreach (var reSplitAudio in splitAudios)
+        
+        try
         {
-            try
-            {
-                var transcriptionResponse = await _speechToTextService.SpeechToTextAsync(
-                    reSplitAudio, record.Language, TranscriptionFileType.Wav, TranscriptionResponseFormat.Text,
-                    record.RestaurantInfo?.Message ?? string.Empty, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-                transcriptionResult.Append(transcriptionResponse);
-            }
-            catch (Exception e)
-            {
-                Log.Warning("Audio segment transcription error: {@Exception}", e);
-            }
+            var transcriptionResponse = await _speechToTextService.SpeechToTextAsync(
+                splitAudios, record.Language, TranscriptionFileType.Wav, TranscriptionResponseFormat.Text,
+                record.RestaurantInfo?.Message ?? string.Empty, cancellationToken: cancellationToken).ConfigureAwait(false);
+                
+            transcriptionResult.Append(transcriptionResponse);
+        }
+        catch (Exception e)
+        {
+            Log.Warning("Audio segment transcription error: {@Exception}", e);
         }
 
         Log.Information("Transcription result {Transcription}", transcriptionResult.ToString());
 
         return transcriptionResult.ToString();
     }
-
-    private async Task<string> CreateTranscriptionJobAsync(byte[] data, string fileName, string language, CancellationToken cancellationToken)
-    {
-        var createTranscriptionDto = new SpeechMaticsCreateTranscriptionDto { Data = data, FileName = fileName };
-
-        var jobConfigDto = new SpeechMaticsJobConfigDto
-        {
-            Type = SpeechMaticsJobType.Transcription,
-            TranscriptionConfig = new SpeechMaticsTranscriptionConfigDto
-            {
-                Language = SelectSpeechMetisLanguageType(language),
-                Diarization = SpeechMaticsDiarizationType.Speaker,
-                OperatingPoint = SpeechMaticsOperatingPointType.Enhanced
-            },
-            NotificationConfig = new List<SpeechMaticsNotificationConfigDto>
-            {
-                new SpeechMaticsNotificationConfigDto
-                {
-                    AuthHeaders = _transcriptionCallbackSetting.AuthHeaders,
-                    Contents = new List<string> { "transcript" },
-                    Url = _transcriptionCallbackSetting.Url
-                }
-            }
-        };
-
-        return await _speechMaticsClient.CreateJobAsync(new SpeechMaticsCreateJobRequestDto { JobConfig = jobConfigDto }, createTranscriptionDto, cancellationToken).ConfigureAwait(false);
-    }
-
-    private SpeechMaticsLanguageType SelectSpeechMetisLanguageType(string language)
-    {
-        return language switch
-        {
-            "en" => SpeechMaticsLanguageType.En,
-            "zh" => SpeechMaticsLanguageType.Yue,
-            "zh-CN" or "zh-TW" => SpeechMaticsLanguageType.Cmn,
-            "es" => SpeechMaticsLanguageType.Es,
-            "ko" => SpeechMaticsLanguageType.Ko,
-            _ => SpeechMaticsLanguageType.En
-        };
-    }
-
-    public async Task<string> CreateSpeechMaticsJobAsync(byte[] recordContent, string recordName, string language,
-        CancellationToken cancellationToken)
-    {
-        var retryCount = 2;
-
-        while (true)
-        {
-            var transcriptionJobIdJObject = JObject.Parse(await CreateTranscriptionJobAsync(recordContent, recordName, language, cancellationToken).ConfigureAwait(false));
-
-            var transcriptionJobId = transcriptionJobIdJObject["id"]?.ToString();
-
-            Log.Information("Phone order record transcriptionJobId: {@transcriptionJobId}", transcriptionJobId);
-
-            if (transcriptionJobId != null)
-                return transcriptionJobId;
-
-            Log.Information("Create speechMatics job abnormal, start replacement key");
-
-            var keys = await _speechMaticsDataProvider.GetSpeechMaticsKeysAsync(
-                    [SpeechMaticsKeyStatus.Active, SpeechMaticsKeyStatus.NotEnabled], cancellationToken: cancellationToken).ConfigureAwait(false);
-
-            Log.Information("Get speechMatics keys：{@keys}", keys);
-
-            var activeKey = keys.FirstOrDefault(x => x.Status == SpeechMaticsKeyStatus.Active);
-
-            var notEnabledKey = keys.FirstOrDefault(x => x.Status == SpeechMaticsKeyStatus.NotEnabled);
-
-            if (notEnabledKey != null && activeKey != null)
-            {
-                notEnabledKey.Status = SpeechMaticsKeyStatus.Active;
-                notEnabledKey.LastModifiedDate = DateTimeOffset.Now;
-                activeKey.Status = SpeechMaticsKeyStatus.Discard;
-            }
-
-            Log.Information("Update speechMatics keys：{@keys}", keys);
-
-            await _speechMaticsDataProvider.UpdateSpeechMaticsKeysAsync([notEnabledKey, activeKey], cancellationToken: cancellationToken).ConfigureAwait(false);
-
-            retryCount--;
-
-            if (retryCount <= 0)
-            {
-                await _weChatClient.SendWorkWechatRobotMessagesAsync(
-                    _speechMaticsKeySetting.SpeechMaticsKeyEarlyWarningRobotUrl,
-                    new SendWorkWechatGroupRobotMessageDto
-                    {
-                        MsgType = "text",
-                        Text = new SendWorkWechatGroupRobotTextDto
-                        {
-                            Content = $"SMT Speech Matics Key Error"
-                        }
-                    }, cancellationToken).ConfigureAwait(false);
-
-                return null;
-            }
-
-            Log.Information("Retrying Create Speech Matics Job Attempts remaining: {RetryCount}", retryCount);
-        }
-    }
-
+    
     private (DateTimeOffset? UtcStart, DateTimeOffset? UtcEnd) ConvertPstDateToUtcRange(DateTimeOffset? inputDate)
     {
         if (!inputDate.HasValue) return (null, null);

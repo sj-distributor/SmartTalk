@@ -2,6 +2,8 @@ namespace SmartTalk.Messages.Dto.Sales;
 
 public class GenerateAiOrdersRequestDto
 {
+    public string AiModel { get; set; }
+    
     public AiOrderInfoDto AiOrderInfoDto { get; set; }
 }
 
@@ -28,5 +30,7 @@ public class AiOrderItemDto
     
     public decimal? Price { get; set; } = null;
      
-    public int MateialQuantity { get; set; }
+    public int MaterialQuantity { get; set; } = 1;
+
+    public string AiUnit { get; set; }
 }

@@ -10,6 +10,8 @@ public interface ICrmClient : IScopedDependency
 {
     Task<string> GetCrmTokenAsync(CancellationToken cancellationToken);
     
+    Task<List<CrmContactDto>> GetCustomerContactsAsync(string customerId, CancellationToken cancellationToken);
+    
     Task<List<GetCustomersPhoneNumberDataDto>> GetCustomersByPhoneNumberAsync(GetCustmoersByPhoneNumberRequestDto numberRequest, CancellationToken cancellationToken);
 }
 
@@ -24,7 +26,7 @@ public class CrmClient : ICrmClient
         _httpClient = httpClient;
         _crmSetting = crmSetting;
     }
-    
+
     public async Task<string> GetCrmTokenAsync(CancellationToken cancellationToken)
     {
         var url = $"{_crmSetting.BaseUrl}/oauth/token";
@@ -47,7 +49,23 @@ public class CrmClient : ICrmClient
 
         return resp.AccessToken;
     }
-    
+
+    public async Task<List<CrmContactDto>> GetCustomerContactsAsync(string customerId,
+        CancellationToken cancellationToken)
+    {
+        var token = await GetCrmTokenAsync(cancellationToken).ConfigureAwait(false);
+
+        var headers = new Dictionary<string, string>
+        {
+            { "Accept", "application/json" },
+            { "Authorization", $"Bearer {token}" }
+        };
+
+        return await _httpClient
+            .GetAsync<List<CrmContactDto>>($"{_crmSetting.BaseUrl}/api/customer/{customerId}/contacts",
+                headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task<List<GetCustomersPhoneNumberDataDto>> GetCustomersByPhoneNumberAsync(GetCustmoersByPhoneNumberRequestDto numberRequest, CancellationToken cancellationToken)
     {
         var  token = await GetCrmTokenAsync(cancellationToken);
