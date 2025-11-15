@@ -126,7 +126,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         var (scenario, task, record, assistant, speechMaticsJob) = await CollectAutoTestDataByJobIdAsync(jobId, cancellationToken);
         if (scenario == null || task == null || record == null || assistant == null || speechMaticsJob == null) return;
 
-        var audioBytes = await FetchingRecordAudioAsync(scenario, cancellationToken).ConfigureAwait(false);
+        var audioBytes = await FetchingRecordAudioAsync(record, cancellationToken).ConfigureAwait(false);
         if (audioBytes == null) return;
 
         var customerAudios = await ExtractingCustomerAudioAsync(speechMaticsJob, audioBytes, cancellationToken).ConfigureAwait(false);
@@ -173,11 +173,23 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         return (scenario, task, record, assistant, speechMaticsJob);
     }
 
-    private async Task<byte[]> FetchingRecordAudioAsync(AutoTestScenario scenario, CancellationToken cancellationToken)
+    private async Task<byte[]> FetchingRecordAudioAsync(AutoTestTaskRecord record, CancellationToken cancellationToken)
     {
-        var salesOrder = JsonConvert.DeserializeObject<SalesOrderDto>(scenario.InputSchema);
+        string recording = null;
         
-        var audioContent = await _smartTalkHttpClientFactory.GetAsync<byte[]>(salesOrder.Recording, cancellationToken).ConfigureAwait(false);
+        using (var doc = JsonDocument.Parse(record.InputSnapshot))
+        {
+            var root = doc.RootElement;
+
+            if (root.TryGetProperty("recording", out var recordingElement))
+            {
+                recording = recordingElement.GetString();
+            }
+        }
+        
+        if (recording == null) return null;
+        
+        var audioContent = await _smartTalkHttpClientFactory.GetAsync<byte[]>(recording, cancellationToken).ConfigureAwait(false);
         
         if (audioContent == null) return null;
         
