@@ -437,7 +437,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
 
         var originOrder = await ExtractAndMatchOrderItemsFromReportAsync(report, historyItems, cancellationToken);
 
-        var order = _mapper.Map<List<AutoTestInputDetail>>(originOrder);
+        var order = _mapper.Map<List<AutoTestInputDetail>>(originOrder.Select(x => x.Orders).ToList());
         Log.Information("sales ai order: {@Order}", order);
         
         return (report, order);
