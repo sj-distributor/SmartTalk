@@ -55,8 +55,6 @@ public class PhoneOrderRecordDto
     public DialogueScenarios? Scenario { get; set; }
 
     public string Remark { get; set; }
-    
-    public bool? IsHumanAnswered { get; set; }
 
     public int? UnSendCount { get; set; }
 }
