@@ -23,6 +23,8 @@ public partial interface IPosDataProvider
         DateTimeOffset? endDate = null, CancellationToken cancellationToken = default);
     
     Task<List<PosOrder>> GetPosCustomerInfosAsync(CancellationToken cancellationToken);
+    
+    Task<List<PosOrder>> GetPosOrdersByRecordIdsAsync(List<int >recordId, CancellationToken cancellationToken = default);
 }
 
 public partial class PosDataProvider
@@ -111,5 +113,12 @@ public partial class PosDataProvider
             .ToListAsync(cancellationToken).ConfigureAwait(false);
 
         return latestOrders;
+    }
+
+    public async Task<List<PosOrder>> GetPosOrdersByRecordIdsAsync(List<int> recordIds, CancellationToken cancellationToken = default)
+    {
+        if (recordIds == null || recordIds.Count == 0) return new List<PosOrder>();
+
+        return await _repository.Query<PosOrder>().Where(x => x.RecordId.HasValue && recordIds.Contains(x.RecordId.Value) && x.Status == PosOrderStatus.Pending).ToListAsync(cancellationToken);
     }
 }
