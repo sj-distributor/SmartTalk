@@ -150,10 +150,15 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
             if (customerAudios == null || customerAudios.Count == 0) record.Status = AutoTestTaskRecordStatus.Failed;
  
             var conversationAudios = await ProcessAudioConversationAsync(customerAudios, assistant, cancellationToken).ConfigureAwait(false);
+            
+            Log.Information("ProcessAudioConversationAsync conversationAudios: {@conversationAudios}", conversationAudios);
+            
             if (conversationAudios == null || conversationAudios.Length == 0) record.Status = AutoTestTaskRecordStatus.Failed;
         
             var (report, aiOrder) = await GenerateSalesAiOrderAsync(assistant, conversationAudios, cancellationToken).ConfigureAwait(false);
 
+            Log.Information("GenerateSalesAiOrderAsync report: {@report}, aiOrder: {@aiOrder}", report, aiOrder);
+            
             var inputSnapshot = JsonConvert.DeserializeObject<AutoTestInputJsonDto>(record.InputSnapshot);
             var comparedAiOrderItems = AutoTestOrderCompare(inputSnapshot.Detail, aiOrder);
             var normalizedOutput = await HandleAutoTestNormalizedOutput(conversationAudios, report, inputSnapshot.Detail, comparedAiOrderItems, cancellationToken).ConfigureAwait(false);
@@ -163,6 +168,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         }
         catch (Exception e)
         {
+            Log.Information("ProcessingTestSalesPhoneOrderSpeechMaticsCallBackAsync Exception: {Exception}", e);
             record.Status = AutoTestTaskRecordStatus.Failed;            
         }
     }
@@ -205,10 +211,13 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
                 recording = recordingElement.GetString();
             }
         }
+        Log.Information("FetchingRecordAudioAsync recording: {@recording}", recording);
         
         if (recording == null) return null;
         
         var audioContent = await _smartTalkHttpClientFactory.GetAsync<byte[]>(recording, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("FetchingRecordAudioAsync audioContent: {@audioContent}", audioContent);
         
         if (audioContent == null) return null;
         
