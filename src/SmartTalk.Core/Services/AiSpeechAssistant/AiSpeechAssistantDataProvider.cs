@@ -440,14 +440,14 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
         
         if (assistantId.HasValue)
         {
-            var resultById = await query.Where(x => x.assistant != null && x.assistant.Id == assistantId.Value).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
-
-            if (resultById != null)
-                return (resultById.assistant, resultById.agent);
+            query = query.Where(x => x.assistant != null && x.assistant.Id == assistantId.Value);
         }
-        
-        var result = await query.Where(x => x.assistant.IsDefault).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        else
+        {
+            query = query.Where(x => x.assistant != null && x.assistant.IsDefault);
+        }
 
+        var result = await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
         return (result?.assistant, result?.agent);
     }
     
