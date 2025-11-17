@@ -41,4 +41,12 @@ public class PhoneOrderRecordDto
     public double? Duration { get; set; }
     
     public bool? IsTransfer { get; set; }
+    
+    public DialogueScenarios? Scenario { get; set; }
+
+    public string Remark { get; set; }
+    
+    public bool? IsHumanAnswered { get; set; }
+
+    public int? UnSendCount { get; set; }
 }

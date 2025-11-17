@@ -17,6 +17,8 @@ public class GetPhoneOrderRecordsRequest : IRequest
     
     public string Name { get; set; }
     
+    public DialogueScenarios? DialogueScenarios { get; set; }
+    
     public DateTimeOffset? Date { get; set; }
 }
 

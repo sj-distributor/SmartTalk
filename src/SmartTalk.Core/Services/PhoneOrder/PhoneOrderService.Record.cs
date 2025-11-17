@@ -15,6 +15,7 @@ using System.Text.RegularExpressions;
 using ClosedXML.Excel;
 using Newtonsoft.Json;
 using SmartTalk.Core.Domain.PhoneOrder;
+using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Services.Linphone;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Dto.Attachments;
@@ -60,10 +61,20 @@ public partial class PhoneOrderService
                 ? (await _posDataProvider.GetPosAgentsAsync(storeIds: [request.StoreId.Value], cancellationToken: cancellationToken).ConfigureAwait(false)).Select(x => x.AgentId).ToList()
                 : [];
 
-        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds, request.Name, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
+        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds, request.Name, utcStart, utcEnd, request.DialogueScenarios, cancellationToken).ConfigureAwait(false);
 
-        var enrichedRecords = _mapper.Map<List<PhoneOrderRecordDto>>(records);
+        var posOrders = await _posDataProvider.GetPosOrdersByRecordIdsAsync(records.Select(x => x.Id).ToList(), cancellationToken);
 
+        var posOrderLookup = posOrders
+            .GroupBy(x => x.RecordId)
+            .ToDictionary(g => g.Key, g => g.Count()); 
+
+        var enrichedRecords = _mapper.Map<List<PhoneOrderRecordDto>>(records).Select(r =>
+            {
+                r.UnSendCount = posOrderLookup.TryGetValue(r.Id, out var count) ? count : 0;
+                return r;
+            }).ToList();
+        
         return new GetPhoneOrderRecordsResponse
         {
             Data = enrichedRecords
