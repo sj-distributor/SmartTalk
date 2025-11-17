@@ -197,4 +197,53 @@ public class SpeechMaticsService : ISpeechMaticsService
             _ => SpeechMaticsLanguageType.En
         };
     }
+
+    private async Task<DialogueScenarioResultDto> IdentifyDialogueScenariosAsync(string query, CancellationToken cancellationToken)
+    {
+        var completionResult = await _smartiesClient.PerformQueryAsync(new AskGptRequest
+            {
+                Messages = new List<CompletionsRequestMessageDto>
+                {
+                    new()
+                    {
+                        Role = "system",
+                        Content = new CompletionsStringContent(
+                            "You are a professional restaurant AI call analysis assistant. " +
+                            "After each customer call, your job is to classify the main scenario of the call into one of the predefined categories. " +
+                            "Choose only ONE category according to the following priority order:\n\n" +
+                            "1. Reservation - Customer requests to book a table, specify time or number of people.\n" +
+                            "2. Order - Customer wants to place, modify, or check an order.\n" +
+                            "3. Inquiry - Customer asks about dishes, prices, opening hours, promotions, etc.\n" +
+                            "4. ThirdPartyOrderNotification - Calls from delivery platforms or third parties notifying orders or issues.\n" +
+                            "5. ComplaintFeedback - Customer complains or gives feedback about service or food.\n" +
+                            "6. InformationNotification - Restaurant proactively informs customers about events or reminders.\n" +
+                            "7. TransferToHuman - AI transferred the call to a human staff.\n" +
+                            "8. SalesCall - Promotional or sales calls from external companies.\n" +
+                            "9. InvalidCall - Silent calls, wrong numbers, or hang-ups.\n" +
+                            "10. TransferVoicemail- The call was forwarded to voicemail." +
+                            "11. Other - Anything that cannot clearly fit the above categories. In this case, extract a short key dialogue snippet as remark.\n\n" +
+                            "When multiple intents appear, select the one with the highest priority.\n" +
+                            "Output strictly in JSON format with two fields only:\n" +
+                            "{\"category\": \"one of [Reservation, Order, Inquiry, ThirdPartyOrderNotification, ComplaintFeedback, InformationNotification, TransferToHuman, SalesCall, InvalidCall, Other]\", " +
+                            "\"remark\": \"if category is 'Other', include a short dialogue snippet, otherwise leave empty\"}. " +
+                            "No explanation or extra text — output only the JSON object.")
+                    },
+                    new()
+                    {
+                        Role = "user",
+                        Content = new CompletionsStringContent($"Call transcript: {query}\nOutput:")
+                    }
+                },
+                Model = OpenAiModel.Gpt4o, ResponseFormat = new() { Type = "json_object" }
+            }, cancellationToken).ConfigureAwait(false);
+        
+        var response = completionResult.Data.Response?.Trim();
+        
+        var result = JsonConvert.DeserializeObject<DialogueScenarioResultDto>(response);
+        
+        if (result == null) throw new Exception($"IdentifyDialogueScenariosAsync 无法反序列化模型返回结果: {response}");
+        
+        return result;
+    }
+    
 }

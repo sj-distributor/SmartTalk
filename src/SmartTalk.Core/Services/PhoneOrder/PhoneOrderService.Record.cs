@@ -64,7 +64,7 @@ public partial class PhoneOrderService
                 ? (await _posDataProvider.GetPosAgentsAsync(storeIds: [request.StoreId.Value], cancellationToken: cancellationToken).ConfigureAwait(false)).Select(x => x.AgentId).ToList()
                 : [];
         
-        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds, request.Name, request.OrderId, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
+        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds, request.Name, request.OrderId, utcStart, utcEnd, request.DialogueScenarios, cancellationToken).ConfigureAwait(false);
 
         var enrichedRecords = _mapper.Map<List<PhoneOrderRecordDto>>(records);
 
