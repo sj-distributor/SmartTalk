@@ -37,6 +37,8 @@ public class CompanyStoreDto
     
     public string Timezone { get; set; }
     
+    public bool IsManualReview { get; set; }
+    
     public int? CreatedBy { get; set; }
     
     public string PosName { get; set; }
