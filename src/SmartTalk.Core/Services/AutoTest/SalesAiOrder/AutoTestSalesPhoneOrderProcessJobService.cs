@@ -141,6 +141,9 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         try
         {
             var audioBytes = await FetchingRecordAudioAsync(record, cancellationToken).ConfigureAwait(false);
+            
+            Log.Information("FetchingRecordAudioAsync audioBytes: {@audioBytes}", audioBytes);
+              
             if (audioBytes == null) record.Status = AutoTestTaskRecordStatus.Failed;
 
             var customerAudios = await ExtractingCustomerAudioAsync(speechMaticsJob, audioBytes, cancellationToken).ConfigureAwait(false);
