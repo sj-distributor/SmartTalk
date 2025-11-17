@@ -70,7 +70,7 @@ public partial interface IAiSpeechAssistantDataProvider : IScopedDependency
     
     Task<AiSpeechAssistantSession> GetAiSpeechAssistantSessionBySessionIdAsync(Guid sessionId, CancellationToken cancellationToken);
 
-    Task<(Domain.AISpeechAssistant.AiSpeechAssistant Assistant, Agent Agent)> GetAgentAndAiSpeechAssistantAsync(int agentId, CancellationToken cancellationToken);
+    Task<(Domain.AISpeechAssistant.AiSpeechAssistant Assistant, Agent Agent)> GetAgentAndAiSpeechAssistantAsync(int agentId, int? assistantId, CancellationToken cancellationToken);
     
     Task<List<AiSpeechAssistantInboundRoute>> GetAiSpeechAssistantInboundRouteAsync(string callerNumber, string didNumber, CancellationToken cancellationToken);
     
@@ -429,7 +429,7 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
             .Where(x => x.SessionId == sessionId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
     
-    public async Task<(Domain.AISpeechAssistant.AiSpeechAssistant Assistant, Agent Agent)> GetAgentAndAiSpeechAssistantAsync(int agentId, CancellationToken cancellationToken)
+    public async Task<(Domain.AISpeechAssistant.AiSpeechAssistant Assistant, Agent Agent)> GetAgentAndAiSpeechAssistantAsync(int agentId, int? assistantId, CancellationToken cancellationToken)
     {
         var query = from agent in _repository.Query<Agent>()
             join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
@@ -437,7 +437,15 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
             from assistant in assistantGroups.DefaultIfEmpty()
             where agent.Id == agentId
             select new { assistant, agent };
+        
+        if (assistantId.HasValue)
+        {
+            var resultById = await query.Where(x => x.assistant != null && x.assistant.Id == assistantId.Value).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
 
+            if (resultById != null)
+                return (resultById.assistant, resultById.agent);
+        }
+        
         var result = await query.Where(x => x.assistant.IsDefault).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
 
         return (result?.assistant, result?.agent);

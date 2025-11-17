@@ -18,6 +18,9 @@ public class PhoneOrderRecord : IEntity
     [Column("agent_id")]
     public int AgentId { get; set; }
     
+    [Column("assistant_id")]
+    public int? AssistantId { get; set; }
+    
     [Column("session_id")]
     public string SessionId { get; set; }
 
