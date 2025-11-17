@@ -10,6 +10,7 @@ using OpenAI.Chat;
 using SmartTalk.Core.Constants;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.PhoneOrder;
+using SmartTalk.Core.Domain.Sales;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Ffmpeg;
@@ -29,6 +30,7 @@ using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Sales;
 using SmartTalk.Messages.Enums.Account;
 using SmartTalk.Messages.Enums.Agent;
+using SmartTalk.Messages.Enums.Sales;
 using SmartTalk.Messages.Enums.STT;
 using Twilio;
 using Twilio.Rest.Api.V2010.Account;
@@ -389,6 +391,21 @@ public class SpeechMaticsService : ISpeechMaticsService
             case AgentType.Sales: 
                 if (!string.IsNullOrEmpty(record.TranscriptionText)) 
                 { 
+                    var assistantName = aiSpeechAssistant?.Name;
+                    var salesConfig = await _aiSpeechAssistantDataProvider.GetCallInSalesByNameAsync(assistantName, SalesCallType.CallIn, cancellationToken).ConfigureAwait(false);
+                    
+                    if (salesConfig == null)
+                    {
+                        Log.Warning("未找到 Sales.Name={AssistantName} 的配置记录，跳过生成草稿单逻辑", assistantName);
+                        return;
+                    }
+
+                    if (!salesConfig.AllowDraftOrder)
+                    {
+                        Log.Information("Sales.Name={AssistantName} 的 allow_draft_order=false，跳过生成草稿单",
+                            assistantName);
+                        return;
+                    }
                     await HandleSalesScenarioAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
                 }
                 break; 

@@ -1,0 +1,1 @@
+ALTER TABLE `sales` ADD COLUMN `allow_draft_order` TINYINT(1) NOT NULL DEFAULT 0;
