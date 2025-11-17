@@ -8,6 +8,8 @@ public class AiSpeechAssistantDto
     
     public string Name { get; set; }
     
+    public int AgentId { get; set; }
+    
     public int AnsweringNumberId { get; set; }
     
     public string AnsweringNumber { get; set; }
