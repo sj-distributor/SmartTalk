@@ -64,7 +64,7 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
             
             Log.Information("Get ai speech assistant: {@Assistant} and agent: {@Agent} by agentId: {AgentId}, assistantId: {AssistantId}", assistant, agent, record.AgentId, record.AssistantId);
 
-            if (!record.AssistantId.HasValue) assistant = new Domain.AISpeechAssistant.AiSpeechAssistant { IsAllowOrderPush = false };
+            if (!record.AssistantId.HasValue) assistant = null;
             
             var posAgents = await _posDataProvider.GetPosAgentsAsync(agentId: record.AgentId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
