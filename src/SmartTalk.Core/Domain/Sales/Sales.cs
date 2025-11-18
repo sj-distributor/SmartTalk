@@ -23,7 +23,4 @@ public class Sales : IEntity, IHasCreatedFields, IAgent
 
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
-    
-    [Column("allow_draft_order")]
-    public bool AllowDraftOrder { get; set; }
 }

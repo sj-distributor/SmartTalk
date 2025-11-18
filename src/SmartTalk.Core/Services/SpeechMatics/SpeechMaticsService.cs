@@ -391,21 +391,6 @@ public class SpeechMaticsService : ISpeechMaticsService
             case AgentType.Sales: 
                 if (!string.IsNullOrEmpty(record.TranscriptionText)) 
                 { 
-                    var assistantName = aiSpeechAssistant?.Name;
-                    var salesConfig = await _aiSpeechAssistantDataProvider.GetCallInSalesByNameAsync(assistantName, SalesCallType.CallIn, cancellationToken).ConfigureAwait(false);
-                    
-                    if (salesConfig == null)
-                    {
-                        Log.Warning("未找到 Sales.Name={AssistantName} 的配置记录，跳过生成草稿单逻辑", assistantName);
-                        return;
-                    }
-
-                    if (!salesConfig.AllowDraftOrder)
-                    {
-                        Log.Information("Sales.Name={AssistantName} 的 allow_draft_order=false，跳过生成草稿单",
-                            assistantName);
-                        return;
-                    }
                     await HandleSalesScenarioAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
                 }
                 break; 
