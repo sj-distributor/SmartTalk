@@ -74,9 +74,8 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
                 ? await MatchSimilarProductsAsync(record, shoppingCart, cancellationToken).ConfigureAwait(false)
                 : await GetSimilarRestaurantByRecordAsync(record, shoppingCart, cancellationToken).ConfigureAwait(false);
 
-            if (items.Count == 0) return;
-            
-            await _phoneOrderDataProvider.AddPhoneOrderItemAsync(items, true, cancellationToken).ConfigureAwait(false);
+            if (items.Count != 0)
+                await _phoneOrderDataProvider.AddPhoneOrderItemAsync(items, true, cancellationToken).ConfigureAwait(false);
             
             if (assistant is { IsAllowOrderPush: true })
             {
