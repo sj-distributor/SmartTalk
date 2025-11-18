@@ -75,6 +75,15 @@ public class PhoneOrderRecord : IEntity
     [Column("incoming_call_number"), StringLength(36)]
     public string IncomingCallNumber { get; set; }
     
+    [Column("order_record_type")]
+    public PhoneOrderRecordType OrderRecordType { get; set; }
+    
+    [Column("is_customer_friendly")]
+    public bool? IsCustomerFriendly { get; set; }
+   
+    [Column("is_human_answered")]
+    public bool? IsHumanAnswered { get; set; }
+    
     [NotMapped]
     public UserAccount UserAccount { get; set; }
     
