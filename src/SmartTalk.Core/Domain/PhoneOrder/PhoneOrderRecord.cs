@@ -18,6 +18,9 @@ public class PhoneOrderRecord : IEntity
     [Column("agent_id")]
     public int AgentId { get; set; }
     
+    [Column("assistant_id")]
+    public int? AssistantId { get; set; }
+    
     [Column("session_id")]
     public string SessionId { get; set; }
 
@@ -77,6 +80,15 @@ public class PhoneOrderRecord : IEntity
 
     [Column("conversation_text")]
     public string ConversationText { get; set; }
+
+    [Column("order_record_type")]
+    public PhoneOrderRecordType OrderRecordType { get; set; }
+    
+    [Column("is_customer_friendly")]
+    public bool? IsCustomerFriendly { get; set; }
+   
+    [Column("is_human_answered")]
+    public bool? IsHumanAnswered { get; set; }
     
     [NotMapped]
     public UserAccount UserAccount { get; set; }

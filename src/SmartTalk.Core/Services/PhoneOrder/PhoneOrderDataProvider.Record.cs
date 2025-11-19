@@ -52,6 +52,8 @@ public partial interface IPhoneOrderDataProvider
     Task AddPhoneOrderRecordReportsAsync(List<PhoneOrderRecordReport> recordReports, bool forceSave = true, CancellationToken cancellationToken = default);
 
     Task<PhoneOrderRecordReport> GetPhoneOrderRecordReportAsync(string callSid, SystemLanguage language, CancellationToken cancellationToken);
+    
+    Task<List<PhoneOrderRecordReport>> GetPhoneOrderRecordReportByRecordIdAsync(List<int> recordId, CancellationToken cancellationToken);
 
     Task UpdatePhoneOrderRecordReportsAsync(List<PhoneOrderRecordReport> reports, bool forceSave = true, CancellationToken cancellationToken = default);
 }
@@ -309,7 +311,17 @@ public partial class PhoneOrderDataProvider
 
         return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
-
+    
+    public async Task<List<PhoneOrderRecordReport>> GetPhoneOrderRecordReportByRecordIdAsync(List<int> recordIds, CancellationToken cancellationToken)
+    {
+        return await _repository.Query<PhoneOrderRecordReport>()
+            .Where(x => recordIds.Contains(x.RecordId))
+            .GroupBy(x => x.RecordId)
+            .Select(g => g.FirstOrDefault())
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+    }
+    
     public async Task UpdatePhoneOrderRecordReportsAsync(List<PhoneOrderRecordReport> reports, bool forceSave = true, CancellationToken cancellationToken = default)
     {
         await _repository.UpdateAllAsync(reports, cancellationToken).ConfigureAwait(false);

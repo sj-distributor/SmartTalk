@@ -8,6 +8,8 @@ public class AiSpeechAssistantDto
     
     public string Name { get; set; }
     
+    public int AgentId { get; set; }
+    
     public int AnsweringNumberId { get; set; }
     
     public string AnsweringNumber { get; set; }
@@ -37,6 +39,8 @@ public class AiSpeechAssistantDto
     public string TransferCallNumber { get; set; }
     
     public bool IsDefault { get; set; }
+    
+    public bool IsAllowOrderPush { get; set; }
     
     public DateTimeOffset CreatedDate { get; set; }
     

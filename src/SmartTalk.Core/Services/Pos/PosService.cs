@@ -51,6 +51,8 @@ public partial interface IPosService : IScopedDependency
     Task<GetPosStoresResponse> GetStoresAsync(GetStoresRequest request, CancellationToken cancellationToken);
 
     Task<GetCurrentUserStoresResponse> GetCurrentUserStoresAsync(GetCurrentUserStoresRequest request, CancellationToken cancellationToken);
+    
+    Task<GetStoresAgentsResponse> GetStoresAgentsAsync(GetStoresAgentsRequest request, CancellationToken cancellationToken);
 }
 
 public partial class PosService : IPosService
@@ -370,6 +372,22 @@ public partial class PosService : IPosService
         }).ToList();
 
         return new GetCurrentUserStoresResponse { Data = enrichStores };
+    }
+
+    public async Task<GetStoresAgentsResponse> GetStoresAgentsAsync(GetStoresAgentsRequest request, CancellationToken cancellationToken)
+    {
+        var stores = _mapper.Map<List<CompanyStoreDto>>(
+            await _posDataProvider.GetPosCompanyStoresAsync(ids: request.StoreIds, cancellationToken: cancellationToken).ConfigureAwait(false));
+        
+        var allAgents = await _posDataProvider.GetPosAgentsAsync(storeIds: request.StoreIds, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var enrichStores = stores.Select(store => new GetStoresAgentsResponseDataDto
+        {
+            Store = store,
+            AgentIds = allAgents.Where(x => x.StoreId == store.Id).Select(x => x.AgentId).ToList()
+        }).ToList();
+
+        return new GetStoresAgentsResponse { Data = enrichStores };
     }
 
     private async Task<List<GetCompanyWithStoresData>> EnrichPosCompaniesAsync(List<CompanyDto> companies, CancellationToken cancellationToken)
