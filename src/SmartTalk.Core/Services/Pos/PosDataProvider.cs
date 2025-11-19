@@ -379,7 +379,7 @@ public partial class PosDataProvider : IPosDataProvider
         var query = from store in _repository.Query<CompanyStore>()
             join posAgent in _repository.Query<PosAgent>() on store.Id equals posAgent.StoreId into posAgentGroups
             from posAgent in posAgentGroups.DefaultIfEmpty()
-            join agent in _repository.Query<Agent>() on posAgent.AgentId equals agent.Id into agentGroups
+            join agent in _repository.Query<Agent>().Where(x => x.IsDisplay) on posAgent.AgentId equals agent.Id into agentGroups
             from agent in agentGroups.DefaultIfEmpty()
             select new { store, agent };
         
