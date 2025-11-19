@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace SmartTalk.Core.Domain.Sales;
 
 [Table("customer_items_cache")]
-public class CustomerItemsCache: IEntity
+public class CustomerItemsCache : IEntity
 {
     [Key]
     [Column("id")]
