@@ -5,7 +5,7 @@ using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Messages.Dto.Crm;
 using SmartTalk.Messages.Dto.Sales;
 
-namespace SmartTalk.Core.Services.AiSpeechAssistant;
+namespace SmartTalk.Core.Services.Sale;
 
 public interface ISalesService : IScopedDependency
 {
