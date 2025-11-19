@@ -3,8 +3,8 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace SmartTalk.Core.Domain.Sales;
 
-[Table("customer_items_cache")]
-public class CustomerItemsCache: IEntity
+[Table("ai_speech_assistant_knowledge_variable_cache")]
+public class AiSpeechAssistantKnowledgeVariableCache: IEntity
 {
     [Key]
     [Column("id")]
@@ -16,6 +16,9 @@ public class CustomerItemsCache: IEntity
 
     [Column("cache_value")]
     public string CacheValue { get; set; }
+    
+    [Column("filter")]
+    public string Filter { get; set; }
 
     [Column("last_updated")]
     public DateTimeOffset LastUpdated { get; set; } = DateTimeOffset.Now;

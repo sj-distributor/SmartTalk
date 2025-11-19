@@ -1,12 +1,32 @@
 using System.Text;
 using Serilog;
+using SmartTalk.Core.Ioc;
+using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Messages.Dto.Crm;
 using SmartTalk.Messages.Dto.Sales;
 
 namespace SmartTalk.Core.Services.Sale;
 
-public class SalesService
+public interface ISalesService : IScopedDependency
 {
+    Task<string> BuildCustomerItemsStringAsync(List<string> soldToIds, CancellationToken cancellationToken);
+
+    Task<string> HandleOrderArrivalTimeList(List<string> customerIds, CancellationToken cancellationToken);
+
+    Task<string> BuildCrmCustomerInfoByPhoneAsync(string phoneNumber, CancellationToken cancellationToken);
+}
+
+public class SalesService : ISalesService
+{
+    private readonly ICrmClient _crmClient;
+    private readonly ISalesClient _salesClient;
+
+    public SalesService(ICrmClient crmClient,ISalesClient salesClient)
+    {
+        _crmClient = crmClient;
+        _salesClient = salesClient;
+    }
+    
     public async Task<string> BuildCustomerItemsStringAsync(List<string> soldToIds, CancellationToken cancellationToken)
     {
         var allItems = new List<string>();
@@ -81,86 +101,86 @@ public class SalesService
                 return $"Item: {name}, Brand: {brand}, Size: {size}, Aliases: {aliasText}, " +
                        $"baseUnit: {partInfo?.BaseUnit ?? ""}, salesUnit: {partInfo?.SalesUnit ?? ""}, weights: {partInfo?.Weights ?? 0}, " +
                        $"placeOfOrigin: {partInfo?.PlaceOfOrigin ?? ""}, packing: {partInfo?.Packing ?? ""}, specifications: {partInfo?.Specifications ?? ""}, " +
-                       $"ranks: {partInfo?.Ranks ?? ""}, atr: {partInfo?.Atr ?? 0}"; 
-            } 
-            
-            allItems.AddRange(askItems.Select(x => FormatItem(x.MaterialDesc, x.LevelCode, x.Material))); 
-            allItems.AddRange(orderItems.Select(x => FormatItem(x.MaterialDescription, x.LevelCode, x.MaterialNumber))); 
-            
-            var customerOrderArrivalText = await HandleOrderArrivalTimeList(new List<string> { soldToId }, cancellationToken);
+                       $"ranks: {partInfo?.Ranks ?? ""}, atr: {partInfo?.Atr ?? 0}";
+            }
+
+            allItems.AddRange(askItems.Select(x => FormatItem(x.MaterialDesc, x.LevelCode, x.Material)));
+            allItems.AddRange(orderItems.Select(x => FormatItem(x.MaterialDescription, x.LevelCode, x.MaterialNumber)));
+
+            var customerOrderArrivalText =
+                await HandleOrderArrivalTimeList(new List<string> { soldToId }, cancellationToken);
             if (!string.IsNullOrEmpty(customerOrderArrivalText))
             {
                 allItems.Add($"=== 客户 {soldToId} 订单到货信息 ===");
                 allItems.Add(customerOrderArrivalText);
             }
-            
-            var crmInfo = await BuildCrmCustomerInfoAsync(soldToId, cancellationToken).ConfigureAwait(false);
-            if (!string.IsNullOrEmpty(crmInfo))
-            {
-                allItems.Add("=== Customer Info ===");
-                allItems.Add(crmInfo);
-            }
         }
-        
+
         return string.Join(Environment.NewLine, allItems);
     }
+    
+    public async Task<string> HandleOrderArrivalTimeList(List<string> customerIds, CancellationToken cancellationToken)
+    {
+        var processedCustomerIds = customerIds.Select(id => "0000" + id).ToList();
 
-    public async Task<string> BuildCrmCustomerInfoAsync(string soldToId, CancellationToken cancellationToken)
+        var getOrderArrivalTimeList = await _salesClient.GetOrderArrivalTimeAsync(new GetOrderArrivalTimeRequestDto { CustomerIds = processedCustomerIds }, cancellationToken).ConfigureAwait(false);
+
+        if (getOrderArrivalTimeList.Data.Count == 0) return "这位客户暂时没有订单。";
+        
+        var resultBuilder = new StringBuilder();
+        
+        var notDeliveredOrders = getOrderArrivalTimeList.Data.Where(order => new[] { 0, 1, 2, 3, 5, 6, 8 }.Contains(order.OrderStatus)).ToList();
+        
+        var deliveringOrders = getOrderArrivalTimeList.Data.Where(order => order.OrderStatus == 4).ToList();
+        
+        var completedOrders = getOrderArrivalTimeList.Data.Where(order => order.OrderStatus == 7).ToList();
+        
+        AppendOrderSection(resultBuilder, "未配送", notDeliveredOrders);
+        AppendOrderSection(resultBuilder, "配送中", deliveringOrders);
+        AppendOrderSection(resultBuilder, "已完成", completedOrders);
+
+        return resultBuilder.ToString();
+    }
+
+    public async Task<string> BuildCrmCustomerInfoByPhoneAsync(string phoneNumber, CancellationToken cancellationToken)
     {
         var customerInfo = new StringBuilder();
 
         try
         {
-            var contacts = await _crmClient.GetCustomerContactsAsync(soldToId, cancellationToken).ConfigureAwait(false);
-            if (contacts != null && contacts.Any())
+            var crmCustomers = await _crmClient.GetCustomersByPhoneNumberAsync(new GetCustmoersByPhoneNumberRequestDto { PhoneNumber = phoneNumber }, cancellationToken).ConfigureAwait(false);
+
+            if (crmCustomers != null && crmCustomers.Any())
             {
-                customerInfo.AppendLine("Contacts:");
-                foreach (var contact in contacts)
+                foreach (var customer in crmCustomers)
                 {
-                    customerInfo.AppendLine(
-                        $"- Name: {contact.Name}, Phone: {contact.Phone}, Identity: {contact.Identity}, Language: {contact.Language}");
+                    customerInfo.AppendLine($"手机号 {phoneNumber}:");
+                    customerInfo.AppendLine($"- SAP编号: {customer.SapId}");
+                    customerInfo.AppendLine($"- 客户名称: {customer.CustomerName}");
+                    customerInfo.AppendLine($"- 地址: {customer.Street}");
+                    customerInfo.AppendLine($"- 仓库: {customer.Warehouse}");
+                    customerInfo.AppendLine($"- 备注: {customer.HeaderNote1}");
+
+                    if (customer.Contacts != null && customer.Contacts.Count > 0)
+                    {
+                        customerInfo.AppendLine(" 联系人信息：");
+                        foreach (var c in customer.Contacts)
+                        {
+                            customerInfo.AppendLine($" - 姓名：{c.Name}，电话：{c.Phone}，身份：{c.Identity}，语言：{c.Language}");
+                        }
+                    }
+
+                    customerInfo.AppendLine();
                 }
             }
             else
             {
-                customerInfo.AppendLine($"No contacts found for CustomerId: {soldToId}");
-            }
-
-            var phones = contacts?.Where(c => !string.IsNullOrEmpty(c.Phone)).Select(c => c.Phone).ToList() ?? new List<string>();
-            foreach (var phone in phones)
-            {
-                var crmCustomers = await _crmClient.GetCustomersByPhoneNumberAsync(new GetCustmoersByPhoneNumberRequestDto { PhoneNumber = phone }, cancellationToken).ConfigureAwait(false);
-
-                if (crmCustomers != null && crmCustomers.Any())
-                {
-                    foreach (var customer in crmCustomers)
-                    {
-                        customerInfo.AppendLine($"Customer Info for phone {phone}:");
-                        customerInfo.AppendLine($"- SAP ID: {customer.SapId}");
-                        customerInfo.AppendLine($"- Name: {customer.CustomerName}");
-                        customerInfo.AppendLine($"- Street: {customer.Street}");
-                        customerInfo.AppendLine($"- Warehouse: {customer.Warehouse}");
-                        customerInfo.AppendLine($"- HeaderNote1: {customer.HeaderNote1}");
-
-                        if (customer.Contacts != null && customer.Contacts.Count > 0)
-                        {
-                            customerInfo.AppendLine("  Customer Contacts:");
-                            foreach (var c in customer.Contacts)
-                            {
-                                customerInfo.AppendLine($"  - Name: {c.Name}, Phone: {c.Phone}, Identity: {c.Identity}, Language: {c.Language}");
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    customerInfo.AppendLine($"No CRM customer info found for phone {phone}");
-                }
+                customerInfo.AppendLine($"没有找到手机号 {phoneNumber} 的 CRM 客户信息");
             }
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Failed to build CRM info for CustomerId: {CustomerId}", soldToId);
+            Log.Error(ex, "Build CRM info failed for phone {PhoneNumber}", phoneNumber);
         }
 
         return customerInfo.ToString();
