@@ -359,4 +359,13 @@ public class PosController : ControllerBase
         
         return Ok(response);
     }
+    
+    [Route("structured/stores"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetStructuredStoresResponse))]
+    public async Task<IActionResult> GetStructuredStoresAsync([FromQuery] GetStructuredStoresRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetStructuredStoresRequest, GetStructuredStoresResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
 }

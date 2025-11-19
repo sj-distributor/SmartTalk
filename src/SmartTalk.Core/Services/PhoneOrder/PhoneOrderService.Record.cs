@@ -68,6 +68,8 @@ public partial class PhoneOrderService
         var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds, request.Name, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
 
         var enrichedRecords = _mapper.Map<List<PhoneOrderRecordDto>>(records);
+        
+        await BuildRecordUnreviewDataAsync(enrichedRecords, cancellationToken).ConfigureAwait(false);
 
         return new GetPhoneOrderRecordsResponse
         {
@@ -1064,5 +1066,18 @@ public partial class PhoneOrderService
         var prevOrderAmount = prevPosOrders.Sum(x => x.Total) - prevCancelledOrders.Sum(x => x.Total);
         var currOrderAmount = restaurantData.TotalOrderAmount;
         restaurantData.OrderAmountChange = prevOrderAmount == 0 && currOrderAmount > 0 ? currOrderAmount : currOrderAmount - prevOrderAmount;
+    }
+    
+    private async Task BuildRecordUnreviewDataAsync(List<PhoneOrderRecordDto> records, CancellationToken cancellationToken)
+    {
+        var orders = await _posDataProvider.GetAiDraftOrdersByRecordIdsAsync(records.Select(x => x.Id).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Get store unreview orders: {@Orders}", orders);
+        
+        var unreviewedRecordIds = orders.Where(x => x.RecordId.HasValue).Select(x => x.RecordId.Value).ToHashSet();
+        
+        records.ForEach(x => x.IsUnreviewed = unreviewedRecordIds.Contains(x.Id));
+        
+        Log.Information("Enrich complete records: {@Records}", records);
     }
 }

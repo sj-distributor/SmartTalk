@@ -47,4 +47,6 @@ public class PhoneOrderRecordDto
     public bool? IsCustomerFriendly { get; set; }
     
     public bool? IsHumanAnswered { get; set; }
+    
+    public bool IsUnreviewed { get; set; }
 }

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Domain.Account;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.PhoneOrder;
+using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.Restaurants;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Messages.Dto.Agent;
@@ -56,6 +57,8 @@ public partial interface IPhoneOrderDataProvider
     Task<List<PhoneOrderRecordReport>> GetPhoneOrderRecordReportByRecordIdAsync(List<int> recordId, CancellationToken cancellationToken);
 
     Task UpdatePhoneOrderRecordReportsAsync(List<PhoneOrderRecordReport> reports, bool forceSave = true, CancellationToken cancellationToken = default);
+    
+    Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsByAgentIdsAsync(List<int> agentIds, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderDataProvider
@@ -328,5 +331,10 @@ public partial class PhoneOrderDataProvider
         await _repository.UpdateAllAsync(reports, cancellationToken).ConfigureAwait(false);
 
         if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsByAgentIdsAsync(List<int> agentIds, CancellationToken cancellationToken)
+    {
+        return await _repository.QueryNoTracking<PhoneOrderRecord>().Where(x => agentIds.Contains(x.AgentId)).AsNoTracking().ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }
