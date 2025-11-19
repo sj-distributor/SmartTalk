@@ -856,7 +856,7 @@ public partial class PhoneOrderService
         var totalDuration = callInRecords.Sum(x => x.Duration ?? 0);
         var friendlyCount = callInRecords.Count(x => x.IsCustomerFriendly == true);
         var satisfactionRate = answeredCount > 0 ? (double)friendlyCount / answeredCount : 0;
-        var transferCount = callInRecords.Count(x => x.IsTransfer == true || x.IsHumanAnswered == true);
+        var transferCount = callInRecords.Count(x => x.IsTransfer == true);
         var transferRate = answeredCount > 0 ? (double)transferCount / answeredCount : 0;
         var repeatRate = answeredCount > 0 ? (double)totalRepeatCalls / answeredCount : 0;
 
@@ -885,7 +885,7 @@ public partial class PhoneOrderService
         var totalDuration = callOutRecords.Sum(x => x.Duration ?? 0);
         var friendlyCount = callOutRecords.Count(x => x.IsCustomerFriendly == true);
         var satisfactionRate = answeredCount > 0 ? (double)friendlyCount / answeredCount : 0;
-        var transferCount = callOutRecords.Count(x => x.IsTransfer == true || x.IsHumanAnswered == true);
+        var transferCount = callOutRecords.Count(x => x.IsTransfer == true);
 
         var totalDurationPerPeriod = GroupDurationByRequestType(callOutRecords, start, end, dataType);
 
@@ -905,24 +905,33 @@ public partial class PhoneOrderService
     private static Dictionary<string, double> GroupDurationByRequestType(List<PhoneOrderRecord> records, DateTimeOffset? startDate, DateTimeOffset? endDate, PhoneOrderDataDashDataType dataType)
     {
         if (startDate == null || endDate == null) return new Dictionary<string, double>();
+        
+        var localStart = startDate.Value.ToOffset(startDate.Value.Offset);
+        var localEnd = endDate.Value.ToOffset(startDate.Value.Offset);
 
-        var start = startDate.Value;
-        var end = endDate.Value;
-
-        var filteredRecords = records.Where(x => x.CreatedDate >= start && x.CreatedDate <= end);
-
+        var filteredRecords = records.Where(x =>
+            {
+                var localCreated = x.CreatedDate.ToOffset(startDate.Value.Offset);
+                return localCreated >= localStart && localCreated <= localEnd;
+            }).ToList();
+        
         if (dataType == PhoneOrderDataDashDataType.Month)
         {
             return filteredRecords
-                .GroupBy(x => new { x.CreatedDate.Year, x.CreatedDate.Month })
-                .OrderBy(g => g.Key.Year).ThenBy(g => g.Key.Month)
+                .GroupBy(x =>
+                {
+                    var localDate = x.CreatedDate.ToOffset(startDate.Value.Offset);
+                    return new { localDate.Year, localDate.Month };
+                })
+                .OrderBy(g => g.Key.Year)
+                .ThenBy(g => g.Key.Month)
                 .ToDictionary(
                     g => $"{g.Key.Year:D4}-{g.Key.Month:D2}",
                     g => g.Sum(x => x.Duration ?? 0));
         }
         
         return filteredRecords
-            .GroupBy(x => x.CreatedDate.Date)
+            .GroupBy(x => x.CreatedDate.ToOffset(startDate.Value.Offset).Date)
             .OrderBy(g => g.Key)
             .ToDictionary(
                 g => g.Key.ToString("yyyy-MM-dd"),

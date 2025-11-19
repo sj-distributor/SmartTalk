@@ -87,6 +87,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         
         var record = new PhoneOrderRecord
         {
+            AssistantId = context.Assistant.Id,
             AgentId = agentAssistant.First().AgentId,
             SessionId = context.CallSid,
             Status = PhoneOrderRecordStatus.Transcription,
