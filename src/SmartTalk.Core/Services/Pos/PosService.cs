@@ -72,8 +72,8 @@ public partial class PosService : IPosService
     private readonly IAccountDataProvider _accountDataProvider;
     private readonly ISecurityDataProvider _securityDataProvider;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
-    private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
     private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
+    private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
     
     public PosService(
         IMapper mapper,
