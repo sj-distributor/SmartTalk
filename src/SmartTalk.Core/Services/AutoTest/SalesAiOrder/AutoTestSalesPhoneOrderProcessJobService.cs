@@ -29,6 +29,7 @@ using SmartTalk.Core.Services.Caching.Redis;
 using SmartTalk.Messages.Enums.SpeechMatics;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Attachments;
+using SmartTalk.Core.Services.Sale;
 using SmartTalk.Messages.Commands.Attachments;
 using SmartTalk.Messages.Dto.Attachments;
 using SmartTalk.Messages.Dto.Sales;
@@ -54,6 +55,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
     private readonly IRedisSafeRunner _redisSafeRunner;
     private readonly TranslationClient _translationClient;
     private readonly IAttachmentService _attachmentService;
+    private readonly ISalesDataProvider _salesDataProvider;
     private readonly ISpeechToTextService _speechToTextService;
     private readonly ISpeechMaticsService _speechMaticsService;
     private readonly IAutoTestDataProvider _autoTestDataProvider;
@@ -71,6 +73,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         IRedisSafeRunner redisSafeRunner,
         TranslationClient translationClient,
         IAttachmentService attachmentService,
+        ISalesDataProvider salesDataProvider,
         ISpeechMaticsService speechMaticsService,
         ISpeechToTextService speechToTextService,
         IAutoTestDataProvider autoTestDataProvider,
@@ -86,6 +89,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         _smartiesClient = smartiesClient;
         _redisSafeRunner = redisSafeRunner;
         _attachmentService = attachmentService;
+        _salesDataProvider = salesDataProvider;
         _translationClient = translationClient;
         _httpClientFactory = httpClientFactory;
         _speechToTextService = speechToTextService;
@@ -454,7 +458,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
             ? aiSpeechAssistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList()
             : new List<string>();
 
-        var customerItemsCacheList = await _aiSpeechAssistantDataProvider.GetCustomerItemsCacheBySoldToIdsAsync(soldToIds, cancellationToken);
+        var customerItemsCacheList = await _salesDataProvider.GetCustomerItemsCacheBySoldToIdsAsync(soldToIds, cancellationToken);
         var customerItemsString = string.Join(Environment.NewLine, soldToIds.Select(id => customerItemsCacheList.FirstOrDefault(c => c.CacheKey == id)?.CacheValue ?? ""));
 
         var audioData = BinaryData.FromBytes(audioContent);
@@ -636,7 +640,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         
         if (soldToIds.Count == 0) return finalPrompt;
         
-        var caches = await _aiSpeechAssistantDataProvider.GetCustomerItemsCacheBySoldToIdsAsync(soldToIds, cancellationToken).ConfigureAwait(false);
+        var caches = await _salesDataProvider.GetCustomerItemsCacheBySoldToIdsAsync(soldToIds, cancellationToken).ConfigureAwait(false);
         var customerItems = caches.Where(c => !string.IsNullOrEmpty(c.CacheValue)).Select(c => c.CacheValue.Trim()).Distinct().ToList();
         finalPrompt = finalPrompt.Replace("#{customer_items}", customerItems.Any() ? string.Join(Environment.NewLine + Environment.NewLine, customerItems.Take(50)) : " ");
 

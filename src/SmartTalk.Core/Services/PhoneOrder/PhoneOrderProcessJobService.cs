@@ -8,6 +8,7 @@ using SmartTalk.Core.Services.Ffmpeg;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
+using SmartTalk.Core.Services.Sale;
 using SmartTalk.Core.Services.SpeechMatics;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Core.Settings.Twilio;
@@ -33,6 +34,7 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
     private readonly ISmartiesClient _smartiesClient;
     private readonly TranslationClient _translationClient;
     private readonly IPhoneOrderService _phoneOrderService;
+    private readonly ISalesDataProvider _salesDataProvider;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly ISmartTalkHttpClientFactory _smartTalkHttpClient;
     private readonly ISpeechMaticsDataProvider _speechMaticsDataProvider;
@@ -48,6 +50,7 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
         ISmartiesClient smartiesClient,
         TranslationClient translationClient,
         IPhoneOrderService phoneOrderService,
+        ISalesDataProvider salesDataProvider,
         IPhoneOrderDataProvider phoneOrderDataProvider,
         ISmartTalkHttpClientFactory smartTalkHttpClient,
         ISpeechMaticsDataProvider speechMaticsDataProvider,
@@ -62,6 +65,7 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
         _smartiesClient = smartiesClient;
         _translationClient = translationClient;
         _phoneOrderService = phoneOrderService;
+        _salesDataProvider = salesDataProvider;
         _smartTalkHttpClient = smartTalkHttpClient;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _speechMaticsDataProvider = speechMaticsDataProvider;

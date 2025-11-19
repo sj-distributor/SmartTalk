@@ -1,18 +1,32 @@
 using System.Text;
 using Serilog;
+using SmartTalk.Core.Ioc;
+using SmartTalk.Core.Services.Http.Clients;
+using SmartTalk.Messages.Dto.Crm;
 using SmartTalk.Messages.Dto.Sales;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
 
-public partial interface IAiSpeechAssistantService
+public interface ISalesService : IScopedDependency
 {
     Task<string> BuildCustomerItemsStringAsync(List<string> soldToIds, CancellationToken cancellationToken);
-    
-    Task<string> HandleOrderArrivalTimeList(List<string> custmoerIds, CancellationToken cancellationToken);
+
+    Task<string> HandleOrderArrivalTimeList(List<string> customerIds, CancellationToken cancellationToken);
+
+    Task<string> BuildCrmCustomerInfoByPhoneAsync(string phoneNumber, CancellationToken cancellationToken);
 }
 
-public partial class AiSpeechAssistantService
+public class SalesService : ISalesService
 {
+    private readonly ICrmClient _crmClient;
+    private readonly ISalesClient _salesClient;
+
+    public SalesService(ICrmClient crmClient,ISalesClient salesClient)
+    {
+        _crmClient = crmClient;
+        _salesClient = salesClient;
+    }
+    
     public async Task<string> BuildCustomerItemsStringAsync(List<string> soldToIds, CancellationToken cancellationToken)
     {
         var allItems = new List<string>();
@@ -91,7 +105,7 @@ public partial class AiSpeechAssistantService
         
         return string.Join(Environment.NewLine, allItems);
     }
-    
+
     public async Task<string> HandleOrderArrivalTimeList(List<string> customerIds, CancellationToken cancellationToken)
     {
         var processedCustomerIds = customerIds.Select(id => "0000" + id).ToList();
@@ -102,26 +116,70 @@ public partial class AiSpeechAssistantService
         }, cancellationToken).ConfigureAwait(false);
 
         if (getOrderArrivalTimeList.Data.Count == 0) return "这位客户暂时没有订单。";
-        
+
         var resultBuilder = new StringBuilder();
-        
+
         var notDeliveredOrders = getOrderArrivalTimeList.Data
             .Where(order => new[] { 0, 1, 2, 3, 5, 6, 8 }.Contains(order.OrderStatus))
             .ToList();
-        
+
         var deliveringOrders = getOrderArrivalTimeList.Data
             .Where(order => order.OrderStatus == 4)
             .ToList();
-        
+
         var completedOrders = getOrderArrivalTimeList.Data
             .Where(order => order.OrderStatus == 7)
             .ToList();
-        
+
         AppendOrderSection(resultBuilder, "未配送", notDeliveredOrders);
         AppendOrderSection(resultBuilder, "配送中", deliveringOrders);
         AppendOrderSection(resultBuilder, "已完成", completedOrders);
 
         return resultBuilder.ToString();
+    }
+
+    public async Task<string> BuildCrmCustomerInfoByPhoneAsync(string phoneNumber, CancellationToken cancellationToken)
+    {
+        var customerInfo = new StringBuilder();
+
+        try
+        {
+            var crmCustomers = await _crmClient.GetCustomersByPhoneNumberAsync(new GetCustmoersByPhoneNumberRequestDto { PhoneNumber = phoneNumber }, cancellationToken).ConfigureAwait(false);
+
+            if (crmCustomers != null && crmCustomers.Any())
+            {
+                foreach (var customer in crmCustomers)
+                {
+                    customerInfo.AppendLine($"手机号 {phoneNumber}:");
+                    customerInfo.AppendLine($"- SAP编号: {customer.SapId}");
+                    customerInfo.AppendLine($"- 客户名称: {customer.CustomerName}");
+                    customerInfo.AppendLine($"- 地址: {customer.Street}");
+                    customerInfo.AppendLine($"- 仓库: {customer.Warehouse}");
+                    customerInfo.AppendLine($"- 备注: {customer.HeaderNote1}");
+
+                    if (customer.Contacts != null && customer.Contacts.Count > 0)
+                    {
+                        customerInfo.AppendLine(" 联系人信息：");
+                        foreach (var c in customer.Contacts)
+                        {
+                            customerInfo.AppendLine($" - 姓名：{c.Name}，电话：{c.Phone}，身份：{c.Identity}，语言：{c.Language}");
+                        }
+                    }
+
+                    customerInfo.AppendLine();
+                }
+            }
+            else
+            {
+                customerInfo.AppendLine($"没有找到手机号 {phoneNumber} 的 CRM 客户信息");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Build CRM info failed for phone {PhoneNumber}", phoneNumber);
+        }
+
+        return customerInfo.ToString();
     }
     
     private void AppendOrderSection(StringBuilder builder, string sectionName, List<GetOrderArrivalTimeDataDto> orders)

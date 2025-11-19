@@ -1,16 +1,12 @@
-using System.Text.Json;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Data;
 using Microsoft.EntityFrameworkCore;
-using Serilog;
 using SmartTalk.Core.Domain.AIAssistant;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.Sales;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
-using SmartTalk.Core.Domain.System;
-using SmartTalk.Core.Domain.Sales;
 using SmartTalk.Messages.Enums.Sales;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
@@ -75,8 +71,6 @@ public partial interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task UpdateAiSpeechAssistantSessionAsync(AiSpeechAssistantSession session, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task<AiSpeechAssistantSession> GetAiSpeechAssistantSessionBySessionIdAsync(Guid sessionId, CancellationToken cancellationToken);
-    
-    Task<Sales> GetCallInSalesByNameAsync(string assistantName, SalesCallType? type, CancellationToken cancellationToken);
 
     Task<(Domain.AISpeechAssistant.AiSpeechAssistant Assistant, Agent Agent)> GetAgentAndAiSpeechAssistantAsync(int agentId, int? assistantId, CancellationToken cancellationToken);
     
@@ -129,10 +123,6 @@ public partial interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task DeleteAiSpeechAssistantFunctionCallsAsync(List<AiSpeechAssistantFunctionCall> tools, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task DeleteAiSpeechAssistantHumanContactsAsync(List<AiSpeechAssistantHumanContact> humanContacts, bool forceSave = true, CancellationToken cancellationToken = default);
-
-    Task<List<CustomerItemsCache>> GetCustomerItemsCacheBySoldToIdsAsync(List<string> soldToIds, CancellationToken cancellationToken);
-    
-    Task UpsertCustomerItemsCacheAsync(string soldToId, string itemsString, bool forceSave, CancellationToken cancellationToken);
     
     Task<List<(Agent, Domain.AISpeechAssistant.AiSpeechAssistant)>> GetAgentAndAiSpeechAssistantPairsAsync(CancellationToken cancellationToken);
 }
@@ -475,15 +465,6 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
         return specifyCallerNumber.Count != 0 ? specifyCallerNumber : routes.Where(x => x.IsFallback).OrderBy(x => x.Priority).ToList();
     }
 
-    public async Task<Sales> GetCallInSalesByNameAsync(string assistantName, SalesCallType? type, CancellationToken cancellationToken)
-    {
-        var query = _repository.Query<Sales>().Where(s => s.Name == assistantName);
-
-        if (type.HasValue) query = query.Where(s => s.Type == type.Value);
-
-        return await query.FirstOrDefaultAsync(cancellationToken);
-    }
-
     public async Task<AiSpeechAssistantUserProfile> GetAiSpeechAssistantUserProfileAsync(int assistantId, string callerNumber, CancellationToken cancellationToken)
     {
         var query = _repository.Query<AiSpeechAssistantUserProfile>()
@@ -690,40 +671,6 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
         await _repository.DeleteAllAsync(humanContacts, cancellationToken).ConfigureAwait(false);
         
         if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-        
-        await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task<List<CustomerItemsCache>> GetCustomerItemsCacheBySoldToIdsAsync(List<string> soldToIds, CancellationToken cancellationToken)
-    {
-        return await _repository.Query<CustomerItemsCache>().Where(x => soldToIds.Contains(x.CacheKey)).ToListAsync(cancellationToken);
-    }
-
-    public async Task UpsertCustomerItemsCacheAsync(string soldToId, string itemsString, bool forceSave, CancellationToken cancellationToken)
-    {
-        var cache = await _repository.FirstOrDefaultAsync<CustomerItemsCache>(x => x.CacheKey == soldToId, cancellationToken);
-        if (cache == null)
-        {
-            cache = new CustomerItemsCache
-            {
-                CacheKey = soldToId,
-                CacheValue = itemsString,
-                LastUpdated = DateTimeOffset.UtcNow
-            };
-            await _repository.InsertAsync(cache, cancellationToken).ConfigureAwait(false);
-        }
-        else
-        {
-            cache.CacheValue = itemsString;
-            cache.LastUpdated = DateTimeOffset.UtcNow;
-            await _repository.UpdateAsync(cache, cancellationToken).ConfigureAwait(false);
-        }
-        
-        if (forceSave)
-        {
-            var count = await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-            Log.Information("SaveChangesAsync affected {Count} rows for soldToId: {SoldToId}", count, soldToId);
-        }
     }
 
     public async Task<List<(Agent, Domain.AISpeechAssistant.AiSpeechAssistant)>> GetAgentAndAiSpeechAssistantPairsAsync(CancellationToken cancellationToken)
