@@ -480,7 +480,7 @@ public partial class PosService : IPosService
         
         Log.Information("Get assistants: {@Assistants} by store id: {StoreId}", assistants, storeId);
         
-        assistants.ForEach(x => x.IsAllowOrderPush = isManualReview);
+        assistants.ForEach(x => x.IsAllowOrderPush = !isManualReview);
         
         await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync(assistants, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
