@@ -1,4 +1,5 @@
 using AutoMapper;
+using Mediator.Net;
 using Newtonsoft.Json;
 using Serilog;
 using Smarties.Messages.DTO.OpenAi;
@@ -10,6 +11,7 @@ using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Caching.Redis;
 using SmartTalk.Core.Services.Http.Clients;
+using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Services.Restaurants;
 using SmartTalk.Core.Services.RetrievalDb.VectorDb;
@@ -33,23 +35,27 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
 {
     private readonly IMapper _mapper;
     private readonly IVectorDb _vectorDb;
+    private readonly IPosService _posService;
     private readonly ISmartiesClient _smartiesClient;
     private readonly IPosDataProvider _posDataProvider;
     private readonly IRedisSafeRunner _redisSafeRunner;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly IRestaurantDataProvider _restaurantDataProvider;
+    private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiiSpeechAssistantDataProvider;
 
-    public PhoneOrderUtilService(IMapper mapper, IVectorDb vectorDb, ISmartiesClient smartiesClient,
-        IPosDataProvider posDataProvider, IPhoneOrderDataProvider phoneOrderDataProvider, IRedisSafeRunner redisSafeRunner, IRestaurantDataProvider restaurantDataProvider, IAiSpeechAssistantDataProvider aiiSpeechAssistantDataProvider)
+    public PhoneOrderUtilService(IMapper mapper, IVectorDb vectorDb, IPosService posService, ISmartiesClient smartiesClient,
+        IPosDataProvider posDataProvider, IPhoneOrderDataProvider phoneOrderDataProvider, IRedisSafeRunner redisSafeRunner, IRestaurantDataProvider restaurantDataProvider, ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient, IAiSpeechAssistantDataProvider aiiSpeechAssistantDataProvider)
     {
         _mapper = mapper;
         _vectorDb = vectorDb;
+        _posService = posService;
         _smartiesClient = smartiesClient;
         _posDataProvider = posDataProvider;
         _redisSafeRunner = redisSafeRunner;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _restaurantDataProvider = restaurantDataProvider;
+        _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
         _aiiSpeechAssistantDataProvider = aiiSpeechAssistantDataProvider;
     }
 
@@ -69,13 +75,8 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
             var posAgents = await _posDataProvider.GetPosAgentsAsync(agentId: record.AgentId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
             Log.Information("Get the pos agent: {@PosAgents} by agent id: {AgentId}", posAgents, record.AgentId);
-        
-            var items = posAgents != null && posAgents.Count != 0
-                ? await MatchSimilarProductsAsync(record, shoppingCart, cancellationToken).ConfigureAwait(false)
-                : await GetSimilarRestaurantByRecordAsync(record, shoppingCart, cancellationToken).ConfigureAwait(false);
-
-            if (items.Count != 0)
-                await _phoneOrderDataProvider.AddPhoneOrderItemAsync(items, true, cancellationToken).ConfigureAwait(false);
+            
+            var order = await MatchSimilarProductsAsync(record, shoppingCart, cancellationToken).ConfigureAwait(false);
             
             if (assistant is { IsAllowOrderPush: true })
             {
@@ -85,7 +86,7 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
                         await HandleSalesOrderAsync(cancellationToken).ConfigureAwait(false);
                         break;
                     case AgentType.PosCompanyStore:
-                        await HandlePosOrderAsync(cancellationToken).ConfigureAwait(false);
+                        await HandlePosOrderAsync(order, cancellationToken).ConfigureAwait(false);
                         break;
                 }
             }
@@ -168,15 +169,15 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
         }).ToList();
     }
     
-    private async Task<List<PhoneOrderOrderItem>> MatchSimilarProductsAsync(PhoneOrderRecord record, PhoneOrderDetailDto foods, CancellationToken cancellationToken)
+    private async Task<PosOrder> MatchSimilarProductsAsync(PhoneOrderRecord record, PhoneOrderDetailDto foods, CancellationToken cancellationToken)
     {
-        if (record == null || foods?.FoodDetails == null || foods.FoodDetails.Count == 0) return [];
+        if (record == null || foods?.FoodDetails == null || foods.FoodDetails.Count == 0) return null;
         
         var store = await _posDataProvider.GetPosStoreByAgentIdAsync(record.AgentId, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Generate pos order for store: {@Store} by agentId: {AgentId}", store, record.AgentId);
         
-        if (store == null) return [];
+        if (store == null) return null;
 
         var tasks = foods.FoodDetails.Where(x => !string.IsNullOrWhiteSpace(x?.FoodName)).Select(async foodDetail =>
         {
@@ -206,28 +207,22 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
 
         var results = completedTasks.Where(x => x != null && x.Id != 0).ToList();
         
-        await BuildPosOrderAsync(record, store, results, cancellationToken).ConfigureAwait(false);
-        
-        return results.Select(x => new PhoneOrderOrderItem
-        {
-            RecordId = record.Id,
-            FoodName = x.FoodDetail.FoodName,
-            Quantity = int.TryParse(x.FoodDetail.Count, out var parsedValue) ? parsedValue : 1,
-            Price = x.FoodDetail.Price,
-            Note = x.FoodDetail.Remark,
-            ProductId = x.FoodDetail.ProductId
-        }).ToList();
+        return await BuildPosOrderAsync(record, store, results, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task BuildPosOrderAsync(PhoneOrderRecord record, CompanyStore store, List<SimilarResult> similarResults, CancellationToken cancellationToken)
+    private async Task<PosOrder> BuildPosOrderAsync(PhoneOrderRecord record, CompanyStore store, List<SimilarResult> similarResults, CancellationToken cancellationToken)
     {
         var products = await _posDataProvider.GetPosProductsAsync(
             storeId: store.Id, ids: similarResults.Select(x => x.Id).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var taxes = GetOrderItemTaxes(products, similarResults);
         
-        await _redisSafeRunner.ExecuteWithLockAsync($"generate-order-number-{store.Id}", async() =>
+        return await _redisSafeRunner.ExecuteWithLockAsync($"generate-order-number-{store.Id}", async() =>
         {
+            var items = BuildPosOrderItems(products, similarResults);
+
+            if (items.Count == 0) return null;
+            
             var orderNo = await GenerateOrderNumberAsync(store, cancellationToken).ConfigureAwait(false);
             
             var order = new PosOrder
@@ -242,7 +237,7 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
                 Total = products.Sum(p => p.Price),
                 SubTotal = products.Sum(p => p.Price) + taxes,
                 Type = PosOrderReceiveType.Pickup,
-                Items = BuildPosOrderItems(products, similarResults),
+                Items = JsonConvert.SerializeObject(items),
                 Notes = record?.Comments ?? string.Empty,
                 RecordId = record!.Id
             };
@@ -250,6 +245,8 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
             Log.Information("Generate complete order: {@Order}", order);
         
             await _posDataProvider.AddPosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
+            
+            return order;
         }, wait: TimeSpan.FromSeconds(10), retry: TimeSpan.FromSeconds(1), server: RedisServer.System).ConfigureAwait(false);
     }
 
@@ -326,7 +323,7 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
         return taxes;
     }
 
-    private string BuildPosOrderItems(List<PosProduct> products, List<SimilarResult> similarResults)
+    private List<PhoneCallOrderItem> BuildPosOrderItems(List<PosProduct> products, List<SimilarResult> similarResults)
     {
         EnrichSimilarResults(products, similarResults);
         
@@ -342,7 +339,7 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
         
         Log.Information("Generate order items: {@orderItems}", orderItems);
             
-        return JsonConvert.SerializeObject(orderItems);
+        return orderItems;
     }
 
     private void EnrichSimilarResults(List<PosProduct> products, List<SimilarResult> similarResults)
@@ -386,9 +383,11 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
         // ToDo: Place order to hifood
     }
     
-    private async Task HandlePosOrderAsync(CancellationToken cancellationToken)
+    private async Task HandlePosOrderAsync(PosOrder order, CancellationToken cancellationToken)
     {
-        // ToDo: Place order to pos
+        if (order == null) return;
+        
+        await _posService.HandlePosOrderAsync(order, false, cancellationToken).ConfigureAwait(false);
     }
 }
 
