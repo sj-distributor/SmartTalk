@@ -17,6 +17,8 @@ public partial interface IAutoTestDataProvider : IScopedDependency
     Task AddAutoTestDataSetItemsAsync(List<AutoTestDataSetItem> setItems, CancellationToken cancellationToken);
     
     Task AddAutoTestDataSetAsync(AutoTestDataSet dataSet, CancellationToken cancellationToken);
+    
+    Task UpdateAutoTestDataSetAsync(AutoTestDataSet dataSet, bool forceSave = true, CancellationToken cancellationToken = default);
 
     Task AddAutoTestDataSetByQuoteAsync(List<AutoTestDataSetItem> items, CancellationToken cancellationToken);
     
@@ -63,7 +65,14 @@ public partial class AutoTestDataProvider : IAutoTestDataProvider
         await _repository.InsertAsync(dataSet, cancellationToken).ConfigureAwait(false);
         await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
-    
+
+    public async Task UpdateAutoTestDataSetAsync(AutoTestDataSet dataSet, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.UpdateAsync(dataSet, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task AddAutoTestDataSetByQuoteAsync(List<AutoTestDataSetItem> items, CancellationToken cancellationToken)
     {
         await _repository.InsertAllAsync(items, cancellationToken).ConfigureAwait(false);
