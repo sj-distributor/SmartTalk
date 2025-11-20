@@ -119,6 +119,7 @@ public class RealtimeAiService : IRealtimeAiService
         _conversationEngine.ErrorOccurredAsync += OnErrorOccurredAsync;
         _conversationEngine.InputAudioTranscriptionCompletedAsync += InputAudioTranscriptionCompletedAsync;
         _conversationEngine.OutputAudioTranscriptionCompletedyAsync += OutputAudioTranscriptionCompletedAsync;
+        _conversationEngine.OutputAudioTranscriptionPartialAsync += OutputAudioTranscriptionPartialAsync;
     }
     
     private async Task ReceiveFromWebSocketClientAsync(RealtimeAiEngineContext context, PhoneOrderRecordType orderRecordType, CancellationToken cancellationToken)
@@ -283,7 +284,22 @@ public class RealtimeAiService : IRealtimeAiService
 
         await _webSocket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(transcription))), WebSocketMessageType.Text, true, CancellationToken.None);
     }
-
+    
+    private async Task OutputAudioTranscriptionPartialAsync(RealtimeAiWssTranscriptionData transcriptionData)
+    {
+        var transcription = new
+        {
+            type = "OutputAudioTranscriptionPartial",
+            Data = new
+            { 
+                transcriptionData
+            },
+            session_id = _streamSid
+        };
+        
+        await _webSocket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(transcription))), WebSocketMessageType.Text, true, CancellationToken.None);
+    }
+    
     private async Task HandleWholeAudioBufferAsync(PhoneOrderRecordType orderRecordType)
     {
         if (_wholeAudioBuffer is { CanRead: true } src && !_hasHandledAudioBuffer)

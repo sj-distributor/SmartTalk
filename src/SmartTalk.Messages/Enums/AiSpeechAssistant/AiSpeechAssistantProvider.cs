@@ -8,5 +8,7 @@ public enum AiSpeechAssistantProvider
     
     Azure,
     
-    Google
+    Google,
+    
+    Qwen
 }
