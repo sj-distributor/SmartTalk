@@ -1,5 +1,6 @@
 using System.Text;
 using Newtonsoft.Json;
+using Serilog;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Settings.Crm;
 using SmartTalk.Messages.Dto.Crm;
@@ -45,7 +46,10 @@ public class CrmClient : ICrmClient
             { "Accept", "application/json" }
         };
 
+        Log.Information("Requesting CRM token from {Url} with client_id={ClientId}", url, _crmSetting.ClientId);
+        
         var resp = await _httpClient.PostAsync<CrmTokenResponse>(url, content, headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
+        Log.Information("CRM token resp: {resp}", resp);
 
         return resp.AccessToken;
     }
@@ -61,7 +65,12 @@ public class CrmClient : ICrmClient
             { "Authorization", $"Bearer {token}" }
         };
         
-        return await _httpClient.GetAsync<List<CrmContactDto>>($"{_crmSetting.BaseUrl}/api/customer/{customerId}/contacts", headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
+        Log.Information("Fetching contacts for customer {CustomerId}", customerId);
+        
+        var contacts = await _httpClient.GetAsync<List<CrmContactDto>>($"{_crmSetting.BaseUrl}/api/customer/{customerId}/contacts", headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
+        Log.Information("Found {Count} contacts for customer {CustomerId}", contacts.Count, customerId);
+        
+        return contacts;
     }
 
     public async Task<List<GetCustomersPhoneNumberDataDto>> GetCustomersByPhoneNumberAsync(GetCustmoersByPhoneNumberRequestDto numberRequest, CancellationToken cancellationToken)
@@ -76,8 +85,9 @@ public class CrmClient : ICrmClient
         
         var url = $"{_crmSetting.BaseUrl}/api/external/get-customers-by-phone-number?phone_number={numberRequest.PhoneNumber}";
 
-        return await _httpClient
-            .GetAsync<List<GetCustomersPhoneNumberDataDto>>(url, headers: headers, cancellationToken: cancellationToken)
-            .ConfigureAwait(false);
+        var result = await _httpClient.GetAsync<List<GetCustomersPhoneNumberDataDto>>(url, headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        Log.Information("Found {Count} customers for phone {PhoneNumber}", result.Count, numberRequest.PhoneNumber);
+        return result;
     }
 }
