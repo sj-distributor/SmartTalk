@@ -50,7 +50,7 @@ public class MaterialPartInfoDto
     public string Ranks { get; set; }
 
     [JsonProperty("atr")]
-    public int Atr { get; set; }
+    public string Atr { get; set; }
 }
 
 public class CustomerLikeNameDto
