@@ -60,7 +60,7 @@ public class CrmClient : ICrmClient
             { "Authorization", $"Bearer {token}"}
         };
         
-        var url = $"{_crmSetting.BaseUrl}/api/external/get-customers-by-phone-number?phone_number={numberRequest.PhoneNumber}";
+        var url = $"{_crmSetting.BaseUrl}/api/customer/get-customers-by-phone-number?phone_number={numberRequest.PhoneNumber}";
 
         return await _httpClient
             .GetAsync<List<GetCustomersPhoneNumberDataDto>>(url, headers: headers, cancellationToken: cancellationToken)
