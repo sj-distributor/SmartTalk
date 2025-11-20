@@ -21,6 +21,7 @@ using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.PhoneOrder;
+using SmartTalk.Core.Services.Sale;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Core.Settings.PhoneOrder;
 using SmartTalk.Core.Settings.Twilio;
@@ -57,6 +58,7 @@ public class SpeechMaticsService : ISpeechMaticsService
     private readonly ISmartiesClient _smartiesClient;
     private readonly PhoneOrderSetting _phoneOrderSetting;
     private readonly IPhoneOrderService _phoneOrderService;
+    private readonly ISalesDataProvider _salesDataProvider;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly ISmartTalkHttpClientFactory _smartTalkHttpClientFactory;
     private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
@@ -73,6 +75,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         ISmartiesClient smartiesClient,
         PhoneOrderSetting phoneOrderSetting,
         IPhoneOrderService phoneOrderService,
+        ISalesDataProvider salesDataProvider,
         IPhoneOrderDataProvider phoneOrderDataProvider,
         ISmartTalkHttpClientFactory smartTalkHttpClientFactory,
         ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient,
@@ -88,6 +91,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         _smartiesClient = smartiesClient;
         _phoneOrderSetting = phoneOrderSetting;
         _phoneOrderService = phoneOrderService;
+        _salesDataProvider = salesDataProvider;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _smartTalkHttpClientFactory = smartTalkHttpClientFactory;
         _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
@@ -376,8 +380,8 @@ public class SpeechMaticsService : ISpeechMaticsService
     {
         var soldToIds = !string.IsNullOrEmpty(aiSpeechAssistant.Name) ? aiSpeechAssistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : new List<string>();
 
-        var customerItemsCacheList = await _aiSpeechAssistantDataProvider.GetCustomerItemsCacheBySoldToIdsAsync(soldToIds, cancellationToken);
-        var customerItemsString = string.Join(Environment.NewLine, soldToIds.Select(id => customerItemsCacheList.FirstOrDefault(c => c.CacheKey == id)?.CacheValue ?? ""));
+        var customerItemsCacheList = await _salesDataProvider.GetCustomerItemsCacheBySoldToIdsAsync(soldToIds, cancellationToken);
+        var customerItemsString = string.Join(Environment.NewLine, soldToIds.Select(id => customerItemsCacheList.FirstOrDefault(c => c.Filter == id)?.CacheValue ?? ""));
 
         var audioData = BinaryData.FromBytes(audioContent);
         List<ChatMessage> messages =
