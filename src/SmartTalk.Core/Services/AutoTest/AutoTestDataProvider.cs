@@ -35,6 +35,8 @@ public partial interface IAutoTestDataProvider : IScopedDependency
     Task DeleteAutoTestDataItemAsync(List<int> delIds, int dataSetId, CancellationToken cancellationToken);
 
     Task<AutoTestImportDataRecord> GetImportDataRecordsById(int id, CancellationToken cancellationToken);
+    
+    Task<List<AutoTestImportDataRecord>> GetImportDataRecordsByIdsAsync(List<int> ids, CancellationToken cancellationToken);
 }
 
 public partial class AutoTestDataProvider : IAutoTestDataProvider
@@ -182,5 +184,11 @@ public partial class AutoTestDataProvider : IAutoTestDataProvider
         return await _repository.Query<AutoTestImportDataRecord>()
             .FirstOrDefaultAsync(x => x.Id == id, cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    public async Task<List<AutoTestImportDataRecord>> GetImportDataRecordsByIdsAsync(List<int> ids, CancellationToken cancellationToken)
+    {
+        return await _repository.QueryNoTracking<AutoTestImportDataRecord>()
+            .Where(x => ids.Contains(x.Id)).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }
