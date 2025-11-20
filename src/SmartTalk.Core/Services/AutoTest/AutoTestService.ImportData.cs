@@ -55,7 +55,11 @@ public partial class AutoTestService
             importRecord.Status = AutoTestStatus.Failed;
             
             await _autoTestDataProvider.AddAutoTestImportRecordAsync(importRecord, true, cancellationToken).ConfigureAwait(false);
-
+            
+            dataSet.ImportRecordId = importRecord.Id;
+        
+            await _autoTestDataProvider.UpdateAutoTestDataSetAsync(dataSet, true, cancellationToken).ConfigureAwait(false);
+            
             return new AutoTestImportDataResponse()
             {
                 Data = _mapper.Map<AutoTestDataSetDto>(dataSet),
@@ -64,6 +68,10 @@ public partial class AutoTestService
         
         await _autoTestDataProvider.AddAutoTestImportRecordAsync(importRecord, true, cancellationToken).ConfigureAwait(false);
 
+        dataSet.ImportRecordId = importRecord.Id;
+        
+        await _autoTestDataProvider.UpdateAutoTestDataSetAsync(dataSet, true, cancellationToken).ConfigureAwait(false);
+        
         _smartTalkBackgroundJobClient.Enqueue(() => _autoTestDataImportHandlerSwitcher.GetHandler(command.ImportType).ImportAsync(command.ImportData, command.ScenarioId, dataSet.Id, importRecord.Id,cancellationToken));
 
         return new AutoTestImportDataResponse()
