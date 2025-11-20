@@ -4,9 +4,11 @@ using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Domain.AIAssistant;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.Pos;
+using SmartTalk.Core.Domain.Sales;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
+using SmartTalk.Messages.Enums.Sales;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
 

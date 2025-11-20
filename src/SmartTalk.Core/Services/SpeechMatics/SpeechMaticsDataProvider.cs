@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Data;
+using SmartTalk.Core.Domain.Sales;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Domain.SpeechMatics;
 using SmartTalk.Messages.Enums.SpeechMatics;
