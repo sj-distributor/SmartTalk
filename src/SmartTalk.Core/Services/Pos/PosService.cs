@@ -84,9 +84,9 @@ public partial class PosService : IPosService
         IAgentDataProvider agentDataProvider,
         IPrinterDataProvider printerDataProvider,
         IAccountDataProvider accountDataProvider,
-        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider,
         ISecurityDataProvider  securityDataProvider,
-        ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient)
+        ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient,
+        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
         _mapper = mapper;
         _vectorDb = vectorDb;
@@ -99,9 +99,9 @@ public partial class PosService : IPosService
         _agentDataProvider = agentDataProvider;
         _printerDataProvider = printerDataProvider;
         _accountDataProvider = accountDataProvider;
-        _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
         _securityDataProvider = securityDataProvider;
         _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
+        _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
     }
     
     public async Task<GetCompanyWithStoresResponse> GetCompanyWithStoresAsync(GetCompanyWithStoresRequest request, CancellationToken cancellationToken)
