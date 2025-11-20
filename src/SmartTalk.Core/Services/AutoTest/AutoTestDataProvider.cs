@@ -17,13 +17,15 @@ public partial interface IAutoTestDataProvider : IScopedDependency
     Task AddAutoTestDataSetItemsAsync(List<AutoTestDataSetItem> setItems, CancellationToken cancellationToken);
     
     Task AddAutoTestDataSetAsync(AutoTestDataSet dataSet, CancellationToken cancellationToken);
+    
+    Task UpdateAutoTestDataSetAsync(AutoTestDataSet dataSet, bool forceSave = true, CancellationToken cancellationToken = default);
 
     Task AddAutoTestDataSetByQuoteAsync(List<AutoTestDataSetItem> items, CancellationToken cancellationToken);
     
     Task<(int count, List<AutoTestDataSet>)> GetAutoTestDataSetsAsync(int? page, int? pageSize, string? keyName, CancellationToken cancellationToken);
 
     Task<(int count, List<AutoTestDataItem>)> GetAutoTestDataItemsBySetIdAsync(int dataSetId, int? page, int? pageSize, CancellationToken cancellationToken);
-    
+
     Task<AutoTestDataSet> GetAutoTestDataSetByIdAsync(int dataSetId, CancellationToken cancellationToken = default);
 
     Task DeleteAutoTestDataSetAsync(AutoTestDataSet dataSet, CancellationToken cancellationToken);
@@ -31,6 +33,10 @@ public partial interface IAutoTestDataProvider : IScopedDependency
     Task<List<int>> GetDataItemIdsByDataSetIdAsync(int dataSetId, CancellationToken cancellationToken);
 
     Task DeleteAutoTestDataItemAsync(List<int> delIds, int dataSetId, CancellationToken cancellationToken);
+
+    Task<AutoTestImportDataRecord> GetImportDataRecordsById(int id, CancellationToken cancellationToken);
+    
+    Task<List<AutoTestImportDataRecord>> GetImportDataRecordsByIdsAsync(List<int> ids, CancellationToken cancellationToken);
 }
 
 public partial class AutoTestDataProvider : IAutoTestDataProvider
@@ -61,7 +67,14 @@ public partial class AutoTestDataProvider : IAutoTestDataProvider
         await _repository.InsertAsync(dataSet, cancellationToken).ConfigureAwait(false);
         await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
-    
+
+    public async Task UpdateAutoTestDataSetAsync(AutoTestDataSet dataSet, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.UpdateAsync(dataSet, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task AddAutoTestDataSetByQuoteAsync(List<AutoTestDataSetItem> items, CancellationToken cancellationToken)
     {
         await _repository.InsertAllAsync(items, cancellationToken).ConfigureAwait(false);
@@ -128,7 +141,7 @@ public partial class AutoTestDataProvider : IAutoTestDataProvider
 
         return (count, resultItems);
     }
-    
+
     public async Task<List<int>> GetDataItemIdsByDataSetIdAsync(int dataSetId, CancellationToken cancellationToken)
     {
         return await _repository.Query<AutoTestDataSetItem>()
@@ -164,5 +177,18 @@ public partial class AutoTestDataProvider : IAutoTestDataProvider
         await _repository.DeleteAllAsync(deleteItems, cancellationToken).ConfigureAwait(false);
         
         await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<AutoTestImportDataRecord> GetImportDataRecordsById(int id, CancellationToken cancellationToken)
+    {
+        return await _repository.Query<AutoTestImportDataRecord>()
+            .FirstOrDefaultAsync(x => x.Id == id, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public async Task<List<AutoTestImportDataRecord>> GetImportDataRecordsByIdsAsync(List<int> ids, CancellationToken cancellationToken)
+    {
+        return await _repository.QueryNoTracking<AutoTestImportDataRecord>()
+            .Where(x => ids.Contains(x.Id)).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }

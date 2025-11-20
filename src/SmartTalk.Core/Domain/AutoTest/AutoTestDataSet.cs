@@ -26,4 +26,7 @@ public class AutoTestDataSet : IEntity
     
     [Column("created_at")]
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.Now;
+    
+    [Column("import_record_id")]
+    public int ImportRecordId { get; set; }
 }

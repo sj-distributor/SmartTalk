@@ -74,13 +74,31 @@ public partial class AutoTestService : IAutoTestService
     public async Task<GetAutoTestDataSetResponse> GetAutoTestDataSetsAsync(GetAutoTestDataSetRequest request, CancellationToken cancellationToken)
     {
         var (count, dataSets) = await _autoTestDataProvider.GetAutoTestDataSetsAsync(request?.Page, request?.PageSize, request?.KeyName, cancellationToken).ConfigureAwait(false);
+
+        var recordImports  = await _autoTestDataProvider.GetImportDataRecordsByIdsAsync(dataSets.Select(x => x.ImportRecordId).ToList(), cancellationToken).ConfigureAwait(false);
         
+        var records =  _mapper.Map<List<AutoTestDataSetDataRecords>>(dataSets);
+        
+        records.ForEach(x =>
+        {
+            var importRecord = recordImports.FirstOrDefault(y => y.Id == x.ImportRecordId);
+
+            if (importRecord == null || string.IsNullOrWhiteSpace(importRecord.OpConfig)) return;
+            
+            var opConfig = JsonConvert.DeserializeObject<Dictionary<string, object>>(importRecord.OpConfig);
+                
+            if (opConfig.ContainsKey("StartDate") && opConfig["StartDate"] != null) x.StartDate = opConfig["StartDate"].ToString();
+
+            if (opConfig.ContainsKey("StartDate") && opConfig["EndDate"] != null) x.EndDate = opConfig["EndDate"].ToString();
+        });
+        
+
         return new GetAutoTestDataSetResponse
         {
             Data = new GetAutoTestDataSetData
             {
                 Count = count,
-                Records = dataSets.Select(x => _mapper.Map<AutoTestDataSetDto>(x)).ToList()
+                Records = records
             }
         };
     }
