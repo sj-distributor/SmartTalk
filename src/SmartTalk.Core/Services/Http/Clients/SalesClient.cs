@@ -98,7 +98,7 @@ public class SalesClient : ISalesClient
     {
         var header = new Dictionary<string, string>
         {
-            { "apikey", _salesCustomerHabitSetting.ApiKey }
+            { "X-API-KEY", _salesCustomerHabitSetting.ApiKey }
         };
         
         return await _httpClientFactory.PostAsJsonAsync<GetCustomerLevel5HabitResponseDto>($"{_salesCustomerHabitSetting.BaseUrl}/api/CustomerInfo/QueryHistoryCustomerLevel5Habit", request, headers: header, cancellationToken: cancellationToken).ConfigureAwait(false);
