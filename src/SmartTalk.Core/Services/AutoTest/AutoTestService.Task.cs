@@ -49,6 +49,16 @@ public partial class AutoTestService
 
         var task = _mapper.Map<AutoTestTask>(command.Task);
         
+        var paramInfos  = JsonConvert.DeserializeObject<AutoTestTaskParamsDto>(task.Params);
+        
+        var agents = await _agentDataProvider.GetAgentByIdAsync(paramInfos.AgentId, cancellationToken).ConfigureAwait(false);
+        
+        if (agents == null) throw new Exception("Agent not found");
+        
+        var assistants = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantAsync(paramInfos.AssistantId, cancellationToken).ConfigureAwait(false);
+        
+        if (assistants == null) throw new Exception("assistants not found");
+        
         await _autoTestDataProvider.AddAutoTestTaskAsync(task, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         Log.Information("CreateAutoTestTaskAsync task :{@task}", task);

@@ -32,15 +32,17 @@ public partial interface IAutoTestService : IScopedDependency
 public partial class AutoTestService : IAutoTestService
 {
     private readonly IMapper _mapper;
+    private readonly IAgentDataProvider _agentDataProvider;
     private readonly IAutoTestDataProvider _autoTestDataProvider;
     private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
     private readonly IAutoTestActionHandlerSwitcher _autoTestActionHandlerSwitcher;
     private readonly IAutoTestDataImportHandlerSwitcher _autoTestDataImportHandlerSwitcher;
 
-    public AutoTestService(IMapper mapper, IAutoTestDataProvider autoTestDataProvider, ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, IAutoTestActionHandlerSwitcher autoTestActionHandlerSwitcher, IAutoTestDataImportHandlerSwitcher autoTestDataImportHandlerSwitcher)
+    public AutoTestService(IMapper mapper, IAgentDataProvider agentDataProvider, IAutoTestDataProvider autoTestDataProvider, ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, IAutoTestActionHandlerSwitcher autoTestActionHandlerSwitcher, IAutoTestDataImportHandlerSwitcher autoTestDataImportHandlerSwitcher)
     {
         _mapper = mapper;
+        _agentDataProvider = agentDataProvider;
         _autoTestDataProvider = autoTestDataProvider;
         _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
