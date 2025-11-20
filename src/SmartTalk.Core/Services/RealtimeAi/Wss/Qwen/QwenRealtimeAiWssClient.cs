@@ -11,15 +11,18 @@ public class QwenRealtimeAiWssClient : IRealtimeAiWssClient
     private Task _receiveLoopTask;
     private ClientWebSocket _webSocket;
 
-    public QwenRealtimeAiWssClient(ClientWebSocket webSocket)
-    {
-        _webSocket = webSocket;
-    }
-
     public Uri EndpointUri { get; private set; }
+    public AiSpeechAssistantProvider Provider => AiSpeechAssistantProvider.Qwen;
+    public WebSocketState CurrentState => _webSocket?.State ?? WebSocketState.None;
+
     public event Func<string, Task> MessageReceivedAsync;
-    public event Func<WebSocketState, string, Task> StateChangedAsync;
     public event Func<Exception, Task> ErrorOccurredAsync;
+    public event Func<WebSocketState, string, Task> StateChangedAsync;
+    
+    public QwenRealtimeAiWssClient()
+    {
+        _webSocket = new ClientWebSocket();
+    }
     
     public async Task ConnectAsync(Uri endpointUri, Dictionary<string, string> customHeaders, CancellationToken cancellationToken)
     {
@@ -118,13 +121,6 @@ public class QwenRealtimeAiWssClient : IRealtimeAiWssClient
         await (StateChangedAsync?.Invoke(_webSocket.State, statusDescription) ?? Task.CompletedTask);
         // Final cleanup is handled by DisposeAsync or when a new connection is made.
     }
-
-    public AiSpeechAssistantProvider Provider => AiSpeechAssistantProvider.Qwen;
-    public WebSocketState CurrentState => _webSocket?.State ?? WebSocketState.None;
-    public ValueTask DisposeAsync()
-    {
-        throw new NotImplementedException();
-    }
     
      private async Task ReceiveMessagesAsync(CancellationToken token)
     {
@@ -210,5 +206,13 @@ public class QwenRealtimeAiWssClient : IRealtimeAiWssClient
         _webSocket = null; // Ensure it's null so a new one is created on next ConnectAsync
         
         Log.Debug("RealtimeClient: Cleanup complete.");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Log.Information("RealtimeClient: Disposing client for {EndpointUri}.", EndpointUri);
+        await DisconnectAsync(WebSocketCloseStatus.NormalClosure, "Client disposing", CancellationToken.None);
+        await CleanUpCurrentConnectionAsync("Disposing client."); // Redundant but safe
+        GC.SuppressFinalize(this);
     }
 }
