@@ -1,6 +1,5 @@
 using Serilog;
 using SmartTalk.Core.Ioc;
-using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.SpeechMatics;
