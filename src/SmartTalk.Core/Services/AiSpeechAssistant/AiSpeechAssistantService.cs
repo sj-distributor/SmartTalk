@@ -32,6 +32,7 @@ using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Services.Restaurants;
+using SmartTalk.Core.Services.Sale;
 using SmartTalk.Core.Services.STT;
 using SmartTalk.Core.Services.Timer;
 using SmartTalk.Core.Settings.Azure;
@@ -75,6 +76,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 {
     private readonly IClock _clock;
     private readonly IMapper _mapper;
+    private readonly ICrmClient _crmClient;
     private readonly ISalesClient _salesClient;
     private readonly ICurrentUser _currentUser;
     private readonly AzureSetting _azureSetting;
@@ -91,6 +93,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly IPhoneOrderService _phoneOrderService;
     private readonly IAgentDataProvider _agentDataProvider;
     private readonly IAttachmentService _attachmentService;
+    private readonly ISalesDataProvider _salesDataProvider;
     private readonly ISpeechToTextService _speechToTextService;
     private readonly WorkWeChatKeySetting _workWeChatKeySetting;
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
@@ -109,6 +112,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     public AiSpeechAssistantService(
         IClock clock,
         IMapper mapper,
+        ICrmClient crmClient,
         ICurrentUser currentUser,
         AzureSetting azureSetting,
         ICacheManager cacheManager,
@@ -124,6 +128,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         IPhoneOrderService phoneOrderService,
         IAgentDataProvider agentDataProvider,
         IAttachmentService attachmentService,
+        ISalesDataProvider salesDataProvider,
         ISpeechToTextService speechToTextService,
         WorkWeChatKeySetting workWeChatKeySetting,
         ISmartTalkHttpClientFactory httpClientFactory,
@@ -135,6 +140,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     {
         _clock = clock;
         _mapper = mapper;
+        _crmClient = crmClient;
         _currentUser = currentUser;
         _salesClient = salesClient;
         _openaiClient = openaiClient;
@@ -152,6 +158,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _httpClientFactory = httpClientFactory;
         _translationClient = translationClient;
         _attachmentService = attachmentService;
+        _salesDataProvider = salesDataProvider;
         _speechToTextService = speechToTextService;
         _workWeChatKeySetting = workWeChatKeySetting;
         _backgroundJobClient = backgroundJobClient;
@@ -437,6 +444,31 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             knowledge.Greetings = string.IsNullOrEmpty(greeting.Data.Number.Greeting) ? knowledge.Greetings : greeting.Data.Number.Greeting;
             
             finalPrompt = finalPrompt.Replace("#{greeting}", knowledge.Greetings ?? string.Empty);
+        }
+        
+        if (finalPrompt.Contains("#{customer_items}", StringComparison.OrdinalIgnoreCase))
+        {
+            var soldToIds = !string.IsNullOrEmpty(assistant.Name) ? assistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : new List<string>();
+
+            if (soldToIds.Any())
+            {
+                var caches = await _salesDataProvider.GetCustomerItemsCacheBySoldToIdsAsync(soldToIds, cancellationToken).ConfigureAwait(false);
+
+                var customerItems = caches.Where(c => !string.IsNullOrEmpty(c.CacheValue)).Select(c => c.CacheValue.Trim()).Distinct().ToList();
+
+                finalPrompt = finalPrompt.Replace("#{customer_items}", customerItems.Any() ? string.Join(Environment.NewLine + Environment.NewLine, customerItems.Take(50)) : " ");
+            }
+        }
+        
+        if (finalPrompt.Contains("#{customer_info}", StringComparison.OrdinalIgnoreCase))
+        {
+            var phone = from;
+            
+            var customerInfoCache = await _salesDataProvider.GetCustomerInfoCacheByPhoneNumberAsync(phone, cancellationToken).ConfigureAwait(false);
+
+            var info = customerInfoCache?.CacheValue?.Trim();
+
+            finalPrompt = finalPrompt.Replace("#{customer_info}", string.IsNullOrEmpty(info) ? " " : info);
         }
         
         Log.Information($"The final prompt: {finalPrompt}");
