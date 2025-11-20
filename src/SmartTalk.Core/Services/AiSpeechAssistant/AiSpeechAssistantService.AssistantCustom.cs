@@ -391,7 +391,8 @@ public partial class AiSpeechAssistantService
             IsDefault = isDefault,
             ModelLanguage = command.AgentType == AgentType.Agent ? string.IsNullOrWhiteSpace(command.ModelLanguage) ? "English" : command.ModelLanguage : null,
             WaitInterval = agent.WaitInterval,
-            IsTransferHuman = agent.IsTransferHuman
+            IsTransferHuman = agent.IsTransferHuman,
+            IsAutoGenerateOrder = agent.Type is AgentType.Sales or AgentType.PosCompanyStore
         };
         
         await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantsAsync([assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
