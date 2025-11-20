@@ -61,23 +61,58 @@ public class QwenRealtimeAiAdapter : IRealtimeAiProviderAdapter
         return sessionPayload;
     }
 
-    public string BuildAudioAppendMessage(RealtimeAiWssAudioData audioData)
+    (string MessageJson, bool IsOpenAiImage) IRealtimeAiProviderAdapter.BuildAudioAppendMessage(RealtimeAiWssAudioData audioData)
     {
-        var message = new
+        var imageBase64 = audioData.CustomProperties.GetValueOrDefault("image") as string;
+        var hasAudio = !string.IsNullOrWhiteSpace(audioData.Base64Payload);
+
+        if (!hasAudio)
+            return (null, false);
+
+        if (!string.IsNullOrWhiteSpace(imageBase64))
         {
-            type = "input_audio_buffer.append",
-            audio = audioData.Base64Payload
+            var mergedMessage = new
+            {
+                type = "conversation.item.create",
+                item = new
+                {
+                    type = "message",
+                    role = "user",
+                    content = new object[]
+                    {
+                        new { type = "input_audio", audio = audioData.Base64Payload },
+                        new { type = "input_image", image_url = $"data:image/jpeg;base64,{imageBase64}" }
+                    }
+                }
+            };
+            return (JsonConvert.SerializeObject(mergedMessage), true);
+        }
+        else
+        {
+            var audioMessage = new
+            {
+                type = "input_audio_buffer.append",
+                audio = audioData.Base64Payload
+            };
+            return (JsonConvert.SerializeObject(audioMessage), false);
+        }
+    }
+
+    public string BuildCommitAudioMessage()
+    {
+        var commitAudioMessage = new
+        {
+            type = "input_audio_buffer.commit"
         };
-        var json = JsonConvert.SerializeObject(message);
         
-        return json;
+        return JsonConvert.SerializeObject(commitAudioMessage);
     }
 
     public string BuildTextUserMessage(string text, string sessionId)
     {
         var message = new
         {
-            type = "conversation.item.create", // 假设的事件类型 (Assumed event type)
+            type = "conversation.item.create",
             item = new
             {
                 type = "message",
