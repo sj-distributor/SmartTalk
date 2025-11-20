@@ -72,9 +72,7 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
 
             if (!record.AssistantId.HasValue) assistant = null;
             
-            var posAgents = await _posDataProvider.GetPosAgentsAsync(agentId: record.AgentId, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-            Log.Information("Get the pos agent: {@PosAgents} by agent id: {AgentId}", posAgents, record.AgentId);
+            if (assistant is not { IsAutoGenerateOrder: true }) return;
             
             var order = await MatchSimilarProductsAsync(record, shoppingCart, cancellationToken).ConfigureAwait(false);
             
