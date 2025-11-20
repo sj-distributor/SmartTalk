@@ -49,7 +49,7 @@ public partial class AutoTestDataProvider
         if (scenarioId.HasValue)
             query = query.Where(x => x.ScenarioId == scenarioId.Value);
         
-        var result = await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+        var result = await query.OrderByDescending(x => x.CreatedAt).ToListAsync(cancellationToken).ConfigureAwait(false);
         
         var paramDict = result.Select(x => new {x.Id, ParamsDto = JsonConvert.DeserializeObject<AutoTestTaskParamsDto>(x.Params)}).ToDictionary(x => x.Id);
         
@@ -69,8 +69,14 @@ public partial class AutoTestDataProvider
             
             if (!paramDict.TryGetValue(x.Id, out var task)) return false; 
            
-            task.ParamsDto.AgentName = agents.FirstOrDefault(a => a.Id == task.ParamsDto.AgentId)?.Name ?? "";
-            task.ParamsDto.AssistantName = assistants.FirstOrDefault(asst => asst.Id == task.ParamsDto.AssistantId)?.Name ?? "";
+            var agent = agents.FirstOrDefault(a => a.Id == task.ParamsDto.AgentId);
+            var assistant = assistants.FirstOrDefault(asst => asst.Id == task.ParamsDto.AssistantId);
+
+            if (agent is null || assistant is null)
+                return false;
+
+            task.ParamsDto.AgentName = agent.Name;
+            task.ParamsDto.AssistantName = assistant.Name;
             x.Params = JsonConvert.SerializeObject(task.ParamsDto);
             
             if (keyword is null || string.IsNullOrEmpty(keyword)) return true;

@@ -9,6 +9,7 @@ using NAudio.Wave.SampleProviders;
 using OpenAI.Audio;
 using OpenAI.Chat;
 using SmartTalk.Core.Ioc;
+using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Jobs;
@@ -41,16 +42,18 @@ public partial class AutoTestService : IAutoTestService
 {
     private readonly IMapper _mapper;
     private readonly OpenAiSettings _openAiSettings;
+    private readonly IAgentDataProvider _agentDataProvider;
     private readonly IAutoTestDataProvider _autoTestDataProvider;
     private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
     private readonly IAutoTestActionHandlerSwitcher _autoTestActionHandlerSwitcher;
     private readonly IAutoTestDataImportHandlerSwitcher _autoTestDataImportHandlerSwitcher;
     
-    public AutoTestService(IMapper mapper, OpenAiSettings openAiSettings, IAutoTestDataProvider autoTestDataProvider, ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, IAutoTestActionHandlerSwitcher autoTestActionHandlerSwitcher, IAutoTestDataImportHandlerSwitcher autoTestDataImportHandlerSwitcher)
+    public AutoTestService(IMapper mapper, OpenAiSettings openAiSettings, IAgentDataProvider agentDataProvider, IAutoTestDataProvider autoTestDataProvider, ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, IAutoTestActionHandlerSwitcher autoTestActionHandlerSwitcher, IAutoTestDataImportHandlerSwitcher autoTestDataImportHandlerSwitcher)
     {
         _mapper = mapper;
         _openAiSettings = openAiSettings;
+        _agentDataProvider = agentDataProvider;
         _autoTestDataProvider = autoTestDataProvider;
         _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;

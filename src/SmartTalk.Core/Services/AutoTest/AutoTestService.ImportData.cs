@@ -20,7 +20,7 @@ public partial class AutoTestService
         if (!command.ImportData.TryGetValue("CustomerId", out var customerObj)) 
             throw new Exception($"The imported data is missing customerId, so processing is skipped. command: {command}");
         
-        var customerId = int.Parse((string)command.ImportData["CustomerId"]); 
+        var customerId = long.Parse((string)command.ImportData["CustomerId"]); 
         var startDate = (DateTime)command.ImportData["StartDate"]; 
         var endDate = (DateTime)command.ImportData["EndDate"]; 
         
