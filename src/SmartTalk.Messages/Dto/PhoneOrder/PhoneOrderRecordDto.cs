@@ -57,4 +57,6 @@ public class PhoneOrderRecordDto
     public string Remark { get; set; }
 
     public int? UnSendCount { get; set; }
+    
+    public bool IsUnreviewed { get; set; }
 }
