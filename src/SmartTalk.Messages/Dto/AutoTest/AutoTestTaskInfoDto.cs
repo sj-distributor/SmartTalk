@@ -6,5 +6,5 @@ public class AutoTestTaskInfoDto
     
     public string TestDataName { get; set; }
     
-    public string CreadtedAt {get; set;}
+    public DateTimeOffset CreadtedAt {get; set;}
 }
