@@ -249,7 +249,12 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     {
         Log.Information("Handling receive phone record: {@command}", command);
 
-        var (record, agent) = await _phoneOrderDataProvider.GetRecordWithAgentAsync(command.CallSid, cancellationToken).ConfigureAwait(false);
+        var (record, agent) = await RetryWithDelayAsync(
+            ct => _phoneOrderDataProvider.GetRecordWithAgentAsync(command.CallSid, ct),
+            result => result.Item1 == null,
+            maxRetryCount: 3,
+            delay: TimeSpan.FromSeconds(10),
+            cancellationToken).ConfigureAwait(false);
         
         Log.Information("Get phone order record: {@record}", record);
 
@@ -1283,5 +1288,25 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                 await Task.Delay(TimeSpan.FromSeconds(delaySeconds), cancellationToken);
             }
         }
+    }
+    
+    private async Task<T> RetryWithDelayAsync<T>(
+        Func<CancellationToken, Task<T>> operation,
+        Func<T, bool> shouldRetry,
+        int maxRetryCount = 1,
+        TimeSpan? delay = null,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await operation(cancellationToken).ConfigureAwait(false);
+        var currentRetry = 0;
+    
+        while (shouldRetry(result) && currentRetry < maxRetryCount)
+        {
+            await Task.Delay(delay ?? TimeSpan.FromSeconds(10), cancellationToken);
+            result = await operation(cancellationToken).ConfigureAwait(false);
+            currentRetry++;
+        }
+    
+        return result;
     }
 }
