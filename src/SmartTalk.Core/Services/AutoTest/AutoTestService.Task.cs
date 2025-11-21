@@ -213,7 +213,7 @@ public partial class AutoTestService
         {
             AssistantName = assistant?.Name ?? string.Empty,
             TestDataName = dataset.Name,
-            CreadtedAt = task.CreatedAt.ToString("MM/dd/yyyy hh:mm tt")
+            CreadtedAt = task.CreatedAt
         };
     }
 }
