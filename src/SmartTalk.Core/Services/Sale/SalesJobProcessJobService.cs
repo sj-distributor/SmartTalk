@@ -76,7 +76,8 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
     public async Task ScheduleRefreshCrmCustomerInfoAsync(RefreshAllCustomerInfoCacheCommand command, CancellationToken cancellationToken)
     {
         var allSales = await _salesDataProvider.GetAllSalesAsync(cancellationToken);
-        var allSoldToIds = allSales.Select(s => s.Name).Where(n => !string.IsNullOrEmpty(n)).Distinct().ToList();
+        var allSoldToIds = allSales.Select(s => s.Name).Where(n => !string.IsNullOrEmpty(n)).SelectMany(id => id.Split('/', StringSplitOptions.RemoveEmptyEntries))
+            .Select(id => id.Trim()).Where(id => !string.IsNullOrWhiteSpace(id)).Distinct().ToList();
         
         var totalPhones = 0;
         

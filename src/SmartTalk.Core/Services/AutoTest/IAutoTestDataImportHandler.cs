@@ -96,13 +96,30 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
         { 
             Log.Warning("导入数据中缺少 customerId，跳过处理"); 
             return null; 
-        } 
-        var customerId = import["CustomerId"].ToString(); 
+        }
+
+        var rawCustomerId = customerObj.ToString(); 
+        var customerIds = rawCustomerId?.Split('/', StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()).ToList();
         var startDate = (DateTime)import["StartDate"]; 
         var endDate = (DateTime)import["EndDate"]; 
         
-        var tokenResponse = await _ringCentralClient.TokenAsync(cancellationToken).ConfigureAwait(false); 
-        var token = tokenResponse.AccessToken;
+        var token = (await _ringCentralClient.TokenAsync(cancellationToken).ConfigureAwait(false)).AccessToken;
+        
+        var finalMatchedItems = new List<AutoTestDataItem>(); 
+        foreach (var cid in customerIds) 
+        { 
+            Log.Information("开始处理店铺 CustomerId = {CustomerId}", cid);
+            
+            var storeResult = await HandleSingleStoreAsync(cid, token, startDate, endDate, scenario.Id, recordId, cancellationToken);
+            
+            if (storeResult != null && storeResult.Count > 0) 
+                finalMatchedItems.AddRange(storeResult); 
+        }
+        
+        return finalMatchedItems;
+    }
+    private async Task<List<AutoTestDataItem>> HandleSingleStoreAsync(string customerId, string token, DateTime startDate, DateTime endDate, int scenarioId, int recordId, CancellationToken cancellationToken) 
+    {
         
         var contacts = await _crmClient.GetCustomerContactsAsync(customerId, cancellationToken).ConfigureAwait(false); 
         var phoneNumbers = contacts.Select(c => NormalizePhone(c.Phone)).Where(p => !string.IsNullOrWhiteSpace(p)).Distinct().ToList();
@@ -136,17 +153,23 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
         foreach (var records in results) 
             allRecords.AddRange(records);
         
-        var singleCallNumbers = allRecords.GroupBy(r => NormalizePhone(r.From?.PhoneNumber ?? r.To?.PhoneNumber)).Where(g => g.Count() == 1)
-            .Select(g => g.Key).Where(p => !string.IsNullOrWhiteSpace(p)).ToList();
+        if (!allRecords.Any()) 
+        { 
+            Log.Warning("店铺 {CustomerId} 没有任何 RC 通话记录", customerId); 
+            return null; 
+        }
         
-        if (!singleCallNumbers.Any())
-        {
-            Log.Warning("没有符合条件的单通话号码，跳过匹配");
-            return null;
+        var singleCallNumbers = allRecords.GroupBy(r => NormalizePhone(r.From?.PhoneNumber ?? r.To?.PhoneNumber))
+            .Where(g => g.Count() == 1).Select(g => g.Key).ToList();
+        
+        if (!singleCallNumbers.Any()) 
+        { 
+            Log.Warning("店铺 {CustomerId} 无单通话号码", customerId); 
+            return null; 
         }
         
         var matchedTasks = singleCallNumbers.Select(phone => allRecords.First(r => NormalizePhone(r.From?.PhoneNumber ?? r.To?.PhoneNumber) == phone))
-            .Select(record => MatchOrderAndRecordingAsync(customerId, record, scenario.Id, recordId, cancellationToken)).ToList();
+            .Select(record => MatchOrderAndRecordingAsync(customerId, record, scenarioId, recordId, cancellationToken)).ToList();
         
         var matchedItems = (await Task.WhenAll(matchedTasks)).Where(x => x != null).ToList();
         
