@@ -405,7 +405,7 @@ public partial class PosService : IPosService
         var structuredStores = storesAndAgents.GroupBy(x => x.Store).Select(g => new StructuredStoreDto
         {
             Store = _mapper.Map<CompanyStoreDto>(g.Key),
-            Agents = _mapper.Map<List<AgentDto>>(g.Select(s => s.Agent).ToList())
+            Agents = _mapper.Map<List<AgentDto>>(g.Select(s => s.Agent).Where(x => x != null).ToList())
         }).ToList();
         
         Log.Information("Structured Stores With Agents: {@StructuredStores}", structuredStores);
