@@ -42,34 +42,34 @@ public class AutoTestController : ControllerBase
     }
     
     [Route("conversation"), HttpPost]
-    public async Task<IActionResult> AutoTestConversationAudioProcessAsync(
-        [FromForm] List<IFormFile> wavFiles,
-        [FromForm] string prompt,
-        CancellationToken cancellationToken)
+    public async Task<IActionResult> AutoTestConversationAudioProcessAsync([FromForm] IFormFile wavFile, [FromForm] string prompt, CancellationToken cancellationToken)
     {
-        if (wavFiles == null || wavFiles.Count == 0)
-            return BadRequest("没有上传音频文件");
+        if (wavFile == null || wavFile.Length == 0)
+            return BadRequest("缺少有效的 WAV 文件");
 
-        var customerWavList = new List<byte[]>();
+        byte[] wavByte;
 
-        foreach (var file in wavFiles)
+        using (var ms = new MemoryStream())
         {
-            using var ms = new MemoryStream();
-            await file.CopyToAsync(ms, cancellationToken);
-            customerWavList.Add(ms.ToArray());
+            await wavFile.CopyToAsync(ms, cancellationToken);
+            wavByte = ms.ToArray();
         }
 
         var result = await _autoTestService.AutoTestConversationAudioProcessAsync(
             new AutoTestConversationAudioProcessCommand
             {
-                CustomerAudioList = customerWavList,
+                CustomerAudioList = wavByte,
                 Prompt = prompt
             },
             cancellationToken
         ).ConfigureAwait(false);
 
-        return File(result.Data, "audio/wav", "gpt-output.wav");
+        return Ok(new
+        {
+            text = result.Data
+        });
     }
+
 
     
     [HttpPost("pcm-to-wav")]

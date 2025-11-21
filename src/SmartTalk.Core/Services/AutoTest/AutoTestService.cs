@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 using AutoMapper;
 using Newtonsoft.Json;
 using Serilog;
@@ -92,76 +93,29 @@ public partial class AutoTestService : IAutoTestService
         };
     }
 
-    private async Task<byte[]> ProcessAudioConversationAsync(
-    List<byte[]> customerWavList, 
-    string prompt, 
-    CancellationToken cancellationToken)
-{
-    if (customerWavList == null || customerWavList.Count == 0)
-        throw new ArgumentException("没有音频输入");
-
-    var conversationHistory = new List<ChatMessage>
+    private async Task<string> ProcessAudioConversationAsync(byte[] customerWav, string prompt, CancellationToken cancellationToken)
     {
-        new SystemChatMessage(prompt)
-    };
-
-    var client = new ChatClient("gpt-4o-audio-preview", _openAiSettings.ApiKey);
-
-    var options = new ChatCompletionOptions
-    {
-        ResponseModalities = ChatResponseModalities.Text | ChatResponseModalities.Audio,
-        AudioOptions = new ChatAudioOptions(ChatOutputAudioVoice.Alloy, ChatOutputAudioFormat.Wav)
-    };
-
-    var wavFiles = new List<string>();
-
-    try
-    {
-        foreach (var wavBytes in customerWavList)
+        var conversationHistory = new List<ChatMessage>
         {
-            if (wavBytes == null || wavBytes.Length == 0)
-                continue;
+            new SystemChatMessage(prompt)
+        };
 
-            // ⭐ 直接保存用户传入的 WAV
-            var userWavFile = Path.GetTempFileName() + ".wav";
-            await File.WriteAllBytesAsync(userWavFile, wavBytes, cancellationToken);
-            wavFiles.Add(userWavFile);
+        var client = new ChatClient("gpt-4o-audio-preview", _openAiSettings.ApiKey);
 
-            // ⭐ 输入 WAV 直接加入对话
-            conversationHistory.Add(new UserChatMessage(
-                ChatMessageContentPart.CreateInputAudioPart(
-                    BinaryData.FromBytes(await File.ReadAllBytesAsync(userWavFile, cancellationToken)),
-                    ChatInputAudioFormat.Wav)));
-
-            // 调用 AI
-            var completion = await client.CompleteChatAsync(conversationHistory, options, cancellationToken);
-
-            // AI 原始输出 WAV
-            var aiWavFile = Path.GetTempFileName() + ".wav";
-            await File.WriteAllBytesAsync(aiWavFile, completion.Value.OutputAudio.AudioBytes.ToArray(), cancellationToken);
-
-            wavFiles.Add(aiWavFile);
-
-            // 将文本加入上下文
-            conversationHistory.Add(new AssistantChatMessage(completion.Value.OutputAudio.Transcript));
-        }
-
-        // ⭐ 合并所有 WAV
-        var mergedWavFile = Path.GetTempFileName() + ".wav";
-        MergeWavFilesToUniformFormat(wavFiles, mergedWavFile);
+        var options = new ChatCompletionOptions
+        {
+            ResponseModalities = ChatResponseModalities.Text | ChatResponseModalities.Audio,
+            AudioOptions = new ChatAudioOptions(ChatOutputAudioVoice.Alloy, ChatOutputAudioFormat.Wav)
+        };
         
-        wavFiles.Add(mergedWavFile);
+        conversationHistory.Add(new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(BinaryData.FromBytes(customerWav), ChatInputAudioFormat.Wav)));
+        
+        var completion = await client.CompleteChatAsync(conversationHistory, options, cancellationToken);
 
-        return await File.ReadAllBytesAsync(mergedWavFile, cancellationToken);
+        var aiReplyText = completion.Value.OutputAudio.Transcript ?? "";
+
+        return aiReplyText;
     }
-    finally
-    {
-        foreach (var f in wavFiles)
-        {
-            if (File.Exists(f)) File.Delete(f);
-        }
-    }
-}
 
 
     private void MergeWavFilesToUniformFormat(List<string> wavFiles, string outputFile)
