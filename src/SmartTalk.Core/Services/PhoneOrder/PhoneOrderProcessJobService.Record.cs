@@ -88,7 +88,7 @@ public partial class PhoneOrderProcessJobService
         CancellationToken cancellationToken)
     {
         var (aiSpeechAssistant, agent) = await _aiSpeechAssistantDataProvider
-            .GetAgentAndAiSpeechAssistantAsync(record.AgentId, cancellationToken).ConfigureAwait(false);
+            .GetAgentAndAiSpeechAssistantAsync(record.AgentId, record.AssistantId, cancellationToken).ConfigureAwait(false);
 
         Log.Information("Get Assistant: {@Assistant} and Agent: {@Agent} by agent id {agentId}", aiSpeechAssistant, agent, record.AgentId);
 
@@ -365,7 +365,7 @@ public partial class PhoneOrderProcessJobService
             : new List<string>();
 
         var customerItemsCacheList =
-            await _aiSpeechAssistantDataProvider.GetCustomerItemsCacheBySoldToIdsAsync(soldToIds, cancellationToken);
+            await _salesDataProvider.GetCustomerItemsCacheBySoldToIdsAsync(soldToIds, cancellationToken);
         var customerItemsString = string.Join(Environment.NewLine,
             soldToIds.Select(id => customerItemsCacheList.FirstOrDefault(c => c.CacheKey == id)?.CacheValue ?? ""));
 
@@ -392,6 +392,11 @@ public partial class PhoneOrderProcessJobService
             case AgentType.Sales:
                 if (!string.IsNullOrEmpty(record.TranscriptionText))
                 {
+                    if (!aiSpeechAssistant.IsAllowOrderPush)
+                    {
+                        Log.Information("Assistant.Name={AssistantName} 的 is_allow_order_push=false，跳过生成草稿单", aiSpeechAssistant.Name);
+                        return;
+                    }
                     await HandleSalesScenarioAsync(agent, aiSpeechAssistant, record, cancellationToken)
                         .ConfigureAwait(false);
                 }

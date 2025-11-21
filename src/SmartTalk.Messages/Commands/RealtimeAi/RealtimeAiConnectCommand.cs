@@ -1,5 +1,6 @@
 using System.Net.WebSockets;
 using Mediator.Net.Contracts;
+using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.RealtimeAi;
 
 namespace SmartTalk.Messages.Commands.RealtimeAi;
