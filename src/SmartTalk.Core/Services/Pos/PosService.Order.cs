@@ -25,6 +25,8 @@ public partial interface IPosService
     Task<GetPosOrderProductsResponse> GetPosOrderProductsAsync(GetPosOrderProductsRequest request, CancellationToken cancellationToken);
     
     Task<GetPosStoreOrderResponse> GetPosStoreOrderAsync(GetPosStoreOrderRequest request, CancellationToken cancellationToken);
+
+    Task HandlePosOrderAsync(PosOrder order, bool isRetry, CancellationToken cancellationToken);
 }
 
 public partial class PosService
@@ -44,13 +46,23 @@ public partial class PosService
     {
         var order = await GetOrAddPosOrderAsync(command, cancellationToken).ConfigureAwait(false);
         
+        await HandlePosOrderAsync(order, command.IsWithRetry, cancellationToken).ConfigureAwait(false);
+        
+        return new PosOrderPlacedEvent
+        {
+            Order = _mapper.Map<PosOrderDto>(order)
+        };
+    }
+
+    public async Task HandlePosOrderAsync(PosOrder order, bool isRetry, CancellationToken cancellationToken)
+    {
         var store = await _posDataProvider.GetPosCompanyStoreAsync(id: order.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (store == null) throw new Exception("Store could not be found.");
 
         var token = await GetPosTokenAsync(store, order, cancellationToken).ConfigureAwait(false);
 
-        _smartTalkBackgroundJobClient.Enqueue(() => CreateMerchPrinterOrderAsync(command.StoreId, order.Id, cancellationToken));
+        _smartTalkBackgroundJobClient.Enqueue(() => CreateMerchPrinterOrderAsync(store.Id, order.Id, cancellationToken));
 
         if (!store.IsLink && string.IsNullOrWhiteSpace(token))
         {
@@ -58,15 +70,10 @@ public partial class PosService
             
             await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
             
-            return new PosOrderPlacedEvent { Order = _mapper.Map<PosOrderDto>(order) };
+            return;
         }
         
-        await SafetyPlaceOrderAsync(order, store, token, command.IsWithRetry, 0, cancellationToken).ConfigureAwait(false);
-        
-        return new PosOrderPlacedEvent
-        {
-            Order = _mapper.Map<PosOrderDto>(order)
-        };
+        await SafetyPlaceOrderAsync(order, store, token, isRetry, 0, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task CreateMerchPrinterOrderAsync(int storeId, int orderId, CancellationToken cancellationToken)
