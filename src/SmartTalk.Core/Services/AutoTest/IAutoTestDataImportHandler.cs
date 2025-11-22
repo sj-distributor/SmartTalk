@@ -114,27 +114,34 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
         }
         
         var allRecords = new List<RingCentralRecordDto>();
-        var tasks = phoneNumbers.Select(phone => RetryAsync(async () =>
-        {
-            Log.Information("请求 RingCentral 通话记录: Customer={CustomerId}, Phone={Phone}, Start={StartDate}, End={EndDate}", customerId, phone, startDate, endDate);
-            var rcRequest = new RingCentralCallLogRequestDto
-            {
-                PhoneNumber = phone,
-                DateFrom = startDate,
-                DateTo = endDate,
-                WithRecording = true,
-                Page = 1,
-                PerPage = 200
-            };
-
-            var resp = await _ringCentralClient.GetRingCentralRecordAsync(rcRequest, token, cancellationToken).ConfigureAwait(false);
-            Log.Information("RingCentral 返回 {Count} 条通话记录, Phone={Phone}", resp?.Records?.Count ?? 0, phone);
-            return resp?.Records ?? new List<RingCentralRecordDto>();
-        })).ToList();
         
-        var results = await Task.WhenAll(tasks); 
-        foreach (var records in results) 
-            allRecords.AddRange(records);
+        foreach (var phone in phoneNumbers) 
+        { 
+            var monthTasks = new List<Task<List<RingCentralRecordDto>>>();
+            
+            var monthStart = new DateTime(startDate.Year, startDate.Month, 1); 
+            var finalMonth = new DateTime(endDate.Year, endDate.Month, 1);
+            
+            int monthLimit = 0;
+            
+            while (monthStart <= finalMonth && monthLimit < 12) 
+            { 
+                var monthEnd = monthStart.AddMonths(1).AddDays(-1);
+                
+                var from = monthStart < startDate ? startDate : monthStart; 
+                var to = monthEnd > endDate ? endDate : monthEnd;
+                
+                monthTasks.Add(LoadOneMonthAsync(phone, token, from, to, cancellationToken));
+                
+                monthStart = monthStart.AddMonths(1); 
+                monthLimit++; 
+            }
+            
+            var monthResults = await Task.WhenAll(monthTasks).ConfigureAwait(false);
+            
+            foreach (var list in monthResults) 
+                allRecords.AddRange(list); 
+        }
         
         var singleCallNumbers = allRecords.GroupBy(r => NormalizePhone(r.From?.PhoneNumber ?? r.To?.PhoneNumber)).Where(g => g.Count() == 1)
             .Select(g => g.Key).Where(p => !string.IsNullOrWhiteSpace(p)).ToList();
@@ -236,6 +243,30 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
         if (digits.Length == 10) return "1" + digits;
 
         return digits;
+    }
+    
+    private async Task<List<RingCentralRecordDto>> LoadOneMonthAsync(string phone, string token, DateTime from, DateTime to, CancellationToken cancellationToken)
+    {
+        return await RetryAsync(async () =>
+        {
+            Log.Information(
+                "【LoadOneMonth】请求 RC 月度通话记录 Phone={Phone}, From={From}, To={To}",
+                phone, from, to);
+
+            var req = new RingCentralCallLogRequestDto
+            {
+                PhoneNumber = phone,
+                DateFrom = from,
+                DateTo = to,
+                WithRecording = true,
+                Page = 1,
+                PerPage = 50 
+            };
+
+            var resp = await _ringCentralClient.GetRingCentralRecordAsync(req, token, cancellationToken).ConfigureAwait(false);
+
+            return resp?.Records ?? new List<RingCentralRecordDto>();
+        });
     }
 }
 
