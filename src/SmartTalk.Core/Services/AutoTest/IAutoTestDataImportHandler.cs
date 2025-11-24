@@ -86,7 +86,7 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
                                 ["MonthEnd"] = to
                             };
                             
-                            _smartTalkBackgroundJobClient.Enqueue<ApiDataImportHandler>(h => h.ImportAsync(importForMonth, scenarioId, dataSetId, recordId, CancellationToken.None));
+                            _smartTalkBackgroundJobClient.Enqueue<ApiDataImportHandler>(h => h.ImportAsync(importForMonth, scenarioId, dataSetId, recordId, cancellationToken));
 
                             monthStart = monthStart.AddMonths(1);
                             monthLimit++;
@@ -140,27 +140,35 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
 
         var token = (await _ringCentralClient.TokenAsync(cancellationToken)).AccessToken;
 
-        var contacts = await _crmClient.GetCustomerContactsAsync(customerId, cancellationToken);
+        var contacts = await _crmClient.GetCustomerContactsAsync(customerId, cancellationToken).ConfigureAwait(false);
         var phoneNumbers = contacts.Select(c => NormalizePhone(c.Phone)).Where(p => !string.IsNullOrEmpty(p)).Distinct().ToList();
 
         if (!phoneNumbers.Any())
             return null;
 
-        var result = new List<AutoTestDataItem>();
+        var allRecords = new List<RingCentralRecordDto>();
 
         foreach (var phone in phoneNumbers)
         {
             var rcRecords = await LoadOneMonthAsync(phone, token, from, to, cancellationToken);
-
-            foreach (var rcRecord in rcRecords)
-            {
-                var matched = await MatchOrderAndRecordingAsync(customerId, rcRecord, scenario.Id, recordId, cancellationToken);
-                if (matched != null)
-                    result.Add(matched);
-            }
+            allRecords.AddRange(rcRecords);
         }
         
-        return result;
+        var singleCallNumbersByDate = allRecords.GroupBy(r => new { Phone = NormalizePhone(r.From?.PhoneNumber ?? r.To?.PhoneNumber), Date = r.StartTime.Date }).Where(g => g.Count() == 1)
+            .Select(g => new { g.Key.Phone, g.Key.Date }).ToList();
+
+        if (!singleCallNumbersByDate.Any())
+        {
+            Log.Warning("没有符合条件的单通话号码，跳过匹配");
+            return null;
+        }
+        
+        var matchedTasks = singleCallNumbersByDate.Select(x => allRecords.First(r => NormalizePhone(r.From?.PhoneNumber ?? r.To?.PhoneNumber) == x.Phone && r.StartTime.Date == x.Date))
+            .Select(record => MatchOrderAndRecordingAsync(customerId, record, scenario.Id, recordId, cancellationToken)).ToList();
+
+        var matchedItems = (await Task.WhenAll(matchedTasks)).Where(x => x != null).ToList();
+
+        return matchedItems;
     }
 
     private async Task<AutoTestDataItem> MatchOrderAndRecordingAsync(string customerId, RingCentralRecordDto record, int scenarioId, int importRecordId, CancellationToken cancellationToken)

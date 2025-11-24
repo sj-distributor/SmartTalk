@@ -72,7 +72,7 @@ public partial class AutoTestService
         
         await _autoTestDataProvider.UpdateAutoTestDataSetAsync(dataSet, true, cancellationToken).ConfigureAwait(false);
 
-        _smartTalkBackgroundJobClient.Enqueue(() => _autoTestDataImportHandlerSwitcher.GetHandler(command.ImportType).ImportAsync(command.ImportData, command.ScenarioId, dataSet.Id, importRecord.Id, CancellationToken.None));
+        _smartTalkBackgroundJobClient.Enqueue(() => _autoTestDataImportHandlerSwitcher.GetHandler(command.ImportType).ImportAsync(command.ImportData, command.ScenarioId, dataSet.Id, importRecord.Id, cancellationToken));
 
         return new AutoTestImportDataResponse()
         {
