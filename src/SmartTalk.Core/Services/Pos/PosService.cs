@@ -55,6 +55,8 @@ public partial interface IPosService : IScopedDependency
     Task<GetStoresAgentsResponse> GetStoresAgentsAsync(GetStoresAgentsRequest request, CancellationToken cancellationToken);
     
     Task<GetStructuredStoresResponse> GetStructuredStoresAsync(GetStructuredStoresRequest request, CancellationToken cancellationToken);
+    
+    Task<GetSimpleStructuredStoresResponse> GetSimpleStructuredStoresAsync(GetSimpleStructuredStoresRequest request, CancellationToken cancellationToken);
 }
 
 public partial class PosService : IPosService
@@ -418,6 +420,28 @@ public partial class PosService : IPosService
         };
     }
     
+    public async Task<GetSimpleStructuredStoresResponse> GetSimpleStructuredStoresAsync(GetSimpleStructuredStoresRequest request, CancellationToken cancellationToken)
+    {
+        var storesAndAgents = await _posDataProvider.GetSimpleStoreAgentsAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        await EnrichSimpleStoreUnreviewDataAsync(storesAndAgents, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Enrich Stores Agents: {@EnrichStoresAndAgents}", storesAndAgents);
+        
+        var structuredStores = storesAndAgents.GroupBy(x => x.StoreId).Select(g => new SimpleStructuredStoreDto
+        {
+            StoreId = g.Key,
+            SimpleStoreAgents = _mapper.Map<List<SimpleStoreAgentDto>>(g)
+        }).ToList();
+        
+        Log.Information("Structured Stores With Agents: {@StructuredStores}", structuredStores);
+        
+        return new GetSimpleStructuredStoresResponse
+        {
+            Data = new GetSimpleStructuredStoresResponseData { StructuredStores = structuredStores }
+        };
+    }
+    
     private async Task BuildStoreUnreviewDataAsync(List<StructuredStoreDto> structuredStores, CancellationToken cancellationToken)
     {
         var agentIds = structuredStores.SelectMany(x => x.Agents.Select(a => a.Id)).Distinct().ToList();
@@ -450,6 +474,35 @@ public partial class PosService : IPosService
         }
         
         Log.Information("Enrich structured stores: {@StructuredStores}", structuredStores);
+    }
+    
+    private async Task EnrichSimpleStoreUnreviewDataAsync(List<SimpleStoreAgentDto> storeAgents, CancellationToken cancellationToken)
+    {
+        var agentIds = storeAgents.Select(x => x.AgentId).Distinct().ToList();
+        
+        if (agentIds.Count == 0) return;
+        
+        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsByAgentIdsAsync(agentIds, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Get simple store unreview records: {@Records}", records);
+        
+        var orders = await _posDataProvider.GetAiDraftOrdersByRecordIdsAsync(records.Select(x => x.Id).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Get simple store unreview orders: {@Orders}", orders);
+        
+        var recordAgentMap = records.ToDictionary(r => r.Id, r => r.AgentId);
+        
+        var agentUnreviewedCount = new Dictionary<int, int>();
+        
+        foreach (var order in orders)
+        {
+            if (recordAgentMap.TryGetValue(order.RecordId!.Value, out var agentId))
+                agentUnreviewedCount[agentId] = agentUnreviewedCount.GetValueOrDefault(agentId) + 1;
+        }
+        
+        storeAgents.ForEach(x => x.UnreviewCount = agentUnreviewedCount.TryGetValue(x.AgentId, out var count) ? count : 0);
+        
+        Log.Information("Enrich simple store agents: {@StoreAgents}", storeAgents);
     }
 
     private async Task<List<GetCompanyWithStoresData>> EnrichPosCompaniesAsync(List<CompanyDto> companies, CancellationToken cancellationToken)
