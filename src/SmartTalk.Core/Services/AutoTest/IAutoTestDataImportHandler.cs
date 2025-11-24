@@ -221,41 +221,41 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
         }
     }
     
-        private async Task<T> RetryForeverAsync<T>(Func<Task<T>> action)
-        {
-            while (true)
+    private async Task<T> RetryForeverAsync<T>(Func<Task<T>> action)
+    {
+        while (true)
+        { 
+            try
             {
-                try
-                {
-                    return await action().ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    Log.Warning(ex, "RingCentral 调用失败，将在60秒后继续重试（无限重试）...");
-                    await Task.Delay(TimeSpan.FromSeconds(60));
-                }
+                return await action().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "RingCentral 调用失败，将在60秒后继续重试（无限重试）...");
+                await Task.Delay(TimeSpan.FromSeconds(60));
             }
         }
+    }
     
-        private async Task<T> RetrySapAsync<T>(Func<Task<T>> action, int maxRetryCount = 2, int shortDelayMs = 2000)
+    private async Task<T> RetrySapAsync<T>(Func<Task<T>> action, int maxRetryCount = 2, int shortDelayMs = 2000)
+    {
+        int currentTry = 0;
+        
+        while (true) 
         {
-            int currentTry = 0;
-
-            while (true)
+            try
             {
-                try
-                {
-                    return await action().ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    currentTry++;
-                    if (currentTry > maxRetryCount) throw;
-                    Log.Warning(ex, "SAP 调用失败，将在 {Delay}ms 后重试…", shortDelayMs);
-                    await Task.Delay(shortDelayMs);
-                }
+                return await action().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                currentTry++;
+                if (currentTry > maxRetryCount) throw;
+                Log.Warning(ex, "SAP 调用失败，将在 {Delay}ms 后重试…", shortDelayMs);
+                await Task.Delay(shortDelayMs);
             }
         }
+    }
     
     private static string NormalizePhone(string phone)
     {
