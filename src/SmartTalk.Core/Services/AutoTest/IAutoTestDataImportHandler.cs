@@ -86,7 +86,7 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
                                 ["MonthEnd"] = to
                             };
                             
-                            _smartTalkBackgroundJobClient.Enqueue(() => _autoTestDataImportHandlerSwitcher.GetHandler(ImportType).ImportAsync(importForMonth, scenarioId, dataSetId, recordId, CancellationToken.None));
+                            _smartTalkBackgroundJobClient.Enqueue<ApiDataImportHandler>(h => h.ImportAsync(importForMonth, scenarioId, dataSetId, recordId, CancellationToken.None));
 
                             monthStart = monthStart.AddMonths(1);
                             monthLimit++;
