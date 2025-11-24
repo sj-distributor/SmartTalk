@@ -142,6 +142,7 @@ public partial class PosDataProvider : IPosDataProvider
                 PosName = store.PosName,
                 TimePeriod = store.TimePeriod,
                 Timezone = store.Timezone,
+                IsManualReview = store.IsManualReview,
                 CreatedBy = store.CreatedBy,
                 CreatedDate = store.CreatedDate,
                 LastModifiedBy = store.LastModifiedBy,
