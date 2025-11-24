@@ -143,8 +143,8 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
                 allRecords.AddRange(list); 
         }
         
-        var singleCallNumbers = allRecords.GroupBy(r => NormalizePhone(r.From?.PhoneNumber ?? r.To?.PhoneNumber)).Where(g => g.Count() == 1)
-            .Select(g => g.Key).Where(p => !string.IsNullOrWhiteSpace(p)).ToList();
+        var singleCallNumbers = allRecords.GroupBy(r => new { Phone = NormalizePhone(r.From?.PhoneNumber ?? r.To?.PhoneNumber), Date = r.StartTime.Date })
+            .Where(g => g.Count() == 1).Select(g => g.Key.Phone).ToList();
         
         if (!singleCallNumbers.Any())
         {
@@ -173,7 +173,7 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
                     CustomerId = new List<string> { customerId },
                     StartDate = sapStartDate,
                     EndDate = sapEndDate
-                }, cancellationToken)).ConfigureAwait(false);
+                },cancellationToken), isRingCentralCall: false).ConfigureAwait(false);
 
             var sapOrders = sapResp?.Data?.RecordingData ?? new List<RecordingDataItem>();
             Log.Information("SAP 返回 {Count} 条订单记录, Customer={CustomerId}, Date={Date}", sapOrders.Count, customerId, sapStartDate);
@@ -216,23 +216,36 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
         }
     }
     
-    private async Task<T> RetryAsync<T>(Func<Task<T>> action, int retryCount = 2, int delayMs = 2000)
+    private async Task<T> RetryAsync<T>(Func<Task<T>> action, bool isRingCentralCall = false, int maxRetryCount = 2, int shortDelayMs = 2000)
     {
         int currentTry = 0;
+
         while (true)
         {
             try
             {
                 return await action();
             }
-            catch
+            catch (Exception ex)
             {
                 currentTry++;
-                if (currentTry > retryCount) throw;
-                await Task.Delay(delayMs);
+                
+                if (isRingCentralCall)
+                {
+                    if (currentTry > maxRetryCount) throw;
+                    Log.Warning(ex, "RingCentral 调用失败，将在60秒后重试…");
+                    await Task.Delay(TimeSpan.FromSeconds(60));
+                }
+                else
+                {
+                    if (currentTry > maxRetryCount) throw;
+                    Log.Warning(ex, "操作失败，将在 {Delay}ms 后重试…", shortDelayMs);
+                    await Task.Delay(shortDelayMs);
+                }
             }
         }
     }
+
     
     private static string NormalizePhone(string phone)
     {
@@ -266,7 +279,7 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
             var resp = await _ringCentralClient.GetRingCentralRecordAsync(req, token, cancellationToken).ConfigureAwait(false);
 
             return resp?.Records ?? new List<RingCentralRecordDto>();
-        });
+        }, isRingCentralCall: true);
     }
 }
 
