@@ -98,8 +98,18 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
             return null; 
         } 
         var customerId = import["CustomerId"].ToString(); 
-        var startDate = (DateTime)import["StartDate"]; 
-        var endDate = (DateTime)import["EndDate"]; 
+        DateTime startDate;
+        DateTime endDate;
+        if (import.ContainsKey("MonthStart") && import.ContainsKey("MonthEnd"))
+        {
+            startDate = (DateTime)import["MonthStart"];
+            endDate = (DateTime)import["MonthEnd"];
+        }
+        else
+        {
+            startDate = (DateTime)import["StartDate"];
+            endDate = (DateTime)import["EndDate"];
+        }
         
         var tokenResponse = await _ringCentralClient.TokenAsync(cancellationToken).ConfigureAwait(false); 
         var token = tokenResponse.AccessToken;
@@ -113,51 +123,48 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
             return null; 
         }
         
-        var allRecords = new List<RingCentralRecordDto>();
+        var allMatchedItems = new List<AutoTestDataItem>();
         
-        foreach (var phone in phoneNumbers) 
-        { 
-            var monthTasks = new List<Task<List<RingCentralRecordDto>>>();
-            
-            var monthStart = new DateTime(startDate.Year, startDate.Month, 1); 
+        foreach (var phone in phoneNumbers)
+        {
+            var monthStart = new DateTime(startDate.Year, startDate.Month, 1);
             var finalMonth = new DateTime(endDate.Year, endDate.Month, 1);
-            
+
             int monthLimit = 0;
-            
-            while (monthStart <= finalMonth && monthLimit < 12) 
+
+            while (monthStart <= finalMonth && monthLimit < 12)
             { 
                 var monthEnd = monthStart.AddMonths(1).AddDays(-1);
                 
                 var from = monthStart < startDate ? startDate : monthStart; 
                 var to = monthEnd > endDate ? endDate : monthEnd;
                 
-                monthTasks.Add(LoadOneMonthAsync(phone, token, from, to, cancellationToken));
+                var rcRecords = await LoadOneMonthAsync(phone, token, from, to, cancellationToken).ConfigureAwait(false);
                 
-                monthStart = monthStart.AddMonths(1); 
-                monthLimit++; 
+                foreach (var rcRecord in rcRecords)
+                {
+                    try
+                    {
+                        var matchedItem = await MatchOrderAndRecordingAsync(customerId, rcRecord, scenario.Id, recordId, cancellationToken).ConfigureAwait(false);
+                        if (matchedItem != null)
+                        { 
+                            allMatchedItems.Add(matchedItem);
+                            await _autoTestDataProvider.AddAutoTestDataItemsAsync(new List<AutoTestDataItem> { matchedItem }, true, cancellationToken).ConfigureAwait(false);
+                            var setItem = new AutoTestDataSetItem { DataItemId = matchedItem.Id, DataSetId = 0, CreatedAt = DateTimeOffset.Now };
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "处理单条 RC 并匹配 SAP 失败 Customer={CustomerId}, Phone={Phone}, StartTime={StartTime}", customerId, phone, rcRecord.StartTime);
+                    }
+                }
+
+                monthStart = monthStart.AddMonths(1);
+                monthLimit++;
             }
-            
-            var monthResults = await Task.WhenAll(monthTasks).ConfigureAwait(false);
-            
-            foreach (var list in monthResults) 
-                allRecords.AddRange(list); 
         }
         
-        var singleCallNumbers = allRecords.GroupBy(r => new { Phone = NormalizePhone(r.From?.PhoneNumber ?? r.To?.PhoneNumber), Date = r.StartTime.Date })
-            .Where(g => g.Count() == 1).Select(g => g.Key.Phone).ToList();
-        
-        if (!singleCallNumbers.Any())
-        {
-            Log.Warning("没有符合条件的单通话号码，跳过匹配");
-            return null;
-        }
-        
-        var matchedTasks = singleCallNumbers.Select(phone => allRecords.First(r => NormalizePhone(r.From?.PhoneNumber ?? r.To?.PhoneNumber) == phone))
-            .Select(record => MatchOrderAndRecordingAsync(customerId, record, scenario.Id, recordId, cancellationToken)).ToList();
-        
-        var matchedItems = (await Task.WhenAll(matchedTasks)).Where(x => x != null).ToList();
-        
-        return matchedItems;
+        return allMatchedItems;
     }
 
     private async Task<AutoTestDataItem> MatchOrderAndRecordingAsync(string customerId, RingCentralRecordDto record, int scenarioId, int importRecordId, CancellationToken cancellationToken)
@@ -165,15 +172,13 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
         try
         {
             var sapStartDate = record.StartTime.Date;
-            var sapEndDate = sapStartDate.AddDays(1);
-
-            var sapResp = await RetryAsync(() 
-                => _sapGatewayClient.QueryRecordingDataAsync(new QueryRecordingDataRequest
+            var sapResp = await RetrySapAsync(() =>
+                _sapGatewayClient.QueryRecordingDataAsync(new QueryRecordingDataRequest
                 {
                     CustomerId = new List<string> { customerId },
                     StartDate = sapStartDate,
-                    EndDate = sapEndDate
-                },cancellationToken), isRingCentralCall: false).ConfigureAwait(false);
+                    EndDate = sapStartDate.AddDays(1)
+                }, cancellationToken)).ConfigureAwait(false);
 
             var sapOrders = sapResp?.Data?.RecordingData ?? new List<RecordingDataItem>();
             Log.Information("SAP 返回 {Count} 条订单记录, Customer={CustomerId}, Date={Date}", sapOrders.Count, customerId, sapStartDate);
@@ -216,36 +221,41 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
         }
     }
     
-    private async Task<T> RetryAsync<T>(Func<Task<T>> action, bool isRingCentralCall = false, int maxRetryCount = 2, int shortDelayMs = 2000)
-    {
-        int currentTry = 0;
-
-        while (true)
+        private async Task<T> RetryForeverAsync<T>(Func<Task<T>> action)
         {
-            try
+            while (true)
             {
-                return await action();
-            }
-            catch (Exception ex)
-            {
-                currentTry++;
-                
-                if (isRingCentralCall)
+                try
                 {
-                    if (currentTry > maxRetryCount) throw;
-                    Log.Warning(ex, "RingCentral 调用失败，将在60秒后重试…");
+                    return await action().ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning(ex, "RingCentral 调用失败，将在60秒后继续重试（无限重试）...");
                     await Task.Delay(TimeSpan.FromSeconds(60));
                 }
-                else
+            }
+        }
+    
+        private async Task<T> RetrySapAsync<T>(Func<Task<T>> action, int maxRetryCount = 2, int shortDelayMs = 2000)
+        {
+            int currentTry = 0;
+
+            while (true)
+            {
+                try
                 {
+                    return await action().ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    currentTry++;
                     if (currentTry > maxRetryCount) throw;
-                    Log.Warning(ex, "操作失败，将在 {Delay}ms 后重试…", shortDelayMs);
+                    Log.Warning(ex, "SAP 调用失败，将在 {Delay}ms 后重试…", shortDelayMs);
                     await Task.Delay(shortDelayMs);
                 }
             }
         }
-    }
-
     
     private static string NormalizePhone(string phone)
     {
@@ -260,7 +270,7 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
     
     private async Task<List<RingCentralRecordDto>> LoadOneMonthAsync(string phone, string token, DateTime from, DateTime to, CancellationToken cancellationToken)
     {
-        return await RetryAsync(async () =>
+        return await RetryForeverAsync(async () =>
         {
             Log.Information(
                 "【LoadOneMonth】请求 RC 月度通话记录 Phone={Phone}, From={From}, To={To}",
@@ -273,13 +283,13 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
                 DateTo = to,
                 WithRecording = true,
                 Page = 1,
-                PerPage = 50 
+                PerPage = 50
             };
 
             var resp = await _ringCentralClient.GetRingCentralRecordAsync(req, token, cancellationToken).ConfigureAwait(false);
 
             return resp?.Records ?? new List<RingCentralRecordDto>();
-        }, isRingCentralCall: true);
+        }).ConfigureAwait(false);
     }
 }
 

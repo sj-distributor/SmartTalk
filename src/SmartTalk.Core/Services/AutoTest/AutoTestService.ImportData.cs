@@ -72,7 +72,25 @@ public partial class AutoTestService
         
         await _autoTestDataProvider.UpdateAutoTestDataSetAsync(dataSet, true, cancellationToken).ConfigureAwait(false);
         
-        _smartTalkBackgroundJobClient.Enqueue(() => _autoTestDataImportHandlerSwitcher.GetHandler(command.ImportType).ImportAsync(command.ImportData, command.ScenarioId, dataSet.Id, importRecord.Id,cancellationToken));
+        var monthStart = new DateTime(startDate.Year, startDate.Month, 1);
+        var finalMonth = new DateTime(endDate.Year, endDate.Month, 1);
+
+        while (monthStart <= finalMonth)
+        {
+            var ms = monthStart;
+            var me = monthStart.AddMonths(1).AddDays(-1);
+            
+            var from = ms < startDate ? startDate : ms;
+            var to = me > endDate ? endDate : me;
+            
+            var importForMonth = new Dictionary<string, object>(command.ImportData);
+            importForMonth["MonthStart"] = from;
+            importForMonth["MonthEnd"] = to;
+            
+            _smartTalkBackgroundJobClient.Enqueue(() => _autoTestDataImportHandlerSwitcher.GetHandler(command.ImportType).ImportAsync(importForMonth, command.ScenarioId, dataSet.Id, importRecord.Id, CancellationToken.None));
+
+            monthStart = monthStart.AddMonths(1);
+        }
 
         return new AutoTestImportDataResponse()
         {
