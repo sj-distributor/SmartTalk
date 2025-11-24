@@ -58,6 +58,8 @@ public partial interface IPosDataProvider : IScopedDependency
     Task<List<ServiceProvider>> GetServiceProviderByIdAsync(int? serviceProviderId = null, CancellationToken cancellationToken = default);
     
     Task<List<(CompanyStore Store, Agent Agent)>> GetStoresAndAgentsAsync(CancellationToken cancellationToken);
+    
+    Task<List<SimpleStoreAgentDto>> GetSimpleStoreAgentsAsync(CancellationToken cancellationToken);
 }
 
 public partial class PosDataProvider : IPosDataProvider
@@ -140,6 +142,7 @@ public partial class PosDataProvider : IPosDataProvider
                 PosName = store.PosName,
                 TimePeriod = store.TimePeriod,
                 Timezone = store.Timezone,
+                IsManualReview = store.IsManualReview,
                 CreatedBy = store.CreatedBy,
                 CreatedDate = store.CreatedDate,
                 LastModifiedBy = store.LastModifiedBy,
@@ -386,5 +389,19 @@ public partial class PosDataProvider : IPosDataProvider
         var result = await query.ToListAsync(cancellationToken).ConfigureAwait(false);
         
         return result.Select(x => (x.store, x.agent)).ToList();
+    }
+
+    public async Task<List<SimpleStoreAgentDto>> GetSimpleStoreAgentsAsync(CancellationToken cancellationToken)
+    {
+        var query = from store in _repository.Query<CompanyStore>()
+            join posAgent in _repository.Query<PosAgent>() on store.Id equals posAgent.StoreId
+            join agent in _repository.Query<Agent>().Where(x => x.IsDisplay) on posAgent.AgentId equals agent.Id
+            select new SimpleStoreAgentDto
+            {
+                StoreId = store.Id,
+                AgentId = agent.Id
+            };
+        
+        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }
