@@ -2,12 +2,12 @@ using Serilog;
 using System.Text;
 using OpenAI.Chat;
 using Newtonsoft.Json;
-using System.Diagnostics;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using AutoMapper;
 using SmartTalk.Core.Ioc;
 using Google.Cloud.Translation.V2;
+using Hangfire;
 using SmartTalk.Core.Services.STT;
 using SmartTalk.Core.Services.Http;
 using Smarties.Messages.DTO.OpenAi;
@@ -17,7 +17,6 @@ using SmartTalk.Core.Settings.OpenAi;
 using Smarties.Messages.Requests.Ask;
 using SmartTalk.Core.Domain.AutoTest;
 using SmartTalk.Core.Domain.SpeechMatics;
-using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Services.Ffmpeg;
 using SmartTalk.Messages.Dto.AutoTest;
 using SmartTalk.Messages.Enums.Caching;
@@ -33,7 +32,10 @@ using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.Sale;
 using SmartTalk.Messages.Commands.Attachments;
 using SmartTalk.Messages.Dto.Attachments;
+using SmartTalk.Messages.Dto.RingCentral;
 using SmartTalk.Messages.Dto.Sales;
+using SmartTalk.Messages.Requests.AutoTest;
+using JsonSerializer = System.Text.Json.JsonSerializer;
 using TranscriptionFileType = SmartTalk.Messages.Enums.STT.TranscriptionFileType;
 using TranscriptionResponseFormat = SmartTalk.Messages.Enums.STT.TranscriptionResponseFormat;
 
@@ -51,12 +53,15 @@ public interface IAutoTestSalesPhoneOrderProcessJobService : IScopedDependency
 public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrderProcessJobService
 {
     private readonly IMapper _mapper;
+    private readonly ICrmClient _crmClient;
     private readonly ISalesClient _salesClient;
     private readonly IFfmpegService _ffmpegService;
     private readonly OpenAiSettings _openAiSettings;
     private readonly ISmartiesClient _smartiesClient;
     private readonly IRedisSafeRunner _redisSafeRunner;
     private readonly TranslationClient _translationClient;
+    private readonly ISapGatewayClients _sapGatewayClient;
+    private readonly IRingCentralClient _ringCentralClient;
     private readonly IAttachmentService _attachmentService;
     private readonly ISalesDataProvider _salesDataProvider;
     private readonly ISpeechToTextService _speechToTextService;
@@ -70,12 +75,15 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
 
     public AutoTestSalesPhoneOrderProcessJobService(
         IMapper mapper,
+        ICrmClient crmClient,
         ISalesClient salesClient,
         IFfmpegService ffmpegService,
         OpenAiSettings openAiSettings,
         ISmartiesClient smartiesClient,
         IRedisSafeRunner redisSafeRunner,
         TranslationClient translationClient,
+        ISapGatewayClients sapGatewayClient,
+        IRingCentralClient ringCentralClient,
         IAttachmentService attachmentService,
         ISalesDataProvider salesDataProvider,
         ISpeechMaticsService speechMaticsService,
@@ -88,6 +96,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
         _mapper = mapper;
+        _crmClient = crmClient;
         _salesClient = salesClient;
         _ffmpegService = ffmpegService;
         _openAiSettings = openAiSettings;
@@ -96,6 +105,8 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         _attachmentService = attachmentService;
         _salesDataProvider = salesDataProvider;
         _translationClient = translationClient;
+        _sapGatewayClient = sapGatewayClient;
+        _ringCentralClient = ringCentralClient;
         _httpClientFactory = httpClientFactory;
         _speechToTextService = speechToTextService;
         _speechMaticsService = speechMaticsService;
@@ -150,28 +161,91 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         var startDate = (DateTime)import["StartDate"];
         var endDate = (DateTime)import["EndDate"];
 
-        var monthStart = new DateTime(startDate.Year, startDate.Month, 1);
-        var finalMonth = new DateTime(endDate.Year, endDate.Month, 1);
-
-        int monthLimit = 0;
-
-        while (monthStart <= finalMonth && monthLimit < 12)
+        var cursor = new DateTime(startDate.Year, startDate.Month, 1);
+        while (cursor <= endDate)
         {
-            var monthEnd = monthStart.AddMonths(1).AddDays(-1);
-
-            var from = monthStart < startDate ? startDate : monthStart;
-            var to = monthEnd > endDate ? endDate : monthEnd;
-
-            var importForMonth = new Dictionary<string, object>(import)
-            {
-                ["MonthStart"] = from,
-                ["MonthEnd"] = to
-            };
+            var monthStart = cursor < startDate ? startDate : cursor;
+            var monthEnd = cursor.AddMonths(1).AddDays(-1);
+            if (monthEnd > endDate) monthEnd = endDate;
             
-            _smartTalkBackgroundJobClient.Enqueue<ApiDataImportHandler>(h => h.ImportAsync(importForMonth, scenarioId, dataSetId, recordId, cancellationToken));
+            _smartTalkBackgroundJobClient.Enqueue(() => ProcessSingleMonthAsync(scenarioId, dataSetId, recordId, monthStart, monthEnd, import, cancellationToken));
 
-            monthStart = monthStart.AddMonths(1);
-            monthLimit++;
+            cursor = cursor.AddMonths(1);
+        }
+    }
+    
+    [AutomaticRetry(Attempts = 3)]
+    public async Task ProcessSingleMonthAsync(int scenarioId, int dataSetId, int recordId, DateTime from, DateTime to, Dictionary<string, object> import, CancellationToken cancellationToken)
+    {
+        var record = await _autoTestDataProvider.GetAutoTestImportDataRecordAsync(recordId, cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            if (!import.TryGetValue("CustomerId", out var customerObj))
+            {
+                Log.Warning("导入数据缺少 CustomerId");
+                return;
+            }
+            var customerId = customerObj.ToString();
+            var token = (await _ringCentralClient.TokenAsync(cancellationToken)).AccessToken;
+
+            var contacts = await _crmClient.GetCustomerContactsAsync(customerId, cancellationToken).ConfigureAwait(false);
+            var phoneNumbers = contacts.Select(c => NormalizePhone(c.Phone)).Where(p => !string.IsNullOrEmpty(p)).Distinct().ToList();
+
+            if (!phoneNumbers.Any())
+                return;
+
+            var allRecords = new List<RingCentralRecordDto>();
+            foreach (var phone in phoneNumbers)
+            {
+                allRecords.AddRange(await LoadOneMonthAsync(phone, token, from, to, cancellationToken));
+            }
+
+            var singleCallNumbersByDate = allRecords.GroupBy(r => new { Phone = NormalizePhone(r.From?.PhoneNumber ?? r.To?.PhoneNumber), Date = r.StartTime.Date })
+                .Where(g => g.Count() == 1).Select(g => g.Key).ToList();
+
+            if (!singleCallNumbersByDate.Any())
+                return;
+
+            var matchedTasks = singleCallNumbersByDate.Select(x =>
+            {
+                var recordDto = allRecords.First(r => NormalizePhone(r.From?.PhoneNumber ?? r.To?.PhoneNumber) == x.Phone && r.StartTime.Date == x.Date);
+                return MatchOrderAndRecordingAsync(customerId, recordDto, scenarioId, recordId, cancellationToken);
+            }).ToList();
+            
+            var matchedItems = new List<AutoTestDataItem>();
+            while (matchedTasks.Any())
+            {
+                var finished = await Task.WhenAny(matchedTasks).ConfigureAwait(false);
+                matchedTasks.Remove(finished);
+
+                var result = await finished.ConfigureAwait(false);
+                if (result != null)
+                {
+                    matchedItems.Add(result);
+                    
+                    await _autoTestDataProvider.AddAutoTestDataItemsAsync(new List<AutoTestDataItem> { result }, true, cancellationToken).ConfigureAwait(false);
+                    var setItem = new AutoTestDataSetItem
+                    {
+                        DataSetId = dataSetId,
+                        DataItemId = result.Id,
+                        CreatedAt = DateTimeOffset.Now
+                    };
+                    await _autoTestDataProvider.AddAutoTestDataSetItemsAsync(new List<AutoTestDataSetItem> { setItem }, cancellationToken).ConfigureAwait(false);
+                }
+            }
+
+            record.Status = matchedItems.Any() ? AutoTestStatus.Done : AutoTestStatus.Failed;
+            await _autoTestDataProvider.UpdateAutoTestImportRecordAsync(record, true, cancellationToken).ConfigureAwait(false);
+
+            if (!matchedItems.Any())
+            {
+                Log.Information("Scenario {ScenarioId} 没有匹配的记录", scenarioId);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "ProcessSingleMonthAsync 失败 ScenarioId={ScenarioId}", scenarioId);
         }
     }
 
@@ -760,5 +834,128 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         record.Status = status;
         
         await _autoTestDataProvider.UpdateTaskRecordsAsync([record], true, cancellationToken).ConfigureAwait(false);
+    }
+    
+    private async Task<AutoTestDataItem> MatchOrderAndRecordingAsync(string customerId, RingCentralRecordDto record, int scenarioId, int importRecordId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var sapStartDate = record.StartTime.Date;
+            var sapResp = await RetrySapAsync(() =>
+                _sapGatewayClient.QueryRecordingDataAsync(new QueryRecordingDataRequest
+                {
+                    CustomerId = new List<string> { customerId },
+                    StartDate = sapStartDate,
+                    EndDate = sapStartDate.AddDays(1)
+                }, cancellationToken)).ConfigureAwait(false);
+
+            var sapOrders = sapResp?.Data?.RecordingData ?? new List<RecordingDataItem>();
+            Log.Information("SAP 返回 {Count} 条订单记录, Customer={CustomerId}, Date={Date}", sapOrders.Count, customerId, sapStartDate);
+            if (!sapOrders.Any()) return null;
+            
+            var oneOrderGroup = sapOrders.GroupBy(x => x.SalesDocument).SingleOrDefault();
+            if (oneOrderGroup == null)
+            {
+                Log.Warning("SAP 没有找到唯一订单记录, Customer={CustomerId}", customerId);
+                return null;
+            }
+            Log.Information("匹配成功: Customer={CustomerId}, Order={OrderId}, 项目数={ItemCount}", customerId, oneOrderGroup.Key, oneOrderGroup.Count());
+            
+            var inputJsonDto = new AutoTestInputJsonDto
+            {
+                Recording = record.Recording?.Uri ?? "",
+                OrderId = oneOrderGroup.Key,
+                CustomerId = customerId,
+                Detail = oneOrderGroup.Select((i, index) => new AutoTestInputDetail
+                {
+                    SerialNumber = index + 1,
+                    Quantity = i.Qty,
+                    ItemName = i.Description ?? "",
+                    ItemId = i.Material
+                }).ToList()
+            };
+
+            return new AutoTestDataItem
+            {
+                ScenarioId = scenarioId,
+                ImportRecordId = importRecordId,
+                InputJson = JsonSerializer.Serialize(inputJsonDto),
+                CreatedAt = DateTimeOffset.Now
+            };
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "匹配订单和录音失败 {CustomerId}", customerId);
+            return null;
+        }
+    }
+    
+    private async Task<T> RetryForeverAsync<T>(Func<Task<T>> action)
+    {
+        while (true)
+        { 
+            try
+            {
+                return await action().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "RingCentral 调用失败，将在60秒后继续重试（无限重试）...");
+                await Task.Delay(TimeSpan.FromSeconds(60));
+            }
+        }
+    }
+    
+    private async Task<T> RetrySapAsync<T>(Func<Task<T>> action, int maxRetryCount = 2, int shortDelayMs = 2000)
+    {
+        int currentTry = 0;
+        
+        while (true) 
+        {
+            try
+            {
+                return await action().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                currentTry++;
+                if (currentTry > maxRetryCount) throw;
+                Log.Warning(ex, "SAP 调用失败，将在 {Delay}ms 后重试…", shortDelayMs);
+                await Task.Delay(shortDelayMs);
+            }
+        }
+    }
+    
+    private static string NormalizePhone(string phone)
+    {
+        if (string.IsNullOrWhiteSpace(phone)) return phone;
+        
+        var digits = new string(phone.Where(char.IsDigit).ToArray());
+
+        if (digits.Length == 10) return "1" + digits;
+
+        return digits;
+    }
+    
+    private async Task<List<RingCentralRecordDto>> LoadOneMonthAsync(string phone, string token, DateTime from, DateTime to, CancellationToken cancellationToken)
+    {
+        return await RetryForeverAsync(async () =>
+        {
+            Log.Information("【LoadOneMonth】请求 RC 月度通话记录 Phone={Phone}, From={From}, To={To}", phone, from, to);
+
+            var req = new RingCentralCallLogRequestDto
+            {
+                PhoneNumber = phone,
+                DateFrom = from,
+                DateTo = to,
+                WithRecording = true,
+                Page = 1,
+                PerPage = 50
+            };
+
+            var resp = await _ringCentralClient.GetRingCentralRecordAsync(req, token, cancellationToken).ConfigureAwait(false);
+
+            return resp?.Records ?? new List<RingCentralRecordDto>();
+        }).ConfigureAwait(false);
     }
 }
