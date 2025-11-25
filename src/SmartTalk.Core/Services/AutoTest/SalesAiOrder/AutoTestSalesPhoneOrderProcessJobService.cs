@@ -29,6 +29,7 @@ using SmartTalk.Core.Services.Caching.Redis;
 using SmartTalk.Messages.Enums.SpeechMatics;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Attachments;
+using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.Sale;
 using SmartTalk.Messages.Commands.Attachments;
 using SmartTalk.Messages.Dto.Attachments;
@@ -43,6 +44,8 @@ public interface IAutoTestSalesPhoneOrderProcessJobService : IScopedDependency
     Task StartTestingSalesPhoneOrderTaskAsync(int taskId, int taskRecordId, CancellationToken cancellationToken);
     
     Task HandleTestingSalesPhoneOrderSpeechMaticsCallBackAsync(string jobId, CancellationToken cancellationToken);
+
+    Task CreateMonthlyJobsAsync(Dictionary<string, object> import, int scenarioId, int dataSetId, int recordId, CancellationToken cancellationToken);
 }
 
 public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrderProcessJobService
@@ -62,6 +65,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
     private readonly ISpeechMaticsDataProvider _speechMaticsDataProvider;
     private readonly ISmartTalkHttpClientFactory _smartTalkHttpClientFactory;
+    private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
 
     public AutoTestSalesPhoneOrderProcessJobService(
@@ -80,6 +84,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         ISmartTalkHttpClientFactory httpClientFactory,
         ISpeechMaticsDataProvider speechMaticsDataProvider,
         ISmartTalkHttpClientFactory smartTalkHttpClientFactory,
+        ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient,
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
         _mapper = mapper;
@@ -97,6 +102,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         _autoTestDataProvider = autoTestDataProvider;
         _speechMaticsDataProvider = speechMaticsDataProvider;
         _smartTalkHttpClientFactory = smartTalkHttpClientFactory;
+        _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
     }
 
@@ -137,6 +143,36 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         await _autoTestDataProvider.UpdateAutoTestTaskRecordAsync(record, true, cancellationToken).ConfigureAwait(false);
         
         await HandleAutoTestTaskStatusChangeAsync(task, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task CreateMonthlyJobsAsync(Dictionary<string, object> import, int scenarioId, int dataSetId, int recordId, CancellationToken cancellationToken)
+    {
+        var startDate = (DateTime)import["StartDate"];
+        var endDate = (DateTime)import["EndDate"];
+
+        var monthStart = new DateTime(startDate.Year, startDate.Month, 1);
+        var finalMonth = new DateTime(endDate.Year, endDate.Month, 1);
+
+        int monthLimit = 0;
+
+        while (monthStart <= finalMonth && monthLimit < 12)
+        {
+            var monthEnd = monthStart.AddMonths(1).AddDays(-1);
+
+            var from = monthStart < startDate ? startDate : monthStart;
+            var to = monthEnd > endDate ? endDate : monthEnd;
+
+            var importForMonth = new Dictionary<string, object>(import)
+            {
+                ["MonthStart"] = from,
+                ["MonthEnd"] = to
+            };
+            
+            _smartTalkBackgroundJobClient.Enqueue<ApiDataImportHandler>(h => h.ImportAsync(importForMonth, scenarioId, dataSetId, recordId, cancellationToken));
+
+            monthStart = monthStart.AddMonths(1);
+            monthLimit++;
+        }
     }
 
     private async Task ProcessingTestSalesPhoneOrderSpeechMaticsCallBackAsync(

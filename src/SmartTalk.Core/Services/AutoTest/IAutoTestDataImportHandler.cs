@@ -1,7 +1,9 @@
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using Serilog;
 using SmartTalk.Core.Domain.AutoTest;
 using SmartTalk.Core.Ioc;
+using SmartTalk.Core.Services.AutoTest.SalesAiOrder;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Messages.Dto.AutoTest;
@@ -39,18 +41,16 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
     private readonly ICrmClient _crmClient;
     private readonly IRingCentralClient _ringCentralClient;
     private readonly IAutoTestDataProvider _autoTestDataProvider;
-    private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
-    private readonly IAutoTestDataImportHandlerSwitcher _autoTestDataImportHandlerSwitcher;
+    private readonly IAutoTestSalesPhoneOrderProcessJobService _autoTestSalesPhoneOrderProcessJobService;
 
     public ApiDataImportHandler(ISapGatewayClients sapGatewayClient, ICrmClient crmClient, IRingCentralClient ringCentralClient, IAutoTestDataProvider autoTestDataProvider,
-        ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient, IAutoTestDataImportHandlerSwitcher autoTestDataImportHandlerSwitcher)
+        IAutoTestSalesPhoneOrderProcessJobService autoTestSalesPhoneOrderProcessJobService)
     {
         _sapGatewayClient = sapGatewayClient;
         _crmClient = crmClient;
         _ringCentralClient = ringCentralClient;
         _autoTestDataProvider = autoTestDataProvider;
-        _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
-        _autoTestDataImportHandlerSwitcher = autoTestDataImportHandlerSwitcher;
+        _autoTestSalesPhoneOrderProcessJobService = autoTestSalesPhoneOrderProcessJobService;
     }
     
     public async Task ImportAsync(Dictionary<string, object> import, int scenarioId, int dataSetId, int recordId, CancellationToken cancellationToken = default)
@@ -67,30 +67,7 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
                 case "AiOrder": 
                     if (!import.ContainsKey("MonthStart") || !import.ContainsKey("MonthEnd"))
                     {
-                        var startDate = (DateTime)import["StartDate"];
-                        var endDate = (DateTime)import["EndDate"];
-
-                        var monthStart = new DateTime(startDate.Year, startDate.Month, 1);
-                        var finalMonth = new DateTime(endDate.Year, endDate.Month, 1);
-
-                        int monthLimit = 0;
-                        while (monthStart <= finalMonth && monthLimit < 12)
-                        {
-                            var monthEnd = monthStart.AddMonths(1).AddDays(-1);
-                            var from = monthStart < startDate ? startDate : monthStart;
-                            var to = monthEnd > endDate ? endDate : monthEnd;
-
-                            var importForMonth = new Dictionary<string, object>(import)
-                            {
-                                ["MonthStart"] = from,
-                                ["MonthEnd"] = to
-                            };
-                            
-                            _smartTalkBackgroundJobClient.Enqueue<ApiDataImportHandler>(h => h.ImportAsync(importForMonth, scenarioId, dataSetId, recordId, cancellationToken));
-
-                            monthStart = monthStart.AddMonths(1);
-                            monthLimit++;
-                        }
+                        await _autoTestSalesPhoneOrderProcessJobService.CreateMonthlyJobsAsync(import, scenarioId, dataSetId, recordId, cancellationToken).ConfigureAwait(false);
 
                         return;
                     }
