@@ -386,7 +386,7 @@ public partial class PosDataProvider : IPosDataProvider
             from agent in agentGroups.DefaultIfEmpty()
             select new { store, agent };
         
-        if (serviceProviderId.HasValue) query = query.Where(x => x.store.Id == serviceProviderId.Value);
+        if (serviceProviderId.HasValue) query = query.Where(x => x.agent.ServiceProviderId == serviceProviderId.Value);
         
         var result = await query.ToListAsync(cancellationToken).ConfigureAwait(false);
         
