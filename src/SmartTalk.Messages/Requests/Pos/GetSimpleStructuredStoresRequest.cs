@@ -4,7 +4,7 @@ using SmartTalk.Messages.Responses;
 
 namespace SmartTalk.Messages.Requests.Pos;
 
-public class GetSimpleStructuredStoresRequest : IRequest
+public class GetSimpleStructuredStoresRequest : HasServiceProviderId, IRequest
 {
 }
 
