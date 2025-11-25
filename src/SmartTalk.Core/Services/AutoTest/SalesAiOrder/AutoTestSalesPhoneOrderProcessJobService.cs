@@ -817,7 +817,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
             var sapResp = await RetrySapAsync(() =>
                 _sapGatewayClient.QueryRecordingDataAsync(new QueryRecordingDataRequest
                 {
-                    CustomerId = new List<string> { customerId },
+                    CustomerId = new List<string> { "106991".PadLeft(10, '0') },
                     StartDate = sapStartDate,
                     EndDate = sapStartDate.AddDays(1)
                 }, cancellationToken)).ConfigureAwait(false);
