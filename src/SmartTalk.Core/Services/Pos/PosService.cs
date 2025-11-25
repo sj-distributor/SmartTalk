@@ -402,7 +402,7 @@ public partial class PosService : IPosService
 
     public async Task<GetStructuredStoresResponse> GetStructuredStoresAsync(GetStructuredStoresRequest request, CancellationToken cancellationToken)
     {
-        var storesAndAgents = await _posDataProvider.GetStoresAndAgentsAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+        var storesAndAgents = await _posDataProvider.GetStoresAndAgentsAsync(request.ServiceProviderId, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         var structuredStores = storesAndAgents.GroupBy(x => x.Store).Select(g => new StructuredStoreDto
         {
@@ -422,7 +422,7 @@ public partial class PosService : IPosService
     
     public async Task<GetSimpleStructuredStoresResponse> GetSimpleStructuredStoresAsync(GetSimpleStructuredStoresRequest request, CancellationToken cancellationToken)
     {
-        var storesAndAgents = await _posDataProvider.GetSimpleStoreAgentsAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+        var storesAndAgents = await _posDataProvider.GetSimpleStoreAgentsAsync(request.ServiceProviderId, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         await EnrichSimpleStoreUnreviewDataAsync(storesAndAgents, cancellationToken).ConfigureAwait(false);
         
