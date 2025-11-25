@@ -353,7 +353,7 @@ public partial class PosDataProvider : IPosDataProvider
 
     public async Task DeletePosAgentsByAgentIdsAsync(List<int> agentIds, bool forceSave = true, CancellationToken cancellationToken = default)
     {
-        var posAgents = await _repository.Query<PosAgent>().Where(x => agentIds.Contains(x.Id)).ToListAsync(cancellationToken).ConfigureAwait(false);
+        var posAgents = await _repository.Query<PosAgent>().Where(x => agentIds.Contains(x.AgentId)).ToListAsync(cancellationToken).ConfigureAwait(false);
 
         await _repository.DeleteAllAsync(posAgents, cancellationToken).ConfigureAwait(false);
 
