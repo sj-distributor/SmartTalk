@@ -74,8 +74,6 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
 
             if (assistant is not { IsAutoGenerateOrder: true }) return;
             
-            if (assistant is not { IsAutoGenerateOrder: true }) return;
-            
             var order = await MatchSimilarProductsAsync(record, shoppingCart, cancellationToken).ConfigureAwait(false);
             
             if (assistant is { IsAllowOrderPush: true })
