@@ -108,7 +108,7 @@ public class SalesService : ISalesService
             allItems.AddRange(orderItems.Select(x => FormatItem(x.MaterialDescription, x.LevelCode, x.MaterialNumber)));
         }
 
-        return string.Join(Environment.NewLine, allItems.Take(50));
+        return string.Join(Environment.NewLine, allItems.Distinct().Take(150));
     }
     
     public async Task<string> HandleOrderArrivalTimeList(List<string> customerIds, CancellationToken cancellationToken)
