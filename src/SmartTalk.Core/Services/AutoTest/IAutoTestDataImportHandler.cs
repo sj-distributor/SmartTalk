@@ -1,6 +1,7 @@
 using Serilog;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.AutoTest.SalesAiOrder;
+using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Messages.Enums.AutoTest;
 
 namespace SmartTalk.Core.Services.AutoTest;
@@ -30,12 +31,12 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
 {
     public AutoTestImportDataRecordType ImportType => AutoTestImportDataRecordType.Api;
     private readonly IAutoTestDataProvider _autoTestDataProvider;
-    private readonly IAutoTestSalesPhoneOrderProcessJobService _autoTestSalesPhoneOrderProcessJobService;
+    private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
 
-    public ApiDataImportHandler(IAutoTestDataProvider autoTestDataProvider, IAutoTestSalesPhoneOrderProcessJobService autoTestSalesPhoneOrderProcessJobService) 
+    public ApiDataImportHandler(IAutoTestDataProvider autoTestDataProvider, ISmartTalkBackgroundJobClient backgroundJobClient) 
     {
         _autoTestDataProvider = autoTestDataProvider;
-        _autoTestSalesPhoneOrderProcessJobService = autoTestSalesPhoneOrderProcessJobService;
+        _backgroundJobClient = backgroundJobClient;
     }
     
     public async Task ImportAsync(Dictionary<string, object> import, int scenarioId, int dataSetId, int recordId, CancellationToken cancellationToken = default)
@@ -46,7 +47,20 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
             switch (scenario.KeyName)
             {
                 case "AiOrder":
-                    await _autoTestSalesPhoneOrderProcessJobService.CreateMonthlyJobsAsync(import, scenarioId, dataSetId, recordId, cancellationToken).ConfigureAwait(false);
+                    if (!import.TryGetValue("CustomerId", out var customerId) || !import.TryGetValue("StartDate", out var startDate) || !import.TryGetValue("EndDate", out var endDate))
+                        return;
+                    
+                    var cursor = new DateTime(((DateTime)startDate).Year, ((DateTime)startDate).Month, 1);
+                    while (cursor <= (DateTime)endDate)
+                    {
+                        var monthStart = cursor < (DateTime)startDate ? startDate : cursor;
+                        var monthEnd = cursor.AddMonths(1).AddDays(-1);
+                        if (monthEnd > (DateTime)endDate) monthEnd = (DateTime)endDate;
+            
+                        _backgroundJobClient.Enqueue<IAutoTestSalesPhoneOrderProcessJobService>(x => x.ProcessPartialRecordingOrderMatchingAsync(scenarioId, dataSetId, recordId, (DateTime)monthStart, monthEnd, customerId.ToString(), cancellationToken));
+
+                        cursor = cursor.AddMonths(1);
+                    }
                     break;
 
                 default:

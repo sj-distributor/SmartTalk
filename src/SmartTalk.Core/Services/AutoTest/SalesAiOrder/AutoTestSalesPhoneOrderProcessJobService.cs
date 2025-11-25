@@ -47,7 +47,8 @@ public interface IAutoTestSalesPhoneOrderProcessJobService : IScopedDependency
     
     Task HandleTestingSalesPhoneOrderSpeechMaticsCallBackAsync(string jobId, CancellationToken cancellationToken);
 
-    Task CreateMonthlyJobsAsync(Dictionary<string, object> import, int scenarioId, int dataSetId, int recordId, CancellationToken cancellationToken);
+    Task ProcessPartialRecordingOrderMatchingAsync(
+        int scenarioId, int dataSetId, int recordId, DateTime from, DateTime to, string customerId, CancellationToken cancellationToken);
 }
 
 public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrderProcessJobService
@@ -156,44 +157,17 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         await HandleAutoTestTaskStatusChangeAsync(task, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task CreateMonthlyJobsAsync(Dictionary<string, object> import, int scenarioId, int dataSetId, int recordId, CancellationToken cancellationToken)
-    {
-        var startDate = (DateTime)import["StartDate"];
-        var endDate = (DateTime)import["EndDate"];
-
-        var cursor = new DateTime(startDate.Year, startDate.Month, 1);
-        while (cursor <= endDate)
-        {
-            var monthStart = cursor < startDate ? startDate : cursor;
-            var monthEnd = cursor.AddMonths(1).AddDays(-1);
-            if (monthEnd > endDate) monthEnd = endDate;
-            
-            _smartTalkBackgroundJobClient.Enqueue(() => ProcessSingleMonthAsync(scenarioId, dataSetId, recordId, monthStart, monthEnd, import, cancellationToken));
-
-            cursor = cursor.AddMonths(1);
-        }
-    }
-    
-    [AutomaticRetry(Attempts = 3)]
-    public async Task ProcessSingleMonthAsync(int scenarioId, int dataSetId, int recordId, DateTime from, DateTime to, Dictionary<string, object> import, CancellationToken cancellationToken)
+    public async Task ProcessPartialRecordingOrderMatchingAsync(int scenarioId, int dataSetId, int recordId, DateTime from, DateTime to, string customerId, CancellationToken cancellationToken)
     {
         var record = await _autoTestDataProvider.GetAutoTestImportDataRecordAsync(recordId, cancellationToken).ConfigureAwait(false);
 
         try
         {
-            if (!import.TryGetValue("CustomerId", out var customerObj))
-            {
-                Log.Warning("导入数据缺少 CustomerId");
-                return;
-            }
-            var customerId = customerObj.ToString();
             var token = (await _ringCentralClient.TokenAsync(cancellationToken)).AccessToken;
-
-            var contacts = await _crmClient.GetCustomerContactsAsync(customerId, cancellationToken).ConfigureAwait(false);
+            var contacts = await _crmClient.GetCustomerContactsAsync(customerId.ToString(), cancellationToken).ConfigureAwait(false);
             var phoneNumbers = contacts.Select(c => NormalizePhone(c.Phone)).Where(p => !string.IsNullOrEmpty(p)).Distinct().ToList();
 
-            if (!phoneNumbers.Any())
-                return;
+            if (!phoneNumbers.Any()) return;
 
             var allRecords = new List<RingCentralRecordDto>();
             foreach (var phone in phoneNumbers)
@@ -201,54 +175,41 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
                 allRecords.AddRange(await LoadOneMonthAsync(phone, token, from, to, cancellationToken));
             }
 
-            var singleCallNumbersByDate = allRecords.GroupBy(r => new { Phone = NormalizePhone(r.From?.PhoneNumber ?? r.To?.PhoneNumber), Date = r.StartTime.Date })
+            var singleCallNumbersByDate = allRecords.GroupBy(r => new { Phone = NormalizePhone(r.From?.PhoneNumber ?? r.To?.PhoneNumber), r.StartTime.Date })
                 .Where(g => g.Count() == 1).Select(g => g.Key).ToList();
 
-            if (!singleCallNumbersByDate.Any())
-                return;
+            if (!singleCallNumbersByDate.Any()) return;
 
             var matchedTasks = singleCallNumbersByDate.Select(x =>
             {
                 var recordDto = allRecords.First(r => NormalizePhone(r.From?.PhoneNumber ?? r.To?.PhoneNumber) == x.Phone && r.StartTime.Date == x.Date);
-                return MatchOrderAndRecordingAsync(customerId, recordDto, scenarioId, recordId, cancellationToken);
+                return MatchOrderAndRecordingAsync(customerId.ToString(), recordDto, scenarioId, recordId, cancellationToken);
             }).ToList();
             
-            var matchedItems = new List<AutoTestDataItem>();
-            while (matchedTasks.Any())
+            var autoTestDataItems = await Task.WhenAll(matchedTasks).ConfigureAwait(false);
+            if (autoTestDataItems.Any())
             {
-                var finished = await Task.WhenAny(matchedTasks).ConfigureAwait(false);
-                matchedTasks.Remove(finished);
+                await _autoTestDataProvider.AddAutoTestDataItemsAsync(autoTestDataItems.ToList(), true, cancellationToken).ConfigureAwait(false);
 
-                var result = await finished.ConfigureAwait(false);
-                if (result != null)
+                var autoTestDataSetItems = autoTestDataItems.Select(x => new AutoTestDataSetItem
                 {
-                    matchedItems.Add(result);
-                    
-                    await _autoTestDataProvider.AddAutoTestDataItemsAsync(new List<AutoTestDataItem> { result }, true, cancellationToken).ConfigureAwait(false);
-                    var setItem = new AutoTestDataSetItem
-                    {
-                        DataSetId = dataSetId,
-                        DataItemId = result.Id,
-                        CreatedAt = DateTimeOffset.Now
-                    };
-                    await _autoTestDataProvider.AddAutoTestDataSetItemsAsync(new List<AutoTestDataSetItem> { setItem }, cancellationToken).ConfigureAwait(false);
-                }
+                    DataSetId = dataSetId,
+                    DataItemId = x.Id,
+                }).ToList();
+                
+                await _autoTestDataProvider.AddAutoTestDataSetItemsAsync(autoTestDataSetItems, cancellationToken).ConfigureAwait(false);
             }
+            else Log.Information("Scenario {ScenarioId} 没有匹配的记录", scenarioId);
 
-            record.Status = matchedItems.Any() ? AutoTestStatus.Done : AutoTestStatus.Failed;
+            record.Status = AutoTestStatus.Done;
             await _autoTestDataProvider.UpdateAutoTestImportRecordAsync(record, true, cancellationToken).ConfigureAwait(false);
-
-            if (!matchedItems.Any())
-            {
-                Log.Information("Scenario {ScenarioId} 没有匹配的记录", scenarioId);
-            }
         }
         catch (Exception ex)
         {
             Log.Error(ex, "ProcessSingleMonthAsync 失败 ScenarioId={ScenarioId}", scenarioId);
         }
     }
-
+    
     private async Task ProcessingTestSalesPhoneOrderSpeechMaticsCallBackAsync(
         AutoTestTaskRecord record, Domain.AISpeechAssistant.AiSpeechAssistant assistant, SpeechMaticsJob speechMaticsJob, CancellationToken cancellationToken)
     {
@@ -955,7 +916,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
 
             var resp = await _ringCentralClient.GetRingCentralRecordAsync(req, token, cancellationToken).ConfigureAwait(false);
 
-            return resp?.Records ?? new List<RingCentralRecordDto>();
+            return resp?.Records ?? [];
         }).ConfigureAwait(false);
     }
 }
