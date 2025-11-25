@@ -18,7 +18,6 @@ using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Messages.Dto.SpeechMatics;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Core.Domain.AISpeechAssistant;
-using SmartTalk.Core.Services.SpeechMatics;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Dto.Sales;
