@@ -379,14 +379,13 @@ public partial class PosDataProvider : IPosDataProvider
 
     public async Task<List<(CompanyStore Store, Agent Agent)>> GetStoresAndAgentsAsync(int? serviceProviderId = null, CancellationToken cancellationToken = default)
     {
-        var query = from store in _repository.Query<CompanyStore>()
+        var query = from company in _repository.Query<Company>().Where(x => !serviceProviderId.HasValue || x.ServiceProviderId == serviceProviderId.Value)
+            join store in _repository.Query<CompanyStore>() on company.Id equals store.CompanyId
             join posAgent in _repository.Query<PosAgent>() on store.Id equals posAgent.StoreId into posAgentGroups
             from posAgent in posAgentGroups.DefaultIfEmpty()
             join agent in _repository.Query<Agent>().Where(x => x.IsDisplay) on posAgent.AgentId equals agent.Id into agentGroups
             from agent in agentGroups.DefaultIfEmpty()
             select new { store, agent };
-        
-        if (serviceProviderId.HasValue) query = query.Where(x => x.agent.ServiceProviderId == serviceProviderId.Value);
         
         var result = await query.ToListAsync(cancellationToken).ConfigureAwait(false);
         
@@ -395,10 +394,11 @@ public partial class PosDataProvider : IPosDataProvider
 
     public async Task<List<SimpleStoreAgentDto>> GetSimpleStoreAgentsAsync(int? serviceProviderId = null, CancellationToken cancellationToken = default)
     {
-        var query = from store in _repository.Query<CompanyStore>()
+        var query = from company in _repository.Query<Company>()
+            join store in _repository.Query<CompanyStore>() on company.Id equals store.CompanyId
             join posAgent in _repository.Query<PosAgent>() on store.Id equals posAgent.StoreId
             join agent in _repository.Query<Agent>().Where(x => x.IsDisplay) on posAgent.AgentId equals agent.Id
-            where !serviceProviderId.HasValue || agent.ServiceProviderId == serviceProviderId.Value
+            where !serviceProviderId.HasValue || company.ServiceProviderId == serviceProviderId.Value
             select new SimpleStoreAgentDto
             {
                 StoreId = store.Id,
