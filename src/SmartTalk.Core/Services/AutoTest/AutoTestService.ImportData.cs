@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Newtonsoft.Json;
 using Serilog;
 using SmartTalk.Core.Domain.AutoTest;
