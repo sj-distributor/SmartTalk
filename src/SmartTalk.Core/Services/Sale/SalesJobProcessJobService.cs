@@ -1,4 +1,5 @@
 using Serilog;
+using SmartTalk.Core.Constants;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
@@ -42,7 +43,7 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
 
         foreach (var soldToId in allSoldToIds)
         {
-            _backgroundJobClient.Enqueue<ISalesJobProcessJobService>(x => x.RefreshCustomerItemsCacheBySoldToIdAsync(soldToId, CancellationToken.None));
+            _backgroundJobClient.Enqueue<ISalesJobProcessJobService>(x => x.RefreshCustomerItemsCacheBySoldToIdAsync(soldToId, CancellationToken.None), HangfireConstants.InternalHostingCaCheKnowledgeVariable);
         }
 
         Log.Information("All customer items cache refresh jobs scheduled. Count: {Count}", allSoldToIds.Count);
@@ -84,7 +85,7 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
             
             foreach (var phone in phoneNumbers)
             {
-                _backgroundJobClient.Enqueue<ISalesJobProcessJobService>(x => x.RefreshCrmCustomerInfoByPhoneNumberAsync(phone, CancellationToken.None));
+                _backgroundJobClient.Enqueue<ISalesJobProcessJobService>(x => x.RefreshCrmCustomerInfoByPhoneNumberAsync(phone, CancellationToken.None), HangfireConstants.InternalHostingCaCheKnowledgeVariable);
             }
         }
 
