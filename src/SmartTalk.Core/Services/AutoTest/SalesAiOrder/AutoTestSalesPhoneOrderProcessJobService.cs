@@ -928,7 +928,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         }).ConfigureAwait(false);
     }
     
-    public async Task<string> UploadRecordingToOssAsync(string contentUri, CancellationToken cancellationToken)
+    private async Task<string> UploadRecordingToOssAsync(string contentUri, CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(contentUri))
             throw new ArgumentException(nameof(contentUri));
