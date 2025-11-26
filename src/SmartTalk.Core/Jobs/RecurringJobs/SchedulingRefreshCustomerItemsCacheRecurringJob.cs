@@ -24,6 +24,4 @@ public class SchedulingRefreshCustomerItemsCacheRecurringJob : IRecurringJob
     public string JobId => nameof(SchedulingRefreshCustomerItemsCacheRecurringJob);
 
     public string CronExpression => _settings.Value;
-    
-    public string Queue => HangfireConstants.InternalHostingCaCheKnowledgeVariable;
 }
