@@ -171,32 +171,9 @@ public class SpeechMaticsService : ISpeechMaticsService
         var callSubjectCn = "通话主题:";
         var callSubjectEn = "Conversation topic:";
 
-        var messages = await ConfigureRecordAnalyzePromptAsync(agent, aiSpeechAssistant, callFrom ?? "", currentTime, audioContent, cancellationToken);
+        var messages = await ConfigureRecordAnalyzePromptAsync(agent, aiSpeechAssistant, callFrom ?? "", callTo ?? "", currentTime, audioContent, callSubjectCn, callSubjectEn, cancellationToken);
         
         ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
-
-        var audioData = BinaryData.FromBytes(audioContent);
-        
-        List<ChatMessage> messages =
-        [
-            new SystemChatMessage(string.IsNullOrEmpty(aiSpeechAssistant?.CustomRecordAnalyzePrompt)
-                ? "你是一名電話錄音的分析員，通過聽取錄音內容和語氣情緒作出精確分析，冩出一份分析報告。\n\n" +
-                  "分析報告的格式：交談主題：xxx\n\n " +
-                  "來電號碼：#{call_from}\n\n " +
-                  "內容摘要:xxx \n\n " +
-                  "客人情感與情緒: xxx \n\n " +
-                  "待辦事件: \n1.xxx\n2.xxx \n\n " +
-                  "客人下單內容(如果沒有則忽略)：1. 牛肉(1箱)\n2.雞腿肉(1箱)"
-                      .Replace("#{call_from}", callFrom ?? "")
-                : aiSpeechAssistant.CustomRecordAnalyzePrompt
-                    .Replace("#{call_from}", callFrom ?? "")
-                    .Replace("#{current_time}", currentTime)
-                    .Replace("#{call_to}", callTo ?? "")
-                    .Replace("#{call_subject_cn}", callSubjectCn)
-                    .Replace("#{call_subject_us}", callSubjectEn)),
-            new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
-            new UserChatMessage("幫我根據錄音生成分析報告：")
-        ];
  
         ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
 
@@ -408,7 +385,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         }
     }
     
-     private async Task<List<ChatMessage>> ConfigureRecordAnalyzePromptAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, string callFrom, string currentTime, byte[] audioContent, CancellationToken cancellationToken) 
+     private async Task<List<ChatMessage>> ConfigureRecordAnalyzePromptAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, string callFrom, string callTo, string currentTime, byte[] audioContent, string callSubjectCn, string callSubjectEn, CancellationToken cancellationToken) 
     {
         var soldToIds = !string.IsNullOrEmpty(aiSpeechAssistant.Name) ? aiSpeechAssistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : new List<string>();
 
@@ -419,8 +396,20 @@ public class SpeechMaticsService : ISpeechMaticsService
         List<ChatMessage> messages =
         [
             new SystemChatMessage( (string.IsNullOrEmpty(aiSpeechAssistant?.CustomRecordAnalyzePrompt)
-                ? "你是一名電話錄音的分析員，通過聽取錄音內容和語氣情緒作出精確分析，冩出一份分析報告。\n\n分析報告的格式：交談主題：xxx\n\n 來電號碼：#{call_from}\n\n 內容摘要:xxx \n\n 客人情感與情緒: xxx \n\n 待辦事件: \n1.xxx\n2.xxx \n\n 客人下單內容(如果沒有則忽略)：1. 牛肉(1箱)\n2. 雞腿肉(1箱)"
-                : aiSpeechAssistant.CustomRecordAnalyzePrompt).Replace("#{call_from}", callFrom ?? "").Replace("#{current_time}", currentTime ?? "").Replace("#{customer_items}", customerItemsString ?? "")),
+                ? "你是一名電話錄音的分析員，通過聽取錄音內容和語氣情緒作出精確分析，冩出一份分析報告。\n\n" +
+                  "分析報告的格式：交談主題：xxx\n\n " +
+                  "來電號碼：#{call_from}\n\n " +
+                  "內容摘要:xxx \n\n " +
+                  "客人情感與情緒: xxx \n\n " +
+                  "待辦事件: \n1.xxx\n2.xxx \n\n " +
+                  "客人下單內容(如果沒有則忽略)：1. 牛肉(1箱)\n2. 雞腿肉(1箱)"
+                : aiSpeechAssistant.CustomRecordAnalyzePrompt)
+                .Replace("#{call_from}", callFrom ?? "")
+                .Replace("#{current_time}", currentTime ?? "")
+                .Replace("#{call_to}", callTo ?? "")
+                .Replace("#{customer_items}", customerItemsString ?? "")
+                .Replace("#{call_subject_cn}", callSubjectCn)
+                .Replace("#{call_subject_us}", callSubjectEn)),
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
             new UserChatMessage("幫我根據錄音生成分析報告：")
         ];
