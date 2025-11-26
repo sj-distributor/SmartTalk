@@ -827,7 +827,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
             string recordingUrl = "";
             if (record.Recording?.ContentUri != null)
             {
-                recordingUrl = await GetOssRecordingUrlAsync(record.Recording.ContentUri, cancellationToken).ConfigureAwait(false);
+                recordingUrl = await UploadRecordingToOssAsync(record.Recording.ContentUri, cancellationToken).ConfigureAwait(false);
             }
             
             var inputJsonDto = new AutoTestInputJsonDto
@@ -928,39 +928,38 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         }).ConfigureAwait(false);
     }
     
-    private async Task<string> UploadRecordingToOssAsync(Stream recordingStream, string fileName, CancellationToken cancellationToken)
+    public async Task<string> UploadRecordingToOssAsync(string contentUri, CancellationToken cancellationToken)
     {
-        if (recordingStream == null) 
-            throw new ArgumentNullException(nameof(recordingStream));
+        if (string.IsNullOrEmpty(contentUri))
+            throw new ArgumentException(nameof(contentUri));
 
-        await using var ms = new MemoryStream();
-        if (recordingStream.CanSeek) recordingStream.Position = 0;
-        await recordingStream.CopyToAsync(ms, cancellationToken);
+        var tokenResponse = await _ringCentralClient.TokenAsync(cancellationToken);
+        var token = tokenResponse.AccessToken;
 
-        var ossResponse = await _attachmentService.UploadAttachmentAsync(
-            new UploadAttachmentCommand
-            {
-                Attachment = new UploadAttachmentDto
-                {
-                    FileName = fileName,
-                    FileContent = ms.ToArray()
-                }
-            }, cancellationToken
-        ).ConfigureAwait(false);
+        var headers = new Dictionary<string, string>
+        {
+            { "Authorization", $"Bearer {token}" }
+        };
+        
+        var fileBytes = await _httpClientFactory.GetAsync<byte[]>(
+            contentUri,
+            cancellationToken,
+            headers: headers
+        );
 
-        var ossUrl = ossResponse?.Attachment?.FileUrl;
-        if (string.IsNullOrEmpty(ossUrl))
-            throw new InvalidOperationException("上传到 OSS 失败");
-
-        return ossUrl;
-    }
-    
-    public async Task<string> GetOssRecordingUrlAsync(string contentUri, CancellationToken cancellationToken)
-    {
-        var stream = await _ringCentralClient.GetRingCentralRecordingStreamAsync(contentUri, cancellationToken).ConfigureAwait(false);
+        if (fileBytes == null || fileBytes.Length == 0)
+            throw new InvalidOperationException("无法获取录音内容");
         
         var fileName = Guid.NewGuid() + ".mp3";
-        
-        return await UploadRecordingToOssAsync(stream, fileName, cancellationToken).ConfigureAwait(false);
+        var ossResponse = await _attachmentService.UploadAttachmentAsync(new UploadAttachmentCommand
+        {
+            Attachment = new UploadAttachmentDto
+            {
+                FileName = fileName,
+                FileContent = fileBytes
+            }
+        }, cancellationToken).ConfigureAwait(false);
+
+        return ossResponse.Attachment?.FileUrl ?? throw new InvalidOperationException("上传 OSS 失败");
     }
 }
