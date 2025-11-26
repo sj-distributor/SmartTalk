@@ -114,7 +114,7 @@ public static class HangfireExtension
                 continue;
             }
 
-            backgroundJobClient.AddOrUpdateRecurringJob<IJobSafeRunner>(job.JobId, r => r.Run(job.JobId, type), job.CronExpression, job.TimeZone, job.Queue ?? "default");
+            backgroundJobClient.AddOrUpdateRecurringJob<IJobSafeRunner>(job.JobId, r => r.Run(job.JobId, type), job.CronExpression, job.TimeZone);
         }
     }
 }
