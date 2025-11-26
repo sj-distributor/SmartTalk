@@ -172,6 +172,8 @@ public partial class PosService
 
         if (order == null)
             throw new Exception($"Order could not be found by orderId: {request.OrderId} or recordId: {request.RecordId}.");
+        
+        await EnrichPosOrderAsync(order, cancellationToken).ConfigureAwait(false);
 
         return new GetPosStoreOrderResponse
         {
@@ -613,5 +615,24 @@ public partial class PosService
             2 => PosOrderModifiedStatus.Cancelled,
             _ => PosOrderModifiedStatus.Normal
         };
+    }
+
+    private async Task EnrichPosOrderAsync(PosOrder order, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var items = JsonConvert.DeserializeObject<List<PosOrderItemDto>>(order.Items);
+        
+            var products = await _posDataProvider.GetPosProductsAsync(
+                productIds: items.Select(x => x.ProductId.ToString()).Distinct().ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+            items.ForEach(x => x.ProductName = products.Where(p => p.ProductId == x.ProductId.ToString()).FirstOrDefault()?.Names);
+            
+            order.Items = JsonConvert.SerializeObject(items);
+        }
+        catch (Exception e)
+        {
+            Log.Information("Enriching pos order failed: {@Exception}", e);
+        }
     }
 }
