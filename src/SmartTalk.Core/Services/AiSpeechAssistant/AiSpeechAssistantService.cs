@@ -242,7 +242,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                 pathCallSid: command.CallSid,
                 recordingStatusCallbackMethod: Twilio.Http.HttpMethod.Post,
                 recordingStatusCallback: new Uri($"https://{command.Host}/api/AiSpeechAssistant/recording/callback"));
-        }, maxRetryCount: 3, delaySeconds: 1, cancellationToken);
+        }, maxRetryCount: 5, delaySeconds: 5, cancellationToken);
     }
 
     public async Task ReceivePhoneRecordingStatusCallbackAsync(ReceivePhoneRecordingStatusCallbackCommand command, CancellationToken cancellationToken)
