@@ -1,7 +1,5 @@
 using Mediator.Net.Context;
 using Mediator.Net.Contracts;
-using SmartTalk.Core.Constants;
-using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.Sale;
 using SmartTalk.Messages.Commands.Sales;
 
@@ -9,16 +7,15 @@ namespace SmartTalk.Core.Handlers.CommandHandlers.Sales;
 
 public class RefreshAllCustomerInfoCacheCommandHandler : ICommandHandler<RefreshAllCustomerInfoCacheCommand>
 {
-    private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
+    private readonly ISalesJobProcessJobService _salesJobProcessJobService;
 
-    public RefreshAllCustomerInfoCacheCommandHandler(ISmartTalkBackgroundJobClient backgroundJobClient)
+    public RefreshAllCustomerInfoCacheCommandHandler(ISalesJobProcessJobService salesJobProcessJobService)
     {
-        _backgroundJobClient = backgroundJobClient;
+        _salesJobProcessJobService = salesJobProcessJobService;
     }
 
     public async Task Handle(IReceiveContext<RefreshAllCustomerInfoCacheCommand> context, CancellationToken cancellationToken)
     {
-        _backgroundJobClient.Enqueue<ISalesJobProcessJobService>(
-            x => x.ScheduleRefreshCrmCustomerInfoAsync(context.Message, cancellationToken), HangfireConstants.InternalHostingCaCheKnowledgeVariable);
+        await _salesJobProcessJobService.ScheduleRefreshCrmCustomerInfoAsync(context.Message, cancellationToken).ConfigureAwait(false);
     }
 }
