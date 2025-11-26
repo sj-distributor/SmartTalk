@@ -189,6 +189,9 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
             }).ToList();
             
             var autoTestDataItems = (await Task.WhenAll(matchedTasks)).Where(x => x != null).ToList();
+            
+            await ReplaceRingCentralRecordIntoOssAsync(autoTestDataItems, cancellationToken).ConfigureAwait(false);
+            
             if (autoTestDataItems.Any())
             {
                 await _autoTestDataProvider.AddAutoTestDataItemsAsync(autoTestDataItems, true, cancellationToken).ConfigureAwait(false);
@@ -824,15 +827,9 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
             }
             Log.Information("匹配成功: Customer={CustomerId}, Order={OrderId}, 项目数={ItemCount}", customerId, oneOrderGroup.Key, oneOrderGroup.Count());
             
-            string recordingUrl = "";
-            if (record.Recording?.ContentUri != null)
-            {
-                recordingUrl = await UploadRecordingToOssAsync(record.Recording.ContentUri, cancellationToken).ConfigureAwait(false);
-            }
-            
             var inputJsonDto = new AutoTestInputJsonDto
             {
-                Recording = recordingUrl,
+                Recording = record.Recording.ContentUri,
                 OrderId = oneOrderGroup.Key,
                 CustomerId = customerId,
                 Detail = oneOrderGroup.Select((i, index) => new AutoTestInputDetail
@@ -926,6 +923,20 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
 
             return resp?.Records ?? [];
         }).ConfigureAwait(false);
+    }
+
+    private async Task ReplaceRingCentralRecordIntoOssAsync(List<AutoTestDataItem> items, CancellationToken cancellationToken)
+    {
+        foreach (var item in items)
+        {
+            var input = JsonConvert.DeserializeObject<AutoTestInputJsonDto>(item.InputJson);
+            if (string.IsNullOrEmpty(input.Recording)) continue;
+
+            var oss = await UploadRecordingToOssAsync(input.Recording, cancellationToken).ConfigureAwait(false);
+                
+            input.Recording = oss;
+            item.InputJson = JsonConvert.SerializeObject(input);
+        }
     }
     
     private async Task<string> UploadRecordingToOssAsync(string contentUri, CancellationToken cancellationToken)
