@@ -928,39 +928,22 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         }).ConfigureAwait(false);
     }
     
-    private async Task<string> UploadRecordingToOssAsync(Stream recordingStream, CancellationToken cancellationToken)
+    private async Task<string> UploadRecordingToOssAsync(Stream recordingStream, string fileName, CancellationToken cancellationToken)
     {
-        if (recordingStream == null) throw new ArgumentNullException(nameof(recordingStream));
+        if (recordingStream == null) 
+            throw new ArgumentNullException(nameof(recordingStream));
 
-        using var memoryStream = new MemoryStream();
-        var waveFormat = new WaveFormat(24000, 16, 1);
-
-        await using (var writer = new WaveFileWriter(memoryStream, waveFormat))
-        {
-            var rented = ArrayPool<byte>.Shared.Rent(64 * 1024);
-            try
-            {
-                int read;
-                if (recordingStream.CanSeek) recordingStream.Position = 0;
-                while ((read = await recordingStream.ReadAsync(rented.AsMemory(0, rented.Length), cancellationToken)) > 0)
-                {
-                    writer.Write(rented, 0, read);
-                }
-                await writer.FlushAsync();
-            }
-            finally
-            {
-                ArrayPool<byte>.Shared.Return(rented);
-            }
-        }
+        await using var ms = new MemoryStream();
+        if (recordingStream.CanSeek) recordingStream.Position = 0;
+        await recordingStream.CopyToAsync(ms, cancellationToken);
 
         var ossResponse = await _attachmentService.UploadAttachmentAsync(
             new UploadAttachmentCommand
             {
                 Attachment = new UploadAttachmentDto
                 {
-                    FileName = Guid.NewGuid() + ".wav",
-                    FileContent = memoryStream.ToArray()
+                    FileName = fileName,
+                    FileContent = ms.ToArray()
                 }
             }, cancellationToken
         ).ConfigureAwait(false);
@@ -975,7 +958,9 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
     public async Task<string> GetOssRecordingUrlAsync(string contentUri, CancellationToken cancellationToken)
     {
         var stream = await _ringCentralClient.GetRingCentralRecordingStreamAsync(contentUri, cancellationToken).ConfigureAwait(false);
-        var ossUrl = await UploadRecordingToOssAsync(stream, cancellationToken).ConfigureAwait(false);
-        return ossUrl;
+        
+        var fileName = Guid.NewGuid() + ".mp3";
+        
+        return await UploadRecordingToOssAsync(stream, fileName, cancellationToken).ConfigureAwait(false);
     }
 }
