@@ -6,5 +6,5 @@ public interface IRecurringJob : IJob
 
     TimeZoneInfo TimeZone => null;
     
-    string Queue => null;
+    string Queue => "default";
 }
