@@ -1,3 +1,4 @@
+using System.Buffers;
 using Serilog;
 using System.Text;
 using OpenAI.Chat;
@@ -12,6 +13,7 @@ using SmartTalk.Core.Services.STT;
 using SmartTalk.Core.Services.Http;
 using Smarties.Messages.DTO.OpenAi;
 using Microsoft.IdentityModel.Tokens;
+using NAudio.Wave;
 using Smarties.Messages.Enums.OpenAi;
 using SmartTalk.Core.Settings.OpenAi;
 using Smarties.Messages.Requests.Ask;
@@ -811,7 +813,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
                 }, cancellationToken)).ConfigureAwait(false);
 
             var sapOrders = sapResp?.Data?.RecordingData ?? new List<RecordingDataItem>();
-            Log.Information("SAP 返回 {Count} 条订单记录, Customer={CustomerId}, Date={Date}", sapOrders.Count, customerId, sapStartDate);
+            Log.Information("SAP 返回 {Count} 条 item 记录, Customer={CustomerId}, Date={Date}", sapOrders.Count, customerId, sapStartDate);
             if (!sapOrders.Any()) return null;
             
             var oneOrderGroup = sapOrders.GroupBy(x => x.SalesDocument).SingleOrDefault();
@@ -822,9 +824,15 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
             }
             Log.Information("匹配成功: Customer={CustomerId}, Order={OrderId}, 项目数={ItemCount}", customerId, oneOrderGroup.Key, oneOrderGroup.Count());
             
+            string recordingUrl = "";
+            if (record.Recording?.ContentUri != null)
+            {
+                recordingUrl = await GetOssRecordingUrlAsync(record.Recording.ContentUri, cancellationToken).ConfigureAwait(false);
+            }
+            
             var inputJsonDto = new AutoTestInputJsonDto
             {
-                Recording = record.Recording?.Uri ?? "",
+                Recording = recordingUrl,
                 OrderId = oneOrderGroup.Key,
                 CustomerId = customerId,
                 Detail = oneOrderGroup.Select((i, index) => new AutoTestInputDetail
@@ -918,5 +926,56 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
 
             return resp?.Records ?? [];
         }).ConfigureAwait(false);
+    }
+    
+    private async Task<string> UploadRecordingToOssAsync(Stream recordingStream, CancellationToken cancellationToken)
+    {
+        if (recordingStream == null) throw new ArgumentNullException(nameof(recordingStream));
+
+        using var memoryStream = new MemoryStream();
+        var waveFormat = new WaveFormat(24000, 16, 1);
+
+        await using (var writer = new WaveFileWriter(memoryStream, waveFormat))
+        {
+            var rented = ArrayPool<byte>.Shared.Rent(64 * 1024);
+            try
+            {
+                int read;
+                if (recordingStream.CanSeek) recordingStream.Position = 0;
+                while ((read = await recordingStream.ReadAsync(rented.AsMemory(0, rented.Length), cancellationToken)) > 0)
+                {
+                    writer.Write(rented, 0, read);
+                }
+                await writer.FlushAsync();
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(rented);
+            }
+        }
+
+        var ossResponse = await _attachmentService.UploadAttachmentAsync(
+            new UploadAttachmentCommand
+            {
+                Attachment = new UploadAttachmentDto
+                {
+                    FileName = Guid.NewGuid() + ".wav",
+                    FileContent = memoryStream.ToArray()
+                }
+            }, cancellationToken
+        ).ConfigureAwait(false);
+
+        var ossUrl = ossResponse?.Attachment?.FileUrl;
+        if (string.IsNullOrEmpty(ossUrl))
+            throw new InvalidOperationException("上传到 OSS 失败");
+
+        return ossUrl;
+    }
+    
+    public async Task<string> GetOssRecordingUrlAsync(string contentUri, CancellationToken cancellationToken)
+    {
+        var stream = await _ringCentralClient.GetRingCentralRecordingStreamAsync(contentUri, cancellationToken).ConfigureAwait(false);
+        var ossUrl = await UploadRecordingToOssAsync(stream, cancellationToken).ConfigureAwait(false);
+        return ossUrl;
     }
 }

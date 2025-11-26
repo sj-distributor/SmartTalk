@@ -10,6 +10,8 @@ public interface IRingCentralClient : IScopedDependency
     Task<RingCentralTokenResponseDto> TokenAsync(CancellationToken cancellationToken);
 
     Task<RingCentralCallLogResponseDto> GetRingCentralRecordAsync(RingCentralCallLogRequestDto request, string token, CancellationToken cancellationToken);
+
+    Task<Stream> GetRingCentralRecordingStreamAsync(string contentUri, CancellationToken cancellationToken);
 }
 
 public class RingCentralClient : IRingCentralClient
@@ -80,5 +82,27 @@ public class RingCentralClient : IRingCentralClient
         Log.Information("RingCentral call log response {@Response}", response);
 
         return response;
+    }
+
+    public async Task<Stream> GetRingCentralRecordingStreamAsync(string contentUri, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(contentUri))
+            throw new ArgumentException("Recording ContentUri 不能为空", nameof(contentUri));
+
+        var tokenResponse = await TokenAsync(cancellationToken).ConfigureAwait(false);
+        var token = tokenResponse.AccessToken;
+
+        var url = contentUri.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? contentUri : $"{_ringCentralAuthenticationSettings.BaseUrl}{contentUri}";
+
+        var headers = new Dictionary<string, string>
+        {
+            { "Authorization", $"Bearer {token}" }
+        };
+
+        var stream = await _httpClientFactory.GetAsync<Stream>(url, headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (stream == null)
+            throw new InvalidOperationException("无法获取 RingCentral 录音流");
+
+        return stream;
     }
 }
