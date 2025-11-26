@@ -933,7 +933,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         if (string.IsNullOrEmpty(contentUri))
             throw new ArgumentException(nameof(contentUri));
 
-        var tokenResponse = await _ringCentralClient.TokenAsync(cancellationToken);
+        var tokenResponse = await _ringCentralClient.TokenAsync(cancellationToken).ConfigureAwait(false);
         var token = tokenResponse.AccessToken;
 
         var headers = new Dictionary<string, string>
@@ -941,11 +941,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
             { "Authorization", $"Bearer {token}" }
         };
         
-        var fileBytes = await _httpClientFactory.GetAsync<byte[]>(
-            contentUri,
-            cancellationToken,
-            headers: headers
-        );
+        var fileBytes = await _httpClientFactory.GetAsync<byte[]>(contentUri, cancellationToken, headers: headers);
 
         if (fileBytes == null || fileBytes.Length == 0)
             throw new InvalidOperationException("无法获取录音内容");
