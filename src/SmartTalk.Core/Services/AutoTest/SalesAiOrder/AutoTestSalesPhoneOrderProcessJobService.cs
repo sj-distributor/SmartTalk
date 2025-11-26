@@ -823,7 +823,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
                 }, cancellationToken)).ConfigureAwait(false);
 
             var sapOrders = sapResp?.Data?.RecordingData ?? new List<RecordingDataItem>();
-            Log.Information("SAP 返回 {Count} 条订单记录, Customer={CustomerId}, Date={Date}", sapOrders.Count, customerId, sapStartDate);
+            Log.Information("SAP 返回 {Count} 条 item 记录, Customer={CustomerId}, Date={Date}", sapOrders.Count, customerId, sapStartDate);
             if (!sapOrders.Any()) return null;
             
             var oneOrderGroup = sapOrders.GroupBy(x => x.SalesDocument).SingleOrDefault();
