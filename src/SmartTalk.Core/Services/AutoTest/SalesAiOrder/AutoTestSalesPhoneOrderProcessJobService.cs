@@ -1,3 +1,4 @@
+using System.Buffers;
 using Serilog;
 using System.Text;
 using OpenAI.Chat;
@@ -12,6 +13,7 @@ using SmartTalk.Core.Services.STT;
 using SmartTalk.Core.Services.Http;
 using Smarties.Messages.DTO.OpenAi;
 using Microsoft.IdentityModel.Tokens;
+using NAudio.Wave;
 using Smarties.Messages.Enums.OpenAi;
 using SmartTalk.Core.Settings.OpenAi;
 using Smarties.Messages.Requests.Ask;
@@ -834,9 +836,15 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
             }
             Log.Information("匹配成功: Customer={CustomerId}, Order={OrderId}, 项目数={ItemCount}", customerId, oneOrderGroup.Key, oneOrderGroup.Count());
             
+            string recordingUrl = "";
+            if (record.Recording?.ContentUri != null)
+            {
+                recordingUrl = await UploadRecordingToOssAsync(record.Recording.ContentUri, cancellationToken).ConfigureAwait(false);
+            }
+            
             var inputJsonDto = new AutoTestInputJsonDto
             {
-                Recording = record.Recording?.Uri ?? "",
+                Recording = recordingUrl,
                 OrderId = oneOrderGroup.Key,
                 CustomerId = customerId,
                 Detail = oneOrderGroup.Select((i, index) => new AutoTestInputDetail
@@ -930,5 +938,36 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
 
             return resp?.Records ?? [];
         }).ConfigureAwait(false);
+    }
+    
+    public async Task<string> UploadRecordingToOssAsync(string contentUri, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(contentUri))
+            throw new ArgumentException(nameof(contentUri));
+
+        var tokenResponse = await _ringCentralClient.TokenAsync(cancellationToken).ConfigureAwait(false);
+        var token = tokenResponse.AccessToken;
+
+        var headers = new Dictionary<string, string>
+        {
+            { "Authorization", $"Bearer {token}" }
+        };
+        
+        var fileBytes = await _httpClientFactory.GetAsync<byte[]>(contentUri, cancellationToken, headers: headers);
+
+        if (fileBytes == null || fileBytes.Length == 0)
+            throw new InvalidOperationException("无法获取录音内容");
+        
+        var fileName = Guid.NewGuid() + ".mp3";
+        var ossResponse = await _attachmentService.UploadAttachmentAsync(new UploadAttachmentCommand
+        {
+            Attachment = new UploadAttachmentDto
+            {
+                FileName = fileName,
+                FileContent = fileBytes
+            }
+        }, cancellationToken).ConfigureAwait(false);
+
+        return ossResponse.Attachment?.FileUrl ?? throw new InvalidOperationException("上传 OSS 失败");
     }
 }
