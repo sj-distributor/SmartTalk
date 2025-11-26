@@ -631,7 +631,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                             _backgroundJobClient.Enqueue<IMediator>(x=> x.SendAsync(new RecordAiSpeechAssistantCallCommand
                             {
                                 CallSid = _aiSpeechAssistantStreamContext.CallSid, Host = _aiSpeechAssistantStreamContext.Host
-                            }, CancellationToken.None));
+                            }, CancellationToken.None), HangfireConstants.InternalHostingRecordPhoneCall);
 
                             if (_aiSpeechAssistantStreamContext.ShouldForward)
                                 _backgroundJobClient.Enqueue<IMediator>(x => x.SendAsync(new TransferHumanServiceCommand

@@ -29,6 +29,7 @@ public static class HangfireExtension
 
         services.AddHangfireServer(opt =>
         {
+            opt.WorkerCount = 30;
             opt.ServerTimeout = TimeSpan.FromHours(2);
             opt.Queues = new[]
             {
@@ -72,6 +73,19 @@ public static class HangfireExtension
             opt.ServerName = $"DEPLOY-{HangfireConstants.InternalHostingTestingSalesPhoneOrder.ToUpper()}-{Guid.NewGuid()}";
         });
 
+        services.AddHangfireServer(opt =>
+        {
+            opt.WorkerCount = 50;
+            opt.Queues = new[] { HangfireConstants.InternalHostingRecordPhoneCall };
+            opt.ServerName = $"DEPLOY-{HangfireConstants.InternalHostingRecordPhoneCall.ToUpper()}-{Guid.NewGuid()}";
+        });
+        
+        services.AddHangfireServer(opt =>
+        {
+            opt.WorkerCount = 20;
+            opt.Queues = new[] { HangfireConstants.InternalHostingCaCheKnowledgeVariable };
+            opt.ServerName = $"DEPLOY-{HangfireConstants.InternalHostingCaCheKnowledgeVariable.ToUpper()}-{Guid.NewGuid()}";
+        });
     }
     
     public static void UseHangfireInternal(this IApplicationBuilder app)
@@ -100,7 +114,7 @@ public static class HangfireExtension
                 continue;
             }
 
-            backgroundJobClient.AddOrUpdateRecurringJob<IJobSafeRunner>(job.JobId, r => r.Run(job.JobId, type), job.CronExpression, job.TimeZone);
+            backgroundJobClient.AddOrUpdateRecurringJob<IJobSafeRunner>(job.JobId, r => r.Run(job.JobId, type), job.CronExpression, job.TimeZone, job.Queue ?? "default");
         }
     }
 }

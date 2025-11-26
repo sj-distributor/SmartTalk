@@ -1,4 +1,5 @@
 using Mediator.Net;
+using SmartTalk.Core.Constants;
 using SmartTalk.Core.Settings.Jobs;
 using SmartTalk.Messages.Commands.Sales;
 
@@ -23,4 +24,6 @@ public class SchedulingRefreshCustomerItemsCacheRecurringJob : IRecurringJob
     public string JobId => nameof(SchedulingRefreshCustomerItemsCacheRecurringJob);
 
     public string CronExpression => _settings.Value;
+    
+    public string Queue => HangfireConstants.InternalHostingCaCheKnowledgeVariable;
 }

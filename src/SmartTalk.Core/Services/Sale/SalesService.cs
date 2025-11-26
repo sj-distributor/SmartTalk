@@ -102,8 +102,8 @@ public class SalesService : ISalesService
             //     allItems.Add(customerOrderArrivalText);
             // }
         }
-        
-        return string.Join(Environment.NewLine, allItems);
+
+        return string.Join(Environment.NewLine, allItems.Distinct().Take(150));
     }
 
     public async Task<string> HandleOrderArrivalTimeList(List<string> customerIds, CancellationToken cancellationToken)
