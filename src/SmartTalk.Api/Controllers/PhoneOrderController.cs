@@ -1,4 +1,3 @@
-using Serilog;
 using Mediator.Net;
 using Newtonsoft.Json.Linq;
 using Microsoft.AspNetCore.Mvc;
