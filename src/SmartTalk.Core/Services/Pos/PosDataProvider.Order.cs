@@ -17,6 +17,10 @@ public partial interface IPosDataProvider
     Task AddPosOrdersAsync(List<PosOrder> orders, bool forceSave = true, CancellationToken cancellationToken = default);
 
     Task<PosOrder> GetPosOrderSortByOrderNoAsync(int storeId, DateTimeOffset utcStart, DateTimeOffset utcEnd, CancellationToken cancellationToken);
+
+    Task<List<PosOrder>>GetPosOrdersByStoreIdsAsync(
+        List<int> storeIds, PosOrderModifiedStatus? modifiedStatus = null, bool? isPush = null, DateTimeOffset? startDate = null,
+        DateTimeOffset? endDate = null, CancellationToken cancellationToken = default);
     
     Task<List<PosOrder>> GetPosCustomerInfosAsync(CancellationToken cancellationToken);
     
@@ -78,7 +82,27 @@ public partial class PosDataProvider
             .Where(x => x.StoreId == storeId && x.CreatedDate >= utcStart && x.CreatedDate < utcEnd)
             .OrderByDescending(x => x.OrderNo).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
-
+    
+    public async Task<List<PosOrder>> GetPosOrdersByStoreIdsAsync(
+        List<int> storeIds, PosOrderModifiedStatus? modifiedStatus = null, bool? isPush = null, DateTimeOffset? startDate = null, DateTimeOffset? endDate = null, CancellationToken cancellationToken = default)
+    {
+        var query = _repository.Query<PosOrder>().Where(x => storeIds.Contains(x.StoreId) && x.OrderId != null);
+        
+        if (modifiedStatus.HasValue)
+            query = query.Where(x => x.ModifiedStatus == modifiedStatus.Value);
+        
+        if (isPush.HasValue)
+            query = query.Where(x => x.IsPush == isPush.Value);
+        
+        if (startDate.HasValue)
+            query = query.Where(x => x.CreatedDate >= startDate.Value);
+        
+        if (endDate.HasValue)
+            query = query.Where(x => x.CreatedDate <= endDate.Value);
+        
+        return await query.OrderByDescending(x => x.CreatedDate).ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+    
     public async Task<List<PosOrder>> GetPosCustomerInfosAsync(CancellationToken cancellationToken)
     {
         var query = _repository.QueryNoTracking<PosOrder>().Where(x => !string.IsNullOrWhiteSpace(x.Phone));

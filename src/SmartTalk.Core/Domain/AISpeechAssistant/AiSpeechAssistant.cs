@@ -66,6 +66,12 @@ public class AiSpeechAssistant : IEntity<int>, IAgent, IHasCreatedFields
     [Column("is_default")]
     public bool IsDefault { get; set; }
     
+    [Column("is_allow_order_push")]
+    public bool IsAllowOrderPush { get; set; }
+    
+    [Column("is_auto_generate_order")]
+    public bool IsAutoGenerateOrder { get; set; }
+    
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
     

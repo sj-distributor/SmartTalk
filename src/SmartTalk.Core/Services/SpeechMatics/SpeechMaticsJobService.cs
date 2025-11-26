@@ -10,7 +10,7 @@ public interface ISpeechMaticsJobService : IScopedDependency
 
 public class SpeechMaticsJobService : ISpeechMaticsJobService
 {
-    private readonly  ISpeechMaticsDataProvider _speechMaticsDataProvider;
+    private readonly ISpeechMaticsDataProvider _speechMaticsDataProvider;
 
     public SpeechMaticsJobService(ISpeechMaticsDataProvider speechMaticsDataProvider)
     {

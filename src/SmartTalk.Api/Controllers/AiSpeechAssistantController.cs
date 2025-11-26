@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
+using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Requests.AiSpeechAssistant;
 
 namespace SmartTalk.Api.Controllers;
@@ -67,7 +68,8 @@ public class AiSpeechAssistantController : ControllerBase
                 AssistantId = id,
                 Host = HttpContext.Request.Host.Host,
                 NumberId = numberId,
-                TwilioWebSocket = await HttpContext.WebSockets.AcceptWebSocketAsync()
+                TwilioWebSocket = await HttpContext.WebSockets.AcceptWebSocketAsync(),
+                OrderRecordType = PhoneOrderRecordType.OutBount,
             };
             await _mediator.SendAsync(command);
         }

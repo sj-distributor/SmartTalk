@@ -32,6 +32,7 @@ using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Services.Restaurants;
+using SmartTalk.Core.Services.Sale;
 using SmartTalk.Core.Services.STT;
 using SmartTalk.Core.Services.Timer;
 using SmartTalk.Core.Settings.Azure;
@@ -49,6 +50,7 @@ using SmartTalk.Messages.Commands.Attachments;
 using SmartTalk.Messages.Dto.Attachments;
 using SmartTalk.Messages.Dto.Smarties;
 using SmartTalk.Messages.Enums.Caching;
+using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.STT;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 using RecordingResource = Twilio.Rest.Api.V2010.Account.Call.RecordingResource;
@@ -74,6 +76,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 {
     private readonly IClock _clock;
     private readonly IMapper _mapper;
+    private readonly ICrmClient _crmClient;
     private readonly ISalesClient _salesClient;
     private readonly ICurrentUser _currentUser;
     private readonly AzureSetting _azureSetting;
@@ -90,6 +93,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly IPhoneOrderService _phoneOrderService;
     private readonly IAgentDataProvider _agentDataProvider;
     private readonly IAttachmentService _attachmentService;
+    private readonly ISalesDataProvider _salesDataProvider;
     private readonly ISpeechToTextService _speechToTextService;
     private readonly WorkWeChatKeySetting _workWeChatKeySetting;
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
@@ -108,6 +112,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     public AiSpeechAssistantService(
         IClock clock,
         IMapper mapper,
+        ICrmClient crmClient,
         ICurrentUser currentUser,
         AzureSetting azureSetting,
         ICacheManager cacheManager,
@@ -123,6 +128,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         IPhoneOrderService phoneOrderService,
         IAgentDataProvider agentDataProvider,
         IAttachmentService attachmentService,
+        ISalesDataProvider salesDataProvider,
         ISpeechToTextService speechToTextService,
         WorkWeChatKeySetting workWeChatKeySetting,
         ISmartTalkHttpClientFactory httpClientFactory,
@@ -134,6 +140,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     {
         _clock = clock;
         _mapper = mapper;
+        _crmClient = crmClient;
         _currentUser = currentUser;
         _salesClient = salesClient;
         _openaiClient = openaiClient;
@@ -151,6 +158,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _httpClientFactory = httpClientFactory;
         _translationClient = translationClient;
         _attachmentService = attachmentService;
+        _salesDataProvider = salesDataProvider;
         _speechToTextService = speechToTextService;
         _workWeChatKeySetting = workWeChatKeySetting;
         _backgroundJobClient = backgroundJobClient;
@@ -200,7 +208,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         await ConnectOpenAiRealTimeSocketAsync(cancellationToken).ConfigureAwait(false);
         
-        var receiveFromTwilioTask = ReceiveFromTwilioAsync(command.TwilioWebSocket, cancellationToken);
+        var receiveFromTwilioTask = ReceiveFromTwilioAsync(command.TwilioWebSocket, command.OrderRecordType, cancellationToken);
         var sendToTwilioTask = SendToTwilioAsync(command.TwilioWebSocket, cancellationToken);
 
         try
@@ -234,14 +242,19 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                 pathCallSid: command.CallSid,
                 recordingStatusCallbackMethod: Twilio.Http.HttpMethod.Post,
                 recordingStatusCallback: new Uri($"https://{command.Host}/api/AiSpeechAssistant/recording/callback"));
-        }, maxRetryCount: 3, delaySeconds: 1, cancellationToken);
+        }, maxRetryCount: 5, delaySeconds: 5, cancellationToken);
     }
 
     public async Task ReceivePhoneRecordingStatusCallbackAsync(ReceivePhoneRecordingStatusCallbackCommand command, CancellationToken cancellationToken)
     {
         Log.Information("Handling receive phone record: {@command}", command);
 
-        var (record, agent) = await _phoneOrderDataProvider.GetRecordWithAgentAsync(command.CallSid, cancellationToken).ConfigureAwait(false);
+        var (record, agent) = await RetryWithDelayAsync(
+            ct => _phoneOrderDataProvider.GetRecordWithAgentAsync(command.CallSid, ct),
+            result => result.Item1 == null,
+            maxRetryCount: 3,
+            delay: TimeSpan.FromSeconds(10),
+            cancellationToken).ConfigureAwait(false);
         
         Log.Information("Get phone order record: {@record}", record);
 
@@ -438,6 +451,31 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             finalPrompt = finalPrompt.Replace("#{greeting}", knowledge.Greetings ?? string.Empty);
         }
         
+        if (finalPrompt.Contains("#{customer_items}", StringComparison.OrdinalIgnoreCase))
+        {
+            var soldToIds = !string.IsNullOrEmpty(assistant.Name) ? assistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : new List<string>();
+
+            if (soldToIds.Any())
+            {
+                var caches = await _salesDataProvider.GetCustomerItemsCacheBySoldToIdsAsync(soldToIds, cancellationToken).ConfigureAwait(false);
+
+                var customerItems = caches.Where(c => !string.IsNullOrEmpty(c.CacheValue)).Select(c => c.CacheValue.Trim()).Distinct().ToList();
+
+                finalPrompt = finalPrompt.Replace("#{customer_items}", customerItems.Any() ? string.Join(Environment.NewLine + Environment.NewLine, customerItems.Take(50)) : " ");
+            }
+        }
+        
+        if (finalPrompt.Contains("#{customer_info}", StringComparison.OrdinalIgnoreCase))
+        {
+            var phone = from;
+            
+            var customerInfoCache = await _salesDataProvider.GetCustomerInfoCacheByPhoneNumberAsync(phone, cancellationToken).ConfigureAwait(false);
+
+            var info = customerInfoCache?.CacheValue?.Trim();
+
+            finalPrompt = finalPrompt.Replace("#{customer_info}", string.IsNullOrEmpty(info) ? " " : info);
+        }
+        
         Log.Information($"The final prompt: {finalPrompt}");
         
         _aiSpeechAssistantStreamContext.LastPrompt = finalPrompt;
@@ -550,7 +588,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         }
     }
     
-    private async Task ReceiveFromTwilioAsync(WebSocket twilioWebSocket, CancellationToken cancellationToken)
+    private async Task ReceiveFromTwilioAsync(WebSocket twilioWebSocket, PhoneOrderRecordType orderRecordType, CancellationToken cancellationToken)
     {
         var buffer = new byte[1024 * 10];
         try
@@ -585,7 +623,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                             _backgroundJobClient.Enqueue<IMediator>(x=> x.SendAsync(new RecordAiSpeechAssistantCallCommand
                             {
                                 CallSid = _aiSpeechAssistantStreamContext.CallSid, Host = _aiSpeechAssistantStreamContext.Host
-                            }, CancellationToken.None));
+                            }, CancellationToken.None), HangfireConstants.InternalHostingRecordPhoneCall);
 
                             if (_aiSpeechAssistantStreamContext.ShouldForward)
                                 _backgroundJobClient.Enqueue<IMediator>(x => x.SendAsync(new TransferHumanServiceCommand
@@ -617,7 +655,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                             }
                             break;
                         case "stop":
-                            _backgroundJobClient.Enqueue<IAiSpeechAssistantProcessJobService>(x => x.RecordAiSpeechAssistantCallAsync(_aiSpeechAssistantStreamContext, CancellationToken.None));
+                            _backgroundJobClient.Enqueue<IAiSpeechAssistantProcessJobService>(x => x.RecordAiSpeechAssistantCallAsync(_aiSpeechAssistantStreamContext, orderRecordType, CancellationToken.None));
                             break;
                     }
                 }
@@ -625,7 +663,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         }
         catch (WebSocketException ex)
         {
-            _backgroundJobClient.Enqueue<IAiSpeechAssistantProcessJobService>(x => x.RecordAiSpeechAssistantCallAsync(_aiSpeechAssistantStreamContext, CancellationToken.None));
+            _backgroundJobClient.Enqueue<IAiSpeechAssistantProcessJobService>(x => x.RecordAiSpeechAssistantCallAsync(_aiSpeechAssistantStreamContext, orderRecordType, CancellationToken.None));
             Log.Error("Receive from Twilio error: {@ex}", ex);
         }
     }
@@ -1250,5 +1288,25 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                 await Task.Delay(TimeSpan.FromSeconds(delaySeconds), cancellationToken);
             }
         }
+    }
+    
+    private async Task<T> RetryWithDelayAsync<T>(
+        Func<CancellationToken, Task<T>> operation,
+        Func<T, bool> shouldRetry,
+        int maxRetryCount = 1,
+        TimeSpan? delay = null,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await operation(cancellationToken).ConfigureAwait(false);
+        var currentRetry = 0;
+    
+        while (shouldRetry(result) && currentRetry < maxRetryCount)
+        {
+            await Task.Delay(delay ?? TimeSpan.FromSeconds(10), cancellationToken);
+            result = await operation(cancellationToken).ConfigureAwait(false);
+            currentRetry++;
+        }
+    
+        return result;
     }
 }

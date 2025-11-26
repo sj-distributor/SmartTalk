@@ -20,6 +20,8 @@ public class GetPhoneOrderRecordsRequest : IRequest
     public DialogueScenarios? DialogueScenarios { get; set; }
     
     public DateTimeOffset? Date { get; set; }
+    
+    public string OrderId { get; set; }
 }
 
 public class GetPhoneOrderRecordsResponse : SmartTalkResponse<List<PhoneOrderRecordDto>>

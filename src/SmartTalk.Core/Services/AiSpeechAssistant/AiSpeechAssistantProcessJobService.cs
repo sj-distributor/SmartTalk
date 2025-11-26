@@ -6,6 +6,7 @@ using Serilog;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Agents;
+using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.Restaurants;
 using SmartTalk.Core.Services.RetrievalDb.VectorDb;
@@ -26,9 +27,9 @@ namespace SmartTalk.Core.Services.AiSpeechAssistant;
 
 public interface IAiSpeechAssistantProcessJobService : IScopedDependency
 {
-    Task RecordAiSpeechAssistantCallAsync(AiSpeechAssistantStreamContextDto context, CancellationToken cancellationToken);
-    
     Task SyncAiSpeechAssistantInfoToAgentAsync(SyncAiSpeechAssistantInfoToAgentCommand command, CancellationToken cancellationToken);
+    
+    Task RecordAiSpeechAssistantCallAsync(AiSpeechAssistantStreamContextDto context, PhoneOrderRecordType orderRecordType, CancellationToken cancellationToken);
 }
 
 public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobService
@@ -62,7 +63,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         _speechAssistantDataProvider = speechAssistantDataProvider;
     }
 
-    public async Task RecordAiSpeechAssistantCallAsync(AiSpeechAssistantStreamContextDto context, CancellationToken cancellationToken)
+    public async Task RecordAiSpeechAssistantCallAsync(AiSpeechAssistantStreamContextDto context, PhoneOrderRecordType orderRecordType, CancellationToken cancellationToken)
     {
         TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
         var callResource = await CallResource.FetchAsync(pathSid: context.CallSid).ConfigureAwait(false);
@@ -77,6 +78,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         
         var record = new PhoneOrderRecord
         {
+            AssistantId = context.Assistant.Id,
             AgentId = agentAssistant.First().AgentId,
             SessionId = context.CallSid,
             Status = PhoneOrderRecordStatus.Transcription,
@@ -88,7 +90,8 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             CustomerName = context.UserInfo?.UserName,
             PhoneNumber = context.UserInfo?.PhoneNumber,
             IsTransfer = context.IsTransfer,
-            IncomingCallNumber = context.LastUserInfo.PhoneNumber
+            IncomingCallNumber = context.LastUserInfo.PhoneNumber,
+            OrderRecordType = orderRecordType,
         };
 
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync([record], cancellationToken: cancellationToken).ConfigureAwait(false);

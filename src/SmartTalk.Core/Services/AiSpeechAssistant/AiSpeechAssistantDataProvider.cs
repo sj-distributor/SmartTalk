@@ -3,9 +3,11 @@ using SmartTalk.Core.Data;
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Domain.AIAssistant;
 using SmartTalk.Core.Domain.AISpeechAssistant;
+using SmartTalk.Core.Domain.Sales;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
+using SmartTalk.Messages.Enums.Sales;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
 
@@ -70,7 +72,7 @@ public partial interface IAiSpeechAssistantDataProvider : IScopedDependency
     
     Task<AiSpeechAssistantSession> GetAiSpeechAssistantSessionBySessionIdAsync(Guid sessionId, CancellationToken cancellationToken);
 
-    Task<(Domain.AISpeechAssistant.AiSpeechAssistant Assistant, Agent Agent)> GetAgentAndAiSpeechAssistantAsync(int agentId, CancellationToken cancellationToken);
+    Task<(Domain.AISpeechAssistant.AiSpeechAssistant Assistant, Agent Agent)> GetAgentAndAiSpeechAssistantAsync(int agentId, int? assistantId, CancellationToken cancellationToken);
     
     Task<List<AiSpeechAssistantInboundRoute>> GetAiSpeechAssistantInboundRouteAsync(string callerNumber, string didNumber, CancellationToken cancellationToken);
     
@@ -429,7 +431,7 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
             .Where(x => x.SessionId == sessionId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
     
-    public async Task<(Domain.AISpeechAssistant.AiSpeechAssistant Assistant, Agent Agent)> GetAgentAndAiSpeechAssistantAsync(int agentId, CancellationToken cancellationToken)
+    public async Task<(Domain.AISpeechAssistant.AiSpeechAssistant Assistant, Agent Agent)> GetAgentAndAiSpeechAssistantAsync(int agentId, int? assistantId, CancellationToken cancellationToken)
     {
         var query = from agent in _repository.Query<Agent>()
             join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
@@ -437,9 +439,17 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
             from assistant in assistantGroups.DefaultIfEmpty()
             where agent.Id == agentId
             select new { assistant, agent };
+        
+        if (assistantId.HasValue)
+        {
+            query = query.Where(x => x.assistant != null && x.assistant.Id == assistantId.Value);
+        }
+        else
+        {
+            query = query.Where(x => x.assistant != null && x.assistant.IsDefault);
+        }
 
-        var result = await query.Where(x => x.assistant.IsDefault).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
-
+        var result = await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
         return (result?.assistant, result?.agent);
     }
     

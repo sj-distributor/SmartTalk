@@ -40,6 +40,10 @@ public class AiSpeechAssistantDto
     
     public bool IsDefault { get; set; }
     
+    public bool IsAllowOrderPush { get; set; }
+    
+    public bool IsAutoGenerateOrder { get; set; }
+    
     public DateTimeOffset CreatedDate { get; set; }
     
     public int CreatedBy { get; set; }
