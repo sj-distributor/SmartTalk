@@ -186,10 +186,10 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
                 return MatchOrderAndRecordingAsync(customerId.ToString(), recordDto, scenarioId, recordId, cancellationToken);
             }).ToList();
             
-            var autoTestDataItems = await Task.WhenAll(matchedTasks).ConfigureAwait(false);
+            var autoTestDataItems = (await Task.WhenAll(matchedTasks)).Where(x => x != null).ToList();
             if (autoTestDataItems.Any())
             {
-                await _autoTestDataProvider.AddAutoTestDataItemsAsync(autoTestDataItems.ToList(), true, cancellationToken).ConfigureAwait(false);
+                await _autoTestDataProvider.AddAutoTestDataItemsAsync(autoTestDataItems, true, cancellationToken).ConfigureAwait(false);
 
                 var autoTestDataSetItems = autoTestDataItems.Select(x => new AutoTestDataSetItem
                 {
