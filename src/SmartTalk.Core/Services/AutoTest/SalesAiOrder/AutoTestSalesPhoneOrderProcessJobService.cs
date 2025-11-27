@@ -972,10 +972,6 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
             }
         }, cancellationToken).ConfigureAwait(false);
 
-        var ossUrl = ossResponse.Attachment?.FileUrl ?? throw new InvalidOperationException("上传 OSS 失败");
-        
-        var cleanUrl = ossUrl.Split('?')[0];
-
-        return cleanUrl;
+        return ossResponse.Attachment?.FileUrl ?? throw new InvalidOperationException("上传 OSS 失败");
     }
 }
