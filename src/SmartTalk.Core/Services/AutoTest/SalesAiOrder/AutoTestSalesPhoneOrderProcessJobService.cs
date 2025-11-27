@@ -806,6 +806,14 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
     {
         try
         {
+            var recordingUri = record.Recording?.ContentUri;
+            if (string.IsNullOrWhiteSpace(recordingUri))
+            {
+                Log.Warning("通话 {CallId} 没有录音，跳过。Customer={CustomerId}", 
+                    record.Id, customerId);
+                return null;
+            }
+            
             var sapStartDate = record.StartTime.Date;
             var sapResp = await RetrySapAsync(() =>
                 _sapGatewayClient.QueryRecordingDataAsync(new QueryRecordingDataRequest
@@ -829,7 +837,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
             
             var inputJsonDto = new AutoTestInputJsonDto
             {
-                Recording = record.Extension.Uri,
+                Recording = recordingUri,
                 OrderId = oneOrderGroup.Key,
                 CustomerId = customerId,
                 Detail = oneOrderGroup.Select((i, index) => new AutoTestInputDetail
