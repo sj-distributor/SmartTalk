@@ -841,7 +841,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
             
             var inputJsonDto = new AutoTestInputJsonDto
             {
-                Recording = record.Recording.ContentUri,
+                Recording = record.Extension.Uri,
                 OrderId = oneOrderGroup.Key,
                 CustomerId = customerId,
                 Detail = oneOrderGroup.Select((i, index) => new AutoTestInputDetail
@@ -932,8 +932,12 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
             };
 
             var resp = await _ringCentralClient.GetRingCentralRecordAsync(req, token, cancellationToken).ConfigureAwait(false);
+            
+            var records = resp?.Records ?? [];
+            
+            var outgoingCalls = records.Where(r => r.From?.PhoneNumber == phone && r.To?.PhoneNumber != phone).ToList();
 
-            return resp?.Records ?? [];
+            return outgoingCalls;
         }).ConfigureAwait(false);
     }
 
