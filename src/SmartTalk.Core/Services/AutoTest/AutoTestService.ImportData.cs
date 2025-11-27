@@ -21,8 +21,8 @@ public partial class AutoTestService
         
         var customerIdRaw = command.ImportData["CustomerId"]?.ToString() ?? "";
         var customerIdFormatted = customerIdRaw.PadLeft(5, '0'); 
-        var startDate = (DateTimeOffset)command.ImportData["StartDate"]; 
-        var endDate = (DateTimeOffset)command.ImportData["EndDate"]; 
+        var startDate = (DateTime)command.ImportData["StartDate"]; 
+        var endDate = (DateTime)command.ImportData["EndDate"]; 
         
         var keyName = $"{customerIdFormatted}-{startDate}-{endDate}-{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
         
