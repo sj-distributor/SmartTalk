@@ -923,7 +923,8 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
             
             var records = resp?.Records ?? [];
             
-            var outgoingCalls = records.Where(r => r.From?.PhoneNumber == phone && r.To?.PhoneNumber != phone).ToList();
+            var outgoingCalls = records.Where(r => r.From?.PhoneNumber == phone).ToList();
+            Log.Information("【LoadOneMonth】筛选主叫为自己({Phone}) 的通话记录，共 {Count} 条", phone, outgoingCalls.Count);
 
             return outgoingCalls;
         }).ConfigureAwait(false);
