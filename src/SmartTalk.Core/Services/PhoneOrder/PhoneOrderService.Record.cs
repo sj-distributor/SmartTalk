@@ -65,10 +65,20 @@ public partial class PhoneOrderService
                 ? (await _posDataProvider.GetPosAgentsAsync(storeIds: [request.StoreId.Value], cancellationToken: cancellationToken).ConfigureAwait(false)).Select(x => x.AgentId).ToList()
                 : [];
 
-        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds, request.Name, utcStart, utcEnd, request.OrderId, cancellationToken).ConfigureAwait(false);
+        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds, request.Name, utcStart, utcEnd, request.OrderId, request.DialogueScenarios, cancellationToken).ConfigureAwait(false);
+        
+        var posOrders = await _posDataProvider.GetPosOrdersByRecordIdsAsync(records.Select(x => x.Id).ToList(), cancellationToken);
 
-        var enrichedRecords = _mapper.Map<List<PhoneOrderRecordDto>>(records);
+        var posOrderLookup = posOrders
+            .GroupBy(x => x.RecordId)
+            .ToDictionary(g => g.Key, g => g.Count()); 
 
+        var enrichedRecords = _mapper.Map<List<PhoneOrderRecordDto>>(records).Select(r =>
+            {
+                r.UnSendCount = posOrderLookup.TryGetValue(r.Id, out var count) ? count : 0;
+                return r;
+            }).ToList();
+        
         return new GetPhoneOrderRecordsResponse
         {
             Data = enrichedRecords
