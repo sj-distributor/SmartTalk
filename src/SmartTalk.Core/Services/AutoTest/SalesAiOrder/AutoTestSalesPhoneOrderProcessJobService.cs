@@ -189,6 +189,9 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
             }).ToList();
             
             var autoTestDataItems = (await Task.WhenAll(matchedTasks)).Where(x => x != null).ToList();
+            
+            await ReplaceRingCentralRecordIntoOssAsync(autoTestDataItems, cancellationToken).ConfigureAwait(false);
+            
             if (autoTestDataItems.Any())
             {
                 await _autoTestDataProvider.AddAutoTestDataItemsAsync(autoTestDataItems, true, cancellationToken).ConfigureAwait(false);
@@ -824,15 +827,9 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
             }
             Log.Information("匹配成功: Customer={CustomerId}, Order={OrderId}, 项目数={ItemCount}", customerId, oneOrderGroup.Key, oneOrderGroup.Count());
             
-            string recordingUrl = "";
-            if (record.Recording?.ContentUri != null)
-            {
-                recordingUrl = await UploadRecordingToOssAsync(record.Recording.ContentUri, cancellationToken).ConfigureAwait(false);
-            }
-            
             var inputJsonDto = new AutoTestInputJsonDto
             {
-                Recording = recordingUrl,
+                Recording = record.Extension.Uri,
                 OrderId = oneOrderGroup.Key,
                 CustomerId = customerId,
                 Detail = oneOrderGroup.Select((i, index) => new AutoTestInputDetail
@@ -923,9 +920,28 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
             };
 
             var resp = await _ringCentralClient.GetRingCentralRecordAsync(req, token, cancellationToken).ConfigureAwait(false);
+            
+            var records = resp?.Records ?? [];
+            
+            var outgoingCalls = records.Where(r => r.Direction == "Outbound").ToList();
+            Log.Information("【LoadOneMonth】筛选主叫为自己({Phone}) 的通话记录，共 {Count} 条", phone, outgoingCalls.Count);
 
-            return resp?.Records ?? [];
+            return outgoingCalls;
         }).ConfigureAwait(false);
+    }
+
+    private async Task ReplaceRingCentralRecordIntoOssAsync(List<AutoTestDataItem> items, CancellationToken cancellationToken)
+    {
+        foreach (var item in items)
+        {
+            var input = JsonConvert.DeserializeObject<AutoTestInputJsonDto>(item.InputJson);
+            if (string.IsNullOrEmpty(input.Recording)) continue;
+
+            var oss = await UploadRecordingToOssAsync(input.Recording, cancellationToken).ConfigureAwait(false);
+                
+            input.Recording = oss;
+            item.InputJson = JsonConvert.SerializeObject(input);
+        }
     }
     
     private async Task<string> UploadRecordingToOssAsync(string contentUri, CancellationToken cancellationToken)
@@ -956,6 +972,10 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
             }
         }, cancellationToken).ConfigureAwait(false);
 
-        return ossResponse.Attachment?.FileUrl ?? throw new InvalidOperationException("上传 OSS 失败");
+        var ossUrl = ossResponse.Attachment?.FileUrl ?? throw new InvalidOperationException("上传 OSS 失败");
+        
+        var cleanUrl = ossUrl.Split('?')[0];
+
+        return cleanUrl;
     }
 }

@@ -25,7 +25,7 @@ public partial class AutoTestService
         var startDate = (DateTime)command.ImportData["StartDate"]; 
         var endDate = (DateTime)command.ImportData["EndDate"]; 
         
-        var keyName = $"{customerIdFormatted}-{startDate:yyMMdd}-{endDate:yyMMdd}-{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
+        var keyName = $"{customerIdFormatted}-{startDate}-{endDate}-{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
         
         var dataSet = new AutoTestDataSet()
         {
