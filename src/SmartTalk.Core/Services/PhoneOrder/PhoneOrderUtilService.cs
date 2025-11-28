@@ -211,7 +211,7 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
     private async Task<PosOrder> BuildPosOrderAsync(PhoneOrderRecord record, CompanyStore store, List<SimilarResult> similarResults, CancellationToken cancellationToken)
     {
         var products = await _posDataProvider.GetPosProductsAsync(
-            storeId: store.Id, ids: similarResults.Select(x => x.Id).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
+            storeId: store.Id, ids: similarResults.Select(x => x.Id).ToList(), isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var taxes = GetOrderItemTaxes(products, similarResults);
         
