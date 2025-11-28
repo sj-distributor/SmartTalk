@@ -286,7 +286,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         {
             var root = doc.RootElement;
 
-            if (root.TryGetProperty("recording", out var recordingElement))
+            if (root.TryGetProperty("Recording", out var recordingElement))
             {
                 recording = recordingElement.GetString();
             }
