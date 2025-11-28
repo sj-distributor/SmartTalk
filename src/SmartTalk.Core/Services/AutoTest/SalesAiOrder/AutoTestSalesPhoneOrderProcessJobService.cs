@@ -1,3 +1,4 @@
+using System.ClientModel;
 using System.Buffers;
 using Serilog;
 using System.Text;
@@ -6,6 +7,7 @@ using Newtonsoft.Json;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using AutoMapper;
+using DocumentFormat.OpenXml.Drawing;
 using SmartTalk.Core.Ioc;
 using Google.Cloud.Translation.V2;
 using Hangfire;
@@ -38,6 +40,7 @@ using SmartTalk.Messages.Dto.RingCentral;
 using SmartTalk.Messages.Dto.Sales;
 using SmartTalk.Messages.Requests.AutoTest;
 using JsonSerializer = System.Text.Json.JsonSerializer;
+using Path = System.IO.Path;
 using TranscriptionFileType = SmartTalk.Messages.Enums.STT.TranscriptionFileType;
 using TranscriptionResponseFormat = SmartTalk.Messages.Enums.STT.TranscriptionResponseFormat;
 
@@ -480,16 +483,38 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
                     ChatMessageContentPart.CreateInputAudioPart(
                         BinaryData.FromBytes(await File.ReadAllBytesAsync(userWavFile, cancellationToken)),
                         ChatInputAudioFormat.Wav)));
+                
+                ClientResult<ChatCompletion> completion = null;
 
-                var completion = await client.CompleteChatAsync(conversationHistory, options, cancellationToken);
+                try
+                {
+                    completion = await RetryWithDelayAsync(
+                        async ct => await client.CompleteChatAsync(conversationHistory, options, ct),
+                        result => result?.Value?.OutputAudio?.AudioBytes == null || result.Value.OutputAudio.AudioBytes.Length == 0,
+                        maxRetryCount: 3,
+                        delay: TimeSpan.FromMilliseconds(500),
+                        cancellationToken: cancellationToken
+                    );
+                }
+                catch (Exception ex)
+                {
+                    Log.Information($"Warning: AI audio generation failed for one input: {ex.Message}");
+                }
 
-                var aiWavFile = Path.GetTempFileName() + ".wav";
-                await File.WriteAllBytesAsync(aiWavFile, completion.Value.OutputAudio.AudioBytes.ToArray(), cancellationToken);
+                if (completion?.Value?.OutputAudio?.AudioBytes is { Length: > 0 })
+                {
+                    var aiWavFile = Path.GetTempFileName() + ".wav";
+                    await File.WriteAllBytesAsync(aiWavFile, completion.Value.OutputAudio.AudioBytes.ToArray(), cancellationToken);
+                    wavFiles.Add(aiWavFile);
 
-                wavFiles.Add(aiWavFile);
+                    conversationHistory.Add(new AssistantChatMessage(completion.Value.OutputAudio.Id));
+                }
+                else
+                {
+                    conversationHistory.Add(new AssistantChatMessage(completion?.Value?.OutputAudio?.Transcript ?? string.Empty));
 
-                conversationHistory.Add(new AssistantChatMessage(completion.Value.OutputAudio.Transcript));
-
+                    Log.Information("Warning: Skipped one audio input due to repeated failures.");
+                }
             }
 
             var mergedWavFile = Path.GetTempFileName() + ".wav";
@@ -819,6 +844,21 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         record.Status = status;
         
         await _autoTestDataProvider.UpdateTaskRecordsAsync([record], true, cancellationToken).ConfigureAwait(false);
+    }
+    
+    private async Task<T> RetryWithDelayAsync<T>(Func<CancellationToken, Task<T>> operation, Func<T, bool> shouldRetry, int maxRetryCount = 1, TimeSpan? delay = null, CancellationToken cancellationToken = default)
+    {
+        var result = await operation(cancellationToken).ConfigureAwait(false);
+        var currentRetry = 0;
+    
+        while (shouldRetry(result) && currentRetry < maxRetryCount)
+        {
+            await Task.Delay(delay ?? TimeSpan.FromSeconds(10), cancellationToken);
+            result = await operation(cancellationToken).ConfigureAwait(false);
+            currentRetry++;
+        }
+    
+        return result;
     }
     
     private async Task<AutoTestDataItem> MatchOrderAndRecordingAsync(string customerId, RingCentralRecordDto record, int scenarioId, int importRecordId, CancellationToken cancellationToken)
