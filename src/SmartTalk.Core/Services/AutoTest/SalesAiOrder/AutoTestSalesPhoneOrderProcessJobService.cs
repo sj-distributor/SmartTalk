@@ -381,6 +381,9 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         }
 
         var speaker = await CheckAudioSpeakerIsCustomerAsync(originText, cancellationToken).ConfigureAwait(false);
+
+        if (speaker != "S1" && speaker != "S2")
+            speaker = "S1";
         
         return (speaker, audioInfos.Where(x => x.Speaker == speaker).OrderBy(x => x.StartTime).ToList());
     }
@@ -419,7 +422,11 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
                 {
                     Role = "system",
                     Content = new CompletionsStringContent("你是一款销售与餐厅老板对话高度理解的智能助手，专门用于分辨那个对话角色是餐厅老板。" +
-                                                           "请根据我提供的对话，判断那个角色是属于是餐厅老板，如果S1是餐厅老板的话，请返回\"S1\"，如果S2是餐厅老板的话，请返回\"S2\"" +
+                                                           "请根据我提供的对话，判断那个角色是属于是餐厅老板。" +
+                                                           "输出规则:" +
+                                                           "1.如果S1是餐厅老板的话，请返回\"S1\"" +
+                                                           "2.如果S2是餐厅老板的话，请返回\"S2\" " +
+                                                           "3.如果根据对话无法确定餐厅老板身份，请默认返回 \"S1\"" +
                                                            "- 样本与输出：\n" +
                                                            "S1:你好，今天我要订货; S2: 今日想订些什么 S1:一箱西兰花 S2: 好的 output:S1\n" +
                                                            "S1: 老板您好，我们今天有新到的牛腩; S2: 嗯，给我留三斤; S1: 没问题; output:S2\n" +
