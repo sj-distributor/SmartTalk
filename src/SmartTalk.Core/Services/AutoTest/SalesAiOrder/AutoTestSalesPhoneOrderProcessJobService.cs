@@ -1,3 +1,4 @@
+using System.ClientModel;
 using Serilog;
 using System.Text;
 using OpenAI.Chat;
@@ -6,6 +7,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using AutoMapper;
+using DocumentFormat.OpenXml.Drawing;
 using SmartTalk.Core.Ioc;
 using Google.Cloud.Translation.V2;
 using SmartTalk.Core.Services.STT;
@@ -33,6 +35,7 @@ using SmartTalk.Core.Services.Sale;
 using SmartTalk.Messages.Commands.Attachments;
 using SmartTalk.Messages.Dto.Attachments;
 using SmartTalk.Messages.Dto.Sales;
+using Path = System.IO.Path;
 using TranscriptionFileType = SmartTalk.Messages.Enums.STT.TranscriptionFileType;
 using TranscriptionResponseFormat = SmartTalk.Messages.Enums.STT.TranscriptionResponseFormat;
 
@@ -392,8 +395,28 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
                     ChatMessageContentPart.CreateInputAudioPart(
                         BinaryData.FromBytes(await File.ReadAllBytesAsync(userWavFile, cancellationToken)),
                         ChatInputAudioFormat.Wav)));
+                
+                ClientResult<ChatCompletion> completion = null;
+                int retryCount = 0;
+                const int maxRetries = 3;
 
-                var completion = await client.CompleteChatAsync(conversationHistory, options, cancellationToken);
+                while (retryCount < maxRetries)
+                {
+                    completion = await client.CompleteChatAsync(conversationHistory, options, cancellationToken);
+
+                    if (completion?.Value?.OutputAudio?.AudioBytes is { Length: > 0 })
+                    {
+                        break;
+                    }
+
+                    retryCount++;
+                    await Task.Delay(3000, cancellationToken);
+                }
+
+                if (completion?.Value?.OutputAudio?.AudioBytes == null || completion.Value.OutputAudio.AudioBytes.Length == 0)
+                {
+                   throw new InvalidOperationException("AI 未返回音频，请检查输入或模型状态。");
+                }
 
                 var aiWavFile = Path.GetTempFileName() + ".wav";
                 await File.WriteAllBytesAsync(aiWavFile, completion.Value.OutputAudio.AudioBytes.ToArray(), cancellationToken);
