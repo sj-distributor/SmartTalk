@@ -419,7 +419,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
                     await File.WriteAllBytesAsync(aiWavFile, completion.Value.OutputAudio.AudioBytes.ToArray(), cancellationToken);
                     wavFiles.Add(aiWavFile);
 
-                    conversationHistory.Add(new AssistantChatMessage(completion.Value.OutputAudio.Transcript));
+                    conversationHistory.Add(new AssistantChatMessage(completion.Value.OutputAudio.Id));
                 }
                 else
                 {
@@ -427,7 +427,6 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
 
                     Log.Information("Warning: Skipped one audio input due to repeated failures.");
                 }
-
             }
 
             var mergedWavFile = Path.GetTempFileName() + ".wav";
