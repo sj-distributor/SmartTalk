@@ -410,7 +410,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Warning: AI audio generation failed for one input: {ex.Message}");
+                    Log.Information($"Warning: AI audio generation failed for one input: {ex.Message}");
                 }
 
                 if (completion?.Value?.OutputAudio?.AudioBytes is { Length: > 0 })
@@ -425,7 +425,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
                 {
                     conversationHistory.Add(new AssistantChatMessage(completion?.Value?.OutputAudio?.Transcript ?? string.Empty));
 
-                    Console.WriteLine("Warning: Skipped one audio input due to repeated failures.");
+                    Log.Information("Warning: Skipped one audio input due to repeated failures.");
                 }
 
             }
