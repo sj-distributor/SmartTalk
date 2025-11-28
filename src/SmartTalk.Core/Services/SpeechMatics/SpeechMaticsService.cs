@@ -565,8 +565,8 @@ public class SpeechMaticsService : ISpeechMaticsService
             var u = unit.ToLower();
             if (u.Contains("case") || u.Contains("箱"))
             {
-                var csItem = candidates.FirstOrDefault(x => x.EndsWith("CS", StringComparison.OrdinalIgnoreCase));
-                if (!string.IsNullOrEmpty(csItem)) return csItem;
+                var csOrCwItem = candidates.FirstOrDefault(x => x.EndsWith("CS", StringComparison.OrdinalIgnoreCase) || x.EndsWith("CW", StringComparison.OrdinalIgnoreCase));
+                if (!string.IsNullOrEmpty(csOrCwItem)) return csOrCwItem;
             }
             else
             {
