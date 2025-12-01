@@ -333,6 +333,6 @@ public partial class PhoneOrderDataProvider
 
     public async Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsByAgentIdsAsync(List<int> agentIds, CancellationToken cancellationToken)
     {
-        return await _repository.QueryNoTracking<PhoneOrderRecord>().Where(x => agentIds.Contains(x.AgentId)).AsNoTracking().ToListAsync(cancellationToken).ConfigureAwait(false);
+        return await _repository.QueryNoTracking<PhoneOrderRecord>().Where(x => x.Status == PhoneOrderRecordStatus.Sent && agentIds.Contains(x.AgentId)).AsNoTracking().ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }
