@@ -822,13 +822,11 @@ public partial class PhoneOrderService
             CancelledOrderCountPerPeriod = cancelledOrderCountPerPeriod
         };
         
-        var linphoneSips = await _linphoneDataProvider.GetLinphoneSipsByAgentIdsAsync(agentIds: request.AgentIds, cancellationToken: cancellationToken).ConfigureAwait(false);
-        var sipNumbers = linphoneSips.Select(y => y.Sip).ToList();
-
-        var (callInFailedCount, callOutFailedCount) = await _linphoneDataProvider.GetCallFailedStatisticsAsync(utcStart.ToUnixTimeSeconds(), utcEnd.ToUnixTimeSeconds(), sipNumbers, cancellationToken).ConfigureAwait(false);
- 
         var callInRecords = records?.Where(x => x.OrderRecordType == PhoneOrderRecordType.InBound).ToList() ?? new List<PhoneOrderRecord>();
         var callOutRecords = records?.Where(x => x.OrderRecordType == PhoneOrderRecordType.OutBount).ToList() ?? new List<PhoneOrderRecord>();
+
+        var callInFailedCount = callInRecords.Select(x => x.Scenario is DialogueScenarios.TransferVoicemail or DialogueScenarios.InvalidCall).Count();
+        var callOutFailedCount = callOutRecords.Select(x => x.Scenario is DialogueScenarios.TransferVoicemail or DialogueScenarios.InvalidCall).Count();
 
         callInRecords.ForEach(r => r.CreatedDate = r.CreatedDate.ToOffset(targetOffset));
         callOutRecords.ForEach(r => r.CreatedDate = r.CreatedDate.ToOffset(targetOffset));
@@ -862,7 +860,7 @@ public partial class PhoneOrderService
         var totalDuration = callInRecords.Sum(x => x.Duration ?? 0);
         var friendlyCount = callInRecords.Count(x => x.IsCustomerFriendly == true);
         var satisfactionRate = answeredCount > 0 ? (double)friendlyCount / answeredCount : 0;
-        var transferCount = callInRecords.Count(x => x.IsTransfer == true);
+        var transferCount = callInRecords.Count(x => x.IsTransfer == true || x.Scenario == DialogueScenarios.TransferToHuman);
         var transferRate = answeredCount > 0 ? (double)transferCount / answeredCount : 0;
         var repeatRate = answeredCount > 0 ? (double)totalRepeatCalls / answeredCount : 0;
 
@@ -891,7 +889,7 @@ public partial class PhoneOrderService
         var totalDuration = callOutRecords.Sum(x => x.Duration ?? 0);
         var friendlyCount = callOutRecords.Count(x => x.IsCustomerFriendly == true);
         var satisfactionRate = answeredCount > 0 ? (double)friendlyCount / answeredCount : 0;
-        var transferCount = callOutRecords.Count(x => x.IsTransfer == true);
+        var transferCount = callOutRecords.Count(x => x.IsTransfer == true || x.Scenario == DialogueScenarios.TransferToHuman);
 
         var totalDurationPerPeriod = GroupDurationByRequestType(callOutRecords, start, end, dataType);
 
