@@ -60,6 +60,8 @@ public partial interface IPosDataProvider : IScopedDependency
     Task<List<(CompanyStore Store, Agent Agent)>> GetStoresAndAgentsAsync(int? serviceProviderId = null, CancellationToken cancellationToken = default);
     
     Task<List<SimpleStoreAgentDto>> GetSimpleStoreAgentsAsync(int? serviceProviderId = null, CancellationToken cancellationToken = default);
+    
+    Task<List<CompanyStore>> GetAllStoresAsync(int? serviceProviderId = null, CancellationToken cancellationToken = default);
 }
 
 public partial class PosDataProvider : IPosDataProvider
@@ -404,6 +406,15 @@ public partial class PosDataProvider : IPosDataProvider
                 StoreId = store.Id,
                 AgentId = agent.Id
             };
+        
+        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<CompanyStore>> GetAllStoresAsync(int? serviceProviderId = null, CancellationToken cancellationToken = default)
+    {
+        var query = from company in _repository.Query<Company>().Where(x => !serviceProviderId.HasValue || x.ServiceProviderId == serviceProviderId.Value)
+            join store in _repository.Query<CompanyStore>() on company.Id equals store.CompanyId
+            select store;
         
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }

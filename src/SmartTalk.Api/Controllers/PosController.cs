@@ -360,6 +360,15 @@ public class PosController : ControllerBase
         return Ok(response);
     }
     
+    [Route("all/stores"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAllStoresResponse))]
+    public async Task<IActionResult> GetAllStoresAsync([FromQuery] GetAllStoresRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetAllStoresRequest, GetAllStoresResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
     [Route("structured/stores"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetStructuredStoresResponse))]
     public async Task<IActionResult> GetStructuredStoresAsync([FromQuery] GetStructuredStoresRequest request)

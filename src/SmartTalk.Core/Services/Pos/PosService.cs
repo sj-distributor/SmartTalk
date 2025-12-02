@@ -54,6 +54,8 @@ public partial interface IPosService : IScopedDependency
     
     Task<GetStoresAgentsResponse> GetStoresAgentsAsync(GetStoresAgentsRequest request, CancellationToken cancellationToken);
     
+    Task<GetAllStoresResponse> GetAllStoresAsync(GetAllStoresRequest request, CancellationToken cancellationToken);
+    
     Task<GetStructuredStoresResponse> GetStructuredStoresAsync(GetStructuredStoresRequest request, CancellationToken cancellationToken);
     
     Task<GetSimpleStructuredStoresResponse> GetSimpleStructuredStoresAsync(GetSimpleStructuredStoresRequest request, CancellationToken cancellationToken);
@@ -398,6 +400,16 @@ public partial class PosService : IPosService
         }).ToList();
 
         return new GetStoresAgentsResponse { Data = enrichStores };
+    }
+
+    public async Task<GetAllStoresResponse> GetAllStoresAsync(GetAllStoresRequest request, CancellationToken cancellationToken)
+    {
+        var stores = await _posDataProvider.GetAllStoresAsync(request.ServiceProviderId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        return new GetAllStoresResponse
+        {
+            Data = _mapper.Map<List<CompanyStoreDto>>(stores)
+        };
     }
 
     public async Task<GetStructuredStoresResponse> GetStructuredStoresAsync(GetStructuredStoresRequest request, CancellationToken cancellationToken)
