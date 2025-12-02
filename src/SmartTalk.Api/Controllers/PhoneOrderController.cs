@@ -32,6 +32,15 @@ public class PhoneOrderController : ControllerBase
         return Ok(response);
     }
     
+    [Route("record/scenario"), HttpPut]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdatePhoneOrderRecordResponse))]
+    public async Task<IActionResult> UpdatePhoneOrderRecordAsync([FromBody] UpdatePhoneOrderRecordCommand command)
+    {
+        var response = await _mediator.SendAsync<UpdatePhoneOrderRecordCommand, UpdatePhoneOrderRecordResponse>(command).ConfigureAwait(false);
+
+        return Ok(response);
+    }
+    
     [Route("conversations"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPhoneOrderConversationsResponse))]
     public async Task<IActionResult> GetPhoneOrderConversationsAsync([FromQuery] GetPhoneOrderConversationsRequest request)
