@@ -35,6 +35,8 @@ namespace SmartTalk.Core.Services.PhoneOrder;
 public partial interface IPhoneOrderService
 {
     Task<GetPhoneOrderRecordsResponse> GetPhoneOrderRecordsAsync(GetPhoneOrderRecordsRequest request, CancellationToken cancellationToken);
+    
+    Task<UpdatePhoneOrderRecordResponse> UpdatePhoneOrderRecordAsync(UpdatePhoneOrderRecordCommand command, CancellationToken cancellationToken);
 
     Task ReceivePhoneOrderRecordAsync(ReceivePhoneOrderRecordCommand command, CancellationToken cancellationToken);
 
@@ -82,6 +84,27 @@ public partial class PhoneOrderService
         return new GetPhoneOrderRecordsResponse
         {
             Data = enrichedRecords
+        };
+    }
+
+    public async Task<UpdatePhoneOrderRecordResponse> UpdatePhoneOrderRecordAsync(UpdatePhoneOrderRecordCommand command, CancellationToken cancellationToken)
+    {
+        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordAsync(command.RecordId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var record = records.FirstOrDefault();
+        if (record == null) throw new Exception($"Phone order record not found: {command.RecordId}");
+        
+        record.Scenario = command.DialogueScenarios;
+
+        await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record,  true, cancellationToken);
+
+        return new UpdatePhoneOrderRecordResponse
+        {
+            Data = new UpdatePhoneOrderRecordResponseDate
+            {
+                RecordId = record.Id,
+                DialogueScenarios = record.Scenario.GetValueOrDefault()
+            }
         };
     }
 
