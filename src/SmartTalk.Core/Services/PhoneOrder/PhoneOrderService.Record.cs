@@ -92,6 +92,8 @@ public partial class PhoneOrderService
     {
         var records = await _phoneOrderDataProvider.GetPhoneOrderRecordAsync(command.RecordId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
+        var user = await _accountDataProvider.GetUserAccountByUserIdAsync(command.UserId, cancellationToken).ConfigureAwait(false);
+        
         var record = records.FirstOrDefault();
         if (record == null) throw new Exception($"Phone order record not found: {command.RecordId}");
         
@@ -104,7 +106,8 @@ public partial class PhoneOrderService
             Data = new UpdatePhoneOrderRecordResponseDate
             {
                 RecordId = record.Id,
-                DialogueScenarios = record.Scenario.GetValueOrDefault()
+                DialogueScenarios = record.Scenario.GetValueOrDefault(),
+                UserName = user.UserName
             }
         };
     }
