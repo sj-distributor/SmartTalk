@@ -14,6 +14,7 @@ using Smarties.Messages.Requests.Ask;
 using System.Text.RegularExpressions;
 using ClosedXML.Excel;
 using Newtonsoft.Json;
+using SmartTalk.Core.Domain.Account;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.SpeechMatics;
@@ -84,15 +85,15 @@ public partial class PhoneOrderService
 
         var updateUserIds = enrichedRecords.Where(r => r.UpdateScenarioUserId.HasValue).Select(r => r.UpdateScenarioUserId!.Value).Distinct().ToList();
 
-        var userAccounts = await _accountDataProvider.GetUserAccountByUserIdsAsync(updateUserIds, cancellationToken).ConfigureAwait(false);
+        var userAccounts = updateUserIds.Count > 0 ? await _accountDataProvider.GetUserAccountByUserIdsAsync(updateUserIds, cancellationToken).ConfigureAwait(false) : new List<UserAccount>();
 
-        var userDict = userAccounts.ToDictionary(u => u.Id, u => u.UserName);
-        
+        var userDict = (userAccounts ?? new List<UserAccount>()).ToDictionary(u => u.Id, u => u.UserName);
+
         enrichedRecords.ForEach(r =>
         {
-            if (r.UpdateScenarioUserId.HasValue && userDict.TryGetValue(r.UpdateScenarioUserId.Value, out var userName)) { r.UpdateScenarioUserName = userName; }
+            if (r.UpdateScenarioUserId.HasValue && userDict.TryGetValue(r.UpdateScenarioUserId.Value, out var name)) { r.UpdateScenarioUserName = name; }
         });
-        
+
         return new GetPhoneOrderRecordsResponse
         {
             Data = enrichedRecords
