@@ -61,4 +61,8 @@ public class PhoneOrderRecordDto
     public int? UnSendCount { get; set; }
     
     public bool IsUnreviewed { get; set; }
+    
+    public int? UpdateScenarioUserId { get; set; }
+    
+    public string UpdateScenarioUserName { get; set; }
 }
