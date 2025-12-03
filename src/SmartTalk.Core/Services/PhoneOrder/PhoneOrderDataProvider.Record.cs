@@ -86,8 +86,11 @@ public partial class PhoneOrderDataProvider
             where record.Status == PhoneOrderRecordStatus.Sent && agents.Contains(record.AgentId)
             select record;
 
-        if (scenarios is { Count: > 0 }) 
-            query = query.Where(record => scenarios.Any(s => s == record.Scenario));
+        if (scenarios is { Count: > 0 })
+        {
+            var scenarioInts = scenarios.Select(s => (int)s).ToList();
+            query = query.Where(r => r.Scenario.HasValue && scenarioInts.Contains((int)r.Scenario.Value));
+        }
         
         if (utcStart.HasValue && utcEnd.HasValue)
             query = query.Where(record => record.CreatedDate >= utcStart.Value && record.CreatedDate < utcEnd.Value);
