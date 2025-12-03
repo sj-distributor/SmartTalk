@@ -68,20 +68,8 @@ public partial class PhoneOrderService
                 : [];
         
         var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds, request.Name, utcStart, utcEnd, request.OrderId, request.DialogueScenarios, cancellationToken).ConfigureAwait(false);
-
-        var posOrders = await _posDataProvider.GetPosOrdersByRecordIdsAsync(records.Select(x => x.Id).ToList(), cancellationToken);
-
-        var posOrderLookup = posOrders
-            .GroupBy(x => x.RecordId)
-            .ToDictionary(g => g.Key, g => g.Count()); 
-
-        var enrichedRecords = _mapper.Map<List<PhoneOrderRecordDto>>(records).Select(r =>
-        {
-            r.UnSendCount = posOrderLookup.TryGetValue(r.Id, out var count) ? count : 0;
-            return r;
-        }).ToList();
         
-        await BuildRecordUnreviewDataAsync(enrichedRecords, cancellationToken).ConfigureAwait(false);
+        var enrichedRecords = _mapper.Map<List<PhoneOrderRecordDto>>(records);
 
         var updateUserIds = enrichedRecords.Where(r => r.UpdateScenarioUserId.HasValue).Select(r => r.UpdateScenarioUserId!.Value).Distinct().ToList();
 
@@ -94,6 +82,8 @@ public partial class PhoneOrderService
             if (r.UpdateScenarioUserId.HasValue && userDict.TryGetValue(r.UpdateScenarioUserId.Value, out var name)) { r.UpdateScenarioUserName = name; }
         });
 
+        await BuildRecordUnreviewDataAsync(enrichedRecords, cancellationToken).ConfigureAwait(false);
+        
         return new GetPhoneOrderRecordsResponse
         {
             Data = enrichedRecords
