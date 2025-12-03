@@ -32,6 +32,8 @@ using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Sales;
 using SmartTalk.Messages.Dto.PhoneOrder;
+using SmartTalk.Messages.Dto.PhoneOrder;
+using SmartTalk.Messages.Enums.Account;
 using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Enums.STT;
 using Twilio;
@@ -166,8 +168,10 @@ public class SpeechMaticsService : ISpeechMaticsService
         
         var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
+        var callSubjectCn = "通话主题:";
+        var callSubjectEn = "Conversation topic:";
 
-        var messages = await ConfigureRecordAnalyzePromptAsync(agent, aiSpeechAssistant, callFrom ?? "", currentTime, audioContent, cancellationToken);
+        var messages = await ConfigureRecordAnalyzePromptAsync(agent, aiSpeechAssistant, callFrom ?? "", callTo ?? "", currentTime, audioContent, callSubjectCn, callSubjectEn, cancellationToken);
         
         ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
  
@@ -175,7 +179,7 @@ public class SpeechMaticsService : ISpeechMaticsService
 
         ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
         Log.Information("sales record analyze report:" + completion.Content.FirstOrDefault()?.Text);
-        
+      
         record.Status = PhoneOrderRecordStatus.Sent;
         record.TranscriptionText = completion.Content.FirstOrDefault()?.Text ?? "";
 
@@ -184,6 +188,11 @@ public class SpeechMaticsService : ISpeechMaticsService
         record.IsCustomerFriendly = checkCustomerFriendly.IsCustomerFriendly;
         record.IsHumanAnswered = checkCustomerFriendly.IsHumanAnswered;
         
+
+        var scenarioInformation = await IdentifyDialogueScenariosAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
+        record.Scenario = scenarioInformation.Category;
+        record.Remark = scenarioInformation.Remark;
+
         var detection = await _translationClient.DetectLanguageAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
 
         await MultiScenarioCustomProcessingAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
@@ -376,7 +385,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         }
     }
     
-     private async Task<List<ChatMessage>> ConfigureRecordAnalyzePromptAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, string callFrom, string currentTime, byte[] audioContent, CancellationToken cancellationToken) 
+     private async Task<List<ChatMessage>> ConfigureRecordAnalyzePromptAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, string callFrom, string callTo, string currentTime, byte[] audioContent, string callSubjectCn, string callSubjectEn, CancellationToken cancellationToken) 
     {
         var soldToIds = !string.IsNullOrEmpty(aiSpeechAssistant.Name) ? aiSpeechAssistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : new List<string>();
 
@@ -387,8 +396,20 @@ public class SpeechMaticsService : ISpeechMaticsService
         List<ChatMessage> messages =
         [
             new SystemChatMessage( (string.IsNullOrEmpty(aiSpeechAssistant?.CustomRecordAnalyzePrompt)
-                ? "你是一名電話錄音的分析員，通過聽取錄音內容和語氣情緒作出精確分析，冩出一份分析報告。\n\n分析報告的格式：交談主題：xxx\n\n 來電號碼：#{call_from}\n\n 內容摘要:xxx \n\n 客人情感與情緒: xxx \n\n 待辦事件: \n1.xxx\n2.xxx \n\n 客人下單內容(如果沒有則忽略)：1. 牛肉(1箱)\n2. 雞腿肉(1箱)"
-                : aiSpeechAssistant.CustomRecordAnalyzePrompt).Replace("#{call_from}", callFrom ?? "").Replace("#{current_time}", currentTime ?? "").Replace("#{customer_items}", customerItemsString ?? "")),
+                ? "你是一名電話錄音的分析員，通過聽取錄音內容和語氣情緒作出精確分析，冩出一份分析報告。\n\n" +
+                  "分析報告的格式：交談主題：xxx\n\n " +
+                  "來電號碼：#{call_from}\n\n " +
+                  "內容摘要:xxx \n\n " +
+                  "客人情感與情緒: xxx \n\n " +
+                  "待辦事件: \n1.xxx\n2.xxx \n\n " +
+                  "客人下單內容(如果沒有則忽略)：1. 牛肉(1箱)\n2. 雞腿肉(1箱)"
+                : aiSpeechAssistant.CustomRecordAnalyzePrompt)
+                .Replace("#{call_from}", callFrom ?? "")
+                .Replace("#{current_time}", currentTime ?? "")
+                .Replace("#{call_to}", callTo ?? "")
+                .Replace("#{customer_items}", customerItemsString ?? "")
+                .Replace("#{call_subject_cn}", callSubjectCn)
+                .Replace("#{call_subject_us}", callSubjectEn)),
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
             new UserChatMessage("幫我根據錄音生成分析報告：")
         ];
@@ -675,5 +696,67 @@ public class SpeechMaticsService : ISpeechMaticsService
         if (result == null) throw new Exception($"无法反序列化模型返回结果: {response}");
 
         return (result.IsHumanAnswered, result.IsCustomerFriendly);
+    }
+
+    private async Task<DialogueScenarioResultDto> IdentifyDialogueScenariosAsync(string query,
+        CancellationToken cancellationToken)
+    {
+        var completionResult = await _smartiesClient.PerformQueryAsync(
+            new AskGptRequest
+            {
+                Messages = new List<CompletionsRequestMessageDto>
+                {
+                    new()
+                    {
+                        Role = "system",
+                        Content = new CompletionsStringContent(
+                            "You are a professional restaurant AI call analysis assistant. " +
+                            "After each customer call, your task is to classify the main scenario of the call into one of the predefined categories.\n\n" +
+                            "Below are the available categories:\n" +
+                            "1. Reservation - The customer requests to book a table, specifying a time or number of people.\n" +
+                            "2. Order - The customer wants to place an order directly with the restaurant (dine-in, pickup, or restaurant delivery), " +
+                            "or modify the order before preparation (add/remove items, cancel order, issue invoices, etc.). " +
+                            "This category does NOT include inquiries or issues about third-party delivery platform orders.\n" +
+                            "3. Inquiry - General questions about restaurant dishes, prices, opening hours, promotions, etc.\n" +
+                            "4. ThirdPartyOrderNotification - Any conversation related to third-party delivery platforms, including but not limited to: " +
+                            "DoorDash, Uber Eats, Grubhub, Postmates, Caviar, Seamless, Fantuan（飯團外賣）, HungryPanda（熊貓外賣）, EzCater. " +
+                            "Includes customers checking the status of platform orders, asking whether the restaurant received their order, " +
+                            "requesting to expedite a platform order, or calls from platforms/couriers about issues.\n" +
+                            "5. ComplaintFeedback - Customer complaints or feedback about food, service, delivery issues, or restaurant experience.\n" +
+                            "6. InformationNotification - One-way notifications, such as out-of-stock messages, delivery time notifications, reminders, etc.\n" +
+                            "7. TransferToHuman - The AI transfers or attempts to transfer the call to a human agent.\n" +
+                            "8. SalesCall - Promotional or sales calls from external companies (insurance, renovation, advertising, etc.).\n" +
+                            "9. InvalidCall - No meaningful conversation: silent calls, no response, wrong number, accidental dial, or hang-ups.\n" +
+                            "10. TransferVoicemail - The call was transferred to voicemail.\n" +
+                            "11. Other - Anything that cannot clearly be categorized above. Provide a short key snippet in 'remark'.\n\n" +
+                            "When multiple intents appear, choose the one with the highest priority using this order:\n" +
+                            "TransferVoicemail > TransferToHuman > Reservation > Order > Inquiry > ComplaintFeedback > InformationNotification > ThirdPartyOrderNotification > SalesCall > InvalidCall > Other\n\n" +
+                            
+                            "Output STRICTLY in JSON format with exactly two fields:\n" +
+                            "{\"category\": \"one of [Reservation, Order, Inquiry, ThirdPartyOrderNotification, ComplaintFeedback, InformationNotification, TransferToHuman, SalesCall, InvalidCall, Other]\"," +
+                            " \"remark\": \"If category is 'Other', include a short snippet; otherwise leave empty\"}.\n" +
+                            "No explanations or extra text — return only the JSON object."
+                        )
+                    },
+                    new()
+                    {
+                        Role = "user",
+                        Content = new CompletionsStringContent($"Call transcript: {query}\nOutput:")
+                    }
+                },
+                Model = OpenAiModel.Gpt4o,
+                ResponseFormat = new() { Type = "json_object" }
+            },
+            cancellationToken
+        ).ConfigureAwait(false);
+
+        var response = completionResult.Data.Response?.Trim();
+
+        var result = JsonConvert.DeserializeObject<DialogueScenarioResultDto>(response);
+
+        if (result == null)
+            throw new Exception($"IdentifyDialogueScenariosAsync 无法反序列化模型返回结果: {response}");
+
+        return result;
     }
 }
