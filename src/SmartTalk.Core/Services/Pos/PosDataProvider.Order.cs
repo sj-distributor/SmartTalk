@@ -25,10 +25,8 @@ public partial interface IPosDataProvider
     Task<List<PosOrder>> GetPosCustomerInfosAsync(CancellationToken cancellationToken);
     
     Task<List<PosOrder>> GetPosOrdersByRecordIdsAsync(List<int> recordIds, CancellationToken cancellationToken);
-    
+
     Task<List<PosOrder>> GetAiDraftOrdersByRecordIdsAsync(List<int> recordIds, CancellationToken cancellationToken);
-    
-    Task<List<PosOrder>> GetPosOrdersByRecordIds1Async(List<int >recordId, CancellationToken cancellationToken = default);
 }
 
 public partial class PosDataProvider
@@ -131,12 +129,5 @@ public partial class PosDataProvider
         return await _repository.QueryNoTracking<PosOrder>()
             .Where(x => x.Status == PosOrderStatus.Pending && x.RecordId.HasValue && recordIds.Contains(x.RecordId.Value))
             .ToListAsync(cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task<List<PosOrder>> GetPosOrdersByRecordIds1Async(List<int> recordIds, CancellationToken cancellationToken = default)
-    {
-        if (recordIds == null || recordIds.Count == 0) return new List<PosOrder>();
-
-        return await _repository.Query<PosOrder>().Where(x => x.RecordId.HasValue && recordIds.Contains(x.RecordId.Value) && x.Status == PosOrderStatus.Pending).ToListAsync(cancellationToken);
     }
 }

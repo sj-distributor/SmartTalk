@@ -59,8 +59,6 @@ public class PhoneOrderRecordDto
     public bool? IsHumanAnswered { get; set; }
     
     public bool IsUnreviewed { get; set; }
-
-    public int? UnSendCount { get; set; }
     
     public int? UpdateScenarioUserId { get; set; }
     
