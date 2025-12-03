@@ -128,7 +128,11 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
             ResponseFormat = new () { Type = "json_object" }
         }, cancellationToken).ConfigureAwait(false);
         
-        return completionResult.Data.Response == null ? null : JsonConvert.DeserializeObject<PhoneOrderDetailDto>(completionResult.Data.Response);
+        var result = completionResult.Data.Response == null ? null : JsonConvert.DeserializeObject<PhoneOrderDetailDto>(completionResult.Data.Response);
+        
+        Log.Information("Food extract result: {@Result}", result);
+
+        return result;
     }
 
     private async Task<List<PhoneOrderOrderItem>> GetSimilarRestaurantByRecordAsync(PhoneOrderRecord record, PhoneOrderDetailDto foods, CancellationToken cancellationToken)
