@@ -386,4 +386,13 @@ public class PosController : ControllerBase
         
         return Ok(response);
     }
+    
+    [Route("print/status"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPrintStatusResponse))]
+    public async Task<IActionResult> GetPrintStatusAsync([FromQuery] GetPrintStatusRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetPrintStatusRequest, GetPrintStatusResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
 }

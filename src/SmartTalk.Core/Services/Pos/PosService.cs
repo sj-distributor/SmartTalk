@@ -22,6 +22,7 @@ using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Pos;
 using SmartTalk.Messages.Enums.Agent;
+using SmartTalk.Messages.Enums.Pos;
 using SmartTalk.Messages.Requests.Pos;
 
 namespace SmartTalk.Core.Services.Pos;
@@ -59,6 +60,8 @@ public partial interface IPosService : IScopedDependency
     Task<GetStructuredStoresResponse> GetStructuredStoresAsync(GetStructuredStoresRequest request, CancellationToken cancellationToken);
     
     Task<GetSimpleStructuredStoresResponse> GetSimpleStructuredStoresAsync(GetSimpleStructuredStoresRequest request, CancellationToken cancellationToken);
+
+    Task<GetPrintStatusResponse> GetPrintStatusAsync(GetPrintStatusRequest request, CancellationToken cancellationToken);
 }
 
 public partial class PosService : IPosService
@@ -568,5 +571,62 @@ public partial class PosService : IPosService
         };
         
         await _posDataProvider.AddPosAgentsAsync([posAgent], cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<GetPrintStatusResponse> GetPrintStatusAsync(GetPrintStatusRequest request, CancellationToken cancellationToken)
+    {
+        var firstTime = DateTimeOffset.Now;
+        var timeout = TimeSpan.FromSeconds(10);
+        
+        var store = await _posDataProvider.GetPosCompanyStoreAsync(id: request.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (store == null || string.IsNullOrEmpty(store.Link) || string.IsNullOrEmpty(store.AppId) || string.IsNullOrEmpty(store.AppSecret))
+        {
+            Log.Error("Store could not be found or appId、url、secret could not be empty.");
+            return null;
+        }
+    
+        var response = await _easyPosClient.GetPosOrderAsync(new GetOrderRequestDto
+        {
+            BaseUrl = store.Link,
+            AppId = store.AppId,
+            AppSecret = store.AppSecret,
+            OrderId = request.OrderId
+        }, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Get pos order response: {@Response}", response);
+
+        if (response?.Data?.Order == null || response.Success == false)
+            throw new Exception($"Order {request.OrderId} could not be found.");
+        
+        while (response.Data.Order.SendStatus != SendStatus.AllSent &&  DateTimeOffset.Now - firstTime < timeout)
+        {
+            response = await _easyPosClient.GetPosOrderAsync(new GetOrderRequestDto
+            {
+                BaseUrl = store.Link,
+                AppId = store.AppId,
+                AppSecret = store.AppSecret,
+                OrderId = request.OrderId
+            }, cancellationToken).ConfigureAwait(false);
+        
+            Log.Information("Get pos order response: {@Response}", response);
+        }
+
+        var order = await _posDataProvider.GetPosOrderByIdAsync(posOrderId: request.OrderId.ToString(), cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        if (order == null)
+        {
+            Log.Error("Order could not be found.");
+            return null;
+        }
+        
+        order.PrintStatus = response.Data.Order.SendStatus == SendStatus.AllSent ? PosOrderPrintStatus.Succeed : PosOrderPrintStatus.Fail;
+
+        await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return new GetPrintStatusResponse
+        {
+            Data = _mapper.Map<PosOrderDto>(order)
+        };
     }
 }
