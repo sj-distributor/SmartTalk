@@ -31,7 +31,6 @@ public class HrJobProcessJobService : IHrJobProcessJobService
         if (noUsingQuestions.Count == 0) return;
 
         var randomResult = ProcessSingleHrInterviewSectionQuestionsCache(noUsingQuestions);
-
         if (randomResult.Count == 0) return;
 
         await RefreshVariableCacheAsync(randomResult.Select(x => x.Cache).ToList(), cancellationToken).ConfigureAwait(false);
