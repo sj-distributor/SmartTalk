@@ -8,7 +8,6 @@ using SmartTalk.Core.Domain.Sales;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
-using SmartTalk.Messages.Enums.Sales;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
 
@@ -128,6 +127,8 @@ public partial interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task<List<(Agent, Domain.AISpeechAssistant.AiSpeechAssistant)>> GetAgentAndAiSpeechAssistantPairsAsync(CancellationToken cancellationToken);
     
     Task<List<Domain.AISpeechAssistant.AiSpeechAssistant>> GetAiSpeechAssistantsByStoreIdAsync(int storeId, CancellationToken cancellationToken = default);
+    
+    Task<List<Domain.AISpeechAssistant.AiSpeechAssistant>> GetAiSpeechAssistantsByCompanyIdAsync(int companyId, CancellationToken cancellationToken);
 }
 
 public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
@@ -694,6 +695,17 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
             join posAgent in _repository.Query<PosAgent>() on store.Id equals posAgent.StoreId
             join agentAssistant in _repository.Query<AgentAssistant>() on posAgent.AgentId equals agentAssistant.AgentId
             join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agentAssistant.AssistantId equals assistant.Id
+            select assistant;
+        
+        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<Domain.AISpeechAssistant.AiSpeechAssistant>> GetAiSpeechAssistantsByCompanyIdAsync(int companyId, CancellationToken cancellationToken)
+    {
+        var query = from company in _repository.Query<Company>().Where(x => x.Id == companyId)
+            join store in _repository.Query<CompanyStore>() on company.Id equals store.CompanyId
+            join posAgent in _repository.Query<PosAgent>() on store.Id equals posAgent.StoreId
+            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>().Where(x => x.IsDefault) on posAgent.AgentId equals assistant.AgentId
             select assistant;
         
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
