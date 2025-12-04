@@ -26,24 +26,22 @@ public class HrJobProcessJobService : IHrJobProcessJobService
 
     public async Task RefreshHrInterviewQuestionsCacheAsync(RefreshHrInterviewQuestionsCacheCommand command, CancellationToken cancellationToken)
     {
-        var tasks = Enum.GetValues(typeof(HrInterviewQuestionSection))
+        var noUsingQuestions = await _hrDataProvider.GetHrInterviewQuestionsAsync(isUsing: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var results = Enum.GetValues(typeof(HrInterviewQuestionSection))
             .Cast<HrInterviewQuestionSection>()
-            .Select(section => ProcessSingleHrInterviewSectionQuestionsCacheAsync(section, cancellationToken))
+            .Select(section => ProcessSingleHrInterviewSectionQuestionsCache(noUsingQuestions.Where(x => x.Section == section).ToList(), section))
             .ToList();
-
-        var results = await Task.WhenAll(tasks).ConfigureAwait(false);
-
-        if (results.Length == 0) return;
+        
+        if (results.Count == 0) return;
 
         await RefreshVariableCacheAsync(results.Select(x => x.Cache).ToList(), cancellationToken).ConfigureAwait(false);
         
         await MarkHrInterviewQuestionsUsingStatusAsync(results.SelectMany(x => x.questions).ToList(), cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<(List<HrInterviewQuestion> questions, AiSpeechAssistantKnowledgeVariableCache Cache)> ProcessSingleHrInterviewSectionQuestionsCacheAsync(HrInterviewQuestionSection section, CancellationToken cancellationToken)
+    private (List<HrInterviewQuestion> questions, AiSpeechAssistantKnowledgeVariableCache Cache) ProcessSingleHrInterviewSectionQuestionsCache(List<HrInterviewQuestion> questions, HrInterviewQuestionSection section)
     {
-        var questions = await _hrDataProvider.GetHrInterviewQuestionsAsync(section, false, cancellationToken: cancellationToken).ConfigureAwait(false);
-
         if (questions == null || questions.Count == 0) return ([], null);
 
         var randomQuestions = RandomPickHrInterviewQuestions(questions);
