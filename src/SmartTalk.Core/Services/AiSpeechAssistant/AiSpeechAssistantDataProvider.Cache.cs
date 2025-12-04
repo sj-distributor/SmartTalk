@@ -1,11 +1,15 @@
+using AutoMapper.QueryableExtensions;
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Domain.Sales;
+using SmartTalk.Messages.Dto.AiSpeechAssistant;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
 
 public partial interface IAiSpeechAssistantDataProvider
 {
-    Task<List<AiSpeechAssistantKnowledgeVariableCache>> GetAiSpeechAssistantKnowledgeVariableCachesAsync(List<string> cacheKeys, CancellationToken cancellationToken = default);
+    Task<List<AiSpeechAssistantKnowledgeVariableCache>> GetAiSpeechAssistantKnowledgeVariableCachesAsync(List<string> cacheKeys = null, string filter = null, CancellationToken cancellationToken = default);
+    
+    Task<List<AiSpeechAssistantKnowledgeVariableCacheDto>> GetAiSpeechAssistantKnowledgeVariableCachesAsync(string cacheKey, string filter, CancellationToken cancellationToken = default);
     
     Task AddAiSpeechAssistantKnowledgeVariableCachesAsync(List<AiSpeechAssistantKnowledgeVariableCache> caches, bool forceSave = true, CancellationToken cancellationToken = default);
     
@@ -15,14 +19,31 @@ public partial interface IAiSpeechAssistantDataProvider
 public partial class AiSpeechAssistantDataProvider
 {
     public async Task<List<AiSpeechAssistantKnowledgeVariableCache>> GetAiSpeechAssistantKnowledgeVariableCachesAsync(
-        List<string> cacheKeys, CancellationToken cancellationToken = default)
+        List<string> cacheKeys = null, string filter = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<AiSpeechAssistantKnowledgeVariableCache>();
 
-        if (cacheKeys.Count != 0)
+        if (cacheKeys != null && cacheKeys.Count != 0)
             query = query.Where(x => cacheKeys.Contains(x.CacheKey));
+
+        if (!string.IsNullOrEmpty(filter))
+            query = query.Where(x => x.Filter == filter);
         
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<AiSpeechAssistantKnowledgeVariableCacheDto>> GetAiSpeechAssistantKnowledgeVariableCachesAsync(
+        string cacheKey, string filter, CancellationToken cancellationToken = default)
+    {
+        var query = _repository.Query<AiSpeechAssistantKnowledgeVariableCache>();
+
+        if (!string.IsNullOrEmpty(cacheKey))
+            query = query.Where(x => x.CacheKey == cacheKey);
+        
+        if (!string.IsNullOrEmpty(filter))
+            query = query.Where(x => x.Filter == filter);
+        
+        return await query.ProjectTo<AiSpeechAssistantKnowledgeVariableCacheDto>(_mapper.ConfigurationProvider).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task AddAiSpeechAssistantKnowledgeVariableCachesAsync(

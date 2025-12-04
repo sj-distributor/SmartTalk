@@ -79,7 +79,7 @@ public class HrJobProcessJobService : IHrJobProcessJobService
             .Select(section => "hr_interview_" + section.ToString().ToLower())
             .ToList();
 
-        var caches = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeVariableCachesAsync(cacheKeys, cancellationToken).ConfigureAwait(false);
+        var caches = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeVariableCachesAsync(cacheKeys, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         Log.Information("Fetching exist hr interview questions from caches: {@Caches}", caches);
         
