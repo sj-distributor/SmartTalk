@@ -47,17 +47,25 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
             switch (scenario.KeyName)
             {
                 case "AiOrder":
-                    if (!import.TryGetValue("CustomerId", out var customerId) || !import.TryGetValue("StartDate", out var startDate) || !import.TryGetValue("EndDate", out var endDate))
+                    if (!import.TryGetValue("CustomerId", out var customerId) || !import.TryGetValue("StartDate", out var startDateObj) || !import.TryGetValue("EndDate", out var endDateObj))
                         return;
                     
-                    var cursor = new DateTime(((DateTime)startDate).Year, ((DateTime)startDate).Month, 1);
-                    while (cursor <= (DateTime)endDate)
+                    DateTime startUtc = startDateObj is DateTime dt1 ? dt1 : DateTime.Parse(startDateObj.ToString());
+                    DateTime endUtc = endDateObj is DateTime dt2 ? dt2 : DateTime.Parse(endDateObj.ToString());
+
+                    var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+                    var startPst = TimeZoneInfo.ConvertTimeFromUtc(startUtc, pacificZone);
+                    var endPst = TimeZoneInfo.ConvertTimeFromUtc(endUtc, pacificZone);
+
+                    var cursor = new DateTime(startPst.Year, startPst.Month, 1);
+                    while (cursor <= endPst)
                     {
-                        var monthStart = cursor < (DateTime)startDate ? startDate : cursor;
+                        var monthStart = cursor < startPst ? startPst : cursor;
                         var monthEnd = cursor.AddMonths(1).AddDays(-1);
-                        if (monthEnd > (DateTime)endDate) monthEnd = (DateTime)endDate;
-            
-                        _backgroundJobClient.Enqueue<IAutoTestSalesPhoneOrderProcessJobService>(x => x.ProcessPartialRecordingOrderMatchingAsync(scenarioId, dataSetId, recordId, (DateTime)monthStart, monthEnd, customerId.ToString(), cancellationToken));
+                        if (monthEnd > endPst) monthEnd = endPst;
+
+                        _backgroundJobClient.Enqueue<IAutoTestSalesPhoneOrderProcessJobService>(x => 
+                            x.ProcessPartialRecordingOrderMatchingAsync(scenarioId, dataSetId, recordId, monthStart, monthEnd, customerId.ToString(), cancellationToken));
 
                         cursor = cursor.AddMonths(1);
                     }
