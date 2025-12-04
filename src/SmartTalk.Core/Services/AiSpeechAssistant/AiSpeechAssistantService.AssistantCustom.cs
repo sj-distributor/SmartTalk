@@ -239,6 +239,7 @@ public partial class AiSpeechAssistantService
         latestDefaultAssistant.IsDefault = true;
         latestDefaultAssistant.AnsweringNumber = previousDefaultAssistant.AnsweringNumber;
         latestDefaultAssistant.AnsweringNumberId = previousDefaultAssistant.AnsweringNumberId;
+        latestDefaultAssistant.IsAutoGenerateOrder = previousDefaultAssistant.IsAutoGenerateOrder;
         previousDefaultAssistant.AnsweringNumber = null;
         previousDefaultAssistant.AnsweringNumberId = null;
         
