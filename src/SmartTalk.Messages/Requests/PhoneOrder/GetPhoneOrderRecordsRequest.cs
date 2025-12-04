@@ -22,6 +22,8 @@ public class GetPhoneOrderRecordsRequest : IRequest
     public DateTimeOffset? Date { get; set; }
     
     public string OrderId { get; set; }
+
+    public bool IsFilteringScenarios { get; set; } = false;
 }
 
 public class GetPhoneOrderRecordsResponse : SmartTalkResponse<List<PhoneOrderRecordDto>>
