@@ -24,6 +24,8 @@ public class GetPhoneOrderRecordsRequest : IRequest
     public string OrderId { get; set; }
     
     public int? AssistantId { get; set; }
+
+    public bool IsFilteringScenarios { get; set; } = false;
 }
 
 public class GetPhoneOrderRecordsResponse : SmartTalkResponse<List<PhoneOrderRecordDto>>
