@@ -46,7 +46,10 @@ public partial class PosService
     {
         var order = await GetOrAddPosOrderAsync(command, cancellationToken).ConfigureAwait(false);
         
-        await HandlePosOrderAsync(order, command.IsWithRetry, cancellationToken).ConfigureAwait(false);
+        await _redisSafeRunner.ExecuteWithLockAsync($"execute-place-order-{order.Id}", async() =>
+        {
+            await HandlePosOrderAsync(order, command.IsWithRetry, cancellationToken).ConfigureAwait(false);
+        }, wait: TimeSpan.FromSeconds(10), retry: TimeSpan.FromSeconds(1), server: RedisServer.System).ConfigureAwait(false);
         
         return new PosOrderPlacedEvent
         {
