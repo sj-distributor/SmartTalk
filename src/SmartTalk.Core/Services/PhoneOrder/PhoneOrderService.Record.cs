@@ -14,6 +14,7 @@ using Smarties.Messages.Requests.Ask;
 using System.Text.RegularExpressions;
 using ClosedXML.Excel;
 using Newtonsoft.Json;
+using SmartTalk.Core.Domain.Account;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Services.Linphone;
@@ -35,6 +36,8 @@ namespace SmartTalk.Core.Services.PhoneOrder;
 public partial interface IPhoneOrderService
 {
     Task<GetPhoneOrderRecordsResponse> GetPhoneOrderRecordsAsync(GetPhoneOrderRecordsRequest request, CancellationToken cancellationToken);
+    
+    Task<UpdatePhoneOrderRecordResponse> UpdatePhoneOrderRecordAsync(UpdatePhoneOrderRecordCommand command, CancellationToken cancellationToken);
 
     Task ReceivePhoneOrderRecordAsync(ReceivePhoneOrderRecordCommand command, CancellationToken cancellationToken);
 
@@ -65,13 +68,54 @@ public partial class PhoneOrderService
                 ? (await _posDataProvider.GetPosAgentsAsync(storeIds: [request.StoreId.Value], cancellationToken: cancellationToken).ConfigureAwait(false)).Select(x => x.AgentId).ToList()
                 : [];
 
-        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds, request.Name, utcStart, utcEnd, request.OrderId, cancellationToken).ConfigureAwait(false);
-
+        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds, request.Name, utcStart, utcEnd, request.OrderId, request.DialogueScenarios, cancellationToken).ConfigureAwait(false);
+        
         var enrichedRecords = _mapper.Map<List<PhoneOrderRecordDto>>(records);
 
+        var updateUserIds = enrichedRecords.Where(r => r.UpdateScenarioUserId.HasValue).Select(r => r.UpdateScenarioUserId!.Value).Distinct().ToList();
+
+        var userAccounts = updateUserIds.Count > 0 ? await _accountDataProvider.GetUserAccountByUserIdsAsync(updateUserIds, cancellationToken).ConfigureAwait(false) : new List<UserAccount>();
+
+        var userDict = (userAccounts ?? new List<UserAccount>()).ToDictionary(u => u.Id, u => u.UserName);
+
+        enrichedRecords.ForEach(r =>
+        {
+            if (r.UpdateScenarioUserId.HasValue && userDict.TryGetValue(r.UpdateScenarioUserId.Value, out var name)) { r.UpdateScenarioUserName = name; }
+        });
+
+        await BuildRecordUnreviewDataAsync(enrichedRecords, cancellationToken).ConfigureAwait(false);
+        
         return new GetPhoneOrderRecordsResponse
         {
             Data = enrichedRecords
+        };
+    }
+
+    public async Task<UpdatePhoneOrderRecordResponse> UpdatePhoneOrderRecordAsync(UpdatePhoneOrderRecordCommand command, CancellationToken cancellationToken)
+    {
+        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordAsync(command.RecordId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var record = records.FirstOrDefault();
+        if (record == null) throw new Exception($"Phone order record not found: {command.RecordId}");
+        
+        var user = await _accountDataProvider.GetUserAccountByUserIdAsync(command.UserId, cancellationToken).ConfigureAwait(false);
+
+        if (user == null) 
+            throw new Exception($"User not found: {command.UserId}");
+        
+        record.Scenario = command.DialogueScenarios;
+        record.UpdateScenarioUserId = user.Id;
+
+        await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record,  true, cancellationToken);
+
+        return new UpdatePhoneOrderRecordResponse
+        {
+            Data = new UpdatePhoneOrderRecordResponseDate
+            {
+                RecordId = record.Id,
+                DialogueScenarios = record.Scenario.GetValueOrDefault(),
+                UserName = user.UserName
+            }
         };
     }
 
@@ -889,13 +933,11 @@ public partial class PhoneOrderService
             CancelledOrderCountPerPeriod = cancelledOrderCountPerPeriod
         };
         
-        var linphoneSips = await _linphoneDataProvider.GetLinphoneSipsByAgentIdsAsync(agentIds: request.AgentIds, cancellationToken: cancellationToken).ConfigureAwait(false);
-        var sipNumbers = linphoneSips.Select(y => y.Sip).ToList();
-
-        var (callInFailedCount, callOutFailedCount) = await _linphoneDataProvider.GetCallFailedStatisticsAsync(utcStart.ToUnixTimeSeconds(), utcEnd.ToUnixTimeSeconds(), sipNumbers, cancellationToken).ConfigureAwait(false);
- 
         var callInRecords = records?.Where(x => x.OrderRecordType == PhoneOrderRecordType.InBound).ToList() ?? new List<PhoneOrderRecord>();
         var callOutRecords = records?.Where(x => x.OrderRecordType == PhoneOrderRecordType.OutBount).ToList() ?? new List<PhoneOrderRecord>();
+
+        var callInFailedCount = callInRecords.Select(x => x.Scenario is DialogueScenarios.TransferVoicemail or DialogueScenarios.InvalidCall).Count();
+        var callOutFailedCount = callOutRecords.Select(x => x.Scenario is DialogueScenarios.TransferVoicemail or DialogueScenarios.InvalidCall).Count();
 
         callInRecords.ForEach(r => r.CreatedDate = r.CreatedDate.ToOffset(targetOffset));
         callOutRecords.ForEach(r => r.CreatedDate = r.CreatedDate.ToOffset(targetOffset));
@@ -929,7 +971,7 @@ public partial class PhoneOrderService
         var totalDuration = callInRecords.Sum(x => x.Duration ?? 0);
         var friendlyCount = callInRecords.Count(x => x.IsCustomerFriendly == true);
         var satisfactionRate = answeredCount > 0 ? (double)friendlyCount / answeredCount : 0;
-        var transferCount = callInRecords.Count(x => x.IsTransfer == true);
+        var transferCount = callInRecords.Count(x => x.IsTransfer == true || x.Scenario == DialogueScenarios.TransferToHuman);
         var transferRate = answeredCount > 0 ? (double)transferCount / answeredCount : 0;
         var repeatRate = answeredCount > 0 ? (double)totalRepeatCalls / answeredCount : 0;
 
@@ -958,7 +1000,7 @@ public partial class PhoneOrderService
         var totalDuration = callOutRecords.Sum(x => x.Duration ?? 0);
         var friendlyCount = callOutRecords.Count(x => x.IsCustomerFriendly == true);
         var satisfactionRate = answeredCount > 0 ? (double)friendlyCount / answeredCount : 0;
-        var transferCount = callOutRecords.Count(x => x.IsTransfer == true);
+        var transferCount = callOutRecords.Count(x => x.IsTransfer == true || x.Scenario == DialogueScenarios.TransferToHuman);
 
         var totalDurationPerPeriod = GroupDurationByRequestType(callOutRecords, start, end, dataType);
 
@@ -1080,5 +1122,18 @@ public partial class PhoneOrderService
         var prevOrderAmount = prevPosOrders.Sum(x => x.Total) - prevCancelledOrders.Sum(x => x.Total);
         var currOrderAmount = restaurantData.TotalOrderAmount;
         restaurantData.OrderAmountChange = prevOrderAmount == 0 && currOrderAmount > 0 ? currOrderAmount : currOrderAmount - prevOrderAmount;
+    }
+    
+    private async Task BuildRecordUnreviewDataAsync(List<PhoneOrderRecordDto> records, CancellationToken cancellationToken)
+    {
+        var orders = await _posDataProvider.GetAiDraftOrdersByRecordIdsAsync(records.Select(x => x.Id).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Get store unreview orders: {@Orders}", orders);
+        
+        var unreviewedRecordIds = orders.Where(x => x.RecordId.HasValue).Select(x => x.RecordId.Value).ToHashSet();
+        
+        records.ForEach(x => x.IsUnreviewed = unreviewedRecordIds.Contains(x.Id));
+        
+        Log.Information("Enrich complete records: {@Records}", records);
     }
 }

@@ -229,6 +229,7 @@ public class AgentService : IAgentService
             await task.ConfigureAwait(false);
             
             var agentList = (List<AgentPreviewDto>)((dynamic)task).Result;
+            
             result.AddRange(agentList);
         }
 
