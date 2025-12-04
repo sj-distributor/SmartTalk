@@ -64,6 +64,8 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
     {
         try
         {
+            if (record.Scenario != DialogueScenarios.Order) return;
+            
             var shoppingCart = await GetOrderDetailsAsync(goalTexts, cancellationToken).ConfigureAwait(false);
             
             var (assistant, agent) = await _aiiSpeechAssistantDataProvider.GetAgentAndAiSpeechAssistantAsync(
@@ -72,8 +74,6 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
             Log.Information("Get ai speech assistant: {@Assistant} and agent: {@Agent} by agentId: {AgentId}, assistantId: {AssistantId}", assistant, agent, record.AgentId, record.AssistantId);
 
             if (!record.AssistantId.HasValue) assistant = null;
-
-            if (record.Scenario != DialogueScenarios.Order) return;
 
             if (assistant is not { IsAutoGenerateOrder: true }) return;
             
