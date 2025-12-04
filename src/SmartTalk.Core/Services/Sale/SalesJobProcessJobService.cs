@@ -79,9 +79,11 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
     {
         var assistants = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantsByCompanyIdAsync(_salesSetting.SpecificCompanyId, cancellationToken).ConfigureAwait(false);
         
+        Log.Information("Customer info cache refresh, Assistants: {@Assistants}.", assistants);
+        
         var assistantCustomerMappings = new List<AssistantCustomerMap>();
         
-        foreach (var assistant in assistants.Where(x => !string.IsNullOrEmpty(x.Name)))
+        foreach (var assistant in assistants.Where(x => !string.IsNullOrEmpty(x.Name) && x.Name.All(c => char.IsDigit(c) || c == '/')))
         {
             var customerIds = assistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().ToList();
             

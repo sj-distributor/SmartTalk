@@ -257,8 +257,9 @@ public class SpeechMaticsService : ISpeechMaticsService
                            "- 此类别不包括关于第三方外卖平台订单的咨询或问题。\n" +
                            "3. Inquiry（咨询） " +
                            "- 关于餐厅菜品、价格、营业时间、菜品、菜单、营业时间、下单金额，促销活动,咨询是否可以开发票等的常规问题。\n" +
-                           "4. ThirdPartyOrderNotification（第三方订单相关） - 任何提及到第三方平台的订单对话，包括但不限于" +
-                           "-DoorDash、Uber Eats、Grubhub、Postmates、Caviar、Seamless、Fantuan（饭团外卖）、HungryPanda（熊猫外卖）、EzCater。对话中有此类关键词，都为ThirdPartyOrderNotification类别" +
+                           "4. ThirdPartyOrderNotification（第三方订单相关） " +
+                           "- *只要对话中提及到第三方平台的订单，都为ThirdPartyOrderNotification*" +
+                           "- 第三方平台包括：DoorDash、Uber Eats、Grubhub、Postmates、Caviar、Seamless、Fantuan（饭团外卖）、HungryPanda（熊猫外卖）、EzCater" +
                            "-包含顾客查询平台订单进度、询问餐厅是否收到订单、催单、或来自平台/骑手的通知或问题。\n" +
                            "5. ComplaintFeedback（投诉与反馈） " +
                            "- 顾客对食物、服务、配送问题或餐厅体验的投诉或反馈。\n" +
