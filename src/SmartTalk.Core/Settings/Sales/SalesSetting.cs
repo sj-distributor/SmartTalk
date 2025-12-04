@@ -8,6 +8,7 @@ public class SalesSetting : IConfigurationSetting
     {
         ApiKey = configuration.GetValue<string>("Sales:ApiKey");
         BaseUrl = configuration.GetValue<string>("Sales:BaseUrl");
+        SpecificCompanyId = configuration.GetValue<int>("Sales:SpecificCompanyId");
     }
     
     public string ApiKey { get; set; }
