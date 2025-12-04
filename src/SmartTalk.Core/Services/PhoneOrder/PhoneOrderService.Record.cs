@@ -70,7 +70,7 @@ public partial class PhoneOrderService
         if (request.DialogueScenarios == null || !request.DialogueScenarios.Any()) 
         { return new GetPhoneOrderRecordsResponse { Data = new List<PhoneOrderRecordDto>() }; }
         
-        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds, request.Name, utcStart, utcEnd, request.OrderId, request.DialogueScenarios, cancellationToken).ConfigureAwait(false);
+        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds, request.Name, utcStart, utcEnd, request.OrderId, request.DialogueScenarios, request.AssistantId, cancellationToken).ConfigureAwait(false);
         
         var enrichedRecords = _mapper.Map<List<PhoneOrderRecordDto>>(records);
 

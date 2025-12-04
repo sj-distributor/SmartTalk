@@ -12,6 +12,8 @@ public class PhoneOrderRecordDto
     
     public string SessionId { get; set; }
     
+    public int? AssistantId { get; set; } 
+    
     public PhoneOrderRecordStatus Status { get; set; }
     
     public string Tips { get; set; }
