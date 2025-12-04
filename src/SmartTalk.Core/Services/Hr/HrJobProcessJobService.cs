@@ -5,6 +5,7 @@ using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.Hr;
 using SmartTalk.Messages.Enums.Hr;
+using Enum = System.Enum;
 
 namespace SmartTalk.Core.Services.Hr;
 
@@ -33,7 +34,7 @@ public class HrJobProcessJobService : IHrJobProcessJobService
             .Select(section => ProcessSingleHrInterviewSectionQuestionsCache(noUsingQuestions.Where(x => x.Section == section).ToList(), section))
             .ToList();
         
-        if (results.Count == 0) return;
+        if (results.Count == 0 || results.Select(x => x.Cache).Any()) return;
 
         await RefreshVariableCacheAsync(results.Select(x => x.Cache).ToList(), cancellationToken).ConfigureAwait(false);
         
@@ -46,6 +47,8 @@ public class HrJobProcessJobService : IHrJobProcessJobService
 
         var randomQuestions = RandomPickHrInterviewQuestions(questions);
 
+        Log.Information("Random pick questions: {@Questions}", randomQuestions);
+        
         var questionText = string.Join(Environment.NewLine, randomQuestions.Select((q, index) => $"{index + 1}. {q.Question}"));
         var cache = new AiSpeechAssistantKnowledgeVariableCache
         {
