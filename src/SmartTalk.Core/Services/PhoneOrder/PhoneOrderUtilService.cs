@@ -88,7 +88,7 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
                     case AgentType.Sales:
                         await HandleSalesOrderAsync(cancellationToken).ConfigureAwait(false);
                         break;
-                    case AgentType.PosCompanyStore:
+                    default:
                         Log.Information("Ready push order: {@order}", order);
                         await HandlePosOrderAsync(order, cancellationToken).ConfigureAwait(false);
                         break;
