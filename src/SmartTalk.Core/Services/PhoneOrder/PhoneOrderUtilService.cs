@@ -81,12 +81,15 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
             
             if (assistant is { IsAllowOrderPush: true })
             {
+                Log.Information("Allow order push...");
+                
                 switch (agent.Type)
                 {
                     case AgentType.Sales:
                         await HandleSalesOrderAsync(cancellationToken).ConfigureAwait(false);
                         break;
                     case AgentType.PosCompanyStore:
+                        Log.Information("Ready push order: {@order}", order);
                         await HandlePosOrderAsync(order, cancellationToken).ConfigureAwait(false);
                         break;
                 }
