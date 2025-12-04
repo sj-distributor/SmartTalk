@@ -64,7 +64,7 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
     {
         try
         {
-            if (record.Scenario != DialogueScenarios.Order) return;
+            // if (record.Scenario != DialogueScenarios.Order) return;
             
             var shoppingCart = await GetOrderDetailsAsync(goalTexts, cancellationToken).ConfigureAwait(false);
             
