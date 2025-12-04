@@ -131,7 +131,7 @@ public partial class AutoTestService : IAutoTestService
         {
             DataSetId = command.TargetDataSetId,
             DataItemId = id, 
-            CreatedAt = DateTimeOffset.UtcNow
+            CreatedAt = DateTimeOffset.UtcNow,
         }).ToList();
         
         await _autoTestDataProvider.AddAutoTestDataSetItemsAsync(newTargetItems, cancellationToken).ConfigureAwait(false);
