@@ -41,7 +41,7 @@ public class HrJobProcessJobService : IHrJobProcessJobService
         await MarkHrInterviewQuestionsUsingStatusAsync(results.SelectMany(x => x.questions).ToList(), cancellationToken).ConfigureAwait(false);
     }
 
-    private (List<HrInterviewQuestion> questions, AiSpeechAssistantKnowledgeVariableCache Cache) ProcessSingleHrInterviewSectionQuestionsCache(List<HrInterviewQuestion> questions, HrInterviewQuestionSection section)
+    public static (List<HrInterviewQuestion> questions, AiSpeechAssistantKnowledgeVariableCache Cache) ProcessSingleHrInterviewSectionQuestionsCache(List<HrInterviewQuestion> questions, HrInterviewQuestionSection section)
     {
         if (questions == null || questions.Count == 0) return ([], null);
 
@@ -62,13 +62,13 @@ public class HrJobProcessJobService : IHrJobProcessJobService
         return (randomQuestions, cache);
     }
 
-    private static List<HrInterviewQuestion> RandomPickHrInterviewQuestions(List<HrInterviewQuestion> questions, int take = 10)
+    public static List<HrInterviewQuestion> RandomPickHrInterviewQuestions(List<HrInterviewQuestion> questions, int take = 10)
     {
         var random = new Random();
         return questions.OrderBy(x => random.Next()).Take(take).ToList();
     }
 
-    private async Task RefreshVariableCacheAsync(List<AiSpeechAssistantKnowledgeVariableCache> newCaches, CancellationToken cancellationToken)
+    public async Task RefreshVariableCacheAsync(List<AiSpeechAssistantKnowledgeVariableCache> newCaches, CancellationToken cancellationToken)
     {
         var cacheKeys = Enum.GetValues(typeof(HrInterviewQuestionSection))
             .Cast<HrInterviewQuestionSection>()
@@ -96,7 +96,7 @@ public class HrJobProcessJobService : IHrJobProcessJobService
         }
     }
 
-    private async Task MarkHrInterviewQuestionsUsingStatusAsync(List<HrInterviewQuestion> randomQuestions, CancellationToken cancellationToken)
+    public async Task MarkHrInterviewQuestionsUsingStatusAsync(List<HrInterviewQuestion> randomQuestions, CancellationToken cancellationToken)
     {
         randomQuestions.ForEach(x => x.IsUsing = true);
         
