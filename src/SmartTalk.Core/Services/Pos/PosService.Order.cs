@@ -46,10 +46,7 @@ public partial class PosService
     {
         var order = await GetOrAddPosOrderAsync(command, cancellationToken).ConfigureAwait(false);
         
-        await _redisSafeRunner.ExecuteWithLockAsync($"execute-place-order-{order.Id}", async() =>
-        {
-            await HandlePosOrderAsync(order, command.IsWithRetry, cancellationToken).ConfigureAwait(false);
-        }, wait: TimeSpan.FromSeconds(10), retry: TimeSpan.FromSeconds(1), server: RedisServer.System).ConfigureAwait(false);
+        await HandlePosOrderAsync(order, command.IsWithRetry, cancellationToken).ConfigureAwait(false);
         
         return new PosOrderPlacedEvent
         {
@@ -59,25 +56,28 @@ public partial class PosService
 
     public async Task HandlePosOrderAsync(PosOrder order, bool isRetry, CancellationToken cancellationToken)
     {
-        var store = await _posDataProvider.GetPosCompanyStoreAsync(id: order.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        if (store == null) throw new Exception("Store could not be found.");
-
-        var token = await GetPosTokenAsync(store, order, cancellationToken).ConfigureAwait(false);
-
-        if (!store.IsLink && string.IsNullOrWhiteSpace(token))
+        await _redisSafeRunner.ExecuteWithLockAsync($"execute-place-order-{order.Id}", async() =>
         {
-            order.Status = PosOrderStatus.Modified;
+            var store = await _posDataProvider.GetPosCompanyStoreAsync(id: order.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            if (store == null) throw new Exception("Store could not be found.");
+
+            var token = await GetPosTokenAsync(store, order, cancellationToken).ConfigureAwait(false);
+
+            if (!store.IsLink && string.IsNullOrWhiteSpace(token))
+            {
+                order.Status = PosOrderStatus.Modified;
             
-            await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
+                await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
             
-            return;
-        }
+                return;
+            }
         
-        await SafetyPlaceOrderAsync(order, store, token, isRetry, 0, cancellationToken).ConfigureAwait(false);
+            await SafetyPlaceOrderAsync(order, store, token, isRetry, 0, cancellationToken).ConfigureAwait(false);
         
-        if (order.Status == PosOrderStatus.Sent && order.IsPush)
-            _smartTalkBackgroundJobClient.Enqueue(() => CreateMerchPrinterOrderAsync(store.Id, order.Id, cancellationToken));
+            if (order.Status == PosOrderStatus.Sent && order.IsPush)
+                _smartTalkBackgroundJobClient.Enqueue(() => CreateMerchPrinterOrderAsync(store.Id, order.Id, cancellationToken));
+        }, wait: TimeSpan.FromSeconds(10), retry: TimeSpan.FromSeconds(1), server: RedisServer.System).ConfigureAwait(false);
     }
 
     public async Task CreateMerchPrinterOrderAsync(int storeId, int orderId, CancellationToken cancellationToken)
