@@ -98,7 +98,7 @@ public class HrJobProcessJobService : IHrJobProcessJobService
                 matchCache.CacheValue = cache.CacheValue;
             }
             
-            await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgeVariableCachesAsync(newCaches, true, cancellationToken).ConfigureAwait(false);
+            await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgeVariableCachesAsync(caches, true, cancellationToken).ConfigureAwait(false);
         }
     }
 
