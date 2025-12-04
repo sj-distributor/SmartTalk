@@ -609,7 +609,7 @@ public partial class PosService : IPosService
                 OrderId = request.OrderId
             }, cancellationToken).ConfigureAwait(false);
         
-            Log.Information("Get pos order response: {@Response}", response);
+            Log.Information("Retry get pos order response: {@Response}", response);
         }
 
         var order = await _posDataProvider.GetPosOrderByIdAsync(posOrderId: request.OrderId.ToString(), cancellationToken: cancellationToken).ConfigureAwait(false);
