@@ -87,7 +87,7 @@ public class HrJobProcessJobService : IHrJobProcessJobService
         {
             foreach (var cache in newCaches)
             {
-                var matchCache = caches.FirstOrDefault(x => x.Filter == cache.Filter);
+                var matchCache = caches.FirstOrDefault(x => x.CacheKey == cache.CacheKey);
 
                 if (matchCache == null) continue;
                 
