@@ -65,7 +65,8 @@ public partial class PhoneOrderService : IPhoneOrderService
         ISmartTalkBackgroundJobClient backgroundJobClient,
         ISpeechMaticsDataProvider speechMaticsDataProvider,
         TranscriptionCallbackSetting transcriptionCallbackSetting, 
-        ILinphoneDataProvider linphoneDataProvider)
+        ILinphoneDataProvider linphoneDataProvider, 
+        IAccountDataProvider accountDataProvider)
     {
         _mapper = mapper;
         _currentUser = currentUser;
@@ -84,5 +85,6 @@ public partial class PhoneOrderService : IPhoneOrderService
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _restaurantDataProvider = restaurantDataProvider;
         _linphoneDataProvider = linphoneDataProvider;
+        _accountDataProvider = accountDataProvider;
     }
 }
