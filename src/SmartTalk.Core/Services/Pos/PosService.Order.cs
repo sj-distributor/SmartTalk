@@ -62,8 +62,6 @@ public partial class PosService
 
         var token = await GetPosTokenAsync(store, order, cancellationToken).ConfigureAwait(false);
 
-        _smartTalkBackgroundJobClient.Enqueue(() => CreateMerchPrinterOrderAsync(store.Id, order.Id, cancellationToken));
-
         if (!store.IsLink && string.IsNullOrWhiteSpace(token))
         {
             order.Status = PosOrderStatus.Modified;
@@ -74,6 +72,9 @@ public partial class PosService
         }
         
         await SafetyPlaceOrderAsync(order, store, token, isRetry, 0, cancellationToken).ConfigureAwait(false);
+        
+        if (order.Status == PosOrderStatus.Sent && order.IsPush)
+            _smartTalkBackgroundJobClient.Enqueue(() => CreateMerchPrinterOrderAsync(store.Id, order.Id, cancellationToken));
     }
 
     public async Task CreateMerchPrinterOrderAsync(int storeId, int orderId, CancellationToken cancellationToken)
