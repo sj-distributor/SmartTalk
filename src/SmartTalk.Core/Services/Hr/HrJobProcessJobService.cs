@@ -28,38 +28,42 @@ public class HrJobProcessJobService : IHrJobProcessJobService
     public async Task RefreshHrInterviewQuestionsCacheAsync(RefreshHrInterviewQuestionsCacheCommand command, CancellationToken cancellationToken)
     {
         var noUsingQuestions = await _hrDataProvider.GetHrInterviewQuestionsAsync(isUsing: false, cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        var results = Enum.GetValues(typeof(HrInterviewQuestionSection))
-            .Cast<HrInterviewQuestionSection>()
-            .Select(section => ProcessSingleHrInterviewSectionQuestionsCache(noUsingQuestions.Where(x => x.Section == section).ToList(), section))
-            .ToList();
-        
-        if (results.Count == 0 || results.Select(x => x.Cache).Any()) return;
+        if (noUsingQuestions.Count == 0) return;
 
-        await RefreshVariableCacheAsync(results.Select(x => x.Cache).ToList(), cancellationToken).ConfigureAwait(false);
+        var randomResult = ProcessSingleHrInterviewSectionQuestionsCache(noUsingQuestions);
+
+        if (randomResult.Count == 0) return;
+
+        await RefreshVariableCacheAsync(randomResult.Select(x => x.Cache).ToList(), cancellationToken).ConfigureAwait(false);
         
-        await MarkHrInterviewQuestionsUsingStatusAsync(results.SelectMany(x => x.questions).ToList(), cancellationToken).ConfigureAwait(false);
+        await MarkHrInterviewQuestionsUsingStatusAsync(randomResult.SelectMany(x => x.Questions).ToList(), cancellationToken).ConfigureAwait(false);
     }
 
-    public static (List<HrInterviewQuestion> questions, AiSpeechAssistantKnowledgeVariableCache Cache) ProcessSingleHrInterviewSectionQuestionsCache(List<HrInterviewQuestion> questions, HrInterviewQuestionSection section)
+    public static List<RandomHrInterviewQuestionCacheDto> ProcessSingleHrInterviewSectionQuestionsCache(List<HrInterviewQuestion> questions)
     {
-        if (questions == null || questions.Count == 0) return ([], null);
+        if (questions == null || questions.Count == 0) return [];
 
-        var randomQuestions = RandomPickHrInterviewQuestions(questions);
-
-        Log.Information("Random pick questions: {@Questions}", randomQuestions);
-        
-        var questionText = string.Join(Environment.NewLine, randomQuestions.Select((q, index) => $"{index + 1}. {q.Question}"));
-        var cache = new AiSpeechAssistantKnowledgeVariableCache
+        var results = new List<RandomHrInterviewQuestionCacheDto>();
+        foreach (var section in Enum.GetValues(typeof(HrInterviewQuestionSection)).Cast<HrInterviewQuestionSection>())
         {
-            CacheKey = "hr_interview_" + section.ToString().ToLower(),
-            CacheValue = questionText,
-            Filter = section.ToString()
-        };
+            var randomQuestions = RandomPickHrInterviewQuestions(questions);
+
+            Log.Information("Random pick questions: {@Questions}", randomQuestions);
         
-        Log.Information("Processed {section} questions, this time will pick these questions: {@RandomQuestions}, cache: {@Cache}", section, questionText, cache);
+            var questionText = string.Join(Environment.NewLine, randomQuestions.Select((q, index) => $"{index + 1}. {q.Question}"));
+            var cache = new AiSpeechAssistantKnowledgeVariableCache
+            {
+                CacheKey = "hr_interview_" + section.ToString().ToLower(),
+                CacheValue = questionText,
+                Filter = section.ToString()
+            };
         
-        return (randomQuestions, cache);
+            Log.Information("Processed {section} questions, this time will pick these questions: {@RandomQuestions}, cache: {@Cache}", section, questionText, cache);
+        
+            results.Add(new RandomHrInterviewQuestionCacheDto() { Questions = randomQuestions, Cache = cache });
+        }
+
+        return results;
     }
 
     public static List<HrInterviewQuestion> RandomPickHrInterviewQuestions(List<HrInterviewQuestion> questions, int take = 10)
@@ -111,5 +115,12 @@ public class HrJobProcessJobService : IHrJobProcessJobService
         }
         
         await _hrDataProvider.UpdateHrInterviewQuestionsAsync(randomQuestions, true, cancellationToken).ConfigureAwait(false);
+    }
+    
+    public class RandomHrInterviewQuestionCacheDto
+    {
+        public List<HrInterviewQuestion> Questions { get; set; }
+        
+        public AiSpeechAssistantKnowledgeVariableCache Cache { get; set; } 
     }
 }
