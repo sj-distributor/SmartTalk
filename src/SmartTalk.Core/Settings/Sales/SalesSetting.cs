@@ -13,4 +13,6 @@ public class SalesSetting : IConfigurationSetting
     public string ApiKey { get; set; }
     
     public string BaseUrl { get; set; }
+    
+    public int SpecificCompanyId { get; set; }
 }
