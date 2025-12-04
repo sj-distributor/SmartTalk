@@ -66,6 +66,9 @@ public partial class PhoneOrderService
             : request.StoreId.HasValue
                 ? (await _posDataProvider.GetPosAgentsAsync(storeIds: [request.StoreId.Value], cancellationToken: cancellationToken).ConfigureAwait(false)).Select(x => x.AgentId).ToList()
                 : [];
+
+        if (request.DialogueScenarios == null || !request.DialogueScenarios.Any()) 
+        { return new GetPhoneOrderRecordsResponse { Data = new List<PhoneOrderRecordDto>() }; }
         
         var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds, request.Name, utcStart, utcEnd, request.OrderId, request.DialogueScenarios, cancellationToken).ConfigureAwait(false);
         
