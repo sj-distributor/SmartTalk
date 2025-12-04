@@ -45,7 +45,8 @@ public class HrJobProcessJobService : IHrJobProcessJobService
         var results = new List<RandomHrInterviewQuestionCacheDto>();
         foreach (var section in Enum.GetValues(typeof(HrInterviewQuestionSection)).Cast<HrInterviewQuestionSection>())
         {
-            var randomQuestions = RandomPickHrInterviewQuestions(questions);
+            var questionInSection = questions.Where(x => x.Section == section).ToList();
+            var randomQuestions = RandomPickHrInterviewQuestions(questionInSection);
 
             Log.Information("Random pick questions: {@Questions}", randomQuestions);
         
