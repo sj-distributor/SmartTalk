@@ -25,7 +25,7 @@ public partial class AutoTestService
         var startDate = (DateTime)command.ImportData["StartDate"]; 
         var endDate = (DateTime)command.ImportData["EndDate"]; 
         
-        var keyName = $"{customerIdFormatted}-{startDate:yyMMdd}-{endDate:yyMMdd}-{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
+        var keyName = $"{customerIdFormatted}-{startDate}-{endDate}-{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
         
         var dataSet = new AutoTestDataSet()
         {
@@ -71,8 +71,8 @@ public partial class AutoTestService
         dataSet.ImportRecordId = importRecord.Id;
         
         await _autoTestDataProvider.UpdateAutoTestDataSetAsync(dataSet, true, cancellationToken).ConfigureAwait(false);
-        
-        _smartTalkBackgroundJobClient.Enqueue(() => _autoTestDataImportHandlerSwitcher.GetHandler(command.ImportType).ImportAsync(command.ImportData, command.ScenarioId, dataSet.Id, importRecord.Id,cancellationToken));
+
+        _smartTalkBackgroundJobClient.Enqueue(() => _autoTestDataImportHandlerSwitcher.GetHandler(command.ImportType).ImportAsync(command.ImportData, command.ScenarioId, dataSet.Id, importRecord.Id, cancellationToken));
 
         return new AutoTestImportDataResponse()
         {
