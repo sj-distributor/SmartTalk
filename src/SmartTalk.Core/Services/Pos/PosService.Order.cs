@@ -176,13 +176,12 @@ public partial class PosService
 
         if (order == null)
             throw new Exception($"Order could not be found by orderId: {request.OrderId} or recordId: {request.RecordId}.");
-        
-        await EnrichPosOrderAsync(order, cancellationToken).ConfigureAwait(false);
 
-        return new GetPosStoreOrderResponse
-        {
-            Data = _mapper.Map<PosOrderDto>(order)
-        };
+        var enrichOrder = _mapper.Map<PosOrderDto>(order);
+        
+        await EnrichPosOrderAsync(enrichOrder, cancellationToken).ConfigureAwait(false);
+
+        return new GetPosStoreOrderResponse { Data = enrichOrder };
     }
 
     private List<GetPosOrderProductsResponseData> BuildPosOrderProductsData(List<PosProduct> products, List<(PosMenu Menu, PosCategory Category)> menuWithCategories)
@@ -627,7 +626,7 @@ public partial class PosService
         };
     }
 
-    private async Task EnrichPosOrderAsync(PosOrder order, CancellationToken cancellationToken)
+    private async Task EnrichPosOrderAsync(PosOrderDto order, CancellationToken cancellationToken)
     {
         try
         {
@@ -639,6 +638,12 @@ public partial class PosService
             items.ForEach(x => x.ProductName = products.Where(p => p.ProductId == x.ProductId.ToString()).FirstOrDefault()?.Names);
             
             order.Items = JsonConvert.SerializeObject(items);
+
+            if (!order.CreatedBy.HasValue) return;
+            
+            var userAccount = await _accountDataProvider.GetUserAccountByUserIdAsync(order.CreatedBy.Value, cancellationToken).ConfigureAwait(false);
+
+            order.CreatedByUsername = userAccount.UserName;
         }
         catch (Exception e)
         {
