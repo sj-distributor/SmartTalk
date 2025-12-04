@@ -74,6 +74,8 @@ public class HrJobProcessJobService : IHrJobProcessJobService
 
         var caches = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeVariableCachesAsync(cacheKeys, cancellationToken).ConfigureAwait(false);
 
+        Log.Information("Fetching exist hr interview questions from caches: {@Caches}", caches);
+        
         if (caches.Count == 0)
         {
             await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgeVariableCachesAsync(newCaches, true, cancellationToken).ConfigureAwait(false);
@@ -82,7 +84,7 @@ public class HrJobProcessJobService : IHrJobProcessJobService
         {
             foreach (var cache in newCaches)
             {
-                var matchCache = caches.FirstOrDefault(x => x.CacheKey == cache.CacheKey);
+                var matchCache = caches.FirstOrDefault(x => x.Filter == cache.Filter);
 
                 if (matchCache == null) continue;
                 
