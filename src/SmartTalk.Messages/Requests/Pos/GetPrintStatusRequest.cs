@@ -6,8 +6,6 @@ namespace SmartTalk.Messages.Requests.Pos;
 
 public class GetPrintStatusRequest : IRequest
 {
-    public int StoreId { get; set; }
-
     public long OrderId { get; set; }
 }
 
