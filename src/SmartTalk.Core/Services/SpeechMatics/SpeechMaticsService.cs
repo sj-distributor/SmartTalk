@@ -719,6 +719,7 @@ public class SpeechMaticsService : ISpeechMaticsService
                            "- 此类别不包括关于第三方外卖平台订单的咨询或问题。\n" +
                            "3. Inquiry（咨询） " +
                            "- 关于餐厅菜品、价格、营业时间、菜品、菜单、营业时间、下单金额，促销活动,咨询是否可以开发票等的常规问题。\n" +
+                           "- 明确表示是“通知”，则归类到此类别。" +
                            "4. ThirdPartyOrderNotification（第三方订单相关） " +
                            "- *只要对话中提及到第三方平台的订单，都为ThirdPartyOrderNotification*" +
                            "- 第三方平台包括：DoorDash、Uber Eats、Grubhub、Postmates、Caviar、Seamless、Fantuan（饭团外卖）、HungryPanda（熊猫外卖）、EzCater" +
@@ -732,7 +733,7 @@ public class SpeechMaticsService : ISpeechMaticsService
                            "8. SalesCall（推销电话）" +
                            " - 来自外部公司（保险、装修、广告等）的促销或销售电话。\n" +                                                                                                                                                                                                                                                                                                                                                              
                            "9. InvalidCall（无效通话）" +
-                           " - 无意义的通话：静默来电、用户无呼应，无应答、拨错号码、误拨或挂断\n" +
+                           " - 包含无意义通话：静默来电、用户无应答、误拨、挂断、无法识别的噪音、对话未进入实际业务内容（如仅出现“请上传录音”“听不到”等）。\n" +
                            "10. TransferVoicemail（语音信箱） " +
                            "- 通话被转入语音信箱。\n" +
                            "11. Other（其他）" +
