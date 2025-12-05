@@ -11,7 +11,7 @@ public partial class EventHandlingService
         if (@event?.Order == null) return;
 
         if (@event.Order.RecordId.HasValue && @event.Order.Status == PosOrderStatus.Sent && @event.Order.IsPush)
-            await BlockedPhoneOrderRecordScenarioAsync(@event.Order.RecordId.Value, cancellationToken).ConfigureAwait(false);
+            await LockedPhoneOrderRecordScenarioAsync(@event.Order.RecordId.Value, cancellationToken).ConfigureAwait(false);
         
         if (string.IsNullOrEmpty(@event.Order?.Phone)) return;
         
@@ -60,7 +60,7 @@ public partial class EventHandlingService
         }
     }
 
-    private async Task BlockedPhoneOrderRecordScenarioAsync(int recordId, CancellationToken cancellationToken)
+    private async Task LockedPhoneOrderRecordScenarioAsync(int recordId, CancellationToken cancellationToken)
     {
         var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByIdAsync(recordId, cancellationToken).ConfigureAwait(false);
 
