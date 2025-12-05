@@ -692,7 +692,7 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
         var query = from company in _repository.Query<Company>().Where(x => x.Id == companyId)
             join store in _repository.Query<CompanyStore>() on company.Id equals store.CompanyId
             join posAgent in _repository.Query<PosAgent>() on store.Id equals posAgent.StoreId
-            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>().Where(x => x.IsDefault) on posAgent.AgentId equals assistant.AgentId
+            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on posAgent.AgentId equals assistant.AgentId
             select assistant;
         
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
