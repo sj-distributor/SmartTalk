@@ -237,7 +237,7 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
             {
                 StoreId = store.Id,
                 Name = record?.CustomerName ?? "Unknown",
-                Phone = !string.IsNullOrWhiteSpace(record?.PhoneNumber) ? record.PhoneNumber : !string.IsNullOrWhiteSpace(record?.IncomingCallNumber) ? record.IncomingCallNumber : "Unknown",
+                Phone = !string.IsNullOrWhiteSpace(record?.PhoneNumber) ? record.PhoneNumber : !string.IsNullOrWhiteSpace(record?.IncomingCallNumber) ? record.IncomingCallNumber.Replace("+1", "") : "Unknown",
                 OrderNo = orderNo,
                 Status = PosOrderStatus.Pending,
                 Count = products.Count,
