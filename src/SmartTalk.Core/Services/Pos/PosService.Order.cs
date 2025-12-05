@@ -528,7 +528,7 @@ public partial class PosService
 
     public async Task<UpdatePosOrderPrintStatusResponse> UpdatePosOrderPrintStatusAsync(UpdatePosOrderPrintStatusCommand command, CancellationToken cancellationToken)
     {
-         var store = await _posDataProvider.GetPosCompanyStoreAsync(id: command.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var store = await _posDataProvider.GetPosCompanyStoreAsync(id: command.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (store == null || string.IsNullOrEmpty(store.Link) || string.IsNullOrEmpty(store.AppId) || string.IsNullOrEmpty(store.AppSecret))
             throw new Exception("Store could not be found or appId、url、secret could not be empty.");
@@ -554,7 +554,7 @@ public partial class PosService
         if (order == null)
             throw new Exception("Order could not be found.");
         
-        while (response.Data.Order.SendStatus != SendStatus.AllSent &&  DateTimeOffset.Now - firstTime < timeout)
+        while (response.Data.Order.SendStatus != SendStatus.AllSent && DateTimeOffset.Now - firstTime < timeout)
         {
             response = await _easyPosClient.GetPosOrderAsync(new GetOrderRequestDto
             {
@@ -587,7 +587,7 @@ public partial class PosService
         };
     }
     
-     public async Task<GetPrintStatusResponse> GetPrintStatusAsync(GetPrintStatusRequest request, CancellationToken cancellationToken)
+    public async Task<GetPrintStatusResponse> GetPrintStatusAsync(GetPrintStatusRequest request, CancellationToken cancellationToken)
     {
         var order = await _posDataProvider.GetPosOrderByIdAsync(orderId: request.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false);
         
