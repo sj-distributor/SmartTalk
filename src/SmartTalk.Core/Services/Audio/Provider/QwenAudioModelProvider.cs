@@ -23,6 +23,7 @@ public class QwenAudioModelProvider : IAudioModelProvider
         var client = new ChatClient("/root/autodl-tmp/Qwen3-Omni-30B-A3B-Instruct", new ApiKeyCredential(_qwenSettings.CrmApiKey), new OpenAIClientOptions
         {
             Endpoint = new Uri("http://47.77.223.168:8000/v1"),
+            NetworkTimeout = TimeSpan.FromMinutes(10)
         });
 
         var messages = new List<ChatMessage>();
