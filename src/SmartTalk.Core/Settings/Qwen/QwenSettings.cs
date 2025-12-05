@@ -8,9 +8,12 @@ public class QwenSettings : IConfigurationSetting
     {
         BaseUrl = configuration.GetValue<string>("Qwen:BaseUrl");
         ApiKey = configuration.GetValue<string>("Qwen:ApiKey");
+        CrmApiKey = configuration.GetValue<string>("Qwen:Crm:ApiKey");
     }
     
     public string BaseUrl { get; set; }
     
     public string ApiKey { get; set; }
+
+    public string CrmApiKey { get; set; }
 }
