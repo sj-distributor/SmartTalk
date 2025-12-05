@@ -6,8 +6,8 @@ public class QwenSettings : IConfigurationSetting
 {
     public QwenSettings(IConfiguration configuration)
     {
-        ApiKey = configuration.GetValue<string>("Qwen:ApiKey");
+        CrmApiKey = configuration.GetValue<string>("Qwen:Crm:ApiKey");
     }
 
-    public string ApiKey { get; set; }
+    public string CrmApiKey { get; set; }
 }
