@@ -181,7 +181,9 @@ public class RealtimeAiService : IRealtimeAiService
             foreach (var section in Enum.GetValues(typeof(HrInterviewQuestionSection)).Cast<HrInterviewQuestionSection>())
             {
                 var cacheKey = $"hr_interview_{section.ToString().ToLower()}";
-                finalPrompt = finalPrompt.Replace($"#{cacheKey}", caches.FirstOrDefault(x => x.CacheKey == cacheKey)?.CacheValue);
+                var placeholder = $"#{{{cacheKey}}}";
+
+                finalPrompt = finalPrompt.Replace(placeholder, caches.FirstOrDefault(x => x.CacheKey == cacheKey)?.CacheValue);
             }
         }
         
