@@ -51,6 +51,8 @@ public class PosOrderDto
     public int RetryCount { get; set; }
     
     public PosOrderModifiedStatus ModifiedStatus { get; set; }
+    
+    public SendStatus? PrintStatus { get; set; }
 
     public int? CreatedBy { get; set; }
     
