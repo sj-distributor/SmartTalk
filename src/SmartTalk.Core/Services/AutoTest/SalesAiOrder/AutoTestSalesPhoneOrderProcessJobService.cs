@@ -888,7 +888,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
                 {
                     CustomerId = new List<string> { customerId.PadLeft(10, '0') },
                     StartDate = sapStartDate,
-                    EndDate = sapStartDate.AddDays(1)
+                    EndDate = sapStartDate
                 }, cancellationToken)).ConfigureAwait(false);
 
             var sapOrders = sapResp?.Data?.RecordingData ?? new List<RecordingDataItem>();
