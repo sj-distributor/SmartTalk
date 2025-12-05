@@ -248,38 +248,41 @@ public class SpeechMaticsService : ISpeechMaticsService
                     {
                         Role = "system",
                         Content = new CompletionsStringContent(
-                            "根据电话录音内容归类到预定义的类别之一\n" +
-                           "以下是可用的分类：\n" +
-                           "1. Reservation（预订） " +
-                           "- 顾客请求预订餐位，并指定时间或人数。 \n" +
-                           "2. Order（下单）" +
-                           " - 顾客希望直接向餐厅下单（堂食、自取或外卖）" +
-                           "- 此类别不包括关于第三方外卖平台订单的咨询或问题。\n" +
-                           "3. Inquiry（咨询） " +
-                           "- 关于餐厅菜品、价格、营业时间、菜品、菜单、营业时间、下单金额，促销活动,咨询是否可以开发票等的常规问题。\n" +
-                           "- 明确表示是“通知”，则归类到此类别。" +
-                           "4. ThirdPartyOrderNotification（第三方订单相关） " +
-                           "- *只要对话中提及到第三方平台的订单，都为ThirdPartyOrderNotification*" +
-                           "- 第三方平台包括：DoorDash、Uber Eats、Grubhub、Postmates、Caviar、Seamless、Fantuan（饭团外卖）、HungryPanda（熊猫外卖）、EzCater" +
-                           "-包含顾客查询平台订单进度、询问餐厅是否收到订单、催单、或来自平台/骑手的通知或问题。\n" +
-                           "5. ComplaintFeedback（投诉与反馈） " +
-                           "- 顾客对食物、服务、配送问题或餐厅体验的投诉或反馈。\n" +
-                           "6. InformationNotification（信息通知） " +
-                           "- 单向通知，例如缺货通知、订货通知，配送时间通知、提醒，客人要求开具发票等\n" +
-                           "7. TransferToHuman（转人工） " +
-                           "- AI 将电话转接或尝试转接给人工客服。\n" +
-                           "8. SalesCall（推销电话）" +
-                           " - 来自外部公司（保险、装修、广告等）的促销或销售电话。\n" +                                                                                                                                                                                                                                                                                                                                                              
-                           "9. InvalidCall（无效通话）" +
-                           " - 包含无意义通话：静默来电、用户无应答、误拨、挂断、无法识别的噪音、对话未进入实际业务内容（如仅出现“请上传录音”“听不到”等）。\n" +
-                           "10. TransferVoicemail（语音信箱） " +
-                           "- 通话被转入语音信箱。\n" +
-                           "11. Other（其他）" +
-                           " - 无法明确归类的内容。需在 'remark' 字段提供简短关键词描述。\n\n" +
-                           "输出必须严格遵循 JSON 格式，且仅包含以下两个字段：\n" +
-                           "{\"category\": \"必须为以下之一：[Reservation, Order, Inquiry, ThirdPartyOrderNotification, ComplaintFeedback, InformationNotification, TransferToHuman, SalesCall, InvalidCall, Other]\"," +
-                           " \"remark\": \"如果 category 为 'Other'，请提供简短说明；否则留空\"}。\n" +
-                           "禁止输出任何额外说明或文本 —— 只返回 JSON 对象。"
+                            "请根据电话录音内容，将其精准归类到下述预定义类别中。\n\n" +
+                            "### 可用分类（严格按定义归类，每个类别对应核心业务场景）：\n" +
+                            "1. Reservation（预订）\n   " +
+                            "- 顾客明确请求预订餐位，并提供时间、人数等关键预订信息。\n" +
+                            "2. Order（下单）\n   " +
+                            "- 顾客直接向餐厅发起下单请求（含堂食、自取、餐厅直送外卖）；\n " +
+                            "- 本类别排除对第三方外卖平台订单的咨询/问题类内容。\n" +
+                            "3. Inquiry（咨询）\n   " +
+                            "- 针对餐厅菜品、价格、营业时间、菜单、下单金额、促销活动、开票可行性等常规信息的提问；\n   " +
+                            "4. ThirdPartyOrderNotification（第三方订单相关）\n   " +
+                            "- 只要对话提及任意第三方外卖平台订单，均归此类；\n   " +
+                            "- 第三方平台包含但不限于：DoorDash、Uber Eats、Grubhub、Postmates、Caviar、Seamless、Fantuan（饭团外卖）、HungryPanda（熊猫外卖）、EzCater；\n   " +
+                            "- 涵盖场景：查询平台订单进度、确认餐厅是否收到平台订单、催单，或平台/骑手的订单相关通知/问题。\n" +
+                            "5. ComplaintFeedback（投诉与反馈）\n " +
+                            " - 顾客针对食物、服务、配送、餐厅体验提出的投诉或正向/负向反馈。\n" +
+                            "6. InformationNotification（信息通知）\n   " +
+                            "- 单向通知类内容，包括：\n " +
+                            " * 缺货/订货通知、配送时间通知/提醒；\n" +
+                            " * 顾客告知餐厅自身变动（迟到、人数变动、取消到店等）；\n " +
+                            " * 物业/外部机构通知（停水、停电等）；\n" +
+                            " * 顾客请求修改订单方式（如堂食改外带）等操作类通知。\n" +
+                            "7. TransferToHuman（转人工）\n" +
+                            " - AI转接/尝试转接通话至人工客服的场景。\n" +
+                            "8. SalesCall（推销电话）\n" +
+                            "- 外部公司（保险、装修、广告等）的促销/销售类来电。\n" +
+                            "9. InvalidCall（无效通话）\n" +
+                            "- 无实际业务内容的通话：静默来电、无应答、误拨、挂断、无法识别的噪音，或仅出现“请上传录音”“听不到”等无意义话术。\n" +
+                            "10. TransferVoicemail（语音信箱）\n    " +
+                            "- 通话被转入语音信箱的场景。\n" +
+                            "11. Other（其他）\n   " +
+                            "- 无法归入上述10类的内容，需在'remark'字段补充简短关键词说明。\n\n" +
+                            "### 输出规则（禁止输出任何额外文本，仅返回JSON）：\n" +
+                            "必须返回包含以下2个字段的JSON对象，格式如下：\n" +
+                            "{\n  \"category\": \"取值范围：Reservation、Order、Inquiry、ThirdPartyOrderNotification、ComplaintFeedback、InformationNotification、TransferToHuman、SalesCall、InvalidCall、TransferVoicemail、Other\",\n " +
+                            " \"remark\": \"仅当category为'Other'时填写简短关键词（如‘咨询加盟’），其余类别留空\"\n}"
                         )
                     },
                     new()
