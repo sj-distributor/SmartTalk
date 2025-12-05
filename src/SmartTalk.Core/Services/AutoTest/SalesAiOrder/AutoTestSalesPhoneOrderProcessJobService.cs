@@ -175,19 +175,26 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
             if (!phoneNumbers.Any()) return;
 
             var allRecords = new List<RingCentralRecordDto>();
+            var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
             foreach (var phone in phoneNumbers)
             {
-                allRecords.AddRange(await LoadOneMonthAsync(phone, token, from, to, cancellationToken));
+                var fromUtc = TimeZoneInfo.ConvertTimeToUtc(from, pacificZone);
+                var toUtc = TimeZoneInfo.ConvertTimeToUtc(to, pacificZone);
+                
+                allRecords.AddRange(await LoadOneMonthAsync(phone, token, fromUtc, toUtc, cancellationToken));
             }
 
-            var singleCallNumbersByDate = allRecords.GroupBy(r => new { Phone = NormalizePhone(r.From?.PhoneNumber ?? r.To?.PhoneNumber), r.StartTime.Date })
-                .Where(g => g.Count() == 1).Select(g => g.Key).ToList();
+            var singleCallNumbersByDate = allRecords.GroupBy(r => new
+                {
+                    Phone = NormalizePhone(r.From?.PhoneNumber ?? r.To?.PhoneNumber), Date = TimeZoneInfo.ConvertTimeFromUtc(r.StartTime, pacificZone).Date
+                }).Where(g => g.Count() == 1).Select(g => g.Key).ToList();
 
             if (!singleCallNumbersByDate.Any()) return;
-
+            
             var matchedTasks = singleCallNumbersByDate.Select(x =>
             {
-                var recordDto = allRecords.First(r => NormalizePhone(r.From?.PhoneNumber ?? r.To?.PhoneNumber) == x.Phone && r.StartTime.Date == x.Date);
+                var recordDto = allRecords.First(r => NormalizePhone(r.From?.PhoneNumber ?? r.To?.PhoneNumber) == x.Phone && TimeZoneInfo.ConvertTimeFromUtc(r.StartTime, pacificZone).Date == x.Date);
+
                 return MatchOrderAndRecordingAsync(customerId.ToString(), recordDto, scenarioId, recordId, cancellationToken);
             }).ToList();
             
@@ -873,7 +880,9 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
                 return null;
             }
             
-            var sapStartDate = record.StartTime.Date;
+            var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+            var sapStartDate = TimeZoneInfo.ConvertTimeFromUtc(record.StartTime, pacificZone).Date;
+            
             var sapResp = await RetrySapAsync(() =>
                 _sapGatewayClient.QueryRecordingDataAsync(new QueryRecordingDataRequest
                 {
@@ -970,17 +979,17 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         return digits;
     }
     
-    private async Task<List<RingCentralRecordDto>> LoadOneMonthAsync(string phone, string token, DateTime from, DateTime to, CancellationToken cancellationToken)
+    private async Task<List<RingCentralRecordDto>> LoadOneMonthAsync(string phone, string token, DateTime fromUtc, DateTime toUtc, CancellationToken cancellationToken)
     {
         return await RetryForeverAsync(async () =>
         {
-            Log.Information("【LoadOneMonth】请求 RC 月度通话记录 Phone={Phone}, From={From}, To={To}", phone, from, to);
+            Log.Information("【LoadOneMonth】请求 RC 月度通话记录 Phone={Phone}, From={From}, To={To}", phone, fromUtc, toUtc);
 
             var req = new RingCentralCallLogRequestDto
             {
                 PhoneNumber = phone,
-                DateFrom = from,
-                DateTo = to,
+                DateFrom = fromUtc,
+                DateTo = toUtc,
                 WithRecording = true,
                 Page = 1,
                 PerPage = 50
