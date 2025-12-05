@@ -27,6 +27,10 @@ public partial interface IPosService
     Task<GetPosStoreOrderResponse> GetPosStoreOrderAsync(GetPosStoreOrderRequest request, CancellationToken cancellationToken);
 
     Task HandlePosOrderAsync(PosOrder order, bool isRetry, CancellationToken cancellationToken);
+
+    Task<UpdatePosOrderPrintStatusResponse> UpdatePosOrderPrintStatusAsync(UpdatePosOrderPrintStatusCommand command, CancellationToken cancellationToken);
+    
+    Task<GetPrintStatusResponse> GetPrintStatusAsync(GetPrintStatusRequest request, CancellationToken cancellationToken);
 }
 
 public partial class PosService
@@ -525,6 +529,80 @@ public partial class PosService
             await SafetyPlaceOrderWithRetryAsync(order, store, token, isWithRetry, cancellationToken).ConfigureAwait(false);
             
         }, wait: TimeSpan.FromSeconds(10), retry: TimeSpan.FromSeconds(1), server: RedisServer.System).ConfigureAwait(false);
+    }
+
+    public async Task<UpdatePosOrderPrintStatusResponse> UpdatePosOrderPrintStatusAsync(UpdatePosOrderPrintStatusCommand command, CancellationToken cancellationToken)
+    {
+        var store = await _posDataProvider.GetPosCompanyStoreAsync(id: command.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (store == null || string.IsNullOrEmpty(store.Link) || string.IsNullOrEmpty(store.AppId) || string.IsNullOrEmpty(store.AppSecret))
+            throw new Exception("Store could not be found or appId、url、secret could not be empty.");
+        
+        var response = await _easyPosClient.GetPosOrderAsync(new GetOrderRequestDto
+        {
+            BaseUrl = store.Link,
+            AppId = store.AppId,
+            AppSecret = store.AppSecret,
+            OrderId = command.OrderId
+        }, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Get pos order response: {@Response}", response);
+
+        if (response?.Data?.Order == null || response.Success == false)
+            throw new Exception($"Order {command.OrderId} could not be found.");
+        
+        var firstTime = DateTimeOffset.Now;
+        var timeout = TimeSpan.FromSeconds(10);
+        
+        var order = await _posDataProvider.GetPosOrderByIdAsync(posOrderId: command.OrderId.ToString(), cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        if (order == null)
+            throw new Exception("Order could not be found.");
+        
+        while (response.Data.Order.SendStatus != SendStatus.AllSent && DateTimeOffset.Now - firstTime < timeout)
+        {
+            response = await _easyPosClient.GetPosOrderAsync(new GetOrderRequestDto
+            {
+                BaseUrl = store.Link,
+                AppId = store.AppId,
+                AppSecret = store.AppSecret,
+                OrderId = command.OrderId
+            }, cancellationToken).ConfigureAwait(false);
+        
+            Log.Information("Retry get pos order response: {@Response}", response);
+
+            if (response.Data.Order.SendStatus == SendStatus.PartiallySent)
+            {
+                order.PrintStatus = response.Data.Order.SendStatus;
+                await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
+            }
+            
+            await Task.Delay(500, cancellationToken).ConfigureAwait(false);
+        }
+        
+        if (response.Data.Order.SendStatus == SendStatus.AllSent)
+        {
+            order.PrintStatus = response.Data.Order.SendStatus;
+            await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+        
+        return new UpdatePosOrderPrintStatusResponse
+        {
+            Data = _mapper.Map<PosOrderDto>(order)
+        };
+    }
+    
+    public async Task<GetPrintStatusResponse> GetPrintStatusAsync(GetPrintStatusRequest request, CancellationToken cancellationToken)
+    {
+        var order = await _posDataProvider.GetPosOrderByIdAsync(orderId: request.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        if (order == null)
+            throw new Exception("Order could not be found.");
+        
+        return new GetPrintStatusResponse
+        {
+            Data = _mapper.Map<PosOrderDto>(order)
+        };
     }
 
     private async Task<PlaceOrderToEasyPosResponseDto> PlaceOrderAsync(PosOrder order, CompanyStore store, string token, CancellationToken cancellationToken)
