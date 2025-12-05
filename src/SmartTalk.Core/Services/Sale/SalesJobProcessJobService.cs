@@ -116,6 +116,8 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
                 _backgroundJobClient.Enqueue<ISalesJobProcessJobService>(x => x.RefreshCrmCustomerInfoByPhoneNumberAsync(phone, CancellationToken.None));
             }
         }
+        
+        Log.Information("Enriched complete assistant customer mappings: {@AssistantCustomerMappings}", assistantCustomerMappings);
 
         await RefreshCrmCustomerInboundRoutsAsync(assistantCustomerMappings, cancellationToken).ConfigureAwait(false);
 
