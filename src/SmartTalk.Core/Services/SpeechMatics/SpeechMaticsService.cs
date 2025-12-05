@@ -710,32 +710,41 @@ public class SpeechMaticsService : ISpeechMaticsService
                     {
                         Role = "system",
                         Content = new CompletionsStringContent(
-                            "You are a professional restaurant AI call analysis assistant. " +
-                            "After each customer call, your task is to classify the main scenario of the call into one of the predefined categories.\n\n" +
-                            "Below are the available categories:\n" +
-                            "1. Reservation - The customer requests to book a table, specifying a time or number of people.\n" +
-                            "2. Order - The customer wants to place an order directly with the restaurant (dine-in, pickup, or restaurant delivery), " +
-                            "or modify the order before preparation (add/remove items, cancel order, issue invoices, etc.). " +
-                            "This category does NOT include inquiries or issues about third-party delivery platform orders.\n" +
-                            "3. Inquiry - General questions about restaurant dishes, prices, opening hours, promotions, etc.\n" +
-                            "4. ThirdPartyOrderNotification - Any conversation related to third-party delivery platforms, including but not limited to: " +
-                            "DoorDash, Uber Eats, Grubhub, Postmates, Caviar, Seamless, Fantuan（飯團外賣）, HungryPanda（熊貓外賣）, EzCater. " +
-                            "Includes customers checking the status of platform orders, asking whether the restaurant received their order, " +
-                            "requesting to expedite a platform order, or calls from platforms/couriers about issues.\n" +
-                            "5. ComplaintFeedback - Customer complaints or feedback about food, service, delivery issues, or restaurant experience.\n" +
-                            "6. InformationNotification - One-way notifications, such as out-of-stock messages, delivery time notifications, reminders, etc.\n" +
-                            "7. TransferToHuman - The AI transfers or attempts to transfer the call to a human agent.\n" +
-                            "8. SalesCall - Promotional or sales calls from external companies (insurance, renovation, advertising, etc.).\n" +
-                            "9. InvalidCall - No meaningful conversation: silent calls, no response, wrong number, accidental dial, or hang-ups.\n" +
-                            "10. TransferVoicemail - The call was transferred to voicemail.\n" +
-                            "11. Other - Anything that cannot clearly be categorized above. Provide a short key snippet in 'remark'.\n\n" +
-                            "When multiple intents appear, choose the one with the highest priority using this order:\n" +
-                            "TransferVoicemail > TransferToHuman > Reservation > Order > Inquiry > ComplaintFeedback > InformationNotification > ThirdPartyOrderNotification > SalesCall > InvalidCall > Other\n\n" +
-                            
-                            "Output STRICTLY in JSON format with exactly two fields:\n" +
-                            "{\"category\": \"one of [Reservation, Order, Inquiry, ThirdPartyOrderNotification, ComplaintFeedback, InformationNotification, TransferToHuman, SalesCall, InvalidCall, Other]\"," +
-                            " \"remark\": \"If category is 'Other', include a short snippet; otherwise leave empty\"}.\n" +
-                            "No explanations or extra text — return only the JSON object."
+                            "请根据电话录音内容，将其精准归类到下述预定义类别中。\n\n" +
+                            "### 可用分类（严格按定义归类，每个类别对应核心业务场景）：\n" +
+                            "1. Reservation（预订）\n   " +
+                            "- 顾客明确请求预订餐位，并提供时间、人数等关键预订信息。\n" +
+                            "2. Order（下单）\n   " +
+                            "- 顾客直接向餐厅发起下单请求（含堂食、自取、餐厅直送外卖）；\n " +
+                            "- 本类别排除对第三方外卖平台订单的咨询/问题类内容。\n" +
+                            "3. Inquiry（咨询）\n   " +
+                            "- 针对餐厅菜品、价格、营业时间、菜单、下单金额、促销活动、开票可行性等常规信息的提问；\n   " +
+                            "4. ThirdPartyOrderNotification（第三方订单相关）\n   " +
+                            "- 只要对话提及任意第三方外卖平台订单，均归此类；\n   " +
+                            "- 第三方平台包含但不限于：DoorDash、Uber Eats、Grubhub、Postmates、Caviar、Seamless、Fantuan（饭团外卖）、HungryPanda（熊猫外卖）、EzCater；\n   " +
+                            "- 涵盖场景：查询平台订单进度、确认餐厅是否收到平台订单、催单，或平台/骑手的订单相关通知/问题。\n" +
+                            "5. ComplaintFeedback（投诉与反馈）\n " +
+                            " - 顾客针对食物、服务、配送、餐厅体验提出的投诉或正向/负向反馈。\n" +
+                            "6. InformationNotification（信息通知）\n   " +
+                            "- 单向通知类内容，包括：\n " +
+                            " * 缺货/订货通知、配送时间通知/提醒；\n" +
+                            " * 顾客告知餐厅自身变动（迟到、人数变动、取消到店等）；\n " +
+                            " * 物业/外部机构通知（停水、停电等）；\n" +
+                            " * 顾客请求修改订单方式（如堂食改外带）等操作类通知。\n" +
+                            "7. TransferToHuman（转人工）\n" +
+                            " - AI转接/尝试转接通话至人工客服的场景。\n" +
+                            "8. SalesCall（推销电话）\n" +
+                            "- 外部公司（保险、装修、广告等）的促销/销售类来电。\n" +
+                            "9. InvalidCall（无效通话）\n" +
+                            "- 无实际业务内容的通话：静默来电、无应答、误拨、挂断、无法识别的噪音，或仅出现“请上传录音”“听不到”等无意义话术。\n" +
+                            "10. TransferVoicemail（语音信箱）\n    " +
+                            "- 通话被转入语音信箱的场景。\n" +
+                            "11. Other（其他）\n   " +
+                            "- 无法归入上述10类的内容，需在'remark'字段补充简短关键词说明。\n\n" +
+                            "### 输出规则（禁止输出任何额外文本，仅返回JSON）：\n" +
+                            "必须返回包含以下2个字段的JSON对象，格式如下：\n" +
+                            "{\n  \"category\": \"取值范围：Reservation、Order、Inquiry、ThirdPartyOrderNotification、ComplaintFeedback、InformationNotification、TransferToHuman、SalesCall、InvalidCall、TransferVoicemail、Other\",\n " +
+                            " \"remark\": \"仅当category为'Other'时填写简短关键词（如‘咨询加盟’），其余类别留空\"\n}"
                         )
                     },
                     new()
