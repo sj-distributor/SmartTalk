@@ -3,6 +3,7 @@ using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.HrInterView;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
+using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.Pos;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
 using SmartTalk.Messages.Events.HrInterView;
@@ -25,15 +26,17 @@ public partial class EventHandlingService : IEventHandlingService
     private readonly SmartiesClient _smartiesClient;
     private readonly IPosDataProvider _posDataProvider;
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
+    private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly IHrInterViewDataProvider _hrInterViewDataProvider;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
 
-    public EventHandlingService(IAsrClient asrClient, SmartiesClient smartiesClient, IPosDataProvider posDataProvider,ISmartTalkHttpClientFactory httpClientFactory, IHrInterViewDataProvider hrInterViewDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
+    public EventHandlingService(IAsrClient asrClient, SmartiesClient smartiesClient, IPosDataProvider posDataProvider,ISmartTalkHttpClientFactory httpClientFactory, IPhoneOrderDataProvider phoneOrderDataProvider, IHrInterViewDataProvider hrInterViewDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
         _asrClient = asrClient;
         _smartiesClient = smartiesClient;
         _posDataProvider = posDataProvider;
         _httpClientFactory = httpClientFactory;
+        _phoneOrderDataProvider = phoneOrderDataProvider;
         _hrInterViewDataProvider = hrInterViewDataProvider;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
     }
