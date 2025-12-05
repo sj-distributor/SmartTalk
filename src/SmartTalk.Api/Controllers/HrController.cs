@@ -29,7 +29,7 @@ public class HrController : ControllerBase
         return Ok(response);
     }
     
-    [Route("interview/questions"), HttpPut]
+    [Route("interview/questions"), HttpPost]
     public async Task<IActionResult> AddHrInterviewQuestionsAsync([FromQuery] AddHrInterviewQuestionsCommand command)
     {
         await _mediator.SendAsync(command);
