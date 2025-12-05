@@ -7,6 +7,7 @@ using SmartTalk.Core.Services.RealtimeAi.Wss;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
+using SmartTalk.Messages.Enums.Hr;
 using SmartTalk.Messages.Enums.RealtimeAi;
 using JsonException = System.Text.Json.JsonException;
 using JsonSerializer = System.Text.Json.JsonSerializer;
