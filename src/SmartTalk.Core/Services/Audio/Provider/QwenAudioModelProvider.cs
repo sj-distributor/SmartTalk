@@ -20,7 +20,7 @@ public class QwenAudioModelProvider : IAudioModelProvider
     
     public async Task<string> ExtractAudioDataFromModelProviderAsync(AnalyzeAudioCommand command, BinaryData audioData, CancellationToken cancellationToken)
     {
-        var client = new ChatClient("/root/autodl-tmp/Qwen3-Omni-30B-A3B-Instruct", new ApiKeyCredential(_qwenSettings.ApiKey), new OpenAIClientOptions
+        var client = new ChatClient("/root/autodl-tmp/Qwen3-Omni-30B-A3B-Instruct", new ApiKeyCredential(_qwenSettings.CrmApiKey), new OpenAIClientOptions
         {
             Endpoint = new Uri("http://47.77.223.168:8000/v1"),
         });
