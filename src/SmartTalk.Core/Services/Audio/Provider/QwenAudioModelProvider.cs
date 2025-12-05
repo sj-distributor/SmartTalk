@@ -1,6 +1,7 @@
 using System.ClientModel;
 using OpenAI;
 using OpenAI.Chat;
+using SmartTalk.Core.Settings.Qwen;
 using SmartTalk.Messages.Commands.SpeechMatics;
 using SmartTalk.Messages.Enums.Audio;
 
@@ -8,11 +9,18 @@ namespace SmartTalk.Core.Services.Audio.Provider;
 
 public class QwenAudioModelProvider : IAudioModelProvider
 {
+    private readonly QwenSettings _qwenSettings;
+
+    public QwenAudioModelProvider(QwenSettings qwenSettings)
+    {
+        _qwenSettings = qwenSettings;
+    }
+
     public AudioModelProviderType ModelProviderType { get; set; } = AudioModelProviderType.Qwen;
     
     public async Task<string> ExtractAudioDataFromModelProviderAsync(AnalyzeAudioCommand command, BinaryData audioData, CancellationToken cancellationToken)
     {
-        var client = new ChatClient("/root/autodl-tmp/Qwen3-Omni-30B-A3B-Instruct", new ApiKeyCredential("1"), new OpenAIClientOptions
+        var client = new ChatClient("/root/autodl-tmp/Qwen3-Omni-30B-A3B-Instruct", new ApiKeyCredential(_qwenSettings.ApiKey), new OpenAIClientOptions
         {
             Endpoint = new Uri("http://47.77.223.168:8000/v1"),
         });
