@@ -21,6 +21,7 @@ using SmartTalk.Messages.Commands.Attachments;
 using SmartTalk.Messages.Commands.RealtimeAi;
 using SmartTalk.Messages.Dto.Attachments;
 using SmartTalk.Messages.Dto.Smarties;
+using SmartTalk.Messages.Enums.Hr;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using JsonException = System.Text.Json.JsonException;
 using JsonSerializer = System.Text.Json.JsonSerializer;
@@ -165,6 +166,22 @@ public class RealtimeAiService : IRealtimeAiService
                 {
                     Log.Warning("Replace restaurant info failed: {Exception}", e);
                 }
+            }
+        }
+        
+        if (finalPrompt.Contains("#{hr_interview_section1}", StringComparison.OrdinalIgnoreCase))
+        {
+            var cacheKeys = Enum.GetValues(typeof(HrInterviewQuestionSection))
+                .Cast<HrInterviewQuestionSection>()
+                .Select(section => "hr_interview_" + section.ToString().ToLower())
+                .ToList();
+
+            var caches = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeVariableCachesAsync(cacheKeys, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            foreach (var section in Enum.GetValues(typeof(HrInterviewQuestionSection)).Cast<HrInterviewQuestionSection>())
+            {
+                var cacheKey = $"hr_interview_{section.ToString().ToLower()}";
+                finalPrompt = finalPrompt.Replace($"#{cacheKey}", caches.FirstOrDefault(x => x.CacheKey == cacheKey)?.CacheValue);
             }
         }
         
