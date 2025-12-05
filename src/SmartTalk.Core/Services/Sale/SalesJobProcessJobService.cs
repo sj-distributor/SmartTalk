@@ -83,12 +83,20 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
         
         var assistantCustomerMappings = new List<AssistantCustomerMap>();
         
+        var defaultAgentNumbers = assistants.Where(x => x.IsDefault).ToDictionary(x => x.AgentId, x => x.AnsweringNumber);
+        
         foreach (var assistant in assistants.Where(x => !string.IsNullOrEmpty(x.Name) && x.Name.All(c => char.IsDigit(c) || c == '/')))
         {
             var customerIds = assistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().ToList();
             
-            assistantCustomerMappings.AddRange(customerIds.Select(x => new AssistantCustomerMap { Id = assistant.Id, TargetNumber = assistant.AnsweringNumber, CustomerId = x.Trim() }));
+            var targetNumber = assistant.IsDefault ? assistant.AnsweringNumber : defaultAgentNumbers.TryGetValue(assistant.AgentId, out var number) ? number : null;
+
+            if (string.IsNullOrWhiteSpace(targetNumber)) continue;
+            
+            assistantCustomerMappings.AddRange(customerIds.Select(x => new AssistantCustomerMap { Id = assistant.Id, TargetNumber = targetNumber, CustomerId = x.Trim() }));
         }
+        
+        Log.Information("Assistant customer mappings: {@AssistantCustomerMappings}", assistantCustomerMappings);
         
         foreach (var mapping in assistantCustomerMappings)
         {
