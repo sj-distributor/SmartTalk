@@ -54,7 +54,7 @@ public static class HangfireExtension
         
         services.AddHangfireServer(opt =>
         {
-            opt.WorkerCount = 5;
+            opt.WorkerCount = 2;
             opt.Queues = new[] { HangfireConstants.InternalHostingFfmpeg };
             opt.ServerName = $"DEPLOY-{HangfireConstants.InternalHostingFfmpeg.ToUpper()}-{Guid.NewGuid()}";
         });
@@ -68,7 +68,7 @@ public static class HangfireExtension
         
         services.AddHangfireServer(opt =>
         {
-            opt.WorkerCount = 2;
+            opt.WorkerCount = 1;
             opt.Queues = new[] { HangfireConstants.InternalHostingTestingSalesPhoneOrder };
             opt.ServerName = $"DEPLOY-{HangfireConstants.InternalHostingTestingSalesPhoneOrder.ToUpper()}-{Guid.NewGuid()}";
         });
@@ -82,7 +82,7 @@ public static class HangfireExtension
         
         services.AddHangfireServer(opt =>
         {
-            opt.WorkerCount = 20;
+            opt.WorkerCount = 5;
             opt.Queues = new[] { HangfireConstants.InternalHostingCaCheKnowledgeVariable };
             opt.ServerName = $"DEPLOY-{HangfireConstants.InternalHostingCaCheKnowledgeVariable.ToUpper()}-{Guid.NewGuid()}";
         });
