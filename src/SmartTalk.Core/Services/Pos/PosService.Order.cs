@@ -577,6 +577,8 @@ public partial class PosService
                 order.PrintStatus = response.Data.Order.SendStatus;
                 await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
             }
+            
+            await Task.Delay(500, cancellationToken);
         }
         
         if (response.Data.Order.SendStatus == SendStatus.AllSent)
