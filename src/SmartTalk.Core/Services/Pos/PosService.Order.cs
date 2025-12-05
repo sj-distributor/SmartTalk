@@ -531,10 +531,7 @@ public partial class PosService
          var store = await _posDataProvider.GetPosCompanyStoreAsync(id: command.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (store == null || string.IsNullOrEmpty(store.Link) || string.IsNullOrEmpty(store.AppId) || string.IsNullOrEmpty(store.AppSecret))
-        {
-            Log.Error("Store could not be found or appId、url、secret could not be empty.");
-            return null;
-        }
+            throw new Exception("Store could not be found or appId、url、secret could not be empty.");
         
         var response = await _easyPosClient.GetPosOrderAsync(new GetOrderRequestDto
         {
@@ -555,10 +552,7 @@ public partial class PosService
         var order = await _posDataProvider.GetPosOrderByIdAsync(posOrderId: command.OrderId.ToString(), cancellationToken: cancellationToken).ConfigureAwait(false);
         
         if (order == null)
-        {
-            Log.Error("Order could not be found.");
-            return null;
-        }
+            throw new Exception("Order could not be found.");
         
         while (response.Data.Order.SendStatus != SendStatus.AllSent &&  DateTimeOffset.Now - firstTime < timeout)
         {

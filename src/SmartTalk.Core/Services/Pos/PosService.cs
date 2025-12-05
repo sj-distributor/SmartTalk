@@ -571,6 +571,4 @@ public partial class PosService : IPosService
         
         await _posDataProvider.AddPosAgentsAsync([posAgent], cancellationToken: cancellationToken).ConfigureAwait(false);
     }
-
-   
 }
