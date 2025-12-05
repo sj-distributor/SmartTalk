@@ -1,4 +1,5 @@
 using AutoMapper;
+using Mediator.Net;
 using Newtonsoft.Json;
 using Serilog;
 using SmartTalk.Core.Domain.Pos;
@@ -22,6 +23,7 @@ using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Pos;
 using SmartTalk.Messages.Enums.Agent;
+using SmartTalk.Messages.Enums.Pos;
 using SmartTalk.Messages.Requests.Pos;
 
 namespace SmartTalk.Core.Services.Pos;
