@@ -95,6 +95,9 @@ public class PhoneOrderRecord : IEntity
     
     [Column("remark")]
     public string Remark { get; set; }
+    
+    [Column("is_locked_scenario")]
+    public bool IsLockedScenario { get; set; }
         
     [Column("update_scenario_user_id")]
     public int? UpdateScenarioUserId { get; set; } 

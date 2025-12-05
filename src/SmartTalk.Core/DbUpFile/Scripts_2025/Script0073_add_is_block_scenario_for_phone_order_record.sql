@@ -1,0 +1,1 @@
+alter table `phone_order_record` add column `is_locked_scenario` tinyint(1) default 0;
