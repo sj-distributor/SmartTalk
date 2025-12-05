@@ -595,13 +595,10 @@ public partial class PosService
     
      public async Task<GetPrintStatusResponse> GetPrintStatusAsync(GetPrintStatusRequest request, CancellationToken cancellationToken)
     {
-        var order = await _posDataProvider.GetPosOrderByIdAsync(posOrderId: request.OrderId.ToString(), cancellationToken: cancellationToken).ConfigureAwait(false);
+        var order = await _posDataProvider.GetPosOrderByIdAsync(orderId: request.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         if (order == null)
-        {
-            Log.Error("Order could not be found.");
-            return null;
-        }
+            throw new Exception("Order could not be found.");
         
         return new GetPrintStatusResponse
         {
