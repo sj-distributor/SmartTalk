@@ -99,6 +99,8 @@ public partial class PhoneOrderService
 
         var record = records.FirstOrDefault();
         if (record == null) throw new Exception($"Phone order record not found: {command.RecordId}");
+
+        if (record.IsLockedScenario) throw new Exception("The record scenario was locked.");
         
         var user = await _accountDataProvider.GetUserAccountByUserIdAsync(command.UserId, cancellationToken).ConfigureAwait(false);
 
