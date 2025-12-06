@@ -19,8 +19,13 @@ public class GoogleAudioModelProvider : IAudioModelProvider
 
     public AudioModelProviderType ModelProviderType { get; set; } = AudioModelProviderType.Google;
 
-    public async Task<string> ExtractAudioDataFromModelProviderAsync(AnalyzeAudioCommand command, BinaryData audioData, CancellationToken cancellationToken)
+    public async Task<string> ExtractAudioDataFromModelProviderAsync(AnalyzeAudioCommand command, AudioService.AudioData audioData, CancellationToken cancellationToken)
     {
+        if (audioData.BinaryContent == null)
+        {
+            throw new Exception("Audio binary is empty for Google Audio Provider.");
+        }
+
         var requestBody = new GoogleGenerateContentRequest
         {
             Contents =
@@ -33,7 +38,7 @@ public class GoogleAudioModelProvider : IAudioModelProvider
                         {
                             InlineData = new ()
                             {
-                                Data = Convert.ToBase64String(audioData),
+                                Data = Convert.ToBase64String(audioData.BinaryContent),
                                 MimeType = GetMimeType(command.AudioFileFormat)
                             }
                         }
