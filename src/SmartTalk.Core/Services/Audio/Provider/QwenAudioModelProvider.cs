@@ -1,3 +1,4 @@
+using SmartTalk.Core.Services.Ffmpeg;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Settings.Qwen;
 using SmartTalk.Messages.Commands.SpeechMatics;
@@ -11,23 +12,22 @@ public class QwenAudioModelProvider : IAudioModelProvider
     private const string Model = "/root/autodl-tmp/Qwen3-Omni-30B-A3B-Instruct";
 
     private readonly QwenSettings _qwenSettings;
+    private readonly IFfmpegService _ffmpegService;
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
 
-    public QwenAudioModelProvider(QwenSettings qwenSettings, ISmartTalkHttpClientFactory httpClientFactory)
+    public QwenAudioModelProvider(QwenSettings qwenSettings, ISmartTalkHttpClientFactory httpClientFactory, IFfmpegService ffmpegService)
     {
         _qwenSettings = qwenSettings;
+        _ffmpegService = ffmpegService;
         _httpClientFactory = httpClientFactory;
     }
 
     public AudioModelProviderType ModelProviderType { get; set; } = AudioModelProviderType.Qwen;
 
-    public async Task<string> ExtractAudioDataFromModelProviderAsync(AnalyzeAudioCommand command, AudioService.AudioData audioData, CancellationToken cancellationToken)
+    public async Task<string> ExtractAudioDataFromModelProviderAsync(AnalyzeAudioCommand command, BinaryData audioData, CancellationToken cancellationToken)
     {
-        if (audioData.Base64String == null)
-        {
-            throw new Exception("Audio base64 is empty for Qwen Audio Provider.");
-        }
-
+        var base64String = await _ffmpegService.ConvertAudioToBase64Async(
+            audioData.ToArray(), Enum.Parse<FfmpegService.AudioType>(command.AudioFileFormat.ToString(), true), cancellationToken).ConfigureAwait(false);
         var audioFormat = command.AudioFileFormat == AudioFileFormat.Wav ? "wav" : "mp3";
 
         var messages = new List<object>();
@@ -44,7 +44,7 @@ public class QwenAudioModelProvider : IAudioModelProvider
                 type = "input_audio",
                 input_audio = new
                 {
-                    data = audioData.Base64String,
+                    data = base64String,
                     format = audioFormat
                 }
             }

@@ -8,5 +8,5 @@ public interface IAudioModelProvider : IScopedDependency
 {
     public AudioModelProviderType ModelProviderType { get; set; }
     
-    Task<string> ExtractAudioDataFromModelProviderAsync(AnalyzeAudioCommand command, AudioService.AudioData audioData, CancellationToken cancellationToken);
+    Task<string> ExtractAudioDataFromModelProviderAsync(AnalyzeAudioCommand command, BinaryData audioData, CancellationToken cancellationToken);
 }
