@@ -17,6 +17,7 @@ using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Core.Services.RealtimeAi.Adapters;
+using SmartTalk.Core.Services.Timer;
 using SmartTalk.Messages.Commands.Attachments;
 using SmartTalk.Messages.Commands.RealtimeAi;
 using SmartTalk.Messages.Dto.Attachments;
@@ -50,6 +51,7 @@ public class RealtimeAiService : IRealtimeAiService
     private volatile bool _isAiSpeaking;
     private bool _hasHandledAudioBuffer;
     private MemoryStream _wholeAudioBuffer;
+    private readonly IInactivityTimerManager _inactivityTimerManager;
     private List<(AiSpeechAssistantSpeaker, string)> _conversationTranscription;
 
     public RealtimeAiService(
@@ -57,6 +59,7 @@ public class RealtimeAiService : IRealtimeAiService
         IAgentDataProvider agentDataProvider,
         IAttachmentService attachmentService,
         IRealtimeAiSwitcher realtimeAiSwitcher,
+        IInactivityTimerManager inactivityTimerManager,
         IRealtimeAiConversationEngine conversationEngine,
         ISmartTalkBackgroundJobClient backgroundJobClient,
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
@@ -67,6 +70,7 @@ public class RealtimeAiService : IRealtimeAiService
         _realtimeAiSwitcher = realtimeAiSwitcher;
         _conversationEngine = conversationEngine;
         _backgroundJobClient = backgroundJobClient;
+        _inactivityTimerManager = inactivityTimerManager;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
 
         _webSocket = null;
