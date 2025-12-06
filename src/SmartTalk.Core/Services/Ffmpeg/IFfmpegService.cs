@@ -27,8 +27,6 @@ public interface IFfmpegService: IScopedDependency
     Task<List<byte[]>> SpiltAudioAsync(byte[] audioBytes, double startTime, double endTime, CancellationToken cancellationToken);
     
     Task<byte[]> ConvertWavToULawAsync(byte[] wavBytes, CancellationToken cancellationToken);
-    
-    Task<string> ConvertAudioToBase64Async(byte[] audioBytes, FfmpegService.AudioType audioType, CancellationToken cancellationToken = default);
 }
 
 public class FfmpegService : IFfmpegService
@@ -489,34 +487,5 @@ public class FfmpegService : IFfmpegService
             try { File.Delete(inputFileName); } catch { /* Ignore */ }
             try { File.Delete(outputFileName); } catch { /* Ignore */ }
         }
-    }
-     
-    public Task<string> ConvertAudioToBase64Async(byte[] audioBytes, AudioType audioType, CancellationToken cancellationToken = default)
-    {
-        if (audioBytes == null || audioBytes.Length == 0)
-        {
-            Log.Warning("ConvertAudioToBase64Async: audio bytes is null or empty");
-            return Task.FromResult(string.Empty);
-        }
-
-        try
-        {
-            var base64String = Convert.ToBase64String(audioBytes);
-
-            Log.Information("ConvertAudioToBase64Async: successfully converted {AudioType} audio ({Length} bytes) to base64", audioType, audioBytes.Length);
-
-            return Task.FromResult(base64String);
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "ConvertAudioToBase64Async: error occurred while converting audio to base64");
-            return Task.FromResult(string.Empty);
-        }
-    }
-    
-    public enum AudioType
-    {
-        Mp3,
-        Wav
     }
 }
