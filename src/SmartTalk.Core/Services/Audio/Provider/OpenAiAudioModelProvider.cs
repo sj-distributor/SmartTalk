@@ -19,15 +19,20 @@ public class OpenAiAudioModelProvider : IAudioModelProvider
 
     public AudioModelProviderType ModelProviderType { get; set; } = AudioModelProviderType.OpenAi;
     
-    public async Task<string> ExtractAudioDataFromModelProviderAsync(AnalyzeAudioCommand command, BinaryData audioData, CancellationToken cancellationToken)
+    public async Task<string> ExtractAudioDataFromModelProviderAsync(AnalyzeAudioCommand command, AudioService.AudioData audioData, CancellationToken cancellationToken)
     {
+        if (audioData.BinaryContent == null)
+        {
+            throw new Exception("Audio binary is empty for OpenAi Audio Provider.");
+        }
+        
         var client = new ChatClient("gpt-4o-audio-preview", _openAiSettings.ApiKey);
 
         var messages = new List<ChatMessage>();
         if (!string.IsNullOrWhiteSpace(command.SystemPrompt))
             messages.Add(new SystemChatMessage(command.SystemPrompt));
 
-        messages.Add(new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData,
+        messages.Add(new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData.BinaryContent,
             command.AudioFileFormat == AudioFileFormat.Wav ? ChatInputAudioFormat.Wav : ChatInputAudioFormat.Mp3)));
 
         if (!string.IsNullOrWhiteSpace(command.UserPrompt))
