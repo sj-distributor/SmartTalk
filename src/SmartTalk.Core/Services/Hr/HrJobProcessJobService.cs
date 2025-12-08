@@ -66,7 +66,7 @@ public class HrJobProcessJobService : IHrJobProcessJobService
         return results;
     }
 
-    public static List<HrInterviewQuestion> RandomPickHrInterviewQuestions(List<HrInterviewQuestion> questions, int take = 10)
+    public static List<HrInterviewQuestion> RandomPickHrInterviewQuestions(List<HrInterviewQuestion> questions, int take = 3)
     {
         var random = new Random();
         return questions.OrderBy(x => random.Next()).Take(take).ToList();
