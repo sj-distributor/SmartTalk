@@ -254,7 +254,10 @@ public class RealtimeAiService : IRealtimeAiService
             type = "AiTurnCompleted",
             session_id = _streamSid
         };
-
+        
+        if (_speechAssistant.Timer != null)
+            StartInactivityTimer(_speechAssistant.Timer.TimeSpanSeconds, _speechAssistant.Timer.AlterContent);
+        
         await _webSocket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(turnCompleted))), WebSocketMessageType.Text, true, CancellationToken.None);
         Log.Information("Realtime turn completed, {@data}", data);
     }
@@ -278,9 +281,6 @@ public class RealtimeAiService : IRealtimeAiService
     
     private async Task OutputAudioTranscriptionCompletedAsync(RealtimeAiWssTranscriptionData transcriptionData)
     {
-        if (_speechAssistant.Timer != null)
-            StartInactivityTimer(_speechAssistant.Timer.TimeSpanSeconds, _speechAssistant.Timer.AlterContent);
-        
         _conversationTranscription.Add((transcriptionData.Speaker, transcriptionData.Transcript));
         
         var transcription = new
