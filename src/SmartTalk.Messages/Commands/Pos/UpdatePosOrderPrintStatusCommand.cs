@@ -8,7 +8,9 @@ public class UpdatePosOrderPrintStatusCommand : ICommand
 {
     public int StoreId { get; set; }
 
-    public long OrderId { get; set; }
+    public string OrderId { get; set; }
+
+    public int RetryCount { get; set; }
 }
 
 public class UpdatePosOrderPrintStatusResponse : SmartTalkResponse<PosOrderDto>

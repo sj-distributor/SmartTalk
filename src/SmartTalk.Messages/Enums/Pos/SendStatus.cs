@@ -4,5 +4,6 @@ public enum SendStatus
 {
     UnSend,
     PartiallySent,
-    AllSent
+    AllSent,
+    Failded
 }
