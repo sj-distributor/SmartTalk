@@ -1,6 +1,7 @@
 using Serilog;
 using Newtonsoft.Json;
 using System.Globalization;
+using Mediator.Net;
 using SmartTalk.Core.Constants;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.Printer;
@@ -538,7 +539,7 @@ public partial class PosService
             BaseUrl = store.Link,
             AppId = store.AppId,
             AppSecret = store.AppSecret,
-            OrderId = command.OrderId
+            OrderId = long.Parse(command.OrderId)
         }, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Get pos order response: {@Response}", response);
@@ -549,7 +550,7 @@ public partial class PosService
         var firstTime = DateTimeOffset.Now;
         var timeout = TimeSpan.FromSeconds(10);
         
-        var order = await _posDataProvider.GetPosOrderByIdAsync(posOrderId: command.OrderId.ToString(), cancellationToken: cancellationToken).ConfigureAwait(false);
+        var order = await _posDataProvider.GetPosOrderByIdAsync(posOrderId: command.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         if (order == null)
             throw new Exception("Order could not be found.");
@@ -561,7 +562,7 @@ public partial class PosService
                 BaseUrl = store.Link,
                 AppId = store.AppId,
                 AppSecret = store.AppSecret,
-                OrderId = command.OrderId
+                OrderId = long.Parse(command.OrderId)
             }, cancellationToken).ConfigureAwait(false);
         
             Log.Information("Retry get pos order response: {@Response}", response);
@@ -575,10 +576,18 @@ public partial class PosService
             await Task.Delay(500, cancellationToken).ConfigureAwait(false);
         }
         
-        if (response.Data.Order.SendStatus != SendStatus.PartiallySent)
+        order.PrintStatus = response.Data.Order.SendStatus == SendStatus.AllSent ? response.Data.Order.SendStatus : SendStatus.Failded;
+        
+        await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        if (command.RetryCount <= 3)
         {
-            order.PrintStatus = response.Data.Order.SendStatus;
-            await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
+            _smartTalkBackgroundJobClient.Schedule<IMediator>(m => m.SendAsync(new UpdatePosOrderPrintStatusCommand
+            {
+                StoreId = command.StoreId,
+                OrderId = command.OrderId,
+                RetryCount = command.RetryCount + 1
+            }, cancellationToken), TimeSpan.FromSeconds(30));   
         }
         
         return new UpdatePosOrderPrintStatusResponse
