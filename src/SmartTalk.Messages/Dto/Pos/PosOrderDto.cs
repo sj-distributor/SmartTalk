@@ -53,12 +53,16 @@ public class PosOrderDto
     public PosOrderModifiedStatus ModifiedStatus { get; set; }
 
     public int? CreatedBy { get; set; }
-    
-    public string CreatedByUsername { get; set; }
 
     public DateTimeOffset CreatedDate { get; set; }
 
     public int? LastModifiedBy { get; set; }
 
     public DateTimeOffset? LastModifiedDate { get; set; }
+    
+    public int? SentBy { get; set; }
+    
+    public DateTimeOffset? SentTime { get; set; }
+    
+    public string SentByUsername { get; set; }
 }

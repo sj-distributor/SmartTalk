@@ -56,28 +56,25 @@ public partial class PosService
 
     public async Task HandlePosOrderAsync(PosOrder order, bool isRetry, CancellationToken cancellationToken)
     {
-        await _redisSafeRunner.ExecuteWithLockAsync($"execute-place-order-{order.Id}", async() =>
+        var store = await _posDataProvider.GetPosCompanyStoreAsync(id: order.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (store == null) throw new Exception("Store could not be found.");
+
+        var token = await GetPosTokenAsync(store, order, cancellationToken).ConfigureAwait(false);
+
+        if (!store.IsLink && string.IsNullOrWhiteSpace(token))
         {
-            var store = await _posDataProvider.GetPosCompanyStoreAsync(id: order.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-            if (store == null) throw new Exception("Store could not be found.");
-
-            var token = await GetPosTokenAsync(store, order, cancellationToken).ConfigureAwait(false);
-
-            if (!store.IsLink && string.IsNullOrWhiteSpace(token))
-            {
-                order.Status = PosOrderStatus.Modified;
-            
-                await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
-            
-                return;
-            }
+            order.Status = PosOrderStatus.Modified;
         
-            await SafetyPlaceOrderAsync(order, store, token, isRetry, 0, cancellationToken).ConfigureAwait(false);
+            await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
         
-            if (order.Status == PosOrderStatus.Sent && order.IsPush)
-                _smartTalkBackgroundJobClient.Enqueue(() => CreateMerchPrinterOrderAsync(store.Id, order.Id, cancellationToken));
-        }, wait: TimeSpan.FromSeconds(10), retry: TimeSpan.FromSeconds(1), server: RedisServer.System).ConfigureAwait(false);
+            return;
+        }
+    
+        await SafetyPlaceOrderAsync(order, store, token, isRetry, 0, cancellationToken).ConfigureAwait(false);
+    
+        if (order.Status == PosOrderStatus.Sent && order.IsPush)
+            _smartTalkBackgroundJobClient.Enqueue(() => CreateMerchPrinterOrderAsync(store.Id, order.Id, cancellationToken));
     }
 
     public async Task CreateMerchPrinterOrderAsync(int storeId, int orderId, CancellationToken cancellationToken)
@@ -602,6 +599,8 @@ public partial class PosService
     private async Task MarkOrderAsSpecificStatusAsync(PosOrder order, PosOrderStatus status, CancellationToken cancellationToken)
     {
         order.Status = status;
+        order.SentBy = _currentUser.Id;
+        order.SentTime = DateTimeOffset.Now;
         
         if(status == PosOrderStatus.Sent) order.IsPush = true;
         
@@ -633,11 +632,11 @@ public partial class PosService
             
             order.Items = JsonConvert.SerializeObject(items);
 
-            if (!order.CreatedBy.HasValue) return;
+            if (!order.SentBy.HasValue) return;
             
-            var userAccount = await _accountDataProvider.GetUserAccountByUserIdAsync(order.CreatedBy.Value, cancellationToken).ConfigureAwait(false);
+            var userAccount = await _accountDataProvider.GetUserAccountByUserIdAsync(order.SentBy.Value, cancellationToken).ConfigureAwait(false);
 
-            order.CreatedByUsername = userAccount.UserName;
+            order.SentByUsername = userAccount.UserName;
         }
         catch (Exception e)
         {
