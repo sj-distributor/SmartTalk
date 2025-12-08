@@ -240,7 +240,7 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
                 Phone = !string.IsNullOrWhiteSpace(record?.PhoneNumber) ? record.PhoneNumber : !string.IsNullOrWhiteSpace(record?.IncomingCallNumber) ? record.IncomingCallNumber.Replace("+1", "") : "Unknown",
                 OrderNo = orderNo,
                 Status = PosOrderStatus.Pending,
-                Count = products.Count,
+                Count = items.Sum(x => x.Quantity),
                 Tax = taxes,
                 Total = items.Sum(p => p.Price * p.Quantity) + taxes,
                 SubTotal = items.Sum(p => p.Price * p.Quantity),
