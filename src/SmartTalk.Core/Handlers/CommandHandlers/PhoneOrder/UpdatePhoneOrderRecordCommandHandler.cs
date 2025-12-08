@@ -16,6 +16,18 @@ public class UpdatePhoneOrderRecordCommandHandler : ICommandHandler<UpdatePhoneO
     
     public async Task<UpdatePhoneOrderRecordResponse> Handle(IReceiveContext<UpdatePhoneOrderRecordCommand> context, CancellationToken cancellationToken)
     {
-        return await _phoneOrderService.UpdatePhoneOrderRecordAsync(context.Message, cancellationToken).ConfigureAwait(false);
+        var @event = await _phoneOrderService.UpdatePhoneOrderRecordAsync(context.Message, cancellationToken).ConfigureAwait(false);
+        
+        await context.PublishAsync(@event, cancellationToken).ConfigureAwait(false);
+
+        return new UpdatePhoneOrderRecordResponse
+        {
+            Data = new UpdatePhoneOrderRecordResponseData
+            {
+                RecordId = @event.RecordId,
+                UserName = @event.UserName,
+                DialogueScenarios = @event.DialogueScenarios
+            }
+        };
     }
 }

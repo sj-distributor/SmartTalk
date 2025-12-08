@@ -17,7 +17,6 @@ using Newtonsoft.Json;
 using SmartTalk.Core.Domain.Account;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Domain.Pos;
-using SmartTalk.Core.Services.Linphone;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Dto.Attachments;
 using SmartTalk.Messages.Enums.PhoneOrder;
@@ -26,8 +25,8 @@ using SmartTalk.Messages.Enums.SpeechMatics;
 using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Requests.PhoneOrder;
 using SmartTalk.Messages.Commands.Attachments;
-using SmartTalk.Messages.Enums.Account;
 using SmartTalk.Messages.Enums.Pos;
+using SmartTalk.Messages.Events.PhoneOrder;
 using TranscriptionFileType = SmartTalk.Messages.Enums.STT.TranscriptionFileType;
 using TranscriptionResponseFormat = SmartTalk.Messages.Enums.STT.TranscriptionResponseFormat;
 
@@ -37,7 +36,7 @@ public partial interface IPhoneOrderService
 {
     Task<GetPhoneOrderRecordsResponse> GetPhoneOrderRecordsAsync(GetPhoneOrderRecordsRequest request, CancellationToken cancellationToken);
     
-    Task<UpdatePhoneOrderRecordResponse> UpdatePhoneOrderRecordAsync(UpdatePhoneOrderRecordCommand command, CancellationToken cancellationToken);
+    Task<PhoneOrderRecordUpdatedEvent> UpdatePhoneOrderRecordAsync(UpdatePhoneOrderRecordCommand command, CancellationToken cancellationToken);
 
     Task ReceivePhoneOrderRecordAsync(ReceivePhoneOrderRecordCommand command, CancellationToken cancellationToken);
 
@@ -94,7 +93,7 @@ public partial class PhoneOrderService
         };
     }
 
-    public async Task<UpdatePhoneOrderRecordResponse> UpdatePhoneOrderRecordAsync(UpdatePhoneOrderRecordCommand command, CancellationToken cancellationToken)
+    public async Task<PhoneOrderRecordUpdatedEvent> UpdatePhoneOrderRecordAsync(UpdatePhoneOrderRecordCommand command, CancellationToken cancellationToken)
     {
         var records = await _phoneOrderDataProvider.GetPhoneOrderRecordAsync(command.RecordId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -108,19 +107,19 @@ public partial class PhoneOrderService
         if (user == null) 
             throw new Exception($"User not found: {command.UserId}");
         
+        var originalScenario = record.Scenario;
+        
         record.Scenario = command.DialogueScenarios;
         record.UpdateScenarioUserId = user.Id;
 
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record,  true, cancellationToken);
 
-        return new UpdatePhoneOrderRecordResponse
+        return new PhoneOrderRecordUpdatedEvent
         {
-            Data = new UpdatePhoneOrderRecordResponseDate
-            {
-                RecordId = record.Id,
-                DialogueScenarios = record.Scenario.GetValueOrDefault(),
-                UserName = user.UserName
-            }
+            RecordId = record.Id,
+            UserName = user.UserName,
+            OriginalScenarios = originalScenario,
+            DialogueScenarios = record.Scenario.GetValueOrDefault()
         };
     }
 
