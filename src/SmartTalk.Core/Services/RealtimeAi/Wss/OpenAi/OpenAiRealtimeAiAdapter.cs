@@ -41,6 +41,26 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
     {
         var configs = await InitialSessionConfigAsync(assistantProfile, cancellationToken).ConfigureAwait(false);
         var turnDetection = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection);
+        var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(assistantProfile.Id, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        if (knowledge.Prompt.Contains("#{hr_interview_section1}", StringComparison.OrdinalIgnoreCase))
+        {
+            var cacheKeys = Enum.GetValues(typeof(HrInterviewQuestionSection))
+                .Cast<HrInterviewQuestionSection>()
+                .Select(section => "hr_interview_" + section.ToString().ToLower())
+                .ToList();
+
+            var caches = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeVariableCachesAsync(cacheKeys, cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+
+            foreach (var section in Enum.GetValues(typeof(HrInterviewQuestionSection)).Cast<HrInterviewQuestionSection>())
+            {
+                var cacheKey = $"hr_interview_{section.ToString().ToLower()}";
+                var placeholder = $"#{{{cacheKey}}}";
+
+                knowledge.Prompt = knowledge.Prompt.Replace(placeholder, caches.FirstOrDefault(x => x.CacheKey == cacheKey)?.CacheValue);
+            }
+        }
         
         var sessionPayload = new
         {
