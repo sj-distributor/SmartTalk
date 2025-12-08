@@ -248,7 +248,7 @@ public class SpeechMaticsService : ISpeechMaticsService
                     {
                         Role = "system",
                         Content = new CompletionsStringContent(
-                            "请根据电话录音内容，将其精准归类到下述预定义类别中。\n\n" +
+                            "请根据交谈主题以及交谈该内容，将其精准归类到下述预定义类别中。\n\n" +
                             "### 可用分类（严格按定义归类，每个类别对应核心业务场景）：\n" +
                             "1. Reservation（预订）\n   " +
                             "- 顾客明确请求预订餐位，并提供时间、人数等关键预订信息。\n" +
@@ -270,7 +270,7 @@ public class SpeechMaticsService : ISpeechMaticsService
                             " * 物业/外部机构通知（停水、停电等）；\n" +
                             " * 顾客请求修改订单方式（如堂食改外带）等操作类通知。\n" +
                             "7. TransferToHuman（转人工）\n" +
-                            " - AI转接/尝试转接通话至人工客服的场景。\n" +
+                            " - 提及到人工客服，转接人工服务的场景。\n" +
                             "8. SalesCall（推销电话）\n" +
                             "- 外部公司（保险、装修、广告等）的促销/销售类来电。\n" +
                             "9. InvalidCall（无效通话）\n" +
