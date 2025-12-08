@@ -55,12 +55,16 @@ public class PosOrderDto
     public SendStatus? PrintStatus { get; set; }
 
     public int? CreatedBy { get; set; }
-    
-    public string CreatedByUsername { get; set; }
 
     public DateTimeOffset CreatedDate { get; set; }
 
     public int? LastModifiedBy { get; set; }
 
     public DateTimeOffset? LastModifiedDate { get; set; }
+    
+    public int? SentBy { get; set; }
+    
+    public DateTimeOffset? SentTime { get; set; }
+    
+    public string SentByUsername { get; set; }
 }
