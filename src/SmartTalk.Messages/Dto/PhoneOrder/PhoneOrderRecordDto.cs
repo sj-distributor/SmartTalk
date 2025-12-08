@@ -67,4 +67,6 @@ public class PhoneOrderRecordDto
     public string UpdateScenarioUserName { get; set; }
     
     public bool IsLockedScenario { get; set; }
+    
+    public string CustomerAddress { get; set; }
 }

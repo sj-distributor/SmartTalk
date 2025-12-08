@@ -102,6 +102,9 @@ public class PhoneOrderRecord : IEntity
     [Column("update_scenario_user_id")]
     public int? UpdateScenarioUserId { get; set; } 
     
+    [Column("customer_address"), StringLength(1024)]
+    public string CustomerAddress { get; set; }
+    
     [NotMapped]
     public UserAccount UserAccount { get; set; }
     
