@@ -580,7 +580,7 @@ public partial class PosService
         
         await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        if (command.RetryCount <= 3)
+        if (command.RetryCount < 3 && response.Data.Order.SendStatus != SendStatus.AllSent)
         {
             _smartTalkBackgroundJobClient.Schedule<IMediator>(m => m.SendAsync(new UpdatePosOrderPrintStatusCommand
             {
