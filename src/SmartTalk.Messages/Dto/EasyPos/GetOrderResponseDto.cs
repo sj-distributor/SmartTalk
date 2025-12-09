@@ -74,8 +74,8 @@ public class EasyPosOrderDto
     [JsonProperty("customer")]
     public EasyPosOrderCustomerDto Customer { get; set; }
 
-    [JsonProperty("sendStatus")]
-    public SendStatus SendStatus { get; set; }
+    [JsonProperty("isPrinted")]
+    public bool IsPrinted { get; set; }
 }
 
 public class EasyPosOrderCustomerDto

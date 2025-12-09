@@ -557,7 +557,7 @@ public partial class PosService
         if (order == null)
             throw new Exception("Order could not be found.");
         
-        while (response.Data.Order.SendStatus != SendStatus.AllSent && DateTimeOffset.Now - firstTime < timeout)
+        while (response.Data.Order.IsPrinted != true && DateTimeOffset.Now - firstTime < timeout)
         {
             response = await _easyPosClient.GetPosOrderAsync(new GetOrderRequestDto
             {
@@ -568,21 +568,15 @@ public partial class PosService
             }, cancellationToken).ConfigureAwait(false);
         
             Log.Information("Retry get pos order response: {@Response}", response);
-
-            if (response.Data.Order.SendStatus == SendStatus.PartiallySent)
-            {
-                order.PrintStatus = response.Data.Order.SendStatus;
-                await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
-            }
             
             await Task.Delay(500, cancellationToken).ConfigureAwait(false);
         }
         
-        order.PrintStatus = response.Data.Order.SendStatus == SendStatus.AllSent ? response.Data.Order.SendStatus : SendStatus.Failded;
+        order.IsPrinted = response.Data.Order.IsPrinted;
         
         await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        if (command.RetryCount < 3 && response.Data.Order.SendStatus != SendStatus.AllSent)
+        if (command.RetryCount < 3 && response.Data.Order.IsPrinted != true)
         {
             _smartTalkBackgroundJobClient.Schedule<IMediator>(m => m.SendAsync(new UpdatePosOrderPrintStatusCommand
             {

@@ -1,2 +1,2 @@
 alter table `pos_order`
-    add column `print_status` int null;
+    add column `is_printed` tinyint(1) null;

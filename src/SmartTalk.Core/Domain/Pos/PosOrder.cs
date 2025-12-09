@@ -81,8 +81,8 @@ public class PosOrder : IEntity, IHasCreatedFields, IHasModifiedFields
     [Column("modified_status")]
     public PosOrderModifiedStatus ModifiedStatus { get; set; }
 
-    [Column("print_status")]
-    public SendStatus? PrintStatus { get; set; }
+    [Column("is_printed")]
+    public bool? IsPrinted { get; set; }
 
     [Column("created_by")]
     public int? CreatedBy { get; set; }
