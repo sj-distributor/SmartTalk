@@ -16,24 +16,23 @@ using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Services.AiSpeechAssistant;
-using SmartTalk.Core.Services.Ffmpeg;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.PhoneOrder;
+using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Services.Sale;
 using SmartTalk.Core.Settings.OpenAi;
-using SmartTalk.Core.Settings.PhoneOrder;
 using SmartTalk.Core.Settings.Twilio;
 using SmartTalk.Messages.Dto.SpeechMatics;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
+using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Sales;
 using SmartTalk.Messages.Dto.PhoneOrder;
-using SmartTalk.Messages.Dto.PhoneOrder;
-using SmartTalk.Messages.Enums.Account;
+using SmartTalk.Messages.Dto.Pos;
 using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Enums.STT;
 using Twilio;
@@ -51,14 +50,14 @@ public interface ISpeechMaticsService : IScopedDependency
 public class SpeechMaticsService : ISpeechMaticsService
 {
     private readonly IMapper _mapper;
+    private readonly IPosService _posService;
     private readonly ISalesClient _salesClient;
-    private readonly  IWeChatClient _weChatClient;
-    private  readonly IFfmpegService _ffmpegService;
     private readonly OpenAiSettings _openAiSettings;
     private readonly TwilioSettings _twilioSettings;
-    private readonly TranslationClient _translationClient;
     private readonly ISmartiesClient _smartiesClient;
-    private readonly PhoneOrderSetting _phoneOrderSetting;
+    private readonly IPosUtilService _posUtilService;
+    private readonly IPosDataProvider _posDataProvider;
+    private readonly TranslationClient _translationClient;
     private readonly IPhoneOrderService _phoneOrderService;
     private readonly ISalesDataProvider _salesDataProvider;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
@@ -68,14 +67,14 @@ public class SpeechMaticsService : ISpeechMaticsService
     
     public SpeechMaticsService(
         IMapper mapper,
+        IPosService posService,
         ISalesClient salesClient,
-        IWeChatClient weChatClient,
-        IFfmpegService ffmpegService,
         OpenAiSettings openAiSettings,
         TwilioSettings twilioSettings,
-        TranslationClient translationClient,
+        IPosUtilService posUtilService,
         ISmartiesClient smartiesClient,
-        PhoneOrderSetting phoneOrderSetting,
+        PosDataProvider posDataProvider,
+        TranslationClient translationClient,
         IPhoneOrderService phoneOrderService,
         ISalesDataProvider salesDataProvider,
         IPhoneOrderDataProvider phoneOrderDataProvider,
@@ -84,14 +83,14 @@ public class SpeechMaticsService : ISpeechMaticsService
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
         _mapper = mapper;
+        _posService = posService;
         _salesClient = salesClient;
-        _weChatClient = weChatClient;
-        _ffmpegService = ffmpegService;
         _openAiSettings = openAiSettings;
         _twilioSettings = twilioSettings;
-        _translationClient = translationClient;
         _smartiesClient = smartiesClient;
-        _phoneOrderSetting = phoneOrderSetting;
+        _posUtilService = posUtilService;
+        _posDataProvider = posDataProvider;
+        _translationClient = translationClient;
         _phoneOrderService = phoneOrderService;
         _salesDataProvider = salesDataProvider;
         _phoneOrderDataProvider = phoneOrderDataProvider;
@@ -192,7 +191,8 @@ public class SpeechMaticsService : ISpeechMaticsService
         record.Scenario = scenarioInformation.Category;
         record.Remark = scenarioInformation.Remark;
         
-        
+        if (record.Scenario == DialogueScenarios.Order)
+            await GenerateAiDraftAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
 
         var detection = await _translationClient.DetectLanguageAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
 
@@ -392,6 +392,8 @@ public class SpeechMaticsService : ISpeechMaticsService
 
         var customerItemsCacheList = await _salesDataProvider.GetCustomerItemsCacheBySoldToIdsAsync(soldToIds, cancellationToken);
         var customerItemsString = string.Join(Environment.NewLine, soldToIds.Select(id => customerItemsCacheList.FirstOrDefault(c => c.Filter == id)?.CacheValue ?? ""));
+        
+        var menuItems = await GeneratePosMenuItemsAsync(agent.Id, cancellationToken).ConfigureAwait(false);
 
         var audioData = BinaryData.FromBytes(audioContent);
         List<ChatMessage> messages =
@@ -410,7 +412,8 @@ public class SpeechMaticsService : ISpeechMaticsService
                 .Replace("#{call_to}", callTo ?? "")
                 .Replace("#{customer_items}", customerItemsString ?? "")
                 .Replace("#{call_subject_cn}", callSubjectCn)
-                .Replace("#{call_subject_us}", callSubjectEn)),
+                .Replace("#{call_subject_us}", callSubjectEn)
+                .Replace("#{menu_items}", menuItems ?? "")),
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
             new UserChatMessage("幫我根據錄音生成分析報告：")
         ];
@@ -699,8 +702,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         return (result.IsHumanAnswered, result.IsCustomerFriendly);
     }
 
-    private async Task<DialogueScenarioResultDto> IdentifyDialogueScenariosAsync(string query,
-        CancellationToken cancellationToken)
+    private async Task<DialogueScenarioResultDto> IdentifyDialogueScenariosAsync(string query, CancellationToken cancellationToken)
     {
         var completionResult = await _smartiesClient.PerformQueryAsync(
             new AskGptRequest
@@ -770,8 +772,114 @@ public class SpeechMaticsService : ISpeechMaticsService
         return result;
     }
 
-    private async Task GenerateAiDraftAsync(CancellationToken cancellationToken)
+    private async Task<string> GeneratePosMenuItemsAsync(int agentId, CancellationToken cancellationToken)
     {
+        var storeAgent = await _posDataProvider.GetPosAgentByAgentIdAsync(agentId, cancellationToken).ConfigureAwait(false);
+
+        if (storeAgent == null) return null;
         
+        var categoryProductsPairs = await _posDataProvider.GetPosCategoryAndProductsAsync(storeAgent.StoreId, cancellationToken).ConfigureAwait(false);
+        
+        var categoryProductsLookup = categoryProductsPairs.GroupBy(x => x.Item1).ToDictionary(x => x.Key, x => x.Select(p => p.Item2).ToList());
+
+        var menuItems = string.Empty;
+        
+        foreach (var (category, products) in categoryProductsLookup)
+        {
+            var productDetails = string.Empty; 
+            var categoryNames = JsonConvert.DeserializeObject<PosNamesLocalization>(category.Names);
+            
+            var idx = 1;
+            productDetails += categoryNames.Cn.Name + "\n";
+
+            foreach (var product in products)
+            {
+                var productNames = JsonConvert.DeserializeObject<PosNamesLocalization>(product.Names);
+                var line = $"{idx}. {productNames.Cn.Name}({product.ProductId})：${product.Price:F2}";
+
+                if (!string.IsNullOrEmpty(product.Modifiers))
+                {
+                    var modifiers = JsonConvert.DeserializeObject<List<EasyPosResponseModifierGroups>>(product.Modifiers);
+                    var modifierNames = new List<string>();
+                    int minSelect = 0, maxSelect = 0, maxRep = 0;
+
+                    foreach (var modifier in modifiers)
+                    {
+                        if (modifier.ModifierProducts != null)
+                        {
+                            foreach (var mp in modifier.ModifierProducts)
+                            {
+                                var nameLoc = mp.Localizations.Find(l => l.LanguageCode == "zh_CN" && l.Field == "name");
+                                
+                                if (nameLoc != null) modifierNames.Add(nameLoc.Value);
+                            }
+                        }
+                        minSelect = modifier.MinimumSelect;
+                        maxSelect = modifier.MaximumSelect;
+                        maxRep = modifier.MaximumRepetition;
+                    }
+
+                    if (modifierNames.Count > 0)
+                    {
+                        line += $"，规格：{string.Join("、", modifierNames)}，要求最少选{minSelect}，最多选{maxSelect}，最大可重复选{maxRep}相同的";
+                    }
+                }
+                
+                idx++;
+                productDetails += line + "\n";
+            }
+            
+            menuItems += productDetails + "\n";
+        }
+        
+        return menuItems.TrimEnd('\r', '\n');
+    }
+    
+    public async Task GenerateAiDraftAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant assistant, PhoneOrderRecord record, CancellationToken cancellationToken)
+    {
+        agent = new Agent { Id = 403, Type = AgentType.PosCompanyStore };
+        assistant = new Domain.AISpeechAssistant.AiSpeechAssistant { IsAllowOrderPush = false};
+        record = new PhoneOrderRecord { Id = 30220, CustomerName = "孙先生", PhoneNumber = "9787552561", TranscriptionText = "交談主題：客戶下單餐點\n\n來電號碼：未知\n\n內容摘要: 客戶來電要求下單，選擇自提方式。提供了姓名孫先生，並訂購了兩杯港式奶茶和兩份海南雞湯麵。確認訂單後，客戶表示沒有其他需求。\n\n客人情感與情緒: 語氣平和，有禮貌，對下單流程熟悉，情緒穩定。\n\n待辦事件:\n1. 確認訂單準備進度。\n2. 準備自提取餐的相關安排。\n\n客人下單內容：\n1. 港式奶茶（2杯）\n2. 海南雞湯麵（2份）" };
+       
+        if (agent.Type != AgentType.PosCompanyStore) return;
+        
+        var menuItems = await GeneratePosMenuItemsAsync(agent.Id, cancellationToken).ConfigureAwait(false);
+    
+        var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
+        
+        var systemPrompt =
+            "你是一名訂單分析助手。請從下面的客戶分析報告文字中提取所有下單的菜品、數量、價格、規格，並且用菜單列表盡力匹配每個菜品。" +
+            "如果報告中提到了送餐類型，請提取送餐類型 type (0: 自提订单，1：配送订单)。" +
+            "請嚴格傳回一個 JSON 對象，頂層字段為 \"type\"，items（数组，元素包含 productId, name, quantity, price, specification）。\n" +
+            "範例：\n" +
+            "{\"type\":0,\"items\":[{\"productId\":\"9778779965031491\",\"name\":\"海南雞湯麵\",\"quantity\":1,\"price\":\"13.00\",\"specification\":null}]}" +
+            "{\"type\":1,\"items\":[{\"productId\":\"9225097809167409\",\"name\":\"港式燒鴨\",\"quantity\":1,\"price\":\"13.00\",\"specification\":\"半隻\"}]} \n\n" +
+            "菜單列表：\n" + menuItems + "\n\n" +
+            "注意：\n1. 必須嚴格輸出 JSON，物件頂層字段必須是 \"type\"，不要有其他字段或額外說明。\n2. 提取的物料名稱需要為繁體中文。\n3. **如果客戶分析文本中沒有任何可識別的下單信息，請返回：{ \"type\":0, \"items\": [] }。不得臆造或猜測菜品。** \n" +
+            "請務必完整提取報告中每一個提到的菜品";
+        
+        Log.Information("Sending prompt with menu items to GPT: {Prompt}", systemPrompt);
+    
+        var messages = new List<ChatMessage>
+        {
+            new SystemChatMessage(systemPrompt),
+            new UserChatMessage("客戶分析報告文本：\n" + record.TranscriptionText + "\n\n")
+        };
+    
+        var completion = await client.CompleteChatAsync(messages, new ChatCompletionOptions { ResponseModalities = ChatResponseModalities.Text, ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat() }, cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            var aiDraftOrder = JsonConvert.DeserializeObject<AiDraftOrderDto>(completion.Value.Content.FirstOrDefault()?.Text ?? "");
+            
+            var order = await _posUtilService.BuildPosOrderAsync(record, aiDraftOrder, cancellationToken).ConfigureAwait(false);
+
+            if (assistant.IsAllowOrderPush)
+                await _posService.HandlePosOrderAsync(order, false, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Failed to extract products from report text");
+        }
     }
 }
