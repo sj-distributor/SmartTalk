@@ -122,9 +122,9 @@ public class SpeechMaticsService : ISpeechMaticsService
 
             var audioContent = await _smartTalkHttpClientFactory.GetAsync<byte[]>(record.Url, cancellationToken).ConfigureAwait(false);
             
-            await SummarizeConversationContentAsync(record, audioContent, cancellationToken).ConfigureAwait(false);
-            
             await _phoneOrderService.ExtractPhoneOrderRecordAiMenuAsync(speakInfos, record, audioContent, cancellationToken).ConfigureAwait(false);
+            
+            await SummarizeConversationContentAsync(record, audioContent, cancellationToken).ConfigureAwait(false);
             
             await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
             
@@ -185,13 +185,14 @@ public class SpeechMaticsService : ISpeechMaticsService
 
         var checkCustomerFriendly = await CheckCustomerFriendlyAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
 
-        record.IsCustomerFriendly = checkCustomerFriendly.IsCustomerFriendly;
         record.IsHumanAnswered = checkCustomerFriendly.IsHumanAnswered;
-        
+        record.IsCustomerFriendly = checkCustomerFriendly.IsCustomerFriendly;
 
         var scenarioInformation = await IdentifyDialogueScenariosAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
         record.Scenario = scenarioInformation.Category;
         record.Remark = scenarioInformation.Remark;
+        
+        
 
         var detection = await _translationClient.DetectLanguageAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
 
@@ -767,5 +768,10 @@ public class SpeechMaticsService : ISpeechMaticsService
             throw new Exception($"IdentifyDialogueScenariosAsync 无法反序列化模型返回结果: {response}");
 
         return result;
+    }
+
+    private async Task GenerateAiDraftAsync(CancellationToken cancellationToken)
+    {
+        
     }
 }
