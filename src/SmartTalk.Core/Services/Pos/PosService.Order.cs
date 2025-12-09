@@ -531,6 +531,15 @@ public partial class PosService
 
     public async Task<UpdatePosOrderPrintStatusResponse> UpdatePosOrderPrintStatusAsync(UpdatePosOrderPrintStatusCommand command, CancellationToken cancellationToken)
     {
+        var order = await _posDataProvider.GetPosOrderByIdAsync(posOrderId: command.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        if (order == null)
+            throw new Exception("Order could not be found.");
+
+        order.IsPrinted = PosOrderIsPrintStatus.Sending;
+        
+        await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
+        
         var store = await _posDataProvider.GetPosCompanyStoreAsync(id: command.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (store == null || string.IsNullOrEmpty(store.Link) || string.IsNullOrEmpty(store.AppId) || string.IsNullOrEmpty(store.AppSecret))
@@ -552,11 +561,6 @@ public partial class PosService
         var firstTime = DateTimeOffset.Now;
         var timeout = TimeSpan.FromSeconds(10);
         
-        var order = await _posDataProvider.GetPosOrderByIdAsync(posOrderId: command.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        if (order == null)
-            throw new Exception("Order could not be found.");
-        
         while (response.Data.Order.IsPrinted != true && DateTimeOffset.Now - firstTime < timeout)
         {
             response = await _easyPosClient.GetPosOrderAsync(new GetOrderRequestDto
@@ -572,7 +576,7 @@ public partial class PosService
             await Task.Delay(500, cancellationToken).ConfigureAwait(false);
         }
         
-        order.IsPrinted = response.Data.Order.IsPrinted;
+        order.IsPrinted = response.Data.Order.IsPrinted ? PosOrderIsPrintStatus.Successed : PosOrderIsPrintStatus.Failed;
         
         await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
         
