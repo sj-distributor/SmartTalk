@@ -199,25 +199,36 @@ public class PrinterService : IPrinterService
             storeCreatedDate = order.CreatedDate.ToString("yyyy-MM-dd HH:mm:ss");
             storePrintDateString = storePrintDate.ToString("yyyy-MM-dd HH:mm:ss");
         }
+
+        Image<Rgba32> img;
         
-        var img = await RenderReceiptAsync(order.OrderNo,  
-            JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(store.Names).GetValueOrDefault("en")?.GetValueOrDefault("name"),
-            store.Address,
-            store.PhoneNums,
-            storeCreatedDate,
-            merchPrinter.PrinterName,
-            order.Type.ToString(),
-            order.Name,
-            order.Phone,
-            order.Address,
-            order.Notes,
-            orderItems,
-            order.SubTotal.ToString(),
-            order.Tax.ToString(),
-            order.Total.ToString(),
-            storePrintDateString,
-            merchPrinter.PrinterLanguage).ConfigureAwait(false);
-       
+        if (merchPrinterOrder.PrintFormat == PrintFormat.Order)
+        {
+            img = await RenderReceiptAsync(order.OrderNo,  
+                JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(store.Names).GetValueOrDefault("en")?.GetValueOrDefault("name"),
+                store.Address,
+                store.PhoneNums,
+                storeCreatedDate,
+                merchPrinter.PrinterName,
+                order.Type.ToString(),
+                order.Name,
+                order.Phone,
+                order.Address,
+                order.Notes,
+                orderItems,
+                order.SubTotal.ToString(),
+                order.Tax.ToString(),
+                order.Total.ToString(),
+                storePrintDateString,
+                merchPrinter.PrinterLanguage).ConfigureAwait(false);
+        }
+        else
+        {
+            img = await RenderReceipt1Async("chongqing hot", "21385 S Western Ave,Torrance,CA,90501,USA", "9023162148",
+                "2025/2/15", "BRYAN.L", "4088888888", "3", "11:45 am", "客人要向著包厢的位子，靠墙。",
+                $@"{DateTimeOffset.Now.ToString("yyyy-MM-dd HH:mm:ss")}").ConfigureAwait(false);
+        }
+        
         var imageKey = Guid.NewGuid().ToString();
         
         using var ms = new MemoryStream();
@@ -564,6 +575,79 @@ public class PrinterService : IPrinterService
         y = DrawLine(paperWidth, img, y, textColor, $"Powered by SmartTalk AI", fontSmall, centerAlign: true);
 
         img.Mutate(x => x.Crop(new Rectangle(0, 0, paperWidth, y + 10)));
+        
+        return img;
+    } 
+    
+    private async Task<Image<Rgba32>> RenderReceipt1Async(string restaurantName, string restaurantAddress,
+        string restaurantPhone,string scheduledDates, string name, string userPhone, string peopleCount, string time, string note, string printTime)
+    {
+        var y = 10;
+        var paperWidth = 512;
+        var textColor = Color.Black;
+        var bgColor = Color.White;
+        
+        var regularFont = "/app/fonts/SourceHanSansSC-Regular.otf";
+        var boldFont = "/app/fonts/SourceHanSansSC-Bold.otf";
+        
+        var collection = new FontCollection();
+        var fontFamily = collection.Add(regularFont);
+        collection.Add(boldFont);
+        
+        var fontSmall = CreateFont(fontFamily, 25);
+        var fontMaxSmall = CreateFont(fontFamily, 23);
+        var fontNormal = CreateFont(fontFamily, 30);
+        var fontBold = CreateFont(fontFamily, 40, bold: true);
+        
+        var lineHeight = TextMeasurer.MeasureSize("口", new TextOptions(fontNormal)).Height;
+
+        var img = new Image<Rgba32>(paperWidth, 10000);
+        img.Mutate(ctx => ctx.Fill(bgColor));
+        
+        y = DrawLine(paperWidth, img, y, textColor, $"Info Update",  CreateFont(fontFamily, 45, true), spacing: 40, centerAlign: true);
+        y = DrawLine(paperWidth, img, y, textColor, $"{restaurantName}", fontMaxSmall, centerAlign: true);
+        
+        if (!string.IsNullOrEmpty(restaurantAddress))
+            y = DrawLine(paperWidth, img, y, textColor, $"{restaurantAddress}", fontMaxSmall, centerAlign: true);
+
+        if (!string.IsNullOrEmpty(restaurantPhone))
+        {
+            var phoneSplit = restaurantPhone.Split(",");
+
+            var phones = "";
+            
+            foreach (var phone in phoneSplit)
+            {
+                phones += $"({phone[..3]})-{phone.Substring(3, 3)}-{phone[6..]},";
+            }
+            
+            phones = phones.TrimEnd(',');
+            
+            y = DrawLine(paperWidth, img, y, textColor, $"{phones}", fontMaxSmall, centerAlign: true, spacing:10);    
+        }
+        
+        y = DrawLine(paperWidth, img, y, textColor, GenerateFullLine('-', fontBold, paperWidth-20), fontBold, yOffset: -10);
+        
+        y = DrawLine(paperWidth, img, y, textColor, $"收據打印機", fontNormal);
+        
+        y = DrawSolidLine(paperWidth, img, y);
+        
+        y = DrawLine(paperWidth, img, y, textColor, $"預定日期:{scheduledDates}", fontNormal);
+        y = DrawLine(paperWidth, img, y, textColor, $"名字:{name}", fontNormal);
+        y = DrawLine(paperWidth, img, y, textColor, $"電話:{userPhone}", fontNormal);
+        y = DrawLine(paperWidth, img, y, textColor, $"人數:{peopleCount}", fontNormal);
+        y = DrawLine(paperWidth, img, y, textColor, $"時間:{time}", fontNormal);
+        y = DrawLine(paperWidth, img, y, textColor, $"備註:{note}", fontNormal);
+        
+        y = DrawLine(paperWidth, img, y, textColor,GenerateFullLine('-', fontNormal, paperWidth-20), fontNormal);
+        
+        y = DrawLine(paperWidth, img, y, textColor, $"Print Time {printTime}", fontSmall, centerAlign: true, spacing: 80, yOffset: 60);
+        y = DrawLine(paperWidth, img, y, textColor, $"Powered by SmartTalk AI", fontSmall, centerAlign: true);
+
+        img.Mutate(x => x.Crop(new Rectangle(0, 0, paperWidth, y + 10)));
+        
+        using var ms = new MemoryStream();
+        img.Save("test.jpg");
         
         return img;
     } 

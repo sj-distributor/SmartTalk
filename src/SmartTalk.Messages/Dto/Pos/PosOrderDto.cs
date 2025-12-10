@@ -44,6 +44,8 @@ public class PosOrderDto
     
     public string ModifiedItems { get; set; }
     
+    public PosOrderIsPrintStatus? IsPrinted { get; set; }
+    
     public bool IsPush { get; set; }
 
     public string Notes { get; set; }

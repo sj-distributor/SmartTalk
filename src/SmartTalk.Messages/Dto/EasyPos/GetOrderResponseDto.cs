@@ -1,4 +1,5 @@
 using Newtonsoft.Json;
+using SmartTalk.Messages.Enums.Pos;
 
 namespace SmartTalk.Messages.Dto.EasyPos;
 
@@ -72,6 +73,9 @@ public class EasyPosOrderDto
     
     [JsonProperty("customer")]
     public EasyPosOrderCustomerDto Customer { get; set; }
+
+    [JsonProperty("isPrinted")]
+    public bool IsPrinted { get; set; }
 }
 
 public class EasyPosOrderCustomerDto
