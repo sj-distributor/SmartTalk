@@ -172,7 +172,11 @@ public partial class PosService
         var order = await _posDataProvider.GetPosOrderByIdAsync(orderId: request.OrderId, recordId: request.RecordId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (order == null)
-            throw new Exception($"Order could not be found by orderId: {request.OrderId} or recordId: {request.RecordId}.");
+        {
+            Log.Information($"Order could not be found by orderId: {request.OrderId} or recordId: {request.RecordId}.");
+            
+            return new GetPosStoreOrderResponse();
+        }
 
         var enrichOrder = _mapper.Map<PosOrderDto>(order);
         
