@@ -27,15 +27,16 @@ public class QwenAudioModelProvider : IAudioModelProvider
     public async Task<string> ExtractAudioDataFromModelProviderAsync(AnalyzeAudioCommand command, BinaryData audioData, CancellationToken cancellationToken)
     {
         var messages = new List<object>();
+        var userInput = new List<object>();
         
         if (!string.IsNullOrWhiteSpace(command.SystemPrompt))
         {
             messages.Add(new { role = "system", content = command.SystemPrompt });
         }
         
-        messages.Add(new
+        userInput.Add(new
         {
-            type = "input_audio",
+            type = "audio_url",
             audio_url = new
             {
                 url = command.AudioUrl
@@ -44,8 +45,10 @@ public class QwenAudioModelProvider : IAudioModelProvider
         
         if (!string.IsNullOrWhiteSpace(command.UserPrompt))
         {
-            messages.Add(new { type = "text", text = command.UserPrompt });
+            userInput.Add(new { type = "text", text = command.UserPrompt });
         }
+        
+        messages.Add(new { role = "user", content = userInput });
         
         var requestBody = new
         {
