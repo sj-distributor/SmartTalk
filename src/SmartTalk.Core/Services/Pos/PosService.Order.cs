@@ -76,7 +76,7 @@ public partial class PosService
             return;
         }
     
-        await SafetyPlaceOrderAsync(order, store, token, isRetry, 0, cancellationToken).ConfigureAwait(false);
+        await SafetyPlaceOrderAsync(order.Id, store, token, isRetry, 0, cancellationToken).ConfigureAwait(false);
     
         if (order.Status == PosOrderStatus.Sent && order.IsPush)
             _smartTalkBackgroundJobClient.Enqueue(() => CreateMerchPrinterOrderAsync(store.Id, order.Id, cancellationToken));
@@ -497,14 +497,21 @@ public partial class PosService
         }
     }
 
-    public async Task SafetyPlaceOrderAsync(PosOrder order, CompanyStore store, string token, bool isWithRetry, int retryCount, CancellationToken cancellationToken)
+    public async Task SafetyPlaceOrderAsync(int orderId, CompanyStore store, string token, bool isWithRetry, int retryCount, CancellationToken cancellationToken)
     {
         const int MaxRetryCount = 3;
-        var lockKey = $"place-order-key-{order.Id}";
+        var lockKey = $"place-order-key-{orderId}";
         
         await _redisSafeRunner.ExecuteWithLockAsync(lockKey, async () =>
         {
-            if(order.Status == PosOrderStatus.Sent) throw new Exception("Order is already sent.");
+            var order = await _posDataProvider.GetPosOrderByIdAsync(orderId: orderId, cancellationToken: cancellationToken).ConfigureAwait(false);
+            
+            if (order.Status == PosOrderStatus.Sent)
+            {
+                Log.Information("Order {OrderId} is already sent, skip placing again.", order.Id);
+                
+                return;
+            }
 
             if (isWithRetry) order.RetryCount = retryCount;
             
@@ -519,7 +526,7 @@ public partial class PosService
 
                 if (status == PosOrderStatus.Error && isWithRetry && order.RetryCount < MaxRetryCount)
                     _smartTalkBackgroundJobClient.Schedule(() => SafetyPlaceOrderAsync(
-                        order, store, token, true, order.RetryCount + 1, cancellationToken), TimeSpan.FromSeconds(30), HangfireConstants.InternalHostingRestaurant);
+                        order.Id, store, token, true, order.RetryCount + 1, cancellationToken), TimeSpan.FromSeconds(30), HangfireConstants.InternalHostingRestaurant);
                 
                 return;
             }
@@ -673,7 +680,7 @@ public partial class PosService
 
             if (isRetry && order.RetryCount < MaxRetryCount)
                 _smartTalkBackgroundJobClient.Schedule(() => SafetyPlaceOrderAsync(
-                    order, store, token, true, order.RetryCount + 1, cancellationToken), TimeSpan.FromSeconds(30), HangfireConstants.InternalHostingRestaurant);
+                    order.Id, store, token, true, order.RetryCount + 1, cancellationToken), TimeSpan.FromSeconds(30), HangfireConstants.InternalHostingRestaurant);
         }
         catch (Exception ex)
         {
@@ -681,7 +688,7 @@ public partial class PosService
             
             if (isRetry && order.RetryCount < MaxRetryCount)
                 _smartTalkBackgroundJobClient.Schedule(() => SafetyPlaceOrderAsync(
-                    order, store, token, true, order.RetryCount + 1, cancellationToken), TimeSpan.FromSeconds(30), HangfireConstants.InternalHostingRestaurant);
+                    order.Id, store, token, true, order.RetryCount + 1, cancellationToken), TimeSpan.FromSeconds(30), HangfireConstants.InternalHostingRestaurant);
 
             Log.Information("Place order {@Order} failed: {@Exception}", order, ex);
         }
