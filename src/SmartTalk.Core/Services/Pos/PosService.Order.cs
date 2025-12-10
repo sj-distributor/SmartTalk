@@ -10,6 +10,7 @@ using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Pos;
 using SmartTalk.Messages.Enums.Caching;
 using SmartTalk.Messages.Enums.Pos;
+using SmartTalk.Messages.Enums.Printer;
 using SmartTalk.Messages.Events.Pos;
 using SmartTalk.Messages.Requests.Pos;
 
@@ -94,7 +95,8 @@ public partial class PosService
             OrderId = orderId,
             StoreId = storeId,
             PrinterMac = merchPrinter?.PrinterMac,
-            PrintDate = DateTimeOffset.Now
+            PrintDate = DateTimeOffset.Now,
+            PrintFormat = PrintFormat.Order
         }, cancellationToken).ConfigureAwait(false);
     }
 

@@ -43,4 +43,7 @@ public class MerchPrinterOrder : IEntity
 
     [Column("printer_mac")]
     public string PrinterMac { get; set; }
+
+    [Column("print_format")]
+    public PrintFormat PrintFormat { get; set; }
 }
