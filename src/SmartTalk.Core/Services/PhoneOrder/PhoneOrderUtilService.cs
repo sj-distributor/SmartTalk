@@ -179,7 +179,7 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
     
     private async Task<PosOrder> MatchSimilarProductsAsync(PhoneOrderRecord record, PhoneOrderDetailDto foods, CancellationToken cancellationToken)
     {
-        if (record == null || foods?.FoodDetails == null || foods.FoodDetails.Count == 0) return null;
+        if (record == null || foods?.FoodDetails == null) return null;
         
         var store = await _posDataProvider.GetPosStoreByAgentIdAsync(record.AgentId, cancellationToken).ConfigureAwait(false);
         
