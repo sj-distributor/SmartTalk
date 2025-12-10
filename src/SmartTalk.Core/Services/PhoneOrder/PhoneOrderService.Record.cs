@@ -73,18 +73,7 @@ public partial class PhoneOrderService
         var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds, request.Name, utcStart, utcEnd, request.OrderId, request.DialogueScenarios, request.AssistantId, cancellationToken).ConfigureAwait(false);
         
         var enrichedRecords = _mapper.Map<List<PhoneOrderRecordDto>>(records);
-
-        var updateUserIds = enrichedRecords.Where(r => r.UpdateScenarioUserId.HasValue).Select(r => r.UpdateScenarioUserId!.Value).Distinct().ToList();
-
-        var userAccounts = updateUserIds.Count > 0 ? await _accountDataProvider.GetUserAccountByUserIdsAsync(updateUserIds, cancellationToken).ConfigureAwait(false) : new List<UserAccount>();
-
-        var userDict = (userAccounts ?? new List<UserAccount>()).ToDictionary(u => u.Id, u => u.UserName);
-
-        enrichedRecords.ForEach(r =>
-        {
-            if (r.UpdateScenarioUserId.HasValue && userDict.TryGetValue(r.UpdateScenarioUserId.Value, out var name)) { r.UpdateScenarioUserName = name; }
-        });
-
+        
         await BuildRecordUnreviewDataAsync(enrichedRecords, cancellationToken).ConfigureAwait(false);
         
         return new GetPhoneOrderRecordsResponse
@@ -110,6 +99,7 @@ public partial class PhoneOrderService
         var originalScenario = record.Scenario;
         
         record.Scenario = command.DialogueScenarios;
+        record.IsModifyScenario = true;
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record,  true, cancellationToken);
         
         await _phoneOrderDataProvider.AddPhoneOrderRecordScenarioHistoryAsync(new PhoneOrderRecordScenarioHistory
