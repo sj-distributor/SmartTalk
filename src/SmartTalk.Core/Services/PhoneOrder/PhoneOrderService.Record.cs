@@ -51,6 +51,8 @@ public partial interface IPhoneOrderService
     Task<GetPhoneOrderRecordReportResponse> GetPhoneOrderRecordReportByCallSidAsync(GetPhoneOrderRecordReportRequest request, CancellationToken cancellationToken);
     
     Task<GetPhoneOrderDataDashboardResponse> GetPhoneOrderDataDashboardAsync(GetPhoneOrderDataDashboardRequest request, CancellationToken cancellationToken);
+    
+    Task<GetPhoneOrderRecordScenarioResponse> GetPhoneOrderRecordScenarioAsync(GetPhoneOrderRecordScenarioRequest request, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderService
@@ -108,9 +110,16 @@ public partial class PhoneOrderService
         var originalScenario = record.Scenario;
         
         record.Scenario = command.DialogueScenarios;
-        record.UpdateScenarioUserId = user.Id;
-
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record,  true, cancellationToken);
+        
+        await _phoneOrderDataProvider.AddPhoneOrderRecordScenarioHistoryAsync(new PhoneOrderRecordScenarioHistory
+        {
+            RecordId = record.Id,
+            Scenario = record.Scenario.GetValueOrDefault(),
+            UpdateScenarioUserId = user.Id,
+            UserName = user.UserName,
+            CreatedDate = DateTime.UtcNow
+        }, true, cancellationToken).ConfigureAwait(false);
 
         return new PhoneOrderRecordUpdatedEvent
         {
@@ -1059,5 +1068,15 @@ public partial class PhoneOrderService
         records.ForEach(x => x.IsUnreviewed = unreviewedRecordIds.Contains(x.Id));
         
         Log.Information("Enrich complete records: {@Records}", records);
+    }
+    
+    public async Task<GetPhoneOrderRecordScenarioResponse> GetPhoneOrderRecordScenarioAsync(GetPhoneOrderRecordScenarioRequest request, CancellationToken cancellationToken)
+    {
+        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordScenarioHistoryAsync(request.RecordId, cancellationToken).ConfigureAwait(false);
+        
+        return new GetPhoneOrderRecordScenarioResponse
+        {
+            Data = _mapper.Map<List<PhoneOrderRecordScenarioHistoryDto>>(records)
+        };
     }
 }
