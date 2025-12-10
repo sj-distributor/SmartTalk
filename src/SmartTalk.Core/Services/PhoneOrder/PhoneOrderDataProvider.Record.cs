@@ -59,7 +59,7 @@ public partial interface IPhoneOrderDataProvider
 
     Task UpdatePhoneOrderRecordReportsAsync(List<PhoneOrderRecordReport> reports, bool forceSave = true, CancellationToken cancellationToken = default);
     
-    Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsByAgentIdsAsync(List<int> agentIds, CancellationToken cancellationToken);
+    Task<Dictionary<int, int>> GetSimplePhoneOrderRecordsByAgentIdsAsync(List<int> agentIds, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderDataProvider
@@ -344,8 +344,11 @@ public partial class PhoneOrderDataProvider
         if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsByAgentIdsAsync(List<int> agentIds, CancellationToken cancellationToken)
+    public async Task<Dictionary<int, int>> GetSimplePhoneOrderRecordsByAgentIdsAsync(List<int> agentIds, CancellationToken cancellationToken)
     {
-        return await _repository.QueryNoTracking<PhoneOrderRecord>().Where(x => x.Status == PhoneOrderRecordStatus.Sent && agentIds.Contains(x.AgentId)).AsNoTracking().ToListAsync(cancellationToken).ConfigureAwait(false);
+        return await _repository.QueryNoTracking<PhoneOrderRecord>()
+            .Where(x => x.Status == PhoneOrderRecordStatus.Sent && agentIds.Contains(x.AgentId))
+            .Select(x => new { x.Id, x.AgentId })
+            .ToDictionaryAsync(k => k.Id, v => v.AgentId, cancellationToken).ConfigureAwait(false);
     }
 }
