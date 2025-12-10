@@ -6,8 +6,6 @@ namespace SmartTalk.Messages.Commands.SpeechMatics;
 
 public class AnalyzeAudioCommand : ICommand
 {
-    public string AudioBase64 { get; set; }
-    
     public byte[] AudioContent { get; set; }
     
     public string AudioUrl { get; set; }
