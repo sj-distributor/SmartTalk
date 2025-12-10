@@ -86,18 +86,7 @@ public partial class PhoneOrderService
                 r.UnSendCount = posOrderLookup.TryGetValue(r.Id, out var count) ? count : 0;
                 return r;
             }).ToList();
-
-        var updateUserIds = enrichedRecords.Where(r => r.UpdateScenarioUserId.HasValue).Select(r => r.UpdateScenarioUserId!.Value).Distinct().ToList();
-
-        var userAccounts = updateUserIds.Count > 0 ? await _accountDataProvider.GetUserAccountByUserIdsAsync(updateUserIds, cancellationToken).ConfigureAwait(false) : new List<UserAccount>();
-
-        var userDict = (userAccounts ?? new List<UserAccount>()).ToDictionary(u => u.Id, u => u.UserName);
-
-        enrichedRecords.ForEach(r =>
-        {
-            if (r.UpdateScenarioUserId.HasValue && userDict.TryGetValue(r.UpdateScenarioUserId.Value, out var name)) { r.UpdateScenarioUserName = name; }
-        });
-
+        
         return new GetPhoneOrderRecordsResponse
         {
             Data = enrichedRecords
@@ -117,6 +106,7 @@ public partial class PhoneOrderService
             throw new Exception($"User not found: {command.UserId}");
         
         record.Scenario = command.DialogueScenarios;
+        record.IsModifyScenario = true;
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record,  true, cancellationToken);
         
         await _phoneOrderDataProvider.AddPhoneOrderRecordScenarioHistoryAsync(new PhoneOrderRecordScenarioHistory

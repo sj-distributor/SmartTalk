@@ -58,7 +58,5 @@ public class PhoneOrderRecordDto
 
     public int? UnSendCount { get; set; }
     
-    public int? UpdateScenarioUserId { get; set; }
-    
-    public string UpdateScenarioUserName { get; set; }
+    public bool IsModifyScenario { get; set; }
 }

@@ -96,6 +96,9 @@ public class PhoneOrderRecord : IEntity
     [Column("remark")]
     public string Remark { get; set; }
     
+    [Column("is_modify_scenario")]
+    public bool IsModifyScenario { get; set; }
+    
     [NotMapped]
     public UserAccount UserAccount { get; set; }
     
