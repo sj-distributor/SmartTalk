@@ -20,6 +20,9 @@ public class AiSpeechAssistantTimer : IEntity
     [Column("alter_content")]
     public string AlterContent { get; set; }
     
+    [Column("skip_round")]
+    public int? SkipRound { get; set; }
+    
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
 }
