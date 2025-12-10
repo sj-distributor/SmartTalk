@@ -1064,9 +1064,13 @@ public partial class PhoneOrderService
     {
         var records = await _phoneOrderDataProvider.GetPhoneOrderRecordScenarioHistoryAsync(request.RecordId, cancellationToken).ConfigureAwait(false);
         
+        var result = _mapper.Map<List<PhoneOrderRecordScenarioHistoryDto>>(records);
+        
+        Log.Information("Get phone order record scenario: {@Result}", result);
+        
         return new GetPhoneOrderRecordScenarioResponse
         {
-            Data = _mapper.Map<List<PhoneOrderRecordScenarioHistoryDto>>(records)
+            Data = result
         };
     }
 }
