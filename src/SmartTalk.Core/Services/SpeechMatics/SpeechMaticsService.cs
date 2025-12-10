@@ -837,10 +837,6 @@ public class SpeechMaticsService : ISpeechMaticsService
     
     public async Task GenerateAiDraftAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant assistant, PhoneOrderRecord record, CancellationToken cancellationToken)
     {
-        agent = new Agent { Id = 403, Type = AgentType.PosCompanyStore };
-        assistant = new Domain.AISpeechAssistant.AiSpeechAssistant { IsAllowOrderPush = false};
-        record = new PhoneOrderRecord { Id = 30220, CustomerName = "孙先生", PhoneNumber = "9787552561", TranscriptionText = "交談主題：客戶下單餐點\n\n來電號碼：未知\n\n內容摘要: 客戶來電要求下單，選擇自提方式。提供了姓名孫先生，並訂購了兩杯港式奶茶和兩份海南雞湯麵。確認訂單後，客戶表示沒有其他需求。\n\n客人情感與情緒: 語氣平和，有禮貌，對下單流程熟悉，情緒穩定。\n\n待辦事件:\n1. 確認訂單準備進度。\n2. 準備自提取餐的相關安排。\n\n客人下單內容：\n1. 港式奶茶（2杯）\n2. 海南雞湯麵（2份）" };
-       
         if (agent.Type != AgentType.PosCompanyStore) return;
         
         var menuItems = await GeneratePosMenuItemsAsync(agent.Id, cancellationToken).ConfigureAwait(false);
