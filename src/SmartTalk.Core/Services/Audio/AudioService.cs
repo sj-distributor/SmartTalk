@@ -60,19 +60,4 @@ public class AudioService : IAudioService
         
         return audioData;
     }
-
-    public class AudioData
-    {
-        public AudioDataType Type { get; set; }
-        
-        public BinaryData BinaryContent { get; set; }
-        
-        public string Url { get; set; }
-    }
-
-    public enum AudioDataType
-    {
-        Binary,
-        Url
-    }
 }
