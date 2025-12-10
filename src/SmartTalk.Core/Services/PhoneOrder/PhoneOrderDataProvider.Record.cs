@@ -60,6 +60,10 @@ public partial interface IPhoneOrderDataProvider
     Task UpdatePhoneOrderRecordReportsAsync(List<PhoneOrderRecordReport> reports, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task<Dictionary<int, int>> GetSimplePhoneOrderRecordsByAgentIdsAsync(List<int> agentIds, CancellationToken cancellationToken);
+    
+    Task<PhoneOrderRecordScenarioHistory> AddPhoneOrderRecordScenarioHistoryAsync(PhoneOrderRecordScenarioHistory scenarioHistory, bool forceSave = true, CancellationToken cancellationToken = default);
+
+    Task<List<PhoneOrderRecordScenarioHistory>> GetPhoneOrderRecordScenarioHistoryAsync(int recordId, CancellationToken cancellationToken = default);
 }
 
 public partial class PhoneOrderDataProvider
@@ -350,5 +354,20 @@ public partial class PhoneOrderDataProvider
             .Where(x => x.Status == PhoneOrderRecordStatus.Sent && agentIds.Contains(x.AgentId))
             .Select(x => new { x.Id, x.AgentId })
             .ToDictionaryAsync(k => k.Id, v => v.AgentId, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<PhoneOrderRecordScenarioHistory> AddPhoneOrderRecordScenarioHistoryAsync(PhoneOrderRecordScenarioHistory scenarioHistory, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.InsertAsync(scenarioHistory, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave)
+            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        
+        return scenarioHistory;
+    }
+    
+    public async Task<List<PhoneOrderRecordScenarioHistory>> GetPhoneOrderRecordScenarioHistoryAsync(int recordId, CancellationToken cancellationToken = default)
+    {
+        return await _repository.Query<PhoneOrderRecordScenarioHistory>().Where(x => x.RecordId == recordId).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }
