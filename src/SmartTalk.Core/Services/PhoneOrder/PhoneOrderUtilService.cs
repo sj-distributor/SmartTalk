@@ -221,8 +221,6 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
         return await _redisSafeRunner.ExecuteWithLockAsync($"generate-order-number-{store.Id}", async() =>
         {
             var items = BuildPosOrderItems(products, similarResults);
-
-            if (items.Count == 0) return null;
             
             var orderNo = await GenerateOrderNumberAsync(store, cancellationToken).ConfigureAwait(false);
             
