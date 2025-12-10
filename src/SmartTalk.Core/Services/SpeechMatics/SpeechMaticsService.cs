@@ -73,7 +73,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         TwilioSettings twilioSettings,
         IPosUtilService posUtilService,
         ISmartiesClient smartiesClient,
-        PosDataProvider posDataProvider,
+        IPosDataProvider posDataProvider,
         TranslationClient translationClient,
         IPhoneOrderService phoneOrderService,
         ISalesDataProvider salesDataProvider,
