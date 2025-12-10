@@ -849,6 +849,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
                 Recording = recordingUri,
                 OrderId = oneOrderGroup.Key,
                 CustomerId = customerId,
+                OrderDate = sapStartDate,
                 Detail = oneOrderGroup.Select((i, index) => new AutoTestInputDetail
                 {
                     SerialNumber = index + 1,
