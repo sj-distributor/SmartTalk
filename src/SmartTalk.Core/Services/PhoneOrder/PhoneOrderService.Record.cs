@@ -74,8 +74,7 @@ public partial class PhoneOrderService
         { return new GetPhoneOrderRecordsResponse { Data = new List<PhoneOrderRecordDto>() }; }
         
         var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds, request.Name, utcStart, utcEnd, request.OrderId, request.DialogueScenarios, cancellationToken).ConfigureAwait(false);
-        
-                return r;
+
         var enrichedRecords = _mapper.Map<List<PhoneOrderRecordDto>>(records);
         
         return new GetPhoneOrderRecordsResponse
