@@ -46,7 +46,8 @@ public class RealtimeAiService : IRealtimeAiService
     private WebSocket _webSocket;
     private IRealtimeAiConversationEngine _conversationEngine;
     private Domain.AISpeechAssistant.AiSpeechAssistant _speechAssistant;
-    
+
+    private int _round;
     private string _sessionId;
     private volatile bool _isAiSpeaking;
     private bool _hasHandledAudioBuffer;
@@ -73,6 +74,7 @@ public class RealtimeAiService : IRealtimeAiService
         _inactivityTimerManager = inactivityTimerManager;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
 
+        _round = 0;
         _webSocket = null;
         _isAiSpeaking = false;
         _speechAssistant = null;
@@ -247,6 +249,7 @@ public class RealtimeAiService : IRealtimeAiService
 
     private async Task OnAiTurnCompletedAsync(object data)
     {
+        _round += 1;
         _isAiSpeaking = false;
         
         var turnCompleted = new
@@ -255,9 +258,9 @@ public class RealtimeAiService : IRealtimeAiService
             session_id = _streamSid
         };
         
-        if (_speechAssistant.Timer != null)
+        if (_speechAssistant.Timer != null && (_speechAssistant.Timer.SkipRound.HasValue && _speechAssistant.Timer.SkipRound.Value < _round || !_speechAssistant.Timer.SkipRound.HasValue))
             StartInactivityTimer(_speechAssistant.Timer.TimeSpanSeconds, _speechAssistant.Timer.AlterContent);
-        
+
         await _webSocket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(turnCompleted))), WebSocketMessageType.Text, true, CancellationToken.None);
         Log.Information("Realtime turn completed, {@data}", data);
     }
