@@ -35,5 +35,7 @@ public class PhoneOrderMapping : Profile
         CreateMap<EasyPosLocalizationsDto, PhoneCallOrderItemModifierLocalization>().ReverseMap();
         
         CreateMap<PhoneOrderRecordReportDto, PhoneOrderRecordReport>().ReverseMap();
+        
+        CreateMap<PhoneOrderRecordScenarioHistory, PhoneOrderRecordScenarioHistoryDto>().ReverseMap();
     }
 }
