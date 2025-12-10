@@ -41,9 +41,9 @@ public class AudioService : IAudioService
         };
     }
 
-    private async Task<AudioData> GetAudioBinaryDataAsync(AnalyzeAudioCommand command, CancellationToken cancellationToken)
+    private async Task<BinaryData> GetAudioBinaryDataAsync(AnalyzeAudioCommand command, CancellationToken cancellationToken)
     {
-        var audioData = new AudioData();
+        BinaryData audioData;
 
         if (!string.IsNullOrWhiteSpace(command.AudioUrl))
         {
@@ -51,21 +51,13 @@ public class AudioService : IAudioService
 
             await using var stream = await httpClient.GetStreamAsync(command.AudioUrl, cancellationToken).ConfigureAwait(false);
 
-            audioData.Type = AudioDataType.Binary;
-            audioData.BinaryContent = await BinaryData.FromStreamAsync(stream, cancellationToken);
-        }
-        else if (command.AudioContent is not null && command.AudioContent.Length != 0)
-        {
-
-            audioData.Type = AudioDataType.Binary;
-            audioData.BinaryContent = BinaryData.FromBytes(command.AudioContent);
+            audioData = await BinaryData.FromStreamAsync(stream, cancellationToken);
         }
         else
         {
-            audioData.Type = AudioDataType.Base64;
-            audioData.Base64String = command.AudioBase64;
+            audioData = BinaryData.FromBytes(command.AudioContent);
         }
-
+        
         return audioData;
     }
 
@@ -75,12 +67,12 @@ public class AudioService : IAudioService
         
         public BinaryData BinaryContent { get; set; }
         
-        public string Base64String { get; set; }
+        public string Url { get; set; }
     }
 
     public enum AudioDataType
     {
         Binary,
-        Base64
+        Url
     }
 }
