@@ -1130,11 +1130,9 @@ public partial class PhoneOrderService
     
     private async Task BuildRecordUnreviewDataAsync(List<PhoneOrderRecordDto> records, CancellationToken cancellationToken)
     {
-        var orders = await _posDataProvider.GetAiDraftOrdersByRecordIdsAsync(records.Select(x => x.Id).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
+        var unreviewedRecordIds = await _posDataProvider.GetAiDraftOrderRecordIdsByRecordIdsAsync(records.Select(x => x.Id).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        Log.Information("Get store unreview orders: {@Orders}", orders);
-        
-        var unreviewedRecordIds = orders.Where(x => x.RecordId.HasValue).Select(x => x.RecordId.Value).ToHashSet();
+        Log.Information("Get store unreview record ids: {@UnreviewedRecordIds}", unreviewedRecordIds);
         
         records.ForEach(x => x.IsUnreviewed = unreviewedRecordIds.Contains(x.Id));
         
