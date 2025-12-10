@@ -1,6 +1,7 @@
 using System.ClientModel;
 using OpenAI;
 using OpenAI.Chat;
+using Serilog;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Settings.Qwen;
 using SmartTalk.Messages.Commands.SpeechMatics;
@@ -68,7 +69,10 @@ public class QwenAudioModelProvider : IAudioModelProvider
             requestBody,
             cancellationToken,
             timeout: TimeSpan.FromMinutes(10),
-            headers: headers).ConfigureAwait(false);
+            headers: headers, 
+            isNeedToReadErrorContent: true).ConfigureAwait(false);
+        
+        Log.Information("Received QwenChatCompletionResponse {@Response}", response);
         
         return response?.Choices?.FirstOrDefault()?.Message?.Content ?? string.Empty;
     }
