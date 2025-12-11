@@ -17,6 +17,8 @@ public class AutoTestInputJsonDto
     [JsonConverter(typeof(EmptyStringConverter))]
     public string PromptText { get; set; }
     
+    public DateTime OrderDate { get; set; } 
+    
     public List<AutoTestInputDetail> Detail { get; set; } = new();
 }
 
