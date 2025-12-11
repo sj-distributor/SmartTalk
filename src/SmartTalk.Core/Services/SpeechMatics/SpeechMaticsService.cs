@@ -14,6 +14,7 @@ using Smarties.Messages.Requests.Ask;
 using SmartTalk.Core.Constants;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.PhoneOrder;
+using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Http;
@@ -393,7 +394,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         var customerItemsCacheList = await _salesDataProvider.GetCustomerItemsCacheBySoldToIdsAsync(soldToIds, cancellationToken);
         var customerItemsString = string.Join(Environment.NewLine, soldToIds.Select(id => customerItemsCacheList.FirstOrDefault(c => c.Filter == id)?.CacheValue ?? ""));
         
-        var menuItems = await GeneratePosMenuItemsAsync(agent.Id, cancellationToken).ConfigureAwait(false);
+        var (_, menuItems) = await GeneratePosMenuItemsAsync(agent.Id, false, cancellationToken).ConfigureAwait(false);
 
         var audioData = BinaryData.FromBytes(audioContent);
         List<ChatMessage> messages =
@@ -772,15 +773,15 @@ public class SpeechMaticsService : ISpeechMaticsService
         return result;
     }
 
-    private async Task<string> GeneratePosMenuItemsAsync(int agentId, CancellationToken cancellationToken)
+    private async Task<(List<PosProduct> Products, string MenuItems)> GeneratePosMenuItemsAsync(int agentId, bool isWithProductId = false, CancellationToken cancellationToken = default)
     {
         var storeAgent = await _posDataProvider.GetPosAgentByAgentIdAsync(agentId, cancellationToken).ConfigureAwait(false);
 
-        if (storeAgent == null) return null;
+        if (storeAgent == null) return ([], null);
         
         var categoryProductsPairs = await _posDataProvider.GetPosCategoryAndProductsAsync(storeAgent.StoreId, cancellationToken).ConfigureAwait(false);
         
-        var categoryProductsLookup = categoryProductsPairs.GroupBy(x => x.Item1).ToDictionary(x => x.Key, x => x.Select(p => p.Item2).ToList());
+        var categoryProductsLookup = categoryProductsPairs.GroupBy(x => x.Item1).ToDictionary(x => x.Key, x => x.Select(p => p.Item2).DistinctBy(d => d.ProductId).ToList());
 
         var menuItems = string.Empty;
         
@@ -795,35 +796,7 @@ public class SpeechMaticsService : ISpeechMaticsService
             foreach (var product in products)
             {
                 var productNames = JsonConvert.DeserializeObject<PosNamesLocalization>(product.Names);
-                var line = $"{idx}. {productNames.Cn.Name}({product.ProductId})：${product.Price:F2}";
-
-                if (!string.IsNullOrEmpty(product.Modifiers))
-                {
-                    var modifiers = JsonConvert.DeserializeObject<List<EasyPosResponseModifierGroups>>(product.Modifiers);
-                    var modifierNames = new List<string>();
-                    int minSelect = 0, maxSelect = 0, maxRep = 0;
-
-                    foreach (var modifier in modifiers)
-                    {
-                        if (modifier.ModifierProducts != null)
-                        {
-                            foreach (var mp in modifier.ModifierProducts)
-                            {
-                                var nameLoc = mp.Localizations.Find(l => l.LanguageCode == "zh_CN" && l.Field == "name");
-                                
-                                if (nameLoc != null) modifierNames.Add(nameLoc.Value);
-                            }
-                        }
-                        minSelect = modifier.MinimumSelect;
-                        maxSelect = modifier.MaximumSelect;
-                        maxRep = modifier.MaximumRepetition;
-                    }
-
-                    if (modifierNames.Count > 0)
-                    {
-                        line += $"，规格：{string.Join("、", modifierNames)}，要求最少选{minSelect}，最多选{maxSelect}，最大可重复选{maxRep}相同的";
-                    }
-                }
+                var line = $"{idx}. {productNames.Cn.Name}{(isWithProductId ? $"({product.ProductId})" : "")}：${product.Price:F2}";
                 
                 idx++;
                 productDetails += line + "\n";
@@ -832,26 +805,56 @@ public class SpeechMaticsService : ISpeechMaticsService
             menuItems += productDetails + "\n";
         }
         
-        return menuItems.TrimEnd('\r', '\n');
+        return (categoryProductsLookup.SelectMany(x => x.Value).ToList(), menuItems.TrimEnd('\r', '\n'));
+    }
+    
+    private string BuildItemModifiers(List<EasyPosResponseModifierGroups> modifiers)
+    {
+        if (modifiers == null || modifiers.Count == 0) return null;
+        
+        var modifiersDetail = "规格：\n";
+
+        foreach (var modifier in modifiers)
+        {
+            var modifierNames = new List<string>();
+            
+            if (modifier.ModifierProducts != null && modifier.ModifierProducts.Count != 0)
+            {
+                foreach (var mp in modifier.ModifierProducts)
+                {
+                    var nameLoc = mp.Localizations.Find(l => l.LanguageCode == "zh_CN" && l.Field == "name");
+                            
+                    if (nameLoc != null && !string.IsNullOrWhiteSpace(nameLoc.Value)) modifierNames.Add($"{nameLoc.Value}({mp.Id})");
+                }
+            }
+            
+            if (modifierNames.Count > 0)
+                modifiersDetail += $"{string.Join("、", modifierNames)}，共{modifierNames.Count}个规格，要求最少选{modifier.MinimumSelect}个规格，最多选{modifier.MaximumSelect}规格，每个最大可重复选{modifier.MaximumRepetition}相同的";
+        }
+        
+        return modifiersDetail.TrimEnd('\r', '\n');
     }
     
     public async Task GenerateAiDraftAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant assistant, PhoneOrderRecord record, CancellationToken cancellationToken)
     {
-        if (agent.Type != AgentType.PosCompanyStore) return;
+        if (agent.Type != AgentType.PosCompanyStore || !assistant.IsAutoGenerateOrder) return;
         
-        var menuItems = await GeneratePosMenuItemsAsync(agent.Id, cancellationToken).ConfigureAwait(false);
-    
+        var (products, menuItems) = await GeneratePosMenuItemsAsync(agent.Id, true, cancellationToken).ConfigureAwait(false);
+        
         var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
         
         var systemPrompt =
-            "你是一名訂單分析助手。請從下面的客戶分析報告文字中提取所有下單的菜品、數量、價格、規格，並且用菜單列表盡力匹配每個菜品。" +
+            "你是一名訂單分析助手。請從下面的客戶分析報告文字中提取客人的姓名、电话、配送类型以及配送地址，以及所有下單的菜品、數量、規格、备注，並且用菜單列表盡力匹配每個菜品。" +
             "如果報告中提到了送餐類型，請提取送餐類型 type (0: 自提订单，1：配送订单)。" +
-            "請嚴格傳回一個 JSON 對象，頂層字段為 \"type\"，items（数组，元素包含 productId, name, quantity, price, specification）。\n" +
+            "如果報告中提到了客户的电话，請提取客户的电话 phoneNumber 。" +
+            "如果報告中提到了客户的姓名，請提取客户的姓名 customerName 。" +
+            "如果報告中提到了客户的配送地址，請提取客户的配送地址 customerAddress，若无则忽略 。" +
+            "請嚴格傳回一個 JSON 對象，頂層字段為 \"type\"，items（数组，元素包含 productId：菜品ID, name：菜品名, quantity：数量, specification：规格, notes：菜品的备注）。\n" +
             "範例：\n" +
-            "{\"type\":0,\"items\":[{\"productId\":\"9778779965031491\",\"name\":\"海南雞湯麵\",\"quantity\":1,\"price\":\"13.00\",\"specification\":null}]}" +
-            "{\"type\":1,\"items\":[{\"productId\":\"9225097809167409\",\"name\":\"港式燒鴨\",\"quantity\":1,\"price\":\"13.00\",\"specification\":\"半隻\"}]} \n\n" +
+            "{\"type\":0,\"phoneNumber\":\"40085235698\",\"customerName\":\"刘先生\",\"customerAddress\":\"中环广场一座\",\"items\":[{\"productId\":\"9778779965031491\",\"name\":\"海南雞湯麵\",\"quantity\":1,\"specification\":null,\"notes\":\"不要葱花\"}]}" +
+            "{\"type\":1,\"phoneNumber\":\"40026235458\",\"customerName\":\"吴先生\",\"customerAddress\":\"中环广场三座\",\"items\":[{\"productId\":\"9225097809167409\",\"name\":\"港式燒鴨\",\"quantity\":1,\"specification\":\"半隻\",\"notes\":\"要酱料包\",}]} \n\n" +
             "菜單列表：\n" + menuItems + "\n\n" +
-            "注意：\n1. 必須嚴格輸出 JSON，物件頂層字段必須是 \"type\"，不要有其他字段或額外說明。\n2. 提取的物料名稱需要為繁體中文。\n3. **如果客戶分析文本中沒有任何可識別的下單信息，請返回：{ \"type\":0, \"items\": [] }。不得臆造或猜測菜品。** \n" +
+            "注意：\n1. 必須嚴格按格式輸出 JSON，不要有其他字段或額外說明。\n2. **如果客戶分析文本中沒有任何可識別的下單信息，請返回：{ \"type\":0, \"items\": [] }。不得臆造或猜測菜品。** \n" +
             "請務必完整提取報告中每一個提到的菜品";
         
         Log.Information("Sending prompt with menu items to GPT: {Prompt}", systemPrompt);
@@ -868,6 +871,29 @@ public class SpeechMaticsService : ISpeechMaticsService
         {
             var aiDraftOrder = JsonConvert.DeserializeObject<AiDraftOrderDto>(completion.Value.Content.FirstOrDefault()?.Text ?? "");
             
+            Log.Information("Deserialize response to ai order: {AiOrder}", aiDraftOrder);
+            
+            var productModifiersLookup = products.Where(x => !string.IsNullOrWhiteSpace(x.Modifiers) && aiDraftOrder.Items.Select(p => p.ProductId).Contains(x.ProductId))
+                .ToDictionary(x => x.ProductId, x => JsonConvert.DeserializeObject<List<EasyPosResponseModifierGroups>>(x.Modifiers));
+            
+            Log.Information("Build product's modifiers: {@ModifiersLookUp}", productModifiersLookup);
+            
+            foreach (var aiDraftItem in aiDraftOrder.Items.Where(x => !string.IsNullOrEmpty(x.Specification)))
+            {
+                if (productModifiersLookup.TryGetValue(aiDraftItem.ProductId, out var modifiers))
+                {
+                    var builtModifiers = await GenerateSpecificationProductsAsync(modifiers, aiDraftItem.Specification, cancellationToken).ConfigureAwait(false);
+                    
+                    Log.Information("Matched modifiers: {@MatchedModifiers}", builtModifiers);
+                    
+                    if (builtModifiers == null || builtModifiers.Count == 0) continue;
+                    
+                    aiDraftItem.Modifiers = builtModifiers;
+                }
+            }
+            
+            Log.Information("Enrich ai draft order: {@EnrichAiDraftOrder}", aiDraftOrder);
+            
             var order = await _posUtilService.BuildPosOrderAsync(record, aiDraftOrder, cancellationToken).ConfigureAwait(false);
 
             if (assistant.IsAllowOrderPush)
@@ -877,5 +903,37 @@ public class SpeechMaticsService : ISpeechMaticsService
         {
             Log.Error(e, "Failed to extract products from report text");
         }
+    }
+
+    public async Task<List<AiDraftItemModifersDto>> GenerateSpecificationProductsAsync( List<EasyPosResponseModifierGroups> modifiers, string specification, CancellationToken cancellationToken)
+    {
+        var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
+        
+        var builtModifiers = BuildItemModifiers(modifiers);
+
+        var systemPrompt =
+            "你是一名菜品规格提取助手。請從下面的规格菜品中提取所有的规格菜品的ID、數量，並且用规格菜單列表盡力匹配每個规格菜品。" +
+            "minimumSelect 代表最少可选规格数量，若为0则可不选。" +
+            "maximumSelect 代表最多可选规格数量" +
+            "maximumRepetition 代表规格每个的最大可选数量" +
+            "請嚴格傳回一個 JSON 数组，里面可包含多个 JSON 对象，对象中的字段為 id、quantity 。\n" +
+            "範例：\n" +
+            "若最少可选规格数量为1，最多可选规格数量为3，规格每个的最大可选数量为2，则输出为：[{\"id\": \"11545690032571397\", \"quantity\": 1}]" +
+            "若最少可选规格数量为1，最多可选规格数量为3，规格每个的最大可选数量为2，则输出为：[{\"id\": \"11545690032571397\", \"quantity\": 1},{\"id\": \"11545690055571397\", \"quantity\": 2},1},{\"id\": \"11545958055571397\", \"quantity\": 2}]" +
+            "菜單列表：\n" + builtModifiers + "\n\n" +
+            "注意：\n1. 必須嚴格輸出 JSON，不要有其他字段或額外說明。\n" +
+            "請務必完整提取報告中每一個提到的菜品";
+
+        Log.Information("Sending prompt with modifier items to GPT: {Prompt}", systemPrompt);
+    
+        var messages = new List<ChatMessage>
+        {
+            new SystemChatMessage(systemPrompt),
+            new UserChatMessage("规格菜品：\n" + specification + "\n\n")
+        };
+    
+        var completion = await client.CompleteChatAsync(messages, new ChatCompletionOptions { ResponseModalities = ChatResponseModalities.Text, ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat() }, cancellationToken).ConfigureAwait(false);
+
+        return JsonConvert.DeserializeObject<List<AiDraftItemModifersDto>>(completion.Value.Content.FirstOrDefault()?.Text ?? "");
     }
 }
