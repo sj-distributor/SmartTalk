@@ -61,4 +61,10 @@ public class PosOrderDto
     public int? LastModifiedBy { get; set; }
 
     public DateTimeOffset? LastModifiedDate { get; set; }
+    
+    public int? SentBy { get; set; }
+    
+    public DateTimeOffset? SentTime { get; set; }
+    
+    public string SentByUsername { get; set; }
 }

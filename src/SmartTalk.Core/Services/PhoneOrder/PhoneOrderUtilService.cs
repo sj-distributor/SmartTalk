@@ -22,6 +22,7 @@ using SmartTalk.Messages.Dto.Pos;
 using SmartTalk.Messages.Dto.Restaurant;
 using SmartTalk.Messages.Dto.WebSocket;
 using SmartTalk.Messages.Enums.Caching;
+using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.Pos;
 
 namespace SmartTalk.Core.Services.PhoneOrder;
@@ -63,6 +64,8 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
     {
         try
         {
+            if (record.Scenario != DialogueScenarios.Order) return;
+            
             var shoppingCart = await GetOrderDetailsAsync(goalTexts, cancellationToken).ConfigureAwait(false);
             
             var (assistant, agent) = await _aiiSpeechAssistantDataProvider.GetAgentAndAiSpeechAssistantAsync(
@@ -83,7 +86,7 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
                     case AgentType.Sales:
                         await HandleSalesOrderAsync(cancellationToken).ConfigureAwait(false);
                         break;
-                    case AgentType.PosCompanyStore:
+                    default:
                         await HandlePosOrderAsync(order, cancellationToken).ConfigureAwait(false);
                         break;
                 }
@@ -106,12 +109,12 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
                     Content = new CompletionsStringContent("你是一款高度理解语言的智能助手，根据所有对话提取Client的food_details。" +
                                        "--规则：" +
                                        "1.根据全文帮我提取food_details，count是菜品的数量且为整数，如果你不清楚数量的时候，count默认为1，remark是对菜品的备注" +
-                                       "2.根据对话中Client的话为主提取food_details" +
+                                       "2.根据对话中Client的话为主提取food_details和 type (0: 自取订单，1：配送、外卖订单)" +
                                        "3.不要出现重复菜品，如果有特殊的要求请标明数量，例如我要两份粥，一份要辣，则标注一份要辣" +
-                                       "注意用json格式返回；规则：{\"food_details\": [{\"food_name\": \"菜品名字\",\"count\":减少的数量（负数）, \"remark\":null}]}}" +
+                                       "注意用json格式返回；规则：{\"food_details\": [{\"food_name\": \"菜品名字\",\"count\": -1, \"remark\":null}], \"type\": 0}" +
                                        "-样本与输出：" +
-                                       "input: Restaurant: . Client:Hi, 我可以要一個外賣嗎? Restaurant:可以啊,要什麼? Client: 我要幾個特價午餐,要一個蒙古牛,要一個蛋花湯跟這個,再要一個椒鹽排骨蛋花湯,然後再要一個魚香肉絲,不要辣的蛋花湯。Restaurant:可以吧。Client:然后再要一个春卷 再要一个法式柠檬柳粒。out:{\"food_details\": [{\"food_name\":\"蒙古牛\",\"count\":1, \"remark\":null},{\"food_name\":\"蛋花湯\",\"count\":3, \"remark\":},{\"food_name\":\"椒鹽排骨\",\"count\":1, \"remark\":null},{\"food_name\":\"魚香肉絲\",\"count\":1, \"remark\":null},{\"food_name\":\"春卷\",\"count\":1, \"remark\":null},{\"food_name\":\"法式柠檬柳粒\",\"count\":1, \"remark\":null}]}" +
-                                       "input: Restaurant: Moon house Client: Hi, may I please have a compound chicken with steamed white rice? Restaurant: Sure, 10 minutes, thank you. Client: Hold on, I'm not finished, I'm not finished Restaurant: Ok, Sir, First Sir, give me your phone number first One minute, One minute, One minute, One minute, Ok, One minute, One minute Client: Okay Restaurant: Ok, 213 Client: 590-6995 You guys want me to order something for you guys? Restaurant: 295, Rm Client: 590-2995 Restaurant: Ah, no, yeah, maybe they have an old one, so, that's why. Client: Okay, come have chicken with cream white rice Restaurant: Bye bye, okay, something else? Client: Good morning, Kidman Restaurant: Okay Client: What do you want?  An order of mongolian beef also with cream white rice please Restaurant: Client: Do you want something, honey?  No, on your plate, you want it?  Let's go to the level, that's a piece of meat.  Let me get an order of combination fried rice, please. Restaurant: Sure, Question is how many wires do we need? Client: Maverick, do you want to share a chicken chow mein with me, for later?  And a chicken chow mein, please.  So that's one compote chicken, one orange chicken, one mingolian beef, one combination rice, and one chicken chow mein, please. Restaurant: Okay, let's see how many, one or two Client: Moon house Restaurant: Tube Tuner, right? Client: Can you separate, can you put in a bag by itself, the combination rice and the mongolian beef with one steamed rice please, because that's for getting here with my daughter. Restaurant: Okay, so let me know.  Okay, so I'm going to leave it.  Okay.  Got it Client: Moon house Restaurant: I'll make it 20 minutes, OK?  Oh, I'm sorry, you want a Mangaloreng beef on a fried rice and one steamed rice separate, right?  Yes.  OK. Client: combination rice, the mongolian beans and the steamed rice separate in one bag. Restaurant: Okay, Thank you Thank you out:{\"food_details\":[{\"food_name\":\"compound chicken\",\"count\":1, \"remark\":null},{\"food_name\":\"orange chicken\",\"count\":1, \"remark\":null},{\"food_name\":\"mongolian beef\",\"count\":1, \"remark\":null},{\"food_name\":\"chicken chow mein\",\"count\":1, \"remark\":null},{\"food_name\":\"combination rice\",\"count\":1, \"remark\":null},{\"food_name\":\"white rice\",\"count\":2, \"remark\":null}]}"
+                                       "input: Restaurant: . Client:Hi, 我可以要一個外賣嗎? Restaurant:可以啊,要什麼? Client: 我要幾個特價午餐,要一個蒙古牛,要一個蛋花湯跟這個,再要一個椒鹽排骨蛋花湯,然後再要一個魚香肉絲,不要辣的蛋花湯。Restaurant:可以吧。Client:然后再要一个春卷 再要一个法式柠檬柳粒。Client: 30分钟后我自己来拿。 out:{\"food_details\": [{\"food_name\":\"蒙古牛\",\"count\":1, \"remark\":null},{\"food_name\":\"蛋花湯\",\"count\":3, \"remark\":null},{\"food_name\":\"椒鹽排骨\",\"count\":1, \"remark\":null},{\"food_name\":\"魚香肉絲\",\"count\":1, \"remark\":null},{\"food_name\":\"春卷\",\"count\":1, \"remark\":null},{\"food_name\":\"法式柠檬柳粒\",\"count\":1, \"remark\":null}], \"type\": 0}" +
+                                       "input: Restaurant: Moon house Client: Hi, may I please have a compound chicken with steamed white rice? Restaurant: Sure, 10 minutes, thank you. Client: Hold on, I'm not finished, I'm not finished Restaurant: Ok, Sir, First Sir, give me your phone number first One minute, One minute, One minute, One minute, Ok, One minute, One minute Client: Okay Restaurant: Ok, 213 Client: 590-6995 You guys want me to order something for you guys? Restaurant: 295, Rm Client: 590-2995 Restaurant: Ah, no, yeah, maybe they have an old one, so, that's why. Client: Okay, come have chicken with cream white rice Restaurant: Bye bye, okay, something else? Client: Good morning, Kidman Restaurant: Okay Client: What do you want?  An order of mongolian beef also with cream white rice please Restaurant: Client: Do you want something, honey?  No, on your plate, you want it?  Let's go to the level, that's a piece of meat.  Let me get an order of combination fried rice, please. Restaurant: Sure, Question is how many wires do we need? Client: Maverick, do you want to share a chicken chow mein with me, for later?  And a chicken chow mein, please.  So that's one compote chicken, one orange chicken, one mingolian beef, one combination rice, and one chicken chow mein, please. Restaurant: Okay, let's see how many, one or two Client: Moon house Restaurant: Tube Tuner, right? Client: Can you separate, can you put in a bag by itself, the combination rice and the mongolian beef with one steamed rice please, because that's for getting here with my daughter. Restaurant: Okay, so let me know.  Okay, so I'm going to leave it.  Okay.  Got it Client: Moon house Restaurant: I'll make it 20 minutes, OK?  Oh, I'm sorry, you want a Mangaloreng beef on a fried rice and one steamed rice separate, right?  Yes.  OK. Client: combination rice, the mongolian beans and the steamed rice separate in one bag. Restaurant: Okay. Client: Please deliver this to Beijing Road.Thank you. out:{\"food_details\":[{\"food_name\":\"compound chicken\",\"count\":1, \"remark\":null},{\"food_name\":\"orange chicken\",\"count\":1, \"remark\":null},{\"food_name\":\"mongolian beef\",\"count\":1, \"remark\":null},{\"food_name\":\"chicken chow mein\",\"count\":1, \"remark\":null},{\"food_name\":\"combination rice\",\"count\":1, \"remark\":null},{\"food_name\":\"white rice\",\"count\":2, \"remark\":null}], \"type\": 0}"
                                        )
                     
                 },
@@ -169,7 +172,7 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
     
     private async Task<PosOrder> MatchSimilarProductsAsync(PhoneOrderRecord record, PhoneOrderDetailDto foods, CancellationToken cancellationToken)
     {
-        if (record == null || foods?.FoodDetails == null || foods.FoodDetails.Count == 0) return null;
+        if (record == null || foods?.FoodDetails == null) return null;
         
         var store = await _posDataProvider.GetPosStoreByAgentIdAsync(record.AgentId, cancellationToken).ConfigureAwait(false);
         
@@ -205,10 +208,10 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
 
         var results = completedTasks.Where(x => x != null && x.Id != 0).ToList();
         
-        return await BuildPosOrderAsync(record, store, results, cancellationToken).ConfigureAwait(false);
+        return await BuildPosOrderAsync(foods.Type, record, store, results, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<PosOrder> BuildPosOrderAsync(PhoneOrderRecord record, CompanyStore store, List<SimilarResult> similarResults, CancellationToken cancellationToken)
+    private async Task<PosOrder> BuildPosOrderAsync(int type, PhoneOrderRecord record, CompanyStore store, List<SimilarResult> similarResults, CancellationToken cancellationToken)
     {
         var products = await _posDataProvider.GetPosProductsAsync(
             storeId: store.Id, ids: similarResults.Select(x => x.Id).ToList(), isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -218,8 +221,6 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
         return await _redisSafeRunner.ExecuteWithLockAsync($"generate-order-number-{store.Id}", async() =>
         {
             var items = BuildPosOrderItems(products, similarResults);
-
-            if (items.Count == 0) return null;
             
             var orderNo = await GenerateOrderNumberAsync(store, cancellationToken).ConfigureAwait(false);
             
@@ -227,14 +228,15 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
             {
                 StoreId = store.Id,
                 Name = record?.CustomerName ?? "Unknown",
-                Phone = record?.PhoneNumber ?? "Unknown",
+                Phone = !string.IsNullOrWhiteSpace(record?.PhoneNumber) ? record.PhoneNumber : !string.IsNullOrWhiteSpace(record?.IncomingCallNumber) ? record.IncomingCallNumber.Replace("+1", "") : "Unknown",
+                Address = record?.CustomerAddress,
                 OrderNo = orderNo,
                 Status = PosOrderStatus.Pending,
-                Count = products.Count,
+                Count = items.Sum(x => x.Quantity),
                 Tax = taxes,
                 Total = items.Sum(p => p.Price * p.Quantity) + taxes,
                 SubTotal = items.Sum(p => p.Price * p.Quantity),
-                Type = PosOrderReceiveType.Pickup,
+                Type = (PosOrderReceiveType)type,
                 Items = JsonConvert.SerializeObject(items),
                 Notes = record?.Comments ?? string.Empty,
                 RecordId = record!.Id

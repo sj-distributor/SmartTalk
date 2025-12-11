@@ -1,6 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Domain.Pos;
-using SmartTalk.Messages.Dto.Pos;
 using SmartTalk.Messages.Enums.Pos;
 
 namespace SmartTalk.Core.Services.Pos;
@@ -25,8 +24,10 @@ public partial interface IPosDataProvider
     Task<List<PosOrder>> GetPosCustomerInfosAsync(CancellationToken cancellationToken);
     
     Task<List<PosOrder>> GetPosOrdersByRecordIdsAsync(List<int> recordIds, CancellationToken cancellationToken);
+
+    Task<List<int>> GetAiDraftOrderRecordIdsByRecordIdsAsync(List<int> recordIds, CancellationToken cancellationToken);
     
-    Task<List<PosOrder>> GetAiDraftOrdersByRecordIdsAsync(List<int> recordIds, CancellationToken cancellationToken);
+    Task DeletePosOrdersAsync(List<PosOrder> orders, bool isForceSave = true, CancellationToken cancellationToken = default);
 }
 
 public partial class PosDataProvider
@@ -124,10 +125,17 @@ public partial class PosDataProvider
             .ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<PosOrder>> GetAiDraftOrdersByRecordIdsAsync(List<int> recordIds, CancellationToken cancellationToken)
+    public async Task<List<int>> GetAiDraftOrderRecordIdsByRecordIdsAsync(List<int> recordIds, CancellationToken cancellationToken)
     {
         return await _repository.QueryNoTracking<PosOrder>()
             .Where(x => x.Status == PosOrderStatus.Pending && x.RecordId.HasValue && recordIds.Contains(x.RecordId.Value))
-            .ToListAsync(cancellationToken).ConfigureAwait(false);
+            .Select(x => x.RecordId.Value).ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task DeletePosOrdersAsync(List<PosOrder> orders, bool isForceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.DeleteAllAsync(orders, cancellationToken).ConfigureAwait(false);
+        
+        if (isForceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 }

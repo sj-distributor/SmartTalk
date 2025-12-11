@@ -462,21 +462,19 @@ public partial class PosService : IPosService
         
         if (agentIds.Count == 0) return;
         
-        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsByAgentIdsAsync(agentIds, cancellationToken).ConfigureAwait(false);
+        var simpleRecords = await _phoneOrderDataProvider.GetSimplePhoneOrderRecordsByAgentIdsAsync(agentIds, cancellationToken).ConfigureAwait(false);
         
-        Log.Information("Get store unreview records: {@Records}", records);
+        Log.Information("Get store unreview simple records: {@SimpleRecords}", simpleRecords);
         
-        var orders = await _posDataProvider.GetAiDraftOrdersByRecordIdsAsync(records.Select(x => x.Id).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
+        var unreviewRecordIds = await _posDataProvider.GetAiDraftOrderRecordIdsByRecordIdsAsync(simpleRecords.Keys.ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        Log.Information("Get store unreview orders: {@Orders}", orders);
-        
-        var recordAgentMap = records.ToDictionary(r => r.Id, r => r.AgentId);
+        Log.Information("Get store unreview record Ids: {@UnreviewRecordIds}", unreviewRecordIds);
         
         var agentUnreviewedCount = new Dictionary<int, int>();
         
-        foreach (var order in orders)
+        foreach (var recordId in unreviewRecordIds)
         {
-            if (recordAgentMap.TryGetValue(order.RecordId!.Value, out var agentId))
+            if (simpleRecords.TryGetValue(recordId, out var agentId))
                 agentUnreviewedCount[agentId] = agentUnreviewedCount.GetValueOrDefault(agentId) + 1;
         }
         
@@ -496,22 +494,22 @@ public partial class PosService : IPosService
         
         if (agentIds.Count == 0) return;
         
-        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsByAgentIdsAsync(agentIds, cancellationToken).ConfigureAwait(false);
+        var simpleRecords = await _phoneOrderDataProvider.GetSimplePhoneOrderRecordsByAgentIdsAsync(agentIds, cancellationToken).ConfigureAwait(false);
         
-        Log.Information("Get simple store unreview records: {@Records}", records);
+        Log.Information("Get simple store unreview simple records: {@SimpleRecords}", simpleRecords);
         
-        var orders = await _posDataProvider.GetAiDraftOrdersByRecordIdsAsync(records.Select(x => x.Id).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
+        var unreviewRecordIds = await _posDataProvider.GetAiDraftOrderRecordIdsByRecordIdsAsync(simpleRecords.Keys.ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        Log.Information("Get simple store unreview orders: {@Orders}", orders);
-        
-        var recordAgentMap = records.ToDictionary(r => r.Id, r => r.AgentId);
+        Log.Information("Get store unreview record Ids: {@UnreviewRecordIds}", unreviewRecordIds);
         
         var agentUnreviewedCount = new Dictionary<int, int>();
         
-        foreach (var order in orders)
+        foreach (var recordId in unreviewRecordIds)
         {
-            if (recordAgentMap.TryGetValue(order.RecordId!.Value, out var agentId))
+            if (simpleRecords.TryGetValue(recordId, out var agentId))
+            {
                 agentUnreviewedCount[agentId] = agentUnreviewedCount.GetValueOrDefault(agentId) + 1;
+            }
         }
         
         storeAgents.ForEach(x => x.UnreviewCount = agentUnreviewedCount.TryGetValue(x.AgentId, out var count) ? count : 0);
