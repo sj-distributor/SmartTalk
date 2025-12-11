@@ -508,9 +508,13 @@ public partial class PosService
         const int MaxRetryCount = 3;
         var lockKey = $"place-order-key-{orderId}";
         
+        Log.Information("Generate lock key: {lockKey} by orderId: {orderId}", lockKey, orderId);
+        
         await _redisSafeRunner.ExecuteWithLockAsync(lockKey, async () =>
         {
             var order = await _posDataProvider.GetPosOrderByIdAsync(orderId: orderId, cancellationToken: cancellationToken).ConfigureAwait(false);
+            
+            Log.Information("Getting pos order {@Order}", order);
             
             if (order.Status == PosOrderStatus.Sent)
             {
