@@ -502,8 +502,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         var storeProducts = await _posDataProvider.GetPosProductsByAgentIdAsync(agentId, cancellationToken).ConfigureAwait(false);
         var storeCategories = await _posDataProvider.GetPosCategoriesAsync(storeId: storeAgent.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        var normalProducts = storeProducts.Where(x => x.Modifiers == "[]").Take(80).ToList();
-        var modifierProducts = storeProducts.Where(x => x.Modifiers != "[]").Take(20).ToList();
+        var normalProducts = storeProducts.OrderBy(x => x.SortOrder).Where(x => x.Modifiers == "[]").Take(80).ToList();
+        var modifierProducts = storeProducts.OrderBy(x => x.SortOrder).Where(x => x.Modifiers != "[]").Take(20).ToList();
         
         var partialProducts = normalProducts.Concat(modifierProducts).ToList();
         var categoryProductsLookup = new Dictionary<PosCategory, List<PosProduct>>();
