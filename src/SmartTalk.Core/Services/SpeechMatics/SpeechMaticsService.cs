@@ -781,7 +781,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         
         var categoryProductsPairs = await _posDataProvider.GetPosCategoryAndProductsAsync(storeAgent.StoreId, cancellationToken).ConfigureAwait(false);
         
-        var categoryProductsLookup = categoryProductsPairs.GroupBy(x => x.Item1).ToDictionary(x => x.Key, x => x.Select(p => p.Item2).DistinctBy(d => d.ProductId).ToList());
+        var categoryProductsLookup = categoryProductsPairs.GroupBy(x => x.Item1).ToDictionary(x => x.Key, x => x.Select(p => p.Item2).GroupBy(g => g.ProductId).Select(v => v.FirstOrDefault()).ToList());
 
         var menuItems = string.Empty;
         
@@ -871,9 +871,13 @@ public class SpeechMaticsService : ISpeechMaticsService
         {
             var aiDraftOrder = JsonConvert.DeserializeObject<AiDraftOrderDto>(completion.Value.Content.FirstOrDefault()?.Text ?? "");
             
-            Log.Information("Deserialize response to ai order: {AiOrder}", aiDraftOrder);
+            Log.Information("Deserialize response to ai order: {@AiOrder}", aiDraftOrder);
             
-            var productModifiersLookup = products.Where(x => !string.IsNullOrWhiteSpace(x.Modifiers) && aiDraftOrder.Items.Select(p => p.ProductId).Contains(x.ProductId))
+            var matchedProducts = products.Where(x => aiDraftOrder.Items.Select(p => p.ProductId).Contains(x.ProductId)).ToList();
+            
+            Log.Information("Matched products: {@MatchedProducts}", matchedProducts);
+            
+            var productModifiersLookup = matchedProducts.Where(x => !string.IsNullOrWhiteSpace(x.Modifiers))
                 .ToDictionary(x => x.ProductId, x => JsonConvert.DeserializeObject<List<EasyPosResponseModifierGroups>>(x.Modifiers));
             
             Log.Information("Build product's modifiers: {@ModifiersLookUp}", productModifiersLookup);
@@ -894,7 +898,7 @@ public class SpeechMaticsService : ISpeechMaticsService
             
             Log.Information("Enrich ai draft order: {@EnrichAiDraftOrder}", aiDraftOrder);
             
-            var order = await _posUtilService.BuildPosOrderAsync(record, aiDraftOrder, cancellationToken).ConfigureAwait(false);
+            var order = await _posUtilService.BuildPosOrderAsync(record, aiDraftOrder, , cancellationToken).ConfigureAwait(false);
 
             if (assistant.IsAllowOrderPush)
                 await _posService.HandlePosOrderAsync(order, false, cancellationToken).ConfigureAwait(false);
@@ -913,9 +917,6 @@ public class SpeechMaticsService : ISpeechMaticsService
 
         var systemPrompt =
             "你是一名菜品规格提取助手。請從下面的规格菜品中提取所有的规格菜品的ID、數量，並且用规格菜單列表盡力匹配每個规格菜品。" +
-            "minimumSelect 代表最少可选规格数量，若为0则可不选。" +
-            "maximumSelect 代表最多可选规格数量" +
-            "maximumRepetition 代表规格每个的最大可选数量" +
             "請嚴格傳回一個 JSON 数组，里面可包含多个 JSON 对象，对象中的字段為 id、quantity 。\n" +
             "範例：\n" +
             "若最少可选规格数量为1，最多可选规格数量为3，规格每个的最大可选数量为2，则输出为：[{\"id\": \"11545690032571397\", \"quantity\": 1}]" +

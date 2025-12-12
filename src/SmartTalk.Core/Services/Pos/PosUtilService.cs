@@ -14,7 +14,7 @@ namespace SmartTalk.Core.Services.Pos;
 
 public interface IPosUtilService : IScopedDependency
 {
-    Task<PosOrder> BuildPosOrderAsync(PhoneOrderRecord record, AiDraftOrderDto aiDraftOrder, CancellationToken cancellationToken);
+    Task<PosOrder> BuildPosOrderAsync(PhoneOrderRecord record, AiDraftOrderDto aiDraftOrder, List<PosProduct> products, CancellationToken cancellationToken);
 }
 
 public class PosUtilService : IPosUtilService
@@ -30,16 +30,16 @@ public class PosUtilService : IPosUtilService
         _redisSafeRunner = redisSafeRunner;
     }
 
-    public async Task<PosOrder> BuildPosOrderAsync(PhoneOrderRecord record, AiDraftOrderDto aiDraftOrder, CancellationToken cancellationToken)
+    public async Task<PosOrder> BuildPosOrderAsync(PhoneOrderRecord record, AiDraftOrderDto aiDraftOrder, List<PosProduct> products, CancellationToken cancellationToken)
     {
         var store = await _posDataProvider.GetPosStoreByAgentIdAsync(record.AgentId, cancellationToken).ConfigureAwait(false);
         
-        var storeProducts = await _posDataProvider.GetPosProductsAsync(
-            storeId: store.Id, productIds: aiDraftOrder.Items.Select(x => x.ProductId).ToList(), isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+        // var storeProducts = await _posDataProvider.GetPosProductsAsync(
+        //     storeId: store.Id, productIds: aiDraftOrder.Items.Select(x => x.ProductId).ToList(), isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        var distinctProducts = storeProducts.GroupBy(x => x.ProductId).Select(x => x.FirstOrDefault()).ToList();
+        // var distinctProducts = products.GroupBy(x => x.ProductId).Select(x => x.FirstOrDefault()).ToList();
         
-        var draftMapping = BuildAiDraftAndProductMapping(distinctProducts, aiDraftOrder.Items);
+        var draftMapping = BuildAiDraftAndProductMapping(products, aiDraftOrder.Items);
 
         var taxes = GetOrderItemTaxes(draftMapping);
         
@@ -158,34 +158,40 @@ public class PosUtilService : IPosUtilService
 
     private List<PhoneCallOrderItem> BuildPosOrderItems(List<(AiDraftItemDto Item, PosProduct Product)> draftMapping)
     {
-        var orderItems = draftMapping.Select(x => new PhoneCallOrderItem
+        var orderItems = new List<PhoneCallOrderItem>();
+        
+        foreach (var (aiDraftItem, product) in draftMapping)
         {
-            ProductId = Convert.ToInt64(x.Product.ProductId),
-            Quantity =x.Item.Quantity,
-            OriginalPrice = x.Product.Price,
-            Price = x.Product.Price,
-            OrderItemModifiers = HandleSpecialItems(x.Product)
-        }).Where(x => x.ProductId != 0).ToList();
+            orderItems.Add(new PhoneCallOrderItem
+            {
+                ProductId = Convert.ToInt64(product.ProductId),
+                Quantity = aiDraftItem.Quantity,
+                OriginalPrice = product.Price,
+                Price = product.Price,
+                OrderItemModifiers = HandleSpecialItems(aiDraftItem, product)
+            });
+        }
         
         Log.Information("Generate order items: {@orderItems}", orderItems);
             
         return orderItems;
     }
 
-    private List<PhoneCallOrderItemModifiers> HandleSpecialItems(PosProduct product)
+    private List<PhoneCallOrderItemModifiers> HandleSpecialItems(AiDraftItemDto aiItem, PosProduct product)
     {
-        var result = !string.IsNullOrWhiteSpace(product?.Modifiers) ? JsonConvert.DeserializeObject<List<EasyPosResponseModifierGroups>>(product.Modifiers) : [];
+        var modifierItems = !string.IsNullOrWhiteSpace(product?.Modifiers) ? JsonConvert.DeserializeObject<List<EasyPosResponseModifierGroups>>(product.Modifiers) : [];
 
-        if (result == null || result.Count == 0) return [];
+        if (modifierItems == null || modifierItems.Count == 0 || aiItem.Modifiers == null || aiItem.Modifiers.Count == 0) return [];
         
         var orderItemModifiers = new List<PhoneCallOrderItemModifiers>();
+        var aiItemModifiersLookup = aiItem.Modifiers.ToDictionary(x => Convert.ToInt64(x.Id), x => x.Quantity);
         
-        foreach (var modifierItem in result)
+        foreach (var modifierItem in modifierItems)
         {
-            var items = modifierItem.ModifierProducts.Select(x => new PhoneCallOrderItemModifiers
+            var items = modifierItem.ModifierProducts.Where(x => aiItem.Modifiers.Select(m => Convert.ToInt64(m.Id)).Contains(x.Id)).Select(x => new PhoneCallOrderItemModifiers
             {
-                Price = x?.Price ?? 0,
-                Quantity = 1,
+                Price = x.Price,
+                Quantity = aiItemModifiersLookup.TryGetValue(x.Id, out var quantity) ? quantity : 0,
                 ModifierId = modifierItem.Id,
                 ModifierProductId = x?.Id ?? 0,
                 Localizations = _mapper.Map<List<PhoneCallOrderItemLocalization>>(modifierItem.Localizations ?? []),
