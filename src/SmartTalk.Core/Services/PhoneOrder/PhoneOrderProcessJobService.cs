@@ -8,6 +8,7 @@ using SmartTalk.Core.Services.Ffmpeg;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
+using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Services.Sale;
 using SmartTalk.Core.Services.SpeechMatics;
 using SmartTalk.Core.Settings.OpenAi;
@@ -27,11 +28,14 @@ public partial interface IPhoneOrderProcessJobService : IScopedDependency
 
 public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
 {
+    private readonly IPosService  _posService;
     private readonly ISalesClient _salesClient;
     private readonly IFfmpegService _ffmpegService;
     private readonly OpenAiSettings _openAiSettings;
     private readonly TwilioSettings _twilioSettings;
     private readonly ISmartiesClient _smartiesClient;
+    private readonly IPosUtilService _posUtilService;
+    private readonly IPosDataProvider _posDataProvider;
     private readonly TranslationClient _translationClient;
     private readonly IPhoneOrderService _phoneOrderService;
     private readonly ISalesDataProvider _salesDataProvider;
@@ -43,11 +47,14 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
 
     public PhoneOrderProcessJobService(
+        IPosService posService,
         ISalesClient salesClient,
         IFfmpegService ffmpegService,
         TwilioSettings twilioSettings,
         OpenAiSettings openAiSettings,
         ISmartiesClient smartiesClient,
+        IPosUtilService posUtilService,
+        IPosDataProvider posDataProvider,
         TranslationClient translationClient,
         IPhoneOrderService phoneOrderService,
         ISalesDataProvider salesDataProvider,
@@ -58,11 +65,14 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
         ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient,
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
+        _posService = posService;
         _salesClient = salesClient;
         _ffmpegService = ffmpegService;
         _twilioSettings = twilioSettings;
         _openAiSettings = openAiSettings;
         _smartiesClient = smartiesClient;
+        _posUtilService = posUtilService;
+        _posDataProvider = posDataProvider;
         _translationClient = translationClient;
         _phoneOrderService = phoneOrderService;
         _salesDataProvider = salesDataProvider;
