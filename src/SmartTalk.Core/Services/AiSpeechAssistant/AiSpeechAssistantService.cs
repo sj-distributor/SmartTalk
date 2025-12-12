@@ -478,7 +478,11 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         if (agentId.HasValue && finalPrompt.Contains("#{menu_items}", StringComparison.OrdinalIgnoreCase))
         {
+            Log.Information("Match menu item scenario...");
+            
             var menuItems = await GenerateMenuItemsAsync(agentId.Value, cancellationToken).ConfigureAwait(false);
+            
+            Log.Information("Generate menu item: {menuItems}", menuItems);
             
             finalPrompt = finalPrompt.Replace("#{menu_items}", string.IsNullOrWhiteSpace(menuItems) ? "" : menuItems);
         }
