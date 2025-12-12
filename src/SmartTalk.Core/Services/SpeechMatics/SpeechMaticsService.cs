@@ -781,7 +781,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         
         var categoryProductsPairs = await _posDataProvider.GetPosCategoryAndProductsAsync(storeAgent.StoreId, cancellationToken).ConfigureAwait(false);
         
-        var categoryProductsLookup = categoryProductsPairs.GroupBy(x => x.Item1).ToDictionary(x => x.Key, x => x.Select(p => p.Item2).GroupBy(g => g.ProductId).Select(v => v.FirstOrDefault()).ToList());
+        var categoryProductsLookup = categoryProductsPairs.GroupBy(x => x.Item1).ToDictionary(g => g.Key, g => g.Select(p => p.Item2).DistinctBy(p => p.ProductId).ToList());
 
         var menuItems = string.Empty;
         
@@ -873,7 +873,7 @@ public class SpeechMaticsService : ISpeechMaticsService
             
             Log.Information("Deserialize response to ai order: {@AiOrder}", aiDraftOrder);
             
-            var matchedProducts = products.Where(x => aiDraftOrder.Items.Select(p => p.ProductId).Contains(x.ProductId)).ToList();
+            var matchedProducts = products.Where(x => aiDraftOrder.Items.Select(p => p.ProductId).Contains(x.ProductId)).DistinctBy(x => x.ProductId).ToList();
             
             Log.Information("Matched products: {@MatchedProducts}", matchedProducts);
             
