@@ -283,8 +283,8 @@ public class SpeechMaticsService : ISpeechMaticsService
                             "必须返回包含以下2个字段的JSON对象，格式如下：\n" +
                             "{\n  \"category\": \"取值范围：Reservation、Order、Inquiry、ThirdPartyOrderNotification、ComplaintFeedback、InformationNotification、TransferToHuman、SalesCall、InvalidCall、TransferVoicemail、Other\",\n " +
                             " \"remark\": \"仅当category为'Other'时填写简短关键词（如‘咨询加盟’），其余类别留空\"\n}" +
-                            "场景优先级：" +
-                            "Order > Reservation/InformationNotification > Inquiry > ComplaintFeedback > TransferToHuman > TransferVoicemail > ThirdPartyOrderNotification > SalesCall > InvalidCall > Other"
+                            "当一个对话中有多个场景出现时，需要遵循以下的识别优先级：" +
+                            "*Order > Reservation/InformationNotification > Inquiry > ComplaintFeedback > TransferToHuman > TransferVoicemail > ThirdPartyOrderNotification > SalesCall > InvalidCall > Other*"
                         )
                     },
                     new()
