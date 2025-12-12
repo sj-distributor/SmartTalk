@@ -25,6 +25,8 @@ public partial interface IPosService
     Task<GetPosOrderProductsResponse> GetPosOrderProductsAsync(GetPosOrderProductsRequest request, CancellationToken cancellationToken);
     
     Task<GetPosStoreOrderResponse> GetPosStoreOrderAsync(GetPosStoreOrderRequest request, CancellationToken cancellationToken);
+
+    Task HandlePosOrderAsync(PosOrder order, bool isRetry, CancellationToken cancellationToken);
 }
 
 public partial class PosService
@@ -44,29 +46,35 @@ public partial class PosService
     {
         var order = await GetOrAddPosOrderAsync(command, cancellationToken).ConfigureAwait(false);
         
+        await HandlePosOrderAsync(order, command.IsWithRetry, cancellationToken).ConfigureAwait(false);
+        
+        return new PosOrderPlacedEvent
+        {
+            Order = _mapper.Map<PosOrderDto>(order)
+        };
+    }
+
+    public async Task HandlePosOrderAsync(PosOrder order, bool isRetry, CancellationToken cancellationToken)
+    {
         var store = await _posDataProvider.GetPosCompanyStoreAsync(id: order.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (store == null) throw new Exception("Store could not be found.");
 
         var token = await GetPosTokenAsync(store, order, cancellationToken).ConfigureAwait(false);
 
-        _smartTalkBackgroundJobClient.Enqueue(() => CreateMerchPrinterOrderAsync(command.StoreId, order.Id, cancellationToken));
-
         if (!store.IsLink && string.IsNullOrWhiteSpace(token))
         {
             order.Status = PosOrderStatus.Modified;
-            
+        
             await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
-            
-            return new PosOrderPlacedEvent { Order = _mapper.Map<PosOrderDto>(order) };
+        
+            return;
         }
-        
-        await SafetyPlaceOrderAsync(order, store, token, command.IsWithRetry, 0, cancellationToken).ConfigureAwait(false);
-        
-        return new PosOrderPlacedEvent
-        {
-            Order = _mapper.Map<PosOrderDto>(order)
-        };
+    
+        await SafetyPlaceOrderAsync(order.Id, store, token, isRetry, 0, cancellationToken).ConfigureAwait(false);
+    
+        if (order.Status == PosOrderStatus.Sent && order.IsPush)
+            _smartTalkBackgroundJobClient.Enqueue(() => CreateMerchPrinterOrderAsync(store.Id, order.Id, cancellationToken));
     }
 
     public async Task CreateMerchPrinterOrderAsync(int storeId, int orderId, CancellationToken cancellationToken)
@@ -148,8 +156,8 @@ public partial class PosService
 
     public async Task<GetPosOrderProductsResponse> GetPosOrderProductsAsync(GetPosOrderProductsRequest request, CancellationToken cancellationToken)
     {
-        var products = await _posDataProvider.GetPosProductsAsync(
-            storeId: request.StoreId, productIds: request.ProductIds, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var products = await _posDataProvider.GetPosProductsByProductIdsAsync(
+            request.StoreId, request.ProductIds, cancellationToken).ConfigureAwait(false);
         
         var menuWithCategories = await _posDataProvider.GetPosMenuInfosAsync(request.StoreId, products.Select(x => x.CategoryId).ToList(), cancellationToken).ConfigureAwait(false);
         
@@ -164,12 +172,17 @@ public partial class PosService
         var order = await _posDataProvider.GetPosOrderByIdAsync(orderId: request.OrderId, recordId: request.RecordId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (order == null)
-            throw new Exception($"Order could not be found by orderId: {request.OrderId} or recordId: {request.RecordId}.");
-
-        return new GetPosStoreOrderResponse
         {
-            Data = _mapper.Map<PosOrderDto>(order)
-        };
+            Log.Information($"Order could not be found by orderId: {request.OrderId} or recordId: {request.RecordId}.");
+            
+            return new GetPosStoreOrderResponse();
+        }
+
+        var enrichOrder = _mapper.Map<PosOrderDto>(order);
+        
+        await EnrichPosOrderAsync(enrichOrder, cancellationToken).ConfigureAwait(false);
+
+        return new GetPosStoreOrderResponse { Data = enrichOrder };
     }
 
     private List<GetPosOrderProductsResponseData> BuildPosOrderProductsData(List<PosProduct> products, List<(PosMenu Menu, PosCategory Category)> menuWithCategories)
@@ -481,14 +494,21 @@ public partial class PosService
         }
     }
 
-    public async Task SafetyPlaceOrderAsync(PosOrder order, CompanyStore store, string token, bool isWithRetry, int retryCount, CancellationToken cancellationToken)
+    public async Task SafetyPlaceOrderAsync(int orderId, CompanyStore store, string token, bool isWithRetry, int retryCount, CancellationToken cancellationToken)
     {
         const int MaxRetryCount = 3;
-        var lockKey = $"place-order-key-{order.Id}";
+        var lockKey = $"place-order-key-{orderId}";
         
         await _redisSafeRunner.ExecuteWithLockAsync(lockKey, async () =>
         {
-            if(order.Status == PosOrderStatus.Sent) throw new Exception("Order is already sent.");
+            var order = await _posDataProvider.GetPosOrderByIdAsync(orderId: orderId, cancellationToken: cancellationToken).ConfigureAwait(false);
+            
+            if (order.Status == PosOrderStatus.Sent)
+            {
+                Log.Information("Order {OrderId} is already sent, skip placing again.", order.Id);
+                
+                return;
+            }
 
             if (isWithRetry) order.RetryCount = retryCount;
             
@@ -503,7 +523,7 @@ public partial class PosService
 
                 if (status == PosOrderStatus.Error && isWithRetry && order.RetryCount < MaxRetryCount)
                     _smartTalkBackgroundJobClient.Schedule(() => SafetyPlaceOrderAsync(
-                        order, store, token, true, order.RetryCount + 1, cancellationToken), TimeSpan.FromSeconds(30), HangfireConstants.InternalHostingRestaurant);
+                        order.Id, store, token, true, order.RetryCount + 1, cancellationToken), TimeSpan.FromSeconds(30), HangfireConstants.InternalHostingRestaurant);
                 
                 return;
             }
@@ -573,7 +593,7 @@ public partial class PosService
 
             if (isRetry && order.RetryCount < MaxRetryCount)
                 _smartTalkBackgroundJobClient.Schedule(() => SafetyPlaceOrderAsync(
-                    order, store, token, true, order.RetryCount + 1, cancellationToken), TimeSpan.FromSeconds(30), HangfireConstants.InternalHostingRestaurant);
+                    order.Id, store, token, true, order.RetryCount + 1, cancellationToken), TimeSpan.FromSeconds(30), HangfireConstants.InternalHostingRestaurant);
         }
         catch (Exception ex)
         {
@@ -581,7 +601,7 @@ public partial class PosService
             
             if (isRetry && order.RetryCount < MaxRetryCount)
                 _smartTalkBackgroundJobClient.Schedule(() => SafetyPlaceOrderAsync(
-                    order, store, token, true, order.RetryCount + 1, cancellationToken), TimeSpan.FromSeconds(30), HangfireConstants.InternalHostingRestaurant);
+                    order.Id, store, token, true, order.RetryCount + 1, cancellationToken), TimeSpan.FromSeconds(30), HangfireConstants.InternalHostingRestaurant);
 
             Log.Information("Place order {@Order} failed: {@Exception}", order, ex);
         }
@@ -590,6 +610,8 @@ public partial class PosService
     private async Task MarkOrderAsSpecificStatusAsync(PosOrder order, PosOrderStatus status, CancellationToken cancellationToken)
     {
         order.Status = status;
+        order.SentBy = _currentUser.Id;
+        order.SentTime = DateTimeOffset.Now;
         
         if(status == PosOrderStatus.Sent) order.IsPush = true;
         
@@ -606,5 +628,30 @@ public partial class PosService
             2 => PosOrderModifiedStatus.Cancelled,
             _ => PosOrderModifiedStatus.Normal
         };
+    }
+
+    private async Task EnrichPosOrderAsync(PosOrderDto order, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var items = JsonConvert.DeserializeObject<List<PosOrderItemDto>>(order.Items);
+        
+            var products = await _posDataProvider.GetPosProductsAsync(
+                productIds: items.Select(x => x.ProductId.ToString()).Distinct().ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+            items.ForEach(x => x.ProductName = products.Where(p => p.ProductId == x.ProductId.ToString()).FirstOrDefault()?.Names);
+            
+            order.Items = JsonConvert.SerializeObject(items);
+
+            if (!order.SentBy.HasValue) return;
+            
+            var userAccount = await _accountDataProvider.GetUserAccountByUserIdAsync(order.SentBy.Value, cancellationToken).ConfigureAwait(false);
+
+            order.SentByUsername = userAccount.UserName;
+        }
+        catch (Exception e)
+        {
+            Log.Information("Enriching pos order failed: {@Exception}", e);
+        }
     }
 }

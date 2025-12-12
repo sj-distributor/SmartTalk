@@ -8,7 +8,11 @@ public class PhoneOrderRecordDto
 {
     public int Id { get; set; }
 
+    public int AgentId { get; set; }
+    
     public string SessionId { get; set; }
+    
+    public int? AssistantId { get; set; } 
     
     public PhoneOrderRecordStatus Status { get; set; }
     
@@ -50,5 +54,19 @@ public class PhoneOrderRecordDto
     
     public bool? IsCustomerFriendly { get; set; }
     
+    public DialogueScenarios? Scenario { get; set; }
+
+    public string Remark { get; set; }
+    
     public bool? IsHumanAnswered { get; set; }
+    
+    public bool IsUnreviewed { get; set; }
+    
+    public int? UpdateScenarioUserId { get; set; }
+    
+    public string UpdateScenarioUserName { get; set; }
+    
+    public bool IsLockedScenario { get; set; }
+    
+    public string CustomerAddress { get; set; }
 }
