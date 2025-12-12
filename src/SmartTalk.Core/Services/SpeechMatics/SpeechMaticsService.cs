@@ -898,7 +898,7 @@ public class SpeechMaticsService : ISpeechMaticsService
             
             Log.Information("Enrich ai draft order: {@EnrichAiDraftOrder}", aiDraftOrder);
             
-            var order = await _posUtilService.BuildPosOrderAsync(record, aiDraftOrder, , cancellationToken).ConfigureAwait(false);
+            var order = await _posUtilService.BuildPosOrderAsync(record, aiDraftOrder, matchedProducts, cancellationToken).ConfigureAwait(false);
 
             if (assistant.IsAllowOrderPush)
                 await _posService.HandlePosOrderAsync(order, false, cancellationToken).ConfigureAwait(false);
