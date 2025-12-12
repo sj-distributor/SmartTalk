@@ -42,6 +42,15 @@ public class PhoneOrderController : ControllerBase
         return Ok(response);
     }
     
+    [Route("record/scenario/history"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPhoneOrderRecordScenarioResponse))]
+    public async Task<IActionResult> GetPhoneOrderRecordScenarioAsync([FromQuery] GetPhoneOrderRecordScenarioRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetPhoneOrderRecordScenarioRequest, GetPhoneOrderRecordScenarioResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
     [Route("conversations"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPhoneOrderConversationsResponse))]
     public async Task<IActionResult> GetPhoneOrderConversationsAsync([FromQuery] GetPhoneOrderConversationsRequest request)

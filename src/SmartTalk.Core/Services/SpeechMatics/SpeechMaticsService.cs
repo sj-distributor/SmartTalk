@@ -711,29 +711,29 @@ public class SpeechMaticsService : ISpeechMaticsService
                     {
                         Role = "system",
                         Content = new CompletionsStringContent(
-                            "请根据电话录音内容，将其精准归类到下述预定义类别中。\n\n" +
+                            "请根据交谈主题以及交谈该内容，将其精准归类到下述预定义类别中。\n\n" +
                             "### 可用分类（严格按定义归类，每个类别对应核心业务场景）：\n" +
                             "1. Reservation（预订）\n   " +
                             "- 顾客明确请求预订餐位，并提供时间、人数等关键预订信息。\n" +
                             "2. Order（下单）\n   " +
-                            "- 顾客直接向餐厅发起下单请求（含堂食、自取、餐厅直送外卖）；\n " +
+                            "- 顾客有明确购买意图，发起真正的下单请求（堂食、自取、餐厅直送外卖），包含菜品、数量等信息；\n " +
                             "- 本类别排除对第三方外卖平台订单的咨询/问题类内容。\n" +
                             "3. Inquiry（咨询）\n   " +
                             "- 针对餐厅菜品、价格、营业时间、菜单、下单金额、促销活动、开票可行性等常规信息的提问；\n   " +
                             "4. ThirdPartyOrderNotification（第三方订单相关）\n   " +
-                            "- 只要对话提及任意第三方外卖平台订单，均归此类；\n   " +
-                            "- 第三方平台包含但不限于：DoorDash、Uber Eats、Grubhub、Postmates、Caviar、Seamless、Fantuan（饭团外卖）、HungryPanda（熊猫外卖）、EzCater；\n   " +
-                            "- 涵盖场景：查询平台订单进度、确认餐厅是否收到平台订单、催单，或平台/骑手的订单相关通知/问题。\n" +
+                            "- 核心：**只要交谈中提及「第三方外卖平台名称/订单标识」，无论场景（咨询、催单、确认），均优先归此类**；\n   " +
+                            "- 平台范围：DoorDash、Uber Eats、Grubhub、Postmates、Caviar、Seamless、Fantuan（饭团外卖）、HungryPanda（熊猫外卖）、EzCater，及其他未列明的“非餐厅自有”外卖平台；\n   " +
+                            "- 场景包含：查询平台订单进度、催单、确认餐厅是否收到平台订单、平台/骑手通知等。\n " +
                             "5. ComplaintFeedback（投诉与反馈）\n " +
                             " - 顾客针对食物、服务、配送、餐厅体验提出的投诉或正向/负向反馈。\n" +
                             "6. InformationNotification（信息通知）\n   " +
-                            "- 单向通知类内容，包括：\n " +
-                            " * 缺货/订货通知、配送时间通知/提醒；\n" +
-                            " * 顾客告知餐厅自身变动（迟到、人数变动、取消到店等）；\n " +
-                            " * 物业/外部机构通知（停水、停电等）；\n" +
-                            " * 顾客请求修改订单方式（如堂食改外带）等操作类通知。\n" +
+                            "- 核心：「无提问/请求属性，仅传递事实性信息或操作意图」，无需对方即时决策；\n " +
+                            " 细分场景：\n" +
+                            " - 餐厅侧通知：“您点的菜缺货”“配送预计20分钟后到”“今天停水无法做饭”；\n    " +
+                            " - 顾客侧通知：“我预订的餐要迟到1小时”“原本4人现在改2人”“我取消今天到店”“我想把堂食改外带”；\n    " +
+                            " - 外部机构通知：“物业说明天停电”“城管通知今天不能外摆”；" +
                             "7. TransferToHuman（转人工）\n" +
-                            " - AI转接/尝试转接通话至人工客服的场景。\n" +
+                            " - 提及到人工客服，转接人工服务的场景。\n" +
                             "8. SalesCall（推销电话）\n" +
                             "- 外部公司（保险、装修、广告等）的促销/销售类来电。\n" +
                             "9. InvalidCall（无效通话）\n" +
@@ -745,7 +745,9 @@ public class SpeechMaticsService : ISpeechMaticsService
                             "### 输出规则（禁止输出任何额外文本，仅返回JSON）：\n" +
                             "必须返回包含以下2个字段的JSON对象，格式如下：\n" +
                             "{\n  \"category\": \"取值范围：Reservation、Order、Inquiry、ThirdPartyOrderNotification、ComplaintFeedback、InformationNotification、TransferToHuman、SalesCall、InvalidCall、TransferVoicemail、Other\",\n " +
-                            " \"remark\": \"仅当category为'Other'时填写简短关键词（如‘咨询加盟’），其余类别留空\"\n}"
+                            " \"remark\": \"仅当category为'Other'时填写简短关键词（如‘咨询加盟’），其余类别留空\"\n}" +
+                            "当一个对话中有多个场景出现时，需要遵循以下的识别优先级：" +
+                            "*Order > Reservation/InformationNotification > Inquiry > ComplaintFeedback > TransferToHuman > TransferVoicemail > ThirdPartyOrderNotification > SalesCall > InvalidCall > Other*"
                         )
                     },
                     new()
