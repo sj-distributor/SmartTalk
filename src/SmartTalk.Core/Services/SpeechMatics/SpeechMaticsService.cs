@@ -236,8 +236,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         return (result.IsHumanAnswered, result.IsCustomerFriendly);
     }
 
-    private async Task<DialogueScenarioResultDto> IdentifyDialogueScenariosAsync(string query,
-        CancellationToken cancellationToken)
+    private async Task<DialogueScenarioResultDto> IdentifyDialogueScenariosAsync(string query, CancellationToken cancellationToken)
     {
         var completionResult = await _smartiesClient.PerformQueryAsync(
             new AskGptRequest

@@ -20,6 +20,7 @@ using NAudio.Codecs;
 using NAudio.Wave;
 using OpenAI.Chat;
 using SmartTalk.Core.Domain.AISpeechAssistant;
+using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.Attachments;
 using SmartTalk.Core.Services.Caching;
@@ -53,6 +54,8 @@ using SmartTalk.Messages.Events.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.Attachments;
 using SmartTalk.Messages.Dto.Attachments;
+using SmartTalk.Messages.Dto.EasyPos;
+using SmartTalk.Messages.Dto.Pos;
 using SmartTalk.Messages.Dto.Smarties;
 using SmartTalk.Messages.Enums.Caching;
 using SmartTalk.Messages.Enums.PhoneOrder;
@@ -210,7 +213,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         InitAiSpeechAssistantStreamContext(command.Host, command.From);
 
-        await BuildingAiSpeechAssistantKnowledgeBaseAsync(command.From, command.To, command.AssistantId, command.NumberId, cancellationToken).ConfigureAwait(false);
+        await BuildingAiSpeechAssistantKnowledgeBaseAsync(command.From, command.To, command.AssistantId, command.NumberId, agent.Id, cancellationToken).ConfigureAwait(false);
         
         _aiSpeechAssistantStreamContext.HumanContactPhone = _aiSpeechAssistantStreamContext.ShouldForward ? null 
             : (await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantHumanContactByAssistantIdAsync(_aiSpeechAssistantStreamContext.Assistant.Id, cancellationToken).ConfigureAwait(false))?.HumanPhone;
@@ -418,7 +421,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         );
     }
     
-    private async Task BuildingAiSpeechAssistantKnowledgeBaseAsync(string from, string to, int? assistantId, int? numberId, CancellationToken cancellationToken)
+    private async Task BuildingAiSpeechAssistantKnowledgeBaseAsync(string from, string to, int? assistantId, int? numberId, int? agentId, CancellationToken cancellationToken)
     {
         var inboundRoute = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantInboundRouteAsync(from, to, cancellationToken).ConfigureAwait(false);
         
@@ -473,6 +476,13 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             }
         }
         
+        if (agentId.HasValue && finalPrompt.Contains("#{menu_items}", StringComparison.OrdinalIgnoreCase))
+        {
+            var menuItems = await GenerateMenuItemsAsync(agentId.Value, cancellationToken).ConfigureAwait(false);
+            
+            finalPrompt = finalPrompt.Replace("#{menu_items}", string.IsNullOrWhiteSpace(menuItems) ? "" : menuItems);
+        }
+        
         if (finalPrompt.Contains("#{customer_info}", StringComparison.OrdinalIgnoreCase))
         {
             var phone = from;
@@ -490,7 +500,87 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _aiSpeechAssistantStreamContext.Assistant = _mapper.Map<AiSpeechAssistantDto>(assistant);
         _aiSpeechAssistantStreamContext.Knowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge);
     }
-
+    
+    private async Task<string> GenerateMenuItemsAsync(int agentId, CancellationToken cancellationToken = default)
+    {
+        var storeAgent = await _posDataProvider.GetPosAgentByAgentIdAsync(agentId, cancellationToken).ConfigureAwait(false);
+    
+        if (storeAgent == null) return null;
+        
+        var storeProducts = await _posDataProvider.GetPosProductsByAgentIdAsync(agentId, cancellationToken).ConfigureAwait(false);
+        var storeCategories = await _posDataProvider.GetPosCategoriesAsync(storeId: storeAgent.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var normalProducts = storeProducts.Where(x => x.Modifiers == "[]").Take(80).ToList();
+        var modifierProducts = storeProducts.Where(x => x.Modifiers != "[]").Take(20).ToList();
+        
+        var partialProducts = normalProducts.Concat(modifierProducts).ToList();
+        var categoryProductsLookup = new Dictionary<PosCategory, List<PosProduct>>();
+        
+        foreach (var product in partialProducts)
+        {
+            var category = storeCategories.FirstOrDefault(c => c.Id == product.CategoryId);
+            if (category == null) continue;
+    
+            if (!categoryProductsLookup.ContainsKey(category))
+            {
+                categoryProductsLookup[category] = new List<PosProduct>();
+            }
+            categoryProductsLookup[category].Add(product);
+        }
+    
+        var menuItems = string.Empty;
+        
+        foreach (var (category, products) in categoryProductsLookup)
+        {
+            var productDetails = string.Empty; 
+            var categoryNames = JsonConvert.DeserializeObject<PosNamesLocalization>(category.Names);
+            
+            var idx = 1;
+            productDetails += categoryNames.Cn.Name + "\n";
+    
+            foreach (var product in products)
+            {
+                var productNames = JsonConvert.DeserializeObject<PosNamesLocalization>(product.Names);
+                var line = $"{idx}. {productNames.Cn.Name}：${product.Price:F2}";
+    
+                if (!string.IsNullOrEmpty(product.Modifiers))
+                {
+                    var modifiers = JsonConvert.DeserializeObject<List<EasyPosResponseModifierGroups>>(product.Modifiers);
+                    var modifierNames = new List<string>();
+                    int minSelect = 0, maxSelect = 0, maxRep = 0;
+    
+                    foreach (var modifier in modifiers)
+                    {
+                        if (modifier.ModifierProducts != null)
+                        {
+                            foreach (var mp in modifier.ModifierProducts)
+                            {
+                                var nameLoc = mp.Localizations.Find(l => l.LanguageCode == "zh_CN" && l.Field == "name");
+                                
+                                if (nameLoc != null) modifierNames.Add(nameLoc.Value);
+                            }
+                        }
+                        minSelect = modifier.MinimumSelect;
+                        maxSelect = modifier.MaximumSelect;
+                        maxRep = modifier.MaximumRepetition;
+                    }
+    
+                    if (modifierNames.Count > 0)
+                    {
+                        line += $"，规格：{string.Join("、", modifierNames)}，要求最少选{minSelect}，最多选{maxSelect}，最大可重复选{maxRep}相同的";
+                    }
+                }
+                
+                idx++;
+                productDetails += line + "\n";
+            }
+            
+            menuItems += productDetails + "\n";
+        }
+        
+        return menuItems.TrimEnd('\r', '\n');
+    }
+    
     public (string forwardNumber, int? forwardAssistantId) DecideDestinationByInboundRoute(List<AiSpeechAssistantInboundRoute> routes)
     {
         if (routes == null || routes.Count == 0)
