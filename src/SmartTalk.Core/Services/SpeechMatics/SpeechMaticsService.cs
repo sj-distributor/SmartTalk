@@ -877,7 +877,7 @@ public class SpeechMaticsService : ISpeechMaticsService
             
             Log.Information("Matched products: {@MatchedProducts}", matchedProducts);
             
-            var productModifiersLookup = matchedProducts.Where(x => !string.IsNullOrWhiteSpace(x.Modifiers))
+            var productModifiersLookup = matchedProducts.Where(x => x.Modifiers != "[]")
                 .ToDictionary(x => x.ProductId, x => JsonConvert.DeserializeObject<List<EasyPosResponseModifierGroups>>(x.Modifiers));
             
             Log.Information("Build product's modifiers: {@ModifiersLookUp}", productModifiersLookup);
