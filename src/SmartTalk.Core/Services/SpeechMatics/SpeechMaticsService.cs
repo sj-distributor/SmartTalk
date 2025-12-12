@@ -581,6 +581,9 @@ public class SpeechMaticsService : ISpeechMaticsService
 
     private async Task<string> ResolveSoldToIdAsync(ExtractedOrderDto storeOrder, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, List<string> soldToIds, CancellationToken cancellationToken) 
     { 
+        if (soldToIds.Count == 1)
+            return soldToIds[0];
+        
         if (!string.IsNullOrEmpty(storeOrder.StoreName)) 
         { 
             var requestDto = new GetCustomerNumbersByNameRequestDto { CustomerName = storeOrder.StoreName }; 
