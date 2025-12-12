@@ -155,11 +155,19 @@ public class SalesService : ISalesService
 
                     if (customer.Contacts != null && customer.Contacts.Count > 0)
                     {
-                        customerInfo.AppendLine(" 联系人信息：");
-                        foreach (var c in customer.Contacts)
+                        var normalizedTargetPhone = NormalizePhone(phoneNumber);
+                        
+                        var matchedContacts = customer.Contacts.Where(c => NormalizePhone(c.Phone) == normalizedTargetPhone).ToList();
+
+                        if (matchedContacts.Any())
                         {
-                            customerInfo.AppendLine($" - 姓名：{c.Name}，电话：{c.Phone}，身份：{c.Identity}，语言：{c.Language}");
+                            customerInfo.AppendLine(" 联系人信息：");
+                            foreach (var c in matchedContacts)
+                            {
+                                customerInfo.AppendLine($" - 姓名：{c.Name}，电话：{c.Phone}，身份：{c.Identity}，语言：{c.Language}");
+                            }
                         }
+
                     }
 
                     customerInfo.AppendLine();
@@ -191,5 +199,17 @@ public class SalesService : ISalesService
             }
             builder.AppendLine();
         }
+    }
+    
+    private string NormalizePhone(string phone)
+    {
+        if (string.IsNullOrEmpty(phone)) return phone;
+        
+        phone = phone.Replace("-", "").Replace(" ", "").Replace("(", "").Replace(")", "");
+        
+        if (!phone.StartsWith("+") && phone.Length == 10)
+            phone = "+1" + phone;
+
+        return phone;
     }
 }

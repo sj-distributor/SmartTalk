@@ -1,9 +1,12 @@
 using Serilog;
 using SmartTalk.Core.Constants;
 using SmartTalk.Core.Ioc;
+using SmartTalk.Core.Domain.AISpeechAssistant;
+using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.SpeechMatics;
+using SmartTalk.Core.Settings.Sales;
 using SmartTalk.Messages.Commands.Sales;
 
 namespace SmartTalk.Core.Services.Sale;
@@ -22,16 +25,20 @@ public interface ISalesJobProcessJobService : IScopedDependency
 public class SalesJobProcessJobService : ISalesJobProcessJobService
 {
     private readonly ICrmClient _crmClient;
+    private readonly SalesSetting _salesSetting;
     private readonly ISalesService _salesService;
     private readonly ISalesDataProvider _salesDataProvider;
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
+    private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
     
-    public SalesJobProcessJobService(ICrmClient crmClient, ISalesService salesService, ISalesDataProvider salesDataProvider, ISmartTalkBackgroundJobClient backgroundJobClient, SpeechMaticsDataProvider speechMaticsDataProvide)
+    public SalesJobProcessJobService(ICrmClient crmClient, SalesSetting salesSetting, ISalesService salesService, ISalesDataProvider salesDataProvider, ISmartTalkBackgroundJobClient backgroundJobClient, SpeechMaticsDataProvider speechMaticsDataProvide, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
         _crmClient = crmClient;
+        _salesSetting = salesSetting;
         _salesService = salesService;
         _salesDataProvider = salesDataProvider;
         _backgroundJobClient = backgroundJobClient;
+        _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
     }
     
     public async Task ScheduleRefreshCustomerItemsCacheAsync(RefreshAllCustomerItemsCacheCommand command, CancellationToken cancellationToken)
@@ -70,26 +77,46 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
     
     public async Task ScheduleRefreshCrmCustomerInfoAsync(RefreshAllCustomerInfoCacheCommand command, CancellationToken cancellationToken)
     {
-        var allSales = await _salesDataProvider.GetAllSalesAsync(cancellationToken);
-        var allSoldToIds = allSales.Select(s => s.Name).Where(n => !string.IsNullOrEmpty(n)).Distinct().ToList();
+        var assistants = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantsByCompanyIdAsync(_salesSetting.SpecificCompanyId, cancellationToken).ConfigureAwait(false);
         
-        var totalPhones = 0;
+        Log.Information("Customer info cache refresh, Assistants: {@Assistants}.", assistants);
         
-        foreach (var soldToId in allSoldToIds)
+        var assistantCustomerMappings = new List<AssistantCustomerMap>();
+        
+        var defaultAgentNumbers = assistants.Where(x => x.IsDefault).ToDictionary(x => x.AgentId, x => x.AnsweringNumber);
+        
+        foreach (var assistant in assistants.Where(x => !string.IsNullOrEmpty(x.Name) && x.Name.All(c => char.IsDigit(c) || c == '/')))
         {
-            var contacts = await _crmClient.GetCustomerContactsAsync(soldToId, cancellationToken).ConfigureAwait(false);
+            var customerIds = assistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().ToList();
+            
+            var targetNumber = assistant.IsDefault ? assistant.AnsweringNumber : defaultAgentNumbers.TryGetValue(assistant.AgentId, out var number) ? number : null;
+
+            if (string.IsNullOrWhiteSpace(targetNumber)) continue;
+            
+            assistantCustomerMappings.AddRange(customerIds.Select(x => new AssistantCustomerMap { Id = assistant.Id, TargetNumber = targetNumber, CustomerId = x.Trim() }));
+        }
+        
+        Log.Information("Assistant customer mappings: {@AssistantCustomerMappings}", assistantCustomerMappings);
+        
+        foreach (var mapping in assistantCustomerMappings)
+        {
+            var contacts = await _crmClient.GetCustomerContactsAsync(mapping.CustomerId, cancellationToken).ConfigureAwait(false);
 
             var phoneNumbers = contacts?.Where(c => !string.IsNullOrEmpty(c.Phone)).Select(c => NormalizePhone(c.Phone)).Distinct().ToList() ?? new List<string>();
 
-            totalPhones += phoneNumbers.Count;
+            mapping.CallerNumbers = phoneNumbers;
             
             foreach (var phone in phoneNumbers)
             {
                 _backgroundJobClient.Enqueue<ISalesJobProcessJobService>(x => x.RefreshCrmCustomerInfoByPhoneNumberAsync(phone, CancellationToken.None), HangfireConstants.InternalHostingCaCheKnowledgeVariable);
             }
         }
+        
+        Log.Information("Enriched complete assistant customer mappings: {@AssistantCustomerMappings}", assistantCustomerMappings);
 
-        Log.Information("Scheduled CRM customer info refresh for {CustomerCount} customers, {PhoneCount} phone numbers", allSoldToIds.Count, totalPhones);
+        await RefreshCrmCustomerInboundRoutsAsync(assistantCustomerMappings, cancellationToken).ConfigureAwait(false);
+
+        Log.Information("Scheduled CRM customer info refresh for {CustomerCount} customers, {PhoneCount} phone numbers", assistantCustomerMappings.Count, assistantCustomerMappings.SelectMany(x => x.CallerNumbers).Count());
     }
 
     
@@ -111,6 +138,26 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
             Log.Error(ex, "Failed to refresh CRM customer info cache for phone {Phone}", phoneNumber);
         }
     }
+
+    public async Task RefreshCrmCustomerInboundRoutsAsync(List<AssistantCustomerMap> assistantCustomerMappings, CancellationToken cancellationToken)
+    {
+        var originalRoutes = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantInboundRoutesByTargetNumberAsync(assistantCustomerMappings.Select(x => x.TargetNumber).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantInboundRoutesAsync(originalRoutes, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var routes = assistantCustomerMappings.SelectMany(x => x.CallerNumbers.Select(k => new AiSpeechAssistantInboundRoute
+        {
+            From = k,
+            To = x.TargetNumber,
+            IsFullDay = true,
+            DayOfWeek = string.Empty,
+            ForwardAssistantId = x.Id,
+            Priority = 0
+        })).ToList();
+
+        if (routes.Count != 0)
+            await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantInboundRoutesAsync(routes, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
     
     private string NormalizePhone(string phone)
     {
@@ -123,4 +170,15 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
 
         return phone;
     }
+}
+
+public class AssistantCustomerMap
+{
+    public int Id { get; set; }
+    
+    public string CustomerId { get; set; }
+    
+    public string TargetNumber { get; set; }
+    
+    public List<string> CallerNumbers { get; set; }
 }
