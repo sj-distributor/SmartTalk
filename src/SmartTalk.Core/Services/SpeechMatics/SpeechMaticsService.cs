@@ -790,13 +790,22 @@ public class SpeechMaticsService : ISpeechMaticsService
             var productDetails = string.Empty; 
             var categoryNames = JsonConvert.DeserializeObject<PosNamesLocalization>(category.Names);
             
+            var categoryName = BuildMenuItemName(categoryNames);
+
+            if (string.IsNullOrWhiteSpace(categoryName)) continue;
+            
             var idx = 1;
-            productDetails += categoryNames.Cn.Name + "\n";
+            productDetails += categoryName + "\n";
 
             foreach (var product in products)
             {
                 var productNames = JsonConvert.DeserializeObject<PosNamesLocalization>(product.Names);
-                var line = $"{idx}. {productNames.Cn.Name}{(isWithProductId ? $"({product.ProductId})" : "")}：${product.Price:F2}";
+                
+                var productName = BuildMenuItemName(productNames);
+
+                if (string.IsNullOrWhiteSpace(productName)) continue;
+                
+                var line = $"{idx}. {productName}{(isWithProductId ? $"({product.ProductId})" : "")}：${product.Price:F2}";
                 
                 idx++;
                 productDetails += line + "\n";
@@ -833,6 +842,14 @@ public class SpeechMaticsService : ISpeechMaticsService
         }
         
         return modifiersDetail.TrimEnd('\r', '\n');
+    }
+    
+    private string BuildMenuItemName(PosNamesLocalization localization)
+    {
+        return !string.IsNullOrWhiteSpace(localization?.Cn?.Name) ? localization.Cn.Name :
+            !string.IsNullOrWhiteSpace(localization?.Cn?.PosName) ? localization.Cn.PosName :
+            !string.IsNullOrWhiteSpace(localization?.Cn?.SendChefName) ? localization.Cn.SendChefName :
+            string.Empty;
     }
     
     public async Task GenerateAiDraftAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant assistant, PhoneOrderRecord record, CancellationToken cancellationToken)
