@@ -15,5 +15,16 @@ public class SimpleStoreAgentDto
     
     public int AgentId { get; set; }
     
+    public List<SimpleAgentAssistantDto> SimpleAgentAssistants { get; set; }
+    
+    public int UnreviewCount => SimpleAgentAssistants.Sum(x => x.UnreviewCount);
+}
+
+public class SimpleAgentAssistantDto
+{
+    public int AgentId { get; set; }
+    
+    public int AssistantId { get; set; }
+    
     public int UnreviewCount { get; set; }
 }
