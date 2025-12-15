@@ -38,14 +38,20 @@ public class AiDraftItemDto
     [JsonProperty("specification")]
     public string Specification { get; set; }
     
-    public List<AiDraftItemModifersDto> Modifiers { get; set; }
+    public List<AiDraftItemModifiersDto> Modifiers { get; set; }
 }
 
-public class AiDraftItemModifersDto
+public class AiDraftItemModifiersDto
 {
     [JsonProperty("id")]
     public string Id { get; set; }
     
     [JsonProperty("quantity")]
     public int Quantity { get; set; }
+}
+
+public class AiDraftItemSpecificationDto
+{
+    [JsonProperty("modifiers")]
+    public List<AiDraftItemModifiersDto> Modifiers { get; set; }
 }

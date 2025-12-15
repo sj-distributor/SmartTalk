@@ -831,16 +831,16 @@ public class SpeechMaticsService : ISpeechMaticsService
             {
                 foreach (var mp in modifier.ModifierProducts)
                 {
-                    var nameLoc = mp.Localizations.Find(l => l.LanguageCode == "zh_CN" && l.Field == "name");
-                            
-                    if (nameLoc != null && !string.IsNullOrWhiteSpace(nameLoc.Value)) modifierNames.Add($"{nameLoc.Value}({mp.Id})");
+                    var name = BuildModifierName(mp);
+                    
+                    if (!string.IsNullOrWhiteSpace(name)) modifierNames.Add($"{name}({mp.Id})");
                 }
             }
-            
+
             if (modifierNames.Count > 0)
                 modifiersDetail += $"{string.Join("、", modifierNames)}，共{modifierNames.Count}个规格，要求最少选{modifier.MinimumSelect}个规格，最多选{modifier.MaximumSelect}规格，每个最大可重复选{modifier.MaximumRepetition}相同的";
         }
-        
+
         return modifiersDetail.TrimEnd('\r', '\n');
     }
     
@@ -850,6 +850,29 @@ public class SpeechMaticsService : ISpeechMaticsService
             !string.IsNullOrWhiteSpace(localization?.Cn?.PosName) ? localization.Cn.PosName :
             !string.IsNullOrWhiteSpace(localization?.Cn?.SendChefName) ? localization.Cn.SendChefName :
             string.Empty;
+    }
+    
+    private string BuildModifierName(EasyPosResponseModifierProducts product)
+    {
+        var zhName = product.Localizations.Find(l => l.LanguageCode == "zh_CN" && l.Field == "name");
+        if (zhName != null && !string.IsNullOrWhiteSpace(zhName.Value)) return zhName.Value;
+    
+        var usName = product.Localizations.Find(l => l.LanguageCode == "en_US" && l.Field == "name");
+        if (usName != null && !string.IsNullOrWhiteSpace(usName.Value)) return usName.Value;
+    
+        var zhPosName = product.Localizations.Find(l => l.LanguageCode == "zh_CN" && l.Field == "posName");
+        if (zhPosName != null && !string.IsNullOrWhiteSpace(zhPosName.Value)) return zhPosName.Value;
+    
+        var usPosName = product.Localizations.Find(l => l.LanguageCode == "en_US" && l.Field == "posName");
+        if (usPosName != null && !string.IsNullOrWhiteSpace(usPosName.Value)) return usPosName.Value;
+    
+        var zhSendChefName = product.Localizations.Find(l => l.LanguageCode == "zh_CN" && l.Field == "sendChefName");
+        if (zhSendChefName != null && !string.IsNullOrWhiteSpace(zhSendChefName.Value)) return zhSendChefName.Value;
+    
+        var usSendChefName = product.Localizations.Find(l => l.LanguageCode == "en_US" && l.Field == "sendChefName");
+        if (usSendChefName != null && !string.IsNullOrWhiteSpace(usSendChefName.Value)) return usSendChefName.Value;
+
+        return string.Empty;
     }
     
     public async Task GenerateAiDraftAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant assistant, PhoneOrderRecord record, CancellationToken cancellationToken)
@@ -903,15 +926,25 @@ public class SpeechMaticsService : ISpeechMaticsService
             {
                 if (productModifiersLookup.TryGetValue(aiDraftItem.ProductId, out var modifiers))
                 {
-                    var builtModifiers = await GenerateSpecificationProductsAsync(modifiers, aiDraftItem.Specification, cancellationToken).ConfigureAwait(false);
-                    
-                    Log.Information("Matched modifiers: {@MatchedModifiers}", builtModifiers);
-                    
-                    if (builtModifiers == null || builtModifiers.Count == 0) continue;
-                    
-                    aiDraftItem.Modifiers = builtModifiers;
+                    try
+                    {
+                        var builtModifiers = await GenerateSpecificationProductsAsync(modifiers, aiDraftItem.Specification, cancellationToken).ConfigureAwait(false);
+            
+                        Log.Information("Matched modifiers: {@MatchedModifiers}", builtModifiers);
+
+                        if (builtModifiers == null || builtModifiers.Count == 0) continue;
+
+                        aiDraftItem.Modifiers = builtModifiers;
+                    }
+                    catch (Exception e)
+                    {
+                        aiDraftItem.Modifiers = [];
+            
+                        Log.Error(e, "Failed to build product: {@AiDraftItem} modifiers", aiDraftItem);
+                    }
                 }
             }
+
             
             Log.Information("Enrich ai draft order: {@EnrichAiDraftOrder}", aiDraftOrder);
             
@@ -926,32 +959,38 @@ public class SpeechMaticsService : ISpeechMaticsService
         }
     }
 
-    public async Task<List<AiDraftItemModifersDto>> GenerateSpecificationProductsAsync( List<EasyPosResponseModifierGroups> modifiers, string specification, CancellationToken cancellationToken)
+    public async Task<List<AiDraftItemModifiersDto>> GenerateSpecificationProductsAsync( List<EasyPosResponseModifierGroups> modifiers, string specification, CancellationToken cancellationToken)
     {
         var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
         
         var builtModifiers = BuildItemModifiers(modifiers);
 
+        if (string.IsNullOrWhiteSpace(builtModifiers)) return [];
+        
         var systemPrompt =
             "你是一名菜品规格提取助手。請從下面的规格菜品中提取所有的规格菜品的ID、數量，並且用规格菜單列表盡力匹配每個规格菜品。" +
-            "請嚴格傳回一個 JSON 数组，里面可包含多个 JSON 对象，对象中的字段為 id、quantity 。\n" +
+            "請嚴格傳回一個 JSON 对象，頂層字段為 items（数组，元素包含 id：规格ID,  quantity：数量）。\n" +
             "範例：\n" +
             "若最少可选规格数量为1，最多可选规格数量为3，规格每个的最大可选数量为2，则输出为：[{\"id\": \"11545690032571397\", \"quantity\": 1}]" +
             "若最少可选规格数量为1，最多可选规格数量为3，规格每个的最大可选数量为2，则输出为：[{\"id\": \"11545690032571397\", \"quantity\": 1},{\"id\": \"11545690055571397\", \"quantity\": 2},1},{\"id\": \"11545958055571397\", \"quantity\": 2}]" +
             "菜單列表：\n" + builtModifiers + "\n\n" +
-            "注意：\n1. 必須嚴格輸出 JSON，不要有其他字段或額外說明。\n" +
+            "注意：\n1. 必須嚴格按格式輸出 JSON，不要有其他字段或額外說明。\n" +
             "請務必完整提取報告中每一個提到的菜品";
 
         Log.Information("Sending prompt with modifier items to GPT: {Prompt}", systemPrompt);
-    
+        
         var messages = new List<ChatMessage>
         {
             new SystemChatMessage(systemPrompt),
             new UserChatMessage("规格菜品：\n" + specification + "\n\n")
         };
-    
+        
         var completion = await client.CompleteChatAsync(messages, new ChatCompletionOptions { ResponseModalities = ChatResponseModalities.Text, ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat() }, cancellationToken).ConfigureAwait(false);
 
-        return JsonConvert.DeserializeObject<List<AiDraftItemModifersDto>>(completion.Value.Content.FirstOrDefault()?.Text ?? "");
+        var result = JsonConvert.DeserializeObject<AiDraftItemSpecificationDto>(completion.Value.Content.FirstOrDefault()?.Text ?? "");
+    
+        Log.Information("Deserialize response to ai specification: {@Result}", result);
+    
+        return result.Modifiers;
     }
 }
