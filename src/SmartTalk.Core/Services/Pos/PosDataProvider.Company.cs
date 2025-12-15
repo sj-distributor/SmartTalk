@@ -39,6 +39,8 @@ public partial interface IPosDataProvider : IScopedDependency
     Task<List<PosOrder>> GetPosOrdersByStoreIdAsync(int storeId, CancellationToken cancellationToken);
     
     Task<List<PosProduct>> GetPosProductsByProductIdsAsync(int storeId, List<string> productIds, CancellationToken cancellationToken);
+    
+    Task<List<PosProduct>> GetPosProductsByAgentIdAsync(int agentId, CancellationToken cancellationToken);
 }
 
 public partial class PosDataProvider
@@ -215,6 +217,16 @@ public partial class PosDataProvider
         var query = from menu in _repository.Query<PosMenu>().Where(x => x.Status)
             join category in _repository.Query<PosCategory>() on menu.Id equals category.MenuId
             join product in _repository.Query<PosProduct>().Where(x => x.StoreId == storeId && productIds.Contains(x.ProductId)) on category.Id equals product.CategoryId
+            select product;
+        
+        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<PosProduct>> GetPosProductsByAgentIdAsync(int agentId, CancellationToken cancellationToken)
+    {
+        var query = from posAgent in _repository.Query<PosAgent>().Where(x => x.AgentId == agentId)
+            join store in _repository.Query<CompanyStore>() on posAgent.StoreId equals store.Id
+            join product in _repository.Query<PosProduct>() on store.Id equals product.StoreId
             select product;
         
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
