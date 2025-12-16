@@ -554,7 +554,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
                 if (string.IsNullOrWhiteSpace(productName)) continue;
                 
-                var line = $"{idx}. {productNames}：${product.Price:F2}";
+                var line = $"{idx}. {productName}：${product.Price:F2}";
     
                 if (!string.IsNullOrEmpty(product.Modifiers))
                 {
@@ -568,9 +568,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                         {
                             foreach (var mp in modifier.ModifierProducts)
                             {
-                                var nameLoc = mp.Localizations.Find(l => l.LanguageCode == "zh_CN" && l.Field == "name");
-                                
-                                if (nameLoc != null) modifierNames.Add(nameLoc.Value);
+                                var name = BuildModifierName(mp);
+
+                                if (!string.IsNullOrWhiteSpace(name)) modifierNames.Add($"{name}({mp.Id})");
                             }
                         }
                         minSelect = modifier.MinimumSelect;
@@ -600,6 +600,29 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             !string.IsNullOrWhiteSpace(localization?.Cn?.PosName) ? localization.Cn.PosName :
             !string.IsNullOrWhiteSpace(localization?.Cn?.SendChefName) ? localization.Cn.SendChefName :
             string.Empty;
+    }
+    
+    private string BuildModifierName(EasyPosResponseModifierProducts product)
+    {
+        var zhName = product.Localizations.Find(l => l.LanguageCode == "zh_CN" && l.Field == "name");
+        if (zhName != null && !string.IsNullOrWhiteSpace(zhName.Value)) return zhName.Value;
+        
+        var usName = product.Localizations.Find(l => l.LanguageCode == "en_US" && l.Field == "name");
+        if (usName != null && !string.IsNullOrWhiteSpace(usName.Value)) return usName.Value;
+        
+        var zhPosName = product.Localizations.Find(l => l.LanguageCode == "zh_CN" && l.Field == "posName");
+        if (zhPosName != null && !string.IsNullOrWhiteSpace(zhPosName.Value)) return zhPosName.Value;
+        
+        var usPosName = product.Localizations.Find(l => l.LanguageCode == "en_US" && l.Field == "posName");
+        if (usPosName != null && !string.IsNullOrWhiteSpace(usPosName.Value)) return usPosName.Value;
+        
+        var zhSendChefName = product.Localizations.Find(l => l.LanguageCode == "zh_CN" && l.Field == "sendChefName");
+        if (zhSendChefName != null && !string.IsNullOrWhiteSpace(zhSendChefName.Value)) return zhSendChefName.Value;
+        
+        var usSendChefName = product.Localizations.Find(l => l.LanguageCode == "en_US" && l.Field == "sendChefName");
+        if (usSendChefName != null && !string.IsNullOrWhiteSpace(usSendChefName.Value)) return usSendChefName.Value;
+
+        return string.Empty;
     }
     
     public (string forwardNumber, int? forwardAssistantId) DecideDestinationByInboundRoute(List<AiSpeechAssistantInboundRoute> routes)
