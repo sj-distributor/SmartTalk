@@ -9,7 +9,6 @@ public class KonwledgeCopyCommand: ICommand
     public List<CopyKnowledge> CopyKnowledge { get; set; }    
     
     public int TargetKnowledgeId { get; set; }
-
 }
 
 public class KonwledgeCopyResponse : SmartTalkResponse<AiSpeechAssistantKnowledgeDto>
@@ -18,9 +17,13 @@ public class KonwledgeCopyResponse : SmartTalkResponse<AiSpeechAssistantKnowledg
 
 public class CopyKnowledge
 {
+    public int AssistantId { get; set; }
+    
     public string CopyKnowledgePoint { get; set; }
     
     public int SourceKnowledgeId { get; set; }
+    
+    public string SourceKnowledgeName { get; set; }
     
     public string RelatedFrom { get; set; }
     

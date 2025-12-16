@@ -1,5 +1,6 @@
 using AutoMapper;
 using SmartTalk.Core.Domain.AISpeechAssistant;
+using SmartTalk.Core.Domain.KnowledgeCopy;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Sales;

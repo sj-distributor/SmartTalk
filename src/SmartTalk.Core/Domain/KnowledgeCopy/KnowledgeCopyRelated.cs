@@ -2,14 +2,21 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace SmartTalk.Core.Domain.KnowledgeCopy;
 
+
 [Table("knowledge_copy_related")]
 public class KnowledgeCopyRelated : IEntity
 {
     [Column("id")]
     public int Id { get; set; }
     
+    [Column("assistant_id")]
+    public int AssistantId { get; set; }
+    
     [Column("source_knowledge_id")]
     public int SourceKnowledgeId { get; set; }
+    
+    [Column("source_knowledge_name")]
+    public string SourceKnowledgeName { get; set; }
     
     [Column("target_knowledge_id")]
     public int TargetKnowledgeId { get; set; }

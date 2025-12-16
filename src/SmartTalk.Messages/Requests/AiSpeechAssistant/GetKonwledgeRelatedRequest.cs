@@ -9,6 +9,13 @@ public class GetKonwledgeRelatedRequest: IRequest
     public int TargetKnowledgeId { get; set; }
 }
 
-public class GetKonwledgeRelatedResponse : SmartTalkResponse<List<KnowledgeCopyRelatedDto>>
+public class GetKonwledgeRelatedResponse : SmartTalkResponse<GetKonwledgeRelatedResponseData>
 {
+}
+
+public class GetKonwledgeRelatedResponseData
+{
+    public List<KnowledgeCopyRelatedDto> KnowledgeCopyRelatedDtos { get; set; }
+    
+    public string DedicatedKnowledge { get; set; }
 }
