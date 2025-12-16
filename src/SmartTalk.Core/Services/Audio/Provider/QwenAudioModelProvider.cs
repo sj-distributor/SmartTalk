@@ -24,7 +24,7 @@ public class QwenAudioModelProvider : IAudioModelProvider
     }
 
     public AudioModelProviderType ModelProviderType { get; set; } = AudioModelProviderType.Qwen;
-
+    
     public async Task<string> ExtractAudioDataFromModelProviderAsync(AnalyzeAudioCommand command, BinaryData audioData, CancellationToken cancellationToken)
     {
         var messages = new List<object>();

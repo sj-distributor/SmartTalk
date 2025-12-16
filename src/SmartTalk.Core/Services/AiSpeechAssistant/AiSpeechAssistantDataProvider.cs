@@ -5,10 +5,15 @@ using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Domain.AIAssistant;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.Pos;
+using SmartTalk.Core.Domain.KnowledgeCopy;
+using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.Sales;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Messages.Dto.Agent;
+using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
+using SmartTalk.Messages.Enums.Sales;
+using SmartTalk.Messages.Requests.AiSpeechAssistant;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
 
@@ -130,6 +135,13 @@ public partial interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task<List<Domain.AISpeechAssistant.AiSpeechAssistant>> GetAiSpeechAssistantsByStoreIdAsync(int storeId, CancellationToken cancellationToken = default);
     
     Task<List<Domain.AISpeechAssistant.AiSpeechAssistant>> GetAiSpeechAssistantsByCompanyIdAsync(int companyId, CancellationToken cancellationToken);
+
+    Task<List<KnowledgeCopyRelated>> AddKnowledgeCopyRelatedAsync(List<KnowledgeCopyRelated> related, bool forceSave = true, CancellationToken cancellationToken = default);
+    
+    Task<List<KnowledgeCopyRelated>> GetKnowledgeCopyRelatedAsync(int targetKnowledgeId, CancellationToken cancellationToken = default);
+
+    Task<List<GetKonwledgesResponseData>> GetAiSpeechAssistantKnowledgesByCompanyIdAsync(int companyId,
+        int? pageIndex = null, int? pageSize = null, int? agentId = null, int? storeId = null, string keyWord = null, CancellationToken cancellationToken = default);
 }
 
 public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
@@ -711,6 +723,58 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
             join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on posAgent.AgentId equals assistant.AgentId
             select assistant;
         
+        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+    
+    public async Task<List<KnowledgeCopyRelated>> AddKnowledgeCopyRelatedAsync(List<KnowledgeCopyRelated> related, bool forceSave = true, CancellationToken cancellationToken = default)
+    { 
+        await _repository.InsertAllAsync(related, cancellationToken).ConfigureAwait(false);
+        
+        if (forceSave)
+            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        
+        return related;
+    }
+
+    public async Task<List<KnowledgeCopyRelated>> GetKnowledgeCopyRelatedAsync(int targetKnowledgeId, CancellationToken cancellationToken = default)
+    {
+        return await _repository.Query<KnowledgeCopyRelated>().Where(x => x.TargetKnowledgeId == targetKnowledgeId).ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<GetKonwledgesResponseData>> GetAiSpeechAssistantKnowledgesByCompanyIdAsync(
+        int companyId, int? pageIndex = null, int? pageSize = null, int? agentId = null, int? storeId = null, string keyWord = null, CancellationToken cancellationToken = default)
+    {
+        var posAgentQuery = _repository.Query<PosAgent>();
+
+        if (storeId.HasValue)
+            posAgentQuery = posAgentQuery.Where(x => x.StoreId == storeId.Value);
+
+        if (agentId.HasValue)
+            posAgentQuery = posAgentQuery.Where(x => x.AgentId == agentId.Value);
+
+        var query =
+            from store in _repository.Query<CompanyStore>().Where(x => x.CompanyId == companyId)
+            join posAgent in posAgentQuery on store.Id equals posAgent.StoreId
+            join agent in _repository.Query<Agent>() on posAgent.AgentId equals agent.Id
+            join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
+            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agentAssistant.AssistantId equals assistant.Id
+            join knowledge in _repository.Query<AiSpeechAssistantKnowledge>() on assistant.Id equals knowledge.AssistantId  where knowledge.IsActive
+            select new GetKonwledgesResponseData
+            {
+                AssistantId = assistant.Id,
+                AssiatantName = assistant.Name,
+                StoreName = store.Names,
+                KnowledgeId = knowledge.Id,
+                AiAgentName = agent.Name,
+                KnowledgeJson = knowledge.Json
+            };
+
+        if (!string.IsNullOrWhiteSpace(keyWord))
+            query = query.Where(x => x.AssiatantName.Contains(keyWord));
+
+        if (pageIndex.HasValue && pageSize.HasValue)
+            query = query.Skip((pageIndex.Value - 1) * pageSize.Value).Take(pageSize.Value);
+
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }

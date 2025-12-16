@@ -10,6 +10,7 @@ using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.RealtimeAi;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.RealtimeAi;
+using SmartTalk.Messages.Commands.KnowledgeCopy;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Requests.AiSpeechAssistant;
 
@@ -350,6 +351,33 @@ public class AiSpeechAssistantController : ControllerBase
     {
         var response = await _mediator.RequestAsync<GetAiSpeechAssistantInboundRoutesRequest, GetAiSpeechAssistantInboundRoutesResponse>(request).ConfigureAwait(false);
         
+        return Ok(response);
+    }
+        
+    [Route("knowledge/copy"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> KonwledgeCopyAsync([FromBody] KonwledgeCopyCommand command, CancellationToken cancellationToken)
+    {
+        var response = await _mediator.SendAsync<KonwledgeCopyCommand, KonwledgeCopyResponse>(command, cancellationToken).ConfigureAwait(false);
+
+        return Ok(response);
+    }
+    
+    [Route("knowledges/get"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetKonwledgesAsync([FromQuery] GetKonwledgesRequest request, CancellationToken cancellationToken)
+    {
+        var response = await _mediator.RequestAsync<GetKonwledgesRequest, GetKonwledgesResponse>(request, cancellationToken).ConfigureAwait(false);
+
+        return Ok(response);
+    }
+    
+    [Route("knowledge/realted/get"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetKonwledgeRelatedAsync([FromQuery] GetKonwledgeRelatedRequest request, CancellationToken cancellationToken)
+    {
+        var response = await _mediator.RequestAsync<GetKonwledgeRelatedRequest, GetKonwledgeRelatedResponse>(request, cancellationToken).ConfigureAwait(false);
+
         return Ok(response);
     }
 
