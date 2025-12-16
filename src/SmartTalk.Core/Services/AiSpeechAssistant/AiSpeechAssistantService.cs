@@ -559,7 +559,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                             {
                                 var name = BuildModifierName(mp);
                     
-                                if (!string.IsNullOrWhiteSpace(name)) modifierNames.Add($"{name}({mp.Id})");
+                                if (!string.IsNullOrWhiteSpace(name)) modifierNames.Add($"{name}");
                             }
                         }
                         minSelect = modifier.MinimumSelect;
