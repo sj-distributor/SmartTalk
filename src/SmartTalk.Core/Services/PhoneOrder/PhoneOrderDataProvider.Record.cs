@@ -366,8 +366,9 @@ public partial class PhoneOrderDataProvider
 
     public async Task<List<SimplePhoneOrderRecordDto>> GetSimplePhoneOrderRecordsByAgentIdsAsync(List<int> agentIds, CancellationToken cancellationToken)
     {
-        var query = from record in _repository.Query<PhoneOrderRecord>().Where(x => x.Status == PhoneOrderRecordStatus.Sent && agentIds.Contains(x.AgentId))
-            join order in _repository.Query<PosOrder>().Where(x => x.RecordId.HasValue) on record.Id equals order.RecordId.Value
+        var query = from order in _repository.Query<PosOrder>().Where(x => x.RecordId.HasValue)
+            join record in _repository.Query<PhoneOrderRecord>().Where(x => x.Status == PhoneOrderRecordStatus.Sent && x.AssistantId.HasValue && agentIds.Contains(x.AgentId)) on order.RecordId.Value equals record.Id
+            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on record.AssistantId.Value equals assistant.Id
             select new SimplePhoneOrderRecordDto
             {
                 Id = record.Id,
