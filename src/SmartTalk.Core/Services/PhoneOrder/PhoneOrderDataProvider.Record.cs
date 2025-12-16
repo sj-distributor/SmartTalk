@@ -10,6 +10,7 @@ using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Dto.Restaurant;
 using SmartTalk.Messages.Enums;
 using SmartTalk.Messages.Enums.PhoneOrder;
+using SmartTalk.Messages.Enums.Pos;
 using SmartTalk.Messages.Enums.STT;
 
 namespace SmartTalk.Core.Services.PhoneOrder;
@@ -366,7 +367,7 @@ public partial class PhoneOrderDataProvider
 
     public async Task<List<SimplePhoneOrderRecordDto>> GetSimplePhoneOrderRecordsByAgentIdsAsync(List<int> agentIds, CancellationToken cancellationToken)
     {
-        var query = from order in _repository.Query<PosOrder>().Where(x => x.RecordId.HasValue)
+        var query = from order in _repository.Query<PosOrder>().Where(x => x.RecordId.HasValue && x.Status == PosOrderStatus.Pending)
             join record in _repository.Query<PhoneOrderRecord>().Where(x => x.Status == PhoneOrderRecordStatus.Sent && x.AssistantId.HasValue && agentIds.Contains(x.AgentId)) on order.RecordId.Value equals record.Id
             join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on record.AssistantId.Value equals assistant.Id
             select new SimplePhoneOrderRecordDto
