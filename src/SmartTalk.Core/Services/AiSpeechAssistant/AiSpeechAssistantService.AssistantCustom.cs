@@ -4,10 +4,12 @@ using Newtonsoft.Json.Linq;
 using System.Globalization;
 using Newtonsoft.Json;
 using SmartTalk.Core.Domain.AISpeechAssistant;
+using SmartTalk.Core.Domain.KnowledgeCopy;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.Restaurants;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
+using SmartTalk.Messages.Commands.KnowledgeCopy;
 using SmartTalk.Messages.Constants;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
@@ -15,6 +17,7 @@ using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.Caching;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
+using SmartTalk.Messages.Requests.AiSpeechAssistant;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
 
@@ -47,6 +50,12 @@ public partial interface IAiSpeechAssistantService
     Task<UpdateAiSpeechAssistantInboundRouteResponse> UpdateAiSpeechAssistantInboundRouteAsync(UpdateAiSpeechAssistantInboundRouteCommand command, CancellationToken cancellationToken);
     
     Task<DeleteAiSpeechAssistantInboundRoutesResponse> DeleteAiSpeechAssistantInboundRoutesAsync(DeleteAiSpeechAssistantInboundRoutesCommand command, CancellationToken cancellationToken);
+
+    Task<AiSpeechAssistantKnowledgeAddedEvent> KonwledgeCopyAsync(KonwledgeCopyCommand command, CancellationToken cancellationToken);
+
+    Task<GetKonwledgesResponse> GetKonwledgesAsync(GetKonwledgesRequest request, CancellationToken cancellationToken);
+    
+    Task<GetKonwledgeRelatedResponse> GetKonwledgeRelatedAsync(GetKonwledgeRelatedRequest request, CancellationToken cancellationToken);
 }
 
 public partial class AiSpeechAssistantService
@@ -815,5 +824,73 @@ public partial class AiSpeechAssistantService
             if(routes.Any(x => x.From.Trim() == number.Trim()))
                 throw new Exception($"Number {number} already exist");
         }
+    }
+
+    public async Task<AiSpeechAssistantKnowledgeAddedEvent> KonwledgeCopyAsync(KonwledgeCopyCommand command, CancellationToken cancellationToken)
+    {
+        var prevKnowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(command.TargetKnowledgeId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        prevKnowledge.IsActive = false; 
+        await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync(new List<AiSpeechAssistantKnowledge> { prevKnowledge }, true, cancellationToken);
+        
+        var mergedPoint = JObject.Parse(prevKnowledge.Json ?? "{}");
+
+        foreach (var point in command.CopyKnowledge.Select(item => JToken.Parse(item.CopyKnowledgePoint)))
+        { mergedPoint.Merge(point, new JsonMergeSettings { MergeArrayHandling = MergeArrayHandling.Replace }); }
+
+        var mergedJson = mergedPoint.ToString();
+
+        var latestKnowledge = new AiSpeechAssistantKnowledge
+        {
+            AssistantId = prevKnowledge.AssistantId,
+            Json = mergedJson,
+            IsActive = true,
+            CreatedBy = _currentUser.Id.Value
+        };
+        
+        latestKnowledge.Prompt = GenerateKnowledgePrompt(mergedJson);
+        latestKnowledge.Version = await HandleKnowledgeVersionAsync(latestKnowledge, cancellationToken).ConfigureAwait(false);
+        
+        await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgesAsync([latestKnowledge], cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var copyRelatedList = command.CopyKnowledge
+            .Select(x => new KnowledgeCopyRelated
+            {
+                SourceKnowledgeId = x.SourceKnowledgeId,
+                TargetKnowledgeId = latestKnowledge.Id,
+                CopyKnowledgePoints = x.CopyKnowledgePoint,
+                IsSyncUpdate = x.IsSyncUpdate,
+                RelatedFrom = x.RelatedFrom
+            }).ToList();
+
+        if (copyRelatedList.Any()) 
+            await _aiSpeechAssistantDataProvider.AddKnowledgeCopyRelatedAsync(copyRelatedList, true, cancellationToken);
+        
+        return new AiSpeechAssistantKnowledgeAddedEvent
+        {
+            PrevKnowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(prevKnowledge),
+            LatestKnowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(latestKnowledge)
+        };
+    }
+
+    public async Task<GetKonwledgesResponse> GetKonwledgesAsync(GetKonwledgesRequest request, CancellationToken cancellationToken)
+    {
+        var speechAssistants = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgesByCompanyIdAsync(
+            request.CompanyId, request.PageIndex, request.PageSize, request.AgentId, request.StoreId, request.KeyWord, cancellationToken).ConfigureAwait(false);
+        
+        return new GetKonwledgesResponse
+        {
+            Data = speechAssistants
+        };
+    }
+
+    public async Task<GetKonwledgeRelatedResponse> GetKonwledgeRelatedAsync(GetKonwledgeRelatedRequest request, CancellationToken cancellationToken)
+    {
+        var relateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedAsync(request.TargetKnowledgeId, cancellationToken).ConfigureAwait(false);
+
+        return new GetKonwledgeRelatedResponse
+        {
+            Data = _mapper.Map<List<KnowledgeCopyRelatedDto>>(relateds)
+        };
     }
 }
