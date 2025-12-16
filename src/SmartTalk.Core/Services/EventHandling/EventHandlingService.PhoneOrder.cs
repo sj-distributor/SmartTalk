@@ -1,3 +1,4 @@
+using SmartTalk.Core.Domain.System;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Events.PhoneOrder;
 
@@ -26,11 +27,11 @@ public partial class EventHandlingService
 
             if (record == null) return;
             
-            var globalText = record.ConversationText;
+            var transcriptionText = record.TranscriptionText;
 
-            if (string.IsNullOrWhiteSpace(globalText)) return;
-
-            await _phoneOrderUtilService.ExtractPhoneOrderShoppingCartAsync(globalText, record, cancellationToken).ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(transcriptionText)) return;
+            
+            await _posUtilService.GenerateAiDraftAsync(new Agent(), new Domain.AISpeechAssistant.AiSpeechAssistant(), record, cancellationToken).ConfigureAwait(false);
         }
     }
 }
