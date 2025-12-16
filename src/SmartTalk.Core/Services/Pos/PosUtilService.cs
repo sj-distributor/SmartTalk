@@ -318,13 +318,13 @@ public class PosUtilService : IPosUtilService
     {
         var mapping = new Dictionary<AiDraftItemDto, PosProduct>();
         
-        foreach (var product in products)
+        foreach (var item in items)
         {
-            var result = items.Where(x => x.ProductId == product.ProductId).FirstOrDefault();
+            var product = products.Where(x => x.ProductId == item.ProductId).FirstOrDefault();
 
-            if (result == null ) continue;
+            if (product == null) continue;
             
-            mapping.Add(result, product);
+            mapping.Add(item, product);
         }
         
         return mapping.Select(x => (x.Key, x.Value)).ToList();
