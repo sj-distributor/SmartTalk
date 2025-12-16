@@ -1,5 +1,6 @@
 using AutoMapper;
 using SmartTalk.Core.Domain.AISpeechAssistant;
+using SmartTalk.Core.Domain.KnowledgeCopy;
 using SmartTalk.Core.Domain.Sales;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
@@ -41,5 +42,7 @@ public class AiSpeechAssistantMapping : Profile
             .ForMember(dest => dest.AiUnit, opt => opt.MapFrom(src => src.Unit));
         
         CreateMap<AiSpeechAssistantKnowledgeVariableCache, AiSpeechAssistantKnowledgeVariableCacheDto>().ReverseMap();
+
+        CreateMap<KnowledgeCopyRelatedDto, KnowledgeCopyRelated>().ReverseMap();
     }
 }
