@@ -754,6 +754,10 @@ public partial class PosService
 
                     if (isWithSpecifications && product.Item2.Count > 0)
                     {
+                        var matchedModifiers = simpleModifiers.FirstOrDefault(x => x.ProductId == item.ProductId.ToString());
+
+                        if (matchedModifiers != null) continue;
+                        
                         simpleModifiers.Add(new PosProductSimpleModifiersDto
                         {
                             ProductId = item.ProductId.ToString(),
