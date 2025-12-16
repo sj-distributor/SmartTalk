@@ -524,6 +524,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         foreach (var (category, products) in categoryProductsLookup)
         {
+            if (products.Count == 0) continue;
+            
             var productDetails = string.Empty; 
             var categoryNames = JsonConvert.DeserializeObject<PosNamesLocalization>(category.Names);
 
