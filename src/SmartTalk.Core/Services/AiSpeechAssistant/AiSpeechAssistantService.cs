@@ -571,8 +571,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                             foreach (var mp in modifier.ModifierProducts)
                             {
                                 var name = BuildModifierName(mp);
-
-                                if (!string.IsNullOrWhiteSpace(name)) modifierNames.Add($"{name}({mp.Id})");
+                    
+                                if (!string.IsNullOrWhiteSpace(name)) modifierNames.Add($"{name}");
                             }
                         }
                         minSelect = modifier.MinimumSelect;
