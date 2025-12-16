@@ -8,6 +8,7 @@ using SmartTalk.Core.Domain.Printer;
 using SmartTalk.Messages.Commands.Pos;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Pos;
+using SmartTalk.Messages.Dto.Printer;
 using SmartTalk.Messages.Enums.Caching;
 using SmartTalk.Messages.Enums.Pos;
 using SmartTalk.Messages.Enums.Printer;
@@ -33,6 +34,8 @@ public partial interface IPosService
     Task<UpdatePosOrderPrintStatusResponse> UpdatePosOrderPrintStatusAsync(UpdatePosOrderPrintStatusCommand command, CancellationToken cancellationToken);
     
     Task<GetPrintStatusResponse> GetPrintStatusAsync(GetPrintStatusRequest request, CancellationToken cancellationToken);
+    
+    Task<GetPosOrderCloudPrintStatusResponse> GetPosOrderCloudPrintStatusAsync(GetPosOrderCloudPrintStatusRequest request, CancellationToken cancellationToken);
 }
 
 public partial class PosService
@@ -775,17 +778,25 @@ public partial class PosService
             order.Items = JsonConvert.SerializeObject(items);
 
             var merchPrinterOrder = (await _printerDataProvider.GetMerchPrinterOrdersAsync(orderId: order.Id, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
-
-            if (merchPrinterOrder != null && merchPrinterOrder.PrinterMac != null && merchPrinterOrder.PrintStatus == PrintStatus.Printed)
+            
+            if (merchPrinterOrder != null && merchPrinterOrder.PrinterMac != null)
             {
                 var merchPrinterLog = (await _printerDataProvider.GetMerchPrinterLogAsync(storeId: order.StoreId, orderId: order.Id, cancellationToken: cancellationToken).ConfigureAwait(false)).Item2.FirstOrDefault();
-
-                if (merchPrinterLog != null && merchPrinterLog.Code != null && merchPrinterLog.Code == 200 )
+                var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(printerMac: merchPrinterOrder.PrinterMac).ConfigureAwait(false)).FirstOrDefault();
+                
+                if (merchPrinterOrder.PrintStatus == PrintStatus.Printed && merchPrinterLog != null && merchPrinterLog.Code != null && merchPrinterLog.Code == 200 )
                     order.cloudPrintStatus = CloudPrintStatus.Successful;
-                else
+                else if (merchPrinterOrder.PrintStatus is PrintStatus.Waiting or PrintStatus.Printing && merchPrinter is { IsEnabled: true })
+                {
+                    var merchPrinterDto = _mapper.Map<MerchPrinterDto>(merchPrinter);
+
+                    if (merchPrinterDto.PrinterStatusInfo.Online && merchPrinterDto.PrinterStatusInfo.PaperEmpty == false)
+                    {
+                        order.cloudPrintStatus = CloudPrintStatus.Printing;
+                    }
+                }else
                     order.cloudPrintStatus = CloudPrintStatus.Failed;
-            }
-            else
+            }else
                 order.cloudPrintStatus = CloudPrintStatus.Failed;
             
             if (!order.SentBy.HasValue) return;
@@ -798,5 +809,36 @@ public partial class PosService
         {
             Log.Information("Enriching pos order failed: {@Exception}", e);
         }
+    }
+    
+    public async Task<GetPosOrderCloudPrintStatusResponse> GetPosOrderCloudPrintStatusAsync(GetPosOrderCloudPrintStatusRequest request, CancellationToken cancellationToken)
+    {
+        var merchPrinterOrder = (await _printerDataProvider.GetMerchPrinterOrdersAsync(orderId: request.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+        
+        var cloudPrintStatus = CloudPrintStatus.Failed;
+        
+        if (merchPrinterOrder != null && merchPrinterOrder.PrinterMac != null)
+        {
+            var merchPrinterLog = (await _printerDataProvider.GetMerchPrinterLogAsync(storeId: request.StoreId, orderId: request.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false)).Item2.FirstOrDefault();
+            var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(printerMac: merchPrinterOrder.PrinterMac).ConfigureAwait(false)).FirstOrDefault();
+            
+            if (merchPrinterOrder.PrintStatus == PrintStatus.Printed && merchPrinterLog is { Code: 200 } )
+                cloudPrintStatus = CloudPrintStatus.Successful;
+            else if (merchPrinterOrder.PrintStatus is PrintStatus.Waiting or PrintStatus.Printing && merchPrinter is { IsEnabled: true })
+            {
+                var merchPrinterDto = _mapper.Map<MerchPrinterDto>(merchPrinter);
+
+                if (merchPrinterDto.PrinterStatusInfo.Online && merchPrinterDto.PrinterStatusInfo.PaperEmpty == false)
+                {
+                    cloudPrintStatus = CloudPrintStatus.Printing;
+                }
+            }else
+                cloudPrintStatus = CloudPrintStatus.Failed;
+        }
+
+        return new GetPosOrderCloudPrintStatusResponse
+        {
+            CloudPrintStatus = cloudPrintStatus
+        };
     }
 }
