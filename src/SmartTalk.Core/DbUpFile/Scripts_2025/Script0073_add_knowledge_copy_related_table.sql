@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS `knowledge_copy_related`
     `source_knowledge_id` INT NOT NULL,
     `target_knowledge_id` INT NOT NULL,
     `copy_knowledge_points` LONGTEXT NOT NULL,
-    `is_sync_update` TINYINT(1) NULL DEFAULT 0,
-    `related_from` VARCHAR(1024) NULL,
-    `created_date` DATETIME(3) NOT NULL
+    `is_sync_update` tinyint(1) not null default 0,
+    `related_from` varchar(255) not null,
+    `created_date` datetime(3) NOT NULL
     ) CHARSET=utf8mb4;
