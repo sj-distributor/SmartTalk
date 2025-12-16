@@ -80,10 +80,10 @@ public partial class PosService
         await SafetyPlaceOrderAsync(order.Id, store, token, isRetry, 0, cancellationToken).ConfigureAwait(false);
     
         if (order.Status == PosOrderStatus.Sent && order.IsPush)
-            _smartTalkBackgroundJobClient.Enqueue(() => CreateMerchPrinterOrderAsync(store.Id, order.Id, cancellationToken));
+            _smartTalkBackgroundJobClient.Enqueue(() => CreateMerchPrinterOrderAsync(store.Id, order.Id, order, cancellationToken));
     }
 
-    public async Task CreateMerchPrinterOrderAsync(int storeId, int orderId, CancellationToken cancellationToken)
+    public async Task CreateMerchPrinterOrderAsync(int storeId, int orderId, PosOrder order, CancellationToken cancellationToken)
     {
         Log.Information("storeId:{storeId}, orderId:{orderId}", storeId, orderId);
         
@@ -598,7 +598,7 @@ public partial class PosService
                 StoreId = command.StoreId,
                 OrderId = command.OrderId,
                 RetryCount = command.RetryCount + 1
-            }, cancellationToken), TimeSpan.FromSeconds(30));   
+            }, cancellationToken), TimeSpan.FromSeconds(30));
         }
         
         return new UpdatePosOrderPrintStatusResponse
@@ -735,6 +735,20 @@ public partial class PosService
             var userAccount = await _accountDataProvider.GetUserAccountByUserIdAsync(order.SentBy.Value, cancellationToken).ConfigureAwait(false);
 
             order.SentByUsername = userAccount.UserName;
+            
+            var merchPrinterOrder = (await _printerDataProvider.GetMerchPrinterOrdersAsync(orderId: order.Id, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+
+            if (merchPrinterOrder != null && merchPrinterOrder.PrinterMac != null && merchPrinterOrder.PrintStatus == PrintStatus.Printed)
+            {
+                var merchPrinterLog = (await _printerDataProvider.GetMerchPrinterLogAsync(storeId: order.StoreId, orderId: order.Id, cancellationToken: cancellationToken).ConfigureAwait(false)).Item2.FirstOrDefault();
+
+                if (merchPrinterLog != null && merchPrinterLog.Code != null && merchPrinterLog.Code == 200 )
+                    order.cloudPrintStatus = CloudPrintStatus.Successful;
+                else
+                    order.cloudPrintStatus = CloudPrintStatus.Failed;
+            }
+            else
+                order.cloudPrintStatus = CloudPrintStatus.Failed;
         }
         catch (Exception e)
         {
