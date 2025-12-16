@@ -288,6 +288,15 @@ public class PosController : ControllerBase
         return Ok(response);
     }
     
+    [Route("order/cloudPrintStatus"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPosOrderCloudPrintStatusResponse))]
+    public async Task<IActionResult> GetPosOrderProductsAsync([FromQuery] GetPosOrderCloudPrintStatusRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetPosOrderCloudPrintStatusRequest, GetPosOrderCloudPrintStatusResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
     [Route("order/products"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPosOrderProductsResponse))]
     public async Task<IActionResult> GetPosOrderProductsAsync([FromQuery] GetPosOrderProductsRequest request)
