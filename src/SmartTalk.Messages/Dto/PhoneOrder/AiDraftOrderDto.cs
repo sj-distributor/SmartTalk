@@ -19,6 +19,9 @@ public class AiDraftOrderDto
     
     [JsonProperty("items")]
     public List<AiDraftItemDto> Items { get; set; }
+    
+    [JsonProperty("notes")]
+    public string Notes { get; set; }
 }
 
 public class AiDraftItemDto
@@ -31,9 +34,6 @@ public class AiDraftItemDto
     
     [JsonProperty("quantity")]
     public int Quantity { get; set; }
-    
-    [JsonProperty("notes")]
-    public string Notes { get; set; }
     
     [JsonProperty("specification")]
     public string Specification { get; set; }
