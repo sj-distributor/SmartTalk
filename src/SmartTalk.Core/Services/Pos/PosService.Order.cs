@@ -180,7 +180,7 @@ public partial class PosService
 
         var enrichOrder = _mapper.Map<PosOrderDto>(order);
         
-        await EnrichPosOrderAsync(enrichOrder, cancellationToken).ConfigureAwait(false);
+        await EnrichPosOrderAsync(enrichOrder, request.IsWithSpecifications, cancellationToken).ConfigureAwait(false);
 
         return new GetPosStoreOrderResponse { Data = enrichOrder };
     }
@@ -630,17 +630,47 @@ public partial class PosService
         };
     }
 
-    private async Task EnrichPosOrderAsync(PosOrderDto order, CancellationToken cancellationToken)
+    private async Task EnrichPosOrderAsync(PosOrderDto order, bool isWithSpecifications = false, CancellationToken cancellationToken = default)
     {
         try
         {
+            var simpleModifiers = new List<PosProductSimpleModifiersDto>();
+            
             var items = JsonConvert.DeserializeObject<List<PosOrderItemDto>>(order.Items);
         
             var products = await _posDataProvider.GetPosProductsAsync(
                 productIds: items.Select(x => x.ProductId.ToString()).Distinct().ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-            items.ForEach(x => x.ProductName = products.Where(p => p.ProductId == x.ProductId.ToString()).FirstOrDefault()?.Names);
             
+            var productsLookup = products.GroupBy(x => x.ProductId).ToDictionary(
+                g => g.Key, g =>
+                {
+                    var p = g.First();
+                    
+                    return (p.Names, string.IsNullOrWhiteSpace(p.Modifiers) ? [] : JsonConvert.DeserializeObject<List<EasyPosResponseModifierGroups>>(p.Modifiers));
+                });
+
+            foreach (var item in items)
+            {
+                if (productsLookup.TryGetValue(item.ProductId.ToString(), out var product))
+                {
+                    item.ProductName = product.Names;
+
+                    if (isWithSpecifications && product.Item2.Count > 0)
+                    {
+                        simpleModifiers.Add(new PosProductSimpleModifiersDto
+                        {
+                            ProductId = item.ProductId.ToString(),
+                            MinimumSelect = product.Item2.First().MinimumSelect,
+                            MaximumSelect = product.Item2.First().MaximumSelect,
+                            MaximumRepetition = product.Item2.First().MaximumRepetition
+                        });
+                    }
+                }
+                else
+                    item.ProductName = null;
+            }
+            
+            order.SimpleModifiers = simpleModifiers;
             order.Items = JsonConvert.SerializeObject(items);
 
             if (!order.SentBy.HasValue) return;
