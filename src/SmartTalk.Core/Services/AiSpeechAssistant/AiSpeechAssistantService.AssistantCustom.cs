@@ -828,7 +828,7 @@ public partial class AiSpeechAssistantService
 
     public async Task<AiSpeechAssistantKnowledgeAddedEvent> KonwledgeCopyAsync(KonwledgeCopyCommand command, CancellationToken cancellationToken)
     {
-        var prevKnowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(command.TargetKnowledgeId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var prevKnowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(knowledgeId: command.TargetKnowledgeId, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         prevKnowledge.IsActive = false; 
         await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync(new List<AiSpeechAssistantKnowledge> { prevKnowledge }, true, cancellationToken);
