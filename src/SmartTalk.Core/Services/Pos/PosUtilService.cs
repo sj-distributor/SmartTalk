@@ -50,13 +50,17 @@ public class PosUtilService : IPosUtilService
             if (items.Count == 0) return null;
             
             var orderNo = await GenerateOrderNumberAsync(store, cancellationToken).ConfigureAwait(false);
+
+            var phoneNUmber = !string.IsNullOrWhiteSpace(aiDraftOrder?.PhoneNumber)
+                ? aiDraftOrder?.PhoneNumber.Replace("+1", "") : !string.IsNullOrWhiteSpace(record?.IncomingCallNumber)
+                    ? record.IncomingCallNumber.Replace("+1", "") : "Unknown";
             
             var order = new PosOrder
             {
                 StoreId = store.Id,
-                Name = record?.CustomerName ?? "Unknown",
-                Phone = !string.IsNullOrWhiteSpace(record?.PhoneNumber) ? record.PhoneNumber : !string.IsNullOrWhiteSpace(record?.IncomingCallNumber) ? record.IncomingCallNumber.Replace("+1", "") : "Unknown",
-                Address = record?.CustomerAddress,
+                Name = !string.IsNullOrEmpty(aiDraftOrder?.CustomerName) ? aiDraftOrder.CustomerName : record?.CustomerName ?? "Unknown",
+                Phone = phoneNUmber,
+                Address = aiDraftOrder?.CustomerAddress,
                 OrderNo = orderNo,
                 Status = PosOrderStatus.Pending,
                 Count = items.Sum(x => x.Quantity),
@@ -65,7 +69,7 @@ public class PosUtilService : IPosUtilService
                 SubTotal = items.Sum(p => p.Price * p.Quantity),
                 Type = (PosOrderReceiveType)aiDraftOrder.Type,
                 Items = JsonConvert.SerializeObject(items),
-                Notes = record?.Comments ?? string.Empty,
+                Notes = aiDraftOrder?.Notes ?? string.Empty,
                 RecordId = record!.Id
             };
             
