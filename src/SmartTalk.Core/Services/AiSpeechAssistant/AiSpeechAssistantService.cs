@@ -563,7 +563,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                             {
                                 var name = BuildModifierName(mp.Localizations);
 
-                                if (!string.IsNullOrWhiteSpace(name)) modifierNames.Add($"{name}({mp.Id})");
+                                if (!string.IsNullOrWhiteSpace(name)) modifierNames.Add($"{name}");
                             }
                         }
 
@@ -571,7 +571,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                             modifiersDetail += $"{BuildModifierName(modifier.Localizations)}規格：{string.Join("、", modifierNames)}，共{modifierNames.Count}个规格，要求最少选{modifier.MinimumSelect}个规格，最多选{modifier.MaximumSelect}规格，每个最大可重复选{modifier.MaximumRepetition}相同的 \n";
                     }
                     
-                    line += modifiersDetail;
+                    line += " " + modifiersDetail;
                 }
                 
                 idx++;
