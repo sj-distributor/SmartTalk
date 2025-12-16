@@ -1,5 +1,4 @@
 using Serilog;
-using SmartTalk.Core.Domain.System;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Events.PhoneOrder;
 
