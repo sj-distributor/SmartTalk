@@ -872,10 +872,11 @@ public partial class PhoneOrderProcessJobService
             "如果報告中提到了客户的电话，請提取客户的电话 phoneNumber 。" +
             "如果報告中提到了客户的姓名，請提取客户的姓名 customerName 。" +
             "如果報告中提到了客户的配送地址，請提取客户的配送地址 customerAddress，若无则忽略 。" +
-            "請嚴格傳回一個 JSON 對象，頂層字段為 \"type\"，items（数组，元素包含 productId：菜品ID, name：菜品名, quantity：数量, specification：规格, notes：菜品的备注）。\n" +
+            "如果報告中提到了客户的订单注意事项或者是要求，請提取客户的备注信息 notes，若无则忽略 。" +
+            "請嚴格傳回一個 JSON 對象，頂層字段為 \"type\"，items（数组，元素包含 productId：菜品ID, name：菜品名, quantity：数量, specification：规格（比如：大、中、小，加小料、加椰果或者有关菜品的其他内容））。\n" +
             "範例：\n" +
-            "{\"type\":0,\"phoneNumber\":\"40085235698\",\"customerName\":\"刘先生\",\"customerAddress\":\"中环广场一座\",\"items\":[{\"productId\":\"9778779965031491\",\"name\":\"海南雞湯麵\",\"quantity\":1,\"specification\":null,\"notes\":\"不要葱花\"}]}" +
-            "{\"type\":1,\"phoneNumber\":\"40026235458\",\"customerName\":\"吴先生\",\"customerAddress\":\"中环广场三座\",\"items\":[{\"productId\":\"9225097809167409\",\"name\":\"港式燒鴨\",\"quantity\":1,\"specification\":\"半隻\",\"notes\":\"要酱料包\",}]} \n\n" +
+            "{\"type\":0,\"phoneNumber\":\"40085235698\",\"customerName\":\"刘先生\",\"customerAddress\":\"中环广场一座\",\"notes\":\"给个酱油包\",\"items\":[{\"productId\":\"9778779965031491\",\"name\":\"海南雞湯麵\",\"quantity\":1,\"specification\":null}]}" +
+            "{\"type\":1,\"phoneNumber\":\"40026235458\",\"customerName\":\"吴先生\",\"customerAddress\":\"中环广场三座\",\"notes\":\"到了不要敲门，放门口\",\"items\":[{\"productId\":\"9225097809167409\",\"name\":\"港式燒鴨\",\"quantity\":1,\"specification\":\"半隻\"}]} \n\n" +
             "菜單列表：\n" + menuItems + "\n\n" +
             "注意：\n1. 必須嚴格按格式輸出 JSON，不要有其他字段或額外說明。\n2. **如果客戶分析文本中沒有任何可識別的下單信息，請返回：{ \"type\":0, \"items\": [] }。不得臆造或猜測菜品。** \n" +
             "請務必完整提取報告中每一個提到的菜品";
