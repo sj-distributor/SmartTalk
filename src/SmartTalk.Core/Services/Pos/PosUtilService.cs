@@ -147,7 +147,7 @@ public class PosUtilService : IPosUtilService
             "範例：\n" +
             "若最少可选规格数量为1，最多可选规格数量为3，规格每个的最大可选数量为2，则输出为：{\"modifiers\":[{\"id\": \"11545690032571397\", \"quantity\": 1}]}" +
             "若最少可选规格数量为1，最多可选规格数量为3，规格每个的最大可选数量为2，则输出为：{\"modifiers\":[{\"id\": \"11545690032571397\", \"quantity\": 1},{\"id\": \"11545690055571397\", \"quantity\": 2},{\"id\": \"11545958055571397\", \"quantity\": 2}]}" +
-            "菜單列表：\n" + builtModifiers + "\n\n" +
+            "規格列表：\n" + builtModifiers + "\n\n" +
             "注意：\n1. 必須嚴格按格式輸出 JSON，不要有其他字段或額外說明。\n" +
             "請務必完整提取報告中每一個提到的菜品";
 
@@ -216,7 +216,7 @@ public class PosUtilService : IPosUtilService
     {
         if (modifiers == null || modifiers.Count == 0) return null;
 
-        var modifiersDetail = "规格：\n";
+        var modifiersDetail = string.Empty;
 
         foreach (var modifier in modifiers)
         {
@@ -226,14 +226,14 @@ public class PosUtilService : IPosUtilService
             {
                 foreach (var mp in modifier.ModifierProducts)
                 {
-                    var name = BuildModifierName(mp);
+                    var name = BuildModifierName(mp.Localizations);
 
                     if (!string.IsNullOrWhiteSpace(name)) modifierNames.Add($"{name}({mp.Id})");
                 }
             }
 
             if (modifierNames.Count > 0)
-                modifiersDetail += $"{string.Join("、", modifierNames)}，共{modifierNames.Count}个规格，要求最少选{modifier.MinimumSelect}个规格，最多选{modifier.MaximumSelect}规格，每个最大可重复选{modifier.MaximumRepetition}相同的";
+                modifiersDetail += $"{BuildModifierName(modifier.Localizations)}規格：{string.Join("、", modifierNames)}，共{modifierNames.Count}个规格，要求最少选{modifier.MinimumSelect}个规格，最多选{modifier.MaximumSelect}规格，每个最大可重复选{modifier.MaximumRepetition}相同的 \n";
         }
 
         return modifiersDetail.TrimEnd('\r', '\n');
@@ -247,24 +247,24 @@ public class PosUtilService : IPosUtilService
             string.Empty;
     }
     
-    private string BuildModifierName(EasyPosResponseModifierProducts product)
+    private string BuildModifierName(List<EasyPosResponseLocalization> localizations)
     {
-        var zhName = product.Localizations.Find(l => l.LanguageCode == "zh_CN" && l.Field == "name");
+        var zhName = localizations.Find(l => l.LanguageCode == "zh_CN" && l.Field == "name");
         if (zhName != null && !string.IsNullOrWhiteSpace(zhName.Value)) return zhName.Value;
         
-        var usName = product.Localizations.Find(l => l.LanguageCode == "en_US" && l.Field == "name");
+        var usName = localizations.Find(l => l.LanguageCode == "en_US" && l.Field == "name");
         if (usName != null && !string.IsNullOrWhiteSpace(usName.Value)) return usName.Value;
         
-        var zhPosName = product.Localizations.Find(l => l.LanguageCode == "zh_CN" && l.Field == "posName");
+        var zhPosName = localizations.Find(l => l.LanguageCode == "zh_CN" && l.Field == "posName");
         if (zhPosName != null && !string.IsNullOrWhiteSpace(zhPosName.Value)) return zhPosName.Value;
         
-        var usPosName = product.Localizations.Find(l => l.LanguageCode == "en_US" && l.Field == "posName");
+        var usPosName = localizations.Find(l => l.LanguageCode == "en_US" && l.Field == "posName");
         if (usPosName != null && !string.IsNullOrWhiteSpace(usPosName.Value)) return usPosName.Value;
         
-        var zhSendChefName = product.Localizations.Find(l => l.LanguageCode == "zh_CN" && l.Field == "sendChefName");
+        var zhSendChefName = localizations.Find(l => l.LanguageCode == "zh_CN" && l.Field == "sendChefName");
         if (zhSendChefName != null && !string.IsNullOrWhiteSpace(zhSendChefName.Value)) return zhSendChefName.Value;
         
-        var usSendChefName = product.Localizations.Find(l => l.LanguageCode == "en_US" && l.Field == "sendChefName");
+        var usSendChefName = localizations.Find(l => l.LanguageCode == "en_US" && l.Field == "sendChefName");
         if (usSendChefName != null && !string.IsNullOrWhiteSpace(usSendChefName.Value)) return usSendChefName.Value;
 
         return string.Empty;

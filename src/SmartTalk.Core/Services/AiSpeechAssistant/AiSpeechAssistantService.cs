@@ -561,29 +561,30 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                 if (!string.IsNullOrEmpty(product.Modifiers))
                 {
                     var modifiers = JsonConvert.DeserializeObject<List<EasyPosResponseModifierGroups>>(product.Modifiers);
-                    var modifierNames = new List<string>();
-                    int minSelect = 0, maxSelect = 0, maxRep = 0;
-    
+                    
+                    if (modifiers == null || modifiers.Count == 0) continue;
+
+                    var modifiersDetail = string.Empty;
+
                     foreach (var modifier in modifiers)
                     {
-                        if (modifier.ModifierProducts != null)
+                        var modifierNames = new List<string>();
+
+                        if (modifier.ModifierProducts != null && modifier.ModifierProducts.Count != 0)
                         {
                             foreach (var mp in modifier.ModifierProducts)
                             {
-                                var name = BuildModifierName(mp);
-                    
-                                if (!string.IsNullOrWhiteSpace(name)) modifierNames.Add($"{name}");
+                                var name = BuildModifierName(mp.Localizations);
+
+                                if (!string.IsNullOrWhiteSpace(name)) modifierNames.Add($"{name}({mp.Id})");
                             }
                         }
-                        minSelect = modifier.MinimumSelect;
-                        maxSelect = modifier.MaximumSelect;
-                        maxRep = modifier.MaximumRepetition;
+
+                        if (modifierNames.Count > 0)
+                            modifiersDetail += $"{BuildModifierName(modifier.Localizations)}規格：{string.Join("、", modifierNames)}，共{modifierNames.Count}个规格，要求最少选{modifier.MinimumSelect}个规格，最多选{modifier.MaximumSelect}规格，每个最大可重复选{modifier.MaximumRepetition}相同的 \n";
                     }
-    
-                    if (modifierNames.Count > 0)
-                    {
-                        line += $"，规格：{string.Join("、", modifierNames)}，要求最少选{minSelect}个规格，最多选{maxSelect}个规格，每个规格最大可重复选{maxRep}相同的";
-                    }
+                    
+                    line += modifiersDetail;
                 }
                 
                 idx++;
@@ -604,24 +605,24 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             string.Empty;
     }
     
-    private string BuildModifierName(EasyPosResponseModifierProducts product)
+    private string BuildModifierName(List<EasyPosResponseLocalization> localizations)
     {
-        var zhName = product.Localizations.Find(l => l.LanguageCode == "zh_CN" && l.Field == "name");
+        var zhName = localizations.Find(l => l.LanguageCode == "zh_CN" && l.Field == "name");
         if (zhName != null && !string.IsNullOrWhiteSpace(zhName.Value)) return zhName.Value;
     
-        var usName = product.Localizations.Find(l => l.LanguageCode == "en_US" && l.Field == "name");
+        var usName = localizations.Find(l => l.LanguageCode == "en_US" && l.Field == "name");
         if (usName != null && !string.IsNullOrWhiteSpace(usName.Value)) return usName.Value;
     
-        var zhPosName = product.Localizations.Find(l => l.LanguageCode == "zh_CN" && l.Field == "posName");
+        var zhPosName = localizations.Find(l => l.LanguageCode == "zh_CN" && l.Field == "posName");
         if (zhPosName != null && !string.IsNullOrWhiteSpace(zhPosName.Value)) return zhPosName.Value;
     
-        var usPosName = product.Localizations.Find(l => l.LanguageCode == "en_US" && l.Field == "posName");
+        var usPosName = localizations.Find(l => l.LanguageCode == "en_US" && l.Field == "posName");
         if (usPosName != null && !string.IsNullOrWhiteSpace(usPosName.Value)) return usPosName.Value;
     
-        var zhSendChefName = product.Localizations.Find(l => l.LanguageCode == "zh_CN" && l.Field == "sendChefName");
+        var zhSendChefName = localizations.Find(l => l.LanguageCode == "zh_CN" && l.Field == "sendChefName");
         if (zhSendChefName != null && !string.IsNullOrWhiteSpace(zhSendChefName.Value)) return zhSendChefName.Value;
     
-        var usSendChefName = product.Localizations.Find(l => l.LanguageCode == "en_US" && l.Field == "sendChefName");
+        var usSendChefName = localizations.Find(l => l.LanguageCode == "en_US" && l.Field == "sendChefName");
         if (usSendChefName != null && !string.IsNullOrWhiteSpace(usSendChefName.Value)) return usSendChefName.Value;
 
         return string.Empty;
