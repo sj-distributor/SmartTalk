@@ -1,3 +1,4 @@
+using Serilog;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Events.PhoneOrder;
@@ -31,7 +32,13 @@ public partial class EventHandlingService
 
             if (string.IsNullOrWhiteSpace(transcriptionText)) return;
             
-            await _posUtilService.GenerateAiDraftAsync(new Agent(), new Domain.AISpeechAssistant.AiSpeechAssistant(), record, cancellationToken).ConfigureAwait(false);
+            var (aiSpeechAssistant, agent) = await _aiSpeechAssistantDataProvider.GetAgentAndAiSpeechAssistantAsync(record.AgentId, record.AssistantId, cancellationToken).ConfigureAwait(false); 
+            
+            Log.Information("Update Scenario Event: Assistant: {@Assistant} and Agent: {@Agent} by agent id {agentId}", aiSpeechAssistant, agent, record.AgentId);
+
+            if (agent == null || aiSpeechAssistant == null) return;
+            
+            await _posUtilService.GenerateAiDraftAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
         }
     }
 }
