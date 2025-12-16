@@ -27,20 +27,20 @@ public partial class EventHandlingService : IEventHandlingService
 {
     private readonly IAsrClient _asrClient;
     private readonly SmartiesClient _smartiesClient;
+    private readonly IPosUtilService _posUtilService;
     private readonly IPosDataProvider _posDataProvider;
-    private readonly PhoneOrderUtilService _phoneOrderUtilService;
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly IHrInterViewDataProvider _hrInterViewDataProvider;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
 
-    public EventHandlingService(IAsrClient asrClient, SmartiesClient smartiesClient, IPosDataProvider posDataProvider, PhoneOrderUtilService phoneOrderUtilService, ISmartTalkHttpClientFactory httpClientFactory, IPhoneOrderDataProvider phoneOrderDataProvider, IHrInterViewDataProvider hrInterViewDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
+    public EventHandlingService(IAsrClient asrClient, SmartiesClient smartiesClient, IPosUtilService posUtilService, IPosDataProvider posDataProvider, ISmartTalkHttpClientFactory httpClientFactory, IPhoneOrderDataProvider phoneOrderDataProvider, IHrInterViewDataProvider hrInterViewDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
         _asrClient = asrClient;
         _smartiesClient = smartiesClient;
+        _posUtilService = posUtilService;
         _posDataProvider = posDataProvider;
         _httpClientFactory = httpClientFactory;
-        _phoneOrderUtilService = phoneOrderUtilService;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _hrInterViewDataProvider = hrInterViewDataProvider;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;

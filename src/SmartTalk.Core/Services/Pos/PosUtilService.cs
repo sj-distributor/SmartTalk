@@ -44,9 +44,9 @@ public class PosUtilService : IPosUtilService
     
     public async Task GenerateAiDraftAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant assistant, PhoneOrderRecord record, CancellationToken cancellationToken)
     {
-        if (record.Scenario != DialogueScenarios.Order)
+        if (record is not { Scenario: DialogueScenarios.Order })
         {
-            Log.Information("The scenario is not the order scenario.");
+            Log.Information("The scenario is not the order scenario: {@Record}.", record);
             
             return;
         }
