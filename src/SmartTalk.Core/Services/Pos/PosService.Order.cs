@@ -730,12 +730,6 @@ public partial class PosService
             
             order.Items = JsonConvert.SerializeObject(items);
 
-            if (!order.SentBy.HasValue) return;
-            
-            var userAccount = await _accountDataProvider.GetUserAccountByUserIdAsync(order.SentBy.Value, cancellationToken).ConfigureAwait(false);
-
-            order.SentByUsername = userAccount.UserName;
-            
             var merchPrinterOrder = (await _printerDataProvider.GetMerchPrinterOrdersAsync(orderId: order.Id, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
 
             if (merchPrinterOrder != null && merchPrinterOrder.PrinterMac != null && merchPrinterOrder.PrintStatus == PrintStatus.Printed)
@@ -749,6 +743,12 @@ public partial class PosService
             }
             else
                 order.cloudPrintStatus = CloudPrintStatus.Failed;
+            
+            if (!order.SentBy.HasValue) return;
+            
+            var userAccount = await _accountDataProvider.GetUserAccountByUserIdAsync(order.SentBy.Value, cancellationToken).ConfigureAwait(false);
+
+            order.SentByUsername = userAccount.UserName;
         }
         catch (Exception e)
         {
