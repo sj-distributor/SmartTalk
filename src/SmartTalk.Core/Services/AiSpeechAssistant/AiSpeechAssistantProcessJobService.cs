@@ -100,8 +100,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             PhoneNumber = context.UserInfo?.PhoneNumber,
             IsTransfer = context.IsTransfer,
             IncomingCallNumber = context.LastUserInfo.PhoneNumber,
-            OrderRecordType = orderRecordType,
-            CustomerAddress = context.UserInfo?.Address
+            OrderRecordType = orderRecordType
         };
 
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync([record], cancellationToken: cancellationToken).ConfigureAwait(false);
