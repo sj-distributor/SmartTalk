@@ -995,9 +995,14 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
             var resp = await _ringCentralClient.GetRingCentralRecordAsync(req, token, cancellationToken).ConfigureAwait(false);
             
             var records = resp?.Records ?? [];
-            Log.Information("【LoadOneMonth】筛选主叫为自己({Phone}) 的通话记录，共 {Count} 条", phone, records.Count);
+            
+            var filteredRecords = records.Where(r => r.Recording != null)
+                .GroupBy(r => DateTime.SpecifyKind(r.StartTime, DateTimeKind.Utc).Date)
+                .Select(g => g.OrderBy(r => DateTime.SpecifyKind(r.StartTime, DateTimeKind.Utc)).First()).ToList();
 
-            return records;
+            Log.Information("【LoadOneMonth】筛选主叫为自己({Phone}) 的通话记录，共 {Count} 条", phone, filteredRecords.Count);
+
+            return filteredRecords;
         }).ConfigureAwait(false);
     }
 
