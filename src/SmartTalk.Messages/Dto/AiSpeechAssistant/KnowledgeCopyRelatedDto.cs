@@ -16,7 +16,7 @@ public class KnowledgeCopyRelatedDto
 
     public bool IsSyncUpdate { get; set; }
 
-    public string RelatedFrom { get; set; }
-
     public DateTimeOffset CreatedDate { get; set; }
+    
+    public string RelatedFrom { get; set; }
 }

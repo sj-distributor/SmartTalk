@@ -33,7 +33,5 @@ public class GetKonwledgesResponseData
     
     public int KnowledgeId { get; set; }
     
-    public string KnowledgeJson { get; set; }
-    
     public string AiAgentName { get; set; }
 }

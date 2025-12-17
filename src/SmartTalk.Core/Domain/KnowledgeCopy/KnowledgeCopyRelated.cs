@@ -9,26 +9,14 @@ public class KnowledgeCopyRelated : IEntity
     [Column("id")]
     public int Id { get; set; }
     
-    [Column("assistant_id")]
-    public int AssistantId { get; set; }
-    
     [Column("source_knowledge_id")]
     public int SourceKnowledgeId { get; set; }
-    
-    [Column("source_knowledge_name")]
-    public string SourceKnowledgeName { get; set; }
-    
+
     [Column("target_knowledge_id")]
     public int TargetKnowledgeId { get; set; }
     
     [Column("copy_knowledge_points")]
     public string CopyKnowledgePoints { get; set; }
-    
-    [Column("is_sync_update")]
-    public bool IsSyncUpdate { get; set; }
-    
-    [Column("related_from")]
-    public string RelatedFrom { get; set; }
     
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
