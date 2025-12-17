@@ -517,6 +517,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         var normalProducts = storeProducts.OrderBy(x => x.SortOrder).Where(x => x.Modifiers == "[]").Take(80).ToList();
         var modifierProducts = storeProducts.OrderBy(x => x.SortOrder).Where(x => x.Modifiers != "[]").Take(20).ToList();
         
+        Log.Information("Get ai menu normal products: {@NormalProducts}.", normalProducts);
+        Log.Information("Get ai menu modifier products: {@ModifierProducts}.", modifierProducts);
+        
         var partialProducts = normalProducts.Concat(modifierProducts).ToList();
         var categoryProductsLookup = new Dictionary<PosCategory, List<PosProduct>>();
         
