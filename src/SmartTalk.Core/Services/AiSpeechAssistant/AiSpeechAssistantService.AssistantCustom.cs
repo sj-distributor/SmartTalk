@@ -845,22 +845,31 @@ public partial class AiSpeechAssistantService
 
         await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync([oldTargetKnowledge, sourceKnowledge], true, cancellationToken).ConfigureAwait(false);
 
-        var mergedPoint = JObject.Parse(oldTargetKnowledge.Json ?? "{}");
-        mergedPoint.Merge(JObject.Parse(sourceKnowledge.Json ?? "{}"), new JsonMergeSettings { MergeArrayHandling = MergeArrayHandling.Replace });
+        var targetJson = JObject.Parse(oldTargetKnowledge.Json ?? "{}");
 
-        var mergedJson = mergedPoint.ToString(Formatting.None);
+        var relateds = (await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedBySourceKnowledgeIdAsync(
+            [oldTargetKnowledge.Id], cancellationToken).ConfigureAwait(false)).OrderBy(x => x.CreatedDate).Select(x => JObject.Parse(x.CopyKnowledgePoints ?? "{}"));
 
+        var sourceJson = JObject.Parse(sourceKnowledge.Json ?? "{}");
+
+        var allJsons = new[] { targetJson }.Concat(relateds).Append(sourceJson);
+
+        var mergedJsonObj = allJsons.Aggregate(new JObject(),
+            (acc, j) => { acc.Merge(j, new JsonMergeSettings { MergeArrayHandling = MergeArrayHandling.Concat }); return acc; });
+        
+        var mergedJson = mergedJsonObj.ToString(Formatting.None);
+        
         var newTargetKnowledge = new AiSpeechAssistantKnowledge
         {
             AssistantId = oldTargetKnowledge.AssistantId,
             Json = mergedJson,
             IsActive = true,
             CreatedBy = oldTargetKnowledge.CreatedBy,
-            CreatedDate = DateTime.UtcNow,
+            CreatedDate = DateTimeOffset.Now,
             Prompt = GenerateKnowledgePrompt(mergedJson),
             Version = await HandleKnowledgeVersionAsync(oldTargetKnowledge, cancellationToken)
         };
-
+        
         await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgesAsync([newTargetKnowledge], cancellationToken: cancellationToken).ConfigureAwait(false);
         
         var copyRelated = new KnowledgeCopyRelated
@@ -868,7 +877,7 @@ public partial class AiSpeechAssistantService
             SourceKnowledgeId = sourceKnowledge.Id,
             TargetKnowledgeId = newTargetKnowledge.Id,
             CopyKnowledgePoints = sourceKnowledge.Json,
-            CreatedDate = DateTime.UtcNow
+            CreatedDate = DateTimeOffset.Now
         };
 
         await _aiSpeechAssistantDataProvider.AddKnowledgeCopyRelatedAsync([copyRelated], true, cancellationToken).ConfigureAwait(false);
