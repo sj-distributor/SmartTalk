@@ -382,7 +382,7 @@ public class PosUtilService : IPosUtilService
             
             var productTax = productTaxes?.FirstOrDefault()?.Value;
             
-            price = product.Price * item.Quantity + item.OrderItemModifiers.Sum(x => x.Price * x.Quantity);
+            price = product.Price * item.Quantity + item.OrderItemModifiers.Sum(x => x.Price * x.Quantity * item.Quantity);
 
             taxes += productTax.HasValue ? price * (productTax.Value / 100) : 0;
             
