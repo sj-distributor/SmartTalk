@@ -804,10 +804,13 @@ public class PrinterService : IPrinterService
      {
          var order = (await _printerDataProvider.GetMerchPrinterOrdersAsync(id:command.Id, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
 
-         if (order == null)
-             throw new Exception("Not find print order");
+         var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(storeId: order?.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+             
+         if (order == null || merchPrinter == null)
+             throw new Exception("Not find print order or merchPrinter");
 
          order.PrintStatus = PrintStatus.Waiting;
+         order.PrinterMac = merchPrinter.PrinterMac;
 
          await _printerDataProvider.UpdateMerchPrinterOrderAsync(order, cancellationToken: cancellationToken).ConfigureAwait(false);
 
