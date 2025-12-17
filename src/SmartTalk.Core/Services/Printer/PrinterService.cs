@@ -67,6 +67,8 @@ public interface IPrinterService : IScopedDependency
     Task<GetMerchPrinterLogResponse> GetMerchPrinterLogAsync(GetMerchPrinterLogRequest request, CancellationToken cancellationToken);
     
     Task ScanOfflinePrinter(CancellationToken cancellationToken);
+
+    Task<MerchPrinterOrderRetryResponse> MerchPrinterOrderRetryAsync(MerchPrinterOrderRetryCommand command, CancellationToken cancellationToken);
 }
 
 public class PrinterService : IPrinterService
@@ -796,8 +798,25 @@ public class PrinterService : IPrinterService
                  Message = "Online:True->False"
              }, cancellationToken).ConfigureAwait(false);
          }
-     } 
-     
+     }
+
+     public async Task<MerchPrinterOrderRetryResponse> MerchPrinterOrderRetryAsync(MerchPrinterOrderRetryCommand command, CancellationToken cancellationToken)
+     {
+         var order = (await _printerDataProvider.GetMerchPrinterOrdersAsync(id:command.Id, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+
+         if (order == null)
+             throw new Exception("Not find print order");
+
+         order.PrintStatus = PrintStatus.Waiting;
+
+         await _printerDataProvider.UpdateMerchPrinterOrderAsync(order, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+         return new MerchPrinterOrderRetryResponse
+         {
+             Data = _mapper.Map<MerchPrinterOrderDto>(order)
+         };
+     }
+
      private static Font CreateFont(FontFamily fontFamily, float size, bool bold = false)
      {
          return new Font(fontFamily, size, bold ? FontStyle.Bold : FontStyle.Regular);
