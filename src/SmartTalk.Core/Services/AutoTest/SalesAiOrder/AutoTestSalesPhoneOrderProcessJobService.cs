@@ -326,36 +326,55 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
     
     private async Task<string> CheckAudioSpeakerIsCustomerAsync(string query, CancellationToken cancellationToken)
     {
-        var completionResult = await _smartiesClient.PerformQueryAsync(new AskGptRequest
-        {
-            Messages = new List<CompletionsRequestMessageDto>
-            {
-                new()
-                {
-                    Role = "system",
-                    Content = new CompletionsStringContent("你是一款销售与餐厅老板对话高度理解的智能助手，专门用于分辨那个对话角色是餐厅老板。" +
-                                                           "请根据我提供的对话，判断那个角色是属于是餐厅老板。" +
-                                                           "输出规则:" +
-                                                           "1.如果S1是餐厅老板的话，请返回\"S1\"" +
-                                                           "2.如果S2是餐厅老板的话，请返回\"S2\" " +
-                                                           "3.如果根据对话无法确定餐厅老板身份，请默认返回 \"S1\"" +
-                                                           "- 样本与输出：\n" +
-                                                           "S1:你好，今天我要订货; S2: 今日想订些什么 S1:一箱西兰花 S2: 好的 output:S1\n" +
-                                                           "S1: 老板您好，我们今天有新到的牛腩; S2: 嗯，给我留三斤; S1: 没问题; output:S2\n" +
-                                                           "S1: 最近土豆怎么样，质量好吗; S2: 很好，新货刚到; S1: 那给我两箱; S2: 好的; output:S1\n" +
-                                                           "S1: 我这边的猪肉库存不多了; S2: 那我给您安排两箱明早送; S1: 可以，谢谢; output:S1\n" +
-                                                           "S1: 老板，您这周还要西红柿吗; S2: 要的，送十箱; S1: 好的; output:S2")
-                },
-                new()
-                {
-                    Role = "user",
-                    Content = new CompletionsStringContent($"input: {query}, output:")
-                }
-            },
-            Model = OpenAiModel.Gpt4o
-        }, cancellationToken).ConfigureAwait(false);
+        var segments = query.Split(new[] { ";", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+        var speakerVotes = new Dictionary<string, int> { { "S1", 0 }, { "S2", 0 } };
 
-        return completionResult.Data.Response;
+        foreach (var segment in segments.Take(12))
+        {
+            var completionResult = await _smartiesClient.PerformQueryAsync(new AskGptRequest
+            {
+                Messages = new List<CompletionsRequestMessageDto>
+                {
+                    new()
+                    {
+                        Role = "system",
+                        Content = new CompletionsStringContent(
+                            "你是一款销售与餐厅老板对话高度理解的智能助手。" +
+                            "请根据我提供的对话判断餐厅老板是哪个 speaker。" +
+                            "输出规则:" +
+                            "1. 如果 S1 是餐厅老板，请返回 S1；S2 是餐厅老板返回 S2。" +
+                            "2. 如果无法确定，请结合语义规则判断：" +
+                            "   - 说下单/要求发货/订货/采购的一般是餐厅老板（客户）；" +
+                            "   - 说问候/确认/重复信息/模板话术的一般是客服；" +
+                            "   - 熟悉流程的客户会直接报要订哪些货，一直回复好的是客服；" +
+                            "3. 若仍无法判断，默认返回 S1。" +
+                            "样例:\n" +
+                            "S1: 我要订货; S2: 好的; output:S1\n" +
+                            "S1: 老板您好，我们有新货; S2: 给我留三斤; output:S2\n" +
+                            "S1: 最近土豆质量好吗; S2: 很好; S1: 我要两箱; output:S1\n" +
+                            "S1: 一箱牛肉；S2: 好；output:S1\n" +
+                            "S1: 最近青豆的价格如何；S2: 和之前一样，5美金一磅；S1:那要50磅青豆\n"+
+                            "S!: 上次的猪肉用得合适吗，最近都有货；S2: 还没用完，暂时不需要； S1: 好的，需要可以再联系我")
+                    },
+                    new()
+                    {
+                        Role = "user",
+                        Content = new CompletionsStringContent($"input: {segment}, output:")
+                    }
+                },
+                Model = OpenAiModel.Gpt4o
+            }, cancellationToken).ConfigureAwait(false);
+
+            var result = completionResult.Data.Response?.Trim();
+            if (result == "S1" || result == "S2") speakerVotes[result]++;
+        }
+
+        var finalSpeaker = speakerVotes.MaxBy(kv => kv.Value).Key;
+
+        if (string.IsNullOrEmpty(finalSpeaker)) finalSpeaker = "S1";
+
+        Log.Information("CheckAudioSpeakerIsCustomerAsync finalSpeaker: {Speaker}", finalSpeaker);
+        return finalSpeaker;
     }
 
     private async Task<byte[]> ProcessAudioConversationAsync(List<byte[]> customerWavList, Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken)
@@ -596,7 +615,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         Log.Information("Candidate material code list: {@Candidates}", candidates);
 
         if (!candidates.Any()) return string.IsNullOrEmpty(baseNumber) ? "" : baseNumber;
-        ;
+        
         if (candidates.Count == 1) return candidates.First();
 
         if (!string.IsNullOrWhiteSpace(unit))

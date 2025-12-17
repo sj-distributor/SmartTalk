@@ -35,27 +35,51 @@ public class SpeechToTextService : ISpeechToTextService
     }
 
     public async Task<string> SpeechToTextAsync(
-        byte[] file, TranscriptionLanguage? language = null, TranscriptionFileType fileType = TranscriptionFileType.Wav,
-        TranscriptionResponseFormat responseFormat = TranscriptionResponseFormat.Vtt, string prompt = null, CancellationToken cancellationToken = default)
+        byte[] file, TranscriptionLanguage? language = null,
+        TranscriptionFileType fileType = TranscriptionFileType.Wav,
+        TranscriptionResponseFormat responseFormat = TranscriptionResponseFormat.Vtt,
+        string prompt = null,
+        CancellationToken cancellationToken = default)
     {
         if (file == null) return null;
-        
+
         var audioBytes = await _ffmpegService.ConvertFileFormatAsync(file, fileType, cancellationToken).ConfigureAwait(false);
 
-        var splitAudios = await _ffmpegService.SplitAudioAsync(audioBytes, secondsPerAudio: 60 * 3, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var splitAudios = await _ffmpegService.SplitAudioAsync(audioBytes, secondsPerAudio: 180, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var transcriptionResult = new StringBuilder();
+        byte[] previousShortSegment = null;
 
         foreach (var audio in splitAudios)
         {
-            var transcriptionResponse = await TranscriptionAsync(audio, language, fileType, responseFormat, prompt, cancellationToken).ConfigureAwait(false);
-            
-            transcriptionResult.Append(transcriptionResponse);
+            byte[] segmentToTranscribe = audio;
+
+            if (previousShortSegment != null)
+            {
+                segmentToTranscribe = previousShortSegment.Concat(audio).ToArray();
+                previousShortSegment = null;
+            }
+
+            if (segmentToTranscribe.Length < 2000)
+            {
+                previousShortSegment = segmentToTranscribe;
+                continue;
+            }
+
+            try
+            {
+                var transcriptionResponse = await TranscriptionAsync(segmentToTranscribe, language, fileType, responseFormat, prompt, cancellationToken).ConfigureAwait(false);
+                transcriptionResult.Append(transcriptionResponse.Trim());
+                transcriptionResult.Append(" ");
+            }
+            catch (Exception e)
+            {
+                Log.Warning(e, "Transcription of audio segment failed, continuing with next segment.");
+            }
         }
 
-        Log.Information("Transcription result {Transcription}", transcriptionResult.ToString());
-        
-        return transcriptionResult.ToString();
+        Log.Information("SpeechToTextAsync completed, transcription length: {Length}", transcriptionResult.Length);
+        return transcriptionResult.ToString().Trim();
     }
     
     public async Task<string> TranscriptionAsync(
