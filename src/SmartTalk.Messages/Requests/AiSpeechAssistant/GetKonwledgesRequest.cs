@@ -19,19 +19,6 @@ public class GetKonwledgesRequest : IRequest
     public string KeyWord { get; set; }
 }
 
-public class GetKonwledgesResponse : SmartTalkResponse<List<GetKonwledgesResponseData>>
+public class GetKonwledgesResponse : SmartTalkResponse<List<KnowledgeCopyRelatedInfoDto>>
 {
-}
-
-public class GetKonwledgesResponseData
-{
-    public int AssistantId { get; set; }
-    
-    public string AssiatantName { get; set; }
-    
-    public string StoreName { get; set; }
-    
-    public int KnowledgeId { get; set; }
-    
-    public string AiAgentName { get; set; }
 }
