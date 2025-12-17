@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
-using SmartTalk.Messages.Commands.KnowledgeCopy;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Requests.AiSpeechAssistant;
 

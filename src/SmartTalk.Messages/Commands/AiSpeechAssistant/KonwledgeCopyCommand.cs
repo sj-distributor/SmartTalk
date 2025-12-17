@@ -2,7 +2,7 @@ using Mediator.Net.Contracts;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Responses;
 
-namespace SmartTalk.Messages.Commands.KnowledgeCopy;
+namespace SmartTalk.Messages.Commands.AiSpeechAssistant;
 
 public class KonwledgeCopyCommand: ICommand
 {

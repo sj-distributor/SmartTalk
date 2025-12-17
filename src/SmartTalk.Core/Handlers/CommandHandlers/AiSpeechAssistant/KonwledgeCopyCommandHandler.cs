@@ -1,7 +1,7 @@
 using Mediator.Net.Context;
 using Mediator.Net.Contracts;
 using SmartTalk.Core.Services.AiSpeechAssistant;
-using SmartTalk.Messages.Commands.KnowledgeCopy;
+using SmartTalk.Messages.Commands.AiSpeechAssistant;
 
 namespace SmartTalk.Core.Handlers.CommandHandlers.AiSpeechAssistant;
 

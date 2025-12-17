@@ -9,7 +9,6 @@ using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.Restaurants;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
-using SmartTalk.Messages.Commands.KnowledgeCopy;
 using SmartTalk.Messages.Constants;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;

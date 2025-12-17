@@ -1,5 +1,3 @@
-ALTER TABLE knowledge_copy_related DROP COLUMN source_knowledge_name;
-
 ALTER TABLE knowledge_copy_related DROP COLUMN is_sync_update;
 
 ALTER TABLE knowledge_copy_related DROP COLUMN related_from;
