@@ -757,17 +757,19 @@ public partial class PosService
 
                     if (isWithSpecifications && product.Item2.Count > 0)
                     {
-                        var matchedModifiers = simpleModifiers.FirstOrDefault(x => x.ProductId == item.ProductId.ToString());
+                        var matchedModifiers = simpleModifiers.Where(x => x.ProductId == item.ProductId.ToString()).ToList();
 
-                        if (matchedModifiers != null) continue;
+                        if (matchedModifiers.Count > 0) continue;
                         
-                        simpleModifiers.Add(new PosProductSimpleModifiersDto
+                        simpleModifiers.AddRange(product.Item2.Select(x => new PosProductSimpleModifiersDto
                         {
                             ProductId = item.ProductId.ToString(),
-                            MinimumSelect = product.Item2.First().MinimumSelect,
-                            MaximumSelect = product.Item2.First().MaximumSelect,
-                            MaximumRepetition = product.Item2.First().MaximumRepetition
-                        });
+                            ModifierId = x.Id.ToString(),
+                            MinimumSelect = x.MinimumSelect,
+                            MaximumSelect = x.MaximumSelect,
+                            MaximumRepetition = x.MaximumRepetition,
+                            ModifierProductIds = x.ModifierProducts.Select(m => m.Id.ToString()).ToList()
+                        }));
                     }
                 }
                 else
