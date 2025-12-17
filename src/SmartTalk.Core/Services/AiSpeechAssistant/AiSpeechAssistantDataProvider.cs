@@ -302,7 +302,7 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
     public async Task<List<AiSpeechAssistantKnowledge>> GetAiSpeechAssistantKnowledgesAsync(List<int> knowledgeIds = null, CancellationToken cancellationToken = default)
     {
         return await _repository.Query<AiSpeechAssistantKnowledge>()
-            .Where(x => knowledgeIds.Contains(x.Id)).ToListAsync(cancellationToken).ConfigureAwait(false);
+            .Where(x => knowledgeIds.Contains(x.Id) && x.IsActive).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task AddAiSpeechAssistantKnowledgesAsync(List<AiSpeechAssistantKnowledge> knowledges, bool forceSave = true, CancellationToken cancellationToken = default)
