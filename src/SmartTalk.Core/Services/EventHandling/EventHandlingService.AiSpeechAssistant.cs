@@ -28,6 +28,8 @@ public partial class EventHandlingService
 
                 knowledge.Brief = brief;
                 await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync([knowledge], cancellationToken: cancellationToken).ConfigureAwait(false);
+                
+                await _aiSpeechAssistantService.SyncCopiedKnowledgesIfRequiredAsync([knowledge], false, cancellationToken).ConfigureAwait(false);
             }
         }
         catch (Exception e)

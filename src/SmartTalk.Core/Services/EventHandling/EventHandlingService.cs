@@ -18,12 +18,14 @@ public partial class EventHandlingService : IEventHandlingService
 {
     private readonly SmartiesClient _smartiesClient;
     private readonly IPosDataProvider _posDataProvider;
+    private readonly IAiSpeechAssistantService _aiSpeechAssistantService;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
 
-    public EventHandlingService(SmartiesClient smartiesClient, IPosDataProvider posDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
+    public EventHandlingService(SmartiesClient smartiesClient, IPosDataProvider posDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, IAiSpeechAssistantService aiSpeechAssistantService)
     {
         _smartiesClient = smartiesClient;
         _posDataProvider = posDataProvider;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
+        _aiSpeechAssistantService = aiSpeechAssistantService;
     }
 }
