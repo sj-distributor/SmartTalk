@@ -70,5 +70,7 @@ public class PosOrderDto
     
     public List<PosProductSimpleModifiersDto> SimpleModifiers { get; set; } = [];
 
-    public CloudPrintStatus cloudPrintStatus { get; set; }
+    public CloudPrintStatus? CloudPrintStatus { get; set; }
+
+    public Guid? CloudPrintOrderId { get; set; }
 }

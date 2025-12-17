@@ -16,7 +16,7 @@ public interface IPrinterDataProvider : IScopedDependency
         int? storeId = null, int? id = null, bool? isEnabled = null, DateTimeOffset? lastStatusInfoLastModifiedDate = null, bool? IsStatusInfo = null, CancellationToken cancellationToken = default);
 
     Task<List<MerchPrinterOrder>> GetMerchPrinterOrdersAsync(Guid? jobToken = null, int? storeId = null, PrintStatus? status = null,
-        DateTimeOffset? endTime = null, string printerMac = null, bool isOrderByPrintDate = false, int? orderId = null, CancellationToken cancellationToken = default);
+        DateTimeOffset? endTime = null, string printerMac = null, bool isOrderByPrintDate = false, int? orderId = null, Guid? id = null, CancellationToken cancellationToken = default);
 
     Task UpdateMerchPrinterOrderAsync(MerchPrinterOrder merchPrinterOrder, bool forceSave = true, CancellationToken cancellationToken = default);
 
@@ -81,7 +81,7 @@ public class PrinterDataProvider : IPrinterDataProvider
     }
     
     public async Task<List<MerchPrinterOrder>> GetMerchPrinterOrdersAsync(Guid? jobToken = null, int? storeId = null, PrintStatus? status = null,
-        DateTimeOffset? endTime = null, string printerMac = null, bool isOrderByPrintDate = false, int? orderId = null, CancellationToken cancellationToken = default)
+        DateTimeOffset? endTime = null, string printerMac = null, bool isOrderByPrintDate = false, int? orderId = null, Guid? id = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<MerchPrinterOrder>();
 
@@ -105,6 +105,9 @@ public class PrinterDataProvider : IPrinterDataProvider
 
         if (orderId.HasValue)
             query = query.Where(x => x.OrderId == orderId);
+
+        if (id.HasValue)
+            query = query.Where(x => x.Id == id);
 
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }

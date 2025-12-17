@@ -781,23 +781,25 @@ public partial class PosService
             
             if (merchPrinterOrder != null && merchPrinterOrder.PrinterMac != null)
             {
+                order.CloudPrintOrderId = merchPrinterOrder.Id;
+                
                 var merchPrinterLog = (await _printerDataProvider.GetMerchPrinterLogAsync(storeId: order.StoreId, orderId: order.Id, cancellationToken: cancellationToken).ConfigureAwait(false)).Item2.FirstOrDefault();
                 var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(printerMac: merchPrinterOrder.PrinterMac).ConfigureAwait(false)).FirstOrDefault();
                 
                 if (merchPrinterOrder.PrintStatus == PrintStatus.Printed && merchPrinterLog != null && merchPrinterLog.Code != null && merchPrinterLog.Code == 200 )
-                    order.cloudPrintStatus = CloudPrintStatus.Successful;
+                    order.CloudPrintStatus = CloudPrintStatus.Successful;
                 else if (merchPrinterOrder.PrintStatus is PrintStatus.Waiting or PrintStatus.Printing && merchPrinter is { IsEnabled: true })
                 {
                     var merchPrinterDto = _mapper.Map<MerchPrinterDto>(merchPrinter);
 
                     if (merchPrinterDto.PrinterStatusInfo.Online && merchPrinterDto.PrinterStatusInfo.PaperEmpty == false)
                     {
-                        order.cloudPrintStatus = CloudPrintStatus.Printing;
+                        order.CloudPrintStatus = CloudPrintStatus.Printing;
                     }
                 }else
-                    order.cloudPrintStatus = CloudPrintStatus.Failed;
+                    order.CloudPrintStatus = CloudPrintStatus.Failed;
             }else
-                order.cloudPrintStatus = CloudPrintStatus.Failed;
+                order.CloudPrintStatus = CloudPrintStatus.Failed;
             
             if (!order.SentBy.HasValue) return;
             
@@ -838,7 +840,11 @@ public partial class PosService
 
         return new GetPosOrderCloudPrintStatusResponse
         {
-            CloudPrintStatus = cloudPrintStatus
+           Data = new GetPosOrderCloudPrintStatusDto
+           {
+               Id = merchPrinterOrder?.Id,
+               CloudPrintStatus = cloudPrintStatus
+           }
         };
     }
 }

@@ -1,5 +1,6 @@
 using Mediator.Net.Contracts;
 using SmartTalk.Messages.Enums.Pos;
+using SmartTalk.Messages.Responses;
 
 namespace SmartTalk.Messages.Requests.Pos;
 
@@ -10,7 +11,13 @@ public class GetPosOrderCloudPrintStatusRequest : IRequest
     public int OrderId { get; set; }
 }
 
-public class GetPosOrderCloudPrintStatusResponse : IResponse
+public class GetPosOrderCloudPrintStatusResponse : SmartTalkResponse<GetPosOrderCloudPrintStatusDto>
 {
-    public CloudPrintStatus CloudPrintStatus { get; set; }
+}
+
+public class GetPosOrderCloudPrintStatusDto
+{
+    public Guid? Id { get; set; }
+    
+    public CloudPrintStatus? CloudPrintStatus { get; set; }   
 }
