@@ -546,7 +546,7 @@ public partial class PosService
             
             await SafetyPlaceOrderWithRetryAsync(order, store, token, isWithRetry, cancellationToken).ConfigureAwait(false);
             
-        }, wait: TimeSpan.FromSeconds(10), retry: TimeSpan.FromSeconds(1), server: RedisServer.System).ConfigureAwait(false);
+        }, wait: TimeSpan.Zero, retry: TimeSpan.Zero, server: RedisServer.System).ConfigureAwait(false);
     }
 
     public async Task<UpdatePosOrderPrintStatusResponse> UpdatePosOrderPrintStatusAsync(UpdatePosOrderPrintStatusCommand command, CancellationToken cancellationToken)
