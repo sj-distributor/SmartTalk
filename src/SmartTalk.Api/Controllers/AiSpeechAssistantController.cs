@@ -353,7 +353,7 @@ public class AiSpeechAssistantController : ControllerBase
     }
         
     [Route("knowledge/copy"), HttpPost]
-    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(KonwledgeCopyResponse))]
     public async Task<IActionResult> KonwledgeCopyAsync([FromBody] KonwledgeCopyCommand command, CancellationToken cancellationToken)
     {
         var response = await _mediator.SendAsync<KonwledgeCopyCommand, KonwledgeCopyResponse>(command, cancellationToken).ConfigureAwait(false);
@@ -362,7 +362,7 @@ public class AiSpeechAssistantController : ControllerBase
     }
     
     [Route("knowledges/get"), HttpGet]
-    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetKonwledgesResponse))]
     public async Task<IActionResult> GetKonwledgesAsync([FromQuery] GetKonwledgesRequest request, CancellationToken cancellationToken)
     {
         var response = await _mediator.RequestAsync<GetKonwledgesRequest, GetKonwledgesResponse>(request, cancellationToken).ConfigureAwait(false);
@@ -371,7 +371,7 @@ public class AiSpeechAssistantController : ControllerBase
     }
     
     [Route("knowledge/realted/get"), HttpGet]
-    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetKonwledgeRelatedResponse))]
     public async Task<IActionResult> GetKonwledgeRelatedAsync([FromQuery] GetKonwledgeRelatedRequest request, CancellationToken cancellationToken)
     {
         var response = await _mediator.RequestAsync<GetKonwledgeRelatedRequest, GetKonwledgeRelatedResponse>(request, cancellationToken).ConfigureAwait(false);
