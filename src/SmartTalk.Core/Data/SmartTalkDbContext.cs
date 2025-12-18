@@ -7,6 +7,7 @@ using SmartTalk.Core.Data.Exceptions;
 using SmartTalk.Core.Services.Identity;
 using SmartTalk.Core.Services.Infrastructure;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Serilog;
 
 namespace SmartTalk.Core.Data;
 
@@ -56,6 +57,8 @@ public class SmartTalkDbContext : DbContext, IUnitOfWork
     {
         if (entityEntry.State == EntityState.Added && entityEntry.Entity is IHasCreatedFields createdEntity)
         {
+            Log.Information("Tracking entity creation, entity: {@Entity}, current user: {@CurrentUser}", entityEntry.Entity, _currentUser);
+            
             createdEntity.CreatedDate = _clock.Now;
         }
     }
@@ -64,6 +67,8 @@ public class SmartTalkDbContext : DbContext, IUnitOfWork
     {
         if (entityEntry.Entity is IHasModifiedFields modifyEntity && entityEntry.State is EntityState.Modified or EntityState.Added)
         { 
+            Log.Information("Tracking entity modification, entity: {@Entity}, current user: {@CurrentUser}", entityEntry.Entity, _currentUser);
+            
             if (_currentUser is not { Id: not null } && modifyEntity.LastModifiedBy == 0) throw new MissingCurrentUserWhenSavingNonNullableFieldException(nameof(modifyEntity.LastModifiedBy));
             
             modifyEntity.LastModifiedDate = _clock.Now;
