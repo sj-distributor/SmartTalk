@@ -81,6 +81,10 @@ public class RedisSafeRunner : IRedisSafeRunner
     public async Task ExecuteWithLockAsync(string lockKey, Func<Task> logic, TimeSpan? expiry = null, TimeSpan? wait = null,
         TimeSpan? retry = null, RedisServer server = RedisServer.System)
     {
+        var execId = Guid.NewGuid().ToString();
+        
+        Log.Information("Executing lock: {LockKey} current execId: {ExecId}", lockKey, execId);
+        
         try
         {
             var redLock = await CreateLockAsync(lockKey, expiry, wait, retry, server).ConfigureAwait(false);
@@ -89,7 +93,10 @@ public class RedisSafeRunner : IRedisSafeRunner
             {
                 // make sure we got the lock
                 if (redLock.IsAcquired)
+                {
                     await logic();
+                    Log.Information("[LOCK] Released {LockKey}, execId={ExecId}", lockKey, execId);
+                }
             }
         }
         catch (Exception ex)
