@@ -782,13 +782,14 @@ public partial class PosService
             var merchPrinterOrder = (await _printerDataProvider.GetMerchPrinterOrdersAsync(orderId: order.Id, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
             
             order.CloudPrintOrderId = merchPrinterOrder?.Id;
-            
+            order.CloudPrintStatus = CloudPrintStatus.Failed;
+        
             if (merchPrinterOrder != null && merchPrinterOrder.PrinterMac != null)
             {
                 var merchPrinterLog = (await _printerDataProvider.GetMerchPrinterLogAsync(storeId: order.StoreId, orderId: order.Id, cancellationToken: cancellationToken).ConfigureAwait(false)).Item2.FirstOrDefault();
                 var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(printerMac: merchPrinterOrder.PrinterMac).ConfigureAwait(false)).FirstOrDefault();
-                
-                if (merchPrinterOrder.PrintStatus == PrintStatus.Printed && merchPrinterLog != null && merchPrinterLog.Code != null && merchPrinterLog.Code == 200 )
+            
+                if (merchPrinterOrder.PrintStatus == PrintStatus.Printed && merchPrinterLog is { Code: 200 })
                     order.CloudPrintStatus = CloudPrintStatus.Successful;
                 else if (merchPrinterOrder.PrintStatus is PrintStatus.Waiting or PrintStatus.Printing && merchPrinter is { IsEnabled: true })
                 {
@@ -800,8 +801,7 @@ public partial class PosService
                     }
                 }else
                     order.CloudPrintStatus = CloudPrintStatus.Failed;
-            }else
-                order.CloudPrintStatus = CloudPrintStatus.Failed;
+            }
             
             if (!order.SentBy.HasValue) return;
             
@@ -826,7 +826,7 @@ public partial class PosService
             var merchPrinterLog = (await _printerDataProvider.GetMerchPrinterLogAsync(storeId: request.StoreId, orderId: request.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false)).Item2.FirstOrDefault();
             var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(printerMac: merchPrinterOrder.PrinterMac).ConfigureAwait(false)).FirstOrDefault();
             
-            if (merchPrinterOrder.PrintStatus == PrintStatus.Printed && merchPrinterLog is { Code: 200 } )
+            if (merchPrinterOrder.PrintStatus == PrintStatus.Printed && merchPrinterLog is { Code: 200 })
                 cloudPrintStatus = CloudPrintStatus.Successful;
             else if (merchPrinterOrder.PrintStatus is PrintStatus.Waiting or PrintStatus.Printing && merchPrinter is { IsEnabled: true })
             {
