@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace SmartTalk.Core.Domain.KnowledgeCopy;
@@ -6,7 +7,9 @@ namespace SmartTalk.Core.Domain.KnowledgeCopy;
 [Table("knowledge_copy_related")]
 public class KnowledgeCopyRelated : IEntity
 {
+    [Key]
     [Column("id")]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     public int Id { get; set; }
     
     [Column("source_knowledge_id")]
@@ -19,5 +22,5 @@ public class KnowledgeCopyRelated : IEntity
     public string CopyKnowledgePoints { get; set; }
     
     [Column("created_date")]
-    public DateTimeOffset CreatedDate { get; set; }
+    public DateTimeOffset CreatedDate { get; set; } = DateTimeOffset.Now;
 }
