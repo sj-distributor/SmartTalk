@@ -870,7 +870,7 @@ public partial class AiSpeechAssistantService
             CreatedBy = oldTargetKnowledge.CreatedBy,
             CreatedDate = DateTimeOffset.Now,
             Prompt = GenerateKnowledgePrompt(mergedJson),
-            Version = await HandleKnowledgeVersionAsync(oldTargetKnowledge, cancellationToken)
+            Version = await HandleKnowledgeVersionAsync(oldTargetKnowledge, cancellationToken).ConfigureAwait(false)
         };
         
         await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgesAsync([newTargetKnowledge], cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -976,6 +976,7 @@ public partial class AiSpeechAssistantService
         if (syncSources.Count == 0) return;
 
         var sourceIds = syncSources.Select(x => x.Id).ToList();
+        var sourceIdSet = new HashSet<int>(sourceIds);
         
         var copyRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedBySourceKnowledgeIdAsync(sourceIds, cancellationToken).ConfigureAwait(false);
 
@@ -996,6 +997,10 @@ public partial class AiSpeechAssistantService
         var allTargetRelations = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync(targetKnowledgeIds, cancellationToken).ConfigureAwait(false) ?? new List<KnowledgeCopyRelated>();
 
         var sourceMap = syncSources.ToDictionary(x => x.Id);
+        
+        var relationsByTarget = allTargetRelations.GroupBy(r => r.TargetKnowledgeId).ToDictionary(
+                g => g.Key, 
+                g => g.OrderBy(r => r.CreatedDate).ToList());
 
         var newTargets = new List<AiSpeechAssistantKnowledge>();
         var newTargetEntries = new List<(int OldTargetId, AiSpeechAssistantKnowledge NewTarget)>();
@@ -1003,17 +1008,15 @@ public partial class AiSpeechAssistantService
         
         foreach (var targetId in targetKnowledgeIds)
         {
-            if (!oldTargetMap.TryGetValue(targetId, out var oldTarget))
+            if (!oldTargetMap.TryGetValue(targetId, out var oldTarget) || !relationsByTarget.TryGetValue(targetId, out var relationsForTarget) || relationsForTarget.Count == 0)
                 continue;
 
-            var relationsForTarget = allTargetRelations
-                .Where(r => r.TargetKnowledgeId == targetId)
-                .OrderBy(r => r.CreatedDate)
-                .ToList();
-
             var remainingRelations = deleteKnowledge
-                ? relationsForTarget.Where(r => !sourceIds.Contains(r.SourceKnowledgeId)).ToList()
+                ? relationsForTarget.Where(r => !sourceIdSet.Contains(r.SourceKnowledgeId)).ToList()
                 : relationsForTarget;
+
+            if (remainingRelations.Count == 0)
+                continue;
 
             var mergedJsonObj = JObject.Parse(oldTarget.Json ?? "{}");
 
@@ -1041,7 +1044,7 @@ public partial class AiSpeechAssistantService
                 CreatedBy = oldTarget.CreatedBy,
                 CreatedDate = DateTimeOffset.Now,
                 Prompt = GenerateKnowledgePrompt(mergedJson),
-                Version = await HandleKnowledgeVersionAsync(oldTarget, cancellationToken)
+                Version = await HandleKnowledgeVersionAsync(oldTarget, cancellationToken).ConfigureAwait(false),
             };
 
             newTargets.Add(newTarget);
@@ -1070,10 +1073,7 @@ public partial class AiSpeechAssistantService
 
         foreach (var related in newCopyRelateds)
         {
-            if (newTargetMap.TryGetValue(related.TargetKnowledgeId, out var newTargetId))
-            {
-                related.TargetKnowledgeId = newTargetId;
-            }
+            if (newTargetMap.TryGetValue(related.TargetKnowledgeId, out var newTargetId)) related.TargetKnowledgeId = newTargetId;
         }
 
         await _aiSpeechAssistantDataProvider.AddKnowledgeCopyRelatedAsync(newCopyRelateds, true, cancellationToken).ConfigureAwait(false);
