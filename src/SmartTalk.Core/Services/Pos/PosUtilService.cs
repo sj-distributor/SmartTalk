@@ -52,6 +52,15 @@ public class PosUtilService : IPosUtilService
         }
         
         if (agent.Type != AgentType.PosCompanyStore || !assistant.IsAutoGenerateOrder) return;
+        
+        var posOrder = await _posDataProvider.GetPosOrderByIdAsync(recordId: record.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (posOrder != null)
+        {
+            Log.Information("The order already exist: {@PosOrder}, recordId: {RecordId}", posOrder, record.Id);
+            
+            return;
+        }
 
         var (products, menuItems) = await GeneratePosMenuItemsAsync(agent.Id, true, cancellationToken).ConfigureAwait(false);
 
