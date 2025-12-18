@@ -69,7 +69,7 @@ public class PosUtilService : IPosUtilService
         var systemPrompt =
             "你是一名訂單分析助手。請從下面的客戶分析報告文字中提取客人的姓名、电话、配送类型以及配送地址，以及所有下單的菜品、數量、規格、备注，並且用菜單列表盡力匹配每個菜品。" +
             "如果報告中提到了送餐類型，請提取送餐類型 type (0: 自提订单，1：配送订单)。" +
-            "如果報告中提到了客户的电话，請提取客户的电话 phoneNumber 。" +
+            "如果客户有要求或者提供其他的号码作为订单的号码，請提取客户的电话 phoneNumber ，否则 phoneNumber 为当前的来电号码：" + record.IncomingCallNumber + "。"+
             "如果報告中提到了客户的姓名，請提取客户的姓名 customerName 。" +
             "如果報告中提到了客户的配送地址，請提取客户的配送地址 customerAddress，若无则忽略 。" +
             "如果報告中提到了客户的订单注意事项或者是要求，請提取客户的备注信息 notes，若无则忽略 。" +
@@ -294,7 +294,7 @@ public class PosUtilService : IPosUtilService
             var orderNo = await GenerateOrderNumberAsync(store, cancellationToken).ConfigureAwait(false);
 
             var phoneNUmber = !string.IsNullOrWhiteSpace(aiDraftOrder?.PhoneNumber)
-                ? aiDraftOrder?.PhoneNumber.Replace("+1", "") : !string.IsNullOrWhiteSpace(record?.IncomingCallNumber)
+                ? aiDraftOrder?.PhoneNumber.Replace("+1", "").Replace("-", "") : !string.IsNullOrWhiteSpace(record?.IncomingCallNumber)
                     ? record.IncomingCallNumber.Replace("+1", "") : "Unknown";
             
             var order = new PosOrder
