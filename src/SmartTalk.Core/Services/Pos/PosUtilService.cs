@@ -294,7 +294,7 @@ public class PosUtilService : IPosUtilService
             var orderNo = await GenerateOrderNumberAsync(store, cancellationToken).ConfigureAwait(false);
 
             var phoneNUmber = !string.IsNullOrWhiteSpace(aiDraftOrder?.PhoneNumber)
-                ? aiDraftOrder?.PhoneNumber.Replace("+1", "") : !string.IsNullOrWhiteSpace(record?.IncomingCallNumber)
+                ? aiDraftOrder?.PhoneNumber.Replace("+1", "").Replace("-", "") : !string.IsNullOrWhiteSpace(record?.IncomingCallNumber)
                     ? record.IncomingCallNumber.Replace("+1", "") : "Unknown";
             
             var order = new PosOrder
