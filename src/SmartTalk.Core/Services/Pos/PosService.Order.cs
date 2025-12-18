@@ -60,7 +60,7 @@ public partial class PosService
 
         if (store == null) throw new Exception("Store could not be found.");
 
-        var token = await GetPosTokenAsync(store, order, cancellationToken).ConfigureAwait(false);
+        var token = await GetPosTokenAsync(store, cancellationToken).ConfigureAwait(false);
 
         if (!store.IsLink && string.IsNullOrWhiteSpace(token))
         {
@@ -433,7 +433,7 @@ public partial class PosService
         return (utcStart, utcEnd);
     }
     
-    private async Task<string> GetPosTokenAsync(CompanyStore store, PosOrder order, CancellationToken cancellationToken)
+    private async Task<string> GetPosTokenAsync(CompanyStore store, CancellationToken cancellationToken)
     {
         var authorization = await _easyPosClient.GetEasyPosTokenAsync(new EasyPosTokenRequestDto
         {
@@ -517,7 +517,7 @@ public partial class PosService
             if (!isAvailable)
             {
                 Log.Information("Current token is available: {IsAvailable}", string.IsNullOrWhiteSpace(token));
-                token = !string.IsNullOrWhiteSpace(token) ? token : await GetPosTokenAsync(store, order, cancellationToken).ConfigureAwait(false);
+                token = !string.IsNullOrWhiteSpace(token) ? token : await GetPosTokenAsync(store, cancellationToken).ConfigureAwait(false);
                 
                 await MarkOrderAsSpecificStatusAsync(order, status, cancellationToken).ConfigureAwait(false);
 
@@ -530,7 +530,7 @@ public partial class PosService
             
             await SafetyPlaceOrderWithRetryAsync(order, store, token, isWithRetry, cancellationToken).ConfigureAwait(false);
             
-        }, wait: TimeSpan.FromSeconds(10), retry: TimeSpan.FromSeconds(1), server: RedisServer.System).ConfigureAwait(false);
+        }, wait: TimeSpan.Zero, retry: TimeSpan.Zero, server: RedisServer.System).ConfigureAwait(false);
     }
 
     private async Task<PlaceOrderToEasyPosResponseDto> PlaceOrderAsync(PosOrder order, CompanyStore store, string token, CancellationToken cancellationToken)
