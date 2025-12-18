@@ -32,9 +32,11 @@ public partial class EventHandlingService : IEventHandlingService
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly IHrInterViewDataProvider _hrInterViewDataProvider;
+    private readonly IAiSpeechAssistantService _aiSpeechAssistantService;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
 
     public EventHandlingService(IAsrClient asrClient, SmartiesClient smartiesClient, IPosUtilService posUtilService, IPosDataProvider posDataProvider, ISmartTalkHttpClientFactory httpClientFactory, IPhoneOrderDataProvider phoneOrderDataProvider, IHrInterViewDataProvider hrInterViewDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
+    public EventHandlingService(SmartiesClient smartiesClient, IPosDataProvider posDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, IAiSpeechAssistantService aiSpeechAssistantService)
     {
         _asrClient = asrClient;
         _smartiesClient = smartiesClient;
@@ -44,5 +46,6 @@ public partial class EventHandlingService : IEventHandlingService
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _hrInterViewDataProvider = hrInterViewDataProvider;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
+        _aiSpeechAssistantService = aiSpeechAssistantService;
     }
 }

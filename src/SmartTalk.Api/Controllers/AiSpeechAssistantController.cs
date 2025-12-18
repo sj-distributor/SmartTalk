@@ -8,9 +8,7 @@ using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Services.RealtimeAi.Services;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.RealtimeAi;
-using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.RealtimeAi;
-using SmartTalk.Messages.Commands.KnowledgeCopy;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Requests.AiSpeechAssistant;
 

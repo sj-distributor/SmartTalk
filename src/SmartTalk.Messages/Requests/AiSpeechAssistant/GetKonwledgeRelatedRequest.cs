@@ -6,9 +6,14 @@ namespace SmartTalk.Messages.Requests.AiSpeechAssistant;
 
 public class GetKonwledgeRelatedRequest: IRequest
 {
-    public int TargetKnowledgeId { get; set; }
+    public int AgentId { get; set; }
 }
 
-public class GetKonwledgeRelatedResponse : SmartTalkResponse<List<KnowledgeCopyRelatedDto>>
+public class GetKonwledgeRelatedResponse : SmartTalkResponse<GetKonwledgeRelatedResponseData>
 {
+}
+
+public class GetKonwledgeRelatedResponseData
+{
+    public List<AiSpeechAssistantKnowledgeDto> DedicatedknowledgeDtos { get; set; }
 }

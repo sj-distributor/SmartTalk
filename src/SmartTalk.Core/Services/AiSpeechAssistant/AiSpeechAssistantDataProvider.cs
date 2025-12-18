@@ -43,6 +43,8 @@ public partial interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task AddAiSpeechAssistantsAsync(List<Domain.AISpeechAssistant.AiSpeechAssistant> assistants, bool forceSave = true, CancellationToken cancellationToken = default);
 
     Task<AiSpeechAssistantKnowledge> GetAiSpeechAssistantKnowledgeAsync(int? assistantId = null, int? knowledgeId = null, bool? isActive = null, CancellationToken cancellationToken = default);
+    
+    Task<List<AiSpeechAssistantKnowledge>> GetAiSpeechAssistantKnowledgesAsync(List<int> knowledgeIds = null, CancellationToken cancellationToken = default);
 
     Task AddAiSpeechAssistantKnowledgesAsync(List<AiSpeechAssistantKnowledge> knowledges, bool forceSave = true, CancellationToken cancellationToken = default);
     
@@ -138,10 +140,16 @@ public partial interface IAiSpeechAssistantDataProvider : IScopedDependency
 
     Task<List<KnowledgeCopyRelated>> AddKnowledgeCopyRelatedAsync(List<KnowledgeCopyRelated> related, bool forceSave = true, CancellationToken cancellationToken = default);
     
-    Task<List<KnowledgeCopyRelated>> GetKnowledgeCopyRelatedAsync(int targetKnowledgeId, CancellationToken cancellationToken = default);
+    Task DeleteKnowledgeCopyRelatedBySourceKnowledgeIdAsync(List<int> sourceKnowledgeId, bool forceSave = true, CancellationToken cancellationToken = default);
+    
+    Task<List<KnowledgeCopyRelated>> GetKnowledgeCopyRelatedBySourceKnowledgeIdAsync(List<int> sourceKnowledgeId, CancellationToken cancellationToken = default);
+    
+    Task<List<KnowledgeCopyRelated>> GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync(List<int> targetKnowledgeId, CancellationToken cancellationToken = default);
 
-    Task<List<GetKonwledgesResponseData>> GetAiSpeechAssistantKnowledgesByCompanyIdAsync(int companyId,
+    Task<List<KnowledgeCopyRelatedInfoDto>> GetAiSpeechAssistantKnowledgesByCompanyIdAsync(int companyId,
         int? pageIndex = null, int? pageSize = null, int? agentId = null, int? storeId = null, string keyWord = null, CancellationToken cancellationToken = default);
+
+    Task<List<KnowledgeCopyRelatedInfoDto>> GetKnowledgeCopyRelatedEnrichInfoAsync(List<int> assistantIds, CancellationToken cancellationToken);
 }
 
 public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
@@ -299,6 +307,12 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
             query = query.Where(x => x.IsActive == isActive.Value);
         
         return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<AiSpeechAssistantKnowledge>> GetAiSpeechAssistantKnowledgesAsync(List<int> knowledgeIds = null, CancellationToken cancellationToken = default)
+    {
+        return await _repository.Query<AiSpeechAssistantKnowledge>()
+            .Where(x => knowledgeIds.Contains(x.Id) && x.IsActive).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task AddAiSpeechAssistantKnowledgesAsync(List<AiSpeechAssistantKnowledge> knowledges, bool forceSave = true, CancellationToken cancellationToken = default)
@@ -736,12 +750,26 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
         return related;
     }
 
-    public async Task<List<KnowledgeCopyRelated>> GetKnowledgeCopyRelatedAsync(int targetKnowledgeId, CancellationToken cancellationToken = default)
+    public async Task DeleteKnowledgeCopyRelatedBySourceKnowledgeIdAsync(List<int> sourceKnowledgeId, bool forceSave = true, CancellationToken cancellationToken = default)
     {
-        return await _repository.Query<KnowledgeCopyRelated>().Where(x => x.TargetKnowledgeId == targetKnowledgeId).ToListAsync(cancellationToken).ConfigureAwait(false);
-    }
+        var relateds = await _repository.Query<KnowledgeCopyRelated>().Where(x => sourceKnowledgeId.Contains(x.SourceKnowledgeId)).ToListAsync(cancellationToken).ConfigureAwait(false);
 
-    public async Task<List<GetKonwledgesResponseData>> GetAiSpeechAssistantKnowledgesByCompanyIdAsync(
+        await _repository.DeleteAllAsync(relateds, cancellationToken).ConfigureAwait(false);
+        
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+    
+    public async Task<List<KnowledgeCopyRelated>> GetKnowledgeCopyRelatedBySourceKnowledgeIdAsync(List<int> sourceKnowledgeId, CancellationToken cancellationToken = default)
+    {
+        return await _repository.Query<KnowledgeCopyRelated>().Where(x => sourceKnowledgeId.Contains(x.SourceKnowledgeId)).ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+    
+    public async Task<List<KnowledgeCopyRelated>> GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync(List<int> targetKnowledgeId, CancellationToken cancellationToken = default)
+    {
+        return await _repository.Query<KnowledgeCopyRelated>().Where(x => targetKnowledgeId.Contains(x.TargetKnowledgeId)).ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+    
+    public async Task<List<KnowledgeCopyRelatedInfoDto>> GetAiSpeechAssistantKnowledgesByCompanyIdAsync(
         int companyId, int? pageIndex = null, int? pageSize = null, int? agentId = null, int? storeId = null, string keyWord = null, CancellationToken cancellationToken = default)
     {
         var posAgentQuery = _repository.Query<PosAgent>();
@@ -759,14 +787,13 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
             join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
             join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agentAssistant.AssistantId equals assistant.Id
             join knowledge in _repository.Query<AiSpeechAssistantKnowledge>() on assistant.Id equals knowledge.AssistantId  where knowledge.IsActive
-            select new GetKonwledgesResponseData
+            select new KnowledgeCopyRelatedInfoDto
             {
                 AssistantId = assistant.Id,
                 AssiatantName = assistant.Name,
                 StoreName = store.Names,
                 KnowledgeId = knowledge.Id,
                 AiAgentName = agent.Name,
-                KnowledgeJson = knowledge.Json
             };
 
         if (!string.IsNullOrWhiteSpace(keyWord))
@@ -776,5 +803,25 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
             query = query.Skip((pageIndex.Value - 1) * pageSize.Value).Take(pageSize.Value);
 
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+    
+    public async Task<List<KnowledgeCopyRelatedInfoDto>> GetKnowledgeCopyRelatedEnrichInfoAsync(List<int> assistantIds, CancellationToken cancellationToken)
+    {
+        var query =
+            from assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>()
+            join agentAssistant in _repository.Query<AgentAssistant>() on assistant.Id equals agentAssistant.AssistantId
+            join agent in _repository.Query<Agent>() on agentAssistant.AgentId equals agent.Id
+            join posAgent in _repository.Query<PosAgent>() on agent.Id equals posAgent.AgentId
+            join store in _repository.Query<CompanyStore>() on posAgent.StoreId equals store.Id
+            where assistantIds.Contains(assistant.Id)
+            select new KnowledgeCopyRelatedInfoDto
+            {
+                AssistantId = assistant.Id,
+                AssiatantName = assistant.Name,
+                AiAgentName = agent.Name,
+                StoreName = store.Names
+            };
+
+        return await query.AsNoTracking().ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }
