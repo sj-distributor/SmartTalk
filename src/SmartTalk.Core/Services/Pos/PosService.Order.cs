@@ -69,7 +69,7 @@ public partial class PosService
 
         if (store == null) throw new Exception("Store could not be found.");
 
-        var token = await GetPosTokenAsync(store, order, cancellationToken).ConfigureAwait(false);
+        var token = await GetPosTokenAsync(store, cancellationToken).ConfigureAwait(false);
 
         if (!store.IsLink && string.IsNullOrWhiteSpace(token))
         {
@@ -187,7 +187,7 @@ public partial class PosService
 
         var enrichOrder = _mapper.Map<PosOrderDto>(order);
         
-        await EnrichPosOrderAsync(enrichOrder, cancellationToken).ConfigureAwait(false);
+        await EnrichPosOrderAsync(enrichOrder, request.IsWithSpecifications, cancellationToken).ConfigureAwait(false);
 
         return new GetPosStoreOrderResponse { Data = enrichOrder };
     }
@@ -440,7 +440,7 @@ public partial class PosService
         return (utcStart, utcEnd);
     }
     
-    private async Task<string> GetPosTokenAsync(CompanyStore store, PosOrder order, CancellationToken cancellationToken)
+    private async Task<string> GetPosTokenAsync(CompanyStore store, CancellationToken cancellationToken)
     {
         var authorization = await _easyPosClient.GetEasyPosTokenAsync(new EasyPosTokenRequestDto
         {
@@ -524,7 +524,7 @@ public partial class PosService
             if (!isAvailable)
             {
                 Log.Information("Current token is available: {IsAvailable}", string.IsNullOrWhiteSpace(token));
-                token = !string.IsNullOrWhiteSpace(token) ? token : await GetPosTokenAsync(store, order, cancellationToken).ConfigureAwait(false);
+                token = !string.IsNullOrWhiteSpace(token) ? token : await GetPosTokenAsync(store, cancellationToken).ConfigureAwait(false);
                 
                 await MarkOrderAsSpecificStatusAsync(order, status, cancellationToken).ConfigureAwait(false);
 
@@ -540,7 +540,7 @@ public partial class PosService
             if (order.Status is PosOrderStatus.Sent or PosOrderStatus.Modified)
                 _smartTalkBackgroundJobClient.Enqueue(() => CreateMerchPrinterOrderAsync(store.Id, order.Id, order, cancellationToken));
             
-        }, wait: TimeSpan.FromSeconds(10), retry: TimeSpan.FromSeconds(1), server: RedisServer.System).ConfigureAwait(false);
+        }, wait: TimeSpan.Zero, retry: TimeSpan.Zero, server: RedisServer.System).ConfigureAwait(false);
     }
 
     public async Task<UpdatePosOrderPrintStatusResponse> UpdatePosOrderPrintStatusAsync(UpdatePosOrderPrintStatusCommand command, CancellationToken cancellationToken)
@@ -720,17 +720,53 @@ public partial class PosService
         };
     }
 
-    private async Task EnrichPosOrderAsync(PosOrderDto order, CancellationToken cancellationToken)
+    private async Task EnrichPosOrderAsync(PosOrderDto order, bool isWithSpecifications = false, CancellationToken cancellationToken = default)
     {
         try
         {
+            var simpleModifiers = new List<PosProductSimpleModifiersDto>();
+            
             var items = JsonConvert.DeserializeObject<List<PosOrderItemDto>>(order.Items);
         
             var products = await _posDataProvider.GetPosProductsAsync(
                 productIds: items.Select(x => x.ProductId.ToString()).Distinct().ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-            items.ForEach(x => x.ProductName = products.Where(p => p.ProductId == x.ProductId.ToString()).FirstOrDefault()?.Names);
             
+            var productsLookup = products.GroupBy(x => x.ProductId).ToDictionary(
+                g => g.Key, g =>
+                {
+                    var p = g.First();
+                    
+                    return (p.Names, string.IsNullOrWhiteSpace(p.Modifiers) ? [] : JsonConvert.DeserializeObject<List<EasyPosResponseModifierGroups>>(p.Modifiers));
+                });
+
+            foreach (var item in items)
+            {
+                if (productsLookup.TryGetValue(item.ProductId.ToString(), out var product))
+                {
+                    item.ProductName = product.Names;
+
+                    if (isWithSpecifications && product.Item2.Count > 0)
+                    {
+                        var matchedModifiers = simpleModifiers.Where(x => x.ProductId == item.ProductId.ToString()).ToList();
+
+                        if (matchedModifiers.Count > 0) continue;
+                        
+                        simpleModifiers.AddRange(product.Item2.Select(x => new PosProductSimpleModifiersDto
+                        {
+                            ProductId = item.ProductId.ToString(),
+                            ModifierId = x.Id.ToString(),
+                            MinimumSelect = x.MinimumSelect,
+                            MaximumSelect = x.MaximumSelect,
+                            MaximumRepetition = x.MaximumRepetition,
+                            ModifierProductIds = x.ModifierProducts.Select(m => m.Id.ToString()).ToList()
+                        }));
+                    }
+                }
+                else
+                    item.ProductName = null;
+            }
+            
+            order.SimpleModifiers = simpleModifiers;
             order.Items = JsonConvert.SerializeObject(items);
 
             var merchPrinterOrder = (await _printerDataProvider.GetMerchPrinterOrdersAsync(orderId: order.Id, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();

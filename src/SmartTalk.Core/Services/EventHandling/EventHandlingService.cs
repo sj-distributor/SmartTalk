@@ -21,16 +21,16 @@ public interface IEventHandlingService : IScopedDependency
 public partial class EventHandlingService : IEventHandlingService
 {
     private readonly SmartiesClient _smartiesClient;
+    private readonly IPosUtilService _posUtilService;
     private readonly IPosDataProvider _posDataProvider;
-    private readonly PhoneOrderUtilService _phoneOrderUtilService;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
 
-    public EventHandlingService(SmartiesClient smartiesClient, IPosDataProvider posDataProvider, PhoneOrderUtilService phoneOrderUtilService, IPhoneOrderDataProvider phoneOrderDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
+    public EventHandlingService(SmartiesClient smartiesClient, IPosUtilService posUtilService, IPosDataProvider posDataProvider, IPhoneOrderDataProvider phoneOrderDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
         _smartiesClient = smartiesClient;
+        _posUtilService = posUtilService;
         _posDataProvider = posDataProvider;
-        _phoneOrderUtilService = phoneOrderUtilService;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
     }

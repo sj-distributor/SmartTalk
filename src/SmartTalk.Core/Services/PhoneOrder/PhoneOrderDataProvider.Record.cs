@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Domain.Account;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.PhoneOrder;
+using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.Restaurants;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Messages.Dto.Agent;
@@ -9,6 +10,7 @@ using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Dto.Restaurant;
 using SmartTalk.Messages.Enums;
 using SmartTalk.Messages.Enums.PhoneOrder;
+using SmartTalk.Messages.Enums.Pos;
 using SmartTalk.Messages.Enums.STT;
 
 namespace SmartTalk.Core.Services.PhoneOrder;
@@ -59,7 +61,11 @@ public partial interface IPhoneOrderDataProvider
 
     Task UpdatePhoneOrderRecordReportsAsync(List<PhoneOrderRecordReport> reports, bool forceSave = true, CancellationToken cancellationToken = default);
     
-    Task<Dictionary<int, int>> GetSimplePhoneOrderRecordsByAgentIdsAsync(List<int> agentIds, CancellationToken cancellationToken);
+    Task<PhoneOrderRecordScenarioHistory> AddPhoneOrderRecordScenarioHistoryAsync(PhoneOrderRecordScenarioHistory scenarioHistory, bool forceSave = true, CancellationToken cancellationToken = default);
+
+    Task<List<PhoneOrderRecordScenarioHistory>> GetPhoneOrderRecordScenarioHistoryAsync(int recordId, CancellationToken cancellationToken = default);
+    
+    Task<List<SimplePhoneOrderRecordDto>> GetSimplePhoneOrderRecordsByAgentIdsAsync(List<int> agentIds, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderDataProvider
@@ -344,11 +350,33 @@ public partial class PhoneOrderDataProvider
         if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<Dictionary<int, int>> GetSimplePhoneOrderRecordsByAgentIdsAsync(List<int> agentIds, CancellationToken cancellationToken)
+    public async Task<PhoneOrderRecordScenarioHistory> AddPhoneOrderRecordScenarioHistoryAsync(PhoneOrderRecordScenarioHistory scenarioHistory, bool forceSave = true, CancellationToken cancellationToken = default)
     {
-        return await _repository.QueryNoTracking<PhoneOrderRecord>()
-            .Where(x => x.Status == PhoneOrderRecordStatus.Sent && agentIds.Contains(x.AgentId))
-            .Select(x => new { x.Id, x.AgentId })
-            .ToDictionaryAsync(k => k.Id, v => v.AgentId, cancellationToken).ConfigureAwait(false);
+        await _repository.InsertAsync(scenarioHistory, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave)
+            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        
+        return scenarioHistory;
+    }
+    
+    public async Task<List<PhoneOrderRecordScenarioHistory>> GetPhoneOrderRecordScenarioHistoryAsync(int recordId, CancellationToken cancellationToken = default)
+    {
+        return await _repository.Query<PhoneOrderRecordScenarioHistory>().Where(x => x.RecordId == recordId).ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<SimplePhoneOrderRecordDto>> GetSimplePhoneOrderRecordsByAgentIdsAsync(List<int> agentIds, CancellationToken cancellationToken)
+    {
+        var query = from order in _repository.Query<PosOrder>().Where(x => x.RecordId.HasValue && x.Status == PosOrderStatus.Pending)
+            join record in _repository.Query<PhoneOrderRecord>().Where(x => x.Status == PhoneOrderRecordStatus.Sent && x.AssistantId.HasValue && agentIds.Contains(x.AgentId)) on order.RecordId.Value equals record.Id
+            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on record.AssistantId.Value equals assistant.Id
+            select new SimplePhoneOrderRecordDto
+            {
+                Id = record.Id,
+                AgentId = record.AgentId,
+                AssistantId = record.AssistantId
+            };
+        
+        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }

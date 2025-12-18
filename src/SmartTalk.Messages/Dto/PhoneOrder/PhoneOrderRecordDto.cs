@@ -61,12 +61,10 @@ public class PhoneOrderRecordDto
     public bool? IsHumanAnswered { get; set; }
     
     public bool IsUnreviewed { get; set; }
+
+    public int? UnSendCount { get; set; }
     
-    public int? UpdateScenarioUserId { get; set; }
-    
-    public string UpdateScenarioUserName { get; set; }
+    public bool IsModifyScenario { get; set; }
     
     public bool IsLockedScenario { get; set; }
-    
-    public string CustomerAddress { get; set; }
 }
