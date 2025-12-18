@@ -67,10 +67,10 @@ public class PosOrderDto
     public DateTimeOffset? SentTime { get; set; }
     
     public string SentByUsername { get; set; }
-    
-    public List<PosProductSimpleModifiersDto> SimpleModifiers { get; set; } = [];
 
     public CloudPrintStatus? CloudPrintStatus { get; set; }
 
     public Guid? CloudPrintOrderId { get; set; }
+    
+    public List<PosProductSimpleModifiersDto> SimpleModifiers { get; set; } = [];
 }
