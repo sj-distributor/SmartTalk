@@ -11,8 +11,7 @@ namespace SmartTalk.Core.Services.Audio.Provider;
 
 public class QwenAudioModelProvider : IAudioModelProvider
 {
-    private const string BaseUrl = "http://47.77.223.168:8000/v1";
-    private const string Model = "/root/autodl-tmp/Qwen3-Omni-30B-A3B-Instruct";
+    private const string Model = "Qwen3-Omni-30B-A3B-Instruct";
 
     private readonly QwenSettings _qwenSettings;
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
