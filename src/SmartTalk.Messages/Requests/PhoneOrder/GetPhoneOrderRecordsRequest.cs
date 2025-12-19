@@ -21,11 +21,11 @@ public class GetPhoneOrderRecordsRequest : IRequest
     
     public DateTimeOffset? Date { get; set; }
     
-    public string OrderId { get; set; }
-    
     public int? AssistantId { get; set; }
 
     public bool IsFilteringScenarios { get; set; } = false;
+    
+    public List<string> OrderIds { get; set; }
 }
 
 public class GetPhoneOrderRecordsResponse : SmartTalkResponse<List<PhoneOrderRecordDto>>
