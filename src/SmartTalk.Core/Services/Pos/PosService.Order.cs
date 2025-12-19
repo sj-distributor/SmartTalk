@@ -36,6 +36,8 @@ public partial interface IPosService
     Task<GetPrintStatusResponse> GetPrintStatusAsync(GetPrintStatusRequest request, CancellationToken cancellationToken);
     
     Task<GetPosOrderCloudPrintStatusResponse> GetPosOrderCloudPrintStatusAsync(GetPosOrderCloudPrintStatusRequest request, CancellationToken cancellationToken);
+
+    Task RetryCloudPrintingAsync(RetryCloudPrintingCommand command, CancellationToken cancellationToken);
 }
 
 public partial class PosService
@@ -90,15 +92,44 @@ public partial class PosService
         var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(storeId: storeId, isEnabled: true, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
 
         Log.Information("get merch printer:{@merchPrinter}", merchPrinter);
-        
-        await _printerDataProvider.AddMerchPrinterOrderAsync(new MerchPrinterOrder
+
+        var merchPrinterOrder = new MerchPrinterOrder
         {
             OrderId = orderId,
             StoreId = storeId,
             PrinterMac = merchPrinter?.PrinterMac,
             PrintDate = DateTimeOffset.Now,
             PrintFormat = PrintFormat.Order
-        }, cancellationToken).ConfigureAwait(false);
+        };
+        
+        await _printerDataProvider.AddMerchPrinterOrderAsync(merchPrinterOrder, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Create merch printer order:{@merchPrinterOrder}", merchPrinterOrder);
+
+        _smartTalkBackgroundJobClient.Schedule<IMediator>( x => x.SendAsync(new RetryCloudPrintingCommand{ Id = merchPrinterOrder.Id, Count = 0}, CancellationToken.None), TimeSpan.FromSeconds(10));
+    }
+
+    public async Task RetryCloudPrintingAsync(RetryCloudPrintingCommand command, CancellationToken cancellationToken)
+    {
+        Log.Information("retry cloud printer:{id}", command.Id);
+        
+        var merchPrinterOrder = (await _printerDataProvider.GetMerchPrinterOrdersAsync(id: command.Id, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+
+        if (merchPrinterOrder == null) return;
+        
+        if (merchPrinterOrder.PrintStatus != PrintStatus.Printed)
+        {
+            var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(storeId: merchPrinterOrder.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+            
+            merchPrinterOrder.PrintStatus = PrintStatus.Waiting;
+            merchPrinterOrder.PrinterMac = merchPrinter?.PrinterMac;
+
+            await _printerDataProvider.UpdateMerchPrinterOrderAsync(merchPrinterOrder, cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+        else return;
+
+        if (command.Count < 3)
+            _smartTalkBackgroundJobClient.Schedule<IMediator>( x => x.SendAsync(new RetryCloudPrintingCommand{ Id = merchPrinterOrder.Id, Count = command.Count + 1 },  CancellationToken.None), TimeSpan.FromSeconds(30));
     }
 
     public async Task UpdatePosOrderAsync(UpdatePosOrderCommand command, CancellationToken cancellationToken)

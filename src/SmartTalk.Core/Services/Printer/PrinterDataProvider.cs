@@ -133,7 +133,6 @@ public class PrinterDataProvider : IPrinterDataProvider
         await _repository.InsertAsync(merchPrinterOrder, cancellationToken).ConfigureAwait(false);
 
         await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-
     }
 
     public async Task AddMerchPrinterLogAsync(MerchPrinterLog merchPrinterLog, CancellationToken cancellationToken)
