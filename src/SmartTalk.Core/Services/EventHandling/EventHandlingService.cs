@@ -15,12 +15,13 @@ namespace SmartTalk.Core.Services.EventHandling;
 public interface IEventHandlingService : IScopedDependency
 {
     Task HandlingEventAsync(AiSpeechAssistantKnowledgeAddedEvent @event, CancellationToken cancellationToken);
-    
     Task HandlingEventAsync(PosOrderPlacedEvent @event, CancellationToken cancellationToken);
     
     Task HandlingEventAsync(ConnectWebSocketEvent @event, CancellationToken cancellationToken);
     
     Task HandlingEventAsync(PhoneOrderRecordUpdatedEvent @event, CancellationToken cancellationToken);
+    
+    public Task HandlingEventAsync(KonwledgeCopyAddedEvent @event, CancellationToken cancellationToken);
 }
 
 public partial class EventHandlingService : IEventHandlingService

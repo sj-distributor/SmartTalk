@@ -1,8 +1,11 @@
+using DocumentFormat.OpenXml.Office2010.ExcelAc;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Serilog;
 using Smarties.Messages.DTO.OpenAi;
 using Smarties.Messages.Enums.OpenAi;
 using Smarties.Messages.Requests.Ask;
+using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
 
 namespace SmartTalk.Core.Services.EventHandling;
@@ -37,7 +40,7 @@ public partial class EventHandlingService
             Log.Error("Generate the knowledge brief error: {@Message}", e.Message);
         }
     }
-    
+
     private JObject CompareJsons(string oldJson, string newJson)
     {
         var result = new JObject();;
@@ -135,4 +138,52 @@ public partial class EventHandlingService
         
         return completionResult?.Data?.Response;
     }
+
+    public async Task HandlingEventAsync(KonwledgeCopyAddedEvent @event, CancellationToken cancellationToken)
+    {
+        if (@event.KnowledgeOldJsons == null || @event.KnowledgeOldJsons.Count == 0) return;
+
+        try
+        {
+            var knowledgeIds = @event.KnowledgeOldJsons.Select(s => s.KnowledgeId).ToList();
+            var knowledges = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgesAsync(knowledgeIds, cancellationToken).ConfigureAwait(false);
+
+            var updates = new List<AiSpeechAssistantKnowledge>();
+
+            foreach (var state in @event.KnowledgeOldJsons)
+            {
+                var knowledge = knowledges.FirstOrDefault(knowledge => knowledge.Id == state.KnowledgeId);
+                if (knowledge == null) continue;
+
+                var diff = CompareJsons(state.OldMergedJson, MergeJsons(new[] { JObject.Parse(state.OldMergedJson), JObject.Parse(@event.CopyJson) }));
+
+                if (diff == null || !diff.HasValues) continue;
+
+                var brief = await GenerateKnowledgeChangeBriefAsync(diff.ToString(), cancellationToken).ConfigureAwait(false);
+
+                if (!string.IsNullOrEmpty(brief))
+                {
+                    knowledge.Brief = brief;
+                    updates.Add(knowledge);
+                }
+            }
+
+            if (updates.Count > 0)
+            {
+                await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync(updates, true, cancellationToken).ConfigureAwait(false);
+            }
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Generate knowledge brief error for multiple copy targets");
+        }
+    }
+
+
+    private static string MergeJsons(IEnumerable<JObject> jsons)
+    {
+        return jsons.Aggregate(new JObject(), (acc, j) =>
+        { acc.Merge(j, new JsonMergeSettings { MergeArrayHandling = MergeArrayHandling.Concat }); return acc; }).ToString(Formatting.None);
+    }
+
 }
