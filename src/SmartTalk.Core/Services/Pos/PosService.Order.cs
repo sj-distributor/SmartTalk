@@ -834,6 +834,10 @@ public partial class PosService
                     order.CloudPrintStatus = CloudPrintStatus.Failed;
             }
             
+            var company = await _posDataProvider.GetPosCompanyStoreAsync(id: order.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            order.IsLink = company.IsLink;
+            
             if (!order.SentBy.HasValue) return;
             
             var userAccount = await _accountDataProvider.GetUserAccountByUserIdAsync(order.SentBy.Value, cancellationToken).ConfigureAwait(false);
