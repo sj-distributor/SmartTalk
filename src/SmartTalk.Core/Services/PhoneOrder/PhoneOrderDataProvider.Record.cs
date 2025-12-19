@@ -107,11 +107,14 @@ public partial class PhoneOrderDataProvider
         if (utcStart.HasValue && utcEnd.HasValue)
             query = query.Where(record => record.CreatedDate >= utcStart.Value && record.CreatedDate < utcEnd.Value);
         
-        if (orderIds != null && orderIds.Any())
-            query = query.Where(record => orderIds.Contains(record.OrderId));
-
         if (assistantId.HasValue)
             query = query.Where(x => x.AssistantId.HasValue && x.AssistantId == assistantId.Value);
+        
+        if (orderIds != null && orderIds.Any())
+        {
+            query = query.Where(record => 
+                orderIds.Any(id => record.OrderId.Contains($"\"{id}\"")));
+        }
 
         return await query.OrderByDescending(record => record.CreatedDate).Take(1000).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
