@@ -801,32 +801,32 @@ public partial class PosService
             order.Items = JsonConvert.SerializeObject(items);
 
             var merchPrinterOrder = (await _printerDataProvider.GetMerchPrinterOrdersAsync(orderId: order.Id, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
-            
+            MerchPrinterDto merchPrinterDto = null;
             order.CloudPrintOrderId = merchPrinterOrder?.Id;
             order.CloudPrintStatus = CloudPrintStatus.Failed;
         
-            if (merchPrinterOrder != null && merchPrinterOrder.PrinterMac != null)
+            if (merchPrinterOrder is { PrinterMac: not null })
             {
                 var merchPrinterLog = (await _printerDataProvider.GetMerchPrinterLogAsync(storeId: order.StoreId, orderId: order.Id, cancellationToken: cancellationToken).ConfigureAwait(false)).Item2.FirstOrDefault();
                 var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(printerMac: merchPrinterOrder.PrinterMac).ConfigureAwait(false)).FirstOrDefault();
-            
+
                 if (merchPrinterOrder.PrintStatus == PrintStatus.Printed && merchPrinterLog is { Code: 200 })
                     order.CloudPrintStatus = CloudPrintStatus.Successful;
                 else if (merchPrinterOrder.PrintStatus is PrintStatus.Waiting or PrintStatus.Printing && merchPrinter is { IsEnabled: true })
                 {
-                    var merchPrinterDto = _mapper.Map<MerchPrinterDto>(merchPrinter);
+                    merchPrinterDto = _mapper.Map<MerchPrinterDto>(merchPrinter);
 
                     if (merchPrinterDto.PrinterStatusInfo.Online && merchPrinterDto.PrinterStatusInfo.PaperEmpty == false)
                     {
                         order.CloudPrintStatus = CloudPrintStatus.Printing;
                     }
-                }else
-                    order.CloudPrintStatus = CloudPrintStatus.Failed;
+                }
             }
             
             var company = await _posDataProvider.GetPosCompanyStoreAsync(id: order.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
             order.IsLink = company.IsLink;
+            order.IsLinkCouldPrinting = merchPrinterDto != null && merchPrinterDto.PrinterStatusInfo.Online;
             
             if (!order.SentBy.HasValue) return;
             
