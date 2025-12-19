@@ -71,6 +71,8 @@ public class PosOrderDto
     public CloudPrintStatus? CloudPrintStatus { get; set; }
 
     public Guid? CloudPrintOrderId { get; set; }
+
+    public bool? IsLink { get; set; }
     
     public List<PosProductSimpleModifiersDto> SimpleModifiers { get; set; } = [];
 }
