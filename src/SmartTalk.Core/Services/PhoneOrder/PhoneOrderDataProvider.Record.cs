@@ -89,10 +89,12 @@ public partial class PhoneOrderDataProvider
         if (utcStart.HasValue && utcEnd.HasValue)
             query = query.Where(record => record.CreatedDate >= utcStart.Value && record.CreatedDate < utcEnd.Value);
         
+        var records = await query.OrderByDescending(r => r.CreatedDate).Take(1000).ToListAsync(cancellationToken).ConfigureAwait(false);
+        
         if (orderIds != null && orderIds.Any())
-            query = query.Where(record => record.OrderId != null && orderIds.Any(id => EF.Functions.Like(record.OrderId, $"%\"{id}\"%")));
+            records = records.Where(r => r.OrderId != null && orderIds.Any(id => r.OrderId.Contains($"\"{id}\""))).ToList();
 
-        return await query.OrderByDescending(record => record.CreatedDate).Take(1000).ToListAsync(cancellationToken).ConfigureAwait(false);
+        return records;
     }
 
     public async Task UpdatePhoneOrderRecordsAsync(PhoneOrderRecord record, bool forceSave = true, CancellationToken cancellationToken = default)
