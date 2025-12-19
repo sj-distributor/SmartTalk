@@ -12,6 +12,8 @@ public interface IEventHandlingService : IScopedDependency
     public Task HandlingEventAsync(AiSpeechAssistantKnowledgeAddedEvent @event, CancellationToken cancellationToken);
     
     public Task HandlingEventAsync(PosOrderPlacedEvent @event, CancellationToken cancellationToken);
+    
+    public Task HandlingEventAsync(KonwledgeCopyAddedEvent @event, CancellationToken cancellationToken);
 }
 
 public partial class EventHandlingService : IEventHandlingService
