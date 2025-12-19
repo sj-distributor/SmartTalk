@@ -1,14 +1,17 @@
 using Serilog;
 using Newtonsoft.Json;
 using System.Globalization;
+using Mediator.Net;
 using SmartTalk.Core.Constants;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.Printer;
 using SmartTalk.Messages.Commands.Pos;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Pos;
+using SmartTalk.Messages.Dto.Printer;
 using SmartTalk.Messages.Enums.Caching;
 using SmartTalk.Messages.Enums.Pos;
+using SmartTalk.Messages.Enums.Printer;
 using SmartTalk.Messages.Events.Pos;
 using SmartTalk.Messages.Requests.Pos;
 
@@ -27,6 +30,12 @@ public partial interface IPosService
     Task<GetPosStoreOrderResponse> GetPosStoreOrderAsync(GetPosStoreOrderRequest request, CancellationToken cancellationToken);
 
     Task HandlePosOrderAsync(PosOrder order, bool isRetry, CancellationToken cancellationToken);
+
+    Task<UpdatePosOrderPrintStatusResponse> UpdatePosOrderPrintStatusAsync(UpdatePosOrderPrintStatusCommand command, CancellationToken cancellationToken);
+    
+    Task<GetPrintStatusResponse> GetPrintStatusAsync(GetPrintStatusRequest request, CancellationToken cancellationToken);
+    
+    Task<GetPosOrderCloudPrintStatusResponse> GetPosOrderCloudPrintStatusAsync(GetPosOrderCloudPrintStatusRequest request, CancellationToken cancellationToken);
 }
 
 public partial class PosService
@@ -72,12 +81,9 @@ public partial class PosService
         }
     
         await SafetyPlaceOrderAsync(order.Id, store, token, isRetry, 0, cancellationToken).ConfigureAwait(false);
-    
-        if (order.Status == PosOrderStatus.Sent && order.IsPush)
-            _smartTalkBackgroundJobClient.Enqueue(() => CreateMerchPrinterOrderAsync(store.Id, order.Id, cancellationToken));
     }
 
-    public async Task CreateMerchPrinterOrderAsync(int storeId, int orderId, CancellationToken cancellationToken)
+    public async Task CreateMerchPrinterOrderAsync(int storeId, int orderId, PosOrder order, CancellationToken cancellationToken)
     {
         Log.Information("storeId:{storeId}, orderId:{orderId}", storeId, orderId);
         
@@ -90,7 +96,8 @@ public partial class PosService
             OrderId = orderId,
             StoreId = storeId,
             PrinterMac = merchPrinter?.PrinterMac,
-            PrintDate = DateTimeOffset.Now
+            PrintDate = DateTimeOffset.Now,
+            PrintFormat = PrintFormat.Order
         }, cancellationToken).ConfigureAwait(false);
     }
 
@@ -530,7 +537,90 @@ public partial class PosService
             
             await SafetyPlaceOrderWithRetryAsync(order, store, token, isWithRetry, cancellationToken).ConfigureAwait(false);
             
+            if (order.Status is PosOrderStatus.Sent or PosOrderStatus.Modified)
+                _smartTalkBackgroundJobClient.Enqueue(() => CreateMerchPrinterOrderAsync(store.Id, order.Id, order, cancellationToken));
+            
         }, wait: TimeSpan.Zero, retry: TimeSpan.Zero, server: RedisServer.System).ConfigureAwait(false);
+    }
+
+    public async Task<UpdatePosOrderPrintStatusResponse> UpdatePosOrderPrintStatusAsync(UpdatePosOrderPrintStatusCommand command, CancellationToken cancellationToken)
+    {
+        var order = await _posDataProvider.GetPosOrderByIdAsync(posOrderId: command.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        if (order == null)
+            throw new Exception("Order could not be found.");
+
+        order.IsPrinted = PosOrderIsPrintStatus.Sending;
+        
+        await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var store = await _posDataProvider.GetPosCompanyStoreAsync(id: command.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (store == null || string.IsNullOrEmpty(store.Link) || string.IsNullOrEmpty(store.AppId) || string.IsNullOrEmpty(store.AppSecret))
+            throw new Exception("Store could not be found or appId、url、secret could not be empty.");
+        
+        var response = await _easyPosClient.GetPosOrderAsync(new GetOrderRequestDto
+        {
+            BaseUrl = store.Link,
+            AppId = store.AppId,
+            AppSecret = store.AppSecret,
+            OrderId = long.Parse(command.OrderId)
+        }, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Get pos order response: {@Response}", response);
+
+        if (response?.Data?.Order == null || response.Success == false)
+            throw new Exception($"Order {command.OrderId} could not be found.");
+        
+        var firstTime = DateTimeOffset.Now;
+        var timeout = TimeSpan.FromSeconds(10);
+        
+        while (response.Data.Order.IsPrinted != true && DateTimeOffset.Now - firstTime < timeout)
+        {
+            response = await _easyPosClient.GetPosOrderAsync(new GetOrderRequestDto
+            {
+                BaseUrl = store.Link,
+                AppId = store.AppId,
+                AppSecret = store.AppSecret,
+                OrderId = long.Parse(command.OrderId)
+            }, cancellationToken).ConfigureAwait(false);
+        
+            Log.Information("Retry get pos order response: {@Response}", response);
+            
+            await Task.Delay(500, cancellationToken).ConfigureAwait(false);
+        }
+        
+        order.IsPrinted = response.Data.Order.IsPrinted ? PosOrderIsPrintStatus.Successed : PosOrderIsPrintStatus.Failed;
+        
+        await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        if (command.RetryCount < 3 && response.Data.Order.IsPrinted != true)
+        {
+            _smartTalkBackgroundJobClient.Schedule<IMediator>(m => m.SendAsync(new UpdatePosOrderPrintStatusCommand
+            {
+                StoreId = command.StoreId,
+                OrderId = command.OrderId,
+                RetryCount = command.RetryCount + 1
+            }, cancellationToken), TimeSpan.FromSeconds(30));
+        }
+        
+        return new UpdatePosOrderPrintStatusResponse
+        {
+            Data = _mapper.Map<PosOrderDto>(order)
+        };
+    }
+    
+    public async Task<GetPrintStatusResponse> GetPrintStatusAsync(GetPrintStatusRequest request, CancellationToken cancellationToken)
+    {
+        var order = await _posDataProvider.GetPosOrderByIdAsync(orderId: request.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        if (order == null)
+            throw new Exception("Order could not be found.");
+        
+        return new GetPrintStatusResponse
+        {
+            Data = _mapper.Map<PosOrderDto>(order)
+        };
     }
 
     private async Task<PlaceOrderToEasyPosResponseDto> PlaceOrderAsync(PosOrder order, CompanyStore store, string token, CancellationToken cancellationToken)
@@ -679,6 +769,30 @@ public partial class PosService
             order.SimpleModifiers = simpleModifiers;
             order.Items = JsonConvert.SerializeObject(items);
 
+            var merchPrinterOrder = (await _printerDataProvider.GetMerchPrinterOrdersAsync(orderId: order.Id, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+            
+            order.CloudPrintOrderId = merchPrinterOrder?.Id;
+            order.CloudPrintStatus = CloudPrintStatus.Failed;
+        
+            if (merchPrinterOrder != null && merchPrinterOrder.PrinterMac != null)
+            {
+                var merchPrinterLog = (await _printerDataProvider.GetMerchPrinterLogAsync(storeId: order.StoreId, orderId: order.Id, cancellationToken: cancellationToken).ConfigureAwait(false)).Item2.FirstOrDefault();
+                var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(printerMac: merchPrinterOrder.PrinterMac).ConfigureAwait(false)).FirstOrDefault();
+            
+                if (merchPrinterOrder.PrintStatus == PrintStatus.Printed && merchPrinterLog is { Code: 200 })
+                    order.CloudPrintStatus = CloudPrintStatus.Successful;
+                else if (merchPrinterOrder.PrintStatus is PrintStatus.Waiting or PrintStatus.Printing && merchPrinter is { IsEnabled: true })
+                {
+                    var merchPrinterDto = _mapper.Map<MerchPrinterDto>(merchPrinter);
+
+                    if (merchPrinterDto.PrinterStatusInfo.Online && merchPrinterDto.PrinterStatusInfo.PaperEmpty == false)
+                    {
+                        order.CloudPrintStatus = CloudPrintStatus.Printing;
+                    }
+                }else
+                    order.CloudPrintStatus = CloudPrintStatus.Failed;
+            }
+            
             if (!order.SentBy.HasValue) return;
             
             var userAccount = await _accountDataProvider.GetUserAccountByUserIdAsync(order.SentBy.Value, cancellationToken).ConfigureAwait(false);
@@ -689,5 +803,40 @@ public partial class PosService
         {
             Log.Information("Enriching pos order failed: {@Exception}", e);
         }
+    }
+    
+    public async Task<GetPosOrderCloudPrintStatusResponse> GetPosOrderCloudPrintStatusAsync(GetPosOrderCloudPrintStatusRequest request, CancellationToken cancellationToken)
+    {
+        var merchPrinterOrder = (await _printerDataProvider.GetMerchPrinterOrdersAsync(orderId: request.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+        
+        var cloudPrintStatus = CloudPrintStatus.Failed;
+        
+        if (merchPrinterOrder != null && merchPrinterOrder.PrinterMac != null)
+        {
+            var merchPrinterLog = (await _printerDataProvider.GetMerchPrinterLogAsync(storeId: request.StoreId, orderId: request.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false)).Item2.FirstOrDefault();
+            var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(printerMac: merchPrinterOrder.PrinterMac).ConfigureAwait(false)).FirstOrDefault();
+            
+            if (merchPrinterOrder.PrintStatus == PrintStatus.Printed && merchPrinterLog is { Code: 200 })
+                cloudPrintStatus = CloudPrintStatus.Successful;
+            else if (merchPrinterOrder.PrintStatus is PrintStatus.Waiting or PrintStatus.Printing && merchPrinter is { IsEnabled: true })
+            {
+                var merchPrinterDto = _mapper.Map<MerchPrinterDto>(merchPrinter);
+
+                if (merchPrinterDto.PrinterStatusInfo.Online && merchPrinterDto.PrinterStatusInfo.PaperEmpty == false)
+                {
+                    cloudPrintStatus = CloudPrintStatus.Printing;
+                }
+            }else
+                cloudPrintStatus = CloudPrintStatus.Failed;
+        }
+
+        return new GetPosOrderCloudPrintStatusResponse
+        {
+           Data = new GetPosOrderCloudPrintStatusDto
+           {
+               Id = merchPrinterOrder?.Id,
+               CloudPrintStatus = cloudPrintStatus
+           }
+        };
     }
 }
