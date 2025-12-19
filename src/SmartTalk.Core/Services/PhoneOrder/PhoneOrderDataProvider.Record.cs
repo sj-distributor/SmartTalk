@@ -90,10 +90,7 @@ public partial class PhoneOrderDataProvider
             query = query.Where(record => record.CreatedDate >= utcStart.Value && record.CreatedDate < utcEnd.Value);
         
         if (orderIds != null && orderIds.Any())
-        {
-            query = query.Where(record => 
-                orderIds.Any(id => record.OrderId.Contains($"\"{id}\"")));
-        }
+            query = query.Where(record => record.OrderId != null && orderIds.Any(id => EF.Functions.Like(record.OrderId, $"%\"{id}\"%")));
 
         return await query.OrderByDescending(record => record.CreatedDate).Take(1000).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
