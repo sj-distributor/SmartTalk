@@ -250,10 +250,25 @@ public class PosUtilService : IPosUtilService
     
     private string BuildMenuItemName(PosNamesLocalization localization)
     {
-        return !string.IsNullOrWhiteSpace(localization?.Cn?.Name) ? localization.Cn.Name :
-            !string.IsNullOrWhiteSpace(localization?.Cn?.PosName) ? localization.Cn.PosName :
-            !string.IsNullOrWhiteSpace(localization?.Cn?.SendChefName) ? localization.Cn.SendChefName :
-            string.Empty;
+        var zhName = !string.IsNullOrWhiteSpace(localization?.Cn?.Name) ? localization.Cn.Name : string.Empty;
+        if (!string.IsNullOrWhiteSpace(zhName)) return zhName;
+    
+        var usName = !string.IsNullOrWhiteSpace(localization?.En?.Name) ? localization.En.Name : string.Empty;
+        if (!string.IsNullOrWhiteSpace(usName)) return usName;
+    
+        var zhPosName = !string.IsNullOrWhiteSpace(localization?.Cn?.PosName) ? localization.Cn.PosName : string.Empty;
+        if (!string.IsNullOrWhiteSpace(zhPosName)) return zhPosName;
+    
+        var usPosName = !string.IsNullOrWhiteSpace(localization?.En?.PosName) ? localization.En.PosName : string.Empty;
+        if (!string.IsNullOrWhiteSpace(usPosName)) return usPosName;
+    
+        var zhSendChefName = !string.IsNullOrWhiteSpace(localization?.Cn?.SendChefName) ? localization.Cn.SendChefName : string.Empty;
+        if (!string.IsNullOrWhiteSpace(zhSendChefName)) return zhSendChefName;
+    
+        var usSendChefName = !string.IsNullOrWhiteSpace(localization?.En?.SendChefName) ? localization.En.SendChefName : string.Empty;
+        if (!string.IsNullOrWhiteSpace(usSendChefName)) return usSendChefName;
+
+        return string.Empty;
     }
     
     private string BuildModifierName(List<EasyPosResponseLocalization> localizations)

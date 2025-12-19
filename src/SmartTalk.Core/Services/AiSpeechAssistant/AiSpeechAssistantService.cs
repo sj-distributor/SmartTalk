@@ -565,29 +565,30 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                 {
                     var modifiers = JsonConvert.DeserializeObject<List<EasyPosResponseModifierGroups>>(product.Modifiers);
                     
-                    if (modifiers == null || modifiers.Count == 0) continue;
-
-                    var modifiersDetail = string.Empty;
-
-                    foreach (var modifier in modifiers)
+                    if (modifiers is { Count: > 0 })
                     {
-                        var modifierNames = new List<string>();
-
-                        if (modifier.ModifierProducts != null && modifier.ModifierProducts.Count != 0)
+                        var modifiersDetail = string.Empty;
+                        
+                        foreach (var modifier in modifiers)
                         {
-                            foreach (var mp in modifier.ModifierProducts)
+                            var modifierNames = new List<string>();
+
+                            if (modifier.ModifierProducts != null && modifier.ModifierProducts.Count != 0)
                             {
-                                var name = BuildModifierName(mp.Localizations);
+                                foreach (var mp in modifier.ModifierProducts)
+                                {
+                                    var name = BuildModifierName(mp.Localizations);
 
-                                if (!string.IsNullOrWhiteSpace(name)) modifierNames.Add($"{name}");
+                                    if (!string.IsNullOrWhiteSpace(name)) modifierNames.Add($"{name}");
+                                }
                             }
+                            
+                            if (modifierNames.Count > 0)
+                                modifiersDetail += $" {BuildModifierName(modifier.Localizations)}規格：{string.Join("、", modifierNames)}，共{modifierNames.Count}个规格，要求最少选{modifier.MinimumSelect}个规格，最多选{modifier.MaximumSelect}规格，每个最大可重复选{modifier.MaximumRepetition}相同的 \n";
                         }
-
-                        if (modifierNames.Count > 0)
-                            modifiersDetail += $"{BuildModifierName(modifier.Localizations)}規格：{string.Join("、", modifierNames)}，共{modifierNames.Count}个规格，要求最少选{modifier.MinimumSelect}个规格，最多选{modifier.MaximumSelect}规格，每个最大可重复选{modifier.MaximumRepetition}相同的 \n";
-                    }
                     
-                    line += " " + modifiersDetail;
+                        line += modifiersDetail;
+                    };
                 }
                 
                 idx++;
@@ -602,10 +603,25 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     
     private string BuildMenuItemName(PosNamesLocalization localization)
     {
-        return !string.IsNullOrWhiteSpace(localization?.Cn?.Name) ? localization.Cn.Name :
-            !string.IsNullOrWhiteSpace(localization?.Cn?.PosName) ? localization.Cn.PosName :
-            !string.IsNullOrWhiteSpace(localization?.Cn?.SendChefName) ? localization.Cn.SendChefName :
-            string.Empty;
+        var zhName = !string.IsNullOrWhiteSpace(localization?.Cn?.Name) ? localization.Cn.Name : string.Empty;
+        if (!string.IsNullOrWhiteSpace(zhName)) return zhName;
+    
+        var usName = !string.IsNullOrWhiteSpace(localization?.En?.Name) ? localization.En.Name : string.Empty;
+        if (!string.IsNullOrWhiteSpace(usName)) return usName;
+    
+        var zhPosName = !string.IsNullOrWhiteSpace(localization?.Cn?.PosName) ? localization.Cn.PosName : string.Empty;
+        if (!string.IsNullOrWhiteSpace(zhPosName)) return zhPosName;
+    
+        var usPosName = !string.IsNullOrWhiteSpace(localization?.En?.PosName) ? localization.En.PosName : string.Empty;
+        if (!string.IsNullOrWhiteSpace(usPosName)) return usPosName;
+    
+        var zhSendChefName = !string.IsNullOrWhiteSpace(localization?.Cn?.SendChefName) ? localization.Cn.SendChefName : string.Empty;
+        if (!string.IsNullOrWhiteSpace(zhSendChefName)) return zhSendChefName;
+    
+        var usSendChefName = !string.IsNullOrWhiteSpace(localization?.En?.SendChefName) ? localization.En.SendChefName : string.Empty;
+        if (!string.IsNullOrWhiteSpace(usSendChefName)) return usSendChefName;
+
+        return string.Empty;
     }
     
     private string BuildModifierName(List<EasyPosResponseLocalization> localizations)
