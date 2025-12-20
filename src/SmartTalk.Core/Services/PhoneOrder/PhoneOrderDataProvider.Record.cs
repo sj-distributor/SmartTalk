@@ -109,10 +109,19 @@ public partial class PhoneOrderDataProvider
         
         if (assistantId.HasValue)
             query = query.Where(x => x.AssistantId.HasValue && x.AssistantId == assistantId.Value);
+
+        if (orderIds != null && orderIds.Any()) 
+        {
+            if (orderIds.Count == 1) 
+            { 
+                var singleOrderId = orderIds[0]; 
+                query = query.Where(r => r.OrderId != null && r.OrderId.Contains(singleOrderId)); 
+            }
+        }
         
         var records = await query.OrderByDescending(r => r.CreatedDate).Take(1000).ToListAsync(cancellationToken).ConfigureAwait(false);
         
-        if (orderIds != null && orderIds.Any())
+        if (orderIds != null && orderIds.Count > 1)
             records = records.Where(r => r.OrderId != null && orderIds.Any(id => r.OrderId.Contains($"\"{id}\""))).ToList();
 
         return records;
