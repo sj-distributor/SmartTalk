@@ -11,6 +11,8 @@ public class AiOrderInfoDto
 {
     public string SoldToId { get; set; } 
     
+    public int AiAssistantId { get; set; }
+    
     public DateTime DocumentDate { get; set; }
     
     public DateTime DeliveryDate { get; set; }
