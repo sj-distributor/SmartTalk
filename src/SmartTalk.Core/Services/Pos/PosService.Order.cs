@@ -870,7 +870,7 @@ public partial class PosService
         
         if (merchPrinterOrder.PrinterMac != null)
         {
-            var merchPrinterLog = (await _printerDataProvider.GetMerchPrinterLogAsync(storeId: request.StoreId, orderId: request.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false)).Item2?.FirstOrDefault();
+            var merchPrinterLog = (await _printerDataProvider.GetMerchPrinterLogAsync(storeId: request.StoreId, orderId: request.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false)).Item2.FirstOrDefault();
             var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(printerMac: merchPrinterOrder.PrinterMac).ConfigureAwait(false)).FirstOrDefault();
             store = await _posDataProvider.GetPosCompanyStoreAsync(id: merchPrinterOrder.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
