@@ -807,21 +807,49 @@ public class PrinterService : IPrinterService
 
      public async Task<MerchPrinterOrderRetryResponse> MerchPrinterOrderRetryAsync(MerchPrinterOrderRetryCommand command, CancellationToken cancellationToken)
      {
-         var lockKey = $"retry-merch-printer-order-key-{command.Id}";
-        
+         var id = command.Id ?? Guid.NewGuid();
+         var lockKey = $"retry-merch-printer-order-key-{id}";
+         
          return await _redisSafeRunner.ExecuteWithLockAsync(lockKey, async () =>
          {
-             var order = (await _printerDataProvider.GetMerchPrinterOrdersAsync(id:command.Id, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+             MerchPrinterOrder order;
+             MerchPrinter merchPrinter;
+             if (command.Id == null && command.OrderId != null && command.StoreId != null)
+             {
+                 Log.Information("storeId:{storeId}, orderId:{orderId}", command.StoreId, command.OrderId);
+        
+                 merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(storeId: command.StoreId, isEnabled: true, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
 
-             var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(storeId: order?.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+                 Log.Information("get merch printer:{@merchPrinter}", merchPrinter);
+
+                 order = new MerchPrinterOrder
+                 {
+                     Id = id,
+                     OrderId = command.OrderId.Value,
+                     StoreId = command.StoreId.Value,
+                     PrinterMac = merchPrinter?.PrinterMac,
+                     PrintDate = DateTimeOffset.Now,
+                     PrintFormat = PrintFormat.Order
+                 };
+        
+                 Log.Information("Create merch printer order:{@merchPrinterOrder}", order);
                  
-             if (order == null || merchPrinter == null)
-                 throw new Exception("Not find print order or merchPrinter");
+                 await _printerDataProvider.AddMerchPrinterOrderAsync(order, cancellationToken).ConfigureAwait(false);
+             }
+             else
+             {
+                 order = (await _printerDataProvider.GetMerchPrinterOrdersAsync(id:command.Id, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
 
-             order.PrintStatus = PrintStatus.Waiting;
-             order.PrinterMac = merchPrinter.PrinterMac;
+                 merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(storeId: order?.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+                 
+                 if (order == null || merchPrinter == null)
+                     throw new Exception("Not find print order or merchPrinter");
 
-             await _printerDataProvider.UpdateMerchPrinterOrderAsync(order, cancellationToken: cancellationToken).ConfigureAwait(false);
+                 order.PrintStatus = PrintStatus.Waiting;
+                 order.PrinterMac = merchPrinter.PrinterMac;
+
+                 await _printerDataProvider.UpdateMerchPrinterOrderAsync(order, cancellationToken: cancellationToken).ConfigureAwait(false);
+             }
 
              _smartTalkBackgroundJobClient.Schedule<IMediator>( x => x.SendAsync(new RetryCloudPrintingCommand{ Id = order.Id, Count = 0}, CancellationToken.None), TimeSpan.FromSeconds(10));
              

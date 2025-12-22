@@ -6,7 +6,11 @@ namespace SmartTalk.Messages.Commands.Printer;
 
 public class MerchPrinterOrderRetryCommand : ICommand
 {
-    public Guid Id { get; set; }
+    public Guid? Id { get; set; }
+
+    public int? OrderId { get; set; }
+
+    public int? StoreId { get; set; }
 }
 
 public class MerchPrinterOrderRetryResponse : SmartTalkResponse<MerchPrinterOrderDto>
