@@ -12,15 +12,18 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Aliyun.OSS;
 using AutoMapper;
+using Mediator.Net;
 using Newtonsoft.Json;
 using Serilog;
 using SmartTalk.Core.Services.AliYun;
 using SmartTalk.Core.Services.Caching.Redis;
 using SmartTalk.Core.Services.Http.Clients;
+using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Settings.Printer;
 using SmartTalk.Message.Commands.Printer;
 using SmartTalk.Message.Events.Printer;
+using SmartTalk.Messages.Commands.Pos;
 using SmartTalk.Messages.Commands.Printer;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Printer;
@@ -81,8 +84,9 @@ public class PrinterService : IPrinterService
     private readonly IPosDataProvider _posDataProvider;
     private readonly IPrinterDataProvider _printerDataProvider;
     private readonly PrinterSendErrorLogSetting _printerSendErrorLogSetting;
+    private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
 
-    public PrinterService(IMapper mapper, IWeChatClient weChatClient, ICacheManager cacheManager, IAliYunOssService ossService, IRedisSafeRunner redisSafeRunner, IPosDataProvider posDataProvider, IPrinterDataProvider printerDataProvider, PrinterSendErrorLogSetting printerSendErrorLogSetting)
+    public PrinterService(IMapper mapper, IWeChatClient weChatClient, ICacheManager cacheManager, IAliYunOssService ossService, IRedisSafeRunner redisSafeRunner, IPosDataProvider posDataProvider, IPrinterDataProvider printerDataProvider, PrinterSendErrorLogSetting printerSendErrorLogSetting, ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient)
     {
         _mapper = mapper;
         _ossService = ossService;
@@ -92,6 +96,7 @@ public class PrinterService : IPrinterService
         _posDataProvider = posDataProvider;
         _printerDataProvider = printerDataProvider;
         _printerSendErrorLogSetting = printerSendErrorLogSetting;
+        _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
     }
 
     public async Task<GetPrinterJobAvailableResponse> GetPrinterJobAvailableAsync(GetPrinterJobAvailableRequest request, CancellationToken cancellationToken)
@@ -802,22 +807,31 @@ public class PrinterService : IPrinterService
 
      public async Task<MerchPrinterOrderRetryResponse> MerchPrinterOrderRetryAsync(MerchPrinterOrderRetryCommand command, CancellationToken cancellationToken)
      {
-         var order = (await _printerDataProvider.GetMerchPrinterOrdersAsync(id:command.Id, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
-
-         var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(storeId: order?.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
-             
-         if (order == null || merchPrinter == null)
-             throw new Exception("Not find print order or merchPrinter");
-
-         order.PrintStatus = PrintStatus.Waiting;
-         order.PrinterMac = merchPrinter.PrinterMac;
-
-         await _printerDataProvider.UpdateMerchPrinterOrderAsync(order, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-         return new MerchPrinterOrderRetryResponse
+         var lockKey = $"retry-merch-printer-order-key-{command.Id}";
+        
+         return await _redisSafeRunner.ExecuteWithLockAsync(lockKey, async () =>
          {
-             Data = _mapper.Map<MerchPrinterOrderDto>(order)
-         };
+             var order = (await _printerDataProvider.GetMerchPrinterOrdersAsync(id:command.Id, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+
+             var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(storeId: order?.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+                 
+             if (order == null || merchPrinter == null)
+                 throw new Exception("Not find print order or merchPrinter");
+
+             order.PrintStatus = PrintStatus.Waiting;
+             order.PrinterMac = merchPrinter.PrinterMac;
+
+             await _printerDataProvider.UpdateMerchPrinterOrderAsync(order, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+             _smartTalkBackgroundJobClient.Schedule<IMediator>( x => x.SendAsync(new RetryCloudPrintingCommand{ Id = order.Id, Count = 0}, CancellationToken.None), TimeSpan.FromSeconds(10));
+             
+             await _cacheManager.GetOrAddAsync($"{order.OrderId}", _ => Task.FromResult("1"), new RedisCachingSetting(expiry: TimeSpan.FromMinutes(30))).ConfigureAwait(false);
+             
+             return new MerchPrinterOrderRetryResponse
+             {
+                 Data = _mapper.Map<MerchPrinterOrderDto>(order)
+             };
+         }, expiry: TimeSpan.FromMinutes(3), wait: TimeSpan.Zero, retry: TimeSpan.Zero, server: RedisServer.System).ConfigureAwait(false);
      }
 
      private static Font CreateFont(FontFamily fontFamily, float size, bool bold = false)

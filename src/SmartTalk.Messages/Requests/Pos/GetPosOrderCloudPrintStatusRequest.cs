@@ -19,5 +19,11 @@ public class GetPosOrderCloudPrintStatusDto
 {
     public Guid? Id { get; set; }
     
-    public CloudPrintStatus? CloudPrintStatus { get; set; }   
+    public CloudPrintStatus? CloudPrintStatus { get; set; }
+    
+    public bool? IsLink { get; set; }
+
+    public bool? IsLinkCouldPrinting { get; set; }
+
+    public bool? IsRetry { get; set; }
 }
