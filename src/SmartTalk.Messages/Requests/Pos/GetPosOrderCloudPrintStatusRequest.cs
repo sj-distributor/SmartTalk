@@ -24,4 +24,6 @@ public class GetPosOrderCloudPrintStatusDto
     public bool? IsLink { get; set; }
 
     public bool? IsLinkCouldPrinting { get; set; }
+
+    public bool? IsRetry { get; set; }
 }

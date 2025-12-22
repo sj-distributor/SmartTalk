@@ -5,7 +5,9 @@ using Mediator.Net;
 using SmartTalk.Core.Constants;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.Printer;
+using SmartTalk.Core.Services.Caching;
 using SmartTalk.Messages.Commands.Pos;
+using SmartTalk.Messages.Commands.Printer;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Pos;
 using SmartTalk.Messages.Dto.Printer;
@@ -107,6 +109,8 @@ public partial class PosService
         Log.Information("Create merch printer order:{@merchPrinterOrder}", merchPrinterOrder);
 
         _smartTalkBackgroundJobClient.Schedule<IMediator>( x => x.SendAsync(new RetryCloudPrintingCommand{ Id = merchPrinterOrder.Id, Count = 0}, CancellationToken.None), TimeSpan.FromSeconds(10));
+        
+        await _cacheManager.GetOrAddAsync($"{order.OrderId}", _ => Task.FromResult("1"), new RedisCachingSetting(expiry: TimeSpan.FromMinutes(30))).ConfigureAwait(false);
     }
 
     public async Task RetryCloudPrintingAsync(RetryCloudPrintingCommand command, CancellationToken cancellationToken)
@@ -123,18 +127,28 @@ public partial class PosService
             
             merchPrinterOrder.PrintStatus = PrintStatus.Waiting;
             merchPrinterOrder.PrinterMac = merchPrinter?.PrinterMac;
-
             await _printerDataProvider.UpdateMerchPrinterOrderAsync(merchPrinterOrder, cancellationToken: cancellationToken).ConfigureAwait(false);
         }
-        else return;
+        else
+            await UpdateMerchPrinterOrderIsRetryStatusAsync(merchPrinterOrder, cancellationToken).ConfigureAwait(false);
 
         if (command.Count < 3)
             _smartTalkBackgroundJobClient.Schedule<IMediator>( x => x.SendAsync(new RetryCloudPrintingCommand{ Id = merchPrinterOrder.Id, Count = command.Count + 1 },  CancellationToken.None), TimeSpan.FromSeconds(30));
         else
         {
+            await UpdateMerchPrinterOrderIsRetryStatusAsync(merchPrinterOrder, cancellationToken).ConfigureAwait(false);
+            
             merchPrinterOrder.PrintStatus = PrintStatus.Printed;
             await _printerDataProvider.UpdateMerchPrinterOrderAsync(merchPrinterOrder, cancellationToken: cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    private async Task UpdateMerchPrinterOrderIsRetryStatusAsync(MerchPrinterOrder merchPrinterOrder, CancellationToken cancellationToken)
+    {
+        var isRetry = await _cacheManager.GetAsync<string>($"{merchPrinterOrder.OrderId}", new RedisCachingSetting(), cancellationToken).ConfigureAwait(false);
+
+        if (isRetry.Equals("1"))
+            await _cacheManager.SetAsync($"{merchPrinterOrder.OrderId}",Task.FromResult("0"), new RedisCachingSetting(expiry: TimeSpan.FromMinutes(30))).ConfigureAwait(false);
     }
 
     public async Task UpdatePosOrderAsync(UpdatePosOrderCommand command, CancellationToken cancellationToken)
@@ -846,12 +860,15 @@ public partial class PosService
     public async Task<GetPosOrderCloudPrintStatusResponse> GetPosOrderCloudPrintStatusAsync(GetPosOrderCloudPrintStatusRequest request, CancellationToken cancellationToken)
     {
         var merchPrinterOrder = (await _printerDataProvider.GetMerchPrinterOrdersAsync(orderId: request.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
-       
+
+        if (merchPrinterOrder == null)
+            throw new Exception("Merch printer order not be found.");
+        
         var cloudPrintStatus = CloudPrintStatus.Failed;
         CompanyStore store = null;
         MerchPrinterDto merchPrinterDto = null;
         
-        if (merchPrinterOrder != null && merchPrinterOrder.PrinterMac != null)
+        if (merchPrinterOrder.PrinterMac != null)
         {
             var merchPrinterLog = (await _printerDataProvider.GetMerchPrinterLogAsync(storeId: request.StoreId, orderId: request.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false)).Item2.FirstOrDefault();
             var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(printerMac: merchPrinterOrder.PrinterMac).ConfigureAwait(false)).FirstOrDefault();
@@ -870,6 +887,8 @@ public partial class PosService
             }else
                 cloudPrintStatus = CloudPrintStatus.Failed;
         }
+        
+        var isRetry = await _cacheManager.GetAsync<string>($"{merchPrinterOrder.OrderId}", new RedisCachingSetting(), cancellationToken).ConfigureAwait(false);
 
         return new GetPosOrderCloudPrintStatusResponse
         {
@@ -878,7 +897,8 @@ public partial class PosService
                Id = merchPrinterOrder?.Id,
                CloudPrintStatus = cloudPrintStatus,
                IsLink = store?.IsLink,
-               IsLinkCouldPrinting = merchPrinterDto != null && merchPrinterDto.PrinterStatusInfo.Online
+               IsLinkCouldPrinting = merchPrinterDto != null && merchPrinterDto.PrinterStatusInfo.Online,
+               IsRetry = bool.Parse(isRetry)
            }
         };
     }
