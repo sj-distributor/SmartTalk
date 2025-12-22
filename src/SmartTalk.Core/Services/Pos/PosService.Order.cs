@@ -110,7 +110,10 @@ public partial class PosService
 
         _smartTalkBackgroundJobClient.Schedule<IMediator>( x => x.SendAsync(new RetryCloudPrintingCommand{ Id = merchPrinterOrder.Id, Count = 0}, CancellationToken.None), TimeSpan.FromSeconds(10));
         
-        await _cacheManager.GetOrAddAsync($"{order.OrderId}", _ => Task.FromResult("1"), new RedisCachingSetting(expiry: TimeSpan.FromMinutes(30))).ConfigureAwait(false);
+        var isRetry =  await _cacheManager.GetOrAddAsync($"{order.OrderId}", _ => Task.FromResult("1"), new RedisCachingSetting(expiry: TimeSpan.FromMinutes(30)), cancellationToken).ConfigureAwait(false);
+        
+        if (isRetry == "0")
+            await _cacheManager.SetAsync($"{order.OrderId}", Task.FromResult("1"), new RedisCachingSetting(expiry: TimeSpan.FromMinutes(30)), cancellationToken).ConfigureAwait(false);
     }
 
     public async Task RetryCloudPrintingAsync(RetryCloudPrintingCommand command, CancellationToken cancellationToken)
@@ -148,7 +151,7 @@ public partial class PosService
         var isRetry = await _cacheManager.GetAsync<string>($"{merchPrinterOrder.OrderId}", new RedisCachingSetting(), cancellationToken).ConfigureAwait(false);
 
         if (isRetry.Equals("1"))
-            await _cacheManager.SetAsync($"{merchPrinterOrder.OrderId}",Task.FromResult("0"), new RedisCachingSetting(expiry: TimeSpan.FromMinutes(30))).ConfigureAwait(false);
+            await _cacheManager.SetAsync($"{merchPrinterOrder.OrderId}",Task.FromResult("0"), new RedisCachingSetting(expiry: TimeSpan.FromMinutes(30)), cancellationToken).ConfigureAwait(false);
     }
 
     public async Task UpdatePosOrderAsync(UpdatePosOrderCommand command, CancellationToken cancellationToken)

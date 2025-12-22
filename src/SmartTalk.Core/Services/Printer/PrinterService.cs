@@ -825,7 +825,12 @@ public class PrinterService : IPrinterService
 
              _smartTalkBackgroundJobClient.Schedule<IMediator>( x => x.SendAsync(new RetryCloudPrintingCommand{ Id = order.Id, Count = 0}, CancellationToken.None), TimeSpan.FromSeconds(10));
              
-             await _cacheManager.GetOrAddAsync($"{order.OrderId}", _ => Task.FromResult("1"), new RedisCachingSetting(expiry: TimeSpan.FromMinutes(30))).ConfigureAwait(false);
+             var isRetry = await _cacheManager.GetOrAddAsync($"{order.OrderId}", _ => Task.FromResult("1"), new RedisCachingSetting(expiry: TimeSpan.FromMinutes(30)), cancellationToken).ConfigureAwait(false);
+
+             if (isRetry == "0")
+             {
+                 await _cacheManager.SetAsync($"{order.OrderId}", "1", new RedisCachingSetting(expiry: TimeSpan.FromMinutes(30)), cancellationToken).ConfigureAwait(false);
+             }
              
              return new MerchPrinterOrderRetryResponse
              {
