@@ -908,7 +908,7 @@ public partial class PosService
                CloudPrintStatus = cloudPrintStatus,
                IsLink = store?.IsLink,
                IsLinkCouldPrinting = merchPrinterDto != null && (merchPrinterDto.PrinterStatusInfo?.Online ?? false),
-               IsRetry = bool.Parse(isRetry)
+               IsRetry = isRetry != null && bool.Parse(isRetry)
            }
         };
     }
