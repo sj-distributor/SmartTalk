@@ -16,6 +16,6 @@ namespace SmartTalk.Messages.Dto.Printer
         
         public Guid? Token { get; set; }
 
-        public PrinterStatusInfo PrinterStatusInfo { get; set; }
+        public PrinterStatusInfo? PrinterStatusInfo { get; set; }
     }
 }
