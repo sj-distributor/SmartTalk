@@ -404,4 +404,13 @@ public class PosController : ControllerBase
         
         return Ok(response);
     }
+    
+    [Route("data/dashboard/companies"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetCompanyWithStoresResponse))]
+    public async Task<IActionResult> GetDataDashBoardCompanyWithStoresAsync([FromQuery] GetDataDashBoardCompanyWithStoresRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetDataDashBoardCompanyWithStoresRequest, GetDataDashBoardCompanyWithStoresResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
 }
