@@ -143,6 +143,8 @@ public partial class EventHandlingService
     {
         if (@event.KnowledgeOldJsons == null || @event.KnowledgeOldJsons.Count == 0) return;
 
+        Log.Information("KonwledgeCopyAddedEvent KnowledgeId: {@Diff}", @event.KnowledgeOldJsons.Select(x=>x.KnowledgeId).ToList());
+        
         try
         {
             var knowledgeIds = @event.KnowledgeOldJsons.Select(s => s.KnowledgeId).ToList();
@@ -161,6 +163,8 @@ public partial class EventHandlingService
 
                 var brief = await GenerateKnowledgeChangeBriefAsync(diff.ToString(), cancellationToken).ConfigureAwait(false);
 
+                Log.Information($"KonwledgeCopyAddedEvent Generate the knowledge chang brief: {brief}");
+                
                 if (!string.IsNullOrEmpty(brief))
                 {
                     knowledge.Brief = brief;
@@ -175,7 +179,7 @@ public partial class EventHandlingService
         }
         catch (Exception e)
         {
-            Log.Error(e, "Generate knowledge brief error for multiple copy targets");
+            Log.Error(e, "KonwledgeCopyAddedEvent Generate knowledge brief error for multiple copy targets");
         }
     }
 

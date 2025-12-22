@@ -866,10 +866,12 @@ public partial class AiSpeechAssistantService
 
         if (command.TargetKnowledgeId.Contains(command.SourceKnowledgeId)) throw new Exception("Source knowledge cannot be included in targets");
 
-        var copyFromKnowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(knowledgeId: command.SourceKnowledgeId, cancellationToken:cancellationToken).ConfigureAwait(false);
-
+        var copyFromKnowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(knowledgeId: command.SourceKnowledgeId, isActive: true, cancellationToken:cancellationToken).ConfigureAwait(false);
+        
         if (copyFromKnowledge == null) throw new InvalidOperationException("Source knowledge not found");
 
+        Log.Information("KonwledgeCopySource knowledge fetched. Id={@SourceId}", copyFromKnowledge.Id);
+        
         copyFromKnowledge.IsSyncUpdate = command.IsSyncUpdate;
         
         var copyToKnowledges = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgesAsync(command.TargetKnowledgeId, cancellationToken:cancellationToken).ConfigureAwait(false);
@@ -881,11 +883,15 @@ public partial class AiSpeechAssistantService
             .ToDictionary(g => g.Key, g => g.OrderBy(x => x.CreatedDate).ToList()) 
                             ?? new Dictionary<int, List<KnowledgeCopyRelated>>();
 
+        Log.Information("KonwledgeCopy Related knowledge lookup built. KeysCount={Count}", relatedLookup.Count);
+
         var newCopeToKnowledges = new List<AiSpeechAssistantKnowledge>();
         var newCopyToRelateds = new List<KnowledgeCopyRelated>();
 
         foreach (var copyToKnowledge in copyToKnowledges)
         {
+            Log.Information("KonwledgeCopy Processing target knowledge. TargetId={TargetId}", copyToKnowledge.Id);
+            
             copyToKnowledge.IsActive = false;
 
             var copyToJson = JObject.Parse(copyToKnowledge.Json ?? "{}");
@@ -914,6 +920,8 @@ public partial class AiSpeechAssistantService
                 Version = await HandleKnowledgeVersionAsync(copyToKnowledge, cancellationToken)
             };
 
+            Log.Information("KonwledgeCopy New copy created. NewTargetId={NewTargetId}, Version={Version}", newCopyToKnowledge.Id, newCopyToKnowledge.Version);
+
             newCopeToKnowledges.Add(newCopyToKnowledge);
 
             if (copyToRelated != null)
@@ -933,6 +941,8 @@ public partial class AiSpeechAssistantService
                 CopyKnowledgePoints = copyFromKnowledge.Json
             });
         }
+        
+        Log.Information("KonwledgeCopy Updating old knowledges and adding new ones. OldCount={OldCount}, NewCount={NewCount}, RelatedCount={RelatedCount}", copyToKnowledges.Count, newCopeToKnowledges.Count, newCopyToRelateds.Count);
         
         await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync(copyToKnowledges, true, cancellationToken);
         await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgesAsync(newCopeToKnowledges, true, cancellationToken);
