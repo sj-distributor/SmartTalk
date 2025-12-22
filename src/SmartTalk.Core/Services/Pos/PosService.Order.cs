@@ -835,7 +835,7 @@ public partial class PosService
                     order.CloudPrintStatus = CloudPrintStatus.Successful;
                 else if (merchPrinterOrder.PrintStatus is PrintStatus.Waiting or PrintStatus.Printing && merchPrinter is { IsEnabled: true })
                 {
-                    if (merchPrinterDto.PrinterStatusInfo.Online && merchPrinterDto.PrinterStatusInfo.PaperEmpty == false)
+                    if (merchPrinterDto.PrinterStatusInfo != null && merchPrinterDto.PrinterStatusInfo.Online)
                         order.CloudPrintStatus = CloudPrintStatus.Printing;
                 }
             }
@@ -843,7 +843,7 @@ public partial class PosService
             var company = await _posDataProvider.GetPosCompanyStoreAsync(id: order.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
             order.IsLink = company.IsLink;
-            order.IsLinkCouldPrinting = merchPrinterDto != null && merchPrinterDto.PrinterStatusInfo.Online;
+            order.IsLinkCouldPrinting = merchPrinterDto != null && (merchPrinterDto.PrinterStatusInfo?.Online ?? false);
             
             if (!order.SentBy.HasValue) return;
             
@@ -897,7 +897,7 @@ public partial class PosService
                Id = merchPrinterOrder?.Id,
                CloudPrintStatus = cloudPrintStatus,
                IsLink = store?.IsLink,
-               IsLinkCouldPrinting = merchPrinterDto != null && merchPrinterDto.PrinterStatusInfo.Online,
+               IsLinkCouldPrinting = merchPrinterDto != null && (merchPrinterDto.PrinterStatusInfo?.Online ?? false),
                IsRetry = bool.Parse(isRetry)
            }
         };
