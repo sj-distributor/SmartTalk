@@ -870,7 +870,7 @@ public partial class PhoneOrderService
 
         Log.Information("[PhoneDashboard] Fetch phone order records: Agents={@AgentIds}, Range={@Start}-{@End} (UTC: {@UtcStart}-{@UtcEnd})", request.AgentIds, request.StartDate, request.EndDate, utcStart, utcEnd);
         
-        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds: request.AgentIds, null, utcStart: utcStart, utcEnd: utcEnd, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsByAgentIdsAsync(request.AgentIds, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
 
         Log.Information("[PhoneDashboard] Phone order records fetched: {@Count}", records?.Count ?? 0);
         
