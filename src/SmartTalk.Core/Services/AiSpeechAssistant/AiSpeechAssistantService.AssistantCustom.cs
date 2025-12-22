@@ -1012,17 +1012,17 @@ public partial class AiSpeechAssistantService
 
         var knowledgeIds = knowledges.Select(k => k.Id).ToList();
 
-        var allCopyRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedBySourceKnowledgeIdAsync(knowledgeIds, cancellationToken).ConfigureAwait(false);
+        var allCopyRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync(knowledgeIds, cancellationToken).ConfigureAwait(false);
 
         allCopyRelateds ??= new List<KnowledgeCopyRelated>();
         
-        var sourceKnowledgeIds = allCopyRelateds.Select(r => r.SourceKnowledgeId).Distinct().ToList();
-        var sourceKnowledges = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgesAsync(sourceKnowledgeIds, cancellationToken).ConfigureAwait(false);
+        var targeKnowledgeIds = allCopyRelateds.Select(r => r.TargetKnowledgeId).Distinct().ToList();
+        var targerKnowledges = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgesAsync(targeKnowledgeIds, cancellationToken).ConfigureAwait(false);
 
-        var sourceKnowledgeMap = sourceKnowledges.ToDictionary(t => t.Id);
+        var targerKnowledgeMap = targerKnowledges.ToDictionary(t => t.Id);
         
         var enrichInfos = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedEnrichInfoAsync(
-            sourceKnowledges.Select(t => t.AssistantId).Distinct().ToList(), cancellationToken).ConfigureAwait(false);
+            targerKnowledges.Select(t => t.AssistantId).Distinct().ToList(), cancellationToken).ConfigureAwait(false);
 
         var enrichDict = enrichInfos.ToDictionary(x => x.AssistantId);
 
@@ -1030,14 +1030,14 @@ public partial class AiSpeechAssistantService
 
         foreach (var related in allCopyRelateds)
         {
-            if (!knowledgeDtoMap.TryGetValue(related.SourceKnowledgeId, out var dto))
+            if (!knowledgeDtoMap.TryGetValue(related.TargetKnowledgeId, out var dto))
                 continue;
 
             dto.KnowledgeCopyRelated ??= new List<KnowledgeCopyRelatedDto>();
 
             var relatedDto = _mapper.Map<KnowledgeCopyRelatedDto>(related);
             
-            if (sourceKnowledgeMap.TryGetValue(related.SourceKnowledgeId, out var sourceKnowledge) && enrichDict.TryGetValue(sourceKnowledge.AssistantId, out var info))
+            if (targerKnowledgeMap.TryGetValue(related.TargetKnowledgeId, out var sourceKnowledge) && enrichDict.TryGetValue(sourceKnowledge.AssistantId, out var info))
             {
                 relatedDto.RelatedFrom = $"{info.StoreName} - {info.AiAgentName} - {info.AssiatantName}";
             }
