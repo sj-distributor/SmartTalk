@@ -877,12 +877,12 @@ public partial class PosService
             var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(printerMac: merchPrinterOrder.PrinterMac).ConfigureAwait(false)).FirstOrDefault();
             store = await _posDataProvider.GetPosCompanyStoreAsync(id: merchPrinterOrder.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
+            merchPrinterDto = _mapper.Map<MerchPrinterDto>(merchPrinter);
+            
             if (merchPrinterOrder.PrintStatus == PrintStatus.Printed && merchPrinterLog != null && merchPrinterLog.Code == 200)
                 cloudPrintStatus = CloudPrintStatus.Successful;
             else if (merchPrinterOrder.PrintStatus is PrintStatus.Waiting or PrintStatus.Printing && merchPrinter is { IsEnabled: true })
             {
-                merchPrinterDto = _mapper.Map<MerchPrinterDto>(merchPrinter);
-
                 if (merchPrinterDto.PrinterStatusInfo != null && merchPrinterDto.PrinterStatusInfo.Online)
                 {
                     cloudPrintStatus = CloudPrintStatus.Printing;
