@@ -53,6 +53,8 @@ public partial interface IPosService : IScopedDependency
     Task<GetCurrentUserStoresResponse> GetCurrentUserStoresAsync(GetCurrentUserStoresRequest request, CancellationToken cancellationToken);
     
     Task<GetStoresAgentsResponse> GetStoresAgentsAsync(GetStoresAgentsRequest request, CancellationToken cancellationToken);
+    
+    Task<GetDataDashBoardCompanyWithStoresResponse> GetDataDashBoardCompanyWithStoresAsync(GetDataDashBoardCompanyWithStoresRequest request, CancellationToken cancellationToken);
 }
 
 public partial class PosService : IPosService
@@ -430,5 +432,22 @@ public partial class PosService : IPosService
         };
         
         await _posDataProvider.AddPosAgentsAsync([posAgent], cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+    
+    public async Task<GetDataDashBoardCompanyWithStoresResponse> GetDataDashBoardCompanyWithStoresAsync(GetDataDashBoardCompanyWithStoresRequest request, CancellationToken cancellationToken)
+    {
+        var (count, companies) = await _posDataProvider.GetPosCompaniesAsync(
+            request.PageIndex, request.PageSize, serviceProviderId: request.ServiceProviderId, keyword: request.Keyword, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var result = _mapper.Map<List<CompanyDto>>(companies);
+        
+        return new GetDataDashBoardCompanyWithStoresResponse
+        {
+            Data = new GetDataDashBoardCompanyWithStoresResponseData
+            {
+                Count = count,
+                Data = await EnrichPosCompaniesAsync(result, cancellationToken).ConfigureAwait(false)
+            }
+        };
     }
 }
