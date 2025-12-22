@@ -880,7 +880,7 @@ public partial class PosService
             {
                 merchPrinterDto = _mapper.Map<MerchPrinterDto>(merchPrinter);
 
-                if (merchPrinterDto.PrinterStatusInfo.Online)
+                if (merchPrinterDto.PrinterStatusInfo != null && merchPrinterDto.PrinterStatusInfo.Online)
                 {
                     cloudPrintStatus = CloudPrintStatus.Printing;
                 }
