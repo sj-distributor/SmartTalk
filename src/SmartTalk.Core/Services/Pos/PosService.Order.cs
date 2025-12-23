@@ -868,14 +868,13 @@ public partial class PosService
             throw new Exception("Merch printer order not be found.");
         
         var cloudPrintStatus = CloudPrintStatus.Failed;
-        CompanyStore store = null;
+        var store = await _posDataProvider.GetPosCompanyStoreAsync(id: merchPrinterOrder.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
         MerchPrinterDto merchPrinterDto = null;
         
         if (merchPrinterOrder.PrinterMac != null)
         {
             var merchPrinterLog = (await _printerDataProvider.GetMerchPrinterLogAsync(storeId: request.StoreId, orderId: request.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false)).Item2.FirstOrDefault();
             var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(printerMac: merchPrinterOrder.PrinterMac).ConfigureAwait(false)).FirstOrDefault();
-            store = await _posDataProvider.GetPosCompanyStoreAsync(id: merchPrinterOrder.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
             merchPrinterDto = _mapper.Map<MerchPrinterDto>(merchPrinter);
             
