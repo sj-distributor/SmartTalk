@@ -77,6 +77,9 @@ public class Agent : IAgent, IEntity<int>, IHasCreatedFields
     [Column("transfer_call_number"), StringLength(128)]
     public string TransferCallNumber { get; set; }
     
+    [Column("service_hours"), StringLength(1024)]
+    public string ServiceHours { get; set; }
+    
     [NotMapped]
     public List<AISpeechAssistant.AiSpeechAssistant> Assistants { get; set; }
 }
