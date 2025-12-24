@@ -64,7 +64,7 @@ public class QwenAudioModelProvider : IAudioModelProvider
         };
         
         var response = await _httpClientFactory.PostAsJsonAsync<QwenChatCompletionResponse>(
-            $"{_qwenSettings.CrmApiKey}/chat/completions",
+            $"{_qwenSettings.CrmBaseUrl}/chat/completions",
             requestBody,
             cancellationToken,
             timeout: TimeSpan.FromMinutes(10),
