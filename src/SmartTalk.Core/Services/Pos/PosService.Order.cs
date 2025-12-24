@@ -846,7 +846,7 @@ public partial class PosService
         
         var status = await CalculateCloudPrintStatusAsync(merchPrinterOrder, merchPrinter, cancellationToken).ConfigureAwait(false);
         
-        var retryKey = merchPrinterOrder != null ? $"retry:{merchPrinterOrder.OrderId}" : null;
+        var retryKey = merchPrinterOrder != null ? $"{merchPrinterOrder.OrderId}" : null;
         
         var isRetry = await _cacheManager.GetAsync<string>(retryKey, new RedisCachingSetting(), cancellationToken).ConfigureAwait(false);
 
