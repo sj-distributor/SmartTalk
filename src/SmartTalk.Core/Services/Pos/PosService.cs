@@ -381,14 +381,23 @@ public partial class PosService : IPosService
         var stores = _mapper.Map<List<CompanyStoreDto>>(
             await _posDataProvider.GetPosCompanyStoresAsync(ids: request.StoreIds, cancellationToken: cancellationToken).ConfigureAwait(false));
         
-        var allAgents = await _posDataProvider.GetPosAgentsAsync(storeIds: request.StoreIds, cancellationToken: cancellationToken).ConfigureAwait(false);
-        
+        var flatAgents =  await _agentDataProvider.GetStoreAgentsAsync(storeIds: request.StoreIds, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var agentLookup = flatAgents
+            .GroupBy(x => x.StoreId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(x => new AgentDetailDto
+                { Id = x.AgentId, Name = x.AgentName }).ToList());
+
         var enrichStores = stores.Select(store => new GetStoresAgentsResponseDataDto
         {
             Store = store,
-            AgentIds = allAgents.Where(x => x.StoreId == store.Id).Select(x => x.AgentId).ToList()
+            Agents = agentLookup.TryGetValue(store.Id, out var agents)
+                ? agents
+                : new List<AgentDetailDto>()
         }).ToList();
-
+        
         return new GetStoresAgentsResponse { Data = enrichStores };
     }
 

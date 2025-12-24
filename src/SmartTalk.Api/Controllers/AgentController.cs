@@ -36,15 +36,6 @@ public class AgentController : ControllerBase
         return Ok(response);
     }
     
-    [Route("store/surface/agents"), HttpGet]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetStoreSurfaceAgentsResponse))]
-    public async Task<IActionResult> GetStoreSurfaceAgentsAsync([FromQuery] GetStoreSurfaceAgentsRequest request)
-    {
-        var response = await _mediator.RequestAsync<GetStoreSurfaceAgentsRequest, GetStoreSurfaceAgentsResponse>(request).ConfigureAwait(false);
-        
-        return Ok(response);
-    }
-    
     [Route("initialize"), HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(AddAgentResponse))]
     public async Task<IActionResult> InitializeAgentAsync([FromBody] AddAgentCommand command)
