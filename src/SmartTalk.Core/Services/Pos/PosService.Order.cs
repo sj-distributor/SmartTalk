@@ -110,7 +110,7 @@ public partial class PosService
 
         _smartTalkBackgroundJobClient.Schedule<IMediator>( x => x.SendAsync(new RetryCloudPrintingCommand{ Id = merchPrinterOrder.Id, Count = 0}, CancellationToken.None), TimeSpan.FromSeconds(30));
         
-        await _cacheManager.SetAsync($"{merchPrinterOrder.OrderId}", true, new RedisCachingSetting(expiry: TimeSpan.FromMinutes(30)), cancellationToken).ConfigureAwait(false);
+        await _cacheManager.SetAsync($"{merchPrinterOrder.OrderId}", "true", new RedisCachingSetting(expiry: TimeSpan.FromMinutes(30)), cancellationToken).ConfigureAwait(false);
     }
 
     public async Task RetryCloudPrintingAsync(RetryCloudPrintingCommand command, CancellationToken cancellationToken)
@@ -133,18 +133,18 @@ public partial class PosService
             {
                 _smartTalkBackgroundJobClient.Schedule<IMediator>( x => x.SendAsync(new RetryCloudPrintingCommand{ Id = merchPrinterOrder.Id, Count = command.Count + 1 },  CancellationToken.None), TimeSpan.FromSeconds(30));
             
-                await _cacheManager.SetAsync($"{merchPrinterOrder.OrderId}", true, new RedisCachingSetting(expiry: TimeSpan.FromMinutes(30)), cancellationToken).ConfigureAwait(false);
+                await _cacheManager.SetAsync($"{merchPrinterOrder.OrderId}", "true", new RedisCachingSetting(expiry: TimeSpan.FromMinutes(30)), cancellationToken).ConfigureAwait(false);
             }
             else
             {
-                await _cacheManager.SetAsync($"{merchPrinterOrder.OrderId}", false, new RedisCachingSetting(expiry: TimeSpan.FromMinutes(30)), cancellationToken).ConfigureAwait(false);
+                await _cacheManager.SetAsync($"{merchPrinterOrder.OrderId}", "false", new RedisCachingSetting(expiry: TimeSpan.FromMinutes(30)), cancellationToken).ConfigureAwait(false);
             
                 merchPrinterOrder.PrintStatus = PrintStatus.Printed;
                 await _printerDataProvider.UpdateMerchPrinterOrderAsync(merchPrinterOrder, cancellationToken: cancellationToken).ConfigureAwait(false);
             }
         }
         else
-            await _cacheManager.SetAsync($"{merchPrinterOrder.OrderId}", false, new RedisCachingSetting(expiry: TimeSpan.FromMinutes(30)), cancellationToken).ConfigureAwait(false);
+            await _cacheManager.SetAsync($"{merchPrinterOrder.OrderId}", "false", new RedisCachingSetting(expiry: TimeSpan.FromMinutes(30)), cancellationToken).ConfigureAwait(false);
     }
 
     public async Task UpdatePosOrderAsync(UpdatePosOrderCommand command, CancellationToken cancellationToken)
@@ -856,10 +856,12 @@ public partial class PosService
         
         var status = await CalculateCloudPrintStatusAsync(merchPrinterOrder, merchPrinter, cancellationToken).ConfigureAwait(false);
         
-        var retryKey = merchPrinterOrder != null ? $"retry:{merchPrinterOrder.OrderId}" : null;
+        var retryKey = merchPrinterOrder != null ? $"{merchPrinterOrder.OrderId}" : null;
         
         var isRetry = await _cacheManager.GetAsync<string>(retryKey, new RedisCachingSetting(), cancellationToken).ConfigureAwait(false);
 
+        Log.Information("IsRetry:{@isRetry}", isRetry);
+        
         return new GetPosOrderCloudPrintStatusResponse
         {
            Data = new GetPosOrderCloudPrintStatusDto
@@ -868,7 +870,7 @@ public partial class PosService
                CloudPrintStatus = status,
                IsLink = store?.IsLink,
                IsLinkCouldPrinting = merchPrinter is { Count: >0 },
-               IsRetry = bool.TryParse(isRetry, out var retry) && retry
+               IsRetry = isRetry == "true"
            }
         };
     }
