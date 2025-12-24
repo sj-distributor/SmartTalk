@@ -136,7 +136,14 @@ public partial class PosService
             await UpdateMerchPrinterOrderIsRetryStatusAsync(merchPrinterOrder, cancellationToken).ConfigureAwait(false);
 
         if (command.Count < 3)
+        {
             _smartTalkBackgroundJobClient.Schedule<IMediator>( x => x.SendAsync(new RetryCloudPrintingCommand{ Id = merchPrinterOrder.Id, Count = command.Count + 1 },  CancellationToken.None), TimeSpan.FromSeconds(30));
+            
+            var isRetry =  await _cacheManager.GetOrAddAsync($"{merchPrinterOrder.OrderId}", _ => Task.FromResult("1"), new RedisCachingSetting(expiry: TimeSpan.FromMinutes(30)), cancellationToken).ConfigureAwait(false);
+        
+            if (isRetry == "0")
+                await _cacheManager.SetAsync($"{merchPrinterOrder.OrderId}", Task.FromResult("1"), new RedisCachingSetting(expiry: TimeSpan.FromMinutes(30)), cancellationToken).ConfigureAwait(false);
+        }
         else
         {
             await UpdateMerchPrinterOrderIsRetryStatusAsync(merchPrinterOrder, cancellationToken).ConfigureAwait(false);
