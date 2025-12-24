@@ -37,6 +37,8 @@ public interface IAgentDataProvider : IScopedDependency
     Task<(int Count, List<Agent> Agents)> GetAgentsPagingAsync(int pageIndex, int pageSize, List<int> agentIds, string keyword = null, CancellationToken cancellationToken = default);
     
     Task<List<Agent>> GetAgentsByIdsAsync(List<int> ids, CancellationToken cancellationToken = default);
+
+    Task<(int Count, List<Agent> Agents)> GetSurfaceAgentsAsync(List<int> agentIds, CancellationToken cancellationToken = default);
 }
 
 public class AgentDataProvider : IAgentDataProvider
@@ -195,5 +197,19 @@ public class AgentDataProvider : IAgentDataProvider
     public async Task<List<Agent>> GetAgentsByIdsAsync(List<int> ids, CancellationToken cancellationToken = default)
     {
         return await _repository.Query<Agent>().Where(x => ids.Contains(x.Id)).ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+    
+    public async Task<(int Count, List<Agent> Agents)> GetSurfaceAgentsAsync(List<int> agentIds, CancellationToken cancellationToken = default)
+    {
+        var query = _repository.Query<Agent>().Where(x => x.IsDisplay && x.IsSurface);
+        
+        if (agentIds != null)
+            query = query.Where(x => agentIds.Contains(x.Id));
+        
+        var count = await query.CountAsync(cancellationToken).ConfigureAwait(false);
+
+        var agents = await query.OrderByDescending(x => x.CreatedDate).ToListAsync(cancellationToken).ConfigureAwait(false);
+        
+        return (count, agents);
     }
 }

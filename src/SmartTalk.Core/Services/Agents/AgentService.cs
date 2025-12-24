@@ -37,6 +37,8 @@ public interface IAgentService : IScopedDependency
     Task<GetAgentByIdResponse> GetAgentByIdAsync(GetAgentByIdRequest request, CancellationToken cancellationToken);
     
     Task<GetAgentsWithAssistantsResponse> GetAgentsWithAssistantsAsync(GetAgentsWithAssistantsRequest request, CancellationToken cancellationToken);
+    
+    Task<GetStoreSurfaceAgentsResponse> GetStoreSurfaceAgentsAsync(GetStoreSurfaceAgentsRequest request, CancellationToken cancellationToken);
 }
 
 public class AgentService : IAgentService
@@ -207,6 +209,28 @@ public class AgentService : IAgentService
         var agents = await _agentDataProvider.GetAgentsWithAssistantsAsync(agentIds: storeAgents.Select(x => x.AgentId).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
         
         return new GetAgentsWithAssistantsResponse { Data = _mapper.Map<List<AgentDto>>(agents) };
+    }
+
+    public async Task<GetStoreSurfaceAgentsResponse> GetStoreSurfaceAgentsAsync(GetStoreSurfaceAgentsRequest request, CancellationToken cancellationToken)
+    {
+        var storeAgents = await _posDataProvider.GetPosAgentsAsync(storeIds: request.AgentIds, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Get Store Surface Agent Ids: {@AgentIds}", storeAgents.Select(x => x.Id).ToList());
+        
+        var (count, agents) = await _agentDataProvider.GetSurfaceAgentsAsync(agentIds: storeAgents.Select(x => x.AgentId).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var enrichAgents = _mapper.Map<List<AgentDto>>(agents);
+        
+        await EnrichAgentsAsync(enrichAgents, cancellationToken).ConfigureAwait(false);
+
+        return new GetStoreSurfaceAgentsResponse
+        {
+            Data = new GetStoreSurfaceAgentsResponseData
+            {
+                Count = count,
+                Agents = _mapper.Map<List<AgentDto>>(enrichAgents)
+            }
+        };
     }
 
     private async Task<List<AgentPreviewDto>> GetAllAgentsAsync(List<AgentType> agentTypes, List<int> agentIds, int? serviceProviderId, CancellationToken cancellationToken)
