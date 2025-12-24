@@ -6,6 +6,7 @@ using SmartTalk.Messages.Dto.Agent;
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Domain;
 using SmartTalk.Core.Domain.AISpeechAssistant;
+using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.Restaurants;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Requests.Agent;
@@ -38,7 +39,7 @@ public interface IAgentDataProvider : IScopedDependency
     
     Task<List<Agent>> GetAgentsByIdsAsync(List<int> ids, CancellationToken cancellationToken = default);
 
-    Task<(int Count, List<Agent> Agents)> GetSurfaceAgentsAsync(List<int> agentIds, CancellationToken cancellationToken = default);
+    Task<List<StoreAgentFlatDto>> GetStoreAgentsAsync(List<int> storeIds, CancellationToken cancellationToken = default);
 }
 
 public class AgentDataProvider : IAgentDataProvider
@@ -199,17 +200,20 @@ public class AgentDataProvider : IAgentDataProvider
         return await _repository.Query<Agent>().Where(x => ids.Contains(x.Id)).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
     
-    public async Task<(int Count, List<Agent> Agents)> GetSurfaceAgentsAsync(List<int> agentIds, CancellationToken cancellationToken = default)
+    public async Task<List<StoreAgentFlatDto>> GetStoreAgentsAsync(List<int> storeIds, CancellationToken cancellationToken = default)
     {
-        var query = _repository.Query<Agent>().Where(x => x.IsDisplay && x.IsSurface);
-        
-        if (agentIds != null)
-            query = query.Where(x => agentIds.Contains(x.Id));
-        
-        var count = await query.CountAsync(cancellationToken).ConfigureAwait(false);
+        var query =
+            from posAgent in _repository.Query<PosAgent>()
+            join agent in _repository.Query<Agent>() on posAgent.AgentId equals agent.Id
+            join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
+            where (storeIds == null || storeIds.Count == 0 || storeIds.Contains(posAgent.StoreId)) && agent.IsSurface && agent.IsDisplay
+            select new StoreAgentFlatDto
+            {
+                StoreId = posAgent.StoreId,
+                AgentId = agent.Id,
+                AgentName = agent.Name
+            };
 
-        var agents = await query.OrderByDescending(x => x.CreatedDate).ToListAsync(cancellationToken).ConfigureAwait(false);
-        
-        return (count, agents);
+        return await query.Distinct().ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }
