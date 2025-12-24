@@ -128,23 +128,23 @@ public partial class PosService
             merchPrinterOrder.PrintStatus = PrintStatus.Waiting;
             merchPrinterOrder.PrinterMac = merchPrinter?.PrinterMac;
             await _printerDataProvider.UpdateMerchPrinterOrderAsync(merchPrinterOrder, cancellationToken: cancellationToken).ConfigureAwait(false);
+            
+            if (command.Count < 3)
+            {
+                _smartTalkBackgroundJobClient.Schedule<IMediator>( x => x.SendAsync(new RetryCloudPrintingCommand{ Id = merchPrinterOrder.Id, Count = command.Count + 1 },  CancellationToken.None), TimeSpan.FromSeconds(30));
+            
+                await _cacheManager.SetAsync($"{merchPrinterOrder.OrderId}", true, new RedisCachingSetting(expiry: TimeSpan.FromMinutes(30)), cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                await _cacheManager.SetAsync($"{merchPrinterOrder.OrderId}", false, new RedisCachingSetting(expiry: TimeSpan.FromMinutes(30)), cancellationToken).ConfigureAwait(false);
+            
+                merchPrinterOrder.PrintStatus = PrintStatus.Printed;
+                await _printerDataProvider.UpdateMerchPrinterOrderAsync(merchPrinterOrder, cancellationToken: cancellationToken).ConfigureAwait(false);
+            }
         }
         else
             await _cacheManager.SetAsync($"{merchPrinterOrder.OrderId}", false, new RedisCachingSetting(expiry: TimeSpan.FromMinutes(30)), cancellationToken).ConfigureAwait(false);
-
-        if (command.Count < 3)
-        {
-            _smartTalkBackgroundJobClient.Schedule<IMediator>( x => x.SendAsync(new RetryCloudPrintingCommand{ Id = merchPrinterOrder.Id, Count = command.Count + 1 },  CancellationToken.None), TimeSpan.FromSeconds(30));
-            
-            await _cacheManager.SetAsync($"{merchPrinterOrder.OrderId}", true, new RedisCachingSetting(expiry: TimeSpan.FromMinutes(30)), cancellationToken).ConfigureAwait(false);
-        }
-        else
-        {
-            await _cacheManager.SetAsync($"{merchPrinterOrder.OrderId}", false, new RedisCachingSetting(expiry: TimeSpan.FromMinutes(30)), cancellationToken).ConfigureAwait(false);
-            
-            merchPrinterOrder.PrintStatus = PrintStatus.Printed;
-            await _printerDataProvider.UpdateMerchPrinterOrderAsync(merchPrinterOrder, cancellationToken: cancellationToken).ConfigureAwait(false);
-        }
     }
 
     public async Task UpdatePosOrderAsync(UpdatePosOrderCommand command, CancellationToken cancellationToken)
