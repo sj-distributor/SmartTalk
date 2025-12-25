@@ -59,6 +59,8 @@ public partial class PosService
     {
         var order = await GetOrAddPosOrderAsync(command, cancellationToken).ConfigureAwait(false);
         
+        _smartTalkBackgroundJobClient.Enqueue(() => CreateMerchPrinterOrderAsync(order.Id, order.Id, order, cancellationToken));
+        
         await HandlePosOrderAsync(order, command.IsWithRetry, cancellationToken).ConfigureAwait(false);
         
         return new PosOrderPlacedEvent
@@ -582,10 +584,6 @@ public partial class PosService
             }
             
             await SafetyPlaceOrderWithRetryAsync(order, store, token, isWithRetry, cancellationToken).ConfigureAwait(false);
-            
-            if (order.Status is PosOrderStatus.Sent or PosOrderStatus.Modified)
-                _smartTalkBackgroundJobClient.Enqueue(() => CreateMerchPrinterOrderAsync(store.Id, order.Id, order, cancellationToken));
-            
         }, wait: TimeSpan.Zero, retry: TimeSpan.Zero, server: RedisServer.System).ConfigureAwait(false);
     }
 
