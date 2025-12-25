@@ -275,7 +275,7 @@ public class SpeechMaticsService : ISpeechMaticsService
                             "9. InvalidCall（无效通话）\n" +
                             "- 无实际业务内容的通话：静默来电、无应答、误拨、挂断、无法识别的噪音，或仅出现“请上传录音”“听不到”等无意义话术。\n" +
                             "10. TransferVoicemail（语音信箱）\n    " +
-                            "- 通话被转入语音信箱的场景。\n" +
+                            "- 通话提及到语音信箱的场景。\n" +
                             "11. Other（其他）\n   " +
                             "- 无法归入上述10类的内容，需在'remark'字段补充简短关键词说明。\n\n" +
                             "### 输出规则（禁止输出任何额外文本，仅返回JSON）：\n" +
