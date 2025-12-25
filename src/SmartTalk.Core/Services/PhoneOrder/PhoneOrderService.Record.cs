@@ -960,7 +960,7 @@ public partial class PhoneOrderService
         var totalDuration = callOutRecords.Sum(x => x.Duration ?? 0);
         var friendlyCount = callOutRecords.Count(x => x.IsCustomerFriendly == true);
         var satisfactionRate = answeredCount > 0 ? (double)friendlyCount / answeredCount : 0;
-        var transferCount = callOutRecords.Count(x => x.IsTransfer == true);
+        var humanAnswerCount = callOutRecords.Count(x => x.IsHumanAnswered == true);
 
         var totalDurationPerPeriod = GroupDurationByRequestType(callOutRecords, start, end, dataType);
 
@@ -970,7 +970,7 @@ public partial class PhoneOrderService
             AverageCallOutDurationSeconds = averageDuration,
             EffectiveCommunicationCallOutCount = effectiveCount,
             CallOutNotAnsweredCount = callInFailedCount,
-            CallOutAnsweredByHumanCount = transferCount,
+            CallOutAnsweredByHumanCount = humanAnswerCount,
             CallOutSatisfactionRate = satisfactionRate,
             TotalCallOutDurationSeconds = totalDuration,
             TotalCallOutDurationPerPeriod = totalDurationPerPeriod
