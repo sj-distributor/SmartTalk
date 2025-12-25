@@ -474,7 +474,7 @@ public class SpeechMaticsService : ISpeechMaticsService
                     var messages = new List<ChatMessage>
                     {
                         new SystemChatMessage(systemPrompt),
-                        new UserChatMessage("客戶分析報告文本：\n" + record.TranscriptionText + "\n\n")
+                        new UserChatMessage("客戶預約資訊文本：\n" + record.TranscriptionText + "\n\n")
                     };
 
                     var completion = await client.CompleteChatAsync(messages, new ChatCompletionOptions { ResponseModalities = ChatResponseModalities.Text, ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat() }, cancellationToken).ConfigureAwait(false);
