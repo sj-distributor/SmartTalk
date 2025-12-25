@@ -13,6 +13,8 @@ public class AddAiSpeechAssistantKnowledgeCommand : ICommand
     public string Json { get; set; }
     
     public string Language { get; set; }
+    
+    public string Primise { get; set; }
 }
 
 public class AddAiSpeechAssistantKnowledgeResponse : SmartTalkResponse<AiSpeechAssistantKnowledgeDto>
