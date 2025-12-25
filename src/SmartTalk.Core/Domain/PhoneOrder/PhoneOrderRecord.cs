@@ -90,6 +90,15 @@ public class PhoneOrderRecord : IEntity
     [Column("is_human_answered")]
     public bool? IsHumanAnswered { get; set; }
     
+    [Column("scenario")]
+    public DialogueScenarios? Scenario { get; set; }
+    
+    [Column("remark")]
+    public string Remark { get; set; }
+    
+    [Column("is_modify_scenario")]
+    public bool IsModifyScenario { get; set; }
+    
     [NotMapped]
     public UserAccount UserAccount { get; set; }
     

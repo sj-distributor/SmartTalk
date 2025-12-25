@@ -50,5 +50,13 @@ public class PhoneOrderRecordDto
     
     public bool? IsCustomerFriendly { get; set; }
     
+    public DialogueScenarios? Scenario { get; set; }
+
+    public string Remark { get; set; }
+    
     public bool? IsHumanAnswered { get; set; }
+
+    public int? UnSendCount { get; set; }
+    
+    public bool IsModifyScenario { get; set; }
 }
