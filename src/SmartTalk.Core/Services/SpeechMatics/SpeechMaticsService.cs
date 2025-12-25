@@ -436,7 +436,53 @@ public class SpeechMaticsService : ISpeechMaticsService
                     
                     await HandleSalesScenarioAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
                 }
-                break; 
+                break;
+            case AgentType.Restaurant or AgentType.PosCompanyStore:
+                if (!string.IsNullOrEmpty(record.TranscriptionText) && record.Scenario == DialogueScenarios.Reservation)
+                {
+                    var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
+                    
+                    var systemPrompt =
+                        "你是一名餐廳預約資訊分析助手。請從下面的顧客與餐廳之間的對話內容中，提取所有與餐廳預約相關的關鍵資訊。" +
+                        "需要識別並提取以下內容：預約日期、預約具體時間、用餐人數、以及任何特殊要求（例如：包廂、靠窗座位、生日慶祝、過敏需求等）。" +
+                        "如果對話中提到了多個可能的預約時間或日期，請選擇**最終確認**的那一個；如果僅為詢問且未確認，請填寫為空字符串。\n" +
+                        "請嚴格傳回一個 JSON 對象，頂層字段為 \"reservation\"，包含以下字段：" +
+                        "ReservationDate（格式 yyyy-MM-dd，可空字符串）、" +
+                        "ReservationTime（格式 HH:mm，可空字符串）、" +
+                        "PartySize（整數，可為 null）、" +
+                        "SpecialRequests（字符串，可空字符串）。\n" +
+                        "範例：\n" +
+                        "{\n" +
+                        "  \"reservation\": {\n" +
+                        "    \"ReservationDate\": \"2025-08-20\",\n" +
+                        "    \"ReservationTime\": \"18:30\",\n" +
+                        "    \"PartySize\": 4,\n" +
+                        "    \"SpecialRequests\": \"需要包廂，並準備生日蠟燭\"\n" +
+                        "  }\n" +
+                        "}\n" +
+                        "注意事項：\n" +
+                        "1. 必須嚴格輸出 JSON，物件頂層字段必須是 \"reservation\"，不得包含其他字段或任何解釋性文字。\n" +
+                        "2. 日期請統一轉換為 yyyy-MM-dd 格式；時間請統一轉換為 24 小時制 HH:mm。\n" +
+                        "3. 若對話中未明確提及某一項資訊，請將對應字段設為空字符串（PartySize 則為 null）。\n" +
+                        "4. 特殊要求請完整保留顧客原意，不要自行擴充或猜測。\n" +
+                        "5. **如果整段對話中沒有任何可識別的預約行為或預約資訊，請返回：{ \"reservation\": null }。不得臆造任何資料。**\n" +
+                        "6. 若顧客使用相對日期（如「明天」、「下週五」），請根據對話上下文合理推算為實際日期；若無法確定，請留空。\n" +
+                        "請務必完整、準確提取對話中所有已確認的預約資訊。";
+                       
+                    Log.Information("Sending prompt to GPT: {Prompt}", systemPrompt);
+
+                    var messages = new List<ChatMessage>
+                    {
+                        new SystemChatMessage(systemPrompt),
+                        new UserChatMessage("客戶分析報告文本：\n" + record.TranscriptionText + "\n\n")
+                    };
+
+                    var completion = await client.CompleteChatAsync(messages, new ChatCompletionOptions { ResponseModalities = ChatResponseModalities.Text, ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat() }, cancellationToken).ConfigureAwait(false);
+                    var jsonResponse = completion.Value.Content.FirstOrDefault()?.Text ?? "";
+        
+                    Log.Information("AI JSON Response: {JsonResponse}", jsonResponse);
+                }
+                break;
         } 
     }
 
