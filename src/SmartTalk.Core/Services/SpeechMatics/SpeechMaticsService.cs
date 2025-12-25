@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using AutoMapper;
 using Google.Cloud.Translation.V2;
+using Microsoft.Extensions.Azure;
 using Serilog;
 using SmartTalk.Core.Ioc;
 using Microsoft.IdentityModel.Tokens;
@@ -14,6 +15,7 @@ using Smarties.Messages.Requests.Ask;
 using SmartTalk.Core.Constants;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.PhoneOrder;
+using SmartTalk.Core.Domain.Sales;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Ffmpeg;
@@ -33,6 +35,7 @@ using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Sales;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Enums.Agent;
+using SmartTalk.Messages.Enums.Sales;
 using SmartTalk.Messages.Enums.STT;
 using Twilio;
 using Twilio.Rest.Api.V2010.Account;
@@ -60,6 +63,7 @@ public class SpeechMaticsService : ISpeechMaticsService
     private readonly IPhoneOrderService _phoneOrderService;
     private readonly ISalesDataProvider _salesDataProvider;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
+    private readonly ISalesPhoneOrderPushService _salesPhoneOrderPushService;
     private readonly ISmartTalkHttpClientFactory _smartTalkHttpClientFactory;
     private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
@@ -77,6 +81,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         IPhoneOrderService phoneOrderService,
         ISalesDataProvider salesDataProvider,
         IPhoneOrderDataProvider phoneOrderDataProvider,
+        ISalesPhoneOrderPushService salesPhoneOrderPushService,
         ISmartTalkHttpClientFactory smartTalkHttpClientFactory,
         ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient,
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
@@ -93,6 +98,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         _phoneOrderService = phoneOrderService;
         _salesDataProvider = salesDataProvider;
         _phoneOrderDataProvider = phoneOrderDataProvider;
+        _salesPhoneOrderPushService = salesPhoneOrderPushService;
         _smartTalkHttpClientFactory = smartTalkHttpClientFactory;
         _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
@@ -187,6 +193,8 @@ public class SpeechMaticsService : ISpeechMaticsService
         var detection = await _translationClient.DetectLanguageAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
 
         await MultiScenarioCustomProcessingAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
+        
+        await _salesPhoneOrderPushService.ExecutePhoneOrderPushTasksAsync(aiSpeechAssistant.Id, cancellationToken).ConfigureAwait(false);
 
         if (agent.SourceSystem == AgentSourceSystem.Smarties)
             await CallBackSmartiesRecordAsync(agent, record, cancellationToken).ConfigureAwait(false);
@@ -434,46 +442,21 @@ public class SpeechMaticsService : ISpeechMaticsService
         foreach (var storeOrder in extractedOrders)
         { 
             var soldToId = await ResolveSoldToIdAsync(storeOrder, aiSpeechAssistant, soldToIds, cancellationToken).ConfigureAwait(false);
-            if (string.IsNullOrEmpty(soldToId)) 
-            { 
-                Log.Warning("未能获取店铺 SoldToId, StoreName={StoreName}, StoreNumber={StoreNumber}", storeOrder.StoreName, storeOrder.StoreNumber); 
-            }
-            
-            if (storeOrder.IsDeleteWholeOrder)
-            {
-                if (storeOrder.Orders.Any())
-                {
-                    Log.Information("检测到取消整单后又有加/减单，跳过删除，按加减单处理");
-                }
-                else
-                {
-                    var deleteReq = new DeleteAiOrderRequestDto
-                    {
-                        CustomerNumber = soldToId,
-                        SoldToIds = string.Join(",", soldToIds),
-                        DeliveryDate = storeOrder.DeliveryDate
-                    };
 
-                    await _salesClient.DeleteAiOrderAsync(deleteReq, cancellationToken).ConfigureAwait(false);
-                    continue;
-                }
+            if (storeOrder.IsDeleteWholeOrder && !storeOrder.Orders.Any())
+            {
+                await CreateDeleteOrderTaskAsync(record, storeOrder, soldToId, soldToIds, cancellationToken).ConfigureAwait(false);
+                continue;
             }
 
             foreach (var item in storeOrder.Orders)
-            { 
-                item.MaterialNumber = MatchMaterialNumber(item.Name, item.MaterialNumber, item.Unit, historyItems); 
+            {
+                item.MaterialNumber = MatchMaterialNumber(item.Name, item.MaterialNumber, item.Unit, historyItems);
             }
 
-            var draftOrder = CreateDraftOrder(storeOrder, soldToId, aiSpeechAssistant, pacificZone, pacificNow, useCanceledOrder: storeOrder.IsUndoCancel);
-            Log.Information("DraftOrder for Store {StoreName}/{StoreNumber}: {@DraftOrder}", storeOrder.StoreName, storeOrder.StoreNumber, draftOrder);
+            var draftOrder = CreateDraftOrder(storeOrder, soldToId, aiSpeechAssistant, pacificZone, pacificNow, storeOrder.IsUndoCancel);
 
-            var response = await _salesClient.GenerateAiOrdersAsync(draftOrder, cancellationToken).ConfigureAwait(false); 
-            Log.Information("Generate Ai Order response for Store {StoreName}/{StoreNumber}: {@response}", storeOrder.StoreName, storeOrder.StoreNumber, response);
-
-            if (response?.Data != null && response.Data.OrderId != Guid.Empty) 
-            { 
-                await UpdateRecordOrderIdAsync(record, response.Data.OrderId, cancellationToken).ConfigureAwait(false);
-            }
+            await CreateGenerateOrderTaskAsync(record, storeOrder, draftOrder, cancellationToken).ConfigureAwait(false);
         }
     }
 
@@ -745,5 +728,46 @@ public class SpeechMaticsService : ISpeechMaticsService
         if (result == null) throw new Exception($"无法反序列化模型返回结果: {response}");
 
         return (result.IsHumanAnswered, result.IsCustomerFriendly);
+    }
+    
+    private async Task CreateDeleteOrderTaskAsync(PhoneOrderRecord record, ExtractedOrderDto storeOrder, string soldToId, List<string> soldToIds, CancellationToken cancellationToken)
+    {
+        var req = new DeleteAiOrderRequestDto
+        {
+            CustomerNumber = soldToId,
+            SoldToIds = string.Join(",", soldToIds),
+            DeliveryDate = storeOrder.DeliveryDate
+        };
+        
+        var task = new PhoneOrderPushTask
+        {
+            RecordId = record.Id,
+            ParentRecordId = record.ParentRecordId,
+            AssistantId = record.AssistantId ?? 0,
+            TaskType = PhoneOrderPushTaskType.DeleteOrder,
+            BusinessKey = $"DELETE_{storeOrder.StoreName}_{storeOrder.DeliveryDate:yyyyMMdd}",
+            RequestJson = JsonSerializer.Serialize(req),
+            Status = PhoneOrderPushTaskStatus.Pending,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        await _salesDataProvider.AddPhoneOrderPushTaskAsync(task, true, cancellationToken).ConfigureAwait(false);
+    }
+    
+    private async Task CreateGenerateOrderTaskAsync(PhoneOrderRecord record, ExtractedOrderDto storeOrder, GenerateAiOrdersRequestDto request, CancellationToken cancellationToken)
+    {
+        var task = new PhoneOrderPushTask
+        {
+            RecordId = record.Id,
+            ParentRecordId = record.ParentRecordId,
+            AssistantId = record.AssistantId ?? 0,
+            TaskType = PhoneOrderPushTaskType.GenerateOrder,
+            BusinessKey = $"{storeOrder.StoreName}_{storeOrder.DeliveryDate:yyyyMMdd}",
+            RequestJson = JsonSerializer.Serialize(request),
+            Status = PhoneOrderPushTaskStatus.Pending,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        await _salesDataProvider.AddPhoneOrderPushTaskAsync(task, true, cancellationToken).ConfigureAwait(false);
     }
 }
