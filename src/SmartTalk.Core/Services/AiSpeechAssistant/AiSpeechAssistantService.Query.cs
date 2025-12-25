@@ -87,9 +87,16 @@ public partial class AiSpeechAssistantService
         var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(
             request.AssistantId, request.KnowledgeId, request.KnowledgeId.HasValue ? null : true, cancellationToken).ConfigureAwait(false);
 
+        var result = _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge);
+        
+        var premise = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantPremiseByAssistantIdAsync(request.AssistantId, cancellationToken).ConfigureAwait(false);
+        
+        if (premise != null && !string.IsNullOrEmpty(premise.Content))
+            result.Premise = _mapper.Map<AiSpeechAssistantPremiseDto>(premise);
+        
         return new GetAiSpeechAssistantKnowledgeResponse
         {
-            Data = _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge)
+            Data = result
         };
     }
 
@@ -131,9 +138,16 @@ public partial class AiSpeechAssistantService
 
         if (session == null) throw new Exception("Could not found the session");
 
+        var sessionDto = _mapper.Map<AiSpeechAssistantSessionDto>(session);
+        
+        var premise = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantPremiseByAssistantIdAsync(session.AssistantId, cancellationToken).ConfigureAwait(false);
+
+        if (premise != null)
+            sessionDto.Premise = _mapper.Map<AiSpeechAssistantPremiseDto>(premise);
+        
         return new GetAiSpeechAssistantSessionResponse
         {
-            Data = _mapper.Map<AiSpeechAssistantSessionDto>(session)
+            Data = sessionDto
         };
     }
 

@@ -16,6 +16,8 @@ public class UpdateAiSpeechAssistantKnowledgeCommand : ICommand
     public string Greetings { get; set; }
     
     public string ModelVoice { get; set; }
+
+    public AiSpeechAssistantPremiseDto? Premise { get; set; }
     
     public AiSpeechAssistantVoiceType? VoiceType { get; set; }
     
