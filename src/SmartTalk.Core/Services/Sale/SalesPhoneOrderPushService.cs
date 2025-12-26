@@ -3,6 +3,7 @@ using Serilog;
 using SmartTalk.Core.Domain.Sales;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Http.Clients;
+using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Messages.Dto.Sales;
 using SmartTalk.Messages.Enums.Sales;
@@ -16,36 +17,34 @@ public interface ISalesPhoneOrderPushService : IScopedDependency
 
 public class SalesPhoneOrderPushService : ISalesPhoneOrderPushService
 {
-    private readonly ISalesDataProvider _salesDataProvider;
     private readonly ISalesClient _salesClient;
+    private readonly ISalesDataProvider _salesDataProvider;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
+    private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
 
-    public SalesPhoneOrderPushService(ISalesDataProvider salesDataProvider, ISalesClient salesClient, IPhoneOrderDataProvider phoneOrderDataProvider)
+    public SalesPhoneOrderPushService(ISalesDataProvider salesDataProvider, ISalesClient salesClient, IPhoneOrderDataProvider phoneOrderDataProvider, ISmartTalkBackgroundJobClient backgroundJobClient)
     {
-        _salesDataProvider = salesDataProvider;
         _salesClient = salesClient;
+        _salesDataProvider = salesDataProvider;
+        _backgroundJobClient = backgroundJobClient;
         _phoneOrderDataProvider = phoneOrderDataProvider;
     }
 
     public async Task ExecutePhoneOrderPushTasksAsync(int assistantId, CancellationToken cancellationToken)
     {
-        var tasks = await _salesDataProvider.GetExecutableTasksAsync(assistantId, cancellationToken).ConfigureAwait(false);
+        var task = await _salesDataProvider.GetNextExecutableTaskAsync(assistantId, cancellationToken).ConfigureAwait(false);
 
-        foreach (var task in tasks)
-        {
-            await ExecuteSingleTaskAsync(task, cancellationToken).ConfigureAwait(false);
-        }
+        if (task == null)
+            return;
+
+        await ExecuteSingleTaskAsync(task, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task ExecuteSingleTaskAsync(PhoneOrderPushTask task, CancellationToken cancellationToken)
     {
         try
         {
-            var parentCompleted = await _salesDataProvider.IsParentCompletedAsync(task.ParentRecordId, cancellationToken).ConfigureAwait(false);
-
-            if (!parentCompleted) return;
-            
-            await _salesDataProvider.MarkSendingAsync(task.Id, cancellationToken).ConfigureAwait(false);
+            await _salesDataProvider.MarkSendingAsync(task.Id, true, cancellationToken).ConfigureAwait(false);
             
             switch (task.TaskType)
             {
@@ -58,18 +57,18 @@ public class SalesPhoneOrderPushService : ISalesPhoneOrderPushService
                     break;
             }
             
-            await _salesDataProvider.MarkSentAsync(task.Id, cancellationToken).ConfigureAwait(false);
+            await _salesDataProvider.MarkSentAsync(task.Id, true, cancellationToken).ConfigureAwait(false);
             
             await TryCompleteRecordAsync(task.RecordId, cancellationToken).ConfigureAwait(false);
-            
-            await NotifyChildTasksAsync(task.RecordId, cancellationToken).ConfigureAwait(false);
+
+            _backgroundJobClient.Enqueue<ISalesPhoneOrderPushService>(s =>
+                s.ExecutePhoneOrderPushTasksAsync(task.AssistantId, CancellationToken.None));
         }
         catch (Exception ex)
         {
-            await _salesDataProvider.MarkFailedAsync(task.Id, cancellationToken).ConfigureAwait(false);
+            await _salesDataProvider.MarkFailedAsync(task.Id, true, cancellationToken).ConfigureAwait(false);
 
-            Log.Error(ex,
-                "PhoneOrderPushTask failed. TaskId={TaskId}", task.Id);
+            Log.Error(ex, "PhoneOrderPushTask failed. TaskId={TaskId}", task.Id);
         }
     }
     
@@ -79,23 +78,9 @@ public class SalesPhoneOrderPushService : ISalesPhoneOrderPushService
 
         if (!hasPendingTasks)
         {
-            await _phoneOrderDataProvider.MarkRecordCompletedAsync(recordId, cancellationToken).ConfigureAwait(false);
+            await _phoneOrderDataProvider.MarkRecordCompletedAsync(recordId, true, cancellationToken).ConfigureAwait(false);
         }
     }
-
-    private async Task NotifyChildTasksAsync(int recordId, CancellationToken cancellationToken)
-    {
-        var childTasks = await _salesDataProvider.GetTasksByParentRecordIdAsync(recordId, cancellationToken).ConfigureAwait(false);
-
-        foreach (var task in childTasks)
-        {
-            if (task.Status != PhoneOrderPushTaskStatus.Pending)
-                continue;
-
-            await ExecuteSingleTaskAsync(task, cancellationToken).ConfigureAwait(false);
-        }
-    }
-
     
     private async Task ExecuteGenerateAsync(PhoneOrderPushTask task, CancellationToken cancellationToken)
     {
@@ -108,7 +93,6 @@ public class SalesPhoneOrderPushService : ISalesPhoneOrderPushService
 
         await _phoneOrderDataProvider.UpdateOrderIdAsync(task.RecordId, resp.Data.OrderId, cancellationToken).ConfigureAwait(false);
     }
-
 
     private async Task ExecuteDeleteAsync(PhoneOrderPushTask task, CancellationToken cancellationToken)
     {

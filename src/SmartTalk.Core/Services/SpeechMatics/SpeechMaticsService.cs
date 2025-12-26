@@ -63,6 +63,7 @@ public class SpeechMaticsService : ISpeechMaticsService
     private readonly IPhoneOrderService _phoneOrderService;
     private readonly ISalesDataProvider _salesDataProvider;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
+    private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
     private readonly ISalesPhoneOrderPushService _salesPhoneOrderPushService;
     private readonly ISmartTalkHttpClientFactory _smartTalkHttpClientFactory;
     private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
@@ -81,6 +82,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         IPhoneOrderService phoneOrderService,
         ISalesDataProvider salesDataProvider,
         IPhoneOrderDataProvider phoneOrderDataProvider,
+        ISmartTalkBackgroundJobClient backgroundJobClient,
         ISalesPhoneOrderPushService salesPhoneOrderPushService,
         ISmartTalkHttpClientFactory smartTalkHttpClientFactory,
         ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient,
@@ -97,6 +99,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         _phoneOrderSetting = phoneOrderSetting;
         _phoneOrderService = phoneOrderService;
         _salesDataProvider = salesDataProvider;
+        _backgroundJobClient = backgroundJobClient;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _salesPhoneOrderPushService = salesPhoneOrderPushService;
         _smartTalkHttpClientFactory = smartTalkHttpClientFactory;
@@ -194,7 +197,7 @@ public class SpeechMaticsService : ISpeechMaticsService
 
         await MultiScenarioCustomProcessingAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
         
-        await _salesPhoneOrderPushService.ExecutePhoneOrderPushTasksAsync(aiSpeechAssistant.Id, cancellationToken).ConfigureAwait(false);
+        _backgroundJobClient.Enqueue<ISalesPhoneOrderPushService>(service => service.ExecutePhoneOrderPushTasksAsync(aiSpeechAssistant.Id, CancellationToken.None));
 
         if (agent.SourceSystem == AgentSourceSystem.Smarties)
             await CallBackSmartiesRecordAsync(agent, record, cancellationToken).ConfigureAwait(false);
