@@ -467,10 +467,17 @@ public class PrinterService : IPrinterService
     {
         var merchPrinterLog = _mapper.Map<MerchPrinterLog>(@event);
         var printError = @event.IsPrintError();
+        var message = "";
         
-        var order = await _posDataProvider.GetPosOrderByIdAsync(@event.MerchPrinterOrderDto.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (@event.MerchPrinterOrderDto.PrintFormat == PrintFormat.Order)
+        {
+            var order = await _posDataProvider.GetPosOrderByIdAsync(@event.MerchPrinterOrderDto.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        var message = $"{(printError?"Print Error":"Print")}:{order.OrderNo}";
+            message = $"{(printError?"Print Error":"Print")}:{order.OrderNo}";
+        }
+        else
+            message = $"{(printError?"Print Error":"Print")}";
+        
         merchPrinterLog.Message = message;
         
         if (message.Equals("Print Error"))
