@@ -15,6 +15,7 @@ using AutoMapper;
 using Mediator.Net;
 using Newtonsoft.Json;
 using Serilog;
+using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Services.AliYun;
 using SmartTalk.Core.Services.Caching.Redis;
 using SmartTalk.Core.Services.Http.Clients;
@@ -468,10 +469,12 @@ public class PrinterService : IPrinterService
         var merchPrinterLog = _mapper.Map<MerchPrinterLog>(@event);
         var printError = @event.IsPrintError();
         var message = "";
+        var text = new SendWorkWechatGroupRobotTextDto();
+        var order = new PosOrder();
         
         if (@event.MerchPrinterOrderDto.PrintFormat == PrintFormat.Order)
         {
-            var order = await _posDataProvider.GetPosOrderByIdAsync(@event.MerchPrinterOrderDto.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false);
+            order = await _posDataProvider.GetPosOrderByIdAsync(@event.MerchPrinterOrderDto.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false);
         
             message = $"{(printError?"Print Error":"Print")}:{order.OrderNo}";
         }
@@ -485,8 +488,12 @@ public class PrinterService : IPrinterService
             var store = await _posDataProvider.GetPosCompanyStoreAsync(id: @event.MerchPrinterOrderDto.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
             var storeName = JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(store.Names).GetValueOrDefault("en")?.GetValueOrDefault("name");
-        
-            var text = new SendWorkWechatGroupRobotTextDto { Content = $"🆘SMT Cloud Print Error Infor🆘\n\nPrint Error: {merchPrinterLog.Message}\nPrint Time: {TimeZoneInfo.ConvertTimeFromUtc(@event.MerchPrinterOrderDto.PrintDate.UtcDateTime, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time")):yyyy-MM-dd HH:mm:ss}\nStore: {storeName}\nOrder Date:{order.CreatedDate.ToString("yyyy-MM-dd")}\nOrder NO: #{order.OrderNo}"};
+            
+            if (@event.MerchPrinterOrderDto.PrintFormat == PrintFormat.Order)
+                text = new SendWorkWechatGroupRobotTextDto { Content = $"🆘SMT Cloud Print Error Infor🆘\n\nPrint Error: {merchPrinterLog.Message}\nPrint Time: {TimeZoneInfo.ConvertTimeFromUtc(@event.MerchPrinterOrderDto.PrintDate.UtcDateTime, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time")):yyyy-MM-dd HH:mm:ss}\nStore: {storeName}\nOrder Date:{order.CreatedDate.ToString("yyyy-MM-dd")}\nOrder NO: #{order.OrderNo}"};
+            else
+                text = new SendWorkWechatGroupRobotTextDto { Content = $"🆘SMT Cloud Print Error Infor🆘\n\nPrint Error: {merchPrinterLog.Message}\nPrint Time: {TimeZoneInfo.ConvertTimeFromUtc(@event.MerchPrinterOrderDto.PrintDate.UtcDateTime, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time")):yyyy-MM-dd HH:mm:ss}\nStore: {storeName}\nOrder Date:{@event.MerchPrinterOrderDto.PrintDate.ToString("yyyy-MM-dd")}\nOrder Id: #{@event.MerchPrinterOrderDto.OrderId}"};
+           
             text.MentionedMobileList = "@all";
         
             await _weChatClient.SendWorkWechatRobotMessagesAsync(_printerSendErrorLogSetting.CloudPrinterSendErrorLogRobotUrl, new SendWorkWechatGroupRobotMessageDto
