@@ -16,6 +16,8 @@ public class MerchPrinterOrderDto
        
     public DateTimeOffset PrintDate { get; set; }
         
+    public PrintFormat PrintFormat { get; set; }
+    
     public DateTimeOffset CreatedDate { get; set; }
 
     public bool IsPrintTest()
