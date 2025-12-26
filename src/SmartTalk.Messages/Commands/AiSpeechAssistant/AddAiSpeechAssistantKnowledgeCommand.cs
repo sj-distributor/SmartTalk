@@ -14,7 +14,7 @@ public class AddAiSpeechAssistantKnowledgeCommand : ICommand
     
     public string Language { get; set; }
     
-    public string Primise { get; set; }
+    public string Premise { get; set; }
 }
 
 public class AddAiSpeechAssistantKnowledgeResponse : SmartTalkResponse<AiSpeechAssistantKnowledgeDto>
