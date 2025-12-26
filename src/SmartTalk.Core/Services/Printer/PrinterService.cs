@@ -163,57 +163,57 @@ public class PrinterService : IPrinterService
         if (merchPrinterOrder == null) return string.Empty;
         
         if (!string.IsNullOrEmpty(merchPrinterOrder.ImageUrl)) return merchPrinterOrder.ImageUrl;
-
-        var order = await _posDataProvider.GetPosOrderByIdAsync(orderId: merchPrinterOrder.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        var orderItems = JsonConvert.DeserializeObject<List<PhoneCallOrderItem>>(order.Items);
-
-        var productIds = new List<string>();
-        
-        foreach (var orderItem in orderItems)
-        {
-            productIds.Add(orderItem.ProductId.ToString());
-        }
-
-        if (productIds.Count > 0)
-        {
-            var products = await _posDataProvider.GetPosProductsAsync(productIds: productIds, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-            Log.Information("Products:{@products}", products);
-            
-            foreach (var orderItem in orderItems)
-            {
-                var product = products.FirstOrDefault(x => x.ProductId == orderItem.ProductId.ToString());
-
-                if (product != null)
-                    orderItem.ProductName = product.Names;
-            }
-        }
-
         var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(printerMac: merchPrinterOrder.PrinterMac,
             storeId: merchPrinterOrder.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
-        
-        var store = await _posDataProvider.GetPosCompanyStoreDetailAsync(order.StoreId, cancellationToken).ConfigureAwait(false);
-        var printerLog = await _printerDataProvider.GetMerchPrinterLogAsync(storeId: store.Id, printerMac: merchPrinter?.PrinterMac, orderId: merchPrinterOrder.OrderId).ConfigureAwait(false);
 
+        var store = await _posDataProvider.GetPosCompanyStoreDetailAsync(merchPrinterOrder.StoreId, cancellationToken).ConfigureAwait(false);
+        
         var storeCreatedDate = "";
         var storePrintDate = DateTimeOffset.Now;
-        var storePrintDateString = "";
-        if (!string.IsNullOrEmpty(store.Timezone))
-        {
-            storeCreatedDate = TimeZoneInfo.ConvertTimeFromUtc(order.CreatedDate.UtcDateTime, TimeZoneInfo.FindSystemTimeZoneById(store.Timezone)).ToString("yyyy-MM-dd HH:mm:ss");    
-            storePrintDateString = TimeZoneInfo.ConvertTimeFromUtc(storePrintDate.UtcDateTime, TimeZoneInfo.FindSystemTimeZoneById(store.Timezone)).ToString("yyyy-MM-dd HH:mm:ss");    
-        }
-        else
-        {
-            storeCreatedDate = order.CreatedDate.ToString("yyyy-MM-dd HH:mm:ss");
-            storePrintDateString = storePrintDate.ToString("yyyy-MM-dd HH:mm:ss");
-        }
-
+        
         Image<Rgba32> img;
         
         if (merchPrinterOrder.PrintFormat == PrintFormat.Order)
         {
+            var order = await _posDataProvider.GetPosOrderByIdAsync(orderId: merchPrinterOrder.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+            var orderItems = JsonConvert.DeserializeObject<List<PhoneCallOrderItem>>(order.Items);
+
+            var productIds = new List<string>();
+        
+            foreach (var orderItem in orderItems)
+            {
+                productIds.Add(orderItem.ProductId.ToString());
+            }
+
+            if (productIds.Count > 0)
+            {
+                var products = await _posDataProvider.GetPosProductsAsync(productIds: productIds, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+                Log.Information("Products:{@products}", products);
+            
+                foreach (var orderItem in orderItems)
+                {
+                    var product = products.FirstOrDefault(x => x.ProductId == orderItem.ProductId.ToString());
+
+                    if (product != null)
+                        orderItem.ProductName = product.Names;
+                }
+            }
+            
+            var storePrintDateString = "";
+            if (!string.IsNullOrEmpty(store.Timezone))
+            {
+                storeCreatedDate = TimeZoneInfo.ConvertTimeFromUtc(order.CreatedDate.UtcDateTime, TimeZoneInfo.FindSystemTimeZoneById(store.Timezone)).ToString("yyyy-MM-dd HH:mm:ss");    
+                storePrintDateString = TimeZoneInfo.ConvertTimeFromUtc(storePrintDate.UtcDateTime, TimeZoneInfo.FindSystemTimeZoneById(store.Timezone)).ToString("yyyy-MM-dd HH:mm:ss");    
+            }
+            else
+            {
+                storeCreatedDate = order.CreatedDate.ToString("yyyy-MM-dd HH:mm:ss");
+                storePrintDateString = storePrintDate.ToString("yyyy-MM-dd HH:mm:ss");
+            }
+            
             img = await RenderReceiptAsync(order.OrderNo,  
                 JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(store.Names).GetValueOrDefault("en")?.GetValueOrDefault("name"),
                 store.Address,
@@ -236,7 +236,7 @@ public class PrinterService : IPrinterService
         {
             var reservationInfo = await _posDataProvider.GetPhoneOrderReservationInformationAsync(merchPrinterOrder.OrderId, cancellationToken).ConfigureAwait(false);
             var phoneOrderRecord = await _phoneOrderDataProvider.GetPhoneOrderRecordByIdAsync(reservationInfo.RecordId, cancellationToken).ConfigureAwait(false);
-                
+            
             img = await RenderReceipt1Async(JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(store.Names).GetValueOrDefault("en")?.GetValueOrDefault("name"),
                 store.Address, store.PhoneNums, reservationInfo.ReservationDate, reservationInfo.UserName, phoneOrderRecord.IncomingCallNumber,
                 reservationInfo.PartySize.ToString(), reservationInfo.ReservationTime, reservationInfo.SpecialRequests,
