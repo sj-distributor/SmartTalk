@@ -415,10 +415,10 @@ public class PosController : ControllerBase
     }
     
     [Route("update/reservationInfo"), HttpPost]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetOrderReservationInfoResponse))]
-    public async Task<IActionResult> UpdateOrderReservationInfoAsync([FromQuery] GetOrderReservationInfoRequest request)
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdateOrderReservationInfoResponse))]
+    public async Task<IActionResult> UpdateOrderReservationInfoAsync([FromBody] UpdateOrderReservationInfoCommand command)
     {
-        var response = await _mediator.RequestAsync<GetOrderReservationInfoRequest, GetOrderReservationInfoResponse>(request).ConfigureAwait(false);
+        var response = await _mediator.SendAsync<UpdateOrderReservationInfoCommand, UpdateOrderReservationInfoResponse>(command).ConfigureAwait(false);
         
         return Ok(response);
     }
