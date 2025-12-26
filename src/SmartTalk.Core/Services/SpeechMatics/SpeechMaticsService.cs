@@ -444,6 +444,8 @@ public class SpeechMaticsService : ISpeechMaticsService
                     
                     var systemPrompt =
                         "你是一名餐廳電話預約資訊分析助手。" +
+                        $"系統當前日期與時間為：{DateTimeOffset.Now:yyyy-MM-dd HH:mm}（格式：yyyy-MM-dd HH:mm）。" +
+                        "所有相對日期與時間（例如：明天、後天、今晚、下週五）都必須**以此時間為唯一基準**進行推算。\n" +
                         "請從下面的顧客與餐廳之間的完整對話內容中，提取所有**已確認**的餐廳預約資訊。" +
                         "本任務僅用於結構化電話預約資料，請嚴格依照指定字段輸出。\n" +
                         "你需要識別並提取以下資訊：" +
@@ -477,8 +479,7 @@ public class SpeechMaticsService : ISpeechMaticsService
                         "6. SpecialRequests 僅保留顧客明確提出的要求，不得自行推斷或補充。\n" +
                         "7. 若整段對話中沒有任何可識別且**已確認**的預約行為，請返回：\n" +
                         "{ \"ReservationDate\": \"\", \"ReservationTime\": \"\", \"UserName\": \"\", \"PartySize\": null, \"SpecialRequests\": \"\" }。\n" +
-                        "8. 若出現相對日期或時間（如「明天」、「後天晚上六點」、「下週五中午」），請根據對話上下文合理推算；" +
-                        "若日期或時間任一無法唯一確定，請將該欄位留空。\n" +
+                        "8. 若出現相對日期或時間，**且根據系統當前時間仍無法唯一確定具體日期或時間**，請將該欄位留空。\n" +
                         "請務必準確、完整地提取所有**已確認**的預約資訊。";
                        
                     Log.Information("Sending prompt to GPT: {Prompt}", systemPrompt);
