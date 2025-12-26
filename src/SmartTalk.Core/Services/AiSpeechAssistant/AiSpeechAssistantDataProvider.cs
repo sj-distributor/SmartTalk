@@ -727,7 +727,7 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
 
     public async Task<List<KnowledgeCopyRelated>> UpdateKnowledgeCopyRelatedAsync(List<KnowledgeCopyRelated> relateds, bool forceSave = true, CancellationToken cancellationToken = default)
     {
-        await _repository.InsertAllAsync(relateds, cancellationToken).ConfigureAwait(false);
+        await _repository.UpdateAllAsync(relateds, cancellationToken).ConfigureAwait(false);
         
         if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         
