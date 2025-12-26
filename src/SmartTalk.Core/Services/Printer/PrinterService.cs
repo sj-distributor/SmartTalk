@@ -829,7 +829,7 @@ public class PrinterService : IPrinterService
                      StoreId = command.StoreId.Value,
                      PrinterMac = merchPrinter?.PrinterMac,
                      PrintDate = DateTimeOffset.Now,
-                     PrintFormat = PrintFormat.Order
+                     PrintFormat = command.PrintFormat ?? PrintFormat.Order
                  };
         
                  Log.Information("Create merch printer order:{@merchPrinterOrder}", order);
