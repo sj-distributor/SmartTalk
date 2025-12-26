@@ -22,5 +22,7 @@ public class AiSpeechAssistantKnowledgeDto
     
     public int CreatedBy { get; set; }
     
-    public List<KnowledgeCopyRelatedDto> KnowledgeCopyRelated { get; set; }
+    public bool IsSyncUpdate { get; set; }
+    
+    public List<KnowledgeCopyRelatedDto> KnowledgeCopyRelateds { get; set; }
 }

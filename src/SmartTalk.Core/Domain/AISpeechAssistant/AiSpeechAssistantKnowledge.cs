@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using SmartTalk.Core.Domain.KnowledgeCopy;
 
 namespace SmartTalk.Core.Domain.AISpeechAssistant;
 
@@ -40,4 +41,7 @@ public class AiSpeechAssistantKnowledge : IEntity, IHasCreatedFields
     
     [Column("is_sync_update")]
     public bool IsSyncUpdate { get; set; }
+    
+    [NotMapped]
+    public List<KnowledgeCopyRelated> KnowledgeCopyRelateds { get; set; }
 }
