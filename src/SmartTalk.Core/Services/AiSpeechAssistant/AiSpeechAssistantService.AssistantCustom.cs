@@ -92,12 +92,12 @@ public partial class AiSpeechAssistantService
 
         var knowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(latestKnowledge);
         
-        if (!string.IsNullOrEmpty(command.Primise))
+        if (!string.IsNullOrEmpty(command.Premise))
         {
             var premise = new AiSpeechAssistantPremise
             {
                 AssistantId = command.AssistantId,
-                Content = command.Primise
+                Content = command.Premise
             };
             
             await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantPremiseAsync(premise, cancellationToken: cancellationToken);
