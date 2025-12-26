@@ -35,5 +35,6 @@ public class PosMapping : Profile
         CreateMap<UpdateStoreCustomerCommand, StoreCustomer>();
 
         CreateMap<PhoneOrderReservationInformation, OrderReservationInfoDto>().ReverseMap();
+        CreateMap<UpdateOrderReservationInfoCommand, PhoneOrderReservationInformation>();
     }
 }
