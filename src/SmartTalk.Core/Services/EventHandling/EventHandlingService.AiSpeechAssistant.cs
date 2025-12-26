@@ -14,7 +14,13 @@ public partial class EventHandlingService
 {
     public async Task HandlingEventAsync(AiSpeechAssistantKnowledgeAddedEvent @event, CancellationToken cancellationToken)
     {
-        var diff = CompareJsons(@event.PrevKnowledge.Json, @event.LatestKnowledge.Json);
+        var oldMergedJsonObj = BuildMergedKnowledgeJson(@event.PrevKnowledge.Json, @event.PrevKnowledge.KnowledgeCopyRelateds.Select(x => x.CopyKnowledgePoints));
+
+        var newMergedJsonObj = BuildMergedKnowledgeJson(@event.LatestKnowledge.Json, @event.LatestKnowledge.KnowledgeCopyRelateds.Select(x => x.CopyKnowledgePoints));
+        
+        Log.Information("Compare the knowledge: {@oldMergedJsonObj} and {@newMergedJsonObj}", oldMergedJsonObj, newMergedJsonObj);
+        
+        var diff = CompareJsons(oldMergedJsonObj.ToString(), newMergedJsonObj.ToString());
         
         Log.Information("Generate the compare result: {@Diff}", diff);
 
@@ -39,6 +45,19 @@ public partial class EventHandlingService
         {
             Log.Error("Generate the knowledge brief error: {@Message}", e.Message);
         }
+    }
+    
+    private JObject BuildMergedKnowledgeJson(string baseJson, IEnumerable<string> copyKnowledgePoints)
+    {
+        var baseObj = JObject.Parse(baseJson ?? "{}");
+
+        var copyObjs = copyKnowledgePoints.Where(x => !string.IsNullOrWhiteSpace(x)).Select(JObject.Parse);
+
+        return new[] { baseObj }
+            .Concat(copyObjs)
+            .Aggregate(new JObject(), (acc, j) =>
+            {
+                acc.Merge(j, new JsonMergeSettings { MergeArrayHandling = MergeArrayHandling.Concat }); return acc; });
     }
 
     private JObject CompareJsons(string oldJson, string newJson)

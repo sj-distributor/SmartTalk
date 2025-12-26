@@ -21,6 +21,9 @@ public class KnowledgeCopyRelated : IEntity
     [Column("copy_knowledge_points")]
     public string CopyKnowledgePoints { get; set; }
     
+    [Column("is_sync_update")]
+    public bool IsSyncUpdate { get; set; }
+    
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; } = DateTimeOffset.Now;
 }

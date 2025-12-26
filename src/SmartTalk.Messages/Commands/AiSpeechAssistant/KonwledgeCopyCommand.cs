@@ -1,5 +1,4 @@
 using Mediator.Net.Contracts;
-using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
 using SmartTalk.Messages.Responses;
 
