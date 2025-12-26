@@ -410,6 +410,24 @@ public class PosController : ControllerBase
     public async Task<IActionResult> GetDataDashBoardCompanyWithStoresAsync([FromQuery] GetDataDashBoardCompanyWithStoresRequest request)
     {
         var response = await _mediator.RequestAsync<GetDataDashBoardCompanyWithStoresRequest, GetDataDashBoardCompanyWithStoresResponse>(request).ConfigureAwait(false);
+     
+        return Ok(response);
+    }
+
+    [Route("get/reservationInfo"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetOrderReservationInfoResponse))]
+    public async Task<IActionResult> GetOrderReservationInfoAsync([FromQuery] GetOrderReservationInfoRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetOrderReservationInfoRequest, GetOrderReservationInfoResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("update/reservationInfo"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetOrderReservationInfoResponse))]
+    public async Task<IActionResult> UpdateOrderReservationInfoAsync([FromQuery] GetOrderReservationInfoRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetOrderReservationInfoRequest, GetOrderReservationInfoResponse>(request).ConfigureAwait(false);
         
         return Ok(response);
     }

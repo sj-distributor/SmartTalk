@@ -3,6 +3,7 @@ using Newtonsoft.Json;
 using System.Globalization;
 using Mediator.Net;
 using SmartTalk.Core.Constants;
+using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.Printer;
 using SmartTalk.Core.Services.Caching;
@@ -40,6 +41,10 @@ public partial interface IPosService
     Task<GetPosOrderCloudPrintStatusResponse> GetPosOrderCloudPrintStatusAsync(GetPosOrderCloudPrintStatusRequest request, CancellationToken cancellationToken);
 
     Task RetryCloudPrintingAsync(RetryCloudPrintingCommand command, CancellationToken cancellationToken);
+
+    Task<GetOrderReservationInfoResponse> GetOrderReservationInfoAsync(GetOrderReservationInfoRequest request, CancellationToken cancellationToken);
+
+    Task<UpdateOrderReservationInfoResponse> UpdateOrderReservationInfoAsync(UpdateOrderReservationInfoCommand command, CancellationToken cancellationToken);
 }
 
 public partial class PosService
@@ -59,7 +64,7 @@ public partial class PosService
     {
         var order = await GetOrAddPosOrderAsync(command, cancellationToken).ConfigureAwait(false);
         
-        _smartTalkBackgroundJobClient.Enqueue(() => CreateMerchPrinterOrderAsync(order.StoreId, order.Id, order, cancellationToken));
+        _smartTalkBackgroundJobClient.Enqueue(() => CreateMerchPrinterOrderAsync(order.StoreId, order.Id, cancellationToken));
         
         await HandlePosOrderAsync(order, command.IsWithRetry, cancellationToken).ConfigureAwait(false);
         
@@ -89,7 +94,7 @@ public partial class PosService
         await SafetyPlaceOrderAsync(order.Id, store, token, isRetry, 0, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task CreateMerchPrinterOrderAsync(int storeId, int orderId, PosOrder order, CancellationToken cancellationToken)
+    public async Task CreateMerchPrinterOrderAsync(int storeId, int orderId, CancellationToken cancellationToken)
     {
         Log.Information("storeId:{storeId}, orderId:{orderId}", storeId, orderId);
         
@@ -900,5 +905,40 @@ public partial class PosService
             return CloudPrintStatus.Printing;
 
         return CloudPrintStatus.Failed;
+    }
+
+    public async Task<GetOrderReservationInfoResponse> GetOrderReservationInfoAsync(GetOrderReservationInfoRequest request, CancellationToken cancellationToken)
+    {
+        var reservationInfo = await _posDataProvider.GetPhoneOrderReservationInformationAsync(request.OrderId, cancellationToken).ConfigureAwait(false);
+
+        var reservationInfoDto = _mapper.Map<OrderReservationInfoDto>(reservationInfo);
+        
+        var merchPrinterOrder = (await _printerDataProvider.GetMerchPrinterOrdersAsync(orderId: request.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+
+        reservationInfoDto.CloudPrintOrderId = merchPrinterOrder?.Id;
+        
+        if (merchPrinterOrder != null)
+        {
+            var merchPrinter = await _printerDataProvider.GetMerchPrintersAsync(storeId: merchPrinterOrder.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
+            
+            reservationInfoDto.CloudPrintStatus = await CalculateCloudPrintStatusAsync(merchPrinterOrder, merchPrinter, cancellationToken).ConfigureAwait(false);
+        }
+        
+        return new GetOrderReservationInfoResponse
+        {
+            Data = reservationInfoDto
+        };
+    }
+
+    public async Task<UpdateOrderReservationInfoResponse> UpdateOrderReservationInfoAsync(UpdateOrderReservationInfoCommand command, CancellationToken cancellationToken)
+    {
+        var reservationInfo = _mapper.Map<PhoneOrderReservationInformation>(command);
+        
+        await _posDataProvider.UpdatePhoneOrderReservationInformationAsync(reservationInfo, cancellationToken:cancellationToken).ConfigureAwait(false);
+
+        return new UpdateOrderReservationInfoResponse
+        {
+            Data = _mapper.Map<OrderReservationInfoDto>(reservationInfo)
+        };
     }
 }
