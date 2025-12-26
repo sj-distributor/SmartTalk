@@ -374,48 +374,71 @@ public partial class PhoneOrderProcessJobService
                     var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
                     
                     var systemPrompt =
-                        "你是一名餐廳預約資訊分析助手。" +
-                        $"系統當前時間為：{DateTimeOffset.Now:yyyy-MM-dd HH:mm}（24 小時制，時區以系統時間為準）。" +
-                        "請**嚴格以此時間為唯一基準**，解析對話中出現的相對日期與時間（例如：明天、後天、下週五、今晚）。" +
+                        "你是一名餐廳電話預約資訊分析助手。" +
+                        $"系統當前日期與時間為：{DateTimeOffset.Now:yyyy-MM-dd HH:mm}（格式：yyyy-MM-dd HH:mm）。" +
+                        "所有相對日期與時間（例如：明天、後天、今晚、下週五）都必須**以此時間為唯一基準**進行推算。\n" +
                         "請從下面的顧客與餐廳之間的完整對話內容中，提取所有**已確認**的餐廳預約資訊。" +
-                        "需要識別並提取以下內容：預約日期、預約具體時間、用餐人數、以及任何特殊要求（例如：包廂、靠窗座位、生日慶祝、過敏需求等）。" +
-                        "若對話中出現多個日期或時間，請僅選擇**顧客與餐廳雙方最終確認**的那一組；" +
-                        "若僅為詢問、討論或尚未確認，請視為未確定並填寫為空字符串。\n" +
-                        "請嚴格且僅輸出一個 JSON 對象，頂層字段必須為 \"reservation\"，包含以下字段：" +
+                        "本任務僅用於結構化電話預約資料，請嚴格依照指定字段輸出。\n" +
+                        "你需要識別並提取以下資訊：" +
+                        "1. 預約日期（ReservationDate），" +
+                        "2. 預約時間（ReservationTime），" +
+                        "3. 顧客姓名（UserName），" +
+                        "4. 用餐人數（PartySize），" +
+                        "5. 特殊要求（SpecialRequests，例如：包廂、靠窗、生日、過敏等）。\n" +
+                        "若對話中出現多個可能的日期或時間，請僅選擇**最終已確認**的那一個；" +
+                        "若僅為詢問、討論或未明確確認，請將對應欄位設為空字符串。\n" +
+                        "請嚴格且僅輸出一個 JSON 對象，包含以下字段（字段名必須完全一致）：" +
                         "ReservationDate（格式 yyyy-MM-dd，可空字符串）、" +
                         "ReservationTime（格式 HH:mm，可空字符串）、" +
+                        "UserName（字符串，可空字符串）、" +
                         "PartySize（整數，可為 null）、" +
                         "SpecialRequests（字符串，可空字符串）。\n" +
-                        "範例：\n" +
+                        "輸出範例：\n" +
                         "{\n" +
-                        "  \"reservation\": {\n" +
-                        "    \"ReservationDate\": \"2025-08-20\",\n" +
-                        "    \"ReservationTime\": \"18:30\",\n" +
-                        "    \"PartySize\": 4,\n" +
-                        "    \"SpecialRequests\": \"需要包廂，並準備生日蠟燭\"\n" +
-                        "  }\n" +
+                        "  \"ReservationDate\": \"2025-08-20\",\n" +
+                        "  \"ReservationTime\": \"18:30\",\n" +
+                        "  \"UserName\": \"王先生\",\n" +
+                        "  \"PartySize\": 4,\n" +
+                        "  \"SpecialRequests\": \"需要包廂，並準備生日蠟燭\"\n" +
                         "}\n" +
                         "規則與注意事項：\n" +
-                        "1. 輸出內容必須為**合法 JSON**，不得包含任何說明性文字、註解或額外字段。\n" +
-                        "2. 日期請統一轉換為 yyyy-MM-dd；時間請使用 24 小時制 HH:mm。\n" +
-                        "3. 若某一項資訊在對話中未被明確確認，請將對應字段設為空字符串（PartySize 則為 null）。\n" +
-                        "4. 特殊要求僅限於對話中明確提出的內容，不得自行推斷或補充。\n" +
-                        "5. 若對話中沒有任何可識別且已確認的預約資訊，請返回：{ \"reservation\": null }。\n" +
-                        "6. 若相對日期或時間依據當前時間無法唯一確定（例如語意模糊或存在多種可能），請將該字段設為空字符串。\n" +
-                        "請務必完整、準確地提取對話中所有**已確認**的預約資訊。";
+                        "1. 輸出內容必須是**合法 JSON**，不得包含任何說明文字、註解或多餘字段。\n" +
+                        "2. ReservationDate 與 ReservationTime 必須分開填寫，不得合併為同一欄位。\n" +
+                        "3. 日期請統一使用 yyyy-MM-dd 格式；時間請使用 24 小時制 HH:mm。\n" +
+                        "4. 若對話中未明確提及某一欄位，請將該欄位設為空字符串（PartySize 則為 null）。\n" +
+                        "5. UserName 僅在顧客主動提供姓名、稱呼或可明確識別身份時才填寫，否則留空。\n" +
+                        "6. SpecialRequests 僅保留顧客明確提出的要求，不得自行推斷或補充。\n" +
+                        "7. 若整段對話中沒有任何可識別且**已確認**的預約行為，請返回：\n" +
+                        "{ \"ReservationDate\": \"\", \"ReservationTime\": \"\", \"UserName\": \"\", \"PartySize\": null, \"SpecialRequests\": \"\" }。\n" +
+                        "8. 若出現相對日期或時間，**且根據系統當前時間仍無法唯一確定具體日期或時間**，請將該欄位留空。\n" +
+                        "請務必準確、完整地提取所有**已確認**的預約資訊。";
                        
                     Log.Information("Sending prompt to GPT: {Prompt}", systemPrompt);
 
                     var messages = new List<ChatMessage>
                     {
                         new SystemChatMessage(systemPrompt),
-                        new UserChatMessage("客戶预订对话文本：\n" + record.TranscriptionText + "\n\n")
+                        new UserChatMessage("客戶預約資訊文本：\n" + record.TranscriptionText + "\n\n")
                     };
 
                     var completion = await client.CompleteChatAsync(messages, new ChatCompletionOptions { ResponseModalities = ChatResponseModalities.Text, ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat() }, cancellationToken).ConfigureAwait(false);
                     var jsonResponse = completion.Value.Content.FirstOrDefault()?.Text ?? "";
         
                     Log.Information("AI JSON Response: {JsonResponse}", jsonResponse);
+
+                    var aiResponse = JsonConvert.DeserializeObject<ReservationAiResultDto>(jsonResponse);
+                    
+                    var information = new PhoneOrderReservationInformation
+                    {
+                        RecordId = record.Id,
+                        ReservationDate = aiResponse.ReservationDate,
+                        ReservationTime = aiResponse.ReservationTime,
+                        UserName = aiResponse.UserName,
+                        PartySize = aiResponse.PartySize,
+                        SpecialRequests = aiResponse.SpecialRequests
+                    };
+                    
+                    await _phoneOrderDataProvider.AddPhoneOrderReservationInformationAsync(information, cancellationToken: cancellationToken).ConfigureAwait(false);
                 }
                 break;
         } 
