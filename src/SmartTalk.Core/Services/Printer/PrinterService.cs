@@ -19,6 +19,7 @@ using SmartTalk.Core.Services.AliYun;
 using SmartTalk.Core.Services.Caching.Redis;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
+using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Settings.Printer;
 using SmartTalk.Message.Commands.Printer;
@@ -85,8 +86,9 @@ public class PrinterService : IPrinterService
     private readonly IPrinterDataProvider _printerDataProvider;
     private readonly PrinterSendErrorLogSetting _printerSendErrorLogSetting;
     private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
+    private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
 
-    public PrinterService(IMapper mapper, IWeChatClient weChatClient, ICacheManager cacheManager, IAliYunOssService ossService, IRedisSafeRunner redisSafeRunner, IPosDataProvider posDataProvider, IPrinterDataProvider printerDataProvider, PrinterSendErrorLogSetting printerSendErrorLogSetting, ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient)
+    public PrinterService(IMapper mapper, IWeChatClient weChatClient, ICacheManager cacheManager, IAliYunOssService ossService, IRedisSafeRunner redisSafeRunner, IPosDataProvider posDataProvider, IPrinterDataProvider printerDataProvider, PrinterSendErrorLogSetting printerSendErrorLogSetting, ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient, IPhoneOrderDataProvider phoneOrderDataProvider)
     {
         _mapper = mapper;
         _ossService = ossService;
@@ -97,6 +99,7 @@ public class PrinterService : IPrinterService
         _printerDataProvider = printerDataProvider;
         _printerSendErrorLogSetting = printerSendErrorLogSetting;
         _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
+        _phoneOrderDataProvider = phoneOrderDataProvider;
     }
 
     public async Task<GetPrinterJobAvailableResponse> GetPrinterJobAvailableAsync(GetPrinterJobAvailableRequest request, CancellationToken cancellationToken)
@@ -231,8 +234,12 @@ public class PrinterService : IPrinterService
         }
         else
         {
-            img = await RenderReceipt1Async("chongqing hot", "21385 S Western Ave,Torrance,CA,90501,USA", "9023162148",
-                "2025/2/15", "BRYAN.L", "4088888888", "3", "11:45 am", "客人要向著包厢的位子，靠墙。",
+            var reservationInfo = await _posDataProvider.GetPhoneOrderReservationInformationAsync(merchPrinterOrder.OrderId, cancellationToken).ConfigureAwait(false);
+            var phoneOrderRecord = await _phoneOrderDataProvider.GetPhoneOrderRecordByIdAsync(reservationInfo.RecordId, cancellationToken).ConfigureAwait(false);
+                
+            img = await RenderReceipt1Async(JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(store.Names).GetValueOrDefault("en")?.GetValueOrDefault("name"),
+                store.Address, store.PhoneNums, reservationInfo.ReservationDate, reservationInfo.UserName, phoneOrderRecord.IncomingCallNumber,
+                reservationInfo.PartySize.ToString(), reservationInfo.ReservationTime, reservationInfo.SpecialRequests,
                 $@"{DateTimeOffset.Now.ToString("yyyy-MM-dd HH:mm:ss")}").ConfigureAwait(false);
         }
         
