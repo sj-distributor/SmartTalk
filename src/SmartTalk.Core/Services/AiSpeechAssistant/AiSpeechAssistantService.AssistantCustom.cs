@@ -83,11 +83,11 @@ public partial class AiSpeechAssistantService
         var relatedDtoMap = command.RelatedKnowledges.ToDictionary(x => x.Id, x => x);
         
         var selectedRelateds = allPrevRelateds.Where(r => relatedDtoMap.ContainsKey(r.Id)).ToList();
-
+        
         allPrevRelateds = allPrevRelateds
             .Select(r =>
             {
-                r.SourceKnowledgeId = latestKnowledge.Id;
+                r.TargetKnowledgeId = latestKnowledge.Id;
 
                 if (relatedDtoMap.TryGetValue(r.Id, out var dto))
                 { r.CopyKnowledgePoints = dto.CopyKnowledgePoints; } return r; 
@@ -114,7 +114,7 @@ public partial class AiSpeechAssistantService
         var knowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(latestKnowledge);
 
         var prevKnowledgeDto = _mapper.Map<AiSpeechAssistantKnowledgeDto>(prevKnowledge);
-        
+
         if (!string.IsNullOrEmpty(command.Premise))
         {
             var premise = new AiSpeechAssistantPremise
@@ -130,7 +130,8 @@ public partial class AiSpeechAssistantService
         
         prevKnowledgeDto.KnowledgeCopyRelateds = _mapper.Map<List<KnowledgeCopyRelatedDto>>(prevKnowledge.KnowledgeCopyRelateds);
         knowledge.KnowledgeCopyRelateds = _mapper.Map<List<KnowledgeCopyRelatedDto>>(latestKnowledge.KnowledgeCopyRelateds);
-        
+
+        prevKnowledgeDto.KnowledgeCopyRelateds = _mapper.Map<List<KnowledgeCopyRelatedDto>>(prevKnowledge.KnowledgeCopyRelateds);
         return new AiSpeechAssistantKnowledgeAddedEvent
         { 
             PrevKnowledge = prevKnowledgeDto,
