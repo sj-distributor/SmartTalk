@@ -33,5 +33,5 @@ public class PhoneOrderPushTask : IEntity
     public PhoneOrderPushTaskStatus Status { get; set; }
     
     [Column("created_at")]
-    public DateTime CreatedAt { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.Now;
 }
