@@ -23,8 +23,6 @@ public interface ISalesDataProvider : IScopedDependency
     Task<AiSpeechAssistantKnowledgeVariableCache> GetCustomerInfoCacheByPhoneNumberAsync(string phoneNumber, CancellationToken cancellationToken);
 
     Task AddPhoneOrderPushTaskAsync(PhoneOrderPushTask task, bool forceSave = true, CancellationToken cancellationToken = default);
-
-    Task<PhoneOrderPushTask> GetNextExecutableTaskAsync(int assistantId, CancellationToken cancellationToken);
     
     Task MarkSendingAsync(int taskId, bool forceSave, CancellationToken cancellationToken = default);
 
@@ -32,7 +30,11 @@ public interface ISalesDataProvider : IScopedDependency
 
     Task MarkFailedAsync(int taskId, bool forceSave, CancellationToken cancellationToken = default);
 
+    Task<bool> IsParentCompletedAsync(int? parentRecordId, CancellationToken cancellationToken);
+
     Task<bool> HasPendingTasksByRecordIdAsync(int recordId, CancellationToken cancellationToken);
+    
+    Task<PhoneOrderPushTask> GetRecordPushTaskByRecordIdAsync(int recordId, CancellationToken cancellationToken);
 }
 
 public class SalesDataProvider : ISalesDataProvider
@@ -131,18 +133,6 @@ public class SalesDataProvider : ISalesDataProvider
         if (forceSave)
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
-
-    public async Task<PhoneOrderPushTask> GetNextExecutableTaskAsync(int assistantId, CancellationToken cancellationToken)
-    {
-        var query = from task in _repository.Query<PhoneOrderPushTask>()
-            join record in _repository.Query<PhoneOrderRecord>() on task.ParentRecordId equals record.Id into recordJoin
-            from record in recordJoin.DefaultIfEmpty()
-            where task.AssistantId == assistantId && task.Status == PhoneOrderPushTaskStatus.Pending && (task.ParentRecordId == null || record.IsCompleted)
-            orderby task.CreatedAt
-            select task;
-
-        return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
-    }
     
     public async Task MarkSendingAsync(int taskId, bool forceSave = true, CancellationToken cancellationToken = default)
     {
@@ -179,9 +169,23 @@ public class SalesDataProvider : ISalesDataProvider
         await _repository.UpdateAsync(task, cancellationToken).ConfigureAwait(false);
         if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
+    
+    public async Task<bool> IsParentCompletedAsync(int? parentRecordId, CancellationToken cancellationToken)
+    {
+        if (!parentRecordId.HasValue) return true;
+
+        return await _repository.Query<PhoneOrderRecord>().Where(r => r.Id == parentRecordId.Value).Select(r => r.IsCompleted).FirstOrDefaultAsync(cancellationToken);
+    }
+
 
     public async Task<bool> HasPendingTasksByRecordIdAsync(int recordId, CancellationToken cancellationToken)
     {
         return await _repository.Query<PhoneOrderPushTask>().AnyAsync(t => t.RecordId == recordId && t.Status != PhoneOrderPushTaskStatus.Sent, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<PhoneOrderPushTask> GetRecordPushTaskByRecordIdAsync(int recordId, CancellationToken cancellationToken)
+    {
+        return await _repository.Query<PhoneOrderPushTask>().Where(t => t.RecordId == recordId && t.Status == PhoneOrderPushTaskStatus.Pending)
+            .OrderBy(t => t.CreatedAt).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 }

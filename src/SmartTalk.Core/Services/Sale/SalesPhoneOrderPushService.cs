@@ -12,7 +12,7 @@ namespace SmartTalk.Core.Services.Sale;
 
 public interface ISalesPhoneOrderPushService : IScopedDependency
 {
-    Task ExecutePhoneOrderPushTasksAsync(int assistantId, CancellationToken cancellationToken);
+    Task ExecutePhoneOrderPushTasksAsync(int recordId, CancellationToken cancellationToken);
 }
 
 public class SalesPhoneOrderPushService : ISalesPhoneOrderPushService
@@ -29,13 +29,16 @@ public class SalesPhoneOrderPushService : ISalesPhoneOrderPushService
         _backgroundJobClient = backgroundJobClient;
         _phoneOrderDataProvider = phoneOrderDataProvider;
     }
-
-    public async Task ExecutePhoneOrderPushTasksAsync(int assistantId, CancellationToken cancellationToken)
+    
+    public async Task ExecutePhoneOrderPushTasksAsync(int recordId, CancellationToken cancellationToken)
     {
-        var task = await _salesDataProvider.GetNextExecutableTaskAsync(assistantId, cancellationToken).ConfigureAwait(false);
+        var task = await _salesDataProvider.GetRecordPushTaskByRecordIdAsync(recordId, cancellationToken).ConfigureAwait(false);
+        
+        if (task == null) return;
+        
+        var parentCompleted = await _salesDataProvider.IsParentCompletedAsync(task.ParentRecordId, cancellationToken).ConfigureAwait(false);
 
-        if (task == null)
-            return;
+        if (!parentCompleted) return;
 
         await ExecuteSingleTaskAsync(task, cancellationToken).ConfigureAwait(false);
     }
@@ -61,8 +64,7 @@ public class SalesPhoneOrderPushService : ISalesPhoneOrderPushService
             
             await TryCompleteRecordAsync(task.RecordId, cancellationToken).ConfigureAwait(false);
 
-            _backgroundJobClient.Enqueue<ISalesPhoneOrderPushService>(s =>
-                s.ExecutePhoneOrderPushTasksAsync(task.AssistantId, CancellationToken.None));
+            _backgroundJobClient.Enqueue<ISalesPhoneOrderPushService>(s => s.ExecutePhoneOrderPushTasksAsync(task.RecordId, CancellationToken.None));
         }
         catch (Exception ex)
         {

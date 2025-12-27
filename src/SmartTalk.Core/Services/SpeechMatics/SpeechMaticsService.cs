@@ -197,7 +197,7 @@ public class SpeechMaticsService : ISpeechMaticsService
 
         await MultiScenarioCustomProcessingAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
         
-        _backgroundJobClient.Enqueue<ISalesPhoneOrderPushService>(service => service.ExecutePhoneOrderPushTasksAsync(aiSpeechAssistant.Id, CancellationToken.None));
+        _backgroundJobClient.Enqueue<ISalesPhoneOrderPushService>(service => service.ExecutePhoneOrderPushTasksAsync(record.Id, CancellationToken.None));
 
         if (agent.SourceSystem == AgentSourceSystem.Smarties)
             await CallBackSmartiesRecordAsync(agent, record, cancellationToken).ConfigureAwait(false);
