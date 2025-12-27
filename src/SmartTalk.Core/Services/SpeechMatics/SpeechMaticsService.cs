@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using AutoMapper;
 using Google.Cloud.Translation.V2;
+using Microsoft.Extensions.Azure;
 using Serilog;
 using SmartTalk.Core.Ioc;
 using Microsoft.IdentityModel.Tokens;
@@ -14,6 +15,7 @@ using Smarties.Messages.Requests.Ask;
 using SmartTalk.Core.Constants;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.PhoneOrder;
+using SmartTalk.Core.Domain.Sales;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Ffmpeg;
@@ -33,6 +35,7 @@ using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Sales;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Enums.Agent;
+using SmartTalk.Messages.Enums.Sales;
 using SmartTalk.Messages.Enums.STT;
 using Twilio;
 using Twilio.Rest.Api.V2010.Account;
@@ -60,6 +63,8 @@ public class SpeechMaticsService : ISpeechMaticsService
     private readonly IPhoneOrderService _phoneOrderService;
     private readonly ISalesDataProvider _salesDataProvider;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
+    private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
+    private readonly ISalesPhoneOrderPushService _salesPhoneOrderPushService;
     private readonly ISmartTalkHttpClientFactory _smartTalkHttpClientFactory;
     private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
@@ -77,6 +82,8 @@ public class SpeechMaticsService : ISpeechMaticsService
         IPhoneOrderService phoneOrderService,
         ISalesDataProvider salesDataProvider,
         IPhoneOrderDataProvider phoneOrderDataProvider,
+        ISmartTalkBackgroundJobClient backgroundJobClient,
+        ISalesPhoneOrderPushService salesPhoneOrderPushService,
         ISmartTalkHttpClientFactory smartTalkHttpClientFactory,
         ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient,
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
@@ -92,7 +99,9 @@ public class SpeechMaticsService : ISpeechMaticsService
         _phoneOrderSetting = phoneOrderSetting;
         _phoneOrderService = phoneOrderService;
         _salesDataProvider = salesDataProvider;
+        _backgroundJobClient = backgroundJobClient;
         _phoneOrderDataProvider = phoneOrderDataProvider;
+        _salesPhoneOrderPushService = salesPhoneOrderPushService;
         _smartTalkHttpClientFactory = smartTalkHttpClientFactory;
         _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
@@ -187,6 +196,8 @@ public class SpeechMaticsService : ISpeechMaticsService
         var detection = await _translationClient.DetectLanguageAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
 
         await MultiScenarioCustomProcessingAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
+        
+        _backgroundJobClient.Enqueue<ISalesPhoneOrderPushService>(service => service.ExecutePhoneOrderPushTasksAsync(record.Id, CancellationToken.None));
 
         if (agent.SourceSystem == AgentSourceSystem.Smarties)
             await CallBackSmartiesRecordAsync(agent, record, cancellationToken).ConfigureAwait(false);
@@ -434,26 +445,21 @@ public class SpeechMaticsService : ISpeechMaticsService
         foreach (var storeOrder in extractedOrders)
         { 
             var soldToId = await ResolveSoldToIdAsync(storeOrder, aiSpeechAssistant, soldToIds, cancellationToken).ConfigureAwait(false);
-            if (string.IsNullOrEmpty(soldToId)) 
-            { 
-                Log.Warning("未能获取店铺 SoldToId, StoreName={StoreName}, StoreNumber={StoreNumber}", storeOrder.StoreName, storeOrder.StoreNumber); 
+
+            if (storeOrder.IsDeleteWholeOrder && !storeOrder.Orders.Any())
+            {
+                await CreateDeleteOrderTaskAsync(record, storeOrder, soldToId, soldToIds, cancellationToken).ConfigureAwait(false);
+                continue;
             }
 
             foreach (var item in storeOrder.Orders)
-            { 
-                item.MaterialNumber = MatchMaterialNumber(item.Name, item.MaterialNumber, item.Unit, historyItems); 
+            {
+                item.MaterialNumber = MatchMaterialNumber(item.Name, item.MaterialNumber, item.Unit, historyItems);
             }
 
-            var draftOrder = CreateDraftOrder(storeOrder, soldToId, aiSpeechAssistant, pacificZone, pacificNow);
-            Log.Information("DraftOrder for Store {StoreName}/{StoreNumber}: {@DraftOrder}", storeOrder.StoreName, storeOrder.StoreNumber, draftOrder);
+            var draftOrder = CreateDraftOrder(storeOrder, soldToId, aiSpeechAssistant, pacificZone, pacificNow, storeOrder.IsUndoCancel);
 
-            var response = await _salesClient.GenerateAiOrdersAsync(draftOrder, cancellationToken).ConfigureAwait(false); 
-            Log.Information("Generate Ai Order response for Store {StoreName}/{StoreNumber}: {@response}", storeOrder.StoreName, storeOrder.StoreNumber, response);
-
-            if (response?.Data != null && response.Data.OrderId != Guid.Empty) 
-            { 
-                await UpdateRecordOrderIdAsync(record, response.Data.OrderId, cancellationToken).ConfigureAwait(false);
-            }
+            await CreateGenerateOrderTaskAsync(record, storeOrder, draftOrder, cancellationToken).ConfigureAwait(false);
         }
     }
 
@@ -464,16 +470,57 @@ public class SpeechMaticsService : ISpeechMaticsService
         var materialListText = string.Join("\n", historyItems.Select(x => $"{x.MaterialDesc} ({x.Material})【{x.invoiceDate}】"));
 
         var systemPrompt =
-            "你是一名訂單分析助手。請從下面的客戶分析報告文字中提取所有下單的物料名稱、數量、單位，並且用歷史物料列表盡力匹配每個物料的materialNumber。" +
-            "如果報告中提到了預約送貨時間，請提取送貨時間（格式yyyy-MM-dd）。" +
-            "如果客戶提到了分店名，請提取 StoreName；如果提到第幾家店，請提取 StoreNumber。\n" +
-            "請嚴格傳回一個 JSON 對象，頂層字段為 \"stores\"，每个店铺对象包含：StoreName（可空字符串）, StoreNumber（可空字符串）, DeliveryDate（可空字符串），orders（数组，元素包含 name, quantity, unit, materialNumber, deliveryDate）。\n" +
-            "範例：\n" +
-            "{\n    \"stores\": [\n        {\n            \"StoreName\": \"HaiDiLao\",\n            \"StoreNumber\": \"1\",\n            \"DeliveryDate\": \"2025-08-20\",\n            \"orders\": [\n                {\n                    \"name\": \"雞胸肉\",\n                    \"quantity\": 1,\n                    \"unit\": \"箱\",\n                    \"materialNumber\": \"000000000010010253\"\n                }\n            ]\n        }\n    ]\n}" +
-            "歷史物料列表：\n" + materialListText + "\n\n" +
-            "每個物料的格式為「物料名稱（物料號碼）」，部分物料會包含日期\n 當有多個相似的物料名稱時，請根據以下規則選擇匹配的物料號碼：1. **優先選擇沒有日期的物料。**\n 2. 如果所有相似物料都有日期，請選擇日期**最新** 的那個物料。\n\n  "+
-            "注意：\n1. 必須嚴格輸出 JSON，物件頂層字段必須是 \"stores\"，不要有其他字段或額外說明。\n2. 提取的物料名稱需要為繁體中文。\n3. 如果没有提到店铺信息，但是有下单内容，则StoreName和StoreNumber可为空值，orders要正常提取。\n4. **如果客戶分析文本中沒有任何可識別的下單信息，請返回：{ \"stores\": [] }。不得臆造或猜測物料。** \n" +
-            "請務必完整提取報告中每一個提到的物料";
+                "你是一名訂單分析助手。請從下面的客戶分析報告文字中提取所有下單的物料名稱、數量、單位，並且用歷史物料列表盡力匹配每個物料的materialNumber。" +
+                "如果報告中提到了預約送貨時間，請提取送貨時間（格式yyyy-MM-dd）。" +
+                "如果客戶提到了分店名，請提取 StoreName；如果提到第幾家店，請提取 StoreNumber。\n" +
+
+                "【訂單意圖判斷規則（非常重要）】\n" +
+                "1. 如果客戶明確表示取消整張訂單、全部不要、整單取消、今天的單都不要，請在該店鋪標記 IsDeleteWholeOrder=true，orders 可以為空陣列。\n" +
+                "2. 如果客戶先說取消整單，後面又表示還是要、算了繼續下單、剛剛的取消不算，請標記 IsUndoCancel=true。\n" +
+                "3. 如果客戶只取消單個物料（例如：某某不要了、某某取消、某某 cut 掉），請保留該物料，並在該物料上標記 markForDelete=true，有提到數量的話 quantity 需要用負數表示\n" +
+                "4. 單個物料取消不等於取消整單，IsDeleteWholeOrder = false。\n" +
+                "5. 如果是減少某個物料的數量，請在該物料的 quantity 使用負數表示，並要使用 markForDelete = true。\n\n" +
+
+                "請嚴格傳回一個 JSON 對象，頂層字段為 \"stores\"，每个店铺对象包含：" +
+                "StoreName（可空字符串）, StoreNumber（可空字符串）, DeliveryDate（可空字符串）, " +
+                "IsDeleteWholeOrder（boolean，默認 false）, IsUndoCancel（boolean，默認 false）, " +
+                "orders（数组，元素包含 name, quantity, unit, materialNumber, markForDelete）。\n" +
+
+                "範例：\n" +
+                "{\n" +
+                "  \"stores\": [\n" +
+                "    {\n" +
+                "      \"StoreName\": \"HaiDiLao\",\n" +
+                "      \"StoreNumber\": \"1\",\n" +
+                "      \"DeliveryDate\": \"2025-08-20\",\n" +
+                "      \"IsDeleteWholeOrder\": false,\n" +
+                "      \"IsUndoCancel\": false,\n" +
+                "      \"orders\": [\n" +
+                "        {\n" +
+                "          \"name\": \"雞胸肉\",\n" +
+                "          \"quantity\": 1,\n" +
+                "          \"unit\": \"箱\",\n" +
+                "          \"materialNumber\": \"000000000010010253\",\n" +
+                "          \"markForDelete\": false\n" +
+                "        }\n" +
+                "      ]\n" +
+                "    }\n" +
+                "  ]\n" +
+                "}\n" +
+
+                "歷史物料列表：\n" + materialListText + "\n\n" +
+
+                "每個物料的格式為「物料名稱（物料號碼）」，部分物料會包含日期。\n" +
+                "當有多個相似的物料名稱時，請根據以下規則選擇匹配的物料號碼：\n" +
+                "1. **優先選擇沒有日期的物料。**\n" +
+                "2. 如果所有相似物料都有日期，請選擇日期 **最新** 的那個物料。\n\n" +
+
+                "注意：\n" +
+                "1. 必須嚴格輸出 JSON，物件頂層字段必須是 \"stores\"，不要有其他字段或額外說明。\n" +
+                "2. 提取的物料名稱需要為繁體中文。\n" +
+                "3. 如果沒有提到店鋪信息，但有下單內容，StoreName 和 StoreNumber 可為空值，orders 要正常提取。\n" +
+                "4. **如果客戶分析文本中沒有任何可識別的下單信息，請返回：{ \"stores\": [] }。不得臆造或猜測物料。**\n" +
+                "5. 請務必完整提取報告中每一個提到的物料。";
         Log.Information("Sending prompt to GPT: {Prompt}", systemPrompt);
 
         var messages = new List<ChatMessage>
@@ -500,7 +547,9 @@ public class SpeechMaticsService : ISpeechMaticsService
                 {
                     StoreName = storeElement.TryGetProperty("StoreName", out var sn) ? sn.GetString() ?? "" : "",
                     StoreNumber = storeElement.TryGetProperty("StoreNumber", out var snum) ? snum.GetString() ?? "" : "",
-                    DeliveryDate = storeElement.TryGetProperty("DeliveryDate", out var dd) && DateTime.TryParse(dd.GetString(), out var dt) ? DateTime.SpecifyKind(dt, DateTimeKind.Utc) : DateTime.UtcNow.AddDays(1)
+                    DeliveryDate = storeElement.TryGetProperty("DeliveryDate", out var dd) && DateTime.TryParse(dd.GetString(), out var dt) ? DateTime.SpecifyKind(dt, DateTimeKind.Utc) : DateTime.UtcNow.AddDays(1),
+                    IsDeleteWholeOrder = storeElement.TryGetProperty("IsDeleteWholeOrder", out var del) && del.GetBoolean(),
+                    IsUndoCancel = storeElement.TryGetProperty("IsUndoCancel", out var undo) && undo.GetBoolean()
                 }; 
 
                 if (storeElement.TryGetProperty("orders", out var ordersArray)) 
@@ -511,15 +560,17 @@ public class SpeechMaticsService : ISpeechMaticsService
                         var qty = orderItem.TryGetProperty("quantity", out var q) && q.TryGetDecimal(out var dec) ? dec : 0; 
                         var unit = orderItem.TryGetProperty("unit", out var u) ? u.GetString() ?? "" : ""; 
                         var materialNumber = orderItem.TryGetProperty("materialNumber", out var mn) ? mn.GetString() ?? "" : ""; 
+                        var markForDelete = orderItem.TryGetProperty("markForDelete", out var md) && md.GetBoolean();
 
                         materialNumber = MatchMaterialNumber(name, materialNumber, unit, historyItems);
 
                         storeDto.Orders.Add(new ExtractedOrderItemDto
                         {
+                            Unit = unit,
                             Name = name,
                             Quantity = (int)qty,
-                            MaterialNumber = materialNumber,
-                            Unit = unit
+                            MarkForDelete = markForDelete,
+                            MaterialNumber = materialNumber
                         });
                     } 
                 }
@@ -601,7 +652,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         return aiSpeechAssistant.Name; 
     }
 
-    private GenerateAiOrdersRequestDto CreateDraftOrder(ExtractedOrderDto storeOrder, string soldToId, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, TimeZoneInfo pacificZone, DateTime pacificNow) 
+    private GenerateAiOrdersRequestDto CreateDraftOrder(ExtractedOrderDto storeOrder, string soldToId, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, TimeZoneInfo pacificZone, DateTime pacificNow, bool useCanceledOrder) 
     { 
         var pacificDeliveryDate = storeOrder.DeliveryDate != default ? TimeZoneInfo.ConvertTimeFromUtc(storeOrder.DeliveryDate, pacificZone) : pacificNow.AddDays(1);
 
@@ -610,6 +661,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         return new GenerateAiOrdersRequestDto
         {
             AiModel = "Smartalk",
+            UseCanceledOrder = useCanceledOrder,
             AiOrderInfoDto = new AiOrderInfoDto
             {
                 SoldToId = soldToId,
@@ -621,7 +673,8 @@ public class SpeechMaticsService : ISpeechMaticsService
                     MaterialNumber = i.MaterialNumber,
                     AiMaterialDesc = i.Name,
                     MaterialQuantity = i.Quantity,
-                    AiUnit = i.Unit
+                    AiUnit = i.Unit,
+                    MarkForDelete = i.MarkForDelete
                 }).ToList()
             }
         };
@@ -678,5 +731,46 @@ public class SpeechMaticsService : ISpeechMaticsService
         if (result == null) throw new Exception($"无法反序列化模型返回结果: {response}");
 
         return (result.IsHumanAnswered, result.IsCustomerFriendly);
+    }
+    
+    private async Task CreateDeleteOrderTaskAsync(PhoneOrderRecord record, ExtractedOrderDto storeOrder, string soldToId, List<string> soldToIds, CancellationToken cancellationToken)
+    {
+        var req = new DeleteAiOrderRequestDto
+        {
+            CustomerNumber = soldToId,
+            SoldToIds = string.Join(",", soldToIds),
+            DeliveryDate = storeOrder.DeliveryDate
+        };
+        
+        var task = new PhoneOrderPushTask
+        {
+            RecordId = record.Id,
+            ParentRecordId = record.ParentRecordId,
+            AssistantId = record.AssistantId ?? 0,
+            TaskType = PhoneOrderPushTaskType.DeleteOrder,
+            BusinessKey = $"DELETE_{storeOrder.StoreName}_{storeOrder.DeliveryDate:yyyyMMdd}",
+            RequestJson = JsonSerializer.Serialize(req),
+            Status = PhoneOrderPushTaskStatus.Pending,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        await _salesDataProvider.AddPhoneOrderPushTaskAsync(task, true, cancellationToken).ConfigureAwait(false);
+    }
+    
+    private async Task CreateGenerateOrderTaskAsync(PhoneOrderRecord record, ExtractedOrderDto storeOrder, GenerateAiOrdersRequestDto request, CancellationToken cancellationToken)
+    {
+        var task = new PhoneOrderPushTask
+        {
+            RecordId = record.Id,
+            ParentRecordId = record.ParentRecordId,
+            AssistantId = record.AssistantId ?? 0,
+            TaskType = PhoneOrderPushTaskType.GenerateOrder,
+            BusinessKey = $"{storeOrder.StoreName}_{storeOrder.DeliveryDate:yyyyMMdd}",
+            RequestJson = JsonSerializer.Serialize(request),
+            Status = PhoneOrderPushTaskStatus.Pending,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        await _salesDataProvider.AddPhoneOrderPushTaskAsync(task, true, cancellationToken).ConfigureAwait(false);
     }
 }
