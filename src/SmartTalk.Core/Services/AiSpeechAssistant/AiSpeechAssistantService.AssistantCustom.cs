@@ -74,52 +74,52 @@ public partial class AiSpeechAssistantService
     public async Task<AiSpeechAssistantKnowledgeAddedEvent> AddAiSpeechAssistantKnowledgeAsync(AddAiSpeechAssistantKnowledgeCommand command, CancellationToken cancellationToken)
     {
         var prevKnowledge = await UpdatePreviousKnowledgeIfRequiredAsync(command.AssistantId, false, cancellationToken).ConfigureAwait(false);
-
+        
         var latestKnowledge = _mapper.Map<AiSpeechAssistantKnowledge>(command);
+        
+        await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgesAsync([latestKnowledge], true, cancellationToken).ConfigureAwait(false);
 
-        var relateds =  await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedByIdAsync(
-            command.RelatedKnowledges.Select(x=>x.Id).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
+        var relateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedByIdAsync(command.RelatedKnowledges.Select(x => x.Id).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var relatedDtoMap = command.RelatedKnowledges.ToDictionary(x => x.Id, x => x);
 
-        var newRelateds = new List<KnowledgeCopyRelated>();
-        
+        foreach (var related in relateds)
+        {
+            if (!relatedDtoMap.TryGetValue(related.Id, out var dto))
+                continue;
+
+            related.CopyKnowledgePoints = dto.CopyKnowledgePoints;
+            related.SourceKnowledgeId = latestKnowledge.Id;
+        }
+
         if (relateds.Any())
         {
-            foreach (var related in relateds)
-            {
-                if (!relatedDtoMap.TryGetValue(related.Id, out var dto)) continue;
-                related.CopyKnowledgePoints = dto.CopyKnowledgePoints; 
-            }
-            
-            newRelateds.AddRange(relateds);
+            await _aiSpeechAssistantDataProvider.UpdateKnowledgeCopyRelatedAsync(relateds, true, cancellationToken).ConfigureAwait(false);
         }
-        
-        await _aiSpeechAssistantDataProvider.UpdateKnowledgeCopyRelatedAsync(newRelateds, true, cancellationToken).ConfigureAwait(false);
-        
-        await InitialKnowledgeAsync(latestKnowledge, newRelateds, cancellationToken).ConfigureAwait(false);
 
-        await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgesAsync([latestKnowledge], cancellationToken: cancellationToken).ConfigureAwait(false);
-        
+        await InitialKnowledgeAsync(latestKnowledge, relateds, cancellationToken);
+
+        await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync([latestKnowledge], true, cancellationToken).ConfigureAwait(false);
+
         if (!string.IsNullOrEmpty(command.Language))
         {
             var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByIdAsync(command.AssistantId, cancellationToken).ConfigureAwait(false);
-            
-            assistant.ModelLanguage = command.Language;
-            
-            await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync([assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
-        }
 
+            assistant.ModelLanguage = command.Language;
+
+            await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync([assistant], true, cancellationToken).ConfigureAwait(false);
+        }
+        
         var prevKnowledgeDto = _mapper.Map<AiSpeechAssistantKnowledgeDto>(prevKnowledge);
         var latestKnowledgeDto = _mapper.Map<AiSpeechAssistantKnowledgeDto>(latestKnowledge);
-        
+
         prevKnowledgeDto.KnowledgeCopyRelateds = _mapper.Map<List<KnowledgeCopyRelatedDto>>(prevKnowledge.KnowledgeCopyRelateds);
-        latestKnowledgeDto.KnowledgeCopyRelateds = _mapper.Map<List<KnowledgeCopyRelatedDto>>(latestKnowledge.KnowledgeCopyRelateds);
-        
+        latestKnowledgeDto.KnowledgeCopyRelateds = _mapper.Map<List<KnowledgeCopyRelatedDto>>(newRelateds);
+
         return new AiSpeechAssistantKnowledgeAddedEvent
         {
             PrevKnowledge = prevKnowledgeDto,
-            LatestKnowledge = latestKnowledgeDto    
+            LatestKnowledge = latestKnowledgeDto
         };
     }
 
