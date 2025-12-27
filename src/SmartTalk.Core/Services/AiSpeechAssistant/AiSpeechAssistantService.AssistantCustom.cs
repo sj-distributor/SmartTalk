@@ -87,7 +87,7 @@ public partial class AiSpeechAssistantService
         allPrevRelateds = allPrevRelateds
             .Select(r =>
             {
-                r.SourceKnowledgeId = latestKnowledge.Id;
+                r.TargetKnowledgeId = latestKnowledge.Id;
 
                 if (relatedDtoMap.TryGetValue(r.Id, out var dto))
                 { r.CopyKnowledgePoints = dto.CopyKnowledgePoints; } return r; 
