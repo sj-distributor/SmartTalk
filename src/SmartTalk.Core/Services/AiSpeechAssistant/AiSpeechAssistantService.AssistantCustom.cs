@@ -74,40 +74,41 @@ public partial class AiSpeechAssistantService
     public async Task<AiSpeechAssistantKnowledgeAddedEvent> AddAiSpeechAssistantKnowledgeAsync(AddAiSpeechAssistantKnowledgeCommand command, CancellationToken cancellationToken)
     {
         var prevKnowledge = await UpdatePreviousKnowledgeIfRequiredAsync(command.AssistantId, false, cancellationToken).ConfigureAwait(false);
-
+        
         var latestKnowledge = _mapper.Map<AiSpeechAssistantKnowledge>(command);
 
-        var relateds =  await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedByIdAsync(
-            command.RelatedKnowledges.Select(x=>x.Id).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
-
+        await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgesAsync([latestKnowledge], true, cancellationToken).ConfigureAwait(false);
+       
+        var allPrevRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedBySourceKnowledgeIdAsync([prevKnowledge.Id], cancellationToken).ConfigureAwait(false);
         var relatedDtoMap = command.RelatedKnowledges.ToDictionary(x => x.Id, x => x);
+        
+        var selectedRelateds = allPrevRelateds.Where(r => relatedDtoMap.ContainsKey(r.Id)).ToList();
 
-        var newRelateds = new List<KnowledgeCopyRelated>();
-    
-        if (relateds.Any())
-        {
-            foreach (var related in relateds)
+        allPrevRelateds = allPrevRelateds
+            .Select(r =>
             {
-                if (!relatedDtoMap.TryGetValue(related.Id, out var dto)) continue;
-                related.CopyKnowledgePoints = dto.CopyKnowledgePoints; 
-            }
-            
-            newRelateds.AddRange(relateds);
+                r.SourceKnowledgeId = latestKnowledge.Id;
+
+                if (relatedDtoMap.TryGetValue(r.Id, out var dto))
+                { r.CopyKnowledgePoints = dto.CopyKnowledgePoints; } return r; 
+            }).ToList();
+        
+        if (allPrevRelateds.Any())
+        {
+            await _aiSpeechAssistantDataProvider.UpdateKnowledgeCopyRelatedAsync(allPrevRelateds, true, cancellationToken).ConfigureAwait(false);
         }
         
-        await _aiSpeechAssistantDataProvider.UpdateKnowledgeCopyRelatedAsync(newRelateds, true, cancellationToken).ConfigureAwait(false);
-           
-        await InitialKnowledgeAsync(latestKnowledge, newRelateds, cancellationToken).ConfigureAwait(false);
-
-        await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgesAsync([latestKnowledge], cancellationToken: cancellationToken).ConfigureAwait(false);
+        await InitialKnowledgeAsync(latestKnowledge, selectedRelateds, cancellationToken).ConfigureAwait(false);
         
+        await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync([latestKnowledge], true, cancellationToken).ConfigureAwait(false);
+
         if (!string.IsNullOrEmpty(command.Language))
         {
             var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByIdAsync(command.AssistantId, cancellationToken).ConfigureAwait(false);
-            
+
             assistant.ModelLanguage = command.Language;
-            
-            await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync([assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync([assistant], true, cancellationToken).ConfigureAwait(false);
         }
 
         var knowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(latestKnowledge);
@@ -136,7 +137,7 @@ public partial class AiSpeechAssistantService
             LatestKnowledge = knowledge    
         };
     }
-
+    
     public async Task<SwitchAiSpeechAssistantKnowledgeVersionResponse> SwitchAiSpeechAssistantKnowledgeVersionAsync(SwitchAiSpeechAssistantKnowledgeVersionCommand command, CancellationToken cancellationToken)
     {
         var preKnowledge = await UpdatePreviousKnowledgeIfRequiredAsync(command.AssistantId, false, cancellationToken).ConfigureAwait(false);
