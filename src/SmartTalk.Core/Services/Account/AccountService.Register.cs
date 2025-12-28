@@ -26,7 +26,7 @@ public partial class AccountService
 
         if (userAccount is not { Count: 0 }) return userAccount.FirstOrDefault();
 
-        var currentUser = await _accountDataProvider.GetUserAccountByUserIdAsync(_currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
+        var currentUser = await _accountDataProvider.GetUserAccountByUserIdAsync(_currentUser.Id.Value, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var account = await _accountDataProvider
             .CreateUserAccountAsync(username, null, UserAccountLevel.None, currentUser.ServiceProviderId, userId, issuer, cancellationToken: cancellationToken).ConfigureAwait(false);

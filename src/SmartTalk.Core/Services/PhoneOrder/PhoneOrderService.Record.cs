@@ -92,7 +92,7 @@ public partial class PhoneOrderService
 
         if (record.IsLockedScenario) throw new Exception("The record scenario was locked.");
         
-        var user = await _accountDataProvider.GetUserAccountByUserIdAsync(command.UserId, cancellationToken).ConfigureAwait(false);
+        var user = await _accountDataProvider.GetUserAccountByUserIdAsync(command.UserId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (user == null) 
             throw new Exception($"User not found: {command.UserId}");

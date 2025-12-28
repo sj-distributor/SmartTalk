@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace SmartTalk.Core.Domain.PhoneOrder;
 
 [Table("phone_order_reservation_information")]
-public class PhoneOrderReservationInformation : IEntity
+public class PhoneOrderReservationInformation : IEntity, IHasCreatedFields, IHasModifiedFields
 {
     [Key]
     [Column("id")]
@@ -14,21 +14,15 @@ public class PhoneOrderReservationInformation : IEntity
     [Column("record_id")]
     public int RecordId { get; set; }
 
-    [Column("reservation_date")]
-    public string ReservationDate { get; set; }
-
-    [Column("reservation_time")]
-    public string ReservationTime { get; set; }
-
-    [Column("user_name")]
-    public string UserName { get; set; }
-
-    [Column("party_size")]
-    public int? PartySize { get; set; }
-
-    [Column("special_requests")]
-    public string SpecialRequests { get; set; }
-
+    [Column("notification_info")]
+    public string NotificationInfo { get; set; }
+    
+    [Column("last_modified_by")]
+    public int? LastModifiedBy { get; set; }
+    
+    [Column("last_modified_date")]
+    public DateTimeOffset? LastModifiedDate { get; set; }
+    
     [Column("created_date")]
-    public DateTimeOffset CreatedDate { get; set; } = DateTimeOffset.Now;
+    public DateTimeOffset CreatedDate { get; set; }
 }

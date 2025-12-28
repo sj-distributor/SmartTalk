@@ -494,17 +494,11 @@ public class SpeechMaticsService : ISpeechMaticsService
                     var jsonResponse = completion.Value.Content.FirstOrDefault()?.Text ?? "";
         
                     Log.Information("AI JSON Response: {JsonResponse}", jsonResponse);
-
-                    var aiResponse = JsonConvert.DeserializeObject<ReservationAiResultDto>(jsonResponse);
                     
                     var information = new PhoneOrderReservationInformation
                     {
                         RecordId = record.Id,
-                        ReservationDate = aiResponse.ReservationDate,
-                        ReservationTime = aiResponse.ReservationTime,
-                        UserName = aiResponse.UserName,
-                        PartySize = aiResponse.PartySize,
-                        SpecialRequests = aiResponse.SpecialRequests
+                       NotificationInfo = jsonResponse
                     };
                     
                     await _phoneOrderDataProvider.AddPhoneOrderReservationInformationAsync(information, cancellationToken: cancellationToken).ConfigureAwait(false);
