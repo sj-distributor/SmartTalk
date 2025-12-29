@@ -440,7 +440,8 @@ public partial class PhoneOrderProcessJobService
                     var information = new PhoneOrderReservationInformation
                     {
                         RecordId = record.Id,
-                       NotificationInfo = jsonResponse
+                        NotificationInfo = jsonResponse,
+                        AiNotificationInfo = jsonResponse
                     };
                     
                     await _phoneOrderDataProvider.AddPhoneOrderReservationInformationAsync(information, cancellationToken: cancellationToken).ConfigureAwait(false);
