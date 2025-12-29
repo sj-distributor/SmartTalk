@@ -8,7 +8,6 @@ using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.Printer;
 using SmartTalk.Core.Services.Caching;
 using SmartTalk.Messages.Commands.Pos;
-using SmartTalk.Messages.Commands.Printer;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Pos;
 using SmartTalk.Messages.Dto.Printer;
@@ -96,28 +95,36 @@ public partial class PosService
 
     public async Task CreateMerchPrinterOrderAsync(int storeId, int orderId, CancellationToken cancellationToken)
     {
-        Log.Information("storeId:{storeId}, orderId:{orderId}", storeId, orderId);
+        var lockKey = $"create-merch-printer-order-key-{orderId}";
         
-        var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(storeId: storeId, isEnabled: true, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
-
-        Log.Information("get merch printer:{@merchPrinter}", merchPrinter);
-
-        var merchPrinterOrder = new MerchPrinterOrder
+        Log.Information("Generate lock key: {lockKey} by orderId: {orderId}", lockKey, orderId);
+        
+        await _redisSafeRunner.ExecuteWithLockAsync(lockKey, async () =>
         {
-            OrderId = orderId,
-            StoreId = storeId,
-            PrinterMac = merchPrinter?.PrinterMac,
-            PrintDate = DateTimeOffset.Now,
-            PrintFormat = PrintFormat.Order
-        };
+            Log.Information("storeId:{storeId}, orderId:{orderId}", storeId, orderId);
         
-        await _printerDataProvider.AddMerchPrinterOrderAsync(merchPrinterOrder, cancellationToken).ConfigureAwait(false);
-        
-        Log.Information("Create merch printer order:{@merchPrinterOrder}", merchPrinterOrder);
+            var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(storeId: storeId, isEnabled: true, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
 
-        _smartTalkBackgroundJobClient.Schedule<IMediator>( x => x.SendAsync(new RetryCloudPrintingCommand{ Id = merchPrinterOrder.Id, Count = 0}, CancellationToken.None), TimeSpan.FromMinutes(1));
+            Log.Information("get merch printer:{@merchPrinter}", merchPrinter);
+
+            var merchPrinterOrder = new MerchPrinterOrder
+            {
+                OrderId = orderId,
+                StoreId = storeId,
+                PrinterMac = merchPrinter?.PrinterMac,
+                PrintDate = DateTimeOffset.Now,
+                PrintFormat = PrintFormat.Order
+            };
         
-        await _cacheManager.SetAsync($"{merchPrinterOrder.OrderId}", "true", new RedisCachingSetting(expiry: TimeSpan.FromMinutes(30)), cancellationToken).ConfigureAwait(false);
+            await _printerDataProvider.AddMerchPrinterOrderAsync(merchPrinterOrder, cancellationToken).ConfigureAwait(false);
+        
+            Log.Information("Create merch printer order:{@merchPrinterOrder}", merchPrinterOrder);
+
+            _smartTalkBackgroundJobClient.Schedule<IMediator>( x => x.SendAsync(new RetryCloudPrintingCommand{ Id = merchPrinterOrder.Id, Count = 0}, CancellationToken.None), TimeSpan.FromMinutes(1));
+        
+            await _cacheManager.SetAsync($"{merchPrinterOrder.OrderId}", "true", new RedisCachingSetting(expiry: TimeSpan.FromMinutes(30)), cancellationToken).ConfigureAwait(false);
+            
+        }, wait: TimeSpan.FromSeconds(10), retry: TimeSpan.FromSeconds(1), server: RedisServer.System).ConfigureAwait(false);
     }
 
     public async Task RetryCloudPrintingAsync(RetryCloudPrintingCommand command, CancellationToken cancellationToken)
