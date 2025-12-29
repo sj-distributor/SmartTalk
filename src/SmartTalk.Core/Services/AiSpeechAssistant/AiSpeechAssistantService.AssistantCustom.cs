@@ -651,9 +651,13 @@ public partial class AiSpeechAssistantService
 
     private async Task InitialKnowledgeAsync(AiSpeechAssistantKnowledge latestKnowledge, List<KnowledgeCopyRelated> relateds, CancellationToken cancellationToken)
     {
-        var latestKnowledgeJson = JObject.Parse(latestKnowledge.Json ?? "{}");
-
-        var relatedJsons = relateds.Select(r => JObject.Parse(r.CopyKnowledgePoints ?? "{}"));
+        var latestKnowledgeJson = string.IsNullOrEmpty(latestKnowledge.Json) ? new JObject() : JObject.Parse(latestKnowledge.Json);
+        
+        var relatedJsons = Enumerable.Empty<JObject>();
+        if (relateds != null && relateds.Any())
+        {
+            relatedJsons = relateds.Select(r => JObject.Parse(r.CopyKnowledgePoints ?? "{}"));
+        }
         
         var mergedJsonObj = new[] { latestKnowledgeJson }
             .Concat(relatedJsons)

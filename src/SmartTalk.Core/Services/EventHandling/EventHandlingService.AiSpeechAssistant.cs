@@ -6,6 +6,7 @@ using Smarties.Messages.DTO.OpenAi;
 using Smarties.Messages.Enums.OpenAi;
 using Smarties.Messages.Requests.Ask;
 using SmartTalk.Core.Domain.AISpeechAssistant;
+using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
 
 namespace SmartTalk.Core.Services.EventHandling;
@@ -14,10 +15,12 @@ public partial class EventHandlingService
 {
     public async Task HandlingEventAsync(AiSpeechAssistantKnowledgeAddedEvent @event, CancellationToken cancellationToken)
     {
-        var oldMergedJsonObj = BuildMergedKnowledgeJson(@event.PrevKnowledge.Json, @event.PrevKnowledge.KnowledgeCopyRelateds.Select(x => x.CopyKnowledgePoints));
+        var prevKnowledgeCopyRelateds = @event.PrevKnowledge.KnowledgeCopyRelateds ?? new List<KnowledgeCopyRelatedDto>();
+        var latestKnowledgeCopyRelateds = @event.LatestKnowledge.KnowledgeCopyRelateds ?? new List<KnowledgeCopyRelatedDto>();
 
-        var newMergedJsonObj = BuildMergedKnowledgeJson(@event.LatestKnowledge.Json, @event.LatestKnowledge.KnowledgeCopyRelateds.Select(x => x.CopyKnowledgePoints));
-        
+        var oldMergedJsonObj = BuildMergedKnowledgeJson(@event.PrevKnowledge.Json, prevKnowledgeCopyRelateds.Select(x => x.CopyKnowledgePoints));
+        var newMergedJsonObj = BuildMergedKnowledgeJson(@event.LatestKnowledge.Json, latestKnowledgeCopyRelateds.Select(x => x.CopyKnowledgePoints));
+
         Log.Information("Compare the knowledge: {@oldMergedJsonObj} and {@newMergedJsonObj}", oldMergedJsonObj, newMergedJsonObj);
         
         var diff = CompareJsons(oldMergedJsonObj.ToString(), newMergedJsonObj.ToString());
@@ -50,14 +53,16 @@ public partial class EventHandlingService
     private JObject BuildMergedKnowledgeJson(string baseJson, IEnumerable<string> copyKnowledgePoints)
     {
         var baseObj = JObject.Parse(baseJson ?? "{}");
-
-        var copyObjs = copyKnowledgePoints.Where(x => !string.IsNullOrWhiteSpace(x)).Select(JObject.Parse);
-
+        
+        var copyObjs = (copyKnowledgePoints ?? Enumerable.Empty<string>()).Where(x => !string.IsNullOrWhiteSpace(x)).Select(JObject.Parse); 
+        
         return new[] { baseObj }
             .Concat(copyObjs)
             .Aggregate(new JObject(), (acc, j) =>
             {
-                acc.Merge(j, new JsonMergeSettings { MergeArrayHandling = MergeArrayHandling.Concat }); return acc; });
+                acc.Merge(j, new JsonMergeSettings { MergeArrayHandling = MergeArrayHandling.Concat });
+                return acc;
+            });
     }
 
     private JObject CompareJsons(string oldJson, string newJson)
