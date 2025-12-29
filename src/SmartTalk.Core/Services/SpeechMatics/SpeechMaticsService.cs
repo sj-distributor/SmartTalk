@@ -509,7 +509,8 @@ public class SpeechMaticsService : ISpeechMaticsService
                     var information = new PhoneOrderReservationInformation
                     {
                         RecordId = record.Id,
-                       NotificationInfo = jsonResponse
+                        NotificationInfo = jsonResponse,
+                        AiNotificationInfo = jsonResponse
                     };
                     
                     await _phoneOrderDataProvider.AddPhoneOrderReservationInformationAsync(information, cancellationToken: cancellationToken).ConfigureAwait(false);

@@ -16,6 +16,9 @@ public class PhoneOrderReservationInformation : IEntity, IHasCreatedFields, IHas
 
     [Column("notification_info")]
     public string NotificationInfo { get; set; }
+
+    [Column("ai_notification_info")]
+    public string AiNotificationInfo { get; set; }
     
     [Column("last_modified_by")]
     public int? LastModifiedBy { get; set; }
