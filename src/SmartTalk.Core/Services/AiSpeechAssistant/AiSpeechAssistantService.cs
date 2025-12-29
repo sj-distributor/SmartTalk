@@ -1502,9 +1502,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         Log.Information("Matched specific service hours: {@SpecificWorkingHours} and the pstTime: {@PstTime}", specificWorkingHours, pstTime);
         
-        var pstTimeToSecond = new TimeSpan(pstTime.TimeOfDay.Hours, pstTime.TimeOfDay.Minutes, pstTime.TimeOfDay.Seconds);
+        var pstTimeToMinute = new TimeSpan(pstTime.TimeOfDay.Hours, pstTime.TimeOfDay.Minutes, 0);
 
-        _aiSpeechAssistantStreamContext.IsInAiServiceHours = specificWorkingHours != null && specificWorkingHours.Hours.Any(x => x.Start <= pstTimeToSecond && x.End >= pstTimeToSecond);
+        _aiSpeechAssistantStreamContext.IsInAiServiceHours = specificWorkingHours != null && specificWorkingHours.Hours.Any(x => x.Start <= pstTimeToMinute && x.End >= pstTimeToMinute);
         _aiSpeechAssistantStreamContext.IsTransfer = agent.IsTransferHuman && !string.IsNullOrEmpty(agent.TransferCallNumber);
     }
 }
