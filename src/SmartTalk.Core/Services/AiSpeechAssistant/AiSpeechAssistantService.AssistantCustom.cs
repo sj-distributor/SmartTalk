@@ -77,7 +77,7 @@ public partial class AiSpeechAssistantService
         
         var latestKnowledge = _mapper.Map<AiSpeechAssistantKnowledge>(command);
         
-        var allPrevRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedBySourceKnowledgeIdAsync([prevKnowledge.Id], cancellationToken).ConfigureAwait(false);
+        var allPrevRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync([prevKnowledge.Id], cancellationToken).ConfigureAwait(false);
        
         Log.Information("All prev relateds: {@allPrevRelatedIds}", allPrevRelateds.Select( r => r.Id).ToList());
         
