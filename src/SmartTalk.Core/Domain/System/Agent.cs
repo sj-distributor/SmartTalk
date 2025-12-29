@@ -77,7 +77,7 @@ public class Agent : IAgent, IEntity<int>, IHasCreatedFields
     [Column("transfer_call_number"), StringLength(128)]
     public string TransferCallNumber { get; set; }
     
-    [Column("service_hours"), StringLength(1024)]
+    [Column("service_hours")]
     public string ServiceHours { get; set; }
     
     [NotMapped]

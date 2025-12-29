@@ -1,1 +1,1 @@
-alter table `agent` add column `service_hours` varchar(1024) null;
+alter table `agent` add column `service_hours` text null;
