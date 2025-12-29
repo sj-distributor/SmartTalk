@@ -399,11 +399,11 @@ public partial class PhoneOrderProcessJobService
                          "PartySize（整數，可為 null）、" +
                          "SpecialRequests（字符串，可空字符串）。\n" +
                          "正確輸出範例（注意：沒有大括號）：\n" +
-                         "\"ReservationDate\": \"2025-08-20\",\n" +
-                         "\"ReservationTime\": \"18:30\",\n" +
-                         "\"UserName\": \"王先生\",\n" +
-                         "\"PartySize\": 4,\n" +
-                         "\"SpecialRequests\": \"需要包廂，並準備生日蠟燭\"\n" +
+                         "ReservationDate: 2025-08-20,\n" +
+                         "ReservationTime: 18:30,\n" +
+                         "UserName: 王先生,\n" +
+                         "PartySize: 4,\n" +
+                         "SpecialRequests: 需要包廂，並準備生日蠟燭\n" +
                          "規則與注意事項：\n" +
                          "1. 不得輸出任何說明文字、註解、標題或多餘內容。\n" +
                          "2. ReservationDate 與 ReservationTime 必須分開填寫，不得合併。\n" +
@@ -412,11 +412,11 @@ public partial class PhoneOrderProcessJobService
                          "5. UserName 僅在顧客主動提供或可明確識別時填寫。\n" +
                          "6. SpecialRequests 僅保留顧客明確提出的內容，不得推斷。\n" +
                          "7. 若整段對話中沒有任何**已確認**的預約行為，請輸出以下內容（仍然不要大括號）：\n" +
-                         "\"ReservationDate\": \"\",\n" +
-                         "\"ReservationTime\": \"\",\n" +
-                         "\"UserName\": \"\",\n" +
-                         "\"PartySize\": null,\n" +
-                         "\"SpecialRequests\": \"\"\n" +
+                         "ReservationDate: ,\n" +
+                         "ReservationTime: ,\n" +
+                         "UserName: ,\n" +
+                         "PartySize: null,\n" +
+                         "SpecialRequests: \n" +
                          "8. 若出現相對日期或時間，且根據系統當前時間仍無法唯一確定，請將該欄位留空。\n" +
                          "請務必準確、完整地提取所有**已確認**的預約資訊。";
                        
