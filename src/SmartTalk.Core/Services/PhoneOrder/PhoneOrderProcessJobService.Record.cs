@@ -428,7 +428,7 @@ public partial class PhoneOrderProcessJobService
                         new UserChatMessage("客戶預約資訊文本：\n" + record.TranscriptionText + "\n\n")
                     };
 
-                    var completion = await client.CompleteChatAsync(messages, new ChatCompletionOptions { ResponseModalities = ChatResponseModalities.Text, ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat() }, cancellationToken).ConfigureAwait(false);
+                    var completion = await client.CompleteChatAsync(messages, new ChatCompletionOptions { ResponseModalities = ChatResponseModalities.Text, ResponseFormat = ChatResponseFormat.CreateTextFormat() }, cancellationToken).ConfigureAwait(false);
                     var jsonResponse = completion.Value.Content.FirstOrDefault()?.Text ?? "";
         
                     Log.Information("AI JSON Response: {JsonResponse}", jsonResponse);
