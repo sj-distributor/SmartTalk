@@ -839,7 +839,7 @@ public partial class PosService
             
             if (!order.SentBy.HasValue) return;
             
-            var userAccount = await _accountDataProvider.GetUserAccountByUserIdAsync(order.SentBy.Value, cancellationToken).ConfigureAwait(false);
+            var userAccount = await _accountDataProvider.GetUserAccountByUserIdAsync(order.SentBy.Value, cancellationToken: cancellationToken).ConfigureAwait(false);
 
             order.SentByUsername = userAccount.UserName;
         }
@@ -922,6 +922,14 @@ public partial class PosService
             var merchPrinter = await _printerDataProvider.GetMerchPrintersAsync(storeId: merchPrinterOrder.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
             
             reservationInfoDto.CloudPrintStatus = await CalculateCloudPrintStatusAsync(merchPrinterOrder, merchPrinter, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (reservationInfo.LastModifiedBy != null)
+        {
+            var account = await _accountDataProvider.GetUserAccountByUserIdAsync(reservationInfo.LastModifiedBy.Value, true, cancellationToken).ConfigureAwait(false);
+            
+            reservationInfoDto.LastModifiedByName = account?.UserName;
+            reservationInfoDto.LastModifiedByPhone = account?.UserAccountProfile?.Phone;
         }
         
         return new GetOrderReservationInfoResponse

@@ -14,6 +14,7 @@ using Aliyun.OSS;
 using AutoMapper;
 using Mediator.Net;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Serilog;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Services.AliYun;
@@ -220,7 +221,7 @@ public class PrinterService : IPrinterService
                 store.Address,
                 store.PhoneNums,
                 storeCreatedDate,
-                merchPrinter.PrinterName,
+                merchPrinter?.PrinterName,
                 order.Type.ToString(),
                 order.Name,
                 order.Phone,
@@ -231,7 +232,7 @@ public class PrinterService : IPrinterService
                 order.Tax.ToString(),
                 order.Total.ToString(),
                 storePrintDateString,
-                merchPrinter.PrinterLanguage).ConfigureAwait(false);
+                merchPrinter?.PrinterLanguage).ConfigureAwait(false);
         }
         else
         {
@@ -239,8 +240,7 @@ public class PrinterService : IPrinterService
             var phoneOrderRecord = await _phoneOrderDataProvider.GetPhoneOrderRecordByIdAsync(reservationInfo.RecordId, cancellationToken).ConfigureAwait(false);
             
             img = await RenderReceipt1Async(JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(store.Names).GetValueOrDefault("en")?.GetValueOrDefault("name"),
-                store.Address, store.PhoneNums, reservationInfo.ReservationDate, reservationInfo.UserName, phoneOrderRecord.IncomingCallNumber,
-                reservationInfo.PartySize.ToString(), reservationInfo.ReservationTime, reservationInfo.SpecialRequests,
+                store.Address, store.PhoneNums, merchPrinter?.PrinterName, reservationInfo.NotificationInfo,
                 $@"{DateTimeOffset.Now.ToString("yyyy-MM-dd HH:mm:ss")}").ConfigureAwait(false);
         }
         
@@ -608,7 +608,7 @@ public class PrinterService : IPrinterService
     } 
     
     private async Task<Image<Rgba32>> RenderReceipt1Async(string restaurantName, string restaurantAddress,
-        string restaurantPhone,string scheduledDates, string name, string userPhone, string peopleCount, string time, string note, string printTime)
+        string restaurantPhone, string printerName, string notificationInfo, string printTime)
     {
         var y = 10;
         var paperWidth = 512;
@@ -656,16 +656,26 @@ public class PrinterService : IPrinterService
         
         y = DrawLine(paperWidth, img, y, textColor, GenerateFullLine('-', fontBold, paperWidth-20), fontBold, yOffset: -10);
         
-        y = DrawLine(paperWidth, img, y, textColor, $"收據打印機", fontNormal);
+        y = DrawLine(paperWidth, img, y, textColor, printerName, fontNormal);
         
         y = DrawSolidLine(paperWidth, img, y);
-        
-        y = DrawLine(paperWidth, img, y, textColor, $"預定日期:{scheduledDates}", fontNormal);
-        y = DrawLine(paperWidth, img, y, textColor, $"名字:{name}", fontNormal);
-        y = DrawLine(paperWidth, img, y, textColor, $"電話:{userPhone}", fontNormal);
-        y = DrawLine(paperWidth, img, y, textColor, $"人數:{peopleCount}", fontNormal);
-        y = DrawLine(paperWidth, img, y, textColor, $"時間:{time}", fontNormal);
-        y = DrawLine(paperWidth, img, y, textColor, $"備註:{note}", fontNormal);
+
+        try
+        {
+            var obj = JObject.Parse(notificationInfo);
+
+            foreach (var prop in obj.Properties())
+            {
+                var value = prop.Value.Type == JTokenType.String ? prop.Value.ToString() : prop.Value.ToString(Newtonsoft.Json.Formatting.None);
+                
+                y = DrawLine(paperWidth, img, y, textColor, $"{prop.Name}:{value}", fontNormal);
+            }
+        }
+        catch (Exception e)
+        {
+            Log.Information("{@e}",e);
+            throw;
+        }
         
         y = DrawLine(paperWidth, img, y, textColor,GenerateFullLine('-', fontNormal, paperWidth-20), fontNormal);
         
