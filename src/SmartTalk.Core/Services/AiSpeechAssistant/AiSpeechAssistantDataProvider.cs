@@ -260,7 +260,7 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
     }
 
     public async Task<(int, List<Domain.AISpeechAssistant.AiSpeechAssistant>)> GetAiSpeechAssistantsAsync(
-        int? pageIndex = null, int? pageSize = null, string channel = null, string keyword = null, List<int> agentIds = null, bool? isDefault = null,           CancellationToken cancellationToken = default)
+        int? pageIndex = null, int? pageSize = null, string channel = null, string keyword = null, List<int> agentIds = null, bool? isDefault = null, CancellationToken cancellationToken = default)
     {
         var query = from agentAssistant in _repository.QueryNoTracking<AgentAssistant>()
             join assistant in _repository.QueryNoTracking<Domain.AISpeechAssistant.AiSpeechAssistant>()
