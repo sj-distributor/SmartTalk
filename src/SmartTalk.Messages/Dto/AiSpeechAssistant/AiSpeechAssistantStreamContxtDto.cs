@@ -48,6 +48,10 @@ public class AiSpeechAssistantStreamContextDto
     public List<(AiSpeechAssistantSpeaker, string)> ConversationTranscription { get; set; } = new();
     
     public bool IsTransfer { get; set; } = false;
+    
+    public bool IsInAiServiceHours { get; set; } = true;
+    
+    public string TransferCallNumber { get; set; }
 }
 
 public class AiSpeechAssistantUserInfoDto
