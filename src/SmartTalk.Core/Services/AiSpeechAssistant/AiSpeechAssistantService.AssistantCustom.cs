@@ -76,16 +76,20 @@ public partial class AiSpeechAssistantService
         var prevKnowledge = await UpdatePreviousKnowledgeIfRequiredAsync(command.AssistantId, false, cancellationToken).ConfigureAwait(false);
         
         var latestKnowledge = _mapper.Map<AiSpeechAssistantKnowledge>(command);
-
-        await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgesAsync([latestKnowledge], true, cancellationToken).ConfigureAwait(false);
-       
+        
         var allPrevRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedBySourceKnowledgeIdAsync([prevKnowledge.Id], cancellationToken).ConfigureAwait(false);
+       
+        Log.Information("All prev relateds: {@allPrevRelatedIds}", allPrevRelateds.Select( r => r.Id).ToList());
+        
         var relatedDtoMap = command.RelatedKnowledges.ToDictionary(x => x.Id, x => x);
         
         var selectedRelateds = allPrevRelateds.Where(r => relatedDtoMap.ContainsKey(r.Id)).ToList();
         
-        allPrevRelateds = allPrevRelateds
-            .Select(r =>
+        await InitialKnowledgeAsync(latestKnowledge, selectedRelateds, cancellationToken).ConfigureAwait(false);
+
+        await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgesAsync([latestKnowledge], true, cancellationToken).ConfigureAwait(false);
+
+        allPrevRelateds = allPrevRelateds.Select(r =>
             {
                 r.TargetKnowledgeId = latestKnowledge.Id;
 
@@ -97,10 +101,6 @@ public partial class AiSpeechAssistantService
         {
             await _aiSpeechAssistantDataProvider.UpdateKnowledgeCopyRelatedAsync(allPrevRelateds, true, cancellationToken).ConfigureAwait(false);
         }
-        
-        await InitialKnowledgeAsync(latestKnowledge, selectedRelateds, cancellationToken).ConfigureAwait(false);
-        
-        await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync([latestKnowledge], true, cancellationToken).ConfigureAwait(false);
 
         if (!string.IsNullOrEmpty(command.Language))
         {
@@ -661,6 +661,8 @@ public partial class AiSpeechAssistantService
                 { acc.Merge(j, new JsonMergeSettings { MergeArrayHandling = MergeArrayHandling.Concat }); return acc; });
 
         var mergedJson = mergedJsonObj.ToString(Formatting.None);
+        
+        Log.Information("InitialKnowledgeAsync mergedJson: {@mergedJson}", mergedJson);
         
         latestKnowledge.IsActive = true;
         latestKnowledge.CreatedBy = _currentUser.Id.Value;
