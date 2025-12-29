@@ -373,7 +373,7 @@ public partial class PhoneOrderProcessJobService
                 {
                     var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
                     
-                     var systemPrompt =
+                    var systemPrompt =
                           "你是一名餐廳電話預約資訊分析助手。" +
                          $"系統當前日期與時間為：{DateTimeOffset.Now:yyyy-MM-dd HH:mm}（格式：yyyy-MM-dd HH:mm）。" +
                          "所有相對日期與時間（例如：明天、後天、今晚、下週五）都必須**以此時間為唯一基準**進行推算。\n" +
