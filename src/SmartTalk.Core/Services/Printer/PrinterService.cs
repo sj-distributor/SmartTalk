@@ -660,21 +660,14 @@ public class PrinterService : IPrinterService
         
         y = DrawSolidLine(paperWidth, img, y);
 
-        try
-        {
-            var obj = JObject.Parse(notificationInfo);
+        
+        var paragraphs = notificationInfo
+            .Replace("\r\n", "\n")
+            .Split('\n');
 
-            foreach (var prop in obj.Properties())
-            {
-                var value = prop.Value.Type == JTokenType.String ? prop.Value.ToString() : prop.Value.ToString(Newtonsoft.Json.Formatting.None);
-                
-                y = DrawLine(paperWidth, img, y, textColor, $"{prop.Name}:{value}", fontNormal);
-            }
-        }
-        catch (Exception e)
+        foreach (var paragraph in paragraphs)
         {
-            Log.Information("{@e}",e);
-            throw;
+            y = DrawLine(paperWidth, img, y, textColor, $"{paragraph}", fontNormal);
         }
         
         y = DrawLine(paperWidth, img, y, textColor,GenerateFullLine('-', fontNormal, paperWidth-20), fontNormal);
