@@ -50,6 +50,10 @@ public class AiSpeechAssistantStreamContextDto
     public bool IsTransfer { get; set; } = false;
     
     public string CustomerItemsString { get; set; }
+    
+    public bool IsInAiServiceHours { get; set; } = true;
+    
+    public string TransferCallNumber { get; set; }
 }
 
 public class AiSpeechAssistantUserInfoDto
