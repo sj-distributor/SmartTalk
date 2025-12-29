@@ -18,6 +18,8 @@ public interface ISalesClient : IScopedDependency
     Task<GetCustomerNumbersByNameResponseDto> GetCustomerNumbersByNameAsync(GetCustomerNumbersByNameRequestDto request, CancellationToken cancellationToken); 
 
     Task<GetCustomerLevel5HabitResponseDto> GetCustomerLevel5HabitAsync(GetCustomerLevel5HabitRequstDto request, CancellationToken cancellationToken);
+    
+    Task<DeleteAiOrderResponseDto> DeleteAiOrderAsync(DeleteAiOrderRequestDto request, CancellationToken cancellationToken);
 }
 
 public class SalesClient : ISalesClient
@@ -102,5 +104,10 @@ public class SalesClient : ISalesClient
         };
         
         return await _httpClientFactory.PostAsJsonAsync<GetCustomerLevel5HabitResponseDto>($"{_salesCustomerHabitSetting.BaseUrl}/api/CustomerInfo/QueryHistoryCustomerLevel5Habit", request, headers: header, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<DeleteAiOrderResponseDto> DeleteAiOrderAsync(DeleteAiOrderRequestDto request, CancellationToken cancellationToken)
+    {
+        return await _httpClientFactory.PostAsJsonAsync<DeleteAiOrderResponseDto>($"{_salesSetting.BaseUrl}/api/SalesOrder/DeleteAiOrder", request, headers: _headers, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 }
