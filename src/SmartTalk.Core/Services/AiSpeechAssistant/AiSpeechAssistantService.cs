@@ -1477,7 +1477,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         return result;
     }
 
-    private void CheckIfInServiceHours(Agent agent)
+    public void CheckIfInServiceHours(Agent agent)
     {
         if (agent.ServiceHours == null)
         {
@@ -1502,7 +1502,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         Log.Information("Matched specific service hours: {@SpecificWorkingHours} and the pstTime: {@PstTime}", specificWorkingHours, pstTime);
 
-        _aiSpeechAssistantStreamContext.IsInAiServiceHours = specificWorkingHours != null && specificWorkingHours.Hours.Any(x => x.Start <= pstTime && x.End >= pstTime);
+        _aiSpeechAssistantStreamContext.IsInAiServiceHours = specificWorkingHours != null && specificWorkingHours.Hours.Any(x => x.Start <= pstTime.TimeOfDay && x.End >= pstTime.TimeOfDay);
         _aiSpeechAssistantStreamContext.IsTransfer = agent.IsTransferHuman && !string.IsNullOrEmpty(agent.TransferCallNumber);
     }
 }

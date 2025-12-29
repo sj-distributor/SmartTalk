@@ -16,8 +16,8 @@ public class AgentServiceHoursDto
 public class HoursDto
 {
     [JsonProperty("start")]
-    public DateTimeOffset Start { get; set; }
+    public TimeSpan Start { get; set; }
     
     [JsonProperty("end")]
-    public DateTimeOffset End { get; set; }
+    public TimeSpan End { get; set; }
 }
