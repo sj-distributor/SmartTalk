@@ -878,6 +878,8 @@ public class PrinterService : IPrinterService
 
                  order.PrintStatus = PrintStatus.Waiting;
                  order.PrinterMac = merchPrinter.PrinterMac;
+                 order.ImageUrl = null;
+                 order.ImageKey = null;
 
                  await _printerDataProvider.UpdateMerchPrinterOrderAsync(order, cancellationToken: cancellationToken).ConfigureAwait(false);
              }
