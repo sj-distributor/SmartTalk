@@ -215,7 +215,8 @@ public partial class AiSpeechAssistantService
         
         var agents = await DeleteAssistantRelatedInfoAsync(assistants.Select(x => x.Id).ToList(), command.IsDeleteAgent, cancellationToken).ConfigureAwait(false);
 
-        await _posDataProvider.DeletePosAgentsByAgentIdsAsync(agents.Select(x => x.Id).ToList(), true, cancellationToken).ConfigureAwait(false);
+        if (command.IsDeleteAgent) 
+            await _posDataProvider.DeletePosAgentsByAgentIdsAsync(agents.Select(x => x.Id).ToList(), true, cancellationToken).ConfigureAwait(false);
         
         return new DeleteAiSpeechAssistantResponse
         {
