@@ -81,8 +81,8 @@ public partial class AiSpeechAssistantService
        
         Log.Information("All prev relateds: {@allPrevRelatedIds}", allPrevRelateds.Select( r => r.Id).ToList());
         
-        var relatedDtoMap = command.RelatedKnowledges.ToDictionary(x => x.Id, x => x);
-        
+        var relatedDtoMap = command.RelatedKnowledges?.ToDictionary(x => x.Id, x => x) ?? new Dictionary<int, KnowledgeCopyRelatedDto>();
+
         var selectedRelateds = allPrevRelateds.Where(r => relatedDtoMap.ContainsKey(r.Id)).ToList();
         
         await InitialKnowledgeAsync(latestKnowledge, selectedRelateds, cancellationToken).ConfigureAwait(false);
