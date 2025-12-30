@@ -51,7 +51,7 @@ namespace SmartTalk.Core.Services.Account
         
         Task<List<RoleUser>> GetRoleUserByRoleAccountLevelAsync(UserAccountLevel userAccountLevel, CancellationToken cancellationToken);
 
-        Task<UserAccount> GetUserAccountByUserIdAsync(int userId, CancellationToken cancellationToken);
+        Task<UserAccount> GetUserAccountByUserIdAsync(int userId, bool includeProfile = false, CancellationToken cancellationToken = default);
         
         Task<List<UserAccount>> GetUserAccountByUserIdsAsync(List<int> userIds, CancellationToken cancellationToken);
 
@@ -391,9 +391,14 @@ namespace SmartTalk.Core.Services.Account
             return user;
         }
 
-        public async Task<UserAccount> GetUserAccountByUserIdAsync(int userId, CancellationToken cancellationToken)
+        public async Task<UserAccount> GetUserAccountByUserIdAsync(int userId, bool includeProfile = false, CancellationToken cancellationToken = default)
         {
-            return await _repository.Query<UserAccount>().Where(x => x.Id == userId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+            var account = await _repository.Query<UserAccount>().Where(x => x.Id == userId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+
+            if (includeProfile)
+                await EnrichUserAccountProfilesAsync(account, cancellationToken).ConfigureAwait(false);
+
+            return account;
         }
 
         public async Task<List<UserAccount>> GetUserAccountByUserIdsAsync(List<int> userIds, CancellationToken cancellationToken)
@@ -416,6 +421,13 @@ namespace SmartTalk.Core.Services.Account
             var roleIds = roles.Select(x => x.Id).ToList();
         
             return await query.Where(x => roleIds.Contains(x.RoleId)).ToListAsync(cancellationToken).ConfigureAwait(false);
+        }
+        
+        private async Task EnrichUserAccountProfilesAsync(UserAccount account, CancellationToken cancellationToken)
+        {
+            var profile = await _repository.Query<UserAccountProfile>().FirstOrDefaultAsync(x => x.UserAccountId == account.Id, cancellationToken).ConfigureAwait(false);
+            
+            account.UserAccountProfile = profile;
         }
     }
 }

@@ -288,6 +288,15 @@ public class PosController : ControllerBase
         return Ok(response);
     }
     
+    [Route("order/cloudPrintStatus"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPosOrderCloudPrintStatusResponse))]
+    public async Task<IActionResult> GetPosOrderProductsAsync([FromQuery] GetPosOrderCloudPrintStatusRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetPosOrderCloudPrintStatusRequest, GetPosOrderCloudPrintStatusResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
     [Route("order/products"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPosOrderProductsResponse))]
     public async Task<IActionResult> GetPosOrderProductsAsync([FromQuery] GetPosOrderProductsRequest request)
@@ -383,6 +392,42 @@ public class PosController : ControllerBase
     public async Task<IActionResult> GetSimpleStructuredStoresAsync([FromQuery] GetSimpleStructuredStoresRequest request)
     {
         var response = await _mediator.RequestAsync<GetSimpleStructuredStoresRequest, GetSimpleStructuredStoresResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("get/printStatus"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPrintStatusResponse))]
+    public async Task<IActionResult> GetPrintStatusAsync([FromQuery] GetPrintStatusRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetPrintStatusRequest, GetPrintStatusResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("update/printStatus"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdatePosOrderPrintStatusResponse))]
+    public async Task<IActionResult> UpdatePosOrderPrintStatusAsync([FromBody] UpdatePosOrderPrintStatusCommand request)
+    {
+        var response = await _mediator.SendAsync<UpdatePosOrderPrintStatusCommand, UpdatePosOrderPrintStatusResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("get/reservationInfo"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetOrderReservationInfoResponse))]
+    public async Task<IActionResult> GetOrderReservationInfoAsync([FromQuery] GetOrderReservationInfoRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetOrderReservationInfoRequest, GetOrderReservationInfoResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("update/reservationInfo"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdateOrderReservationInfoResponse))]
+    public async Task<IActionResult> UpdateOrderReservationInfoAsync([FromBody] UpdateOrderReservationInfoCommand command)
+    {
+        var response = await _mediator.SendAsync<UpdateOrderReservationInfoCommand, UpdateOrderReservationInfoResponse>(command).ConfigureAwait(false);
         
         return Ok(response);
     }

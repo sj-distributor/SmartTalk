@@ -12,15 +12,21 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Aliyun.OSS;
 using AutoMapper;
+using Mediator.Net;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Serilog;
+using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Services.AliYun;
 using SmartTalk.Core.Services.Caching.Redis;
 using SmartTalk.Core.Services.Http.Clients;
+using SmartTalk.Core.Services.Jobs;
+using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Settings.Printer;
 using SmartTalk.Message.Commands.Printer;
 using SmartTalk.Message.Events.Printer;
+using SmartTalk.Messages.Commands.Pos;
 using SmartTalk.Messages.Commands.Printer;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Printer;
@@ -67,6 +73,8 @@ public interface IPrinterService : IScopedDependency
     Task<GetMerchPrinterLogResponse> GetMerchPrinterLogAsync(GetMerchPrinterLogRequest request, CancellationToken cancellationToken);
     
     Task ScanOfflinePrinter(CancellationToken cancellationToken);
+
+    Task<MerchPrinterOrderRetryResponse> MerchPrinterOrderRetryAsync(MerchPrinterOrderRetryCommand command, CancellationToken cancellationToken);
 }
 
 public class PrinterService : IPrinterService
@@ -79,8 +87,10 @@ public class PrinterService : IPrinterService
     private readonly IPosDataProvider _posDataProvider;
     private readonly IPrinterDataProvider _printerDataProvider;
     private readonly PrinterSendErrorLogSetting _printerSendErrorLogSetting;
+    private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
+    private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
 
-    public PrinterService(IMapper mapper, IWeChatClient weChatClient, ICacheManager cacheManager, IAliYunOssService ossService, IRedisSafeRunner redisSafeRunner, IPosDataProvider posDataProvider, IPrinterDataProvider printerDataProvider, PrinterSendErrorLogSetting printerSendErrorLogSetting)
+    public PrinterService(IMapper mapper, IWeChatClient weChatClient, ICacheManager cacheManager, IAliYunOssService ossService, IRedisSafeRunner redisSafeRunner, IPosDataProvider posDataProvider, IPrinterDataProvider printerDataProvider, PrinterSendErrorLogSetting printerSendErrorLogSetting, ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient, IPhoneOrderDataProvider phoneOrderDataProvider)
     {
         _mapper = mapper;
         _ossService = ossService;
@@ -90,6 +100,8 @@ public class PrinterService : IPrinterService
         _posDataProvider = posDataProvider;
         _printerDataProvider = printerDataProvider;
         _printerSendErrorLogSetting = printerSendErrorLogSetting;
+        _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
+        _phoneOrderDataProvider = phoneOrderDataProvider;
     }
 
     public async Task<GetPrinterJobAvailableResponse> GetPrinterJobAvailableAsync(GetPrinterJobAvailableRequest request, CancellationToken cancellationToken)
@@ -153,71 +165,85 @@ public class PrinterService : IPrinterService
         if (merchPrinterOrder == null) return string.Empty;
         
         if (!string.IsNullOrEmpty(merchPrinterOrder.ImageUrl)) return merchPrinterOrder.ImageUrl;
-
-        var order = await _posDataProvider.GetPosOrderByIdAsync(orderId: merchPrinterOrder.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        var orderItems = JsonConvert.DeserializeObject<List<PhoneCallOrderItem>>(order.Items);
-
-        var productIds = new List<string>();
-        
-        foreach (var orderItem in orderItems)
-        {
-            productIds.Add(orderItem.ProductId.ToString());
-        }
-
-        if (productIds.Count > 0)
-        {
-            var products = await _posDataProvider.GetPosProductsAsync(productIds: productIds, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-            Log.Information("Products:{@products}", products);
-            
-            foreach (var orderItem in orderItems)
-            {
-                var product = products.FirstOrDefault(x => x.ProductId == orderItem.ProductId.ToString());
-
-                if (product != null)
-                    orderItem.ProductName = product.Names;
-            }
-        }
-
         var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(printerMac: merchPrinterOrder.PrinterMac,
             storeId: merchPrinterOrder.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
-        
-        var store = await _posDataProvider.GetPosCompanyStoreDetailAsync(order.StoreId, cancellationToken).ConfigureAwait(false);
-        var printerLog = await _printerDataProvider.GetMerchPrinterLogAsync(storeId: store.Id, printerMac: merchPrinter?.PrinterMac, orderId: merchPrinterOrder.OrderId).ConfigureAwait(false);
 
+        var store = await _posDataProvider.GetPosCompanyStoreDetailAsync(merchPrinterOrder.StoreId, cancellationToken).ConfigureAwait(false);
+        
         var storeCreatedDate = "";
         var storePrintDate = DateTimeOffset.Now;
-        var storePrintDateString = "";
-        if (!string.IsNullOrEmpty(store.Timezone))
+        
+        Image<Rgba32> img;
+        
+        if (merchPrinterOrder.PrintFormat == PrintFormat.Order)
         {
-            storeCreatedDate = TimeZoneInfo.ConvertTimeFromUtc(order.CreatedDate.UtcDateTime, TimeZoneInfo.FindSystemTimeZoneById(store.Timezone)).ToString("yyyy-MM-dd HH:mm:ss");    
-            storePrintDateString = TimeZoneInfo.ConvertTimeFromUtc(storePrintDate.UtcDateTime, TimeZoneInfo.FindSystemTimeZoneById(store.Timezone)).ToString("yyyy-MM-dd HH:mm:ss");    
+            var order = await _posDataProvider.GetPosOrderByIdAsync(orderId: merchPrinterOrder.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+            var orderItems = JsonConvert.DeserializeObject<List<PhoneCallOrderItem>>(order.Items);
+
+            var productIds = new List<string>();
+        
+            foreach (var orderItem in orderItems)
+            {
+                productIds.Add(orderItem.ProductId.ToString());
+            }
+
+            if (productIds.Count > 0)
+            {
+                var products = await _posDataProvider.GetPosProductsAsync(productIds: productIds, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+                Log.Information("Products:{@products}", products);
+            
+                foreach (var orderItem in orderItems)
+                {
+                    var product = products.FirstOrDefault(x => x.ProductId == orderItem.ProductId.ToString());
+
+                    if (product != null)
+                        orderItem.ProductName = product.Names;
+                }
+            }
+            
+            var storePrintDateString = "";
+            if (!string.IsNullOrEmpty(store.Timezone))
+            {
+                storeCreatedDate = TimeZoneInfo.ConvertTimeFromUtc(order.CreatedDate.UtcDateTime, TimeZoneInfo.FindSystemTimeZoneById(store.Timezone)).ToString("yyyy-MM-dd HH:mm:ss");    
+                storePrintDateString = TimeZoneInfo.ConvertTimeFromUtc(storePrintDate.UtcDateTime, TimeZoneInfo.FindSystemTimeZoneById(store.Timezone)).ToString("yyyy-MM-dd HH:mm:ss");    
+            }
+            else
+            {
+                storeCreatedDate = order.CreatedDate.ToString("yyyy-MM-dd HH:mm:ss");
+                storePrintDateString = storePrintDate.ToString("yyyy-MM-dd HH:mm:ss");
+            }
+            
+            img = await RenderReceiptAsync(order.OrderNo,  
+                JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(store.Names).GetValueOrDefault("en")?.GetValueOrDefault("name"),
+                store.Address,
+                store.PhoneNums,
+                storeCreatedDate,
+                merchPrinter?.PrinterName,
+                order.Type.ToString(),
+                order.Name,
+                order.Phone,
+                order.Address,
+                order.Notes,
+                orderItems,
+                order.SubTotal.ToString(),
+                order.Tax.ToString(),
+                order.Total.ToString(),
+                storePrintDateString,
+                merchPrinter?.PrinterLanguage).ConfigureAwait(false);
         }
         else
         {
-            storeCreatedDate = order.CreatedDate.ToString("yyyy-MM-dd HH:mm:ss");
-            storePrintDateString = storePrintDate.ToString("yyyy-MM-dd HH:mm:ss");
+            var reservationInfo = await _posDataProvider.GetPhoneOrderReservationInformationAsync(merchPrinterOrder.OrderId, cancellationToken).ConfigureAwait(false);
+            var phoneOrderRecord = await _phoneOrderDataProvider.GetPhoneOrderRecordByIdAsync(reservationInfo.RecordId, cancellationToken).ConfigureAwait(false);
+            
+            img = await RenderReceipt1Async(JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(store.Names).GetValueOrDefault("en")?.GetValueOrDefault("name"),
+                store.Address, store.PhoneNums, merchPrinter?.PrinterName, reservationInfo.NotificationInfo,
+                $@"{DateTimeOffset.Now.ToString("yyyy-MM-dd HH:mm:ss")}").ConfigureAwait(false);
         }
         
-        var img = await RenderReceiptAsync(order.OrderNo,  
-            JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(store.Names).GetValueOrDefault("en")?.GetValueOrDefault("name"),
-            store.Address,
-            store.PhoneNums,
-            storeCreatedDate,
-            merchPrinter.PrinterName,
-            order.Type.ToString(),
-            order.Name,
-            order.Phone,
-            order.Address,
-            order.Notes,
-            orderItems,
-            order.SubTotal.ToString(),
-            order.Tax.ToString(),
-            order.Total.ToString(),
-            storePrintDateString,
-            merchPrinter.PrinterLanguage).ConfigureAwait(false);
-       
         var imageKey = Guid.NewGuid().ToString();
         
         using var ms = new MemoryStream();
@@ -442,10 +468,19 @@ public class PrinterService : IPrinterService
     {
         var merchPrinterLog = _mapper.Map<MerchPrinterLog>(@event);
         var printError = @event.IsPrintError();
+        var message = "";
+        var text = new SendWorkWechatGroupRobotTextDto();
+        var order = new PosOrder();
         
-        var order = await _posDataProvider.GetPosOrderByIdAsync(@event.MerchPrinterOrderDto.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (@event.MerchPrinterOrderDto.PrintFormat == PrintFormat.Order)
+        {
+            order = await _posDataProvider.GetPosOrderByIdAsync(@event.MerchPrinterOrderDto.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        var message = $"{(printError?"Print Error":"Print")}:{order.OrderNo}";
+            message = $"{(printError?"Print Error":"Print")}:{order.OrderNo}";
+        }
+        else
+            message = $"{(printError?"Print Error":"Print")}";
+        
         merchPrinterLog.Message = message;
         
         if (message.Equals("Print Error"))
@@ -453,8 +488,12 @@ public class PrinterService : IPrinterService
             var store = await _posDataProvider.GetPosCompanyStoreAsync(id: @event.MerchPrinterOrderDto.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
             var storeName = JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(store.Names).GetValueOrDefault("en")?.GetValueOrDefault("name");
-        
-            var text = new SendWorkWechatGroupRobotTextDto { Content = $"🆘SMT Cloud Print Error Infor🆘\n\nPrint Error: {merchPrinterLog.Message}\nPrint Time: {TimeZoneInfo.ConvertTimeFromUtc(@event.MerchPrinterOrderDto.PrintDate.UtcDateTime, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time")):yyyy-MM-dd HH:mm:ss}\nStore: {storeName}\nOrder Date:{order.CreatedDate.ToString("yyyy-MM-dd")}\nOrder NO: #{order.OrderNo}"};
+            
+            if (@event.MerchPrinterOrderDto.PrintFormat == PrintFormat.Order)
+                text = new SendWorkWechatGroupRobotTextDto { Content = $"🆘SMT Cloud Print Error Infor🆘\n\nPrint Error: {merchPrinterLog.Message}\nPrint Time: {TimeZoneInfo.ConvertTimeFromUtc(@event.MerchPrinterOrderDto.PrintDate.UtcDateTime, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time")):yyyy-MM-dd HH:mm:ss}\nStore: {storeName}\nOrder Date:{order.CreatedDate.ToString("yyyy-MM-dd")}\nOrder NO: #{order.OrderNo}"};
+            else
+                text = new SendWorkWechatGroupRobotTextDto { Content = $"🆘SMT Cloud Print Error Infor🆘\n\nPrint Error: {merchPrinterLog.Message}\nPrint Time: {TimeZoneInfo.ConvertTimeFromUtc(@event.MerchPrinterOrderDto.PrintDate.UtcDateTime, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time")):yyyy-MM-dd HH:mm:ss}\nStore: {storeName}\nOrder Date:{@event.MerchPrinterOrderDto.PrintDate.ToString("yyyy-MM-dd")}\nOrder Id: #{@event.MerchPrinterOrderDto.OrderId}"};
+           
             text.MentionedMobileList = "@all";
         
             await _weChatClient.SendWorkWechatRobotMessagesAsync(_printerSendErrorLogSetting.CloudPrinterSendErrorLogRobotUrl, new SendWorkWechatGroupRobotMessageDto
@@ -564,6 +603,82 @@ public class PrinterService : IPrinterService
         y = DrawLine(paperWidth, img, y, textColor, $"Powered by SmartTalk AI", fontSmall, centerAlign: true);
 
         img.Mutate(x => x.Crop(new Rectangle(0, 0, paperWidth, y + 10)));
+        
+        return img;
+    } 
+    
+    private async Task<Image<Rgba32>> RenderReceipt1Async(string restaurantName, string restaurantAddress,
+        string restaurantPhone, string printerName, string notificationInfo, string printTime)
+    {
+        var y = 10;
+        var paperWidth = 512;
+        var textColor = Color.Black;
+        var bgColor = Color.White;
+        
+        var regularFont = "/app/fonts/SourceHanSansSC-Regular.otf";
+        var boldFont = "/app/fonts/SourceHanSansSC-Bold.otf";
+        
+        var collection = new FontCollection();
+        var fontFamily = collection.Add(regularFont);
+        collection.Add(boldFont);
+        
+        var fontSmall = CreateFont(fontFamily, 25);
+        var fontMaxSmall = CreateFont(fontFamily, 23);
+        var fontNormal = CreateFont(fontFamily, 30);
+        var fontBold = CreateFont(fontFamily, 40, bold: true);
+        
+        var lineHeight = TextMeasurer.MeasureSize("口", new TextOptions(fontNormal)).Height;
+
+        var img = new Image<Rgba32>(paperWidth, 10000);
+        img.Mutate(ctx => ctx.Fill(bgColor));
+        
+        y = DrawLine(paperWidth, img, y, textColor, $"Info Update",  CreateFont(fontFamily, 45, true), spacing: 40, centerAlign: true);
+        y = DrawLine(paperWidth, img, y, textColor, $"{restaurantName}", fontMaxSmall, centerAlign: true);
+        
+        if (!string.IsNullOrEmpty(restaurantAddress))
+            y = DrawLine(paperWidth, img, y, textColor, $"{restaurantAddress}", fontMaxSmall, centerAlign: true);
+
+        if (!string.IsNullOrEmpty(restaurantPhone))
+        {
+            var phoneSplit = restaurantPhone.Split(",");
+
+            var phones = "";
+            
+            foreach (var phone in phoneSplit)
+            {
+                phones += $"({phone[..3]})-{phone.Substring(3, 3)}-{phone[6..]},";
+            }
+            
+            phones = phones.TrimEnd(',');
+            
+            y = DrawLine(paperWidth, img, y, textColor, $"{phones}", fontMaxSmall, centerAlign: true, spacing:10);    
+        }
+        
+        y = DrawLine(paperWidth, img, y, textColor, GenerateFullLine('-', fontBold, paperWidth-20), fontBold, yOffset: -10);
+        
+        y = DrawLine(paperWidth, img, y, textColor, printerName, fontNormal);
+        
+        y = DrawSolidLine(paperWidth, img, y);
+
+        
+        var paragraphs = notificationInfo
+            .Replace("\r\n", "\n")
+            .Split('\n');
+
+        foreach (var paragraph in paragraphs)
+        {
+            y = DrawLine(paperWidth, img, y, textColor, $"{paragraph}", fontNormal);
+        }
+        
+        y = DrawLine(paperWidth, img, y, textColor,GenerateFullLine('-', fontNormal, paperWidth-20), fontNormal);
+        
+        y = DrawLine(paperWidth, img, y, textColor, $"Print Time {printTime}", fontSmall, centerAlign: true, spacing: 80, yOffset: 60);
+        y = DrawLine(paperWidth, img, y, textColor, $"Powered by SmartTalk AI", fontSmall, centerAlign: true);
+
+        img.Mutate(x => x.Crop(new Rectangle(0, 0, paperWidth, y + 10)));
+        
+        using var ms = new MemoryStream();
+        img.Save("test.jpg");
         
         return img;
     } 
@@ -712,8 +827,67 @@ public class PrinterService : IPrinterService
                  Message = "Online:True->False"
              }, cancellationToken).ConfigureAwait(false);
          }
-     } 
-     
+     }
+
+     public async Task<MerchPrinterOrderRetryResponse> MerchPrinterOrderRetryAsync(MerchPrinterOrderRetryCommand command, CancellationToken cancellationToken)
+     {
+         var id = command.Id ?? Guid.NewGuid();
+         var lockKey = $"retry-merch-printer-order-key-{id}";
+         
+         return await _redisSafeRunner.ExecuteWithLockAsync(lockKey, async () =>
+         {
+             MerchPrinterOrder order;
+             MerchPrinter merchPrinter;
+             if (command.Id == null && command.OrderId != null && command.StoreId != null)
+             {
+                 Log.Information("storeId:{storeId}, orderId:{orderId}", command.StoreId, command.OrderId);
+        
+                 merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(storeId: command.StoreId, isEnabled: true, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+
+                 Log.Information("get merch printer:{@merchPrinter}", merchPrinter);
+
+                 order = new MerchPrinterOrder
+                 {
+                     Id = id,
+                     OrderId = command.OrderId.Value,
+                     StoreId = command.StoreId.Value,
+                     PrinterMac = merchPrinter?.PrinterMac,
+                     PrintDate = DateTimeOffset.Now,
+                     PrintFormat = command.PrintFormat ?? PrintFormat.Order
+                 };
+        
+                 Log.Information("Create merch printer order:{@merchPrinterOrder}", order);
+                 
+                 await _printerDataProvider.AddMerchPrinterOrderAsync(order, cancellationToken).ConfigureAwait(false);
+             }
+             else
+             {
+                 order = (await _printerDataProvider.GetMerchPrinterOrdersAsync(id:command.Id, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+
+                 merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(storeId: order?.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+                 
+                 if (order == null || merchPrinter == null)
+                     throw new Exception("Not find print order or merchPrinter");
+
+                 order.PrintStatus = PrintStatus.Waiting;
+                 order.PrinterMac = merchPrinter.PrinterMac;
+                 order.ImageUrl = null;
+                 order.ImageKey = null;
+
+                 await _printerDataProvider.UpdateMerchPrinterOrderAsync(order, cancellationToken: cancellationToken).ConfigureAwait(false);
+             }
+
+             _smartTalkBackgroundJobClient.Schedule<IMediator>( x => x.SendAsync(new RetryCloudPrintingCommand{ Id = order.Id, Count = 0}, CancellationToken.None), TimeSpan.FromMinutes(1));
+             
+             await _cacheManager.SetAsync($"{order.OrderId}", true, new RedisCachingSetting(expiry: TimeSpan.FromMinutes(30)), cancellationToken).ConfigureAwait(false);
+             
+             return new MerchPrinterOrderRetryResponse
+             {
+                 Data = _mapper.Map<MerchPrinterOrderDto>(order)
+             };
+         }, expiry: TimeSpan.FromMinutes(3), wait: TimeSpan.Zero, retry: TimeSpan.Zero, server: RedisServer.System).ConfigureAwait(false);
+     }
+
      private static Font CreateFont(FontFamily fontFamily, float size, bool bold = false)
      {
          return new Font(fontFamily, size, bold ? FontStyle.Bold : FontStyle.Regular);

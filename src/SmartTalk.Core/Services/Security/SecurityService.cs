@@ -69,7 +69,7 @@ public class SecurityService : ISecurityService
             if (user != null)
                 throw new Exception("Username already in use");
 
-            var oldUser = await _accountDataProvider.GetUserAccountByUserIdAsync(command.UserId, cancellationToken).ConfigureAwait(false);
+            var oldUser = await _accountDataProvider.GetUserAccountByUserIdAsync(command.UserId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
             oldUser.UserName = command.NewName;
 
@@ -227,7 +227,7 @@ public class SecurityService : ISecurityService
 
     public async Task<SwitchLanguageResponse> SwitchLanguageAsync(SwitchLanguageCommand command, CancellationToken cancellationToken)
     {
-        var userAccount = await _accountDataProvider.GetUserAccountByUserIdAsync(_currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
+        var userAccount = await _accountDataProvider.GetUserAccountByUserIdAsync(_currentUser.Id.Value, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         userAccount.SystemLanguage = command.Language;
 
