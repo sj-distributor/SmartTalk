@@ -1127,6 +1127,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     
     private async Task ProcessTransferCallAsync(JsonElement jsonDocument, string functionName, CancellationToken cancellationToken)
     {
+        if (_aiSpeechAssistantStreamContext.IsTransfer) return;
+        
         if (string.IsNullOrEmpty(_aiSpeechAssistantStreamContext.HumanContactPhone))
         {
             var nonHumanService = new
