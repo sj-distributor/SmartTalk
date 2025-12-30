@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Serilog;
 using SmartTalk.Core.Domain.Account;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.PhoneOrder;
@@ -102,6 +103,8 @@ public partial class PhoneOrderDataProvider
             where (agentIds == null || !agentIds.Any() || agentIds.Contains(agent.Id)) && (string.IsNullOrEmpty(name) || assistant.Name.Contains(name))
             select agent;
 
+        Log.Information("GetPhoneOrderRecordsAsync: agentIds: {@agentIds}", agentIds);
+        
         var agents = (await agentsQuery.ToListAsync(cancellationToken).ConfigureAwait(false)).Select(x => x.Id).Distinct().ToList();
 
         if (agents.Count == 0) return [];
@@ -109,6 +112,8 @@ public partial class PhoneOrderDataProvider
         var query = from record in _repository.Query<PhoneOrderRecord>()
             where record.Status == PhoneOrderRecordStatus.Sent && agents.Contains(record.AgentId)
             select record;
+        
+        Log.Information("GetPhoneOrderRecordsAsync: recordCount: {@RecordCount}", query.Count());
 
         if (scenarios is { Count: > 0 })
         {
