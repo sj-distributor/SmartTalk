@@ -578,30 +578,33 @@ public class SpeechMaticsService : ISpeechMaticsService
         var candidates = historyItems.Where(x => x.MaterialDesc != null && x.MaterialDesc.Contains(itemName, StringComparison.OrdinalIgnoreCase)).Select(x => x.Material).ToList();
         Log.Information("Candidate material code list: {@Candidates}", candidates);
 
-        if (!candidates.Any()) return string.IsNullOrEmpty(baseNumber) ? "" : baseNumber;; 
+        if (!candidates.Any()) return string.IsNullOrEmpty(baseNumber) ? "" : baseNumber;
         if (candidates.Count == 1) return candidates.First();
 
-        if (!string.IsNullOrWhiteSpace(unit))
+        var isCase = !string.IsNullOrWhiteSpace(unit) && (unit.Contains("case", StringComparison.OrdinalIgnoreCase) || unit.Contains("箱"));
+        if (isCase)
         {
-            var u = unit.ToLower();
-            if (u.Contains("case") || u.Contains("箱"))
-            {
-                var csItem = candidates.FirstOrDefault(x => x.EndsWith("CS", StringComparison.OrdinalIgnoreCase));
-                if (!string.IsNullOrEmpty(csItem)) return csItem;
-            }
-            else
-            {
-                var pcItem = candidates.FirstOrDefault(x => x.EndsWith("PC", StringComparison.OrdinalIgnoreCase));
-                if (!string.IsNullOrEmpty(pcItem)) return pcItem;
-            }
-        }
+            var noPcList = candidates.Where(x => !x.Contains("PC", StringComparison.OrdinalIgnoreCase)).ToList();
 
-        var pureNumber = candidates.FirstOrDefault(x => Regex.IsMatch(x, @"^\d+$"));
-        return pureNumber ?? candidates.First();
+            if (noPcList.Any())
+                return noPcList.First(); 
+            
+            return candidates.First();
+        }
+        
+        var pcList = candidates.Where(x => x.Contains("PC", StringComparison.OrdinalIgnoreCase)).ToList();
+
+        if (pcList.Any())
+            return pcList.First();
+        
+        return candidates.First();
     }
 
     private async Task<string> ResolveSoldToIdAsync(ExtractedOrderDto storeOrder, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, List<string> soldToIds, CancellationToken cancellationToken) 
     { 
+        if (soldToIds.Count == 1)
+            return soldToIds[0];
+        
         if (!string.IsNullOrEmpty(storeOrder.StoreName)) 
         { 
             var requestDto = new GetCustomerNumbersByNameRequestDto { CustomerName = storeOrder.StoreName }; 

@@ -496,6 +496,8 @@ public partial class PhoneOrderService
         record.Status = status;
 
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync(new List<PhoneOrderRecord> { record }, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Added phone order record: {@record}", record);
     }
 
     private async Task<bool> CheckPhoneOrderRecordDurationAsync(byte[] recordContent, CancellationToken cancellationToken)
