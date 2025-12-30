@@ -368,4 +368,22 @@ public class PosController : ControllerBase
         
         return Ok(response);
     }
+    
+    [Route("all/stores"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAllStoresResponse))]
+    public async Task<IActionResult> GetAllStoresAsync([FromQuery] GetAllStoresRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetAllStoresRequest, GetAllStoresResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("simple/stores"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetSimpleStructuredStoresResponse))]
+    public async Task<IActionResult> GetSimpleStructuredStoresAsync([FromQuery] GetSimpleStructuredStoresRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetSimpleStructuredStoresRequest, GetSimpleStructuredStoresResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
 }

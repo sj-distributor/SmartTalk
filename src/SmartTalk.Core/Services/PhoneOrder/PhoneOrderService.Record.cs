@@ -2,22 +2,19 @@ using System.Reflection;
 using Serilog;
 using System.Text;
 using System.Text.Json.Serialization;
-using Newtonsoft.Json.Linq;
 using SmartTalk.Messages.Enums.STT;
 using Smarties.Messages.DTO.OpenAi;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.EasyPos;
-using SmartTalk.Messages.Dto.WeChat;
 using Microsoft.IdentityModel.Tokens;
 using Smarties.Messages.Enums.OpenAi;
 using Smarties.Messages.Requests.Ask;
 using System.Text.RegularExpressions;
 using ClosedXML.Excel;
 using Newtonsoft.Json;
-using SmartTalk.Core.Domain.Account;
+using Newtonsoft.Json.Linq;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Domain.Pos;
-using SmartTalk.Core.Services.Linphone;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Dto.Attachments;
 using SmartTalk.Messages.Enums.PhoneOrder;
@@ -26,8 +23,9 @@ using SmartTalk.Messages.Enums.SpeechMatics;
 using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Requests.PhoneOrder;
 using SmartTalk.Messages.Commands.Attachments;
-using SmartTalk.Messages.Enums.Account;
+using SmartTalk.Messages.Dto.WeChat;
 using SmartTalk.Messages.Enums.Pos;
+using SmartTalk.Messages.Events.PhoneOrder;
 using TranscriptionFileType = SmartTalk.Messages.Enums.STT.TranscriptionFileType;
 using TranscriptionResponseFormat = SmartTalk.Messages.Enums.STT.TranscriptionResponseFormat;
 
@@ -37,7 +35,7 @@ public partial interface IPhoneOrderService
 {
     Task<GetPhoneOrderRecordsResponse> GetPhoneOrderRecordsAsync(GetPhoneOrderRecordsRequest request, CancellationToken cancellationToken);
     
-    Task<UpdatePhoneOrderRecordResponse> UpdatePhoneOrderRecordAsync(UpdatePhoneOrderRecordCommand command, CancellationToken cancellationToken);
+    Task<PhoneOrderRecordUpdatedEvent> UpdatePhoneOrderRecordAsync(UpdatePhoneOrderRecordCommand command, CancellationToken cancellationToken);
 
     Task ReceivePhoneOrderRecordAsync(ReceivePhoneOrderRecordCommand command, CancellationToken cancellationToken);
 
@@ -73,9 +71,11 @@ public partial class PhoneOrderService
         if (request.IsFilteringScenarios && (request.DialogueScenarios == null || !request.DialogueScenarios.Any()))
         { return new GetPhoneOrderRecordsResponse { Data = new List<PhoneOrderRecordDto>() }; }
         
-        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds, request.Name, utcStart, utcEnd, request.OrderId, request.DialogueScenarios, cancellationToken).ConfigureAwait(false);
-
+        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds, request.Name, utcStart, utcEnd, request.OrderId, request.DialogueScenarios, request.AssistantId, cancellationToken).ConfigureAwait(false);
+        
         var enrichedRecords = _mapper.Map<List<PhoneOrderRecordDto>>(records);
+        
+        await BuildRecordUnreviewDataAsync(enrichedRecords, cancellationToken).ConfigureAwait(false);
         
         return new GetPhoneOrderRecordsResponse
         {
@@ -83,17 +83,21 @@ public partial class PhoneOrderService
         };
     }
 
-    public async Task<UpdatePhoneOrderRecordResponse> UpdatePhoneOrderRecordAsync(UpdatePhoneOrderRecordCommand command, CancellationToken cancellationToken)
+    public async Task<PhoneOrderRecordUpdatedEvent> UpdatePhoneOrderRecordAsync(UpdatePhoneOrderRecordCommand command, CancellationToken cancellationToken)
     {
         var records = await _phoneOrderDataProvider.GetPhoneOrderRecordAsync(command.RecordId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var record = records.FirstOrDefault();
         if (record == null) throw new Exception($"Phone order record not found: {command.RecordId}");
+
+        if (record.IsLockedScenario) throw new Exception("The record scenario was locked.");
         
         var user = await _accountDataProvider.GetUserAccountByUserIdAsync(command.UserId, cancellationToken).ConfigureAwait(false);
 
         if (user == null) 
             throw new Exception($"User not found: {command.UserId}");
+        
+        var originalScenario = record.Scenario;
         
         record.Scenario = command.DialogueScenarios;
         record.IsModifyScenario = true;
@@ -108,14 +112,12 @@ public partial class PhoneOrderService
             CreatedDate = DateTime.UtcNow
         }, true, cancellationToken).ConfigureAwait(false);
 
-        return new UpdatePhoneOrderRecordResponse
+        return new PhoneOrderRecordUpdatedEvent
         {
-            Data = new UpdatePhoneOrderRecordResponseDate
-            {
-                RecordId = record.Id,
-                DialogueScenarios = record.Scenario.GetValueOrDefault(),
-                UserName = user.UserName
-            }
+            RecordId = record.Id,
+            UserName = user.UserName,
+            OriginalScenarios = originalScenario,
+            DialogueScenarios = record.Scenario.GetValueOrDefault()
         };
     }
 
@@ -193,11 +195,9 @@ public partial class PhoneOrderService
 
             var (goalText, tip) = await PhoneOrderTranscriptionAsync(phoneOrderInfo, record, audioContent, cancellationToken).ConfigureAwait(false);
             
-            record.ConversationText = goalText;
-
-            await _phoneOrderUtilService.ExtractPhoneOrderShoppingCartAsync(goalText, record, cancellationToken).ConfigureAwait(false);
-
             record.Tips = tip;
+            record.ConversationText = goalText;
+            
             await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception e)
@@ -1127,6 +1127,17 @@ public partial class PhoneOrderService
         var prevOrderAmount = prevPosOrders.Sum(x => x.Total) - prevCancelledOrders.Sum(x => x.Total);
         var currOrderAmount = restaurantData.TotalOrderAmount;
         restaurantData.OrderAmountChange = prevOrderAmount == 0 && currOrderAmount > 0 ? currOrderAmount : currOrderAmount - prevOrderAmount;
+    }
+    
+    private async Task BuildRecordUnreviewDataAsync(List<PhoneOrderRecordDto> records, CancellationToken cancellationToken)
+    {
+        var unreviewedRecordIds = await _posDataProvider.GetAiDraftOrderRecordIdsByRecordIdsAsync(records.Select(x => x.Id).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Get store unreview record ids: {@UnreviewedRecordIds}", unreviewedRecordIds);
+        
+        records.ForEach(x => x.IsUnreviewed = unreviewedRecordIds.Contains(x.Id));
+        
+        Log.Information("Enrich complete records: {@Records}", records);
     }
     
     public async Task<GetPhoneOrderRecordScenarioResponse> GetPhoneOrderRecordScenarioAsync(GetPhoneOrderRecordScenarioRequest request, CancellationToken cancellationToken)

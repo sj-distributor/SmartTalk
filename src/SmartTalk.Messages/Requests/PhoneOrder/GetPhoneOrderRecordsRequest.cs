@@ -22,6 +22,8 @@ public class GetPhoneOrderRecordsRequest : IRequest
     public DateTimeOffset? Date { get; set; }
     
     public string OrderId { get; set; }
+    
+    public int? AssistantId { get; set; }
 
     public bool IsFilteringScenarios { get; set; } = false;
 }

@@ -14,26 +14,26 @@ using Smarties.Messages.Requests.Ask;
 using SmartTalk.Core.Constants;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.PhoneOrder;
+using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Services.AiSpeechAssistant;
-using SmartTalk.Core.Services.Ffmpeg;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.PhoneOrder;
+using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Services.Sale;
 using SmartTalk.Core.Settings.OpenAi;
-using SmartTalk.Core.Settings.PhoneOrder;
 using SmartTalk.Core.Settings.Twilio;
 using SmartTalk.Messages.Dto.SpeechMatics;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
+using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Sales;
 using SmartTalk.Messages.Dto.PhoneOrder;
-using SmartTalk.Messages.Dto.PhoneOrder;
-using SmartTalk.Messages.Enums.Account;
+using SmartTalk.Messages.Dto.Pos;
 using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Enums.STT;
 using Twilio;
@@ -51,14 +51,14 @@ public interface ISpeechMaticsService : IScopedDependency
 public class SpeechMaticsService : ISpeechMaticsService
 {
     private readonly IMapper _mapper;
+    private readonly IPosService _posService;
     private readonly ISalesClient _salesClient;
-    private readonly  IWeChatClient _weChatClient;
-    private  readonly IFfmpegService _ffmpegService;
     private readonly OpenAiSettings _openAiSettings;
     private readonly TwilioSettings _twilioSettings;
-    private readonly TranslationClient _translationClient;
     private readonly ISmartiesClient _smartiesClient;
-    private readonly PhoneOrderSetting _phoneOrderSetting;
+    private readonly IPosUtilService _posUtilService;
+    private readonly IPosDataProvider _posDataProvider;
+    private readonly TranslationClient _translationClient;
     private readonly IPhoneOrderService _phoneOrderService;
     private readonly ISalesDataProvider _salesDataProvider;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
@@ -68,14 +68,14 @@ public class SpeechMaticsService : ISpeechMaticsService
     
     public SpeechMaticsService(
         IMapper mapper,
+        IPosService posService,
         ISalesClient salesClient,
-        IWeChatClient weChatClient,
-        IFfmpegService ffmpegService,
         OpenAiSettings openAiSettings,
         TwilioSettings twilioSettings,
-        TranslationClient translationClient,
+        IPosUtilService posUtilService,
         ISmartiesClient smartiesClient,
-        PhoneOrderSetting phoneOrderSetting,
+        IPosDataProvider posDataProvider,
+        TranslationClient translationClient,
         IPhoneOrderService phoneOrderService,
         ISalesDataProvider salesDataProvider,
         IPhoneOrderDataProvider phoneOrderDataProvider,
@@ -84,14 +84,14 @@ public class SpeechMaticsService : ISpeechMaticsService
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
         _mapper = mapper;
+        _posService = posService;
         _salesClient = salesClient;
-        _weChatClient = weChatClient;
-        _ffmpegService = ffmpegService;
         _openAiSettings = openAiSettings;
         _twilioSettings = twilioSettings;
-        _translationClient = translationClient;
         _smartiesClient = smartiesClient;
-        _phoneOrderSetting = phoneOrderSetting;
+        _posUtilService = posUtilService;
+        _posDataProvider = posDataProvider;
+        _translationClient = translationClient;
         _phoneOrderService = phoneOrderService;
         _salesDataProvider = salesDataProvider;
         _phoneOrderDataProvider = phoneOrderDataProvider;
@@ -122,9 +122,9 @@ public class SpeechMaticsService : ISpeechMaticsService
 
             var audioContent = await _smartTalkHttpClientFactory.GetAsync<byte[]>(record.Url, cancellationToken).ConfigureAwait(false);
             
-            await _phoneOrderService.ExtractPhoneOrderRecordAiMenuAsync(speakInfos, record, audioContent, cancellationToken).ConfigureAwait(false);
-            
             await SummarizeConversationContentAsync(record, audioContent, cancellationToken).ConfigureAwait(false);
+            
+            await _phoneOrderService.ExtractPhoneOrderRecordAiMenuAsync(speakInfos, record, audioContent, cancellationToken).ConfigureAwait(false);
             
             await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
             
@@ -185,13 +185,14 @@ public class SpeechMaticsService : ISpeechMaticsService
 
         var checkCustomerFriendly = await CheckCustomerFriendlyAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
 
-        record.IsCustomerFriendly = checkCustomerFriendly.IsCustomerFriendly;
         record.IsHumanAnswered = checkCustomerFriendly.IsHumanAnswered;
-        
+        record.IsCustomerFriendly = checkCustomerFriendly.IsCustomerFriendly;
 
         var scenarioInformation = await IdentifyDialogueScenariosAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
         record.Scenario = scenarioInformation.Category;
         record.Remark = scenarioInformation.Remark;
+        
+        await _posUtilService.GenerateAiDraftAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
 
         var detection = await _translationClient.DetectLanguageAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
 
@@ -391,6 +392,8 @@ public class SpeechMaticsService : ISpeechMaticsService
 
         var customerItemsCacheList = await _salesDataProvider.GetCustomerItemsCacheBySoldToIdsAsync(soldToIds, cancellationToken);
         var customerItemsString = string.Join(Environment.NewLine, soldToIds.Select(id => customerItemsCacheList.FirstOrDefault(c => c.Filter == id)?.CacheValue ?? ""));
+        
+        var (_, menuItems) = await _posUtilService.GeneratePosMenuItemsAsync(agent.Id, false, cancellationToken).ConfigureAwait(false);
 
         var audioData = BinaryData.FromBytes(audioContent);
         List<ChatMessage> messages =
@@ -409,7 +412,8 @@ public class SpeechMaticsService : ISpeechMaticsService
                 .Replace("#{call_to}", callTo ?? "")
                 .Replace("#{customer_items}", customerItemsString ?? "")
                 .Replace("#{call_subject_cn}", callSubjectCn)
-                .Replace("#{call_subject_us}", callSubjectEn)),
+                .Replace("#{call_subject_us}", callSubjectEn)
+                .Replace("#{menu_items}", menuItems ?? "")),
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
             new UserChatMessage("幫我根據錄音生成分析報告：")
         ];
@@ -701,8 +705,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         return (result.IsHumanAnswered, result.IsCustomerFriendly);
     }
 
-    private async Task<DialogueScenarioResultDto> IdentifyDialogueScenariosAsync(string query,
-        CancellationToken cancellationToken)
+    private async Task<DialogueScenarioResultDto> IdentifyDialogueScenariosAsync(string query, CancellationToken cancellationToken)
     {
         var completionResult = await _smartiesClient.PerformQueryAsync(
             new AskGptRequest

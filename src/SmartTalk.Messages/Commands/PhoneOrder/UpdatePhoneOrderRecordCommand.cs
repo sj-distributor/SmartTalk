@@ -13,11 +13,11 @@ public class UpdatePhoneOrderRecordCommand: ICommand
     public int UserId { get; set; }
 }
 
-public class UpdatePhoneOrderRecordResponse : SmartTalkResponse<UpdatePhoneOrderRecordResponseDate>
+public class UpdatePhoneOrderRecordResponse : SmartTalkResponse<UpdatePhoneOrderRecordResponseData>
 {
 }
 
-public class UpdatePhoneOrderRecordResponseDate
+public class UpdatePhoneOrderRecordResponseData
 {
     public int RecordId { get; set; }
 

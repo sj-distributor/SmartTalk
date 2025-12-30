@@ -239,6 +239,7 @@ public partial class AiSpeechAssistantService
         latestDefaultAssistant.IsDefault = true;
         latestDefaultAssistant.AnsweringNumber = previousDefaultAssistant.AnsweringNumber;
         latestDefaultAssistant.AnsweringNumberId = previousDefaultAssistant.AnsweringNumberId;
+        latestDefaultAssistant.IsAutoGenerateOrder = previousDefaultAssistant.IsAutoGenerateOrder;
         previousDefaultAssistant.AnsweringNumber = null;
         previousDefaultAssistant.AnsweringNumberId = null;
         
@@ -391,7 +392,8 @@ public partial class AiSpeechAssistantService
             IsDefault = isDefault,
             ModelLanguage = command.AgentType == AgentType.Agent ? string.IsNullOrWhiteSpace(command.ModelLanguage) ? "English" : command.ModelLanguage : null,
             WaitInterval = agent.WaitInterval,
-            IsTransferHuman = agent.IsTransferHuman
+            IsTransferHuman = agent.IsTransferHuman,
+            IsAutoGenerateOrder = false
         };
         
         await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantsAsync([assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
