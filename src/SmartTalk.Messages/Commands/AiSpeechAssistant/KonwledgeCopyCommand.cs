@@ -13,6 +13,6 @@ public class KonwledgeCopyCommand: ICommand
     public bool IsSyncUpdate { get; set; }
 }
 
-public class KonwledgeCopyResponse : SmartTalkResponse<List<KnowledgeOldState>>
+public class KonwledgeCopyResponse : SmartTalkResponse<List<AiSpeechAssistantKnowledgeOldState>>
 {
 }
