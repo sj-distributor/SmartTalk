@@ -147,6 +147,8 @@ public partial interface IAiSpeechAssistantDataProvider : IScopedDependency
         int? pageIndex = null, int? pageSize = null, int? agentId = null, int? storeId = null, string keyWord = null, CancellationToken cancellationToken = default);
 
     Task<List<KnowledgeCopyRelatedInfoDto>> GetKnowledgeCopyRelatedEnrichInfoAsync(List<int> assistantIds, CancellationToken cancellationToken);
+
+    Task<List<Domain.AISpeechAssistant.AiSpeechAssistant>> GetAiSpeechAssistantsByStoreIdAsync(int storeId, CancellationToken cancellationToken = default);
 }
 
 public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
@@ -811,5 +813,16 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
             };
 
         return await query.AsNoTracking().ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<Domain.AISpeechAssistant.AiSpeechAssistant>> GetAiSpeechAssistantsByStoreIdAsync(int storeId, CancellationToken cancellationToken = default)
+    {
+        var query = from store in _repository.Query<CompanyStore>().Where(x => x.Id == storeId)
+            join posAgent in _repository.Query<PosAgent>() on store.Id equals posAgent.StoreId
+            join agentAssistant in _repository.Query<AgentAssistant>() on posAgent.AgentId equals agentAssistant.AgentId
+            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agentAssistant.AssistantId equals assistant.Id
+            select assistant;
+        
+        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }

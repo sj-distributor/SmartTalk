@@ -17,9 +17,15 @@ public class GetPhoneOrderRecordsRequest : IRequest
     
     public string Name { get; set; }
     
+    public List<DialogueScenarios>? DialogueScenarios { get; set; }
+    
     public DateTimeOffset? Date { get; set; }
     
     public string OrderId { get; set; }
+    
+    public int? AssistantId { get; set; }
+
+    public bool IsFilteringScenarios { get; set; } = false;
 }
 
 public class GetPhoneOrderRecordsResponse : SmartTalkResponse<List<PhoneOrderRecordDto>>
