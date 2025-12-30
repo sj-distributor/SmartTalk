@@ -744,15 +744,15 @@ public class SpeechMaticsService : ISpeechMaticsService
                             "9. InvalidCall（无效通话）\n" +
                             "- 无实际业务内容的通话：静默来电、无应答、误拨、挂断、无法识别的噪音，或仅出现“请上传录音”“听不到”等无意义话术。\n" +
                             "10. TransferVoicemail（语音信箱）\n    " +
-                            "- 通话被转入语音信箱的场景。\n" +
+                            "- 通话提及到语音信箱的场景。\n" +
                             "11. Other（其他）\n   " +
                             "- 无法归入上述10类的内容，需在'remark'字段补充简短关键词说明。\n\n" +
                             "### 输出规则（禁止输出任何额外文本，仅返回JSON）：\n" +
                             "必须返回包含以下2个字段的JSON对象，格式如下：\n" +
                             "{\n  \"category\": \"取值范围：Reservation、Order、Inquiry、ThirdPartyOrderNotification、ComplaintFeedback、InformationNotification、TransferToHuman、SalesCall、InvalidCall、TransferVoicemail、Other\",\n " +
                             " \"remark\": \"仅当category为'Other'时填写简短关键词（如‘咨询加盟’），其余类别留空\"\n}" +
-                            "当一个对话中有多个场景出现时，需要遵循以下的识别优先级：" +
-                            "*Order > Reservation/InformationNotification > Inquiry > ComplaintFeedback > TransferToHuman > TransferVoicemail > ThirdPartyOrderNotification > SalesCall > InvalidCall > Other*"
+                            "当一个对话中有多个场景出现时，需要严格遵循以下的识别优先级：" +
+                            "*1.Order > 2.Reservation/InformationNotification > 3.Inquiry > 4.ComplaintFeedback > 5.TransferToHuman > 6.TransferVoicemail > 7.ThirdPartyOrderNotification > 8.SalesCall > 9.InvalidCall > 10.Other*"
                         )
                     },
                     new()

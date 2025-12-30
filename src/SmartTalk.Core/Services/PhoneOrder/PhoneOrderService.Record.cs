@@ -107,7 +107,7 @@ public partial class PhoneOrderService
         {
             RecordId = record.Id,
             Scenario = record.Scenario.GetValueOrDefault(),
-            UpdateScenarioUserId = user.Id,
+            UpdatedBy = user.Id,
             UserName = user.UserName,
             CreatedDate = DateTime.UtcNow
         }, true, cancellationToken).ConfigureAwait(false);
@@ -914,7 +914,7 @@ public partial class PhoneOrderService
 
         Log.Information("[PhoneDashboard] Fetch phone order records: Agents={@AgentIds}, Range={@Start}-{@End} (UTC: {@UtcStart}-{@UtcEnd})", request.AgentIds, request.StartDate, request.EndDate, utcStart, utcEnd);
         
-        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds: request.AgentIds, null, utcStart: utcStart, utcEnd: utcEnd, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsByAgentIdsAsync(agentIds: request.AgentIds, utcStart: utcStart, utcEnd: utcEnd, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         Log.Information("[PhoneDashboard] Phone order records fetched: {@Count}", records?.Count ?? 0);
         
@@ -938,9 +938,12 @@ public partial class PhoneOrderService
         var callInRecords = records?.Where(x => x.OrderRecordType == PhoneOrderRecordType.InBound).ToList() ?? new List<PhoneOrderRecord>();
         var callOutRecords = records?.Where(x => x.OrderRecordType == PhoneOrderRecordType.OutBount).ToList() ?? new List<PhoneOrderRecord>();
 
-        var callInFailedCount = callInRecords.Select(x => x.Scenario is DialogueScenarios.TransferVoicemail or DialogueScenarios.InvalidCall).Count();
-        var callOutFailedCount = callOutRecords.Select(x => x.Scenario is DialogueScenarios.TransferVoicemail or DialogueScenarios.InvalidCall).Count();
+        var callInFailedCount = records?.Count(x => x.OrderRecordType == PhoneOrderRecordType.InBound && x.Scenario is DialogueScenarios.TransferVoicemail or DialogueScenarios.InvalidCall) ?? 0;
 
+        var callOutFailedCount = records?.Count(x => x.OrderRecordType == PhoneOrderRecordType.OutBount && x.Scenario is DialogueScenarios.TransferVoicemail or DialogueScenarios.InvalidCall) ?? 0;
+        
+        Log.Information("[PhoneDashboard] Phone order Failed Count CallIn={@callInFailedCount}, CallOut={@callOutFailedCount}", callInFailedCount, callOutFailedCount);
+        
         callInRecords.ForEach(r => r.CreatedDate = r.CreatedDate.ToOffset(targetOffset));
         callOutRecords.ForEach(r => r.CreatedDate = r.CreatedDate.ToOffset(targetOffset));
 
@@ -1002,7 +1005,7 @@ public partial class PhoneOrderService
         var totalDuration = callOutRecords.Sum(x => x.Duration ?? 0);
         var friendlyCount = callOutRecords.Count(x => x.IsCustomerFriendly == true);
         var satisfactionRate = answeredCount > 0 ? (double)friendlyCount / answeredCount : 0;
-        var transferCount = callOutRecords.Count(x => x.IsTransfer == true || x.Scenario == DialogueScenarios.TransferToHuman);
+        var humanAnswerCount = callOutRecords.Count(x => x.IsHumanAnswered == true);
 
         var totalDurationPerPeriod = GroupDurationByRequestType(callOutRecords, start, end, dataType);
 
@@ -1012,7 +1015,7 @@ public partial class PhoneOrderService
             AverageCallOutDurationSeconds = averageDuration,
             EffectiveCommunicationCallOutCount = effectiveCount,
             CallOutNotAnsweredCount = callInFailedCount,
-            CallOutAnsweredByHumanCount = transferCount,
+            CallOutAnsweredByHumanCount = humanAnswerCount,
             CallOutSatisfactionRate = satisfactionRate,
             TotalCallOutDurationSeconds = totalDuration,
             TotalCallOutDurationPerPeriod = totalDurationPerPeriod
