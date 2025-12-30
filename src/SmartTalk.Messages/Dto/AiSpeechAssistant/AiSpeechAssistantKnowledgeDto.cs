@@ -26,5 +26,5 @@ public class AiSpeechAssistantKnowledgeDto
     
     public bool IsSyncUpdate { get; set; }
     
-    public List<KnowledgeCopyRelatedDto> KnowledgeCopyRelateds { get; set; }
+    public List<AiSpeechAssistantKnowledgeCopyRelatedDto> KnowledgeCopyRelateds { get; set; }
 }

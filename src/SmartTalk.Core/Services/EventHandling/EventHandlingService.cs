@@ -21,7 +21,7 @@ public interface IEventHandlingService : IScopedDependency
     
     Task HandlingEventAsync(PhoneOrderRecordUpdatedEvent @event, CancellationToken cancellationToken);
     
-    public Task HandlingEventAsync(KonwledgeCopyAddedEvent @event, CancellationToken cancellationToken);
+    public Task HandlingEventAsync(AiSpeechAssistantKonwledgeCopyAddedEvent @event, CancellationToken cancellationToken);
 }
 
 public partial class EventHandlingService : IEventHandlingService

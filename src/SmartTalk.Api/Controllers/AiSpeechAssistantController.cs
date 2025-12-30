@@ -361,7 +361,7 @@ public class AiSpeechAssistantController : ControllerBase
         return Ok(response);
     }
     
-    [Route("knowledges/get"), HttpGet]
+    [Route("knowledges"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetKonwledgesResponse))]
     public async Task<IActionResult> GetKonwledgesAsync([FromQuery] GetKonwledgesRequest request, CancellationToken cancellationToken)
     {

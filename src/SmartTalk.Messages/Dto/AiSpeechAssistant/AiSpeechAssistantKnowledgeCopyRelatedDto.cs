@@ -1,6 +1,6 @@
 namespace SmartTalk.Messages.Dto.AiSpeechAssistant;
 
-public class KnowledgeCopyRelatedDto
+public class AiSpeechAssistantKnowledgeCopyRelatedDto
 {
     public int Id { get; set; }
     

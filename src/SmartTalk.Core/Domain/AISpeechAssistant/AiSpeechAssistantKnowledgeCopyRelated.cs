@@ -1,11 +1,10 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
-namespace SmartTalk.Core.Domain.KnowledgeCopy;
+namespace SmartTalk.Core.Domain.AISpeechAssistant;
 
-
-[Table("knowledge_copy_related")]
-public class KnowledgeCopyRelated : IEntity
+[Table("ai_speech_assistant_knowledge_copy_related")]
+public class AiSpeechAssistantKnowledgeCopyRelated : IEntity
 {
     [Key]
     [Column("id")]

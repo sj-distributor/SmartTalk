@@ -1,21 +1,22 @@
 using Mediator.Net.Context;
 using Mediator.Net.Contracts;
 using SmartTalk.Core.Services.EventHandling;
+using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
 
 namespace SmartTalk.Core.Handlers.EventHandlers.AiSpeechAssistant;
 
-public class KonwledgeCopyAddedEventHandler : IEventHandler<KonwledgeCopyAddedEvent>
+public class KonwledgeCopyAddedEventHandler : IEventHandler<AiSpeechAssistantKonwledgeCopyAddedEvent>
 {
-    private readonly IEventHandlingService _eventHandlingService;
+    private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
 
-    public KonwledgeCopyAddedEventHandler(IEventHandlingService eventHandlingService)
+    public KonwledgeCopyAddedEventHandler(ISmartTalkBackgroundJobClient backgroundJobClient)
     {
-        _eventHandlingService = eventHandlingService;
+        _smartTalkBackgroundJobClient = backgroundJobClient;
     }
 
-    public async Task Handle(IReceiveContext<KonwledgeCopyAddedEvent> context, CancellationToken cancellationToken)
+    public async Task Handle(IReceiveContext<AiSpeechAssistantKonwledgeCopyAddedEvent> context, CancellationToken cancellationToken)
     {
-        await _eventHandlingService.HandlingEventAsync(context.Message, cancellationToken).ConfigureAwait(false);
+        _smartTalkBackgroundJobClient.Enqueue<IEventHandlingService>(x => x.HandlingEventAsync(context.Message, cancellationToken));
     }
 }

@@ -15,8 +15,8 @@ public partial class EventHandlingService
 {
     public async Task HandlingEventAsync(AiSpeechAssistantKnowledgeAddedEvent @event, CancellationToken cancellationToken)
     {
-        var prevKnowledgeCopyRelateds = @event.PrevKnowledge.KnowledgeCopyRelateds ?? new List<KnowledgeCopyRelatedDto>();
-        var latestKnowledgeCopyRelateds = @event.LatestKnowledge.KnowledgeCopyRelateds ?? new List<KnowledgeCopyRelatedDto>();
+        var prevKnowledgeCopyRelateds = @event.PrevKnowledge.KnowledgeCopyRelateds ?? new List<AiSpeechAssistantKnowledgeCopyRelatedDto>();
+        var latestKnowledgeCopyRelateds = @event.LatestKnowledge.KnowledgeCopyRelateds ?? new List<AiSpeechAssistantKnowledgeCopyRelatedDto>();
 
         var oldMergedJsonObj = BuildMergedKnowledgeJson(@event.PrevKnowledge.Json, prevKnowledgeCopyRelateds.Select(x => x.CopyKnowledgePoints));
         var newMergedJsonObj = BuildMergedKnowledgeJson(@event.LatestKnowledge.Json, latestKnowledgeCopyRelateds.Select(x => x.CopyKnowledgePoints));
@@ -163,7 +163,7 @@ public partial class EventHandlingService
         return completionResult?.Data?.Response;
     }
 
-    public async Task HandlingEventAsync(KonwledgeCopyAddedEvent @event, CancellationToken cancellationToken)
+    public async Task HandlingEventAsync(AiSpeechAssistantKonwledgeCopyAddedEvent @event, CancellationToken cancellationToken)
     {
         if (@event.KnowledgeOldJsons == null || @event.KnowledgeOldJsons.Count == 0) return;
 
@@ -206,12 +206,10 @@ public partial class EventHandlingService
             Log.Error(e, "KonwledgeCopyAddedEvent Generate knowledge brief error for multiple copy targets");
         }
     }
-
-
+    
     private static string MergeJsons(IEnumerable<JObject> jsons)
     {
         return jsons.Aggregate(new JObject(), (acc, j) =>
         { acc.Merge(j, new JsonMergeSettings { MergeArrayHandling = MergeArrayHandling.Concat }); return acc; }).ToString(Formatting.None);
     }
-
 }

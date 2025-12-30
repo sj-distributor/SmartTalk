@@ -1,6 +1,5 @@
 using DocumentFormat.OpenXml.Office2010.ExcelAc;
 using Serilog;
-using SmartTalk.Core.Domain.KnowledgeCopy;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Requests.AiSpeechAssistant;
 
@@ -98,12 +97,9 @@ public partial class AiSpeechAssistantService
         if (premise != null && !string.IsNullOrEmpty(premise.Content))
             result.Premise = _mapper.Map<AiSpeechAssistantPremiseDto>(premise);
         
-        result.KnowledgeCopyRelateds = _mapper.Map<List<KnowledgeCopyRelatedDto>>(allCopyRelateds);
-        
-        return new GetAiSpeechAssistantKnowledgeResponse
-        {
-            Data = result
-        };
+        result.KnowledgeCopyRelateds = _mapper.Map<List<AiSpeechAssistantKnowledgeCopyRelatedDto>>(allCopyRelateds);
+
+        return new GetAiSpeechAssistantKnowledgeResponse { Data = result };
     }
 
     public async Task<GetAiSpeechAssistantKnowledgeHistoryResponse> GetAiSpeechAssistantKnowledgeHistoryAsync(GetAiSpeechAssistantKnowledgeHistoryRequest request, CancellationToken cancellationToken)
