@@ -102,6 +102,8 @@ public partial class PhoneOrderDataProvider
         var query = from record in _repository.Query<PhoneOrderRecord>()
             where record.Status == PhoneOrderRecordStatus.Sent && agents.Contains(record.AgentId)
             select record;
+        
+        Log.Information("GetPhoneOrderRecordsAsync: recordCount: {@RecordCount}", query.Count());
 
         if (scenarios is { Count: > 0 })
         {
