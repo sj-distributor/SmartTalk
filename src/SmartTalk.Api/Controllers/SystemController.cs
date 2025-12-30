@@ -43,4 +43,11 @@ public class SystemController : ControllerBase
         
         return Ok();
     }
+    
+    [AllowAnonymous]
+    [Route("test"), HttpGet]
+    public async Task<IActionResult> TestAsync()
+    {
+        return Ok("成功！！");
+    }
 }
