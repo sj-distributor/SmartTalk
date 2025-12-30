@@ -103,7 +103,7 @@ public partial class PhoneOrderService
         {
             RecordId = record.Id,
             Scenario = record.Scenario.GetValueOrDefault(),
-            UpdateScenarioUserId = user.Id,
+            UpdatedBy = user.Id,
             UserName = user.UserName,
             CreatedDate = DateTime.UtcNow
         }, true, cancellationToken).ConfigureAwait(false);
