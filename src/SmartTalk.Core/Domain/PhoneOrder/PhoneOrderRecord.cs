@@ -110,4 +110,10 @@ public class PhoneOrderRecord : IEntity
     
     [NotMapped]
     public Restaurant RestaurantInfo { get; set; }
+    
+    [Column("parent_record_id")]
+    public int? ParentRecordId { get; set; }
+    
+    [Column("is_completed")]
+    public bool IsCompleted { get; set; }
 }

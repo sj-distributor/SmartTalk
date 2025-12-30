@@ -8,6 +8,10 @@ public class ExtractedOrderDto
     
     public DateTime DeliveryDate { get; set; }
     
+    public bool IsDeleteWholeOrder { get; set; }
+    
+    public bool IsUndoCancel { get; set; } 
+    
     public List<ExtractedOrderItemDto> Orders { get; set; } = new();
 }
 
@@ -20,4 +24,6 @@ public class ExtractedOrderItemDto
     public string MaterialNumber { get; set; }
     
     public string Unit { get; set; }
+    
+    public bool MarkForDelete { get; set; } 
 }

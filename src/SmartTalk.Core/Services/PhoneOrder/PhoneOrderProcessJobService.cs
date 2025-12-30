@@ -41,6 +41,7 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
     private readonly ISalesDataProvider _salesDataProvider;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly ISmartTalkHttpClientFactory _smartTalkHttpClient;
+    private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
     private readonly ISpeechMaticsDataProvider _speechMaticsDataProvider;
     private readonly ISmartTalkHttpClientFactory _smartTalkHttpClientFactory;
     private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
@@ -60,6 +61,7 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
         ISalesDataProvider salesDataProvider,
         IPhoneOrderDataProvider phoneOrderDataProvider,
         ISmartTalkHttpClientFactory smartTalkHttpClient,
+        ISmartTalkBackgroundJobClient backgroundJobClient,
         ISpeechMaticsDataProvider speechMaticsDataProvider,
         ISmartTalkHttpClientFactory smartTalkHttpClientFactory,
         ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient,
@@ -77,6 +79,7 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
         _phoneOrderService = phoneOrderService;
         _salesDataProvider = salesDataProvider;
         _smartTalkHttpClient = smartTalkHttpClient;
+        _backgroundJobClient = backgroundJobClient;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _speechMaticsDataProvider = speechMaticsDataProvider;
         _smartTalkHttpClientFactory = smartTalkHttpClientFactory;

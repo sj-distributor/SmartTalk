@@ -4,6 +4,7 @@ using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.Restaurants;
+using SmartTalk.Core.Domain.Sales;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.PhoneOrder;
@@ -11,6 +12,7 @@ using SmartTalk.Messages.Dto.Restaurant;
 using SmartTalk.Messages.Enums;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.Pos;
+using SmartTalk.Messages.Enums.Sales;
 using SmartTalk.Messages.Enums.STT;
 
 namespace SmartTalk.Core.Services.PhoneOrder;
@@ -70,6 +72,12 @@ public partial interface IPhoneOrderDataProvider
     Task<List<SimplePhoneOrderRecordDto>> GetSimplePhoneOrderRecordsByAgentIdsAsync(List<int> agentIds, CancellationToken cancellationToken);
 
     Task AddPhoneOrderReservationInformationAsync(PhoneOrderReservationInformation information, bool forceSave = true, CancellationToken cancellationToken = default);
+
+    Task<int?> GetLatestPhoneOrderRecordIdAsync(int agentId, int assistantId, string currentSessionId, CancellationToken cancellationToken);
+    
+    Task UpdateOrderIdAsync(int recordId, Guid orderId, CancellationToken cancellationToken);
+
+    Task MarkRecordCompletedAsync(int recordId, bool forceSave = true, CancellationToken cancellationToken = default);
 }
 
 public partial class PhoneOrderDataProvider
@@ -415,5 +423,56 @@ public partial class PhoneOrderDataProvider
 
         if (forceSave)
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<int?> GetLatestPhoneOrderRecordIdAsync(int agentId, int assistantId, string currentSessionId, CancellationToken cancellationToken)
+    {
+        var records = await _repository.Query<PhoneOrderRecord>().Where(r => r.AgentId == agentId && r.AssistantId == assistantId && r.SessionId != currentSessionId)
+            .OrderByDescending(r => r.CreatedDate).ThenByDescending(r => r.Id).Select(r => r.Id).ToListAsync(cancellationToken).ConfigureAwait(false);
+
+        foreach (var recordId in records)
+        {
+            if (await IsRecordCompletedAsync(recordId, cancellationToken).ConfigureAwait(false))
+                return recordId;
+        }
+
+        return null;
+    }
+
+    public async Task UpdateOrderIdAsync(int recordId, Guid orderId, CancellationToken cancellationToken)
+    {
+        var record = await _repository.Query<PhoneOrderRecord>().Where(r => r.Id == recordId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+
+        if (record == null) return;
+
+        record.OrderId = orderId.ToString();
+
+        await _repository.UpdateAsync(record, cancellationToken).ConfigureAwait(false);
+        await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<bool> IsRecordCompletedAsync(int recordId, CancellationToken cancellationToken)
+    {
+        var tasks = await _repository.Query<PhoneOrderPushTask>()
+            .Where(t => t.RecordId == recordId)
+            .Select(t => t.Status)
+            .ToListAsync(cancellationToken);
+        
+        if (!tasks.Any())
+            return true;
+        
+        return tasks.All(s => s == PhoneOrderPushTaskStatus.Sent);
+    }
+    
+    public async Task MarkRecordCompletedAsync(int recordId, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        var record = await _repository.Query<PhoneOrderRecord>().Where(r => r.Id == recordId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+
+        if (record == null) return;
+
+        record.IsCompleted = true;
+
+        await _repository.UpdateAsync(record, cancellationToken).ConfigureAwait(false);
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 }

@@ -18,6 +18,8 @@ public interface ISalesClient : IScopedDependency
     Task<GetCustomerLevel5HabitResponseDto> GetCustomerLevel5HabitAsync(GetCustomerLevel5HabitRequstDto request, CancellationToken cancellationToken);
     
     Task<GetOrderArrivalTimeResponseDto> GetOrderArrivalTimeAsync(GetOrderArrivalTimeRequestDto request, CancellationToken cancellationToken);
+
+    Task<DeleteAiOrderResponseDto> DeleteAiOrderAsync(DeleteAiOrderRequestDto request, CancellationToken cancellationToken);
 }
 
 public class SalesClient : ISalesClient
@@ -95,5 +97,10 @@ public class SalesClient : ISalesClient
             throw new ArgumentException("CustomerIds cannot be null or empty.");
 
         return await _httpClientFactory.PostAsJsonAsync<GetOrderArrivalTimeResponseDto>($"{_salesOrderArrivalSetting.BaseUrl}/api/order/getOrderArrivalTime", request, headers: header, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+    
+    public async Task<DeleteAiOrderResponseDto> DeleteAiOrderAsync(DeleteAiOrderRequestDto request, CancellationToken cancellationToken)
+    {
+        return await _httpClientFactory.PostAsJsonAsync<DeleteAiOrderResponseDto>($"{_salesSetting.BaseUrl}/api/SalesOrder/DeleteAiOrder", request, headers: _headers, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 }

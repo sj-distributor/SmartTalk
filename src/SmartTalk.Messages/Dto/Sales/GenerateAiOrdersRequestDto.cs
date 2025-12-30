@@ -5,6 +5,8 @@ public class GenerateAiOrdersRequestDto
     public string AiModel { get; set; }
     
     public AiOrderInfoDto AiOrderInfoDto { get; set; }
+    
+    public bool UseCanceledOrder { get; set; }
 }
 
 public class AiOrderInfoDto
@@ -35,4 +37,6 @@ public class AiOrderItemDto
     public int MaterialQuantity { get; set; } = 1;
     
     public string AiUnit { get; set; }
+    
+    public bool MarkForDelete { get; set; }
 }
