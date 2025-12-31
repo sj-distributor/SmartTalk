@@ -194,6 +194,13 @@ public class RealtimeAiService : IRealtimeAiService
                 finalPrompt = finalPrompt.Replace(placeholder, caches.FirstOrDefault(x => x.CacheKey == cacheKey)?.CacheValue);
             }
         }
+
+        if (finalPrompt.Contains("#{hr_interview_questions}", StringComparison.OrdinalIgnoreCase))
+        {
+            var cache = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeVariableCachesAsync(["hr_interview_questions"], cancellationToken: cancellationToken).ConfigureAwait(false);
+            
+            finalPrompt = finalPrompt.Replace("#{hr_interview_questions}", cache.FirstOrDefault()?.CacheValue);   
+        }
         
         Log.Information($"The final prompt: {finalPrompt}");
 
