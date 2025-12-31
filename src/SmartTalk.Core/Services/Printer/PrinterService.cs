@@ -14,7 +14,6 @@ using Aliyun.OSS;
 using AutoMapper;
 using Mediator.Net;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using Serilog;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Services.AliYun;
