@@ -8,7 +8,7 @@ public class KonwledgeCopyCommand: ICommand
 {
     public int SourceKnowledgeId { get; set; }
     
-    public List<int> TargetKnowledgeId { get; set; }
+    public List<int> TargetKnowledgeIds { get; set; }
     
     public bool IsSyncUpdate { get; set; }
 }
