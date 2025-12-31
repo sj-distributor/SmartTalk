@@ -32,10 +32,6 @@ public partial interface IPosService
     Task<GetPosStoreOrderResponse> GetPosStoreOrderAsync(GetPosStoreOrderRequest request, CancellationToken cancellationToken);
 
     Task HandlePosOrderAsync(PosOrder order, bool isRetry, CancellationToken cancellationToken);
-
-    Task<UpdatePosOrderPrintStatusResponse> UpdatePosOrderPrintStatusAsync(UpdatePosOrderPrintStatusCommand command, CancellationToken cancellationToken);
-    
-    Task<GetPrintStatusResponse> GetPrintStatusAsync(GetPrintStatusRequest request, CancellationToken cancellationToken);
     
     Task<GetPosOrderCloudPrintStatusResponse> GetPosOrderCloudPrintStatusAsync(GetPosOrderCloudPrintStatusRequest request, CancellationToken cancellationToken);
 
@@ -63,7 +59,14 @@ public partial class PosService
     {
         var order = await GetOrAddPosOrderAsync(command, cancellationToken).ConfigureAwait(false);
         
-        _smartTalkBackgroundJobClient.Enqueue(() => CreateMerchPrinterOrderAsync(order.StoreId, order.Id, cancellationToken));
+        var lockKey = $"create-merch-printer-order-key-{order.Id}";
+        
+        Log.Information("Generate lock key: {lockKey} by orderId: {orderId}", lockKey, order.Id);
+        
+        await _redisSafeRunner.ExecuteWithLockAsync(lockKey, async () =>
+        {
+            _smartTalkBackgroundJobClient.Enqueue(() => CreateMerchPrinterOrderAsync(order.StoreId, order.Id, cancellationToken));
+        }, wait: TimeSpan.Zero, retry: TimeSpan.Zero, server: RedisServer.System).ConfigureAwait(false);
         
         await HandlePosOrderAsync(order, command.IsWithRetry, cancellationToken).ConfigureAwait(false);
         
@@ -95,12 +98,6 @@ public partial class PosService
 
     public async Task CreateMerchPrinterOrderAsync(int storeId, int orderId, CancellationToken cancellationToken)
     {
-        var lockKey = $"create-merch-printer-order-key-{orderId}";
-        
-        Log.Information("Generate lock key: {lockKey} by orderId: {orderId}", lockKey, orderId);
-        
-        await _redisSafeRunner.ExecuteWithLockAsync(lockKey, async () =>
-        {
             Log.Information("storeId:{storeId}, orderId:{orderId}", storeId, orderId);
         
             var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(storeId: storeId, isEnabled: true, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
@@ -123,8 +120,6 @@ public partial class PosService
             _smartTalkBackgroundJobClient.Schedule<IMediator>( x => x.SendAsync(new RetryCloudPrintingCommand{ Id = merchPrinterOrder.Id, Count = 0}, CancellationToken.None), TimeSpan.FromMinutes(1));
         
             await _cacheManager.SetAsync($"{merchPrinterOrder.OrderId}", "true", new RedisCachingSetting(expiry: TimeSpan.FromMinutes(30)), cancellationToken).ConfigureAwait(false);
-            
-        }, wait: TimeSpan.FromSeconds(10), retry: TimeSpan.FromSeconds(1), server: RedisServer.System).ConfigureAwait(false);
     }
 
     public async Task RetryCloudPrintingAsync(RetryCloudPrintingCommand command, CancellationToken cancellationToken)
@@ -603,86 +598,6 @@ public partial class PosService
             
             await SafetyPlaceOrderWithRetryAsync(order, store, token, isWithRetry, cancellationToken).ConfigureAwait(false);
         }, wait: TimeSpan.Zero, retry: TimeSpan.Zero, server: RedisServer.System).ConfigureAwait(false);
-    }
-
-    public async Task<UpdatePosOrderPrintStatusResponse> UpdatePosOrderPrintStatusAsync(UpdatePosOrderPrintStatusCommand command, CancellationToken cancellationToken)
-    {
-        var order = await _posDataProvider.GetPosOrderByIdAsync(posOrderId: command.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        if (order == null)
-            throw new Exception("Order could not be found.");
-
-        order.IsPrinted = PosOrderIsPrintStatus.Sending;
-        
-        await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        var store = await _posDataProvider.GetPosCompanyStoreAsync(id: command.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        if (store == null || string.IsNullOrEmpty(store.Link) || string.IsNullOrEmpty(store.AppId) || string.IsNullOrEmpty(store.AppSecret))
-            throw new Exception("Store could not be found or appId、url、secret could not be empty.");
-        
-        var response = await _easyPosClient.GetPosOrderAsync(new GetOrderRequestDto
-        {
-            BaseUrl = store.Link,
-            AppId = store.AppId,
-            AppSecret = store.AppSecret,
-            OrderId = long.Parse(command.OrderId)
-        }, cancellationToken).ConfigureAwait(false);
-        
-        Log.Information("Get pos order response: {@Response}", response);
-
-        if (response?.Data?.Order == null || response.Success == false)
-            throw new Exception($"Order {command.OrderId} could not be found.");
-        
-        var firstTime = DateTimeOffset.Now;
-        var timeout = TimeSpan.FromSeconds(10);
-        
-        while (response.Data.Order.IsPrinted != true && DateTimeOffset.Now - firstTime < timeout)
-        {
-            response = await _easyPosClient.GetPosOrderAsync(new GetOrderRequestDto
-            {
-                BaseUrl = store.Link,
-                AppId = store.AppId,
-                AppSecret = store.AppSecret,
-                OrderId = long.Parse(command.OrderId)
-            }, cancellationToken).ConfigureAwait(false);
-        
-            Log.Information("Retry get pos order response: {@Response}", response);
-            
-            await Task.Delay(500, cancellationToken).ConfigureAwait(false);
-        }
-        
-        order.IsPrinted = response.Data.Order.IsPrinted ? PosOrderIsPrintStatus.Successed : PosOrderIsPrintStatus.Failed;
-        
-        await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        if (command.RetryCount < 3 && response.Data.Order.IsPrinted != true)
-        {
-            _smartTalkBackgroundJobClient.Schedule<IMediator>(m => m.SendAsync(new UpdatePosOrderPrintStatusCommand
-            {
-                StoreId = command.StoreId,
-                OrderId = command.OrderId,
-                RetryCount = command.RetryCount + 1
-            }, cancellationToken), TimeSpan.FromSeconds(30));
-        }
-        
-        return new UpdatePosOrderPrintStatusResponse
-        {
-            Data = _mapper.Map<PosOrderDto>(order)
-        };
-    }
-    
-    public async Task<GetPrintStatusResponse> GetPrintStatusAsync(GetPrintStatusRequest request, CancellationToken cancellationToken)
-    {
-        var order = await _posDataProvider.GetPosOrderByIdAsync(orderId: request.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        if (order == null)
-            throw new Exception("Order could not be found.");
-        
-        return new GetPrintStatusResponse
-        {
-            Data = _mapper.Map<PosOrderDto>(order)
-        };
     }
 
     private async Task<PlaceOrderToEasyPosResponseDto> PlaceOrderAsync(PosOrder order, CompanyStore store, string token, CancellationToken cancellationToken)

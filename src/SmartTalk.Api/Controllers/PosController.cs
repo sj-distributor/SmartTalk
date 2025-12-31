@@ -387,24 +387,6 @@ public class PosController : ControllerBase
         return Ok(response);
     }
     
-    [Route("get/printStatus"), HttpGet]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPrintStatusResponse))]
-    public async Task<IActionResult> GetPrintStatusAsync([FromQuery] GetPrintStatusRequest request)
-    {
-        var response = await _mediator.RequestAsync<GetPrintStatusRequest, GetPrintStatusResponse>(request).ConfigureAwait(false);
-        
-        return Ok(response);
-    }
-    
-    [Route("update/printStatus"), HttpPost]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdatePosOrderPrintStatusResponse))]
-    public async Task<IActionResult> UpdatePosOrderPrintStatusAsync([FromBody] UpdatePosOrderPrintStatusCommand request)
-    {
-        var response = await _mediator.SendAsync<UpdatePosOrderPrintStatusCommand, UpdatePosOrderPrintStatusResponse>(request).ConfigureAwait(false);
-        
-        return Ok(response);
-    }
-    
     [Route("data/dashboard/companies"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetCompanyWithStoresResponse))]
     public async Task<IActionResult> GetDataDashBoardCompanyWithStoresAsync([FromQuery] GetDataDashBoardCompanyWithStoresRequest request)
