@@ -87,10 +87,10 @@ public partial class PhoneOrderDataProvider
         List<int> agentIds, string name, DateTimeOffset? utcStart = null, DateTimeOffset? utcEnd = null, string orderId = null,
         List<DialogueScenarios> scenarios = null, int? assistantId = null, CancellationToken cancellationToken = default)
     {
-        var agentsQuery = from agent in _repository.Query<Agent>().Where(x => x.IsDisplay)
+        var agentsQuery = from agent in _repository.Query<Agent>()
             join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId into agentAssistantGroups
             from agentAssistant in agentAssistantGroups.DefaultIfEmpty()
-            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>().Where(x => x.IsDisplay) on agentAssistant.AssistantId equals assistant.Id
+            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agentAssistant.AssistantId equals assistant.Id
             where (agentIds == null || !agentIds.Any() || agentIds.Contains(agent.Id)) && (string.IsNullOrEmpty(name) || assistant == null || assistant.Name.Contains(name))
             select agent;
 
