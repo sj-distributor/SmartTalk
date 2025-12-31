@@ -100,6 +100,10 @@ public partial class PosService
         {
             Log.Information("storeId:{storeId}, orderId:{orderId}", storeId, orderId);
         
+            var order = (await _printerDataProvider.GetMerchPrinterOrdersAsync(storeId: storeId, orderId: orderId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+
+            if (order != null) return;
+            
             var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(storeId: storeId, isEnabled: true, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
 
             Log.Information("get merch printer:{@merchPrinter}", merchPrinter);
