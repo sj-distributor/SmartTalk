@@ -30,13 +30,13 @@ public partial class EventHandlingService : IEventHandlingService
     private readonly SmartiesClient _smartiesClient;
     private readonly IPosUtilService _posUtilService;
     private readonly IPosDataProvider _posDataProvider;
-    private readonly ISmartTalkHttpClientFactory _httpClientFactory;
-    private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
+    private readonly ISmartTalkHttpClientFactory _httpClientFactory; 
     private readonly IHrInterViewDataProvider _hrInterViewDataProvider;
     private readonly IAiSpeechAssistantService _aiSpeechAssistantService;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
+    private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
 
-    public EventHandlingService(IAsrClient asrClient, SmartiesClient smartiesClient, IPosUtilService posUtilService, IPosDataProvider posDataProvider, ISmartTalkHttpClientFactory httpClientFactory, IPhoneOrderDataProvider phoneOrderDataProvider, IHrInterViewDataProvider hrInterViewDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, IAiSpeechAssistantService aiSpeechAssistantService) 
+   public EventHandlingService(IAsrClient asrClient, SmartiesClient smartiesClient, IPosUtilService posUtilService, IPosDataProvider posDataProvider, ISmartTalkHttpClientFactory httpClientFactory, IPhoneOrderDataProvider phoneOrderDataProvider, IHrInterViewDataProvider hrInterViewDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, IAiSpeechAssistantService aiSpeechAssistantService) 
     {
         _asrClient = asrClient;
         _smartiesClient = smartiesClient;
