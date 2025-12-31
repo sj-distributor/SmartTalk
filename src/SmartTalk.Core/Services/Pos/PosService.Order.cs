@@ -59,14 +59,7 @@ public partial class PosService
     {
         var order = await GetOrAddPosOrderAsync(command, cancellationToken).ConfigureAwait(false);
         
-        var lockKey = $"create-merch-printer-order-key-{order.Id}";
-        
-        Log.Information("Generate lock key: {lockKey} by orderId: {orderId}", lockKey, order.Id);
-        
-        await _redisSafeRunner.ExecuteWithLockAsync(lockKey, async () =>
-        {
-            _smartTalkBackgroundJobClient.Enqueue(() => CreateMerchPrinterOrderAsync(order.StoreId, order.Id, cancellationToken));
-        }, wait: TimeSpan.Zero, retry: TimeSpan.Zero, server: RedisServer.System).ConfigureAwait(false);
+        _smartTalkBackgroundJobClient.Enqueue(() => CreateMerchPrinterOrderAsync(order.StoreId, order.Id, cancellationToken));
         
         await HandlePosOrderAsync(order, command.IsWithRetry, cancellationToken).ConfigureAwait(false);
         
@@ -98,6 +91,13 @@ public partial class PosService
 
     public async Task CreateMerchPrinterOrderAsync(int storeId, int orderId, CancellationToken cancellationToken)
     {
+          
+        var lockKey = $"create-merch-printer-order-key-{orderId}";
+        
+        Log.Information("Generate lock key: {lockKey} by orderId: {orderId}", lockKey, orderId);
+        
+        await _redisSafeRunner.ExecuteWithLockAsync(lockKey, async () =>
+        {
             Log.Information("storeId:{storeId}, orderId:{orderId}", storeId, orderId);
         
             var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(storeId: storeId, isEnabled: true, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
@@ -120,6 +120,7 @@ public partial class PosService
             _smartTalkBackgroundJobClient.Schedule<IMediator>( x => x.SendAsync(new RetryCloudPrintingCommand{ Id = merchPrinterOrder.Id, Count = 0}, CancellationToken.None), TimeSpan.FromMinutes(1));
         
             await _cacheManager.SetAsync($"{merchPrinterOrder.OrderId}", "true", new RedisCachingSetting(expiry: TimeSpan.FromMinutes(30)), cancellationToken).ConfigureAwait(false);
+        }, wait: TimeSpan.Zero, retry: TimeSpan.Zero, server: RedisServer.System).ConfigureAwait(false);
     }
 
     public async Task RetryCloudPrintingAsync(RetryCloudPrintingCommand command, CancellationToken cancellationToken)
