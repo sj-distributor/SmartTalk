@@ -205,7 +205,11 @@ public class AgentService : IAgentService
     {
         var storeAgents = await _posDataProvider.GetPosAgentsAsync(storeIds: request.StoreId.HasValue ? [request.StoreId.Value] : null, cancellationToken: cancellationToken).ConfigureAwait(false);
         
+        Log.Information("Getting store agents: {@StoreAgents}.", storeAgents);
+        
         var agents = await _agentDataProvider.GetAgentsWithAssistantsAsync(agentIds: storeAgents.Select(x => x.AgentId).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Getting store agents with assistants: {@Agents}.", agents);
         
         return new GetAgentsWithAssistantsResponse { Data = _mapper.Map<List<AgentDto>>(agents) };
     }

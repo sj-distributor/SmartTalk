@@ -4,6 +4,7 @@ using SmartTalk.Core.Data;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Messages.Dto.Agent;
 using Microsoft.EntityFrameworkCore;
+using Serilog;
 using SmartTalk.Core.Domain;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.Pos;
@@ -147,6 +148,8 @@ public class AgentDataProvider : IAgentDataProvider
             select new { agent, assistant };
         
         var result = await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Get agent and assistant pairs: {@Result}", result);
         
         return result.GroupBy(x => x.agent.Id).Select(x =>
         {
