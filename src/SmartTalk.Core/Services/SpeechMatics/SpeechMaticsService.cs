@@ -438,7 +438,7 @@ public class SpeechMaticsService : ISpeechMaticsService
                 }
                 break;
             case AgentType.Restaurant or AgentType.PosCompanyStore:
-                if (!string.IsNullOrEmpty(record.TranscriptionText) && record.Scenario == DialogueScenarios.Reservation)
+                if (!string.IsNullOrEmpty(record.TranscriptionText) && record.Scenario is DialogueScenarios.Reservation or DialogueScenarios.ThirdPartyOrderNotification or DialogueScenarios.InformationNotification)
                 {
                     var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
                     
