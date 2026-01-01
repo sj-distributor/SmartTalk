@@ -139,23 +139,23 @@ public class HrJobProcessJobService : IHrJobProcessJobService
 
         var sb = new StringBuilder();
 
-        sb.AppendLine("Ask these questions one by one：");
+        sb.AppendLine("Ask these questions one by one. And at the beginning of each section, please state the corresponding introductory phrase:");
 
         // Section1
-        sb.AppendLine($"Let’s move on to {s1.Count} questions to learn a bit more about you:");
+        sb.AppendLine($"Introductory phrase: Let’s move on to {s1.Count} questions to learn a bit more about you:");
         var index = 1;
         foreach (var q in s1)
             sb.AppendLine($"{index++}. {q.Question}");
         sb.AppendLine();
 
         // Section2
-        sb.AppendLine("The next few questions will give me a better idea of how you see things:");
+        sb.AppendLine("Introductory phrase: The next few questions will give me a better idea of how you see things:");
         foreach (var q in s2)
             sb.AppendLine($"{index++}. {q.Question}");
         sb.AppendLine();
 
         // Section3
-        sb.AppendLine("Let’s move into the discussion part now:");
+        sb.AppendLine("Introductory phrase: Let’s move into the discussion part now:");
         foreach (var q in s3)
             sb.AppendLine($"{index++}. {q.Question}");
 
