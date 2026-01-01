@@ -42,13 +42,6 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
         var configs = await InitialSessionConfigAsync(assistantProfile, cancellationToken).ConfigureAwait(false);
         var turnDetection = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection);
         
-        if (knowledge.Prompt.Contains("#{hr_interview_questions}", StringComparison.OrdinalIgnoreCase))
-        {
-            var cache = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeVariableCachesAsync(["hr_interview_questions"], cancellationToken: cancellationToken).ConfigureAwait(false);
-            
-            knowledge.Prompt = knowledge.Prompt.Replace("#{hr_interview_questions}", cache.FirstOrDefault()?.CacheValue);   
-        }
-        
         var sessionPayload = new
         {
             type = "session.update",
