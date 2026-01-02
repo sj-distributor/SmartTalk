@@ -437,7 +437,7 @@ public class SpeechMaticsService : ISpeechMaticsService
                     await HandleSalesScenarioAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
                 }
                 break;
-            case AgentType.Restaurant or AgentType.PosCompanyStore:
+            case AgentType.Restaurant or AgentType.PosCompanyStore or AgentType.Agent:
                 if (!string.IsNullOrEmpty(record.TranscriptionText) && record.Scenario is DialogueScenarios.Reservation or DialogueScenarios.ThirdPartyOrderNotification or DialogueScenarios.InformationNotification)
                 {
                     var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
