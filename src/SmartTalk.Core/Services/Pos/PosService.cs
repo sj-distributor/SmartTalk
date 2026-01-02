@@ -59,6 +59,8 @@ public partial interface IPosService : IScopedDependency
     Task<GetAllStoresResponse> GetAllStoresAsync(GetAllStoresRequest request, CancellationToken cancellationToken);
     
     Task<GetSimpleStructuredStoresResponse> GetSimpleStructuredStoresAsync(GetSimpleStructuredStoresRequest request, CancellationToken cancellationToken);
+    
+    Task<GetStoreByAgentIdResponse> GetStoreByAgentIdAsync(GetStoreByAgentIdRequest request, CancellationToken cancellationToken);
 }
 
 public partial class PosService : IPosService
@@ -443,6 +445,13 @@ public partial class PosService : IPosService
         };
     }
     
+    public async Task<GetStoreByAgentIdResponse> GetStoreByAgentIdAsync(GetStoreByAgentIdRequest request, CancellationToken cancellationToken)
+    {
+        var store = await _posDataProvider.GetPosStoreByAgentIdAsync(request.AgentId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return new GetStoreByAgentIdResponse { Data = store?.Id };
+    }
+
     private async Task EnrichSimpleStoreUnreviewDataAsync(List<SimpleStoreAgentDto> storeAgents, CancellationToken cancellationToken)
     {
         var agentIds = storeAgents.Select(x => x.AgentId).Distinct().ToList();
