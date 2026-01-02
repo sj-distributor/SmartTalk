@@ -1,3 +1,4 @@
+using AutoMapper;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Data;
 using Microsoft.EntityFrameworkCore;
@@ -132,11 +133,13 @@ public partial interface IAiSpeechAssistantDataProvider : IScopedDependency
 
 public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
 {
+    private readonly IMapper _mapper;
     private readonly IRepository _repository;
     private readonly IUnitOfWork _unitOfWork;
 
-    public AiSpeechAssistantDataProvider(IRepository repository, IUnitOfWork unitOfWork)
+    public AiSpeechAssistantDataProvider(IRepository repository, IUnitOfWork unitOfWork, IMapper mapper)
     {
+        _mapper = mapper;
         _repository = repository;
         _unitOfWork = unitOfWork;
     }
