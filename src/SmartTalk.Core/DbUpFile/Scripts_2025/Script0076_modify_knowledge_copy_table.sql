@@ -1,0 +1,1 @@
+alter table knowledge_copy_related rename to ai_speech_assistant_knowledge_copy_related;

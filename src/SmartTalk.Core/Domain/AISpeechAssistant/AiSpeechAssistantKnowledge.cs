@@ -37,4 +37,10 @@ public class AiSpeechAssistantKnowledge : IEntity, IHasCreatedFields
     
     [Column("created_by")]
     public int CreatedBy { get; set; }
+    
+    [Column("is_sync_update")]
+    public bool IsSyncUpdate { get; set; }
+    
+    [NotMapped]
+    public List<AiSpeechAssistantKnowledgeCopyRelated> KnowledgeCopyRelateds { get; set; }
 }

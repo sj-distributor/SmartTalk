@@ -13,7 +13,9 @@ public interface IEventHandlingService : IScopedDependency
 {
     Task HandlingEventAsync(AiSpeechAssistantKnowledgeAddedEvent @event, CancellationToken cancellationToken);
     
-    Task HandlingEventAsync(PosOrderPlacedEvent @event, CancellationToken cancellationToken);
+    public Task HandlingEventAsync(PosOrderPlacedEvent @event, CancellationToken cancellationToken);
+    
+    public Task HandlingEventAsync(AiSpeechAssistantKonwledgeCopyAddedEvent @event, CancellationToken cancellationToken);
     
      Task HandlingEventAsync(PhoneOrderRecordUpdatedEvent @event, CancellationToken cancellationToken);
 }
@@ -23,15 +25,17 @@ public partial class EventHandlingService : IEventHandlingService
     private readonly SmartiesClient _smartiesClient;
     private readonly IPosUtilService _posUtilService;
     private readonly IPosDataProvider _posDataProvider;
-    private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
+    private readonly IAiSpeechAssistantService _aiSpeechAssistantService;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
+    private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
 
-    public EventHandlingService(SmartiesClient smartiesClient, IPosUtilService posUtilService, IPosDataProvider posDataProvider, IPhoneOrderDataProvider phoneOrderDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
+    public EventHandlingService(SmartiesClient smartiesClient, IPosUtilService posUtilService, IPosDataProvider posDataProvider, IPhoneOrderDataProvider phoneOrderDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, IAiSpeechAssistantService aiSpeechAssistantService)
     {
         _smartiesClient = smartiesClient;
         _posUtilService = posUtilService;
         _posDataProvider = posDataProvider;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
+        _aiSpeechAssistantService = aiSpeechAssistantService;
     }
 }
