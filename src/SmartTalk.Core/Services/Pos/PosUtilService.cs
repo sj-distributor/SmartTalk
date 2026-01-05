@@ -106,7 +106,7 @@ public class PosUtilService : IPosUtilService
 
             Log.Information("Build product's modifiers: {@ModifiersLookUp}", productModifiersLookup);
 
-            foreach (var aiDraftItem in aiDraftOrder.Items.Where(x => !string.IsNullOrEmpty(x.Specification)))
+            foreach (var aiDraftItem in aiDraftOrder.Items.Where(x => !string.IsNullOrEmpty(x.Specification) && !string.IsNullOrEmpty(x.ProductId)))
             {
                 if (productModifiersLookup.TryGetValue(aiDraftItem.ProductId, out var modifiers))
                 {
