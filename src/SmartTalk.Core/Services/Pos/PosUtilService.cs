@@ -67,12 +67,12 @@ public class PosUtilService : IPosUtilService
         var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
 
         var systemPrompt =
-            "你是一名訂單分析助手。請從下面的客戶分析報告文字中提取客人的姓名、电话、配送类型以及配送地址，以及所有下單的菜品、數量、規格、备注，並且用菜單列表盡力匹配每個菜品。" +
-            "如果報告中提到了送餐類型，請提取送餐類型 type (0: 自提订单，1：配送订单)。" +
-            "如果客户有要求或者提供其他的号码作为订单的号码，請提取客户的电话 phoneNumber ，否则 phoneNumber 为当前的来电号码：" + record.IncomingCallNumber + "。"+
-            "如果報告中提到了客户的姓名，請提取客户的姓名 customerName 。" +
-            "如果報告中提到了客户的配送地址，請提取客户的配送地址 customerAddress，若无则忽略 。" +
-            "如果報告中提到了客户的订单注意事项或者是要求，請提取客户的备注信息 notes，若无则忽略 。" +
+            "你是一名訂單分析助手。請從下面的客戶分析報告文字中提取客人的姓名、电话、配送类型以及配送地址，以及所有下單的菜品、數量、規格、备注，並且用菜單列表盡力匹配每個菜品。\n" +
+            "如果報告中提到了送餐類型，請提取送餐類型 type (0: 自提订单，1：配送订单)。\n" +
+            "如果客户有要求或者提供其他的号码作为订单的号码，請提取客户的电话 phoneNumber ，否则 phoneNumber 为当前的来电号码：" + record.IncomingCallNumber + "。\n"+
+            "如果報告中提到了客户的姓名，請提取客户的姓名 customerName 。\n" +
+            "如果報告中提到了客户的配送地址，請提取客户的配送地址 customerAddress，若无则忽略 。\n" +
+            "如果報告中提到了客户的订单注意事项或者是要求，且該內容不能獨立構成一個可下單的菜品名稱，則請提取為备注信息 notes；若该要求是附属于某一道菜品的特殊交代（如口味、加料、忌口），則在不影響該菜品正常生成 items 的前提下，將該要求體現在 notes 中。\n" +
             "請嚴格傳回一個 JSON 對象，頂層字段為 \"type\"，items（数组，元素包含 productId：菜品ID, name：菜品名, quantity：数量, specification：规格（比如：大、中、小，加小料、加椰果或者有关菜品的其他内容））。\n" +
             "範例：\n" +
             "{\"type\":0,\"phoneNumber\":\"40085235698\",\"customerName\":\"刘先生\",\"customerAddress\":\"中环广场一座\",\"notes\":\"给个酱油包\",\"items\":[{\"productId\":\"9778779965031491\",\"name\":\"海南雞湯麵\",\"quantity\":1,\"specification\":null}]}" +
