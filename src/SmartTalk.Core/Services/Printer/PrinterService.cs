@@ -1150,7 +1150,7 @@ public class PrinterService : IPrinterService
          var maxWidth = paperWidth - 20;
          var lines = new List<string>();
 
-         var tokens = Regex.Matches(text, @"[\u4e00-\u9fff]|[A-Za-z0-9]+|[,.!?;:，。！？；：]|\s").Select(m => m.Value).ToList();
+         var tokens = Regex.Matches(text, @"\w+|[^\w\s]|\s").Select(m => m.Value).ToList();
 
          var currentLine = "";
 
