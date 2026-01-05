@@ -438,61 +438,85 @@ public class SpeechMaticsService : ISpeechMaticsService
                 }
                 break;
             case AgentType.Restaurant or AgentType.PosCompanyStore or AgentType.Agent:
-                if (!string.IsNullOrEmpty(record.TranscriptionText) && record.Scenario is DialogueScenarios.Reservation or DialogueScenarios.ThirdPartyOrderNotification or DialogueScenarios.InformationNotification)
+                if (!string.IsNullOrEmpty(record.TranscriptionText))
                 {
                     var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
-                    
-                    var systemPrompt =
-                         "你是一名餐廳電話預約資訊分析助手。" +
-                         $"系統當前日期與時間為：{DateTimeOffset.Now:yyyy-MM-dd HH:mm}（格式：yyyy-MM-dd HH:mm）。" +
-                         "所有相對日期與時間（例如：明天、後天、今晚、下週五）都必須**以此時間為唯一基準**進行推算。\n" +
-                         "請從下面的顧客與餐廳之間的完整對話內容中，提取所有**已確認**的餐廳預約資訊。" +
-                         "本任務僅用於結構化電話預約資料，請嚴格依照指定字段輸出。\n" +
-                         "你需要識別並提取以下資訊：" +
-                         "1. 預約日期，" +
-                         "2. 名字，" +
-                         "3. 電話，" +
-                         "4. 人數，" +
-                         "2. 時間，" +
-                         "5. 備註。（例如：包廂、靠窗、生日、過敏需求等）\n" +
-                         "若對話中出現多個可能的日期或時間，請僅選擇**最終已確認**的那一個；" +
-                         "若僅為詢問、討論或未明確確認，請將對應欄位設為空字符串。\n" +
-                         "輸出格式規則（非常重要）：\n" +
-                         "1. **不要輸出任何大括號 `{` 或 `}`**。\n" +
-                         "2. 請僅輸出以下字段本身，作為鍵值對，每行一個字段。\n" +
-                         "3. 字段名稱必須完全一致，字段順序必須固定如下：\n" +
-                         " 預約日期, 名字, 電話, 人數, 時間, 備註。\n" +
-                         "字段格式要求：" +
-                         "預約日期（yyyy-MM-dd，可空字符串）、" +
-                         "名字（字符串，可空字符串）、" +
-                         "電話（字符串，可空字符串）、" +
-                         "人數（整數，可為 null）、" +
-                         "時間（HH:mm，可空字符串）、" +
-                         "備註（字符串，可空字符串）。\n" +
-                         "正確輸出範例（注意：沒有大括號）：\n" +
-                         "預約日期: 2025-08-20\n" +
-                         "名字: 王先生\n" +
-                         "電話: 4088888888\n" +
-                         "人數: 4\n" +
-                         "時間: 18:30\n" +
-                         "備註: 需要包廂，並準備生日蠟燭。\n" +
-                         "規則與注意事項：\n" +
-                         "1. 不得輸出任何說明文字、註解、標題或多餘內容。\n" +
-                         "2. 預約日期 與 時間 必須分開填寫，不得合併。\n" +
-                         "3. 日期使用 yyyy-MM-dd；時間使用 24 小時制 HH:mm。\n" +
-                         "4. 若某欄位未被明確確認，請設為空字符串（人數 為 null）。\n" +
-                         "5. 名字 僅在顧客主動提供或可明確識別時填寫。\n" +
-                         "6. 備註 僅保留顧客明確提出的內容，不得推斷。\n" +
-                         "7. 若整段對話中沒有任何**已確認**的預約行為，請輸出以下內容（仍然不要大括號）：\n" +
-                         "預約日期: \n" +
-                         "名字: \n" +
-                         "電話: \n" +
-                         "人數: \n" +
-                         "時間: \n" +
-                         "備註: \n" +
-                         "8. 若出現相對日期或時間，且根據系統當前時間仍無法唯一確定，請將該欄位留空。\n" +
-                         "請務必準確、完整地提取所有**已確認**的預約資訊。";
-                       
+                    var systemPrompt = "";
+
+                    if (record.Scenario is DialogueScenarios.Reservation)
+                    {
+                        systemPrompt =
+                            "你是一名餐廳電話預約資訊分析助手。" +
+                            $"系統當前日期與時間為：{DateTimeOffset.Now:yyyy-MM-dd HH:mm}（格式：yyyy-MM-dd HH:mm）。" +
+                            "所有相對日期與時間（例如：明天、後天、今晚、下週五）都必須**以此時間為唯一基準**進行推算。\n" +
+                            "請從下面的顧客與餐廳之間的完整對話內容中，提取所有**已確認**的餐廳預約資訊。" +
+                            "本任務僅用於結構化電話預約資料，請嚴格依照指定字段輸出。\n" +
+                            "你需要識別並提取以下資訊：" +
+                            "1. 預約日期，" +
+                            "2. 名字，" +
+                            "3. 電話，" +
+                            "4. 人數，" +
+                            "2. 時間，" +
+                            "5. 備註。（例如：包廂、靠窗、生日、過敏需求等）\n" +
+                            "若對話中出現多個可能的日期或時間，請僅選擇**最終已確認**的那一個；" +
+                            "若僅為詢問、討論或未明確確認，請將對應欄位設為空字符串。\n" +
+                            "輸出格式規則（非常重要）：\n" +
+                            "1. **不要輸出任何大括號 `{` 或 `}`**。\n" +
+                            "2. 請僅輸出以下字段本身，作為鍵值對，每行一個字段。\n" +
+                            "3. 字段名稱必須完全一致，字段順序必須固定如下：\n" +
+                            " 預約日期, 名字, 電話, 人數, 時間, 備註。\n" +
+                            "字段格式要求：" +
+                            "預約日期（yyyy-MM-dd，可空字符串）、" +
+                            "名字（字符串，可空字符串）、" +
+                            "電話（字符串，可空字符串）、" +
+                            "人數（整數，可為 null）、" +
+                            "時間（HH:mm，可空字符串）、" +
+                            "備註（字符串，可空字符串）。\n" +
+                            "正確輸出範例（注意：沒有大括號）：\n" +
+                            "預約日期: 2025-08-20\n" +
+                            "名字: 王先生\n" +
+                            "電話: 4088888888\n" +
+                            "人數: 4\n" +
+                            "時間: 18:30\n" +
+                            "備註: 需要包廂，並準備生日蠟燭。\n" +
+                            "規則與注意事項：\n" +
+                            "1. 不得輸出任何說明文字、註解、標題或多餘內容。\n" +
+                            "2. 預約日期 與 時間 必須分開填寫，不得合併。\n" +
+                            "3. 日期使用 yyyy-MM-dd；時間使用 24 小時制 HH:mm。\n" +
+                            "4. 若某欄位未被明確確認，請設為空字符串（人數 為 null）。\n" +
+                            "5. 名字 僅在顧客主動提供或可明確識別時填寫。\n" +
+                            "6. 備註 僅保留顧客明確提出的內容，不得推斷。\n" +
+                            "7. 若整段對話中沒有任何**已確認**的預約行為，請輸出以下內容（仍然不要大括號）：\n" +
+                            "預約日期: \n" +
+                            "名字: \n" +
+                            "電話: \n" +
+                            "人數: \n" +
+                            "時間: \n" +
+                            "備註: \n" +
+                            "8. 若出現相對日期或時間，且根據系統當前時間仍無法唯一確定，請將該欄位留空。\n" +
+                            "請務必準確、完整地提取所有**已確認**的預約資訊。";
+                    }
+                    else if (record.Scenario is DialogueScenarios.ThirdPartyOrderNotification or DialogueScenarios.InformationNotification)
+                    {
+                        systemPrompt =
+                            "你是一名專業的電話錄音分析員，負責根據電話錄音中可識別的語音內容，對通話進行準確理解並撰寫「內容摘要」。\n" +
+                            "請嚴格遵守以下規則：\n" +
+                            "1. 僅根據錄音中實際可識別的內容進行摘要，不得臆測、補充或編造未出現的資訊。\n" +
+                            "2. 即使錄音為空、無有效語音、語音模糊、僅有雜音，或未能識別客戶發言，仍必須輸出「內容摘要」。\n" +
+                            "3. 當出現上述無法識別情況時，請在內容摘要中明確填寫：「未識別到有效內容」。\n" +
+                            "\n" +
+                            "【輸出格式規則（非常重要）】\n" +
+                            "1. 嚴禁輸出任何形式的大括號「{」或「}」。\n" +
+                            "2. 僅輸出一行，格式必須完全如下：\n" +
+                            " 內容摘要: <摘要文字>\n" +
+                            "3. 除「內容摘要」一行外，不得輸出任何其他文字、說明、標題或換行。\n" +
+                            "4. 若無法產生有效摘要，請直接輸出：\n" +
+                            "內容摘要: 未識別到有效內容 \n" +
+                            "\n" +
+                            "【正確輸出範例（僅作格式參考）】\n" +
+                            "內容摘要: 客戶蔡先生來電預訂明天中午12點的10人座位，並要求座位靠窗。";
+                    }else return;
+
                     Log.Information("Sending prompt to GPT: {Prompt}", systemPrompt);
 
                     var messages = new List<ChatMessage>
@@ -501,19 +525,26 @@ public class SpeechMaticsService : ISpeechMaticsService
                         new UserChatMessage("客戶預約資訊文本：\n" + record.TranscriptionText + "\n\n")
                     };
 
-                    var completion = await client.CompleteChatAsync(messages, new ChatCompletionOptions { ResponseModalities = ChatResponseModalities.Text, ResponseFormat = ChatResponseFormat.CreateTextFormat() }, cancellationToken).ConfigureAwait(false);
+                    var completion = await client.CompleteChatAsync(messages,
+                        new ChatCompletionOptions
+                        {
+                            ResponseModalities = ChatResponseModalities.Text,
+                            ResponseFormat = ChatResponseFormat.CreateTextFormat()
+                        }, cancellationToken).ConfigureAwait(false);
                     var jsonResponse = completion.Value.Content.FirstOrDefault()?.Text ?? "";
-        
+
                     Log.Information("AI JSON Response: {JsonResponse}", jsonResponse);
-                    
+
                     var information = new PhoneOrderReservationInformation
                     {
                         RecordId = record.Id,
                         NotificationInfo = jsonResponse,
                         AiNotificationInfo = jsonResponse
                     };
-                    
-                    await _phoneOrderDataProvider.AddPhoneOrderReservationInformationAsync(information, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+                    await _phoneOrderDataProvider
+                        .AddPhoneOrderReservationInformationAsync(information, cancellationToken: cancellationToken)
+                        .ConfigureAwait(false);
                 }
                 break;
         } 
