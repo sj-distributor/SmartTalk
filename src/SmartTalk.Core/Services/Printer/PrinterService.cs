@@ -236,11 +236,15 @@ public class PrinterService : IPrinterService
         else
         {
             var reservationInfo = await _posDataProvider.GetPhoneOrderReservationInformationAsync(merchPrinterOrder.OrderId, cancellationToken).ConfigureAwait(false);
-            var phoneOrderRecord = await _phoneOrderDataProvider.GetPhoneOrderRecordByIdAsync(reservationInfo.RecordId, cancellationToken).ConfigureAwait(false);
+            var storePrintDateString = "";
+            if (!string.IsNullOrEmpty(store.Timezone))
+                storePrintDateString = TimeZoneInfo.ConvertTimeFromUtc(storePrintDate.UtcDateTime, TimeZoneInfo.FindSystemTimeZoneById(store.Timezone)).ToString("yyyy-MM-dd HH:mm:ss");    
+            else
+                storePrintDateString = storePrintDate.ToString("yyyy-MM-dd HH:mm:ss");
             
             img = await RenderReceipt1Async(JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(store.Names).GetValueOrDefault("en")?.GetValueOrDefault("name"),
                 store.Address, store.PhoneNums, merchPrinter?.PrinterName, reservationInfo.NotificationInfo,
-                $@"{DateTimeOffset.Now.ToString("yyyy-MM-dd HH:mm:ss")}").ConfigureAwait(false);
+                storePrintDateString).ConfigureAwait(false);
         }
         
         var imageKey = Guid.NewGuid().ToString();
