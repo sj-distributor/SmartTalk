@@ -662,7 +662,6 @@ public class PrinterService : IPrinterService
         y = DrawLine(paperWidth, img, y, textColor, printerName, fontNormal);
         
         y = DrawSolidLine(paperWidth, img, y);
-
         
         var paragraphs = notificationInfo
             .Replace("\r\n", "\n")
@@ -1150,39 +1149,50 @@ public class PrinterService : IPrinterService
      {
          var maxWidth = paperWidth - 20;
          var lines = new List<string>();
-            
-         var tokens = Regex.Matches(text, @"\w+|[^\w\s]|\s").Select(m => m.Value).ToList();
+
+         var tokens = Regex.Matches(text, @"[\u4e00-\u9fff]|[A-Za-z0-9]+|[,.!?;:，。！？；：]|\s").Select(m => m.Value).ToList();
 
          var currentLine = "";
+
          foreach (var token in tokens)
          {
              var testLine = currentLine + token;
-             var size = TextMeasurer.MeasureSize(testLine, new TextOptions(font));
+             var testSize = TextMeasurer.MeasureSize(testLine, new TextOptions(font));
 
-             if (size.Width > maxWidth && !string.IsNullOrWhiteSpace(currentLine))
-             {
-                 if (Regex.IsMatch(token, @"[,.!?;:，。！？；：]") && lines.Count > 0)
-                 {
-                     lines[^1] += token;
-                     currentLine = "";
-                 }
-                 else
-                 {
-                     lines.Add(currentLine);
-                     currentLine = token.TrimStart();
-                 }
-             }
-             else
+             if (testSize.Width <= maxWidth)
              {
                  currentLine = testLine;
+                 continue;
              }
+
+             if (!string.IsNullOrWhiteSpace(currentLine))
+             {
+                 lines.Add(currentLine);
+                 currentLine = "";
+             }
+
+             if (Regex.IsMatch(token, @"[,.!?;:，。！？；：]"))
+             {
+                 if (lines.Count > 0)
+                 {
+                     var punctTest = lines[^1] + token;
+                     var punctSize = TextMeasurer.MeasureSize(punctTest, new TextOptions(font));
+
+                     if (punctSize.Width <= maxWidth)
+                         lines[^1] = punctTest;
+                     else
+                         currentLine = token;
+                 }
+                 else
+                     currentLine = token;
+             }
+             else
+                 currentLine = token.TrimStart();
          }
 
-         if (!string.IsNullOrEmpty(currentLine))
+         if (!string.IsNullOrWhiteSpace(currentLine))
              lines.Add(currentLine);
-            
-         Log.Information("lins:{@lines}", lines);
-            
+         
          foreach (var line in lines)
          {
              var size = TextMeasurer.MeasureSize(line, new TextOptions(font));
@@ -1193,13 +1203,12 @@ public class PrinterService : IPrinterService
              else if (rightAlign)
                  x = paperWidth - size.Width - 10;
 
-             Log.Information("line:{@line}, size{@size}", line, size);
-                
-             img.Mutate(ctx => ctx.DrawText(line, font, textColor, new PointF(x, y + yOffset)));
-                
+             img.Mutate(ctx =>
+                 ctx.DrawText(line, font, textColor, new PointF(x, y + yOffset)));
+
              y += (int)size.Height + (int)spacing;
          }
-         
+
          return y;
      }
      
