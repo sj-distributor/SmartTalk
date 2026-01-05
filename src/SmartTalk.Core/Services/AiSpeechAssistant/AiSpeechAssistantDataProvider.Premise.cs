@@ -26,7 +26,7 @@ public partial class AiSpeechAssistantDataProvider
 
     public async Task<AiSpeechAssistantPremise> GetAiSpeechAssistantPremiseByAssistantIdAsync(int assistantId, CancellationToken cancellationToken = default)
     {
-        return await _repository.Query<AiSpeechAssistantPremise>().Where(x => x.AssistantId == assistantId)
+        return await _repository.Query<AiSpeechAssistantPremise>().Where(x => x.AssistantId == assistantId).OrderByDescending(x => x.Id)
             .FirstOrDefaultAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
