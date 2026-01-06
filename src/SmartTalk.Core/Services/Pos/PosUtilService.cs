@@ -303,8 +303,6 @@ public class PosUtilService : IPosUtilService
         return await _redisSafeRunner.ExecuteWithLockAsync($"generate-order-number-{store.Id}", async() =>
         {
             var (items, subTotal, taxes) = BuildPosOrderItems(draftMapping);
-
-            if (items.Count == 0) return null;
             
             var orderNo = await GenerateOrderNumberAsync(store, cancellationToken).ConfigureAwait(false);
 
