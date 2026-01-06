@@ -335,6 +335,9 @@ public partial class PhoneOrderService
                     conversations.Add(new PhoneOrderConversation { RecordId = record.Id, Question = originText, Order = conversationIndex, StartTime = speakDetail.StartTime, EndTime = speakDetail.EndTime });
                 else
                 {
+                    if (conversationIndex >= conversations.Count)
+                        conversations.Add(new PhoneOrderConversation { RecordId = record.Id, Question = "", Order = conversationIndex, StartTime = speakDetail.StartTime, EndTime = speakDetail.EndTime });
+
                     conversations[conversationIndex].Answer = originText;
                     conversationIndex++;
                 }
