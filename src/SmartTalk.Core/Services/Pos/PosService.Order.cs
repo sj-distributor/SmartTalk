@@ -828,6 +828,8 @@ public partial class PosService
     {
         var reservationInfo = await _posDataProvider.GetPhoneOrderReservationInformationAsync(request.OrderId, cancellationToken).ConfigureAwait(false);
 
+        if (reservationInfo == null) return new GetOrderReservationInfoResponse();
+        
         var reservationInfoDto = _mapper.Map<OrderReservationInfoDto>(reservationInfo);
         
         var merchPrinterOrder = (await _printerDataProvider.GetMerchPrinterOrdersAsync(orderId: request.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
