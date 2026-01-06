@@ -67,7 +67,7 @@ public class RealtimeAiService : IRealtimeAiService
         IInactivityTimerManager inactivityTimerManager,
         IRealtimeAiConversationEngine conversationEngine,
         ISmartTalkBackgroundJobClient backgroundJobClient,
-        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
+        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, ISmartiesClient smartiesClient)
     {
         _phoneOrderService = phoneOrderService;
         _agentDataProvider = agentDataProvider;
@@ -77,6 +77,7 @@ public class RealtimeAiService : IRealtimeAiService
         _backgroundJobClient = backgroundJobClient;
         _inactivityTimerManager = inactivityTimerManager;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
+        _smartiesClient = smartiesClient;
 
         _round = 0;
         _webSocket = null;
