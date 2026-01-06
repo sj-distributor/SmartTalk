@@ -82,10 +82,8 @@ public partial class AiSpeechAssistantService
 
         await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgesAsync([latestKnowledge], true, cancellationToken).ConfigureAwait(false);
 
-        if (command.RelatedKnowledges != null && command.RelatedKnowledges.Any())
-        {
-            await HandleKnowledgeCopyRelatedUpdates(allPrevRelateds, selectedRelateds, latestKnowledge, command.RelatedKnowledges.ToDictionary(x => x.Id, x => x), cancellationToken);
-        }
+        await HandleKnowledgeCopyRelatedUpdates(allPrevRelateds, selectedRelateds, latestKnowledge, 
+            command.RelatedKnowledges.ToDictionary(x => x.Id, x => x), cancellationToken);
 
         if (!string.IsNullOrEmpty(command.Language))
         {
@@ -113,40 +111,31 @@ public partial class AiSpeechAssistantService
     {
         var allPrevRelateds = new List<AiSpeechAssistantKnowledgeCopyRelated>();
         var selectedRelateds = new List<AiSpeechAssistantKnowledgeCopyRelated>();
+        
+        allPrevRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync([prevKnowledgeId], cancellationToken).ConfigureAwait(false);
+        Log.Information("All prev relateds: {@allPrevRelatedIds}", allPrevRelateds.Select(r => r.Id).ToList());
 
-        if (relatedKnowledges != null && relatedKnowledges.Any())
-        {
-            allPrevRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync([prevKnowledgeId], cancellationToken).ConfigureAwait(false);
-            Log.Information("All prev relateds: {@allPrevRelatedIds}", allPrevRelateds.Select(r => r.Id).ToList());
+        var relatedDtoMap = relatedKnowledges.ToDictionary(x => x.Id, x => x);
 
-            var relatedDtoMap = relatedKnowledges.ToDictionary(x => x.Id, x => x);
-
-            selectedRelateds = allPrevRelateds.Where(r => relatedDtoMap.ContainsKey(r.Id)).ToList();
-        }
+        selectedRelateds = allPrevRelateds.Where(r => relatedDtoMap.ContainsKey(r.Id)).ToList();
 
         return (allPrevRelateds, selectedRelateds);
     }
     
-    private async Task HandleKnowledgeCopyRelatedUpdates(List<AiSpeechAssistantKnowledgeCopyRelated> allPrevRelateds, List<AiSpeechAssistantKnowledgeCopyRelated> selectedRelateds, AiSpeechAssistantKnowledge latestKnowledge, Dictionary<int, AiSpeechAssistantKnowledgeCopyRelatedDto> relatedDtoMap, CancellationToken cancellationToken)
+    private async Task HandleKnowledgeCopyRelatedUpdates(List<AiSpeechAssistantKnowledgeCopyRelated> allRelateds, List<AiSpeechAssistantKnowledgeCopyRelated> selectedRelateds, AiSpeechAssistantKnowledge latestKnowledge, Dictionary<int, AiSpeechAssistantKnowledgeCopyRelatedDto> relatedDtoMap, CancellationToken cancellationToken)
     {
-        allPrevRelateds = allPrevRelateds.Select(r =>
-        {
-            r.TargetKnowledgeId = latestKnowledge.Id;
+        if (!allRelateds.Any()) { return; }
+        
+        allRelateds.ForEach(r => r.SourceKnowledgeId = latestKnowledge.Id);
+        
+        selectedRelateds
+            .Where(r => relatedDtoMap.ContainsKey(r.Id))
+            .ToList()
+            .ForEach(r => r.CopyKnowledgePoints = relatedDtoMap[r.Id].CopyKnowledgePoints);
 
-            if (relatedDtoMap.TryGetValue(r.Id, out var dto))
-            {
-                r.CopyKnowledgePoints = dto.CopyKnowledgePoints;
-            }
-
-            return r;
-        }).ToList();
-
-        if (allPrevRelateds.Any())
-        {
-            await _aiSpeechAssistantDataProvider.UpdateKnowledgeCopyRelatedAsync(allPrevRelateds, true, cancellationToken).ConfigureAwait(false);
-        }
+        await _aiSpeechAssistantDataProvider.UpdateKnowledgeCopyRelatedAsync(allRelateds, true, cancellationToken).ConfigureAwait(false);
     }
-
+    
     public async Task<SwitchAiSpeechAssistantKnowledgeVersionResponse> SwitchAiSpeechAssistantKnowledgeVersionAsync(SwitchAiSpeechAssistantKnowledgeVersionCommand command, CancellationToken cancellationToken)
     {
         var preKnowledge = await UpdatePreviousKnowledgeIfRequiredAsync(command.AssistantId, false, cancellationToken).ConfigureAwait(false);
