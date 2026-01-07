@@ -80,4 +80,7 @@ public class AiSpeechAssistant : IEntity<int>, IAgent, IHasCreatedFields
     
     [NotMapped]
     public AiSpeechAssistantKnowledge Knowledge { get; set; }
+    
+    [NotMapped]
+    public AiSpeechAssistantTimer Timer { get; set; }
 }
