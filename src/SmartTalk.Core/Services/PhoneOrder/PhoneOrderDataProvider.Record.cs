@@ -387,9 +387,11 @@ public partial class PhoneOrderDataProvider
 
     public async Task<List<SimplePhoneOrderRecordDto>> GetSimplePhoneOrderRecordsAsync(List<int> agentIds, CancellationToken cancellationToken)
     {
+        var printerOrders = _repository.Query<MerchPrinterOrder>();
+        
         var query = from order in _repository.Query<PhoneOrderReservationInformation>()
             join record in _repository.Query<PhoneOrderRecord>().Where(x => x.Status == PhoneOrderRecordStatus.Sent && x.AssistantId.HasValue && agentIds.Contains(x.AgentId)) on order.RecordId equals record.Id
-            where !_repository.Query<MerchPrinterOrder>().Any(x => x.OrderId == order.RecordId)
+            where !printerOrders.Any(x => x.OrderId == order.RecordId)
             select new SimplePhoneOrderRecordDto
             {
                 Id = record.Id,
