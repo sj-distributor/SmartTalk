@@ -5,7 +5,9 @@ using Serilog;
 using Smarties.Messages.DTO.OpenAi;
 using Smarties.Messages.Enums.OpenAi;
 using Smarties.Messages.Requests.Ask;
+using SmartTalk.Core.Constants;
 using SmartTalk.Core.Domain.AISpeechAssistant;
+using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
 
@@ -41,7 +43,7 @@ public partial class EventHandlingService
                 knowledge.Brief = brief;
                 await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync([knowledge], cancellationToken: cancellationToken).ConfigureAwait(false);
                 
-                await _aiSpeechAssistantService.SyncCopiedKnowledgesIfRequiredAsync([knowledge], false, cancellationToken).ConfigureAwait(false);
+                _smartTalkBackgroundJobClient.Enqueue<IAiSpeechAssistantService>(x => x.SyncCopiedKnowledgesIfRequiredAsync(knowledge.Id, false, CancellationToken.None));
             }
         }
         catch (Exception e)
