@@ -442,12 +442,16 @@ public class SpeechMaticsService : ISpeechMaticsService
                 {
                     var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
                     var systemPrompt = "";
+                    
+                    var store = await _posDataProvider.GetPosStoreByAgentIdAsync(agent.Id, cancellationToken).ConfigureAwait(false);
 
+                    var storePrintDateString = TimeZoneInfo.ConvertTimeFromUtc(DateTimeOffset.Now.UtcDateTime, TimeZoneInfo.FindSystemTimeZoneById(store.Timezone)).ToString("yyyy-MM-dd HH:mm"); 
+                   
                     if (record.Scenario is DialogueScenarios.Reservation)
                     {
                         systemPrompt =
                             "你是一名餐廳電話預約資訊分析助手。" +
-                            $"系統當前日期與時間為：{DateTimeOffset.Now:yyyy-MM-dd HH:mm}（格式：yyyy-MM-dd HH:mm）。" +
+                            $"系統當前日期與時間為：{storePrintDateString}（格式：yyyy-MM-dd HH:mm）。" +
                             "所有相對日期與時間（例如：明天、後天、今晚、下週五）都必須**以此時間為唯一基準**進行推算。\n" +
                             "請從下面的顧客與餐廳之間的完整對話內容中，提取所有**已確認**的餐廳預約資訊。" +
                             "本任務僅用於結構化電話預約資料，請嚴格依照指定字段輸出。\n" +
