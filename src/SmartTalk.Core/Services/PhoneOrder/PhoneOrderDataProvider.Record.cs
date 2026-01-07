@@ -4,6 +4,7 @@ using SmartTalk.Core.Domain.Account;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Domain.Pos;
+using SmartTalk.Core.Domain.Printer;
 using SmartTalk.Core.Domain.Restaurants;
 using SmartTalk.Core.Domain.Sales;
 using SmartTalk.Core.Domain.System;
@@ -71,6 +72,8 @@ public partial interface IPhoneOrderDataProvider
     Task<List<PhoneOrderRecordScenarioHistory>> GetPhoneOrderRecordScenarioHistoryAsync(int recordId, CancellationToken cancellationToken = default);
     
     Task<List<SimplePhoneOrderRecordDto>> GetSimplePhoneOrderRecordsByAgentIdsAsync(List<int> agentIds, CancellationToken cancellationToken);
+    
+    Task<List<SimplePhoneOrderRecordDto>> GetSimplePhoneOrderRecordsAsync(List<int> agentIds, CancellationToken cancellationToken);
 
     Task AddPhoneOrderReservationInformationAsync(PhoneOrderReservationInformation information, bool forceSave = true, CancellationToken cancellationToken = default);
 
@@ -414,6 +417,21 @@ public partial class PhoneOrderDataProvider
         var query = from order in _repository.Query<PosOrder>().Where(x => x.RecordId.HasValue && x.Status == PosOrderStatus.Pending)
             join record in _repository.Query<PhoneOrderRecord>().Where(x => x.Status == PhoneOrderRecordStatus.Sent && x.AssistantId.HasValue && agentIds.Contains(x.AgentId)) on order.RecordId.Value equals record.Id
             join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on record.AssistantId.Value equals assistant.Id
+            select new SimplePhoneOrderRecordDto
+            {
+                Id = record.Id,
+                AgentId = record.AgentId,
+                AssistantId = record.AssistantId
+            };
+        
+        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<SimplePhoneOrderRecordDto>> GetSimplePhoneOrderRecordsAsync(List<int> agentIds, CancellationToken cancellationToken)
+    {
+        var query = from order in _repository.Query<PhoneOrderReservationInformation>()
+            join record in _repository.Query<PhoneOrderRecord>().Where(x => x.Status == PhoneOrderRecordStatus.Sent && x.AssistantId.HasValue && agentIds.Contains(x.AgentId)) on order.RecordId equals record.Id
+            where !_repository.Query<MerchPrinterOrder>().Any(x => x.OrderId == order.RecordId)
             select new SimplePhoneOrderRecordDto
             {
                 Id = record.Id,
