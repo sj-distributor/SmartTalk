@@ -94,6 +94,7 @@ public partial class AiSpeechAssistantService
             
             knowledge.Premise = _mapper.Map<AiSpeechAssistantPremiseDto>(premise);;
         }
+        else await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantPremiseByAssistantIdAsync(command.AssistantId, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         return new AiSpeechAssistantKnowledgeAddedEvent
         {
@@ -232,6 +233,7 @@ public partial class AiSpeechAssistantService
             
             newKnowledge.Premise = command.Premise;
         }
+        else await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantPremiseByAssistantIdAsync(knowledge.AssistantId, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         return new UpdateAiSpeechAssistantKnowledgeResponse
         {

@@ -12,6 +12,8 @@ public partial interface IAiSpeechAssistantDataProvider
     Task UpdateAiSpeechAssistantPremiseAsync(AiSpeechAssistantPremise premise, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task DeleteAiSpeechAssistantPremiseAsync(AiSpeechAssistantPremise premise, bool forceSave = true, CancellationToken cancellationToken = default);
+    
+    Task DeleteAiSpeechAssistantPremiseByAssistantIdAsync(int assistantId, bool forceSave = true, CancellationToken cancellationToken = default);
 }
 
 public partial class AiSpeechAssistantDataProvider
@@ -44,5 +46,18 @@ public partial class AiSpeechAssistantDataProvider
         
         if (forceSave)
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task DeleteAiSpeechAssistantPremiseByAssistantIdAsync(int assistantId, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        var premises = await _repository.Query<AiSpeechAssistantPremise>().Where(x => x.AssistantId == assistantId).ToListAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (premises is { Count: > 0 })
+        {
+            await _repository.DeleteAllAsync(premises, cancellationToken).ConfigureAwait(false);
+
+            if (forceSave)
+                await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
     }
 }
