@@ -379,9 +379,15 @@ public partial class PhoneOrderProcessJobService
                     var systemPrompt = "";
                     
                     var store = await _posDataProvider.GetPosStoreByAgentIdAsync(agent.Id, cancellationToken).ConfigureAwait(false);
+                    var storePrintDateString = ""; 
 
-                    var storePrintDateString = TimeZoneInfo.ConvertTimeFromUtc(DateTimeOffset.Now.UtcDateTime, TimeZoneInfo.FindSystemTimeZoneById(store.Timezone)).ToString("yyyy-MM-dd HH:mm:ss"); 
-                   
+                    if (!string.IsNullOrEmpty(store.Timezone))
+                    {
+                        storePrintDateString = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById(store.Timezone)).ToString("yyyy-MM-dd HH:mm:ss");    
+                    }
+                    else
+                        storePrintDateString = DateTimeOffset.Now.ToString("yyyy-MM-dd HH:mm:ss");
+                  
                     if (record.Scenario is DialogueScenarios.Reservation)
                     {
                         systemPrompt =
