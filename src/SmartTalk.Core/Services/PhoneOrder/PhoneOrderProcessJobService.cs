@@ -9,6 +9,7 @@ using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.Pos;
+using SmartTalk.Core.Services.Printer;
 using SmartTalk.Core.Services.Sale;
 using SmartTalk.Core.Services.SpeechMatics;
 using SmartTalk.Core.Settings.OpenAi;
@@ -46,6 +47,7 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
     private readonly ISmartTalkHttpClientFactory _smartTalkHttpClientFactory;
     private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
+    private readonly IPrinterDataProvider _printerDataProvider;
 
     public PhoneOrderProcessJobService(
         IPosService posService,
@@ -65,7 +67,7 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
         ISpeechMaticsDataProvider speechMaticsDataProvider,
         ISmartTalkHttpClientFactory smartTalkHttpClientFactory,
         ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient,
-        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
+        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, IPrinterDataProvider printerDataProvider)
     {
         _posService = posService;
         _salesClient = salesClient;
@@ -85,6 +87,7 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
         _smartTalkHttpClientFactory = smartTalkHttpClientFactory;
         _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
+        _printerDataProvider = printerDataProvider;
     }
 
     public async Task CalculatePhoneOrderRecodingDurationAsync(SchedulingCalculatePhoneOrderRecodingDurationCommand command, CancellationToken cancellationToken)

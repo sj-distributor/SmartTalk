@@ -18,12 +18,14 @@ using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Messages.Dto.SpeechMatics;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Core.Domain.AISpeechAssistant;
+using SmartTalk.Core.Domain.Printer;
 using SmartTalk.Core.Domain.Sales;
 using SmartTalk.Core.Services.Sale;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Dto.Sales;
 using SmartTalk.Messages.Enums.Agent;
+using SmartTalk.Messages.Enums.Printer;
 using SmartTalk.Messages.Enums.Sales;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 
@@ -475,6 +477,26 @@ public partial class PhoneOrderProcessJobService
                     };
                     
                     await _phoneOrderDataProvider.AddPhoneOrderReservationInformationAsync(information, cancellationToken: cancellationToken).ConfigureAwait(false);
+                    
+                    if (store.IsManualReview)
+                    {
+                        var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(storeId: store.Id, isEnabled: true, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+
+                        Log.Information("get merch printer:{@merchPrinter}", merchPrinter);
+                        
+                        var order = new MerchPrinterOrder
+                        {
+                            OrderId = record.Id,
+                            StoreId = store.Id,
+                            PrinterMac = merchPrinter?.PrinterMac,
+                            PrintDate = DateTimeOffset.Now,
+                            PrintFormat = PrintFormat.Draft
+                        };
+        
+                        Log.Information("Create merch printer order:{@merchPrinterOrder}", order);
+                 
+                        await _printerDataProvider.AddMerchPrinterOrderAsync(order, cancellationToken).ConfigureAwait(false);
+                    }
                 }
                 break;
         } 
