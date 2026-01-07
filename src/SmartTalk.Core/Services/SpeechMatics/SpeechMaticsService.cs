@@ -672,15 +672,15 @@ public class SpeechMaticsService : ISpeechMaticsService
                 {
                     Role = "system",
                     Content = new CompletionsStringContent(
-                        "你需要帮我从电话录音报告中判断两个维度：" +
-                        "1. 是否真人接听（IsHumanAnswered）：" +
-                        "   - 如果客户有自然对话、提问、回应、表达等语气，说明是真人接听，返回 true。" +
-                        "   - 如果是语音信箱、系统提示、无人应答，返回 false。" +
-                        "2. 客人态度是否友好（IsCustomerFriendly）：" +
-                        "   - 如果语气平和、客气、积极配合，返回 true。" +
-                        "   - 如果语气恶劣、冷淡、负面或不耐烦，返回 false。" +
-                        "输出格式务必是 JSON：" +
-                        "{\"IsHumanAnswered\": true, \"IsCustomerFriendly\": true}" +
+                        "你需要帮我从电话录音报告中判断两个维度：\n" +
+                        "1. 是否真人接听（IsHumanAnswered）：\n" +
+                        "   - 默认返回 true，表示是真人接听。\n" +
+                        "   - 仅当录音中包含语音信箱、系统提示、无人接听，或是 是AI 回复时，返回 false。\n" +
+                        "2. 客人态度是否友好（IsCustomerFriendly）：\n" +
+                        "   - 如果语气平和、客气、积极配合，返回 true。\n" +
+                        "   - 如果语气恶劣、冷淡、负面或不耐烦，返回 false。\n" +
+                        "输出格式务必是 JSON：\n" +
+                        "{\"IsHumanAnswered\": true, \"IsCustomerFriendly\": true}\n" +
                         "\n\n样例：\n" +
                         "input: 通話主題：客戶查詢價格。\n內容摘要：客戶開場問候並詢問價格，語氣平和，最後表示感謝。\noutput: {\"IsHumanAnswered\": true, \"IsCustomerFriendly\": true}\n" +
                         "input: 通話主題：外呼無人接聽。\n內容摘要：撥號後自動語音提示‘您撥打的電話暫時無法接通’。\noutput: {\"IsHumanAnswered\": false, \"IsCustomerFriendly\": false}\n"
