@@ -1244,6 +1244,7 @@ public partial class AiSpeechAssistantService
                     CopyKnowledgePoints = useLatestSource
                         ? sourceKnowledge.Json
                         : relation.CopyKnowledgePoints,
+                    IsSyncUpdate = relation.IsSyncUpdate,
                 });
             }
 
