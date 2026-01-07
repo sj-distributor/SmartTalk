@@ -917,7 +917,7 @@ public partial class AiSpeechAssistantService
         Log.Information("KonwledgeCopy Source knowledge fetched. Id={SourceId}", copyFromKnowledge.Id);
 
         copyFromKnowledge.IsSyncUpdate = command.IsSyncUpdate;
-
+        
         var copyToKnowledges = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgesAsync(command.TargetKnowledgeIds, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var copyToRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync(copyToKnowledges.Select(x => x.Id).ToList(), cancellationToken).ConfigureAwait(false);
@@ -930,9 +930,13 @@ public partial class AiSpeechAssistantService
 
         var newCopeToKnowledges = new List<AiSpeechAssistantKnowledge>();
 
+        var copyFromRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync(new List<int> { copyFromKnowledge.Id }, cancellationToken).ConfigureAwait(false);
+        var copyFromRelatedLookup = copyFromRelateds?.GroupBy(x => x.TargetKnowledgeId)
+            .ToDictionary(g => g.Key, g => g.OrderBy(x => x.CreatedDate).ToList());
+        
         foreach (var copyToKnowledge in copyToKnowledges)
         {
-            var newCopyToKnowledge = await BuildNewCopyToKnowledgeAsync(copyToKnowledge, copyFromKnowledge, relatedLookup, cancellationToken).ConfigureAwait(false);
+            var newCopyToKnowledge = await BuildNewCopyToKnowledgeAsync(copyToKnowledge, copyFromKnowledge, relatedLookup, copyFromRelatedLookup, cancellationToken).ConfigureAwait(false);
             newCopeToKnowledges.Add(newCopyToKnowledge);
         }
 
@@ -941,7 +945,7 @@ public partial class AiSpeechAssistantService
 
         Log.Information("KonwledgeCopy New copies inserted. newCopyToKnowledge={@newCopyToKnowledge}", newCopeToKnowledges);
         
-        await BuildAndPersistCopyRelatedsAsync(copyFromKnowledge, copyToKnowledges, newCopeToKnowledges, relatedLookup, cancellationToken).ConfigureAwait(false);
+        await BuildAndPersistCopyRelatedsAsync(copyFromKnowledge, copyToKnowledges, newCopeToKnowledges, relatedLookup, copyFromRelatedLookup, cancellationToken).ConfigureAwait(false);
 
         var knowledgeOldJsons = BuildKnowledgeOldJsons(copyToKnowledges, relatedLookup);
 
@@ -954,7 +958,8 @@ public partial class AiSpeechAssistantService
         };
     }
 
-    private async Task<AiSpeechAssistantKnowledge> BuildNewCopyToKnowledgeAsync(AiSpeechAssistantKnowledge copyToKnowledge, AiSpeechAssistantKnowledge copyFromKnowledge, Dictionary<int, List<AiSpeechAssistantKnowledgeCopyRelated>> relatedLookup, CancellationToken cancellationToken)
+    private async Task<AiSpeechAssistantKnowledge> BuildNewCopyToKnowledgeAsync(AiSpeechAssistantKnowledge copyToKnowledge, AiSpeechAssistantKnowledge copyFromKnowledge,
+        Dictionary<int, List<AiSpeechAssistantKnowledgeCopyRelated>> relatedLookup, Dictionary<int, List<AiSpeechAssistantKnowledgeCopyRelated>> copyFromRelatedLookup, CancellationToken cancellationToken)
     {
         Log.Information("KonwledgeCopy Processing target knowledge. TargetId={TargetId}", copyToKnowledge.Id);
         
@@ -967,8 +972,13 @@ public partial class AiSpeechAssistantService
             ? copyToRelated.Select(r => JObject.Parse(r.CopyKnowledgePoints ?? "{}"))
             : Enumerable.Empty<JObject>();
         
+        var copyFromRelatedJsons = copyFromRelatedLookup.TryGetValue(copyToKnowledge.Id, out var copyFromRelated)
+            ? copyFromRelated.Select(r => JObject.Parse(r.CopyKnowledgePoints ?? "{}"))
+            : Enumerable.Empty<JObject>();
+        
         var mergedJsonObj = new[] { copyToJson }
             .Concat(copyToRelatedJsons)
+            .Concat(copyFromRelatedJsons)
             .Append(copyFromJson)
             .Aggregate(new JObject(), (acc, j) =>
             { acc.Merge(j, new JsonMergeSettings { MergeArrayHandling = MergeArrayHandling.Concat }); return acc; });
@@ -988,7 +998,7 @@ public partial class AiSpeechAssistantService
     }
 
     private async Task BuildAndPersistCopyRelatedsAsync(AiSpeechAssistantKnowledge copyFromKnowledge, List<AiSpeechAssistantKnowledge> oldCopyTos, 
-        List<AiSpeechAssistantKnowledge> newCopyTos, Dictionary<int, List<AiSpeechAssistantKnowledgeCopyRelated>> relatedLookup, CancellationToken cancellationToken)
+        List<AiSpeechAssistantKnowledge> newCopyTos, Dictionary<int, List<AiSpeechAssistantKnowledgeCopyRelated>> relatedLookup, Dictionary<int, List<AiSpeechAssistantKnowledgeCopyRelated>> copyFromRelatedLookup, CancellationToken cancellationToken)
     {
         var result = new List<AiSpeechAssistantKnowledgeCopyRelated>();
 
@@ -1008,8 +1018,19 @@ public partial class AiSpeechAssistantService
                 }));
             }
             
+            if (copyFromRelatedLookup.TryGetValue(copyFromKnowledge.Id, out var copyFromRelated))
+            {
+                result.AddRange(copyFromRelated.Select(r => new AiSpeechAssistantKnowledgeCopyRelated
+                {
+                    SourceKnowledgeId = r.SourceKnowledgeId,
+                    TargetKnowledgeId = newCopyTo.Id,
+                    CopyKnowledgePoints = r.CopyKnowledgePoints,
+                    IsSyncUpdate = r.IsSyncUpdate
+                }));
+            }
+            
             var copyFromJsonForRelated = BuildCopyFromJsonForRelated(copyFromKnowledge.Json);
-
+            
             result.Add(new AiSpeechAssistantKnowledgeCopyRelated
             {
                 SourceKnowledgeId = copyFromKnowledge.Id,
