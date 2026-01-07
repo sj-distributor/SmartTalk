@@ -447,8 +447,8 @@ public partial class PosService : IPosService
         Log.Information("Get simple store unreview simple records: {@SimpleRecords}", simpleRecords);
         Log.Information("Get simple store unreview reservation records: {@ReservationRecords}", reservationRecords);
        
-        var result = simpleRecords
-            .UnionBy(reservationRecords, x => x.Id)
+        var result = reservationRecords
+            .UnionBy(simpleRecords, x => x.Id)
             .ToList();
 
         var simpleAgentAssistant = result.Where(x => x.AssistantId.HasValue).GroupBy(x => x.AssistantId.Value).Select(g =>
