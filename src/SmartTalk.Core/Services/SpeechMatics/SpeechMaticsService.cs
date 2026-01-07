@@ -450,7 +450,7 @@ public class SpeechMaticsService : ISpeechMaticsService
                     
                     var store = await _posDataProvider.GetPosStoreByAgentIdAsync(agent.Id, cancellationToken).ConfigureAwait(false);
 
-                    var storePrintDateString = TimeZoneInfo.ConvertTimeFromUtc(DateTimeOffset.Now.UtcDateTime, TimeZoneInfo.FindSystemTimeZoneById(store.Timezone)).ToString("yyyy-MM-dd HH:mm"); 
+                    var storePrintDateString = TimeZoneInfo.ConvertTimeFromUtc(DateTimeOffset.Now.UtcDateTime, TimeZoneInfo.FindSystemTimeZoneById(store.Timezone)).ToString("yyyy-MM-dd HH:mm:ss"); 
                    
                     if (record.Scenario is DialogueScenarios.Reservation)
                     {
