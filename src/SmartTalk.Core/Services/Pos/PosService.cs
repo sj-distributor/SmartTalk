@@ -460,17 +460,16 @@ public partial class PosService : IPosService
         
         if (agentIds.Count == 0) return;
         
-        var simpleRecordsTask = _phoneOrderDataProvider.GetSimplePhoneOrderRecordsByAgentIdsAsync(agentIds, cancellationToken);
+        var simpleRecords = await _phoneOrderDataProvider.GetSimplePhoneOrderRecordsByAgentIdsAsync(agentIds, cancellationToken).ConfigureAwait(false);
 
-        var reservationRecordsTask = _phoneOrderDataProvider.GetSimplePhoneOrderRecordsAsync(agentIds, cancellationToken);
-
-        await Task.WhenAll(simpleRecordsTask, reservationRecordsTask);
-
-        var result = simpleRecordsTask.Result
-            .UnionBy(reservationRecordsTask.Result, x => x.Id)
-            .ToList();
+        var reservationRecords = await _phoneOrderDataProvider.GetSimplePhoneOrderRecordsAsync(agentIds, cancellationToken).ConfigureAwait(false);
         
-        Log.Information("Get simple store unreview simple records: {@SimpleRecords}", result);
+        Log.Information("Get simple store unreview simple records: {@SimpleRecords}", simpleRecords);
+        Log.Information("Get simple store unreview reservation records: {@ReservationRecords}", reservationRecords);
+       
+        var result = simpleRecords
+            .UnionBy(reservationRecords, x => x.Id)
+            .ToList();
 
         var simpleAgentAssistant = result.Where(x => x.AssistantId.HasValue).GroupBy(x => x.AssistantId.Value).Select(g =>
             new SimpleAgentAssistantDto
