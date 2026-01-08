@@ -975,8 +975,6 @@ public partial class AiSpeechAssistantService
         if (copyFromKnowledge == null) throw new InvalidOperationException("Source knowledge not found");
 
         Log.Information("KonwledgeCopy Source knowledge fetched. Id={SourceId}", copyFromKnowledge.Id);
-
-        copyFromKnowledge.IsSyncUpdate = command.IsSyncUpdate;
         
         var copyToKnowledges = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgesAsync(command.TargetKnowledgeIds, cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -1005,7 +1003,7 @@ public partial class AiSpeechAssistantService
 
         Log.Information("KonwledgeCopy New copies inserted. newCopyToKnowledge={@newCopyToKnowledge}", newCopeToKnowledges);
         
-        await BuildAndPersistCopyRelatedsAsync(copyFromKnowledge, copyToKnowledges, newCopeToKnowledges, relatedLookup, copyFromRelatedLookup, cancellationToken).ConfigureAwait(false);
+        await BuildAndPersistCopyRelatedsAsync(copyFromKnowledge, command.IsSyncUpdate, copyToKnowledges, newCopeToKnowledges, relatedLookup, copyFromRelatedLookup, cancellationToken).ConfigureAwait(false);
 
         var knowledgeOldJsons = BuildKnowledgeOldJsons(copyToKnowledges, relatedLookup);
 
@@ -1057,7 +1055,7 @@ public partial class AiSpeechAssistantService
         };
     }
 
-    private async Task BuildAndPersistCopyRelatedsAsync(AiSpeechAssistantKnowledge copyFromKnowledge, List<AiSpeechAssistantKnowledge> oldCopyTos, 
+    private async Task BuildAndPersistCopyRelatedsAsync(AiSpeechAssistantKnowledge copyFromKnowledge, bool isSyncUpdate, List<AiSpeechAssistantKnowledge> oldCopyTos, 
         List<AiSpeechAssistantKnowledge> newCopyTos, Dictionary<int, List<AiSpeechAssistantKnowledgeCopyRelated>> relatedLookup, Dictionary<int, List<AiSpeechAssistantKnowledgeCopyRelated>> copyFromRelatedLookup, CancellationToken cancellationToken)
     {
         var result = new List<AiSpeechAssistantKnowledgeCopyRelated>();
@@ -1096,7 +1094,7 @@ public partial class AiSpeechAssistantService
                 SourceKnowledgeId = copyFromKnowledge.Id,
                 TargetKnowledgeId = newCopyTo.Id,
                 CopyKnowledgePoints = copyFromJsonForRelated,
-                IsSyncUpdate = copyFromKnowledge.IsSyncUpdate
+                IsSyncUpdate = isSyncUpdate
             });
         }
         
@@ -1286,7 +1284,7 @@ public partial class AiSpeechAssistantService
         var newTargets = new List<AiSpeechAssistantKnowledge>();
         var targetPairs = new List<(int OldTargetId, AiSpeechAssistantKnowledge NewTarget)>();
         var newRelations = new List<AiSpeechAssistantKnowledgeCopyRelated>();
-
+        
         foreach (var (targetId, oldTarget) in oldTargetMap)
         {
             relationsByTarget.TryGetValue(targetId, out var relations);
@@ -1308,7 +1306,6 @@ public partial class AiSpeechAssistantService
                 Json = oldTarget.Json,
                 Brief = oldTarget.Brief,
                 Greetings = oldTarget.Greetings,
-                IsSyncUpdate = oldTarget.IsSyncUpdate,
                 IsActive = true,
                 CreatedBy = oldTarget.CreatedBy,
                 CreatedDate = DateTimeOffset.Now,
@@ -1330,7 +1327,7 @@ public partial class AiSpeechAssistantService
                     CopyKnowledgePoints = useLatestSource
                         ? sourceKnowledge.Json
                         : relation.CopyKnowledgePoints,
-                    IsSyncUpdate = relation.IsSyncUpdate,
+                    IsSyncUpdate = !deleteKnowledge && relation.IsSyncUpdate
                 });
             }
 
