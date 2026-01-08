@@ -39,5 +39,14 @@ public partial class EventHandlingService
             
             await _posUtilService.GenerateAiDraftAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
         }
+
+        if (@event.OriginalScenarios is not (DialogueScenarios.InformationNotification or DialogueScenarios.ThirdPartyOrderNotification) && @event.DialogueScenarios is DialogueScenarios.InformationNotification or DialogueScenarios.InformationNotification)
+        {
+            var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByIdAsync(@event.RecordId, cancellationToken).ConfigureAwait(false);
+
+            var agent = await _agentDataProvider.GetAgentByIdAsync(record.AgentId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            await _phoneOrderUtilService.GenerateAiDraftAsync(record, agent, cancellationToken).ConfigureAwait(false);
+        }
     }
 }

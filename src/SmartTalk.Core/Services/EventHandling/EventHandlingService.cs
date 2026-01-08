@@ -1,4 +1,5 @@
 using SmartTalk.Core.Ioc;
+using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.PhoneOrder;
@@ -25,13 +26,17 @@ public partial class EventHandlingService : IEventHandlingService
     private readonly IPosDataProvider _posDataProvider;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
+    private readonly IAgentDataProvider _agentDataProvider;
+    private readonly IPhoneOrderUtilService _phoneOrderUtilService;
 
-    public EventHandlingService(SmartiesClient smartiesClient, IPosUtilService posUtilService, IPosDataProvider posDataProvider, IPhoneOrderDataProvider phoneOrderDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
+    public EventHandlingService(SmartiesClient smartiesClient, IPosUtilService posUtilService, IPosDataProvider posDataProvider, IPhoneOrderDataProvider phoneOrderDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, IAgentDataProvider agentDataProvider, IPhoneOrderUtilService phoneOrderUtilService)
     {
         _smartiesClient = smartiesClient;
         _posUtilService = posUtilService;
         _posDataProvider = posDataProvider;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
+        _agentDataProvider = agentDataProvider;
+        _phoneOrderUtilService = phoneOrderUtilService;
     }
 }
