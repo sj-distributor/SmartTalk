@@ -8,6 +8,8 @@ public class AutoTestOrderItemDto
     
     public decimal Quantity { get; set; }
     
+    public string Unit { get; set; }
+    
     public string ItemName { get; set; }
     
     public AutoTestOrderItemStatus Status { get; set; }
