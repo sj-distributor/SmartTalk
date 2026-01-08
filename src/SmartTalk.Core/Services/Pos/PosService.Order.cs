@@ -59,6 +59,8 @@ public partial class PosService
     {
         var order = await GetOrAddPosOrderAsync(command, cancellationToken).ConfigureAwait(false);
         
+        if (order.Items == "[]") return new PosOrderPlacedEvent();
+        
         _smartTalkBackgroundJobClient.Enqueue(() => CreateMerchPrinterOrderAsync(order.StoreId, order.Id, cancellationToken));
         
         await HandlePosOrderAsync(order, command.IsWithRetry, cancellationToken).ConfigureAwait(false);
