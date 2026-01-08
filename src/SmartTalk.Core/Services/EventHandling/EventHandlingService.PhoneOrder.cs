@@ -40,7 +40,7 @@ public partial class EventHandlingService
             await _posUtilService.GenerateAiDraftAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
         }
 
-        if (@event.OriginalScenarios is not (DialogueScenarios.InformationNotification or DialogueScenarios.ThirdPartyOrderNotification) && @event.DialogueScenarios is DialogueScenarios.InformationNotification or DialogueScenarios.InformationNotification)
+        if (@event.OriginalScenarios is DialogueScenarios.InformationNotification or DialogueScenarios.ThirdPartyOrderNotification && @event.DialogueScenarios is DialogueScenarios.Reservation)
         {
             var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByIdAsync(@event.RecordId, cancellationToken).ConfigureAwait(false);
 
