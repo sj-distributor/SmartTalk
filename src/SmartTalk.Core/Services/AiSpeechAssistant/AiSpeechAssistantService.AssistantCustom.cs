@@ -1226,7 +1226,7 @@ public partial class AiSpeechAssistantService
         var newTargets = new List<AiSpeechAssistantKnowledge>();
         var targetPairs = new List<(int OldTargetId, AiSpeechAssistantKnowledge NewTarget)>();
         var newRelations = new List<AiSpeechAssistantKnowledgeCopyRelated>();
-
+        
         foreach (var (targetId, oldTarget) in oldTargetMap)
         {
             relationsByTarget.TryGetValue(targetId, out var relations);
@@ -1270,7 +1270,7 @@ public partial class AiSpeechAssistantService
                     CopyKnowledgePoints = useLatestSource
                         ? sourceKnowledge.Json
                         : relation.CopyKnowledgePoints,
-                    IsSyncUpdate = relation.IsSyncUpdate,
+                    IsSyncUpdate = !deleteKnowledge && relation.IsSyncUpdate
                 });
             }
 
