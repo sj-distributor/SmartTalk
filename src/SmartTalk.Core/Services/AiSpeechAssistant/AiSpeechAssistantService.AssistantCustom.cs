@@ -1173,6 +1173,9 @@ public partial class AiSpeechAssistantService
 
     public async Task SyncCopiedKnowledgesIfRequiredAsync(int sourceKnowledgeId, bool deleteKnowledge, CancellationToken cancellationToken)
     {
+        if (deleteKnowledge)
+        { await DisableSyncUpdateAsync(sourceKnowledgeId, cancellationToken); return; }
+        
         var sourceKnowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(knowledgeId: sourceKnowledgeId, cancellationToken:cancellationToken).ConfigureAwait(false);
         if (sourceKnowledge == null) return;
         
@@ -1180,13 +1183,24 @@ public partial class AiSpeechAssistantService
 
         if (oldTargetMap.Count == 0) return;
         
-        var rebuildResult = await RebuildTargetsAsync(oldTargetMap, sourceKnowledge, deleteKnowledge, cancellationToken).ConfigureAwait(false);
+        var rebuildResult = await RebuildTargetsAsync(oldTargetMap, sourceKnowledge, cancellationToken).ConfigureAwait(false);
 
         if (rebuildResult.NewTargets.Count == 0) return;
         
         await PersistNewTargetsAsync(rebuildResult, cancellationToken).ConfigureAwait(false);
     }
+    
+    private async Task DisableSyncUpdateAsync(int sourceKnowledgeId, CancellationToken cancellationToken)
+    {
+        var relations = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedBySourceKnowledgeIdAsync([sourceKnowledgeId], cancellationToken);
 
+        if (relations == null || relations.Count == 0) return;
+
+        relations.ForEach(r => r.IsSyncUpdate = false);
+
+        await _aiSpeechAssistantDataProvider.UpdateKnowledgeCopyRelatedAsync(relations, true, cancellationToken);
+    }
+    
     private async Task<Dictionary<int, AiSpeechAssistantKnowledge>> GetAndDeactivateOldTargetsAsync(int sourceId, CancellationToken cancellationToken)
     {
         var sourceCopyRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedBySourceKnowledgeIdAsync([sourceId], cancellationToken).ConfigureAwait(false);
@@ -1209,7 +1223,7 @@ public partial class AiSpeechAssistantService
         return oldTargets.ToDictionary(x => x.Id);
     }
 
-    private async Task<RebuildResult> RebuildTargetsAsync(Dictionary<int, AiSpeechAssistantKnowledge> oldTargetMap, AiSpeechAssistantKnowledge sourceKnowledge, bool deleteKnowledge, CancellationToken cancellationToken)
+    private async Task<RebuildResult> RebuildTargetsAsync(Dictionary<int, AiSpeechAssistantKnowledge> oldTargetMap, AiSpeechAssistantKnowledge sourceKnowledge, CancellationToken cancellationToken)
     {
         var targetIds = oldTargetMap.Keys.ToList();
 
@@ -1230,15 +1244,11 @@ public partial class AiSpeechAssistantService
             relationsByTarget.TryGetValue(targetId, out var relations);
             relations ??= new List<AiSpeechAssistantKnowledgeCopyRelated>();
             
-            var remainingRelations = deleteKnowledge
-                ? relations.Where(r => r.SourceKnowledgeId != sourceKnowledge.Id).ToList()
-                : relations;
-
-            Log.Information("remainingRelations : {remainingRelations}", remainingRelations.Select(x=>x.Id));
+            Log.Information("relations : {@relations}", relations.Select(x=>x.Id));
             
-            if (remainingRelations.Count == 0) continue;
+            if (relations.Count == 0) continue;
             
-            var mergedJson = MergeKnowledgeJson(remainingRelations, sourceKnowledge, deleteKnowledge);
+            var mergedJson = MergeKnowledgeJson(relations, sourceKnowledge);
 
             var newTarget = new AiSpeechAssistantKnowledge
             {
@@ -1256,9 +1266,9 @@ public partial class AiSpeechAssistantService
             newTargets.Add(newTarget);
             targetPairs.Add((targetId, newTarget));
             
-            foreach (var relation in remainingRelations)
+            foreach (var relation in relations)
             {
-                var useLatestSource = !deleteKnowledge && relation.SourceKnowledgeId == sourceKnowledge.Id;
+                var useLatestSource = relation.SourceKnowledgeId == sourceKnowledge.Id;
 
                 newRelations.Add(new AiSpeechAssistantKnowledgeCopyRelated
                 {
@@ -1267,7 +1277,7 @@ public partial class AiSpeechAssistantService
                     CopyKnowledgePoints = useLatestSource
                         ? sourceKnowledge.Json
                         : relation.CopyKnowledgePoints,
-                    IsSyncUpdate = !deleteKnowledge && relation.IsSyncUpdate
+                    IsSyncUpdate = relation.IsSyncUpdate,
                 });
             }
 
@@ -1282,23 +1292,14 @@ public partial class AiSpeechAssistantService
         };
     }
 
-    private static string MergeKnowledgeJson(List<AiSpeechAssistantKnowledgeCopyRelated> relations, AiSpeechAssistantKnowledge sourceKnowledge, bool deleteKnowledge)
+    private static string MergeKnowledgeJson(List<AiSpeechAssistantKnowledgeCopyRelated> relations, AiSpeechAssistantKnowledge sourceKnowledge)
     {
         var mergedObj = new JObject();
-        
-        foreach (var relation in relations)
+
+        foreach (var json in relations.Select(relation => relation.SourceKnowledgeId == sourceKnowledge.Id
+                     ? JObject.Parse(sourceKnowledge.Json ?? "{}")
+                     : JObject.Parse(relation.CopyKnowledgePoints ?? "{}")))
         {
-            JObject json;
-
-            if (!deleteKnowledge && relation.SourceKnowledgeId == sourceKnowledge.Id)
-            {
-                json = JObject.Parse(sourceKnowledge.Json ?? "{}");
-            }
-            else
-            {
-                json = JObject.Parse(relation.CopyKnowledgePoints ?? "{}");
-            }
-
             mergedObj.Merge(json, new JsonMergeSettings { MergeArrayHandling = MergeArrayHandling.Concat });
         }
 
