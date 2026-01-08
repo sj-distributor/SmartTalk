@@ -1,4 +1,5 @@
 using SmartTalk.Core.Ioc;
+using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.HrInterView;
 using SmartTalk.Core.Services.Http;
@@ -6,6 +7,7 @@ using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.Pos;
+using SmartTalk.Core.Services.Printer;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
 using SmartTalk.Messages.Events.HrInterView;
 using SmartTalk.Messages.Events.PhoneOrder;
@@ -37,9 +39,10 @@ public partial class EventHandlingService : IEventHandlingService
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
+    private readonly IAgentDataProvider _agentDataProvider;
+    private readonly IPhoneOrderUtilService _phoneOrderUtilService;
 
-
-   public EventHandlingService(IAsrClient asrClient, SmartiesClient smartiesClient, IPosUtilService posUtilService, IPosDataProvider posDataProvider, ISmartTalkHttpClientFactory httpClientFactory, IPhoneOrderDataProvider phoneOrderDataProvider, IHrInterViewDataProvider hrInterViewDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, IAiSpeechAssistantService aiSpeechAssistantService, ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient) 
+   public EventHandlingService(IAsrClient asrClient, SmartiesClient smartiesClient, IPosUtilService posUtilService, IPosDataProvider posDataProvider, ISmartTalkHttpClientFactory httpClientFactory, IPhoneOrderDataProvider phoneOrderDataProvider, IHrInterViewDataProvider hrInterViewDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, IAiSpeechAssistantService aiSpeechAssistantService, ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient, IAgentDataProvider agentDataProvider, IPhoneOrderUtilService phoneOrderUtilService) 
    {
         _asrClient = asrClient;
         _smartiesClient = smartiesClient;
@@ -51,5 +54,7 @@ public partial class EventHandlingService : IEventHandlingService
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
         _aiSpeechAssistantService = aiSpeechAssistantService;
         _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
+        _agentDataProvider = agentDataProvider;
+        _phoneOrderUtilService = phoneOrderUtilService;
    }
 }

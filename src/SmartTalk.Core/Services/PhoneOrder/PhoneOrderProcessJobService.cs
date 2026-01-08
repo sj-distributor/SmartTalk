@@ -47,7 +47,7 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
     private readonly ISmartTalkHttpClientFactory _smartTalkHttpClientFactory;
     private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
-    private readonly IPrinterDataProvider _printerDataProvider;
+    private readonly IPhoneOrderUtilService _phoneOrderUtilService;
 
     public PhoneOrderProcessJobService(
         IPosService posService,
@@ -67,7 +67,7 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
         ISpeechMaticsDataProvider speechMaticsDataProvider,
         ISmartTalkHttpClientFactory smartTalkHttpClientFactory,
         ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient,
-        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, IPrinterDataProvider printerDataProvider)
+        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, IPhoneOrderUtilService phoneOrderUtilService)
     {
         _posService = posService;
         _salesClient = salesClient;
@@ -87,7 +87,7 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
         _smartTalkHttpClientFactory = smartTalkHttpClientFactory;
         _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
-        _printerDataProvider = printerDataProvider;
+        _phoneOrderUtilService = phoneOrderUtilService;
     }
 
     public async Task CalculatePhoneOrderRecodingDurationAsync(SchedulingCalculatePhoneOrderRecodingDurationCommand command, CancellationToken cancellationToken)
