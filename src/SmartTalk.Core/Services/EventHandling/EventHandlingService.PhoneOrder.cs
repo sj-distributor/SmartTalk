@@ -45,7 +45,12 @@ public partial class EventHandlingService
             var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByIdAsync(@event.RecordId, cancellationToken).ConfigureAwait(false);
 
             var agent = await _agentDataProvider.GetAgentByIdAsync(record.AgentId, cancellationToken: cancellationToken).ConfigureAwait(false);
-
+            
+            var reservation = await _posDataProvider.GetPhoneOrderReservationInformationAsync(record.Id, cancellationToken).ConfigureAwait(false);
+            
+            if (reservation != null)
+                await _posDataProvider.DeletePhoneOrderReservationInformationAsync(reservation, cancellationToken).ConfigureAwait(false);
+            
             await _phoneOrderUtilService.GenerateAiDraftAsync(record, agent, cancellationToken).ConfigureAwait(false);
         }
     }
