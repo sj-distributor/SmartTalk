@@ -46,6 +46,8 @@ public partial class PosService
     {
         var order = await GetOrAddPosOrderAsync(command, cancellationToken).ConfigureAwait(false);
         
+        if (order.Items == "[]") return new PosOrderPlacedEvent();
+        
         await HandlePosOrderAsync(order, command.IsWithRetry, cancellationToken).ConfigureAwait(false);
         
         return new PosOrderPlacedEvent
