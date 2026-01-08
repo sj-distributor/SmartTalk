@@ -254,7 +254,7 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
                     
         await _phoneOrderDataProvider.AddPhoneOrderReservationInformationAsync(information, cancellationToken: cancellationToken).ConfigureAwait(false);
                     
-        if (store.IsManualReview)
+        if (!store.IsManualReview)
         {
             var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(storeId: store.Id, isEnabled: true, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
 
