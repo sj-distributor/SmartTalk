@@ -33,6 +33,8 @@ public partial interface IPosDataProvider
     Task<PhoneOrderReservationInformation> GetPhoneOrderReservationInformationAsync(int recordId, CancellationToken cancellationToken);
 
     Task UpdatePhoneOrderReservationInformationAsync(PhoneOrderReservationInformation reservationInformation, bool isForceSave = true, CancellationToken cancellationToken = default);
+
+    Task DeletePhoneOrderReservationInformationAsync(PhoneOrderReservationInformation reservationInformation, CancellationToken cancellationToken);
 }
 
 public partial class PosDataProvider
@@ -156,5 +158,11 @@ public partial class PosDataProvider
 
         if (isForceSave)
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task DeletePhoneOrderReservationInformationAsync(
+        PhoneOrderReservationInformation reservationInformation, CancellationToken cancellationToken)
+    {
+        await _repository.DeleteAsync(reservationInformation, cancellationToken).ConfigureAwait(false);
     }
 }
