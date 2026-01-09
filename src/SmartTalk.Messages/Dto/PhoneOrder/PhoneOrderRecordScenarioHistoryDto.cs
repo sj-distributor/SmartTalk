@@ -10,6 +10,8 @@ public class PhoneOrderRecordScenarioHistoryDto
 
     public DialogueScenarios Scenario { get; set; }
 
+    public ModifyType ModifyType { get; set; }
+    
     public int UpdateScenarioUserId { get; set; } 
     
     public string UserName { get; set; }
