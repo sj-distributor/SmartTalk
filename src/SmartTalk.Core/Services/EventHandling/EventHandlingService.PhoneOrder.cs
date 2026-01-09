@@ -40,18 +40,24 @@ public partial class EventHandlingService
             await _posUtilService.GenerateAiDraftAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
         }
 
-        if (@event.OriginalScenarios is DialogueScenarios.InformationNotification or DialogueScenarios.ThirdPartyOrderNotification && @event.DialogueScenarios is DialogueScenarios.Reservation)
-        {
-            var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByIdAsync(@event.RecordId, cancellationToken).ConfigureAwait(false);
+        if (@event.OriginalScenarios is not DialogueScenarios.InformationNotification and DialogueScenarios.ThirdPartyOrderNotification && @event.DialogueScenarios is DialogueScenarios.ThirdPartyOrderNotification or DialogueScenarios.InformationNotification)
+            await RegenerateAiDraftAsync(@event.RecordId, cancellationToken).ConfigureAwait(false);
+        
+        if (@event.OriginalScenarios is not DialogueScenarios.Reservation && @event.DialogueScenarios is DialogueScenarios.Reservation)
+            await RegenerateAiDraftAsync(@event.RecordId, cancellationToken).ConfigureAwait(false);
+    }
+    
+    private async Task RegenerateAiDraftAsync(int recordId, CancellationToken cancellationToken)
+    {
+        var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByIdAsync(recordId, cancellationToken).ConfigureAwait(false);
 
-            var agent = await _agentDataProvider.GetAgentByIdAsync(record.AgentId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var agent = await _agentDataProvider.GetAgentByIdAsync(record.AgentId, cancellationToken: cancellationToken).ConfigureAwait(false);
             
-            var reservation = await _posDataProvider.GetPhoneOrderReservationInformationAsync(record.Id, cancellationToken).ConfigureAwait(false);
+        var reservation = await _posDataProvider.GetPhoneOrderReservationInformationAsync(record.Id, cancellationToken).ConfigureAwait(false);
             
-            if (reservation != null)
-                await _posDataProvider.DeletePhoneOrderReservationInformationAsync(reservation, cancellationToken).ConfigureAwait(false);
+        if (reservation != null)
+            await _posDataProvider.DeletePhoneOrderReservationInformationAsync(reservation, cancellationToken).ConfigureAwait(false);
             
-            await _phoneOrderUtilService.GenerateAiDraftAsync(record, agent, cancellationToken).ConfigureAwait(false);
-        }
+        await _phoneOrderUtilService.GenerateAiDraftAsync(record, agent, cancellationToken).ConfigureAwait(false);
     }
 }
