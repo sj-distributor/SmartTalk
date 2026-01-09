@@ -12,6 +12,7 @@ using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Pos;
 using SmartTalk.Messages.Dto.Printer;
 using SmartTalk.Messages.Enums.Caching;
+using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.Pos;
 using SmartTalk.Messages.Enums.Printer;
 using SmartTalk.Messages.Events.Pos;
@@ -65,7 +66,8 @@ public partial class PosService
         
         return new PosOrderPlacedEvent
         {
-            Order = _mapper.Map<PosOrderDto>(order)
+            Order = _mapper.Map<PosOrderDto>(order),
+            IsPersistAction = command.IsPersistAction
         };
     }
 
@@ -874,7 +876,17 @@ public partial class PosService
         var reservationInfo = _mapper.Map<PhoneOrderReservationInformation>(command);
         
         await _posDataProvider.UpdatePhoneOrderReservationInformationAsync(reservationInfo, cancellationToken:cancellationToken).ConfigureAwait(false);
-
+        
+        await _phoneOrderDataProvider.AddPhoneOrderRecordScenarioHistoryAsync(new PhoneOrderRecordScenarioHistory
+        {
+            RecordId = command.RecordId,
+            Scenario = DialogueScenarios.Order,
+            ModifyType = ModifyType.Info,
+            UpdatedBy = _currentUser.Id ?? 0,
+            UserName = _currentUser.Name,
+            CreatedDate = DateTime.UtcNow
+        }, true, cancellationToken).ConfigureAwait(false);
+        
         return new UpdateOrderReservationInfoResponse
         {
             Data = _mapper.Map<OrderReservationInfoDto>(reservationInfo)

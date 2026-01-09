@@ -1,4 +1,6 @@
+using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Domain.Pos;
+using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.Pos;
 using SmartTalk.Messages.Events.Pos;
 
@@ -57,6 +59,19 @@ public partial class EventHandlingService
             }
             
             await _posDataProvider.UpdateStoreCustomersAsync([customer], cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+
+        if (@event.IsPersistAction && @event.Order.RecordId.HasValue)
+        {
+            await _phoneOrderDataProvider.AddPhoneOrderRecordScenarioHistoryAsync(new PhoneOrderRecordScenarioHistory
+            {
+                RecordId = @event.Order.RecordId.Value,
+                Scenario = DialogueScenarios.Order,
+                ModifyType = ModifyType.Order,
+                UpdatedBy = _currentUser.Id.Value,
+                UserName = _currentUser.Name,
+                CreatedDate = DateTime.UtcNow
+            }, true, cancellationToken).ConfigureAwait(false);
         }
     }
 

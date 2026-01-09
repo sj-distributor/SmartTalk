@@ -17,6 +17,9 @@ public class PhoneOrderRecordScenarioHistory : IEntity
     
     [Column("scenario")]
     public DialogueScenarios Scenario { get; set; }
+
+    [Column("modify_type")]
+    public ModifyType ModifyType { get; set; }
     
     [Column("updated_by")]
     public int UpdatedBy { get; set; } 

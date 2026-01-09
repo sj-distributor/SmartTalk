@@ -5,6 +5,7 @@ using SmartTalk.Core.Services.HrInterView;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
+using SmartTalk.Core.Services.Identity;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Services.Printer;
@@ -30,6 +31,7 @@ public interface IEventHandlingService : IScopedDependency
 public partial class EventHandlingService : IEventHandlingService
 {
     private readonly IAsrClient _asrClient;
+    private readonly ICurrentUser _currentUser;
     private readonly SmartiesClient _smartiesClient;
     private readonly IPosUtilService _posUtilService;
     private readonly IPosDataProvider _posDataProvider;
@@ -41,8 +43,8 @@ public partial class EventHandlingService : IEventHandlingService
     private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
     private readonly IAgentDataProvider _agentDataProvider;
     private readonly IPhoneOrderUtilService _phoneOrderUtilService;
-
-   public EventHandlingService(IAsrClient asrClient, SmartiesClient smartiesClient, IPosUtilService posUtilService, IPosDataProvider posDataProvider, ISmartTalkHttpClientFactory httpClientFactory, IPhoneOrderDataProvider phoneOrderDataProvider, IHrInterViewDataProvider hrInterViewDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, IAiSpeechAssistantService aiSpeechAssistantService, ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient, IAgentDataProvider agentDataProvider, IPhoneOrderUtilService phoneOrderUtilService) 
+    
+   public EventHandlingService(IAsrClient asrClient, SmartiesClient smartiesClient, IPosUtilService posUtilService, IPosDataProvider posDataProvider, ISmartTalkHttpClientFactory httpClientFactory, IPhoneOrderDataProvider phoneOrderDataProvider, IHrInterViewDataProvider hrInterViewDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, IAiSpeechAssistantService aiSpeechAssistantService, ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient, IAgentDataProvider agentDataProvider, IPhoneOrderUtilService phoneOrderUtilService, ICurrentUser currentUser) 
    {
         _asrClient = asrClient;
         _smartiesClient = smartiesClient;
@@ -56,5 +58,6 @@ public partial class EventHandlingService : IEventHandlingService
         _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
         _agentDataProvider = agentDataProvider;
         _phoneOrderUtilService = phoneOrderUtilService;
+        _currentUser = currentUser;
    }
 }
