@@ -92,6 +92,8 @@ public class SalesPhoneOrderPushService : ISalesPhoneOrderPushService
 
         if (resp?.Data == null || resp.Data.OrderId == Guid.Empty)
             throw new Exception("GenerateAiOrdersAsync failed");
+        
+        Log.Information("Sales GenerateOrder SUCCESS. TaskId={TaskId}, Request={@Request}, OrderId={OrderId}", task.Id, req, resp.Data.OrderId);
 
         await _phoneOrderDataProvider.UpdateOrderIdAsync(task.RecordId, resp.Data.OrderId, cancellationToken).ConfigureAwait(false);
     }
@@ -101,5 +103,7 @@ public class SalesPhoneOrderPushService : ISalesPhoneOrderPushService
         var req = JsonSerializer.Deserialize<DeleteAiOrderRequestDto>(task.RequestJson);
 
         await _salesClient.DeleteAiOrderAsync(req, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Sales DeleteOrder SUCCESS. TaskId={TaskId}, Request={@Request}", task.Id, req);
     }
 }
