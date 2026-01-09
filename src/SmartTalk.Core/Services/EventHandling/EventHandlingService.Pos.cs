@@ -63,6 +63,14 @@ public partial class EventHandlingService
 
         if (@event.IsPersistAction && @event.Order.RecordId.HasValue)
         {
+            var records = await _phoneOrderDataProvider.GetPhoneOrderRecordAsync(@event.Order.RecordId.Value, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            var record = records.FirstOrDefault();
+            if (record == null) throw new Exception($"Phone order record not found: {@event.Order.RecordId.Value}");
+            
+            record.IsModifyScenario = true;
+            await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record,  true, cancellationToken);
+            
             await _phoneOrderDataProvider.AddPhoneOrderRecordScenarioHistoryAsync(new PhoneOrderRecordScenarioHistory
             {
                 RecordId = @event.Order.RecordId.Value,
