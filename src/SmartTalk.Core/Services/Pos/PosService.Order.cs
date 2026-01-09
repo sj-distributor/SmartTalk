@@ -863,6 +863,14 @@ public partial class PosService
     {
         var reservationInfo = _mapper.Map<PhoneOrderReservationInformation>(command);
         
+        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordAsync(command.RecordId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var record = records.FirstOrDefault();
+        if (record == null) throw new Exception($"Phone order record not found: {command.RecordId}");
+            
+        record.IsModifyScenario = true;
+        await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record,  true, cancellationToken);
+        
         await _posDataProvider.UpdatePhoneOrderReservationInformationAsync(reservationInfo, cancellationToken:cancellationToken).ConfigureAwait(false);
         
         await _phoneOrderDataProvider.AddPhoneOrderRecordScenarioHistoryAsync(new PhoneOrderRecordScenarioHistory
