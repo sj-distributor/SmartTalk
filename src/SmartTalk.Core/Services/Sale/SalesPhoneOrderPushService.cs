@@ -93,7 +93,7 @@ public class SalesPhoneOrderPushService : ISalesPhoneOrderPushService
         if (!hasPendingTasks)
         {
             Log.Information("Marking RecordId={RecordId} as completed", recordId);
-            await _phoneOrderDataProvider.MarkRecordCompletedAsync(recordId, true, cancellationToken).ConfigureAwait(false);
+            await _phoneOrderDataProvider.MarkRecordCompletedAsync(recordId, cancellationToken).ConfigureAwait(false);
         }
         else
         {

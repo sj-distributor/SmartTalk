@@ -81,7 +81,7 @@ public partial interface IPhoneOrderDataProvider
     
     Task UpdateOrderIdAsync(int recordId, Guid orderId, CancellationToken cancellationToken);
 
-    Task MarkRecordCompletedAsync(int recordId, bool forceSave = true, CancellationToken cancellationToken = default);
+    Task MarkRecordCompletedAsync(int recordId, CancellationToken cancellationToken = default);
 }
 
 public partial class PhoneOrderDataProvider
@@ -491,19 +491,9 @@ public partial class PhoneOrderDataProvider
         return tasks.All(s => s == PhoneOrderPushTaskStatus.Sent);
     }
     
-    public async Task MarkRecordCompletedAsync(int recordId, bool forceSave = true, CancellationToken cancellationToken = default)
+    public async Task MarkRecordCompletedAsync(int recordId, CancellationToken cancellationToken = default)
     {
-        var record = await _repository.Query<PhoneOrderRecord>().Where(r => r.Id == recordId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
-
-        if (record == null) 
-        {
-            Log.Information("MarkRecordCompletedAsync: RecordId={RecordId} not found", recordId);
-            return;
-        }
-
-        record.IsCompleted = true;
-
-        await _repository.UpdateAsync(record, cancellationToken).ConfigureAwait(false);
-        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await _repository.Query<PhoneOrderRecord>().Where(r => r.Id == recordId && !r.IsCompleted)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(r => r.IsCompleted, true), cancellationToken).ConfigureAwait(false);
     }
 }
