@@ -36,7 +36,7 @@ public partial interface IAutoTestDataProvider
     
     Task<HashSet<string>> GetCustomerPhoneWhiteListAsync(CancellationToken cancellationToken);
 
-    Task<AutoTestCallRecordSync?> GetLastCallRecordAsync(CancellationToken cancellationToken);
+    Task<AutoTestCallRecordSync> GetLastCallRecordAsync(CancellationToken cancellationToken);
 
     Task InsertCallRecordsAsync(List<AutoTestCallRecordSync> records, bool forceSave = true, CancellationToken cancellationToken = default);
 }
@@ -140,11 +140,11 @@ public partial class AutoTestDataProvider
     
     public async Task<HashSet<string>> GetCustomerPhoneWhiteListAsync(CancellationToken cancellationToken)
     {
-        var phones = await _repository.Query<AiSpeechAssistantKnowledgeVariableCache>()
-            .Where(x => x.CacheKey == "customer_info" && !string.IsNullOrEmpty(x.Filter))
-            .Select(x => x.Filter)
-            .ToListAsync(cancellationToken).ConfigureAwait(false);
-        
+        var phones = await _repository.Query<AutoTestPhoneWhitelist>()
+            .Select(x => x.PhoneNumber)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
         return phones.ToHashSet();
     }
     
