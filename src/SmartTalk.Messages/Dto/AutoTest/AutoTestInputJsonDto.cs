@@ -28,6 +28,8 @@ public class AutoTestInputDetail
     
     public decimal Quantity { get; set; }
     
+    public string Unit { get; set; }
+    
     [JsonConverter(typeof(EmptyStringConverter))]
     public string ItemName { get; set; }
     

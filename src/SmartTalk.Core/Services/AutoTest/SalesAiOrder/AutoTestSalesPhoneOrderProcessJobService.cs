@@ -803,6 +803,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
             {
                 ItemId = item.ItemId,
                 Quantity = item.Quantity,
+                Unit = item.Unit,
                 ItemName = item.ItemName,
                 Status = realOrderItem.Quantity == item.Quantity ? AutoTestOrderItemStatus.Normal : AutoTestOrderItemStatus.Abnormal
             });
@@ -816,6 +817,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
                 {
                     ItemId = aiItem.ItemId,
                     Quantity = aiItem.Quantity,
+                    Unit = aiItem.Unit,
                     ItemName = aiItem.ItemName,
                     Status = AutoTestOrderItemStatus.Abnormal
                 });
