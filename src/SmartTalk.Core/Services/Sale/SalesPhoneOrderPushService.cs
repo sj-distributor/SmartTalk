@@ -80,7 +80,7 @@ public class SalesPhoneOrderPushService : ISalesPhoneOrderPushService
 
         if (!hasPendingTasks)
         {
-            await _phoneOrderDataProvider.MarkRecordCompletedAsync(recordId, true, cancellationToken).ConfigureAwait(false);
+            await _phoneOrderDataProvider.MarkRecordCompletedAsync(recordId, cancellationToken).ConfigureAwait(false);
         }
     }
     
