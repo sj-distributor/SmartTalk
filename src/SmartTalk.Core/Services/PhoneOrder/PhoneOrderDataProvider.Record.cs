@@ -495,7 +495,11 @@ public partial class PhoneOrderDataProvider
     {
         var record = await _repository.Query<PhoneOrderRecord>().Where(r => r.Id == recordId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
 
-        if (record == null) return;
+        if (record == null) 
+        {
+            Log.Information("MarkRecordCompletedAsync: RecordId={RecordId} not found", recordId);
+            return;
+        }
 
         record.IsCompleted = true;
 

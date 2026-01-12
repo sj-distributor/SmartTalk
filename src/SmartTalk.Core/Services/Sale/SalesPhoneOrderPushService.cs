@@ -32,13 +32,23 @@ public class SalesPhoneOrderPushService : ISalesPhoneOrderPushService
     
     public async Task ExecutePhoneOrderPushTasksAsync(int recordId, CancellationToken cancellationToken)
     {
+        Log.Information("Start ExecutePhoneOrderPushTasksAsync for RecordId={RecordId}", recordId);
         var task = await _salesDataProvider.GetRecordPushTaskByRecordIdAsync(recordId, cancellationToken).ConfigureAwait(false);
         
-        if (task == null) return;
+        if (task == null)
+        {
+            Log.Information("No task found for RecordId={RecordId}", recordId);
+            return;
+        }
         
         var parentCompleted = await _salesDataProvider.IsParentCompletedAsync(task.ParentRecordId, cancellationToken).ConfigureAwait(false);
+        Log.Information("ParentCompleted={ParentCompleted} for ParentRecordId={ParentRecordId}", parentCompleted, task.ParentRecordId);
 
-        if (!parentCompleted) return;
+        if (!parentCompleted) 
+        {
+            Log.Information("Parent not completed. Skipping execution for TaskId={TaskId}", task.Id);
+            return;
+        }
 
         await ExecuteSingleTaskAsync(task, cancellationToken).ConfigureAwait(false);
     }
@@ -64,6 +74,7 @@ public class SalesPhoneOrderPushService : ISalesPhoneOrderPushService
             
             await TryCompleteRecordAsync(task.RecordId, cancellationToken).ConfigureAwait(false);
 
+            Log.Information("Enqueuing next push task for RecordId={RecordId}", task.RecordId);
             _backgroundJobClient.Enqueue<ISalesPhoneOrderPushService>(s => s.ExecutePhoneOrderPushTasksAsync(task.RecordId, CancellationToken.None));
         }
         catch (Exception ex)
@@ -77,10 +88,16 @@ public class SalesPhoneOrderPushService : ISalesPhoneOrderPushService
     private async Task TryCompleteRecordAsync(int recordId, CancellationToken cancellationToken)
     {
         var hasPendingTasks = await _salesDataProvider.HasPendingTasksByRecordIdAsync(recordId, cancellationToken).ConfigureAwait(false);
+        Log.Information("HasPendingTasks={HasPendingTasks} for RecordId={RecordId}", hasPendingTasks, recordId);
 
         if (!hasPendingTasks)
         {
+            Log.Information("Marking RecordId={RecordId} as completed", recordId);
             await _phoneOrderDataProvider.MarkRecordCompletedAsync(recordId, true, cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            Log.Information("Cannot mark RecordId={RecordId} as complete. Pending tasks exist.", recordId);
         }
     }
     
