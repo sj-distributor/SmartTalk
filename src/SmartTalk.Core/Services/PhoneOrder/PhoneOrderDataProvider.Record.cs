@@ -167,12 +167,15 @@ public partial class PhoneOrderDataProvider
     {
         var existing = await _repository.Query<PhoneOrderRecord>()
             .Where(r => r.Id == record.Id)
-            .Select(r => new { r.IsCompleted })
+            .Select(r => new { r.IsCompleted, r.OrderId })
             .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);
 
         if (existing != null)
+        {
             record.IsCompleted = existing.IsCompleted;
+            record.OrderId = existing.OrderId;
+        }
         
         await _repository.UpdateAsync(record, cancellationToken).ConfigureAwait(false);
 
