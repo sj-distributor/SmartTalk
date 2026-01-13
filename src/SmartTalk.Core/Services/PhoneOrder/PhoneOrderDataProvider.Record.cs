@@ -71,6 +71,8 @@ public partial interface IPhoneOrderDataProvider
     Task<List<SimplePhoneOrderRecordDto>> GetSimplePhoneOrderRecordsAsync(List<int> agentIds, CancellationToken cancellationToken);
 
     Task AddPhoneOrderReservationInformationAsync(PhoneOrderReservationInformation information, bool forceSave = true, CancellationToken cancellationToken = default);
+
+    Task<List<int>> GetPhoneOrderReservationInfoUnreviewedRecordIdsAsync(List<int> recordIds, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderDataProvider
@@ -408,5 +410,15 @@ public partial class PhoneOrderDataProvider
 
         if (forceSave)
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<int>> GetPhoneOrderReservationInfoUnreviewedRecordIdsAsync(List<int> recordIds, CancellationToken cancellationToken)
+    {
+        return await (from info in _repository.QueryNoTracking<PhoneOrderReservationInformation>()
+                join order in _repository.Query<MerchPrinterOrder>() on info.RecordId equals order.OrderId into oders
+                from order in oders.DefaultIfEmpty()
+                where recordIds.Contains(info.RecordId) && order == null
+                select info.RecordId
+            ).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }
