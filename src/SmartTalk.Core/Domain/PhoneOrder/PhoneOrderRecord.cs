@@ -115,5 +115,5 @@ public class PhoneOrderRecord : IEntity
     public int? ParentRecordId { get; set; }
     
     [Column("is_completed")]
-    public bool IsCompleted { get; set; }
+    public bool IsCompleted { get; set; } = false;
 }

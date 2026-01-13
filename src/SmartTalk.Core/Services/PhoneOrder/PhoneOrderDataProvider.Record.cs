@@ -165,6 +165,15 @@ public partial class PhoneOrderDataProvider
 
     public async Task UpdatePhoneOrderRecordsAsync(PhoneOrderRecord record, bool forceSave = true, CancellationToken cancellationToken = default)
     {
+        var existing = await _repository.Query<PhoneOrderRecord>()
+            .Where(r => r.Id == record.Id)
+            .Select(r => new { r.IsCompleted })
+            .FirstOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        if (existing != null)
+            record.IsCompleted = existing.IsCompleted;
+        
         await _repository.UpdateAsync(record, cancellationToken).ConfigureAwait(false);
 
         if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
