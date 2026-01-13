@@ -82,6 +82,8 @@ public partial interface IPhoneOrderDataProvider
     Task UpdateOrderIdAsync(int recordId, Guid orderId, CancellationToken cancellationToken);
 
     Task MarkRecordCompletedAsync(int recordId, CancellationToken cancellationToken = default);
+
+    Task<List<int>> GetPhoneOrderReservationInfoUnreviewedRecordIdsAsync(List<int> recordIds, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderDataProvider
@@ -502,10 +504,20 @@ public partial class PhoneOrderDataProvider
         
         return tasks.All(s => s == PhoneOrderPushTaskStatus.Sent);
     }
-    
+
     public async Task MarkRecordCompletedAsync(int recordId, CancellationToken cancellationToken = default)
     {
         await _repository.Query<PhoneOrderRecord>().Where(r => r.Id == recordId && !r.IsCompleted)
             .ExecuteUpdateAsync(setters => setters.SetProperty(r => r.IsCompleted, true), cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<int>> GetPhoneOrderReservationInfoUnreviewedRecordIdsAsync(List<int> recordIds, CancellationToken cancellationToken)
+    {
+        return await (from info in _repository.QueryNoTracking<PhoneOrderReservationInformation>()
+                join order in _repository.Query<MerchPrinterOrder>() on info.RecordId equals order.OrderId into oders
+                from order in oders.DefaultIfEmpty()
+                where recordIds.Contains(info.RecordId) && order == null
+                select info.RecordId
+            ).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }
