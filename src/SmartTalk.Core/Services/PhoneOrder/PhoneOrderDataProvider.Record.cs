@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Newtonsoft.Json;
 using SmartTalk.Core.Domain.Account;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.PhoneOrder;
@@ -107,12 +108,15 @@ public partial class PhoneOrderDataProvider
     {
         var existing = await _repository.Query<PhoneOrderRecord>()
             .Where(r => r.Id == record.Id)
-            .Select(r => new { r.IsCompleted })
+            .Select(r => new { r.IsCompleted, r.OrderId })
             .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);
 
         if (existing != null)
+        {
             record.IsCompleted = existing.IsCompleted;
+            record.OrderId = existing.OrderId;
+        }
         
         await _repository.UpdateAsync(record, cancellationToken).ConfigureAwait(false);
 
@@ -366,7 +370,10 @@ public partial class PhoneOrderDataProvider
 
         if (record == null) return;
 
-        record.OrderId = orderId.ToString();
+        var orderIds = string.IsNullOrEmpty(record.OrderId) ? new List<Guid>() : JsonConvert.DeserializeObject<List<Guid>>(record.OrderId)!;
+        
+        orderIds.Add(orderId); 
+        record.OrderId = JsonConvert.SerializeObject(orderIds);
 
         await _repository.UpdateAsync(record, cancellationToken).ConfigureAwait(false);
         await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);

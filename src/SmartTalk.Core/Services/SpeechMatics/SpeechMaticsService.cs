@@ -680,16 +680,6 @@ public class SpeechMaticsService : ISpeechMaticsService
         };
     }
 
-    private async Task UpdateRecordOrderIdAsync(PhoneOrderRecord record, Guid orderId, CancellationToken cancellationToken) 
-    { 
-        var orderIds = string.IsNullOrEmpty(record.OrderId) ? new List<Guid>() : JsonSerializer.Deserialize<List<Guid>>(record.OrderId)!;
-
-        orderIds.Add(orderId); 
-        record.OrderId = JsonSerializer.Serialize(orderIds);
-
-        await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken).ConfigureAwait(false);
-    }
-
     private async Task<(bool IsHumanAnswered, bool IsCustomerFriendly)> CheckCustomerFriendlyAsync(string transcriptionText, CancellationToken cancellationToken)
     {
         var completionResult = await _smartiesClient.PerformQueryAsync(new AskGptRequest
