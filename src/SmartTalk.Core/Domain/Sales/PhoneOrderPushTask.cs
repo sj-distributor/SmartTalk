@@ -9,6 +9,7 @@ public class PhoneOrderPushTask : IEntity
 {
     [Key]
     [Column("id")]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     public int Id { get; set; }
     
     [Column("record_id")]
