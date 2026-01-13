@@ -1,5 +1,6 @@
-using System.Text.Json;
+using Newtonsoft.Json;
 using Serilog;
+using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Domain.Sales;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Http.Clients;
@@ -7,6 +8,7 @@ using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Messages.Dto.Sales;
 using SmartTalk.Messages.Enums.Sales;
+using JsonSerializer = System.Text.Json.JsonSerializer;
 
 namespace SmartTalk.Core.Services.Sale;
 
@@ -122,5 +124,15 @@ public class SalesPhoneOrderPushService : ISalesPhoneOrderPushService
         await _salesClient.DeleteAiOrderAsync(req, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Sales DeleteOrder SUCCESS. TaskId={TaskId}, Request={@Request}", task.Id, req);
+    }
+    
+    private async Task UpdateRecordOrderIdAsync(PhoneOrderRecord record, Guid orderId, CancellationToken cancellationToken) 
+    { 
+        var orderIds = string.IsNullOrEmpty(record.OrderId) ? new List<Guid>() : JsonConvert.DeserializeObject<List<Guid>>(record.OrderId)!;
+        
+        orderIds.Add(orderId); 
+        record.OrderId = JsonConvert.SerializeObject(orderIds);
+        
+        await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken).ConfigureAwait(false); 
     }
 }

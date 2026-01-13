@@ -628,16 +628,6 @@ public partial class PhoneOrderProcessJobService
         };
     }
     
-    private async Task UpdateRecordOrderIdAsync(PhoneOrderRecord record, Guid orderId, CancellationToken cancellationToken) 
-    { 
-        var orderIds = string.IsNullOrEmpty(record.OrderId) ? new List<Guid>() : JsonConvert.DeserializeObject<List<Guid>>(record.OrderId)!;
-        
-        orderIds.Add(orderId); 
-        record.OrderId = JsonConvert.SerializeObject(orderIds);
-        
-        await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken).ConfigureAwait(false); 
-    }
-    
     private async Task<int> SendAgentMessageRecordAsync(Agent agent, int recordId, int groupKey, CancellationToken cancellationToken)
     {
         var timezone = !string.IsNullOrWhiteSpace(agent.Timezone) ? TimeZoneInfo.FindSystemTimeZoneById(agent.Timezone) : TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
