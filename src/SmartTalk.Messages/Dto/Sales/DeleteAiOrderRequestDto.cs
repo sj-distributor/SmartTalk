@@ -7,6 +7,8 @@ public class DeleteAiOrderRequestDto
     public string SoldToIds { get; set; } = string.Empty;
     
     public DateTime? DeliveryDate { get; set; }
+    
+    public int AiAssistantId { get; set; }
 }
 
 public class DeleteAiOrderResponseDto
