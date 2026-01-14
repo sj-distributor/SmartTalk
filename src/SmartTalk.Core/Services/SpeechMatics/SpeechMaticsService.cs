@@ -729,7 +729,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         {
             CustomerNumber = soldToId,
             SoldToIds = string.Join(",", soldToIds),
-            DeliveryDate = storeOrder.DeliveryDate
+            DeliveryDate = storeOrder.DeliveryDate.Date
         };
         
         var task = new PhoneOrderPushTask
