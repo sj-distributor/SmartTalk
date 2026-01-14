@@ -13,6 +13,10 @@ public class UpdateOrderReservationInfoCommand : ICommand
     public string NotificationInfo { get; set; }
 
     public string AiNotificationInfo { get; set; }
+
+    public string EnNotificationInfo { get; set; }
+    
+    public string EnAiNotificationInfo { get; set; }
 }
 
 public class UpdateOrderReservationInfoResponse : SmartTalkResponse<OrderReservationInfoDto>

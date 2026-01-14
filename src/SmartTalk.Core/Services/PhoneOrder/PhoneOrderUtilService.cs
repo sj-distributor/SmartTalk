@@ -1,4 +1,5 @@
 using AutoMapper;
+using Google.Cloud.Translation.V2;
 using Mediator.Net;
 using Newtonsoft.Json;
 using OpenAI.Chat;
@@ -30,6 +31,7 @@ using SmartTalk.Messages.Enums.Caching;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.Pos;
 using SmartTalk.Messages.Enums.Printer;
+using SmartTalk.Messages.Enums.STT;
 
 namespace SmartTalk.Core.Services.PhoneOrder;
 
@@ -54,9 +56,10 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
     private readonly IRestaurantDataProvider _restaurantDataProvider;
     private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiiSpeechAssistantDataProvider;
+    private readonly TranslationClient _translationClient;
 
     public PhoneOrderUtilService(IMapper mapper, IVectorDb vectorDb, IPosService posService, ISmartiesClient smartiesClient,
-        IPosDataProvider posDataProvider, IPhoneOrderDataProvider phoneOrderDataProvider, IRedisSafeRunner redisSafeRunner, IRestaurantDataProvider restaurantDataProvider, ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient, IAiSpeechAssistantDataProvider aiiSpeechAssistantDataProvider, OpenAiSettings openAiSettings, IPrinterDataProvider printerDataProvider)
+        IPosDataProvider posDataProvider, IPhoneOrderDataProvider phoneOrderDataProvider, IRedisSafeRunner redisSafeRunner, IRestaurantDataProvider restaurantDataProvider, ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient, IAiSpeechAssistantDataProvider aiiSpeechAssistantDataProvider, OpenAiSettings openAiSettings, IPrinterDataProvider printerDataProvider, TranslationClient translationClient)
     {
         _mapper = mapper;
         _vectorDb = vectorDb;
@@ -66,6 +69,7 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
         _posDataProvider = posDataProvider;
         _redisSafeRunner = redisSafeRunner;
         _printerDataProvider = printerDataProvider;
+        _translationClient = translationClient;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _restaurantDataProvider = restaurantDataProvider;
         _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
@@ -221,23 +225,27 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
         else if (record.Scenario is DialogueScenarios.ThirdPartyOrderNotification or DialogueScenarios.InformationNotification)
         {
             systemPrompt =
-                "你是一名專業的電話錄音分析員，負責根據電話錄音中可識別的語音內容，準確理解通話中所傳達的「通知事項」，並撰寫精簡明確的「通知摘要」。\n" +
+                "你是一名文本內容摘要精簡助手。\n" +
+                "請根據提供的文本內容中「內容摘要」部分，" +
+                "準確理解其中明確表達的「通知事項」，並生成一條精簡、清楚的「通知摘要」。\n" +
                 "請嚴格遵守以下規則：\n" +
-                "1. 僅根據錄音中實際可識別的內容提取通知，不得臆測、補充或編造未出現的資訊。\n" +
-                "2. 僅在通話中出現明確的通知行為時（例如：營業時間變更、臨時停業、服務異常、延遲、取消、活動公告、询问、通知等）才進行摘要。\n" +
-                "3. 通知摘要需在不遺漏關鍵資訊的前提下進行精簡，避免冗餘敘述與口語重複。\n" +
-                "4. 若錄音為空、無有效語音、語音模糊、僅有雜音，或通話中未出現任何可識別的通知內容，仍必須輸出通知摘要。\n" +
+                "1. 僅根據文本中實際出現、可明確識別的內容進行摘要，不得臆測、補充或編造任何未出現的資訊。\n" +
+                "2. 僅在文本中出現明確的通知或事項說明時才進行摘要，例如：" +
+                "營業時間變更、臨時停業、服務異常、延遲、取消、活動公告、下單、詢問或其他明確告知事項。\n" +
+                "3. 通知摘要需在不遺漏關鍵資訊的前提下進行高度精簡，避免冗餘敘述與口語重複。\n" +
+                "4. 若「內容摘要」為空、無有效內容、語意模糊，或未出現任何可識別的通知事項，仍需輸出通知摘要。\n" +
                 "5. 當無法識別任何有效通知時，請在通知摘要中明確填寫：「未識別到有效通知內容」。\n" +
-                "6. 通知摘要需遵守字數限制：**中文盡量控制在30字以內，英文不得超過100個字母**。\n" +
+                "6. 通知摘要需遵守字數限制：" +
+                "中文盡量控制在 30 字以內；英文不得超過 100 個字母。\n" +
                 "【輸出格式規則（非常重要）】\n" +
                 "1. 嚴禁輸出任何形式的大括號「{」或「}」。\n" +
                 "2. 僅輸出一行，格式必須完全如下：\n" +
-                " 通知摘要: <摘要文字>\n" +
+                "通知摘要: <摘要文字>\n" +
                 "3. 除「通知摘要」一行外，不得輸出任何其他文字、說明、標題或換行。\n" +
                 "4. 若無法產生有效通知摘要，請直接輸出：\n" +
                 "通知摘要: 未識別到有效通知內容\n" +
                 "【正確輸出範例（僅作格式參考）】\n" +
-                "通知摘要: 今日晚間因設備維修，餐廳將提前於晚上8點停止營業。";
+                "通知摘要: 客戶下單切片牛肉1箱、黃雞蛋1箱、青蔥2箱、雞腿肉1箱";
         }else return;
                        
         Log.Information("Sending prompt to GPT: {Prompt}", systemPrompt);
@@ -251,17 +259,39 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
         var completion = await client.CompleteChatAsync(messages, new ChatCompletionOptions { ResponseModalities = ChatResponseModalities.Text, ResponseFormat = ChatResponseFormat.CreateTextFormat() }, cancellationToken).ConfigureAwait(false);
         var jsonResponse = completion.Value.Content.FirstOrDefault()?.Text ?? "";
         
+        var detection = await _translationClient.DetectLanguageAsync(jsonResponse, cancellationToken).ConfigureAwait(false);
+
+        var orderLanguage = SelectReportLanguageEnum(detection.Language);
+        
+        var targetLanguage = orderLanguage == TranscriptionLanguage.Chinese ? "en" : "zh";
+        
+        var translatedText = await _translationClient.TranslateTextAsync(jsonResponse, targetLanguage, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
         Log.Information("AI JSON Response: {JsonResponse}", jsonResponse);
-                    
-        var information = new PhoneOrderReservationInformation
-        {
-            RecordId = record.Id,
-            NotificationInfo = jsonResponse,
-            AiNotificationInfo = jsonResponse
-        };
+        
+        PhoneOrderReservationInformation information;
+        
+        if (orderLanguage == TranscriptionLanguage.Chinese)
+            information = new PhoneOrderReservationInformation
+            {
+                RecordId = record.Id,
+                NotificationInfo = jsonResponse,
+                AiNotificationInfo = jsonResponse,
+                EnNotificationInfo = translatedText.TranslatedText,
+                EnAiNotificationInfo = translatedText.TranslatedText
+            };
+        else
+            information = new PhoneOrderReservationInformation
+            {
+                RecordId = record.Id,
+                NotificationInfo = translatedText.TranslatedText,
+                AiNotificationInfo = translatedText.TranslatedText,
+                EnNotificationInfo = jsonResponse,
+                EnAiNotificationInfo = jsonResponse
+            };
                     
         await _phoneOrderDataProvider.AddPhoneOrderReservationInformationAsync(information, cancellationToken: cancellationToken).ConfigureAwait(false);
-                    
+
         if (!store.IsManualReview)
         {
             var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(storeId: store.Id, isEnabled: true, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
@@ -540,6 +570,14 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
         if (order == null) return;
         
         await _posService.HandlePosOrderAsync(order, false, cancellationToken).ConfigureAwait(false);
+    }
+    
+    private TranscriptionLanguage SelectReportLanguageEnum(string language)
+    {
+        if (language.StartsWith("zh", StringComparison.OrdinalIgnoreCase))
+            return TranscriptionLanguage.Chinese;
+    
+        return TranscriptionLanguage.English;
     }
 }
 
