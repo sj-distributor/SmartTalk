@@ -799,7 +799,7 @@ public partial class PhoneOrderProcessJobService
         {
             CustomerNumber = soldToId,
             SoldToIds = string.Join(",", soldToIds),
-            DeliveryDate = storeOrder.DeliveryDate
+            DeliveryDate = storeOrder.DeliveryDate.Date
         };
         
         var task = new PhoneOrderPushTask
