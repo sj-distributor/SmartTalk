@@ -24,6 +24,10 @@ public class OrderReservationInfoDto
 
     public string AiNotificationInfo { get; set; }
     
+    public string EnNotificationInfo { get; set; }
+    
+    public string EnAiNotificationInfo { get; set; }
+    
     public string LastModifiedByName { get; set; }
 
     public string LastModifiedByPhone { get; set; }
