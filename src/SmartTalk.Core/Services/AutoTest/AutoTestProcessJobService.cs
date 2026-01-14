@@ -35,43 +35,20 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
         var whiteList = await _autoTestDataProvider.GetCustomerPhoneWhiteListAsync(cancellationToken).ConfigureAwait(false);
         
         var lastRecord = await _autoTestDataProvider.GetLastCallRecordAsync(cancellationToken).ConfigureAwait(false);
+
         var startTime = lastRecord?.StartTimeUtc ?? new DateTime(2025, 9, 1, 0, 0, 0, DateTimeKind.Utc);
-        var endTime = DateTime.UtcNow;
-        
-        var records = await _crmClient.GetCallRecordsAsync(startTime, endTime, cancellationToken).ConfigureAwait(false);
 
-        var recordsToInsert = new List<AutoTestCallRecordSync>();
+        var now = DateTime.UtcNow;
+        var windowSize = TimeSpan.FromHours(24);
 
-        foreach (var record in records)
+        while (startTime < now)
         {
-            if (record.Source != 0) continue;
-
-            var from = NormalizePhone(record.From);
-            var to = NormalizePhone(record.To);
-
-            if (!whiteList.Contains(from) && !whiteList.Contains(to))
-                continue;
-
-            var recordingUrl = string.IsNullOrEmpty(record.RecordingUrl) ? null : await UploadRecordingToOssAsync(record.RecordingUrl, cancellationToken).ConfigureAwait(false);
-
-            recordsToInsert.Add(new AutoTestCallRecordSync
-            {
-                CallLogId = record.Id,
-                CallId = record.CallId,
-                FromNumber = from,
-                ToNumber = to,
-                Direction = record.Direction,
-                ExtensionId = record.ExtensionId,
-                StartTimeUtc = record.StartTime,
-                RecordingUrl = recordingUrl,
-                Source = record.Source,
-                LastUpdated = DateTime.UtcNow
-            });
-        }
-
-        if (recordsToInsert.Any())
-        {
-            await _autoTestDataProvider.InsertCallRecordsAsync(recordsToInsert, true, cancellationToken).ConfigureAwait(false);
+            var endTime = startTime + windowSize;
+            if (endTime > now) endTime = now;
+            
+            await SyncCallRecordsByWindowAsync(startTime, endTime, whiteList, cancellationToken).ConfigureAwait(false);
+            
+            startTime = endTime;
         }
     }
 
@@ -89,6 +66,53 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
         return sb.ToString();
     }
 
+    private async Task SyncCallRecordsByWindowAsync(DateTime startTime, DateTime endTime, HashSet<string> whiteList, CancellationToken cancellationToken)
+    {
+        var records = await _crmClient.GetCallRecordsAsync(startTime, endTime, cancellationToken).ConfigureAwait(false);
+
+        if (records == null || records.Count == 0)
+            return;
+
+        var recordsToInsert = new List<AutoTestCallRecordSync>();
+
+        foreach (var record in records)
+        {
+            if (record.Source != 0)
+                continue;
+
+            var from = NormalizePhone(record.From);
+            var to = NormalizePhone(record.To);
+
+            if (!whiteList.Contains(from) && !whiteList.Contains(to))
+                continue;
+
+            string recordingUrl = null;
+            if (!string.IsNullOrEmpty(record.RecordingUrl))
+            {
+                recordingUrl = await UploadRecordingToOssAsync(record.RecordingUrl, cancellationToken).ConfigureAwait(false);
+            }
+
+            recordsToInsert.Add(new AutoTestCallRecordSync
+            {
+                CallLogId = record.Id,
+                CallId = record.CallId,
+                FromNumber = from,
+                ToNumber = to,
+                Direction = record.Direction,
+                ExtensionId = record.ExtensionId,
+                StartTimeUtc = record.StartTime,
+                RecordingUrl = recordingUrl,
+                Source = record.Source,
+                LastUpdated = DateTime.UtcNow
+            });
+        }
+
+        if (recordsToInsert.Count > 0)
+        {
+            await _autoTestDataProvider.InsertCallRecordsAsync(recordsToInsert, true, cancellationToken).ConfigureAwait(false);
+        }
+    }
+    
     private async Task<string> UploadRecordingToOssAsync(string recordingUrl, CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(recordingUrl))

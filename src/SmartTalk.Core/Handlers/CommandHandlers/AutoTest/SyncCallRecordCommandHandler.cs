@@ -8,7 +8,6 @@ namespace SmartTalk.Core.Handlers.CommandHandlers.AutoTest;
 public class SyncCallRecordCommandHandler : ICommandHandler<SyncCallRecordCommand>
 {
     private readonly IAutoTestProcessJobService _autoTestProcessJobService;
-    
 
     public SyncCallRecordCommandHandler(IAutoTestProcessJobService autoTestProcessJobService)
     {
