@@ -1,9 +1,11 @@
 using System.Text;
+using SmartTalk.Core.Constants;
 using SmartTalk.Core.Domain.AutoTest;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Attachments;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
+using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Messages.Commands.Attachments;
 using SmartTalk.Messages.Commands.AutoTest;
 using SmartTalk.Messages.Dto.Attachments;
@@ -13,6 +15,8 @@ namespace SmartTalk.Core.Services.AutoTest;
 public interface IAutoTestProcessJobService : IScopedDependency
 {
     Task SyncCallRecordsAsync(SyncCallRecordCommand command, CancellationToken cancellationToken);
+    
+    Task SyncCallRecordsByWindowAsync(DateTime startTimeUtc, DateTime endTimeUtc, CancellationToken cancellationToken);
 }
 
 public class AutoTestProcessJobService : IAutoTestProcessJobService
@@ -21,24 +25,25 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
     private readonly IAttachmentService _attachmentService;
     private readonly IAutoTestDataProvider _autoTestDataProvider;
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
+    private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
 
-    public AutoTestProcessJobService(ICrmClient crmClient, IAttachmentService attachmentService, IAutoTestDataProvider autoTestDataProvider, ISmartTalkHttpClientFactory httpClientFactory)
+    public AutoTestProcessJobService(ICrmClient crmClient, IAttachmentService attachmentService, IAutoTestDataProvider autoTestDataProvider, 
+        ISmartTalkHttpClientFactory httpClientFactory, ISmartTalkBackgroundJobClient backgroundJobClient)
     {
         _crmClient = crmClient;
         _attachmentService = attachmentService;
         _httpClientFactory = httpClientFactory;
+        _backgroundJobClient = backgroundJobClient;
         _autoTestDataProvider = autoTestDataProvider;
     }
     
     public async Task SyncCallRecordsAsync(SyncCallRecordCommand command, CancellationToken cancellationToken)
     {
-        var whiteList = await _autoTestDataProvider.GetCustomerPhoneWhiteListAsync(cancellationToken).ConfigureAwait(false);
-        
         var lastRecord = await _autoTestDataProvider.GetLastCallRecordAsync(cancellationToken).ConfigureAwait(false);
 
         var startTime = lastRecord?.StartTimeUtc ?? new DateTime(2025, 9, 1, 0, 0, 0, DateTimeKind.Utc);
 
-        var now = DateTime.UtcNow;
+        var now = DateTime.UtcNow.AddDays(-3);
         var windowSize = TimeSpan.FromHours(24);
 
         while (startTime < now)
@@ -46,29 +51,18 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
             var endTime = startTime + windowSize;
             if (endTime > now) endTime = now;
             
-            await SyncCallRecordsByWindowAsync(startTime, endTime, whiteList, cancellationToken).ConfigureAwait(false);
+            _backgroundJobClient.Enqueue<IAutoTestProcessJobService>(x => x.SyncCallRecordsByWindowAsync(startTime, endTime, CancellationToken.None));
             
             startTime = endTime;
         }
     }
 
-    private static string NormalizePhone(string phone)
+
+    public async Task SyncCallRecordsByWindowAsync(DateTime startTimeUtc, DateTime endTimeUtc, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(phone)) return phone;
-
-        var sb = new StringBuilder();
-        foreach (var ch in phone)
-        {
-            if (char.IsDigit(ch) || ch == '+')
-                sb.Append(ch);
-        }
-
-        return sb.ToString();
-    }
-
-    private async Task SyncCallRecordsByWindowAsync(DateTime startTime, DateTime endTime, HashSet<string> whiteList, CancellationToken cancellationToken)
-    {
-        var records = await _crmClient.GetCallRecordsAsync(startTime, endTime, cancellationToken).ConfigureAwait(false);
+        var whiteList = await _autoTestDataProvider.GetCustomerPhoneWhiteListAsync(cancellationToken).ConfigureAwait(false);
+        
+        var records = await _crmClient.GetCallRecordsAsync(startTimeUtc, endTimeUtc, cancellationToken).ConfigureAwait(false);
 
         if (records == null || records.Count == 0)
             return;
@@ -135,5 +129,19 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
         }, cancellationToken).ConfigureAwait(false);
 
         return ossResponse.Attachment?.FileUrl;
+    }
+    
+    private static string NormalizePhone(string phone)
+    {
+        if (string.IsNullOrWhiteSpace(phone)) return phone;
+
+        var sb = new StringBuilder();
+        foreach (var ch in phone)
+        {
+            if (char.IsDigit(ch) || ch == '+')
+                sb.Append(ch);
+        }
+
+        return sb.ToString();
     }
 }
