@@ -16,9 +16,11 @@ using Mediator.Net;
 using Newtonsoft.Json;
 using Serilog;
 using SmartTalk.Core.Domain.Pos;
+using SmartTalk.Core.Services.Account;
 using SmartTalk.Core.Services.AliYun;
 using SmartTalk.Core.Services.Caching.Redis;
 using SmartTalk.Core.Services.Http.Clients;
+using SmartTalk.Core.Services.Identity;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.Pos;
@@ -30,6 +32,7 @@ using SmartTalk.Messages.Commands.Printer;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Printer;
 using SmartTalk.Messages.Dto.WeChat;
+using SmartTalk.Messages.Enums;
 using SmartTalk.Messages.Enums.Caching;
 using SmartTalk.Messages.Enums.Printer;
 using SmartTalk.Messages.Events.Printer;
@@ -79,17 +82,19 @@ public interface IPrinterService : IScopedDependency
 public class PrinterService : IPrinterService
 {
     private readonly IMapper _mapper;
+    private readonly ICurrentUser _currentUser;
     private readonly IWeChatClient _weChatClient;
     private readonly ICacheManager _cacheManager;
     private readonly IAliYunOssService _ossService;
     private readonly IRedisSafeRunner _redisSafeRunner;
     private readonly IPosDataProvider _posDataProvider;
+    private readonly IAccountDataProvider _accountDataProvider;
     private readonly IPrinterDataProvider _printerDataProvider;
     private readonly PrinterSendErrorLogSetting _printerSendErrorLogSetting;
     private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
 
-    public PrinterService(IMapper mapper, IWeChatClient weChatClient, ICacheManager cacheManager, IAliYunOssService ossService, IRedisSafeRunner redisSafeRunner, IPosDataProvider posDataProvider, IPrinterDataProvider printerDataProvider, PrinterSendErrorLogSetting printerSendErrorLogSetting, ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient, IPhoneOrderDataProvider phoneOrderDataProvider)
+    public PrinterService(IMapper mapper, IWeChatClient weChatClient, ICacheManager cacheManager, IAliYunOssService ossService, IRedisSafeRunner redisSafeRunner, IPosDataProvider posDataProvider, IPrinterDataProvider printerDataProvider, PrinterSendErrorLogSetting printerSendErrorLogSetting, ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient, IPhoneOrderDataProvider phoneOrderDataProvider, IAccountDataProvider accountDataProvider, ICurrentUser currentUser)
     {
         _mapper = mapper;
         _ossService = ossService;
@@ -101,6 +106,8 @@ public class PrinterService : IPrinterService
         _printerSendErrorLogSetting = printerSendErrorLogSetting;
         _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
         _phoneOrderDataProvider = phoneOrderDataProvider;
+        _accountDataProvider = accountDataProvider;
+        _currentUser = currentUser;
     }
 
     public async Task<GetPrinterJobAvailableResponse> GetPrinterJobAvailableAsync(GetPrinterJobAvailableRequest request, CancellationToken cancellationToken)
@@ -237,13 +244,18 @@ public class PrinterService : IPrinterService
         {
             var reservationInfo = await _posDataProvider.GetPhoneOrderReservationInformationAsync(merchPrinterOrder.OrderId, cancellationToken).ConfigureAwait(false);
             var storePrintDateString = "";
+            
             if (!string.IsNullOrEmpty(store.Timezone))
                 storePrintDateString = TimeZoneInfo.ConvertTimeFromUtc(storePrintDate.UtcDateTime, TimeZoneInfo.FindSystemTimeZoneById(store.Timezone)).ToString("yyyy-MM-dd HH:mm:ss");    
             else
                 storePrintDateString = storePrintDate.ToString("yyyy-MM-dd HH:mm:ss");
             
+            var userAccount = await _accountDataProvider.GetUserAccountByUserIdAsync(_currentUser.Id.Value, cancellationToken: cancellationToken).ConfigureAwait(false);
+            
+            var notificationInfo = userAccount.SystemLanguage == SystemLanguage.Chinese ? reservationInfo.NotificationInfo : reservationInfo.EnNotificationInfo; 
+                
             img = await RenderReceipt1Async(JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(store.Names).GetValueOrDefault("en")?.GetValueOrDefault("name"),
-                store.Address, store.PhoneNums, merchPrinter?.PrinterName, reservationInfo.NotificationInfo,
+                store.Address, store.PhoneNums, merchPrinter?.PrinterName, notificationInfo,
                 storePrintDateString).ConfigureAwait(false);
         }
         
