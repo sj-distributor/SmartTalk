@@ -41,30 +41,33 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
     
     public async Task SyncCallRecordsAsync(SyncCallRecordCommand command, CancellationToken cancellationToken)
     {
-        var lastRecord = await _autoTestDataProvider.GetLastCallRecordAsync(cancellationToken).ConfigureAwait(false);
-
-        var startTime = lastRecord?.StartTimeUtc ?? new DateTime(2025, 9, 9, 0, 0, 0, DateTimeKind.Utc);
+        var whiteList = await _autoTestDataProvider.GetCustomerPhoneWhiteListAsync(cancellationToken).ConfigureAwait(false);
 
         var now = DateTime.UtcNow.AddDays(-3);
-        var windowSize = TimeSpan.FromHours(12);
 
-        while (startTime < now)
+        foreach (var phone in whiteList)
         {
-            var endTime = startTime + windowSize;
-            if (endTime > now) endTime = now;
-            
-            _backgroundJobClient.Enqueue<IAutoTestProcessJobService>(x => x.SyncCallRecordsByWindowAsync(startTime, endTime, CancellationToken.None));
-            
-            startTime = endTime;
+            var lastRecord = await _autoTestDataProvider.GetLastCallRecordAsync(phone, cancellationToken).ConfigureAwait(false);
+            var startTime = lastRecord?.StartTimeUtc ?? new DateTime(2025, 9, 9, 0, 0, 0, DateTimeKind.Utc);
+
+            var windowSize = TimeSpan.FromMinutes(10);
+
+            while (startTime < now)
+            {
+                var endTime = startTime + windowSize;
+                if (endTime > now) endTime = now;
+
+                Log.Information("Enqueue SyncCallRecordsByWindowAsync for {Phone}: {StartTime} - {EndTime}", phone, startTime, endTime);
+
+                _backgroundJobClient.Enqueue<IAutoTestProcessJobService>(x => x.SyncCallRecordsByWindowAsync(startTime, endTime, cancellationToken));
+
+                startTime = endTime;
+            }
         }
     }
 
-
     public async Task SyncCallRecordsByWindowAsync(DateTime startTimeUtc, DateTime endTimeUtc, CancellationToken cancellationToken)
     {
-        var whiteList = await _autoTestDataProvider.GetCustomerPhoneWhiteListAsync(cancellationToken).ConfigureAwait(false);
-        Log.Information("Fetched {WhiteCount} white list entries", whiteList.Count);
-        
         var records = await _crmClient.GetCallRecordsAsync(startTimeUtc, endTimeUtc, cancellationToken).ConfigureAwait(false);
 
         if (records == null || records.Count == 0)
@@ -85,9 +88,6 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
 
             var from = NormalizePhone(record.From);
             var to = NormalizePhone(record.To);
-
-            if (!whiteList.Contains(from) && !whiteList.Contains(to))
-                continue;
 
             if (string.IsNullOrEmpty(record.CallId))
                 continue;

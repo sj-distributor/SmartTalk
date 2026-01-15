@@ -36,7 +36,7 @@ public partial interface IAutoTestDataProvider
     
     Task<HashSet<string>> GetCustomerPhoneWhiteListAsync(CancellationToken cancellationToken);
 
-    Task<AutoTestCallRecordSync> GetLastCallRecordAsync(CancellationToken cancellationToken);
+    Task<AutoTestCallRecordSync> GetLastCallRecordAsync(string phone = null, CancellationToken cancellationToken = default);
 
     Task InsertCallRecordsAsync(List<AutoTestCallRecordSync> records, bool forceSave = true, CancellationToken cancellationToken = default);
 }
@@ -148,9 +148,14 @@ public partial class AutoTestDataProvider
         return phones.ToHashSet();
     }
     
-    public async Task<AutoTestCallRecordSync> GetLastCallRecordAsync(CancellationToken cancellationToken)
+    public async Task<AutoTestCallRecordSync> GetLastCallRecordAsync(string phone = null, CancellationToken cancellationToken = default)
     {
-        return await _repository.Query<AutoTestCallRecordSync>().OrderByDescending(x => x.StartTimeUtc).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        var query = _repository.Query<AutoTestCallRecordSync>();
+
+        if (!string.IsNullOrWhiteSpace(phone)) 
+            query = query.Where(x => x.FromNumber == phone || x.ToNumber == phone);
+
+        return await query.OrderByDescending(x => x.StartTimeUtc).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
     
     public async Task InsertCallRecordsAsync(List<AutoTestCallRecordSync> records, bool forceSave = true, CancellationToken cancellationToken = default)
