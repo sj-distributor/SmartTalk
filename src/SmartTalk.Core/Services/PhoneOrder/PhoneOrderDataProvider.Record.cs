@@ -85,6 +85,8 @@ public partial interface IPhoneOrderDataProvider
     Task MarkRecordCompletedAsync(int recordId, CancellationToken cancellationToken = default);
 
     Task<List<int>> GetPhoneOrderReservationInfoUnreviewedRecordIdsAsync(List<int> recordIds, CancellationToken cancellationToken);
+    
+    Task<PhoneOrderRecordReport> GetOriginalPhoneOrderRecordReportAsync(int recordId, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderDataProvider
@@ -523,5 +525,10 @@ public partial class PhoneOrderDataProvider
                 where recordIds.Contains(info.RecordId) && order == null
                 select info.RecordId
             ).ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<PhoneOrderRecordReport> GetOriginalPhoneOrderRecordReportAsync(int recordId, CancellationToken cancellationToken)
+    {
+        return await _repository.Query<PhoneOrderRecordReport>().Where(x => x.RecordId == recordId && x.IsOrigin).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 }
