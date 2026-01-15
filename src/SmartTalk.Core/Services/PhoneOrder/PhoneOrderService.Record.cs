@@ -1131,7 +1131,8 @@ public partial class PhoneOrderService
         
         var unreviewedRecordIds = await _posDataProvider.GetAiDraftOrderRecordIdsByRecordIdsAsync(recordIds, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        var unreviewedReservationRecordIds = await _phoneOrderDataProvider.GetPhoneOrderReservationInfoUnreviewedRecordIdsAsync(recordIds, cancellationToken).ConfigureAwait(false);
+        var reservationRecordIds = records.Where(x => x.Scenario is DialogueScenarios.Reservation or DialogueScenarios.InformationNotification or DialogueScenarios.ThirdPartyOrderNotification).Select(x => x.Id).ToList();
+        var unreviewedReservationRecordIds = await _phoneOrderDataProvider.GetPhoneOrderReservationInfoUnreviewedRecordIdsAsync(reservationRecordIds, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Get store unreview record ids: {@UnreviewedRecordIds}", unreviewedRecordIds);
         

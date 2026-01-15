@@ -392,7 +392,7 @@ public partial class PhoneOrderDataProvider
         var printerOrders = _repository.Query<MerchPrinterOrder>();
         
         var query = from order in _repository.Query<PhoneOrderReservationInformation>()
-            join record in _repository.Query<PhoneOrderRecord>().Where(x => x.Status == PhoneOrderRecordStatus.Sent && x.AssistantId.HasValue && agentIds.Contains(x.AgentId)) on order.RecordId equals record.Id
+            join record in _repository.Query<PhoneOrderRecord>().Where(x => x.Status == PhoneOrderRecordStatus.Sent && x.AssistantId.HasValue && agentIds.Contains(x.AgentId) && (x.Scenario == DialogueScenarios.Reservation || x.Scenario == DialogueScenarios.InformationNotification || x.Scenario == DialogueScenarios.ThirdPartyOrderNotification)) on order.RecordId equals record.Id
             where !printerOrders.Any(x => x.OrderId == order.RecordId)
             select new SimplePhoneOrderRecordDto
             {
