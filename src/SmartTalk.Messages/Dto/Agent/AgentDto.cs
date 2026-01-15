@@ -48,6 +48,8 @@ public class AgentDto
     
     public string TransferCallNumber { get; set; }
     
+    public string ServiceHours { get; set; }
+    
     public DateTimeOffset CreatedDate { get; set; }
 
     public int UnreviewCount { get; set; } = 0;
