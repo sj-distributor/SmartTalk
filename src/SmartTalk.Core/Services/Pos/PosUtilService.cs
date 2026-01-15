@@ -120,7 +120,7 @@ public class PosUtilService : IPosUtilService
                 {
                     try
                     {
-                        var builtModifiers = await GenerateSpecificationProductsAsync(modifiers, aiDraftItem.Specification, cancellationToken).ConfigureAwait(false);
+                        var builtModifiers = await GenerateSpecificationProductsAsync(modifiers, record.Language, aiDraftItem.Specification, cancellationToken).ConfigureAwait(false);
                         
                         Log.Information("Matched modifiers: {@MatchedModifiers}", builtModifiers);
 
@@ -150,7 +150,7 @@ public class PosUtilService : IPosUtilService
         }
     }
 
-    public async Task<List<AiDraftItemModifiersDto>> GenerateSpecificationProductsAsync(List<EasyPosResponseModifierGroups> modifiers, string specification, CancellationToken cancellationToken)
+    public async Task<List<AiDraftItemModifiersDto>> GenerateSpecificationProductsAsync(List<EasyPosResponseModifierGroups> modifiers, TranscriptionLanguage language, string specification, CancellationToken cancellationToken)
     {
         var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
 
