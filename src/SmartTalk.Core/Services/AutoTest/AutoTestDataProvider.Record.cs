@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using Newtonsoft.Json;
 using SmartTalk.Core.Domain.AutoTest;
+using SmartTalk.Core.Domain.Sales;
 using SmartTalk.Messages.Enums.AutoTest;
 
 namespace SmartTalk.Core.Services.AutoTest;
@@ -31,6 +33,12 @@ public partial interface IAutoTestDataProvider
     Task UpdateAutoTestImportRecordAsync(AutoTestImportDataRecord record, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task<List<AutoTestTaskRecord>> GetAllAutoTestTaskRecordsByTaskIdAsync(int taskId, CancellationToken cancellationToken);
+    
+    Task<HashSet<string>> GetCustomerPhoneWhiteListAsync(CancellationToken cancellationToken);
+
+    Task<AutoTestCallRecordSync> GetLastCallRecordAsync(CancellationToken cancellationToken);
+
+    Task InsertCallRecordsAsync(List<AutoTestCallRecordSync> records, bool forceSave = true, CancellationToken cancellationToken = default);
 }
 
 public partial class AutoTestDataProvider
@@ -128,5 +136,26 @@ public partial class AutoTestDataProvider
         var result = await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
 
         return (result?.task, result?.dataset);
+    }
+    
+    public async Task<HashSet<string>> GetCustomerPhoneWhiteListAsync(CancellationToken cancellationToken)
+    {
+        var phones = await _repository.Query<AutoTestPhoneWhitelist>()
+            .Select(x => x.PhoneNumber)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        return phones.ToHashSet();
+    }
+    
+    public async Task<AutoTestCallRecordSync> GetLastCallRecordAsync(CancellationToken cancellationToken)
+    {
+        return await _repository.Query<AutoTestCallRecordSync>().OrderByDescending(x => x.StartTimeUtc).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+    
+    public async Task InsertCallRecordsAsync(List<AutoTestCallRecordSync> records, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.InsertAllAsync(records, cancellationToken).ConfigureAwait(false);
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 }

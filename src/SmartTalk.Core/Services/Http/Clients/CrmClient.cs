@@ -3,6 +3,7 @@ using Newtonsoft.Json;
 using Serilog;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Settings.Crm;
+using SmartTalk.Messages.Dto.AutoTest;
 using SmartTalk.Messages.Dto.Crm;
 
 namespace SmartTalk.Core.Services.Http.Clients;
@@ -14,6 +15,8 @@ public interface ICrmClient : IScopedDependency
     Task<List<CrmContactDto>> GetCustomerContactsAsync(string customerId, CancellationToken cancellationToken);
 
     Task<List<GetCustomersPhoneNumberDataDto>> GetCustomersByPhoneNumberAsync(GetCustmoersByPhoneNumberRequestDto numberRequest, CancellationToken cancellationToken);
+    
+    Task<List<AutoTestCallLogDto>> GetCallRecordsAsync(DateTime startTimeUtc, DateTime endTimeUtc, CancellationToken cancellationToken);
 }
 
 public class CrmClient : ICrmClient
@@ -88,5 +91,20 @@ public class CrmClient : ICrmClient
 
         Log.Information("Found {Count} customers for phone {PhoneNumber}", result.Count, numberRequest.PhoneNumber);
         return result;
+    }
+    
+    public async Task<List<AutoTestCallLogDto>> GetCallRecordsAsync(DateTime startTimeUtc, DateTime endTimeUtc, CancellationToken cancellationToken)
+    {
+        var url = $"{_crmSetting.SyncBaseUrl}/api/external/ring-central/call-logs" + $"?start_time={startTimeUtc:O}&end_time={endTimeUtc:O}";
+        
+        var headers = new Dictionary<string, string>
+        {
+            { "Accept", "application/json" },
+            { "X-API-KEY", _crmSetting.ApiKey }
+        };
+        
+        var response = await _httpClient.GetAsync<GetCallRecordsDataDto>(url, headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return response.Data;
     }
 }
