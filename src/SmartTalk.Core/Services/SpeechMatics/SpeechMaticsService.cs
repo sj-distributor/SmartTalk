@@ -665,6 +665,7 @@ public class SpeechMaticsService : ISpeechMaticsService
             AiOrderInfoDto = new AiOrderInfoDto
             {
                 SoldToId = soldToId,
+                AiAssistantId = aiSpeechAssistant.Id,
                 SoldToIds = string.IsNullOrEmpty(soldToId) ? assistantNameWithComma : soldToId,
                 DocumentDate = pacificNow.Date,
                 DeliveryDate = pacificDeliveryDate.Date,
