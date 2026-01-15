@@ -41,7 +41,7 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
     {
         var lastRecord = await _autoTestDataProvider.GetLastCallRecordAsync(cancellationToken).ConfigureAwait(false);
 
-        var startTime = lastRecord?.StartTimeUtc ?? new DateTime(2025, 9, 1, 0, 0, 0, DateTimeKind.Utc);
+        var startTime = lastRecord?.StartTimeUtc ?? new DateTime(2025, 9, 9, 0, 0, 0, DateTimeKind.Utc);
 
         var now = DateTime.UtcNow.AddDays(-3);
         var windowSize = TimeSpan.FromHours(24);
