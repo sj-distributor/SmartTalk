@@ -113,7 +113,7 @@ public partial class PhoneOrderProcessJobService
         var callSubjectCn = "通话主题:";
         var callSubjectEn = "Conversation topic:";
         
-        var messages = await ConfigureRecordAnalyzePromptAsync(agent, aiSpeechAssistant, callFrom ?? "", callTo ?? "", callSubjectCn, callSubjectEn, currentTime, audioContent, cancellationToken);
+        var messages = await ConfigureRecordAnalyzePromptAsync(agent, aiSpeechAssistant, record, callFrom ?? "", callTo ?? "", callSubjectCn, callSubjectEn, currentTime, audioContent, cancellationToken);
         
         ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
         
@@ -239,7 +239,9 @@ public partial class PhoneOrderProcessJobService
             await _smartiesClient.CallBackSmartiesAiSpeechAssistantRecordAsync(new AiSpeechAssistantCallBackRequestDto { CallSid = record.SessionId, RecordUrl = record.Url, RecordAnalyzeReport =  record.TranscriptionText }, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<List<ChatMessage>> ConfigureRecordAnalyzePromptAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, string callFrom, string callTo, string callSubjectCn, string callSubjectEn, string currentTime, byte[] audioContent, CancellationToken cancellationToken) 
+    private async Task<List<ChatMessage>> ConfigureRecordAnalyzePromptAsync(
+        Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, PhoneOrderRecord record, string callFrom,
+        string callTo, string callSubjectCn, string callSubjectEn, string currentTime, byte[] audioContent, CancellationToken cancellationToken) 
     {
         var askItemsJson = string.Empty;
         
@@ -280,7 +282,7 @@ public partial class PhoneOrderProcessJobService
             }
         }
         
-        var (_, menuItems) = await _posUtilService.GeneratePosMenuItemsAsync(agent.Id, false, cancellationToken).ConfigureAwait(false);
+        var (_, menuItems) = await _posUtilService.GeneratePosMenuItemsAsync(agent.Id, false, record.Language, cancellationToken).ConfigureAwait(false);
         
         var soldToIds = !string.IsNullOrEmpty(aiSpeechAssistant.Name) ? aiSpeechAssistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : new List<string>();
         
