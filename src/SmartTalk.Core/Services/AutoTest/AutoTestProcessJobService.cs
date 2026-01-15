@@ -1,4 +1,6 @@
 using System.Text;
+using System.Text.Json;
+using Serilog;
 using SmartTalk.Core.Constants;
 using SmartTalk.Core.Domain.AutoTest;
 using SmartTalk.Core.Ioc;
@@ -44,7 +46,7 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
         var startTime = lastRecord?.StartTimeUtc ?? new DateTime(2025, 9, 9, 0, 0, 0, DateTimeKind.Utc);
 
         var now = DateTime.UtcNow.AddDays(-3);
-        var windowSize = TimeSpan.FromHours(24);
+        var windowSize = TimeSpan.FromHours(12);
 
         while (startTime < now)
         {
@@ -61,16 +63,23 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
     public async Task SyncCallRecordsByWindowAsync(DateTime startTimeUtc, DateTime endTimeUtc, CancellationToken cancellationToken)
     {
         var whiteList = await _autoTestDataProvider.GetCustomerPhoneWhiteListAsync(cancellationToken).ConfigureAwait(false);
+        Log.Information("Fetched {WhiteCount} white list entries", whiteList.Count);
         
         var records = await _crmClient.GetCallRecordsAsync(startTimeUtc, endTimeUtc, cancellationToken).ConfigureAwait(false);
 
         if (records == null || records.Count == 0)
+        {
+            Log.Information("No call records returned for window {StartTime} - {EndTime}", startTimeUtc, endTimeUtc);
             return;
+        }
 
         var recordsToInsert = new List<AutoTestCallRecordSync>();
 
         foreach (var record in records)
         {
+            var recordJson = JsonSerializer.Serialize(record, new JsonSerializerOptions { WriteIndented = true });
+            Log.Information("Fetched record from CRM: {RecordJson}", recordJson);
+            
             if (record.Source != 0)
                 continue;
 
@@ -80,10 +89,14 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
             if (!whiteList.Contains(from) && !whiteList.Contains(to))
                 continue;
 
+            if (string.IsNullOrEmpty(record.CallId))
+                continue;
+            
             string recordingUrl = null;
             if (!string.IsNullOrEmpty(record.RecordingUrl))
             {
                 recordingUrl = await UploadRecordingToOssAsync(record.RecordingUrl, cancellationToken).ConfigureAwait(false);
+                Log.Information("Uploaded recording for record {Id} to {RecordingUrl}", record.Id, recordingUrl);
             }
 
             recordsToInsert.Add(new AutoTestCallRecordSync
