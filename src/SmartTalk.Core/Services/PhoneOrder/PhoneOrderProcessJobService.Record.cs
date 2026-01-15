@@ -400,7 +400,7 @@ public partial class PhoneOrderProcessJobService
 
             if (storeOrder.IsDeleteWholeOrder && !storeOrder.Orders.Any())
             {
-                await CreateDeleteOrderTaskAsync(record, storeOrder, soldToId, soldToIds, cancellationToken).ConfigureAwait(false);
+                await CreateDeleteOrderTaskAsync(record, storeOrder, soldToId, soldToIds, pacificZone, pacificNow, cancellationToken).ConfigureAwait(false);
                 continue;
             }
 
@@ -794,13 +794,14 @@ public partial class PhoneOrderProcessJobService
         return result;
     }
      
-    private async Task CreateDeleteOrderTaskAsync(PhoneOrderRecord record, ExtractedOrderDto storeOrder, string soldToId, List<string> soldToIds, CancellationToken cancellationToken)
+    private async Task CreateDeleteOrderTaskAsync(PhoneOrderRecord record, ExtractedOrderDto storeOrder, string soldToId, List<string> soldToIds, TimeZoneInfo pacificZone, DateTime pacificNow, CancellationToken cancellationToken)
     {
+        var pacificDeliveryDate = storeOrder.DeliveryDate != default ? TimeZoneInfo.ConvertTimeFromUtc(storeOrder.DeliveryDate, pacificZone) : pacificNow.AddDays(1);
         var req = new DeleteAiOrderRequestDto
         {
             CustomerNumber = soldToId,
             SoldToIds = string.Join(",", soldToIds),
-            DeliveryDate = storeOrder.DeliveryDate.Date,
+            DeliveryDate = pacificDeliveryDate.Date,
             AiAssistantId  = record.AssistantId ?? 0
         };
         
