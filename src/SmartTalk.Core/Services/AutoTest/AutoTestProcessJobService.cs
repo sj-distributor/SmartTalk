@@ -51,7 +51,7 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
             var endTime = startTime + windowSize;
             if (endTime > now) endTime = now;
             
-            _backgroundJobClient.Enqueue<IAutoTestProcessJobService>(x => x.SyncCallRecordsByWindowAsync(startTime, endTime, CancellationToken.None));
+            _backgroundJobClient.Enqueue<IAutoTestProcessJobService>(x => x.SyncCallRecordsByWindowAsync(startTime, endTime, CancellationToken.None), HangfireConstants.InternalHostingAutoTestCallRecordSync);
             
             startTime = endTime;
         }
