@@ -8,4 +8,6 @@ public class PhoneOrderRecordInformationDto
     public AgentDto Agent { get; set; }
     
     public DateTimeOffset StartDate { get; set; }
+    
+    public string OutCallNumber { get; set; }
 }

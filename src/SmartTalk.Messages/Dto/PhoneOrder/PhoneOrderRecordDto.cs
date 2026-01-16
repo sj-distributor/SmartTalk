@@ -50,6 +50,8 @@ public class PhoneOrderRecordDto
     
     public string IncomingCallNumber { get; set; }
 
+    public string OutCallNumber { get; set; }
+    
     public string ConversationText { get; set; }
     
     public bool? IsCustomerFriendly { get; set; }

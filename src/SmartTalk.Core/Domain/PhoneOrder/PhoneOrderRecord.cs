@@ -101,6 +101,9 @@ public class PhoneOrderRecord : IEntity
     
     [Column("is_modify_scenario")]
     public bool IsModifyScenario { get; set; }
+
+    [Column("out_call_number")]
+    public string OutCallNumber { get; set; }
     
     [NotMapped]
     public UserAccount UserAccount { get; set; }
