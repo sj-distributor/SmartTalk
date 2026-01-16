@@ -1,4 +1,6 @@
 using System.Text;
+using System.Text.Json;
+using Serilog;
 using SmartTalk.Core.Constants;
 using SmartTalk.Core.Domain.AutoTest;
 using SmartTalk.Core.Ioc;
@@ -39,33 +41,58 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
     
     public async Task SyncCallRecordsAsync(SyncCallRecordCommand command, CancellationToken cancellationToken)
     {
-        var lastRecord = await _autoTestDataProvider.GetLastCallRecordAsync(cancellationToken).ConfigureAwait(false);
+        var whiteList = await _autoTestDataProvider.GetCustomerPhoneWhiteListAsync(cancellationToken).ConfigureAwait(false);
 
-        var startTime = lastRecord?.StartTimeUtc ?? new DateTime(2025, 9, 9, 0, 0, 0, DateTimeKind.Utc);
+        if (whiteList == null || whiteList.Count == 0)
+            return;
 
         var now = DateTime.UtcNow.AddDays(-3);
-        var windowSize = TimeSpan.FromHours(24);
+        
+        var globalStartTime = new DateTime(2025, 9, 9, 0, 0, 0, DateTimeKind.Utc);
+
+        foreach (var phone in whiteList)
+        {
+            var lastRecord = await _autoTestDataProvider.GetLastCallRecordAsync(phone, cancellationToken).ConfigureAwait(false);
+
+            if (lastRecord == null)
+            {
+                globalStartTime = new DateTime(2025, 9, 9, 0, 0, 0, DateTimeKind.Utc);
+                break;
+            }
+
+            if (lastRecord.StartTimeUtc < globalStartTime)
+                globalStartTime = lastRecord.StartTimeUtc;
+        }
+
+        var windowSize = TimeSpan.FromMinutes(10);
+        var startTime = globalStartTime;
 
         while (startTime < now)
         {
             var endTime = startTime + windowSize;
             if (endTime > now) endTime = now;
-            
-            _backgroundJobClient.Enqueue<IAutoTestProcessJobService>(x => x.SyncCallRecordsByWindowAsync(startTime, endTime, CancellationToken.None), HangfireConstants.InternalHostingAutoTestCallRecordSync);
-            
+
+            Log.Information("Enqueue SyncCallRecordsByWindowAsync: {StartTime} - {EndTime}", startTime, endTime);
+
+            _backgroundJobClient.Enqueue<IAutoTestProcessJobService>(x => x.SyncCallRecordsByWindowAsync(startTime, endTime, CancellationToken.None));
+
             startTime = endTime;
         }
     }
 
-
     public async Task SyncCallRecordsByWindowAsync(DateTime startTimeUtc, DateTime endTimeUtc, CancellationToken cancellationToken)
     {
-        var whiteList = await _autoTestDataProvider.GetCustomerPhoneWhiteListAsync(cancellationToken).ConfigureAwait(false);
-        
         var records = await _crmClient.GetCallRecordsAsync(startTimeUtc, endTimeUtc, cancellationToken).ConfigureAwait(false);
 
-        if (records == null || records.Count == 0)
+        if (records == null || records.Count == 0) 
             return;
+        
+        var callLogIds = records.Where(x => x.Source == 0 && !string.IsNullOrEmpty(x.Id))
+            .Select(x => x.Id).Distinct().ToList();
+
+        var existingIds = await _autoTestDataProvider.GetExistingCallLogIdsAsync(callLogIds, cancellationToken).ConfigureAwait(false);
+
+        var existingSet = existingIds.ToHashSet();
 
         var recordsToInsert = new List<AutoTestCallRecordSync>();
 
@@ -74,11 +101,14 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
             if (record.Source != 0)
                 continue;
 
+            if (string.IsNullOrEmpty(record.Id))
+                continue;
+            
+            if (existingSet.Contains(record.Id))
+                continue;
+
             var from = NormalizePhone(record.From);
             var to = NormalizePhone(record.To);
-
-            if (!whiteList.Contains(from) && !whiteList.Contains(to))
-                continue;
 
             string recordingUrl = null;
             if (!string.IsNullOrEmpty(record.RecordingUrl))
