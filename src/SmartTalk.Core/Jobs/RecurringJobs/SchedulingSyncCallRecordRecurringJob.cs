@@ -1,3 +1,4 @@
+using Hangfire;
 using Mediator.Net;
 using SmartTalk.Messages.Commands.AutoTest;
 
@@ -19,5 +20,5 @@ public class SchedulingSyncCallRecordRecurringJob : IRecurringJob
 
     public string JobId => nameof(SchedulingSyncCallRecordRecurringJob);
 
-    public string CronExpression => "0 0 31 2 *";
+    public string CronExpression => Cron.Never();
 }
