@@ -12,6 +12,8 @@ public class MerchPrinterOrderRetryCommand : ICommand
     public int? OrderId { get; set; }
 
     public int? StoreId { get; set; }
+
+    public int? PhoneOrderId { get; set; }
     
     public PrintFormat? PrintFormat { get; set; }
 }
