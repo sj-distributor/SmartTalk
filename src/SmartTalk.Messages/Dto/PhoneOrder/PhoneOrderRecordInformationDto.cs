@@ -9,5 +9,5 @@ public class PhoneOrderRecordInformationDto
     
     public DateTimeOffset StartDate { get; set; }
     
-    public string OutCallNumber { get; set; }
+    public string PhoneNumber { get; set; }
 }

@@ -143,7 +143,7 @@ public partial class PhoneOrderService
 
         Log.Information("Phone order record transcription detected language: {@detectionLanguage}", detection.Language);
 
-        var record = new PhoneOrderRecord { SessionId = Guid.NewGuid().ToString(), AgentId = recordInfo.Agent.Id, Language = SelectLanguageEnum(detection.Language), CreatedDate = recordInfo.StartDate, Status = PhoneOrderRecordStatus.Recieved, OrderRecordType = command.OrderRecordType, PhoneNumber = recordInfo.OutCallNumber };
+        var record = new PhoneOrderRecord { SessionId = Guid.NewGuid().ToString(), AgentId = recordInfo.Agent.Id, Language = SelectLanguageEnum(detection.Language), CreatedDate = recordInfo.StartDate, Status = PhoneOrderRecordStatus.Recieved, OrderRecordType = command.OrderRecordType, PhoneNumber = recordInfo.PhoneNumber };
 
         if (await CheckPhoneOrderRecordDurationAsync(command.RecordContent, cancellationToken).ConfigureAwait(false))
         {
@@ -539,7 +539,7 @@ public partial class PhoneOrderService
         {
             Agent = _mapper.Map<AgentDto>(agent),
             StartDate = startTime ?? ExtractPhoneOrderStartDateFromRecordName(recordName),
-            OutCallNumber = outCallNumber
+            PhoneNumber = outCallNumber
         };
     }
     
