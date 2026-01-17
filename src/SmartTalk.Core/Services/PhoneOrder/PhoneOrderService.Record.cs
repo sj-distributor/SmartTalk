@@ -533,13 +533,13 @@ public partial class PhoneOrderService
     {
         var agent = await _agentDataProvider.GetAgentByIdAsync(agentId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        var outCallNumber = TryExtractTargetNumber(recordName);
+        var phoneNumber = TryExtractTargetNumber(recordName);
         
         return new PhoneOrderRecordInformationDto
         {
             Agent = _mapper.Map<AgentDto>(agent),
             StartDate = startTime ?? ExtractPhoneOrderStartDateFromRecordName(recordName),
-            PhoneNumber = outCallNumber
+            PhoneNumber = phoneNumber
         };
     }
     
