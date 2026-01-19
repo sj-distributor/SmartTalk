@@ -19,4 +19,6 @@ public static class HangfireConstants
     public const string InternalHostingRecordPhoneCall = "record-phone-call";
     
     public const string InternalHostingCaCheKnowledgeVariable = "cache-knowledge-variable";
+    
+    public const string InternalHostingAutoTestCallRecordSync = "auto-test-call-record-sync";
 }

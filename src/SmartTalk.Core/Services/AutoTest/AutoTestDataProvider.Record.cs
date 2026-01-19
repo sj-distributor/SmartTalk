@@ -39,6 +39,8 @@ public partial interface IAutoTestDataProvider
     Task<AutoTestCallRecordSync> GetLastCallRecordAsync(string phone = null, CancellationToken cancellationToken = default);
 
     Task InsertCallRecordsAsync(List<AutoTestCallRecordSync> records, bool forceSave = true, CancellationToken cancellationToken = default);
+
+    Task<List<string>> GetExistingCallLogIdsAsync(List<string> callLogIds, CancellationToken cancellationToken);
 }
 
 public partial class AutoTestDataProvider
@@ -162,5 +164,11 @@ public partial class AutoTestDataProvider
     {
         await _repository.InsertAllAsync(records, cancellationToken).ConfigureAwait(false);
         if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<string>> GetExistingCallLogIdsAsync(List<string> callLogIds, CancellationToken cancellationToken)
+    {
+        return await _repository.Query<AutoTestCallRecordSync>().Where(x => callLogIds.Contains(x.CallLogId))
+            .Select(x => x.CallLogId).ToListAsync(cancellationToken);
     }
 }
