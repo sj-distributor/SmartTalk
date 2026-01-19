@@ -860,24 +860,30 @@ public class PrinterService : IPrinterService
              {
                  Log.Information("storeId:{storeId}, orderId:{orderId}", command.StoreId, command.OrderId);
         
-                 merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(storeId: command.StoreId, isEnabled: true, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+                 var merchPrinterOrder = (await _printerDataProvider.GetMerchPrinterOrdersAsync(storeId: command.StoreId, orderId: command.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
 
-                 Log.Information("get merch printer:{@merchPrinter}", merchPrinter);
-
-                 order = new MerchPrinterOrder
+                 if (merchPrinterOrder != null) order = merchPrinterOrder;
+                 else
                  {
-                     Id = id,
-                     OrderId = command.OrderId,
-                     PhoneOrderId = command.PhoneOrderId,
-                     StoreId = command.StoreId.Value,
-                     PrinterMac = merchPrinter?.PrinterMac,
-                     PrintDate = DateTimeOffset.Now,
-                     PrintFormat = command.PrintFormat ?? PrintFormat.Order
-                 };
+                     merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(storeId: command.StoreId, isEnabled: true, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+
+                     Log.Information("get merch printer:{@merchPrinter}", merchPrinter);
+
+                     order = new MerchPrinterOrder
+                     {
+                         Id = id,
+                         OrderId = command.OrderId,
+                         PhoneOrderId = command.PhoneOrderId,
+                         StoreId = command.StoreId.Value,
+                         PrinterMac = merchPrinter?.PrinterMac,
+                         PrintDate = DateTimeOffset.Now,
+                         PrintFormat = command.PrintFormat ?? PrintFormat.Order
+                     };
         
-                 Log.Information("Create merch printer order:{@merchPrinterOrder}", order);
+                     Log.Information("Create merch printer order:{@merchPrinterOrder}", order);
                  
-                 await _printerDataProvider.AddMerchPrinterOrderAsync(order, cancellationToken).ConfigureAwait(false);
+                     await _printerDataProvider.AddMerchPrinterOrderAsync(order, cancellationToken).ConfigureAwait(false);
+                 }
              }
              else
              {
