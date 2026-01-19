@@ -9,7 +9,7 @@ public class MerchPrinterOrderRetryCommand : ICommand
 {
     public Guid? Id { get; set; }
 
-    public int PhoneOrderReservationInfoId { get; set; }
+    public int? PhoneOrderReservationInfoId { get; set; }
 
     public int? OrderId { get; set; }
 
