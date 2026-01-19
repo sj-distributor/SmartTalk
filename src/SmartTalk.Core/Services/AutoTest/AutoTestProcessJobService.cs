@@ -74,7 +74,7 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
 
             Log.Information("Enqueue SyncCallRecordsByWindowAsync: {StartTime} - {EndTime}", startTime, endTime);
 
-            _backgroundJobClient.Enqueue<IAutoTestProcessJobService>(x => x.SyncCallRecordsByWindowAsync(startTime, endTime, CancellationToken.None));
+            _backgroundJobClient.Enqueue<IAutoTestProcessJobService>(x => x.SyncCallRecordsByWindowAsync(startTime, endTime, CancellationToken.None), HangfireConstants.InternalHostingAutoTestCallRecordSync);
 
             startTime = endTime;
         }
