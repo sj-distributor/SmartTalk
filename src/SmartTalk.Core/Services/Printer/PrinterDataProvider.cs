@@ -15,7 +15,7 @@ public interface IPrinterDataProvider : IScopedDependency
     Task<List<MerchPrinter>> GetMerchPrintersAsync(string printerMac = null, Guid? token = null,
         int? storeId = null, int? id = null, bool? isEnabled = null, DateTimeOffset? lastStatusInfoLastModifiedDate = null, bool? IsStatusInfo = null, CancellationToken cancellationToken = default);
 
-    Task<List<MerchPrinterOrder>> GetMerchPrinterOrdersAsync(Guid? jobToken = null, int? storeId = null, PrintStatus? status = null,
+    Task<List<MerchPrinterOrder>> GetMerchPrinterOrdersAsync(Guid? jobToken = null, int? storeId = null, int? recordId = null, PrintStatus? status = null,
         DateTimeOffset? endTime = null, string printerMac = null, bool isOrderByPrintDate = false, int? orderId = null, Guid? id = null, CancellationToken cancellationToken = default);
 
     Task UpdateMerchPrinterOrderAsync(MerchPrinterOrder merchPrinterOrder, bool forceSave = true, CancellationToken cancellationToken = default);
@@ -80,7 +80,7 @@ public class PrinterDataProvider : IPrinterDataProvider
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
     
-    public async Task<List<MerchPrinterOrder>> GetMerchPrinterOrdersAsync(Guid? jobToken = null, int? storeId = null, PrintStatus? status = null,
+    public async Task<List<MerchPrinterOrder>> GetMerchPrinterOrdersAsync(Guid? jobToken = null, int? storeId = null, int? recordId = null, PrintStatus? status = null,
         DateTimeOffset? endTime = null, string printerMac = null, bool isOrderByPrintDate = false, int? orderId = null, Guid? id = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<MerchPrinterOrder>();
@@ -90,6 +90,9 @@ public class PrinterDataProvider : IPrinterDataProvider
 
         if (storeId.HasValue)
             query = query.Where(x => x.StoreId == storeId.Value);
+
+        if (recordId.HasValue)
+            query = query.Where(x => x.PhoneOrderId == recordId);
 
         if (status.HasValue)
             query = query.Where(x => x.PrintStatus == status.Value);

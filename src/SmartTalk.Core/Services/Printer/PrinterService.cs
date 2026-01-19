@@ -859,8 +859,12 @@ public class PrinterService : IPrinterService
              if (command.Id == null &&  command.StoreId != null && (command.OrderId != null || command.PhoneOrderId != null))
              {
                  Log.Information("storeId:{storeId}, orderId:{orderId}", command.StoreId, command.OrderId);
-        
-                 var merchPrinterOrder = (await _printerDataProvider.GetMerchPrinterOrdersAsync(storeId: command.StoreId, orderId: command.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+                 var merchPrinterOrder = new MerchPrinterOrder();
+                 
+                 if (command.OrderId != null)
+                     merchPrinterOrder = (await _printerDataProvider.GetMerchPrinterOrdersAsync(storeId: command.StoreId, orderId: command.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+                 else if (command.PhoneOrderId != null)
+                     merchPrinterOrder =  (await _printerDataProvider.GetMerchPrinterOrdersAsync(storeId: command.StoreId, recordId: command.PhoneOrderId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
 
                  if (merchPrinterOrder != null) order = merchPrinterOrder;
                  else
