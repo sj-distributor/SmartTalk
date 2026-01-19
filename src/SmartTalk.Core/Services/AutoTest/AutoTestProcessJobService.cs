@@ -64,7 +64,7 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
                 globalStartTime = lastRecord.StartTimeUtc;
         }
 
-        var windowSize = TimeSpan.FromMinutes(10);
+        var windowSize = TimeSpan.FromHours(12);
         var startTime = globalStartTime;
 
         while (startTime < now)
