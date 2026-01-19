@@ -46,6 +46,7 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
             type = "session.update",
             session = new
             {
+                type = "realtime",
                 audio = new
                 {
                     input = new
