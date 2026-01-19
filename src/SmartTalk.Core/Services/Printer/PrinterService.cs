@@ -243,7 +243,10 @@ public class PrinterService : IPrinterService
         }
         else
         {
-            var reservationInfo = await _posDataProvider.GetPhoneOrderReservationInformationAsync(merchPrinterOrder.OrderId, cancellationToken).ConfigureAwait(false);
+            if (merchPrinterOrder.PhoneOrderId == null)
+                throw new Exception("Phone order id is null");
+            
+            var reservationInfo = await _posDataProvider.GetPhoneOrderReservationInformationAsync(merchPrinterOrder.PhoneOrderId.Value, cancellationToken).ConfigureAwait(false);
             var storePrintDateString = "";
             
             if (!string.IsNullOrEmpty(store.Timezone))
@@ -853,7 +856,7 @@ public class PrinterService : IPrinterService
          {
              MerchPrinterOrder order;
              MerchPrinter merchPrinter;
-             if (command.Id == null && command.OrderId != null && command.StoreId != null)
+             if (command.Id == null &&  command.StoreId != null && (command.OrderId != null || command.PhoneOrderId != null))
              {
                  Log.Information("storeId:{storeId}, orderId:{orderId}", command.StoreId, command.OrderId);
         
@@ -864,7 +867,8 @@ public class PrinterService : IPrinterService
                  order = new MerchPrinterOrder
                  {
                      Id = id,
-                     OrderId = command.OrderId.Value,
+                     OrderId = command.OrderId,
+                     PhoneOrderId = command.PhoneOrderId,
                      StoreId = command.StoreId.Value,
                      PrinterMac = merchPrinter?.PrinterMac,
                      PrintDate = DateTimeOffset.Now,
@@ -891,6 +895,10 @@ public class PrinterService : IPrinterService
 
                  await _printerDataProvider.UpdateMerchPrinterOrderAsync(order, cancellationToken: cancellationToken).ConfigureAwait(false);
              }
+
+             var reservation = await _posDataProvider.GetPhoneOrderReservationInformationAsync(command.PhoneOrderReservationInfoId, cancellationToken: cancellationToken).ConfigureAwait(false);
+             
+             await _posDataProvider.UpdatePhoneOrderReservationInformationAsync(reservation, cancellationToken: cancellationToken).ConfigureAwait(false);
 
              _smartTalkBackgroundJobClient.Schedule<IMediator>( x => x.SendAsync(new RetryCloudPrintingCommand{ Id = order.Id, Count = 0}, CancellationToken.None), TimeSpan.FromMinutes(1));
              
