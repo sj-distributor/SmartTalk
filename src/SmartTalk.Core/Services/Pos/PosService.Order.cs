@@ -863,21 +863,24 @@ public partial class PosService
     {
         var reservationInfo = await _posDataProvider.GetPhoneOrderReservationInformationAsync(command.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        if (!string.IsNullOrWhiteSpace(command.NotificationInfo) && string.IsNullOrWhiteSpace(command.EnNotificationInfo))
+        if (!string.IsNullOrWhiteSpace(command.NotificationInfo))
         {
             reservationInfo.NotificationInfo = command.NotificationInfo;
-        
-            var translatedText = await _translationClient.TranslateTextAsync(command.NotificationInfo, "en", cancellationToken: cancellationToken).ConfigureAwait(false);
 
-            reservationInfo.EnNotificationInfo = translatedText.TranslatedText;
+            if (string.IsNullOrWhiteSpace(command.EnNotificationInfo))
+            {
+                var en = await _translationClient.TranslateTextAsync(command.NotificationInfo, "en", cancellationToken: cancellationToken).ConfigureAwait(false);
+
+                reservationInfo.EnNotificationInfo = en.TranslatedText;
+            }
         }
-        else if (string.IsNullOrWhiteSpace(command.NotificationInfo) && !string.IsNullOrWhiteSpace(command.EnNotificationInfo))
+        else if (!string.IsNullOrWhiteSpace(command.EnNotificationInfo))
         {
             reservationInfo.EnNotificationInfo = command.EnNotificationInfo;
-        
-            var translatedText = await _translationClient.TranslateTextAsync(command.EnNotificationInfo, "zh", cancellationToken: cancellationToken).ConfigureAwait(false);
 
-            reservationInfo.NotificationInfo = translatedText.TranslatedText;
+            var zh = await _translationClient.TranslateTextAsync(command.EnNotificationInfo, "zh", cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            reservationInfo.NotificationInfo = zh.TranslatedText;
         }
         
         var records = await _phoneOrderDataProvider.GetPhoneOrderRecordAsync(command.RecordId, cancellationToken: cancellationToken).ConfigureAwait(false);
