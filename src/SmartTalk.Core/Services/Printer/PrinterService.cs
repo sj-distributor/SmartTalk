@@ -896,10 +896,17 @@ public class PrinterService : IPrinterService
                  await _printerDataProvider.UpdateMerchPrinterOrderAsync(order, cancellationToken: cancellationToken).ConfigureAwait(false);
              }
 
-             var reservation = await _posDataProvider.GetPhoneOrderReservationInformationAsync(command.PhoneOrderReservationInfoId, cancellationToken: cancellationToken).ConfigureAwait(false);
-             
-             await _posDataProvider.UpdatePhoneOrderReservationInformationAsync(reservation, cancellationToken: cancellationToken).ConfigureAwait(false);
+             if (command.PrintFormat == PrintFormat.Draft)
+             {
+                 if (order.PhoneOrderId == null)
+                     throw new Exception("Phone order reservation info id is null");
+                        
+                 var reservation = await _posDataProvider.GetPhoneOrderReservationInformationAsync(order.PhoneOrderId.Value, cancellationToken: cancellationToken).ConfigureAwait(false);
 
+                 if (reservation != null)
+                    await _posDataProvider.UpdatePhoneOrderReservationInformationAsync(reservation, cancellationToken: cancellationToken).ConfigureAwait(false);
+             }
+             
              _smartTalkBackgroundJobClient.Schedule<IMediator>( x => x.SendAsync(new RetryCloudPrintingCommand{ Id = order.Id, Count = 0}, CancellationToken.None), TimeSpan.FromMinutes(1));
              
              await _cacheManager.SetAsync($"{order.OrderId}", true, new RedisCachingSetting(expiry: TimeSpan.FromMinutes(30)), cancellationToken).ConfigureAwait(false);
