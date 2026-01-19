@@ -46,15 +46,24 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
             type = "session.update",
             session = new
             {
-                turn_detection = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection),
-                input_audio_format = context.InputFormat.GetDescription(),
-                output_audio_format = context.OutputFormat.GetDescription(),
-                voice = string.IsNullOrEmpty(assistantProfile.ModelVoice) ? "alloy" : assistantProfile.ModelVoice,
+                audio = new
+                {
+                    input = new
+                    {
+                        transcription = new { model = "whisper-1" },
+                        format = context.InputFormat.GetDescription(),
+                        turn_detection = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection),
+                        noise_reduction = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction),
+                    },
+                    output = new
+                    {
+                        format = context.OutputFormat.GetDescription(),
+                        voice = string.IsNullOrEmpty(assistantProfile.ModelVoice) ? "alloy" : assistantProfile.ModelVoice,
+                    }
+                },
                 instructions = knowledge?.Prompt ?? context.InitialPrompt,
                 modalities = new[] { "text", "audio" },
-                temperature = 0.8,
-                input_audio_transcription = new { model = "whisper-1" },
-                input_audio_noise_reduction = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction),
+                temperature = 0.4,
                 tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config)
             }
         };
