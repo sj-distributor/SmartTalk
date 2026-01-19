@@ -78,6 +78,7 @@
       <Folder Include="Assets\Audio\RepeatOrderHoldon\Alloy\Cantonese\" />
       <Folder Include="Assets\Audio\RepeatOrderHoldon\Alloy\Korean\" />
       <Folder Include="Assets\Audio\RepeatOrderHoldon\Alloy\Spanish\" />
+      <Folder Include="Assets\Audio\RepeatOrderHoldon\Alloy\Thai\" />
       <Folder Include="Assets\Audio\RepeatOrderHoldon\Alloy\Viet\" />
       <Folder Include="Assets\Audio\RepeatOrderHoldon\Alloy\Zh\" />
     </ItemGroup>
