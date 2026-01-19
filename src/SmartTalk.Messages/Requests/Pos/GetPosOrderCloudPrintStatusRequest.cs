@@ -8,7 +8,9 @@ public class GetPosOrderCloudPrintStatusRequest : IRequest
 {
     public int StoreId { get; set; }
     
-    public int OrderId { get; set; }
+    public int? OrderId { get; set; }
+
+    public int? PhoneOrderRecordId { get; set; }
 }
 
 public class GetPosOrderCloudPrintStatusResponse : SmartTalkResponse<GetPosOrderCloudPrintStatusDto>
