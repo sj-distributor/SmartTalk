@@ -15,6 +15,7 @@ using AutoMapper;
 using Mediator.Net;
 using Newtonsoft.Json;
 using Serilog;
+using SmartTalk.Core.Domain.Account;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Services.Account;
 using SmartTalk.Core.Services.AliYun;
@@ -249,14 +250,14 @@ public class PrinterService : IPrinterService
                 storePrintDateString = TimeZoneInfo.ConvertTimeFromUtc(storePrintDate.UtcDateTime, TimeZoneInfo.FindSystemTimeZoneById(store.Timezone)).ToString("yyyy-MM-dd HH:mm:ss");    
             else
                 storePrintDateString = storePrintDate.ToString("yyyy-MM-dd HH:mm:ss");
+
+            UserAccount userAccount = null;
+            if (_currentUser.Id != null)
+                userAccount = await _accountDataProvider.GetUserAccountByUserIdAsync(_currentUser.Id.Value, cancellationToken: cancellationToken).ConfigureAwait(false);
             
-            var userAccount = await _accountDataProvider.GetUserAccountByUserIdAsync(_currentUser.Id.Value, cancellationToken: cancellationToken).ConfigureAwait(false);
+            var notificationInfo = userAccount == null || userAccount.SystemLanguage == SystemLanguage.Chinese ? reservationInfo.NotificationInfo : reservationInfo.EnNotificationInfo; 
             
-            var notificationInfo = userAccount.SystemLanguage == SystemLanguage.Chinese ? reservationInfo.NotificationInfo : reservationInfo.EnNotificationInfo; 
-                
-            img = await RenderReceipt1Async(JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(store.Names).GetValueOrDefault("en")?.GetValueOrDefault("name"),
-                store.Address, store.PhoneNums, merchPrinter?.PrinterName, notificationInfo,
-                storePrintDateString).ConfigureAwait(false);
+            img = await RenderReceipt1Async(JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(store.Names).GetValueOrDefault("en")?.GetValueOrDefault("name"), store.Address, store.PhoneNums, merchPrinter?.PrinterName, notificationInfo, storePrintDateString).ConfigureAwait(false);
         }
         
         var imageKey = Guid.NewGuid().ToString();
