@@ -875,7 +875,7 @@ public partial class PosService
         {
             reservationInfo.EnNotificationInfo = command.EnNotificationInfo;
         
-            var translatedText = await _translationClient.TranslateTextAsync(command.NotificationInfo, "zh", cancellationToken: cancellationToken).ConfigureAwait(false);
+            var translatedText = await _translationClient.TranslateTextAsync(command.EnNotificationInfo, "zh", cancellationToken: cancellationToken).ConfigureAwait(false);
 
             reservationInfo.NotificationInfo = translatedText.TranslatedText;
         }
