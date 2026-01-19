@@ -53,19 +53,19 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
                     input = new
                     {
                         transcription = new { model = "whisper-1" },
-                        format = context.InputFormat.GetDescription(),
+                        format = new { type = "audio/pcm", rate = 24000 },
                         turn_detection = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection),
                         noise_reduction = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction),
                     },
                     output = new
                     {
-                        format = context.OutputFormat.GetDescription(),
+                        format = new { type = "audio/pcm", rate = 24000 },
                         voice = string.IsNullOrEmpty(assistantProfile.ModelVoice) ? "alloy" : assistantProfile.ModelVoice,
                     }
                 },
                 instructions = context.InitialPrompt,
-                modalities = turnDetection == null ? new[] { "text" } : new[] { "text", "audio" },
-                temperature = 0.8,
+                output_modalities = turnDetection == null ? new[] { "text" } : new[] { "audio" },
+                temperature = 0.4,
                 tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config)
             }
         };

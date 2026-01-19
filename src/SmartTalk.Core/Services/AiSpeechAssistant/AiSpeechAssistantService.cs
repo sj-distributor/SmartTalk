@@ -1413,19 +1413,19 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                 {
                     input = new
                     {
-                        audio_format = "g711_ulaw",
+                        format = new { type = "audio/pcmu" },
                         transcription = new { model = "whisper-1" },
                         turn_detection = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection),
                         noise_reduction = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction)
                     },
                     output = new
                     {
-                        format = "g711_ulaw",
+                        format = new { type = "audio/pcmu" },
                         voice = string.IsNullOrEmpty(assistant.ModelVoice) ? "alloy" : assistant.ModelVoice,
                     }
                 },
                 instructions = _aiSpeechAssistantStreamContext.LastPrompt,
-                modalities = new[] { "text", "audio" },
+                output_modalities = new[] { "audio" },
                 temperature = 0.8,
                 tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config)
             },
