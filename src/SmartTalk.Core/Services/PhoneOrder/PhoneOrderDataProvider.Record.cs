@@ -450,7 +450,7 @@ public partial class PhoneOrderDataProvider
         
         var query = from order in _repository.Query<PhoneOrderReservationInformation>()
             join record in _repository.Query<PhoneOrderRecord>().Where(x => x.Status == PhoneOrderRecordStatus.Sent && x.AssistantId.HasValue && agentIds.Contains(x.AgentId) && (x.Scenario == DialogueScenarios.Reservation || x.Scenario == DialogueScenarios.InformationNotification || x.Scenario == DialogueScenarios.ThirdPartyOrderNotification)) on order.RecordId equals record.Id
-            where !printerOrders.Any(x => x.OrderId == order.RecordId)
+            where !printerOrders.Any(x => x.PhoneOrderId == order.RecordId)
             select new SimplePhoneOrderRecordDto
             {
                 Id = record.Id,
@@ -520,7 +520,7 @@ public partial class PhoneOrderDataProvider
     public async Task<List<int>> GetPhoneOrderReservationInfoUnreviewedRecordIdsAsync(List<int> recordIds, CancellationToken cancellationToken)
     {
         return await (from info in _repository.QueryNoTracking<PhoneOrderReservationInformation>()
-                join order in _repository.Query<MerchPrinterOrder>() on info.RecordId equals order.OrderId into oders
+                join order in _repository.Query<MerchPrinterOrder>() on info.RecordId equals order.PhoneOrderId into oders
                 from order in oders.DefaultIfEmpty()
                 where recordIds.Contains(info.RecordId) && order == null
                 select info.RecordId

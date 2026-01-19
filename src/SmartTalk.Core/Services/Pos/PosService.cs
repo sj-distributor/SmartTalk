@@ -1,4 +1,5 @@
 using AutoMapper;
+using Google.Cloud.Translation.V2;
 using Mediator.Net;
 using Newtonsoft.Json;
 using Serilog;
@@ -75,6 +76,7 @@ public partial class PosService : IPosService
     private readonly ISmartiesClient _smartiesClient;
     private readonly IRedisSafeRunner _redisSafeRunner;
     private readonly IPosDataProvider _posDataProvider;
+    private readonly TranslationClient _translationClient;
     private readonly IAgentDataProvider _agentDataProvider;
     private readonly IPrinterDataProvider _printerDataProvider;
     private readonly IAccountDataProvider _accountDataProvider;
@@ -82,6 +84,7 @@ public partial class PosService : IPosService
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
+    
     
     public PosService(
         IMapper mapper,
@@ -98,7 +101,7 @@ public partial class PosService : IPosService
         ISecurityDataProvider  securityDataProvider,
         IPhoneOrderDataProvider phoneOrderDataProvider,
         ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient,
-        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
+        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, TranslationClient translationClient)
     {
         _mapper = mapper;
         _vectorDb = vectorDb;
@@ -115,6 +118,7 @@ public partial class PosService : IPosService
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
+        _translationClient = translationClient;
     }
     
     public async Task<GetCompanyWithStoresResponse> GetCompanyWithStoresAsync(GetCompanyWithStoresRequest request, CancellationToken cancellationToken)

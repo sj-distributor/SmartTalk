@@ -95,7 +95,6 @@ public partial class PosService
 
     public async Task CreateMerchPrinterOrderAsync(int storeId, int orderId, CancellationToken cancellationToken)
     {
-          
         var lockKey = $"create-merch-printer-order-key-{orderId}";
         
         Log.Information("Generate lock key: {lockKey} by orderId: {orderId}", lockKey, orderId);
@@ -815,7 +814,7 @@ public partial class PosService
         if (merchPrinterOrder == null)
             return CloudPrintStatus.Failed;
 
-        var merchPrinterLog = (await _printerDataProvider.GetMerchPrinterLogAsync(storeId: merchPrinterOrder.StoreId, orderId: merchPrinterOrder.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false)).Item2.FirstOrDefault();
+        var merchPrinterLog = (await _printerDataProvider.GetMerchPrinterLogAsync(storeId: merchPrinterOrder.StoreId, recordId: merchPrinterOrder.PhoneOrderId, orderId: merchPrinterOrder.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false)).Item2.FirstOrDefault();
         
         Log.Information("Merch printer log:{@merchPrinterLog}", merchPrinterLog);
         
@@ -831,8 +830,7 @@ public partial class PosService
 
         var isOnlineMerchPrinter = merchPrinterDtos?.Any(x => x.PrinterStatusInfo?.Online == true) == true;
         
-        if (merchPrinterOrder.PrintStatus is PrintStatus.Waiting or PrintStatus.Printing &&
-            isOnlineMerchPrinter)
+        if (merchPrinterOrder.PrintStatus is PrintStatus.Waiting or PrintStatus.Printing && isOnlineMerchPrinter)
             return CloudPrintStatus.Printing;
 
         return CloudPrintStatus.Failed;
@@ -846,7 +844,7 @@ public partial class PosService
         
         var reservationInfoDto = _mapper.Map<OrderReservationInfoDto>(reservationInfo);
         
-        var merchPrinterOrder = (await _printerDataProvider.GetMerchPrinterOrdersAsync(orderId: request.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+        var merchPrinterOrder = (await _printerDataProvider.GetMerchPrinterOrdersAsync(recordId: request.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
 
         reservationInfoDto.CloudPrintOrderId = merchPrinterOrder?.Id;
         
@@ -873,7 +871,27 @@ public partial class PosService
 
     public async Task<UpdateOrderReservationInfoResponse> UpdateOrderReservationInfoAsync(UpdateOrderReservationInfoCommand command, CancellationToken cancellationToken)
     {
-        var reservationInfo = _mapper.Map<PhoneOrderReservationInformation>(command);
+        var reservationInfo = await _posDataProvider.GetPhoneOrderReservationInformationAsync(command.RecordId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (!string.IsNullOrWhiteSpace(command.NotificationInfo))
+        {
+            reservationInfo.NotificationInfo = command.NotificationInfo;
+
+            if (string.IsNullOrWhiteSpace(command.EnNotificationInfo))
+            {
+                var en = await _translationClient.TranslateTextAsync(command.NotificationInfo, "en", cancellationToken: cancellationToken).ConfigureAwait(false);
+
+                reservationInfo.EnNotificationInfo = en.TranslatedText;
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(command.EnNotificationInfo))
+        {
+            reservationInfo.EnNotificationInfo = command.EnNotificationInfo;
+
+            var zh = await _translationClient.TranslateTextAsync(command.EnNotificationInfo, "zh", cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            reservationInfo.NotificationInfo = zh.TranslatedText;
+        }
         
         var records = await _phoneOrderDataProvider.GetPhoneOrderRecordAsync(command.RecordId, cancellationToken: cancellationToken).ConfigureAwait(false);
 

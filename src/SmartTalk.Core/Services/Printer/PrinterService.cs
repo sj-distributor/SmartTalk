@@ -243,7 +243,10 @@ public class PrinterService : IPrinterService
         }
         else
         {
-            var reservationInfo = await _posDataProvider.GetPhoneOrderReservationInformationAsync(merchPrinterOrder.OrderId, cancellationToken).ConfigureAwait(false);
+            if (merchPrinterOrder.PhoneOrderId == null)
+                throw new Exception("Phone order id is null");
+            
+            var reservationInfo = await _posDataProvider.GetPhoneOrderReservationInformationAsync(merchPrinterOrder.PhoneOrderId.Value, cancellationToken).ConfigureAwait(false);
             var storePrintDateString = "";
             
             if (!string.IsNullOrEmpty(store.Timezone))
@@ -499,7 +502,7 @@ public class PrinterService : IPrinterService
         
         merchPrinterLog.Message = message;
         
-        if (message.Equals("Print Error"))
+        if (message.Equals("Print Error") && @event.MerchPrinterOrderDto.PrintFormat == PrintFormat.Order)
         {
             var store = await _posDataProvider.GetPosCompanyStoreAsync(id: @event.MerchPrinterOrderDto.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -853,27 +856,38 @@ public class PrinterService : IPrinterService
          {
              MerchPrinterOrder order;
              MerchPrinter merchPrinter;
-             if (command.Id == null && command.OrderId != null && command.StoreId != null)
+             if (command.Id == null &&  command.StoreId != null && (command.OrderId != null || command.PhoneOrderId != null))
              {
                  Log.Information("storeId:{storeId}, orderId:{orderId}", command.StoreId, command.OrderId);
-        
-                 merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(storeId: command.StoreId, isEnabled: true, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
-
-                 Log.Information("get merch printer:{@merchPrinter}", merchPrinter);
-
-                 order = new MerchPrinterOrder
-                 {
-                     Id = id,
-                     OrderId = command.OrderId.Value,
-                     StoreId = command.StoreId.Value,
-                     PrinterMac = merchPrinter?.PrinterMac,
-                     PrintDate = DateTimeOffset.Now,
-                     PrintFormat = command.PrintFormat ?? PrintFormat.Order
-                 };
-        
-                 Log.Information("Create merch printer order:{@merchPrinterOrder}", order);
+                 var merchPrinterOrder = new MerchPrinterOrder();
                  
-                 await _printerDataProvider.AddMerchPrinterOrderAsync(order, cancellationToken).ConfigureAwait(false);
+                 if (command.OrderId != null)
+                     merchPrinterOrder = (await _printerDataProvider.GetMerchPrinterOrdersAsync(storeId: command.StoreId, orderId: command.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+                 else if (command.PhoneOrderId != null)
+                     merchPrinterOrder =  (await _printerDataProvider.GetMerchPrinterOrdersAsync(storeId: command.StoreId, recordId: command.PhoneOrderId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+
+                 if (merchPrinterOrder != null) order = merchPrinterOrder;
+                 else
+                 {
+                     merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(storeId: command.StoreId, isEnabled: true, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+
+                     Log.Information("get merch printer:{@merchPrinter}", merchPrinter);
+
+                     order = new MerchPrinterOrder
+                     {
+                         Id = id,
+                         OrderId = command.OrderId,
+                         PhoneOrderId = command.PhoneOrderId,
+                         StoreId = command.StoreId.Value,
+                         PrinterMac = merchPrinter?.PrinterMac,
+                         PrintDate = DateTimeOffset.Now,
+                         PrintFormat = command.PrintFormat ?? PrintFormat.Order
+                     };
+        
+                     Log.Information("Create merch printer order:{@merchPrinterOrder}", order);
+                 
+                     await _printerDataProvider.AddMerchPrinterOrderAsync(order, cancellationToken).ConfigureAwait(false);
+                 }
              }
              else
              {
@@ -892,6 +906,17 @@ public class PrinterService : IPrinterService
                  await _printerDataProvider.UpdateMerchPrinterOrderAsync(order, cancellationToken: cancellationToken).ConfigureAwait(false);
              }
 
+             if (command.PrintFormat == PrintFormat.Draft)
+             {
+                 if (order.PhoneOrderId == null)
+                     throw new Exception("Phone order reservation info id is null");
+                        
+                 var reservation = await _posDataProvider.GetPhoneOrderReservationInformationAsync(order.PhoneOrderId.Value, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+                 if (reservation != null)
+                    await _posDataProvider.UpdatePhoneOrderReservationInformationAsync(reservation, cancellationToken: cancellationToken).ConfigureAwait(false);
+             }
+             
              _smartTalkBackgroundJobClient.Schedule<IMediator>( x => x.SendAsync(new RetryCloudPrintingCommand{ Id = order.Id, Count = 0}, CancellationToken.None), TimeSpan.FromMinutes(1));
              
              await _cacheManager.SetAsync($"{order.OrderId}", true, new RedisCachingSetting(expiry: TimeSpan.FromMinutes(30)), cancellationToken).ConfigureAwait(false);
