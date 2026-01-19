@@ -24,6 +24,6 @@ public class MerchPrinterOrderDto
 
     public bool IsPrintTest()
     {
-        return OrderId is 0 && PhoneOrderId is 0;
+        return OrderId == 0 && PhoneOrderId == null;
     }
 }
