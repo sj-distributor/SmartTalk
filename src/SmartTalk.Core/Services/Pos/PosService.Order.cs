@@ -861,7 +861,24 @@ public partial class PosService
 
     public async Task<UpdateOrderReservationInfoResponse> UpdateOrderReservationInfoAsync(UpdateOrderReservationInfoCommand command, CancellationToken cancellationToken)
     {
-        var reservationInfo = _mapper.Map<PhoneOrderReservationInformation>(command);
+        var reservationInfo = await _posDataProvider.GetPhoneOrderReservationInformationAsync(command.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (!string.IsNullOrEmpty(command.NotificationInfo) && string.IsNullOrEmpty(command.EnNotificationInfo))
+        {
+            reservationInfo.NotificationInfo = command.NotificationInfo;
+        
+            var translatedText = await _translationClient.TranslateTextAsync(command.NotificationInfo, "en", cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            reservationInfo.EnNotificationInfo = translatedText.TranslatedText;
+        }
+        else if (string.IsNullOrEmpty(command.NotificationInfo) && !string.IsNullOrEmpty(command.EnNotificationInfo))
+        {
+            reservationInfo.EnNotificationInfo = command.EnNotificationInfo;
+        
+            var translatedText = await _translationClient.TranslateTextAsync(command.NotificationInfo, "zh", cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            reservationInfo.NotificationInfo = translatedText.TranslatedText;
+        }
         
         var records = await _phoneOrderDataProvider.GetPhoneOrderRecordAsync(command.RecordId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
