@@ -501,7 +501,7 @@ public class PrinterService : IPrinterService
         
         merchPrinterLog.Message = message;
         
-        if (message.Equals("Print Error"))
+        if (message.Equals("Print Error") && @event.MerchPrinterOrderDto.PrintFormat == PrintFormat.Order)
         {
             var store = await _posDataProvider.GetPosCompanyStoreAsync(id: @event.MerchPrinterOrderDto.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
