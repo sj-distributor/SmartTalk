@@ -63,7 +63,7 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
                     }
                 },
                 instructions = knowledge?.Prompt ?? context.InitialPrompt,
-                modalities = new[] { "text", "audio" },
+                output_modalities = new[] { "audio" },
                 temperature = 0.4,
                 tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config)
             }

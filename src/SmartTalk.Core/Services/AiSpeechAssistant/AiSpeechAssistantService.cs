@@ -1390,7 +1390,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                     }
                 },
                 instructions = _aiSpeechAssistantStreamContext.LastPrompt,
-                modalities = new[] { "text", "audio" },
+                output_modalities = new[] { "audio" },
                 temperature = 0.8,
                 tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config)
             },
