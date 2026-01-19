@@ -93,7 +93,6 @@ public partial class PosService
 
     public async Task CreateMerchPrinterOrderAsync(int storeId, int orderId, CancellationToken cancellationToken)
     {
-          
         var lockKey = $"create-merch-printer-order-key-{orderId}";
         
         Log.Information("Generate lock key: {lockKey} by orderId: {orderId}", lockKey, orderId);
