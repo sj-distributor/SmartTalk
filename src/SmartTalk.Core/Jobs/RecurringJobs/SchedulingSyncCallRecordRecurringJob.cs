@@ -20,5 +20,5 @@ public class SchedulingSyncCallRecordRecurringJob : IRecurringJob
 
     public string JobId => nameof(SchedulingSyncCallRecordRecurringJob);
 
-    public string CronExpression => "*/10 * * * *";
+    public string CronExpression => Cron.Never();
 }
