@@ -873,7 +873,7 @@ public partial class PosService
 
     public async Task<UpdateOrderReservationInfoResponse> UpdateOrderReservationInfoAsync(UpdateOrderReservationInfoCommand command, CancellationToken cancellationToken)
     {
-        var reservationInfo = await _posDataProvider.GetPhoneOrderReservationInformationAsync(command.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var reservationInfo = await _posDataProvider.GetPhoneOrderReservationInformationAsync(command.RecordId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (!string.IsNullOrWhiteSpace(command.NotificationInfo))
         {
