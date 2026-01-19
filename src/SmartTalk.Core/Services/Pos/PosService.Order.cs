@@ -863,7 +863,7 @@ public partial class PosService
     {
         var reservationInfo = await _posDataProvider.GetPhoneOrderReservationInformationAsync(command.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        if (!string.IsNullOrEmpty(command.NotificationInfo) && string.IsNullOrEmpty(command.EnNotificationInfo))
+        if (!string.IsNullOrWhiteSpace(command.NotificationInfo) && string.IsNullOrWhiteSpace(command.EnNotificationInfo))
         {
             reservationInfo.NotificationInfo = command.NotificationInfo;
         
@@ -871,7 +871,7 @@ public partial class PosService
 
             reservationInfo.EnNotificationInfo = translatedText.TranslatedText;
         }
-        else if (string.IsNullOrEmpty(command.NotificationInfo) && !string.IsNullOrEmpty(command.EnNotificationInfo))
+        else if (string.IsNullOrWhiteSpace(command.NotificationInfo) && !string.IsNullOrWhiteSpace(command.EnNotificationInfo))
         {
             reservationInfo.EnNotificationInfo = command.EnNotificationInfo;
         
