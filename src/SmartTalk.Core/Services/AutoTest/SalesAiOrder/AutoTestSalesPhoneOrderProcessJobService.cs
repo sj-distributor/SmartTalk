@@ -180,20 +180,23 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
             
             var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
 
-            var singleCallKeys = callRecords.GroupBy(r => new
-                { Phone = NormalizePhone(r.FromNumber ?? r.ToNumber), Date = TimeZoneInfo.ConvertTimeFromUtc(r.StartTimeUtc, pacificZone).Date })
-                .Where(g => g.Count() == 1).Select(g => g.Key).ToList();
+            var singleDayRecords = callRecords.SelectMany(r => new[]
+                {
+                    new { Phone = NormalizePhone(r.FromNumber), Record = r }, 
+                    new { Phone = NormalizePhone(r.ToNumber), Record = r }
+                }).Where(x => !string.IsNullOrEmpty(x.Phone)).GroupBy(x => new
+                {
+                    Phone = x.Phone, Date = TimeZoneInfo.ConvertTimeFromUtc(x.Record.StartTimeUtc, pacificZone).Date
+                }).Where(g => g.Count() == 1).Select(g => g.First().Record).Distinct().ToList();
 
-            if (!singleCallKeys.Any()) return;
 
-            var matchTasks = singleCallKeys.Select(key =>
+            if (!singleDayRecords.Any())
             {
-                var callRecord = callRecords.First(r =>
-                    NormalizePhone(r.FromNumber ?? r.ToNumber) == key.Phone &&
-                    TimeZoneInfo.ConvertTimeFromUtc(r.StartTimeUtc, pacificZone).Date == key.Date);
+                Log.Information("Scenario {ScenarioId} 没有任何『一天只有一条』的录音", scenarioId);
+                return;
+            }
 
-                return MatchOrderAndRecordingAsync(customerId, callRecord, scenarioId, recordId, cancellationToken);
-            }).ToList();
+            var matchTasks = singleDayRecords.Select(callRecord => MatchOrderAndRecordingAsync(customerId, callRecord, scenarioId, recordId, cancellationToken)).ToList();
             
             var autoTestDataItems = (await Task.WhenAll(matchTasks)).Where(x => x != null).ToList();
             
