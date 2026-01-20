@@ -1,12 +1,11 @@
 using AutoMapper;
 using Newtonsoft.Json;
 using OpenAI.Chat;
-using PostBoy.Messages.Extensions;
 using Serilog;
-using Smarties.Messages.Enums.Translation;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.System;
+using SmartTalk.Core.Extensions;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Caching.Redis;
 using SmartTalk.Core.Services.PhoneOrder;
