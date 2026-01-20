@@ -170,6 +170,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         {
             var contacts = await _crmClient.GetCustomerContactsAsync(customerId.ToString(), cancellationToken).ConfigureAwait(false);
             var phoneNumbers = contacts.Select(c => NormalizePhone(c.Phone)).Where(p => !string.IsNullOrEmpty(p)).Distinct().ToList();
+            Log.Information("Normalized phone numbers: {@PhoneNumbers}", phoneNumbers);
 
             if (!phoneNumbers.Any()) return;
             
