@@ -16,7 +16,9 @@ using SmartTalk.Core.Services.RetrievalDb.VectorDb;
 using SmartTalk.Core.Services.SpeechMatics;
 using SmartTalk.Core.Services.STT;
 using SmartTalk.Core.Settings.PhoneOrder;
+using SmartTalk.Core.Settings.Sales;
 using SmartTalk.Core.Settings.SpeechMatics;
+using SmartTalk.Core.Services.AiSpeechAssistant;
 
 namespace SmartTalk.Core.Services.PhoneOrder;
 
@@ -34,6 +36,7 @@ public partial class PhoneOrderService : IPhoneOrderService
     private readonly ISmartiesClient _smartiesClient;
     private readonly TranslationClient _translationClient;
     private readonly IPosDataProvider _posDataProvider;
+    private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
     private readonly IAccountDataProvider _accountDataProvider;
     private readonly ILinphoneDataProvider _linphoneDataProvider;
     private readonly IAttachmentService _attachmentService;
@@ -44,10 +47,15 @@ public partial class PhoneOrderService : IPhoneOrderService
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly IRestaurantDataProvider _restaurantDataProvider;
+    private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
+    private readonly ISpeechMaticsDataProvider _speechMaticsDataProvider;
+    private readonly TranscriptionCallbackSetting _transcriptionCallbackSetting;
+    private readonly SalesSetting _salesSetting;
 
     public PhoneOrderService(
         IMapper mapper,
         ICurrentUser currentUser,
+        SalesSetting salesSetting,
         IWeChatClient weChatClient,
         IEasyPosClient easyPosClient,
         IFfmpegService ffmpegService,
@@ -66,7 +74,8 @@ public partial class PhoneOrderService : IPhoneOrderService
         ISpeechMaticsDataProvider speechMaticsDataProvider,
         TranscriptionCallbackSetting transcriptionCallbackSetting, 
         ILinphoneDataProvider linphoneDataProvider, 
-        IAccountDataProvider accountDataProvider)
+        IAccountDataProvider accountDataProvider,
+        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
         _mapper = mapper;
         _currentUser = currentUser;
@@ -76,6 +85,8 @@ public partial class PhoneOrderService : IPhoneOrderService
         _smartiesClient = smartiesClient;
         _translationClient = translationClient;
         _posDataProvider = posDataProvider;
+        _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
+        _accountDataProvider = accountDataProvider;
         _attachmentService = attachmentService;
         _agentDataProvider = agentDataProvider;
         _httpClientFactory = httpClientFactory;
@@ -86,5 +97,6 @@ public partial class PhoneOrderService : IPhoneOrderService
         _restaurantDataProvider = restaurantDataProvider;
         _linphoneDataProvider = linphoneDataProvider;
         _accountDataProvider = accountDataProvider;
+        _salesSetting = salesSetting;
     }
 }
