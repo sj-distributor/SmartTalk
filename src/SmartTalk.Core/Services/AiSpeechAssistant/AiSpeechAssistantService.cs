@@ -1408,46 +1408,27 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         {
             AiSpeechAssistantProvider.OpenAi => new
             {
-                audio = new
-                {
-                    input = new
-                    {
-                        format = new { type = "audio/pcmu" },
-                        transcription = new { model = "whisper-1" },
-                        turn_detection = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection),
-                        noise_reduction = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction)
-                    },
-                    output = new
-                    {
-                        format = new { type = "audio/pcmu" },
-                        voice = string.IsNullOrEmpty(assistant.ModelVoice) ? "alloy" : assistant.ModelVoice,
-                    }
-                },
+                turn_detection = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection),
+                input_audio_format = "g711_ulaw",
+                output_audio_format = "g711_ulaw",
+                voice = string.IsNullOrEmpty(assistant.ModelVoice) ? "alloy" : assistant.ModelVoice,
                 instructions = _aiSpeechAssistantStreamContext.LastPrompt,
-                output_modalities = new[] { "audio" },
+                modalities = new[] { "text", "audio" },
                 temperature = 0.8,
+                input_audio_transcription = new { model = "whisper-1" },
+                input_audio_noise_reduction = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction),
                 tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config)
             },
             AiSpeechAssistantProvider.Azure => new
             {
-                audio = new
-                {
-                    input = new
-                    {
-                        audio_format = "g711_ulaw",
-                        transcription = new { model = "whisper-1" },
-                        turn_detection = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection),
-                        noise_reduction = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction)
-                    },
-                    output = new
-                    {
-                        format = "g711_ulaw",
-                        voice = string.IsNullOrEmpty(assistant.ModelVoice) ? "alloy" : assistant.ModelVoice,
-                    }
-                },
+                turn_detection = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection),
+                input_audio_format = "g711_ulaw",
+                output_audio_format = "g711_ulaw",
+                voice = string.IsNullOrEmpty(assistant.ModelVoice) ? "alloy" : assistant.ModelVoice,
                 instructions = _aiSpeechAssistantStreamContext.LastPrompt,
                 modalities = new[] { "text", "audio" },
                 temperature = 0.8,
+                input_audio_transcription = new { model = "whisper-1" },
                 tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config)
             },
             _ => throw new NotSupportedException(nameof(assistant.ModelProvider))

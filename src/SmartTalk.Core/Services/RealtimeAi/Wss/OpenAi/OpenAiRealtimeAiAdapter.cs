@@ -47,24 +47,15 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
             type = "session.update",
             session = new
             {
-                audio = new
-                {
-                    input = new
-                    {
-                        transcription = new { model = "whisper-1" },
-                        format = new { type = "audio/pcm", rate = 24000 },
-                        turn_detection = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection),
-                        noise_reduction = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction),
-                    },
-                    output = new
-                    {
-                        format = new { type = "audio/pcm", rate = 24000 },
-                        voice = string.IsNullOrEmpty(assistantProfile.ModelVoice) ? "alloy" : assistantProfile.ModelVoice,
-                    }
-                },
+                turn_detection = turnDetection,
+                input_audio_format = context.InputFormat.GetDescription(),
+                output_audio_format = context.OutputFormat.GetDescription(),
+                voice = string.IsNullOrEmpty(assistantProfile.ModelVoice) ? "alloy" : assistantProfile.ModelVoice,
                 instructions = context.InitialPrompt,
-                output_modalities = turnDetection == null ? new[] { "text" } : new[] { "audio" },
-                temperature = 0.4,
+                modalities = turnDetection == null ? new[] { "text" } : new[] { "text", "audio" },
+                temperature = 0.8,
+                input_audio_transcription = new { model = "whisper-1" },
+                input_audio_noise_reduction = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction),
                 tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config)
             }
         };
