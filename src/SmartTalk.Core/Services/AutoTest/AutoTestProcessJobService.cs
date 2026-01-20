@@ -82,6 +82,11 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
 
     public async Task SyncCallRecordsByWindowAsync(DateTime startTimeUtc, DateTime endTimeUtc, CancellationToken cancellationToken)
     {
+        var whiteList = await _autoTestDataProvider.GetCustomerPhoneWhiteListAsync(cancellationToken).ConfigureAwait(false);
+
+        if (whiteList == null || whiteList.Count == 0)
+            return;
+        
         var records = await _crmClient.GetCallRecordsAsync(startTimeUtc, endTimeUtc, cancellationToken).ConfigureAwait(false);
 
         if (records == null || records.Count == 0) 
@@ -109,6 +114,9 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
 
             var from = NormalizePhone(record.From);
             var to = NormalizePhone(record.To);
+            
+            if (!whiteList.Contains(from) && !whiteList.Contains(to))
+                continue;
 
             string recordingUrl = null;
             if (!string.IsNullOrEmpty(record.RecordingUrl))
