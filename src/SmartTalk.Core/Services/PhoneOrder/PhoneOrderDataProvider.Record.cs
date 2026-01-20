@@ -73,6 +73,8 @@ public partial interface IPhoneOrderDataProvider
     Task AddPhoneOrderReservationInformationAsync(PhoneOrderReservationInformation information, bool forceSave = true, CancellationToken cancellationToken = default);
 
     Task<List<int>> GetPhoneOrderReservationInfoUnreviewedRecordIdsAsync(List<int> recordIds, CancellationToken cancellationToken);
+
+    Task<List<PhoneOrderRecordTaskSourceDto>> GetPhoneOrderRecordTasksEnrichInfoForAgentsAsync(List<int> agentIds, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderDataProvider
@@ -420,5 +422,25 @@ public partial class PhoneOrderDataProvider
                 where recordIds.Contains(info.RecordId) && order == null
                 select info.RecordId
             ).ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+    
+    public async Task<List<PhoneOrderRecordTaskSourceDto>> GetPhoneOrderRecordTasksEnrichInfoForAgentsAsync(List<int> agentIds, CancellationToken cancellationToken)
+    {
+        var query =
+            from assistantKnowledge in _repository.Query<AiSpeechAssistantKnowledge>()
+            join agentAssistant in _repository.Query<AgentAssistant>() on assistantKnowledge.Id equals agentAssistant.AssistantId
+            join agent in _repository.Query<Agent>() on agentAssistant.AgentId equals agent.Id
+            join posAgent in _repository.Query<PosAgent>() on agent.Id equals posAgent.AgentId
+            join store in _repository.Query<CompanyStore>() on posAgent.StoreId equals store.Id
+            join company in _repository.Query<Company>() on store.CompanyId equals company.Id
+            where agentIds.Contains(agent.Id)
+            select new PhoneOrderRecordTaskSourceDto
+            {
+                AgentId = agent.Id,
+                TaskInfo = $"{company.Name} - {store.Names} - {agent.Name}"
+            };
+        
+        var results = await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+        return results;
     }
 }
