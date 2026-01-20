@@ -170,14 +170,14 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
 
             if (!phoneNumbers.Any()) return;
             
-            var callRecords = await _autoTestDataProvider.GetCallRecordsByPhonesAndRangeAsync(phoneNumbers, from.ToUniversalTime(), to.ToUniversalTime(), cancellationToken).ConfigureAwait(false);
+            var callRecords = await _autoTestDataProvider.GetCallRecordsByPhonesAndRangeAsync(phoneNumbers, from, to, cancellationToken).ConfigureAwait(false);
 
             if (!callRecords.Any())
             {
                 Log.Information("Scenario {ScenarioId} 时间段 {From}~{To} 没有通话数据", scenarioId, from, to);
                 return;
             }
-            
+
             var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
 
             var singleDayRecords = callRecords.SelectMany(r => new[]
