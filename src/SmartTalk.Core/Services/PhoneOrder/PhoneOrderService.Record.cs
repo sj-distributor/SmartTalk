@@ -767,6 +767,10 @@ public partial class PhoneOrderService
             return new GetPhoneOrderCompanyCallReportResponse { Data = string.Empty };
 
         var assistantIds = await _posDataProvider.GetAssistantIdsByCompanyIdAsync(company.Id, cancellationToken).ConfigureAwait(false);
+        const int daysWindow = 30;
+        var latestRecords = await _phoneOrderDataProvider
+            .GetLatestPhoneOrderRecordsByAssistantIdsAsync(assistantIds, daysWindow, cancellationToken)
+            .ConfigureAwait(false);
 
         var assistantNameMap = new Dictionary<int, string>();
         if (assistantIds.Count > 0)
@@ -783,7 +787,7 @@ public partial class PhoneOrderService
             ? []
             : await _phoneOrderDataProvider.GetPhoneOrderRecordsByAssistantIdsAsync(assistantIds, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
 
-        var reportRows = BuildCompanyCallReportRows(records, assistantNameMap);
+        var reportRows = BuildCompanyCallReportRows(records, assistantNameMap, latestRecords, daysWindow);
         var fileUrl = await ToCompanyCallReportExcelAsync(reportRows, request.ReportType, cancellationToken).ConfigureAwait(false);
 
         return new GetPhoneOrderCompanyCallReportResponse { Data = fileUrl };
@@ -818,9 +822,16 @@ public partial class PhoneOrderService
     }
 
     private static List<CompanyCallReportRow> BuildCompanyCallReportRows(
-        List<PhoneOrderRecord> records, IReadOnlyDictionary<int, string> assistantNameMap)
+        List<PhoneOrderRecord> records,
+        IReadOnlyDictionary<int, string> assistantNameMap,
+        IReadOnlyDictionary<int, PhoneOrderRecord> latestRecords,
+        int daysWindow)
     {
         if (records == null || records.Count == 0) return [];
+
+        var chinaZone = GetChinaTimeZone();
+        var nowChina = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, chinaZone);
+        var todayLocal = new DateTime(nowChina.Year, nowChina.Month, nowChina.Day, 0, 0, 0, DateTimeKind.Unspecified);
 
         return records
             .Where(record => record.AssistantId.HasValue)
@@ -828,6 +839,11 @@ public partial class PhoneOrderService
             .Select(group =>
             {
                 assistantNameMap.TryGetValue(group.Key, out var assistantName);
+                latestRecords.TryGetValue(group.Key, out var latestRecord);
+
+                var daysSinceLastCallText = latestRecord == null
+                    ? $"超过{daysWindow}天"
+                    : CalculateDaysSinceLastCallText(latestRecord.CreatedDate, todayLocal, chinaZone);
 
                 return new CompanyCallReportRow
                 {
@@ -838,7 +854,8 @@ public partial class PhoneOrderService
                     ComplaintCount = group.Count(x => x.Scenario == DialogueScenarios.ComplaintFeedback),
                     SalesCount = group.Count(x => x.Scenario == DialogueScenarios.SalesCall),
                     InvalidCount = group.Count(x => x.Scenario == DialogueScenarios.InvalidCall),
-                    InquiryCount = group.Count(x => x.Scenario == DialogueScenarios.Inquiry)
+                    InquiryCount = group.Count(x => x.Scenario == DialogueScenarios.Inquiry),
+                    DaysSinceLastCallText = daysSinceLastCallText
                 };
             })
             .OrderBy(row => row.CustomerId)
@@ -865,7 +882,7 @@ public partial class PhoneOrderService
 
     private static (DateTimeOffset StartUtc, DateTimeOffset EndUtc) GetCompanyCallReportUtcRange(PhoneOrderCallReportType reportType)
     {
-        var chinaZone = TimeZoneInfo.FindSystemTimeZoneById("Asia/Shanghai");
+        var chinaZone = GetChinaTimeZone();
         var nowChina = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, chinaZone);
         var todayLocal = new DateTime(nowChina.Year, nowChina.Month, nowChina.Day, 0, 0, 0, DateTimeKind.Unspecified);
 
@@ -882,6 +899,27 @@ public partial class PhoneOrderService
         var weekEndUtc = weekStartUtc.AddDays(7);
 
         return (new DateTimeOffset(weekStartUtc), new DateTimeOffset(weekEndUtc));
+    }
+
+    private static TimeZoneInfo GetChinaTimeZone()
+    {
+        try
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById("Asia/Shanghai");
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById("China Standard Time");
+        }
+    }
+
+    private static string CalculateDaysSinceLastCallText(DateTimeOffset latestCallUtc, DateTime todayLocal, TimeZoneInfo chinaZone)
+    {
+        var latestLocal = TimeZoneInfo.ConvertTime(latestCallUtc, chinaZone);
+        var diff = todayLocal - latestLocal.DateTime;
+        var days = Math.Max(0, Math.Round(diff.TotalDays, 1));
+
+        return days.ToString("0.0");
     }
     
     private string ConvertUtcToPst(DateTimeOffset utcTime)
@@ -991,7 +1029,8 @@ public partial class PhoneOrderService
                 "當日轉接",
                 "當日投訴",
                 "當天推銷",
-                "當日無效"
+                "當日無效",
+                "多久沒來電"
             }
             : new[]
             {
@@ -1022,7 +1061,8 @@ public partial class PhoneOrderService
                 ws.Cell(rowIndex + 2, colIndex++).Value = row.TransferCount;
                 ws.Cell(rowIndex + 2, colIndex++).Value = row.ComplaintCount;
                 ws.Cell(rowIndex + 2, colIndex++).Value = row.SalesCount;
-                ws.Cell(rowIndex + 2, colIndex).Value = row.InvalidCount;
+                ws.Cell(rowIndex + 2, colIndex++).Value = row.InvalidCount;
+                ws.Cell(rowIndex + 2, colIndex).Value = row.DaysSinceLastCallText ?? string.Empty;
             }
             else
             {
@@ -1084,6 +1124,8 @@ public partial class PhoneOrderService
         public int InvalidCount { get; set; }
 
         public int InquiryCount { get; set; }
+
+        public string DaysSinceLastCallText { get; set; }
     }
     
     public async Task<GetPhoneOrderDataDashboardResponse> GetPhoneOrderDataDashboardAsync(GetPhoneOrderDataDashboardRequest request, CancellationToken cancellationToken)
