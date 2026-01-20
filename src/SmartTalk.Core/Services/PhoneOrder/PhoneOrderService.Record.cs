@@ -1163,8 +1163,8 @@ public partial class PhoneOrderService
 
     public async Task<GetPhoneOrderRecordTasksResponse> GetPhoneOrderRecordTasksRequestAsync(GetPhoneOrderRecordTasksRequest request, CancellationToken cancellationToken)
     {
-        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(
-            agentIds: request.AgentIds, name: null, utcStart: request.StartTime, utcEnd: request.EntTime, scenarios: new List<DialogueScenarios>()
+        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds: request.AgentIds, name: null, utcStart: request.StartTime, utcEnd: request.EntTime,
+            scenarios: new List<DialogueScenarios>()
             {
                 DialogueScenarios.Order,
                 DialogueScenarios.Reservation,
@@ -1173,13 +1173,14 @@ public partial class PhoneOrderService
             }, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         Log.Information("Get All records: {@records}", records.Count);
+
+        var processedRecords = await _phoneOrderDataProvider.GetSimplePhoneOrderRecordsAsync(request.AgentIds, cancellationToken).ConfigureAwait(false);
+
+        var unprocessedCount = records.Count(record => !processedRecords.Any(processed => processed.Id == record.Id));
         
         if (request.DoListTpye == PhoneOrderRecordTaskType.Unprocessed)
         {
-            var processedRecords = await _phoneOrderDataProvider.GetSimplePhoneOrderRecordsAsync(request.AgentIds, cancellationToken).ConfigureAwait(false);
-
             records = records.Where(record => !processedRecords.Any(processed => processed.Id == record.Id)).ToList();
-
             Log.Information("Get Unprocessed records: {@records}", records.Count);
         }
         
@@ -1187,13 +1188,12 @@ public partial class PhoneOrderService
         var posAgents = await _posDataProvider.GetPosAgentByAgentIdsAsync(agentIds, cancellationToken).ConfigureAwait(false);
         
         var taskSources = await _phoneOrderDataProvider.GetPhoneOrderRecordTasksEnrichInfoForAgentsAsync(agentIds, cancellationToken).ConfigureAwait(false);
-
-        var responseData = records.Select(record =>
-        {
-            var posAgent = posAgents.FirstOrDefault(p => p.AgentId == record.AgentId);
-            var taskSource = taskSources.FirstOrDefault(ts => ts.AgentId == record.AgentId);
-
-            return new GetPhoneOrderRecordTasksResponseData
+        
+        var tasks = (from record in records
+            let posAgent = posAgents.FirstOrDefault(p => p.AgentId == record.AgentId)
+            let taskSource = taskSources.FirstOrDefault(ts => ts.AgentId == record.AgentId)
+            where taskSource != null
+            select new PhoneOrderRecordTaskDto
             {
                 StortId = posAgent?.Id ?? 0,
                 AgentId = record.AgentId,
@@ -1201,12 +1201,15 @@ public partial class PhoneOrderService
                 Scenarios = record.Scenario,
                 RecordDate = record.CreatedDate,
                 TaskSource = taskSource.TaskInfo
-            };
-        }).ToList();
+            }).ToList();
 
         return new GetPhoneOrderRecordTasksResponse
         {
-            Data = responseData
+            Data = new GetPhoneOrderRecordTasksResponseData
+            {
+                Tasks = tasks,
+                UnProcessCount = unprocessedCount 
+            }; 
         };
     }
 }

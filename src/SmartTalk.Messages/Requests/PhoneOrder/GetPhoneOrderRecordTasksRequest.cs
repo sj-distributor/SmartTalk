@@ -1,4 +1,5 @@
 using Mediator.Net.Contracts;
+using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Responses;
 
@@ -15,21 +16,13 @@ public class GetPhoneOrderRecordTasksRequest : IRequest
     public PhoneOrderRecordTaskType DoListTpye { get; set; }
 }
 
-public class GetPhoneOrderRecordTasksResponse : SmartTalkResponse<List<GetPhoneOrderRecordTasksResponseData>>
+public class GetPhoneOrderRecordTasksResponse : SmartTalkResponse<GetPhoneOrderRecordTasksResponseData>
 {
 }
 
 public class GetPhoneOrderRecordTasksResponseData
 {
-    public int StortId { get; set; }
-    
-    public int AgentId { get; set; }
+    public List<PhoneOrderRecordTaskDto> Tasks { get; set; }
 
-    public int RecordId { get; set; }
-
-    public DialogueScenarios? Scenarios { get; set; }
-    
-    public DateTimeOffset RecordDate { get; set; }
-
-    public string TaskSource { get; set; }
+    public int UnProcessCount { get; set; }
 }
