@@ -908,14 +908,15 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         }
     }
     
-    private static string NormalizePhone(string phone)
+    private string NormalizePhone(string phone)
     {
-        if (string.IsNullOrWhiteSpace(phone)) return phone;
+        if (string.IsNullOrEmpty(phone)) return phone;
         
-        var digits = new string(phone.Where(char.IsDigit).ToArray());
+        phone = phone.Replace("-", "").Replace(" ", "").Replace("(", "").Replace(")", "");
+        
+        if (!phone.StartsWith("+") && phone.Length == 10)
+            phone = "+1" + phone;
 
-        if (digits.Length == 10) return "1" + digits;
-
-        return digits;
+        return phone;
     }
 }
