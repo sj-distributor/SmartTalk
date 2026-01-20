@@ -773,7 +773,7 @@ public partial class PosService
         
         var store = await _posDataProvider.GetPosCompanyStoreAsync(id: request.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        var merchPrinterOrder = (await _printerDataProvider.GetMerchPrinterOrdersAsync(recordId: request.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+        var merchPrinterOrder = (await _printerDataProvider.GetMerchPrinterOrdersAsync(orderId: request.OrderId, recordId: request.PhoneOrderRecordId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
         
         var status = await CalculateCloudPrintStatusAsync(merchPrinterOrder, merchPrinter, cancellationToken).ConfigureAwait(false);
         
