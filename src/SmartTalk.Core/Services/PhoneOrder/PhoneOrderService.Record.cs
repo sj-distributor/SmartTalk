@@ -49,6 +49,8 @@ public partial interface IPhoneOrderService
 
     Task<GetPhoneCallRecordDetailResponse> GetPhoneCallrecordDetailAsync(GetPhoneCallRecordDetailRequest request, CancellationToken cancellationToken);
 
+    Task<GetPhoneOrderCompanyCallReportResponse> GetPhoneOrderCompanyCallReportAsync(GetPhoneOrderCompanyCallReportRequest request, CancellationToken cancellationToken);
+
     Task<GetPhoneOrderRecordReportResponse> GetPhoneOrderRecordReportByCallSidAsync(GetPhoneOrderRecordReportRequest request, CancellationToken cancellationToken);
     
     Task<GetPhoneOrderDataDashboardResponse> GetPhoneOrderDataDashboardAsync(GetPhoneOrderDataDashboardRequest request, CancellationToken cancellationToken);
@@ -754,6 +756,39 @@ public partial class PhoneOrderService
         return new GetPhoneCallRecordDetailResponse { Data = fileUrl };
     }
 
+    public async Task<GetPhoneOrderCompanyCallReportResponse> GetPhoneOrderCompanyCallReportAsync(GetPhoneOrderCompanyCallReportRequest request, CancellationToken cancellationToken)
+    {
+        var companyName = _salesSetting.CompanyName?.Trim();
+        if (string.IsNullOrWhiteSpace(companyName))
+            throw new Exception("Sales CompanyName is not configured.");
+
+        var company = await _posDataProvider.GetPosCompanyByNameAsync(companyName, cancellationToken).ConfigureAwait(false);
+        if (company == null)
+            return new GetPhoneOrderCompanyCallReportResponse { Data = string.Empty };
+
+        var assistantIds = await _posDataProvider.GetAssistantIdsByCompanyIdAsync(company.Id, cancellationToken).ConfigureAwait(false);
+
+        var assistantNameMap = new Dictionary<int, string>();
+        if (assistantIds.Count > 0)
+        {
+            var assistants = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByIdsAsync(assistantIds, cancellationToken).ConfigureAwait(false);
+            assistantNameMap = assistants
+                .GroupBy(x => x.Id)
+                .ToDictionary(g => g.Key, g => g.First().Name ?? string.Empty);
+        }
+
+        var (utcStart, utcEnd) = GetCompanyCallReportUtcRange(request.ReportType);
+
+        var records = assistantIds.Count == 0
+            ? []
+            : await _phoneOrderDataProvider.GetPhoneOrderRecordsByAssistantIdsAsync(assistantIds, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
+
+        var reportRows = BuildCompanyCallReportRows(records, assistantNameMap);
+        var fileUrl = await ToCompanyCallReportExcelAsync(reportRows, request.ReportType, cancellationToken).ConfigureAwait(false);
+
+        return new GetPhoneOrderCompanyCallReportResponse { Data = fileUrl };
+    }
+
     public async Task<GetPhoneOrderRecordReportResponse> GetPhoneOrderRecordReportByCallSidAsync(GetPhoneOrderRecordReportRequest request, CancellationToken cancellationToken)
     {
         var report = await _phoneOrderDataProvider.GetPhoneOrderRecordReportAsync(request.CallSid, request.Language, cancellationToken).ConfigureAwait(false);
@@ -782,6 +817,34 @@ public partial class PhoneOrderService
         };
     }
 
+    private static List<CompanyCallReportRow> BuildCompanyCallReportRows(
+        List<PhoneOrderRecord> records, IReadOnlyDictionary<int, string> assistantNameMap)
+    {
+        if (records == null || records.Count == 0) return [];
+
+        return records
+            .Where(record => record.AssistantId.HasValue)
+            .GroupBy(record => record.AssistantId.Value)
+            .Select(group =>
+            {
+                assistantNameMap.TryGetValue(group.Key, out var assistantName);
+
+                return new CompanyCallReportRow
+                {
+                    CustomerId = string.IsNullOrWhiteSpace(assistantName) ? group.Key.ToString() : assistantName,
+                    TotalCalls = group.Count(),
+                    OrderCount = group.Count(x => x.Scenario == DialogueScenarios.Order),
+                    TransferCount = group.Count(x => x.Scenario == DialogueScenarios.TransferToHuman),
+                    ComplaintCount = group.Count(x => x.Scenario == DialogueScenarios.ComplaintFeedback),
+                    SalesCount = group.Count(x => x.Scenario == DialogueScenarios.SalesCall),
+                    InvalidCount = group.Count(x => x.Scenario == DialogueScenarios.InvalidCall),
+                    InquiryCount = group.Count(x => x.Scenario == DialogueScenarios.Inquiry)
+                };
+            })
+            .OrderBy(row => row.CustomerId)
+            .ToList();
+    }
+
     private (DateTimeOffset StartUtc, DateTimeOffset EndUtc) GetQueryTimeRange(int month)
     {
         if (month < 1 || month > 12) throw new ArgumentOutOfRangeException(nameof(month));
@@ -798,6 +861,27 @@ public partial class PhoneOrderService
         var endUtc = TimeZoneInfo.ConvertTimeToUtc(nextMonthLocal, tz);
 
         return (new DateTimeOffset(startUtc), new DateTimeOffset(endUtc));
+    }
+
+    private static (DateTimeOffset StartUtc, DateTimeOffset EndUtc) GetCompanyCallReportUtcRange(PhoneOrderCallReportType reportType)
+    {
+        var chinaZone = TimeZoneInfo.FindSystemTimeZoneById("Asia/Shanghai");
+        var nowChina = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, chinaZone);
+        var todayLocal = new DateTime(nowChina.Year, nowChina.Month, nowChina.Day, 0, 0, 0, DateTimeKind.Unspecified);
+
+        if (reportType == PhoneOrderCallReportType.Daily)
+        {
+            var startUtc = TimeZoneInfo.ConvertTimeToUtc(todayLocal, chinaZone);
+            var endUtc = startUtc.AddDays(1);
+
+            return (new DateTimeOffset(startUtc), new DateTimeOffset(endUtc));
+        }
+
+        var startOfWeekLocal = todayLocal.AddDays(-((int)todayLocal.DayOfWeek + 6) % 7);
+        var weekStartUtc = TimeZoneInfo.ConvertTimeToUtc(startOfWeekLocal, chinaZone);
+        var weekEndUtc = weekStartUtc.AddDays(7);
+
+        return (new DateTimeOffset(weekStartUtc), new DateTimeOffset(weekEndUtc));
     }
     
     private string ConvertUtcToPst(DateTimeOffset utcTime)
@@ -892,6 +976,79 @@ public partial class PhoneOrderService
         return audio.Attachment?.FileUrl ?? string.Empty;
     }
 
+    private async Task<string> ToCompanyCallReportExcelAsync(
+        IReadOnlyList<CompanyCallReportRow> rows, PhoneOrderCallReportType reportType, CancellationToken cancellationToken)
+    {
+        using var workbook = new XLWorkbook();
+        var ws = workbook.AddWorksheet("Sheet1");
+
+        var headers = reportType == PhoneOrderCallReportType.Daily
+            ? new[]
+            {
+                "customer id",
+                "當日有效通話量合計（所有通話-無效通話）",
+                "當日下單",
+                "當日轉接",
+                "當日投訴",
+                "當天推銷",
+                "當日無效"
+            }
+            : new[]
+            {
+                "customer id",
+                "本周有call入 Sales",
+                "本周有效通話量（下单+转接+咨询）",
+                "本周下單",
+                "本周轉接",
+                "本周投訴",
+                "本周推銷",
+                "本周無效"
+            };
+
+        for (var col = 0; col < headers.Length; col++)
+            ws.Cell(1, col + 1).Value = headers[col];
+
+        for (var rowIndex = 0; rowIndex < rows.Count; rowIndex++)
+        {
+            var row = rows[rowIndex];
+            var colIndex = 1;
+
+            ws.Cell(rowIndex + 2, colIndex++).Value = row.CustomerId;
+
+            if (reportType == PhoneOrderCallReportType.Daily)
+            {
+                ws.Cell(rowIndex + 2, colIndex++).Value = row.TotalCalls - row.InvalidCount;
+                ws.Cell(rowIndex + 2, colIndex++).Value = row.OrderCount;
+                ws.Cell(rowIndex + 2, colIndex++).Value = row.TransferCount;
+                ws.Cell(rowIndex + 2, colIndex++).Value = row.ComplaintCount;
+                ws.Cell(rowIndex + 2, colIndex++).Value = row.SalesCount;
+                ws.Cell(rowIndex + 2, colIndex).Value = row.InvalidCount;
+            }
+            else
+            {
+                ws.Cell(rowIndex + 2, colIndex++).Value = row.TotalCalls;
+                ws.Cell(rowIndex + 2, colIndex++).Value = row.OrderCount + row.TransferCount + row.InquiryCount;
+                ws.Cell(rowIndex + 2, colIndex++).Value = row.OrderCount;
+                ws.Cell(rowIndex + 2, colIndex++).Value = row.TransferCount;
+                ws.Cell(rowIndex + 2, colIndex++).Value = row.ComplaintCount;
+                ws.Cell(rowIndex + 2, colIndex++).Value = row.SalesCount;
+                ws.Cell(rowIndex + 2, colIndex).Value = row.InvalidCount;
+            }
+        }
+
+        ws.Columns().AdjustToContents();
+
+        using var ms = new MemoryStream();
+        workbook.SaveAs(ms);
+
+        var attachment = await _attachmentService.UploadAttachmentAsync(new UploadAttachmentCommand
+        {
+            Attachment = new UploadAttachmentDto { FileName = Guid.NewGuid() + ".xlsx", FileContent = ms.ToArray() }
+        }, cancellationToken).ConfigureAwait(false);
+
+        return attachment.Attachment?.FileUrl ?? string.Empty;
+    }
+
     /// <summary>
     /// 判断是否是简单类型（可以原样 ToString），否则认为复杂需要 JSON 序列化
     /// </summary>
@@ -908,6 +1065,25 @@ public partial class PhoneOrderService
             type == typeof(DateTimeOffset) ||
             type == typeof(Guid) ||
             type == typeof(TimeSpan);
+    }
+
+    private sealed class CompanyCallReportRow
+    {
+        public string CustomerId { get; set; }
+
+        public int TotalCalls { get; set; }
+
+        public int OrderCount { get; set; }
+
+        public int TransferCount { get; set; }
+
+        public int ComplaintCount { get; set; }
+
+        public int SalesCount { get; set; }
+
+        public int InvalidCount { get; set; }
+
+        public int InquiryCount { get; set; }
     }
     
     public async Task<GetPhoneOrderDataDashboardResponse> GetPhoneOrderDataDashboardAsync(GetPhoneOrderDataDashboardRequest request, CancellationToken cancellationToken)
