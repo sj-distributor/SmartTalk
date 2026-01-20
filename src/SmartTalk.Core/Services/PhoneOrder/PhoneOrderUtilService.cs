@@ -293,7 +293,7 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
                         
             var order = new MerchPrinterOrder
             {
-                OrderId = record.Id,
+                PhoneOrderId = record.Id,
                 StoreId = store.Id,
                 PrinterMac = merchPrinter?.PrinterMac,
                 PrintDate = DateTimeOffset.Now,
