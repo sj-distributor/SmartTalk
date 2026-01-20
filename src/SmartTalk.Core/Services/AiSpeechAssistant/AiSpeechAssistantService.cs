@@ -1373,7 +1373,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         {
             AiSpeechAssistantProvider.OpenAi => new
             {
-                type = "realtime",
                 audio = new
                 {
                     input = new
@@ -1396,7 +1395,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             },
             AiSpeechAssistantProvider.Azure => new
             {
-                type = "realtime",
                 audio = new
                 {
                     input = new
