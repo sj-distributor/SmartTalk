@@ -53,19 +53,23 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
                     var startUtc = startDateObj is DateTime dt1 ? dt1 : DateTime.Parse(startDateObj.ToString());
                     var endUtc = endDateObj is DateTime dt2 ? dt2 : DateTime.Parse(endDateObj.ToString());
                     
-                    var cstZone = TimeZoneInfo.FindSystemTimeZoneById("China Standard Time");
-                    var startCstDate = TimeZoneInfo.ConvertTimeFromUtc(startUtc, cstZone).Date;
-                    var endCstDate = TimeZoneInfo.ConvertTimeFromUtc(endUtc, cstZone).Date;
-
-                    var cursor = startCstDate;
-                    while (cursor <= endCstDate)
+                    var pstZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+                    
+                    var startPstDate = TimeZoneInfo.ConvertTimeFromUtc(startUtc, pstZone).Date;
+                    var endPstDate   = TimeZoneInfo.ConvertTimeFromUtc(endUtc, pstZone).Date;
+                    
+                    var startPst = new DateTime(startPstDate.Year, startPstDate.Month, startPstDate.Day, 0, 0, 0);
+                    var endPst   = new DateTime(endPstDate.Year, endPstDate.Month, endPstDate.Day, 23, 59, 59, 999);
+                    
+                    var cursor = new DateTime(startPst.Year, startPst.Month, 1);
+                    while (cursor <= endPst)
                     {
-                        var monthStart = cursor < startCstDate ? startCstDate : cursor;
+                        var monthStart = cursor < startPst ? startPst : cursor;
                         var monthEnd = cursor.AddMonths(1).AddDays(-1);
-                        if (monthEnd > endCstDate) monthEnd = endCstDate;
+                        if (monthEnd > endPst) monthEnd = endPst;
                         
-                        var fromUtc = TimeZoneInfo.ConvertTimeToUtc(monthStart, cstZone);
-                        var toUtc = TimeZoneInfo.ConvertTimeToUtc(monthEnd.AddDays(1).AddMilliseconds(-1), cstZone);
+                        var fromUtc = TimeZoneInfo.ConvertTimeToUtc(monthStart, pstZone);
+                        var toUtc   = TimeZoneInfo.ConvertTimeToUtc(monthEnd, pstZone);
 
                         _backgroundJobClient.Enqueue<IAutoTestSalesPhoneOrderProcessJobService>(x =>
                             x.ProcessPartialRecordingOrderMatchingAsync(scenarioId, dataSetId, recordId, fromUtc, toUtc, customerId.ToString(), cancellationToken));
