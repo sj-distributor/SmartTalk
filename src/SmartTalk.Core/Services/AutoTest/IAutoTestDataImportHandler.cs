@@ -52,16 +52,22 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
                     
                     DateTime startUtc = startDateObj is DateTime dt1 ? dt1 : DateTime.Parse(startDateObj.ToString());
                     DateTime endUtc = endDateObj is DateTime dt2 ? dt2 : DateTime.Parse(endDateObj.ToString());
-
-                    var cursor = new DateTime(startUtc.Year, startUtc.Month, 1);
-                    while (cursor <= endUtc)
+                    var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+                    var startPst = TimeZoneInfo.ConvertTimeFromUtc(startUtc, pacificZone).Date;
+                    var endPst = TimeZoneInfo.ConvertTimeFromUtc(endUtc, pacificZone).Date;
+                    
+                    var cursor = new DateTime(startPst.Year, startPst.Month, 1);
+                    while (cursor <= endPst)
                     {
-                        var monthStart = cursor < startUtc ? startUtc : cursor;
+                        var monthStart = cursor < startPst ? startPst : cursor;
                         var monthEnd = cursor.AddMonths(1).AddDays(-1);
-                        if (monthEnd > endUtc) monthEnd = endUtc;
+                        if (monthEnd > endPst) monthEnd = endPst;
+
+                        var fromUtc = TimeZoneInfo.ConvertTimeToUtc(monthStart, pacificZone);
+                        var toUtc = TimeZoneInfo.ConvertTimeToUtc(monthEnd.AddDays(1).AddMilliseconds(-1), pacificZone);
 
                         _backgroundJobClient.Enqueue<IAutoTestSalesPhoneOrderProcessJobService>(x => 
-                            x.ProcessPartialRecordingOrderMatchingAsync(scenarioId, dataSetId, recordId, monthStart, monthEnd, customerId.ToString(), cancellationToken));
+                            x.ProcessPartialRecordingOrderMatchingAsync(scenarioId, dataSetId, recordId, fromUtc, toUtc, customerId.ToString(), cancellationToken));
 
                         cursor = cursor.AddMonths(1);
                     }
