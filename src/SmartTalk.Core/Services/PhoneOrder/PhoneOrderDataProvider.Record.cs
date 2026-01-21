@@ -400,7 +400,8 @@ public partial class PhoneOrderDataProvider
             {
                 Id = record.Id,
                 AgentId = record.AgentId,
-                AssistantId = record.AssistantId
+                AssistantId = record.AssistantId,
+                LastModifiedBy = order.LastModifiedBy
             };
         
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);

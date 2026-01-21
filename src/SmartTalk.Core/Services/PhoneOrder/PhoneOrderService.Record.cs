@@ -1188,10 +1188,20 @@ public partial class PhoneOrderService
         var posAgents = await _posDataProvider.GetPosAgentByAgentIdsAsync(agentIds, cancellationToken).ConfigureAwait(false);
         
         var taskSources = await _phoneOrderDataProvider.GetPhoneOrderRecordTasksEnrichInfoForAgentsAsync(agentIds, cancellationToken).ConfigureAwait(false);
+
+        var posOrders = await _posDataProvider.GetPosOrdersByRecordIdsAsync(records.Select(x => x.Id).ToList(), cancellationToken).ConfigureAwait(false);
+        
+        var userIds = processedRecords.Select(pr => pr.LastModifiedBy).Union(posOrders.Select(po => po.LastModifiedBy)).Where(id => id.HasValue).Select(id => id.Value).Distinct().ToList();
+
+        var userAccounts = await _accountDataProvider.GetUserAccountByUserIdsAsync(userIds, cancellationToken).ConfigureAwait(false);
+        
+        var userAccountDict = userAccounts.ToDictionary(ua => ua.Id, ua => ua.UserName);
         
         var tasks = (from record in records
             let posAgent = posAgents.FirstOrDefault(p => p.AgentId == record.AgentId)
             let taskSource = taskSources.FirstOrDefault(ts => ts.AgentId == record.AgentId)
+            let processedRecord = processedRecords.FirstOrDefault(pr=>pr.Id == record.Id)
+            let posOrder = posOrders.FirstOrDefault(po=>po.RecordId == record.Id)
             where taskSource != null
             select new PhoneOrderRecordTaskDto
             {
@@ -1200,7 +1210,8 @@ public partial class PhoneOrderService
                 RecordId = record.Id,
                 Scenarios = record.Scenario,
                 RecordDate = record.CreatedDate,
-                TaskSource = taskSource.TaskInfo
+                TaskSource = taskSource.TaskInfo,
+                ProcessorName = GetProcessorName(processedRecord?.LastModifiedBy ?? posOrder?.LastModifiedBy, userAccountDict)
             }).ToList();
 
         return new GetPhoneOrderRecordTasksResponse
@@ -1211,5 +1222,13 @@ public partial class PhoneOrderService
                 UnProcessCount = unprocessedCount 
             }
         };
+    }
+    
+    private string GetProcessorName(int? userId, Dictionary<int, string> userAccountDict)
+    {
+        if (userId == null || !userAccountDict.ContainsKey(userId.Value))
+            return null;
+
+        return userAccountDict[userId.Value];
     }
 }

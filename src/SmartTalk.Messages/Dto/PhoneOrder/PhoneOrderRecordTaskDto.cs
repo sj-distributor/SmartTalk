@@ -15,4 +15,6 @@ public class PhoneOrderRecordTaskDto
     public DateTimeOffset RecordDate { get; set; }
 
     public string TaskSource { get; set; }
+
+    public string ProcessorName { get; set; }
 }
