@@ -178,15 +178,13 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
                 return;
             }
 
-            var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
-
             var singleDayRecords = callRecords.SelectMany(r => new[]
                 {
                     new { Phone = NormalizePhone(r.FromNumber), Record = r }, 
                     new { Phone = NormalizePhone(r.ToNumber), Record = r }
                 }).Where(x => !string.IsNullOrEmpty(x.Phone)).GroupBy(x => new
                 {
-                    Phone = x.Phone, Date = TimeZoneInfo.ConvertTimeFromUtc(x.Record.StartTimeUtc, pacificZone).Date
+                    Phone = x.Phone, Date = x.Record.StartTimeUtc.Date
                 }).Where(g => g.Count() == 1).Select(g => g.First().Record).Distinct().ToList();
 
 
