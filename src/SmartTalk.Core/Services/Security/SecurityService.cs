@@ -35,6 +35,8 @@ public interface ISecurityService : IScopedDependency
          CreateUserPermissionsCommand command, CancellationToken cancellationToken);
 
      Task<SwitchLanguageResponse> SwitchLanguageAsync(SwitchLanguageCommand command, CancellationToken cancellationToken);
+     
+     Task<UpdateUserAccountTaskNotificationResponse> UpdateUserAccountTaskNotificationAsync(UpdateUserAccountTaskNotificationCommand command, CancellationToken cancellationToken);
 }
 
 public class SecurityService : ISecurityService
@@ -236,6 +238,25 @@ public class SecurityService : ISecurityService
         return new SwitchLanguageResponse()
         {
             Data = _mapper.Map<UserAccountDto>(userAccount)
+        };
+    }
+
+    public async Task<UpdateUserAccountTaskNotificationResponse> UpdateUserAccountTaskNotificationAsync(UpdateUserAccountTaskNotificationCommand command, CancellationToken cancellationToken)
+    {
+        var userAccount = await _accountDataProvider.GetUserAccountByUserIdAsync(command.UserId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (userAccount is null) throw new AccountExpiredException("UpdateUserAccountTaskNotificationAsync User Account Is Not Exist");
+        userAccount.IsTurnOnNotification = command.IsTurnOnNotification ?? userAccount.IsTurnOnNotification;
+        userAccount.IsTaskEnabled = command.IsTaskEnabled ?? userAccount.IsTaskEnabled;
+        
+        await _accountDataProvider.UpdateUserAccountAsync(userAccount, true, cancellationToken).ConfigureAwait(false);
+
+        return new UpdateUserAccountTaskNotificationResponse()
+        {
+            Data = new UpdateUserAccountTaskNotificationResponseData()
+            {
+               UserAccount = _mapper.Map<UserAccountDto>(userAccount)
+            }
         };
     }
 }

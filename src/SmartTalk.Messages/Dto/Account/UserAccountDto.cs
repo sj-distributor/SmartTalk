@@ -34,8 +34,12 @@ public class UserAccountDto
     public int? LastModifiedBy { get; set; }
 
     public string LastModifiedByName { get; set; }
-
+    
     public DateTimeOffset? LastModifiedDate { get; set; }
+
+    public bool IsTaskEnabled { get; set; }
+
+    public bool IsTurnOnNotification { get; set; }
     
     public List<RoleDto> Roles { get; set; } = new();
 
