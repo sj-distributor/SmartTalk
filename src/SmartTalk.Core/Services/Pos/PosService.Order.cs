@@ -814,7 +814,7 @@ public partial class PosService
         if (merchPrinterOrder == null)
             return CloudPrintStatus.Failed;
 
-        var merchPrinterLog = (await _printerDataProvider.GetMerchPrinterLogAsync(storeId: merchPrinterOrder.StoreId, recordId: merchPrinterOrder.PhoneOrderId, orderId: merchPrinterOrder.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false)).Item2.FirstOrDefault();
+        var merchPrinterLog = (await _printerDataProvider.GetMerchPrinterLogAsync(storeId: merchPrinterOrder.StoreId, recordId: merchPrinterOrder.RecordId, orderId: merchPrinterOrder.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false)).Item2.FirstOrDefault();
         
         Log.Information("Merch printer log:{@merchPrinterLog}", merchPrinterLog);
         
