@@ -1,2 +1,2 @@
 alter table `merch_printer_log`
-    add column `phone_order_Id` int null;
+    add column `record_id` int null;

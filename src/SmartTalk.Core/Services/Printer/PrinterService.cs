@@ -242,10 +242,10 @@ public class PrinterService : IPrinterService
         }
         else
         {
-            if (merchPrinterOrder.PhoneOrderId == null)
+            if (merchPrinterOrder.RecordId == null)
                 throw new Exception("Phone order id is null");
             
-            var reservationInfo = await _posDataProvider.GetPhoneOrderReservationInformationAsync(merchPrinterOrder.PhoneOrderId.Value, cancellationToken).ConfigureAwait(false);
+            var reservationInfo = await _posDataProvider.GetPhoneOrderReservationInformationAsync(merchPrinterOrder.RecordId.Value, cancellationToken).ConfigureAwait(false);
             var storePrintDateString = "";
             
             if (!string.IsNullOrEmpty(store.Timezone))
@@ -876,7 +876,7 @@ public class PrinterService : IPrinterService
                      {
                          Id = id,
                          OrderId = command.OrderId,
-                         PhoneOrderId = command.PhoneOrderId,
+                         RecordId = command.PhoneOrderId,
                          StoreId = command.StoreId.Value,
                          PrinterMac = merchPrinter?.PrinterMac,
                          PrintDate = DateTimeOffset.Now,
@@ -907,10 +907,10 @@ public class PrinterService : IPrinterService
 
              if (command.PrintFormat == PrintFormat.Draft)
              {
-                 if (order.PhoneOrderId == null)
+                 if (order.RecordId == null)
                      throw new Exception("Phone order reservation info id is null");
                         
-                 var reservation = await _posDataProvider.GetPhoneOrderReservationInformationAsync(order.PhoneOrderId.Value, cancellationToken: cancellationToken).ConfigureAwait(false);
+                 var reservation = await _posDataProvider.GetPhoneOrderReservationInformationAsync(order.RecordId.Value, cancellationToken: cancellationToken).ConfigureAwait(false);
 
                  if (reservation != null)
                     await _posDataProvider.UpdatePhoneOrderReservationInformationAsync(reservation, cancellationToken: cancellationToken).ConfigureAwait(false);

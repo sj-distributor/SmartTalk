@@ -23,8 +23,8 @@ public class MerchPrinterOrder : IEntity
     [Column("order_id")]
     public int? OrderId { get; set; }
 
-    [Column("phone_order_Id")]
-    public int? PhoneOrderId { get; set; }
+    [Column("record_id")]
+    public int? RecordId { get; set; }
         
     [Column("print_status")]
     public PrintStatus PrintStatus { get; set; }

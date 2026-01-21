@@ -91,7 +91,7 @@ public class PrinterDataProvider : IPrinterDataProvider
             query = query.Where(x => x.StoreId == storeId.Value);
 
         if (recordId.HasValue)
-            query = query.Where(x => x.PhoneOrderId == recordId);
+            query = query.Where(x => x.RecordId == recordId);
 
         if (status.HasValue)
             query = query.Where(x => x.PrintStatus == status.Value);
