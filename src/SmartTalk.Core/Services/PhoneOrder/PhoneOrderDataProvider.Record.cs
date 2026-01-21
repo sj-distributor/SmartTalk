@@ -92,6 +92,8 @@ public partial interface IPhoneOrderDataProvider
     Task<List<int>> GetPhoneOrderReservationInfoUnreviewedRecordIdsAsync(List<int> recordIds, CancellationToken cancellationToken);
     
     Task<PhoneOrderRecordReport> GetOriginalPhoneOrderRecordReportAsync(int recordId, CancellationToken cancellationToken);
+
+    Task<List<PhoneOrderRecordTaskSourceDto>> GetPhoneOrderRecordTasksEnrichInfoForAgentsAsync(List<int> agentIds, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderDataProvider
@@ -504,7 +506,8 @@ public partial class PhoneOrderDataProvider
             {
                 Id = record.Id,
                 AgentId = record.AgentId,
-                AssistantId = record.AssistantId
+                AssistantId = record.AssistantId,
+                LastModifiedBy = order.LastModifiedBy
             };
         
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
@@ -575,9 +578,31 @@ public partial class PhoneOrderDataProvider
                 select info.RecordId
             ).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
-
-    public async Task<PhoneOrderRecordReport> GetOriginalPhoneOrderRecordReportAsync(int recordId, CancellationToken cancellationToken)
+    
+    public async Task<PhoneOrderRecordReport> GetOriginalPhoneOrderRecordReportAsync(int recordId,
+        CancellationToken cancellationToken)
     {
-        return await _repository.Query<PhoneOrderRecordReport>().Where(x => x.RecordId == recordId && x.IsOrigin).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        return await _repository.Query<PhoneOrderRecordReport>().Where(x => x.RecordId == recordId && x.IsOrigin)
+            .FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<PhoneOrderRecordTaskSourceDto>> GetPhoneOrderRecordTasksEnrichInfoForAgentsAsync(List<int> agentIds, CancellationToken cancellationToken)
+    {
+        var query =
+            from assistantKnowledge in _repository.Query<AiSpeechAssistantKnowledge>()
+            join agentAssistant in _repository.Query<AgentAssistant>() on assistantKnowledge.Id equals agentAssistant.AssistantId
+            join agent in _repository.Query<Agent>() on agentAssistant.AgentId equals agent.Id
+            join posAgent in _repository.Query<PosAgent>() on agent.Id equals posAgent.AgentId
+            join store in _repository.Query<CompanyStore>() on posAgent.StoreId equals store.Id
+            join company in _repository.Query<Company>() on store.CompanyId equals company.Id
+            where agentIds.Contains(agent.Id)
+            select new PhoneOrderRecordTaskSourceDto
+            {
+                AgentId = agent.Id,
+                TaskInfo = $"{company.Name} - {store.Names} - {agent.Name}"
+            };
+        
+        var results = await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+        return results;
     }
 }

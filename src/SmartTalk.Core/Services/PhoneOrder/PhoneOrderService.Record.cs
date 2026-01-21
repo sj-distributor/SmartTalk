@@ -56,6 +56,8 @@ public partial interface IPhoneOrderService
     Task<GetPhoneOrderDataDashboardResponse> GetPhoneOrderDataDashboardAsync(GetPhoneOrderDataDashboardRequest request, CancellationToken cancellationToken);
     
     Task<GetPhoneOrderRecordScenarioResponse> GetPhoneOrderRecordScenarioAsync(GetPhoneOrderRecordScenarioRequest request, CancellationToken cancellationToken);
+    
+    Task<GetPhoneOrderRecordTasksResponse> GetPhoneOrderRecordTasksRequestAsync(GetPhoneOrderRecordTasksRequest request, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderService
@@ -1326,5 +1328,76 @@ public partial class PhoneOrderService
         {
             Data = result
         };
+    }
+
+    public async Task<GetPhoneOrderRecordTasksResponse> GetPhoneOrderRecordTasksRequestAsync(GetPhoneOrderRecordTasksRequest request, CancellationToken cancellationToken)
+    {
+        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds: request.AgentIds, name: null, utcStart: request.StartTime, utcEnd: request.EntTime,
+            scenarios: new List<DialogueScenarios>()
+            {
+                DialogueScenarios.Order,
+                DialogueScenarios.Reservation,
+                DialogueScenarios.ThirdPartyOrderNotification,
+                DialogueScenarios.InformationNotification,
+            }, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        Log.Information("Get All records: {@records}", records.Count);
+
+        var processedRecords = await _phoneOrderDataProvider.GetSimplePhoneOrderRecordsAsync(request.AgentIds, cancellationToken).ConfigureAwait(false);
+
+        var unprocessedCount = records.Count(record => !processedRecords.Any(processed => processed.Id == record.Id));
+        
+        if (request.DoListTpye == PhoneOrderRecordTaskType.Unprocessed)
+        {
+            records = records.Where(record => !processedRecords.Any(processed => processed.Id == record.Id)).ToList();
+            Log.Information("Get Unprocessed records: {@records}", records.Count);
+        }
+        
+        var agentIds = records.Select(record => record.AgentId).Distinct().ToList();
+        var posAgents = await _posDataProvider.GetPosAgentByAgentIdsAsync(agentIds, cancellationToken).ConfigureAwait(false);
+        
+        var taskSources = await _phoneOrderDataProvider.GetPhoneOrderRecordTasksEnrichInfoForAgentsAsync(agentIds, cancellationToken).ConfigureAwait(false);
+
+        var posOrders = await _posDataProvider.GetPosOrdersByRecordIdsAsync(records.Select(x => x.Id).ToList(), cancellationToken).ConfigureAwait(false);
+        
+        var userIds = processedRecords.Select(pr => pr.LastModifiedBy).Union(posOrders.Select(po => po.LastModifiedBy)).Where(id => id.HasValue).Select(id => id.Value).Distinct().ToList();
+
+        var userAccounts = await _accountDataProvider.GetUserAccountByUserIdsAsync(userIds, cancellationToken).ConfigureAwait(false);
+        
+        var userAccountDict = userAccounts.ToDictionary(ua => ua.Id, ua => ua.UserName);
+        
+        var tasks = (from record in records
+            let posAgent = posAgents.FirstOrDefault(p => p.AgentId == record.AgentId)
+            let taskSource = taskSources.FirstOrDefault(ts => ts.AgentId == record.AgentId)
+            let processedRecord = processedRecords.FirstOrDefault(pr=>pr.Id == record.Id)
+            let posOrder = posOrders.FirstOrDefault(po=>po.RecordId == record.Id)
+            where taskSource != null
+            select new PhoneOrderRecordTaskDto
+            {
+                StortId = posAgent?.Id ?? 0,
+                AgentId = record.AgentId,
+                RecordId = record.Id,
+                Scenarios = record.Scenario,
+                RecordDate = record.CreatedDate,
+                TaskSource = taskSource.TaskInfo,
+                ProcessorName = GetProcessorName(processedRecord?.LastModifiedBy ?? posOrder?.LastModifiedBy, userAccountDict)
+            }).ToList();
+
+        return new GetPhoneOrderRecordTasksResponse
+        {
+            Data = new GetPhoneOrderRecordTasksResponseData
+            {
+                Tasks = tasks,
+                UnProcessCount = unprocessedCount 
+            }
+        };
+    }
+    
+    private string GetProcessorName(int? userId, Dictionary<int, string> userAccountDict)
+    {
+        if (userId == null || !userAccountDict.ContainsKey(userId.Value))
+            return null;
+
+        return userAccountDict[userId.Value];
     }
 }

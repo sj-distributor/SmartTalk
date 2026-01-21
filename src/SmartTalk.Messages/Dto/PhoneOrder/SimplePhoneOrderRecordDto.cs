@@ -7,4 +7,6 @@ public class SimplePhoneOrderRecordDto
     public int AgentId { get; set; }
 
     public int? AssistantId { get; set; }
+
+    public int? LastModifiedBy { get; set; }
 }

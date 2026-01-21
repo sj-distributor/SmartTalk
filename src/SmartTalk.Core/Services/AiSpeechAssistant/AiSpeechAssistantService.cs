@@ -515,7 +515,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     
     private async Task<string> GenerateMenuItemsAsync(int agentId, CancellationToken cancellationToken = default)
     {
-        var storeAgent = await _posDataProvider.GetPosAgentByAgentIdAsync(agentId, cancellationToken).ConfigureAwait(false);
+        var storeAgent = (await _posDataProvider.GetPosAgentByAgentIdsAsync([agentId], cancellationToken).ConfigureAwait(false)).FirstOrDefault();
     
         if (storeAgent == null) return null;
         
