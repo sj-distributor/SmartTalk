@@ -181,8 +181,6 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
                 Log.Information("Scenario {ScenarioId} 时间段 {From}~{To} 没有通话数据", scenarioId, from, to);
                 return;
             }
-            
-            var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
 
             var singleDayRecords = callRecords.SelectMany(r => new[]
                 {
@@ -190,7 +188,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
                     new { Phone = NormalizePhone(r.ToNumber), Record = r }
                 }).Where(x => !string.IsNullOrEmpty(x.Phone)).GroupBy(x => new
                 {
-                    Phone = x.Phone, Date = TimeZoneInfo.ConvertTimeFromUtc(x.Record.StartTimeUtc, pacificZone).Date
+                    Phone = x.Phone, Date = x.Record.StartTimeUtc.Date
                 }).Where(g => g.Count() == 1).Select(g => g.First().Record).Distinct().ToList();
 
 
