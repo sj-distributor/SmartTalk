@@ -143,7 +143,7 @@ public partial class PhoneOrderService
 
         Log.Information("Phone order record transcription detected language: {@detectionLanguage}", detection.Language);
 
-        var record = new PhoneOrderRecord { SessionId = Guid.NewGuid().ToString(), AgentId = recordInfo.Agent.Id, Language = SelectLanguageEnum(detection.Language), CreatedDate = recordInfo.StartDate, Status = PhoneOrderRecordStatus.Recieved, OrderRecordType = command.OrderRecordType };
+        var record = new PhoneOrderRecord { SessionId = Guid.NewGuid().ToString(), AgentId = recordInfo.Agent.Id, Language = SelectLanguageEnum(detection.Language), CreatedDate = recordInfo.StartDate, Status = PhoneOrderRecordStatus.Recieved, OrderRecordType = command.OrderRecordType, PhoneNumber = recordInfo.PhoneNumber };
 
         if (await CheckPhoneOrderRecordDurationAsync(command.RecordContent, cancellationToken).ConfigureAwait(false))
         {
@@ -533,10 +533,30 @@ public partial class PhoneOrderService
     {
         var agent = await _agentDataProvider.GetAgentByIdAsync(agentId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
+        var phoneNumber = TryExtractTargetNumber(recordName);
+        
         return new PhoneOrderRecordInformationDto
         {
             Agent = _mapper.Map<AgentDto>(agent),
-            StartDate = startTime ?? ExtractPhoneOrderStartDateFromRecordName(recordName)
+            StartDate = startTime ?? ExtractPhoneOrderStartDateFromRecordName(recordName),
+            PhoneNumber = phoneNumber
+        };
+    }
+    
+    private static string TryExtractTargetNumber(string fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName))
+            return "";
+
+        var parts = fileName.Split('-', StringSplitOptions.RemoveEmptyEntries);
+
+        if (parts.Length < 3)
+            return "";
+
+        return parts[0] switch
+        {
+            "out" when parts.Length > 1 => parts[1],
+            _ => ""
         };
     }
 
