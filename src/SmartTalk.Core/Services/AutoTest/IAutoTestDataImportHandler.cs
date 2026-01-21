@@ -50,18 +50,25 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
                     if (!import.TryGetValue("CustomerId", out var customerId) || !import.TryGetValue("StartDate", out var startDateObj) || !import.TryGetValue("EndDate", out var endDateObj))
                         return;
                     
-                    DateTime startUtc = startDateObj is DateTime dt1 ? dt1 : DateTime.Parse(startDateObj.ToString());
-                    DateTime endUtc = endDateObj is DateTime dt2 ? dt2 : DateTime.Parse(endDateObj.ToString());
+                    var startUtc = startDateObj is DateTime dt1 ? dt1 : DateTime.Parse(startDateObj.ToString());
+                    var endUtc = endDateObj is DateTime dt2 ? dt2 : DateTime.Parse(endDateObj.ToString());
                     
-                    var cursor = new DateTime(startUtc.Year, startUtc.Month, 1, 0, 0, 0, DateTimeKind.Utc);
-                    while (cursor <= endUtc)
+                    var cstZone = TimeZoneInfo.FindSystemTimeZoneById("China Standard Time");
+                    var startCstDate = TimeZoneInfo.ConvertTimeFromUtc(startUtc, cstZone).Date;
+                    var endCstDate = TimeZoneInfo.ConvertTimeFromUtc(endUtc, cstZone).Date;
+
+                    var cursor = startCstDate;
+                    while (cursor <= endCstDate)
                     {
-                        var monthStart = cursor < startUtc ? startUtc : cursor;
-                        var monthEnd = cursor.AddMonths(1).AddDays(-1).Date.AddDays(1).AddMilliseconds(-1);
-                        if (monthEnd > endUtc) monthEnd = endUtc;
+                        var monthStart = cursor < startCstDate ? startCstDate : cursor;
+                        var monthEnd = cursor.AddMonths(1).AddDays(-1);
+                        if (monthEnd > endCstDate) monthEnd = endCstDate;
+                        
+                        var fromUtc = TimeZoneInfo.ConvertTimeToUtc(monthStart, cstZone);
+                        var toUtc = TimeZoneInfo.ConvertTimeToUtc(monthEnd.AddDays(1).AddMilliseconds(-1), cstZone);
 
                         _backgroundJobClient.Enqueue<IAutoTestSalesPhoneOrderProcessJobService>(x =>
-                            x.ProcessPartialRecordingOrderMatchingAsync(scenarioId, dataSetId, recordId, monthStart, monthEnd, customerId.ToString(), cancellationToken));
+                            x.ProcessPartialRecordingOrderMatchingAsync(scenarioId, dataSetId, recordId, fromUtc, toUtc, customerId.ToString(), cancellationToken));
 
                         cursor = cursor.AddMonths(1);
                     }

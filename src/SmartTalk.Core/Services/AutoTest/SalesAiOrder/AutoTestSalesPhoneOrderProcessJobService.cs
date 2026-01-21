@@ -182,13 +182,14 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
                 return;
             }
 
+            var cstZone = TimeZoneInfo.FindSystemTimeZoneById("China Standard Time");
             var singleDayRecords = callRecords.SelectMany(r => new[]
                 {
                     new { Phone = NormalizePhone(r.FromNumber), Record = r }, 
                     new { Phone = NormalizePhone(r.ToNumber), Record = r }
                 }).Where(x => !string.IsNullOrEmpty(x.Phone)).GroupBy(x => new
                 {
-                    Phone = x.Phone, Date = x.Record.StartTimeUtc.Date
+                    Phone = x.Phone, Date = TimeZoneInfo.ConvertTimeFromUtc(x.Record.StartTimeUtc, cstZone).Date
                 }).Where(g => g.Count() == 1).Select(g => g.First().Record).Distinct().ToList();
 
 
