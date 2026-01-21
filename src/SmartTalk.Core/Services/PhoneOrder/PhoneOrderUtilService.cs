@@ -267,6 +267,8 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
             Log.Information("Create merch printer order:{@merchPrinterOrder}", order);
                  
             await _printerDataProvider.AddMerchPrinterOrderAsync(order, cancellationToken).ConfigureAwait(false);
+            
+            return;
         }
         else return;
                        
