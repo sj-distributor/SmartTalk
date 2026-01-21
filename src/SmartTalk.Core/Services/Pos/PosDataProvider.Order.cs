@@ -16,6 +16,9 @@ public partial interface IPosDataProvider
     
     Task AddPosOrdersAsync(List<PosOrder> orders, bool forceSave = true, CancellationToken cancellationToken = default);
 
+    Task<List<PosOrder>> GetPosOrdersByRecordIdsAsync(List<int> recordIds, CancellationToken cancellationToken);
+    
+
     Task<PosOrder> GetPosOrderSortByOrderNoAsync(int storeId, DateTimeOffset utcStart, DateTimeOffset utcEnd, CancellationToken cancellationToken);
 
     Task<List<PosOrder>>GetPosOrdersByStoreIdsAsync(
@@ -164,5 +167,12 @@ public partial class PosDataProvider
         PhoneOrderReservationInformation reservationInformation, CancellationToken cancellationToken)
     {
         await _repository.DeleteAsync(reservationInformation, cancellationToken).ConfigureAwait(false);
+    }
+    
+    public async Task<List<PosOrder>> GetPosOrdersByRecordIdsAsync(List<int> recordIds, CancellationToken cancellationToken)
+    {
+        return await _repository.QueryNoTracking<PosOrder>()
+            .Where(x => x.RecordId.HasValue && recordIds.Contains(x.RecordId.Value))
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }
