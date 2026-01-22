@@ -6,6 +6,7 @@ using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Ioc;
+using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.Caching.Redis;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Messages.Dto.Agent;
@@ -23,6 +24,8 @@ public interface IPosUtilService : IScopedDependency
     Task GenerateAiDraftAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant assistant, PhoneOrderRecord record, CancellationToken cancellationToken);
 
     Task<(List<PosProduct> Products, string MenuItems)> GeneratePosMenuItemsAsync(int agentId, bool isWithProductId = false, CancellationToken cancellationToken = default);
+    
+    Task<decimal?> CalculateOrderAmountAsync(int assistantId, BinaryData audioData, CancellationToken cancellationToken = default);
 }
 
 public class PosUtilService : IPosUtilService
@@ -32,14 +35,16 @@ public class PosUtilService : IPosUtilService
     private readonly OpenAiSettings _openAiSettings;
     private readonly IPosDataProvider _posDataProvider;
     private readonly IRedisSafeRunner _redisSafeRunner;
+    private readonly IAgentDataProvider _agentDataProvider;
 
-    public PosUtilService(IMapper mapper, IPosService posService, OpenAiSettings openAiSettings, IPosDataProvider posDataProvider, IRedisSafeRunner redisSafeRunner)
+    public PosUtilService(IMapper mapper, IPosService posService, OpenAiSettings openAiSettings, IPosDataProvider posDataProvider, IRedisSafeRunner redisSafeRunner, IAgentDataProvider agentDataProvider)
     {
         _mapper = mapper;
         _posService = posService;
         _openAiSettings = openAiSettings;
         _posDataProvider = posDataProvider;
         _redisSafeRunner = redisSafeRunner;
+        _agentDataProvider = agentDataProvider;
     }
     
     public async Task GenerateAiDraftAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant assistant, PhoneOrderRecord record, CancellationToken cancellationToken)
@@ -219,6 +224,93 @@ public class PosUtilService : IPosUtilService
         }
 
         return (categoryProductsLookup.SelectMany(x => x.Value).ToList(), menuItems.TrimEnd('\r', '\n'));
+    }
+
+    public async Task<decimal?> CalculateOrderAmountAsync(int assistantId, BinaryData audioData, CancellationToken cancellationToken = default)
+    {
+        var agent = await _agentDataProvider.GetAgentByAssistantIdAsync(assistantId, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Get agent: {@Agent} by assistant id: {AssistantId}", agent, assistantId);
+        
+        if (agent == null) return null;
+        
+        var (products, menuItems) = await GeneratePosMenuItemsAsync(agent.Id, true, cancellationToken).ConfigureAwait(false);
+        
+        var systemPrompt =
+            "你是一名訂單分析助手，善于从录音中提取订单的相关内容，比如菜品，数量，规格信息，並且用菜單列表盡力匹配每個菜品。" +
+            "請嚴格傳回一個 JSON 對象，items（数组，元素包含 productId：菜品ID, name：菜品名, quantity：数量, specification：规格（比如：大、中、小，加小料、加椰果或者有关菜品的其他内容））。\n" +
+            "範例：\n" +
+            "{\"items\":[{\"productId\":\"9778779965031491\",\"name\":\"海南雞湯麵\",\"quantity\":1,\"specification\":null}]}" +
+            "{\"items\":[{\"productId\":\"9225097809167409\",\"name\":\"港式燒鴨\",\"quantity\":1,\"specification\":\"半隻\"}]} \n\n" +
+            "菜單列表：\n" + menuItems + "\n\n" +
+            "注意：\n1. 必須嚴格按格式輸出 JSON，不要有其他字段或額外說明。\n2. **如果客戶分析文本中沒有任何可識別的下單信息，請返回：{ \"type\":0, \"items\": [] }。不得臆造或猜測菜品。** \n" +
+            "請務必完整提取報告中每一個提到的菜品";
+        
+        List<ChatMessage> messages =
+        [
+            new SystemChatMessage(systemPrompt),
+            new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
+            new UserChatMessage("幫我根據錄音生成订单：")
+        ];
+        
+        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
+ 
+        ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text, ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat() };
+
+        ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
+
+        try
+        {
+            var aiDraftOrder = JsonConvert.DeserializeObject<AiDraftOrderDto>(completion.Content.FirstOrDefault()?.Text ?? "");
+
+            Log.Information("Deserialize response to ai order: {@AiOrder}", aiDraftOrder);
+
+            var matchedProducts = products.Where(x => aiDraftOrder.Items.Select(p => p.ProductId).Contains(x.ProductId)).DistinctBy(x => x.ProductId).ToList();
+
+            Log.Information("Matched products: {@MatchedProducts}", matchedProducts);
+
+            var productModifiersLookup = matchedProducts.Where(x => !string.IsNullOrWhiteSpace(x.Modifiers))
+                .ToDictionary(x => x.ProductId, x => JsonConvert.DeserializeObject<List<EasyPosResponseModifierGroups>>(x.Modifiers));
+
+            Log.Information("Build product's modifiers: {@ModifiersLookUp}", productModifiersLookup);
+
+            foreach (var aiDraftItem in aiDraftOrder.Items.Where(x => !string.IsNullOrEmpty(x.Specification)))
+            {
+                if (productModifiersLookup.TryGetValue(aiDraftItem.ProductId, out var modifiers))
+                {
+                    try
+                    {
+                        var builtModifiers = await GenerateSpecificationProductsAsync(modifiers, aiDraftItem.Specification, cancellationToken).ConfigureAwait(false);
+                        
+                        Log.Information("Matched modifiers: {@MatchedModifiers}", builtModifiers);
+
+                        if (builtModifiers == null || builtModifiers.Count == 0) continue;
+
+                        aiDraftItem.Modifiers = builtModifiers;
+                    }
+                    catch (Exception e)
+                    {
+                        aiDraftItem.Modifiers = [];
+                        
+                        Log.Error(e, "Failed to build product: {@AiDraftItem} modifiers", aiDraftItem);
+                    }
+                }
+            }
+
+            Log.Information("Enrich ai draft order: {@EnrichAiDraftOrder}", aiDraftOrder);
+        
+            var draftMapping = BuildAiDraftAndProductMapping(products, aiDraftOrder.Items);
+            
+            var (_, subTotal, taxes) = BuildPosOrderItems(draftMapping);
+            
+            return subTotal + taxes;
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Failed to extract products from report text");
+            
+            return null;
+        }
     }
 
     private string BuildItemModifiers(List<EasyPosResponseModifierGroups> modifiers)
