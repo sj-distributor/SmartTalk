@@ -74,7 +74,7 @@ public class PosUtilService : IPosUtilService
         
         try
         {
-            var (matchedProducts, aiDraftOrder) = await ExtractProductsFromReportAsync(agent, record.TranscriptionText, record.IncomingCallNumber, cancellationToken).ConfigureAwait(false);
+            var (matchedProducts, aiDraftOrder) = await ExtractProductsFromReportAsync(agent, record.Id, record.TranscriptionText, record.IncomingCallNumber, record.Language, cancellationToken).ConfigureAwait(false);
             
             if (matchedProducts == null || aiDraftOrder == null) return;
 
@@ -102,7 +102,7 @@ public class PosUtilService : IPosUtilService
         var systemPrompt =
             "你是一名訂單分析助手。請從下面的客戶分析報告文字中提取客人的姓名、电话、配送类型以及配送地址，以及所有下單的菜品、數量、規格、备注，並且用菜單列表盡力匹配每個菜品。\n" +
             "如果報告中提到了送餐類型，請提取送餐類型 type (0: 自提订单，1：配送订单)。\n" +
-            "如果客户有要求或者提供其他的号码作为订单的号码，請提取客户的电话 phoneNumber ，否则 phoneNumber 为当前的来电号码：" + record.IncomingCallNumber + "。\n"+
+            "如果客户有要求或者提供其他的号码作为订单的号码，請提取客户的电话 phoneNumber ，否则 phoneNumber 为当前的来电号码：" + incomingCallNumber + "。\n"+
             "如果報告中提到了客户的姓名，請提取客户的姓名 customerName 。\n" +
             "如果報告中提到了客户的配送地址，請提取客户的配送地址 customerAddress，若无则忽略 。\n" +
             "如果報告中提到了客户的订单注意事项或者是要求，且該內容不能獨立構成一個可下單的菜品名稱，則請提取為备注信息 notes；若该要求是附属于某一道菜品的特殊交代（如口味、加料、忌口），則在不影響該菜品正常生成 items 的前提下，將該要求體現在 notes 中。\n" +
@@ -146,7 +146,7 @@ public class PosUtilService : IPosUtilService
                 {
                     try
                     {
-                        var builtModifiers = await GenerateSpecificationProductsAsync(modifiers, record.Language, aiDraftItem.Specification, cancellationToken).ConfigureAwait(false);
+                        var builtModifiers = await GenerateSpecificationProductsAsync(modifiers, language, aiDraftItem.Specification, cancellationToken).ConfigureAwait(false);
                         
                         Log.Information("Matched modifiers: {@MatchedModifiers}", builtModifiers);
 
@@ -264,7 +264,7 @@ public class PosUtilService : IPosUtilService
 
         var report = await GenerateAiDraftReportAsync(agent, audioData, cancellationToken).ConfigureAwait(false);
 
-        var (matchedProducts, aiDraftOrder) = await ExtractProductsFromReportAsync(agent, report, string.Empty, cancellationToken).ConfigureAwait(false);
+        var (matchedProducts, aiDraftOrder) = await ExtractProductsFromReportAsync(agent, 0, report, string.Empty, TranscriptionLanguage.Chinese, cancellationToken).ConfigureAwait(false);
             
         var draftMapping = BuildAiDraftAndProductMapping(matchedProducts, aiDraftOrder.Items);
         
@@ -275,7 +275,7 @@ public class PosUtilService : IPosUtilService
 
     private async Task<string> GenerateAiDraftReportAsync(Agent agent, BinaryData audioData, CancellationToken cancellationToken)
     {
-        var (_, menuItems) = await GeneratePosMenuItemsAsync(agent.Id, false, cancellationToken).ConfigureAwait(false);
+        var (_, menuItems) = await GeneratePosMenuItemsAsync(agent.Id, false, TranscriptionLanguage.Chinese, cancellationToken).ConfigureAwait(false);
         
         List<ChatMessage> messages =
         [
