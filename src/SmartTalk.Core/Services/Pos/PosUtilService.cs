@@ -72,11 +72,30 @@ public class PosUtilService : IPosUtilService
             return;
         }
         
-        var originalReport = await _phoneOrderDataProvider.GetOriginalPhoneOrderRecordReportAsync(record.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var (matchedProducts, aiDraftOrder) = await ExtractProductsFromReportAsync(agent, record.TranscriptionText, record.IncomingCallNumber, cancellationToken).ConfigureAwait(false);
+            
+            if (matchedProducts == null || aiDraftOrder == null) return;
 
-        var report = originalReport?.Report ?? record.TranscriptionText;
+            var order = await BuildPosOrderAsync(record, aiDraftOrder, matchedProducts, cancellationToken).ConfigureAwait(false);
+
+            if (assistant.IsAllowOrderPush)
+                await _posService.HandlePosOrderAsync(order, false, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Generate ai draft order failed.");
+        }
+    }
+
+    private async Task<(List<PosProduct> matchedProducts, AiDraftOrderDto aiDraftOrder)> ExtractProductsFromReportAsync(Agent agent, int recordId, string report, string incomingCallNumber, TranscriptionLanguage language,  CancellationToken cancellationToken)
+    {
+        var originalReport = await _phoneOrderDataProvider.GetOriginalPhoneOrderRecordReportAsync(recordId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (!string.IsNullOrWhiteSpace(originalReport?.Report)) report = originalReport.Report;
         
-        var (products, menuItems) = await GeneratePosMenuItemsAsync(agent.Id, true, record.Language, cancellationToken).ConfigureAwait(false);
+        var (products, menuItems) = await GeneratePosMenuItemsAsync(agent.Id, true, language, cancellationToken).ConfigureAwait(false);
 
         var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
 
@@ -87,7 +106,7 @@ public class PosUtilService : IPosUtilService
             "如果報告中提到了客户的姓名，請提取客户的姓名 customerName 。\n" +
             "如果報告中提到了客户的配送地址，請提取客户的配送地址 customerAddress，若无则忽略 。\n" +
             "如果報告中提到了客户的订单注意事项或者是要求，且該內容不能獨立構成一個可下單的菜品名稱，則請提取為备注信息 notes；若该要求是附属于某一道菜品的特殊交代（如口味、加料、忌口），則在不影響該菜品正常生成 items 的前提下，將該要求體現在 notes 中。\n" +
-            "另外请注意备注的语言，当前的语言为: " + record.Language.GetDescription() + "，如果当前语言类型为 zh，则备注为中文，若不是 zh，则备注为英文 \n" +
+            "另外请注意备注的语言，当前的语言为: " + language.GetDescription() + "，如果当前语言类型为 zh，则备注为中文，若不是 zh，则备注为英文 \n" +
             "請嚴格傳回一個 JSON 對象，頂層字段為 \"type\"，items（数组，元素包含 productId：菜品ID, name：菜品名, quantity：数量, specification：规格（比如：大、中、小，加小料、加椰果或者有关菜品的其他内容））。\n" +
             "範例：\n" +
             "{\"type\":0,\"phoneNumber\":\"40085235698\",\"customerName\":\"刘先生\",\"customerAddress\":\"中环广场一座\",\"notes\":\"给个酱油包\",\"items\":[{\"productId\":\"9778779965031491\",\"name\":\"海南雞湯麵\",\"quantity\":1,\"specification\":null}]}" +
@@ -146,14 +165,13 @@ public class PosUtilService : IPosUtilService
 
             Log.Information("Enrich ai draft order: {@EnrichAiDraftOrder}", aiDraftOrder);
 
-            var order = await BuildPosOrderAsync(record, aiDraftOrder, matchedProducts, cancellationToken).ConfigureAwait(false);
-
-            if (assistant.IsAllowOrderPush)
-                await _posService.HandlePosOrderAsync(order, false, cancellationToken).ConfigureAwait(false);
+            return (matchedProducts, aiDraftOrder);
         }
         catch (Exception e)
         {
             Log.Error(e, "Failed to extract products from report text");
+
+            return (null, null);
         }
     }
 
@@ -243,84 +261,49 @@ public class PosUtilService : IPosUtilService
         Log.Information("Get agent: {@Agent} by assistant id: {AssistantId}", agent, assistantId);
         
         if (agent == null) return null;
+
+        var report = await GenerateAiDraftReportAsync(agent, audioData, cancellationToken).ConfigureAwait(false);
+
+        var (matchedProducts, aiDraftOrder) = await ExtractProductsFromReportAsync(agent, report, string.Empty, cancellationToken).ConfigureAwait(false);
+            
+        var draftMapping = BuildAiDraftAndProductMapping(matchedProducts, aiDraftOrder.Items);
         
-        var (products, menuItems) = await GeneratePosMenuItemsAsync(agent.Id, true, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var (_, subTotal, taxes) = BuildPosOrderItems(draftMapping);
         
-        var systemPrompt =
-            "你是一名訂單分析助手，善于从录音中提取订单的相关内容，比如菜品，数量，规格信息，並且用菜單列表盡力匹配每個菜品。" +
-            "請嚴格傳回一個 JSON 對象，items（数组，元素包含 productId：菜品ID, name：菜品名, quantity：数量, specification：规格（比如：大、中、小，加小料、加椰果或者有关菜品的其他内容））。\n" +
-            "範例：\n" +
-            "{\"items\":[{\"productId\":\"9778779965031491\",\"name\":\"海南雞湯麵\",\"quantity\":1,\"specification\":null}]}" +
-            "{\"items\":[{\"productId\":\"9225097809167409\",\"name\":\"港式燒鴨\",\"quantity\":1,\"specification\":\"半隻\"}]} \n\n" +
-            "菜單列表：\n" + menuItems + "\n\n" +
-            "注意：\n1. 必須嚴格按格式輸出 JSON，不要有其他字段或額外說明。\n2. **如果客戶分析文本中沒有任何可識別的下單信息，請返回：{ \"type\":0, \"items\": [] }。不得臆造或猜測菜品。** \n" +
-            "請務必完整提取報告中每一個提到的菜品";
+        return subTotal + taxes;
+    }
+
+    private async Task<string> GenerateAiDraftReportAsync(Agent agent, BinaryData audioData, CancellationToken cancellationToken)
+    {
+        var (_, menuItems) = await GeneratePosMenuItemsAsync(agent.Id, false, cancellationToken).ConfigureAwait(false);
         
         List<ChatMessage> messages =
         [
-            new SystemChatMessage(systemPrompt),
+            new SystemChatMessage("你是一名電話訂單內容分析員，只需要從錄音內容中提取客戶實際下單的菜品資訊。\n\n" +
+                                  "請僅輸出「客戶下單內容」，不要輸出任何其他說明、分析、摘要或多餘文字。\n\n" +
+                                  "輸出格式必須嚴格遵守以下結構（若無有效下單內容，則不輸出任何內容）：\n\n" +
+                                  "客戶下單內容（請務必按該格式輸出：菜品 數量 規格）：\n" +
+                                  "1. 港式奶茶 2杯\n" +
+                                  "2. 海南雞湯麵 2份\n" +
+                                  "3. 叉燒包派對餐 1份 小份(12pcs)\n\n" +
+                                  "注意事項：\n- 僅提取客戶明確確認的下單菜品\n" +
+                                  "- 不要推測或補全未明確提及的菜品\n" +
+                                  "- 規格（如大小、數量、套餐）僅在錄音中明確出現時才輸出\n" +
+                                  "- 若客戶未下單或未識別到有效菜品，請不要輸出任何內容\n\n" +
+                                  "客戶下單的菜品可能參考以下菜單，但不限於此：\n" + menuItems),
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
-            new UserChatMessage("幫我根據錄音生成订单：")
+            new UserChatMessage("幫我根據錄音生成订单草稿：")
         ];
         
         ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
  
-        ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text, ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat() };
+        ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
 
         ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
-
-        try
-        {
-            var aiDraftOrder = JsonConvert.DeserializeObject<AiDraftOrderDto>(completion.Content.FirstOrDefault()?.Text ?? "");
-
-            Log.Information("Deserialize response to ai order: {@AiOrder}", aiDraftOrder);
-
-            var matchedProducts = products.Where(x => aiDraftOrder.Items.Select(p => p.ProductId).Contains(x.ProductId)).DistinctBy(x => x.ProductId).ToList();
-
-            Log.Information("Matched products: {@MatchedProducts}", matchedProducts);
-
-            var productModifiersLookup = matchedProducts.Where(x => !string.IsNullOrWhiteSpace(x.Modifiers))
-                .ToDictionary(x => x.ProductId, x => JsonConvert.DeserializeObject<List<EasyPosResponseModifierGroups>>(x.Modifiers));
-
-            Log.Information("Build product's modifiers: {@ModifiersLookUp}", productModifiersLookup);
-
-            foreach (var aiDraftItem in aiDraftOrder.Items.Where(x => !string.IsNullOrEmpty(x.Specification)))
-            {
-                if (productModifiersLookup.TryGetValue(aiDraftItem.ProductId, out var modifiers))
-                {
-                    try
-                    {
-                        var builtModifiers = await GenerateSpecificationProductsAsync(modifiers, TranscriptionLanguage.Chinese, aiDraftItem.Specification, cancellationToken).ConfigureAwait(false);
-                        
-                        Log.Information("Matched modifiers: {@MatchedModifiers}", builtModifiers);
-
-                        if (builtModifiers == null || builtModifiers.Count == 0) continue;
-
-                        aiDraftItem.Modifiers = builtModifiers;
-                    }
-                    catch (Exception e)
-                    {
-                        aiDraftItem.Modifiers = [];
-                        
-                        Log.Error(e, "Failed to build product: {@AiDraftItem} modifiers", aiDraftItem);
-                    }
-                }
-            }
-
-            Log.Information("Enrich ai draft order: {@EnrichAiDraftOrder}", aiDraftOrder);
         
-            var draftMapping = BuildAiDraftAndProductMapping(products, aiDraftOrder.Items);
-            
-            var (_, subTotal, taxes) = BuildPosOrderItems(draftMapping);
-            
-            return subTotal + taxes;
-        }
-        catch (Exception e)
-        {
-            Log.Error(e, "Failed to extract products from report text");
-            
-            return null;
-        }
+        Log.Information("Calculate: summary report:" + completion.Content.FirstOrDefault()?.Text);
+        
+        return completion.Content.FirstOrDefault()?.Text ?? string.Empty;
     }
 
     private string BuildItemModifiers(List<EasyPosResponseModifierGroups> modifiers, TranscriptionLanguage language = TranscriptionLanguage.Chinese)
