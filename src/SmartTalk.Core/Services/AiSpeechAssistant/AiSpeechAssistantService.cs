@@ -1296,6 +1296,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         var fileContent = memoryStream.ToArray();
         var audioData = BinaryData.FromBytes(fileContent);
         
+        var language = await DetectAudioLanguageAsync(fileContent, cancellationToken).ConfigureAwait(false);
+        
         var amount = await _posUtilService.CalculateOrderAmountAsync(_aiSpeechAssistantStreamContext.Assistant.Id, audioData, cancellationToken).ConfigureAwait(false);
 
         ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
