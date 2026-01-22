@@ -12,6 +12,8 @@ public class AiSpeechAssistantDto
     
     public int AnsweringNumberId { get; set; }
     
+    public string Language { get; set; }
+    
     public string AnsweringNumber { get; set; }
     
     public string ModelUrl { get; set; }

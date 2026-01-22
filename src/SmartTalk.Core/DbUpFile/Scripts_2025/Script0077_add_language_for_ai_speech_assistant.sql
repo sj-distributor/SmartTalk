@@ -1,2 +1,2 @@
 ALTER TABLE ai_speech_assistant
-    ADD COLUMN IF NOT EXISTS langauge varchar(255);
+    ADD COLUMN `language` varchar(255) NOT NULL;

@@ -709,7 +709,7 @@ public partial class PhoneOrderService
                 .ToDictionary(g => g.Key, g => g.First().Name ?? string.Empty);
             assistantLanguageMap = assistants
                 .GroupBy(x => x.Id)
-                .ToDictionary(g => g.Key, g => g.First().Langauge ?? string.Empty);
+                .ToDictionary(g => g.Key, g => g.First().Language ?? string.Empty);
         }
 
         var (utcStart, utcEnd) = GetCompanyCallReportUtcRange(request.ReportType);
