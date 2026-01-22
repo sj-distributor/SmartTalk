@@ -197,7 +197,18 @@ public class SpeechMaticsService : ISpeechMaticsService
 
         await MultiScenarioCustomProcessingAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
         
-        _backgroundJobClient.Enqueue<ISalesPhoneOrderPushService>(service => service.ExecutePhoneOrderPushTasksAsync(record.Id, CancellationToken.None));
+        var hasPendingTasks = await _salesDataProvider.HasPendingTasksByRecordIdAsync(record.Id, cancellationToken).ConfigureAwait(false);
+        
+        if (!hasPendingTasks)
+        {
+            Log.Information("No PhoneOrderPushTask created, mark record completed. RecordId={RecordId}", record.Id);
+
+            await _phoneOrderDataProvider.MarkRecordCompletedAsync(record.Id, cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            _backgroundJobClient.Enqueue<ISalesPhoneOrderPushService>(service => service.ExecutePhoneOrderPushTasksAsync(record.Id, CancellationToken.None));
+        }
 
         if (agent.SourceSystem == AgentSourceSystem.Smarties)
             await CallBackSmartiesRecordAsync(agent, record, cancellationToken).ConfigureAwait(false);
@@ -417,6 +428,7 @@ public class SpeechMaticsService : ISpeechMaticsService
                     if (!aiSpeechAssistant.IsAllowOrderPush)
                     {
                         Log.Information("Assistant.Name={AssistantName} 的 is_allow_order_push=false，跳过生成草稿单", aiSpeechAssistant.Name);
+                        
                         return;
                     }
                     
