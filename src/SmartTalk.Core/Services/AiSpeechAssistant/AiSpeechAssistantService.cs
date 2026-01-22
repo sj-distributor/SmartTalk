@@ -1164,7 +1164,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     {
         _shouldSendBuffToOpenAi = false;
 
-        await RandomSendHoldOnAudioAsync(twilioWebSocket, "SmartTalk.Core.Assets.Audio.RepeatOrderHoldon", cancellationToken).ConfigureAwait(false);
+        await RandomSendRepeatOrderHoldOnAudioAsync(twilioWebSocket, "SmartTalk.Core.Assets.Audio.RepeatOrderHoldon", cancellationToken).ConfigureAwait(false);
 
         var responseAudio = await GenerateRepeatOrderAudioAsync(cancellationToken);
         
@@ -1186,7 +1186,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     {
         _shouldSendBuffToOpenAi = false;
 
-        await RandomSendHoldOnAudioAsync(twilioWebSocket, "SmartTalk.Core.Assets.Audio.CalculateOrderAmountHoldOn", cancellationToken).ConfigureAwait(false);
+        await RandomSendCalculateOrderAmountHoldOnAudioAsync(twilioWebSocket, "SmartTalk.Core.Assets.Audio.CalculateOrderAmountHoldOn", cancellationToken).ConfigureAwait(false);
 
         var responseAudio = await GenerateOrderTotalAudioAsync(cancellationToken).ConfigureAwait(false);
         
@@ -1204,7 +1204,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _shouldSendBuffToOpenAi = true;
     }
 
-    private async Task RandomSendHoldOnAudioAsync(WebSocket twilioWebSocket, string prefix, CancellationToken cancellationToken)
+    private async Task RandomSendRepeatOrderHoldOnAudioAsync(WebSocket twilioWebSocket, string prefix, CancellationToken cancellationToken)
     {
         var assistant = _aiSpeechAssistantStreamContext.Assistant;
         
@@ -1274,6 +1274,33 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         return completion.OutputAudio.AudioBytes.ToArray();
     }
     
+    private async Task RandomSendCalculateOrderAmountHoldOnAudioAsync(WebSocket twilioWebSocket, string prefix, CancellationToken cancellationToken)
+    {
+        var assistant = _aiSpeechAssistantStreamContext.Assistant;
+        
+        Enum.TryParse(assistant.ModelVoice, true, out AiSpeechAssistantVoice voice);
+        voice = voice == default ? AiSpeechAssistantVoice.Alloy : voice;
+        
+        var language = assistant.ModelLanguage == "English" ? AiSpeechAssistantMainLanguage.En : AiSpeechAssistantMainLanguage.Zh;
+        
+        var stream = AudioHelper.GetRandomAudioStream(voice, language, prefix);
+
+        using var holOnStream = new MemoryStream();
+        
+        await stream.CopyToAsync(holOnStream, cancellationToken);
+        var bytes = holOnStream.ToArray();
+        var holdOn = Convert.ToBase64String(bytes);
+            
+        var holdOnAudio = new
+        {
+            @event = "media",
+            streamSid = _aiSpeechAssistantStreamContext.StreamSid,
+            media = new { payload = holdOn }
+        };
+
+        await SendToWebSocketAsync(twilioWebSocket, holdOnAudio, cancellationToken);
+    }
+    
     private async Task<byte[]> GenerateOrderTotalAudioAsync(CancellationToken cancellationToken)
     {
         using var memoryStream = new MemoryStream();
@@ -1296,7 +1323,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         var fileContent = memoryStream.ToArray();
         var audioData = BinaryData.FromBytes(fileContent);
         
-        var language = await DetectAudioLanguageAsync(fileContent, cancellationToken).ConfigureAwait(false);
+        var language = ConvertLanguageCode(await DetectAudioLanguageAsync(fileContent, cancellationToken).ConfigureAwait(false));
         
         var amount = await _posUtilService.CalculateOrderAmountAsync(_aiSpeechAssistantStreamContext.Assistant.Id, audioData, cancellationToken).ConfigureAwait(false);
 
