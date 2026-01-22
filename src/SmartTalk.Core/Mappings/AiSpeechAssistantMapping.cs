@@ -33,7 +33,5 @@ public class AiSpeechAssistantMapping : Profile
             .ForMember(dest => dest.MaterialNumber, opt => opt.MapFrom(src => src.MaterialNumber))
             .ForMember(dest => dest.AiUnit, opt => opt.MapFrom(src => src.Unit));
         CreateMap<AiSpeechAssistantInboundRoute, AiSpeechAssistantInboundRouteDto>().ReverseMap();
-
-        CreateMap<AiSpeechAssistantPremise, AiSpeechAssistantPremiseDto>().ReverseMap();
     }
 }

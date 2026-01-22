@@ -79,27 +79,11 @@ public partial class AiSpeechAssistantService
             
             await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync([assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
         }
-
-        var knowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(latestKnowledge);
-        
-        if (!string.IsNullOrEmpty(command.Premise))
-        {
-            var premise = new AiSpeechAssistantPremise
-            {
-                AssistantId = command.AssistantId,
-                Content = command.Premise
-            };
-            
-            await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantPremiseAsync(premise, cancellationToken: cancellationToken);
-            
-            knowledge.Premise = _mapper.Map<AiSpeechAssistantPremiseDto>(premise);;
-        }
-        else await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantPremiseByAssistantIdAsync(command.AssistantId, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         return new AiSpeechAssistantKnowledgeAddedEvent
         {
             PrevKnowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(prevKnowledge),
-            LatestKnowledge = knowledge
+            LatestKnowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(latestKnowledge)
         };
     }
 
@@ -116,16 +100,9 @@ public partial class AiSpeechAssistantService
 
         await UpdateKnowledgeStatusAsync(currentKnowledge, true, cancellationToken).ConfigureAwait(false);
 
-        var knowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(currentKnowledge);
-        
-        var premise = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantPremiseByAssistantIdAsync(command.AssistantId, cancellationToken: cancellationToken);
-
-        if (premise != null && !string.IsNullOrEmpty(premise.Content))
-            knowledge.Premise = _mapper.Map<AiSpeechAssistantPremiseDto>(premise);
-
         return new SwitchAiSpeechAssistantKnowledgeVersionResponse
         {
-            Data = knowledge
+            Data = _mapper.Map<AiSpeechAssistantKnowledgeDto>(currentKnowledge)
         };
     }
 
@@ -223,21 +200,10 @@ public partial class AiSpeechAssistantService
             await UpdateAssistantVoiceIfRequiredAsync(knowledge.AssistantId, command.VoiceType.Value, cancellationToken).ConfigureAwait(false);
         
         await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync([knowledge], cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        var newKnowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge);
-
-        if (command.Premise != null)
-        {
-            await _aiSpeechAssistantDataProvider
-                .UpdateAiSpeechAssistantPremiseAsync(_mapper.Map<AiSpeechAssistantPremise>(command.Premise), true, cancellationToken).ConfigureAwait(false);
-            
-            newKnowledge.Premise = command.Premise;
-        }
-        else await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantPremiseByAssistantIdAsync(knowledge.AssistantId, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         return new UpdateAiSpeechAssistantKnowledgeResponse
         {
-            Data = newKnowledge
+            Data = _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge),
         };
     }
     
