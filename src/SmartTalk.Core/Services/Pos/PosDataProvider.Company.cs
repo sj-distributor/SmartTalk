@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Ioc;
 
@@ -13,6 +14,10 @@ public partial interface IPosDataProvider : IScopedDependency
     Task DeletePosCompanyAsync(Company company, bool isForceSave = true, CancellationToken cancellationToken = default);
 
     Task<Company> GetPosCompanyAsync(int id, CancellationToken cancellationToken);
+
+    Task<Company> GetPosCompanyByNameAsync(string name, CancellationToken cancellationToken);
+
+    Task<List<int>> GetAssistantIdsByCompanyIdAsync(int companyId, CancellationToken cancellationToken = default);
 
     Task<List<PosMenu>> GetPosMenusAsync(int storeId, bool? IsActive = null, CancellationToken cancellationToken = default);
 
@@ -69,6 +74,27 @@ public partial class PosDataProvider
     public async Task<Company> GetPosCompanyAsync(int id, CancellationToken cancellationToken)
     {
         return await _repository.Query<Company>(x => x.Id == id).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<Company> GetPosCompanyByNameAsync(string name, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return null;
+
+        var normalizedName = name.Trim();
+
+        return await _repository.Query<Company>().Where(x => x.Name == normalizedName).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<int>> GetAssistantIdsByCompanyIdAsync(int companyId, CancellationToken cancellationToken = default)
+    {
+        if (companyId <= 0) return [];
+
+        var query = from store in _repository.Query<CompanyStore>().Where(x => x.CompanyId == companyId)
+            join posAgent in _repository.Query<PosAgent>() on store.Id equals posAgent.StoreId
+            join agentAssistant in _repository.Query<AgentAssistant>() on posAgent.AgentId equals agentAssistant.AgentId
+            select agentAssistant.AssistantId;
+
+        return await query.Distinct().ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<List<PosMenu>> GetPosMenusAsync(int storeId, bool? IsActive = null, CancellationToken cancellationToken = default)
