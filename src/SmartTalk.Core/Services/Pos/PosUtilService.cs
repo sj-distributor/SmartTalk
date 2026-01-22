@@ -244,7 +244,7 @@ public class PosUtilService : IPosUtilService
         
         if (agent == null) return null;
         
-        var (products, menuItems) = await GeneratePosMenuItemsAsync(agent.Id, true, cancellationToken).ConfigureAwait(false);
+        var (products, menuItems) = await GeneratePosMenuItemsAsync(agent.Id, true, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         var systemPrompt =
             "你是一名訂單分析助手，善于从录音中提取订单的相关内容，比如菜品，数量，规格信息，並且用菜單列表盡力匹配每個菜品。" +
@@ -290,7 +290,7 @@ public class PosUtilService : IPosUtilService
                 {
                     try
                     {
-                        var builtModifiers = await GenerateSpecificationProductsAsync(modifiers, aiDraftItem.Specification, cancellationToken).ConfigureAwait(false);
+                        var builtModifiers = await GenerateSpecificationProductsAsync(modifiers, TranscriptionLanguage.Chinese, aiDraftItem.Specification, cancellationToken).ConfigureAwait(false);
                         
                         Log.Information("Matched modifiers: {@MatchedModifiers}", builtModifiers);
 
