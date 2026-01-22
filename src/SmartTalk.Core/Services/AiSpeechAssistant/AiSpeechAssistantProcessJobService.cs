@@ -165,9 +165,9 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
                 var contacts = await _crmClient.GetCustomerContactsAsync(assistant.Name, cancellationToken).ConfigureAwait(false);
                 var language = BuildLanguageText(contacts);
 
-                if (!string.Equals(assistant.Langauge ?? string.Empty, language, StringComparison.Ordinal))
+                if (!string.Equals(assistant.Language ?? string.Empty, language, StringComparison.Ordinal))
                 {
-                    assistant.Langauge = language;
+                    assistant.Language = language;
                     updates.Add(assistant);
                 }
             }
