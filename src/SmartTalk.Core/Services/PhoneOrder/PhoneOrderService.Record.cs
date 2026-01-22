@@ -700,12 +700,16 @@ public partial class PhoneOrderService
             .ConfigureAwait(false);
 
         var assistantNameMap = new Dictionary<int, string>();
+        var assistantLanguageMap = new Dictionary<int, string>();
         if (assistantIds.Count > 0)
         {
             var assistants = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByIdsAsync(assistantIds, cancellationToken).ConfigureAwait(false);
             assistantNameMap = assistants
                 .GroupBy(x => x.Id)
                 .ToDictionary(g => g.Key, g => g.First().Name ?? string.Empty);
+            assistantLanguageMap = assistants
+                .GroupBy(x => x.Id)
+                .ToDictionary(g => g.Key, g => g.First().Langauge ?? string.Empty);
         }
 
         var (utcStart, utcEnd) = GetCompanyCallReportUtcRange(request.ReportType);
@@ -714,7 +718,7 @@ public partial class PhoneOrderService
             ? []
             : await _phoneOrderDataProvider.GetPhoneOrderRecordsByAssistantIdsAsync(assistantIds, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
 
-        var reportRows = BuildCompanyCallReportRows(records, assistantNameMap, latestRecords, daysWindow);
+        var reportRows = BuildCompanyCallReportRows(records, assistantNameMap, assistantLanguageMap, latestRecords, daysWindow);
         var fileUrl = await ToCompanyCallReportExcelAsync(reportRows, request.ReportType, cancellationToken).ConfigureAwait(false);
 
         return new GetPhoneOrderCompanyCallReportResponse { Data = fileUrl };
@@ -769,6 +773,7 @@ public partial class PhoneOrderService
     private static List<CompanyCallReportRow> BuildCompanyCallReportRows(
         List<PhoneOrderRecord> records,
         IReadOnlyDictionary<int, string> assistantNameMap,
+        IReadOnlyDictionary<int, string> assistantLanguageMap,
         IReadOnlyDictionary<int, PhoneOrderRecord> latestRecords,
         int daysWindow)
     {
@@ -784,6 +789,7 @@ public partial class PhoneOrderService
             .Select(group =>
             {
                 assistantNameMap.TryGetValue(group.Key, out var assistantName);
+                assistantLanguageMap.TryGetValue(group.Key, out var assistantLanguage);
                 latestRecords.TryGetValue(group.Key, out var latestRecord);
 
                 var daysSinceLastCallText = latestRecord == null
@@ -793,6 +799,7 @@ public partial class PhoneOrderService
                 return new CompanyCallReportRow
                 {
                     CustomerId = string.IsNullOrWhiteSpace(assistantName) ? group.Key.ToString() : assistantName,
+                    CustomerLanguage = assistantLanguage ?? string.Empty,
                     TotalCalls = group.Count(),
                     OrderCount = group.Count(x => x.Scenario == DialogueScenarios.Order),
                     TransferCount = group.Count(x => x.Scenario == DialogueScenarios.TransferToHuman),
@@ -969,6 +976,7 @@ public partial class PhoneOrderService
             ? new[]
             {
                 "customer id",
+                "客人語種",
                 "當日有效通話量合計（所有通話-無效通話）",
                 "當日下單",
                 "當日轉接",
@@ -980,6 +988,7 @@ public partial class PhoneOrderService
             : new[]
             {
                 "customer id",
+                "客人語種",
                 "本周有call入 Sales",
                 "本周有效通話量（下单+转接+咨询）",
                 "本周下單",
@@ -998,6 +1007,7 @@ public partial class PhoneOrderService
             var colIndex = 1;
 
             ws.Cell(rowIndex + 2, colIndex++).Value = row.CustomerId;
+            ws.Cell(rowIndex + 2, colIndex++).Value = row.CustomerLanguage ?? string.Empty;
 
             if (reportType == PhoneOrderCallReportType.Daily)
             {
@@ -1055,6 +1065,8 @@ public partial class PhoneOrderService
     private sealed class CompanyCallReportRow
     {
         public string CustomerId { get; set; }
+
+        public string CustomerLanguage { get; set; }
 
         public int TotalCalls { get; set; }
 
