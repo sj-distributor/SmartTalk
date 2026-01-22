@@ -75,6 +75,10 @@
     </ItemGroup>
     
     <ItemGroup>
+      <Folder Include="Assets\Audio\CalculateOrderAmountHoldOn\Alloy\En\" />
+      <Folder Include="Assets\Audio\CalculateOrderAmountHoldOn\Alloy\Zh\" />
+      <Folder Include="Assets\Audio\CalculateOrderAmountHoldOn\Ash\En\" />
+      <Folder Include="Assets\Audio\CalculateOrderAmountHoldOn\Ash\Zh\" />
       <Folder Include="Assets\Audio\RepeatOrderHoldon\Alloy\Cantonese\" />
       <Folder Include="Assets\Audio\RepeatOrderHoldon\Alloy\Korean\" />
       <Folder Include="Assets\Audio\RepeatOrderHoldon\Alloy\Spanish\" />

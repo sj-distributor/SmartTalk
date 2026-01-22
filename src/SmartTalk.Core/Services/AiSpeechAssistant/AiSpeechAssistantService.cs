@@ -97,6 +97,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly OpenAiSettings _openAiSettings;
     private readonly TwilioSettings _twilioSettings;
     private readonly ISmartiesClient _smartiesClient;
+    private readonly IPosUtilService _posUtilService;
     private readonly ZhiPuAiSettings _zhiPuAiSettings;
     private readonly IRedisSafeRunner _redisSafeRunner;
     private readonly IPosDataProvider _posDataProvider;
@@ -125,6 +126,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         IClock clock,
         IMapper mapper,
         ICrmClient crmClient,
+        ISalesClient salesClient,
         ICurrentUser currentUser,
         AzureSetting azureSetting,
         ICacheManager cacheManager,
@@ -133,6 +135,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         OpenAiSettings openAiSettings,
         TwilioSettings twilioSettings,
         ISmartiesClient smartiesClient,
+        IPosUtilService posUtilService,
         ZhiPuAiSettings zhiPuAiSettings,
         IRedisSafeRunner redisSafeRunner,
         IPosDataProvider posDataProvider,
@@ -149,7 +152,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         IPhoneOrderDataProvider phoneOrderDataProvider,
         IInactivityTimerManager inactivityTimerManager,
         ISmartTalkBackgroundJobClient backgroundJobClient,
-        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, ISalesClient salesClient)
+        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
         _clock = clock;
         _mapper = mapper;
@@ -160,6 +163,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _cacheManager = cacheManager;
         _azureSetting = azureSetting;
         _ffmpegService = ffmpegService;
+        _posUtilService = posUtilService;
         _openAiSettings = openAiSettings;
         _twilioSettings = twilioSettings;
         _smartiesClient = smartiesClient;
@@ -989,6 +993,10 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                                             await ProcessHangupAsync(outputElement, cancellationToken).ConfigureAwait(false);
                                             break;
                                         
+                                        case OpenAiToolConstants.CalculateOrderAmount:
+                                            await ProcessCalculateOrderAmountAsync(twilioWebSocket, cancellationToken).ConfigureAwait(false);
+                                            break;
+                                        
                                         case OpenAiToolConstants.Refund:
                                         case OpenAiToolConstants.Complaint:
                                         case OpenAiToolConstants.ReturnGoods:
@@ -1191,7 +1199,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     {
         _shouldSendBuffToOpenAi = false;
 
-        await RandomSendRepeatOrderHoldOnAudioAsync(twilioWebSocket, cancellationToken);
+        await RandomSendHoldOnAudioAsync(twilioWebSocket, "SmartTalk.Core.Assets.Audio.RepeatOrderHoldon", cancellationToken).ConfigureAwait(false);
 
         var responseAudio = await GenerateRepeatOrderAudioAsync(cancellationToken);
         
@@ -1208,8 +1216,30 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         _shouldSendBuffToOpenAi = true;
     }
+    
+    private async Task ProcessCalculateOrderAmountAsync(WebSocket twilioWebSocket, CancellationToken cancellationToken)
+    {
+        _shouldSendBuffToOpenAi = false;
 
-    private async Task RandomSendRepeatOrderHoldOnAudioAsync(WebSocket twilioWebSocket, CancellationToken cancellationToken)
+        await RandomSendHoldOnAudioAsync(twilioWebSocket, "SmartTalk.Core.Assets.Audio.CalculateOrderAmountHoldOn", cancellationToken).ConfigureAwait(false);
+
+        var responseAudio = await GenerateOrderTotalAudioAsync(cancellationToken).ConfigureAwait(false);
+        
+        var uLawAudio = await _ffmpegService.ConvertWavToULawAsync(responseAudio, cancellationToken);
+
+        var repeatAudio = new
+        {
+            @event = "media",
+            streamSid = _aiSpeechAssistantStreamContext.StreamSid,
+            media = new { payload = uLawAudio }
+        };
+        
+        await SendToWebSocketAsync(twilioWebSocket, repeatAudio, cancellationToken);
+        
+        _shouldSendBuffToOpenAi = true;
+    }
+
+    private async Task RandomSendHoldOnAudioAsync(WebSocket twilioWebSocket, string prefix, CancellationToken cancellationToken)
     {
         var assistant = _aiSpeechAssistantStreamContext.Assistant;
         
@@ -1219,7 +1249,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         Enum.TryParse(assistant.ModelLanguage, true, out AiSpeechAssistantMainLanguage language);
         language = language == default ? AiSpeechAssistantMainLanguage.En : language;
         
-        var stream = AudioHelper.GetRandomAudioStream(voice, language);
+        var stream = AudioHelper.GetRandomAudioStream(voice, language, prefix);
 
         using var holOnStream = new MemoryStream();
         
@@ -1275,6 +1305,57 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
         
         Log.Information("Analyze record to repeat order: {@completion}", completion);
+
+        return completion.OutputAudio.AudioBytes.ToArray();
+    }
+    
+    private async Task<byte[]> GenerateOrderTotalAudioAsync(CancellationToken cancellationToken)
+    {
+        using var memoryStream = new MemoryStream();
+
+        await using (var writer = new WaveFileWriter(memoryStream, new WaveFormat(8000, 16, channels: 1)))
+        {
+            List<byte[]> bufferBytesCopy;
+
+            lock (_wholeAudioBufferBytes)
+            {
+                bufferBytesCopy = _wholeAudioBufferBytes.ToList();
+            }
+
+            foreach (var pcmSample in from audio in bufferBytesCopy from t in audio select MuLawDecoder.MuLawToLinearSample(t))
+            {
+                writer.WriteSample(pcmSample / 32768f);
+            }
+        }
+        
+        var fileContent = memoryStream.ToArray();
+        var audioData = BinaryData.FromBytes(fileContent);
+        
+        var amount = await _posUtilService.CalculateOrderAmountAsync(_aiSpeechAssistantStreamContext.Assistant.Id, audioData, cancellationToken).ConfigureAwait(false);
+
+        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
+        List<ChatMessage> messages =
+        [
+            new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
+            new UserChatMessage(
+                "你是一名電話錄音分析員，你需要對錄音的內容進行準確分。\n" +
+                "当前订单的总金额是：" + amount + "单位是美元\n" +
+                "你需要根据当前的录音内容的主要语言去回复用户，先复述用户的下单菜品、单价，再给出总金额。\n" +
+                "范例：\n" +
+                "比如当前录音的主要语言是中文：您下单的菜品有：宫保鸡丁 15.90$，鲜虾云吞面 13.90$ 总计是 32.78$." + 
+                "比如当前录音的主要语言是英文：Your order includes: Kung Pao Chicken $15.90 and Shrimp Wonton Noodles $13.90, for a total of $32.78."
+                )
+        ];
+        
+        ChatCompletionOptions options = new()
+        {
+            ResponseModalities = ChatResponseModalities.Text | ChatResponseModalities.Audio,
+            AudioOptions = new ChatAudioOptions(new ChatOutputAudioVoice(_aiSpeechAssistantStreamContext.Assistant.ModelVoice), ChatOutputAudioFormat.Wav)
+        };
+
+        ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
+        
+        Log.Information("Calculate order amount result: {@completion}", completion);
 
         return completion.OutputAudio.AudioBytes.ToArray();
     }
