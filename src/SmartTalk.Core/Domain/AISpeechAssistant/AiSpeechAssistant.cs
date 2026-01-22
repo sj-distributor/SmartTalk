@@ -14,6 +14,9 @@ public class AiSpeechAssistant : IEntity<int>, IAgent, IHasCreatedFields
 
     [Column("name"), StringLength(255)]
     public string Name { get; set; }
+
+    [Column("langauge"), StringLength(255)]
+    public string Langauge { get; set; }
     
     [Column("answering_number_id")]
     public int? AnsweringNumberId { get; set; }
