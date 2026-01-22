@@ -400,7 +400,8 @@ public class SpeechMaticsService : ISpeechMaticsService
         [
             new SystemChatMessage( (string.IsNullOrEmpty(aiSpeechAssistant?.CustomRecordAnalyzePrompt)
                 ? "你是一名電話錄音的分析員，通過聽取錄音內容和語氣情緒作出精確分析，冩出一份分析報告。\n\n" +
-                  "分析報告的格式：交談主題：xxx\n\n " +
+                  "分析報告的格式如下：" +
+                  "交談主題：xxx\n\n " +
                   "來電號碼：#{call_from}\n\n " +
                   "內容摘要:xxx \n\n " +
                   "客人情感與情緒: xxx \n\n " +
