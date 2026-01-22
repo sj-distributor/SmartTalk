@@ -33,6 +33,24 @@ public class PhoneOrderController : ControllerBase
         return Ok(response);
     }
     
+    [Route("record/scenario"), HttpPut]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdatePhoneOrderRecordResponse))]
+    public async Task<IActionResult> UpdatePhoneOrderRecordAsync([FromBody] UpdatePhoneOrderRecordCommand command)
+    {
+        var response = await _mediator.SendAsync<UpdatePhoneOrderRecordCommand, UpdatePhoneOrderRecordResponse>(command).ConfigureAwait(false);
+
+        return Ok(response);
+    }
+    
+    [Route("record/scenario/history"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPhoneOrderRecordScenarioResponse))]
+    public async Task<IActionResult> GetPhoneOrderRecordScenarioAsync([FromQuery] GetPhoneOrderRecordScenarioRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetPhoneOrderRecordScenarioRequest, GetPhoneOrderRecordScenarioResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
     [Route("conversations"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPhoneOrderConversationsResponse))]
     public async Task<IActionResult> GetPhoneOrderConversationsAsync([FromQuery] GetPhoneOrderConversationsRequest request)
@@ -79,7 +97,11 @@ public class PhoneOrderController : ControllerBase
 
         var fileContent = ms.ToArray();
         
-        await _mediator.SendAsync(new ReceivePhoneOrderRecordCommand { RecordName = file.FileName, RecordContent = fileContent, AgentId = agentId, OrderRecordType = PhoneOrderRecordType.TestLink}).ConfigureAwait(false);
+        await _mediator.SendAsync(new ReceivePhoneOrderRecordCommand { 
+            RecordName = file.FileName, 
+            RecordContent = fileContent, 
+            AgentId = agentId, 
+            OrderRecordType = PhoneOrderRecordType.InBound}).ConfigureAwait(false);
         
         return Ok();
     }
