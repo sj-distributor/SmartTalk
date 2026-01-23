@@ -1173,6 +1173,8 @@ public partial class AiSpeechAssistantService
 
     public async Task SyncCopiedKnowledgesIfRequiredAsync(int sourceKnowledgeId, bool deleteKnowledge, CancellationToken cancellationToken)
     {
+        Log.Information("Start Sync Copied Knowledges for Knowledge ID: {@SourceKnowledgeId}, {@DeleteKnowledge}", sourceKnowledgeId, deleteKnowledge);
+
         if (deleteKnowledge)
         { await DisableSyncUpdateAsync(sourceKnowledgeId, cancellationToken); return; }
         
