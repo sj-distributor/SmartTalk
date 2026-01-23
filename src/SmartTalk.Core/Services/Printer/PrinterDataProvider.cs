@@ -4,7 +4,6 @@ using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Data;
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Domain.Printer;
-using SmartTalk.Core.Extensions;
 using SmartTalk.Messages.Enums.Printer;
 using SmartTalk.Messages.Requests.Printer;
 
@@ -16,7 +15,7 @@ public interface IPrinterDataProvider : IScopedDependency
         int? storeId = null, int? id = null, bool? isEnabled = null, DateTimeOffset? lastStatusInfoLastModifiedDate = null, bool? IsStatusInfo = null, CancellationToken cancellationToken = default);
 
     Task<List<MerchPrinterOrder>> GetMerchPrinterOrdersAsync(Guid? jobToken = null, int? storeId = null, PrintStatus? status = null,
-        DateTimeOffset? endTime = null, string printerMac = null, bool isOrderByPrintDate = false, int? orderId = null, Guid? id = null, CancellationToken cancellationToken = default);
+        DateTimeOffset? endTime = null, string printerMac = null, bool isOrderByPrintDate = false, int? orderId = null, Guid? id = null, int? recordId = null, CancellationToken cancellationToken = default);
 
     Task UpdateMerchPrinterOrderAsync(MerchPrinterOrder merchPrinterOrder, bool forceSave = true, CancellationToken cancellationToken = default);
 
@@ -35,7 +34,7 @@ public interface IPrinterDataProvider : IScopedDependency
     Task DeleteMerchPrinterAsync(MerchPrinter merchPrinter, bool foreSave = true, CancellationToken cancellationToken = default);
 
     Task<(int, List<MerchPrinterLogDto>)> GetMerchPrinterLogAsync(int storeId, string printerMac = null, DateTimeOffset? startDate = null,
-        DateTimeOffset? endDate = null, int? code = null, PrintLogType? logType = null, int? pageIndex = null, int? pageSize = null, int? orderId = null, CancellationToken cancellationToken = default);
+        DateTimeOffset? endDate = null, int? code = null, PrintLogType? logType = null, int? pageIndex = null, int? pageSize = null, int? orderId = null, int? recordId = null, CancellationToken cancellationToken = default);
 }
 
 public class PrinterDataProvider : IPrinterDataProvider
@@ -81,7 +80,7 @@ public class PrinterDataProvider : IPrinterDataProvider
     }
     
     public async Task<List<MerchPrinterOrder>> GetMerchPrinterOrdersAsync(Guid? jobToken = null, int? storeId = null, PrintStatus? status = null,
-        DateTimeOffset? endTime = null, string printerMac = null, bool isOrderByPrintDate = false, int? orderId = null, Guid? id = null, CancellationToken cancellationToken = default)
+        DateTimeOffset? endTime = null, string printerMac = null, bool isOrderByPrintDate = false, int? orderId = null, Guid? id = null, int? recordId = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<MerchPrinterOrder>();
 
@@ -90,6 +89,9 @@ public class PrinterDataProvider : IPrinterDataProvider
 
         if (storeId.HasValue)
             query = query.Where(x => x.StoreId == storeId.Value);
+
+        if (recordId.HasValue)
+            query = query.Where(x => x.RecordId == recordId);
 
         if (status.HasValue)
             query = query.Where(x => x.PrintStatus == status.Value);
@@ -172,7 +174,7 @@ public class PrinterDataProvider : IPrinterDataProvider
     }
 
     public async Task<(int, List<MerchPrinterLogDto>)> GetMerchPrinterLogAsync(int storeId, string printerMac = null, DateTimeOffset? startDate = null,
-        DateTimeOffset? endDate = null, int? code = null, PrintLogType? logType = null, int? pageIndex = null, int? pageSize = null, int? orderId = null, CancellationToken cancellationToken = default)
+        DateTimeOffset? endDate = null, int? code = null, PrintLogType? logType = null, int? pageIndex = null, int? pageSize = null, int? orderId = null, int? recordId = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<MerchPrinterLog>().Where(x => x.StoreId == storeId);
 
@@ -190,6 +192,9 @@ public class PrinterDataProvider : IPrinterDataProvider
 
         if (orderId.HasValue)
             query = query.Where(x => x.OrderId == orderId.Value);
+
+        if (recordId.HasValue)
+            query = query.Where(x => x.PhoneOrderId == recordId.Value);
 
         var count = query.Count();
 
