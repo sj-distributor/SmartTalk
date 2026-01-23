@@ -1323,28 +1323,30 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         var fileContent = memoryStream.ToArray();
         var audioData = BinaryData.FromBytes(fileContent);
         
-        var (items, amount) = await _posUtilService.CalculateOrderAmountAsync(_aiSpeechAssistantStreamContext.Assistant, audioData, cancellationToken).ConfigureAwait(false);
-
+        var amount = await _posUtilService.CalculateOrderAmountAsync(_aiSpeechAssistantStreamContext.Assistant, audioData, cancellationToken).ConfigureAwait(false);
+        
         ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
         List<ChatMessage> messages =
         [
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
             new UserChatMessage(
-                "你是一名電話錄音分析員，你需要對錄音的內容進行準確分。\n" +
-                "当前订单菜品有：" + items + "\n" +
-                "当前订单的总金额是：" + amount + "单位是美元\n" +
-                "你需要根据当前的录音内容的主要语言去回复用户，先复述用户的下单菜品、单价，再给出总金额。\n" +
-                "比如当前录音的主要语言是中文：\n" +
-                "范例：\n" +
-                "您下单的菜品有：宫保鸡丁 15.90$，鲜虾云吞面 13.90$ 总计是 32.78$." + 
-                "比如当前录音的主要语言是英文或其他语言：\n" +
-                "范例：\n" +
-                "Your order includes: Kung Pao Chicken $15.90 and Shrimp Wonton Noodles $13.90, for a total of $32.78. \n" +
-                "若当前订单金额为0，则需要回复：\n" +
-                "中文范例： \n" +
-                "未识别到菜品，订单金额为0 \n" +
-                "英文范例： \n" +
-                "No dishes were identified; order amount is 0."
+                "你是一名電話錄音分析員，你只需要向客戶播報當前訂單的總金額。\n\n" +
+                "當前訂單的總金額是：" + amount + "美元。\n\n" +
+                "請根據錄音內容的主要語言回覆客戶，只需播報總金額，不需要復述任何菜品、單價或下單內容。\n\n" +
+                "回覆要求：\n" +
+                "- 語言自然、簡潔\n" +
+                "- 只包含總金額資訊\n" +
+                "- 不要加入任何額外說明\n\n" +
+                "範例：\n\n" +
+                "若主要語言為中文：\n" +
+                "本次訂單的總金額是 32.78 美元。\n\n" +
+                "若主要語言為英文或其他語言：\n" +
+                "The total amount of your order is $32.78.\n\n" +
+                "若當前訂單金額為 0，請回覆：\n\n" +
+                "中文：\n" +
+                "未識別到有效訂單，訂單金額為 0。\n\n" +
+                "英文：\n" +
+                "No valid order was identified. The total amount is $0."
                 )
         ];
         

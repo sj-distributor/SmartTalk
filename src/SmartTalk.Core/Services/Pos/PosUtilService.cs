@@ -7,7 +7,6 @@ using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Agents;
-using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Caching.Redis;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Messages.Dto.Agent;
@@ -27,7 +26,7 @@ public interface IPosUtilService : IScopedDependency
 
     Task<(List<PosProduct> Products, string MenuItems)> GeneratePosMenuItemsAsync(int agentId, bool isWithProductId = false, CancellationToken cancellationToken = default);
     
-    Task<(string simpleItems, decimal? amount)> CalculateOrderAmountAsync(AiSpeechAssistantDto assistant, BinaryData audioData, CancellationToken cancellationToken = default);
+    Task<decimal> CalculateOrderAmountAsync(AiSpeechAssistantDto assistant, BinaryData audioData, CancellationToken cancellationToken = default);
 }
 
 public class PosUtilService : IPosUtilService
@@ -246,14 +245,14 @@ public class PosUtilService : IPosUtilService
         return (categoryProductsLookup.SelectMany(x => x.Value).ToList(), menuItems.TrimEnd('\r', '\n'));
     }
 
-    public async Task<(string simpleItems, decimal? amount)> CalculateOrderAmountAsync(
+    public async Task<decimal> CalculateOrderAmountAsync(
        AiSpeechAssistantDto assistant, BinaryData audioData, CancellationToken cancellationToken = default)
     {
         var agent = await _agentDataProvider.GetAgentByAssistantIdAsync(assistant.Id, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Get agent: {@Agent} by assistant id: {AssistantId}", agent, assistant.Id);
         
-        if (agent == null) return (string.Empty, null);
+        if (agent == null) return 0;
 
         var report = await GenerateAiDraftReportAsync(agent, audioData, cancellationToken).ConfigureAwait(false);
 
@@ -261,16 +260,16 @@ public class PosUtilService : IPosUtilService
             
         var draftMapping = BuildAiDraftAndProductMapping(matchedProducts, aiDraftOrder.Items);
         
-        var (items, subTotal, taxes) = BuildPosOrderItems(draftMapping);
+        var (_, subTotal, taxes) = BuildPosOrderItems(draftMapping);
 
-        var simpleItems = string.Join("、", items.Select(x => x.ProductName + x.Price));
-        
-        return (simpleItems, subTotal + taxes);
+        return subTotal + taxes;
     }
 
     private async Task<string> GenerateAiDraftReportAsync(Agent agent, BinaryData audioData, CancellationToken cancellationToken)
     {
         var (_, menuItems) = await GeneratePosMenuItemsAsync(agent.Id, false, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Build menu items for summary: {@MenuItems}", menuItems);
         
         List<ChatMessage> messages =
         [
