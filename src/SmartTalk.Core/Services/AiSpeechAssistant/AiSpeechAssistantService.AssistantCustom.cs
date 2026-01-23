@@ -109,7 +109,8 @@ public partial class AiSpeechAssistantService
         return new AiSpeechAssistantKnowledgeAddedEvent
         {
             PrevKnowledge = prevKnowledgeDto,
-            LatestKnowledge = latestKnowledgeDto
+            LatestKnowledge = latestKnowledgeDto,
+            ShouldSyncLatedKnowledge = command.RelatedKnowledges.Any()
         };
     }
 
