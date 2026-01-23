@@ -265,9 +265,11 @@ public class PosUtilService : IPosUtilService
         
         if (agent == null) return (string.Empty, null);
 
-        var report = await GenerateAiDraftReportAsync(agent, audioData, cancellationToken).ConfigureAwait(false);
+        var language = assistant.ModelLanguage is "Mandarin" or "Cantonese" ? TranscriptionLanguage.Chinese : TranscriptionLanguage.English;
 
-        var (matchedProducts, aiDraftOrder) = await ExtractProductsFromReportAsync(agent, 0, report, string.Empty, TranscriptionLanguage.Chinese, cancellationToken).ConfigureAwait(false);
+        var report = await GenerateAiDraftReportAsync(agent, audioData, language, cancellationToken).ConfigureAwait(false);
+
+        var (matchedProducts, aiDraftOrder) = await ExtractProductsFromReportAsync(agent, 0, report, string.Empty, language, cancellationToken).ConfigureAwait(false);
             
         var draftMapping = BuildAiDraftAndProductMapping(matchedProducts, aiDraftOrder.Items);
         
@@ -278,9 +280,9 @@ public class PosUtilService : IPosUtilService
         return (simpleItems, subTotal + taxes);
     }
 
-    private async Task<string> GenerateAiDraftReportAsync(Agent agent, BinaryData audioData, CancellationToken cancellationToken)
+    private async Task<string> GenerateAiDraftReportAsync(Agent agent, BinaryData audioData, TranscriptionLanguage language, CancellationToken cancellationToken)
     {
-        var (_, menuItems) = await GeneratePosMenuItemsAsync(agent.Id, false, TranscriptionLanguage.Chinese, cancellationToken).ConfigureAwait(false);
+        var (_, menuItems) = await GeneratePosMenuItemsAsync(agent.Id, false, language, cancellationToken).ConfigureAwait(false);
         
         List<ChatMessage> messages =
         [
