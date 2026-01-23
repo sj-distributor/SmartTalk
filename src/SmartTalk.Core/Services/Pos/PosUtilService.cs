@@ -25,7 +25,7 @@ public interface IPosUtilService : IScopedDependency
 
     Task<(List<PosProduct> Products, string MenuItems)> GeneratePosMenuItemsAsync(int agentId, bool isWithProductId = false, CancellationToken cancellationToken = default);
     
-    Task<decimal?> CalculateOrderAmountAsync(int assistantId, BinaryData audioData, CancellationToken cancellationToken = default);
+    Task<(string simpleItems, decimal? amount)> CalculateOrderAmountAsync(int assistantId, BinaryData audioData, CancellationToken cancellationToken = default);
 }
 
 public class PosUtilService : IPosUtilService
@@ -244,13 +244,13 @@ public class PosUtilService : IPosUtilService
         return (categoryProductsLookup.SelectMany(x => x.Value).ToList(), menuItems.TrimEnd('\r', '\n'));
     }
 
-    public async Task<decimal?> CalculateOrderAmountAsync(int assistantId, BinaryData audioData, CancellationToken cancellationToken = default)
+    public async Task<(string simpleItems, decimal? amount)> CalculateOrderAmountAsync(int assistantId, BinaryData audioData, CancellationToken cancellationToken = default)
     {
         var agent = await _agentDataProvider.GetAgentByAssistantIdAsync(assistantId, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Get agent: {@Agent} by assistant id: {AssistantId}", agent, assistantId);
         
-        if (agent == null) return null;
+        if (agent == null) return (string.Empty, null);
 
         var report = await GenerateAiDraftReportAsync(agent, audioData, cancellationToken).ConfigureAwait(false);
 
@@ -258,9 +258,11 @@ public class PosUtilService : IPosUtilService
             
         var draftMapping = BuildAiDraftAndProductMapping(matchedProducts, aiDraftOrder.Items);
         
-        var (_, subTotal, taxes) = BuildPosOrderItems(draftMapping);
+        var (items, subTotal, taxes) = BuildPosOrderItems(draftMapping);
+
+        var simpleItems = string.Join("、", items.Select(x => x.ProductName + x.Price));
         
-        return subTotal + taxes;
+        return (simpleItems, subTotal + taxes);
     }
 
     private async Task<string> GenerateAiDraftReportAsync(Agent agent, BinaryData audioData, CancellationToken cancellationToken)
