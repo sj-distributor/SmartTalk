@@ -1,2 +1,1 @@
-ALTER TABLE ai_speech_assistant
-    ADD COLUMN `language` varchar(255) NULL;
+ALTER TABLE ai_speech_assistant CHANGE COLUMN `language` varchar(255) NULL;
