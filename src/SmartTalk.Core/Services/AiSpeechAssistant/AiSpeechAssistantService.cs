@@ -1334,9 +1334,17 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                 "当前订单菜品有：" + items + "\n" +
                 "当前订单的总金额是：" + amount + "单位是美元\n" +
                 "你需要根据当前的录音内容的主要语言去回复用户，先复述用户的下单菜品、单价，再给出总金额。\n" +
+                "比如当前录音的主要语言是中文：\n" +
                 "范例：\n" +
-                "比如当前录音的主要语言是中文：您下单的菜品有：宫保鸡丁 15.90$，鲜虾云吞面 13.90$ 总计是 32.78$." + 
-                "比如当前录音的主要语言是英文：Your order includes: Kung Pao Chicken $15.90 and Shrimp Wonton Noodles $13.90, for a total of $32.78."
+                "您下单的菜品有：宫保鸡丁 15.90$，鲜虾云吞面 13.90$ 总计是 32.78$." + 
+                "比如当前录音的主要语言是英文或其他语言：\n" +
+                "范例：\n" +
+                "Your order includes: Kung Pao Chicken $15.90 and Shrimp Wonton Noodles $13.90, for a total of $32.78. \n" +
+                "若当前订单金额为0，则需要回复：\n" +
+                "中文范例： \n" +
+                "未识别到菜品，订单金额为0 \n" +
+                "英文范例： \n" +
+                "No dishes were identified; order amount is 0."
                 )
         ];
         
