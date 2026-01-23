@@ -1358,9 +1358,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         var fileContent = memoryStream.ToArray();
         var audioData = BinaryData.FromBytes(fileContent);
         
-        var language = ConvertLanguageCode(await DetectAudioLanguageAsync(fileContent, cancellationToken).ConfigureAwait(false));
-        
-        var amount = await _posUtilService.CalculateOrderAmountAsync(_aiSpeechAssistantStreamContext.Assistant.Id, audioData, cancellationToken).ConfigureAwait(false);
+        var (items, amount) = await _posUtilService.CalculateOrderAmountAsync(_aiSpeechAssistantStreamContext.Assistant.Id, audioData, cancellationToken).ConfigureAwait(false);
 
         ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
         List<ChatMessage> messages =
@@ -1368,6 +1366,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
             new UserChatMessage(
                 "你是一名電話錄音分析員，你需要對錄音的內容進行準確分。\n" +
+                "当前订单菜品有：" + items + "\n" +
                 "当前订单的总金额是：" + amount + "单位是美元\n" +
                 "你需要根据当前的录音内容的主要语言去回复用户，先复述用户的下单菜品、单价，再给出总金额。\n" +
                 "范例：\n" +
