@@ -90,7 +90,9 @@ public partial class AiSpeechAssistantService
 
         var result = _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge);
 
-        var allCopyRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedBySourceKnowledgeIdAsync(new List<int> { knowledge.Id }, cancellationToken).ConfigureAwait(false);
+        var allCopyRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync(new List<int> { knowledge.Id }, cancellationToken).ConfigureAwait(false);
+     
+        Log.Information("Get the knowledge copy related Ids: {@Ids}", allCopyRelateds.Select(x => x.Id));
 
         var premise = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantPremiseByAssistantIdAsync(request.AssistantId, cancellationToken).ConfigureAwait(false);
         

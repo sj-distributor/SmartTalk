@@ -123,8 +123,9 @@ public partial class AiSpeechAssistantService
 
         return new AiSpeechAssistantKnowledgeAddedEvent
         { 
-            PrevKnowledge = prevKnowledgeDto,
-            LatestKnowledge = knowledge    
+            PrevKnowledge = prevKnowledgeDto, 
+            LatestKnowledge = knowledge,
+            ShouldSyncLatedKnowledge = command.RelatedKnowledges.Any()
         };
     }
 
@@ -1233,6 +1234,8 @@ public partial class AiSpeechAssistantService
 
     public async Task SyncCopiedKnowledgesIfRequiredAsync(int sourceKnowledgeId, bool deleteKnowledge, CancellationToken cancellationToken)
     {
+        Log.Information("Start Sync Copied Knowledges for Knowledge ID: {@SourceKnowledgeId}, {@DeleteKnowledge}", sourceKnowledgeId, deleteKnowledge);
+
         if (deleteKnowledge)
         { await DisableSyncUpdateAsync(sourceKnowledgeId, cancellationToken); return; }
         
