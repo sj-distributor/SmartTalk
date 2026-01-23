@@ -239,7 +239,31 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
                 "通知摘要: 未識別到有效通知內容\n" +
                 "【正確輸出範例（僅作格式參考）】\n" +
                 "通知摘要: 客戶下單切片牛肉1箱、黃雞蛋1箱、青蔥2箱、雞腿肉1箱";
-        }else return;
+        }
+        else if (record.Scenario is DialogueScenarios.Order && !store.IsManualReview)
+        {
+            var posOrder = await _posDataProvider.GetPosOrderByIdAsync(recordId: record.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
+               
+            var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(storeId: store.Id, isEnabled: true, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+
+            Log.Information("get merch printer:{@merchPrinter}", merchPrinter);
+                        
+            var order = new MerchPrinterOrder
+            {
+                OrderId = posOrder.Id,
+                StoreId = store.Id,
+                PrinterMac = merchPrinter?.PrinterMac,
+                PrintDate = DateTimeOffset.Now,
+                PrintFormat = PrintFormat.Order
+            };
+        
+            Log.Information("Create merch printer order:{@merchPrinterOrder}", order);
+                 
+            await _printerDataProvider.AddMerchPrinterOrderAsync(order, cancellationToken).ConfigureAwait(false);
+            
+            return;
+        }
+        else return;
                        
         Log.Information("Sending prompt to GPT: {Prompt}", systemPrompt);
 
@@ -293,7 +317,7 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
                         
             var order = new MerchPrinterOrder
             {
-                OrderId = record.Id,
+                RecordId = record.Id,
                 StoreId = store.Id,
                 PrinterMac = merchPrinter?.PrinterMac,
                 PrintDate = DateTimeOffset.Now,
