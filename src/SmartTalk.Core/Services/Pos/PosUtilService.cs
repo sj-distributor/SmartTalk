@@ -8,10 +8,12 @@ using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Extensions;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Agents;
+using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Caching.Redis;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Messages.Dto.Agent;
+using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Dto.Pos;
@@ -28,7 +30,7 @@ public interface IPosUtilService : IScopedDependency
 
     Task<(List<PosProduct> Products, string MenuItems)> GeneratePosMenuItemsAsync(int agentId, bool isWithProductId = false, TranscriptionLanguage language = TranscriptionLanguage.Chinese, CancellationToken cancellationToken = default);
     
-    Task<(string simpleItems, decimal? amount)> CalculateOrderAmountAsync(int assistantId, BinaryData audioData, CancellationToken cancellationToken = default);
+    Task<(string simpleItems, decimal? amount)> CalculateOrderAmountAsync(AiSpeechAssistantDto assistant, BinaryData audioData, CancellationToken cancellationToken = default);
 }
 
 public class PosUtilService : IPosUtilService
@@ -254,11 +256,12 @@ public class PosUtilService : IPosUtilService
         return (categoryProductsLookup.SelectMany(x => x.Value).ToList(), menuItems.TrimEnd('\r', '\n'));
     }
 
-    public async Task<(string simpleItems, decimal? amount)> CalculateOrderAmountAsync(int assistantId, BinaryData audioData, CancellationToken cancellationToken = default)
+    public async Task<(string simpleItems, decimal? amount)> CalculateOrderAmountAsync(
+       AiSpeechAssistantDto assistant, BinaryData audioData, CancellationToken cancellationToken = default)
     {
-        var agent = await _agentDataProvider.GetAgentByAssistantIdAsync(assistantId, cancellationToken).ConfigureAwait(false);
+        var agent = await _agentDataProvider.GetAgentByAssistantIdAsync(assistant.Id, cancellationToken).ConfigureAwait(false);
         
-        Log.Information("Get agent: {@Agent} by assistant id: {AssistantId}", agent, assistantId);
+        Log.Information("Get agent: {@Agent} by assistant id: {AssistantId}", agent, assistant.Id);
         
         if (agent == null) return (string.Empty, null);
 
