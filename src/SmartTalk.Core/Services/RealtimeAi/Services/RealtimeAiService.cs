@@ -46,7 +46,6 @@ public class RealtimeAiService : IRealtimeAiService
 
     private string _streamSid;
     private string _imageMessage;
-    private bool _cameraEnabled = false;
     private WebSocket _webSocket;
     private IRealtimeAiConversationEngine _conversationEngine;
     private Domain.AISpeechAssistant.AiSpeechAssistant _speechAssistant;
@@ -278,14 +277,14 @@ public class RealtimeAiService : IRealtimeAiService
                 {
                     using var jsonDocument = JsonSerializer.Deserialize<JsonDocument>(rawMessage);
                     
-                    if (jsonDocument.RootElement.TryGetProperty("start_camera", out var cameraProp))
-                    {
-                        _cameraEnabled = cameraProp.GetBoolean();
-                        if (!_cameraEnabled)
-                            _imageMessage = null;
-                        Log.Information("Camera {Status}", _cameraEnabled ? "started" : "stopped");
-                        continue;
-                    }
+                    // if (jsonDocument.RootElement.TryGetProperty("start_camera", out var cameraProp))
+                    // {
+                    //     _cameraEnabled = cameraProp.GetBoolean();
+                    //     if (!_cameraEnabled)
+                    //         _imageMessage = null;
+                    //     Log.Information("Camera {Status}", _cameraEnabled ? "started" : "stopped");
+                    //     continue;
+                    // }
                     
                     if (jsonDocument.RootElement.TryGetProperty("commit_audio", out var commit))
                     {
