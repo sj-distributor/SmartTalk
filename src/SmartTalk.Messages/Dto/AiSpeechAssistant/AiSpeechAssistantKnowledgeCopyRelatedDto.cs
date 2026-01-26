@@ -15,4 +15,6 @@ public class AiSpeechAssistantKnowledgeCopyRelatedDto
     public bool IsSyncUpdate { get; set; }
     
     public string RelatedFrom { get; set; }
+    
+    public bool IsDisplay { get; set; }
 }
