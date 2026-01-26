@@ -45,7 +45,11 @@ public partial class EventHandlingService
                 
                 Log.Information( "knowledgeIdToSync Id: {@PrevKnowledge} , {@knowledgeIdToSync}", @event.PrevKnowledge.Id, knowledge.Id);
 
-                if (@event.ShouldSyncLastedKnowledge)
+                var targerPrevRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync([@event.PrevKnowledge.Id], cancellationToken).ConfigureAwait(false);
+                Log.Information("targerPrevRelateds prev relateds: {@allPrevRelatedIds}", targerPrevRelateds.Select(r => r.Id).ToList());
+                var checkShouldSyncRelation = @event.ShouldSyncLastedKnowledge && targerPrevRelateds.Any();
+                
+                if (checkShouldSyncRelation)
                 {
                     _smartTalkBackgroundJobClient.Enqueue<IAiSpeechAssistantService>(x => x.SyncCopiedKnowledgesIfRequiredAsync(
                         @event.PrevKnowledge.Id, @event.ShouldSyncLastedKnowledge,  false, CancellationToken.None));
