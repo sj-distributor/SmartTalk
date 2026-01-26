@@ -77,6 +77,8 @@ public partial interface IPhoneOrderDataProvider
     Task<List<WaitingProcessingEventsDto>> GetWaitingProcessingEventsAsync(List<int> agentIds, CancellationToken cancellationToken);
 
     Task AddWaitingProcessingEventAsync(WaitingProcessingEvent waitingProcessingEvent, bool forceSave = true, CancellationToken cancellationToken = default);
+
+    Task<string> GetRecordTaskSourceAsync(int recordId, CancellationToken cancellationToken = default);
 }
 
 public partial class PhoneOrderDataProvider
@@ -455,5 +457,28 @@ public partial class PhoneOrderDataProvider
 
         if (forceSave)
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+    
+    public async Task<string> GetRecordTaskSourceAsync(int recordId, CancellationToken cancellationToken = default)
+    {
+        var query = from record in _repository.Query<PhoneOrderRecord>()
+            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on record.AssistantId equals assistant.Id into assistantJoin
+            from assistant in assistantJoin.DefaultIfEmpty()
+            join agentAssistant in _repository.Query<AgentAssistant>() on assistant.Id equals agentAssistant.AssistantId into agentAssistantJoin
+            from agentAssistant in agentAssistantJoin.DefaultIfEmpty()
+            join agent in _repository.Query<Agent>() on agentAssistant.AgentId equals agent.Id
+            join posAgent in _repository.Query<PosAgent>() on agent.Id equals posAgent.AgentId
+            join store in _repository.Query<CompanyStore>() on posAgent.StoreId equals store.Id
+            join company in _repository.Query<Company>() on store.CompanyId equals company.Id
+            select new 
+            {
+                RecordInfo = assistant != null 
+                    ? $"{company.Name} - {store.Names} - {agent.Name} - {assistant.Name}" 
+                    : $"{company.Name} - {store.Names} - {agent.Name}"
+            };
+
+        var results = await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+        
+        return results.FirstOrDefault()?.RecordInfo ?? string.Empty;
     }
 }

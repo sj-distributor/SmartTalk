@@ -197,6 +197,8 @@ public class SpeechMaticsService : ISpeechMaticsService
         var scenarioInformation = await IdentifyDialogueScenariosAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
         record.Scenario = scenarioInformation.Category;
         record.Remark = scenarioInformation.Remark;
+
+        await _phoneOrderUtilService.GenerateWaitingProcessingEventAsync(record, agent.Id, cancellationToken).ConfigureAwait(false);
         
         await _posUtilService.GenerateAiDraftAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
 

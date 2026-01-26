@@ -42,7 +42,7 @@ public interface IPhoneOrderUtilService : IScopedDependency
 
     Task GenerateAiDraftAsync(PhoneOrderRecord record, Agent agent, CancellationToken cancellationToken);
 
-    Task GenerateWaitingProcessingEventAsync(int recordId, int agentId, TaskType type, CancellationToken cancellationToken);
+    Task GenerateWaitingProcessingEventAsync(PhoneOrderRecord record, int agentId, CancellationToken cancellationToken);
 }
 
 public class PhoneOrderUtilService : IPhoneOrderUtilService
@@ -333,16 +333,24 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
         }
     }
 
-    public async Task GenerateWaitingProcessingEventAsync(int recordId, int agentId, TaskType type, CancellationToken cancellationToken)
+    public async Task GenerateWaitingProcessingEventAsync(PhoneOrderRecord record, int agentId, CancellationToken cancellationToken)
     {
-        //get TaskSource
-        
+        var taskSource = await _phoneOrderDataProvider.GetRecordTaskSourceAsync(record.Id, cancellationToken).ConfigureAwait(false);
+
+        var type = record.Scenario switch
+        {
+            DialogueScenarios.ThirdPartyOrderNotification => TaskType.Order,
+            DialogueScenarios.InformationNotification => TaskType.InformationNotification,
+            _ => TaskType.Todo
+        };
+
         var waitingEvent = new WaitingProcessingEvent
         {
-            RecordId = recordId,
+            RecordId = record.Id,
             AgentId = agentId,
             TaskType = type,
             TaskStatus = TaskStatus.Unfinished,
+            TaskSource = taskSource
         };
         
         await _phoneOrderDataProvider.AddWaitingProcessingEventAsync(waitingEvent, cancellationToken: cancellationToken).ConfigureAwait(false);
