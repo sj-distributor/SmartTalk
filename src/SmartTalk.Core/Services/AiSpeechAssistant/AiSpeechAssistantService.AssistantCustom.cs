@@ -1338,7 +1338,7 @@ public partial class AiSpeechAssistantService
 
                 newRelations.Add(new AiSpeechAssistantKnowledgeCopyRelated
                 {
-                    SourceKnowledgeId = relation.SourceKnowledgeId,
+                    SourceKnowledgeId = sourceKnowledge.Id,
                     TargetKnowledgeId = targetId,
                     CopyKnowledgePoints = useLatestSource
                         ? sourceKnowledge.Json
