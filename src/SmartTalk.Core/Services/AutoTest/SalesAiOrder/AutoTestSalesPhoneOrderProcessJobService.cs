@@ -198,9 +198,11 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
                 return;
             }
 
-            var matchTasks = singleDayRecords.Select(callRecord => MatchOrderAndRecordingAsync(customerId, callRecord, scenarioId, recordId, cancellationToken)).ToList();
+            var matchTasks = singleDayRecords .Select((callRecord, index) => new { Index = index, Task = MatchOrderAndRecordingAsync( customerId, callRecord, scenarioId, recordId, cancellationToken) }).ToList(); 
             
-            var autoTestDataItems = (await Task.WhenAll(matchTasks)).Where(x => x != null).ToList();
+            var results = await Task.WhenAll(matchTasks.Select(x => x.Task)); 
+            
+            var autoTestDataItems = matchTasks.Zip(results, (x, result) => new { x.Index, Item = result }).Where(x => x.Item != null).OrderBy(x => x.Index).Select(x => x.Item).ToList();
             
             if (autoTestDataItems.Any())
             {
