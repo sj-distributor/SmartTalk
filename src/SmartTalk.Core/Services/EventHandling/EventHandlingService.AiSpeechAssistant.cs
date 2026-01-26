@@ -22,16 +22,12 @@ public partial class EventHandlingService
 
         var oldMergedJsonObj = BuildMergedKnowledgeJson(@event.PrevKnowledge.Json, prevKnowledgeCopyRelateds.Select(x => x.CopyKnowledgePoints));
         var newMergedJsonObj = BuildMergedKnowledgeJson(@event.LatestKnowledge.Json, latestKnowledgeCopyRelateds.Select(x => x.CopyKnowledgePoints));
-
-        Log.Information("Compare the knowledge: {@oldMergedJsonObj} and {@newMergedJsonObj}", oldMergedJsonObj, newMergedJsonObj);
         
-        var diff = CompareJsons(oldMergedJsonObj.ToString(), newMergedJsonObj.ToString());
-        
-        Log.Information("Generate the compare result: {@Diff}", diff);
+        var diffJson = $"old: {oldMergedJsonObj}, new: {newMergedJsonObj}";
 
         try
         {
-            var brief = await GenerateKnowledgeChangeBriefAsync(diff.ToString(), cancellationToken).ConfigureAwait(false);
+            var brief = await GenerateKnowledgeChangeBriefAsync(diffJson, cancellationToken).ConfigureAwait(false);
         
             Log.Information($"Generate the knowledge chang brief: {brief}");
 
@@ -197,6 +193,8 @@ public partial class EventHandlingService
                 var diff = CompareJsons(state.OldMergedJson, MergeJsons(new[] { JObject.Parse(state.OldMergedJson), JObject.Parse(@event.CopyJson) }));
 
                 if (diff == null || !diff.HasValues) continue;
+                
+                Log.Information($"KonwledgeCopyAddedEvent Generate diff: {diff}");
 
                 var brief = await GenerateKnowledgeChangeBriefAsync(diff.ToString(), cancellationToken).ConfigureAwait(false);
 

@@ -102,7 +102,7 @@ public partial class AiSpeechAssistantService
 
         var knowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(latestKnowledge);
         var prevKnowledgeDto = _mapper.Map<AiSpeechAssistantKnowledgeDto>(prevKnowledge);
-   
+
         if (!string.IsNullOrEmpty(command.Premise))
         {
             var premise = new AiSpeechAssistantPremise
@@ -117,14 +117,14 @@ public partial class AiSpeechAssistantService
         }
         else await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantPremiseByAssistantIdAsync(command.AssistantId, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        prevKnowledgeDto.KnowledgeCopyRelateds = _mapper.Map<List<AiSpeechAssistantKnowledgeCopyRelatedDto>>(prevKnowledge.KnowledgeCopyRelateds);
         knowledge.KnowledgeCopyRelateds = _mapper.Map<List<AiSpeechAssistantKnowledgeCopyRelatedDto>>(selectedRelateds);
-     
+        prevKnowledgeDto.KnowledgeCopyRelateds = _mapper.Map<List<AiSpeechAssistantKnowledgeCopyRelatedDto>>(allPrevRelateds);
+      
         return new AiSpeechAssistantKnowledgeAddedEvent
         { 
             PrevKnowledge = prevKnowledgeDto, 
             LatestKnowledge = knowledge, 
-            ShouldSyncLastedKnowledge = command.RelatedKnowledges.Any()
+            ShouldSyncLastedKnowledge = !command.RelatedKnowledges.Any()
         };
     }
 
