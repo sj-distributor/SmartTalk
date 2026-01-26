@@ -54,6 +54,8 @@ public partial interface IPhoneOrderService
     Task<GetPhoneOrderDataDashboardResponse> GetPhoneOrderDataDashboardAsync(GetPhoneOrderDataDashboardRequest request, CancellationToken cancellationToken);
     
     Task<GetPhoneOrderRecordScenarioResponse> GetPhoneOrderRecordScenarioAsync(GetPhoneOrderRecordScenarioRequest request, CancellationToken cancellationToken);
+    
+    Task<GetPhoneOrderRecordTasksResponse> GetPhoneOrderRecordTasksRequestsAsync(GetPhoneOrderRecordTasksRequest request, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderService
@@ -1156,6 +1158,23 @@ public partial class PhoneOrderService
         return new GetPhoneOrderRecordScenarioResponse
         {
             Data = result
+        };
+    }
+    
+    public async Task<GetPhoneOrderRecordTasksResponse> GetPhoneOrderRecordTasksRequestsAsync(
+        GetPhoneOrderRecordTasksRequest request, CancellationToken cancellationToken)
+    {
+        var storesAndAgents = await _posDataProvider.GetSimpleStoreAgentsAsync(request.ServiceProviderId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var agentIds = storesAndAgents.Select(x => x.AgentId).Distinct().ToList();
+        
+        if (agentIds.Count == 0) return new GetPhoneOrderRecordTasksResponse();
+        
+        var events = await _phoneOrderDataProvider.GetWaitingProcessingEventsAsync(agentIds, cancellationToken).ConfigureAwait(false);
+
+        return new GetPhoneOrderRecordTasksResponse
+        {
+            Data = events
         };
     }
 }

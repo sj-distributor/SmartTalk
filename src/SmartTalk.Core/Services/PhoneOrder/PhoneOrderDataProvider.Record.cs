@@ -73,6 +73,10 @@ public partial interface IPhoneOrderDataProvider
     Task AddPhoneOrderReservationInformationAsync(PhoneOrderReservationInformation information, bool forceSave = true, CancellationToken cancellationToken = default);
 
     Task<List<int>> GetPhoneOrderReservationInfoUnreviewedRecordIdsAsync(List<int> recordIds, CancellationToken cancellationToken);
+    
+    Task<List<WaitingProcessingEventsDto>> GetWaitingProcessingEventsAsync(List<int> agentIds, CancellationToken cancellationToken);
+
+    Task AddWaitingProcessingEventAsync(WaitingProcessingEvent waitingProcessingEvent, bool forceSave = true, CancellationToken cancellationToken = default);
 }
 
 public partial class PhoneOrderDataProvider
@@ -420,5 +424,36 @@ public partial class PhoneOrderDataProvider
                 where recordIds.Contains(info.RecordId) && order == null
                 select info.RecordId
             ).ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+    
+    public async Task<List<WaitingProcessingEventsDto>> GetWaitingProcessingEventsAsync(List<int> agentIds, CancellationToken cancellationToken)
+    {
+        var query = _repository.QueryNoTracking<WaitingProcessingEvent>().Where(x => agentIds.Contains(x.AgentId));
+
+        return await (from events in query
+            join record in _repository.QueryNoTracking<PhoneOrderRecord>() on events.RecordId equals record.Id
+            join userAccount in _repository.QueryNoTracking<UserAccount>() on events.LastModifiedBy equals userAccount.Id 
+            select new WaitingProcessingEventsDto()
+            {
+                Id = events.Id,
+                Url = record.Url,
+                AgentId = events.AgentId,
+                RecordId = events.RecordId,
+                TaskType = events.TaskType,
+                Scenario = record.Scenario,
+                SessionId = record.SessionId,
+                TaskStatus = events.TaskStatus,
+                TaskSource = events.TaskSource,
+                CreatedDate = events.CreatedDate,
+                LastModifiedByName = userAccount.UserName
+            }).ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task AddWaitingProcessingEventAsync(WaitingProcessingEvent waitingProcessingEvent, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.InsertAsync(waitingProcessingEvent, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave)
+            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 }
