@@ -174,7 +174,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
 
             if (!phoneNumbers.Any()) return;
             
-            var callRecords = await _autoTestDataProvider.GetCallRecordsByPhonesAndRangeAsync(phoneNumbers, from, to, cancellationToken).ConfigureAwait(false);
+            var callRecords = (await _autoTestDataProvider.GetCallRecordsByPhonesAndRangeAsync(phoneNumbers, from, to, cancellationToken).ConfigureAwait(false)).OrderBy(r => r.StartTimeUtc).ToList();
 
             if (!callRecords.Any())
             {
