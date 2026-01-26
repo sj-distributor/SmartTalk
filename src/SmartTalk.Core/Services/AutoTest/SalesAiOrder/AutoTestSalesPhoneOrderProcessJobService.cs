@@ -202,7 +202,12 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
             
             var autoTestDataItems = (await Task.WhenAll(matchTasks)).Where(x => x != null).ToList();
             
-            var sortedAutoTestDataItems = autoTestDataItems.OrderBy(x => JsonSerializer.Deserialize<AutoTestInputJsonDto>(x.InputJson).OrderDate).ToList();
+            var sortedAutoTestDataItems = autoTestDataItems.Select(x => new { 
+                    Item = x,
+                    OrderDate = JsonSerializer.Deserialize<AutoTestInputJsonDto>(x.InputJson)?.OrderDate })
+                .OrderBy(x => x.OrderDate)
+                .Select(x => x.Item)
+                .ToList();
             
             if (sortedAutoTestDataItems.Any())
             {
