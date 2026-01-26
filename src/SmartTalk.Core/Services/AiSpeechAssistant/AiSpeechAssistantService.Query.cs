@@ -90,22 +90,11 @@ public partial class AiSpeechAssistantService
 
         var result = _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge);
 
-        var allCopyRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync(
-            new List<int> { knowledge.Id }, cancellationToken).ConfigureAwait(false);
+        var allCopyRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync(new List<int> { knowledge.Id }, cancellationToken).ConfigureAwait(false);
+     
+        Log.Information("Get the knowledge copy related Ids: {@Ids}", allCopyRelateds.Select(x => x.Id));
 
-        if (allCopyRelateds == null || !allCopyRelateds.Any())
-        {
-            allCopyRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedBySourceKnowledgeIdAsync(new List<int> { knowledge.Id }, true, cancellationToken).ConfigureAwait(false);
-        }
-
-        if (allCopyRelateds == null || !allCopyRelateds.Any())
-        {
-            result.KnowledgeCopyRelateds = new List<AiSpeechAssistantKnowledgeCopyRelatedDto>();
-        }
-        else
-        {
-            result.KnowledgeCopyRelateds = _mapper.Map<List<AiSpeechAssistantKnowledgeCopyRelatedDto>>(allCopyRelateds);
-        }
+        result.KnowledgeCopyRelateds = _mapper.Map<List<AiSpeechAssistantKnowledgeCopyRelatedDto>>(allCopyRelateds);
         
         var premise = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantPremiseByAssistantIdAsync(request.AssistantId, cancellationToken).ConfigureAwait(false);
         
@@ -116,7 +105,7 @@ public partial class AiSpeechAssistantService
 
         return new GetAiSpeechAssistantKnowledgeResponse { Data = result };
     }
-    
+
     public async Task<GetAiSpeechAssistantKnowledgeHistoryResponse> GetAiSpeechAssistantKnowledgeHistoryAsync(GetAiSpeechAssistantKnowledgeHistoryRequest request, CancellationToken cancellationToken)
     {
         var (count, knowledges) = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgesAsync(
