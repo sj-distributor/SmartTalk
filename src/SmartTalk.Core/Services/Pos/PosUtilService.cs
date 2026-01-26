@@ -6,9 +6,11 @@ using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Ioc;
+using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.Caching.Redis;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Messages.Dto.Agent;
+using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Dto.Pos;
@@ -23,6 +25,8 @@ public interface IPosUtilService : IScopedDependency
     Task GenerateAiDraftAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant assistant, PhoneOrderRecord record, CancellationToken cancellationToken);
 
     Task<(List<PosProduct> Products, string MenuItems)> GeneratePosMenuItemsAsync(int agentId, bool isWithProductId = false, CancellationToken cancellationToken = default);
+    
+    Task<decimal> CalculateOrderAmountAsync(AiSpeechAssistantDto assistant, BinaryData audioData, CancellationToken cancellationToken = default);
 }
 
 public class PosUtilService : IPosUtilService
@@ -32,14 +36,16 @@ public class PosUtilService : IPosUtilService
     private readonly OpenAiSettings _openAiSettings;
     private readonly IPosDataProvider _posDataProvider;
     private readonly IRedisSafeRunner _redisSafeRunner;
+    private readonly IAgentDataProvider _agentDataProvider;
 
-    public PosUtilService(IMapper mapper, IPosService posService, OpenAiSettings openAiSettings, IPosDataProvider posDataProvider, IRedisSafeRunner redisSafeRunner)
+    public PosUtilService(IMapper mapper, IPosService posService, OpenAiSettings openAiSettings, IPosDataProvider posDataProvider, IRedisSafeRunner redisSafeRunner, IAgentDataProvider agentDataProvider)
     {
         _mapper = mapper;
         _posService = posService;
         _openAiSettings = openAiSettings;
         _posDataProvider = posDataProvider;
         _redisSafeRunner = redisSafeRunner;
+        _agentDataProvider = agentDataProvider;
     }
     
     public async Task GenerateAiDraftAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant assistant, PhoneOrderRecord record, CancellationToken cancellationToken)
@@ -61,7 +67,26 @@ public class PosUtilService : IPosUtilService
             
             return;
         }
+        
+        try
+        {
+            var (matchedProducts, aiDraftOrder) = await ExtractProductsFromReportAsync(agent, record.TranscriptionText, record.IncomingCallNumber, cancellationToken).ConfigureAwait(false);
+            
+            if (matchedProducts == null || aiDraftOrder == null) return;
 
+            var order = await BuildPosOrderAsync(record, aiDraftOrder, matchedProducts, cancellationToken).ConfigureAwait(false);
+
+            if (assistant.IsAllowOrderPush)
+                await _posService.HandlePosOrderAsync(order, false, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Generate ai draft order failed.");
+        }
+    }
+
+    private async Task<(List<PosProduct> matchedProducts, AiDraftOrderDto aiDraftOrder)> ExtractProductsFromReportAsync(Agent agent, string report, string incomingCallNumber, CancellationToken cancellationToken)
+    {
         var (products, menuItems) = await GeneratePosMenuItemsAsync(agent.Id, true, cancellationToken).ConfigureAwait(false);
 
         var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
@@ -69,7 +94,7 @@ public class PosUtilService : IPosUtilService
         var systemPrompt =
             "你是一名訂單分析助手。請從下面的客戶分析報告文字中提取客人的姓名、电话、配送类型以及配送地址，以及所有下單的菜品、數量、規格、备注，並且用菜單列表盡力匹配每個菜品。" +
             "如果報告中提到了送餐類型，請提取送餐類型 type (0: 自提订单，1：配送订单)。" +
-            "如果客户有要求或者提供其他的号码作为订单的号码，請提取客户的电话 phoneNumber ，否则 phoneNumber 为当前的来电号码：" + record.IncomingCallNumber + "。"+
+            "如果客户有要求或者提供其他的号码作为订单的号码，請提取客户的电话 phoneNumber ，否则 phoneNumber 为当前的来电号码：" + incomingCallNumber + "。"+
             "如果報告中提到了客户的姓名，請提取客户的姓名 customerName 。" +
             "如果報告中提到了客户的配送地址，請提取客户的配送地址 customerAddress，若无则忽略 。" +
             "如果報告中提到了客户的订单注意事项或者是要求，請提取客户的备注信息 notes，若无则忽略 。" +
@@ -86,7 +111,7 @@ public class PosUtilService : IPosUtilService
         var messages = new List<ChatMessage>
         {
             new SystemChatMessage(systemPrompt),
-            new UserChatMessage("客戶分析報告文本：\n" + record.TranscriptionText + "\n\n")
+            new UserChatMessage("客戶分析報告文本：\n" + report + "\n\n")
         };
 
         var completion = await client.CompleteChatAsync(messages, new ChatCompletionOptions { ResponseModalities = ChatResponseModalities.Text, ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat() }, cancellationToken).ConfigureAwait(false);
@@ -131,18 +156,17 @@ public class PosUtilService : IPosUtilService
 
             Log.Information("Enrich ai draft order: {@EnrichAiDraftOrder}", aiDraftOrder);
 
-            var order = await BuildPosOrderAsync(record, aiDraftOrder, matchedProducts, cancellationToken).ConfigureAwait(false);
-
-            if (assistant.IsAllowOrderPush)
-                await _posService.HandlePosOrderAsync(order, false, cancellationToken).ConfigureAwait(false);
+            return (matchedProducts, aiDraftOrder);
         }
         catch (Exception e)
         {
             Log.Error(e, "Failed to extract products from report text");
+
+            return (null, null);
         }
     }
 
-    public async Task<List<AiDraftItemModifiersDto>> GenerateSpecificationProductsAsync( List<EasyPosResponseModifierGroups> modifiers, string specification, CancellationToken cancellationToken)
+    public async Task<List<AiDraftItemModifiersDto>> GenerateSpecificationProductsAsync(List<EasyPosResponseModifierGroups> modifiers, string specification, CancellationToken cancellationToken)
     {
         var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
 
@@ -219,6 +243,65 @@ public class PosUtilService : IPosUtilService
         }
 
         return (categoryProductsLookup.SelectMany(x => x.Value).ToList(), menuItems.TrimEnd('\r', '\n'));
+    }
+
+    public async Task<decimal> CalculateOrderAmountAsync(
+       AiSpeechAssistantDto assistant, BinaryData audioData, CancellationToken cancellationToken = default)
+    {
+        var agent = await _agentDataProvider.GetAgentByAssistantIdAsync(assistant.Id, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Get agent: {@Agent} by assistant id: {AssistantId}", agent, assistant.Id);
+        
+        if (agent == null) return 0;
+
+        var report = await GenerateAiDraftReportAsync(agent, audioData, cancellationToken).ConfigureAwait(false);
+
+        var (matchedProducts, aiDraftOrder) = await ExtractProductsFromReportAsync(agent, report, string.Empty, cancellationToken).ConfigureAwait(false);
+            
+        var draftMapping = BuildAiDraftAndProductMapping(matchedProducts, aiDraftOrder.Items);
+        
+        var (_, subTotal, taxes) = BuildPosOrderItems(draftMapping);
+
+        return subTotal + taxes;
+    }
+
+    private async Task<string> GenerateAiDraftReportAsync(Agent agent, BinaryData audioData, CancellationToken cancellationToken)
+    {
+        var (_, menuItems) = await GeneratePosMenuItemsAsync(agent.Id, false, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Build menu items for summary: {@MenuItems}", menuItems);
+        
+        List<ChatMessage> messages =
+        [
+            new SystemChatMessage("你是一名電話訂單內容分析員，只需要從錄音內容中提取客戶實際下單的菜品資訊。\n\n" +
+                                  "請僅輸出「客戶下單內容」，不要輸出任何其他說明、分析、摘要或多餘文字。\n\n" +
+                                  "輸出格式必須嚴格遵守以下結構（若無有效下單內容，則不輸出任何內容）：\n\n" +
+                                  "客戶下單內容（請務必按該格式輸出：菜品 數量 規格）：\n" +
+                                  "1. 港式奶茶 2杯\n" +
+                                  "2. 海南雞湯麵 2份\n" +
+                                  "3. 叉燒包派對餐 1份 小份(12pcs)\n\n" +
+                                  "判定下單成立的情況包括（但不限於）：\n" +
+                                  "- 客戶直接說明要下單某些菜品\n" +
+                                  "- 客戶表示需要點幾個菜，並對服務人員或系統推薦的菜品表示明確確認（如「好」、「可以」、「就這些」、「OK」、「行」、「沒問題」等），此時應視為客戶已下單該推薦的菜品\n" +
+                                  "- 客戶在推薦後未提出異議，並結束或暫停對話，可視為默認確認推薦內容\n\n" +
+                                  "注意事項：\n- 僅提取客戶已確認的下單菜品（包含確認推薦的情況）\n" +
+                                  "- 不要推測或補全未被推薦或未被確認的菜品\n" +
+                                  "- 規格（如大小、數量、套餐）僅在錄音中明確出現時才輸出\n" +
+                                  "- 若客戶未下單或未識別到有效菜品，請不要輸出任何內容\n\n" +
+                                  "客戶下單的菜品可能參考以下菜單，但不限於此：" + menuItems),
+            new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
+            new UserChatMessage("幫我根據錄音生成订单草稿：")
+        ];
+        
+        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
+ 
+        ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
+
+        ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
+        
+        Log.Information("Calculate: summary report:" + completion.Content.FirstOrDefault()?.Text);
+        
+        return completion.Content.FirstOrDefault()?.Text ?? string.Empty;
     }
 
     private string BuildItemModifiers(List<EasyPosResponseModifierGroups> modifiers)
