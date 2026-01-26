@@ -198,17 +198,17 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
                 return;
             }
 
-            var matchTasks = singleDayRecords .Select((callRecord, index) => new { Index = index, Task = MatchOrderAndRecordingAsync( customerId, callRecord, scenarioId, recordId, cancellationToken) }).ToList(); 
+            var matchTasks = singleDayRecords.Select(callRecord => MatchOrderAndRecordingAsync(customerId, callRecord, scenarioId, recordId, cancellationToken)).ToList();
             
-            var results = await Task.WhenAll(matchTasks.Select(x => x.Task)); 
+            var autoTestDataItems = (await Task.WhenAll(matchTasks)).Where(x => x != null).ToList();
             
-            var autoTestDataItems = matchTasks.Zip(results, (x, result) => new { x.Index, Item = result }).Where(x => x.Item != null).OrderBy(x => x.Index).Select(x => x.Item).ToList();
+            var sortedAutoTestDataItems = autoTestDataItems.OrderBy(x => JsonSerializer.Deserialize<AutoTestInputJsonDto>(x.InputJson).OrderDate).ToList();
             
-            if (autoTestDataItems.Any())
+            if (sortedAutoTestDataItems.Any())
             {
-                await _autoTestDataProvider.AddAutoTestDataItemsAsync(autoTestDataItems, true, cancellationToken).ConfigureAwait(false);
+                await _autoTestDataProvider.AddAutoTestDataItemsAsync(sortedAutoTestDataItems, true, cancellationToken).ConfigureAwait(false);
 
-                var autoTestDataSetItems = autoTestDataItems.Select(x => new AutoTestDataSetItem
+                var autoTestDataSetItems = sortedAutoTestDataItems.Select(x => new AutoTestDataSetItem
                 {
                     DataSetId = dataSetId,
                     DataItemId = x.Id,
