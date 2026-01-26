@@ -55,7 +55,7 @@ public partial interface IAiSpeechAssistantService
     
     Task<GetKonwledgeRelatedResponse> GetKonwledgeRelatedAsync(GetKonwledgeRelatedRequest request, CancellationToken cancellationToken);
 
-    Task SyncCopiedKnowledgesIfRequiredAsync(int sourceKnowledgeId, bool deleteKnowledge, CancellationToken cancellationToken);
+    Task SyncCopiedKnowledgesIfRequiredAsync(int sourceKnowledgeId, bool deleteKnowledge, bool shouldSyncLastedKnowledge, CancellationToken cancellationToken);
 }
 
 public partial class AiSpeechAssistantService
@@ -125,7 +125,7 @@ public partial class AiSpeechAssistantService
         { 
             PrevKnowledge = prevKnowledgeDto, 
             LatestKnowledge = knowledge,
-            ShouldSyncLatedKnowledge = command.RelatedKnowledges.Any()
+            ShouldSyncLastedKnowledge = command.RelatedKnowledges.Any()
         };
     }
 
@@ -831,7 +831,7 @@ public partial class AiSpeechAssistantService
         
         foreach (var knowledge in knowledges)
         {
-            _backgroundJobClient.Enqueue<IAiSpeechAssistantService>(x => x.SyncCopiedKnowledgesIfRequiredAsync(knowledge.Id, true, CancellationToken.None));
+            _backgroundJobClient.Enqueue<IAiSpeechAssistantService>(x => x.SyncCopiedKnowledgesIfRequiredAsync(knowledge.Id, true,  false, CancellationToken.None));
         }
 
         return agents;
@@ -1232,7 +1232,7 @@ public partial class AiSpeechAssistantService
         };
     }
 
-    public async Task SyncCopiedKnowledgesIfRequiredAsync(int sourceKnowledgeId, bool deleteKnowledge, CancellationToken cancellationToken)
+    public async Task SyncCopiedKnowledgesIfRequiredAsync(int sourceKnowledgeId, bool deleteKnowledge, bool shouldSyncLastedKnowledge, CancellationToken cancellationToken)
     {
         Log.Information("Start Sync Copied Knowledges for Knowledge ID: {@SourceKnowledgeId}, {@DeleteKnowledge}", sourceKnowledgeId, deleteKnowledge);
 
@@ -1245,6 +1245,9 @@ public partial class AiSpeechAssistantService
         var oldTargetMap = await GetAndDeactivateOldTargetsAsync(sourceKnowledgeId, cancellationToken);
 
         if (oldTargetMap.Count == 0) return;
+
+        if (!shouldSyncLastedKnowledge) 
+            sourceKnowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(assistantId: sourceKnowledge.AssistantId, isActive: true, cancellationToken:cancellationToken).ConfigureAwait(false);
         
         var rebuildResult = await RebuildTargetsAsync(oldTargetMap, sourceKnowledge, cancellationToken).ConfigureAwait(false);
 
@@ -1289,7 +1292,7 @@ public partial class AiSpeechAssistantService
     private async Task<RebuildResult> RebuildTargetsAsync(Dictionary<int, AiSpeechAssistantKnowledge> oldTargetMap, AiSpeechAssistantKnowledge sourceKnowledge, CancellationToken cancellationToken)
     {
         var targetIds = oldTargetMap.Keys.ToList();
-
+        
         var allTargetRelations = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync(targetIds, cancellationToken).ConfigureAwait(false) ?? new List<AiSpeechAssistantKnowledgeCopyRelated>();
         
         Log.Information("RebuildTargetsAsync allTargetRelationsIds {allTargetRelationsIds}",  allTargetRelations.Select(x=>x.Id));
