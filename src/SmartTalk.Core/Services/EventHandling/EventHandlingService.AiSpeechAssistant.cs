@@ -43,12 +43,7 @@ public partial class EventHandlingService
                 knowledge.Brief = brief;
                 await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync([knowledge], cancellationToken: cancellationToken).ConfigureAwait(false);
                 
-                var knowledgeIdToSync = @event.ShouldSyncLastedKnowledge ? knowledge.Id : @event.PrevKnowledge.Id;
-            
-                Log.Information( "knowledgeIdToSync Id: {@knowledgeIdToSync}", knowledgeIdToSync);
-                
-                _smartTalkBackgroundJobClient.Enqueue<IAiSpeechAssistantService>(x => x.SyncCopiedKnowledgesIfRequiredAsync(
-                    knowledgeIdToSync, @event.ShouldSyncLastedKnowledge,  false, CancellationToken.None));
+                _smartTalkBackgroundJobClient.Enqueue<IAiSpeechAssistantService>(x => x.SyncCopiedKnowledgesIfRequiredAsync(@event.PrevKnowledge.Id, false, CancellationToken.None));
             }
         }
         catch (Exception e)
