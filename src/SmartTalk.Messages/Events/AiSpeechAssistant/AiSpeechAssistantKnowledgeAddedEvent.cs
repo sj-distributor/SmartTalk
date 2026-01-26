@@ -9,5 +9,5 @@ public class AiSpeechAssistantKnowledgeAddedEvent : IEvent
     
     public AiSpeechAssistantKnowledgeDto LatestKnowledge { get; set; }
     
-    public bool ShouldSyncLatedKnowledge { get; set; }
+    public bool ShouldSyncLastedKnowledge { get; set; }
 }
