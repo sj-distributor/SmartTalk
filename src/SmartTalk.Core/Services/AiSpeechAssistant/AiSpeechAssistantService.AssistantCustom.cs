@@ -1174,7 +1174,7 @@ public partial class AiSpeechAssistantService
 
     public async Task SyncCopiedKnowledgesIfRequiredAsync(int sourceKnowledgeId, bool deleteKnowledge, bool shouldSyncLastedKnowledge, CancellationToken cancellationToken)
     {
-        Log.Information("Start Sync Copied Knowledges for Knowledge ID: {@SourceKnowledgeId}, {@DeleteKnowledge}", sourceKnowledgeId, deleteKnowledge);
+        Log.Information("Start Sync Copied Knowledges for Knowledge ID: {@SourceKnowledgeId}, {@DeleteKnowledge}, {ShouldSyncLastedKnowledge}", sourceKnowledgeId, deleteKnowledge, shouldSyncLastedKnowledge);
 
         if (deleteKnowledge)
         { await DisableSyncUpdateAsync(sourceKnowledgeId, cancellationToken); return; }
@@ -1186,7 +1186,7 @@ public partial class AiSpeechAssistantService
 
         if (oldTargetMap.Count == 0) return;
 
-        if (!shouldSyncLastedKnowledge) 
+        if (shouldSyncLastedKnowledge) 
             sourceKnowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(assistantId: sourceKnowledge.AssistantId, isActive: true, cancellationToken:cancellationToken).ConfigureAwait(false);
         
         var rebuildResult = await RebuildTargetsAsync(oldTargetMap, sourceKnowledge, cancellationToken).ConfigureAwait(false);
