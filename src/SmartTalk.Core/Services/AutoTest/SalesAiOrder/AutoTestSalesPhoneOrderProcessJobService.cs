@@ -190,8 +190,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
                 }).Where(x => !string.IsNullOrEmpty(x.Phone)).GroupBy(x => new
                 {
                     Phone = x.Phone, Date = TimeZoneInfo.ConvertTimeFromUtc(x.Record.StartTimeUtc, pstZone).Date
-                }).Where(g => g.Count() == 1).Select(g => g.First().Record).Distinct().ToList();
-
+                }).Where(g => g.Count() == 1).Select(g => g.First().Record).Distinct().OrderBy(r => r.StartTimeUtc).ToList();
 
             if (!singleDayRecords.Any())
             {
