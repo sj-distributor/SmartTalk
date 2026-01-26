@@ -103,9 +103,8 @@ public partial class AiSpeechAssistantService
         var prevKnowledgeDto = _mapper.Map<AiSpeechAssistantKnowledgeDto>(prevKnowledge);
         var latestKnowledgeDto = _mapper.Map<AiSpeechAssistantKnowledgeDto>(latestKnowledge);
 
-        prevKnowledgeDto.KnowledgeCopyRelateds = _mapper.Map<List<AiSpeechAssistantKnowledgeCopyRelatedDto>>(prevKnowledge.KnowledgeCopyRelateds);
+        prevKnowledgeDto.KnowledgeCopyRelateds = _mapper.Map<List<AiSpeechAssistantKnowledgeCopyRelatedDto>>(allPrevRelateds);
         latestKnowledgeDto.KnowledgeCopyRelateds = _mapper.Map<List<AiSpeechAssistantKnowledgeCopyRelatedDto>>(selectedRelateds);
-
         return new AiSpeechAssistantKnowledgeAddedEvent
         {
             PrevKnowledge = prevKnowledgeDto,
@@ -1274,15 +1273,11 @@ public partial class AiSpeechAssistantService
             
             foreach (var relation in relations)
             {
-                var useLatestSource = relation.SourceKnowledgeId == sourceKnowledge.Id;
-
                 newRelations.Add(new AiSpeechAssistantKnowledgeCopyRelated
                 {
                     SourceKnowledgeId = sourceKnowledge.Id,
                     TargetKnowledgeId = targetId,
-                    CopyKnowledgePoints = useLatestSource
-                        ? sourceKnowledge.Json
-                        : relation.CopyKnowledgePoints,
+                    CopyKnowledgePoints = sourceKnowledge.Json,
                     IsSyncUpdate = relation.IsSyncUpdate,
                 });
             }
