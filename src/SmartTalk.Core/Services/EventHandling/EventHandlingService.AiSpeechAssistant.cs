@@ -49,7 +49,7 @@ public partial class EventHandlingService
                 if (checkShouldSyncRelation)
                 {
                     _smartTalkBackgroundJobClient.Enqueue<IAiSpeechAssistantService>(x => x.SyncCopiedKnowledgesIfRequiredAsync(
-                        @event.PrevKnowledge.Id, @event.ShouldSyncLastedKnowledge,  false, CancellationToken.None));
+                        @event.PrevKnowledge.Id, false, @event.ShouldSyncLastedKnowledge, CancellationToken.None));
                 }
             }
         }
