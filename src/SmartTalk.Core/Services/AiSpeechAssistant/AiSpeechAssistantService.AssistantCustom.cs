@@ -107,10 +107,10 @@ public partial class AiSpeechAssistantService
         latestKnowledgeDto.KnowledgeCopyRelateds = _mapper.Map<List<AiSpeechAssistantKnowledgeCopyRelatedDto>>(selectedRelateds);
         
         return new AiSpeechAssistantKnowledgeAddedEvent
-        {
-            PrevKnowledge = prevKnowledgeDto,
-            LatestKnowledge = latestKnowledgeDto,
-            ShouldSyncLastedKnowledge = command.RelatedKnowledges.Any()
+        { 
+            PrevKnowledge = prevKnowledgeDto, 
+            LatestKnowledge = latestKnowledgeDto, 
+            ShouldSyncLastedKnowledge = !command.RelatedKnowledges.Any()
         };
     }
 
