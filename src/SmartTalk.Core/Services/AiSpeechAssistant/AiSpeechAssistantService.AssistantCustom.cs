@@ -119,8 +119,7 @@ public partial class AiSpeechAssistantService
         
         prevKnowledgeDto.KnowledgeCopyRelateds = _mapper.Map<List<AiSpeechAssistantKnowledgeCopyRelatedDto>>(prevKnowledge.KnowledgeCopyRelateds);
         knowledge.KnowledgeCopyRelateds = _mapper.Map<List<AiSpeechAssistantKnowledgeCopyRelatedDto>>(selectedRelateds);
-        prevKnowledgeDto.KnowledgeCopyRelateds = _mapper.Map<List<AiSpeechAssistantKnowledgeCopyRelatedDto>>(allPrevRelateds);
-    
+     
         return new AiSpeechAssistantKnowledgeAddedEvent
         { 
             PrevKnowledge = prevKnowledgeDto, 
