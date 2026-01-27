@@ -119,7 +119,7 @@ public partial class AiSpeechAssistantService
         var allPrevRelateds = new List<AiSpeechAssistantKnowledgeCopyRelated>();
         var selectedRelateds = new List<AiSpeechAssistantKnowledgeCopyRelated>(); 
         
-        allPrevRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedBySourceKnowledgeIdAsync([prevKnowledgeId], cancellationToken).ConfigureAwait(false);
+        allPrevRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedBySourceKnowledgeIdAsync([prevKnowledgeId], null, cancellationToken).ConfigureAwait(false);
         Log.Information("All prev relateds: {@allPrevRelatedIds}", allPrevRelateds.Select(r => r.Id).ToList());
 
         if (allPrevRelateds.Count == 0) { return (allPrevRelateds ?? [], []); }
@@ -1198,7 +1198,7 @@ public partial class AiSpeechAssistantService
     
     private async Task DisableSyncUpdateAsync(int sourceKnowledgeId, CancellationToken cancellationToken)
     {
-        var relations = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedBySourceKnowledgeIdAsync([sourceKnowledgeId], cancellationToken);
+        var relations = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedBySourceKnowledgeIdAsync([sourceKnowledgeId], null, cancellationToken);
 
         if (relations == null || relations.Count == 0) return;
 
@@ -1209,7 +1209,7 @@ public partial class AiSpeechAssistantService
     
     private async Task<Dictionary<int, AiSpeechAssistantKnowledge>> GetAndDeactivateOldTargetsAsync(int sourceId, CancellationToken cancellationToken)
     {
-        var sourceCopyRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedBySourceKnowledgeIdAsync([sourceId], cancellationToken).ConfigureAwait(false);
+        var sourceCopyRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedBySourceKnowledgeIdAsync([sourceId], null, cancellationToken).ConfigureAwait(false);
 
         if (sourceCopyRelateds == null || sourceCopyRelateds.Count == 0) return new Dictionary<int, AiSpeechAssistantKnowledge>();
 

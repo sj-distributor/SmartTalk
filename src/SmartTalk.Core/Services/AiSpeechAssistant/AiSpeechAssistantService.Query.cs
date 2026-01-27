@@ -91,12 +91,12 @@ public partial class AiSpeechAssistantService
      
         Log.Information("Get the knowledge copy related Ids: {@Ids}", allCopyRelateds.Select(x => x.Id));
 
-        result.KnowledgeCopyRelateds = await EnhanceRelateFrom(knowledge, allCopyRelateds, cancellationToken).ConfigureAwait(false);
+        result.KnowledgeCopyRelateds = await EnhanceRelateFrom(allCopyRelateds, cancellationToken).ConfigureAwait(false);
         
         return new GetAiSpeechAssistantKnowledgeResponse { Data = result };
     }
 
-    public async Task<List<AiSpeechAssistantKnowledgeCopyRelatedDto>> EnhanceRelateFrom(AiSpeechAssistantKnowledge knowledge, List<AiSpeechAssistantKnowledgeCopyRelated> relateds, CancellationToken cancellationToken)
+    public async Task<List<AiSpeechAssistantKnowledgeCopyRelatedDto>> EnhanceRelateFrom(List<AiSpeechAssistantKnowledgeCopyRelated> relateds, CancellationToken cancellationToken)
     {
         if (relateds == null || relateds.Count == 0) return new List<AiSpeechAssistantKnowledgeCopyRelatedDto>();
 
