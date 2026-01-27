@@ -32,6 +32,7 @@ using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.Pos;
 using SmartTalk.Messages.Enums.Printer;
 using SmartTalk.Messages.Enums.STT;
+using TaskStatus = SmartTalk.Messages.Enums.PhoneOrder.TaskStatus;
 
 namespace SmartTalk.Core.Services.PhoneOrder;
 
@@ -40,6 +41,8 @@ public interface IPhoneOrderUtilService : IScopedDependency
     Task ExtractPhoneOrderShoppingCartAsync(string goalTexts, PhoneOrderRecord record, CancellationToken cancellationToken);
 
     Task GenerateAiDraftAsync(PhoneOrderRecord record, Agent agent, CancellationToken cancellationToken);
+
+    Task GenerateWaitingProcessingEventAsync(int recordId, int agentId, TaskType type, CancellationToken cancellationToken);
 }
 
 public class PhoneOrderUtilService : IPhoneOrderUtilService
@@ -339,6 +342,21 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
                  
             await _printerDataProvider.AddMerchPrinterOrderAsync(order, cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    public async Task GenerateWaitingProcessingEventAsync(int recordId, int agentId, TaskType type, CancellationToken cancellationToken)
+    {
+        //get TaskSource
+        
+        var waitingEvent = new WaitingProcessingEvent
+        {
+            RecordId = recordId,
+            AgentId = agentId,
+            TaskType = type,
+            TaskStatus = TaskStatus.Unfinished,
+        };
+        
+        await _phoneOrderDataProvider.AddWaitingProcessingEventAsync(waitingEvent, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<List<PhoneOrderOrderItem>> GetSimilarRestaurantByRecordAsync(PhoneOrderRecord record, PhoneOrderDetailDto foods, CancellationToken cancellationToken)

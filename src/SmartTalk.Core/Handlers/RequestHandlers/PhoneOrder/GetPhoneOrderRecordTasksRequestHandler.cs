@@ -13,9 +13,9 @@ public class GetPhoneOrderRecordTasksRequestHandler : IRequestHandler<GetPhoneOr
     {
         _phoneOrderService = phoneOrderService;
     }
-
+    
     public async Task<GetPhoneOrderRecordTasksResponse> Handle(IReceiveContext<GetPhoneOrderRecordTasksRequest> context, CancellationToken cancellationToken)
     {
-        return await _phoneOrderService.GetPhoneOrderRecordTasksRequestAsync(context.Message, cancellationToken).ConfigureAwait(false);
+        return await _phoneOrderService.GetPhoneOrderRecordTasksRequestsAsync(context.Message, cancellationToken).ConfigureAwait(false);
     }
 }
