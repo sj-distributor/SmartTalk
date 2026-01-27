@@ -164,6 +164,8 @@ public partial class PhoneOrderProcessJobService
 
         await _phoneOrderDataProvider.AddPhoneOrderRecordReportsAsync(reports, true, cancellationToken).ConfigureAwait(false);
         
+        await _phoneOrderUtilService.GenerateWaitingProcessingEventAsync(record, scenarioInformation.IsIncludeTodo, agent.Id, cancellationToken).ConfigureAwait(false);
+        
         await _posUtilService.GenerateAiDraftAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Handle Smarties callback if required: {@Agent}、{@Record}", agent, record);

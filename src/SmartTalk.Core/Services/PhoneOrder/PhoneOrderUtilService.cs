@@ -32,7 +32,6 @@ using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.Pos;
 using SmartTalk.Messages.Enums.Printer;
 using SmartTalk.Messages.Enums.STT;
-using TaskStatus = SmartTalk.Messages.Enums.PhoneOrder.TaskStatus;
 
 namespace SmartTalk.Core.Services.PhoneOrder;
 
@@ -42,7 +41,7 @@ public interface IPhoneOrderUtilService : IScopedDependency
 
     Task GenerateAiDraftAsync(PhoneOrderRecord record, Agent agent, CancellationToken cancellationToken);
 
-    Task GenerateWaitingProcessingEventAsync(int recordId, int agentId, TaskType type, CancellationToken cancellationToken);
+    Task GenerateWaitingProcessingEventAsync(PhoneOrderRecord record, bool isIncludeTodo, int agentId, CancellationToken cancellationToken);
 }
 
 public class PhoneOrderUtilService : IPhoneOrderUtilService
@@ -344,21 +343,48 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
         }
     }
 
-    public async Task GenerateWaitingProcessingEventAsync(int recordId, int agentId, TaskType type, CancellationToken cancellationToken)
+    public async Task GenerateWaitingProcessingEventAsync(PhoneOrderRecord record, bool isIncludeTodo, int agentId, CancellationToken cancellationToken)
     {
-        //get TaskSource
+        var mainScenarios = new[]
+        {
+            DialogueScenarios.Reservation,
+            DialogueScenarios.Order,
+            DialogueScenarios.InformationNotification,
+            DialogueScenarios.ThirdPartyOrderNotification
+        };
+
+        var isMainScenario = record.Scenario.HasValue && mainScenarios.Contains(record.Scenario.Value);
         
+        if (!isMainScenario && !isIncludeTodo) { return; }
+
+        TaskType taskType;
+
+        if (isMainScenario)
+        {
+            taskType = record.Scenario switch
+            {
+                DialogueScenarios.Reservation or DialogueScenarios.Order => TaskType.Order,
+                DialogueScenarios.InformationNotification or DialogueScenarios.ThirdPartyOrderNotification => TaskType.InformationNotification,
+            };
+        }
+        else
+            taskType = TaskType.Todo;
+
+        var taskSource = await _phoneOrderDataProvider.GetRecordTaskSourceAsync(record.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
+
         var waitingEvent = new WaitingProcessingEvent
         {
-            RecordId = recordId,
+            RecordId = record.Id,
             AgentId = agentId,
-            TaskType = type,
-            TaskStatus = TaskStatus.Unfinished,
+            TaskType = taskType,
+            TaskStatus = WaitingTaskStatus.Unfinished,
+            TaskSource = taskSource,
+            IsIncludeTodo = isIncludeTodo
         };
-        
-        await _phoneOrderDataProvider.AddWaitingProcessingEventAsync(waitingEvent, cancellationToken: cancellationToken).ConfigureAwait(false);
-    }
 
+        await _phoneOrderDataProvider.AddWaitingProcessingEventAsync(waitingEvent, true, cancellationToken).ConfigureAwait(false);
+    }
+    
     private async Task<List<PhoneOrderOrderItem>> GetSimilarRestaurantByRecordAsync(PhoneOrderRecord record, PhoneOrderDetailDto foods, CancellationToken cancellationToken)
     {
         if (record == null || foods?.FoodDetails == null || foods.FoodDetails.Count == 0) return [];

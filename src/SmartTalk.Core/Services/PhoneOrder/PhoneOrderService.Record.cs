@@ -58,6 +58,8 @@ public partial interface IPhoneOrderService
     Task<GetPhoneOrderRecordScenarioResponse> GetPhoneOrderRecordScenarioAsync(GetPhoneOrderRecordScenarioRequest request, CancellationToken cancellationToken);
     
     Task<GetPhoneOrderRecordTasksResponse> GetPhoneOrderRecordTasksRequestsAsync(GetPhoneOrderRecordTasksRequest request, CancellationToken cancellationToken);
+
+    Task<UpdatePhoneOrderRecordTasksResponse> UpdatePhoneOrderRecordTasksAsync(UpdatePhoneOrderRecordTasksCommand command, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderService
@@ -1345,17 +1347,47 @@ public partial class PhoneOrderService
     public async Task<GetPhoneOrderRecordTasksResponse> GetPhoneOrderRecordTasksRequestsAsync(
         GetPhoneOrderRecordTasksRequest request, CancellationToken cancellationToken)
     {
+        var (utcStart, utcEnd) = ConvertPstDateToUtcRange(request.Date);
+        
         var storesAndAgents = await _posDataProvider.GetSimpleStoreAgentsAsync(request.ServiceProviderId, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         var agentIds = storesAndAgents.Select(x => x.AgentId).Distinct().ToList();
         
         if (agentIds.Count == 0) return new GetPhoneOrderRecordTasksResponse();
         
-        var events = await _phoneOrderDataProvider.GetWaitingProcessingEventsAsync(agentIds, cancellationToken).ConfigureAwait(false);
+        var events = await _phoneOrderDataProvider.GetWaitingProcessingEventsAsync(agentIds, request.WaitingTaskStatus, utcStart, utcEnd, request.TaskType, cancellationToken).ConfigureAwait(false);
 
+        var (all, unread) = await _phoneOrderDataProvider.GetAllOrUnreadWaitingProcessingEventsAsync(agentIds, cancellationToken).ConfigureAwait(false);
+        
         return new GetPhoneOrderRecordTasksResponse
         {
-            Data = events
+            Data = new GetPhoneOrderRecordTasksDto
+            {
+                AllCount = all,
+                UnreadCount = unread,
+                WaitingTasks = events
+            }
+        };
+    }
+
+    public async Task<UpdatePhoneOrderRecordTasksResponse> UpdatePhoneOrderRecordTasksAsync(
+        UpdatePhoneOrderRecordTasksCommand command, CancellationToken cancellationToken)
+    {
+        var waitingProcessingEvents = await _phoneOrderDataProvider.GetWaitingProcessingEventsAsync(ids: command.Ids, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (waitingProcessingEvents.Count < 0) return new UpdatePhoneOrderRecordTasksResponse();
+
+        waitingProcessingEvents = waitingProcessingEvents.Select(x =>
+        {
+            x.TaskStatus = command.WaitingTaskStatus;
+            return x;
+        }).ToList();
+        
+        await _phoneOrderDataProvider.UpdateWaitingProcessingEventsAsync(waitingProcessingEvents, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return new UpdatePhoneOrderRecordTasksResponse
+        {
+            Data = _mapper.Map<List<WaitingProcessingEventsDto>>(waitingProcessingEvents)
         };
     }
 }
