@@ -23,6 +23,8 @@ public class WaitingProcessingEventsDto
 
     public string SessionId { get; set; }
     
+    public bool IsIncludeTodo { get; set; }
+    
     public DateTimeOffset CreatedDate { get; set; }
     
     public string LastModifiedByName { get; set; }

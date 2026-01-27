@@ -27,6 +27,9 @@ public class WaitingProcessingEvent : IEntity, IHasCreatedFields, IHasModifiedFi
 
     [Column("task_source")]
     public string TaskSource { get; set; }
+    
+    [Column("is_include_todo")]
+    public bool IsIncludeTodo { get; set; }
 
     [Column("created_date")] 
     public DateTimeOffset CreatedDate { get; set; } = DateTimeOffset.Now;
