@@ -1,0 +1,1 @@
+alter table `waiting_processing_event`  add column `is_include_todo`  tinyint(1) default 0;

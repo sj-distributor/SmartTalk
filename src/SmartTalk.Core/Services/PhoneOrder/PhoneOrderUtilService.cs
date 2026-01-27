@@ -335,28 +335,48 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
 
     public async Task GenerateWaitingProcessingEventAsync(PhoneOrderRecord record, bool isIncludeTodo, int agentId, CancellationToken cancellationToken)
     {
-        var taskSource = await _phoneOrderDataProvider.GetRecordTaskSourceAsync(record.Id, cancellationToken).ConfigureAwait(false);
+        var mainScenarios = new[]
+        {
+            DialogueScenarios.Reservation,
+            DialogueScenarios.Order,
+            DialogueScenarios.InformationNotification,
+            DialogueScenarios.ThirdPartyOrderNotification
+        };
+
+        var isMainScenario = record.Scenario.HasValue && mainScenarios.Contains(record.Scenario.Value);
         
-        var type = isIncludeTodo
-            ? TaskType.Todo
-            : record.Scenario switch
+        if (!isMainScenario && !isIncludeTodo) { return; }
+
+        TaskType taskType;
+
+        if (isMainScenario)
+        {
+            taskType = record.Scenario switch
             {
                 DialogueScenarios.Reservation or DialogueScenarios.Order => TaskType.Order,
                 DialogueScenarios.InformationNotification or DialogueScenarios.ThirdPartyOrderNotification => TaskType.InformationNotification,
             };
+        }
+        else
+        {
+            taskType = TaskType.Todo;
+        }
+
+        var taskSource = await _phoneOrderDataProvider.GetRecordTaskSourceAsync(record.Id, cancellationToken).ConfigureAwait(false);
 
         var waitingEvent = new WaitingProcessingEvent
         {
             RecordId = record.Id,
             AgentId = agentId,
-            TaskType = type,
+            TaskType = taskType,
             TaskStatus = TaskStatus.Unfinished,
             TaskSource = taskSource,
+            IsIncludeTodo = isIncludeTodo
         };
-        
-        await _phoneOrderDataProvider.AddWaitingProcessingEventAsync(waitingEvent, cancellationToken: cancellationToken).ConfigureAwait(false);
-    }
 
+        await _phoneOrderDataProvider.AddWaitingProcessingEventAsync(waitingEvent, true, cancellationToken).ConfigureAwait(false);
+    }
+    
     private async Task<List<PhoneOrderOrderItem>> GetSimilarRestaurantByRecordAsync(PhoneOrderRecord record, PhoneOrderDetailDto foods, CancellationToken cancellationToken)
     {
         if (record == null || foods?.FoodDetails == null || foods.FoodDetails.Count == 0) return [];
