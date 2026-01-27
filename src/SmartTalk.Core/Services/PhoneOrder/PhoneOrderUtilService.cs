@@ -42,7 +42,7 @@ public interface IPhoneOrderUtilService : IScopedDependency
 
     Task GenerateAiDraftAsync(PhoneOrderRecord record, Agent agent, CancellationToken cancellationToken);
 
-    Task GenerateWaitingProcessingEventAsync(PhoneOrderRecord record, int agentId, CancellationToken cancellationToken);
+    Task GenerateWaitingProcessingEventAsync(PhoneOrderRecord record, bool isIncludeTodo, int agentId, CancellationToken cancellationToken);
 }
 
 public class PhoneOrderUtilService : IPhoneOrderUtilService
@@ -333,16 +333,17 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
         }
     }
 
-    public async Task GenerateWaitingProcessingEventAsync(PhoneOrderRecord record, int agentId, CancellationToken cancellationToken)
+    public async Task GenerateWaitingProcessingEventAsync(PhoneOrderRecord record, bool isIncludeTodo, int agentId, CancellationToken cancellationToken)
     {
         var taskSource = await _phoneOrderDataProvider.GetRecordTaskSourceAsync(record.Id, cancellationToken).ConfigureAwait(false);
-
-        var type = record.Scenario switch
-        {
-            DialogueScenarios.ThirdPartyOrderNotification => TaskType.Order,
-            DialogueScenarios.InformationNotification => TaskType.InformationNotification,
-            _ => TaskType.Todo
-        };
+        
+        var type = isIncludeTodo
+            ? TaskType.Todo
+            : record.Scenario switch
+            {
+                DialogueScenarios.Reservation or DialogueScenarios.Order => TaskType.Order,
+                DialogueScenarios.InformationNotification or DialogueScenarios.ThirdPartyOrderNotification => TaskType.InformationNotification,
+            };
 
         var waitingEvent = new WaitingProcessingEvent
         {
@@ -350,7 +351,7 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
             AgentId = agentId,
             TaskType = type,
             TaskStatus = TaskStatus.Unfinished,
-            TaskSource = taskSource
+            TaskSource = taskSource,
         };
         
         await _phoneOrderDataProvider.AddWaitingProcessingEventAsync(waitingEvent, cancellationToken: cancellationToken).ConfigureAwait(false);
