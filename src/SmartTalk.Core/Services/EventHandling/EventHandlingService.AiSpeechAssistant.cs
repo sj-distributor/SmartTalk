@@ -41,7 +41,7 @@ public partial class EventHandlingService
                 
                 Log.Information( "knowledgeIdToSync Id: {@PrevKnowledge} , {@knowledgeIdToSync}", @event.PrevKnowledge.Id, knowledge.Id);
 
-                var targerPrevRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedBySourceKnowledgeIdAsync([@event.PrevKnowledge.Id], cancellationToken).ConfigureAwait(false);
+                var targerPrevRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedBySourceKnowledgeIdAsync([@event.PrevKnowledge.Id], true, cancellationToken).ConfigureAwait(false);
                 Log.Information("targerPrevRelateds prev relateds: {@allPrevRelatedIds}", targerPrevRelateds.Select(r => r.Id).ToList());
                
                 var checkShouldSyncRelation = @event.ShouldSyncLastedKnowledge && targerPrevRelateds.Any();
