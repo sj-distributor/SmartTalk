@@ -45,6 +45,27 @@ public partial class EventHandlingService
         
         if (@event.OriginalScenarios is not DialogueScenarios.Reservation && @event.DialogueScenarios is DialogueScenarios.Reservation)
             await RegenerateAiDraftAsync(@event.RecordId, cancellationToken).ConfigureAwait(false);
+
+        if (@event.OriginalScenarios is DialogueScenarios.Reservation or DialogueScenarios.InformationNotification or DialogueScenarios.ThirdPartyOrderNotification or DialogueScenarios.Order)
+        {
+            var waitingEvent = (await _phoneOrderDataProvider.GetWaitingProcessingEventsAsync(recordId: @event.RecordId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+
+            if (waitingEvent == null) return;
+            
+            if (@event.DialogueScenarios is DialogueScenarios.Reservation or DialogueScenarios.InformationNotification or DialogueScenarios.ThirdPartyOrderNotification or DialogueScenarios.Order)
+            {
+                waitingEvent.TaskType = @event.DialogueScenarios switch
+                {
+                    DialogueScenarios.Order or DialogueScenarios.Reservation => TaskType.Order,
+                    DialogueScenarios.InformationNotification or DialogueScenarios.ThirdPartyOrderNotification => TaskType.InformationNotification,
+                    _ => throw new ArgumentOutOfRangeException()
+                };
+                
+                await _phoneOrderDataProvider.UpdateWaitingProcessingEventsAsync([waitingEvent], cancellationToken: cancellationToken).ConfigureAwait(false);
+            }
+            else
+                await _phoneOrderDataProvider.DeleteWaitingProcessingEventAsync(waitingEvent, cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
     }
     
     private async Task RegenerateAiDraftAsync(int recordId, CancellationToken cancellationToken)
