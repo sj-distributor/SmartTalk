@@ -1,5 +1,4 @@
 using SmartTalk.Messages.Enums.PhoneOrder;
-using TaskStatus = SmartTalk.Messages.Enums.PhoneOrder.TaskStatus;
 
 namespace SmartTalk.Messages.Dto.PhoneOrder;
 
@@ -13,7 +12,7 @@ public class WaitingProcessingEventsDto
 
     public TaskType TaskType { get; set; }
 
-    public TaskStatus TaskStatus { get; set; }
+    public WaitingTaskStatus TaskStatus { get; set; }
     
     public DialogueScenarios? Scenario { get; set; }
 

@@ -1,7 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using SmartTalk.Messages.Enums.PhoneOrder;
-using TaskStatus = SmartTalk.Messages.Enums.PhoneOrder.TaskStatus;
 
 namespace SmartTalk.Core.Domain.PhoneOrder;
 
@@ -23,7 +22,7 @@ public class WaitingProcessingEvent : IEntity, IHasCreatedFields, IHasModifiedFi
     public TaskType TaskType { get; set; }
 
     [Column("task_status")]
-    public TaskStatus TaskStatus { get; set; }
+    public WaitingTaskStatus TaskStatus { get; set; }
 
     [Column("task_source")]
     public string TaskSource { get; set; }

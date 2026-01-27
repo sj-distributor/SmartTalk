@@ -32,7 +32,6 @@ using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.Pos;
 using SmartTalk.Messages.Enums.Printer;
 using SmartTalk.Messages.Enums.STT;
-using TaskStatus = SmartTalk.Messages.Enums.PhoneOrder.TaskStatus;
 
 namespace SmartTalk.Core.Services.PhoneOrder;
 
@@ -362,18 +361,16 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
             };
         }
         else
-        {
             taskType = TaskType.Todo;
-        }
 
-        var taskSource = await _phoneOrderDataProvider.GetRecordTaskSourceAsync(record.Id, cancellationToken).ConfigureAwait(false);
+        var taskSource = await _phoneOrderDataProvider.GetRecordTaskSourceAsync(record.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var waitingEvent = new WaitingProcessingEvent
         {
             RecordId = record.Id,
             AgentId = agentId,
             TaskType = taskType,
-            TaskStatus = TaskStatus.Unfinished,
+            TaskStatus = WaitingTaskStatus.Unfinished,
             TaskSource = taskSource,
             IsIncludeTodo = isIncludeTodo
         };

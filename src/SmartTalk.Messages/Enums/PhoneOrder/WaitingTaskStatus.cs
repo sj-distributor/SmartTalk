@@ -1,6 +1,6 @@
 namespace SmartTalk.Messages.Enums.PhoneOrder;
 
-public enum TaskStatus
+public enum WaitingTaskStatus
 {
     Finished,
     Unfinished

@@ -163,6 +163,15 @@ public class PhoneOrderController : ControllerBase
         return Ok(response);
     }
     
+    [Route("tasks/update"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdatePhoneOrderRecordTasksResponse))]
+    public async Task<IActionResult> UpdatePhoneOrderRecordTasksAsync([FromBody] UpdatePhoneOrderRecordTasksCommand request)
+    {
+        var response = await _mediator.SendAsync<UpdatePhoneOrderRecordTasksCommand, UpdatePhoneOrderRecordTasksResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
     #region Linphone
     
     [Route("linphone/add"), HttpPost]
