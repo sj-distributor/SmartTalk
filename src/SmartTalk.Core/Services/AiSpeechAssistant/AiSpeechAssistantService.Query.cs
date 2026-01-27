@@ -1,5 +1,6 @@
 using DocumentFormat.OpenXml.Office2010.ExcelAc;
 using Serilog;
+using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Requests.AiSpeechAssistant;
 
@@ -94,16 +95,47 @@ public partial class AiSpeechAssistantService
      
         Log.Information("Get the knowledge copy related Ids: {@Ids}", allCopyRelateds.Select(x => x.Id));
 
-        result.KnowledgeCopyRelateds = _mapper.Map<List<AiSpeechAssistantKnowledgeCopyRelatedDto>>(allCopyRelateds);
-        
         var premise = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantPremiseByAssistantIdAsync(request.AssistantId, cancellationToken).ConfigureAwait(false);
         
         if (premise != null && !string.IsNullOrEmpty(premise.Content))
             result.Premise = _mapper.Map<AiSpeechAssistantPremiseDto>(premise);
         
-        result.KnowledgeCopyRelateds = _mapper.Map<List<AiSpeechAssistantKnowledgeCopyRelatedDto>>(allCopyRelateds);
-
+        result.KnowledgeCopyRelateds = await EnhanceRelateFrom(knowledge, allCopyRelateds, cancellationToken).ConfigureAwait(false);
         return new GetAiSpeechAssistantKnowledgeResponse { Data = result };
+    }
+
+    public async Task<List<AiSpeechAssistantKnowledgeCopyRelatedDto>> EnhanceRelateFrom(AiSpeechAssistantKnowledge knowledge, List<AiSpeechAssistantKnowledgeCopyRelated> relateds, CancellationToken cancellationToken)
+    {
+        if (relateds == null || relateds.Count == 0) return new List<AiSpeechAssistantKnowledgeCopyRelatedDto>();
+
+        var sourceKnowledgeIds = relateds.Select(r => r.SourceKnowledgeId).Distinct().ToList();
+
+        var sourceKnowledges = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgesAsync(sourceKnowledgeIds, cancellationToken).ConfigureAwait(false);
+
+        var sourceKnowledgeMap = sourceKnowledges.ToDictionary(k => k.Id);
+
+        var assistantIds = sourceKnowledges.Select(k => k.AssistantId).Distinct().ToList();
+
+        var enrichInfos = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedEnrichInfoAsync(assistantIds, cancellationToken).ConfigureAwait(false);
+
+        var enrichDict = enrichInfos.ToDictionary(x => x.AssistantId);
+
+        var result = new List<AiSpeechAssistantKnowledgeCopyRelatedDto>(relateds.Count);
+
+        foreach (var related in relateds)
+        {
+            var dto = _mapper.Map<AiSpeechAssistantKnowledgeCopyRelatedDto>(related);
+
+            if (sourceKnowledgeMap.TryGetValue(related.SourceKnowledgeId, out var sourceKnowledge) &&
+                enrichDict.TryGetValue(sourceKnowledge.AssistantId, out var info))
+            {
+                dto.RelatedFrom = $"{info.StoreName} - {info.AiAgentName} - {info.AssiatantName}";
+            }
+
+            result.Add(dto);
+        }
+
+        return result;
     }
 
     public async Task<GetAiSpeechAssistantKnowledgeHistoryResponse> GetAiSpeechAssistantKnowledgeHistoryAsync(GetAiSpeechAssistantKnowledgeHistoryRequest request, CancellationToken cancellationToken)
