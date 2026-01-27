@@ -246,7 +246,11 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
         else if (record.Scenario is DialogueScenarios.Order && !store.IsManualReview)
         {
             var posOrder = await _posDataProvider.GetPosOrderByIdAsync(recordId: record.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
-               
+
+            var orderItems = JsonConvert.DeserializeObject<List<PhoneCallOrderItem>>(posOrder.Items);
+            
+            if (orderItems.Count <= 0) return;
+            
             var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(storeId: store.Id, isEnabled: true, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
 
             Log.Information("get merch printer:{@merchPrinter}", merchPrinter);
