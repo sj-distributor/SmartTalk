@@ -614,7 +614,8 @@ public partial class PhoneOrderDataProvider
         
         return await (from events in query
             join record in _repository.QueryNoTracking<PhoneOrderRecord>() on events.RecordId equals record.Id
-            join userAccount in _repository.QueryNoTracking<UserAccount>() on events.LastModifiedBy equals userAccount.Id 
+            join userAccount in _repository.QueryNoTracking<UserAccount>() on events.LastModifiedBy equals userAccount.Id into userAccounts
+            from userAccount in userAccounts.DefaultIfEmpty()
             select new WaitingProcessingEventsDto
             {
                 Id = events.Id,
