@@ -244,6 +244,8 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
         {
             var posOrder = await _posDataProvider.GetPosOrderByIdAsync(recordId: record.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
 
+            if (posOrder == null) return;
+            
             var orderItems = JsonConvert.DeserializeObject<List<PhoneCallOrderItem>>(posOrder.Items);
             
             if (orderItems.Count <= 0) return;
