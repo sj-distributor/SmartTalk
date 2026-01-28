@@ -179,7 +179,7 @@ public class PosUtilService : IPosUtilService
     
      public async Task<(List<PosProduct> Products, string MenuItems)> GeneratePosMenuItemsAsync(int agentId, bool isWithProductId = false, CancellationToken cancellationToken = default)
     {
-        var storeAgent = await _posDataProvider.GetPosAgentByAgentIdAsync(agentId, cancellationToken).ConfigureAwait(false);
+        var storeAgent = (await _posDataProvider.GetPosAgentByAgentIdsAsync([agentId], cancellationToken).ConfigureAwait(false)).FirstOrDefault();
 
         if (storeAgent == null) return ([], null);
 
