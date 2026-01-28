@@ -1354,16 +1354,19 @@ public partial class PhoneOrderService
         GetPhoneOrderRecordTasksRequest request, CancellationToken cancellationToken)
     {
         var (utcStart, utcEnd) = ConvertPstDateToUtcRange(request.Date);
-        
-        var storesAndAgents = await _posDataProvider.GetSimpleStoreAgentsAsync(request.ServiceProviderId, cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        var agentIds = storesAndAgents.Select(x => x.AgentId).Distinct().ToList();
-        
-        if (agentIds.Count == 0) return new GetPhoneOrderRecordTasksResponse();
-        
-        var events = await _phoneOrderDataProvider.GetWaitingProcessingEventsAsync(agentIds, request.WaitingTaskStatus, utcStart, utcEnd, request.TaskType, cancellationToken).ConfigureAwait(false);
 
-        var (all, unread) = await _phoneOrderDataProvider.GetAllOrUnreadWaitingProcessingEventsAsync(agentIds, cancellationToken).ConfigureAwait(false);
+        if (request.AgentIds is not { Count: > 0 })
+        {
+            var storesAndAgents = await _posDataProvider.GetSimpleStoreAgentsAsync(request.ServiceProviderId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+            request.AgentIds = storesAndAgents.Select(x => x.AgentId).Distinct().ToList(); 
+        }
+        
+        if (request.AgentIds.Count == 0) return new GetPhoneOrderRecordTasksResponse();
+        
+        var events = await _phoneOrderDataProvider.GetWaitingProcessingEventsAsync(request.AgentIds, request.WaitingTaskStatus, utcStart, utcEnd, request.TaskType, cancellationToken).ConfigureAwait(false);
+
+        var (all, unread) = await _phoneOrderDataProvider.GetAllOrUnreadWaitingProcessingEventsAsync(request.AgentIds, cancellationToken).ConfigureAwait(false);
         
         return new GetPhoneOrderRecordTasksResponse
         {
