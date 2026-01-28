@@ -35,6 +35,7 @@ using SmartTalk.Messages.Dto.Printer;
 using SmartTalk.Messages.Dto.WeChat;
 using SmartTalk.Messages.Enums;
 using SmartTalk.Messages.Enums.Caching;
+using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.Printer;
 using SmartTalk.Messages.Events.Printer;
 using Color = SixLabors.ImageSharp.Color;
@@ -317,6 +318,8 @@ public class PrinterService : IPrinterService
            
             await _printerDataProvider.UpdateMerchPrinterOrderAsync(merchPrinterOrder, cancellationToken: cancellationToken).ConfigureAwait(false);
 
+            await UpdateWaitingProcessingEventAsync(merchPrinterOrder.RecordId, merchPrinterOrder.OrderId, cancellationToken).ConfigureAwait(false);
+            
             return new PrinterJobConfirmedEvent
             {
                 MerchPrinterOrderDto = _mapper.Map<MerchPrinterOrderDto>(merchPrinterOrder),
@@ -327,7 +330,33 @@ public class PrinterService : IPrinterService
 
         return null;
     }
-    
+
+    private async Task UpdateWaitingProcessingEventAsync(int? recordId, int? orderId, CancellationToken cancellationToken)
+    {
+        int? id = null;
+        
+        if (recordId.HasValue) id = recordId.Value;
+
+        if (orderId.HasValue)
+        {
+            var order = await _posDataProvider.GetPosOrderByIdAsync(orderId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            if (order is not { RecordId: not null }) return;
+
+            id = order.RecordId;
+        }
+        
+        if(!id.HasValue) return;
+        
+        var waitingProcessingEvent = (await _phoneOrderDataProvider.GetWaitingProcessingEventsAsync(recordId: id, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+
+        if (waitingProcessingEvent == null) return;
+
+        waitingProcessingEvent.TaskStatus = WaitingTaskStatus.Finished;
+            
+        await _phoneOrderDataProvider.UpdateWaitingProcessingEventsAsync([waitingProcessingEvent], cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task<PrinterJobConfirmedEvent> RecordPrintErrorAfterConfirmPrinterJobAsync(
         ConfirmPrinterJobCommand command, CancellationToken cancellationToken)
     {

@@ -1,4 +1,5 @@
 using Serilog;
+using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Events.PhoneOrder;
 
@@ -65,6 +66,30 @@ public partial class EventHandlingService
             }
             else
                 await _phoneOrderDataProvider.DeleteWaitingProcessingEventAsync(waitingEvent, cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+
+        if (@event.OriginalScenarios != DialogueScenarios.Reservation && 
+            @event.OriginalScenarios != DialogueScenarios.InformationNotification && 
+            @event.OriginalScenarios != DialogueScenarios.ThirdPartyOrderNotification && 
+            @event.OriginalScenarios != DialogueScenarios.Order && 
+            @event.DialogueScenarios is DialogueScenarios.Order or 
+                DialogueScenarios.InformationNotification or 
+                DialogueScenarios.ThirdPartyOrderNotification or 
+                DialogueScenarios.Reservation)
+        {
+            var waitingEvent = (await _phoneOrderDataProvider.GetWaitingProcessingEventsAsync(recordId: @event.RecordId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+
+            if (waitingEvent != null) return;
+
+            var record = (await _phoneOrderDataProvider.GetPhoneOrderRecordAsync(recordId: @event.RecordId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+
+            if (record == null) return;
+            
+            var scenarioInformation = await _speechMaticsService.IdentifyDialogueScenariosAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
+            record.Scenario = scenarioInformation.Category;
+            record.Remark = scenarioInformation.Remark;
+
+            await _phoneOrderUtilService.GenerateWaitingProcessingEventAsync(record, scenarioInformation.IsIncludeTodo, record.AgentId, cancellationToken).ConfigureAwait(false);
         }
     }
     

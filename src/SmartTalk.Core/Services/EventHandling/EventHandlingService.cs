@@ -9,6 +9,7 @@ using SmartTalk.Core.Services.Identity;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Services.Printer;
+using SmartTalk.Core.Services.SpeechMatics;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
 using SmartTalk.Messages.Events.HrInterView;
 using SmartTalk.Messages.Events.PhoneOrder;
@@ -43,8 +44,9 @@ public partial class EventHandlingService : IEventHandlingService
     private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
     private readonly IAgentDataProvider _agentDataProvider;
     private readonly IPhoneOrderUtilService _phoneOrderUtilService;
+    private readonly ISpeechMaticsService _speechMaticsService;
     
-   public EventHandlingService(IAsrClient asrClient, SmartiesClient smartiesClient, IPosUtilService posUtilService, IPosDataProvider posDataProvider, ISmartTalkHttpClientFactory httpClientFactory, IPhoneOrderDataProvider phoneOrderDataProvider, IHrInterViewDataProvider hrInterViewDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, IAiSpeechAssistantService aiSpeechAssistantService, ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient, IAgentDataProvider agentDataProvider, IPhoneOrderUtilService phoneOrderUtilService, ICurrentUser currentUser) 
+   public EventHandlingService(IAsrClient asrClient, SmartiesClient smartiesClient, IPosUtilService posUtilService, IPosDataProvider posDataProvider, ISmartTalkHttpClientFactory httpClientFactory, IPhoneOrderDataProvider phoneOrderDataProvider, IHrInterViewDataProvider hrInterViewDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, IAiSpeechAssistantService aiSpeechAssistantService, ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient, IAgentDataProvider agentDataProvider, IPhoneOrderUtilService phoneOrderUtilService, ICurrentUser currentUser, ISpeechMaticsService speechMaticsService) 
    {
         _asrClient = asrClient;
         _smartiesClient = smartiesClient;
@@ -59,5 +61,6 @@ public partial class EventHandlingService : IEventHandlingService
         _agentDataProvider = agentDataProvider;
         _phoneOrderUtilService = phoneOrderUtilService;
         _currentUser = currentUser;
-   }
+        _speechMaticsService = speechMaticsService;
+    }
 }
