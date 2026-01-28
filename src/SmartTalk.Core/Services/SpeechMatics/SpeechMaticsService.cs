@@ -197,9 +197,6 @@ public class SpeechMaticsService : ISpeechMaticsService
         var detection = await _translationClient.DetectLanguageAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
 
         await MultiScenarioCustomProcessingAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
-
-        if (agent.SourceSystem == AgentSourceSystem.Smarties)
-            await CallBackSmartiesRecordAsync(agent, record, cancellationToken).ConfigureAwait(false);
         
         var reports = new List<PhoneOrderRecordReport>();
 
