@@ -720,7 +720,7 @@ public partial class PhoneOrderService
             ? []
             : await _phoneOrderDataProvider.GetPhoneOrderRecordsByAssistantIdsAsync(assistantIds, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
 
-        var reportRows = BuildCompanyCallReportRows(records, assistantNameMap, assistantLanguageMap, latestRecords, daysWindow);
+        var reportRows = BuildCompanyCallReportRows(records, assistantIds, assistantNameMap, assistantLanguageMap, latestRecords, daysWindow);
         var fileUrl = await ToCompanyCallReportExcelAsync(reportRows, request.ReportType, cancellationToken).ConfigureAwait(false);
 
         return new GetPhoneOrderCompanyCallReportResponse { Data = fileUrl };
@@ -774,25 +774,31 @@ public partial class PhoneOrderService
 
     private static List<CompanyCallReportRow> BuildCompanyCallReportRows(
         List<PhoneOrderRecord> records,
+        IReadOnlyList<int> assistantIds,
         IReadOnlyDictionary<int, string> assistantNameMap,
         IReadOnlyDictionary<int, string> assistantLanguageMap,
         IReadOnlyDictionary<int, PhoneOrderRecord> latestRecords,
         int daysWindow)
     {
-        if (records == null || records.Count == 0) return [];
+        if (assistantIds == null || assistantIds.Count == 0) return [];
 
         var chinaZone = GetChinaTimeZone();
         var nowChina = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, chinaZone);
         var todayLocal = new DateTime(nowChina.Year, nowChina.Month, nowChina.Day, 0, 0, 0, DateTimeKind.Unspecified);
 
-        return records
+        var recordGroups = (records ?? [])
             .Where(record => record.AssistantId.HasValue)
             .GroupBy(record => record.AssistantId.Value)
-            .Select(group =>
+            .ToDictionary(group => group.Key, group => group.ToList());
+
+        return assistantIds
+            .Select(assistantId =>
             {
-                assistantNameMap.TryGetValue(group.Key, out var assistantName);
-                assistantLanguageMap.TryGetValue(group.Key, out var assistantLanguage);
-                latestRecords.TryGetValue(group.Key, out var latestRecord);
+                assistantNameMap.TryGetValue(assistantId, out var assistantName);
+                assistantLanguageMap.TryGetValue(assistantId, out var assistantLanguage);
+                latestRecords.TryGetValue(assistantId, out var latestRecord);
+                recordGroups.TryGetValue(assistantId, out var groupRecords);
+                groupRecords ??= [];
 
                 var daysSinceLastCallText = latestRecord == null
                     ? $"超过{daysWindow}天"
@@ -800,15 +806,15 @@ public partial class PhoneOrderService
 
                 return new CompanyCallReportRow
                 {
-                    CustomerId = string.IsNullOrWhiteSpace(assistantName) ? group.Key.ToString() : assistantName,
+                    CustomerId = string.IsNullOrWhiteSpace(assistantName) ? assistantId.ToString() : assistantName,
                     CustomerLanguage = assistantLanguage ?? string.Empty,
-                    TotalCalls = group.Count(),
-                    OrderCount = group.Count(x => x.Scenario == DialogueScenarios.Order),
-                    TransferCount = group.Count(x => x.Scenario == DialogueScenarios.TransferToHuman),
-                    ComplaintCount = group.Count(x => x.Scenario == DialogueScenarios.ComplaintFeedback),
-                    SalesCount = group.Count(x => x.Scenario == DialogueScenarios.SalesCall),
-                    InvalidCount = group.Count(x => x.Scenario == DialogueScenarios.InvalidCall),
-                    InquiryCount = group.Count(x => x.Scenario == DialogueScenarios.Inquiry),
+                    TotalCalls = groupRecords.Count,
+                    OrderCount = groupRecords.Count(x => x.Scenario == DialogueScenarios.Order),
+                    TransferCount = groupRecords.Count(x => x.Scenario == DialogueScenarios.TransferToHuman),
+                    ComplaintCount = groupRecords.Count(x => x.Scenario == DialogueScenarios.ComplaintFeedback),
+                    SalesCount = groupRecords.Count(x => x.Scenario == DialogueScenarios.SalesCall),
+                    InvalidCount = groupRecords.Count(x => x.Scenario == DialogueScenarios.InvalidCall),
+                    InquiryCount = groupRecords.Count(x => x.Scenario == DialogueScenarios.Inquiry),
                     DaysSinceLastCallText = daysSinceLastCallText
                 };
             })
