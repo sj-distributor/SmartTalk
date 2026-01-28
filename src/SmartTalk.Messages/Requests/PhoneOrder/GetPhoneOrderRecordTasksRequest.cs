@@ -8,6 +8,8 @@ namespace SmartTalk.Messages.Requests.PhoneOrder;
 
 public class GetPhoneOrderRecordTasksRequest : HasServiceProviderId, IRequest
 {
+    public List<int> AgentIds { get; set; }
+    
     public DateTimeOffset? Date { get; set; }
 
     public WaitingTaskStatus? WaitingTaskStatus { get; set; }
