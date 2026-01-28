@@ -928,6 +928,10 @@ public partial class PhoneOrderService
         }
 
         var startOfWeekLocal = todayLocal.AddDays(-((int)todayLocal.DayOfWeek + 6) % 7);
+        
+        if (reportType == PhoneOrderCallReportType.LastWeek)
+            startOfWeekLocal = startOfWeekLocal.AddDays(-7);
+
         var weekStartUtc = TimeZoneInfo.ConvertTimeToUtc(startOfWeekLocal, chinaZone);
         var weekEndUtc = weekStartUtc.AddDays(7);
 
@@ -1066,18 +1070,31 @@ public partial class PhoneOrderService
                 "當日無效",
                 "多久沒來電"
             }
-            : new[]
-            {
-                "customer id",
-                "客人語種",
-                "本周有call入 Sales",
-                "本周有效通話量（下单+转接+咨询）",
-                "本周下單",
-                "本周轉接",
-                "本周投訴",
-                "本周推銷",
-                "本周無效"
-            };
+            : reportType == PhoneOrderCallReportType.LastWeek
+                ? new[]
+                {
+                    "customer id",
+                    "客人語種",
+                    "上周有call入 Sales",
+                    "上周有效通話量（下单+转接+咨询）",
+                    "上周下單",
+                    "上周轉接",
+                    "上周投訴",
+                    "上周推銷",
+                    "上周無效"
+                }
+                : new[]
+                {
+                    "customer id",
+                    "客人語種",
+                    "本周有call入 Sales",
+                    "本周有效通話量（下单+转接+咨询）",
+                    "本周下單",
+                    "本周轉接",
+                    "本周投訴",
+                    "本周推銷",
+                    "本周無效"
+                };
 
         for (var col = 0; col < headers.Length; col++)
             ws.Cell(1, col + 1).Value = headers[col];
