@@ -187,9 +187,6 @@ public partial class PhoneOrderProcessJobService
         
         await CallBackSmartiesRecordAsync(agent, record, cancellationToken).ConfigureAwait(false);
 
-        if (agent.SourceSystem == AgentSourceSystem.Smarties) 
-            await CallBackSmartiesRecordAsync(agent, record, cancellationToken).ConfigureAwait(false);
-
         var message = agent.WechatRobotMessage?.Replace("#{assistant_name}", aiSpeechAssistant?.Name ?? "").Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString()).Replace("#{assistant_file_url}", record.Url);
 
         message = await SwitchKeyMessageByGetUserProfileAsync(record, callFrom, aiSpeechAssistant, agent, message, cancellationToken).ConfigureAwait(false);
