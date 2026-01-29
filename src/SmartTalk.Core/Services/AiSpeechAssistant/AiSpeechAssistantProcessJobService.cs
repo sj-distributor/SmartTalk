@@ -154,6 +154,9 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         var assistants = await _speechAssistantDataProvider.GetAiSpeechAssistantByIdsAsync(assistantIds, cancellationToken).ConfigureAwait(false);
         if (assistants.Count == 0) return;
 
+        var crmToken = await _crmClient.GetCrmTokenAsync(cancellationToken).ConfigureAwait(false);
+        if (crmToken == null) return;
+        
         var updates = new List<Domain.AISpeechAssistant.AiSpeechAssistant>();
 
         foreach (var assistant in assistants)
@@ -162,7 +165,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
 
             try
             {
-                var contacts = await _crmClient.GetCustomerContactsAsync(assistant.Name, cancellationToken).ConfigureAwait(false);
+                var contacts = await _crmClient.GetCustomerContactsAsync(assistant.Name, crmToken, cancellationToken).ConfigureAwait(false);
                 var language = BuildLanguageText(contacts);
 
                 if (!string.Equals(assistant.Language ?? string.Empty, language, StringComparison.Ordinal))
