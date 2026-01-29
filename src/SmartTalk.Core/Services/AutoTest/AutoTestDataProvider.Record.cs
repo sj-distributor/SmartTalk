@@ -112,7 +112,7 @@ public partial class AutoTestDataProvider
         var count = await query.CountAsync(cancellationToken).ConfigureAwait(false);
 
         if (pageIndex.HasValue && pageSize.HasValue)
-            query = query.OrderBy(x => x.IsArchived).ThenBy(x => x.DataSetItemId).Skip((pageIndex.Value - 1) * pageSize.Value).Take(pageSize.Value);
+            query = query.OrderBy(x => x.IsArchived).ThenByDescending(x => x.CreatedAt).Skip((pageIndex.Value - 1) * pageSize.Value).Take(pageSize.Value);
         
         var records = await query.ToListAsync(cancellationToken).ConfigureAwait(false);
 
