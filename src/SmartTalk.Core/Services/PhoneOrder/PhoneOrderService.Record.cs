@@ -26,6 +26,7 @@ using SmartTalk.Messages.Commands.Attachments;
 using SmartTalk.Messages.Dto.WeChat;
 using SmartTalk.Messages.Enums.Pos;
 using SmartTalk.Messages.Events.PhoneOrder;
+using SmartTalk.Core.Extensions;
 using TranscriptionFileType = SmartTalk.Messages.Enums.STT.TranscriptionFileType;
 using TranscriptionResponseFormat = SmartTalk.Messages.Enums.STT.TranscriptionResponseFormat;
 
@@ -873,6 +874,9 @@ public partial class PhoneOrderService
                 recordGroups.TryGetValue(assistantId, out var groupRecords);
                 groupRecords ??= [];
 
+                var scenarioCounts = Enum.GetValues<DialogueScenarios>()
+                    .ToDictionary(scenario => scenario, scenario => groupRecords.Count(x => x.Scenario == scenario));
+
                 var daysSinceLastCallText = latestRecord == null
                     ? $"超过{daysWindow}天"
                     : CalculateDaysSinceLastCallText(latestRecord.CreatedDate, todayLocal, chinaZone);
@@ -882,12 +886,7 @@ public partial class PhoneOrderService
                     CustomerId = string.IsNullOrWhiteSpace(assistantName) ? assistantId.ToString() : assistantName,
                     CustomerLanguage = assistantLanguage ?? string.Empty,
                     TotalCalls = groupRecords.Count,
-                    OrderCount = groupRecords.Count(x => x.Scenario == DialogueScenarios.Order),
-                    TransferCount = groupRecords.Count(x => x.Scenario == DialogueScenarios.TransferToHuman),
-                    ComplaintCount = groupRecords.Count(x => x.Scenario == DialogueScenarios.ComplaintFeedback),
-                    SalesCount = groupRecords.Count(x => x.Scenario == DialogueScenarios.SalesCall),
-                    InvalidCount = groupRecords.Count(x => x.Scenario == DialogueScenarios.InvalidCall),
-                    InquiryCount = groupRecords.Count(x => x.Scenario == DialogueScenarios.Inquiry),
+                    ScenarioCounts = scenarioCounts,
                     DaysSinceLastCallText = daysSinceLastCallText
                 };
             })
@@ -1057,47 +1056,46 @@ public partial class PhoneOrderService
         using var workbook = new XLWorkbook();
         var ws = workbook.AddWorksheet("Sheet1");
 
-        var headers = reportType == PhoneOrderCallReportType.Daily
-            ? new[]
-            {
-                "customer id",
-                "客人語種",
-                "當日有效通話量合計（所有通話-無效通話）",
-                "當日下單",
-                "當日轉接",
-                "當日投訴",
-                "當天推銷",
-                "當日無效",
-                "多久沒來電"
-            }
+        var scenarios = Enum.GetValues<DialogueScenarios>();
+        var prefix = reportType == PhoneOrderCallReportType.Daily
+            ? "当日"
             : reportType == PhoneOrderCallReportType.LastWeek
-                ? new[]
-                {
-                    "customer id",
-                    "客人語種",
-                    "上周有call入 Sales",
-                    "上周有效通話量（下单+转接+咨询）",
-                    "上周下單",
-                    "上周轉接",
-                    "上周投訴",
-                    "上周推銷",
-                    "上周無效"
-                }
-                : new[]
-                {
-                    "customer id",
-                    "客人語種",
-                    "本周有call入 Sales",
-                    "本周有效通話量（下单+转接+咨询）",
-                    "本周下單",
-                    "本周轉接",
-                    "本周投訴",
-                    "本周推銷",
-                    "本周無效"
-                };
+                ? "上周"
+                : "本周";
 
-        for (var col = 0; col < headers.Length; col++)
+        var headers = new List<string>
+        {
+            "customer id",
+            "客人語種"
+        };
+
+        if (reportType == PhoneOrderCallReportType.Daily)
+        {
+            headers.Add("當日有效通話量合計（所有通話-無效通話）");
+        }
+        else
+        {
+            headers.Add($"{prefix}有call入 Sales");
+            headers.Add($"{prefix}有效通話量（下单+转接+咨询）");
+        }
+
+        foreach (var scenario in scenarios)
+        {
+            headers.Add($"{prefix}{scenario.GetDescription()}");
+        }
+
+        if (reportType == PhoneOrderCallReportType.Daily)
+        {
+            headers.Add("多久沒來電");
+        }
+
+        for (var col = 0; col < headers.Count; col++)
             ws.Cell(1, col + 1).Value = headers[col];
+
+        static int GetScenarioCount(IReadOnlyDictionary<DialogueScenarios, int> counts, DialogueScenarios scenario)
+        {
+            return counts != null && counts.TryGetValue(scenario, out var count) ? count : 0;
+        }
 
         for (var rowIndex = 0; rowIndex < rows.Count; rowIndex++)
         {
@@ -1109,23 +1107,29 @@ public partial class PhoneOrderService
 
             if (reportType == PhoneOrderCallReportType.Daily)
             {
-                ws.Cell(rowIndex + 2, colIndex++).Value = row.TotalCalls - row.InvalidCount;
-                ws.Cell(rowIndex + 2, colIndex++).Value = row.OrderCount;
-                ws.Cell(rowIndex + 2, colIndex++).Value = row.TransferCount;
-                ws.Cell(rowIndex + 2, colIndex++).Value = row.ComplaintCount;
-                ws.Cell(rowIndex + 2, colIndex++).Value = row.SalesCount;
-                ws.Cell(rowIndex + 2, colIndex++).Value = row.InvalidCount;
+                var invalidCount = GetScenarioCount(row.ScenarioCounts, DialogueScenarios.InvalidCall);
+                ws.Cell(rowIndex + 2, colIndex++).Value = row.TotalCalls - invalidCount;
+
+                foreach (var scenario in scenarios)
+                {
+                    ws.Cell(rowIndex + 2, colIndex++).Value = GetScenarioCount(row.ScenarioCounts, scenario);
+                }
+
                 ws.Cell(rowIndex + 2, colIndex).Value = row.DaysSinceLastCallText ?? string.Empty;
             }
             else
             {
+                var orderCount = GetScenarioCount(row.ScenarioCounts, DialogueScenarios.Order);
+                var transferCount = GetScenarioCount(row.ScenarioCounts, DialogueScenarios.TransferToHuman);
+                var inquiryCount = GetScenarioCount(row.ScenarioCounts, DialogueScenarios.Inquiry);
+
                 ws.Cell(rowIndex + 2, colIndex++).Value = row.TotalCalls;
-                ws.Cell(rowIndex + 2, colIndex++).Value = row.OrderCount + row.TransferCount + row.InquiryCount;
-                ws.Cell(rowIndex + 2, colIndex++).Value = row.OrderCount;
-                ws.Cell(rowIndex + 2, colIndex++).Value = row.TransferCount;
-                ws.Cell(rowIndex + 2, colIndex++).Value = row.ComplaintCount;
-                ws.Cell(rowIndex + 2, colIndex++).Value = row.SalesCount;
-                ws.Cell(rowIndex + 2, colIndex).Value = row.InvalidCount;
+                ws.Cell(rowIndex + 2, colIndex++).Value = orderCount + transferCount + inquiryCount;
+
+                foreach (var scenario in scenarios)
+                {
+                    ws.Cell(rowIndex + 2, colIndex++).Value = GetScenarioCount(row.ScenarioCounts, scenario);
+                }
             }
         }
 
@@ -1168,17 +1172,7 @@ public partial class PhoneOrderService
 
         public int TotalCalls { get; set; }
 
-        public int OrderCount { get; set; }
-
-        public int TransferCount { get; set; }
-
-        public int ComplaintCount { get; set; }
-
-        public int SalesCount { get; set; }
-
-        public int InvalidCount { get; set; }
-
-        public int InquiryCount { get; set; }
+        public Dictionary<DialogueScenarios, int> ScenarioCounts { get; set; } = new();
 
         public string DaysSinceLastCallText { get; set; }
     }
