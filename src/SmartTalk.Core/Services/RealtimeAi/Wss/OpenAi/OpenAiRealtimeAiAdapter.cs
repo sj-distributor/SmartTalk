@@ -41,32 +41,7 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
     {
         var configs = await InitialSessionConfigAsync(assistantProfile, cancellationToken).ConfigureAwait(false);
         var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(assistantProfile.Id, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        if (knowledge.Prompt.Contains("#{hr_interview_section1}", StringComparison.OrdinalIgnoreCase))
-        {
-            var cacheKeys = Enum.GetValues(typeof(HrInterviewQuestionSection))
-                .Cast<HrInterviewQuestionSection>()
-                .Select(section => "hr_interview_" + section.ToString().ToLower())
-                .ToList();
-
-            var caches = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeVariableCachesAsync(cacheKeys, cancellationToken: cancellationToken)
-                .ConfigureAwait(false);
-
-            foreach (var section in Enum.GetValues(typeof(HrInterviewQuestionSection)).Cast<HrInterviewQuestionSection>())
-            {
-                var cacheKey = $"hr_interview_{section.ToString().ToLower()}";
-                var placeholder = $"#{{{cacheKey}}}";
-
-                knowledge.Prompt = knowledge.Prompt.Replace(placeholder, caches.FirstOrDefault(x => x.CacheKey == cacheKey)?.CacheValue);
-            }
-        }
-        
-        if (knowledge.Prompt.Contains("#{hr_interview_questions}", StringComparison.OrdinalIgnoreCase))
-        {
-            var cache = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeVariableCachesAsync(["hr_interview_questions"], cancellationToken: cancellationToken).ConfigureAwait(false);
-            
-            knowledge.Prompt = knowledge.Prompt.Replace("#{hr_interview_questions}", cache.FirstOrDefault()?.CacheValue);   
-        }
+        var prompt = await ReplaceKnowledgeVariablesAsync(knowledge?.Prompt, cancellationToken).ConfigureAwait(false);
         
         var sessionPayload = new
         {
@@ -77,7 +52,7 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
                 input_audio_format = context.InputFormat.GetDescription(),
                 output_audio_format = context.OutputFormat.GetDescription(),
                 voice = string.IsNullOrEmpty(assistantProfile.ModelVoice) ? "alloy" : assistantProfile.ModelVoice,
-                instructions = knowledge?.Prompt ?? context.InitialPrompt,
+                instructions = prompt ?? context.InitialPrompt,
                 modalities = new[] { "text", "audio" },
                 temperature = 0.8,
                 input_audio_transcription = new { model = "whisper-1" },
@@ -89,6 +64,44 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
         Log.Information("OpenAIAdapter: 构建初始会话负载: {@Payload}", sessionPayload);
         
         return sessionPayload;
+    }
+
+    private async Task<string> ReplaceKnowledgeVariablesAsync(string prompt, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(prompt))
+        {
+            return prompt;
+        }
+
+        if (prompt.Contains("#{hr_interview_section1}", StringComparison.OrdinalIgnoreCase))
+        {
+            var cacheKeys = Enum.GetValues(typeof(HrInterviewQuestionSection))
+                .Cast<HrInterviewQuestionSection>()
+                .Select(section => "hr_interview_" + section.ToString().ToLower())
+                .ToList();
+
+            var caches = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeVariableCachesAsync(cacheKeys, cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+
+            prompt = Enum.GetValues(typeof(HrInterviewQuestionSection))
+                .Cast<HrInterviewQuestionSection>()
+                .Aggregate(prompt, (current, section) =>
+                {
+                    var cacheKey = $"hr_interview_{section.ToString().ToLower()}";
+                    var placeholder = $"#{{{cacheKey}}}";
+                    var cacheValue = caches.FirstOrDefault(x => x.CacheKey == cacheKey)?.CacheValue;
+                    return current.Replace(placeholder, cacheValue);
+                });
+        }
+
+        if (prompt.Contains("#{hr_interview_questions}", StringComparison.OrdinalIgnoreCase))
+        {
+            var cache = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeVariableCachesAsync(["hr_interview_questions"], cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            prompt = prompt.Replace("#{hr_interview_questions}", cache.FirstOrDefault()?.CacheValue);
+        }
+
+        return prompt;
     }
 
     public string BuildAudioAppendMessage(RealtimeAiWssAudioData audioData)
