@@ -328,4 +328,25 @@ public class AiSpeechAssistantController : ControllerBase
 
         return Ok(response);
     }
+
+    #region variable_cache
+    
+    [Route("caches"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAiSpeechAssistantKnowledgeVariableCacheResponse))]
+    public async Task<IActionResult> GetAiSpeechAssistantKnowledgeVariableCacheAsync([FromQuery] GetAiSpeechAssistantKnowledgeVariableCacheRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetAiSpeechAssistantKnowledgeVariableCacheRequest, GetAiSpeechAssistantKnowledgeVariableCacheResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("caches"), HttpPut]
+    public async Task<IActionResult> UpdateAiSpeechAssistantKnowledgeVariableCacheAsync([FromBody] UpdateAiSpeechAssistantKnowledgeVariableCacheCommand command)
+    {
+        await _mediator.SendAsync(command);
+
+        return Ok();
+    }
+    
+    #endregion
 }
