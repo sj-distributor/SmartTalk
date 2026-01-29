@@ -37,6 +37,10 @@ public class UserAccountDto
 
     public DateTimeOffset? LastModifiedDate { get; set; }
     
+    public bool IsTaskEnabled { get; set; }
+
+    public bool IsTurnOnNotification { get; set; }
+    
     public List<RoleDto> Roles { get; set; } = new();
 
     public List<PermissionDto> Permissions { get; set; } = new();

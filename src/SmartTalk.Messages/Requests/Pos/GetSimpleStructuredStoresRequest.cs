@@ -6,6 +6,7 @@ namespace SmartTalk.Messages.Requests.Pos;
 
 public class GetSimpleStructuredStoresRequest : HasServiceProviderId, IRequest
 {
+    public List<int> AgentIds { get; set; }
 }
 
 public class GetSimpleStructuredStoresResponse : SmartTalkResponse<GetSimpleStructuredStoresResponseData>
@@ -17,4 +18,6 @@ public class GetSimpleStructuredStoresResponseData
     public List<SimpleStructuredStoreDto> StructuredStores { get; set; }
     
     public int UnreviewTotalCount => StructuredStores.Sum(x => x.UnreviewTotalCount);
+
+    public int? WaitingProcessingEventCount { get; set; }
 }
