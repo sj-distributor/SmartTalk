@@ -642,10 +642,10 @@ public partial class PhoneOrderDataProvider
     
     public async Task<string> GetRecordTaskSourceAsync(int recordId, CancellationToken cancellationToken = default)
     {
-        var query = from record in _repository.Query<PhoneOrderRecord>()
+        var query = from record in _repository.Query<PhoneOrderRecord>() where record.Id == recordId
             join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on record.AssistantId equals assistant.Id into assistantJoin
             from assistant in assistantJoin.DefaultIfEmpty()
-            join agentAssistant in _repository.Query<AgentAssistant>() on assistant.Id equals agentAssistant.AssistantId into agentAssistantJoin
+            join agentAssistant in _repository.Query<AgentAssistant>() on record.AgentId equals agentAssistant.AgentId into agentAssistantJoin
             from agentAssistant in agentAssistantJoin.DefaultIfEmpty()
             join agent in _repository.Query<Agent>() on agentAssistant.AgentId equals agent.Id
             join posAgent in _repository.Query<PosAgent>() on agent.Id equals posAgent.AgentId
@@ -659,7 +659,7 @@ public partial class PhoneOrderDataProvider
             };
 
         var results = await query.ToListAsync(cancellationToken).ConfigureAwait(false);
-        
+    
         return results.FirstOrDefault()?.RecordInfo ?? string.Empty;
     }
 
