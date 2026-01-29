@@ -67,7 +67,7 @@ public partial class AutoTestService
 
         Log.Information("CreateAutoTestTaskAsync dataItems :{@dataItems}", dataItems);
         
-        var records = dataItems.Select(x => new AutoTestTaskRecord
+        var records = dataItems.OrderBy(x => x.CreatedAt).Select((x, index) => new AutoTestTaskRecord
         {
             TestTaskId = task.Id,
             ScenarioId = task.ScenarioId,
@@ -76,7 +76,7 @@ public partial class AutoTestService
             InputSnapshot = x.InputJson,
             RequestJson = task.Params,
             Status = AutoTestTaskRecordStatus.Pending,
-            CreatedAt = DateTimeOffset.Now
+            CreatedAt = DateTimeOffset.Now.AddMilliseconds(50 + index)
         }).ToList();
                     
         Log.Information("CreateAutoTestTaskAsync records :{@records}", records);
