@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using SmartTalk.Messages.Enums.DynamicInterface;
 
 namespace SmartTalk.Core.Domain.Sales;
 
@@ -22,4 +23,22 @@ public class AiSpeechAssistantKnowledgeVariableCache: IEntity
 
     [Column("last_updated")]
     public DateTimeOffset LastUpdated { get; set; } = DateTimeOffset.Now;
+    
+    [Column("system_name")]
+    public string SystemName { get; set; }
+
+    [Column("category_name")]
+    public string CategoryName { get; set; }
+
+    [Column("field_name")]
+    public string FieldName { get; set; }
+
+    [Column("level_type")]
+    public VariableLevelType LevelType { get; set; } = VariableLevelType.System;
+
+    [Column("parent_id")]
+    public int? ParentId { get; set; }
+
+    [Column("is_enabled")]
+    public bool IsEnabled { get; set; } = false;
 }
