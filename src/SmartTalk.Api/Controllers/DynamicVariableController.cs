@@ -4,9 +4,9 @@ using Microsoft.AspNetCore.Mvc;
 using SmartTalk.Messages.Requests.DynamicInterface;
 
 namespace SmartTalk.Api.Controllers;
-//
-// [Authorize]
-// [ApiController]
+
+[Authorize]
+[ApiController]
 [Route("api/[controller]")]
 public class DynamicInterfaceController : ControllerBase
 {
