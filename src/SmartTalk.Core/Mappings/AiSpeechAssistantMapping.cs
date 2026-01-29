@@ -35,6 +35,8 @@ public class AiSpeechAssistantMapping : Profile
             .ForMember(dest => dest.AiUnit, opt => opt.MapFrom(src => src.Unit));
         CreateMap<AiSpeechAssistantInboundRoute, AiSpeechAssistantInboundRouteDto>().ReverseMap();
 
+        CreateMap<AiSpeechAssistantKnowledgeCopyRelatedDto, AiSpeechAssistantKnowledgeCopyRelated>().ReverseMap();
+
         CreateMap<AiSpeechAssistantPremise, AiSpeechAssistantPremiseDto>().ReverseMap();
         
         CreateMap<AiSpeechAssistantKnowledgeVariableCache, AiSpeechAssistantKnowledgeVariableCacheDto>().ReverseMap();

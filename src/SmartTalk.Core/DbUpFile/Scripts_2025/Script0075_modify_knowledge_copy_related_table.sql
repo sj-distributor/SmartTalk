@@ -1,0 +1,1 @@
+alter table `knowledge_copy_related` add column `is_sync_update` tinyint(1) not null default 0;

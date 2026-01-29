@@ -13,6 +13,8 @@ public class AddAiSpeechAssistantKnowledgeCommand : ICommand
     public string Json { get; set; }
     
     public string Language { get; set; }
+
+    public List<AiSpeechAssistantKnowledgeCopyRelatedDto> RelatedKnowledges { get; set; }
     
     public string Premise { get; set; }
 }
