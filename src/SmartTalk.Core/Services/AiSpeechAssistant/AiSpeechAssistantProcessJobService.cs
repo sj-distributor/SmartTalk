@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Http;
 using System.Text;
 using AutoMapper;
 using Google.Cloud.Translation.V2;
@@ -158,14 +160,15 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         if (crmToken == null) return;
         
         var updates = new List<Domain.AISpeechAssistant.AiSpeechAssistant>();
+        var rateLimitDelay = TimeSpan.FromMinutes(3);
 
         foreach (var assistant in assistants)
         {
-            if (string.IsNullOrWhiteSpace(assistant.Name)) continue;
+            if (!TryGetCustomerId(assistant, out var customerId)) continue;
 
             try
             {
-                var contacts = await _crmClient.GetCustomerContactsAsync(assistant.Name, crmToken, cancellationToken).ConfigureAwait(false);
+                var contacts = await _crmClient.GetCustomerContactsAsync(customerId, crmToken, cancellationToken).ConfigureAwait(false);
                 var language = BuildLanguageText(contacts);
 
                 if (!string.Equals(assistant.Language ?? string.Empty, language, StringComparison.Ordinal))
@@ -174,14 +177,33 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
                     updates.Add(assistant);
                 }
             }
+            catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
+            {
+                Log.Warning(ex, "Rate limited while syncing language for assistant {AssistantId} (CustomerId: {CustomerId})", assistant.Id, customerId);
+                await Task.Delay(rateLimitDelay, cancellationToken).ConfigureAwait(false);
+            }
             catch (Exception ex)
             {
                 Log.Warning(ex, "Failed to sync language for assistant {AssistantId} (CustomerId: {CustomerId})", assistant.Id, assistant.Name);
             }
         }
 
-        if (updates.Count > 0)
-            await _speechAssistantDataProvider.UpdateAiSpeechAssistantsAsync(updates, cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (updates.Count == 0) return;
+
+        await _speechAssistantDataProvider.UpdateAiSpeechAssistantsAsync(updates, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        static bool TryGetCustomerId(Domain.AISpeechAssistant.AiSpeechAssistant assistant, out string customerId)
+        {
+            customerId = null;
+            if (string.IsNullOrWhiteSpace(assistant.Name) || assistant.Language is null) return false;
+
+            var rawCustomerId = assistant.Name.Trim();
+            var firstSegment = rawCustomerId.Split('/')[0].Trim();
+            if (string.IsNullOrEmpty(firstSegment) || !char.IsDigit(firstSegment[0])) return false;
+
+            customerId = firstSegment;
+            return true;
+        }
     }
 
     private static string BuildLanguageText(IReadOnlyList<SmartTalk.Messages.Dto.Crm.CrmContactDto> contacts)
