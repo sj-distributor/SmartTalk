@@ -98,9 +98,12 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
         
         Log.Information("Assistant customer mappings: {@AssistantCustomerMappings}", assistantCustomerMappings);
         
+        var crmToken = await _crmClient.GetCrmTokenAsync(cancellationToken).ConfigureAwait(false);
+        if (crmToken == null) return;
+        
         foreach (var mapping in assistantCustomerMappings)
         {
-            var contacts = await _crmClient.GetCustomerContactsAsync(mapping.CustomerId, cancellationToken).ConfigureAwait(false);
+            var contacts = await _crmClient.GetCustomerContactsAsync(mapping.CustomerId, crmToken, cancellationToken).ConfigureAwait(false);
 
             var phoneNumbers = contacts?.Where(c => !string.IsNullOrEmpty(c.Phone)).Select(c => NormalizePhone(c.Phone)).Distinct().ToList() ?? new List<string>();
 
