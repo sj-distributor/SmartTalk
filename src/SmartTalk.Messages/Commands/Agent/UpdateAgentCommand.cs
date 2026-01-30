@@ -24,8 +24,6 @@ public class UpdateAgentCommand : HasServiceProviderId, ICommand
     
     public string TransferCallNumber { get; set; }
     
-    public string ServiceHours { get; set; }
-    
     public AiSpeechAssistantChannel Channel { get; set; }
 }
 

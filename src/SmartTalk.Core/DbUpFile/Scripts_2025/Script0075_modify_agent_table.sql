@@ -1,1 +1,0 @@
-alter table `agent` add column `service_hours` text null;

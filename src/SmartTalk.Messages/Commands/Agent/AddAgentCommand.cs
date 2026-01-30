@@ -23,8 +23,6 @@ public class AddAgentCommand : HasServiceProviderId, ICommand
     public bool IsTransferHuman { get; set; } = false;
     
     public string TransferCallNumber { get; set; }
-    
-    public string ServiceHours { get; set; }
 
     public AiSpeechAssistantChannel Channel { get; set; } = AiSpeechAssistantChannel.PhoneChat;
 }
