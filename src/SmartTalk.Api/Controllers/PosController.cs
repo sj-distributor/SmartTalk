@@ -359,4 +359,40 @@ public class PosController : ControllerBase
         
         return Ok(response);
     }
+    
+    [Route("data/dashboard/companies"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetCompanyWithStoresResponse))]
+    public async Task<IActionResult> GetDataDashBoardCompanyWithStoresAsync([FromQuery] GetDataDashBoardCompanyWithStoresRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetDataDashBoardCompanyWithStoresRequest, GetDataDashBoardCompanyWithStoresResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("all/stores"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAllStoresResponse))]
+    public async Task<IActionResult> GetAllStoresAsync([FromQuery] GetAllStoresRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetAllStoresRequest, GetAllStoresResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("simple/stores"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetSimpleStructuredStoresResponse))]
+    public async Task<IActionResult> GetSimpleStructuredStoresAsync([FromQuery] GetSimpleStructuredStoresRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetSimpleStructuredStoresRequest, GetSimpleStructuredStoresResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("store/by-agent"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetStoreByAgentIdResponse))]
+    public async Task<IActionResult> GetStoreByAgentIdAsync([FromQuery] GetStoreByAgentIdRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetStoreByAgentIdRequest, GetStoreByAgentIdResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
 }

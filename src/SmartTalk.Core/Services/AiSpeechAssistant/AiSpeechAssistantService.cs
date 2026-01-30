@@ -18,6 +18,8 @@ using SmartTalk.Core.Constants;
 using Microsoft.AspNetCore.Http;
 using OpenAI.Chat;
 using SmartTalk.Core.Domain.AISpeechAssistant;
+using SmartTalk.Core.Domain.Pos;
+using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.Attachments;
 using SmartTalk.Core.Services.Caching;
@@ -47,7 +49,10 @@ using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.Attachments;
+using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.Attachments;
+using SmartTalk.Messages.Dto.EasyPos;
+using SmartTalk.Messages.Dto.Pos;
 using SmartTalk.Messages.Dto.Smarties;
 using SmartTalk.Messages.Enums.Caching;
 using SmartTalk.Messages.Enums.PhoneOrder;
@@ -201,7 +206,13 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
         InitAiSpeechAssistantStreamContext(command.Host, command.From);
 
-        await BuildingAiSpeechAssistantKnowledgeBaseAsync(command.From, command.To, command.AssistantId, command.NumberId, cancellationToken).ConfigureAwait(false);
+        await BuildingAiSpeechAssistantKnowledgeBaseAsync(command.From, command.To, command.AssistantId, command.NumberId, agent.Id, cancellationToken).ConfigureAwait(false);
+        
+        CheckIfInServiceHours(agent);
+        _aiSpeechAssistantStreamContext.TransferCallNumber = agent.TransferCallNumber;
+
+        if (!_aiSpeechAssistantStreamContext.IsInAiServiceHours && !_aiSpeechAssistantStreamContext.IsTransfer)
+            return new AiSpeechAssistantConnectCloseEvent();
         
         _aiSpeechAssistantStreamContext.HumanContactPhone = _aiSpeechAssistantStreamContext.ShouldForward ? null 
             : (await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantHumanContactByAssistantIdAsync(_aiSpeechAssistantStreamContext.Assistant.Id, cancellationToken).ConfigureAwait(false))?.HumanPhone;
@@ -410,7 +421,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         );
     }
     
-    private async Task BuildingAiSpeechAssistantKnowledgeBaseAsync(string from, string to, int? assistantId, int? numberId, CancellationToken cancellationToken)
+    private async Task BuildingAiSpeechAssistantKnowledgeBaseAsync(string from, string to, int? assistantId, int? numberId, int? agentId, CancellationToken cancellationToken)
     {
         var inboundRoute = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantInboundRouteAsync(from, to, cancellationToken).ConfigureAwait(false);
         
@@ -465,6 +476,13 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             }
         }
         
+        if (agentId.HasValue && finalPrompt.Contains("#{menu_items}", StringComparison.OrdinalIgnoreCase))
+        {
+            var menuItems = await GenerateMenuItemsAsync(agentId.Value, cancellationToken).ConfigureAwait(false);
+            
+            finalPrompt = finalPrompt.Replace("#{menu_items}", string.IsNullOrWhiteSpace(menuItems) ? "" : menuItems);
+        }
+        
         if (finalPrompt.Contains("#{customer_info}", StringComparison.OrdinalIgnoreCase))
         {
             var phone = from;
@@ -482,7 +500,145 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _aiSpeechAssistantStreamContext.Assistant = _mapper.Map<AiSpeechAssistantDto>(assistant);
         _aiSpeechAssistantStreamContext.Knowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge);
     }
+    
+    private async Task<string> GenerateMenuItemsAsync(int agentId, CancellationToken cancellationToken = default)
+    {
+        var storeAgent = await _posDataProvider.GetPosAgentByAgentIdAsync(agentId, cancellationToken).ConfigureAwait(false);
+    
+        if (storeAgent == null) return null;
+        
+        var storeProducts = await _posDataProvider.GetPosProductsByAgentIdAsync(agentId, cancellationToken).ConfigureAwait(false);
+        var storeCategories = (await _posDataProvider.GetPosCategoriesAsync(storeId: storeAgent.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false)).DistinctBy(x => x.CategoryId).ToList();
+        
+        var normalProducts = storeProducts.OrderBy(x => x.SortOrder).Where(x => x.Modifiers == "[]").Take(80).ToList();
+        var modifierProducts = storeProducts.OrderBy(x => x.SortOrder).Where(x => x.Modifiers != "[]").Take(20).ToList();
+        
+        var partialProducts = normalProducts.Concat(modifierProducts).ToList();
+        var categoryProductsLookup = new Dictionary<PosCategory, List<PosProduct>>();
+        
+        foreach (var product in partialProducts)
+        {
+            var category = storeCategories.FirstOrDefault(c => c.Id == product.CategoryId);
+            if (category == null) continue;
+    
+            if (!categoryProductsLookup.ContainsKey(category))
+            {
+                categoryProductsLookup[category] = new List<PosProduct>();
+            }
+            categoryProductsLookup[category].Add(product);
+        }
+    
+        var menuItems = string.Empty;
+        
+        foreach (var (category, products) in categoryProductsLookup)
+        {
+            if (products.Count == 0) continue;
+            
+            var productDetails = string.Empty; 
+            var categoryNames = JsonConvert.DeserializeObject<PosNamesLocalization>(category.Names);
 
+            var categoryName = BuildMenuItemName(categoryNames);
+
+            if (string.IsNullOrWhiteSpace(categoryName)) continue;
+            
+            var idx = 1;
+            productDetails += categoryName + "\n";
+    
+            foreach (var product in products)
+            {
+                var productNames = JsonConvert.DeserializeObject<PosNamesLocalization>(product.Names);
+                
+                var productName = BuildMenuItemName(productNames);
+
+                if (string.IsNullOrWhiteSpace(productName)) continue;
+                var line = $"{idx}. {productName}：${product.Price:F2}";
+    
+                if (!string.IsNullOrEmpty(product.Modifiers))
+                {
+                    var modifiers = JsonConvert.DeserializeObject<List<EasyPosResponseModifierGroups>>(product.Modifiers);
+                    
+                    if (modifiers is { Count: > 0 })
+                    {
+                        var modifiersDetail = string.Empty;
+                        
+                        foreach (var modifier in modifiers)
+                        {
+                            var modifierNames = new List<string>();
+
+                            if (modifier.ModifierProducts != null && modifier.ModifierProducts.Count != 0)
+                            {
+                                foreach (var mp in modifier.ModifierProducts)
+                                {
+                                    var name = BuildModifierName(mp.Localizations);
+
+                                    if (!string.IsNullOrWhiteSpace(name)) modifierNames.Add($"{name}");
+                                }
+                            }
+                            
+                            if (modifierNames.Count > 0)
+                                modifiersDetail += $" {BuildModifierName(modifier.Localizations)}規格：{string.Join("、", modifierNames)}，共{modifierNames.Count}个规格，要求最少选{modifier.MinimumSelect}个规格，最多选{modifier.MaximumSelect}规格，每个最大可重复选{modifier.MaximumRepetition}相同的 \n";
+                        }
+                    
+                        line += modifiersDetail;
+                    };
+                }
+                
+                idx++;
+                productDetails += line + "\n";
+            }
+            
+            menuItems += productDetails + "\n";
+        }
+        
+        return menuItems.TrimEnd('\r', '\n');
+    }
+    
+    private string BuildMenuItemName(PosNamesLocalization localization)
+    {
+        var zhName = !string.IsNullOrWhiteSpace(localization?.Cn?.Name) ? localization.Cn.Name : string.Empty;
+        if (!string.IsNullOrWhiteSpace(zhName)) return zhName;
+    
+        var usName = !string.IsNullOrWhiteSpace(localization?.En?.Name) ? localization.En.Name : string.Empty;
+        if (!string.IsNullOrWhiteSpace(usName)) return usName;
+    
+        var zhPosName = !string.IsNullOrWhiteSpace(localization?.Cn?.PosName) ? localization.Cn.PosName : string.Empty;
+        if (!string.IsNullOrWhiteSpace(zhPosName)) return zhPosName;
+    
+        var usPosName = !string.IsNullOrWhiteSpace(localization?.En?.PosName) ? localization.En.PosName : string.Empty;
+        if (!string.IsNullOrWhiteSpace(usPosName)) return usPosName;
+    
+        var zhSendChefName = !string.IsNullOrWhiteSpace(localization?.Cn?.SendChefName) ? localization.Cn.SendChefName : string.Empty;
+        if (!string.IsNullOrWhiteSpace(zhSendChefName)) return zhSendChefName;
+    
+        var usSendChefName = !string.IsNullOrWhiteSpace(localization?.En?.SendChefName) ? localization.En.SendChefName : string.Empty;
+        if (!string.IsNullOrWhiteSpace(usSendChefName)) return usSendChefName;
+
+        return string.Empty;
+    }
+    
+    private string BuildModifierName(List<EasyPosResponseLocalization> localizations)
+    {
+        var zhName = localizations.Find(l => l.LanguageCode == "zh_CN" && l.Field == "name");
+        if (zhName != null && !string.IsNullOrWhiteSpace(zhName.Value)) return zhName.Value;
+    
+        var usName = localizations.Find(l => l.LanguageCode == "en_US" && l.Field == "name");
+        if (usName != null && !string.IsNullOrWhiteSpace(usName.Value)) return usName.Value;
+    
+        var zhPosName = localizations.Find(l => l.LanguageCode == "zh_CN" && l.Field == "posName");
+        if (zhPosName != null && !string.IsNullOrWhiteSpace(zhPosName.Value)) return zhPosName.Value;
+    
+        var usPosName = localizations.Find(l => l.LanguageCode == "en_US" && l.Field == "posName");
+        if (usPosName != null && !string.IsNullOrWhiteSpace(usPosName.Value)) return usPosName.Value;
+    
+        var zhSendChefName = localizations.Find(l => l.LanguageCode == "zh_CN" && l.Field == "sendChefName");
+        if (zhSendChefName != null && !string.IsNullOrWhiteSpace(zhSendChefName.Value)) return zhSendChefName.Value;
+    
+        var usSendChefName = localizations.Find(l => l.LanguageCode == "en_US" && l.Field == "sendChefName");
+        if (usSendChefName != null && !string.IsNullOrWhiteSpace(usSendChefName.Value)) return usSendChefName.Value;
+
+        return string.Empty;
+    }
+    
     public (string forwardNumber, int? forwardAssistantId) DecideDestinationByInboundRoute(List<AiSpeechAssistantInboundRoute> routes)
     {
         if (routes == null || routes.Count == 0)
@@ -624,6 +780,17 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                             {
                                 CallSid = _aiSpeechAssistantStreamContext.CallSid, Host = _aiSpeechAssistantStreamContext.Host
                             }, CancellationToken.None), HangfireConstants.InternalHostingRecordPhoneCall);
+
+                            if (!_aiSpeechAssistantStreamContext.IsInAiServiceHours && _aiSpeechAssistantStreamContext.IsTransfer)
+                            {
+                                _backgroundJobClient.Enqueue<IMediator>(x => x.SendAsync(new TransferHumanServiceCommand
+                                {
+                                    CallSid = _aiSpeechAssistantStreamContext.CallSid,
+                                    HumanPhone = _aiSpeechAssistantStreamContext.TransferCallNumber
+                                }, cancellationToken));
+
+                                break;
+                            }
 
                             if (_aiSpeechAssistantStreamContext.ShouldForward)
                                 _backgroundJobClient.Enqueue<IMediator>(x => x.SendAsync(new TransferHumanServiceCommand
@@ -850,9 +1017,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     
     private void StartInactivityTimer()
     {
-        _inactivityTimerManager.StartTimer(_aiSpeechAssistantStreamContext.CallSid, TimeSpan.FromMinutes(2), async () =>
+        _inactivityTimerManager.StartTimer(_aiSpeechAssistantStreamContext.CallSid, TimeSpan.FromSeconds(60), async () =>
         {
-            Log.Warning("No activity detected for 2 minutes.");
+            Log.Warning("No activity detected for 60 seconds.");
             
             await HangupCallAsync(_aiSpeechAssistantStreamContext.CallSid, CancellationToken.None);
         });
@@ -944,6 +1111,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     
     private async Task ProcessTransferCallAsync(JsonElement jsonDocument, string functionName, CancellationToken cancellationToken)
     {
+        if (_aiSpeechAssistantStreamContext.IsTransfer) return;
+        
         if (string.IsNullOrEmpty(_aiSpeechAssistantStreamContext.HumanContactPhone))
         {
             var nonHumanService = new
@@ -1308,5 +1477,36 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         }
     
         return result;
+    }
+
+    public void CheckIfInServiceHours(Agent agent)
+    {
+        if (agent.ServiceHours == null)
+        {
+            _aiSpeechAssistantStreamContext.IsInAiServiceHours = true;
+            
+            return;
+        }
+        
+        var utcNow = DateTimeOffset.UtcNow;
+
+        var pstZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+
+        var pstTime = TimeZoneInfo.ConvertTime(utcNow, pstZone);
+        
+        var dayOfWeek = pstTime.DayOfWeek;
+        
+        var workingHours = JsonConvert.DeserializeObject<List<AgentServiceHoursDto>>(agent.ServiceHours);
+        
+        Log.Information("Parsed service hours; {@WorkingHours}", workingHours);
+        
+        var specificWorkingHours = workingHours.Where(x => x.DayOfWeek == dayOfWeek).FirstOrDefault();
+        
+        Log.Information("Matched specific service hours: {@SpecificWorkingHours} and the pstTime: {@PstTime}", specificWorkingHours, pstTime);
+        
+        var pstTimeToMinute = new TimeSpan(pstTime.TimeOfDay.Hours, pstTime.TimeOfDay.Minutes, 0);
+
+        _aiSpeechAssistantStreamContext.IsInAiServiceHours = specificWorkingHours != null && specificWorkingHours.Hours.Any(x => x.Start <= pstTimeToMinute && x.End >= pstTimeToMinute);
+        _aiSpeechAssistantStreamContext.IsTransfer = agent.IsTransferHuman && !string.IsNullOrEmpty(agent.TransferCallNumber);
     }
 }

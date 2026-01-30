@@ -48,6 +48,10 @@ public class AiSpeechAssistantStreamContextDto
     public List<(AiSpeechAssistantSpeaker, string)> ConversationTranscription { get; set; } = new();
     
     public bool IsTransfer { get; set; } = false;
+    
+    public bool IsInAiServiceHours { get; set; } = true;
+    
+    public string TransferCallNumber { get; set; }
 }
 
 public class AiSpeechAssistantUserInfoDto
@@ -57,6 +61,9 @@ public class AiSpeechAssistantUserInfoDto
     
     [JsonProperty("customer_phone")]
     public string PhoneNumber { get; set; }
+    
+    [JsonProperty("customer_address")]
+    public string Address { get; set; }
 }
 
 public class AiSpeechAssistantOrderDto

@@ -1,5 +1,6 @@
 using DocumentFormat.OpenXml.Office2010.ExcelAc;
 using Serilog;
+using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Requests.AiSpeechAssistant;
 
@@ -80,13 +81,57 @@ public partial class AiSpeechAssistantService
 
     public async Task<GetAiSpeechAssistantKnowledgeResponse> GetAiSpeechAssistantKnowledgeAsync(GetAiSpeechAssistantKnowledgeRequest request, CancellationToken cancellationToken)
     {
-        var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(
-            request.AssistantId, request.KnowledgeId, request.KnowledgeId.HasValue ? null : true, cancellationToken).ConfigureAwait(false);
+        var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(request.AssistantId, request.KnowledgeId, request.KnowledgeId.HasValue ? null : true, cancellationToken).ConfigureAwait(false);
 
-        return new GetAiSpeechAssistantKnowledgeResponse
+        if (knowledge == null) { return new GetAiSpeechAssistantKnowledgeResponse { Data = null }; }
+
+        var result = _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge);
+        var premise = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantPremiseByAssistantIdAsync(request.AssistantId, cancellationToken).ConfigureAwait(false);
+        
+        if (premise != null && !string.IsNullOrEmpty(premise.Content))
+            result.Premise = _mapper.Map<AiSpeechAssistantPremiseDto>(premise);
+
+        var allCopyRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync(new List<int> { knowledge.Id }, cancellationToken).ConfigureAwait(false);
+     
+        Log.Information("Get the knowledge copy related Ids: {@Ids}", allCopyRelateds.Select(x => x.Id));
+
+        result.KnowledgeCopyRelateds = await EnhanceRelateFrom(allCopyRelateds, cancellationToken).ConfigureAwait(false);
+        
+        return new GetAiSpeechAssistantKnowledgeResponse { Data = result };
+    }
+
+    public async Task<List<AiSpeechAssistantKnowledgeCopyRelatedDto>> EnhanceRelateFrom(List<AiSpeechAssistantKnowledgeCopyRelated> relateds, CancellationToken cancellationToken)
+    {
+        if (relateds == null || relateds.Count == 0) return new List<AiSpeechAssistantKnowledgeCopyRelatedDto>();
+
+        var sourceKnowledgeIds = relateds.Select(r => r.SourceKnowledgeId).Distinct().ToList();
+
+        var sourceKnowledges = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgesAsync(sourceKnowledgeIds, cancellationToken).ConfigureAwait(false);
+
+        var sourceKnowledgeMap = sourceKnowledges.ToDictionary(k => k.Id);
+
+        var assistantIds = sourceKnowledges.Select(k => k.AssistantId).Distinct().ToList();
+
+        var enrichInfos = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedEnrichInfoAsync(assistantIds, cancellationToken).ConfigureAwait(false);
+
+        var enrichDict = enrichInfos.ToDictionary(x => x.AssistantId);
+
+        var result = new List<AiSpeechAssistantKnowledgeCopyRelatedDto>(relateds.Count);
+
+        foreach (var related in relateds)
         {
-            Data = _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge)
-        };
+            var dto = _mapper.Map<AiSpeechAssistantKnowledgeCopyRelatedDto>(related);
+
+            if (sourceKnowledgeMap.TryGetValue(related.SourceKnowledgeId, out var sourceKnowledge) &&
+                enrichDict.TryGetValue(sourceKnowledge.AssistantId, out var info))
+            {
+                dto.RelatedFrom = $"{info.StoreName} - {info.AiAgentName} - {info.AssiatantName}";
+            }
+
+            result.Add(dto);
+        }
+
+        return result;
     }
 
     public async Task<GetAiSpeechAssistantKnowledgeHistoryResponse> GetAiSpeechAssistantKnowledgeHistoryAsync(GetAiSpeechAssistantKnowledgeHistoryRequest request, CancellationToken cancellationToken)
@@ -127,9 +172,16 @@ public partial class AiSpeechAssistantService
 
         if (session == null) throw new Exception("Could not found the session");
 
+        var sessionDto = _mapper.Map<AiSpeechAssistantSessionDto>(session);
+        
+        var premise = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantPremiseByAssistantIdAsync(session.AssistantId, cancellationToken).ConfigureAwait(false);
+
+        if (premise != null)
+            sessionDto.Premise = _mapper.Map<AiSpeechAssistantPremiseDto>(premise);
+        
         return new GetAiSpeechAssistantSessionResponse
         {
-            Data = _mapper.Map<AiSpeechAssistantSessionDto>(session)
+            Data = sessionDto
         };
     }
 

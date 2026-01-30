@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Http;
 using System.Text;
 using AutoMapper;
 using Google.Cloud.Translation.V2;
@@ -7,9 +9,12 @@ using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.Agents;
+using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.PhoneOrder;
+using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Services.Restaurants;
 using SmartTalk.Core.Services.RetrievalDb.VectorDb;
+using SmartTalk.Core.Settings.Sales;
 using SmartTalk.Core.Settings.Twilio;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Constants;
@@ -28,6 +33,8 @@ namespace SmartTalk.Core.Services.AiSpeechAssistant;
 public interface IAiSpeechAssistantProcessJobService : IScopedDependency
 {
     Task SyncAiSpeechAssistantInfoToAgentAsync(SyncAiSpeechAssistantInfoToAgentCommand command, CancellationToken cancellationToken);
+
+    Task SyncAiSpeechAssistantLanguageAsync(SyncAiSpeechAssistantLanguageCommand command, CancellationToken cancellationToken);
     
     Task RecordAiSpeechAssistantCallAsync(AiSpeechAssistantStreamContextDto context, PhoneOrderRecordType orderRecordType, CancellationToken cancellationToken);
 }
@@ -42,11 +49,17 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
     private readonly IRestaurantDataProvider _restaurantDataProvider;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly IAiSpeechAssistantDataProvider _speechAssistantDataProvider;
+    private readonly ICrmClient _crmClient;
+    private readonly IPosDataProvider _posDataProvider;
+    private readonly SalesSetting _salesSetting;
 
     public AiSpeechAssistantProcessJobService(
         IMapper mapper,
         IVectorDb vectorDb,
+        ICrmClient crmClient,
+        SalesSetting salesSetting,
         TwilioSettings twilioSettings,
+        IPosDataProvider posDataProvider,
         TranslationClient translationClient,
         IAgentDataProvider agentDataProvider,
         IRestaurantDataProvider restaurantDataProvider,
@@ -55,7 +68,10 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
     {
         _mapper = mapper;
         _vectorDb = vectorDb;
+        _crmClient = crmClient;
+        _salesSetting = salesSetting;
         _twilioSettings = twilioSettings;
+        _posDataProvider = posDataProvider;
         _translationClient = translationClient;
         _agentDataProvider = agentDataProvider;
         _phoneOrderDataProvider = phoneOrderDataProvider;
@@ -95,6 +111,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             IncomingCallNumber = context.LastUserInfo.PhoneNumber,
             OrderRecordType = orderRecordType,
             ParentRecordId = parentRecordId
+            OrderRecordType = orderRecordType
         };
 
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync([record], cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -119,6 +136,97 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         }
         
         await _agentDataProvider.UpdateAgentsAsync(agentAndAssistantPairs.Select(x => x.Item1).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task SyncAiSpeechAssistantLanguageAsync(SyncAiSpeechAssistantLanguageCommand command, CancellationToken cancellationToken)
+    {
+        var companyName = _salesSetting.CompanyName?.Trim();
+        if (string.IsNullOrWhiteSpace(companyName))
+        {
+            Log.Information("Skip syncing assistant language: Sales CompanyName is empty.");
+            return;
+        }
+
+        var company = await _posDataProvider.GetPosCompanyByNameAsync(companyName, cancellationToken).ConfigureAwait(false);
+        if (company == null)
+        {
+            Log.Information("Skip syncing assistant language: company not found: {CompanyName}", companyName);
+            return;
+        }
+
+        var assistantIds = await _posDataProvider.GetAssistantIdsByCompanyIdAsync(company.Id, cancellationToken).ConfigureAwait(false);
+        if (assistantIds.Count == 0) return;
+
+        var assistants = await _speechAssistantDataProvider.GetAiSpeechAssistantByIdsAsync(assistantIds, cancellationToken).ConfigureAwait(false);
+        if (assistants.Count == 0) return;
+
+        var crmToken = await _crmClient.GetCrmTokenAsync(cancellationToken).ConfigureAwait(false);
+        if (crmToken == null) return;
+        
+        var updates = new List<Domain.AISpeechAssistant.AiSpeechAssistant>();
+        var rateLimitDelay = TimeSpan.FromMinutes(3);
+
+        foreach (var assistant in assistants)
+        {
+            if (!TryGetCustomerId(assistant, out var customerId)) continue;
+
+            try
+            {
+                var contacts = await _crmClient.GetCustomerContactsAsync(customerId, crmToken, cancellationToken).ConfigureAwait(false);
+                var language = BuildLanguageText(contacts);
+
+                if (!string.Equals(assistant.Language ?? string.Empty, language, StringComparison.Ordinal))
+                {
+                    assistant.Language = language;
+                    updates.Add(assistant);
+                }
+            }
+            catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
+            {
+                Log.Warning(ex, "Rate limited while syncing language for assistant {AssistantId} (CustomerId: {CustomerId})", assistant.Id, customerId);
+                await Task.Delay(rateLimitDelay, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Failed to sync language for assistant {AssistantId} (CustomerId: {CustomerId})", assistant.Id, assistant.Name);
+            }
+        }
+
+        if (updates.Count == 0) return;
+
+        await _speechAssistantDataProvider.UpdateAiSpeechAssistantsAsync(updates, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        static bool TryGetCustomerId(Domain.AISpeechAssistant.AiSpeechAssistant assistant, out string customerId)
+        {
+            customerId = null;
+            if (string.IsNullOrWhiteSpace(assistant.Name) || assistant.Language is null) return false;
+
+            var rawCustomerId = assistant.Name.Trim();
+            var firstSegment = rawCustomerId.Split('/')[0].Trim();
+            if (string.IsNullOrEmpty(firstSegment) || !char.IsDigit(firstSegment[0])) return false;
+
+            customerId = firstSegment;
+            return true;
+        }
+    }
+
+    private static string BuildLanguageText(IReadOnlyList<SmartTalk.Messages.Dto.Crm.CrmContactDto> contacts)
+    {
+        if (contacts == null || contacts.Count == 0) return string.Empty;
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var result = new List<string>();
+
+        foreach (var contact in contacts)
+        {
+            var language = contact.Language?.Trim();
+            if (string.IsNullOrWhiteSpace(language)) continue;
+            if (!seen.Add(language)) continue;
+
+            result.Add(language);
+        }
+
+        return result.Count == 0 ? string.Empty : string.Join("/", result);
     }
 
     private static string FormattedConversation(List<(AiSpeechAssistantSpeaker, string)> conversationTranscription)
