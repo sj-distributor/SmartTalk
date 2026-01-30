@@ -10,7 +10,7 @@ public class MerchPrinterOrderDto
 
     public int? OrderId { get; set; }
     
-    public int? PhoneOrderId { get; set; }
+    public int? RecordId { get; set; }
 
     public PrintStatus PrintStatus { get; set; }
 
@@ -24,6 +24,6 @@ public class MerchPrinterOrderDto
 
     public bool IsPrintTest()
     {
-        return OrderId == 0 && PhoneOrderId == null;
+        return OrderId == 0 && RecordId == null;
     }
 }
