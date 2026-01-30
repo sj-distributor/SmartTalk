@@ -12,7 +12,7 @@ public interface ICrmClient : IScopedDependency
 {
     Task<string> GetCrmTokenAsync(CancellationToken cancellationToken);
     
-    Task<List<CrmContactDto>> GetCustomerContactsAsync(string customerId, CancellationToken cancellationToken);
+    Task<List<CrmContactDto>> GetCustomerContactsAsync(string customerId, string token = null, CancellationToken cancellationToken = default);
 
     Task<List<GetCustomersPhoneNumberDataDto>> GetCustomersByPhoneNumberAsync(GetCustmoersByPhoneNumberRequestDto numberRequest, CancellationToken cancellationToken);
     
@@ -57,9 +57,9 @@ public class CrmClient : ICrmClient
         return resp.AccessToken;
     }
 
-    public async Task<List<CrmContactDto>> GetCustomerContactsAsync(string customerId, CancellationToken cancellationToken)
+    public async Task<List<CrmContactDto>> GetCustomerContactsAsync(string customerId, string token = null, CancellationToken cancellationToken = default)
     {
-        var token = await GetCrmTokenAsync(cancellationToken).ConfigureAwait(false);
+        token ??= await GetCrmTokenAsync(cancellationToken).ConfigureAwait(false);
 
         var headers = new Dictionary<string, string>
         {
