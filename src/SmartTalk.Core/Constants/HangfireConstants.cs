@@ -15,4 +15,6 @@ public static class HangfireConstants
     public const string InternalHostingTransfer = "transfer";
     
     public const string InternalHostingTestingSalesPhoneOrder = "auto-testing-sales-phone-order";
+    
+    public const string InternalHostingAutoTestCallRecordSync = "auto-test-call-record-sync";
 }

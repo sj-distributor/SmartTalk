@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using Newtonsoft.Json;
 using SmartTalk.Core.Domain.AutoTest;
+using SmartTalk.Core.Domain.Sales;
 using SmartTalk.Messages.Enums.AutoTest;
 
 namespace SmartTalk.Core.Services.AutoTest;
@@ -31,6 +33,16 @@ public partial interface IAutoTestDataProvider
     Task UpdateAutoTestImportRecordAsync(AutoTestImportDataRecord record, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task<List<AutoTestTaskRecord>> GetAllAutoTestTaskRecordsByTaskIdAsync(int taskId, CancellationToken cancellationToken);
+    
+    Task<HashSet<string>> GetCustomerPhoneWhiteListAsync(CancellationToken cancellationToken);
+
+    Task<AutoTestCallRecordSync> GetLastCallRecordAsync(string phone = null, CancellationToken cancellationToken = default);
+
+    Task InsertCallRecordsAsync(List<AutoTestCallRecordSync> records, bool forceSave = true, CancellationToken cancellationToken = default);
+
+    Task<List<string>> GetExistingCallLogIdsAsync(List<string> callLogIds, CancellationToken cancellationToken);
+
+    Task<List<AutoTestCallRecordSync>> GetCallRecordsByPhonesAndRangeAsync(List<string> phones, DateTime fromUtc, DateTime toUtc, CancellationToken cancellationToken);
 }
 
 public partial class AutoTestDataProvider
@@ -128,5 +140,50 @@ public partial class AutoTestDataProvider
         var result = await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
 
         return (result?.task, result?.dataset);
+    }
+    
+    public async Task<HashSet<string>> GetCustomerPhoneWhiteListAsync(CancellationToken cancellationToken)
+    {
+        var phones = await _repository.Query<AutoTestPhoneWhitelist>()
+            .Select(x => x.PhoneNumber)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        return phones.ToHashSet();
+    }
+    
+    public async Task<AutoTestCallRecordSync> GetLastCallRecordAsync(string phone = null, CancellationToken cancellationToken = default)
+    {
+        var query = _repository.Query<AutoTestCallRecordSync>();
+
+        if (!string.IsNullOrWhiteSpace(phone)) 
+            query = query.Where(x => x.FromNumber == phone || x.ToNumber == phone);
+
+        return await query.OrderByDescending(x => x.StartTimeUtc).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+    
+    public async Task InsertCallRecordsAsync(List<AutoTestCallRecordSync> records, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.InsertAllAsync(records, cancellationToken).ConfigureAwait(false);
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<string>> GetExistingCallLogIdsAsync(List<string> callLogIds, CancellationToken cancellationToken)
+    {
+        return await _repository.Query<AutoTestCallRecordSync>().Where(x => callLogIds.Contains(x.CallLogId))
+            .Select(x => x.CallLogId).ToListAsync(cancellationToken);
+    }
+
+    public async Task<List<AutoTestCallRecordSync>> GetCallRecordsByPhonesAndRangeAsync(List<string> phones, DateTime fromUtc, DateTime toUtc, CancellationToken cancellationToken)
+    {
+        return await _repository.Query<AutoTestCallRecordSync>().Where(x =>
+                x.StartTimeUtc >= fromUtc &&
+                x.StartTimeUtc <= toUtc &&
+                (
+                    phones.Contains(x.FromNumber) ||
+                    phones.Contains(x.ToNumber)
+                ) &&
+                !string.IsNullOrEmpty(x.RecordingUrl)
+            ).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }
