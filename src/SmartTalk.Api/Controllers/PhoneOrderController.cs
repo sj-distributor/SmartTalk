@@ -6,7 +6,6 @@ using Microsoft.AspNetCore.Authorization;
 using SmartTalk.Messages.Commands.Linphone;
 using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Dto.SpeechMatics;
-using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Requests.Linphone;
 using SmartTalk.Messages.Requests.PhoneOrder;
 
@@ -29,24 +28,6 @@ public class PhoneOrderController : ControllerBase
     public async Task<IActionResult> GetPhoneOrderRecordsAsync([FromQuery] GetPhoneOrderRecordsRequest request)
     {
         var response = await _mediator.RequestAsync<GetPhoneOrderRecordsRequest, GetPhoneOrderRecordsResponse>(request).ConfigureAwait(false);
-        
-        return Ok(response);
-    }
-    
-    [Route("record/scenario"), HttpPut]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdatePhoneOrderRecordResponse))]
-    public async Task<IActionResult> UpdatePhoneOrderRecordAsync([FromBody] UpdatePhoneOrderRecordCommand command)
-    {
-        var response = await _mediator.SendAsync<UpdatePhoneOrderRecordCommand, UpdatePhoneOrderRecordResponse>(command).ConfigureAwait(false);
-
-        return Ok(response);
-    }
-    
-    [Route("record/scenario/history"), HttpGet]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPhoneOrderRecordScenarioResponse))]
-    public async Task<IActionResult> GetPhoneOrderRecordScenarioAsync([FromQuery] GetPhoneOrderRecordScenarioRequest request)
-    {
-        var response = await _mediator.RequestAsync<GetPhoneOrderRecordScenarioRequest, GetPhoneOrderRecordScenarioResponse>(request).ConfigureAwait(false);
         
         return Ok(response);
     }
@@ -97,11 +78,7 @@ public class PhoneOrderController : ControllerBase
 
         var fileContent = ms.ToArray();
         
-        await _mediator.SendAsync(new ReceivePhoneOrderRecordCommand { 
-            RecordName = file.FileName, 
-            RecordContent = fileContent, 
-            AgentId = agentId, 
-            OrderRecordType = PhoneOrderRecordType.InBound}).ConfigureAwait(false);
+        await _mediator.SendAsync(new ReceivePhoneOrderRecordCommand { RecordName = file.FileName, RecordContent = fileContent, AgentId = agentId }).ConfigureAwait(false);
         
         return Ok();
     }
@@ -133,15 +110,6 @@ public class PhoneOrderController : ControllerBase
         return Ok(response);
     }
 
-    [Route("data/dashboard"), HttpGet]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPhoneOrderDataDashboardResponse))]
-    public async Task<IActionResult> GetPhoneOrderDataDashboardAsync([FromQuery] GetPhoneOrderDataDashboardRequest request)
-    {
-        var response = await _mediator.RequestAsync<GetPhoneOrderDataDashboardRequest, GetPhoneOrderDataDashboardResponse>(request).ConfigureAwait(false);
-        
-        return Ok(response);
-    }
-    
     #region Linphone
     
     [Route("linphone/add"), HttpPost]

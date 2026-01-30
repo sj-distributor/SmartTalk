@@ -1,6 +1,5 @@
 using System.Net.WebSockets;
 using Mediator.Net.Contracts;
-using SmartTalk.Messages.Enums.PhoneOrder;
 
 namespace SmartTalk.Messages.Commands.AiSpeechAssistant;
 
@@ -17,6 +16,4 @@ public class ConnectAiSpeechAssistantCommand : ICommand
     public int? AssistantId { get; set; }
     
     public WebSocket TwilioWebSocket { get; set; }
-    
-    public PhoneOrderRecordType OrderRecordType { get; set; }
 }

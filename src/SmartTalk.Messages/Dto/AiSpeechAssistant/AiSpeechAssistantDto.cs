@@ -12,8 +12,6 @@ public class AiSpeechAssistantDto
     
     public int AnsweringNumberId { get; set; }
     
-    public string Language { get; set; }
-    
     public string AnsweringNumber { get; set; }
     
     public string ModelUrl { get; set; }
@@ -43,8 +41,6 @@ public class AiSpeechAssistantDto
     public bool IsDefault { get; set; }
     
     public bool IsAllowOrderPush { get; set; }
-    
-    public bool IsAutoGenerateOrder { get; set; }
     
     public DateTimeOffset CreatedDate { get; set; }
     

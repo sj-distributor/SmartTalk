@@ -2,21 +2,21 @@ using System.Reflection;
 using Serilog;
 using System.Text;
 using System.Text.Json.Serialization;
+using Newtonsoft.Json.Linq;
 using SmartTalk.Messages.Enums.STT;
 using Smarties.Messages.DTO.OpenAi;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.EasyPos;
+using SmartTalk.Messages.Dto.WeChat;
 using Microsoft.IdentityModel.Tokens;
 using Smarties.Messages.Enums.OpenAi;
 using Smarties.Messages.Requests.Ask;
 using System.Text.RegularExpressions;
 using ClosedXML.Excel;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Domain.SpeechMatics;
 using SmartTalk.Core.Services.Linphone;
-using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Dto.Attachments;
 using SmartTalk.Messages.Enums.PhoneOrder;
@@ -25,10 +25,6 @@ using SmartTalk.Messages.Enums.SpeechMatics;
 using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Requests.PhoneOrder;
 using SmartTalk.Messages.Commands.Attachments;
-using SmartTalk.Messages.Dto.WeChat;
-using SmartTalk.Messages.Enums.Pos;
-using SmartTalk.Messages.Events.PhoneOrder;
-using SmartTalk.Core.Extensions;
 using TranscriptionFileType = SmartTalk.Messages.Enums.STT.TranscriptionFileType;
 using TranscriptionResponseFormat = SmartTalk.Messages.Enums.STT.TranscriptionResponseFormat;
 
@@ -37,8 +33,6 @@ namespace SmartTalk.Core.Services.PhoneOrder;
 public partial interface IPhoneOrderService
 {
     Task<GetPhoneOrderRecordsResponse> GetPhoneOrderRecordsAsync(GetPhoneOrderRecordsRequest request, CancellationToken cancellationToken);
-    
-    Task<PhoneOrderRecordUpdatedEvent> UpdatePhoneOrderRecordAsync(UpdatePhoneOrderRecordCommand command, CancellationToken cancellationToken);
 
     Task ReceivePhoneOrderRecordAsync(ReceivePhoneOrderRecordCommand command, CancellationToken cancellationToken);
 
@@ -50,13 +44,7 @@ public partial interface IPhoneOrderService
 
     Task<GetPhoneCallRecordDetailResponse> GetPhoneCallrecordDetailAsync(GetPhoneCallRecordDetailRequest request, CancellationToken cancellationToken);
 
-    Task<GetPhoneOrderCompanyCallReportResponse> GetPhoneOrderCompanyCallReportAsync(GetPhoneOrderCompanyCallReportRequest request, CancellationToken cancellationToken);
-
     Task<GetPhoneOrderRecordReportResponse> GetPhoneOrderRecordReportByCallSidAsync(GetPhoneOrderRecordReportRequest request, CancellationToken cancellationToken);
-    
-    Task<GetPhoneOrderDataDashboardResponse> GetPhoneOrderDataDashboardAsync(GetPhoneOrderDataDashboardRequest request, CancellationToken cancellationToken);
-    
-    Task<GetPhoneOrderRecordScenarioResponse> GetPhoneOrderRecordScenarioAsync(GetPhoneOrderRecordScenarioRequest request, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderService
@@ -70,58 +58,14 @@ public partial class PhoneOrderService
             : request.StoreId.HasValue
                 ? (await _posDataProvider.GetPosAgentsAsync(storeIds: [request.StoreId.Value], cancellationToken: cancellationToken).ConfigureAwait(false)).Select(x => x.AgentId).ToList()
                 : [];
-        
-        Log.Information("Get phone order records: {@AgentIds}, {Name}, {Start}, {End}, {OrderId}, {DialogueScenarios}, {AssistantId}", agentIds, request.Name, utcStart, utcEnd, request.OrderId, request.DialogueScenarios, request.AssistantId);
-        
-        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds, request.Name, utcStart, utcEnd, request.OrderId, request.DialogueScenarios, request.AssistantId, cancellationToken).ConfigureAwait(false);
-        
-        Log.Information("Get phone order records Count: {@Count}", records.Count);
-        
+
+        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds, request.Name, utcStart, utcEnd, request.OrderId, cancellationToken).ConfigureAwait(false);
+
         var enrichedRecords = _mapper.Map<List<PhoneOrderRecordDto>>(records);
-        
-        await BuildRecordUnreviewDataAsync(enrichedRecords, cancellationToken).ConfigureAwait(false);
-        
+
         return new GetPhoneOrderRecordsResponse
         {
             Data = enrichedRecords
-        };
-    }
-
-    public async Task<PhoneOrderRecordUpdatedEvent> UpdatePhoneOrderRecordAsync(UpdatePhoneOrderRecordCommand command, CancellationToken cancellationToken)
-    {
-        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordAsync(command.RecordId, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        var record = records.FirstOrDefault();
-        if (record == null) throw new Exception($"Phone order record not found: {command.RecordId}");
-
-        if (record.IsLockedScenario) throw new Exception("The record scenario was locked.");
-        
-        var user = await _accountDataProvider.GetUserAccountByUserIdAsync(command.UserId, cancellationToken).ConfigureAwait(false);
-
-        if (user == null) 
-            throw new Exception($"User not found: {command.UserId}");
-        
-        var originalScenario = record.Scenario;
-        
-        record.Scenario = command.DialogueScenarios;
-        record.IsModifyScenario = true;
-        await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record,  true, cancellationToken);
-        
-        await _phoneOrderDataProvider.AddPhoneOrderRecordScenarioHistoryAsync(new PhoneOrderRecordScenarioHistory
-        {
-            RecordId = record.Id,
-            Scenario = record.Scenario.GetValueOrDefault(),
-            UpdatedBy = user.Id,
-            UserName = user.UserName,
-            CreatedDate = DateTime.UtcNow
-        }, true, cancellationToken).ConfigureAwait(false);
-
-        return new PhoneOrderRecordUpdatedEvent
-        {
-            RecordId = record.Id,
-            UserName = user.UserName,
-            OriginalScenarios = originalScenario,
-            DialogueScenarios = record.Scenario.GetValueOrDefault()
         };
     }
 
@@ -146,7 +90,7 @@ public partial class PhoneOrderService
 
         Log.Information("Phone order record transcription detected language: {@detectionLanguage}", detection.Language);
 
-        var record = new PhoneOrderRecord { SessionId = Guid.NewGuid().ToString(), AgentId = recordInfo.Agent.Id, Language = SelectLanguageEnum(detection.Language), CreatedDate = recordInfo.StartDate, Status = PhoneOrderRecordStatus.Recieved, OrderRecordType = command.OrderRecordType, PhoneNumber = recordInfo.PhoneNumber };
+        var record = new PhoneOrderRecord { SessionId = Guid.NewGuid().ToString(), AgentId = recordInfo.Agent.Id, Language = SelectLanguageEnum(detection.Language), CreatedDate = recordInfo.StartDate, Status = PhoneOrderRecordStatus.Recieved };
 
         if (await CheckPhoneOrderRecordDurationAsync(command.RecordContent, cancellationToken).ConfigureAwait(false))
         {
@@ -198,11 +142,10 @@ public partial class PhoneOrderService
             Log.Information("Phone order record info: {@phoneOrderInfo}", phoneOrderInfo);
 
             var (goalText, tip) = await PhoneOrderTranscriptionAsync(phoneOrderInfo, record, audioContent, cancellationToken).ConfigureAwait(false);
-            
+
+            await _phoneOrderUtilService.ExtractPhoneOrderShoppingCartAsync(goalText, record, cancellationToken).ConfigureAwait(false);
+
             record.Tips = tip;
-            record.ConversationText = goalText;
-            
-            await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception e)
         {
@@ -332,9 +275,6 @@ public partial class PhoneOrderService
                     conversations.Add(new PhoneOrderConversation { RecordId = record.Id, Question = originText, Order = conversationIndex, StartTime = speakDetail.StartTime, EndTime = speakDetail.EndTime });
                 else
                 {
-                    if (conversationIndex >= conversations.Count)
-                        conversations.Add(new PhoneOrderConversation { RecordId = record.Id, Question = "", Order = conversationIndex, StartTime = speakDetail.StartTime, EndTime = speakDetail.EndTime });
-
                     conversations[conversationIndex].Answer = originText;
                     conversationIndex++;
                 }
@@ -503,8 +443,6 @@ public partial class PhoneOrderService
         record.Status = status;
 
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync(new List<PhoneOrderRecord> { record }, cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        Log.Information("Added phone order record: {@record}", record);
     }
 
     private async Task<bool> CheckPhoneOrderRecordDurationAsync(byte[] recordContent, CancellationToken cancellationToken)
@@ -536,30 +474,10 @@ public partial class PhoneOrderService
     {
         var agent = await _agentDataProvider.GetAgentByIdAsync(agentId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        var phoneNumber = TryExtractTargetNumber(recordName);
-        
         return new PhoneOrderRecordInformationDto
         {
             Agent = _mapper.Map<AgentDto>(agent),
-            StartDate = startTime ?? ExtractPhoneOrderStartDateFromRecordName(recordName),
-            PhoneNumber = phoneNumber
-        };
-    }
-    
-    private static string TryExtractTargetNumber(string fileName)
-    {
-        if (string.IsNullOrWhiteSpace(fileName))
-            return "";
-
-        var parts = fileName.Split('-', StringSplitOptions.RemoveEmptyEntries);
-
-        if (parts.Length < 3)
-            return "";
-
-        return parts[0] switch
-        {
-            "out" when parts.Length > 1 => parts[1],
-            _ => ""
+            StartDate = startTime ?? ExtractPhoneOrderStartDateFromRecordName(recordName)
         };
     }
 
@@ -674,47 +592,6 @@ public partial class PhoneOrderService
         return new GetPhoneCallRecordDetailResponse { Data = fileUrl };
     }
 
-    public async Task<GetPhoneOrderCompanyCallReportResponse> GetPhoneOrderCompanyCallReportAsync(GetPhoneOrderCompanyCallReportRequest request, CancellationToken cancellationToken)
-    {
-        var companyName = _salesSetting.CompanyName?.Trim();
-        if (string.IsNullOrWhiteSpace(companyName))
-            throw new Exception("Sales CompanyName is not configured.");
-
-        var company = await _posDataProvider.GetPosCompanyByNameAsync(companyName, cancellationToken).ConfigureAwait(false);
-        if (company == null)
-            return new GetPhoneOrderCompanyCallReportResponse { Data = string.Empty };
-
-        var assistantIds = await _posDataProvider.GetAssistantIdsByCompanyIdAsync(company.Id, cancellationToken).ConfigureAwait(false);
-        const int daysWindow = 30;
-        var latestRecords = await _phoneOrderDataProvider
-            .GetLatestPhoneOrderRecordsByAssistantIdsAsync(assistantIds, daysWindow, cancellationToken)
-            .ConfigureAwait(false);
-
-        var assistantNameMap = new Dictionary<int, string>();
-        var assistantLanguageMap = new Dictionary<int, string>();
-        if (assistantIds.Count > 0)
-        {
-            var assistants = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByIdsAsync(assistantIds, cancellationToken).ConfigureAwait(false);
-            assistantNameMap = assistants
-                .GroupBy(x => x.Id)
-                .ToDictionary(g => g.Key, g => g.First().Name ?? string.Empty);
-            assistantLanguageMap = assistants
-                .GroupBy(x => x.Id)
-                .ToDictionary(g => g.Key, g => g.First().Language ?? string.Empty);
-        }
-
-        var (utcStart, utcEnd) = GetCompanyCallReportUtcRange(request.ReportType);
-
-        var records = assistantIds.Count == 0
-            ? []
-            : await _phoneOrderDataProvider.GetPhoneOrderRecordsByAssistantIdsAsync(assistantIds, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
-
-        var reportRows = BuildCompanyCallReportRows(records, assistantIds, assistantNameMap, assistantLanguageMap, latestRecords, daysWindow);
-        var fileUrl = await ToCompanyCallReportExcelAsync(reportRows, request.ReportType, cancellationToken).ConfigureAwait(false);
-
-        return new GetPhoneOrderCompanyCallReportResponse { Data = fileUrl };
-    }
-
     public async Task<GetPhoneOrderRecordReportResponse> GetPhoneOrderRecordReportByCallSidAsync(GetPhoneOrderRecordReportRequest request, CancellationToken cancellationToken)
     {
         var report = await _phoneOrderDataProvider.GetPhoneOrderRecordReportAsync(request.CallSid, request.Language, cancellationToken).ConfigureAwait(false);
@@ -743,54 +620,6 @@ public partial class PhoneOrderService
         };
     }
 
-    private static List<CompanyCallReportRow> BuildCompanyCallReportRows(
-        List<PhoneOrderRecord> records,
-        IReadOnlyList<int> assistantIds,
-        IReadOnlyDictionary<int, string> assistantNameMap,
-        IReadOnlyDictionary<int, string> assistantLanguageMap,
-        IReadOnlyDictionary<int, PhoneOrderRecord> latestRecords,
-        int daysWindow)
-    {
-        if (assistantIds == null || assistantIds.Count == 0) return [];
-
-        var chinaZone = GetChinaTimeZone();
-        var nowChina = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, chinaZone);
-        var todayLocal = new DateTime(nowChina.Year, nowChina.Month, nowChina.Day, 0, 0, 0, DateTimeKind.Unspecified);
-
-        var recordGroups = (records ?? [])
-            .Where(record => record.AssistantId.HasValue)
-            .GroupBy(record => record.AssistantId.Value)
-            .ToDictionary(group => group.Key, group => group.ToList());
-
-        return assistantIds
-            .Select(assistantId =>
-            {
-                assistantNameMap.TryGetValue(assistantId, out var assistantName);
-                assistantLanguageMap.TryGetValue(assistantId, out var assistantLanguage);
-                latestRecords.TryGetValue(assistantId, out var latestRecord);
-                recordGroups.TryGetValue(assistantId, out var groupRecords);
-                groupRecords ??= [];
-
-                var scenarioCounts = Enum.GetValues<DialogueScenarios>()
-                    .ToDictionary(scenario => scenario, scenario => groupRecords.Count(x => x.Scenario == scenario));
-
-                var daysSinceLastCallText = latestRecord == null
-                    ? $"超过{daysWindow}天"
-                    : CalculateDaysSinceLastCallText(latestRecord.CreatedDate, todayLocal, chinaZone);
-
-                return new CompanyCallReportRow
-                {
-                    CustomerId = string.IsNullOrWhiteSpace(assistantName) ? assistantId.ToString() : assistantName,
-                    CustomerLanguage = assistantLanguage ?? string.Empty,
-                    TotalCalls = groupRecords.Count,
-                    ScenarioCounts = scenarioCounts,
-                    DaysSinceLastCallText = daysSinceLastCallText
-                };
-            })
-            .OrderBy(row => row.CustomerId)
-            .ToList();
-    }
-
     private (DateTimeOffset StartUtc, DateTimeOffset EndUtc) GetQueryTimeRange(int month)
     {
         if (month < 1 || month > 12) throw new ArgumentOutOfRangeException(nameof(month));
@@ -807,52 +636,6 @@ public partial class PhoneOrderService
         var endUtc = TimeZoneInfo.ConvertTimeToUtc(nextMonthLocal, tz);
 
         return (new DateTimeOffset(startUtc), new DateTimeOffset(endUtc));
-    }
-
-    private static (DateTimeOffset StartUtc, DateTimeOffset EndUtc) GetCompanyCallReportUtcRange(PhoneOrderCallReportType reportType)
-    {
-        var chinaZone = GetChinaTimeZone();
-        var nowChina = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, chinaZone);
-        var todayLocal = new DateTime(nowChina.Year, nowChina.Month, nowChina.Day, 0, 0, 0, DateTimeKind.Unspecified);
-
-        if (reportType == PhoneOrderCallReportType.Daily)
-        {
-            var startUtc = TimeZoneInfo.ConvertTimeToUtc(todayLocal, chinaZone);
-            var endUtc = startUtc.AddDays(1);
-
-            return (new DateTimeOffset(startUtc), new DateTimeOffset(endUtc));
-        }
-
-        var startOfWeekLocal = todayLocal.AddDays(-((int)todayLocal.DayOfWeek + 6) % 7);
-        
-        if (reportType == PhoneOrderCallReportType.LastWeek)
-            startOfWeekLocal = startOfWeekLocal.AddDays(-7);
-
-        var weekStartUtc = TimeZoneInfo.ConvertTimeToUtc(startOfWeekLocal, chinaZone);
-        var weekEndUtc = weekStartUtc.AddDays(7);
-
-        return (new DateTimeOffset(weekStartUtc), new DateTimeOffset(weekEndUtc));
-    }
-
-    private static TimeZoneInfo GetChinaTimeZone()
-    {
-        try
-        {
-            return TimeZoneInfo.FindSystemTimeZoneById("Asia/Shanghai");
-        }
-        catch (TimeZoneNotFoundException)
-        {
-            return TimeZoneInfo.FindSystemTimeZoneById("China Standard Time");
-        }
-    }
-
-    private static string CalculateDaysSinceLastCallText(DateTimeOffset latestCallUtc, DateTime todayLocal, TimeZoneInfo chinaZone)
-    {
-        var latestLocal = TimeZoneInfo.ConvertTime(latestCallUtc, chinaZone);
-        var diff = todayLocal - latestLocal.DateTime;
-        var days = Math.Max(0, Math.Round(diff.TotalDays, 1));
-
-        return days.ToString("0.0");
     }
     
     private string ConvertUtcToPst(DateTimeOffset utcTime)
@@ -947,102 +730,6 @@ public partial class PhoneOrderService
         return audio.Attachment?.FileUrl ?? string.Empty;
     }
 
-    private async Task<string> ToCompanyCallReportExcelAsync(
-        IReadOnlyList<CompanyCallReportRow> rows, PhoneOrderCallReportType reportType, CancellationToken cancellationToken)
-    {
-        using var workbook = new XLWorkbook();
-        var ws = workbook.AddWorksheet("Sheet1");
-
-        var scenarios = Enum.GetValues<DialogueScenarios>();
-        var prefix = reportType == PhoneOrderCallReportType.Daily
-            ? "当日"
-            : reportType == PhoneOrderCallReportType.LastWeek
-                ? "上周"
-                : "本周";
-
-        var headers = new List<string>
-        {
-            "customer id",
-            "客人語種"
-        };
-
-        if (reportType == PhoneOrderCallReportType.Daily)
-        {
-            headers.Add("當日有效通話量合計（所有通話-無效通話）");
-        }
-        else
-        {
-            headers.Add($"{prefix}有call入 Sales");
-            headers.Add($"{prefix}有效通話量（下单+转接+咨询）");
-        }
-
-        foreach (var scenario in scenarios)
-        {
-            headers.Add($"{prefix}{scenario.GetDescription()}");
-        }
-
-        if (reportType == PhoneOrderCallReportType.Daily)
-        {
-            headers.Add("多久沒來電");
-        }
-
-        for (var col = 0; col < headers.Count; col++)
-            ws.Cell(1, col + 1).Value = headers[col];
-
-        static int GetScenarioCount(IReadOnlyDictionary<DialogueScenarios, int> counts, DialogueScenarios scenario)
-        {
-            return counts != null && counts.TryGetValue(scenario, out var count) ? count : 0;
-        }
-
-        for (var rowIndex = 0; rowIndex < rows.Count; rowIndex++)
-        {
-            var row = rows[rowIndex];
-            var colIndex = 1;
-
-            ws.Cell(rowIndex + 2, colIndex++).Value = row.CustomerId;
-            ws.Cell(rowIndex + 2, colIndex++).Value = row.CustomerLanguage ?? string.Empty;
-
-            if (reportType == PhoneOrderCallReportType.Daily)
-            {
-                var invalidCount = GetScenarioCount(row.ScenarioCounts, DialogueScenarios.InvalidCall);
-                ws.Cell(rowIndex + 2, colIndex++).Value = row.TotalCalls - invalidCount;
-
-                foreach (var scenario in scenarios)
-                {
-                    ws.Cell(rowIndex + 2, colIndex++).Value = GetScenarioCount(row.ScenarioCounts, scenario);
-                }
-
-                ws.Cell(rowIndex + 2, colIndex).Value = row.DaysSinceLastCallText ?? string.Empty;
-            }
-            else
-            {
-                var orderCount = GetScenarioCount(row.ScenarioCounts, DialogueScenarios.Order);
-                var transferCount = GetScenarioCount(row.ScenarioCounts, DialogueScenarios.TransferToHuman);
-                var inquiryCount = GetScenarioCount(row.ScenarioCounts, DialogueScenarios.Inquiry);
-
-                ws.Cell(rowIndex + 2, colIndex++).Value = row.TotalCalls;
-                ws.Cell(rowIndex + 2, colIndex++).Value = orderCount + transferCount + inquiryCount;
-
-                foreach (var scenario in scenarios)
-                {
-                    ws.Cell(rowIndex + 2, colIndex++).Value = GetScenarioCount(row.ScenarioCounts, scenario);
-                }
-            }
-        }
-
-        ws.Columns().AdjustToContents();
-
-        using var ms = new MemoryStream();
-        workbook.SaveAs(ms);
-
-        var attachment = await _attachmentService.UploadAttachmentAsync(new UploadAttachmentCommand
-        {
-            Attachment = new UploadAttachmentDto { FileName = Guid.NewGuid() + ".xlsx", FileContent = ms.ToArray() }
-        }, cancellationToken).ConfigureAwait(false);
-
-        return attachment.Attachment?.FileUrl ?? string.Empty;
-    }
-
     /// <summary>
     /// 判断是否是简单类型（可以原样 ToString），否则认为复杂需要 JSON 序列化
     /// </summary>
@@ -1059,266 +746,5 @@ public partial class PhoneOrderService
             type == typeof(DateTimeOffset) ||
             type == typeof(Guid) ||
             type == typeof(TimeSpan);
-    }
-
-    private sealed class CompanyCallReportRow
-    {
-        public string CustomerId { get; set; }
-
-        public string CustomerLanguage { get; set; }
-
-        public int TotalCalls { get; set; }
-
-        public Dictionary<DialogueScenarios, int> ScenarioCounts { get; set; } = new();
-
-        public string DaysSinceLastCallText { get; set; }
-    }
-    
-    public async Task<GetPhoneOrderDataDashboardResponse> GetPhoneOrderDataDashboardAsync(GetPhoneOrderDataDashboardRequest request, CancellationToken cancellationToken)
-    {
-        var targetOffset = request.StartDate.Offset;
-        var utcStart = request.StartDate.ToUniversalTime();
-        var utcEnd = request.EndDate.ToUniversalTime();
-
-        Log.Information("[PhoneDashboard] Fetch phone order records: Agents={@AgentIds}, Range={@Start}-{@End} (UTC: {@UtcStart}-{@UtcEnd})", request.AgentIds, request.StartDate, request.EndDate, utcStart, utcEnd);
-        
-        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsByAgentIdsAsync(agentIds: request.AgentIds, utcStart: utcStart, utcEnd: utcEnd, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        Log.Information("[PhoneDashboard] Phone order records fetched: {@Count}", records?.Count ?? 0);
-        
-        var posOrders = await _posDataProvider.GetPosOrdersByStoreIdsAsync(request.StoreIds, null, true, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
-        var cancelledOrders = await _posDataProvider.GetPosOrdersByStoreIdsAsync(request.StoreIds, PosOrderModifiedStatus.Cancelled, true, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
-
-        Log.Information("[PhoneDashboard] POS orders loaded: Total={@Total}, Cancelled={@Cancelled}", posOrders.Count, cancelledOrders.Count);
-              
-        var orderCountPerPeriod = GroupCountByRequestType(posOrders, x => x.CreatedDate.ToOffset(targetOffset), request.StartDate, request.EndDate, request.DataType);
-        var cancelledOrderCountPerPeriod = GroupCountByRequestType(cancelledOrders, x => x.CreatedDate.ToOffset(targetOffset), request.StartDate, request.EndDate, request.DataType);
-        
-        var restaurantData = new RestaurantDataDto
-        {
-            OrderCount = posOrders.Count,
-            TotalOrderAmount = posOrders.Sum(x => x.Total) - cancelledOrders.Sum(x => x.Total),
-            CancelledOrderCount = cancelledOrders.Count,
-            OrderCountPerPeriod = orderCountPerPeriod,
-            CancelledOrderCountPerPeriod = cancelledOrderCountPerPeriod
-        };
-        
-        var callInRecords = records?.Where(x => x.OrderRecordType == PhoneOrderRecordType.InBound).ToList() ?? new List<PhoneOrderRecord>();
-        var callOutRecords = records?.Where(x => x.OrderRecordType == PhoneOrderRecordType.OutBount).ToList() ?? new List<PhoneOrderRecord>();
-
-        var callInFailedCount = records?.Count(x => x.OrderRecordType == PhoneOrderRecordType.InBound && x.Scenario is DialogueScenarios.TransferVoicemail or DialogueScenarios.InvalidCall) ?? 0;
-
-        var callOutFailedCount = records?.Count(x => x.OrderRecordType == PhoneOrderRecordType.OutBount && x.Scenario is DialogueScenarios.TransferVoicemail or DialogueScenarios.InvalidCall) ?? 0;
-        
-        Log.Information("[PhoneDashboard] Phone order Failed Count CallIn={@callInFailedCount}, CallOut={@callOutFailedCount}", callInFailedCount, callOutFailedCount);
-        
-        callInRecords.ForEach(r => r.CreatedDate = r.CreatedDate.ToOffset(targetOffset));
-        callOutRecords.ForEach(r => r.CreatedDate = r.CreatedDate.ToOffset(targetOffset));
-
-        Log.Information("[PhoneDashboard] Phone order records loaded: CallIn={@CallIn}, CallOut={@CallOut}", callInRecords.Count, callOutRecords.Count);
-        
-        var callInData = BuildCallInData(callInRecords, callInFailedCount, request.InvalidCallSeconds, request.StartDate, request.EndDate, request.DataType);
-        var callOutData = BuildCallOutData(callOutRecords, callOutFailedCount, request.InvalidCallSeconds, request.StartDate, request.EndDate, request.DataType);
-   
-        await ApplyPeriodComparisonAsync(request, callInRecords, callOutRecords, restaurantData, callInData, callOutData, cancellationToken).ConfigureAwait(false);
-
-        return new GetPhoneOrderDataDashboardResponse
-        {
-            Data = new GetPhoneOrderDataDashboardResponseData
-            {
-                CallInData = callInData,
-                CallOutData = callOutData,
-                Restaurant = restaurantData
-            }
-        };
-    }
-
-    private static CallInDataDto BuildCallInData(List<PhoneOrderRecord> callInRecords, int callInFailedCount, int? invalidCallSeconds, DateTimeOffset? start, DateTimeOffset? end, PhoneOrderDataDashDataType dataType)
-    {
-        var answeredCount = callInRecords.Count;
-
-        var totalRepeatCalls = callInRecords.GroupBy(x => x.PhoneNumber).Select(g => Math.Max(0, g.Count() - 1)).Sum();
-
-        var effectiveCount = answeredCount - callInRecords.Count(x => (x.Duration ?? 0) <= invalidCallSeconds);
-        var averageDuration = callInRecords.DefaultIfEmpty().Average(x => x?.Duration ?? 0);
-        var totalDuration = callInRecords.Sum(x => x.Duration ?? 0);
-        var friendlyCount = callInRecords.Count(x => x.IsCustomerFriendly == true);
-        var satisfactionRate = answeredCount > 0 ? (double)friendlyCount / answeredCount : 0;
-        var transferCount = callInRecords.Count(x => x.IsTransfer == true || x.Scenario == DialogueScenarios.TransferToHuman);
-        var transferRate = answeredCount > 0 ? (double)transferCount / answeredCount : 0;
-        var repeatRate = answeredCount > 0 ? (double)totalRepeatCalls / answeredCount : 0;
-
-        var totalDurationPerPeriod = GroupDurationByRequestType(callInRecords, start, end, dataType);
-
-        return new CallInDataDto
-        {
-            AnsweredCallInCount = answeredCount,
-            AverageCallInDurationSeconds = averageDuration,
-            CallInAnsweredByHumanCount = transferCount,
-            EffectiveCommunicationCallInCount = effectiveCount,
-            RepeatCallInRate = repeatRate,
-            CallInSatisfactionRate = satisfactionRate,
-            CallInMissedByHumanCount = callInFailedCount,
-            CallinTransferToHumanRate = transferRate,
-            TotalCallInDurationSeconds = totalDuration,
-            TotalCallInDurationPerPeriod = totalDurationPerPeriod
-        };
-    }
-
-    private static CallOutDataDto BuildCallOutData(List<PhoneOrderRecord> callOutRecords, int callInFailedCount, int? invalidCallSeconds, DateTimeOffset? start, DateTimeOffset? end, PhoneOrderDataDashDataType dataType)
-    {
-        var answeredCount = callOutRecords.Count;
-        var effectiveCount = answeredCount - callOutRecords.Count(x => (x.Duration ?? 0) <= invalidCallSeconds);
-        var averageDuration = callOutRecords.DefaultIfEmpty().Average(x => x?.Duration ?? 0);
-        var totalDuration = callOutRecords.Sum(x => x.Duration ?? 0);
-        var friendlyCount = callOutRecords.Count(x => x.IsCustomerFriendly == true);
-        var satisfactionRate = answeredCount > 0 ? (double)friendlyCount / answeredCount : 0;
-        var humanAnswerCount = callOutRecords.Count(x => x.IsHumanAnswered == true);
-
-        var totalDurationPerPeriod = GroupDurationByRequestType(callOutRecords, start, end, dataType);
-
-        return new CallOutDataDto
-        {
-            AnsweredCallOutCount = answeredCount,
-            AverageCallOutDurationSeconds = averageDuration,
-            EffectiveCommunicationCallOutCount = effectiveCount,
-            CallOutNotAnsweredCount = callInFailedCount,
-            CallOutAnsweredByHumanCount = humanAnswerCount,
-            CallOutSatisfactionRate = satisfactionRate,
-            TotalCallOutDurationSeconds = totalDuration,
-            TotalCallOutDurationPerPeriod = totalDurationPerPeriod
-        };
-    }
-    
-    private static Dictionary<string, double> GroupDurationByRequestType(List<PhoneOrderRecord> records, DateTimeOffset? startDate, DateTimeOffset? endDate, PhoneOrderDataDashDataType dataType)
-    {
-        if (startDate == null || endDate == null) return new Dictionary<string, double>();
-        
-        var localStart = startDate.Value.ToOffset(startDate.Value.Offset);
-        var localEnd = endDate.Value.ToOffset(startDate.Value.Offset);
-
-        var filteredRecords = records.Where(x =>
-            {
-                var localCreated = x.CreatedDate.ToOffset(startDate.Value.Offset);
-                return localCreated >= localStart && localCreated <= localEnd;
-            }).ToList();
-        
-        if (dataType == PhoneOrderDataDashDataType.Month)
-        {
-            return filteredRecords
-                .GroupBy(x =>
-                {
-                    var localDate = x.CreatedDate.ToOffset(startDate.Value.Offset);
-                    return new { localDate.Year, localDate.Month };
-                })
-                .OrderBy(g => g.Key.Year)
-                .ThenBy(g => g.Key.Month)
-                .ToDictionary(
-                    g => $"{g.Key.Year:D4}-{g.Key.Month:D2}",
-                    g => g.Sum(x => x.Duration ?? 0));
-        }
-        
-        return filteredRecords
-            .GroupBy(x => x.CreatedDate.ToOffset(startDate.Value.Offset).Date)
-            .OrderBy(g => g.Key)
-            .ToDictionary(
-                g => g.Key.ToString("yyyy-MM-dd"),
-                g => g.Sum(x => x.Duration ?? 0));
-    }
-    
-    private static Dictionary<string, int> GroupCountByRequestType(List<PosOrder> orders, Func<PosOrder, DateTimeOffset> dateSelector, DateTimeOffset? startDate, DateTimeOffset? endDate, PhoneOrderDataDashDataType dataType)
-    {
-        if (startDate == null || endDate == null || orders == null) return new Dictionary<string, int>();
-
-        var start = startDate.Value;
-        var end = endDate.Value;
-
-        var filteredRecords = orders.Where(x => {
-            var dt = dateSelector(x);
-            return dt >= start && dt <= end;
-        });
-
-        if (dataType == PhoneOrderDataDashDataType.Month)
-        {
-            return filteredRecords
-                .GroupBy(x => {
-                    var dt = dateSelector(x);
-                    return new { dt.Year, dt.Month };
-                })
-                .OrderBy(g => g.Key.Year).ThenBy(g => g.Key.Month)
-                .ToDictionary(
-                    g => $"{g.Key.Year:D4}-{g.Key.Month:D2}",
-                    g => g.Count());
-        }
-        
-        return filteredRecords
-            .GroupBy(x => dateSelector(x).Date)
-            .OrderBy(g => g.Key)
-            .ToDictionary(
-                g => g.Key.ToString("yyyy-MM-dd"),
-                g => g.Count());
-    }
-
-    private async Task ApplyPeriodComparisonAsync(GetPhoneOrderDataDashboardRequest request,
-        List<PhoneOrderRecord> callInRecords, List<PhoneOrderRecord> callOutRecords, RestaurantDataDto restaurantData,
-        CallInDataDto callInData, CallOutDataDto callOutData, CancellationToken cancellationToken)
-    {
-        var periodDays = (request.EndDate - request.StartDate).TotalDays;
-        if (periodDays <= 0) return;
-
-        var prevStartDate = request.StartDate.AddDays(-periodDays);
-        var prevEndDate = request.EndDate.AddDays(-periodDays);
-
-        var prevRecords = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(
-            agentIds: request.AgentIds, null, utcStart: prevStartDate, utcEnd: prevEndDate, cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        var prevCallInRecords = prevRecords?.Where(x => x.OrderRecordType == PhoneOrderRecordType.InBound).ToList() ?? new List<PhoneOrderRecord>();
-        var prevCallOutRecords = prevRecords?.Where(x => x.OrderRecordType == PhoneOrderRecordType.OutBount).ToList() ?? new List<PhoneOrderRecord>();
-
-        var prevPosOrders = await _posDataProvider.GetPosOrdersByStoreIdsAsync(request.StoreIds, null, true, prevStartDate, prevEndDate, cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        var prevCancelledOrders = await _posDataProvider.GetPosOrdersByStoreIdsAsync(
-            request.StoreIds, PosOrderModifiedStatus.Cancelled, true, prevStartDate, prevEndDate, cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        var prevCallInCount = prevCallInRecords.Count;
-        var currCallInCount = callInRecords.Count;
-        callInData.CountChange = prevCallInCount == 0 && currCallInCount > 0 ? currCallInCount : currCallInCount - prevCallInCount;
-
-        var prevCallOutCount = prevCallOutRecords.Count;
-        var currCallOutCount = callOutRecords.Count;
-        callOutData.CountChange = prevCallOutCount == 0 && currCallOutCount > 0 ? currCallOutCount : currCallOutCount - prevCallOutCount;
-
-        var prevOrderCount = prevPosOrders.Count;
-        var currOrderCount = restaurantData.OrderCount;
-        restaurantData.OrderCountChange = prevOrderCount == 0 && currOrderCount > 0 ? currOrderCount : currOrderCount - prevOrderCount;
-        
-        var prevOrderAmount = prevPosOrders.Sum(x => x.Total) - prevCancelledOrders.Sum(x => x.Total);
-        var currOrderAmount = restaurantData.TotalOrderAmount;
-        restaurantData.OrderAmountChange = prevOrderAmount == 0 && currOrderAmount > 0 ? currOrderAmount : currOrderAmount - prevOrderAmount;
-    }
-    
-    private async Task BuildRecordUnreviewDataAsync(List<PhoneOrderRecordDto> records, CancellationToken cancellationToken)
-    {
-        var unreviewedRecordIds = await _posDataProvider.GetAiDraftOrderRecordIdsByRecordIdsAsync(records.Select(x => x.Id).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        Log.Information("Get store unreview record ids: {@UnreviewedRecordIds}", unreviewedRecordIds);
-        
-        records.ForEach(x => x.IsUnreviewed = unreviewedRecordIds.Contains(x.Id));
-        
-        Log.Information("Enrich complete records: {@Records}", records);
-    }
-    
-    public async Task<GetPhoneOrderRecordScenarioResponse> GetPhoneOrderRecordScenarioAsync(GetPhoneOrderRecordScenarioRequest request, CancellationToken cancellationToken)
-    {
-        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordScenarioHistoryAsync(request.RecordId, cancellationToken).ConfigureAwait(false);
-        
-        var result = _mapper.Map<List<PhoneOrderRecordScenarioHistoryDto>>(records);
-        
-        Log.Information("Get phone order record scenario: {@Result}", result);
-        
-        return new GetPhoneOrderRecordScenarioResponse
-        {
-            Data = result
-        };
     }
 }

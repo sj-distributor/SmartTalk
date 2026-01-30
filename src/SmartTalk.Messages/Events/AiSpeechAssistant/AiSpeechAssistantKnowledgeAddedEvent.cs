@@ -8,6 +8,4 @@ public class AiSpeechAssistantKnowledgeAddedEvent : IEvent
     public AiSpeechAssistantKnowledgeDto PrevKnowledge { get; set; }
     
     public AiSpeechAssistantKnowledgeDto LatestKnowledge { get; set; }
-    
-    public bool ShouldSyncLastedKnowledge { get; set; }
 }

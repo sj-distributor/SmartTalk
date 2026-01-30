@@ -57,9 +57,6 @@ public class AiSpeechAssistantUserInfoDto
     
     [JsonProperty("customer_phone")]
     public string PhoneNumber { get; set; }
-    
-    [JsonProperty("customer_address")]
-    public string Address { get; set; }
 }
 
 public class AiSpeechAssistantOrderDto

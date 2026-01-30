@@ -1,1 +1,0 @@
-alter table `company_store` add column `is_manual_review` tinyint(1) not null default 0;

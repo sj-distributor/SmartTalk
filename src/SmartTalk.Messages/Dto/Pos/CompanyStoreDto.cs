@@ -37,8 +37,6 @@ public class CompanyStoreDto
     
     public string Timezone { get; set; }
     
-    public bool IsManualReview { get; set; }
-    
     public int? CreatedBy { get; set; }
     
     public string PosName { get; set; }
@@ -54,6 +52,4 @@ public class CompanyStoreDto
     public DateTimeOffset? LastModifiedDate { get; set; }
 
     public int Count { get; set; } = 0;
-
-    public int UnreviewCount { get; set; } = 0;
 }

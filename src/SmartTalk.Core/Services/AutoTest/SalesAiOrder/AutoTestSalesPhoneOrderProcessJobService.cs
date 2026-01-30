@@ -163,12 +163,9 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
     {
         var record = await _autoTestDataProvider.GetAutoTestImportDataRecordAsync(recordId, cancellationToken).ConfigureAwait(false);
 
-        var crmToken = await _crmClient.GetCrmTokenAsync(cancellationToken).ConfigureAwait(false);
-        if (crmToken == null) return;
-        
         try
         {
-            var contacts = await _crmClient.GetCustomerContactsAsync(customerId.ToString(), crmToken, cancellationToken).ConfigureAwait(false);
+            var contacts = await _crmClient.GetCustomerContactsAsync(customerId.ToString(), cancellationToken).ConfigureAwait(false);
             var phoneNumbers = contacts.Select(c => NormalizePhone(c.Phone)).Where(p => !string.IsNullOrEmpty(p)).Distinct().ToList();
 
             if (!phoneNumbers.Any()) return;

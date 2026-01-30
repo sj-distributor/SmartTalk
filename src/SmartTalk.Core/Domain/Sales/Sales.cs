@@ -5,7 +5,7 @@ using SmartTalk.Messages.Enums.Sales;
 namespace SmartTalk.Core.Domain.Sales;
 
 [Table("sales")]
-public class Sales : IEntity<int>, IHasCreatedFields, IAgent
+public class Sales : IEntity, IHasCreatedFields, IAgent
 {
     [Key]
     [Column("id")]

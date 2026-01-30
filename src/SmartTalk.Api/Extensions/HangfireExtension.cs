@@ -29,7 +29,6 @@ public static class HangfireExtension
 
         services.AddHangfireServer(opt =>
         {
-            opt.WorkerCount = 30;
             opt.ServerTimeout = TimeSpan.FromHours(2);
             opt.Queues = new[]
             {
@@ -64,20 +63,6 @@ public static class HangfireExtension
             opt.WorkerCount = 50;
             opt.Queues = new[] { HangfireConstants.InternalHostingTransfer };
             opt.ServerName = $"DEPLOY-{HangfireConstants.InternalHostingTransfer.ToUpper()}-{Guid.NewGuid()}";
-        });
-        
-        services.AddHangfireServer(opt =>
-        {
-            opt.WorkerCount = 50;
-            opt.Queues = new[] { HangfireConstants.InternalHostingRecordPhoneCall };
-            opt.ServerName = $"DEPLOY-{HangfireConstants.InternalHostingRecordPhoneCall.ToUpper()}-{Guid.NewGuid()}";
-        });
-        
-        services.AddHangfireServer(opt =>
-        {
-            opt.WorkerCount = 20;
-            opt.Queues = new[] { HangfireConstants.InternalHostingCaCheKnowledgeVariable };
-            opt.ServerName = $"DEPLOY-{HangfireConstants.InternalHostingCaCheKnowledgeVariable.ToUpper()}-{Guid.NewGuid()}";
         });
         
         services.AddHangfireServer(opt =>

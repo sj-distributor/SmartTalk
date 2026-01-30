@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
-using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Requests.AiSpeechAssistant;
 
 namespace SmartTalk.Api.Controllers;
@@ -68,8 +67,7 @@ public class AiSpeechAssistantController : ControllerBase
                 AssistantId = id,
                 Host = HttpContext.Request.Host.Host,
                 NumberId = numberId,
-                TwilioWebSocket = await HttpContext.WebSockets.AcceptWebSocketAsync(),
-                OrderRecordType = PhoneOrderRecordType.OutBount,
+                TwilioWebSocket = await HttpContext.WebSockets.AcceptWebSocketAsync()
             };
             await _mediator.SendAsync(command);
         }
@@ -301,52 +299,4 @@ public class AiSpeechAssistantController : ControllerBase
         
         return Ok(response);
     }
-        
-    [Route("knowledge/copy"), HttpPost]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(KonwledgeCopyResponse))]
-    public async Task<IActionResult> KonwledgeCopyAsync([FromBody] KonwledgeCopyCommand command, CancellationToken cancellationToken)
-    {
-        var response = await _mediator.SendAsync<KonwledgeCopyCommand, KonwledgeCopyResponse>(command, cancellationToken).ConfigureAwait(false);
-
-        return Ok(response);
-    }
-    
-    [Route("knowledges"), HttpGet]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetKonwledgesResponse))]
-    public async Task<IActionResult> GetKonwledgesAsync([FromQuery] GetKonwledgesRequest request, CancellationToken cancellationToken)
-    {
-        var response = await _mediator.RequestAsync<GetKonwledgesRequest, GetKonwledgesResponse>(request, cancellationToken).ConfigureAwait(false);
-
-        return Ok(response);
-    }
-    
-    [Route("knowledge/realted"), HttpGet]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetKonwledgeRelatedResponse))]
-    public async Task<IActionResult> GetKonwledgeRelatedAsync([FromQuery] GetKonwledgeRelatedRequest request, CancellationToken cancellationToken)
-    {
-        var response = await _mediator.RequestAsync<GetKonwledgeRelatedRequest, GetKonwledgeRelatedResponse>(request, cancellationToken).ConfigureAwait(false);
-
-        return Ok(response);
-    }
-
-    #region variable_cache
-    
-    [Route("caches"), HttpGet]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAiSpeechAssistantKnowledgeVariableCacheResponse))]
-    public async Task<IActionResult> GetAiSpeechAssistantKnowledgeVariableCacheAsync([FromQuery] GetAiSpeechAssistantKnowledgeVariableCacheRequest request)
-    {
-        var response = await _mediator.RequestAsync<GetAiSpeechAssistantKnowledgeVariableCacheRequest, GetAiSpeechAssistantKnowledgeVariableCacheResponse>(request).ConfigureAwait(false);
-        
-        return Ok(response);
-    }
-    
-    [Route("caches"), HttpPut]
-    public async Task<IActionResult> UpdateAiSpeechAssistantKnowledgeVariableCacheAsync([FromBody] UpdateAiSpeechAssistantKnowledgeVariableCacheCommand command)
-    {
-        await _mediator.SendAsync(command);
-
-        return Ok();
-    }
-    
-    #endregion
 }

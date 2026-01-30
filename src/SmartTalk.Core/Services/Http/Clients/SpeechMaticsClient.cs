@@ -53,7 +53,7 @@ public class SpeechMaticsClient : ISpeechMaticsClient
         
         Log.Information("formData : {@formData} , fileData : {@fileData}", formData, fileData);
         
-        return await _httpClientFactory.PostAsMultipartAsync<string>($"{_speechMaticsSetting.BaseUrl}/jobs/", formData, fileData, cancellationToken, timeout: TimeSpan.FromMinutes(5), headers: headers, isNeedToReadErrorContent: true).ConfigureAwait(false);
+        return await _httpClientFactory.PostAsMultipartAsync<string>($"{_speechMaticsSetting.BaseUrl}/jobs/", formData, fileData, cancellationToken, headers: headers, isNeedToReadErrorContent: true).ConfigureAwait(false);;
     }
     
     public async Task<SpeechMaticsGetAllJobsResponseDto> GetAllJobsAsync(CancellationToken cancellationToken)

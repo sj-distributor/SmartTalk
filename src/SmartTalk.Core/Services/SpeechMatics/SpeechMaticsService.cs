@@ -1,7 +1,4 @@
-using System.Text.Json;
-using AutoMapper;
-using DocumentFormat.OpenXml.Spreadsheet;
-using Google.Cloud.Translation.V2;
+
 using Serilog;
 using SmartTalk.Core.Ioc;
 using Newtonsoft.Json.Linq;
@@ -49,7 +46,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         while (true)
         {
             var transcriptionJobIdJObject = JObject.Parse(await CreateTranscriptionJobAsync(recordContent, recordName, language, cancellationToken).ConfigureAwait(false));
-            
+
             var transcriptionJobId = transcriptionJobIdJObject["id"]?.ToString();
 
             Log.Information("Phone order record transcriptionJobId: {@transcriptionJobId}", transcriptionJobId);
@@ -115,7 +112,7 @@ public class SpeechMaticsService : ISpeechMaticsService
     private async Task<string> CreateTranscriptionJobAsync(byte[] data, string fileName, string language, CancellationToken cancellationToken)
     {
         var createTranscriptionDto = new SpeechMaticsCreateTranscriptionDto { Data = data, FileName = fileName };
-        
+
         var jobConfigDto = new SpeechMaticsJobConfigDto
         {
             Type = SpeechMaticsJobType.Transcription,

@@ -25,15 +25,13 @@ public class SalesClient : ISalesClient
     private readonly SalesSetting _salesSetting;
     private readonly Dictionary<string, string> _headers;
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
-    private readonly SalesOrderArrivalSetting _salesOrderArrivalSetting;
-    private readonly SalesCustomerHabitSetting _salesCustomerHabitSetting;
+    public readonly SalesOrderArrivalSetting _salesOrderArrivalSetting;
 
-    public SalesClient(SalesSetting salesSetting, ISmartTalkHttpClientFactory httpClientFactory, SalesOrderArrivalSetting salesOrderArrivalSetting, SalesCustomerHabitSetting salesCustomerHabitSetting)
+    public SalesClient(SalesSetting salesSetting, ISmartTalkHttpClientFactory httpClientFactory, SalesOrderArrivalSetting salesOrderArrivalSetting)
     {
         _salesSetting = salesSetting;
         _httpClientFactory = httpClientFactory;
         _salesOrderArrivalSetting = salesOrderArrivalSetting;
-        _salesCustomerHabitSetting = salesCustomerHabitSetting;
 
         _headers = new Dictionary<string, string>
         {
@@ -96,11 +94,6 @@ public class SalesClient : ISalesClient
 
     public async Task<GetCustomerLevel5HabitResponseDto> GetCustomerLevel5HabitAsync(GetCustomerLevel5HabitRequstDto request, CancellationToken cancellationToken)
     {
-        var header = new Dictionary<string, string>
-        {
-            { "X-API-KEY", _salesCustomerHabitSetting.ApiKey }
-        };
-        
-        return await _httpClientFactory.PostAsJsonAsync<GetCustomerLevel5HabitResponseDto>($"{_salesCustomerHabitSetting.BaseUrl}/api/CustomerInfo/QueryHistoryCustomerLevel5Habit", request, headers: header, cancellationToken: cancellationToken).ConfigureAwait(false);
+        return await _httpClientFactory.PostAsJsonAsync<GetCustomerLevel5HabitResponseDto>($"{_salesSetting.BaseUrl}/api/CustomerInfo/QueryHistoryCustomerLevel5Habit", request, headers: _headers, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 }

@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Domain.Pos;
-using SmartTalk.Messages.Enums.Pos;
+using SmartTalk.Messages.Dto.Pos;
 
 namespace SmartTalk.Core.Services.Pos;
 
@@ -16,18 +16,8 @@ public partial interface IPosDataProvider
     Task AddPosOrdersAsync(List<PosOrder> orders, bool forceSave = true, CancellationToken cancellationToken = default);
 
     Task<PosOrder> GetPosOrderSortByOrderNoAsync(int storeId, DateTimeOffset utcStart, DateTimeOffset utcEnd, CancellationToken cancellationToken);
-
-    Task<List<PosOrder>>GetPosOrdersByStoreIdsAsync(
-        List<int> storeIds, PosOrderModifiedStatus? modifiedStatus = null, bool? isPush = null, DateTimeOffset? startDate = null,
-        DateTimeOffset? endDate = null, CancellationToken cancellationToken = default);
     
     Task<List<PosOrder>> GetPosCustomerInfosAsync(CancellationToken cancellationToken);
-    
-    Task<List<PosOrder>> GetPosOrdersByRecordIdsAsync(List<int> recordIds, CancellationToken cancellationToken);
-
-    Task<List<int>> GetAiDraftOrderRecordIdsByRecordIdsAsync(List<int> recordIds, CancellationToken cancellationToken);
-    
-    Task DeletePosOrdersAsync(List<PosOrder> orders, bool isForceSave = true, CancellationToken cancellationToken = default);
 }
 
 public partial class PosDataProvider
@@ -85,27 +75,7 @@ public partial class PosDataProvider
             .Where(x => x.StoreId == storeId && x.CreatedDate >= utcStart && x.CreatedDate < utcEnd)
             .OrderByDescending(x => x.OrderNo).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
-    
-    public async Task<List<PosOrder>> GetPosOrdersByStoreIdsAsync(
-        List<int> storeIds, PosOrderModifiedStatus? modifiedStatus = null, bool? isPush = null, DateTimeOffset? startDate = null, DateTimeOffset? endDate = null, CancellationToken cancellationToken = default)
-    {
-        var query = _repository.Query<PosOrder>().Where(x => storeIds.Contains(x.StoreId) && x.OrderId != null);
-        
-        if (modifiedStatus.HasValue)
-            query = query.Where(x => x.ModifiedStatus == modifiedStatus.Value);
-        
-        if (isPush.HasValue)
-            query = query.Where(x => x.IsPush == isPush.Value);
-        
-        if (startDate.HasValue)
-            query = query.Where(x => x.CreatedDate >= startDate.Value);
-        
-        if (endDate.HasValue)
-            query = query.Where(x => x.CreatedDate <= endDate.Value);
-        
-        return await query.OrderByDescending(x => x.CreatedDate).ToListAsync(cancellationToken).ConfigureAwait(false);
-    }
-    
+
     public async Task<List<PosOrder>> GetPosCustomerInfosAsync(CancellationToken cancellationToken)
     {
         var query = _repository.QueryNoTracking<PosOrder>().Where(x => !string.IsNullOrWhiteSpace(x.Phone));
@@ -116,26 +86,5 @@ public partial class PosDataProvider
             .ToListAsync(cancellationToken).ConfigureAwait(false);
 
         return latestOrders;
-    }
-
-    public async Task<List<PosOrder>> GetPosOrdersByRecordIdsAsync(List<int> recordIds, CancellationToken cancellationToken)
-    {
-        return await _repository.QueryNoTracking<PosOrder>()
-            .Where(x => x.RecordId.HasValue && recordIds.Contains(x.RecordId.Value))
-            .ToListAsync(cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task<List<int>> GetAiDraftOrderRecordIdsByRecordIdsAsync(List<int> recordIds, CancellationToken cancellationToken)
-    {
-        return await _repository.QueryNoTracking<PosOrder>()
-            .Where(x => x.Status == PosOrderStatus.Pending && x.RecordId.HasValue && recordIds.Contains(x.RecordId.Value))
-            .Select(x => x.RecordId.Value).ToListAsync(cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task DeletePosOrdersAsync(List<PosOrder> orders, bool isForceSave = true, CancellationToken cancellationToken = default)
-    {
-        await _repository.DeleteAllAsync(orders, cancellationToken).ConfigureAwait(false);
-        
-        if (isForceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 }

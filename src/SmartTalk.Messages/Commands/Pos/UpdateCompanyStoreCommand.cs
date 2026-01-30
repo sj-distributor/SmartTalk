@@ -22,8 +22,6 @@ public class UpdateCompanyStoreCommand : ICommand
 
     public string Timezone { get; set; }
     
-    public bool IsManualReview { get; set; }
-    
     public List<string> PhoneNumbers { get; set; }
 }
 

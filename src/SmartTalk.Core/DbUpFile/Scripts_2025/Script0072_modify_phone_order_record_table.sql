@@ -1,1 +1,0 @@
-alter table `phone_order_record` modify column `order_record_type` int not null default 0;

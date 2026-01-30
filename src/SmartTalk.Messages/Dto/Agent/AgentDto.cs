@@ -49,8 +49,6 @@ public class AgentDto
     public string TransferCallNumber { get; set; }
     
     public DateTimeOffset CreatedDate { get; set; }
-
-    public int UnreviewCount { get; set; } = 0;
     
     public List<AiSpeechAssistantDto> Assistants { get; set; }
 }

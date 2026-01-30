@@ -1,2 +1,0 @@
-CREATE INDEX `idx_source_knowledge_id` ON `ai_speech_assistant_knowledge_copy_related` (source_knowledge_id);
-CREATE INDEX `idx_target_knowledge_id` ON `ai_speech_assistant_knowledge_copy_related` (target_knowledge_id);

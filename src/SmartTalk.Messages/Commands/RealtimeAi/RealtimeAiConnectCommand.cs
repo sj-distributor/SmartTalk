@@ -16,6 +16,4 @@ public class RealtimeAiConnectCommand : ICommand
     public RealtimeAiAudioCodec OutputFormat { get; set; }
     
     public RealtimeAiServerRegion Region { get; set; }
-    
-    public PhoneOrderRecordType OrderRecordType { get; set; }
 }

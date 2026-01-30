@@ -8,11 +8,7 @@ public class PhoneOrderRecordDto
 {
     public int Id { get; set; }
 
-    public int AgentId { get; set; }
-    
     public string SessionId { get; set; }
-    
-    public int? AssistantId { get; set; } 
     
     public PhoneOrderRecordStatus Status { get; set; }
     
@@ -42,8 +38,6 @@ public class PhoneOrderRecordDto
     
     public TranscriptionLanguage Language { get; set; }
     
-    public PhoneOrderRecordType OrderRecordType { get; set; }
-    
     public double? Duration { get; set; }
     
     public bool? IsTransfer { get; set; }
@@ -51,20 +45,4 @@ public class PhoneOrderRecordDto
     public string IncomingCallNumber { get; set; }
 
     public string ConversationText { get; set; }
-    
-    public bool? IsCustomerFriendly { get; set; }
-    
-    public DialogueScenarios? Scenario { get; set; }
-
-    public string Remark { get; set; }
-    
-    public bool? IsHumanAnswered { get; set; }
-    
-    public bool IsUnreviewed { get; set; }
-
-    public int? UnSendCount { get; set; }
-    
-    public bool IsModifyScenario { get; set; }
-    
-    public bool IsLockedScenario { get; set; }
 }

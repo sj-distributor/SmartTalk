@@ -9,16 +9,13 @@ using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Identity;
 using SmartTalk.Core.Services.Jobs;
-using SmartTalk.Core.Services.Linphone;
 using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Services.Restaurants;
 using SmartTalk.Core.Services.RetrievalDb.VectorDb;
 using SmartTalk.Core.Services.SpeechMatics;
 using SmartTalk.Core.Services.STT;
 using SmartTalk.Core.Settings.PhoneOrder;
-using SmartTalk.Core.Settings.Sales;
 using SmartTalk.Core.Settings.SpeechMatics;
-using SmartTalk.Core.Services.AiSpeechAssistant;
 
 namespace SmartTalk.Core.Services.PhoneOrder;
 

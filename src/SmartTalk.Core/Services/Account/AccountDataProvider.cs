@@ -52,8 +52,6 @@ namespace SmartTalk.Core.Services.Account
         Task<List<RoleUser>> GetRoleUserByRoleAccountLevelAsync(UserAccountLevel userAccountLevel, CancellationToken cancellationToken);
 
         Task<UserAccount> GetUserAccountByUserIdAsync(int userId, CancellationToken cancellationToken);
-        
-        Task<List<UserAccount>> GetUserAccountByUserIdsAsync(List<int> userIds, CancellationToken cancellationToken);
 
         Task<UserAccount> GetUserAccountByUserNameWithServiceProviderIdAsync(string userName, int? serviceProviderId, CancellationToken cancellationToken);
     }
@@ -394,11 +392,6 @@ namespace SmartTalk.Core.Services.Account
         public async Task<UserAccount> GetUserAccountByUserIdAsync(int userId, CancellationToken cancellationToken)
         {
             return await _repository.Query<UserAccount>().Where(x => x.Id == userId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
-        }
-
-        public async Task<List<UserAccount>> GetUserAccountByUserIdsAsync(List<int> userIds, CancellationToken cancellationToken)
-        {
-            return await _repository.Query<UserAccount>().Where(x => userIds.Contains(x.Id)).ToListAsync(cancellationToken).ConfigureAwait(false);
         }
 
         public async Task<UserAccount> GetUserAccountByUserNameWithServiceProviderIdAsync(string userName, int? serviceProviderId, CancellationToken cancellationToken)

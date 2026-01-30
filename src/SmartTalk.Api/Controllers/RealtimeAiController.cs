@@ -2,7 +2,6 @@ using Mediator.Net;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SmartTalk.Messages.Commands.RealtimeAi;
-using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.RealtimeAi;
 
 namespace SmartTalk.Api.Controllers;
@@ -47,8 +46,7 @@ public class RealtimeAiController : ControllerBase
                 InputFormat = RealtimeAiAudioCodec.PCM16,
                 OutputFormat = RealtimeAiAudioCodec.PCM16,
                 WebSocket = await HttpContext.WebSockets.AcceptWebSocketAsync(),
-                Region = RealtimeAiServerRegion.US,
-                OrderRecordType = PhoneOrderRecordType.TestLink
+                Region = RealtimeAiServerRegion.US
             };
             
             await _mediator.SendAsync(command).ConfigureAwait(false);
@@ -71,8 +69,7 @@ public class RealtimeAiController : ControllerBase
                 InputFormat = RealtimeAiAudioCodec.PCM16,
                 OutputFormat = RealtimeAiAudioCodec.PCM16,
                 WebSocket = await HttpContext.WebSockets.AcceptWebSocketAsync(),
-                Region = region,
-                OrderRecordType = PhoneOrderRecordType.TestLink
+                Region = region
             };
             
             await _mediator.SendAsync(command).ConfigureAwait(false);
