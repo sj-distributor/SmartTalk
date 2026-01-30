@@ -76,8 +76,17 @@ public class SalesPhoneOrderPushService : ISalesPhoneOrderPushService
             
             await TryCompleteRecordAsync(task.RecordId, cancellationToken).ConfigureAwait(false);
 
-            Log.Information("Enqueuing next push task for RecordId={RecordId}", task.RecordId);
-            _backgroundJobClient.Enqueue<ISalesPhoneOrderPushService>(s => s.ExecutePhoneOrderPushTasksAsync(task.RecordId, CancellationToken.None));
+            var hasPendingTasks = await _salesDataProvider.HasPendingTasksByRecordIdAsync(task.RecordId, cancellationToken).ConfigureAwait(false);
+
+            if (hasPendingTasks)
+            {
+                Log.Information("Enqueuing next push task for RecordId={RecordId}", task.RecordId);
+                _backgroundJobClient.Enqueue<ISalesPhoneOrderPushService>(s => s.ExecutePhoneOrderPushTasksAsync(task.RecordId, CancellationToken.None));
+            }
+            else
+            {
+                Log.Information("No pending tasks left, record flow ends. RecordId={RecordId}", task.RecordId);
+            }
         }
         catch (Exception ex)
         {
