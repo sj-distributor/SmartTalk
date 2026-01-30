@@ -36,15 +36,6 @@ public class SystemController : ControllerBase
         return Ok(response);
     }
 
-    [Route("company/report"), HttpGet]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPhoneOrderCompanyCallReportResponse))]
-    public async Task<IActionResult> GetPhoneOrderCompanyCallReportAsync([FromQuery] GetPhoneOrderCompanyCallReportRequest request)
-    {
-        var response = await _mediator.RequestAsync<GetPhoneOrderCompanyCallReportRequest, GetPhoneOrderCompanyCallReportResponse>(request).ConfigureAwait(false);
-
-        return Ok(response);
-    }
-
     [Route("external/inbound/redirect"), HttpPost]
     public async Task<IActionResult> ConfigureAiSpeechAssistantInboundRouteAsync([FromBody] ConfigureAiSpeechAssistantInboundRouteCommand command)
     {

@@ -92,10 +92,4 @@ public class PosOrder : IEntity, IHasCreatedFields, IHasModifiedFields
 
     [Column("last_modified_date")]
     public DateTimeOffset? LastModifiedDate { get; set; }
-    
-    [Column("sent_by")]
-    public int? SentBy { get; set; }
-
-    [Column("sent_time")]
-    public DateTimeOffset? SentTime { get; set; }
 }

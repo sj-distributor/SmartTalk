@@ -4,9 +4,6 @@ namespace SmartTalk.Messages.Dto.WebSocket;
 
 public class PhoneOrderDetailDto
 {
-    [JsonProperty("type")]
-    public int Type { get; set; }
-    
     [JsonProperty("food_details")]
     public List<FoodDetailDto> FoodDetails { get; set; } = new();
 }

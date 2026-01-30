@@ -17,7 +17,6 @@ using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Core.Services.RealtimeAi.Adapters;
-using SmartTalk.Core.Services.Timer;
 using SmartTalk.Messages.Commands.Attachments;
 using SmartTalk.Messages.Commands.RealtimeAi;
 using SmartTalk.Messages.Dto.Attachments;
@@ -46,13 +45,11 @@ public class RealtimeAiService : IRealtimeAiService
     private WebSocket _webSocket;
     private IRealtimeAiConversationEngine _conversationEngine;
     private Domain.AISpeechAssistant.AiSpeechAssistant _speechAssistant;
-
-    private int _round;
+    
     private string _sessionId;
     private volatile bool _isAiSpeaking;
     private bool _hasHandledAudioBuffer;
     private MemoryStream _wholeAudioBuffer;
-    private readonly IInactivityTimerManager _inactivityTimerManager;
     private List<(AiSpeechAssistantSpeaker, string)> _conversationTranscription;
 
     public RealtimeAiService(
@@ -60,7 +57,6 @@ public class RealtimeAiService : IRealtimeAiService
         IAgentDataProvider agentDataProvider,
         IAttachmentService attachmentService,
         IRealtimeAiSwitcher realtimeAiSwitcher,
-        IInactivityTimerManager inactivityTimerManager,
         IRealtimeAiConversationEngine conversationEngine,
         ISmartTalkBackgroundJobClient backgroundJobClient,
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
@@ -71,10 +67,8 @@ public class RealtimeAiService : IRealtimeAiService
         _realtimeAiSwitcher = realtimeAiSwitcher;
         _conversationEngine = conversationEngine;
         _backgroundJobClient = backgroundJobClient;
-        _inactivityTimerManager = inactivityTimerManager;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
 
-        _round = 0;
         _webSocket = null;
         _isAiSpeaking = false;
         _speechAssistant = null;
@@ -86,12 +80,10 @@ public class RealtimeAiService : IRealtimeAiService
     public async Task RealtimeAiConnectAsync(RealtimeAiConnectCommand command, CancellationToken cancellationToken)
     {
         var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantWithKnowledgeAsync(command.AssistantId, cancellationToken).ConfigureAwait(false);
-        var timer = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantTimerByAssistantIdAsync(assistant.Id, cancellationToken).ConfigureAwait(false);
-
+        
         Log.Information("Get realtime ai assistant: {@Assistant}", assistant);
         
         _speechAssistant = assistant ?? throw new Exception($"Could not find a assistant by id: {command.AssistantId}");
-        _speechAssistant.Timer = timer;
         
         await RealtimeAiConnectInternalAsync(command.WebSocket, 
             "You are a friendly assistant", command.InputFormat, command.OutputFormat, command.Region, command.OrderRecordType, cancellationToken).ConfigureAwait(false);
@@ -222,9 +214,6 @@ public class RealtimeAiService : IRealtimeAiService
 
     private async Task OnAiDetectedUserSpeechAsync()
     {
-        if (_speechAssistant.Timer != null)
-            StopInactivityTimer();
-        
         var speechDetected = new
         {
             type = "SpeechDetected",
@@ -249,7 +238,6 @@ public class RealtimeAiService : IRealtimeAiService
 
     private async Task OnAiTurnCompletedAsync(object data)
     {
-        _round += 1;
         _isAiSpeaking = false;
         
         var turnCompleted = new
@@ -257,9 +245,6 @@ public class RealtimeAiService : IRealtimeAiService
             type = "AiTurnCompleted",
             session_id = _streamSid
         };
-        
-        if (_speechAssistant.Timer != null && (_speechAssistant.Timer.SkipRound.HasValue && _speechAssistant.Timer.SkipRound.Value < _round || !_speechAssistant.Timer.SkipRound.HasValue))
-            StartInactivityTimer(_speechAssistant.Timer.TimeSpanSeconds, _speechAssistant.Timer.AlterContent);
 
         await _webSocket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(turnCompleted))), WebSocketMessageType.Text, true, CancellationToken.None);
         Log.Information("Realtime turn completed, {@data}", data);
@@ -368,20 +353,5 @@ public class RealtimeAiService : IRealtimeAiService
                     Transcription = t.Item2
                 }).ToList()
             }, CancellationToken.None));
-    }
-    
-    private void StartInactivityTimer(int seconds, string alterContent)
-    {
-        _inactivityTimerManager.StartTimer(_streamSid, TimeSpan.FromSeconds(seconds), async () =>
-        {
-            Log.Warning("No activity detected for {seconds} seconds.", seconds);
-
-            await _conversationEngine.SendTextAsync(alterContent);
-        });
-    }
-
-    private void StopInactivityTimer()
-    {
-        _inactivityTimerManager.StopTimer(_streamSid);
     }
 }

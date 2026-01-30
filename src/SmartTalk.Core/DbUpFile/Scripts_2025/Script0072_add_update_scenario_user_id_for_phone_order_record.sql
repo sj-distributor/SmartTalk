@@ -1,1 +1,0 @@
-alter table `phone_order_record` add column `update_scenario_user_id` int null;

@@ -1,1 +1,0 @@
-alter table `phone_order_record` add column `is_modify_scenario` tinyint(1) not null default 0;

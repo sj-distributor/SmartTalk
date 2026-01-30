@@ -6,7 +6,6 @@ using SmartTalk.Messages.Dto.Agent;
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Domain;
 using SmartTalk.Core.Domain.AISpeechAssistant;
-using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.Restaurants;
 
 namespace SmartTalk.Core.Services.Agents;
@@ -34,8 +33,6 @@ public interface IAgentDataProvider : IScopedDependency
     Task<Agent> GetAgentByNumberAsync(string didNumber, int? assistantId = null, CancellationToken cancellationToken = default);
     
     Task<(int Count, List<Agent> Agents)> GetAgentsPagingAsync(int pageIndex, int pageSize, List<int> agentIds, string keyword = null, CancellationToken cancellationToken = default);
-
-    Task<List<StoreAgentFlatDto>> GetStoreAgentsAsync(List<int> storeIds, CancellationToken cancellationToken = default);
 }
 
 public class AgentDataProvider : IAgentDataProvider
@@ -136,10 +133,8 @@ public class AgentDataProvider : IAgentDataProvider
         List<int> agentIds = null, string keyword = null, bool? isDefault = null, CancellationToken cancellationToken = default)
     {
         var query = from agent in _repository.Query<Agent>().Where(x => x.IsDisplay && x.IsSurface)
-            join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId into agentAssistantGroups
-            from agentAssistant in agentAssistantGroups.DefaultIfEmpty()
-            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agentAssistant.AssistantId equals assistant.Id into assistantGroups
-            from assistant in assistantGroups.DefaultIfEmpty()
+            join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
+            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agentAssistant.AssistantId equals assistant.Id
             where agentIds != null && agentIds.Contains(agent.Id)
             select new { agent, assistant };
         
@@ -191,22 +186,5 @@ public class AgentDataProvider : IAgentDataProvider
         var agents = await query.OrderByDescending(x => x.CreatedDate).Skip((pageIndex - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken).ConfigureAwait(false);
         
         return (count, agents);
-    }
-    
-    public async Task<List<StoreAgentFlatDto>> GetStoreAgentsAsync(List<int> storeIds, CancellationToken cancellationToken = default)
-    {
-        var query =
-            from posAgent in _repository.Query<PosAgent>()
-            join agent in _repository.Query<Agent>() on posAgent.AgentId equals agent.Id
-            join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
-            where (storeIds == null || storeIds.Count == 0 || storeIds.Contains(posAgent.StoreId)) && agent.IsSurface && agent.IsDisplay
-            select new StoreAgentFlatDto
-            {
-                StoreId = posAgent.StoreId,
-                AgentId = agent.Id,
-                AgentName = agent.Name
-            };
-
-        return await query.Distinct().ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }

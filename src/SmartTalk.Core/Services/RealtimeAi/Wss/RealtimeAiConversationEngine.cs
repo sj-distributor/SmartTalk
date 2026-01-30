@@ -258,7 +258,6 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
         Log.Information("AiConversationEngine: 准备发送文本消息: '{Text}'. 会话 ID: {SessionId}", text, _sessionId); // AiConversationEngine: Preparing to send text message: '{Text}'. Session ID: {SessionId}
         var messageJson = _aiAdapter.BuildTextUserMessage(text, _sessionId);
         await _realtimeAiClient.SendMessageAsync(messageJson, _sessionCts.Token);
-        await _realtimeAiClient.SendMessageAsync(JsonSerializer.Serialize(new { type = "response.create" }), _sessionCts.Token);
     }
 
     public async Task NotifyUserSpeechStartedAsync(string lastAssistantItemIdToInterrupt = null)

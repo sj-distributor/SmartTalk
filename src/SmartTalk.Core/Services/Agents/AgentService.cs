@@ -120,8 +120,7 @@ public class AgentService : IAgentService
             Voice = command.Voice,
             WaitInterval = command.WaitInterval,
             IsTransferHuman = command.IsTransferHuman,
-            TransferCallNumber = command.TransferCallNumber,
-            ServiceHours = command.ServiceHours
+            TransferCallNumber = command.TransferCallNumber
         };
         
         await _agentDataProvider.AddAgentAsync(agent, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -230,7 +229,6 @@ public class AgentService : IAgentService
             await task.ConfigureAwait(false);
             
             var agentList = (List<AgentPreviewDto>)((dynamic)task).Result;
-            
             result.AddRange(agentList);
         }
 

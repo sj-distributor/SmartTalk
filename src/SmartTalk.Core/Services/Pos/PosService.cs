@@ -12,7 +12,6 @@ using SmartTalk.Core.Services.Caching.Redis;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Identity;
 using SmartTalk.Core.Services.Jobs;
-using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.Printer;
 using SmartTalk.Core.Services.RetrievalDb.VectorDb;
 using SmartTalk.Core.Services.Security;
@@ -21,6 +20,7 @@ using SmartTalk.Messages.Constants;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Pos;
+using SmartTalk.Messages.Enums.Account;
 using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Requests.Pos;
 
@@ -53,14 +53,6 @@ public partial interface IPosService : IScopedDependency
     Task<GetCurrentUserStoresResponse> GetCurrentUserStoresAsync(GetCurrentUserStoresRequest request, CancellationToken cancellationToken);
     
     Task<GetStoresAgentsResponse> GetStoresAgentsAsync(GetStoresAgentsRequest request, CancellationToken cancellationToken);
-    
-    Task<GetDataDashBoardCompanyWithStoresResponse> GetDataDashBoardCompanyWithStoresAsync(GetDataDashBoardCompanyWithStoresRequest request, CancellationToken cancellationToken);
-    
-    Task<GetAllStoresResponse> GetAllStoresAsync(GetAllStoresRequest request, CancellationToken cancellationToken);
-    
-    Task<GetSimpleStructuredStoresResponse> GetSimpleStructuredStoresAsync(GetSimpleStructuredStoresRequest request, CancellationToken cancellationToken);
-    
-    Task<GetStoreByAgentIdResponse> GetStoreByAgentIdAsync(GetStoreByAgentIdRequest request, CancellationToken cancellationToken);
 }
 
 public partial class PosService : IPosService
@@ -76,10 +68,9 @@ public partial class PosService : IPosService
     private readonly IAgentDataProvider _agentDataProvider;
     private readonly IPrinterDataProvider _printerDataProvider;
     private readonly IAccountDataProvider _accountDataProvider;
-    private readonly ISecurityDataProvider _securityDataProvider;
-    private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
-    private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
+    private readonly ISecurityDataProvider _securityDataProvider;
+    private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
     
     public PosService(
         IMapper mapper,
@@ -93,10 +84,9 @@ public partial class PosService : IPosService
         IAgentDataProvider agentDataProvider,
         IPrinterDataProvider printerDataProvider,
         IAccountDataProvider accountDataProvider,
+        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider,
         ISecurityDataProvider  securityDataProvider,
-        IPhoneOrderDataProvider phoneOrderDataProvider,
-        ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient,
-        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
+        ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient)
     {
         _mapper = mapper;
         _vectorDb = vectorDb;
@@ -109,10 +99,9 @@ public partial class PosService : IPosService
         _agentDataProvider = agentDataProvider;
         _printerDataProvider = printerDataProvider;
         _accountDataProvider = accountDataProvider;
-        _securityDataProvider = securityDataProvider;
-        _phoneOrderDataProvider = phoneOrderDataProvider;
-        _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
+        _securityDataProvider = securityDataProvider;
+        _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
     }
     
     public async Task<GetCompanyWithStoresResponse> GetCompanyWithStoresAsync(GetCompanyWithStoresRequest request, CancellationToken cancellationToken)
@@ -161,9 +150,6 @@ public partial class PosService : IPosService
     public async Task<UpdateCompanyStoreResponse> UpdateCompanyStoreAsync(UpdateCompanyStoreCommand command, CancellationToken cancellationToken)
     {
         var store = await _posDataProvider.GetPosCompanyStoreAsync(id: command.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        if (store.IsManualReview != command.IsManualReview)
-            await CheckAiSpeechAssistantOrderPushSwitchAsync(store.Id, command.IsManualReview, cancellationToken).ConfigureAwait(false);
         
         _mapper.Map(command, store);
 
@@ -393,88 +379,15 @@ public partial class PosService : IPosService
         var stores = _mapper.Map<List<CompanyStoreDto>>(
             await _posDataProvider.GetPosCompanyStoresAsync(ids: request.StoreIds, cancellationToken: cancellationToken).ConfigureAwait(false));
         
-        var flatAgents =  await _agentDataProvider.GetStoreAgentsAsync(storeIds: request.StoreIds, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        var agentLookup = flatAgents
-            .GroupBy(x => x.StoreId)
-            .ToDictionary(
-                g => g.Key,
-                g => g.Select(x => new AgentDetailDto
-                { Id = x.AgentId, Name = x.AgentName }).ToList());
-
+        var allAgents = await _posDataProvider.GetPosAgentsAsync(storeIds: request.StoreIds, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
         var enrichStores = stores.Select(store => new GetStoresAgentsResponseDataDto
         {
             Store = store,
-            Agents = agentLookup.TryGetValue(store.Id, out var agents)
-                ? agents
-                : new List<AgentDetailDto>()
+            AgentIds = allAgents.Where(x => x.StoreId == store.Id).Select(x => x.AgentId).ToList()
         }).ToList();
-        
+
         return new GetStoresAgentsResponse { Data = enrichStores };
-    }
-
-    public async Task<GetAllStoresResponse> GetAllStoresAsync(GetAllStoresRequest request, CancellationToken cancellationToken)
-    {
-        var stores = await _posDataProvider.GetAllStoresAsync(request.ServiceProviderId, cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        return new GetAllStoresResponse
-        {
-            Data = _mapper.Map<List<CompanyStoreDto>>(stores)
-        };
-    }
-    
-    public async Task<GetSimpleStructuredStoresResponse> GetSimpleStructuredStoresAsync(GetSimpleStructuredStoresRequest request, CancellationToken cancellationToken)
-    {
-        var storesAndAgents = await _posDataProvider.GetSimpleStoreAgentsAsync(request.ServiceProviderId, cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        await EnrichSimpleStoreUnreviewDataAsync(storesAndAgents, cancellationToken).ConfigureAwait(false);
-        
-        Log.Information("Enrich Stores Agents: {@EnrichStoresAndAgents}", storesAndAgents);
-        
-        var structuredStores = storesAndAgents.GroupBy(x => x.StoreId).Select(g => new SimpleStructuredStoreDto
-        {
-            StoreId = g.Key,
-            SimpleStoreAgents = _mapper.Map<List<SimpleStoreAgentDto>>(g)
-        }).ToList();
-        
-        Log.Information("Structured Stores With Agents: {@StructuredStores}", structuredStores);
-        
-        return new GetSimpleStructuredStoresResponse
-        {
-            Data = new GetSimpleStructuredStoresResponseData { StructuredStores = structuredStores }
-        };
-    }
-    
-    public async Task<GetStoreByAgentIdResponse> GetStoreByAgentIdAsync(GetStoreByAgentIdRequest request, CancellationToken cancellationToken)
-    {
-        var store = await _posDataProvider.GetPosStoreByAgentIdAsync(request.AgentId, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        return new GetStoreByAgentIdResponse { Data = store?.Id };
-    }
-
-    private async Task EnrichSimpleStoreUnreviewDataAsync(List<SimpleStoreAgentDto> storeAgents, CancellationToken cancellationToken)
-    {
-        var agentIds = storeAgents.Select(x => x.AgentId).Distinct().ToList();
-        
-        if (agentIds.Count == 0) return;
-        
-        var simpleRecords = await _phoneOrderDataProvider.GetSimplePhoneOrderRecordsByAgentIdsAsync(agentIds, cancellationToken).ConfigureAwait(false);
-        
-        Log.Information("Get simple store unreview simple records: {@SimpleRecords}", simpleRecords);
-
-        var simpleAgentAssistant = simpleRecords.Where(x => x.AssistantId.HasValue).GroupBy(x => x.AssistantId.Value).Select(g =>
-            new SimpleAgentAssistantDto
-            {
-                AgentId = g.First().AgentId,
-                AssistantId = g.Key,
-                UnreviewCount = g.Count()
-            }).ToList();
-        
-        var lookup = simpleAgentAssistant.GroupBy(x => x.AgentId).ToDictionary(g => g.Key, g => g.ToList());
-        
-        storeAgents.ForEach(x => x.SimpleAgentAssistants = lookup.TryGetValue(x.AgentId, out var result) ? result : []);
-        
-        Log.Information("Enrich simple store agents: {@StoreAgents}", storeAgents);
     }
 
     private async Task<List<GetCompanyWithStoresData>> EnrichPosCompaniesAsync(List<CompanyDto> companies, CancellationToken cancellationToken)
@@ -499,17 +412,6 @@ public partial class PosService : IPosService
         return _mapper.Map<List<CompanyStoreDto>>(stores);
     }
 
-    private async Task CheckAiSpeechAssistantOrderPushSwitchAsync(int storeId, bool isManualReview, CancellationToken cancellationToken)
-    {
-        var assistants = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantsByStoreIdAsync(storeId, cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        Log.Information("Get assistants: {@Assistants} by store id: {StoreId}", assistants, storeId);
-        
-        assistants.ForEach(x => x.IsAllowOrderPush = !isManualReview);
-        
-        await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync(assistants, cancellationToken: cancellationToken).ConfigureAwait(false);
-    }
-
     private async Task InitialAgentAsync(int storeId, CancellationToken cancellationToken)
     {
         var agent = new Agent
@@ -528,22 +430,5 @@ public partial class PosService : IPosService
         };
         
         await _posDataProvider.AddPosAgentsAsync([posAgent], cancellationToken: cancellationToken).ConfigureAwait(false);
-    }
-    
-    public async Task<GetDataDashBoardCompanyWithStoresResponse> GetDataDashBoardCompanyWithStoresAsync(GetDataDashBoardCompanyWithStoresRequest request, CancellationToken cancellationToken)
-    {
-        var (count, companies) = await _posDataProvider.GetPosCompaniesAsync(
-            request.PageIndex, request.PageSize, serviceProviderId: request.ServiceProviderId, keyword: request.Keyword, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        var result = _mapper.Map<List<CompanyDto>>(companies);
-        
-        return new GetDataDashBoardCompanyWithStoresResponse
-        {
-            Data = new GetDataDashBoardCompanyWithStoresResponseData
-            {
-                Count = count,
-                Data = await EnrichPosCompaniesAsync(result, cancellationToken).ConfigureAwait(false)
-            }
-        };
     }
 }

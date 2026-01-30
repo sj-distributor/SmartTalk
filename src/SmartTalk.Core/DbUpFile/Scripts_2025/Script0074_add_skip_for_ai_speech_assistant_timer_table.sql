@@ -1,1 +1,0 @@
-alter table `ai_speech_assistant_timer` add column `skip_round` int null;
