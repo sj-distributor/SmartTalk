@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Messages.Enums.Pos;
 
@@ -28,6 +29,12 @@ public partial interface IPosDataProvider
     Task<List<int>> GetAiDraftOrderRecordIdsByRecordIdsAsync(List<int> recordIds, CancellationToken cancellationToken);
     
     Task DeletePosOrdersAsync(List<PosOrder> orders, bool isForceSave = true, CancellationToken cancellationToken = default);
+
+    Task<PhoneOrderReservationInformation> GetPhoneOrderReservationInformationAsync(int recordId, CancellationToken cancellationToken);
+
+    Task UpdatePhoneOrderReservationInformationAsync(PhoneOrderReservationInformation reservationInformation, bool isForceSave = true, CancellationToken cancellationToken = default);
+
+    Task DeletePhoneOrderReservationInformationAsync(PhoneOrderReservationInformation reservationInformation, CancellationToken cancellationToken);
 }
 
 public partial class PosDataProvider
@@ -137,5 +144,25 @@ public partial class PosDataProvider
         await _repository.DeleteAllAsync(orders, cancellationToken).ConfigureAwait(false);
         
         if (isForceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<PhoneOrderReservationInformation> GetPhoneOrderReservationInformationAsync(int recordId, CancellationToken cancellationToken)
+    {
+        return await _repository.Query<PhoneOrderReservationInformation>().FirstOrDefaultAsync(x => x.RecordId == recordId, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task UpdatePhoneOrderReservationInformationAsync(
+        PhoneOrderReservationInformation reservationInformation, bool isForceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.UpdateAsync(reservationInformation, cancellationToken).ConfigureAwait(false);
+
+        if (isForceSave)
+            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task DeletePhoneOrderReservationInformationAsync(
+        PhoneOrderReservationInformation reservationInformation, CancellationToken cancellationToken)
+    {
+        await _repository.DeleteAsync(reservationInformation, cancellationToken).ConfigureAwait(false);
     }
 }

@@ -1,4 +1,6 @@
 using AutoMapper;
+using Google.Cloud.Translation.V2;
+using Mediator.Net;
 using Newtonsoft.Json;
 using Serilog;
 using SmartTalk.Core.Domain.Pos;
@@ -22,6 +24,7 @@ using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Pos;
 using SmartTalk.Messages.Enums.Agent;
+using SmartTalk.Messages.Enums.Pos;
 using SmartTalk.Messages.Requests.Pos;
 
 namespace SmartTalk.Core.Services.Pos;
@@ -73,6 +76,7 @@ public partial class PosService : IPosService
     private readonly ISmartiesClient _smartiesClient;
     private readonly IRedisSafeRunner _redisSafeRunner;
     private readonly IPosDataProvider _posDataProvider;
+    private readonly TranslationClient _translationClient;
     private readonly IAgentDataProvider _agentDataProvider;
     private readonly IPrinterDataProvider _printerDataProvider;
     private readonly IAccountDataProvider _accountDataProvider;
@@ -80,6 +84,7 @@ public partial class PosService : IPosService
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
+    
     
     public PosService(
         IMapper mapper,
@@ -96,7 +101,7 @@ public partial class PosService : IPosService
         ISecurityDataProvider  securityDataProvider,
         IPhoneOrderDataProvider phoneOrderDataProvider,
         ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient,
-        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
+        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, TranslationClient translationClient)
     {
         _mapper = mapper;
         _vectorDb = vectorDb;
@@ -113,6 +118,7 @@ public partial class PosService : IPosService
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
+        _translationClient = translationClient;
     }
     
     public async Task<GetCompanyWithStoresResponse> GetCompanyWithStoresAsync(GetCompanyWithStoresRequest request, CancellationToken cancellationToken)
@@ -459,10 +465,17 @@ public partial class PosService : IPosService
         if (agentIds.Count == 0) return;
         
         var simpleRecords = await _phoneOrderDataProvider.GetSimplePhoneOrderRecordsByAgentIdsAsync(agentIds, cancellationToken).ConfigureAwait(false);
+
+        var reservationRecords = await _phoneOrderDataProvider.GetSimplePhoneOrderRecordsAsync(agentIds, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Get simple store unreview simple records: {@SimpleRecords}", simpleRecords);
+        Log.Information("Get simple store unreview reservation records: {@ReservationRecords}", reservationRecords);
+       
+        var result = reservationRecords
+            .UnionBy(simpleRecords, x => x.Id)
+            .ToList();
 
-        var simpleAgentAssistant = simpleRecords.Where(x => x.AssistantId.HasValue).GroupBy(x => x.AssistantId.Value).Select(g =>
+        var simpleAgentAssistant = result.Where(x => x.AssistantId.HasValue).GroupBy(x => x.AssistantId.Value).Select(g =>
             new SimpleAgentAssistantDto
             {
                 AgentId = g.First().AgentId,

@@ -187,4 +187,13 @@ public class PrinterController : ControllerBase
 
         return Ok(response);
     }
+    
+    [HttpPost, Route("merchPrinterOrder/retry")]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(MerchPrinterOrderRetryResponse))]
+    public async Task<IActionResult> MerchPrinterOrderRetryAsync([FromBody] MerchPrinterOrderRetryCommand request, CancellationToken cancellationToken)
+    {
+        var response = await _mediator.SendAsync<MerchPrinterOrderRetryCommand, MerchPrinterOrderRetryResponse>(request, cancellationToken).ConfigureAwait(false);
+
+        return Ok(response);
+    }
 }  

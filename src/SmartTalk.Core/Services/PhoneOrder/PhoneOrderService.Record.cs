@@ -96,7 +96,7 @@ public partial class PhoneOrderService
 
         if (record.IsLockedScenario) throw new Exception("The record scenario was locked.");
         
-        var user = await _accountDataProvider.GetUserAccountByUserIdAsync(command.UserId, cancellationToken).ConfigureAwait(false);
+        var user = await _accountDataProvider.GetUserAccountByUserIdAsync(command.UserId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (user == null) 
             throw new Exception($"User not found: {command.UserId}");
@@ -1402,11 +1402,20 @@ public partial class PhoneOrderService
     
     private async Task BuildRecordUnreviewDataAsync(List<PhoneOrderRecordDto> records, CancellationToken cancellationToken)
     {
-        var unreviewedRecordIds = await _posDataProvider.GetAiDraftOrderRecordIdsByRecordIdsAsync(records.Select(x => x.Id).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
+        var recordIds = records.Select(x => x.Id).ToList();
+        
+        var unreviewedRecordIds = await _posDataProvider.GetAiDraftOrderRecordIdsByRecordIdsAsync(recordIds, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var reservationRecordIds = records.Where(x => x.Scenario is DialogueScenarios.Reservation or DialogueScenarios.InformationNotification or DialogueScenarios.ThirdPartyOrderNotification).Select(x => x.Id).ToList();
+        var unreviewedReservationRecordIds = await _phoneOrderDataProvider.GetPhoneOrderReservationInfoUnreviewedRecordIdsAsync(reservationRecordIds, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Get store unreview record ids: {@UnreviewedRecordIds}", unreviewedRecordIds);
         
-        records.ForEach(x => x.IsUnreviewed = unreviewedRecordIds.Contains(x.Id));
+        var result = unreviewedReservationRecordIds
+            .Union(unreviewedRecordIds)
+            .ToList();
+        
+        records.ForEach(x => x.IsUnreviewed = result.Contains(x.Id));
         
         Log.Information("Enrich complete records: {@Records}", records);
     }

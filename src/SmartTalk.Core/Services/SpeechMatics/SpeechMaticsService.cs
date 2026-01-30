@@ -15,6 +15,7 @@ using SmartTalk.Core.Constants;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Domain.Pos;
+using SmartTalk.Core.Domain.Printer;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Http;
@@ -22,6 +23,7 @@ using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.Pos;
+using SmartTalk.Core.Services.Printer;
 using SmartTalk.Core.Services.Sale;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Core.Settings.Twilio;
@@ -35,6 +37,7 @@ using SmartTalk.Messages.Dto.Sales;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Dto.Pos;
 using SmartTalk.Messages.Enums.Agent;
+using SmartTalk.Messages.Enums.Printer;
 using SmartTalk.Messages.Enums.STT;
 using Twilio;
 using Twilio.Rest.Api.V2010.Account;
@@ -65,6 +68,7 @@ public class SpeechMaticsService : ISpeechMaticsService
     private readonly ISmartTalkHttpClientFactory _smartTalkHttpClientFactory;
     private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
+    private readonly IPhoneOrderUtilService _phoneOrderUtilService;
     
     public SpeechMaticsService(
         IMapper mapper,
@@ -81,7 +85,8 @@ public class SpeechMaticsService : ISpeechMaticsService
         IPhoneOrderDataProvider phoneOrderDataProvider,
         ISmartTalkHttpClientFactory smartTalkHttpClientFactory,
         ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient,
-        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
+        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider,
+        IPhoneOrderUtilService phoneOrderUtilService)
     {
         _mapper = mapper;
         _posService = posService;
@@ -98,6 +103,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         _smartTalkHttpClientFactory = smartTalkHttpClientFactory;
         _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
+        _phoneOrderUtilService = phoneOrderUtilService;
     }
 
     public async Task HandleTranscriptionCallbackAsync(HandleTranscriptionCallbackCommand command, CancellationToken cancellationToken)
@@ -436,7 +442,10 @@ public class SpeechMaticsService : ISpeechMaticsService
                     
                     await HandleSalesScenarioAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
                 }
-                break; 
+                break;
+            case AgentType.Restaurant or AgentType.PosCompanyStore or AgentType.Agent:
+                await _phoneOrderUtilService.GenerateAiDraftAsync(record, agent, cancellationToken).ConfigureAwait(false);
+                break;
         } 
     }
 

@@ -4,6 +4,7 @@ using SmartTalk.Core.Domain.Account;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Domain.Pos;
+using SmartTalk.Core.Domain.Printer;
 using SmartTalk.Core.Domain.Restaurants;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Messages.Dto.Agent;
@@ -74,7 +75,13 @@ public partial interface IPhoneOrderDataProvider
     Task<List<PhoneOrderRecordScenarioHistory>> GetPhoneOrderRecordScenarioHistoryAsync(int recordId, CancellationToken cancellationToken = default);
     
     Task<List<SimplePhoneOrderRecordDto>> GetSimplePhoneOrderRecordsByAgentIdsAsync(List<int> agentIds, CancellationToken cancellationToken);
-    
+
+    Task<List<SimplePhoneOrderRecordDto>> GetSimplePhoneOrderRecordsAsync(List<int> agentIds, CancellationToken cancellationToken);
+
+    Task AddPhoneOrderReservationInformationAsync(PhoneOrderReservationInformation information, bool forceSave = true, CancellationToken cancellationToken = default);
+
+    Task<List<int>> GetPhoneOrderReservationInfoUnreviewedRecordIdsAsync(List<int> recordIds, CancellationToken cancellationToken);
+
     Task<PhoneOrderRecordReport> GetOriginalPhoneOrderRecordReportAsync(int recordId, CancellationToken cancellationToken);
 }
 
@@ -454,6 +461,41 @@ public partial class PhoneOrderDataProvider
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<List<SimplePhoneOrderRecordDto>> GetSimplePhoneOrderRecordsAsync(List<int> agentIds, CancellationToken cancellationToken)
+    {
+        var printerOrders = _repository.Query<MerchPrinterOrder>();
+        
+        var query = from order in _repository.Query<PhoneOrderReservationInformation>()
+            join record in _repository.Query<PhoneOrderRecord>().Where(x => x.Status == PhoneOrderRecordStatus.Sent && x.AssistantId.HasValue && agentIds.Contains(x.AgentId) && (x.Scenario == DialogueScenarios.Reservation || x.Scenario == DialogueScenarios.InformationNotification || x.Scenario == DialogueScenarios.ThirdPartyOrderNotification)) on order.RecordId equals record.Id
+            where !printerOrders.Any(x => x.RecordId == order.RecordId)
+            select new SimplePhoneOrderRecordDto
+            {
+                Id = record.Id,
+                AgentId = record.AgentId,
+                AssistantId = record.AssistantId
+            };
+        
+        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task AddPhoneOrderReservationInformationAsync(PhoneOrderReservationInformation information, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.InsertAsync(information, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave)
+            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<int>> GetPhoneOrderReservationInfoUnreviewedRecordIdsAsync(List<int> recordIds, CancellationToken cancellationToken)
+    {
+        return await (from info in _repository.QueryNoTracking<PhoneOrderReservationInformation>()
+                join order in _repository.Query<MerchPrinterOrder>() on info.RecordId equals order.RecordId into oders
+                from order in oders.DefaultIfEmpty()
+                where recordIds.Contains(info.RecordId) && order == null
+                select info.RecordId
+            ).ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+    
     public async Task<PhoneOrderRecordReport> GetOriginalPhoneOrderRecordReportAsync(int recordId, CancellationToken cancellationToken)
     {
         return await _repository.Query<PhoneOrderRecordReport>().Where(x => x.RecordId == recordId && x.IsOrigin).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);

@@ -1,6 +1,8 @@
 using SmartTalk.Core.Ioc;
+using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Http.Clients;
+using SmartTalk.Core.Services.Identity;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.Pos;
@@ -23,15 +25,18 @@ public interface IEventHandlingService : IScopedDependency
 
 public partial class EventHandlingService : IEventHandlingService
 {
+    private readonly ICurrentUser _currentUser;
     private readonly SmartiesClient _smartiesClient;
     private readonly IPosUtilService _posUtilService;
     private readonly IPosDataProvider _posDataProvider;
     private readonly IAiSpeechAssistantService _aiSpeechAssistantService;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
+    private readonly IAgentDataProvider _agentDataProvider;
+    private readonly IPhoneOrderUtilService _phoneOrderUtilService;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
 
-    public EventHandlingService(SmartiesClient smartiesClient, IPosUtilService posUtilService, IPosDataProvider posDataProvider, IPhoneOrderDataProvider phoneOrderDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, IAiSpeechAssistantService aiSpeechAssistantService, ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient)
+    public EventHandlingService(SmartiesClient smartiesClient, IPosUtilService posUtilService, IPosDataProvider posDataProvider, IPhoneOrderDataProvider phoneOrderDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, IAiSpeechAssistantService aiSpeechAssistantService, ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient, ICurrentUser currentUser, IAgentDataProvider agentDataProvider, IPhoneOrderUtilService phoneOrderUtilService)
     {
         _smartiesClient = smartiesClient;
         _posUtilService = posUtilService;
@@ -40,5 +45,8 @@ public partial class EventHandlingService : IEventHandlingService
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
         _aiSpeechAssistantService = aiSpeechAssistantService;
         _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
+        _currentUser = currentUser;
+        _agentDataProvider = agentDataProvider;
+        _phoneOrderUtilService = phoneOrderUtilService;
     }
 }

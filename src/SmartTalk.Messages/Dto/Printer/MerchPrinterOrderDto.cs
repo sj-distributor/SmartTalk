@@ -7,8 +7,10 @@ public class MerchPrinterOrderDto
     public Guid Id { get; set; }
         
     public int StoreId { get; set; }
+
+    public int? OrderId { get; set; }
     
-    public int OrderId { get; set; }
+    public int? PhoneOrderId { get; set; }
 
     public PrintStatus PrintStatus { get; set; }
 
@@ -16,10 +18,12 @@ public class MerchPrinterOrderDto
        
     public DateTimeOffset PrintDate { get; set; }
         
+    public PrintFormat PrintFormat { get; set; }
+    
     public DateTimeOffset CreatedDate { get; set; }
 
     public bool IsPrintTest()
     {
-        return OrderId == 0;
+        return OrderId == 0 && PhoneOrderId == null;
     }
 }

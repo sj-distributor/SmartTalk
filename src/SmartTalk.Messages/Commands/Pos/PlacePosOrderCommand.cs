@@ -40,6 +40,8 @@ public class PlacePosOrderCommand : ICommand
     public PosOrderReceiveType Type { get; set; }
     
     public int Count { get; set; }
+
+    public bool IsPersistAction { get; set; } = false;
 }
 
 public class PlacePosOrderResponse : SmartTalkResponse<PosOrderDto>;

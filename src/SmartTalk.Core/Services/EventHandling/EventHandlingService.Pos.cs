@@ -1,4 +1,6 @@
+using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Domain.Pos;
+using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.Pos;
 using SmartTalk.Messages.Events.Pos;
 
@@ -57,6 +59,27 @@ public partial class EventHandlingService
             }
             
             await _posDataProvider.UpdateStoreCustomersAsync([customer], cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+
+        if (@event.IsPersistAction && @event.Order.RecordId.HasValue)
+        {
+            var records = await _phoneOrderDataProvider.GetPhoneOrderRecordAsync(@event.Order.RecordId.Value, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            var record = records.FirstOrDefault();
+            if (record == null) throw new Exception($"Phone order record not found: {@event.Order.RecordId.Value}");
+            
+            record.IsModifyScenario = true;
+            await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record,  true, cancellationToken);
+            
+            await _phoneOrderDataProvider.AddPhoneOrderRecordScenarioHistoryAsync(new PhoneOrderRecordScenarioHistory
+            {
+                RecordId = @event.Order.RecordId.Value,
+                Scenario = DialogueScenarios.Order,
+                ModifyType = ModifyType.Order,
+                UpdatedBy = _currentUser.Id.Value,
+                UserName = _currentUser.Name,
+                CreatedDate = DateTime.UtcNow
+            }, true, cancellationToken).ConfigureAwait(false);
         }
     }
 
