@@ -17,6 +17,8 @@ public partial class EventHandlingService
 {
     public async Task HandlingEventAsync(AiSpeechAssistantKnowledgeAddedEvent @event, CancellationToken cancellationToken)
     {
+        Log.Information("Start AiSpeechAssistantKnowledgeAddedEvent");
+        
         var prevKnowledgeCopyRelateds = @event.PrevKnowledge.KnowledgeCopyRelateds ?? new List<AiSpeechAssistantKnowledgeCopyRelatedDto>();
         var latestKnowledgeCopyRelateds = @event.LatestKnowledge.KnowledgeCopyRelateds ?? new List<AiSpeechAssistantKnowledgeCopyRelatedDto>();
 
