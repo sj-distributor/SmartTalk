@@ -120,6 +120,12 @@ public partial class AiSpeechAssistantService
         prevKnowledgeDto.KnowledgeCopyRelateds = _mapper.Map<List<AiSpeechAssistantKnowledgeCopyRelatedDto>>(allPrevRelateds ?? new List<AiSpeechAssistantKnowledgeCopyRelated>());
         knowledge.KnowledgeCopyRelateds = _mapper.Map<List<AiSpeechAssistantKnowledgeCopyRelatedDto>>(selectedRelateds ?? new List<AiSpeechAssistantKnowledgeCopyRelated>());
       
+        Log.Information("Knowledge added. KnowledgeId={KnowledgeId}", knowledge.Id);
+
+        Log.Information("Knowledge added.  RelatedCount={RelatedCount}", knowledge.KnowledgeCopyRelateds.Count);
+
+        Log.Information("Knowledge added. ShouldSyncLastedKnowledge={ShouldSyncLastedKnowledge}", !command.RelatedKnowledges.Any());
+        
         Log.Information("Knowledge added. KnowledgeId={KnowledgeId}, RelatedCount={RelatedCount}, ShouldSyncLastedKnowledge={ShouldSyncLastedKnowledge}",
             knowledge.Id, knowledge.KnowledgeCopyRelateds.Count, !command.RelatedKnowledges.Any());
 
