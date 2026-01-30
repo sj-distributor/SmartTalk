@@ -19,6 +19,7 @@ using Microsoft.AspNetCore.Http;
 using OpenAI.Chat;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.Pos;
+using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.Attachments;
 using SmartTalk.Core.Services.Caching;
@@ -48,6 +49,7 @@ using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.Attachments;
+using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.Attachments;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Pos;
@@ -205,6 +207,12 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         InitAiSpeechAssistantStreamContext(command.Host, command.From);
 
         await BuildingAiSpeechAssistantKnowledgeBaseAsync(command.From, command.To, command.AssistantId, command.NumberId, agent.Id, cancellationToken).ConfigureAwait(false);
+        
+        CheckIfInServiceHours(agent);
+        _aiSpeechAssistantStreamContext.TransferCallNumber = agent.TransferCallNumber;
+
+        if (!_aiSpeechAssistantStreamContext.IsInAiServiceHours && !_aiSpeechAssistantStreamContext.IsTransfer)
+            return new AiSpeechAssistantConnectCloseEvent();
         
         _aiSpeechAssistantStreamContext.HumanContactPhone = _aiSpeechAssistantStreamContext.ShouldForward ? null 
             : (await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantHumanContactByAssistantIdAsync(_aiSpeechAssistantStreamContext.Assistant.Id, cancellationToken).ConfigureAwait(false))?.HumanPhone;
@@ -772,6 +780,17 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                             {
                                 CallSid = _aiSpeechAssistantStreamContext.CallSid, Host = _aiSpeechAssistantStreamContext.Host
                             }, CancellationToken.None), HangfireConstants.InternalHostingRecordPhoneCall);
+
+                            if (!_aiSpeechAssistantStreamContext.IsInAiServiceHours && _aiSpeechAssistantStreamContext.IsTransfer)
+                            {
+                                _backgroundJobClient.Enqueue<IMediator>(x => x.SendAsync(new TransferHumanServiceCommand
+                                {
+                                    CallSid = _aiSpeechAssistantStreamContext.CallSid,
+                                    HumanPhone = _aiSpeechAssistantStreamContext.TransferCallNumber
+                                }, cancellationToken));
+
+                                break;
+                            }
 
                             if (_aiSpeechAssistantStreamContext.ShouldForward)
                                 _backgroundJobClient.Enqueue<IMediator>(x => x.SendAsync(new TransferHumanServiceCommand
@@ -1458,5 +1477,36 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         }
     
         return result;
+    }
+
+    public void CheckIfInServiceHours(Agent agent)
+    {
+        if (agent.ServiceHours == null)
+        {
+            _aiSpeechAssistantStreamContext.IsInAiServiceHours = true;
+            
+            return;
+        }
+        
+        var utcNow = DateTimeOffset.UtcNow;
+
+        var pstZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+
+        var pstTime = TimeZoneInfo.ConvertTime(utcNow, pstZone);
+        
+        var dayOfWeek = pstTime.DayOfWeek;
+        
+        var workingHours = JsonConvert.DeserializeObject<List<AgentServiceHoursDto>>(agent.ServiceHours);
+        
+        Log.Information("Parsed service hours; {@WorkingHours}", workingHours);
+        
+        var specificWorkingHours = workingHours.Where(x => x.DayOfWeek == dayOfWeek).FirstOrDefault();
+        
+        Log.Information("Matched specific service hours: {@SpecificWorkingHours} and the pstTime: {@PstTime}", specificWorkingHours, pstTime);
+        
+        var pstTimeToMinute = new TimeSpan(pstTime.TimeOfDay.Hours, pstTime.TimeOfDay.Minutes, 0);
+
+        _aiSpeechAssistantStreamContext.IsInAiServiceHours = specificWorkingHours != null && specificWorkingHours.Hours.Any(x => x.Start <= pstTimeToMinute && x.End >= pstTimeToMinute);
+        _aiSpeechAssistantStreamContext.IsTransfer = agent.IsTransferHuman && !string.IsNullOrEmpty(agent.TransferCallNumber);
     }
 }
