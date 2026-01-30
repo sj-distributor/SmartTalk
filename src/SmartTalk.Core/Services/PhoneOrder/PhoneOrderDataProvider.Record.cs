@@ -74,6 +74,8 @@ public partial interface IPhoneOrderDataProvider
     Task<List<PhoneOrderRecordScenarioHistory>> GetPhoneOrderRecordScenarioHistoryAsync(int recordId, CancellationToken cancellationToken = default);
     
     Task<List<SimplePhoneOrderRecordDto>> GetSimplePhoneOrderRecordsByAgentIdsAsync(List<int> agentIds, CancellationToken cancellationToken);
+    
+    Task<PhoneOrderRecordReport> GetOriginalPhoneOrderRecordReportAsync(int recordId, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderDataProvider
@@ -450,5 +452,10 @@ public partial class PhoneOrderDataProvider
             };
         
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<PhoneOrderRecordReport> GetOriginalPhoneOrderRecordReportAsync(int recordId, CancellationToken cancellationToken)
+    {
+        return await _repository.Query<PhoneOrderRecordReport>().Where(x => x.RecordId == recordId && x.IsOrigin).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 }
