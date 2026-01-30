@@ -1,0 +1,18 @@
+using Mediator.Net.Contracts;
+using SmartTalk.Messages.Events.AiSpeechAssistant;
+using SmartTalk.Messages.Responses;
+
+namespace SmartTalk.Messages.Commands.AiSpeechAssistant;
+
+public class KonwledgeCopyCommand: ICommand
+{
+    public int SourceKnowledgeId { get; set; }
+    
+    public List<int> TargetKnowledgeIds { get; set; }
+    
+    public bool IsSyncUpdate { get; set; }
+}
+
+public class KonwledgeCopyResponse : SmartTalkResponse<List<AiSpeechAssistantKnowledgeOldState>>
+{
+}

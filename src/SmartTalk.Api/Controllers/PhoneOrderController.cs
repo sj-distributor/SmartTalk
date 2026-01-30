@@ -97,7 +97,11 @@ public class PhoneOrderController : ControllerBase
 
         var fileContent = ms.ToArray();
         
-        await _mediator.SendAsync(new ReceivePhoneOrderRecordCommand { RecordName = file.FileName, RecordContent = fileContent, AgentId = agentId, OrderRecordType = PhoneOrderRecordType.TestLink}).ConfigureAwait(false);
+        await _mediator.SendAsync(new ReceivePhoneOrderRecordCommand { 
+            RecordName = file.FileName, 
+            RecordContent = fileContent, 
+            AgentId = agentId, 
+            OrderRecordType = PhoneOrderRecordType.InBound}).ConfigureAwait(false);
         
         return Ok();
     }

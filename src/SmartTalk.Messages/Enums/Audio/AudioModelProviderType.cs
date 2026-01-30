@@ -3,5 +3,6 @@ namespace SmartTalk.Messages.Enums.Audio;
 public enum AudioModelProviderType
 {
     Google,
-    OpenAi
+    OpenAi,
+    Qwen
 }

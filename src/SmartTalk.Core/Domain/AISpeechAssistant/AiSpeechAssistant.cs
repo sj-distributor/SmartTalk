@@ -14,6 +14,9 @@ public class AiSpeechAssistant : IEntity<int>, IAgent, IHasCreatedFields
 
     [Column("name"), StringLength(255)]
     public string Name { get; set; }
+
+    [Column("language"), StringLength(255)]
+    public string Language { get; set; }
     
     [Column("answering_number_id")]
     public int? AnsweringNumberId { get; set; }
@@ -80,4 +83,7 @@ public class AiSpeechAssistant : IEntity<int>, IAgent, IHasCreatedFields
     
     [NotMapped]
     public AiSpeechAssistantKnowledge Knowledge { get; set; }
+    
+    [NotMapped]
+    public AiSpeechAssistantTimer Timer { get; set; }
 }
