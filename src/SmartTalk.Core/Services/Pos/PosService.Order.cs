@@ -898,7 +898,7 @@ public partial class PosService
             RecordId = command.RecordId,
             Scenario = DialogueScenarios.Order,
             ModifyType = ModifyType.Info,
-            UpdateScenarioUserId = _currentUser.Id ?? 0,
+            UpdatedBy = _currentUser.Id ?? 0,
             UserName = _currentUser.Name,
             CreatedDate = DateTime.UtcNow
         }, true, cancellationToken).ConfigureAwait(false);

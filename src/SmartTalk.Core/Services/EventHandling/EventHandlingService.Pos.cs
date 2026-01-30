@@ -76,7 +76,7 @@ public partial class EventHandlingService
                 RecordId = @event.Order.RecordId.Value,
                 Scenario = DialogueScenarios.Order,
                 ModifyType = ModifyType.Order,
-                UpdateScenarioUserId = _currentUser.Id.Value,
+                UpdatedBy = _currentUser.Id.Value,
                 UserName = _currentUser.Name,
                 CreatedDate = DateTime.UtcNow
             }, true, cancellationToken).ConfigureAwait(false);
