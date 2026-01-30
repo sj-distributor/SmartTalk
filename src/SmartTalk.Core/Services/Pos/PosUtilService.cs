@@ -5,8 +5,10 @@ using Serilog;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.System;
+using SmartTalk.Core.Extensions;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Caching.Redis;
+using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.EasyPos;
@@ -15,6 +17,7 @@ using SmartTalk.Messages.Dto.Pos;
 using SmartTalk.Messages.Enums.Caching;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.Pos;
+using SmartTalk.Messages.Enums.STT;
 
 namespace SmartTalk.Core.Services.Pos;
 
@@ -22,7 +25,7 @@ public interface IPosUtilService : IScopedDependency
 {
     Task GenerateAiDraftAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant assistant, PhoneOrderRecord record, CancellationToken cancellationToken);
 
-    Task<(List<PosProduct> Products, string MenuItems)> GeneratePosMenuItemsAsync(int agentId, bool isWithProductId = false, CancellationToken cancellationToken = default);
+    Task<(List<PosProduct> Products, string MenuItems)> GeneratePosMenuItemsAsync(int agentId, bool isWithProductId = false, TranscriptionLanguage language = TranscriptionLanguage.Chinese, CancellationToken cancellationToken = default);
 }
 
 public class PosUtilService : IPosUtilService
@@ -32,14 +35,15 @@ public class PosUtilService : IPosUtilService
     private readonly OpenAiSettings _openAiSettings;
     private readonly IPosDataProvider _posDataProvider;
     private readonly IRedisSafeRunner _redisSafeRunner;
-
-    public PosUtilService(IMapper mapper, IPosService posService, OpenAiSettings openAiSettings, IPosDataProvider posDataProvider, IRedisSafeRunner redisSafeRunner)
+    private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
+    public PosUtilService(IMapper mapper, IPosService posService, OpenAiSettings openAiSettings, IPosDataProvider posDataProvider, IRedisSafeRunner redisSafeRunner, IPhoneOrderDataProvider phoneOrderDataProvider)
     {
         _mapper = mapper;
         _posService = posService;
         _openAiSettings = openAiSettings;
         _posDataProvider = posDataProvider;
         _redisSafeRunner = redisSafeRunner;
+        _phoneOrderDataProvider = phoneOrderDataProvider;
     }
     
     public async Task GenerateAiDraftAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant assistant, PhoneOrderRecord record, CancellationToken cancellationToken)
@@ -61,18 +65,23 @@ public class PosUtilService : IPosUtilService
             
             return;
         }
+        
+        var originalReport = await _phoneOrderDataProvider.GetOriginalPhoneOrderRecordReportAsync(record.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        var (products, menuItems) = await GeneratePosMenuItemsAsync(agent.Id, true, cancellationToken).ConfigureAwait(false);
+        var report = originalReport?.Report ?? record.TranscriptionText;
+        
+        var (products, menuItems) = await GeneratePosMenuItemsAsync(agent.Id, true, record.Language, cancellationToken).ConfigureAwait(false);
 
         var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
 
         var systemPrompt =
-            "你是一名訂單分析助手。請從下面的客戶分析報告文字中提取客人的姓名、电话、配送类型以及配送地址，以及所有下單的菜品、數量、規格、备注，並且用菜單列表盡力匹配每個菜品。" +
-            "如果報告中提到了送餐類型，請提取送餐類型 type (0: 自提订单，1：配送订单)。" +
-            "如果客户有要求或者提供其他的号码作为订单的号码，請提取客户的电话 phoneNumber ，否则 phoneNumber 为当前的来电号码：" + record.IncomingCallNumber + "。"+
-            "如果報告中提到了客户的姓名，請提取客户的姓名 customerName 。" +
-            "如果報告中提到了客户的配送地址，請提取客户的配送地址 customerAddress，若无则忽略 。" +
-            "如果報告中提到了客户的订单注意事项或者是要求，請提取客户的备注信息 notes，若无则忽略 。" +
+            "你是一名訂單分析助手。請從下面的客戶分析報告文字中提取客人的姓名、电话、配送类型以及配送地址，以及所有下單的菜品、數量、規格、备注，並且用菜單列表盡力匹配每個菜品。\n" +
+            "如果報告中提到了送餐類型，請提取送餐類型 type (0: 自提订单，1：配送订单)。\n" +
+            "如果客户有要求或者提供其他的号码作为订单的号码，請提取客户的电话 phoneNumber ，否则 phoneNumber 为当前的来电号码：" + record.IncomingCallNumber + "。\n"+
+            "如果報告中提到了客户的姓名，請提取客户的姓名 customerName 。\n" +
+            "如果報告中提到了客户的配送地址，請提取客户的配送地址 customerAddress，若无则忽略 。\n" +
+            "如果報告中提到了客户的订单注意事项或者是要求，且該內容不能獨立構成一個可下單的菜品名稱，則請提取為备注信息 notes；若该要求是附属于某一道菜品的特殊交代（如口味、加料、忌口），則在不影響該菜品正常生成 items 的前提下，將該要求體現在 notes 中。\n" +
+            "另外请注意备注的语言，当前的语言为: " + record.Language.GetDescription() + "，如果当前语言类型为 zh，则备注为中文，若不是 zh，则备注为英文 \n" +
             "請嚴格傳回一個 JSON 對象，頂層字段為 \"type\"，items（数组，元素包含 productId：菜品ID, name：菜品名, quantity：数量, specification：规格（比如：大、中、小，加小料、加椰果或者有关菜品的其他内容））。\n" +
             "範例：\n" +
             "{\"type\":0,\"phoneNumber\":\"40085235698\",\"customerName\":\"刘先生\",\"customerAddress\":\"中环广场一座\",\"notes\":\"给个酱油包\",\"items\":[{\"productId\":\"9778779965031491\",\"name\":\"海南雞湯麵\",\"quantity\":1,\"specification\":null}]}" +
@@ -86,7 +95,7 @@ public class PosUtilService : IPosUtilService
         var messages = new List<ChatMessage>
         {
             new SystemChatMessage(systemPrompt),
-            new UserChatMessage("客戶分析報告文本：\n" + record.TranscriptionText + "\n\n")
+            new UserChatMessage("客戶分析報告文本：\n" + report + "\n\n")
         };
 
         var completion = await client.CompleteChatAsync(messages, new ChatCompletionOptions { ResponseModalities = ChatResponseModalities.Text, ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat() }, cancellationToken).ConfigureAwait(false);
@@ -106,13 +115,13 @@ public class PosUtilService : IPosUtilService
 
             Log.Information("Build product's modifiers: {@ModifiersLookUp}", productModifiersLookup);
 
-            foreach (var aiDraftItem in aiDraftOrder.Items.Where(x => !string.IsNullOrEmpty(x.Specification)))
+            foreach (var aiDraftItem in aiDraftOrder.Items.Where(x => !string.IsNullOrEmpty(x.Specification) && !string.IsNullOrEmpty(x.ProductId)))
             {
                 if (productModifiersLookup.TryGetValue(aiDraftItem.ProductId, out var modifiers))
                 {
                     try
                     {
-                        var builtModifiers = await GenerateSpecificationProductsAsync(modifiers, aiDraftItem.Specification, cancellationToken).ConfigureAwait(false);
+                        var builtModifiers = await GenerateSpecificationProductsAsync(modifiers, record.Language, aiDraftItem.Specification, cancellationToken).ConfigureAwait(false);
                         
                         Log.Information("Matched modifiers: {@MatchedModifiers}", builtModifiers);
 
@@ -142,7 +151,7 @@ public class PosUtilService : IPosUtilService
         }
     }
 
-    public async Task<List<AiDraftItemModifiersDto>> GenerateSpecificationProductsAsync( List<EasyPosResponseModifierGroups> modifiers, string specification, CancellationToken cancellationToken)
+    public async Task<List<AiDraftItemModifiersDto>> GenerateSpecificationProductsAsync(List<EasyPosResponseModifierGroups> modifiers, TranscriptionLanguage language, string specification, CancellationToken cancellationToken)
     {
         var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
 
@@ -177,7 +186,7 @@ public class PosUtilService : IPosUtilService
         return result.Modifiers;
     }
     
-     public async Task<(List<PosProduct> Products, string MenuItems)> GeneratePosMenuItemsAsync(int agentId, bool isWithProductId = false, CancellationToken cancellationToken = default)
+     public async Task<(List<PosProduct> Products, string MenuItems)> GeneratePosMenuItemsAsync(int agentId, bool isWithProductId = false, TranscriptionLanguage language = TranscriptionLanguage.Chinese, CancellationToken cancellationToken = default)
     {
         var storeAgent = await _posDataProvider.GetPosAgentByAgentIdAsync(agentId, cancellationToken).ConfigureAwait(false);
 
@@ -195,7 +204,7 @@ public class PosUtilService : IPosUtilService
             var categoryNames = JsonConvert.DeserializeObject<PosNamesLocalization>(category.Names);
 
             var idx = 1;
-            var categoryName = BuildMenuItemName(categoryNames);
+            var categoryName = BuildMenuItemName(categoryNames, language);
 
             if (string.IsNullOrWhiteSpace(categoryName)) continue;
             
@@ -205,7 +214,7 @@ public class PosUtilService : IPosUtilService
             {
                 var productNames = JsonConvert.DeserializeObject<PosNamesLocalization>(product.Names);
                 
-                var productName = BuildMenuItemName(productNames);
+                var productName = BuildMenuItemName(productNames, language);
 
                 if (string.IsNullOrWhiteSpace(productName)) continue;
                 
@@ -221,7 +230,7 @@ public class PosUtilService : IPosUtilService
         return (categoryProductsLookup.SelectMany(x => x.Value).ToList(), menuItems.TrimEnd('\r', '\n'));
     }
 
-    private string BuildItemModifiers(List<EasyPosResponseModifierGroups> modifiers)
+    private string BuildItemModifiers(List<EasyPosResponseModifierGroups> modifiers, TranscriptionLanguage language = TranscriptionLanguage.Chinese)
     {
         if (modifiers == null || modifiers.Count == 0) return null;
 
@@ -235,43 +244,64 @@ public class PosUtilService : IPosUtilService
             {
                 foreach (var mp in modifier.ModifierProducts)
                 {
-                    var name = BuildModifierName(mp.Localizations);
+                    var name = BuildModifierName(mp.Localizations, language);
 
                     if (!string.IsNullOrWhiteSpace(name)) modifierNames.Add($"{name}({mp.Id})");
                 }
             }
 
             if (modifierNames.Count > 0)
-                modifiersDetail += $"{BuildModifierName(modifier.Localizations)}規格：{string.Join("、", modifierNames)}，共{modifierNames.Count}个规格，要求最少选{modifier.MinimumSelect}个规格，最多选{modifier.MaximumSelect}规格，每个最大可重复选{modifier.MaximumRepetition}相同的 \n";
+                modifiersDetail += $"{BuildModifierName(modifier.Localizations, language)}規格：{string.Join("、", modifierNames)}，共{modifierNames.Count}个规格，要求最少选{modifier.MinimumSelect}个规格，最多选{modifier.MaximumSelect}规格，每个最大可重复选{modifier.MaximumRepetition}相同的 \n";
         }
 
         return modifiersDetail.TrimEnd('\r', '\n');
     }
     
-    private string BuildMenuItemName(PosNamesLocalization localization)
+    private string BuildMenuItemName(PosNamesLocalization localization, TranscriptionLanguage language = TranscriptionLanguage.Chinese)
     {
-        return !string.IsNullOrWhiteSpace(localization?.Cn?.Name) ? localization.Cn.Name :
-            !string.IsNullOrWhiteSpace(localization?.Cn?.PosName) ? localization.Cn.PosName :
-            !string.IsNullOrWhiteSpace(localization?.Cn?.SendChefName) ? localization.Cn.SendChefName :
-            string.Empty;
+        if (language is TranscriptionLanguage.Chinese)
+        {
+            var zhName = !string.IsNullOrWhiteSpace(localization?.Cn?.Name) ? localization.Cn.Name : string.Empty;
+            if (!string.IsNullOrWhiteSpace(zhName)) return zhName;
+    
+            var zhPosName = !string.IsNullOrWhiteSpace(localization?.Cn?.PosName) ? localization.Cn.PosName : string.Empty;
+            if (!string.IsNullOrWhiteSpace(zhPosName)) return zhPosName;
+    
+            var zhSendChefName = !string.IsNullOrWhiteSpace(localization?.Cn?.SendChefName) ? localization.Cn.SendChefName : string.Empty;
+            if (!string.IsNullOrWhiteSpace(zhSendChefName)) return zhSendChefName;
+        }
+        
+        var usName = !string.IsNullOrWhiteSpace(localization?.En?.Name) ? localization.En.Name : string.Empty;
+        if (!string.IsNullOrWhiteSpace(usName)) return usName;
+            
+        var usPosName = !string.IsNullOrWhiteSpace(localization?.En?.PosName) ? localization.En.PosName : string.Empty;
+        if (!string.IsNullOrWhiteSpace(usPosName)) return usPosName;
+            
+        var usSendChefName = !string.IsNullOrWhiteSpace(localization?.En?.SendChefName) ? localization.En.SendChefName : string.Empty;
+        if (!string.IsNullOrWhiteSpace(usSendChefName)) return usSendChefName;
+
+        return string.Empty;
     }
     
-    private string BuildModifierName(List<EasyPosResponseLocalization> localizations)
+    private string BuildModifierName(List<EasyPosResponseLocalization> localizations, TranscriptionLanguage language)
     {
-        var zhName = localizations.Find(l => l.LanguageCode == "zh_CN" && l.Field == "name");
-        if (zhName != null && !string.IsNullOrWhiteSpace(zhName.Value)) return zhName.Value;
+        if (language is TranscriptionLanguage.Chinese)
+        {
+            var zhName = localizations.Find(l => l.LanguageCode == "zh_CN" && l.Field == "name");
+            if (zhName != null && !string.IsNullOrWhiteSpace(zhName.Value)) return zhName.Value;
+            
+            var zhPosName = localizations.Find(l => l.LanguageCode == "zh_CN" && l.Field == "posName");
+            if (zhPosName != null && !string.IsNullOrWhiteSpace(zhPosName.Value)) return zhPosName.Value;
+            
+            var zhSendChefName = localizations.Find(l => l.LanguageCode == "zh_CN" && l.Field == "sendChefName");
+            if (zhSendChefName != null && !string.IsNullOrWhiteSpace(zhSendChefName.Value)) return zhSendChefName.Value;
+        }
         
         var usName = localizations.Find(l => l.LanguageCode == "en_US" && l.Field == "name");
         if (usName != null && !string.IsNullOrWhiteSpace(usName.Value)) return usName.Value;
         
-        var zhPosName = localizations.Find(l => l.LanguageCode == "zh_CN" && l.Field == "posName");
-        if (zhPosName != null && !string.IsNullOrWhiteSpace(zhPosName.Value)) return zhPosName.Value;
-        
         var usPosName = localizations.Find(l => l.LanguageCode == "en_US" && l.Field == "posName");
         if (usPosName != null && !string.IsNullOrWhiteSpace(usPosName.Value)) return usPosName.Value;
-        
-        var zhSendChefName = localizations.Find(l => l.LanguageCode == "zh_CN" && l.Field == "sendChefName");
-        if (zhSendChefName != null && !string.IsNullOrWhiteSpace(zhSendChefName.Value)) return zhSendChefName.Value;
         
         var usSendChefName = localizations.Find(l => l.LanguageCode == "en_US" && l.Field == "sendChefName");
         if (usSendChefName != null && !string.IsNullOrWhiteSpace(usSendChefName.Value)) return usSendChefName.Value;
@@ -288,8 +318,6 @@ public class PosUtilService : IPosUtilService
         return await _redisSafeRunner.ExecuteWithLockAsync($"generate-order-number-{store.Id}", async() =>
         {
             var (items, subTotal, taxes) = BuildPosOrderItems(draftMapping);
-
-            if (items.Count == 0) return null;
             
             var orderNo = await GenerateOrderNumberAsync(store, cancellationToken).ConfigureAwait(false);
 

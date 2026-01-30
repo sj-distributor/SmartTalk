@@ -179,7 +179,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         var callSubjectCn = "通话主题:";
         var callSubjectEn = "Conversation topic:";
 
-        var messages = await ConfigureRecordAnalyzePromptAsync(agent, aiSpeechAssistant, callFrom ?? "", callTo ?? "", currentTime, audioContent, callSubjectCn, callSubjectEn, cancellationToken);
+        var messages = await ConfigureRecordAnalyzePromptAsync(agent, aiSpeechAssistant, record, callFrom ?? "", callTo ?? "", currentTime, audioContent, callSubjectCn, callSubjectEn, cancellationToken);
         
         ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
  
@@ -207,9 +207,6 @@ public class SpeechMaticsService : ISpeechMaticsService
         var detection = await _translationClient.DetectLanguageAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
 
         await MultiScenarioCustomProcessingAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
-
-        if (agent.SourceSystem == AgentSourceSystem.Smarties)
-            await CallBackSmartiesRecordAsync(agent, record, cancellationToken).ConfigureAwait(false);
         
         var reports = new List<PhoneOrderRecordReport>();
 
@@ -238,6 +235,8 @@ public class SpeechMaticsService : ISpeechMaticsService
         });
 
         await _phoneOrderDataProvider.AddPhoneOrderRecordReportsAsync(reports, true, cancellationToken).ConfigureAwait(false);
+        
+        await _posUtilService.GenerateAiDraftAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
         
         await CallBackSmartiesRecordAsync(agent, record, cancellationToken).ConfigureAwait(false);
 
@@ -396,21 +395,24 @@ public class SpeechMaticsService : ISpeechMaticsService
         }
     }
     
-     private async Task<List<ChatMessage>> ConfigureRecordAnalyzePromptAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, string callFrom, string callTo, string currentTime, byte[] audioContent, string callSubjectCn, string callSubjectEn, CancellationToken cancellationToken) 
+     private async Task<List<ChatMessage>> ConfigureRecordAnalyzePromptAsync(
+         Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, PhoneOrderRecord record, string callFrom,
+         string callTo, string currentTime, byte[] audioContent, string callSubjectCn, string callSubjectEn, CancellationToken cancellationToken) 
     {
         var soldToIds = !string.IsNullOrEmpty(aiSpeechAssistant.Name) ? aiSpeechAssistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : new List<string>();
 
         var customerItemsCacheList = await _salesDataProvider.GetCustomerItemsCacheBySoldToIdsAsync(soldToIds, cancellationToken);
         var customerItemsString = string.Join(Environment.NewLine, soldToIds.Select(id => customerItemsCacheList.FirstOrDefault(c => c.Filter == id)?.CacheValue ?? ""));
         
-        var (_, menuItems) = await _posUtilService.GeneratePosMenuItemsAsync(agent.Id, false, cancellationToken).ConfigureAwait(false);
+        var (_, menuItems) = await _posUtilService.GeneratePosMenuItemsAsync(agent.Id, false, record.Language, cancellationToken).ConfigureAwait(false);
 
         var audioData = BinaryData.FromBytes(audioContent);
         List<ChatMessage> messages =
         [
             new SystemChatMessage( (string.IsNullOrEmpty(aiSpeechAssistant?.CustomRecordAnalyzePrompt)
                 ? "你是一名電話錄音的分析員，通過聽取錄音內容和語氣情緒作出精確分析，冩出一份分析報告。\n\n" +
-                  "分析報告的格式：交談主題：xxx\n\n " +
+                  "分析報告的格式如下：" +
+                  "交談主題：xxx\n\n " +
                   "來電號碼：#{call_from}\n\n " +
                   "內容摘要:xxx \n\n " +
                   "客人情感與情緒: xxx \n\n " +
@@ -595,30 +597,33 @@ public class SpeechMaticsService : ISpeechMaticsService
         var candidates = historyItems.Where(x => x.MaterialDesc != null && x.MaterialDesc.Contains(itemName, StringComparison.OrdinalIgnoreCase)).Select(x => x.Material).ToList();
         Log.Information("Candidate material code list: {@Candidates}", candidates);
 
-        if (!candidates.Any()) return string.IsNullOrEmpty(baseNumber) ? "" : baseNumber;; 
+        if (!candidates.Any()) return string.IsNullOrEmpty(baseNumber) ? "" : baseNumber;
         if (candidates.Count == 1) return candidates.First();
 
-        if (!string.IsNullOrWhiteSpace(unit))
+        var isCase = !string.IsNullOrWhiteSpace(unit) && (unit.Contains("case", StringComparison.OrdinalIgnoreCase) || unit.Contains("箱"));
+        if (isCase)
         {
-            var u = unit.ToLower();
-            if (u.Contains("case") || u.Contains("箱"))
-            {
-                var csItem = candidates.FirstOrDefault(x => x.EndsWith("CS", StringComparison.OrdinalIgnoreCase));
-                if (!string.IsNullOrEmpty(csItem)) return csItem;
-            }
-            else
-            {
-                var pcItem = candidates.FirstOrDefault(x => x.EndsWith("PC", StringComparison.OrdinalIgnoreCase));
-                if (!string.IsNullOrEmpty(pcItem)) return pcItem;
-            }
-        }
+            var noPcList = candidates.Where(x => !x.Contains("PC", StringComparison.OrdinalIgnoreCase)).ToList();
 
-        var pureNumber = candidates.FirstOrDefault(x => Regex.IsMatch(x, @"^\d+$"));
-        return pureNumber ?? candidates.First();
+            if (noPcList.Any())
+                return noPcList.First(); 
+            
+            return candidates.First();
+        }
+        
+        var pcList = candidates.Where(x => x.Contains("PC", StringComparison.OrdinalIgnoreCase)).ToList();
+
+        if (pcList.Any())
+            return pcList.First();
+        
+        return candidates.First();
     }
 
     private async Task<string> ResolveSoldToIdAsync(ExtractedOrderDto storeOrder, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, List<string> soldToIds, CancellationToken cancellationToken) 
     { 
+        if (soldToIds.Count == 1)
+            return soldToIds[0];
+        
         if (!string.IsNullOrEmpty(storeOrder.StoreName)) 
         { 
             var requestDto = new GetCustomerNumbersByNameRequestDto { CustomerName = storeOrder.StoreName }; 
@@ -682,15 +687,17 @@ public class SpeechMaticsService : ISpeechMaticsService
                 {
                     Role = "system",
                     Content = new CompletionsStringContent(
-                        "你需要帮我从电话录音报告中判断两个维度：" +
-                        "1. 是否真人接听（IsHumanAnswered）：" +
-                        "   - 如果客户有自然对话、提问、回应、表达等语气，说明是真人接听，返回 true。" +
-                        "   - 如果是语音信箱、系统提示、无人应答，返回 false。" +
-                        "2. 客人态度是否友好（IsCustomerFriendly）：" +
-                        "   - 如果语气平和、客气、积极配合，返回 true。" +
-                        "   - 如果语气恶劣、冷淡、负面或不耐烦，返回 false。" +
-                        "输出格式务必是 JSON：" +
-                        "{\"IsHumanAnswered\": true, \"IsCustomerFriendly\": true}" +
+                        "你需要帮我从电话录音报告中判断两个维度：\n" +
+                        "1. 是否真人接听（IsHumanAnswered）：\n" +
+                        "   - 默认返回 true，表示是真人接听。\n" +
+                        "   - 当报告中包含转接语音信箱、系统提示、无人接听，或是 是AI 回复时，返回 false。表示非真人接听\n" +
+                        "例子：" +
+                        "“转接语音信箱“，“非真人接听”，“无人应答”，“对面为重复系统音提示”\n" +
+                        "2. 客人态度是否友好（IsCustomerFriendly）：\n" +
+                        "   - 如果语气平和、客气、积极配合，返回 true。\n" +
+                        "   - 如果语气恶劣、冷淡、负面或不耐烦，返回 false。\n" +
+                        "输出格式务必是 JSON：\n" +
+                        "{\"IsHumanAnswered\": true, \"IsCustomerFriendly\": true}\n" +
                         "\n\n样例：\n" +
                         "input: 通話主題：客戶查詢價格。\n內容摘要：客戶開場問候並詢問價格，語氣平和，最後表示感謝。\noutput: {\"IsHumanAnswered\": true, \"IsCustomerFriendly\": true}\n" +
                         "input: 通話主題：外呼無人接聽。\n內容摘要：撥號後自動語音提示‘您撥打的電話暫時無法接通’。\noutput: {\"IsHumanAnswered\": false, \"IsCustomerFriendly\": false}\n"
@@ -754,7 +761,7 @@ public class SpeechMaticsService : ISpeechMaticsService
                             "9. InvalidCall（无效通话）\n" +
                             "- 无实际业务内容的通话：静默来电、无应答、误拨、挂断、无法识别的噪音，或仅出现“请上传录音”“听不到”等无意义话术。\n" +
                             "10. TransferVoicemail（语音信箱）\n    " +
-                            "- 通话被转入语音信箱的场景。\n" +
+                            "- 通话提及到语音信箱的场景。\n" +
                             "11. Other（其他）\n   " +
                             "- 无法归入上述10类的内容，需在'remark'字段补充简短关键词说明。\n\n" +
                             "### 输出规则（禁止输出任何额外文本，仅返回JSON）：\n" +

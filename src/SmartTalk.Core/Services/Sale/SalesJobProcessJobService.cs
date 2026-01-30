@@ -73,11 +73,14 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
         var allSales = await _salesDataProvider.GetAllSalesAsync(cancellationToken);
         var allSoldToIds = allSales.Select(s => s.Name).Where(n => !string.IsNullOrEmpty(n)).Distinct().ToList();
         
+        var crmToken = await _crmClient.GetCrmTokenAsync(cancellationToken).ConfigureAwait(false);
+        if (crmToken == null) return;
+        
         var totalPhones = 0;
         
         foreach (var soldToId in allSoldToIds)
         {
-            var contacts = await _crmClient.GetCustomerContactsAsync(soldToId, cancellationToken).ConfigureAwait(false);
+            var contacts = await _crmClient.GetCustomerContactsAsync(soldToId, crmToken, cancellationToken).ConfigureAwait(false);
 
             var phoneNumbers = contacts?.Where(c => !string.IsNullOrEmpty(c.Phone)).Select(c => NormalizePhone(c.Phone)).Distinct().ToList() ?? new List<string>();
 

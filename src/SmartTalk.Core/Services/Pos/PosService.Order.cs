@@ -73,6 +73,8 @@ public partial class PosService
 
     public async Task HandlePosOrderAsync(PosOrder order, bool isRetry, CancellationToken cancellationToken)
     {
+        if (order.Items == "[]") return;
+        
         var store = await _posDataProvider.GetPosCompanyStoreAsync(id: order.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (store == null) throw new Exception("Store could not be found.");
@@ -896,7 +898,7 @@ public partial class PosService
             RecordId = command.RecordId,
             Scenario = DialogueScenarios.Order,
             ModifyType = ModifyType.Info,
-            UpdateScenarioUserId = _currentUser.Id ?? 0,
+            UpdatedBy = _currentUser.Id ?? 0,
             UserName = _currentUser.Name,
             CreatedDate = DateTime.UtcNow
         }, true, cancellationToken).ConfigureAwait(false);
