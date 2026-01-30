@@ -25,6 +25,11 @@ public partial interface IPhoneOrderDataProvider
         List<DialogueScenarios> scenarios = null, int? assistantId = null, CancellationToken cancellationToken = default);
 
     Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsByAgentIdsAsync(List<int> agentIds, DateTimeOffset? utcStart = null, DateTimeOffset? utcEnd = null, CancellationToken cancellationToken = default);
+
+    Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsByAssistantIdsAsync(List<int> assistantIds, DateTimeOffset? utcStart = null, DateTimeOffset? utcEnd = null, CancellationToken cancellationToken = default);
+
+    Task<Dictionary<int, PhoneOrderRecord>> GetLatestPhoneOrderRecordsByAssistantIdsAsync(
+        List<int> assistantIds, int daysWindow, CancellationToken cancellationToken = default);
     
     Task<List<PhoneOrderOrderItem>> AddPhoneOrderItemAsync(List<PhoneOrderOrderItem> phoneOrderOrderItems, bool forceSave = true, CancellationToken cancellationToken = default);
     
@@ -139,6 +144,50 @@ public partial class PhoneOrderDataProvider
             query = query.Where(record => record.CreatedDate >= utcStart.Value && record.CreatedDate < utcEnd.Value);
 
         return await query.OrderByDescending(record => record.CreatedDate).Take(1000).ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsByAssistantIdsAsync(List<int> assistantIds, DateTimeOffset? utcStart = null, DateTimeOffset? utcEnd = null, CancellationToken cancellationToken = default)
+    {
+        if (assistantIds == null || assistantIds.Count == 0) return [];
+
+        var query = _repository.Query<PhoneOrderRecord>()
+            .Where(x => x.AssistantId.HasValue && assistantIds.Contains(x.AssistantId.Value))
+            .Where(x => x.Status == PhoneOrderRecordStatus.Sent);
+
+        if (utcStart.HasValue && utcEnd.HasValue)
+            query = query.Where(record => record.CreatedDate >= utcStart.Value && record.CreatedDate < utcEnd.Value);
+
+        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<Dictionary<int, PhoneOrderRecord>> GetLatestPhoneOrderRecordsByAssistantIdsAsync(
+        List<int> assistantIds, int daysWindow, CancellationToken cancellationToken = default)
+    {
+        if (assistantIds == null || assistantIds.Count == 0) return [];
+
+        if (daysWindow <= 0) return [];
+
+        var startUtc = DateTimeOffset.UtcNow.AddDays(-daysWindow);
+
+        var records = await _repository.Query<PhoneOrderRecord>()
+            .Where(x => x.AssistantId.HasValue && assistantIds.Contains(x.AssistantId.Value))
+            .Where(x => x.Status == PhoneOrderRecordStatus.Sent)
+            .Where(x => x.CreatedDate >= startUtc)
+            .OrderByDescending(x => x.CreatedDate)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        var result = new Dictionary<int, PhoneOrderRecord>();
+
+        foreach (var record in records)
+        {
+            var assistantId = record.AssistantId.GetValueOrDefault();
+            if (result.ContainsKey(assistantId)) continue;
+
+            result[assistantId] = record;
+        }
+
+        return result;
     }
 
     public async Task UpdatePhoneOrderRecordsAsync(PhoneOrderRecord record, bool forceSave = true, CancellationToken cancellationToken = default)

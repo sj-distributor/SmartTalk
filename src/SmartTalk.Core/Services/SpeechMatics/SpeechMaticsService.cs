@@ -195,9 +195,6 @@ public class SpeechMaticsService : ISpeechMaticsService
         var detection = await _translationClient.DetectLanguageAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
 
         await MultiScenarioCustomProcessingAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
-
-        if (agent.SourceSystem == AgentSourceSystem.Smarties)
-            await CallBackSmartiesRecordAsync(agent, record, cancellationToken).ConfigureAwait(false);
         
         var reports = new List<PhoneOrderRecordReport>();
 
@@ -402,7 +399,8 @@ public class SpeechMaticsService : ISpeechMaticsService
         [
             new SystemChatMessage( (string.IsNullOrEmpty(aiSpeechAssistant?.CustomRecordAnalyzePrompt)
                 ? "你是一名電話錄音的分析員，通過聽取錄音內容和語氣情緒作出精確分析，冩出一份分析報告。\n\n" +
-                  "分析報告的格式：交談主題：xxx\n\n " +
+                  "分析報告的格式如下：" +
+                  "交談主題：xxx\n\n " +
                   "來電號碼：#{call_from}\n\n " +
                   "內容摘要:xxx \n\n " +
                   "客人情感與情緒: xxx \n\n " +
@@ -674,15 +672,17 @@ public class SpeechMaticsService : ISpeechMaticsService
                 {
                     Role = "system",
                     Content = new CompletionsStringContent(
-                        "你需要帮我从电话录音报告中判断两个维度：" +
-                        "1. 是否真人接听（IsHumanAnswered）：" +
-                        "   - 如果客户有自然对话、提问、回应、表达等语气，说明是真人接听，返回 true。" +
-                        "   - 如果是语音信箱、系统提示、无人应答，返回 false。" +
-                        "2. 客人态度是否友好（IsCustomerFriendly）：" +
-                        "   - 如果语气平和、客气、积极配合，返回 true。" +
-                        "   - 如果语气恶劣、冷淡、负面或不耐烦，返回 false。" +
-                        "输出格式务必是 JSON：" +
-                        "{\"IsHumanAnswered\": true, \"IsCustomerFriendly\": true}" +
+                        "你需要帮我从电话录音报告中判断两个维度：\n" +
+                        "1. 是否真人接听（IsHumanAnswered）：\n" +
+                        "   - 默认返回 true，表示是真人接听。\n" +
+                        "   - 当报告中包含转接语音信箱、系统提示、无人接听，或是 是AI 回复时，返回 false。表示非真人接听\n" +
+                        "例子：" +
+                        "“转接语音信箱“，“非真人接听”，“无人应答”，“对面为重复系统音提示”\n" +
+                        "2. 客人态度是否友好（IsCustomerFriendly）：\n" +
+                        "   - 如果语气平和、客气、积极配合，返回 true。\n" +
+                        "   - 如果语气恶劣、冷淡、负面或不耐烦，返回 false。\n" +
+                        "输出格式务必是 JSON：\n" +
+                        "{\"IsHumanAnswered\": true, \"IsCustomerFriendly\": true}\n" +
                         "\n\n样例：\n" +
                         "input: 通話主題：客戶查詢價格。\n內容摘要：客戶開場問候並詢問價格，語氣平和，最後表示感謝。\noutput: {\"IsHumanAnswered\": true, \"IsCustomerFriendly\": true}\n" +
                         "input: 通話主題：外呼無人接聽。\n內容摘要：撥號後自動語音提示‘您撥打的電話暫時無法接通’。\noutput: {\"IsHumanAnswered\": false, \"IsCustomerFriendly\": false}\n"
