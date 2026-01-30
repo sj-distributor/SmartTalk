@@ -90,18 +90,17 @@ public partial class AiSpeechAssistantService
         if (knowledge == null) { return new GetAiSpeechAssistantKnowledgeResponse { Data = null }; }
 
         var result = _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge);
+        var premise = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantPremiseByAssistantIdAsync(request.AssistantId, cancellationToken).ConfigureAwait(false);
+        
+        if (premise != null && !string.IsNullOrEmpty(premise.Content))
+            result.Premise = _mapper.Map<AiSpeechAssistantPremiseDto>(premise);
 
         var allCopyRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync(new List<int> { knowledge.Id }, cancellationToken).ConfigureAwait(false);
      
         Log.Information("Get the knowledge copy related Ids: {@Ids}", allCopyRelateds.Select(x => x.Id));
 
-        var premise = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantPremiseByAssistantIdAsync(request.AssistantId, cancellationToken).ConfigureAwait(false);
-        
-        if (premise != null && !string.IsNullOrEmpty(premise.Content))
-            result.Premise = _mapper.Map<AiSpeechAssistantPremiseDto>(premise);
-        
         result.KnowledgeCopyRelateds = await EnhanceRelateFrom(allCopyRelateds, cancellationToken).ConfigureAwait(false);
-
+        
         return new GetAiSpeechAssistantKnowledgeResponse { Data = result };
     }
 

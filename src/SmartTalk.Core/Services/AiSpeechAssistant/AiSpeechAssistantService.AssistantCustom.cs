@@ -286,7 +286,7 @@ public partial class AiSpeechAssistantService
             await UpdateAssistantVoiceIfRequiredAsync(knowledge.AssistantId, command.ModelVoice, command.VoiceType.Value, command.MediaType, cancellationToken).ConfigureAwait(false);
         
         await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync([knowledge], cancellationToken: cancellationToken).ConfigureAwait(false);
-        
+
         var newKnowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge);
 
         if (command.Premise != null)

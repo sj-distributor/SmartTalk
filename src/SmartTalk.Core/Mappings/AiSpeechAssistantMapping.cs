@@ -34,17 +34,11 @@ public class AiSpeechAssistantMapping : Profile
             .ForMember(dest => dest.MaterialNumber, opt => opt.MapFrom(src => src.MaterialNumber))
             .ForMember(dest => dest.AiUnit, opt => opt.MapFrom(src => src.Unit));
         CreateMap<AiSpeechAssistantInboundRoute, AiSpeechAssistantInboundRouteDto>().ReverseMap();
-        
-        CreateMap<ExtractedOrderItemDto, AiOrderItemDto>()
-            .ForMember(dest => dest.AiMaterialDesc, opt => opt.MapFrom(src => src.Name))
-            .ForMember(dest => dest.MaterialQuantity, opt => opt.MapFrom(src => src.Quantity))
-            .ForMember(dest => dest.MaterialNumber, opt => opt.MapFrom(src => src.MaterialNumber))
-            .ForMember(dest => dest.AiUnit, opt => opt.MapFrom(src => src.Unit));
-        
-        CreateMap<AiSpeechAssistantKnowledgeVariableCache, AiSpeechAssistantKnowledgeVariableCacheDto>().ReverseMap();
-        
+
+        CreateMap<AiSpeechAssistantKnowledgeCopyRelatedDto, AiSpeechAssistantKnowledgeCopyRelated>().ReverseMap();
 
         CreateMap<AiSpeechAssistantPremise, AiSpeechAssistantPremiseDto>().ReverseMap();
-        CreateMap<AiSpeechAssistantKnowledgeCopyRelatedDto, AiSpeechAssistantKnowledgeCopyRelated>().ReverseMap();
+        
+        CreateMap<AiSpeechAssistantKnowledgeVariableCache, AiSpeechAssistantKnowledgeVariableCacheDto>().ReverseMap();
     }
 }
