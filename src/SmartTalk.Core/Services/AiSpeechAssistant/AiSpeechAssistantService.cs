@@ -401,6 +401,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
     public async Task TransferHumanServiceAsync(TransferHumanServiceCommand command, CancellationToken cancellationToken)
     {
+        Log.Information("Transfer human service command");
+        
         TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
         
         var call = await CallResource.UpdateAsync(
@@ -1111,7 +1113,11 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     
     private async Task ProcessTransferCallAsync(JsonElement jsonDocument, string functionName, CancellationToken cancellationToken)
     {
+        Log.Information("Start transfer call");
+        
         if (_aiSpeechAssistantStreamContext.IsTransfer) return;
+        
+        Log.Information("Transfer call failed");
         
         if (string.IsNullOrEmpty(_aiSpeechAssistantStreamContext.HumanContactPhone))
         {
@@ -1133,6 +1139,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             _aiSpeechAssistantStreamContext.IsTransfer = true;
             
             var (reply, replySeconds) = MatchTransferCallReply(functionName);
+            
+            Log.Information("Transfer call reply: " + reply);
             
             _backgroundJobClient.Schedule<IMediator>(x => x.SendAsync(new TransferHumanServiceCommand
             {
