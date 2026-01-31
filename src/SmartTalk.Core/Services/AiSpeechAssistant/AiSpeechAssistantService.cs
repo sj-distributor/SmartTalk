@@ -1117,8 +1117,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         if (_aiSpeechAssistantStreamContext.IsTransfer) return;
         
-        Log.Information("Transfer call failed");
-        
         if (string.IsNullOrEmpty(_aiSpeechAssistantStreamContext.HumanContactPhone))
         {
             var nonHumanService = new
