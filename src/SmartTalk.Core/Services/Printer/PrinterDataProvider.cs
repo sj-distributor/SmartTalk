@@ -194,7 +194,7 @@ public class PrinterDataProvider : IPrinterDataProvider
             query = query.Where(x => x.OrderId == orderId.Value);
 
         if (recordId.HasValue)
-            query = query.Where(x => x.PhoneOrderId == recordId.Value);
+            query = query.Where(x => x.RecordId == recordId.Value);
 
         var count = query.Count();
 

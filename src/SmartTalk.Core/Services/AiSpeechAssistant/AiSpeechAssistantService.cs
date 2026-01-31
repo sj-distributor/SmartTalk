@@ -211,7 +211,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         CheckIfInServiceHours(agent);
         _aiSpeechAssistantStreamContext.TransferCallNumber = agent.TransferCallNumber;
 
-        if (!_aiSpeechAssistantStreamContext.IsInAiServiceHours && !_aiSpeechAssistantStreamContext.IsTransfer)
+        if (!_aiSpeechAssistantStreamContext.IsInAiServiceHours && !_aiSpeechAssistantStreamContext.IsEnableManualService)
             return new AiSpeechAssistantConnectCloseEvent();
         
         _aiSpeechAssistantStreamContext.HumanContactPhone = _aiSpeechAssistantStreamContext.ShouldForward ? null 
@@ -401,6 +401,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
     public async Task TransferHumanServiceAsync(TransferHumanServiceCommand command, CancellationToken cancellationToken)
     {
+        Log.Information("Transfer human service command");
+        
         TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
         
         var call = await CallResource.UpdateAsync(
@@ -781,7 +783,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                                 CallSid = _aiSpeechAssistantStreamContext.CallSid, Host = _aiSpeechAssistantStreamContext.Host
                             }, CancellationToken.None), HangfireConstants.InternalHostingRecordPhoneCall);
 
-                            if (!_aiSpeechAssistantStreamContext.IsInAiServiceHours && _aiSpeechAssistantStreamContext.IsTransfer)
+                            if (!_aiSpeechAssistantStreamContext.IsInAiServiceHours && _aiSpeechAssistantStreamContext.IsEnableManualService)
                             {
                                 _backgroundJobClient.Enqueue<IMediator>(x => x.SendAsync(new TransferHumanServiceCommand
                                 {
@@ -1111,6 +1113,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     
     private async Task ProcessTransferCallAsync(JsonElement jsonDocument, string functionName, CancellationToken cancellationToken)
     {
+        Log.Information("Start transfer call");
+        
         if (_aiSpeechAssistantStreamContext.IsTransfer) return;
         
         if (string.IsNullOrEmpty(_aiSpeechAssistantStreamContext.HumanContactPhone))
@@ -1133,6 +1137,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             _aiSpeechAssistantStreamContext.IsTransfer = true;
             
             var (reply, replySeconds) = MatchTransferCallReply(functionName);
+            
+            Log.Information("Transfer call reply: " + reply);
             
             _backgroundJobClient.Schedule<IMediator>(x => x.SendAsync(new TransferHumanServiceCommand
             {
@@ -1507,6 +1513,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         var pstTimeToMinute = new TimeSpan(pstTime.TimeOfDay.Hours, pstTime.TimeOfDay.Minutes, 0);
 
         _aiSpeechAssistantStreamContext.IsInAiServiceHours = specificWorkingHours != null && specificWorkingHours.Hours.Any(x => x.Start <= pstTimeToMinute && x.End >= pstTimeToMinute);
-        _aiSpeechAssistantStreamContext.IsTransfer = agent.IsTransferHuman && !string.IsNullOrEmpty(agent.TransferCallNumber);
+        _aiSpeechAssistantStreamContext.IsEnableManualService = agent.IsTransferHuman && !string.IsNullOrEmpty(agent.TransferCallNumber);
     }
 }
