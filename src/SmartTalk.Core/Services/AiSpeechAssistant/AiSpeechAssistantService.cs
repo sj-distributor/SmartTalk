@@ -211,7 +211,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         CheckIfInServiceHours(agent);
         _aiSpeechAssistantStreamContext.TransferCallNumber = agent.TransferCallNumber;
 
-        if (!_aiSpeechAssistantStreamContext.IsInAiServiceHours && !_aiSpeechAssistantStreamContext.IsTransfer)
+        if (!_aiSpeechAssistantStreamContext.IsInAiServiceHours && !_aiSpeechAssistantStreamContext.IsEnableManualService)
             return new AiSpeechAssistantConnectCloseEvent();
         
         _aiSpeechAssistantStreamContext.HumanContactPhone = _aiSpeechAssistantStreamContext.ShouldForward ? null 
@@ -783,7 +783,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                                 CallSid = _aiSpeechAssistantStreamContext.CallSid, Host = _aiSpeechAssistantStreamContext.Host
                             }, CancellationToken.None), HangfireConstants.InternalHostingRecordPhoneCall);
 
-                            if (!_aiSpeechAssistantStreamContext.IsInAiServiceHours && _aiSpeechAssistantStreamContext.IsTransfer)
+                            if (!_aiSpeechAssistantStreamContext.IsInAiServiceHours && _aiSpeechAssistantStreamContext.IsEnableManualService)
                             {
                                 _backgroundJobClient.Enqueue<IMediator>(x => x.SendAsync(new TransferHumanServiceCommand
                                 {
@@ -1513,6 +1513,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         var pstTimeToMinute = new TimeSpan(pstTime.TimeOfDay.Hours, pstTime.TimeOfDay.Minutes, 0);
 
         _aiSpeechAssistantStreamContext.IsInAiServiceHours = specificWorkingHours != null && specificWorkingHours.Hours.Any(x => x.Start <= pstTimeToMinute && x.End >= pstTimeToMinute);
-        _aiSpeechAssistantStreamContext.IsTransfer = agent.IsTransferHuman && !string.IsNullOrEmpty(agent.TransferCallNumber);
+        _aiSpeechAssistantStreamContext.IsEnableManualService = agent.IsTransferHuman && !string.IsNullOrEmpty(agent.TransferCallNumber);
     }
 }
