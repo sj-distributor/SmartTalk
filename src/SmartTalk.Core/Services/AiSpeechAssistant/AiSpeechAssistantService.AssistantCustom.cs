@@ -1307,16 +1307,16 @@ public partial class AiSpeechAssistantService
             newTargets.Add(newTarget);
             targetPairs.Add((targetId, newTarget));
             
-            foreach (var relation in relations)
+            var copyFromJsonForRelated = BuildCopyFromJsonForRelated(sourceKnowledge.Json);
+            Log.Information("SyncCopiedKnowledges: copyFromJsonForRelated = {@copyFromJsonForRelated}", copyFromJsonForRelated);
+
+            newRelations.AddRange(relations.Select(relation => new AiSpeechAssistantKnowledgeCopyRelated
             {
-                newRelations.Add(new AiSpeechAssistantKnowledgeCopyRelated
-                {
-                    SourceKnowledgeId = sourceKnowledge.Id,
-                    TargetKnowledgeId = targetId,
-                    CopyKnowledgePoints = sourceKnowledge.Json,
-                    IsSyncUpdate = relation.IsSyncUpdate,
-                });
-            }
+                SourceKnowledgeId = sourceKnowledge.Id, 
+                TargetKnowledgeId = targetId,
+                CopyKnowledgePoints = copyFromJsonForRelated, 
+                IsSyncUpdate = relation.IsSyncUpdate,
+            }));
 
             Log.Information("SyncCopiedKnowledges: target rebuilt. OldTargetId={TargetId}", targetId);
         }
