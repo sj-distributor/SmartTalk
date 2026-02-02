@@ -145,10 +145,6 @@ public partial interface IAiSpeechAssistantDataProvider : IScopedDependency
     
     Task<List<AiSpeechAssistantKnowledgeCopyRelated>> GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync(List<int> targetKnowledgeIds, CancellationToken cancellationToken = default);
     
-    Task<List<AiSpeechAssistantKnowledgeCopyRelated>> GetKnowledgeCopyRelatedByIdsAsync(List<int> Ids, CancellationToken cancellationToken = default);
-
-    Task<List<AiSpeechAssistantKnowledgeCopyRelated>> GetKnowledgeCopyRelatedByKnowledgeIdAsync(List<int> KnowledgeIds, CancellationToken cancellationToken = default);
-
     Task<List<KnowledgeCopyRelatedInfoDto>> GetAiSpeechAssistantKnowledgesByCompanyIdAsync(int companyId,
         int? pageIndex = null, int? pageSize = null, int? agentId = null, int? storeId = null, string keyWord = null, CancellationToken cancellationToken = default);
 
@@ -788,16 +784,6 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
     public async Task<List<AiSpeechAssistantKnowledgeCopyRelated>> GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync(List<int> targetKnowledgeIds, CancellationToken cancellationToken = default)
     {
         return await _repository.Query<AiSpeechAssistantKnowledgeCopyRelated>().Where(x => targetKnowledgeIds.Contains(x.TargetKnowledgeId)).ToListAsync(cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task<List<AiSpeechAssistantKnowledgeCopyRelated>> GetKnowledgeCopyRelatedByIdsAsync(List<int> Ids, CancellationToken cancellationToken = default)
-    {
-        return await _repository.Query<AiSpeechAssistantKnowledgeCopyRelated>().Where(x => Ids.Contains(x.Id)).ToListAsync(cancellationToken).ConfigureAwait(false);
-    }
-    
-    public async Task<List<AiSpeechAssistantKnowledgeCopyRelated>> GetKnowledgeCopyRelatedByKnowledgeIdAsync(List<int> KnowledgeIds, CancellationToken cancellationToken = default)
-    {
-        return await _repository.Query<AiSpeechAssistantKnowledgeCopyRelated>().Where(x => KnowledgeIds.Contains(x.TargetKnowledgeId) || KnowledgeIds.Contains(x.SourceKnowledgeId)).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<List<KnowledgeCopyRelatedInfoDto>> GetAiSpeechAssistantKnowledgesByCompanyIdAsync(
