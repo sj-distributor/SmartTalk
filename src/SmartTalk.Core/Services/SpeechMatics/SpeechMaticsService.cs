@@ -409,7 +409,7 @@ public class SpeechMaticsService : ISpeechMaticsService
                   "交談主題：xxx\n\n " +
                   "來電號碼：#{call_from}\n\n " +
                   "內容摘要:xxx \n\n " +
-                  "客人情感與情緒: xxx \n\n " +
+                  "客人情感與情緒(无法判断默认为平缓): xxx \n\n " +
                   "待辦事件: \n1.xxx\n2.xxx \n\n " +
                   "客人下單內容(如果沒有則忽略)：1. 牛肉(1箱)\n2. 雞腿肉(1箱)"
                 : aiSpeechAssistant.CustomRecordAnalyzePrompt)
