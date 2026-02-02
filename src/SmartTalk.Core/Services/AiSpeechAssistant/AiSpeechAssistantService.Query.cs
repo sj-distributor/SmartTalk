@@ -161,6 +161,13 @@ public partial class AiSpeechAssistantService
 
         var allRelated = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync(ids, cancellationToken).ConfigureAwait(false);
 
+        if (allRelated.Any(r => r.IsSyncUpdate))
+        {
+            knowledges.ForEach(k => { k.KnowledgeCopyRelateds = new List<AiSpeechAssistantKnowledgeCopyRelatedDto>(); });
+
+            return knowledges;
+        }
+        
         var relatedMap = allRelated.GroupBy(x => x.TargetKnowledgeId).ToDictionary(g => g.Key, g => g.ToList());
 
         knowledges.ForEach(k =>
