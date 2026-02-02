@@ -139,15 +139,40 @@ public partial class AiSpeechAssistantService
         var (count, knowledges) = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgesAsync(
             request.AssistantId, request.PageIndex, request.PageSize, cancellationToken: cancellationToken).ConfigureAwait(false);
 
+        var knowledgeDtos = _mapper.Map<List<AiSpeechAssistantKnowledgeDto>>(knowledges);
+
+        var historyKnowledges = await EnhanceKnowledgesHistoryRelatedInfo(knowledgeDtos, cancellationToken).ConfigureAwait(false);
+        
         return new GetAiSpeechAssistantKnowledgeHistoryResponse
         {
             Data = new GetAiSpeechAssistantKnowledgeHistoryResponseData
             {
                 Count = count,
-                Knowledges = _mapper.Map<List<AiSpeechAssistantKnowledgeDto>>(knowledges)
+                Knowledges = historyKnowledges
             }
         };
     }
+
+    public async Task<List<AiSpeechAssistantKnowledgeDto>> EnhanceKnowledgesHistoryRelatedInfo(List<AiSpeechAssistantKnowledgeDto> knowledges, CancellationToken cancellationToken)
+    {
+        if (knowledges == null || knowledges.Count == 0) return knowledges;
+
+        var ids = knowledges.Select(k => k.Id).Distinct().ToList();
+
+        var allRelated = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync(ids, cancellationToken).ConfigureAwait(false);
+
+        var relatedMap = allRelated.GroupBy(x => x.TargetKnowledgeId).ToDictionary(g => g.Key, g => g.ToList());
+
+        knowledges.ForEach(k =>
+        {
+            relatedMap.TryGetValue(k.Id, out var relateds);
+
+            k.KnowledgeCopyRelateds = _mapper.Map<List<AiSpeechAssistantKnowledgeCopyRelatedDto>>(relateds ?? new List<AiSpeechAssistantKnowledgeCopyRelated>());
+        });
+        
+        return knowledges;
+    }
+
 
     public async Task<GetAiSpeechAssistantByIdResponse> GetAiSpeechAssistantByIdAsync(GetAiSpeechAssistantByIdRequest request, CancellationToken cancellationToken)
     {
