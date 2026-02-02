@@ -10,6 +10,7 @@ using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Account;
 using SmartTalk.Core.Services.Identity;
 using SmartTalk.Core.Services.AiSpeechAssistant;
+using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Services.Restaurants;
 using SmartTalk.Messages.Commands.Agent;
@@ -47,9 +48,10 @@ public class AgentService : IAgentService
     private readonly IAgentDataProvider _agentDataProvider;
     private readonly IAccountDataProvider _accountDataProvider;
     private readonly IRestaurantDataProvider _restaurantDataProvider;
+    private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
     
-    public AgentService(IMapper mapper, ICurrentUser currentUser, IPosDataProvider posDataProvider, IAgentDataProvider agentDataProvider, IRestaurantDataProvider restaurantDataProvider, IAccountDataProvider accountDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
+    public AgentService(IMapper mapper, ICurrentUser currentUser, IPosDataProvider posDataProvider, IAgentDataProvider agentDataProvider, IRestaurantDataProvider restaurantDataProvider, IAccountDataProvider accountDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient)
     {
         _mapper = mapper;
         _currentUser = currentUser;
@@ -58,6 +60,7 @@ public class AgentService : IAgentService
         _accountDataProvider = accountDataProvider;
         _restaurantDataProvider = restaurantDataProvider;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
+        _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
     }
 
     public async Task<GetAgentsResponse> GetAgentsAsync(GetAgentsRequest request, CancellationToken cancellationToken)
@@ -175,6 +178,12 @@ public class AgentService : IAgentService
         
         await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantsAsync(assistants, cancellationToken: cancellationToken).ConfigureAwait(false);
             
+        var knowledges = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantActiveKnowledgesAsync(
+            assistants.Select(x=>x.Id).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        foreach (var knowledge in knowledges)
+        { _smartTalkBackgroundJobClient.Enqueue<IAiSpeechAssistantService>(x => x.SyncCopiedKnowledgesIfRequiredAsync(knowledge.Id, true,  false, CancellationToken.None)); }
+        
         var defaultAssistant = assistants.Where(x => x.IsDefault).FirstOrDefault();
 
         if (defaultAssistant is not { AnsweringNumberId: not null }) return new DeleteAgentResponse { Data = _mapper.Map<AgentDto>(agent) };
