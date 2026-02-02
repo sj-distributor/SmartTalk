@@ -8,6 +8,8 @@ public class GetPhoneCallUsagesPreviewRequest : IRequest
 {
     public int Month { get; set; }
     
+    public int? Year { get; set; }
+    
     public bool IncludeExternalData { get; set; } = false;
 }
 

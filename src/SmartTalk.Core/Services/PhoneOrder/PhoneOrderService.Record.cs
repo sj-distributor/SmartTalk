@@ -738,7 +738,7 @@ public partial class PhoneOrderService
 
     public async Task<GetPhoneCallUsagesPreviewResponse> GetPhoneCallUsagesPreviewAsync(GetPhoneCallUsagesPreviewRequest request, CancellationToken cancellationToken)
     {
-        var (startTime, endTime) = GetQueryTimeRange(request.Month);
+        var (startTime, endTime) = GetQueryTimeRange(request.Month, request.Year ?? 2026);
 
         var result = await _phoneOrderDataProvider
             .GetPhonCallUsagesAsync(startTime, endTime, request.IncludeExternalData, cancellationToken).ConfigureAwait(false);
@@ -894,17 +894,17 @@ public partial class PhoneOrderService
             .ToList();
     }
 
-    private (DateTimeOffset StartUtc, DateTimeOffset EndUtc) GetQueryTimeRange(int month)
+    private (DateTimeOffset StartUtc, DateTimeOffset EndUtc) GetQueryTimeRange(int month, int year = 2026)
     {
         if (month < 1 || month > 12) throw new ArgumentOutOfRangeException(nameof(month));
 
         var tz = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"); // PT, 含 DST
 
-        var startLocal = new DateTime(2025, month, 1, 0, 0, 0, DateTimeKind.Unspecified);
+        var startLocal = new DateTime(year, month, 1, 0, 0, 0, DateTimeKind.Unspecified);
 
         var nextMonthLocal = (month == 12)
-            ? new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Unspecified)
-            : new DateTime(2025, month + 1, 1, 0, 0, 0, DateTimeKind.Unspecified);
+            ? new DateTime(year + 1, 1, 1, 0, 0, 0, DateTimeKind.Unspecified)
+            : new DateTime(year, month + 1, 1, 0, 0, 0, DateTimeKind.Unspecified);
 
         var startUtc = TimeZoneInfo.ConvertTimeToUtc(startLocal, tz);
         var endUtc = TimeZoneInfo.ConvertTimeToUtc(nextMonthLocal, tz);
