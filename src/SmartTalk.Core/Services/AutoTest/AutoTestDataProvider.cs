@@ -124,11 +124,11 @@ public partial class AutoTestDataProvider : IAutoTestDataProvider
         
         var allItems = await query.ToListAsync(cancellationToken).ConfigureAwait(false);
         
-        var sortedItems = allItems.OrderBy(item =>
+        var sortedItems = allItems.OrderByDescending(item =>
         {
             try
             {
-                if (string.IsNullOrWhiteSpace(item.InputJson)) return DateTime.MaxValue;
+                if (string.IsNullOrWhiteSpace(item.InputJson)) return DateTime.MinValue;
 
                 var jsonObject = JsonConvert.DeserializeObject<Dictionary<string, object>>(item.InputJson);
 
