@@ -1,6 +1,7 @@
 using AutoMapper;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
+using Serilog;
 using SmartTalk.Core.Data;
 using SmartTalk.Core.Domain.AutoTest;
 using SmartTalk.Core.Ioc;
@@ -120,27 +121,51 @@ public partial class AutoTestDataProvider : IAutoTestDataProvider
             select autoTestDataItem;
 
         var count = await query.CountAsync(cancellationToken).ConfigureAwait(false);
+        
+        var allItems = await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+        
+        var sortedItems = allItems.OrderBy(item =>
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(item.InputJson)) return DateTime.MaxValue;
 
+                var jsonObject = JsonConvert.DeserializeObject<Dictionary<string, object>>(item.InputJson);
+
+                if (jsonObject != null && jsonObject.TryGetValue("OrderDate", out var orderDateObj))
+                {
+                    if (DateTime.TryParse(orderDateObj?.ToString(), out var orderDate))
+                    {
+                        return orderDate;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Unexpected error while extracting OrderDate from AutoTestDataItem {ItemId}", item.Id);
+            }
+
+            return DateTime.MinValue;
+        });
+        
+        var sortedItemsList = sortedItems.ToList();
+        
         List<AutoTestDataItem> resultItems;
-
         if (page.HasValue && pageSize.HasValue)
         {
-            resultItems = await query
-                .OrderByDescending(x => x.CreatedAt)
+            resultItems = sortedItemsList
                 .Skip((page.Value - 1) * pageSize.Value)
                 .Take(pageSize.Value)
-                .ToListAsync(cancellationToken).ConfigureAwait(false);
+                .ToList();
         }
         else
         {
-            resultItems = await query
-                .OrderByDescending(x => x.CreatedAt)
-                .ToListAsync(cancellationToken)
-                .ConfigureAwait(false);
+            resultItems = sortedItemsList;
         }
 
         return (count, resultItems);
     }
+
 
     public async Task<List<int>> GetDataItemIdsByDataSetIdAsync(int dataSetId, CancellationToken cancellationToken)
     {
