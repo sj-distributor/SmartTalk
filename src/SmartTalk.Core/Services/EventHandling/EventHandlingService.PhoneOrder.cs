@@ -86,8 +86,6 @@ public partial class EventHandlingService
             if (record == null) return;
             
             var scenarioInformation = await _speechMaticsService.IdentifyDialogueScenariosAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
-            record.Scenario = scenarioInformation.Category;
-            record.Remark = scenarioInformation.Remark;
 
             await _phoneOrderUtilService.GenerateWaitingProcessingEventAsync(record, scenarioInformation.IsIncludeTodo, record.AgentId, cancellationToken).ConfigureAwait(false);
         }
