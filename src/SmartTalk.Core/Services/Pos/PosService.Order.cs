@@ -70,6 +70,34 @@ public partial class PosService
             IsPersistAction = command.IsPersistAction
         };
     }
+    
+    private async Task UpdateWaitingProcessingEventAsync(int? recordId, int storeId, CancellationToken cancellationToken)
+    {
+        if (!recordId.HasValue)
+        {
+            Log.Information("Update waiting processing event recordId is null");
+            
+            return;
+        }
+        
+        var waitingEvent = (await _phoneOrderDataProvider.GetWaitingProcessingEventsAsync(recordId: recordId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+
+        Log.Information("Pos printing waiting processing event:{@waitingEvent}", waitingEvent);
+        
+        if (waitingEvent == null || waitingEvent.TaskStatus is WaitingTaskStatus.Finished or WaitingTaskStatus.FinishedPosPrinter) return;
+
+        var merchPrinter = await _printerDataProvider.GetMerchPrintersAsync(storeId: storeId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var isCloudPrinting = merchPrinter is { Count: >0 };
+        
+        waitingEvent.TaskStatus = waitingEvent.TaskStatus switch
+        {
+            WaitingTaskStatus.Unfinished => isCloudPrinting ? WaitingTaskStatus.FinishedPosPrinter : WaitingTaskStatus.Finished,
+            WaitingTaskStatus.FinishedCloudPrinter => WaitingTaskStatus.Finished
+        };
+        
+        await _phoneOrderDataProvider.UpdateWaitingProcessingEventsAsync([waitingEvent], cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
 
     public async Task HandlePosOrderAsync(PosOrder order, bool isRetry, CancellationToken cancellationToken)
     {
@@ -691,8 +719,13 @@ public partial class PosService
         order.Status = status;
         order.SentBy = _currentUser.Id;
         order.SentTime = DateTimeOffset.Now;
-        
-        if(status == PosOrderStatus.Sent) order.IsPush = true;
+
+        if (status == PosOrderStatus.Sent)
+        {
+            order.IsPush = true;
+            
+            await UpdateWaitingProcessingEventAsync(order.RecordId, order.StoreId, cancellationToken).ConfigureAwait(false);
+        }
         
         await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
     }
