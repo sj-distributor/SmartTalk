@@ -350,9 +350,14 @@ public class PrinterService : IPrinterService
         
         var waitingProcessingEvent = (await _phoneOrderDataProvider.GetWaitingProcessingEventsAsync(recordId: id, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
 
-        if (waitingProcessingEvent == null) return;
+        Log.Information("Cloud printed waiting processing event:{@waitingProcessingEvent}", waitingProcessingEvent);
+        
+        if (waitingProcessingEvent == null || waitingProcessingEvent.TaskStatus == WaitingTaskStatus.Finished) return;
 
-        waitingProcessingEvent.TaskStatus = WaitingTaskStatus.Finished;
+        if (waitingProcessingEvent.TaskType == TaskType.Order && waitingProcessingEvent.TaskStatus != WaitingTaskStatus.FinishedPosPrinter)
+            waitingProcessingEvent.TaskStatus = WaitingTaskStatus.FinishedCloudPrinter;
+        else
+            waitingProcessingEvent.TaskStatus = WaitingTaskStatus.Finished;
             
         await _phoneOrderDataProvider.UpdateWaitingProcessingEventsAsync([waitingProcessingEvent], cancellationToken: cancellationToken).ConfigureAwait(false);
     }
@@ -885,15 +890,27 @@ public class PrinterService : IPrinterService
          {
              MerchPrinterOrder order;
              MerchPrinter merchPrinter;
+             int? recordId = null;
+             
              if (command.Id == null &&  command.StoreId != null && (command.OrderId != null || command.PhoneOrderId != null))
              {
                  Log.Information("storeId:{storeId}, orderId:{orderId}", command.StoreId, command.OrderId);
                  var merchPrinterOrder = new MerchPrinterOrder();
-                 
+
                  if (command.OrderId != null)
+                 {
                      merchPrinterOrder = (await _printerDataProvider.GetMerchPrinterOrdersAsync(storeId: command.StoreId, orderId: command.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+                     
+                     var posOrder = await _posDataProvider.GetPosOrderByIdAsync(orderId: command.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+                     recordId = posOrder.RecordId;
+                 }
                  else if (command.PhoneOrderId != null)
+                 {
                      merchPrinterOrder =  (await _printerDataProvider.GetMerchPrinterOrdersAsync(storeId: command.StoreId, recordId: command.PhoneOrderId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+
+                     recordId = command.PhoneOrderId;
+                 }
 
                  if (merchPrinterOrder != null) order = merchPrinterOrder;
                  else
@@ -927,6 +944,15 @@ public class PrinterService : IPrinterService
                  if (order == null || merchPrinter == null)
                      throw new Exception("Not find print order or merchPrinter");
 
+                 if (order.RecordId.HasValue)
+                     recordId = order.RecordId;
+                 else
+                 {
+                     var posOrder = await _posDataProvider.GetPosOrderByIdAsync(orderId: order.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+                     recordId = posOrder.RecordId;
+                 }
+
                  order.PrintStatus = PrintStatus.Waiting;
                  order.PrinterMac = merchPrinter.PrinterMac;
                  order.ImageUrl = null;
@@ -945,6 +971,13 @@ public class PrinterService : IPrinterService
                  if (reservation != null)
                     await _posDataProvider.UpdatePhoneOrderReservationInformationAsync(reservation, cancellationToken: cancellationToken).ConfigureAwait(false);
              }
+             
+             var waitingEvent = (await _phoneOrderDataProvider.GetWaitingProcessingEventsAsync(recordId: recordId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+
+             Log.Information("Cloud printing waiting processing event:{@waitingEvent}", waitingEvent);
+             
+             if (waitingEvent != null)
+                 await _phoneOrderDataProvider.UpdateWaitingProcessingEventsAsync([waitingEvent], cancellationToken: cancellationToken).ConfigureAwait(false);
              
              _smartTalkBackgroundJobClient.Schedule<IMediator>( x => x.SendAsync(new RetryCloudPrintingCommand{ Id = order.Id, Count = 0}, CancellationToken.None), TimeSpan.FromMinutes(1));
              
