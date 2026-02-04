@@ -858,7 +858,7 @@ public partial class PhoneOrderService
 
         var chinaZone = GetChinaTimeZone();
         var nowChina = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, chinaZone);
-        var todayLocal = new DateTime(nowChina.Year, nowChina.Month, nowChina.Day, 0, 0, 0, DateTimeKind.Unspecified);
+        var todayChina = new DateTime(nowChina.Year, nowChina.Month, nowChina.Day, 0, 0, 0, DateTimeKind.Unspecified);
 
         var recordGroups = (records ?? [])
             .Where(record => record.AssistantId.HasValue)
@@ -879,7 +879,7 @@ public partial class PhoneOrderService
 
                 var daysSinceLastCallText = latestRecord == null
                     ? $"超过{daysWindow}天"
-                    : CalculateDaysSinceLastCallText(latestRecord.CreatedDate, todayLocal, chinaZone);
+                    : CalculateDaysSinceLastCallText(latestRecord.CreatedDate, todayChina, chinaZone);
 
                 return new CompanyCallReportRow
                 {
@@ -912,26 +912,43 @@ public partial class PhoneOrderService
         return (new DateTimeOffset(startUtc), new DateTimeOffset(endUtc));
     }
 
-    private static (DateTimeOffset StartUtc, DateTimeOffset EndUtc) GetCompanyCallReportUtcRange(PhoneOrderCallReportType reportType)
+    public static (DateTimeOffset StartUtc, DateTimeOffset EndUtc) GetCompanyCallReportUtcRange(PhoneOrderCallReportType reportType)
     {
         var chinaZone = GetChinaTimeZone();
         var nowChina = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, chinaZone);
-        var todayLocal = new DateTime(nowChina.Year, nowChina.Month, nowChina.Day, 0, 0, 0, DateTimeKind.Unspecified);
+        var todayChina = new DateTime(nowChina.Year, nowChina.Month, nowChina.Day, 0, 0, 0, DateTimeKind.Unspecified);
 
         if (reportType == PhoneOrderCallReportType.Daily)
         {
-            var startUtc = TimeZoneInfo.ConvertTimeToUtc(todayLocal, chinaZone);
+            var startUtc = TimeZoneInfo.ConvertTimeToUtc(todayChina, chinaZone);
             var endUtc = startUtc.AddDays(1);
 
             return (new DateTimeOffset(startUtc), new DateTimeOffset(endUtc));
         }
 
-        var startOfWeekLocal = todayLocal.AddDays(-((int)todayLocal.DayOfWeek + 6) % 7);
+        // 计算本周一的日期（中国时间）
+        // DayOfWeek: Sunday=0, Monday=1, ..., Saturday=6
+        // 公式计算：将 Sunday 视为上周的最后一天，Monday 是本周的第一天
+        var daysFromMonday = ((int)todayChina.DayOfWeek + 6) % 7; // Sunday=6, Monday=0, Tuesday=1, ...
+        var thisWeekMondayChina = todayChina.AddDays(-daysFromMonday);
+        
+        DateTime startOfWeekChina;
         
         if (reportType == PhoneOrderCallReportType.LastWeek)
-            startOfWeekLocal = startOfWeekLocal.AddDays(-7);
+        {
+            // 上周一：本周一减去 7 天
+            startOfWeekChina = thisWeekMondayChina.AddDays(-7);
+        }
+        else
+        {
+            // 本周一
+            startOfWeekChina = thisWeekMondayChina;
+        }
 
-        var weekStartUtc = TimeZoneInfo.ConvertTimeToUtc(startOfWeekLocal, chinaZone);
+        // 将中国时间的周一 00:00:00 转换为 UTC
+        var weekStartUtc = TimeZoneInfo.ConvertTimeToUtc(startOfWeekChina, chinaZone);
+        
+        // 结束时间：下周一 00:00:00（UTC），这样查询条件 CreatedDate < endUtc 会包含上周一到上周日 23:59:59.999 的所有数据
         var weekEndUtc = weekStartUtc.AddDays(7);
 
         return (new DateTimeOffset(weekStartUtc), new DateTimeOffset(weekEndUtc));
@@ -949,10 +966,10 @@ public partial class PhoneOrderService
         }
     }
 
-    private static string CalculateDaysSinceLastCallText(DateTimeOffset latestCallUtc, DateTime todayLocal, TimeZoneInfo chinaZone)
+    private static string CalculateDaysSinceLastCallText(DateTimeOffset latestCallUtc, DateTime todayChina, TimeZoneInfo chinaZone)
     {
-        var latestLocal = TimeZoneInfo.ConvertTime(latestCallUtc, chinaZone);
-        var diff = todayLocal - latestLocal.DateTime;
+        var latestChina = TimeZoneInfo.ConvertTime(latestCallUtc, chinaZone);
+        var diff = todayChina - latestChina.DateTime;
         var days = Math.Max(0, Math.Round(diff.TotalDays, 1));
 
         return days.ToString("0.0");
