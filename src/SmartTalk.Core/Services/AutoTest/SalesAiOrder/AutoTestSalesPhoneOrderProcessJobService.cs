@@ -163,14 +163,23 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
     {
         var record = await _autoTestDataProvider.GetAutoTestImportDataRecordAsync(recordId, cancellationToken).ConfigureAwait(false);
 
+        var crmToken = await _crmClient.GetCrmTokenAsync(cancellationToken).ConfigureAwait(false); 
+        if (crmToken == null) return;
         try
         {
-            var contacts = await _crmClient.GetCustomerContactsAsync(customerId.ToString(), cancellationToken).ConfigureAwait(false);
-            var phoneNumbers = contacts.Select(c => NormalizePhone(c.Phone)).Where(p => !string.IsNullOrEmpty(p)).Distinct().ToList();
+            var contacts = await _crmClient.GetCustomerContactsAsync(customerId.ToString(), cancellationToken)
+                .ConfigureAwait(false);
+
+            var phoneNumbers = contacts.Select(c => NormalizePhone(c.Phone)).Where(p => !string.IsNullOrEmpty(p))
+                .Distinct().ToList();
+            Log.Information("Normalized phone numbers: {@PhoneNumbers}", phoneNumbers);
 
             if (!phoneNumbers.Any()) return;
-            
-            var callRecords = (await _autoTestDataProvider.GetCallRecordsByPhonesAndRangeAsync(phoneNumbers, from, to, cancellationToken).ConfigureAwait(false)).OrderBy(r => r.StartTimeUtc).ToList();
+
+            var callRecords =
+                (await _autoTestDataProvider
+                    .GetCallRecordsByPhonesAndRangeAsync(phoneNumbers, from, to, cancellationToken)
+                    .ConfigureAwait(false)).OrderBy(r => r.StartTimeUtc).ToList();
 
             if (!callRecords.Any())
             {
@@ -178,14 +187,16 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
                 return;
             }
 
+            var pstZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
             var singleDayRecords = callRecords.SelectMany(r => new[]
                 {
                     new { Phone = NormalizePhone(r.FromNumber), Record = r }, 
                     new { Phone = NormalizePhone(r.ToNumber), Record = r }
                 }).Where(x => !string.IsNullOrEmpty(x.Phone)).GroupBy(x => new
                 {
-                    Phone = x.Phone, Date = x.Record.StartTimeUtc.Date
-                }).Where(g => g.Count() == 1).Select(g => g.First().Record).Distinct().OrderBy(r => r.StartTimeUtc).ToList();
+                    Phone = x.Phone, Date = TimeZoneInfo.ConvertTimeFromUtc(x.Record.StartTimeUtc, pstZone).Date
+                }).Where(g => g.Count() == 1).Select(g => g.First().Record).Distinct().OrderBy(r => r.StartTimeUtc)
+                .ToList();
 
             if (!singleDayRecords.Any())
             {
@@ -193,15 +204,23 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
                 return;
             }
 
-            var matchTasks = singleDayRecords.Select(callRecord => MatchOrderAndRecordingAsync(customerId, callRecord, scenarioId, recordId, cancellationToken)).ToList();
-            
-            var autoTestDataItems = (await Task.WhenAll(matchTasks)).Where(x => x != null).ToList();
-            
-            if (autoTestDataItems.Any())
-            {
-                await _autoTestDataProvider.AddAutoTestDataItemsAsync(autoTestDataItems, true, cancellationToken).ConfigureAwait(false);
+            var matchTasks = singleDayRecords.Select(callRecord =>
+                MatchOrderAndRecordingAsync(customerId, callRecord, scenarioId, recordId, cancellationToken)).ToList();
 
-                var autoTestDataSetItems = autoTestDataItems.Select(x => new AutoTestDataSetItem
+            var autoTestDataItems = (await Task.WhenAll(matchTasks)).Where(x => x != null).ToList();
+
+            var sortedAutoTestDataItems = autoTestDataItems.Select(x => new
+                    { Item = x, OrderDate = JsonSerializer.Deserialize<AutoTestInputJsonDto>(x.InputJson)?.OrderDate })
+                .OrderBy(x => x.OrderDate)
+                .Select(x => x.Item)
+                .ToList();
+
+            if (sortedAutoTestDataItems.Any())
+            {
+                await _autoTestDataProvider.AddAutoTestDataItemsAsync(sortedAutoTestDataItems, true, cancellationToken)
+                    .ConfigureAwait(false);
+
+                var autoTestDataSetItems = sortedAutoTestDataItems.Select(x => new AutoTestDataSetItem
                 {
                     DataSetId = dataSetId,
                     DataItemId = x.Id,

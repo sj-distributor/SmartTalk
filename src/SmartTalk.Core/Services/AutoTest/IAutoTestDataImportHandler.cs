@@ -43,40 +43,51 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
     {
         var scenario = await _autoTestDataProvider.GetAutoTestScenarioByIdAsync(scenarioId, cancellationToken).ConfigureAwait(false);
         try
+    {
+        switch (scenario.KeyName)
         {
-            switch (scenario.KeyName)
-            {
-                case "AiOrder":
-                    if (!import.TryGetValue("CustomerId", out var customerId) || !import.TryGetValue("StartDate", out var startDateObj) || !import.TryGetValue("EndDate", out var endDateObj))
-                        return;
+            case "AiOrder":
+                if (!import.TryGetValue("CustomerId", out var customerId) || !import.TryGetValue("StartDate", out var startDateObj) || !import.TryGetValue("EndDate", out var endDateObj))
+                    return;
+                
+                var startUtc = startDateObj is DateTime dt1 ? dt1 : DateTime.Parse(startDateObj.ToString());
+                var endUtc = endDateObj is DateTime dt2 ? dt2 : DateTime.Parse(endDateObj.ToString());
+                
+                var pstZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+                
+                var startPstDate = TimeZoneInfo.ConvertTimeFromUtc(startUtc, pstZone).Date;
+                var endPstDate   = TimeZoneInfo.ConvertTimeFromUtc(endUtc, pstZone).Date;
+                
+                var startPst = new DateTime(startPstDate.Year, startPstDate.Month, startPstDate.Day, 0, 0, 0);
+                var endPst   = new DateTime(endPstDate.Year, endPstDate.Month, endPstDate.Day, 23, 59, 59, 999);
+                
+                var cursor = new DateTime(startPst.Year, startPst.Month, 1);
+                while (cursor <= endPst)
+                {
+                    var monthStart = cursor < startPst ? startPst : cursor;
+                    var monthEnd = cursor.AddMonths(1).AddDays(-1);
+                    if (monthEnd > endPst) monthEnd = endPst;
                     
-                    DateTime startUtc = startDateObj is DateTime dt1 ? dt1 : DateTime.Parse(startDateObj.ToString());
-                    DateTime endUtc = endDateObj is DateTime dt2 ? dt2 : DateTime.Parse(endDateObj.ToString());
-                    
-                    var cursor = new DateTime(startUtc.Year, startUtc.Month, 1, 0, 0, 0, DateTimeKind.Utc);
-                    while (cursor <= endUtc)
-                    {
-                        var monthStart = cursor < startUtc ? startUtc : cursor;
-                        var monthEnd = cursor.AddMonths(1).AddDays(-1).Date.AddDays(1).AddMilliseconds(-1);
-                        if (monthEnd > endUtc) monthEnd = endUtc;
+                    var fromUtc = TimeZoneInfo.ConvertTimeToUtc(monthStart, pstZone);
+                    var toUtc   = TimeZoneInfo.ConvertTimeToUtc(monthEnd, pstZone);
 
-                        _backgroundJobClient.Enqueue<IAutoTestSalesPhoneOrderProcessJobService>(x =>
-                            x.ProcessPartialRecordingOrderMatchingAsync(scenarioId, dataSetId, recordId, monthStart, monthEnd, customerId.ToString(), cancellationToken));
+                    _backgroundJobClient.Enqueue<IAutoTestSalesPhoneOrderProcessJobService>(x =>
+                        x.ProcessPartialRecordingOrderMatchingAsync(scenarioId, dataSetId, recordId, fromUtc, toUtc, customerId.ToString(), cancellationToken));
 
-                        cursor = cursor.AddMonths(1);
-                    }
-                    break;
+                    cursor = cursor.AddMonths(1);
+                }
+                break;
 
-                default:
-                    Log.Warning("未知 Scenario KeyName {KeyName}，跳过处理", scenario.KeyName);
-                    break;
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "ImportAsync 失败 ScenarioId={ScenarioId}", scenarioId);
+            default:
+                Log.Warning("未知 Scenario KeyName {KeyName}，跳过处理", scenario.KeyName);
+                break;
         }
     }
+    catch (Exception ex)
+    {
+        Log.Error(ex, "ImportAsync 失败 ScenarioId={ScenarioId}", scenarioId);
+    }
+}
 
     public class DbDataImportHandler : IAutoTestDataImportHandler
     {
