@@ -124,9 +124,9 @@ public partial class PosService
         
             Log.Information("Create merch printer order:{@merchPrinterOrder}", merchPrinterOrder);
 
-            _smartTalkBackgroundJobClient.Schedule<IMediator>( x => x.SendAsync(new RetryCloudPrintingCommand{ Id = merchPrinterOrder.Id, Count = 0}, CancellationToken.None), TimeSpan.FromMinutes(1));
+            //_smartTalkBackgroundJobClient.Schedule<IMediator>( x => x.SendAsync(new RetryCloudPrintingCommand{ Id = merchPrinterOrder.Id, Count = 0}, CancellationToken.None), TimeSpan.FromMinutes(1));
         
-            await _cacheManager.SetAsync($"{merchPrinterOrder.OrderId}", "true", new RedisCachingSetting(expiry: TimeSpan.FromMinutes(30)), cancellationToken).ConfigureAwait(false);
+            //await _cacheManager.SetAsync($"{merchPrinterOrder.OrderId}", "true", new RedisCachingSetting(expiry: TimeSpan.FromMinutes(30)), cancellationToken).ConfigureAwait(false);
         }, wait: TimeSpan.Zero, retry: TimeSpan.Zero, server: RedisServer.System).ConfigureAwait(false);
     }
 
