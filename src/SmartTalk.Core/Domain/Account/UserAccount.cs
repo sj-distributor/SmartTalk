@@ -74,6 +74,9 @@ namespace SmartTalk.Core.Domain.Account
     
         [Column("last_modified_date")]
         public DateTimeOffset? LastModifiedDate { get; set; }
+        
+        [Column("is_task_enabled")]
+        public bool IsTaskEnabled { get; set; }
 
         [Column("is_turn_on_notification")]
         public bool IsTurnOnNotification { get; set; }

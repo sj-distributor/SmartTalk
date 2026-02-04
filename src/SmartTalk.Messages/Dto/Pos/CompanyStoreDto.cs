@@ -47,8 +47,6 @@ public class CompanyStoreDto
     
     public bool IsLink { get; set; }
     
-    public bool IsTaskEnabled { get; set; }
-    
     public DateTimeOffset CreatedDate { get; set; }
     
     public int? LastModifiedBy { get; set; }

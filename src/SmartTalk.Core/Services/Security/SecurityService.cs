@@ -1,7 +1,6 @@
 using System.Net;
 using AutoMapper;
 using Serilog;
-using SmartTalk.Core.Domain.Account;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Domain.Security;
@@ -15,7 +14,6 @@ using SmartTalk.Messages.Requests.Security;
 using SmartTalk.Messages.Commands.Security;
 using SmartTalk.Messages.Constants;
 using SmartTalk.Messages.Dto.Account;
-using SmartTalk.Messages.Dto.Pos;
 using SmartTalk.Messages.Enums.Security;
 using SmartTalk.Messages.Events.Security;
 
@@ -245,36 +243,19 @@ public class SecurityService : ISecurityService
     
     public async Task<UpdateUserAccountTaskNotificationResponse> UpdateUserAccountTaskNotificationAsync(UpdateUserAccountTaskNotificationCommand command, CancellationToken cancellationToken)
     {
-        UserAccount userAccount = null;
-        CompanyStore store = null;
+        var userAccount = await _accountDataProvider.GetUserAccountByUserIdAsync(command.UserId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        if (command.UserId.HasValue && command.IsTurnOnNotification.HasValue)
+        if (userAccount is null) throw new AccountExpiredException("UpdateUserAccountTaskNotificationAsync User Account Is Not Exist");
+        userAccount.IsTurnOnNotification = command.IsTurnOnNotification ?? userAccount.IsTurnOnNotification;
+        userAccount.IsTaskEnabled = command.IsTaskEnabled ?? userAccount.IsTaskEnabled;
+
+        await _accountDataProvider.UpdateUserAccountAsync(userAccount, true, cancellationToken).ConfigureAwait(false);
+
+        return new UpdateUserAccountTaskNotificationResponse()
         {
-            userAccount = await _accountDataProvider.GetUserAccountByUserIdAsync(command.UserId.Value, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-            if (userAccount is null) throw new AccountExpiredException("UpdateUserAccountTaskNotificationAsync User Account Is Not Exist");
-
-            userAccount.IsTurnOnNotification = command.IsTurnOnNotification.Value;
-            await _accountDataProvider.UpdateUserAccountAsync(userAccount, true, cancellationToken).ConfigureAwait(false);
-        }
-
-        if (command.StoreId.HasValue && command.IsTaskEnabled.HasValue)
-        {
-            store = await _posDataProvider.GetPosCompanyStoreAsync(id: command.StoreId.Value, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-            if (store is null) throw new InvalidOperationException($"Store not found. StoreId={command.StoreId.Value}");
-
-            store.IsTaskEnabled = command.IsTaskEnabled.Value;
-
-            await _posDataProvider.UpdatePosCompanyStoresAsync([store], true, cancellationToken).ConfigureAwait(false);
-        }
-
-        return new UpdateUserAccountTaskNotificationResponse
-        {
-            Data = new UpdateUserAccountTaskNotificationResponseData
+            Data = new UpdateUserAccountTaskNotificationResponseData()
             {
-                UserAccount = userAccount is null ? null : _mapper.Map<UserAccountDto>(userAccount),
-                CompanyStore = store is null ? null : _mapper.Map<CompanyStoreDto>(store),
+                UserAccount = _mapper.Map<UserAccountDto>(userAccount)
             }
         };
     }
