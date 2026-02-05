@@ -195,7 +195,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         static bool TryGetCustomerId(Domain.AISpeechAssistant.AiSpeechAssistant assistant, out string customerId)
         {
             customerId = null;
-            if (string.IsNullOrWhiteSpace(assistant.Name) || assistant.Language is null) return false;
+            if (string.IsNullOrWhiteSpace(assistant.Name)) return false;
 
             var rawCustomerId = assistant.Name.Trim();
             var firstSegment = rawCustomerId.Split('/')[0].Trim();
