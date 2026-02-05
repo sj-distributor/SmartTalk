@@ -155,13 +155,14 @@ public partial class AiSpeechAssistantService
         if (!allRelateds.Any()) { return; }
         
         Log.Information(
-            "Updating knowledge copy relateds. KnowledgeId={KnowledgeId}, AllCount={AllCount}, SelectedCount={SelectedCount}", latestKnowledgeId, allRelateds.Count, selectedRelateds.Count);
-
+            "Updating knowledge copy relateds. KnowledgeId={KnowledgeId}, AllRelatedsIds={AllRelatedsIds}, SelectedRelatedsIds={SelectedRelatedsIds}",
+            latestKnowledgeId, string.Join(",", allRelateds.Select(x => x.Id)), string.Join(",", selectedRelateds.Select(x => x.Id)));
+        
         allRelateds.ForEach(r =>
         {
             if (r.SourceKnowledgeId == prevKnowledgeId) { r.SourceKnowledgeId = latestKnowledgeId; }
-
-            if (r.TargetKnowledgeId == prevKnowledgeId && r.IsSyncUpdate) { r.TargetKnowledgeId = latestKnowledgeId; }
+            
+            if (r.TargetKnowledgeId == prevKnowledgeId && selectedRelateds.Any(s => s.Id == r.Id)) { r.TargetKnowledgeId = latestKnowledgeId; }
         });
         
         selectedRelateds
