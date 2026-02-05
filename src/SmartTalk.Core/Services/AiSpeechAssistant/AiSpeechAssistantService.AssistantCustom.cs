@@ -136,7 +136,6 @@ public partial class AiSpeechAssistantService
         var allPrevRelateds = new List<AiSpeechAssistantKnowledgeCopyRelated>();
         var selectedRelateds = new List<AiSpeechAssistantKnowledgeCopyRelated>(); 
         
-        allPrevRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedBySourceKnowledgeIdAsync([prevKnowledgeId], null, cancellationToken).ConfigureAwait(false);
         Log.Information("All prev relateds: {@allPrevRelatedIds}", allPrevRelateds.Select(r => r.Id).ToList());
 
         if (allPrevRelateds.Count == 0) { return (allPrevRelateds ?? [], []); }
