@@ -4,7 +4,6 @@ using Correlate.AspNetCore;
 using SmartTalk.Api.Filters;
 using SmartTalk.Api.Extensions;
 using Correlate.DependencyInjection;
-using SmartTalk.Core.Settings.OpenAi;
 using Swashbuckle.AspNetCore.SwaggerUI;
 
 namespace SmartTalk.Api;
