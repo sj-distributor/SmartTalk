@@ -765,7 +765,7 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
     {
         var query = _repository
             .Query<AiSpeechAssistantKnowledgeCopyRelated>()
-            .Where(x => targetKnowledgeIds.Contains(x.SourceKnowledgeId));
+            .Where(x => targetKnowledgeIds.Contains(x.TargetKnowledgeId));
 
         if (isSyncUpdate.HasValue)
         {
