@@ -996,7 +996,7 @@ public partial class AiSpeechAssistantService
         
         var copyToKnowledges = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgesAsync(command.TargetKnowledgeIds, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        var copyToRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync(copyToKnowledges.Select(x => x.Id).ToList(), cancellationToken).ConfigureAwait(false);
+        var copyToRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync(copyToKnowledges.Select(x => x.Id).ToList(), null, cancellationToken).ConfigureAwait(false);
 
         var relatedLookup = copyToRelateds?.GroupBy(x => x.TargetKnowledgeId)
                                 .ToDictionary(g => g.Key, g => g.OrderBy(x => x.CreatedDate).ToList())
@@ -1006,7 +1006,7 @@ public partial class AiSpeechAssistantService
 
         var newCopeToKnowledges = new List<AiSpeechAssistantKnowledge>();
 
-        var copyFromRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync(new List<int> { copyFromKnowledge.Id }, cancellationToken).ConfigureAwait(false);
+        var copyFromRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync(new List<int> { copyFromKnowledge.Id }, null, cancellationToken).ConfigureAwait(false);
         var copyFromRelatedLookup = copyFromRelateds?.GroupBy(x => x.TargetKnowledgeId)
             .ToDictionary(g => g.Key, g => g.OrderBy(x => x.CreatedDate).ToList());
         
@@ -1205,7 +1205,7 @@ public partial class AiSpeechAssistantService
 
         var knowledgeIds = knowledges.Select(k => k.Id).ToList();
 
-        var allCopyRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync(knowledgeIds, cancellationToken).ConfigureAwait(false);
+        var allCopyRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync(knowledgeIds, null, cancellationToken).ConfigureAwait(false);
 
         allCopyRelateds ??= new List<AiSpeechAssistantKnowledgeCopyRelated>();
         
@@ -1310,7 +1310,7 @@ public partial class AiSpeechAssistantService
     {
         var targetIds = oldTargetMap.Keys.ToList();
         
-        var allTargetRelations = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync(targetIds, cancellationToken).ConfigureAwait(false) ?? new List<AiSpeechAssistantKnowledgeCopyRelated>();
+        var allTargetRelations = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync(targetIds, true, cancellationToken).ConfigureAwait(false) ?? new List<AiSpeechAssistantKnowledgeCopyRelated>();
         
         Log.Information("RebuildTargetsAsync allTargetRelationsIds {allTargetRelationsIds}",  allTargetRelations.Select(x=>x.Id));
         
