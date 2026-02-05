@@ -157,8 +157,13 @@ public partial class AiSpeechAssistantService
         Log.Information(
             "Updating knowledge copy relateds. KnowledgeId={KnowledgeId}, AllCount={AllCount}, SelectedCount={SelectedCount}", latestKnowledgeId, allRelateds.Count, selectedRelateds.Count);
 
-        allRelateds.ForEach(r => r.SourceKnowledgeId = latestKnowledgeId);
-            
+        allRelateds.ForEach(r =>
+        {
+            if (r.SourceKnowledgeId == prevKnowledgeId) { r.SourceKnowledgeId = latestKnowledgeId; }
+
+            if (r.TargetKnowledgeId == prevKnowledgeId) { r.TargetKnowledgeId = latestKnowledgeId; }
+        });
+        
         selectedRelateds
             .Where(r => relatedDtoMap.ContainsKey(r.Id))
             .ToList()
