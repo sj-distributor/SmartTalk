@@ -142,7 +142,7 @@ public partial class AiSpeechAssistantService
         var allPrevRelateds = new List<AiSpeechAssistantKnowledgeCopyRelated>();
         var selectedRelateds = new List<AiSpeechAssistantKnowledgeCopyRelated>(); 
         
-        allPrevRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedsAsync(prevKnowledgeId, cancellationToken).ConfigureAwait(false);
+        allPrevRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedBySourceKnowledgeIdAsync([prevKnowledgeId], null, cancellationToken).ConfigureAwait(false);
         Log.Information("All prev relateds: {@allPrevRelatedIds}", allPrevRelateds.Select(r => r.Id).ToList());
 
         if (allPrevRelateds.Count == 0) { return (allPrevRelateds ?? [], []); }
@@ -162,14 +162,9 @@ public partial class AiSpeechAssistantService
         
         Log.Information(
             "Updating knowledge copy relateds. KnowledgeId={KnowledgeId}, AllCount={AllCount}, SelectedCount={SelectedCount}", latestKnowledgeId, allRelateds.Count, selectedRelateds.Count);
-        
-        allRelateds.ForEach(r =>
-        {
-            if (r.SourceKnowledgeId == prevKnowledgeId) { r.SourceKnowledgeId = latestKnowledgeId; }
 
-            if (r.TargetKnowledgeId == prevKnowledgeId) { r.TargetKnowledgeId = latestKnowledgeId; }
-        });
-        
+        allRelateds.ForEach(r => r.SourceKnowledgeId = latestKnowledgeId);
+            
         selectedRelateds
             .Where(r => relatedDtoMap.ContainsKey(r.Id))
             .ToList()
