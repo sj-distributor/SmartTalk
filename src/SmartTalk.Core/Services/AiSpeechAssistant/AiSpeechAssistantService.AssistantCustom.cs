@@ -161,7 +161,7 @@ public partial class AiSpeechAssistantService
         {
             if (r.SourceKnowledgeId == prevKnowledgeId) { r.SourceKnowledgeId = latestKnowledgeId; }
 
-            if (r.TargetKnowledgeId == prevKnowledgeId) { r.TargetKnowledgeId = latestKnowledgeId; }
+            if (r.TargetKnowledgeId == prevKnowledgeId && r.IsSyncUpdate) { r.TargetKnowledgeId = latestKnowledgeId; }
         });
         
         selectedRelateds
