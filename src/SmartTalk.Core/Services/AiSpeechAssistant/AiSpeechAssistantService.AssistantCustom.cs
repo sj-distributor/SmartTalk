@@ -1226,7 +1226,6 @@ public partial class AiSpeechAssistantService
 
         if (deleteKnowledge)
         { await DisableSyncUpdateAsync(sourceKnowledgeId, cancellationToken); return; }
-        
 
         var oldTargetMap = await GetAndDeactivateOldTargetsAsync(sourceKnowledgeId, cancellationToken);
 
@@ -1347,16 +1346,25 @@ public partial class AiSpeechAssistantService
     {
         var mergedObj = new JObject();
 
-        foreach (var json in relations.Select(relation => relation.SourceKnowledgeId == sourceKnowledge.Id
-                     ? JObject.Parse(sourceKnowledge.Json ?? "{}")
-                     : JObject.Parse(relation.CopyKnowledgePoints ?? "{}")))
+        foreach (var relation in relations)
         {
-            mergedObj.Merge(json, new JsonMergeSettings { MergeArrayHandling = MergeArrayHandling.Concat });
+            JObject json;
+            if (relation.SourceKnowledgeId == sourceKnowledge.Id)
+                json = AppendCopySuffixToKeys(JObject.Parse(sourceKnowledge.Json ?? "{}"));
+            else
+                json = JObject.Parse(relation.CopyKnowledgePoints ?? "{}");
+
+            foreach (var prop in json.Properties())
+            {
+                if (prop.Name.EndsWith("-副本"))
+                    mergedObj[prop.Name] = prop.Value.DeepClone();
+            }
         }
 
+        Log.Information("Merged JObject: {@mergedObj}", mergedObj);
         return mergedObj.ToString(Formatting.None);
     }
-
+    
     private async Task PersistNewTargetsAsync(RebuildResult result, CancellationToken cancellationToken)
     {
         await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgesAsync(result.NewTargets, true, cancellationToken).ConfigureAwait(false);
