@@ -131,8 +131,6 @@ public partial interface IAiSpeechAssistantDataProvider : IScopedDependency
     
     Task<List<(Agent, Domain.AISpeechAssistant.AiSpeechAssistant)>> GetAgentAndAiSpeechAssistantPairsAsync(CancellationToken cancellationToken);
     
-    Task<List<Domain.AISpeechAssistant.AiSpeechAssistant>> GetAiSpeechAssistantsByStoreIdAsync(int storeId, CancellationToken cancellationToken = default);
-    
     Task<List<Domain.AISpeechAssistant.AiSpeechAssistant>> GetAiSpeechAssistantsByCompanyIdAsync(int companyId, CancellationToken cancellationToken);
 
     Task<List<AiSpeechAssistantKnowledgeCopyRelated>> AddKnowledgeCopyRelatedAsync(List<AiSpeechAssistantKnowledgeCopyRelated> relateds, bool forceSave = true, CancellationToken cancellationToken = default);
@@ -720,18 +718,7 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
         
         return result.Select(x => (x.agent, x.assistant)).ToList();
     }
-
-    public async Task<List<Domain.AISpeechAssistant.AiSpeechAssistant>> GetAiSpeechAssistantsByStoreIdAsync(int storeId, CancellationToken cancellationToken = default)
-    {
-        var query = from store in _repository.Query<CompanyStore>().Where(x => x.Id == storeId)
-            join posAgent in _repository.Query<PosAgent>() on store.Id equals posAgent.StoreId
-            join agentAssistant in _repository.Query<AgentAssistant>() on posAgent.AgentId equals agentAssistant.AgentId
-            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agentAssistant.AssistantId equals assistant.Id
-            select assistant;
-        
-        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
-    }
-
+    
     public async Task<List<Domain.AISpeechAssistant.AiSpeechAssistant>> GetAiSpeechAssistantsByCompanyIdAsync(int companyId, CancellationToken cancellationToken)
     {
         var query = from company in _repository.Query<Company>().Where(x => x.Id == companyId)
