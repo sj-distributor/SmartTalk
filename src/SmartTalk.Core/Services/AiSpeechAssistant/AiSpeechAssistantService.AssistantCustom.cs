@@ -1227,16 +1227,16 @@ public partial class AiSpeechAssistantService
         if (deleteKnowledge)
         { await DisableSyncUpdateAsync(sourceKnowledgeId, cancellationToken); return; }
 
+        var sourceKnowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(knowledgeId: sourceKnowledgeId, cancellationToken:cancellationToken).ConfigureAwait(false);
+        if (sourceKnowledge == null) return;
+        
         var oldTargetMap = await GetAndDeactivateOldTargetsAsync(sourceKnowledgeId, cancellationToken);
 
         if (oldTargetMap.Count == 0) return;
 
-        AiSpeechAssistantKnowledge sourceKnowledge = null;
-        if (shouldSyncLastedKnowledge)
-        {
-            sourceKnowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(knowledgeId: sourceKnowledgeId, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
-        }
-
+        if (shouldSyncLastedKnowledge) 
+            sourceKnowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(assistantId: sourceKnowledge.AssistantId, isActive: true, cancellationToken:cancellationToken).ConfigureAwait(false);
+        
         var rebuildResult = await RebuildTargetsAsync(oldTargetMap, sourceKnowledge, cancellationToken).ConfigureAwait(false);
 
         if (rebuildResult.NewTargets.Count == 0) return;
@@ -1269,9 +1269,9 @@ public partial class AiSpeechAssistantService
             return new Dictionary<int, AiSpeechAssistantKnowledge>();
         
         oldTargets.ForEach(x => x.IsActive = false);
-
-        Log.Information("SyncCopiedKnowledges: deactivate old targets. Count={Count}", oldTargets.Count);
-
+        
+        Log.Information("SyncCopiedKnowledges: deactivate old targets. Ids={Ids}", oldTargets.Select(x => x.Id));
+        
         await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync(oldTargets, true, cancellationToken).ConfigureAwait(false);
         
         return oldTargets.ToDictionary(x => x.Id);
@@ -1298,7 +1298,7 @@ public partial class AiSpeechAssistantService
             relationsByTarget.TryGetValue(targetId, out var relations);
             relations ??= new List<AiSpeechAssistantKnowledgeCopyRelated>();
             
-            Log.Information("relations : {@relations}", relations.Select(x=>x.Id));
+            Log.Information("relations : {@relations}，sourceKnowledge {@sourceKnowledge}", relations.Select(x=>x.Id), sourceKnowledge.Id);
             
             if (relations.Count == 0) continue;
             
