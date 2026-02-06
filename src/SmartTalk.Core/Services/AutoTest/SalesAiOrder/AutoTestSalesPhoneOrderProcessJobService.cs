@@ -326,16 +326,20 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         
         var (customerSpeaker, audios) = await HandlerConversationSpeakerIsCustomerAsync(sixSentences, audioBytes, cancellationToken: cancellationToken).ConfigureAwait(false);
         
+        Log.Information("Customer speaker: {@customerSpeaker}, audios: {@audios}", customerSpeaker, audios);
+        
         var customerAudioInfos = speakInfos.Where(x => x.Speaker == customerSpeaker && !sixSentences.Any(s => Math.Abs(s.StartTime - x.StartTime) == 0)).ToList();
         
         foreach (var audioInfo in customerAudioInfos)
         {
             audioInfo.Audio = await _ffmpegService.SpiltAudioAsync(audioBytes, audioInfo.StartTime * 1000, audioInfo.EndTime * 1000, cancellationToken: cancellationToken).ConfigureAwait(false);
         }
+        
         customerAudioInfos.AddRange(audios);
+        
         var customerAudios = customerAudioInfos.OrderBy(x => x.StartTime).Select(x => x.Audio).ToList();
 
-        Log.Information("Extracted customer audio, audio count: {Count}", customerAudios.Count);
+        Log.Information("Extracted customer audio: {@customerAudios}", customerAudios);
         
         return customerAudios;
     }
