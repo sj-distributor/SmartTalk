@@ -14,7 +14,7 @@ public class GetPhoneOrderRecordTasksRequest : HasServiceProviderId, IRequest
 
     public WaitingTaskStatus? WaitingTaskStatus { get; set; }
 
-    public TaskType? TaskType { get; set; }
+    public List<TaskType> TaskType { get; set; }
 }
 
 public class GetPhoneOrderRecordTasksResponse : SmartTalkResponse<GetPhoneOrderRecordTasksDto>

@@ -1394,7 +1394,7 @@ public partial class PhoneOrderService
         
         var events = await _phoneOrderDataProvider.GetWaitingProcessingEventsAsync(request.AgentIds, request.WaitingTaskStatus, utcStart, utcEnd, request.TaskType, cancellationToken).ConfigureAwait(false);
 
-        var (all, unread) = await _phoneOrderDataProvider.GetAllOrUnreadWaitingProcessingEventsAsync(request.AgentIds, cancellationToken).ConfigureAwait(false);
+        var (all, unread) = await _phoneOrderDataProvider.GetAllOrUnreadWaitingProcessingEventsAsync(request.AgentIds, request.TaskType, cancellationToken).ConfigureAwait(false);
         
         return new GetPhoneOrderRecordTasksResponse
         {
