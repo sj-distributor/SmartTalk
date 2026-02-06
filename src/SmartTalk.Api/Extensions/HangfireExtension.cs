@@ -1,12 +1,6 @@
-using Serilog;
-using Hangfire;
-using Newtonsoft.Json;
-using Hangfire.Correlate;
-using Hangfire.Pro.Redis;
-using SmartTalk.Core.Jobs;
-using SmartTalk.Core.Constants;
-using SmartTalk.Core.Services.Jobs;
-using SmartTalk.Core.Settings.Caching;
+using SmartTalk.Api.Extensions.Hangfire;
+using SmartTalk.Core.Settings.System;
+using SmartTalk.Messages.Enums.System;
 
 namespace SmartTalk.Api.Extensions;
 
@@ -14,100 +8,27 @@ public static class HangfireExtension
 {
     public static void AddHangfireInternal(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddHangfire((sp, c) =>
-        {
-            c.UseCorrelate(sp);
-            c.UseMaxArgumentSizeToRender(int.MaxValue);
-            c.UseFilter(new AutomaticRetryAttribute { Attempts = 0 });
-            c.UseRedisStorage(new RedisCacheConnectionStringSetting(configuration).Value, 
-                new RedisStorageOptions { MaxSucceededListLength = 500000, MaxDeletedListLength = 10000 }).WithJobExpirationTimeout(TimeSpan.FromDays(1));
-            c.UseSerializerSettings(new JsonSerializerSettings
-            {
-                TypeNameHandling = TypeNameHandling.All
-            });
-        });
+        var hangfireRegistrar = FindRegistrar(configuration);
 
-        services.AddHangfireServer(opt =>
-        {
-            opt.WorkerCount = 30;
-            opt.ServerTimeout = TimeSpan.FromHours(2);
-            opt.Queues = new[]
-            {
-                HangfireConstants.DefaultQueue,
-                HangfireConstants.InternalHostingRestaurant
-            };
-        });
-        
-        services.AddHangfireServer(opt =>
-        {
-            opt.WorkerCount = 5;
-            opt.Queues = new[] { HangfireConstants.InternalHostingPhoneOrder };
-            opt.ServerName = $"DEPLOY-{HangfireConstants.InternalHostingPhoneOrder.ToUpper()}-{Guid.NewGuid()}";
-        });
-        
-        services.AddHangfireServer(opt =>
-        {
-            opt.WorkerCount = 5;
-            opt.Queues = new[] { HangfireConstants.InternalHostingSipServer };
-            opt.ServerName = $"DEPLOY-{HangfireConstants.InternalHostingSipServer.ToUpper()}-{Guid.NewGuid()}";
-        });
-        
-        services.AddHangfireServer(opt =>
-        {
-            opt.WorkerCount = 5;
-            opt.Queues = new[] { HangfireConstants.InternalHostingFfmpeg };
-            opt.ServerName = $"DEPLOY-{HangfireConstants.InternalHostingFfmpeg.ToUpper()}-{Guid.NewGuid()}";
-        });
-        
-        services.AddHangfireServer(opt =>
-        {
-            opt.WorkerCount = 50;
-            opt.Queues = new[] { HangfireConstants.InternalHostingTransfer };
-            opt.ServerName = $"DEPLOY-{HangfireConstants.InternalHostingTransfer.ToUpper()}-{Guid.NewGuid()}";
-        });
-        
-        services.AddHangfireServer(opt =>
-        {
-            opt.WorkerCount = 50;
-            opt.Queues = new[] { HangfireConstants.InternalHostingRecordPhoneCall };
-            opt.ServerName = $"DEPLOY-{HangfireConstants.InternalHostingRecordPhoneCall.ToUpper()}-{Guid.NewGuid()}";
-        });
-        
-        services.AddHangfireServer(opt =>
-        {
-            opt.WorkerCount = 20;
-            opt.Queues = new[] { HangfireConstants.InternalHostingCaCheKnowledgeVariable };
-            opt.ServerName = $"DEPLOY-{HangfireConstants.InternalHostingCaCheKnowledgeVariable.ToUpper()}-{Guid.NewGuid()}";
-        });
-    }
-    
-    public static void UseHangfireInternal(this IApplicationBuilder app)
-    {
-        app.UseHangfireDashboard(options: new DashboardOptions
-        {
-            IgnoreAntiforgeryToken = true
-        });
-
-        app.ScanHangfireRecurringJobs();
+        hangfireRegistrar.RegisterHangfire(services, configuration);
     }
 
-    public static void ScanHangfireRecurringJobs(this IApplicationBuilder app)
+    public static void UseHangfireInternal(this IApplicationBuilder app, IConfiguration configuration)
     {
-        var backgroundJobClient = app.ApplicationServices.GetRequiredService<ISmartTalkBackgroundJobClient>();
+        var hangfireRegistrar = FindRegistrar(configuration);
 
-        var recurringJobTypes = typeof(IRecurringJob).Assembly.GetTypes().Where(type => type.IsClass && typeof(IRecurringJob).IsAssignableFrom(type)).ToList();
+        hangfireRegistrar.ApplyHangfire(app, configuration);
+    }
 
-        foreach (var type in recurringJobTypes)
+    private static IHangfireRegistrar FindRegistrar(IConfiguration configuration)
+    {
+        var hangfireHosting = new HangfireHostingSetting(configuration).Value;
+
+        return hangfireHosting switch
         {
-            var job = (IRecurringJob) app.ApplicationServices.GetRequiredService(type);
-
-            if (string.IsNullOrEmpty(job.CronExpression))
-            {
-                Log.Error("Recurring Job Cron Expression Empty, {Job}", job.GetType().FullName);
-                continue;
-            }
-
-            backgroundJobClient.AddOrUpdateRecurringJob<IJobSafeRunner>(job.JobId, r => r.Run(job.JobId, type), job.CronExpression, job.TimeZone);
-        }
+            HangfireHosting.Api => new ApiHangfireRegistrar(),
+            HangfireHosting.Internal => new InternalHangfireRegistrar(),
+            _ => throw new ArgumentOutOfRangeException(nameof(hangfireHosting), hangfireHosting, null)
+        };
     }
 }
