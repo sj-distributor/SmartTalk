@@ -64,6 +64,20 @@ public class InternalHangfireRegistrar : HangfireRegistrarBase
             opt.Queues = new[] { HangfireConstants.InternalHostingCaCheKnowledgeVariable };
             opt.ServerName = $"DEPLOY-{HangfireConstants.InternalHostingCaCheKnowledgeVariable.ToUpper()}-{Guid.NewGuid()}";
         });
+        
+        services.AddHangfireServer(opt =>
+        {
+            opt.WorkerCount = 2;
+            opt.Queues = new[] { HangfireConstants.InternalHostingTestingSalesPhoneOrder };
+            opt.ServerName = $"DEPLOY-{HangfireConstants.InternalHostingTestingSalesPhoneOrder.ToUpper()}-{Guid.NewGuid()}";
+        });
+        
+        services.AddHangfireServer(opt =>
+        {
+            opt.WorkerCount = 30;
+            opt.Queues = new[] { HangfireConstants.InternalHostingAutoTestCallRecordSync };
+            opt.ServerName = $"DEPLOY-{HangfireConstants.InternalHostingAutoTestCallRecordSync.ToUpper()}-{Guid.NewGuid()}";
+        });
     }
 
     public override void ApplyHangfire(IApplicationBuilder app, IConfiguration configuration)
