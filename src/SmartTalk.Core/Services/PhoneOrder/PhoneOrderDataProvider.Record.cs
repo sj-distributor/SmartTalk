@@ -103,7 +103,7 @@ public partial interface IPhoneOrderDataProvider
     
     Task UpdateWaitingProcessingEventsAsync(List<WaitingProcessingEvent> waitingProcessingEvents, bool forceSave = true, CancellationToken cancellationToken = default);
     
-    Task<(int, int)> GetAllOrUnreadWaitingProcessingEventsAsync(List<int> agentIds, List<TaskType> taskTypes, CancellationToken cancellationToken);
+    Task<(int, int)> GetAllOrUnreadWaitingProcessingEventsAsync(List<int> agentIds, List<TaskType> taskTypes = null, CancellationToken cancellationToken = default);
 
     Task<PhoneOrderRecordReport> GetOriginalPhoneOrderRecordReportAsync(int recordId, CancellationToken cancellationToken);
 }
@@ -692,19 +692,19 @@ public partial class PhoneOrderDataProvider
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<(int, int)> GetAllOrUnreadWaitingProcessingEventsAsync(List<int> agentIds, List<TaskType> taskTypes, CancellationToken cancellationToken)
+    public async Task<(int, int)> GetAllOrUnreadWaitingProcessingEventsAsync(List<int> agentIds, List<TaskType> taskTypes = null, CancellationToken cancellationToken = default)
     {
-        var result = await _repository
-            .QueryNoTracking<WaitingProcessingEvent>()
-            .Where(x => agentIds.Contains(x.AgentId))
-            .Where(x => taskTypes.Contains(x.TaskType))
-            .GroupBy(_ => 1)
+        var query = _repository.QueryNoTracking<WaitingProcessingEvent>().Where(x => agentIds.Contains(x.AgentId));
+
+        if (taskTypes is { Count: > 0 })
+            query = query.Where(x => taskTypes.Contains(x.TaskType));
+        
+        var result = await query.GroupBy(_ => 1)
             .Select(g => new
             {
                 All = g.Count(),
                 Unread = g.Count(x => x.TaskStatus == WaitingTaskStatus.Unfinished)
-            })
-            .SingleOrDefaultAsync(cancellationToken);
+            }).SingleOrDefaultAsync(cancellationToken);
 
         return result == null ? (0, 0) : (result.All, result.Unread);
     }
