@@ -162,8 +162,8 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         await HandleAutoTestTaskStatusChangeAsync(task, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task ProcessPartialRecordingOrderMatchingAsync(int scenarioId, int dataSetId, int recordId, DateTime from, DateTime to, string customerId, CancellationToken cancellationToken)
-    {
+    public async Task ProcessPartialRecordingOrderMatchingAsync(int scenarioId, int dataSetId, int recordId, DateTime from, DateTime to, string customerId, CancellationToken cancellationToken) 
+    { 
         var record = await _autoTestDataProvider.GetAutoTestImportDataRecordAsync(recordId, cancellationToken).ConfigureAwait(false);
 
         var crmToken = await _crmClient.GetCrmTokenAsync(cancellationToken).ConfigureAwait(false);
@@ -221,17 +221,17 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
                     DataItemId = x.Id,
                 }).ToList();
                 
-                await _autoTestDataProvider.AddAutoTestDataSetItemsAsync(autoTestDataSetItems, cancellationToken).ConfigureAwait(false);
+                await _autoTestDataProvider.AddAutoTestDataSetItemsAsync(autoTestDataSetItems, cancellationToken).ConfigureAwait(false); 
             }
             else Log.Information("Scenario {ScenarioId} 没有匹配的记录", scenarioId);
-
-            record.Status = AutoTestStatus.Done;
-            await _autoTestDataProvider.UpdateAutoTestImportRecordAsync(record, true, cancellationToken).ConfigureAwait(false);
+            
+            record.Status = AutoTestStatus.Done; 
+            await _autoTestDataProvider.UpdateAutoTestImportRecordAsync(record, true, cancellationToken).ConfigureAwait(false); 
         }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "ProcessSingleMonthAsync 失败 ScenarioId={ScenarioId}", scenarioId);
-        }
+        catch (Exception ex) 
+        { 
+            Log.Error(ex, "ProcessSingleMonthAsync 失败 ScenarioId={ScenarioId}", scenarioId); 
+        } 
     }
     
     private async Task ProcessingTestSalesPhoneOrderSpeechMaticsCallBackAsync(
