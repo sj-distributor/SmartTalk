@@ -373,10 +373,27 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         speakInfos.Add(new SpeechMaticsSpeakInfoForAutoTestDto { EndTime = endTime, StartTime = startTime, Speaker = currentSpeaker });
 
         Log.Information("Structure diarization results : {@speakInfos}", speakInfos);
+
+        var targetSpeakInfos = GenerateSpeechMatics(speakInfos);
         
+        Log.Information("Generate target speak infos: {@targetSpeakInfos}", targetSpeakInfos);
+        
+        return targetSpeakInfos;
+    }
+
+    private List<SpeechMaticsSpeakInfoForAutoTestDto> GenerateSpeechMatics(List<SpeechMaticsSpeakInfoForAutoTestDto> speakInfos)
+    {
+        if (speakInfos == null || speakInfos.Count == 0)
+            return speakInfos;
+        
+        for (var i = 0; i < speakInfos.Count; i++)
+        {
+            speakInfos[i].Speaker = i % 2 == 0 ? "S1" : "S2";
+        }
+
         return speakInfos;
     }
-    
+
     private async Task<(string, List<SpeechMaticsSpeakInfoForAutoTestDto>)> HandlerConversationSpeakerIsCustomerAsync(
         List<SpeechMaticsSpeakInfoForAutoTestDto> audioInfos, byte[] audioBytes, CancellationToken cancellationToken)
     {
