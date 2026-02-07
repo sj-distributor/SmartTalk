@@ -3,6 +3,7 @@
     <PropertyGroup>
         <TargetFramework>net8.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
+        <NoWarn>$(NoWarn);OPENAI001</NoWarn>
     </PropertyGroup>
 
     <ItemGroup>
@@ -37,7 +38,7 @@
         <PackageReference Include="Microsoft.KernelMemory.AI.OpenAI" Version="0.35.240321.1" />
         <PackageReference Include="NAudio" Version="2.2.1" />
         <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-        <PackageReference Include="OpenAI" Version="2.2.0-beta.4" />
+        <PackageReference Include="OpenAI" Version="2.8.0" />
         <PackageReference Include="OpenCCNET" Version="1.0.2" />
         <PackageReference Include="NRedisStack" Version="0.12.0" />
         <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="7.0.0" />
