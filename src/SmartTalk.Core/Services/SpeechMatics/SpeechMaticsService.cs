@@ -19,6 +19,7 @@ using SmartTalk.Core.Domain.Printer;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Http;
+using SmartTalk.Core.Utils;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.PhoneOrder;
@@ -159,7 +160,7 @@ public class SpeechMaticsService : ISpeechMaticsService
 
         try
         {
-            await RetryAsync(async () =>
+            await RetryHelper.RetryAsync(async () =>
             {
                 var call = await CallResource.FetchAsync(record.SessionId);
                 callFrom = call?.From;
@@ -366,27 +367,6 @@ public class SpeechMaticsService : ISpeechMaticsService
             return TranscriptionLanguage.Chinese;
     
         return TranscriptionLanguage.English;
-    }
-    
-    private async Task RetryAsync(
-        Func<Task> action,
-        int maxRetryCount,
-        int delaySeconds,
-        CancellationToken cancellationToken)
-    {
-        for (int attempt = 1; attempt <= maxRetryCount + 1; attempt++)
-        {
-            try
-            {
-                await action();
-                return;
-            }
-            catch (Exception ex) when (attempt <= maxRetryCount)
-            {
-                Log.Warning(ex, "重試第 {Attempt} 次失敗，稍後再試…", attempt);
-                await Task.Delay(TimeSpan.FromSeconds(delaySeconds), cancellationToken);
-            }
-        }
     }
     
      private async Task<List<ChatMessage>> ConfigureRecordAnalyzePromptAsync(
