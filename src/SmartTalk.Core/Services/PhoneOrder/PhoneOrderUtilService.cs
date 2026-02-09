@@ -349,7 +349,7 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
     {
         var store = await _posDataProvider.GetPosStoreByAgentIdAsync(agentId, cancellationToken).ConfigureAwait(false);
 
-        if (!store.IsTaskEnabled)
+        if (!store.IsTaskEnabled && !store.IsManualReview)
             return;
 
         var mainScenarios = new[]
@@ -366,7 +366,7 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
 
         TaskType taskType;
 
-        if (isMainScenario)
+        if (isMainScenario && store.IsManualReview)
         {
             taskType = record.Scenario switch
             {
@@ -374,8 +374,15 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
                 DialogueScenarios.InformationNotification or DialogueScenarios.ThirdPartyOrderNotification => TaskType.InformationNotification,
             };
         }
-        else
+        else if (isIncludeTodo && store.IsTaskEnabled)
+        {
             taskType = TaskType.Todo;
+        }
+        else
+            taskType = TaskType.Other;
+
+        if (!store.IsTaskEnabled)
+            isIncludeTodo = false;
 
         var taskSource = await _phoneOrderDataProvider.GetRecordTaskSourceAsync(record.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
 
