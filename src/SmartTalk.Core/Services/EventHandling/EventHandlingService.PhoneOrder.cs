@@ -18,8 +18,6 @@ public partial class EventHandlingService
             if (order == null) return;
             
             await _posDataProvider.DeletePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
-            
-            return;
         }
         
         if (@event.OriginalScenarios != DialogueScenarios.Order && @event.DialogueScenarios == DialogueScenarios.Order)
