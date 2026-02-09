@@ -481,6 +481,7 @@ public class SpeechMaticsService : ISpeechMaticsService
             "你是一名訂單分析助手。請從下面的客戶分析報告文字中提取所有下單的物料名稱、數量、單位，並且用歷史物料列表盡力匹配每個物料的materialNumber。" +
             "如果報告中提到了預約送貨時間，請提取送貨時間（格式yyyy-MM-dd）。" +
             "如果客戶提到了分店名，請提取 StoreName；如果提到第幾家店，請提取 StoreNumber。\n" +
+            "如果订单中包含明确的数量描述，即使同时出现“需要确认数量 / 数量不确定”等提示，也应先按当前报告中的数量提取。\n" +
             "請嚴格傳回一個 JSON 對象，頂層字段為 \"stores\"，每个店铺对象包含：StoreName（可空字符串）, StoreNumber（可空字符串）, DeliveryDate（可空字符串），orders（数组，元素包含 name, quantity, unit, materialNumber, deliveryDate）。\n" +
             "範例：\n" +
             "{\n    \"stores\": [\n        {\n            \"StoreName\": \"HaiDiLao\",\n            \"StoreNumber\": \"1\",\n            \"DeliveryDate\": \"2025-08-20\",\n            \"orders\": [\n                {\n                    \"name\": \"雞胸肉\",\n                    \"quantity\": 1,\n                    \"unit\": \"箱\",\n                    \"materialNumber\": \"000000000010010253\"\n                }\n            ]\n        }\n    ]\n}" +
@@ -522,7 +523,20 @@ public class SpeechMaticsService : ISpeechMaticsService
                     foreach (var orderItem in ordersArray.EnumerateArray()) 
                     { 
                         var name = orderItem.TryGetProperty("name", out var n) ? n.GetString() ?? "" : ""; 
-                        var qty = orderItem.TryGetProperty("quantity", out var q) && q.TryGetDecimal(out var dec) ? dec : 0; 
+                        
+                        decimal qty = 0;
+                        if (orderItem.TryGetProperty("quantity", out var q))
+                        {
+                            if (q.ValueKind == JsonValueKind.Number)
+                            {
+                                qty = q.GetDecimal();
+                            }
+                            else if (q.ValueKind == JsonValueKind.String && decimal.TryParse(q.GetString(), out var parsed))
+                            {
+                                qty = parsed;
+                            }
+                        }
+
                         var unit = orderItem.TryGetProperty("unit", out var u) ? u.GetString() ?? "" : ""; 
                         var materialNumber = orderItem.TryGetProperty("materialNumber", out var mn) ? mn.GetString() ?? "" : ""; 
 
