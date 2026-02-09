@@ -340,6 +340,11 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
 
     public async Task GenerateWaitingProcessingEventAsync(PhoneOrderRecord record, bool isIncludeTodo, int agentId, CancellationToken cancellationToken)
     {
+        var store = await _posDataProvider.GetPosStoreByAgentIdAsync(agentId, cancellationToken).ConfigureAwait(false);
+
+        if (!store.IsTaskEnabled)
+            return;
+
         var mainScenarios = new[]
         {
             DialogueScenarios.Reservation,
