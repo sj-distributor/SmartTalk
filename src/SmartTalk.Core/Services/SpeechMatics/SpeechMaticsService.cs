@@ -531,8 +531,7 @@ public class SpeechMaticsService : ISpeechMaticsService
                             {
                                 qty = q.GetDecimal();
                             }
-                            else if (q.ValueKind == JsonValueKind.String &&
-                                     decimal.TryParse(q.GetString(), out var parsed))
+                            else if (q.ValueKind == JsonValueKind.String && decimal.TryParse(q.GetString(), out var parsed))
                             {
                                 qty = parsed;
                             }
