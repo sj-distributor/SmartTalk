@@ -11,5 +11,8 @@ public enum TaskType
     InformationNotification = 1,
     
     [Description("todo")]
-    Todo = 2
+    Todo = 2,
+        
+    [Description("other")]
+    Other = 3
 }
