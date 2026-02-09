@@ -91,7 +91,7 @@ public partial interface IPhoneOrderDataProvider
 
     Task<List<int>> GetPhoneOrderReservationInfoUnreviewedRecordIdsAsync(List<int> recordIds, CancellationToken cancellationToken);
     
-    Task< List<WaitingProcessingEventsDto>> GetWaitingProcessingEventsAsync(List<int> agentIds, WaitingTaskStatus? waitingTaskStatus = null, DateTimeOffset? utcStart = null, DateTimeOffset? utcEnd = null, List<TaskType> taskType = null, CancellationToken cancellationToken = default);
+    Task< List<WaitingProcessingEventsDto>> GetWaitingProcessingEventsAsync(List<int> agentIds, WaitingTaskStatus? waitingTaskStatus = null, DateTimeOffset? utcStart = null, DateTimeOffset? utcEnd = null, List<TaskType> taskType = null, bool? isIncludeTodo = false, CancellationToken cancellationToken = default);
 
     Task AddWaitingProcessingEventAsync(WaitingProcessingEvent waitingProcessingEvent, bool forceSave = true, CancellationToken cancellationToken = default);
 
@@ -599,7 +599,7 @@ public partial class PhoneOrderDataProvider
     }
     
     public async Task<List<WaitingProcessingEventsDto>> GetWaitingProcessingEventsAsync(List<int> agentIds, WaitingTaskStatus? waitingTaskStatus = null,
-        DateTimeOffset? utcStart = null, DateTimeOffset? utcEnd = null, List<TaskType> taskType = null, CancellationToken cancellationToken = default)
+        DateTimeOffset? utcStart = null, DateTimeOffset? utcEnd = null, List<TaskType> taskType = null, bool? isIncludeTodo = false, CancellationToken cancellationToken = default)
     {
         var query = _repository.QueryNoTracking<WaitingProcessingEvent>().Where(x => agentIds.Contains(x.AgentId));
 
@@ -611,6 +611,9 @@ public partial class PhoneOrderDataProvider
 
         if (taskType is { Count: > 0 })
             query = query.Where(x => taskType.Contains(x.TaskType));
+
+        if (isIncludeTodo.HasValue)
+            query = query.Where(x => x.IsIncludeTodo == true);
         
         return await (from events in query
             join record in _repository.QueryNoTracking<PhoneOrderRecord>() on events.RecordId equals record.Id

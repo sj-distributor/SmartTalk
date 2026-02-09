@@ -1391,8 +1391,10 @@ public partial class PhoneOrderService
         }
         
         if (request.AgentIds.Count == 0) return new GetPhoneOrderRecordTasksResponse();
+
+        bool? isIncludeTodo = request.TaskType.Contains(TaskType.Todo) ? true : null;
         
-        var events = await _phoneOrderDataProvider.GetWaitingProcessingEventsAsync(request.AgentIds, request.WaitingTaskStatus, utcStart, utcEnd, request.TaskType, cancellationToken).ConfigureAwait(false);
+        var events = await _phoneOrderDataProvider.GetWaitingProcessingEventsAsync(request.AgentIds, request.WaitingTaskStatus, utcStart, utcEnd, request.TaskType, isIncludeTodo, cancellationToken).ConfigureAwait(false);
 
         var (all, unread) = await _phoneOrderDataProvider.GetAllOrUnreadWaitingProcessingEventsAsync(request.AgentIds, request.TaskType, cancellationToken).ConfigureAwait(false);
         
