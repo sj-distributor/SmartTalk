@@ -451,10 +451,10 @@ public partial class PosService : IPosService
         {
             var agentIds = storesAndAgents.Select(x => x.AgentId).Distinct().ToList();
             
-            waitingProcessingEventCount = await _phoneOrderDataProvider.GetAllOrUnreadWaitingProcessingEventsAsync(agentIds, cancellationToken).ConfigureAwait(false);
+            waitingProcessingEventCount = await _phoneOrderDataProvider.GetAllOrUnreadWaitingProcessingEventsAsync(agentIds, request.TaskTypes, cancellationToken).ConfigureAwait(false);
         }
         else
-            waitingProcessingEventCount = await _phoneOrderDataProvider.GetAllOrUnreadWaitingProcessingEventsAsync(request.AgentIds, cancellationToken).ConfigureAwait(false);
+            waitingProcessingEventCount = await _phoneOrderDataProvider.GetAllOrUnreadWaitingProcessingEventsAsync(request.AgentIds, request.TaskTypes, cancellationToken).ConfigureAwait(false);
 
         return new GetSimpleStructuredStoresResponse
         {
