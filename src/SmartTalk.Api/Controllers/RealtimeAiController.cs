@@ -1,8 +1,7 @@
 using Mediator.Net;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Serilog;
-using SmartTalk.Messages.Commands.RealtimeAi;
+using SmartTalk.Messages.Commands.AiKids;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.RealtimeAi;
 
@@ -22,29 +21,11 @@ public class RealtimeAiController : ControllerBase
     
     [AllowAnonymous]
     [HttpGet("connect/{assistantId}")]
-    public async Task RealtimeAiConnectAsync(int assistantId)
+    public async Task ConnectAiKidRealtimeAsync(int assistantId)
     {
         if (HttpContext.WebSockets.IsWebSocketRequest)
         {
-            // var requested = HttpContext.WebSockets.WebSocketRequestedProtocols;
-            //
-            // if (!Enum.TryParse<RealtimeAiAudioCodec>(requested.FirstOrDefault(x => x.StartsWith("InputFormat."))?.Replace("InputFormat.", ""), ignoreCase: true, out var inputFormat))
-            // {
-            //     HttpContext.Response.StatusCode = 400;
-            //     await HttpContext.Response.WriteAsync("Invalid InputFormat enum value");
-            //     return;
-            // }
-            //
-            // if (!Enum.TryParse<RealtimeAiAudioCodec>(requested.FirstOrDefault(x => x.StartsWith("OutputFormat."))?.Replace("OutputFormat.", ""), ignoreCase: true, out var outputFormat))
-            // {
-            //     HttpContext.Response.StatusCode = 400;
-            //     await HttpContext.Response.WriteAsync("Invalid OutputFormat enum value");
-            //     return;
-            // }
-            //
-            // Log.Information("Realtime Api AssistantId: {AssistantId}, InputFormat: {RealtimeAiAudioCodec}, OutputFormat: {OutputFormat}", assistantId, inputFormat, outputFormat);
-            
-            var command = new RealtimeAiConnectCommand
+            var command = new AiKidRealtimeCommand
             {
                 AssistantId = assistantId,
                 InputFormat = RealtimeAiAudioCodec.PCM16,
@@ -64,11 +45,11 @@ public class RealtimeAiController : ControllerBase
     
     [AllowAnonymous]
     [HttpGet("connect/{assistantId}/{region}")]
-    public async Task HkRealtimeAiConnectAsync(int assistantId, RealtimeAiServerRegion region)
+    public async Task HkConnectAiKidRealtimeAsync(int assistantId, RealtimeAiServerRegion region)
     {
         if (HttpContext.WebSockets.IsWebSocketRequest)
         {
-            var command = new RealtimeAiConnectCommand
+            var command = new AiKidRealtimeCommand
             {
                 AssistantId = assistantId,
                 InputFormat = RealtimeAiAudioCodec.PCM16,
