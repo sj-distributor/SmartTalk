@@ -615,7 +615,12 @@ public partial class PhoneOrderDataProvider
             query = query.Where(x => taskType.Contains(x.TaskType));
 
         if (isIncludeTodo.HasValue)
-            query = query.Where(x => x.IsIncludeTodo == true);
+        {
+            if (isIncludeTodo.Value && taskType is { Count: > 0 } && taskType.Contains(TaskType.Todo))
+                query = query.Where(x => x.TaskType == TaskType.Todo || x.IsIncludeTodo == true);
+            else
+                query = query.Where(x => x.IsIncludeTodo == true);
+        }
         
         return await (from events in query
             join record in _repository.QueryNoTracking<PhoneOrderRecord>() on events.RecordId equals record.Id
