@@ -370,8 +370,8 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
         {
             taskType = record.Scenario switch
             {
-                DialogueScenarios.Reservation or DialogueScenarios.Order => TaskType.Order,
-                DialogueScenarios.InformationNotification or DialogueScenarios.ThirdPartyOrderNotification => TaskType.InformationNotification,
+                DialogueScenarios.Order => TaskType.Order,
+                DialogueScenarios.InformationNotification or DialogueScenarios.ThirdPartyOrderNotification or DialogueScenarios.Reservation => TaskType.InformationNotification,
             };
         }
         else if (isIncludeTodo && store.IsTaskEnabled)
