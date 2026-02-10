@@ -3,9 +3,9 @@ using Mediator.Net.Contracts;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.RealtimeAi;
 
-namespace SmartTalk.Messages.Commands.RealtimeAi;
+namespace SmartTalk.Messages.Commands.AiKids;
 
-public class RealtimeAiConnectCommand : ICommand
+public class AiKidRealtimeCommand : ICommand
 {
     public int AssistantId { get; set; }
     

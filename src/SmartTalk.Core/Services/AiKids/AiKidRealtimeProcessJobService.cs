@@ -2,22 +2,22 @@ using Google.Cloud.Translation.V2;
 using Serilog;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Ioc;
-using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Agents;
+using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.STT;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.STT;
 
-namespace SmartTalk.Core.Services.RealtimeAi.Services;
+namespace SmartTalk.Core.Services.AiKids;
 
-public interface IRealtimeProcessJobService : IScopedDependency
+public interface IAiKidRealtimeProcessJobService : IScopedDependency
 {
     Task RecordingRealtimeAiAsync(string recordingUrl, int assistantId, string sessionId, PhoneOrderRecordType orderRecordType, CancellationToken cancellationToken);
 }
 
-public class RealtimeProcessJobService : IRealtimeProcessJobService
+public class AiKidRealtimeProcessJobService : IAiKidRealtimeProcessJobService
 {
     private readonly TranslationClient _translationClient;
     private readonly IAgentDataProvider _agentDataProvider;
@@ -27,7 +27,7 @@ public class RealtimeProcessJobService : IRealtimeProcessJobService
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
 
-    public RealtimeProcessJobService(
+    public AiKidRealtimeProcessJobService(
         TranslationClient translationClient,
         IAgentDataProvider agentDataProvider,
         IPhoneOrderService phoneOrderService,

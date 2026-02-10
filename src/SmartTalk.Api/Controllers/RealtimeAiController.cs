@@ -1,7 +1,7 @@
 using Mediator.Net;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using SmartTalk.Messages.Commands.RealtimeAi;
+using SmartTalk.Messages.Commands.AiKids;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.RealtimeAi;
 
@@ -21,7 +21,7 @@ public class RealtimeAiController : ControllerBase
     
     [AllowAnonymous]
     [HttpGet("connect/{assistantId}")]
-    public async Task RealtimeAiConnectAsync(int assistantId)
+    public async Task ConnectAiKidRealtimeAsync(int assistantId)
     {
         if (HttpContext.WebSockets.IsWebSocketRequest)
         {
@@ -41,7 +41,7 @@ public class RealtimeAiController : ControllerBase
             //     return;
             // }
             
-            var command = new RealtimeAiConnectCommand
+            var command = new AiKidRealtimeCommand
             {
                 AssistantId = assistantId,
                 InputFormat = RealtimeAiAudioCodec.PCM16,
@@ -61,11 +61,11 @@ public class RealtimeAiController : ControllerBase
     
     [AllowAnonymous]
     [HttpGet("connect/{assistantId}/{region}")]
-    public async Task HkRealtimeAiConnectAsync(int assistantId, RealtimeAiServerRegion region)
+    public async Task HkConnectAiKidRealtimeAsync(int assistantId, RealtimeAiServerRegion region)
     {
         if (HttpContext.WebSockets.IsWebSocketRequest)
         {
-            var command = new RealtimeAiConnectCommand
+            var command = new AiKidRealtimeCommand
             {
                 AssistantId = assistantId,
                 InputFormat = RealtimeAiAudioCodec.PCM16,

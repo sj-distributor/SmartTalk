@@ -4,26 +4,27 @@ using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
-using SmartTalk.Messages.Commands.RealtimeAi;
+using SmartTalk.Core.Services.RealtimeAi.Services;
+using SmartTalk.Messages.Commands.AiKids;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Dto.Smarties;
 using SmartTalk.Messages.Enums.Hr;
 
-namespace SmartTalk.Core.Services.RealtimeAi.Services;
+namespace SmartTalk.Core.Services.AiKids;
 
-public interface IAiSpeechAssistantRealtimeService : IScopedDependency
+public interface IAiKidRealtimeService : IScopedDependency
 {
-    Task RealtimeAiConnectAsync(RealtimeAiConnectCommand command, CancellationToken cancellationToken);
+    Task RealtimeAiConnectAsync(AiKidRealtimeCommand command, CancellationToken cancellationToken);
 }
 
-public class AiSpeechAssistantRealtimeService : IAiSpeechAssistantRealtimeService
+public class AiKidRealtimeService : IAiKidRealtimeService
 {
     private readonly ISmartiesClient _smartiesClient;
     private readonly IRealtimeAiService _realtimeAiService;
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
 
-    public AiSpeechAssistantRealtimeService(
+    public AiKidRealtimeService(
         ISmartiesClient smartiesClient,
         IRealtimeAiService realtimeAiService,
         ISmartTalkBackgroundJobClient backgroundJobClient,
@@ -35,7 +36,7 @@ public class AiSpeechAssistantRealtimeService : IAiSpeechAssistantRealtimeServic
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
     }
 
-    public async Task RealtimeAiConnectAsync(RealtimeAiConnectCommand command, CancellationToken cancellationToken)
+    public async Task RealtimeAiConnectAsync(AiKidRealtimeCommand command, CancellationToken cancellationToken)
     {
         var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantWithKnowledgeAsync(command.AssistantId, cancellationToken).ConfigureAwait(false)
             ?? throw new InvalidOperationException($"Could not find assistant by id: {command.AssistantId}");
@@ -64,7 +65,7 @@ public class AiSpeechAssistantRealtimeService : IAiSpeechAssistantRealtimeServic
             {
                 if (!string.IsNullOrEmpty(fileUrl) && assistant.Id != 0)
                 {
-                    _backgroundJobClient.Enqueue<IRealtimeProcessJobService>(x =>
+                    _backgroundJobClient.Enqueue<IAiKidRealtimeProcessJobService>(x =>
                         x.RecordingRealtimeAiAsync(fileUrl, assistant.Id, sessionId, orderRecordType, CancellationToken.None));
                 }
 
