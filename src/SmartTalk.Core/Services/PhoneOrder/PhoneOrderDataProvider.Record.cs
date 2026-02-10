@@ -106,6 +106,8 @@ public partial interface IPhoneOrderDataProvider
     Task<(int, int)> GetAllOrUnreadWaitingProcessingEventsAsync(List<int> agentIds, List<TaskType> taskTypes = null, CancellationToken cancellationToken = default);
 
     Task<PhoneOrderRecordReport> GetOriginalPhoneOrderRecordReportAsync(int recordId, CancellationToken cancellationToken);
+
+    Task<List<string>> GetTranscriptionTextsAsync(int assistantId, int recordId, DateTimeOffset utcStart, DateTimeOffset utcEnd, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderDataProvider
@@ -476,7 +478,7 @@ public partial class PhoneOrderDataProvider
 
         if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
-
+    
     public async Task<PhoneOrderRecordScenarioHistory> AddPhoneOrderRecordScenarioHistoryAsync(PhoneOrderRecordScenarioHistory scenarioHistory, bool forceSave = true, CancellationToken cancellationToken = default)
     {
         await _repository.InsertAsync(scenarioHistory, cancellationToken).ConfigureAwait(false);
@@ -710,5 +712,20 @@ public partial class PhoneOrderDataProvider
             }).SingleOrDefaultAsync(cancellationToken);
 
         return result == null ? (0, 0) : (result.All, result.Unread);
+    }
+
+    public async Task<List<string>> GetTranscriptionTextsAsync(int assistantId, int recordId, DateTimeOffset utcStart, DateTimeOffset utcEnd, CancellationToken cancellationToken)
+    {
+        return await _repository.Query<PhoneOrderRecord>().AsNoTracking()
+            .Where(x =>
+                x.AssistantId == assistantId &&
+                x.Id != recordId &&
+                x.CreatedDate >= utcStart &&
+                x.CreatedDate < utcEnd &&
+                !string.IsNullOrEmpty(x.TranscriptionText))
+            .OrderBy(x => x.CreatedDate)
+            .Select(x => x.TranscriptionText)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
     }
 }

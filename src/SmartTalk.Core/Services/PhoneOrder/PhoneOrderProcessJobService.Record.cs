@@ -413,16 +413,13 @@ public partial class PhoneOrderProcessJobService
         foreach (var storeOrder in extractedOrders)
         { 
             var soldToId = await ResolveSoldToIdAsync(storeOrder, aiSpeechAssistant, soldToIds, cancellationToken).ConfigureAwait(false);
+            
+            await RefineOrderByAiAsync(storeOrder, soldToId, aiSpeechAssistant, historyItems, record.Id, cancellationToken).ConfigureAwait(false);
 
             if (storeOrder.IsDeleteWholeOrder && !storeOrder.Orders.Any())
             {
                 await CreateDeleteOrderTaskAsync(record, storeOrder, soldToId, soldToIds, pacificZone, pacificNow, cancellationToken).ConfigureAwait(false);
                 continue;
-            }
-
-            foreach (var item in storeOrder.Orders)
-            {
-                item.MaterialNumber = MatchMaterialNumber(item.Name, item.MaterialNumber, item.Unit, historyItems);
             }
 
             var draftOrder = CreateDraftOrder(storeOrder, soldToId, aiSpeechAssistant, pacificZone, pacificNow, storeOrder.IsUndoCancel);
@@ -447,7 +444,9 @@ public partial class PhoneOrderProcessJobService
                 "2. 如果客戶先說取消整單，後面又表示還是要、算了繼續下單、剛剛的取消不算，請標記 IsUndoCancel=true。\n" +
                 "3. 如果客戶只取消單個物料（例如：某某不要了、某某取消、某某 cut 掉），請保留該物料，並在該物料上標記 markForDelete=true，有提到數量的話 quantity 需要用負數表示\n" +
                 "4. 單個物料取消不等於取消整單，IsDeleteWholeOrder = false。\n" +
-                "5. 如果是減少某個物料的數量，請在該物料的 quantity 使用負數表示，並要使用 markForDelete = true。\n\n" +
+                "5. 如果得到的字段restored是true，就為true，是false或者沒有得到這個字段，則為false\n" +
+                "6. 如果订单中包含明确的数量描述，即使同时出现“需要确认数量 / 数量不确定”等提示，也应先按当前报告中的数量提取。\n" +
+                "7. 如果是減少某個物料的數量，請在該物料的 quantity 使用負數表示，並要使用 markForDelete = true。\n\n" +
 
                 "請嚴格傳回一個 JSON 對象，頂層字段為 \"stores\"，每个店铺对象包含：" +
                 "StoreName（可空字符串）, StoreNumber（可空字符串）, DeliveryDate（可空字符串）, " +
@@ -469,7 +468,8 @@ public partial class PhoneOrderProcessJobService
                 "          \"quantity\": 1,\n" +
                 "          \"unit\": \"箱\",\n" +
                 "          \"materialNumber\": \"000000000010010253\",\n" +
-                "          \"markForDelete\": false\n" +
+                "          \"markForDelete\": false,\n" +
+                "          \"restored\": false\n" +
                 "        }\n" +
                 "      ]\n" +
                 "    }\n" +
@@ -528,16 +528,19 @@ public partial class PhoneOrderProcessJobService
                         var unit = orderItem.TryGetProperty("unit", out var u) ? u.GetString() ?? "" : ""; 
                         var materialNumber = orderItem.TryGetProperty("materialNumber", out var mn) ? mn.GetString() ?? "" : ""; 
                         var markForDelete = orderItem.TryGetProperty("markForDelete", out var md) && md.GetBoolean();
+                        var restored = orderItem.TryGetProperty("restored", out var rd) && rd.GetBoolean();
 
-                        materialNumber = MatchMaterialNumber(name, materialNumber, unit, historyItems);
-
+                        if (string.IsNullOrWhiteSpace(materialNumber))
+                            materialNumber = MatchMaterialNumber(name, materialNumber, unit, historyItems);
+                        
                         storeDto.Orders.Add(new ExtractedOrderItemDto
                         {
                             Unit = unit,
                             Name = name,
                             Quantity = (int)qty,
                             MarkForDelete = markForDelete,
-                            MaterialNumber = materialNumber
+                            MaterialNumber = materialNumber,
+                            Restored = restored
                         });
                     } 
                 }
@@ -578,27 +581,30 @@ public partial class PhoneOrderProcessJobService
         if (!candidates.Any()) return string.IsNullOrEmpty(baseNumber) ? "" : baseNumber;; 
         if (candidates.Count == 1) return candidates.First();
         
-        if (!string.IsNullOrWhiteSpace(unit))
+        var isCase = !string.IsNullOrWhiteSpace(unit) && (unit.Contains("case", StringComparison.OrdinalIgnoreCase) || unit.Contains("箱"));
+        if (isCase)
         {
-            var u = unit.ToLower();
-            if (u.Contains("case") || u.Contains("箱"))
-            {
-                var csItem = candidates.FirstOrDefault(x => x.EndsWith("CS", StringComparison.OrdinalIgnoreCase));
-                if (!string.IsNullOrEmpty(csItem)) return csItem;
-            }
-            else
-            {
-                var pcItem = candidates.FirstOrDefault(x => x.EndsWith("PC", StringComparison.OrdinalIgnoreCase));
-                if (!string.IsNullOrEmpty(pcItem)) return pcItem;
-            }
+            var noPcList = candidates.Where(x => !x.Contains("PC", StringComparison.OrdinalIgnoreCase)).ToList();
+
+            if (noPcList.Any())
+                return noPcList.First(); 
+            
+            return candidates.First();
         }
         
-        var pureNumber = candidates.FirstOrDefault(x => Regex.IsMatch(x, @"^\d+$"));
-        return pureNumber ?? candidates.First();
+        var pcList = candidates.Where(x => x.Contains("PC", StringComparison.OrdinalIgnoreCase)).ToList();
+
+        if (pcList.Any())
+            return pcList.First();
+        
+        return candidates.First();
     }
     
     private async Task<string> ResolveSoldToIdAsync(ExtractedOrderDto storeOrder, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, List<string> soldToIds, CancellationToken cancellationToken) 
     { 
+        if (soldToIds.Count == 1)
+            return soldToIds[0];
+        
         if (!string.IsNullOrEmpty(storeOrder.StoreName)) 
         { 
             var requestDto = new GetCustomerNumbersByNameRequestDto { CustomerName = storeOrder.StoreName }; 
@@ -639,7 +645,8 @@ public partial class PhoneOrderProcessJobService
                     AiMaterialDesc = i.Name,
                     MaterialQuantity = i.Quantity,
                     AiUnit = i.Unit,
-                    MarkForDelete = i.MarkForDelete
+                    MarkForDelete = i.MarkForDelete,
+                    Restored = i.Restored
                 }).ToList()
             }
         };
@@ -819,7 +826,7 @@ public partial class PhoneOrderProcessJobService
             CustomerNumber = soldToId,
             SoldToIds = string.Join(",", soldToIds),
             DeliveryDate = pacificDeliveryDate.Date,
-            AiAssistantId  = record.AssistantId ?? 0
+            AiAssistantId = record.AssistantId ?? 0
         };
         
         var task = new PhoneOrderPushTask
@@ -852,5 +859,176 @@ public partial class PhoneOrderProcessJobService
         };
 
         await _salesDataProvider.AddPhoneOrderPushTaskAsync(task, true, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task RefineOrderByAiAsync(ExtractedOrderDto storeOrder, string soldToId, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant,  List<(string Material, string MaterialDesc, DateTime? invoiceDate)> historyItems, int recordId, CancellationToken cancellationToken)
+    {
+        var draftOrder = await _salesClient.GetAiOrderItemsByDeliveryDateAsync(new GetAiOrderItemsByDeliveryDateRequestDto { CustomerNumber = soldToId, DeliveryDate = storeOrder.DeliveryDate }, cancellationToken).ConfigureAwait(false);
+        
+        var todayReports = await GetTodayReportsByAssistantAsync(aiSpeechAssistant.Id, recordId, cancellationToken).ConfigureAwait(false);
+        
+        var hasDraftOrder = draftOrder?.Data != null && draftOrder.Data.Any();
+        var hasTodayReports = todayReports != null && todayReports.Any();
+
+        if (!hasDraftOrder && !hasTodayReports)
+        {
+            Log.Information("Skip RefineOrderByAiAsync: no draft order and no today reports. SoldToId={SoldToId}, DeliveryDate={DeliveryDate}", soldToId, storeOrder.DeliveryDate);
+            return;
+        }
+        
+        var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
+
+        var currentOrdersJson = JsonSerializer.Serialize(storeOrder.Orders);
+        
+        var draftOrderJson = draftOrder?.Data != null ? JsonSerializer.Serialize(draftOrder.Data) : "[]";
+        
+        var historyReportsText = todayReports.Any() ? string.Join("\n---\n", todayReports) : "（无）";
+
+        var systemPrompt =
+            "你是一名「电话下单意图裁决助手」，负责在多通电话、多次加单、减单、取消、撤销取消的情况下，" +
+            "判断客户『最终明确要执行』的订单结果。\n\n" +
+            "你将同时获得三类信息：\n" +
+            "1. 本次通话中提取出的订单内容（优先级最高）\n" +
+            "2. 系统中已存在的草稿单内容\n" +
+            "3. 今天该客户的历史分析报告（按时间顺序）\n\n" +
+            "【裁决优先级规则（非常重要）】\n" +
+            "- 本次通话内容优先级最高\n" +
+            "- 历史分析报告仅作为上下文参考，不可覆盖本次通话中的明确指令\n" +
+            "- 草稿单仅用于判断是否存在、是否被取消，不可覆盖本次通话指令\n\n" +
+            "【你的核心任务】\n" +
+            "1. 判断是否为整单取消（IsDeleteWholeOrder）\n" +
+            "2. 判断是否为撤销之前的取消（IsUndoCancel）\n" +
+            "3. 合并同一物料的多次加减单\n" +
+            "4. 若加减数量相互抵消，只输出最终数量\n" +
+            "5. 输出客户最终明确要执行的订单结果\n\n" +
+            "【整单取消规则】\n" +
+            "- 只有当客户在『本次通话中』明确表示“整单取消 / 全部不要 / 今天的单都取消”等语义，" +
+            "才能将 IsDeleteWholeOrder 设置为 true\n" +
+            "- 整单取消时，Orders 必须为空数组\n" +
+            "- 仅取消单个物料，不等于整单取消\n\n" +
+            "【撤销取消规则】\n" +
+            "- 当客户在本次通话中明确表示“刚刚取消的不算 / 还是要 / 恢复之前的订单”，" +
+            "才能将 IsUndoCancel 设置为 true\n\n" +
+            "【物料合并规则】\n" +
+            "- 同一物料必须合并为一条\n" +
+            "- 如果物料在多通电话中被多次加单或减单，必须计算最终净数量\n" +
+            "- 不允许输出重复物料\n\n" +
+            "【物料名称拼接规则（必须遵守）】\n" +
+            "- Name 字段必须体现加减过程\n" +
+            "- 拼接格式：物料名#第一次数量单位+后续变更\n" +
+            "- 示例：\n" +
+            "  第一通：鸡胸肉 1 箱\n" +
+            "  第二通：加 2 箱\n" +
+            "  最终输出：\n" +
+            "  Name = 鸡胸肉#1箱+2\n" +
+            "  Quantity = 3\n" +
+            "  Unit = 箱\n\n" +
+            "【单个物料取消规则（非常重要）】\n" +
+            "- 如果客户在本次通话中明确表示取消某个具体物料，" +
+            "即使该物料在当前草稿单中已经不存在，也必须输出该物料\n" +
+            "- 此时必须设置 MarkForDelete = true\n" +
+            "- 仅仅“没有再提到”某个物料，不等于取消，禁止设置 MarkForDelete\n\n" +
+            "【恢复已取消物料规则】\n" +
+            "- 当客户明确表示恢复、继续要、撤销之前的取消，" +
+            "且该物料在历史中曾被取消，必须设置：\n" +
+            "  MarkForDelete = false\n\n" +
+            "如果得到的字段restored是true，那就是Restore = true，如果是false或者沒有得到這個字段，則為 Restore = false\n" +
+            "【禁止行为】\n" +
+            "- 不得臆造任何通话中未提及的物料\n" +
+            "- 不得因为草稿单中不存在就忽略明确的取消指令\n" +
+            "- 不得把“未提及”当成“取消”\n" +
+            "- 不得输出非 JSON 内容\n\n" +
+            "【输出格式（必须严格是 JSON，不允许多字段或少字段）】\n" +
+            "{\n" +
+            "  \"StoreName\": \"\",\n" +
+            "  \"StoreNumber\": \"\",\n" +
+            "  \"DeliveryDate\": \"yyyy-MM-dd\",\n" +
+            "  \"IsDeleteWholeOrder\": false,\n" +
+            "  \"IsUndoCancel\": false,\n" +
+            "  \"Orders\": [\n" +
+            "    {\n" +
+            "      \"Name\": \"\",\n" +
+            "      \"Quantity\": 0,\n" +
+            "      \"MaterialNumber\": \"\",\n" +
+            "      \"Unit\": \"\",\n" +
+            "      \"MarkForDelete\": false,\n" +
+            "      \"Restored\": false\n" +
+            "    }\n" +
+            "  ]\n" +
+            "}\n\n" +
+            "如果最终没有任何有效下单内容，请返回 Orders 为空数组。";
+        
+        var userPrompt = "【本次通话提取的订单】\n" + currentOrdersJson + "\n\n" + "【系统中已有草稿单】\n" + draftOrderJson + "\n\n" + "【今日历史分析报告】\n" + historyReportsText + "\n";
+        Log.Information("Sending refine prompt to GPT: {Prompt}", systemPrompt);
+        var messages = new List<ChatMessage>
+        {
+            new SystemChatMessage(systemPrompt),
+            new UserChatMessage(userPrompt)
+        };
+
+        var completion = await client.CompleteChatAsync(messages, new ChatCompletionOptions { ResponseModalities = ChatResponseModalities.Text, ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat() }, cancellationToken).ConfigureAwait(false);
+        
+        var jsonResponse = completion.Value.Content.FirstOrDefault()?.Text ?? "";
+        Log.Information("Second AI refine response: {Json}", jsonResponse);
+        
+        try
+        {
+            using var jsonDoc = JsonDocument.Parse(jsonResponse);
+            var root = jsonDoc.RootElement;
+
+            storeOrder.StoreName = root.TryGetProperty("StoreName", out var sn) ? sn.GetString() ?? "" : storeOrder.StoreName;
+
+            storeOrder.StoreNumber = root.TryGetProperty("StoreNumber", out var storeNum) ? storeNum.GetString() ?? "" : storeOrder.StoreNumber;
+
+            if (root.TryGetProperty("DeliveryDate", out var dd) && DateTime.TryParse(dd.GetString(), out var dt))
+                storeOrder.DeliveryDate = DateTime.SpecifyKind(dt, DateTimeKind.Utc);
+
+            storeOrder.IsDeleteWholeOrder = root.TryGetProperty("IsDeleteWholeOrder", out var del) && del.GetBoolean();
+
+            storeOrder.IsUndoCancel = root.TryGetProperty("IsUndoCancel", out var undo) && undo.GetBoolean();
+
+            storeOrder.Orders.Clear();
+
+            if (root.TryGetProperty("Orders", out var ordersArray))
+            {
+                foreach (var orderItem in ordersArray.EnumerateArray())
+                {
+                    var name = orderItem.GetProperty("Name").GetString() ?? "";
+                    var qty = orderItem.GetProperty("Quantity").GetInt32();
+                    var unit = orderItem.GetProperty("Unit").GetString() ?? "";
+                    var materialNumber = orderItem.GetProperty("MaterialNumber").GetString() ?? "";
+                    var markForDelete = orderItem.GetProperty("MarkForDelete").GetBoolean();
+                    var restored = orderItem.GetProperty("Restored").GetBoolean();
+
+                    storeOrder.Orders.Add(new ExtractedOrderItemDto
+                    {
+                        Name = name,
+                        Quantity = qty,
+                        Unit = unit,
+                        MaterialNumber = materialNumber,
+                        MarkForDelete = markForDelete,
+                        Restored = restored
+                    });
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warning("第二次模型解析失败，保留第一次模型结果: {Message}", ex.Message);
+        }
+    }
+    
+    private async Task<List<string>> GetTodayReportsByAssistantAsync(int assistantId, int recordId, CancellationToken cancellationToken)
+    {
+        var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+        var pacificNow = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, pacificZone);
+        
+        var pacificStartOfDay = new DateTimeOffset(pacificNow.Year, pacificNow.Month, pacificNow.Day, 0, 0, 0, pacificZone.GetUtcOffset(pacificNow));
+        
+        var utcStart = pacificStartOfDay.ToUniversalTime();
+        var utcEnd = utcStart.AddDays(1);
+        
+        var reports = await _phoneOrderDataProvider.GetTranscriptionTextsAsync(assistantId, recordId, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
+        return reports;
     }
 }

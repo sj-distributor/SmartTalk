@@ -81,7 +81,9 @@ public class SalesPhoneOrderPushService : ISalesPhoneOrderPushService
             if (hasPendingTasks)
             {
                 Log.Information("Enqueuing next push task for RecordId={RecordId}", task.RecordId);
-                _backgroundJobClient.Enqueue<ISalesPhoneOrderPushService>(s => s.ExecutePhoneOrderPushTasksAsync(task.RecordId, CancellationToken.None));
+
+                _backgroundJobClient.Enqueue<ISalesPhoneOrderPushService>(
+                    s => s.ExecutePhoneOrderPushTasksAsync(task.RecordId, CancellationToken.None));
             }
             else
             {
@@ -110,6 +112,11 @@ public class SalesPhoneOrderPushService : ISalesPhoneOrderPushService
         {
             Log.Information("Cannot mark RecordId={RecordId} as complete. Pending tasks exist.", recordId);
         }
+        
+        if (!hasPendingTasks)
+        {
+            await _phoneOrderDataProvider.MarkRecordCompletedAsync(recordId, cancellationToken).ConfigureAwait(false);
+        }
     }
     
     private async Task ExecuteGenerateAsync(PhoneOrderPushTask task, CancellationToken cancellationToken)
@@ -131,7 +138,6 @@ public class SalesPhoneOrderPushService : ISalesPhoneOrderPushService
         var req = JsonSerializer.Deserialize<DeleteAiOrderRequestDto>(task.RequestJson);
 
         await _salesClient.DeleteAiOrderAsync(req, cancellationToken).ConfigureAwait(false);
-        
         Log.Information("Sales DeleteOrder SUCCESS. TaskId={TaskId}, Request={@Request}", task.Id, req);
     }
     

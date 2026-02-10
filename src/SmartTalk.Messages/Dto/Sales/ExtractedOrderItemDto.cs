@@ -26,4 +26,6 @@ public class ExtractedOrderItemDto
     public string Unit { get; set; }
     
     public bool MarkForDelete { get; set; } 
+    
+    public bool Restored { get; set; }
 }
