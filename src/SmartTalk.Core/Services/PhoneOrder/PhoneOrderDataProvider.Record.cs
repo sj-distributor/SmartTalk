@@ -611,16 +611,14 @@ public partial class PhoneOrderDataProvider
         if (utcStart.HasValue && utcEnd.HasValue)
             query = query.Where(x => x.CreatedDate >= utcStart.Value && x.CreatedDate < utcEnd.Value);
 
-        if (taskType is { Count: > 0 })
+        var hasTodoTaskType = taskType is { Count: > 0 } && taskType.Contains(TaskType.Todo);
+        var filterByIsIncludeTodoOnly = isIncludeTodo == true && hasTodoTaskType;
+
+        if (taskType is { Count: > 0 } && !filterByIsIncludeTodoOnly)
             query = query.Where(x => taskType.Contains(x.TaskType));
 
         if (isIncludeTodo.HasValue)
-        {
-            if (isIncludeTodo.Value && taskType is { Count: > 0 } && taskType.Contains(TaskType.Todo))
-                query = query.Where(x => x.TaskType == TaskType.Todo || x.IsIncludeTodo == true);
-            else
-                query = query.Where(x => x.IsIncludeTodo == true);
-        }
+            query = query.Where(x => x.IsIncludeTodo == true);
         
         return await (from events in query
             join record in _repository.QueryNoTracking<PhoneOrderRecord>() on events.RecordId equals record.Id
