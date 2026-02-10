@@ -46,9 +46,8 @@ public class RealtimeAiService : IRealtimeAiService
     private int _round;
     private string _sessionId;
     private volatile bool _isAiSpeaking;
-    private bool _hasHandledAudioBuffer;
+    private int _hasHandledAudioBuffer;
     private MemoryStream _wholeAudioBuffer;
-    private PhoneOrderRecordType _orderRecordType;
     private readonly IInactivityTimerManager _inactivityTimerManager;
     private readonly SemaphoreSlim _wsSendLock = new(1, 1);
     private readonly SemaphoreSlim _bufferLock = new(1, 1);
@@ -71,7 +70,7 @@ public class RealtimeAiService : IRealtimeAiService
         _webSocket = null;
         _isAiSpeaking = false;
         _speechAssistant = null;
-        _hasHandledAudioBuffer = false;
+        _hasHandledAudioBuffer = 0;
         _conversationTranscription = new ConcurrentQueue<(AiSpeechAssistantSpeaker, string)>();
         _sessionId = Guid.NewGuid().ToString();
     }
@@ -96,7 +95,6 @@ public class RealtimeAiService : IRealtimeAiService
     {
         _webSocket = command.WebSocket;
         _streamSid = Guid.NewGuid().ToString("N");
-        _orderRecordType = command.OrderRecordType;
 
         _isAiSpeaking = false;
         _wholeAudioBuffer = new MemoryStream();
@@ -170,9 +168,6 @@ public class RealtimeAiService : IRealtimeAiService
                         Log.Information("[RealtimeAi] Client sent close frame, SessionId: {SessionId}, AssistantId: {AssistantId}",
                             _sessionId, _speechAssistant.Id);
 
-                        await HandleWholeAudioBufferAsync(orderRecordType).ConfigureAwait(false);
-                        await HandleTranscriptionsAsync().ConfigureAwait(false);
-
                         await _conversationEngine.EndSessionAsync("Disconnect From RealtimeAi");
                         await _webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Client acknowledges close", CancellationToken.None);
 
@@ -240,26 +235,6 @@ public class RealtimeAiService : IRealtimeAiService
 
                 try
                 {
-                    await HandleWholeAudioBufferAsync(orderRecordType).ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "[RealtimeAi] Failed to handle audio buffer during cleanup, SessionId: {SessionId}, AssistantId: {AssistantId}",
-                        _sessionId, _speechAssistant?.Id);
-                }
-
-                try
-                {
-                    await HandleTranscriptionsAsync().ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "[RealtimeAi] Failed to handle transcriptions during cleanup, SessionId: {SessionId}, AssistantId: {AssistantId}",
-                        _sessionId, _speechAssistant?.Id);
-                }
-
-                try
-                {
                     await _conversationEngine.EndSessionAsync("Client disconnected abnormally");
                 }
                 catch (Exception ex)
@@ -277,6 +252,26 @@ public class RealtimeAiService : IRealtimeAiService
                     Log.Error(ex, "[RealtimeAi] Failed to stop inactivity timer during cleanup, SessionId: {SessionId}, AssistantId: {AssistantId}, StreamSid: {StreamSid}",
                         _sessionId, _speechAssistant?.Id, _streamSid);
                 }
+            }
+
+            try
+            {
+                await HandleWholeAudioBufferAsync(orderRecordType).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "[RealtimeAi] Failed to handle audio buffer during cleanup, SessionId: {SessionId}, AssistantId: {AssistantId}",
+                    _sessionId, _speechAssistant?.Id);
+            }
+
+            try
+            {
+                await HandleTranscriptionsAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "[RealtimeAi] Failed to handle transcriptions during cleanup, SessionId: {SessionId}, AssistantId: {AssistantId}",
+                    _sessionId, _speechAssistant?.Id);
             }
 
             ms.Dispose();
@@ -325,8 +320,6 @@ public class RealtimeAiService : IRealtimeAiService
         Log.Error("[RealtimeAi] Conversation engine error, SessionId: {SessionId}, AssistantId: {AssistantId}, ErrorCode: {ErrorCode}, ErrorMessage: {ErrorMessage}, IsCritical: {IsCritical}",
             _sessionId, _speechAssistant?.Id, errorData?.Code, errorData?.Message, errorData?.IsCritical);
 
-        await HandleWholeAudioBufferAsync(_orderRecordType).ConfigureAwait(false);
-        
         var clientError = new
         {
             type = "ClientError",
@@ -405,10 +398,26 @@ public class RealtimeAiService : IRealtimeAiService
 
     private async Task HandleWholeAudioBufferAsync(PhoneOrderRecordType orderRecordType)
     {
-        if (_wholeAudioBuffer is { CanRead: true } src && !_hasHandledAudioBuffer)
-        {
-            _hasHandledAudioBuffer = true;
+        if (Interlocked.CompareExchange(ref _hasHandledAudioBuffer, 1, 0) != 0)
+            return;
 
+        MemoryStream snapshot;
+
+        await _bufferLock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            snapshot = _wholeAudioBuffer;
+            _wholeAudioBuffer = null;
+        }
+        finally
+        {
+            _bufferLock.Release();
+        }
+
+        if (snapshot is not { CanRead: true }) return;
+
+        try
+        {
             var waveFormat = new WaveFormat(24000, 16, 1);
             using var wavStream = new MemoryStream();
 
@@ -418,8 +427,8 @@ public class RealtimeAiService : IRealtimeAiService
                 try
                 {
                     int read;
-                    if (src.CanSeek) src.Position = 0;
-                    while ((read = await src.ReadAsync(rented.AsMemory(0, rented.Length))) > 0)
+                    if (snapshot.CanSeek) snapshot.Position = 0;
+                    while ((read = await snapshot.ReadAsync(rented.AsMemory(0, rented.Length))) > 0)
                     {
                         writer.Write(rented, 0, read);
                     }
@@ -430,7 +439,7 @@ public class RealtimeAiService : IRealtimeAiService
                     ArrayPool<byte>.Shared.Return(rented);
                 }
             }
-            
+
             var audio = await _attachmentService.UploadAttachmentAsync(
                 new UploadAttachmentCommand
                 {
@@ -443,14 +452,16 @@ public class RealtimeAiService : IRealtimeAiService
 
             Log.Information("[RealtimeAi] Audio uploaded, SessionId: {SessionId}, AssistantId: {AssistantId}, Url: {Url}",
                 _sessionId, _speechAssistant.Id, audio?.Attachment?.FileUrl);
+
             if (!string.IsNullOrEmpty(audio?.Attachment?.FileUrl) && _speechAssistant.Id != 0)
             {
                 _backgroundJobClient.Enqueue<IRealtimeProcessJobService>(x =>
                     x.RecordingRealtimeAiAsync(audio.Attachment.FileUrl, _speechAssistant.Id, _sessionId, orderRecordType, CancellationToken.None));
             }
-
-            await src.DisposeAsync();
-            _wholeAudioBuffer = null;
+        }
+        finally
+        {
+            await snapshot.DisposeAsync();
         }
     }
 
