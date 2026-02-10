@@ -7,15 +7,15 @@ namespace SmartTalk.Core.Handlers.CommandHandlers.RealtimeAi;
 
 public class RealtimeAiConnectCommandHandler : ICommandHandler<RealtimeAiConnectCommand>
 {
-    private readonly IRealtimeAiService _realtimeAiService;
+    private readonly IAiSpeechAssistantRealtimeService _aiSpeechAssistantRealtimeService;
 
-    public RealtimeAiConnectCommandHandler(IRealtimeAiService realtimeAiService)
+    public RealtimeAiConnectCommandHandler(IAiSpeechAssistantRealtimeService aiSpeechAssistantRealtimeService)
     {
-        _realtimeAiService = realtimeAiService;
+        _aiSpeechAssistantRealtimeService = aiSpeechAssistantRealtimeService;
     }
 
     public async Task Handle(IReceiveContext<RealtimeAiConnectCommand> context, CancellationToken cancellationToken)
     {
-        await _realtimeAiService.RealtimeAiConnectAsync(context.Message, cancellationToken);
+        await _aiSpeechAssistantRealtimeService.RealtimeAiConnectAsync(context.Message, cancellationToken);
     }
 }
