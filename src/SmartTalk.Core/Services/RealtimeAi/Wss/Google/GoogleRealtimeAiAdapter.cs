@@ -44,7 +44,7 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
                     responseModalities =  new[] { "audio" },
                     speechConfig = new
                     {
-                        languageCode = string.IsNullOrEmpty(assistantProfile.ModelLanguage) ? "en-US" : assistantProfile.ModelLanguage,
+                        languageCode = string.IsNullOrEmpty(knowledge.ModelLanguage) ? "en-US" : knowledge.ModelLanguage,
                         voiceConfig = new { prebuiltVoiceConfig = new { voiceName = string.IsNullOrEmpty(assistantProfile.ModelVoice) ? "Aoede" : assistantProfile.ModelVoice } }
                     }
                 },
