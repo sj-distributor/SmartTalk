@@ -44,9 +44,9 @@ public partial class EventHandlingService : IEventHandlingService
     private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
     private readonly IAgentDataProvider _agentDataProvider;
     private readonly IPhoneOrderUtilService _phoneOrderUtilService;
-    private readonly ISpeechMaticsService _speechMaticsService;
+    private readonly IPhoneOrderProcessJobService _phoneOrderProcessJobService;
     
-   public EventHandlingService(IAsrClient asrClient, SmartiesClient smartiesClient, IPosUtilService posUtilService, IPosDataProvider posDataProvider, ISmartTalkHttpClientFactory httpClientFactory, IPhoneOrderDataProvider phoneOrderDataProvider, IHrInterViewDataProvider hrInterViewDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, IAiSpeechAssistantService aiSpeechAssistantService, ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient, IAgentDataProvider agentDataProvider, IPhoneOrderUtilService phoneOrderUtilService, ICurrentUser currentUser, ISpeechMaticsService speechMaticsService) 
+   public EventHandlingService(IAsrClient asrClient, SmartiesClient smartiesClient, IPosUtilService posUtilService, IPosDataProvider posDataProvider, ISmartTalkHttpClientFactory httpClientFactory, IPhoneOrderDataProvider phoneOrderDataProvider, IHrInterViewDataProvider hrInterViewDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, IAiSpeechAssistantService aiSpeechAssistantService, ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient, IAgentDataProvider agentDataProvider, IPhoneOrderUtilService phoneOrderUtilService, ICurrentUser currentUser, IPhoneOrderProcessJobService phoneOrderProcessJobService) 
    {
         _asrClient = asrClient;
         _smartiesClient = smartiesClient;
@@ -61,6 +61,6 @@ public partial class EventHandlingService : IEventHandlingService
         _agentDataProvider = agentDataProvider;
         _phoneOrderUtilService = phoneOrderUtilService;
         _currentUser = currentUser;
-        _speechMaticsService = speechMaticsService;
-    }
+        _phoneOrderProcessJobService = phoneOrderProcessJobService;
+   }
 }

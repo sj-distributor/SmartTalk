@@ -34,6 +34,8 @@ namespace SmartTalk.Core.Services.PhoneOrder;
 public partial interface IPhoneOrderProcessJobService
 {
     Task HandleReleasedSpeechMaticsCallBackAsync(string jobId, CancellationToken cancellationToken);
+
+    Task<DialogueScenarioResultDto> IdentifyDialogueScenariosAsync(string query, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderProcessJobService
@@ -736,7 +738,7 @@ public partial class PhoneOrderProcessJobService
         }
     }
     
-     private async Task<DialogueScenarioResultDto> IdentifyDialogueScenariosAsync(string query, CancellationToken cancellationToken)
+    public async Task<DialogueScenarioResultDto> IdentifyDialogueScenariosAsync(string query, CancellationToken cancellationToken)
     {
         var completionResult = await _smartiesClient.PerformQueryAsync(
             new AskGptRequest
