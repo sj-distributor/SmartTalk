@@ -1035,7 +1035,7 @@ public partial class AiSpeechAssistantService
             IsActive = true,
             CreatedBy = copyToKnowledge.CreatedBy,
             CreatedDate = DateTimeOffset.Now,
-            ModelLanguage = copyToKnowledge.ModelLanguage,
+            ModelLanguage = copyFromKnowledge.ModelLanguage,
             Prompt = GenerateKnowledgePrompt(mergedJson),
             Version = await HandleKnowledgeVersionAsync(copyToKnowledge, cancellationToken)
         };
