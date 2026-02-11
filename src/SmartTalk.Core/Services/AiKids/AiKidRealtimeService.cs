@@ -1,9 +1,9 @@
 using System.Text;
 using Serilog;
 using SmartTalk.Core.Ioc;
-using SmartTalk.Core.Services.AiSpeechAssistant;
-using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
+using SmartTalk.Core.Services.Http.Clients;
+using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.RealtimeAi.Services;
 using SmartTalk.Messages.Commands.AiKids;
 using SmartTalk.Messages.Dto.RealtimeAi;
@@ -49,8 +49,20 @@ public class AiKidRealtimeService : IAiKidRealtimeService
 
         var options = new RealtimeSessionOptions
         {
+            ModelConfig = new RealtimeAiModelConfig
+            {
+                Provider = assistant.ModelProvider,
+                ServiceUrl = assistant.ModelUrl,
+                Voice = assistant.ModelVoice,
+                ModelName = assistant.ModelName,
+                ModelLanguage = assistant.ModelLanguage,
+                Greetings = assistant.Knowledge?.Greetings
+            },
+            ConnectionProfile = new RealtimeAiConnectionProfile
+            {
+                ProfileId = assistant.Id.ToString()
+            },
             WebSocket = command.WebSocket,
-            AssistantProfile = assistant,
             InitialPrompt = initialPrompt,
             InputFormat = command.InputFormat,
             OutputFormat = command.OutputFormat,
@@ -73,7 +85,8 @@ public class AiKidRealtimeService : IAiKidRealtimeService
             },
             OnTranscriptionsReadyAsync = async (sessionId, transcriptions) =>
             {
-                var kid = await _aiSpeechAssistantDataProvider.GetAiKidAsync(agentId: assistant.AgentId).ConfigureAwait(false);
+                var kid = await _aiSpeechAssistantDataProvider.GetAiKidAsync(agentId: assistant.AgentId, cancellationToken: cancellationToken).ConfigureAwait(false);
+                
                 if (kid == null) return;
 
                 _backgroundJobClient.Enqueue<ISmartiesClient>(x =>
