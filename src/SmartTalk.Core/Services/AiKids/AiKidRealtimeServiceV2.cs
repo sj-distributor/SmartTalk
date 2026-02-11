@@ -67,7 +67,8 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
             WebSocket = command.WebSocket,
             InputFormat = command.InputFormat,
             OutputFormat = command.OutputFormat,
-            Region = command.Region
+            Region = command.Region,
+            EnableRecording = true
         };
 
         var greetings = assistant.Knowledge?.Greetings;
@@ -81,7 +82,6 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
                 if (!string.IsNullOrEmpty(greetings))
                     await sendText($"Greet the user with: {greetings}").ConfigureAwait(false);
             },
-            EnableRecording = true,
             OnRecordingCompleteAsync = async (sessionId, wavBytes) =>
             {
                 var audio = await _attachmentService.UploadAttachmentAsync(

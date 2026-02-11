@@ -70,6 +70,11 @@ public class RealtimeSessionOptions
     public RealtimeAiAudioCodec OutputFormat { get; set; }
 
     public RealtimeAiServerRegion Region { get; set; }
+
+    /// <summary>
+    /// When true, the service buffers all audio (user + AI) and produces a WAV file on session end.
+    /// </summary>
+    public bool EnableRecording { get; set; }
 }
 
 public class RealtimeSessionCallbacks
@@ -97,11 +102,6 @@ public class RealtimeSessionCallbacks
     /// Parameters: (sessionId, transcriptions).
     /// </summary>
     public Func<string, IReadOnlyList<(AiSpeechAssistantSpeaker Speaker, string Text)>, Task> OnTranscriptionsReadyAsync { get; set; }
-
-    /// <summary>
-    /// When true, the service buffers all audio (user + AI) and produces a WAV file on session end.
-    /// </summary>
-    public bool EnableRecording { get; set; }
 
     /// <summary>
     /// Called when the session ends and recording is enabled.
