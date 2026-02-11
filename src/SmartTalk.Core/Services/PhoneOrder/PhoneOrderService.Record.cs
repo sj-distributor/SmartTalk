@@ -1398,6 +1398,15 @@ public partial class PhoneOrderService
 
         var (all, unread) = await _phoneOrderDataProvider.GetAllOrUnreadWaitingProcessingEventsAsync(request.AgentIds, request.TaskType, cancellationToken).ConfigureAwait(false);
         
+        if (request.TaskType is { Count: > 0 } && request.TaskType.Contains(TaskType.Todo))
+        {
+            events = events.Select(x =>
+            {
+                x.TaskType = TaskType.Todo;
+                return x;
+            }).ToList();
+        }
+        
         return new GetPhoneOrderRecordTasksResponse
         {
             Data = new GetPhoneOrderRecordTasksDto
