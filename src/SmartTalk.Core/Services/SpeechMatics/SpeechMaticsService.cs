@@ -845,6 +845,14 @@ public class SpeechMaticsService : ISpeechMaticsService
             "  Name = 鸡胸肉#1箱+2\n" +
             "  Quantity = 3\n" +
             "  Unit = 箱\n\n" +
+            "示例：\n" + 
+            "第一通：西兰花 1 箱\n" + 
+            "第二通：减 1 箱\n" + 
+            " 最终输出：\n" + 
+            "Name = 西兰花#1箱-1\n" + 
+            "Quantity = 0\n" + 
+            "Unit = 箱\n" + 
+            "如果最终数量为 0,也需要记录并发送过去。\n" + 
             "【单个物料取消规则（非常重要）】\n" +
             "- 如果客户在本次通话中明确表示取消某个具体物料，" +
             "即使该物料在当前草稿单中已经不存在，也必须输出该物料\n" +
