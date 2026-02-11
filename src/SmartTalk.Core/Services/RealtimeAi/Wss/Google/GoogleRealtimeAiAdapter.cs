@@ -2,6 +2,7 @@ using System.Text.Json;
 using Newtonsoft.Json;
 using Serilog;
 using SmartTalk.Core.Services.AiSpeechAssistant;
+using SmartTalk.Core.Services.RealtimeAi.Services;
 using SmartTalk.Core.Services.RealtimeAi.wss;
 using SmartTalk.Core.Settings.Google;
 using SmartTalk.Messages.Dto.RealtimeAi;
@@ -29,47 +30,49 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
     }
 
     public async Task<object> GetInitialSessionPayloadAsync(
-        Domain.AISpeechAssistant.AiSpeechAssistant assistantProfile, RealtimeAiEngineContext context, string sessionId = null, CancellationToken cancellationToken = default)
+        RealtimeSessionOptions options, string sessionId = null, CancellationToken cancellationToken = default)
     {
-        var configs = await InitialSessionConfigAsync(assistantProfile, cancellationToken).ConfigureAwait(false);
-        var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(assistantProfile.Id, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
-
+        var profile = options.ConnectionProfile;
+        var modelConfig = options.ModelConfig;
+        var configs = await InitialSessionConfigAsync(options, cancellationToken).ConfigureAwait(false);
+        var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(int.Parse(profile.ProfileId), isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
         var tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config).ToList();
-        
+
         var sessionPayload = new
         {
             setup = new
             {
-                model = assistantProfile.ModelName,
+                model = modelConfig.ModelName,
                 generationConfig = new {
                     temperature = 0.8,
                     responseModalities =  new[] { "audio" },
                     speechConfig = new
                     {
-                        languageCode = string.IsNullOrEmpty(knowledge.ModelLanguage) ? "en-US" : knowledge.ModelLanguage,
-                        voiceConfig = new { prebuiltVoiceConfig = new { voiceName = string.IsNullOrEmpty(assistantProfile.ModelVoice) ? "Aoede" : assistantProfile.ModelVoice } }
+
+                        languageCode = string.IsNullOrEmpty(modelConfig.ModelLanguage) ? "en-US" : modelConfig.ModelLanguage,
+                        voiceConfig = new { prebuiltVoiceConfig = new { voiceName = string.IsNullOrEmpty(modelConfig.Voice) ? "Aoede" : modelConfig.Voice } }
                     }
                 },
                 systemInstruction = new
                 {
                     parts = new[]
                     {
-                        new { text = context.InitialPrompt }
+                        new { text = options.InitialPrompt }
                     }
                 },
                 tools = tools.Any() ? tools : null,
                 realtimeInputConfig = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection)
             }
         };
-        
+
         Log.Information("GoogleAdapter: 构建初始会话负载: {@Payload}", sessionPayload);
-        
+
         return sessionPayload;
     }
 
     public (string MessageJson, bool IsOpenAiImage) BuildAudioAppendMessage(RealtimeAiWssAudioData audioData)
     {
-        object message = audioData.CustomProperties.GetValueOrDefault(nameof(RealtimeAiEngineContext.InputFormat)) switch
+        object message = audioData.CustomProperties.GetValueOrDefault(nameof(RealtimeSessionOptions.InputFormat)) switch
         {
             RealtimeAiAudioCodec.PCM16 => new
             {
@@ -184,9 +187,9 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
         }
     }
     
-    private async Task<List<(AiSpeechAssistantSessionConfigType Type, object Config)>> InitialSessionConfigAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken = default)
+    private async Task<List<(AiSpeechAssistantSessionConfigType Type, object Config)>> InitialSessionConfigAsync(RealtimeSessionOptions options, CancellationToken cancellationToken = default)
     {
-        var functions = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallByAssistantIdsAsync([assistant.Id], assistant.ModelProvider, true, cancellationToken).ConfigureAwait(false);
+        var functions = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallByAssistantIdsAsync([int.Parse(options.ConnectionProfile.ProfileId)], options.ModelConfig.Provider, true, cancellationToken).ConfigureAwait(false);
 
         return functions.Count == 0 ? [] : functions.Where(x => !string.IsNullOrWhiteSpace(x.Content)).Select(x => (x.Type, JsonConvert.DeserializeObject<object>(x.Content))).ToList();
     }

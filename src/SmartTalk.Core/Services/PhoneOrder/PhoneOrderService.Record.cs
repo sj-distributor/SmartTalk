@@ -120,7 +120,7 @@ public partial class PhoneOrderService
             UserName = user.UserName,
             CreatedDate = DateTime.UtcNow
         }, true, cancellationToken).ConfigureAwait(false);
-
+        
         return new PhoneOrderRecordUpdatedEvent
         {
             RecordId = record.Id,

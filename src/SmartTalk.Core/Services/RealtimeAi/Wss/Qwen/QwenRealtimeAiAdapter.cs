@@ -3,6 +3,7 @@ using Newtonsoft.Json;
 using Serilog;
 using SmartTalk.Core.Extensions;
 using SmartTalk.Core.Services.AiSpeechAssistant;
+using SmartTalk.Core.Services.RealtimeAi.Services;
 using SmartTalk.Core.Services.RealtimeAi.wss;
 using SmartTalk.Core.Settings.Qwen;
 using SmartTalk.Messages.Dto.RealtimeAi;
@@ -34,10 +35,10 @@ public class QwenRealtimeAiAdapter : IRealtimeAiProviderAdapter
     }
 
     public async Task<object> GetInitialSessionPayloadAsync(
-        Domain.AISpeechAssistant.AiSpeechAssistant assistantProfile, RealtimeAiEngineContext context, string sessionId = null, CancellationToken cancellationToken = default)
+        RealtimeSessionOptions options, string sessionId = null, CancellationToken cancellationToken = default)
     {
-        var configs = await InitialSessionConfigAsync(assistantProfile, cancellationToken).ConfigureAwait(false);
-        var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(assistantProfile.Id, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var configs = await InitialSessionConfigAsync(options, cancellationToken).ConfigureAwait(false);
+        var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(int.Parse(options.ConnectionProfile.ProfileId), isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var turnDetection = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection);
 
@@ -47,10 +48,10 @@ public class QwenRealtimeAiAdapter : IRealtimeAiProviderAdapter
             session = new
             {
                 turn_detection = turnDetection,
-                input_audio_format = context.InputFormat.GetDescription(),
-                output_audio_format = context.OutputFormat.GetDescription(),
-                voice = string.IsNullOrEmpty(assistantProfile.ModelVoice) ? "alloy" : assistantProfile.ModelVoice,
-                instructions = knowledge?.Prompt ?? context.InitialPrompt,
+                input_audio_format = options.InputFormat.GetDescription(),
+                output_audio_format = options.OutputFormat.GetDescription(),
+                voice = string.IsNullOrEmpty(options.ModelConfig.Voice) ? "alloy" : options.ModelConfig.Voice,
+                instructions = knowledge?.Prompt ?? options.InitialPrompt,
                 modalities = turnDetection == null ? new[] { "text" } : new[] { "text", "audio" },
                 temperature = 0.8
             }
@@ -222,9 +223,9 @@ public class QwenRealtimeAiAdapter : IRealtimeAiProviderAdapter
         }
     }
     
-    private async Task<List<(AiSpeechAssistantSessionConfigType Type, object Config)>> InitialSessionConfigAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken = default)
+    private async Task<List<(AiSpeechAssistantSessionConfigType Type, object Config)>> InitialSessionConfigAsync(RealtimeSessionOptions options, CancellationToken cancellationToken = default)
     {
-        var functions = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallByAssistantIdsAsync([assistant.Id], assistant.ModelProvider, true, cancellationToken).ConfigureAwait(false);
+        var functions = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallByAssistantIdsAsync([int.Parse(options.ConnectionProfile.ProfileId)], options.ModelConfig.Provider, true, cancellationToken).ConfigureAwait(false);
 
         return functions.Count == 0 ? [] : functions.Where(x => !string.IsNullOrWhiteSpace(x.Content)).Select(x => (x.Type, JsonConvert.DeserializeObject<object>(x.Content))).ToList();
     }

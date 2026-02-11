@@ -14,7 +14,7 @@ namespace SmartTalk.Core.Services.RealtimeAi.Services;
 public interface ITwilioUtilService : IScopedDependency
 {
     Task OnCallStartedAsync(
-        ClientWebSocket webSocket, string callSid, Domain.AISpeechAssistant.AiSpeechAssistant assistantProfile,
+        ClientWebSocket webSocket, string callSid, RealtimeAiConnectionProfile connectionProfile,
         string initialPrompt, RealtimeAiAudioCodec inputFormat, RealtimeAiServerRegion region, RealtimeAiAudioCodec outputFormat);
 }
 
@@ -25,7 +25,7 @@ public class TwilioUtilUtilService : ITwilioUtilService
     
     private string _currentCallSid; // 示例：当前通话ID (Example: current call ID)
     private ClientWebSocket _webSocket;
-    private Domain.AISpeechAssistant.AiSpeechAssistant _currentAssistantProfileForCall;
+    private RealtimeSessionOptions _currentOptions;
     
     private const int TwilioInputSampleRate = 8000;
     private const RealtimeAiAudioCodec TwilioInputCodec = RealtimeAiAudioCodec.MULAW;
@@ -48,17 +48,24 @@ public class TwilioUtilUtilService : ITwilioUtilService
     }
     
     public async Task OnCallStartedAsync(
-        ClientWebSocket webSocket, string callSid, Domain.AISpeechAssistant.AiSpeechAssistant assistantProfile, 
+        ClientWebSocket webSocket, string callSid, RealtimeAiConnectionProfile connectionProfile,
         string initialPrompt, RealtimeAiAudioCodec inputFormat, RealtimeAiServerRegion region, RealtimeAiAudioCodec outputFormat)
     {
-        // ... (同前) ...
         _webSocket = webSocket;
         _currentCallSid = callSid;
-        _currentAssistantProfileForCall = assistantProfile; // 保存配置 (Save profile)
+        _currentOptions = new RealtimeSessionOptions
+        {
+            WebSocket = webSocket,
+            ConnectionProfile = connectionProfile,
+            InitialPrompt = initialPrompt,
+            InputFormat = inputFormat,
+            OutputFormat = outputFormat,
+            Region = region
+        };
         Log.Information("TwilioHandler: 电话呼叫开始 CallSid: {CallSid}。准备启动 AI 会话。", callSid); // TwilioHandler: Call started CallSid: {CallSid}. Preparing to start AI session.
         try
         {
-            await _aiEngine.StartSessionAsync(assistantProfile, initialPrompt, inputFormat, outputFormat, region, CancellationToken.None); // 传入合适的 CancellationToken (Pass appropriate CancellationToken)
+            await _aiEngine.StartSessionAsync(_currentOptions, CancellationToken.None); // 传入合适的 CancellationToken (Pass appropriate CancellationToken)
         }
         catch (Exception ex)
         {
@@ -71,7 +78,7 @@ public class TwilioUtilUtilService : ITwilioUtilService
     {
         if (string.IsNullOrEmpty(base64AudioPayload)) return;
         
-        if (_currentAssistantProfileForCall == null)
+        if (_currentOptions == null)
         {
             Log.Warning("TwilioHandler: 收到 Twilio 音频但当前没有活动的助手配置 CallSid: {CallSid}", _currentCallSid); // TwilioHandler: Received Twilio audio but no active assistant profile for CallSid: {CallSid}
             return;
@@ -87,7 +94,7 @@ public class TwilioUtilUtilService : ITwilioUtilService
 
             // 检查是否需要转换 (Check if conversion is needed)
             // if (TwilioInputCodec == aiTargetCodec && TwilioInputSampleRate == aiTargetSampleRate)
-            if(_currentAssistantProfileForCall.ModelProvider is AiSpeechAssistantProvider.OpenAi or AiSpeechAssistantProvider.Azure)
+            if(_currentOptions.ModelConfig.Provider is AiSpeechAssistantProvider.OpenAi or AiSpeechAssistantProvider.Azure)
             {
                 audioBytesForAi = twilioAudioBytes;
                 // Log.Trace("TwilioHandler: Twilio 输入音频格式 ({Codec} @ {Rate}Hz) 与 AI 期望格式相同，无需转换。", TwilioInputCodec, TwilioInputSampleRate); // TwilioHandler: Twilio input audio format ({Codec} @ {Rate}Hz) is the same as AI expected format, no conversion needed.
@@ -132,7 +139,7 @@ public class TwilioUtilUtilService : ITwilioUtilService
         Log.Information("TwilioHandler: 电话呼叫结束 CallSid: {CallSid}。准备结束 AI 会话。", _currentCallSid); // TwilioHandler: Call ended CallSid: {CallSid}. Preparing to end AI session.
         await _aiEngine.EndSessionAsync("电话呼叫结束"); // Call ended
         _currentCallSid = null;
-        _currentAssistantProfileForCall = null; // 清理配置 (Clear profile)
+        _currentOptions = null; // 清理配置 (Clear options)
     }
     
     // --- AI 引擎事件处理 (AI engine event handling) ---
@@ -163,7 +170,7 @@ public class TwilioUtilUtilService : ITwilioUtilService
             byte[] audioBytesForTwilio;
 
             // 检查是否需要转换成 Twilio 期望的格式 (Check if conversion to Twilio's expected format is needed)
-            if (_currentAssistantProfileForCall.ModelProvider is AiSpeechAssistantProvider.OpenAi or AiSpeechAssistantProvider.Azure)
+            if (_currentOptions.ModelConfig.Provider is AiSpeechAssistantProvider.OpenAi or AiSpeechAssistantProvider.Azure)
             {
                 audioBytesForTwilio = aiAudioBytes;
                 // Log.Trace("TwilioHandler: AI 输出音频格式 ({Codec} @ {Rate}Hz) 与 Twilio 期望格式相同，无需转换。", aiAudioData.Codec, aiAudioData.SampleRate); // TwilioHandler: AI output audio format ({Codec} @ {Rate}Hz) is the same as Twilio expected format, no conversion needed.
