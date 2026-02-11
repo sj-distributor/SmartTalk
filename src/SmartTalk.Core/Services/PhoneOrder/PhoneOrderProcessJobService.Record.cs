@@ -938,6 +938,14 @@ public partial class PhoneOrderProcessJobService
             "- 不得因为草稿单中不存在就忽略明确的取消指令\n" +
             "- 不得把“未提及”当成“取消”\n" +
             "- 不得输出非 JSON 内容\n\n" +
+            "【最终执行订单合并规则（非常重要）】\n" +
+            "- 最终输出的 Orders 表示“本次通话结束后，系统应执行的完整订单结果”\n" +
+            "- 如果某个物料：\n  " +
+            "- 存在于系统草稿单中\n  " +
+            "- 且在本次通话中没有被明确取消、减为 0、或被整单取消\n " +
+            " - 且本次通话中也没有对其进行任何修改\n" +
+            "- 则该物料必须被保留并输出到最终 Orders 中\n" +
+            "- 这类物料无需在 Name 中体现加减过程，可直接使用原数量\n"+
             "【输出格式（必须严格是 JSON，不允许多字段或少字段）】\n" +
             "{\n" +
             "  \"StoreName\": \"\",\n" +
@@ -976,9 +984,11 @@ public partial class PhoneOrderProcessJobService
             using var jsonDoc = JsonDocument.Parse(jsonResponse);
             var root = jsonDoc.RootElement;
 
-            storeOrder.StoreName = root.TryGetProperty("StoreName", out var sn) ? sn.GetString() ?? "" : storeOrder.StoreName;
+            if (root.TryGetProperty("StoreName", out var sn))
+                storeOrder.StoreName = sn.GetString() ?? storeOrder.StoreName;
 
-            storeOrder.StoreNumber = root.TryGetProperty("StoreNumber", out var storeNum) ? storeNum.GetString() ?? "" : storeOrder.StoreNumber;
+            if (root.TryGetProperty("StoreNumber", out var storeNum))
+                storeOrder.StoreNumber = storeNum.GetString() ?? storeOrder.StoreNumber;
 
             if (root.TryGetProperty("DeliveryDate", out var dd) && DateTime.TryParse(dd.GetString(), out var dt))
                 storeOrder.DeliveryDate = DateTime.SpecifyKind(dt, DateTimeKind.Utc);
@@ -987,23 +997,38 @@ public partial class PhoneOrderProcessJobService
 
             storeOrder.IsUndoCancel = root.TryGetProperty("IsUndoCancel", out var undo) && undo.GetBoolean();
 
-            storeOrder.Orders.Clear();
-
-            if (root.TryGetProperty("Orders", out var ordersArray))
+            if (root.TryGetProperty("Orders", out var ordersArray) && ordersArray.ValueKind == JsonValueKind.Array)
             {
+                storeOrder.Orders.Clear();
+
                 foreach (var orderItem in ordersArray.EnumerateArray())
                 {
-                    var name = orderItem.GetProperty("Name").GetString() ?? "";
-                    var qty = orderItem.GetProperty("Quantity").GetInt32();
-                    var unit = orderItem.GetProperty("Unit").GetString() ?? "";
-                    var materialNumber = orderItem.GetProperty("MaterialNumber").GetString() ?? "";
-                    var markForDelete = orderItem.GetProperty("MarkForDelete").GetBoolean();
-                    var restored = orderItem.GetProperty("Restored").GetBoolean();
+                    var name = orderItem.TryGetProperty("Name", out var n) ? n.GetString() ?? "" : "";
+                    var unit = orderItem.TryGetProperty("Unit", out var u) ? u.GetString() ?? "" : "";
+                    var materialNumber = orderItem.TryGetProperty("MaterialNumber", out var m)
+                        ? m.GetString() ?? ""
+                        : "";
+
+                    var quantity = 0;
+                    if (orderItem.TryGetProperty("Quantity", out var q))
+                    {
+                        if (q.ValueKind == JsonValueKind.Number)
+                            quantity = q.GetInt32();
+                        else if (q.ValueKind == JsonValueKind.String &&
+                                 int.TryParse(q.GetString(), out var parsed))
+                            quantity = parsed;
+                    }
+
+                    var markForDelete =
+                        orderItem.TryGetProperty("MarkForDelete", out var d) && d.GetBoolean();
+
+                    var restored =
+                        orderItem.TryGetProperty("Restored", out var r) && r.GetBoolean();
 
                     storeOrder.Orders.Add(new ExtractedOrderItemDto
                     {
                         Name = name,
-                        Quantity = qty,
+                        Quantity = quantity,
                         Unit = unit,
                         MaterialNumber = materialNumber,
                         MarkForDelete = markForDelete,
