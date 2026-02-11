@@ -1,13 +1,10 @@
 using System.Text.Json;
-using Newtonsoft.Json;
 using Serilog;
 using SmartTalk.Core.Extensions;
-using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.RealtimeAiV2.Services;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
-using SmartTalk.Messages.Enums.Hr;
 using SmartTalk.Messages.Enums.RealtimeAi;
 using JsonException = System.Text.Json.JsonException;
 using JsonSerializer = System.Text.Json.JsonSerializer;
@@ -17,12 +14,10 @@ namespace SmartTalk.Core.Services.RealtimeAiV2.Adapters.OpenAi;
 public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
 {
     private readonly OpenAiSettings _openAiSettings;
-    private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
 
-    public OpenAiRealtimeAiAdapter(OpenAiSettings openAiSettings, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
+    public OpenAiRealtimeAiAdapter(OpenAiSettings openAiSettings)
     {
         _openAiSettings = openAiSettings;
-        _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
     }
 
     public Dictionary<string, string> GetHeaders(RealtimeAiServerRegion region)
@@ -36,74 +31,32 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
         };
     }
 
-    public async Task<object> GetInitialSessionPayloadAsync(
+    public Task<object> GetInitialSessionPayloadAsync(
         RealtimeSessionOptions options, string sessionId, CancellationToken cancellationToken)
     {
-        var profile = options.ConnectionProfile;
         var modelConfig = options.ModelConfig;
-        var configs = await InitialSessionConfigAsync(options, cancellationToken).ConfigureAwait(false);
-        var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(int.Parse(profile.ProfileId), isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
-        var prompt = await ReplaceKnowledgeVariablesAsync(knowledge?.Prompt, cancellationToken).ConfigureAwait(false);
 
         var sessionPayload = new
         {
             type = "session.update",
             session = new
             {
-                turn_detection = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection),
+                turn_detection = modelConfig.TurnDetection ?? new { type = "server_vad" },
                 input_audio_format = options.InputFormat.GetDescription(),
                 output_audio_format = options.OutputFormat.GetDescription(),
                 voice = string.IsNullOrEmpty(modelConfig.Voice) ? "alloy" : modelConfig.Voice,
-                instructions = prompt ?? options.InitialPrompt,
+                instructions = modelConfig.Prompt,
                 modalities = new[] { "text", "audio" },
                 temperature = 0.8,
                 input_audio_transcription = new { model = "whisper-1" },
-                input_audio_noise_reduction = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction),
-                tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config)
+                input_audio_noise_reduction = modelConfig.InputAudioNoiseReduction,
+                tools = modelConfig.Tools.Any() ? modelConfig.Tools : null
             }
         };
 
         Log.Information("OpenAIAdapter: 构建初始会话负载: {@Payload}", sessionPayload);
 
-        return sessionPayload;
-    }
-
-    private async Task<string> ReplaceKnowledgeVariablesAsync(string prompt, CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrEmpty(prompt))
-        {
-            return prompt;
-        }
-
-        if (prompt.Contains("#{hr_interview_section1}", StringComparison.OrdinalIgnoreCase))
-        {
-            var cacheKeys = Enum.GetValues(typeof(HrInterviewQuestionSection))
-                .Cast<HrInterviewQuestionSection>()
-                .Select(section => "hr_interview_" + section.ToString().ToLower())
-                .ToList();
-
-            var caches = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeVariableCachesAsync(cacheKeys, cancellationToken: cancellationToken)
-                .ConfigureAwait(false);
-
-            prompt = Enum.GetValues(typeof(HrInterviewQuestionSection))
-                .Cast<HrInterviewQuestionSection>()
-                .Aggregate(prompt, (current, section) =>
-                {
-                    var cacheKey = $"hr_interview_{section.ToString().ToLower()}";
-                    var placeholder = $"#{{{cacheKey}}}";
-                    var cacheValue = caches.FirstOrDefault(x => x.CacheKey == cacheKey)?.CacheValue;
-                    return current.Replace(placeholder, cacheValue);
-                });
-        }
-
-        if (prompt.Contains("#{hr_interview_questions}", StringComparison.OrdinalIgnoreCase))
-        {
-            var cache = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeVariableCachesAsync(["hr_interview_questions"], cancellationToken: cancellationToken).ConfigureAwait(false);
-
-            prompt = prompt.Replace("#{hr_interview_questions}", cache.FirstOrDefault()?.CacheValue);
-        }
-
-        return prompt;
+        return Task.FromResult<object>(sessionPayload);
     }
 
     public string BuildAudioAppendMessage(RealtimeAiWssAudioData audioData)
@@ -140,19 +93,23 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
     
     public object BuildInterruptMessage(string lastAssistantItemIdToInterrupt)
     {
-        // ... (同前) (... (Same as before))
         if (!string.IsNullOrEmpty(lastAssistantItemIdToInterrupt))
         {
             var message = new
             {
-                type = "conversation.interrupt", // 假设的事件类型 (Assumed event type)
+                type = "conversation.interrupt",
                 item_id_to_interrupt = lastAssistantItemIdToInterrupt
             };
-            Log.Information("OpenAIAdapter: 构建打断消息，目标 item_id: {ItemId}", lastAssistantItemIdToInterrupt); // OpenAIAdapter: Building interrupt message, target item_id: {ItemId}
-            return message; // 返回对象，由 Engine 序列化 (Return object, serialized by Engine)
+            Log.Information("OpenAIAdapter: 构建打断消息，目标 item_id: {ItemId}", lastAssistantItemIdToInterrupt);
+            return message;
         }
-        Log.Warning("OpenAIAdapter: 尝试构建打断消息但未提供 lastAssistantItemIdToInterrupt。"); // OpenAIAdapter: Attempting to build interrupt message but lastAssistantItemIdToInterrupt was not provided.
+        Log.Warning("OpenAIAdapter: 尝试构建打断消息但未提供 lastAssistantItemIdToInterrupt。");
         return null;
+    }
+
+    public string BuildTriggerResponseMessage()
+    {
+        return JsonSerializer.Serialize(new { type = "response.create" });
     }
 
     public ParsedRealtimeAiProviderEvent ParseMessage(string rawMessage)
@@ -231,24 +188,5 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
         }
     }
     
-    private async Task<List<(AiSpeechAssistantSessionConfigType Type, object Config)>> InitialSessionConfigAsync(RealtimeSessionOptions options, CancellationToken cancellationToken = default)
-    {
-        var functions = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallByAssistantIdsAsync([int.Parse(options.ConnectionProfile.ProfileId)], options.ModelConfig.Provider, true, cancellationToken).ConfigureAwait(false);
-
-        return functions.Count == 0 ? [] : functions.Where(x => !string.IsNullOrWhiteSpace(x.Content)).Select(x => (x.Type, JsonConvert.DeserializeObject<object>(x.Content))).ToList();
-    }
-
-    private object InitialSessionParameters(List<(AiSpeechAssistantSessionConfigType Type, object Config)> configs, AiSpeechAssistantSessionConfigType type)
-    {
-        var config = configs.FirstOrDefault(x => x.Type == type);
-
-        return type switch
-        {
-            AiSpeechAssistantSessionConfigType.TurnDirection => config.Config ?? new { type = "server_vad" },
-            AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction => config.Config,
-            _ => throw new NotSupportedException(nameof(type))
-        };
-    }
-
     public AiSpeechAssistantProvider Provider => AiSpeechAssistantProvider.OpenAi;
 }

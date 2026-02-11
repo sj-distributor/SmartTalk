@@ -8,7 +8,9 @@ using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.RealtimeAi;
 
-namespace SmartTalk.Core.Services.RealtimeAiV2.Services;
+using SmartTalk.Core.Services.RealtimeAiV2.Services;
+
+namespace SmartTalk.Core.Services.RealtimeAiV2.Services.Twilio;
 
 public interface ITwilioUtilService : IScopedDependency
 {
@@ -54,9 +56,12 @@ public class TwilioUtilUtilService : ITwilioUtilService
         _currentCallSid = callSid;
         _currentOptions = new RealtimeSessionOptions
         {
+            ModelConfig = new RealtimeAiModelConfig
+            {
+                Prompt = initialPrompt
+            },
             WebSocket = webSocket,
             ConnectionProfile = connectionProfile,
-            InitialPrompt = initialPrompt,
             InputFormat = inputFormat,
             OutputFormat = outputFormat,
             Region = region

@@ -1,7 +1,5 @@
 using System.Text.Json;
-using Newtonsoft.Json;
 using Serilog;
-using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.RealtimeAiV2.Services;
 using SmartTalk.Core.Settings.Google;
 using SmartTalk.Messages.Dto.RealtimeAi;
@@ -15,12 +13,10 @@ namespace SmartTalk.Core.Services.RealtimeAiV2.Adapters.Google;
 public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
 {
     private readonly GoogleSettings _googleSettings;
-    private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
 
-    public GoogleRealtimeAiAdapter(GoogleSettings googleSettings, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
+    public GoogleRealtimeAiAdapter(GoogleSettings googleSettings)
     {
         _googleSettings = googleSettings;
-        _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
     }
 
     public Dictionary<string, string> GetHeaders(RealtimeAiServerRegion region)
@@ -28,14 +24,10 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
         return new Dictionary<string, string>();
     }
 
-    public async Task<object> GetInitialSessionPayloadAsync(
+    public Task<object> GetInitialSessionPayloadAsync(
         RealtimeSessionOptions options, string sessionId = null, CancellationToken cancellationToken = default)
     {
-        var profile = options.ConnectionProfile;
         var modelConfig = options.ModelConfig;
-        var configs = await InitialSessionConfigAsync(options, cancellationToken).ConfigureAwait(false);
-        var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(int.Parse(profile.ProfileId), isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
-        var tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config).ToList();
 
         var sessionPayload = new
         {
@@ -44,7 +36,7 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
                 model = modelConfig.ModelName,
                 generationConfig = new {
                     temperature = 0.8,
-                    responseModalities =  new[] { "audio" },
+                    responseModalities = new[] { "audio" },
                     speechConfig = new
                     {
                         languageCode = string.IsNullOrEmpty(modelConfig.ModelLanguage) ? "en-US" : modelConfig.ModelLanguage,
@@ -55,17 +47,17 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
                 {
                     parts = new[]
                     {
-                        new { text = knowledge?.Prompt ?? string.Empty }
+                        new { text = modelConfig.Prompt ?? string.Empty }
                     }
                 },
-                tools = tools.Any() ? tools : null,
-                realtimeInputConfig = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection)
+                tools = modelConfig.Tools.Any() ? modelConfig.Tools : null,
+                realtimeInputConfig = modelConfig.TurnDetection
             }
         };
 
         Log.Information("GoogleAdapter: 构建初始会话负载: {@Payload}", sessionPayload);
 
-        return sessionPayload;
+        return Task.FromResult<object>(sessionPayload);
     }
 
     public string BuildAudioAppendMessage(RealtimeAiWssAudioData audioData)
@@ -102,18 +94,22 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
     
     public object BuildInterruptMessage(string lastAssistantItemIdToInterrupt)
     {
-        // ... (同前) (... (Same as before))
         if (!string.IsNullOrEmpty(lastAssistantItemIdToInterrupt))
         {
             var message = new
             {
-                type = "conversation.interrupt", // 假设的事件类型 (Assumed event type)
+                type = "conversation.interrupt",
                 item_id_to_interrupt = lastAssistantItemIdToInterrupt
             };
-            Log.Information("GoogleAdapter: 构建打断消息，目标 item_id: {ItemId}", lastAssistantItemIdToInterrupt); // GoogleAdapter: Building interrupt message, target item_id: {ItemId}
-            return message; // 返回对象，由 Engine 序列化 (Return object, serialized by Engine)
+            Log.Information("GoogleAdapter: 构建打断消息，目标 item_id: {ItemId}", lastAssistantItemIdToInterrupt);
+            return message;
         }
-        Log.Warning("GoogleAdapter: 尝试构建打断消息但未提供 lastAssistantItemIdToInterrupt。"); // GoogleAdapter: Attempting to build interrupt message but lastAssistantItemIdToInterrupt was not provided.
+        Log.Warning("GoogleAdapter: 尝试构建打断消息但未提供 lastAssistantItemIdToInterrupt。");
+        return null;
+    }
+
+    public string BuildTriggerResponseMessage()
+    {
         return null;
     }
 
@@ -174,23 +170,5 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
         }
     }
     
-    private async Task<List<(AiSpeechAssistantSessionConfigType Type, object Config)>> InitialSessionConfigAsync(RealtimeSessionOptions options, CancellationToken cancellationToken = default)
-    {
-        var functions = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallByAssistantIdsAsync([int.Parse(options.ConnectionProfile.ProfileId)], options.ModelConfig.Provider, true, cancellationToken).ConfigureAwait(false);
-
-        return functions.Count == 0 ? [] : functions.Where(x => !string.IsNullOrWhiteSpace(x.Content)).Select(x => (x.Type, JsonConvert.DeserializeObject<object>(x.Content))).ToList();
-    }
-    
-    private object InitialSessionParameters(List<(AiSpeechAssistantSessionConfigType Type, object Config)> configs, AiSpeechAssistantSessionConfigType type)
-    {
-        var config = configs.FirstOrDefault(x => x.Type == type);
-
-        return type switch
-        {
-            AiSpeechAssistantSessionConfigType.TurnDirection => config.Config,
-            _ => throw new NotSupportedException(nameof(type))
-        };
-    }
-
     public AiSpeechAssistantProvider Provider => AiSpeechAssistantProvider.Google;
 }

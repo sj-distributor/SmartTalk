@@ -3,7 +3,6 @@ using Newtonsoft.Json;
 using Serilog;
 using SmartTalk.Core.Services.RealtimeAiV2.Services;
 using SmartTalk.Messages.Dto.RealtimeAi;
-using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.RealtimeAi;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 
@@ -15,7 +14,6 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
     private readonly IRealtimeAiWssClient _realtimeAiClient;
 
     private string _sessionId;
-    private string _greetings;
     public string CurrentSessionId { get; }
     private CancellationTokenSource _sessionCts; // 用于控制当前会话的生命周期 (For controlling the lifecycle of the current session)
     private RealtimeSessionOptions _currentOptions; // 保存当前会话的配置 (Store current session options)
@@ -35,7 +33,6 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
     
     public RealtimeAiConversationEngine(IRealtimeAiProviderAdapter aiAdapter, IRealtimeAiWssClient realtimeAiClient)
     {
-        _greetings = string.Empty;
         _aiAdapter = aiAdapter ?? throw new ArgumentNullException(nameof(aiAdapter));
         _realtimeAiClient = realtimeAiClient ?? throw new ArgumentNullException(nameof(realtimeAiClient));
 
@@ -85,9 +82,6 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
 
             await _realtimeAiClient.SendMessageAsync(initialMessageJson, _sessionCts.Token);
 
-            if (!string.IsNullOrEmpty(modelConfig.Greetings))
-                _greetings = modelConfig.Greetings;
-
             Log.Information("AiConversationEngine: 已发送初始会话消息。会话 ID: {SessionId}", _sessionId); // AiConversationEngine: Initial session message sent. Session ID: {SessionId}
         }
         catch (OperationCanceledException) when (_sessionCts.IsCancellationRequested)
@@ -105,29 +99,6 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
         }
     }
     
-    private string BuildGreetingMessage(string greeting)
-    {
-        var message = new
-        {
-            type = "conversation.item.create",
-            item = new
-            {
-                type = "message",
-                role = "user",
-                content = new[]
-                {
-                    new
-                    {
-                        type = "input_text",
-                        text = $"Greet the user with: '{greeting}'"
-                    }
-                }
-            }
-        };
-            
-        return JsonSerializer.Serialize(message);
-    }
-    
     private async Task OnClientMessageReceivedAsync(string rawMessage)
     {
         if (_sessionCts == null || _sessionCts.IsCancellationRequested) return; // 会话已结束或正在结束 (Session has ended or is ending)
@@ -143,15 +114,6 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
             {
                  case RealtimeAiWssEventType.SessionInitialized:
                      Log.Information("AiConversationEngine: AI 服务商确认会话 (ID: {SessionId}) 已初始化/更新。", _sessionId); // AiConversationEngine: AI service provider confirmed session (ID: {SessionId}) initialized/updated.
-                     
-                     if (!string.IsNullOrEmpty(_greetings))
-                     {
-                         Log.Information("AiConversationEngine: 发送初始会话问候消息。会话 ID: {SessionId}", _sessionId);
-
-                         await SendTextAsync($"Greet the user with: {_greetings}");
-                         if (_currentOptions.ModelConfig.Provider == AiSpeechAssistantProvider.OpenAi)
-                             await _realtimeAiClient.SendMessageAsync(JsonSerializer.Serialize(new { type = "response.create" }), _sessionCts.Token);
-                     }
                      await OnSessionStatusChangedAsync(RealtimeAiWssEventType.SessionInitialized, parsedEvent.Data ?? _sessionId);
                      break;
                  case RealtimeAiWssEventType.ResponseAudioDelta:
@@ -255,7 +217,10 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
         Log.Information("AiConversationEngine: 准备发送文本消息: '{Text}'. 会话 ID: {SessionId}", text, _sessionId); // AiConversationEngine: Preparing to send text message: '{Text}'. Session ID: {SessionId}
         var messageJson = _aiAdapter.BuildTextUserMessage(text, _sessionId);
         await _realtimeAiClient.SendMessageAsync(messageJson, _sessionCts.Token);
-        await _realtimeAiClient.SendMessageAsync(JsonSerializer.Serialize(new { type = "response.create" }), _sessionCts.Token);
+
+        var triggerMessage = _aiAdapter.BuildTriggerResponseMessage();
+        if (triggerMessage != null)
+            await _realtimeAiClient.SendMessageAsync(triggerMessage, _sessionCts.Token);
     }
 
     public async Task NotifyUserSpeechStartedAsync(string lastAssistantItemIdToInterrupt = null)
