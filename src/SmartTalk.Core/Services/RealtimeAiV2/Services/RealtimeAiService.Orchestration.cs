@@ -10,6 +10,12 @@ namespace SmartTalk.Core.Services.RealtimeAiV2.Services;
 
 public partial class RealtimeAiService
 {
+    private static readonly (string Property, string Type, Func<JsonElement, string> Extract)[] ClientMessageParsers =
+    [
+        ("media", "audio", e => e.GetProperty("payload").GetString()),
+        ("text",  "text",  e => e.GetString())
+    ];
+    
     private async Task OrchestrateSessionAsync(CancellationToken cancellationToken)
     {
         var clientIsClose = false;
@@ -28,8 +34,7 @@ public partial class RealtimeAiService
         }
         catch (WebSocketException ex)
         {
-            Log.Error(ex, "[RealtimeAi] WebSocket error, SessionId: {SessionId}, WebSocketState: {WebSocketState}",
-                _ctx.SessionId, GetWebSocketStateSafe());
+            Log.Error(ex, "[RealtimeAi] WebSocket error, SessionId: {SessionId}, WebSocketState: {WebSocketState}", _ctx.SessionId, GetWebSocketStateSafe());
         }
         catch (OperationCanceledException)
         {
@@ -66,24 +71,48 @@ public partial class RealtimeAiService
     {
         try
         {
-            var payload = ExtractAudioPayload(rawMessage);
+            var (type, payload) = ParseClientMessage(rawMessage);
 
-            if (payload != null)
-                await HandleClientAudioAsync(payload).ConfigureAwait(false);
-            else
-                Log.Warning("[RealtimeAi] Received empty payload, SessionId: {SessionId}", _ctx.SessionId);
+            switch (type)
+            {
+                case "audio":
+                    await HandleClientAudioAsync(payload).ConfigureAwait(false);
+                    break;
+                case "text":
+                    await HandleClientTextAsync(payload).ConfigureAwait(false);
+                    break;
+                default:
+                    Log.Warning("[RealtimeAi] Unknown client message type, SessionId: {SessionId}", _ctx.SessionId);
+                    break;
+            }
         }
         catch (JsonException jsonEx)
         {
-            Log.Error(jsonEx, "[RealtimeAi] Failed to parse client message, SessionId: {SessionId}, RawMessage: {RawMessage}", _ctx.SessionId, rawMessage);
+            Log.Error(jsonEx, "[RealtimeAi] Failed to parse client message, SessionId: {SessionId}", _ctx.SessionId);
         }
     }
 
-    private static string ExtractAudioPayload(string rawMessage)
+    private static (string Type, string Payload) ParseClientMessage(string rawMessage)
     {
         using var doc = JsonDocument.Parse(rawMessage);
-        var payload = doc.RootElement.GetProperty("media").GetProperty("payload").GetString();
-        return string.IsNullOrWhiteSpace(payload) ? null : payload;
+        
+        var root = doc.RootElement;
+
+        foreach (var (property, type, extract) in ClientMessageParsers)
+        {
+            if (!root.TryGetProperty(property, out var element)) continue;
+            
+            var payload = extract(element);
+            
+            if (!string.IsNullOrWhiteSpace(payload)) return (type, payload);
+        }
+
+        return (null, null);
+    }
+
+    private async Task HandleClientTextAsync(string text)
+    {
+        await SendTextToProviderAsync(text).ConfigureAwait(false);
     }
 
     private async Task HandleClientAudioAsync(string base64Payload)
@@ -115,42 +144,14 @@ public partial class RealtimeAiService
         await SafeExecuteAsync(
             () => DisconnectFromProviderAsync(clientIsClose ? "Client disconnected" : "Client disconnected abnormally"), "disconnect from provider");
 
-        await SafeExecuteAsync(() =>
-        {
-            _inactivityTimerManager.StopTimer(_ctx.StreamSid);
-            return Task.CompletedTask;
-        }, "stop inactivity timer");
-        
+        await SafeExecuteAsync(
+            () => { _inactivityTimerManager.StopTimer(_ctx.StreamSid); return Task.CompletedTask; }, "stop inactivity timer");
+
+        await SafeExecuteAsync(async 
+            () => { if (_ctx.Options?.OnSessionEndedAsync != null) await _ctx.Options.OnSessionEndedAsync(_ctx.SessionId).ConfigureAwait(false); }, "invoke OnSessionEndedAsync");
+
         await SafeExecuteAsync(HandleRecordingAsync, "handle recording");
-
-        await SafeExecuteAsync(async () =>
-        {
-            if (_ctx.Options?.OnSessionEndedAsync != null)
-                await _ctx.Options.OnSessionEndedAsync(_ctx.SessionId).ConfigureAwait(false);
-        }, "invoke OnSessionEndedAsync");
-
         await SafeExecuteAsync(HandleTranscriptionsAsync, "handle transcriptions");
-    }
-
-    private async Task SafeExecuteAsync(Func<Task> action, string operationName)
-    {
-        try
-        {
-            await action().ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "[RealtimeAi] Cleanup failed: {Operation}, SessionId: {SessionId}", operationName, _ctx.SessionId);
-        }
-    }
-
-    private async Task HandleTranscriptionsAsync()
-    {
-        if (_ctx.Options.OnTranscriptionsCompletedAsync == null || _ctx.Transcriptions.IsEmpty) return;
-
-        var transcriptions = _ctx.Transcriptions.Select(t => (t.Speaker, t.Text)).ToList();
-        
-        await _ctx.Options.OnTranscriptionsCompletedAsync(_ctx.SessionId, transcriptions).ConfigureAwait(false);
     }
 
     private async Task WriteToAudioBufferAsync(byte[] data)
@@ -169,6 +170,15 @@ public partial class RealtimeAiService
         }
     }
 
+    private async Task HandleTranscriptionsAsync()
+    {
+        if (_ctx.Options.OnTranscriptionsCompletedAsync == null || _ctx.Transcriptions.IsEmpty) return;
+
+        var transcriptions = _ctx.Transcriptions.Select(t => (t.Speaker, t.Text)).ToList();
+        
+        await _ctx.Options.OnTranscriptionsCompletedAsync(_ctx.SessionId, transcriptions).ConfigureAwait(false);
+    }
+    
     private async Task HandleRecordingAsync()
     {
         if (!_ctx.Options.EnableRecording || _ctx.Options.OnRecordingCompleteAsync == null) return;
@@ -216,6 +226,18 @@ public partial class RealtimeAiService
         finally
         {
             await snapshot.DisposeAsync();
+        }
+    }
+    
+    private async Task SafeExecuteAsync(Func<Task> action, string operationName)
+    {
+        try
+        {
+            await action().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[RealtimeAi] Cleanup failed: {Operation}, SessionId: {SessionId}", operationName, _ctx.SessionId);
         }
     }
 }

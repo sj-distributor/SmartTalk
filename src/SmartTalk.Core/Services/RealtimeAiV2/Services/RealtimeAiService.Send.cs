@@ -1,3 +1,6 @@
+using System.Net.WebSockets;
+using System.Text;
+using Newtonsoft.Json;
 using Serilog;
 using SmartTalk.Messages.Dto.RealtimeAi;
 
@@ -5,6 +8,29 @@ namespace SmartTalk.Core.Services.RealtimeAiV2.Services;
 
 public partial class RealtimeAiService
 {
+    private async Task SendToClientAsync(object payload)
+    {
+        if (_ctx.WebSocket is not { State: WebSocketState.Open }) return;
+
+        await _ctx.WsSendLock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            if (_ctx.WebSocket is not { State: WebSocketState.Open }) return;
+
+            var bytes = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(payload));
+            await _ctx.WebSocket.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, CancellationToken.None);
+        }
+        catch (WebSocketException ex)
+        {
+            Log.Warning(ex, "[RealtimeAi] Failed to send to client, SessionId: {SessionId}, WebSocketState: {WebSocketState}",
+                _ctx.SessionId, _ctx.WebSocket?.State);
+        }
+        finally
+        {
+            _ctx.WsSendLock.Release();
+        }
+    }
+
     private async Task SendTextToProviderAsync(string text)
     {
         Log.Information("[RealtimeAi] Sending text to provider, SessionId: {SessionId}, Text: {Text}", _ctx.SessionId, text);
