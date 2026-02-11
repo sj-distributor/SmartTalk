@@ -4,12 +4,34 @@ using SmartTalk.Messages.Enums.RealtimeAi;
 
 namespace SmartTalk.Core.Services.RealtimeAi.Services;
 
+public class RealtimeAiConnectionProfile
+{
+    public string ProfileId { get; set; }
+}
+
+public class RealtimeAiModelConfig
+{
+    public AiSpeechAssistantProvider Provider { get; set; }
+
+    public string ServiceUrl { get; set; }
+
+    public string Voice { get; set; }
+
+    public string ModelName { get; set; }
+
+    public string ModelLanguage { get; set; }
+
+    public string Greetings { get; set; }
+}
+
 public class RealtimeSessionOptions
 {
+    public RealtimeAiModelConfig ModelConfig { get; set; }
+    
+    public RealtimeAiConnectionProfile ConnectionProfile { get; set; }
+
     public WebSocket WebSocket { get; set; }
-
-    public Domain.AISpeechAssistant.AiSpeechAssistant AssistantProfile { get; set; }
-
+    
     public string InitialPrompt { get; set; }
 
     public RealtimeAiAudioCodec InputFormat { get; set; }

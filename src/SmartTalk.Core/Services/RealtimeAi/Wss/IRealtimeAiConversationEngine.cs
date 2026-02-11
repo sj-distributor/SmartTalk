@@ -1,4 +1,5 @@
 using SmartTalk.Core.Ioc;
+using SmartTalk.Core.Services.RealtimeAi.Services;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.RealtimeAi;
 
@@ -20,8 +21,7 @@ public interface IRealtimeAiConversationEngine : IAsyncDisposable, IScopedDepend
     event Func<RealtimeAiWssFunctionCallData, Task> FunctionCallSuggestedAsync;
     event Func<string, Task> AiRawMessageReceivedAsync;
     
-    Task StartSessionAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistantProfile, string initialUserPrompt,
-        RealtimeAiAudioCodec inputFormat, RealtimeAiAudioCodec outputFormat, RealtimeAiServerRegion region, CancellationToken cancellationToken);
+    Task StartSessionAsync(RealtimeSessionOptions options, CancellationToken cancellationToken);
     /// <summary>
     /// 发送音频数据块给 AI。
     /// **注意:** 此方法接收的 audioData 应为 AI 服务提供商期望的格式 (可能已由外部转换)。
