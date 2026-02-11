@@ -4,10 +4,9 @@ using Mediator.Net;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
-using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Services.RealtimeAi.Services;
+using SmartTalk.Messages.Commands.AiKids;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
-using SmartTalk.Messages.Commands.RealtimeAi;
 using SmartTalk.Messages.Enums.RealtimeAi;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Requests.AiSpeechAssistant;
@@ -267,7 +266,7 @@ public class AiSpeechAssistantController : ControllerBase
         if (HttpContext.WebSockets.IsWebSocketRequest)
         {
             // await _realtimeAiService.RealtimeAiConnectAsync(, assistant, "You are a friendly assistant", RealtimeAiAudioCodec.PCM16, RealtimeAiAudioCodec.PCM16, CancellationToken.None).ConfigureAwait(false);
-            await _mediator.SendAsync(new RealtimeAiConnectCommand
+            await _mediator.SendAsync(new AiKidRealtimeCommand
             {
                 AssistantId = 1,
                 WebSocket = await HttpContext.WebSockets.AcceptWebSocketAsync(),
