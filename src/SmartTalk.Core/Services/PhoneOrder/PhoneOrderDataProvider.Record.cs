@@ -616,7 +616,12 @@ public partial class PhoneOrderDataProvider
         var query = _repository.QueryNoTracking<WaitingProcessingEvent>().Where(x => agentIds.Contains(x.AgentId));
 
         if (taskTypes is { Count: > 0 })
-            query = query.Where(x => taskTypes.Contains(x.TaskType));
+        {
+            if (taskTypes.Contains(TaskType.Todo))
+                query = query.Where(x => taskTypes.Contains(x.TaskType) || x.IsIncludeTodo == true);
+            else
+                query = query.Where(x => taskTypes.Contains(x.TaskType));
+        }
         
         var result = await query.GroupBy(_ => 1)
             .Select(g => new
