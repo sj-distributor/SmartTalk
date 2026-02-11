@@ -413,6 +413,8 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
             audioInfo.Audio = audio;
         }
 
+        Log.Information("Auto test conversation six origin text: {@originText}", originText);
+        
         var speaker = await CheckAudioSpeakerIsCustomerAsync(originText, cancellationToken).ConfigureAwait(false);
 
         if (speaker != "S1" && speaker != "S2")
@@ -454,18 +456,18 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
                 new()
                 {
                     Role = "system",
-                    Content = new CompletionsStringContent("你是一款销售与餐厅老板对话高度理解的智能助手，专门用于分辨那个对话角色是餐厅老板。" +
-                                                           "请根据我提供的对话，判断那个角色是属于是餐厅老板。" +
-                                                           "输出规则:" +
-                                                           "1.如果S1是餐厅老板的话，请返回\"S1\"" +
-                                                           "2.如果S2是餐厅老板的话，请返回\"S2\" " +
-                                                           "3.如果根据对话无法确定餐厅老板身份，请默认返回 \"S1\"" +
-                                                           "- 样本与输出：\n" +
-                                                           "S1:你好，今天我要订货; S2: 今日想订些什么 S1:一箱西兰花 S2: 好的 output:S1\n" +
-                                                           "S1: 老板您好，我们今天有新到的牛腩; S2: 嗯，给我留三斤; S1: 没问题; output:S2\n" +
-                                                           "S1: 最近土豆怎么样，质量好吗; S2: 很好，新货刚到; S1: 那给我两箱; S2: 好的; output:S1\n" +
-                                                           "S1: 我这边的猪肉库存不多了; S2: 那我给您安排两箱明早送; S1: 可以，谢谢; output:S1\n" +
-                                                           "S1: 老板，您这周还要西红柿吗; S2: 要的，送十箱; S1: 好的; output:S2")
+                    Content = new CompletionsStringContent(
+                        "你是用来判断对话中哪一方是餐厅老板的分类器。\n" +
+                        "对话角色：S1 与 S2，其中一位是餐厅老板（客户），另一位是销售/供应商。\n" +
+                        "判断依据：下单/要货/确认收货/报价询问/库存补货/订货意向通常是老板；推销新品/报价推荐/催单发货通常是销售。\n" +
+                        "输出规则：只能输出 \"S1\" 或 \"S2\"，不要输出其它文本。\n" +
+                        "不确定时默认输出 \"S1\"。\n" +
+                        "示例：\n" +
+                        "S1:你好，今天我要订货; S2: 今日想订些什么; output:S1\n" +
+                        "S1: 老板您好，我们今天有新到的牛腩; S2: 嗯，给我留三斤; output:S2\n" +
+                        "S1: 最近土豆怎么样，质量好吗; S2: 很好，新货刚到; output:S1\n" +
+                        "S1: 我这边的猪肉库存不多了; S2: 那我给您安排两箱明早送; output:S1\n" +
+                        "S1: 老板，您这周还要西红柿吗; S2: 要的，送十箱; output:S2")
                 },
                 new()
                 {
