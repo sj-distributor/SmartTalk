@@ -250,6 +250,9 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
             var customerAudios = await ExtractingCustomerAudioAsync(speechMaticsJob, audioBytes, cancellationToken).ConfigureAwait(false);
             if (customerAudios == null || customerAudios.Count == 0) record.Status = AutoTestTaskRecordStatus.Failed;
  
+            customerAudios = await MergeShortCustomerAudiosAsync(customerAudios, 3, cancellationToken).ConfigureAwait(false);
+            if (customerAudios == null || customerAudios.Count == 0) record.Status = AutoTestTaskRecordStatus.Failed;
+
             var conversationAudios = await ProcessAudioConversationAsync(customerAudios, assistant, cancellationToken).ConfigureAwait(false);
             if (conversationAudios == null || conversationAudios.Length == 0) record.Status = AutoTestTaskRecordStatus.Failed;
         
@@ -538,6 +541,77 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
             {
                 if (File.Exists(f)) File.Delete(f);
             }
+        }
+    }
+
+    private async Task<List<byte[]>> MergeShortCustomerAudiosAsync(List<byte[]> customerAudios, double minSeconds, CancellationToken cancellationToken)
+    {
+        if (customerAudios == null || customerAudios.Count == 0) return customerAudios ?? new List<byte[]>();
+
+        var result = new List<byte[]>();
+        var buffer = new List<byte[]>();
+        double bufferSeconds = 0;
+
+        foreach (var audio in customerAudios)
+        {
+            if (audio == null || audio.Length == 0) continue;
+
+            buffer.Add(audio);
+            bufferSeconds += await GetAudioDurationSecondsAsync(audio, cancellationToken).ConfigureAwait(false);
+
+            if (bufferSeconds >= minSeconds)
+            {
+                result.Add(await MergeWavBytesAsync(buffer, cancellationToken).ConfigureAwait(false));
+                buffer.Clear();
+                bufferSeconds = 0;
+            }
+        }
+
+        if (buffer.Count > 0)
+            result.Add(await MergeWavBytesAsync(buffer, cancellationToken).ConfigureAwait(false));
+
+        return result;
+    }
+
+    private async Task<double> GetAudioDurationSecondsAsync(byte[] audioBytes, CancellationToken cancellationToken)
+    {
+        if (audioBytes == null || audioBytes.Length == 0) return 0;
+
+        var duration = await _ffmpegService.GetAudioDurationAsync(audioBytes, cancellationToken).ConfigureAwait(false);
+        return TimeSpan.TryParse(duration, out var timeSpan) ? timeSpan.TotalSeconds : 0;
+    }
+
+    private async Task<byte[]> MergeWavBytesAsync(List<byte[]> wavBytes, CancellationToken cancellationToken)
+    {
+        if (wavBytes == null || wavBytes.Count == 0) return Array.Empty<byte>();
+        if (wavBytes.Count == 1) return wavBytes[0];
+
+        var tempFiles = new List<string>();
+        string outputFile = null;
+
+        try
+        {
+            foreach (var bytes in wavBytes)
+            {
+                var tempFile = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.wav");
+                await File.WriteAllBytesAsync(tempFile, bytes, cancellationToken).ConfigureAwait(false);
+                tempFiles.Add(tempFile);
+            }
+
+            outputFile = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.wav");
+            await _ffmpegService.MergeWavFilesToUniformFormat(tempFiles, outputFile, cancellationToken).ConfigureAwait(false);
+
+            return await File.ReadAllBytesAsync(outputFile, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            foreach (var f in tempFiles)
+            {
+                if (File.Exists(f)) File.Delete(f);
+            }
+
+            if (!string.IsNullOrEmpty(outputFile) && File.Exists(outputFile))
+                File.Delete(outputFile);
         }
     }
 
