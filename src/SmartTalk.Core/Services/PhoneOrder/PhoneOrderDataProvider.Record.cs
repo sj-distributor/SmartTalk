@@ -636,6 +636,7 @@ public partial class PhoneOrderDataProvider
                 TaskStatus = events.TaskStatus,
                 TaskSource = events.TaskSource,
                 CreatedDate = events.CreatedDate,
+                IsIncludeTodo = events.IsIncludeTodo,
                 LastModifiedByName = userAccount.UserName
             }).OrderByDescending(x => x.CreatedDate).ToListAsync(cancellationToken).ConfigureAwait(false);
     }

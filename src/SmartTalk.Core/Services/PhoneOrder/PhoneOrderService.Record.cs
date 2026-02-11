@@ -120,13 +120,39 @@ public partial class PhoneOrderService
             UserName = user.UserName,
             CreatedDate = DateTime.UtcNow
         }, true, cancellationToken).ConfigureAwait(false);
+        
+        var taskType = MapScenarioToTaskType(command.DialogueScenarios);
+        var waitingProcessingEvents = await _phoneOrderDataProvider.GetWaitingProcessingEventsAsync(recordId: record.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
 
+        if (waitingProcessingEvents.Count > 0)
+        {
+            foreach (var waitingProcessingEvent in waitingProcessingEvents)
+                waitingProcessingEvent.TaskType = taskType;
+
+            await _phoneOrderDataProvider.UpdateWaitingProcessingEventsAsync(waitingProcessingEvents, cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+        
         return new PhoneOrderRecordUpdatedEvent
         {
             RecordId = record.Id,
             UserName = user.UserName,
             OriginalScenarios = originalScenario,
             DialogueScenarios = record.Scenario.GetValueOrDefault()
+        };
+    }
+    
+    private static TaskType MapScenarioToTaskType(DialogueScenarios scenario)
+    {
+        return scenario switch
+        {
+            DialogueScenarios.Order => TaskType.Order,
+
+            DialogueScenarios.Reservation
+                or DialogueScenarios.InformationNotification
+                or DialogueScenarios.ThirdPartyOrderNotification
+                => TaskType.InformationNotification,
+
+            _ => throw new InvalidOperationException($"Unsupported scenario: {scenario}")
         };
     }
 
