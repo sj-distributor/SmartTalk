@@ -55,8 +55,8 @@ public partial class EventHandlingService
             {
                 waitingEvent.TaskType = @event.DialogueScenarios switch
                 {
-                    DialogueScenarios.Order or DialogueScenarios.Reservation => TaskType.Order,
-                    DialogueScenarios.InformationNotification or DialogueScenarios.ThirdPartyOrderNotification => TaskType.InformationNotification,
+                    DialogueScenarios.Order => TaskType.Order,
+                    DialogueScenarios.Reservation or DialogueScenarios.InformationNotification or DialogueScenarios.ThirdPartyOrderNotification => TaskType.InformationNotification,
                     _ => throw new ArgumentOutOfRangeException()
                 };
                 
