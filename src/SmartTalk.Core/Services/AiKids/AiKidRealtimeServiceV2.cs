@@ -107,7 +107,7 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
                         x.RecordingRealtimeAiAsync(audio.Attachment.FileUrl, assistantId, sessionId, orderRecordType, CancellationToken.None));
                 }
             },
-            OnTranscriptionsReadyAsync = async (sessionId, transcriptions) =>
+            OnTranscriptionsCompletedAsync = async (sessionId, transcriptions) =>
             {
                 var kid = await _aiSpeechAssistantDataProvider
                     .GetAiKidAsync(agentId: assistant.AgentId, cancellationToken: cancellationToken).ConfigureAwait(false);

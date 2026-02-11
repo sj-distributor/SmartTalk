@@ -94,12 +94,6 @@ public class RealtimeSessionOptions
     public Func<Func<string, Task>, Task> OnSessionReadyAsync { get; set; }
 
     /// <summary>
-    /// Called when audio data is received or sent.
-    /// Parameters: (audioBytes, isAiOutput).
-    /// </summary>
-    public Func<byte[], bool, Task> OnAudioDataAsync { get; set; }
-
-    /// <summary>
     /// Called when the session ends.
     /// Parameter: sessionId.
     /// </summary>
@@ -109,7 +103,7 @@ public class RealtimeSessionOptions
     /// Called when session ends with collected transcriptions.
     /// Parameters: (sessionId, transcriptions).
     /// </summary>
-    public Func<string, IReadOnlyList<(AiSpeechAssistantSpeaker Speaker, string Text)>, Task> OnTranscriptionsReadyAsync { get; set; }
+    public Func<string, IReadOnlyList<(AiSpeechAssistantSpeaker Speaker, string Text)>, Task> OnTranscriptionsCompletedAsync { get; set; }
 
     /// <summary>
     /// Called when the session ends and recording is enabled.

@@ -101,9 +101,6 @@ public partial class RealtimeAiService : IRealtimeAiService
                     {
                         var audioBytes = Convert.FromBase64String(payload);
 
-                        if (!_ctx.IsAiSpeaking && _ctx.Options.OnAudioDataAsync != null)
-                            await _ctx.Options.OnAudioDataAsync(audioBytes, false).ConfigureAwait(false);
-
                         if (!_ctx.IsAiSpeaking)
                             await WriteToAudioBufferAsync(audioBytes).ConfigureAwait(false);
 
@@ -179,7 +176,7 @@ public partial class RealtimeAiService : IRealtimeAiService
 
             try
             {
-                if (_ctx.Options.OnSessionEndedAsync != null)
+                if (_ctx.Options?.OnSessionEndedAsync != null)
                     await _ctx.Options.OnSessionEndedAsync(_ctx.SessionId).ConfigureAwait(false);
             }
             catch (Exception ex)
@@ -204,10 +201,10 @@ public partial class RealtimeAiService : IRealtimeAiService
 
     private async Task HandleTranscriptionsAsync()
     {
-        if (_ctx.Options.OnTranscriptionsReadyAsync == null || _ctx.Transcriptions.IsEmpty) return;
+        if (_ctx.Options.OnTranscriptionsCompletedAsync == null || _ctx.Transcriptions.IsEmpty) return;
 
         var transcriptions = _ctx.Transcriptions.Select(t => (t.Speaker, t.Text)).ToList();
-        await _ctx.Options.OnTranscriptionsReadyAsync(_ctx.SessionId, transcriptions).ConfigureAwait(false);
+        await _ctx.Options.OnTranscriptionsCompletedAsync(_ctx.SessionId, transcriptions).ConfigureAwait(false);
     }
 
     private async Task WriteToAudioBufferAsync(byte[] data)

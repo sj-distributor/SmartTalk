@@ -114,9 +114,6 @@ public partial class RealtimeAiService
 
         var audioBytes = Convert.FromBase64String(aiAudioData.Base64Payload);
 
-        if (_ctx.Options.OnAudioDataAsync != null)
-            await _ctx.Options.OnAudioDataAsync(audioBytes, true).ConfigureAwait(false);
-
         await WriteToAudioBufferAsync(audioBytes).ConfigureAwait(false);
 
         var audioDelta = new
