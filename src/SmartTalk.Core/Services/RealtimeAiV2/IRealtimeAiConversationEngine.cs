@@ -3,7 +3,7 @@ using SmartTalk.Core.Services.RealtimeAiV2.Services;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.RealtimeAi;
 
-namespace SmartTalk.Core.Services.RealtimeAiV2.Wss;
+namespace SmartTalk.Core.Services.RealtimeAiV2;
 
 public interface IRealtimeAiConversationEngine : IAsyncDisposable, IScopedDependency
 {

@@ -8,7 +8,6 @@ using Newtonsoft.Json;
 using Serilog;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Attachments;
-using SmartTalk.Core.Services.RealtimeAiV2.Adapters;
 using SmartTalk.Core.Services.RealtimeAiV2.Wss;
 using SmartTalk.Core.Services.Timer;
 using SmartTalk.Messages.Commands.Attachments;

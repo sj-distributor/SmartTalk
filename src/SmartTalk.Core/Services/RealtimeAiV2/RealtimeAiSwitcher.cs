@@ -2,12 +2,12 @@ using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.RealtimeAiV2.Wss;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 
-namespace SmartTalk.Core.Services.RealtimeAiV2.Adapters;
+namespace SmartTalk.Core.Services.RealtimeAiV2;
 
 public interface IRealtimeAiSwitcher : IScopedDependency
 {
     IRealtimeAiWssClient WssClient(AiSpeechAssistantProvider provider);
-    
+
     IRealtimeAiProviderAdapter ProviderAdapter(AiSpeechAssistantProvider provider);
 }
 
