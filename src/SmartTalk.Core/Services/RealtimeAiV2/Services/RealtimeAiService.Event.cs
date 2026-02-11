@@ -57,7 +57,6 @@ public partial class RealtimeAiService
                     break;
 
                 case RealtimeAiWssEventType.ResponseAudioDone:
-                    Log.Debug("[RealtimeAi] Provider audio response done, SessionId: {SessionId}, ItemId: {ItemId}", _ctx.SessionId, parsedEvent.ItemId);
                     break;
 
                 case RealtimeAiWssEventType.Unknown:
@@ -79,7 +78,6 @@ public partial class RealtimeAiService
         if ((newState == WebSocketState.Closed || newState == WebSocketState.Aborted)
             && IsProviderSessionActive)
         {
-            Log.Warning("[RealtimeAi] Provider connection lost unexpectedly, SessionId: {SessionId}", _ctx.SessionId);
             await OnErrorOccurredAsync(new RealtimeAiErrorData { Code = "ConnectionLost", Message = $"Provider connection lost: {reason}", IsCritical = true });
             await DisconnectFromProviderAsync($"Provider connection lost: {reason}").ConfigureAwait(false);
         }
@@ -97,18 +95,12 @@ public partial class RealtimeAiService
     private async Task OnSessionInitializedAsync()
     {
         if (_ctx.Options.OnSessionReadyAsync != null)
-        {
-            Log.Information("[RealtimeAi] Session ready, invoking OnSessionReadyAsync, SessionId: {SessionId}", _ctx.SessionId);
             await _ctx.Options.OnSessionReadyAsync(SendTextToProviderAsync).ConfigureAwait(false);
-        }
     }
 
     private async Task OnAiAudioOutputReadyAsync(RealtimeAiWssAudioData aiAudioData)
     {
         if (aiAudioData == null || string.IsNullOrEmpty(aiAudioData.Base64Payload)) return;
-
-        Log.Debug("[RealtimeAi] Sending AI audio to client, SessionId: {SessionId}, AssistantId: {AssistantId}, PayloadLength: {PayloadLength}",
-            _ctx.SessionId, _ctx.Options.ConnectionProfile.ProfileId, aiAudioData.Base64Payload.Length);
 
         _ctx.IsAiSpeaking = true;
 
@@ -145,9 +137,6 @@ public partial class RealtimeAiService
 
     private async Task OnErrorOccurredAsync(RealtimeAiErrorData errorData)
     {
-        Log.Error("[RealtimeAi] Error occurred, SessionId: {SessionId}, AssistantId: {AssistantId}, ErrorCode: {ErrorCode}, ErrorMessage: {ErrorMessage}, IsCritical: {IsCritical}",
-            _ctx.SessionId, _ctx.Options?.ConnectionProfile?.ProfileId, errorData?.Code, errorData?.Message, errorData?.IsCritical);
-
         var clientError = new
         {
             type = "ClientError",
@@ -173,8 +162,7 @@ public partial class RealtimeAiService
             StartInactivityTimer(idleFollowUp.TimeoutSeconds, idleFollowUp.FollowUpMessage);
 
         await SendToClientAsync(turnCompleted).ConfigureAwait(false);
-        Log.Information("[RealtimeAi] AI turn completed, SessionId: {SessionId}, AssistantId: {AssistantId}, Round: {Round}, Data: {@Data}",
-            _ctx.SessionId, _ctx.Options.ConnectionProfile.ProfileId, _ctx.Round, data);
+        Log.Information("[RealtimeAi] AI turn completed, SessionId: {SessionId}, Round: {Round}", _ctx.SessionId, _ctx.Round);
     }
 
     private async Task OnInputAudioTranscriptionCompletedAsync(RealtimeAiWssTranscriptionData transcriptionData)

@@ -14,7 +14,6 @@ using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Dto.Smarties;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.Hr;
-using SmartTalk.Messages.Enums.PhoneOrder;
 
 namespace SmartTalk.Core.Services.AiKids;
 
@@ -128,7 +127,7 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
             }
         };
 
-        await _realtimeAiService.StartAsync(options, cancellationToken).ConfigureAwait(false);
+        await _realtimeAiService.ConnectAsync(options, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<RealtimeAiModelConfig> BuildModelConfigAsync(
