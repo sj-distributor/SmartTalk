@@ -923,6 +923,14 @@ public partial class PhoneOrderProcessJobService
             "  Name = 鸡胸肉#1箱+2\n" +
             "  Quantity = 3\n" +
             "  Unit = 箱\n\n" +
+            "示例：\n" + 
+            "第一通：西兰花 1 箱\n" + 
+            "第二通：减 1 箱\n" + 
+            " 最终输出：\n" + 
+            "Name = 西兰花#1箱-1\n" + 
+            "Quantity = 0\n" + 
+            "Unit = 箱\n" + 
+            "如果最终数量为 0,也需要记录并发送过去。\n" + 
             "【单个物料取消规则（非常重要）】\n" +
             "- 如果客户在本次通话中明确表示取消某个具体物料，" +
             "即使该物料在当前草稿单中已经不存在，也必须输出该物料\n" +
@@ -967,7 +975,7 @@ public partial class PhoneOrderProcessJobService
             "如果最终没有任何有效下单内容，请返回 Orders 为空数组。";
         
         var userPrompt = "【本次通话提取的订单】\n" + currentOrdersJson + "\n\n" + "【系统中已有草稿单】\n" + draftOrderJson + "\n\n" + "【今日历史分析报告】\n" + historyReportsText + "\n";
-        Log.Information("Sending refine prompt to GPT: {Prompt}", systemPrompt);
+        Log.Information("Sending refine prompt to GPT: {Prompt}", userPrompt);
         var messages = new List<ChatMessage>
         {
             new SystemChatMessage(systemPrompt),
