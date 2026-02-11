@@ -8,11 +8,9 @@ public partial class RealtimeAiService
 {
     private bool IsProviderSessionActive => _ctx.SessionCts is { IsCancellationRequested: false };
 
-    private async Task ConnectToProviderAsync(CancellationToken cancellationToken)
+    private async Task ConnectToProviderAsync()
     {
         SubscribeProviderEvents();
-
-        _ctx.SessionCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
         var serviceUri = new Uri(_ctx.Options.ModelConfig.ServiceUrl);
         var headers = _ctx.Adapter.GetHeaders(_ctx.Options.Region);

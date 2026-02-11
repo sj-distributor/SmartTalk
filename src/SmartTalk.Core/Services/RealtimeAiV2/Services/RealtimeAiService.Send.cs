@@ -11,13 +11,14 @@ public partial class RealtimeAiService
     {
         if (_ctx.WebSocket is not { State: WebSocketState.Open }) return;
 
-        await _ctx.WsSendLock.WaitAsync().ConfigureAwait(false);
+        await _ctx.WsSendLock.WaitAsync(_ctx.SessionCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
         try
         {
             var bytes = JsonSerializer.SerializeToUtf8Bytes(payload);
-            
-            await _ctx.WebSocket.SendAsync(bytes.AsMemory(), WebSocketMessageType.Text, true, CancellationToken.None);
+
+            await _ctx.WebSocket.SendAsync(bytes.AsMemory(), WebSocketMessageType.Text, true, _ctx.SessionCts?.Token ?? CancellationToken.None);
         }
+        catch (OperationCanceledException) { }
         catch (WebSocketException ex)
         {
             Log.Warning(ex, "[RealtimeAi] Failed to send to client, SessionId: {SessionId}, WebSocketState: {WebSocketState}", _ctx.SessionId, _ctx.WebSocket?.State);

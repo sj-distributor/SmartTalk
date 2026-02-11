@@ -2,7 +2,7 @@ namespace SmartTalk.Core.Services.RealtimeAiV2.Services;
 
 public partial class RealtimeAiService
 {
-    private void BuildSessionContext(RealtimeSessionOptions options)
+    private void BuildSessionContext(RealtimeSessionOptions options, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(options.ModelConfig);
@@ -12,7 +12,8 @@ public partial class RealtimeAiService
         _ctx = new RealtimeAiSessionContext
         {
             Options = options,
-            WebSocket = options.WebSocket
+            WebSocket = options.WebSocket,
+            SessionCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
         };
 
         BuildConnectSwitcher();

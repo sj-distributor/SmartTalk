@@ -16,7 +16,7 @@ public partial class RealtimeAiService
         ("text",  "text",  e => e.GetString())
     ];
     
-    private async Task OrchestrateSessionAsync(CancellationToken cancellationToken)
+    private async Task OrchestrateSessionAsync()
     {
         var clientIsClose = false;
         var buffer = ArrayPool<byte>.Shared.Rent(8192);
@@ -25,7 +25,7 @@ public partial class RealtimeAiService
         {
             while (_ctx.WebSocket.State == WebSocketState.Open)
             {
-                (var message, clientIsClose) = await ReadClientMessageAsync(buffer, cancellationToken).ConfigureAwait(false);
+                (var message, clientIsClose) = await ReadClientMessageAsync(buffer).ConfigureAwait(false);
 
                 if (clientIsClose) break;
 
@@ -48,15 +48,15 @@ public partial class RealtimeAiService
         }
     }
 
-    private async Task<(string Message, bool ClientIsClose)> ReadClientMessageAsync(byte[] buffer, CancellationToken cancellationToken)
+    private async Task<(string Message, bool ClientIsClose)> ReadClientMessageAsync(byte[] buffer)
     {
         using var ms = new MemoryStream();
-        
+
         ValueWebSocketReceiveResult result;
 
         do
         {
-            result = await _ctx.WebSocket.ReceiveAsync(buffer.AsMemory(), cancellationToken).ConfigureAwait(false);
+            result = await _ctx.WebSocket.ReceiveAsync(buffer.AsMemory(), _ctx.SessionCts.Token).ConfigureAwait(false);
 
             if (result.MessageType == WebSocketMessageType.Close) return (null, true);
 
@@ -158,7 +158,7 @@ public partial class RealtimeAiService
     {
         if (!_ctx.Options.EnableRecording || _ctx.AudioBuffer is not { CanWrite: true }) return;
 
-        await _ctx.BufferLock.WaitAsync().ConfigureAwait(false);
+        await _ctx.BufferLock.WaitAsync(_ctx.SessionCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
         try
         {
             if (_ctx.AudioBuffer is { CanWrite: true })

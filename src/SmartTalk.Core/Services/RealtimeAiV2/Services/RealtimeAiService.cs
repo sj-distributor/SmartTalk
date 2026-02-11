@@ -26,13 +26,13 @@ public partial class RealtimeAiService : IRealtimeAiService
 
     public async Task ConnectAsync(RealtimeSessionOptions options, CancellationToken cancellationToken)
     {
-        BuildSessionContext(options);
+        BuildSessionContext(options, cancellationToken);
 
         Log.Information("[RealtimeAi] Session initialized, Context: {@Context}", _ctx);
 
         try
         {
-            await ConnectToProviderAsync(cancellationToken).ConfigureAwait(false);
+            await ConnectToProviderAsync().ConfigureAwait(false);
         }
         catch
         {
@@ -40,7 +40,7 @@ public partial class RealtimeAiService : IRealtimeAiService
             throw;
         }
 
-        await OrchestrateSessionAsync(cancellationToken).ConfigureAwait(false);
+        await OrchestrateSessionAsync().ConfigureAwait(false);
     }
 
     private void StartInactivityTimer(int seconds, string followUpMessage)
