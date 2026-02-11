@@ -59,6 +59,8 @@ public class RealtimeAiModelConfig
 
 public class RealtimeSessionOptions
 {
+    // --- Configuration ---
+
     public RealtimeAiModelConfig ModelConfig { get; set; }
 
     public RealtimeAiConnectionProfile ConnectionProfile { get; set; }
@@ -75,10 +77,16 @@ public class RealtimeSessionOptions
     /// When true, the service buffers all audio (user + AI) and produces a WAV file on session end.
     /// </summary>
     public bool EnableRecording { get; set; }
-}
 
-public class RealtimeSessionCallbacks
-{
+    /// <summary>
+    /// Optional idle follow-up configuration. When set, AI will proactively
+    /// send a follow-up message if the user stays silent after an AI turn.
+    /// Null to disable.
+    /// </summary>
+    public RealtimeSessionIdleFollowUp IdleFollowUp { get; set; }
+
+    // --- Callbacks ---
+
     /// <summary>
     /// Called when the AI session is initialized and ready.
     /// The consumer receives a sendText delegate to send messages (e.g. greetings).
@@ -108,13 +116,6 @@ public class RealtimeSessionCallbacks
     /// Parameters: (sessionId, wavBytes).
     /// </summary>
     public Func<string, byte[], Task> OnRecordingCompleteAsync { get; set; }
-
-    /// <summary>
-    /// Optional idle follow-up configuration. When set, AI will proactively
-    /// send a follow-up message if the user stays silent after an AI turn.
-    /// Null to disable.
-    /// </summary>
-    public RealtimeSessionIdleFollowUp IdleFollowUp { get; set; }
 }
 
 public class RealtimeSessionIdleFollowUp

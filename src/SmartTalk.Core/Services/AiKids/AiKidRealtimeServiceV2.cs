@@ -57,6 +57,10 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
 
         var modelConfig = await BuildModelConfigAsync(assistant, cancellationToken).ConfigureAwait(false);
 
+        var greetings = assistant.Knowledge?.Greetings;
+        var orderRecordType = command.OrderRecordType;
+        var assistantId = assistant.Id;
+
         var options = new RealtimeSessionOptions
         {
             ModelConfig = modelConfig,
@@ -68,15 +72,15 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
             InputFormat = command.InputFormat,
             OutputFormat = command.OutputFormat,
             Region = command.Region,
-            EnableRecording = true
-        };
-
-        var greetings = assistant.Knowledge?.Greetings;
-        var orderRecordType = command.OrderRecordType;
-        var assistantId = assistant.Id;
-
-        var callbacks = new RealtimeSessionCallbacks
-        {
+            EnableRecording = true,
+            IdleFollowUp = timer != null
+                ? new RealtimeSessionIdleFollowUp
+                {
+                    TimeoutSeconds = timer.TimeSpanSeconds,
+                    FollowUpMessage = timer.AlterContent,
+                    SkipRounds = timer.SkipRound
+                }
+                : null,
             OnSessionReadyAsync = async sendText =>
             {
                 if (!string.IsNullOrEmpty(greetings))
@@ -121,18 +125,10 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
                             Transcription = t.Text
                         }).ToList()
                     }, CancellationToken.None));
-            },
-            IdleFollowUp = timer != null
-                ? new RealtimeSessionIdleFollowUp
-                {
-                    TimeoutSeconds = timer.TimeSpanSeconds,
-                    FollowUpMessage = timer.AlterContent,
-                    SkipRounds = timer.SkipRound
-                }
-                : null
+            }
         };
 
-        await _realtimeAiService.StartAsync(options, callbacks, cancellationToken).ConfigureAwait(false);
+        await _realtimeAiService.StartAsync(options, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<RealtimeAiModelConfig> BuildModelConfigAsync(
