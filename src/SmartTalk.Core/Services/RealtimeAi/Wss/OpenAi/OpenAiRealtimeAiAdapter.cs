@@ -44,7 +44,6 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
         var modelConfig = options.ModelConfig;
         var configs = await InitialSessionConfigAsync(options, cancellationToken).ConfigureAwait(false);
         var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(int.Parse(profile.ProfileId), isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
-        var prompt = await ReplaceKnowledgeVariablesAsync(knowledge?.Prompt, cancellationToken).ConfigureAwait(false);
 
         var sessionPayload = new
         {
@@ -55,7 +54,7 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
                 input_audio_format = options.InputFormat.GetDescription(),
                 output_audio_format = options.OutputFormat.GetDescription(),
                 voice = string.IsNullOrEmpty(modelConfig.Voice) ? "alloy" : modelConfig.Voice,
-                instructions = prompt ?? options.InitialPrompt,
+                instructions = knowledge?.Prompt ?? options.InitialPrompt,
                 modalities = new[] { "text", "audio" },
                 temperature = 0.8,
                 input_audio_transcription = new { model = "whisper-1" },
