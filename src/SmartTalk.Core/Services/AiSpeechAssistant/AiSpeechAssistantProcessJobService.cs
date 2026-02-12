@@ -227,7 +227,12 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             relatedLookup.TryGetValue(knowledge.Id, out var relateds);
             relateds ??= [];
 
-            var mergedJson = MergeNormalizedJson(knowledge.Json, relateds.Select(x => x.CopyKnowledgePoints));
+            if (!TryMergeNormalizedJson(knowledge.Id, knowledge.Json, relateds.Select(x => x.CopyKnowledgePoints), out var mergedJson))
+            {
+                Log.Warning("Sync knowledge prompt skipped update due to merge failure. KnowledgeId={KnowledgeId}", knowledge.Id);
+                continue;
+            }
+
             var newPrompt = GenerateKnowledgePrompt(mergedJson);
 
             if (!string.Equals(knowledge.Prompt ?? string.Empty, newPrompt, StringComparison.Ordinal))
@@ -243,32 +248,45 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             .UpdateAiSpeechAssistantKnowledgesAsync(updates, true, cancellationToken).ConfigureAwait(false);
     }
 
-    private static string MergeNormalizedJson(string knowledgeJson, IEnumerable<string> copyKnowledgePoints)
+    private static bool TryMergeNormalizedJson(int knowledgeId, string knowledgeJson, IEnumerable<string> copyKnowledgePoints, out string mergedJson)
     {
-        var merged = NormalizeJsonToObject(knowledgeJson);
+        mergedJson = string.Empty;
 
+        if (!TryNormalizeJsonToObject(knowledgeId, knowledgeJson, "knowledge.Json", out var merged))
+            return false;
+
+        var relationIndex = 0;
         foreach (var json in copyKnowledgePoints ?? Enumerable.Empty<string>())
         {
-            var normalized = NormalizeJsonToObject(json);
+            relationIndex++;
+
+            if (!TryNormalizeJsonToObject(knowledgeId, json, $"copyKnowledgePoints[{relationIndex}]", out var normalized))
+                return false;
+
             merged.Merge(normalized, new JsonMergeSettings { MergeArrayHandling = MergeArrayHandling.Concat });
         }
 
-        return merged.ToString(Formatting.None);
+        mergedJson = merged.ToString(Formatting.None);
+        return true;
     }
 
-    private static JObject NormalizeJsonToObject(string json)
+    private static bool TryNormalizeJsonToObject(int knowledgeId, string json, string source, out JObject normalizedObject)
     {
+        normalizedObject = new JObject();
+
         if (string.IsNullOrWhiteSpace(json))
-            return new JObject();
+            return true;
 
         try
         {
-            return RemoveCopySuffixFromKeys(JObject.Parse(json));
+            normalizedObject = RemoveCopySuffixFromKeys(JObject.Parse(json));
+            return true;
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, "Sync knowledge prompt skipped invalid json: {Json}", json);
-            return new JObject();
+            Log.Warning(ex, "Sync knowledge prompt merge failed due to invalid json. KnowledgeId={KnowledgeId}, Source={Source}, Json={Json}",
+                knowledgeId, source, json);
+            return false;
         }
     }
 
