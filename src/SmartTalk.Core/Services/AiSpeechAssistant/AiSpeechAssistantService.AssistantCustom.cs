@@ -680,8 +680,8 @@ public partial class AiSpeechAssistantService
             .Aggregate(new JObject(), (acc, j) =>
                 { acc.Merge(j, new JsonMergeSettings { MergeArrayHandling = MergeArrayHandling.Concat }); return acc; });
 
-        var mergedJson = mergedJsonObj.ToString(Formatting.None);
-        
+        var mergedJson = RemoveCopySuffixFromKeys(mergedJsonObj).ToString(Formatting.None);
+
         Log.Information("InitialKnowledgeAsync mergedJson: {@mergedJson}", mergedJson);
         
         latestKnowledge.IsActive = true;
