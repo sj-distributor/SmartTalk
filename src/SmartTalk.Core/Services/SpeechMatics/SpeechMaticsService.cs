@@ -785,7 +785,10 @@ public class SpeechMaticsService : ISpeechMaticsService
 
     private async Task RefineOrderByAiAsync(ExtractedOrderDto storeOrder, string soldToId, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant,  List<(string Material, string MaterialDesc, DateTime? invoiceDate)> historyItems, int recordId, CancellationToken cancellationToken)
     {
-        var draftOrder = await _salesClient.GetAiOrderItemsByDeliveryDateAsync(new GetAiOrderItemsByDeliveryDateRequestDto { CustomerNumber = soldToId, DeliveryDate = storeOrder.DeliveryDate }, cancellationToken).ConfigureAwait(false);
+        var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+        var deliveryDateInPst = TimeZoneInfo.ConvertTime(storeOrder.DeliveryDate, pacificZone); 
+        
+        var draftOrder = await _salesClient.GetAiOrderItemsByDeliveryDateAsync(new GetAiOrderItemsByDeliveryDateRequestDto { CustomerNumber = soldToId, DeliveryDate = deliveryDateInPst }, cancellationToken).ConfigureAwait(false);
         
         var todayReports = await GetTodayReportsByAssistantAsync(aiSpeechAssistant.Id, recordId, cancellationToken).ConfigureAwait(false);
         
