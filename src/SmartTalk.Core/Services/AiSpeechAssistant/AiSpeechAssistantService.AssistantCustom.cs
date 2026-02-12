@@ -685,7 +685,7 @@ public partial class AiSpeechAssistantService
         latestKnowledge.Version = await HandleKnowledgeVersionAsync(latestKnowledge, cancellationToken).ConfigureAwait(false);
     }
 
-    private string GenerateKnowledgePrompt(string json)
+    public string GenerateKnowledgePrompt(string json)
     {
         var prompt = new StringBuilder();
         var jsonData = JObject.Parse(json);
@@ -1341,25 +1341,56 @@ public partial class AiSpeechAssistantService
 
     private static string MergeKnowledgeJson(List<AiSpeechAssistantKnowledgeCopyRelated> relations, AiSpeechAssistantKnowledge sourceKnowledge)
     {
-        var mergedObj = new JObject();
+        var mergedObj = RemoveCopySuffixFromKeys(JObject.Parse(sourceKnowledge.Json ?? "{}"));
 
         foreach (var relation in relations)
         {
-            JObject json;
-            if (relation.SourceKnowledgeId == sourceKnowledge.Id)
-                json = AppendCopySuffixToKeys(JObject.Parse(sourceKnowledge.Json ?? "{}"));
-            else
-                json = JObject.Parse(relation.CopyKnowledgePoints ?? "{}");
+            var json = relation.SourceKnowledgeId == sourceKnowledge.Id
+                ? JObject.Parse(sourceKnowledge.Json ?? "{}")
+                : JObject.Parse(relation.CopyKnowledgePoints ?? "{}");
 
-            foreach (var prop in json.Properties())
-            {
-                if (prop.Name.EndsWith("-副本"))
-                    mergedObj[prop.Name] = prop.Value.DeepClone();
-            }
+            var normalized = RemoveCopySuffixFromKeys(json);
+
+            foreach (var prop in normalized.Properties())
+                mergedObj[prop.Name] = prop.Value;
         }
 
         Log.Information("Merged JObject: {@mergedObj}", mergedObj);
         return mergedObj.ToString(Formatting.None);
+    }
+
+    private static JObject RemoveCopySuffixFromKeys(JObject source)
+    {
+        var result = new JObject();
+
+        foreach (var prop in source.Properties())
+        {
+            var newKey = RemoveCopySuffix(prop.Name);
+            result[newKey] = StripCopySuffixFromToken(prop.Value);
+        }
+
+        return result;
+    }
+
+    private static string RemoveCopySuffix(string key)
+    {
+        if (key.EndsWith("-副本", StringComparison.Ordinal))
+            return key[..^"-副本".Length];
+
+        if (key.EndsWith("副本", StringComparison.Ordinal))
+            return key[..^"副本".Length];
+
+        return key;
+    }
+
+    private static JToken StripCopySuffixFromToken(JToken token)
+    {
+        return token.Type switch
+        {
+            JTokenType.Object => RemoveCopySuffixFromKeys((JObject)token),
+            JTokenType.Array => new JArray(token.Select(StripCopySuffixFromToken)),
+            _ => token.DeepClone()
+        };
     }
     
     private async Task PersistNewTargetsAsync(RebuildResult result, CancellationToken cancellationToken)
