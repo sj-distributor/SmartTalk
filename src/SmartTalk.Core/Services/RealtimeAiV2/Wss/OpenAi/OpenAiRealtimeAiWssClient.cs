@@ -2,6 +2,7 @@ using System.Net.WebSockets;
 using System.Text;
 using Serilog;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
+using SmartTalk.Messages.Enums.RealtimeAi;
 
 namespace SmartTalk.Core.Services.RealtimeAiV2.Wss.OpenAi;
 
@@ -11,7 +12,7 @@ public class OpenAiRealtimeAiWssClient : IRealtimeAiWssClient
     private ClientWebSocket _webSocket;
 
     public Uri EndpointUri { get; private set; }
-    public AiSpeechAssistantProvider Provider => AiSpeechAssistantProvider.OpenAi;
+    public RealtimeAiProvider Provider => RealtimeAiProvider.OpenAi;
     public WebSocketState CurrentState => _webSocket?.State ?? WebSocketState.None;
 
     public event Func<string, Task> MessageReceivedAsync;

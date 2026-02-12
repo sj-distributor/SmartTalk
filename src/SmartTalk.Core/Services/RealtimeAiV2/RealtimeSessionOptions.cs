@@ -1,4 +1,5 @@
 using System.Net.WebSockets;
+using SmartTalk.Core.Services.RealtimeAiV2.Adapters;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.RealtimeAi;
 
@@ -9,6 +10,11 @@ public class RealtimeAiConnectionProfile
     public string ProfileId { get; set; }
 }
 
+public class RealtimeAiClientConfig
+{
+    public RealtimeAiClient Client { get; set; }
+}
+
 /// <summary>
 /// Model and session configuration prepared by the consumer.
 /// All business-specific data fetching and prompt engineering should be done
@@ -17,7 +23,7 @@ public class RealtimeAiConnectionProfile
 /// </summary>
 public class RealtimeAiModelConfig
 {
-    public AiSpeechAssistantProvider Provider { get; set; }
+    public RealtimeAiProvider Provider { get; set; }
 
     public string ServiceUrl { get; set; }
 
@@ -61,6 +67,8 @@ public class RealtimeSessionOptions
 {
     // --- Configuration ---
 
+    public RealtimeAiClientConfig ClientConfig { get; set; }
+    
     public RealtimeAiModelConfig ModelConfig { get; set; }
 
     public RealtimeAiConnectionProfile ConnectionProfile { get; set; }
@@ -72,6 +80,12 @@ public class RealtimeSessionOptions
     public RealtimeAiAudioCodec OutputFormat { get; set; }
 
     public RealtimeAiServerRegion Region { get; set; }
+
+    /// <summary>
+    /// Client protocol adapter for parsing inbound messages and building outbound messages.
+    /// Defaults to DefaultRealtimeAiClientAdapter if not specified.
+    /// </summary>
+    public IRealtimeAiClientAdapter ClientAdapter { get; set; }
 
     /// <summary>
     /// When true, the service buffers all audio (user + AI) and produces a WAV file on session end.

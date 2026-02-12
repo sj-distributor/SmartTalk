@@ -248,5 +248,5 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
         };
     }
 
-    public AiSpeechAssistantProvider Provider => AiSpeechAssistantProvider.OpenAi;
+    public RealtimeAiProvider Provider => RealtimeAiProvider.OpenAi;
 }

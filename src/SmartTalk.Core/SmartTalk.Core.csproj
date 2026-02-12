@@ -86,6 +86,8 @@
       <Folder Include="Assets\Audio\RepeatOrderHoldon\Alloy\Thai\" />
       <Folder Include="Assets\Audio\RepeatOrderHoldon\Alloy\Viet\" />
       <Folder Include="Assets\Audio\RepeatOrderHoldon\Alloy\Zh\" />
+      <Folder Include="Services\RealtimeAiV2\Adapters\Clients\" />
+      <Folder Include="Services\RealtimeAiV2\Adapters\Providers\" />
     </ItemGroup>
     
 </Project>

@@ -8,13 +8,13 @@ using SmartTalk.Messages.Enums.RealtimeAi;
 using JsonException = System.Text.Json.JsonException;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 
-namespace SmartTalk.Core.Services.RealtimeAiV2.Adapters.OpenAi;
+namespace SmartTalk.Core.Services.RealtimeAiV2.Adapters.Providers.OpenAi;
 
-public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
+public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
 {
     private readonly OpenAiSettings _openAiSettings;
 
-    public OpenAiRealtimeAiAdapter(OpenAiSettings openAiSettings)
+    public OpenAiRealtimeAiProviderAdapter(OpenAiSettings openAiSettings)
     {
         _openAiSettings = openAiSettings;
     }
@@ -211,5 +211,5 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
         return "Unknown OpenAI error";
     }
     
-    public AiSpeechAssistantProvider Provider => AiSpeechAssistantProvider.OpenAi;
+    public RealtimeAiProvider Provider => RealtimeAiProvider.OpenAi;
 }

@@ -1,6 +1,5 @@
 using System.Text.Json;
 using Serilog;
-using SmartTalk.Core.Services.RealtimeAiV2.Services;
 using SmartTalk.Core.Settings.Google;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
@@ -8,13 +7,13 @@ using SmartTalk.Messages.Enums.RealtimeAi;
 using JsonException = System.Text.Json.JsonException;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 
-namespace SmartTalk.Core.Services.RealtimeAiV2.Adapters.Google;
+namespace SmartTalk.Core.Services.RealtimeAiV2.Adapters.Providers.Google;
 
-public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
+public class GoogleRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
 {
     private readonly GoogleSettings _googleSettings;
 
-    public GoogleRealtimeAiAdapter(GoogleSettings googleSettings)
+    public GoogleRealtimeAiProviderAdapter(GoogleSettings googleSettings)
     {
         _googleSettings = googleSettings;
     }
@@ -59,26 +58,30 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
 
     public string BuildAudioAppendMessage(RealtimeAiWssAudioData audioData)
     {
-        var inputFormat = audioData.CustomProperties.GetValueOrDefault(nameof(RealtimeSessionOptions.InputFormat));
+        var imageBase64 = audioData.CustomProperties.GetValueOrDefault("image") as string;
 
-        object message = inputFormat switch
+        object message;
+
+        if (!string.IsNullOrWhiteSpace(imageBase64))
         {
-            RealtimeAiAudioCodec.IMAGE => new
+            message = new
             {
                 realtimeInput = new
                 {
-                    video = new { data = audioData.Base64Payload, mimeType = "image/jpeg" }
+                    video = new { data = imageBase64, mimeType = "image/jpeg" }
                 }
-            },
-            RealtimeAiAudioCodec.PCM16 => new
+            };
+        }
+        else
+        {
+            message = new
             {
                 realtimeInput = new
                 {
                     audio = new { data = audioData.Base64Payload, mimeType = "audio/pcm;rate=24000" }
                 }
-            },
-            _ => throw new NotSupportedException("mimeType")
-        };
+            };
+        }
 
         return JsonSerializer.Serialize(message);
     }
@@ -172,5 +175,5 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
         }
     }
     
-    public AiSpeechAssistantProvider Provider => AiSpeechAssistantProvider.Google;
+    public RealtimeAiProvider Provider => RealtimeAiProvider.Google;
 }

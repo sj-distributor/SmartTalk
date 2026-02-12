@@ -5,12 +5,10 @@ using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Domain.AIAssistant;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.Pos;
-using SmartTalk.Core.Domain.Pos;
-using SmartTalk.Core.Domain.Sales;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
-using SmartTalk.Messages.Enums.AiSpeechAssistant;
+using SmartTalk.Messages.Enums.RealtimeAi;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
 
@@ -24,7 +22,7 @@ public partial interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task<AiSpeechAssistantHumanContact> GetAiSpeechAssistantHumanContactByAssistantIdAsync(int assistantId, CancellationToken cancellationToken);
     
     Task<List<AiSpeechAssistantFunctionCall>> GetAiSpeechAssistantFunctionCallByAssistantIdsAsync(
-        List<int> assistantIds, AiSpeechAssistantProvider provider, bool? isActive = null, CancellationToken cancellationToken = default);
+        List<int> assistantIds, RealtimeAiProvider provider, bool? isActive = null, CancellationToken cancellationToken = default);
 
     Task<NumberPool> GetNumberAsync(int? numberId = null, bool? isUsed = null, CancellationToken cancellationToken = default);
     
@@ -208,7 +206,7 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
     }
 
     public async Task<List<AiSpeechAssistantFunctionCall>> GetAiSpeechAssistantFunctionCallByAssistantIdsAsync(
-        List<int> assistantIds, AiSpeechAssistantProvider provider, bool? isActive = null, CancellationToken cancellationToken = default)
+        List<int> assistantIds, RealtimeAiProvider provider, bool? isActive = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.QueryNoTracking<AiSpeechAssistantFunctionCall>().Where(x => assistantIds.Contains(x.AssistantId) && x.ModelProvider == provider);
 

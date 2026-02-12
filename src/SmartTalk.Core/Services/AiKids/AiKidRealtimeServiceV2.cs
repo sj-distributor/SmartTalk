@@ -15,6 +15,7 @@ using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Dto.Smarties;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.Hr;
+using SmartTalk.Messages.Enums.RealtimeAi;
 
 namespace SmartTalk.Core.Services.AiKids;
 
@@ -63,6 +64,10 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
 
         var options = new RealtimeSessionOptions
         {
+            ClientConfig = new RealtimeAiClientConfig
+            {
+                Client = RealtimeAiClient.Default
+            },
             ModelConfig = modelConfig,
             ConnectionProfile = new RealtimeAiConnectionProfile
             {

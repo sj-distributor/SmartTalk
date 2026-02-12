@@ -14,6 +14,7 @@ using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.Caching;
+using SmartTalk.Messages.Enums.RealtimeAi;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
 using SmartTalk.Messages.Requests.AiSpeechAssistant;
 
@@ -493,7 +494,7 @@ public partial class AiSpeechAssistantService
             AnsweringNumber = number?.Number,
             CreatedBy = _currentUser.Id.Value,
             ModelUrl = command.AgentType == AgentType.AiKid ? AiSpeechAssistantStore.AiKidDefaultUrl : AiSpeechAssistantStore.DefaultUrl,
-            ModelProvider = AiSpeechAssistantProvider.OpenAi,
+            ModelProvider = RealtimeAiProvider.OpenAi,
             Channel = command.Channels == null ? null : string.Join(",", command.Channels.Select(x => (int)x)),
             IsDisplay = command.IsDisplay,
             IsDefault = isDefault,
@@ -844,7 +845,7 @@ public partial class AiSpeechAssistantService
         
         Log.Information("Getting AI Speech Assistant Configs: {@TurnDetection} {@TransferCallTool}", turnDetection, transferCallTool);
         
-        if (assistant.ModelProvider == AiSpeechAssistantProvider.OpenAi)
+        if (assistant.ModelProvider == RealtimeAiProvider.OpenAi)
         {
             if (transferCallTool == null)
             {
@@ -861,7 +862,7 @@ public partial class AiSpeechAssistantService
                     Name = "transfer_call",
                     Content = JsonConvert.SerializeObject(content),
                     Type = AiSpeechAssistantSessionConfigType.Tool,
-                    ModelProvider = AiSpeechAssistantProvider.OpenAi,
+                    ModelProvider = RealtimeAiProvider.OpenAi,
                     IsActive = assistant.IsTransferHuman,
                 };
             
@@ -889,7 +890,7 @@ public partial class AiSpeechAssistantService
                     Name = "turn_detection",
                     Content = JsonConvert.SerializeObject(content),
                     Type = AiSpeechAssistantSessionConfigType.TurnDirection,
-                    ModelProvider = AiSpeechAssistantProvider.OpenAi,
+                    ModelProvider = RealtimeAiProvider.OpenAi,
                     IsActive = true
                 };
                 
