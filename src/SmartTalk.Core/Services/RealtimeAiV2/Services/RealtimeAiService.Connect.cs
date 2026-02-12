@@ -6,8 +6,6 @@ namespace SmartTalk.Core.Services.RealtimeAiV2.Services;
 
 public partial class RealtimeAiService
 {
-    private bool IsProviderSessionActive => _ctx.SessionCts is { IsCancellationRequested: false };
-
     private async Task ConnectToProviderAsync()
     {
         SubscribeProviderEvents();

@@ -2,7 +2,7 @@ using System.Net.WebSockets;
 
 namespace SmartTalk.Core.Services.RealtimeAiV2.Wss;
 
-public interface IRealtimeAiWssClient : IAsyncDisposable, RealtimeAi.wss.IRealtimeAiProvider
+public interface IRealtimeAiWssClient : IAsyncDisposable, IRealtimeAiProvider
 {
     WebSocketState CurrentState { get; }
     Uri EndpointUri { get; }

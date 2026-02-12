@@ -7,6 +7,8 @@ namespace SmartTalk.Core.Services.RealtimeAiV2.Services;
 
 public partial class RealtimeAiService
 {
+    private bool IsProviderSessionActive => _ctx.SessionCts is { IsCancellationRequested: false };
+
     private async Task OnWssMessageReceivedAsync(string rawMessage)
     {
         if (!IsProviderSessionActive) return;
@@ -28,18 +30,10 @@ public partial class RealtimeAiService
                     break;
 
                 case RealtimeAiWssEventType.InputAudioTranscriptionCompleted:
-                    if (parsedEvent.Data is RealtimeAiWssTranscriptionData inputTranscription)
-                        await OnInputAudioTranscriptionCompletedAsync(inputTranscription).ConfigureAwait(false);
-                    break;
-
                 case RealtimeAiWssEventType.OutputAudioTranscriptionPartial:
-                    if (parsedEvent.Data is RealtimeAiWssTranscriptionData outputPartialTranscription)
-                        await OnOutputAudioTranscriptionPartialAsync(outputPartialTranscription).ConfigureAwait(false);
-                    break;
-
                 case RealtimeAiWssEventType.OutputAudioTranscriptionCompleted:
-                    if (parsedEvent.Data is RealtimeAiWssTranscriptionData outputTranscription)
-                        await OnOutputAudioTranscriptionCompletedAsync(outputTranscription).ConfigureAwait(false);
+                    if (parsedEvent.Data is RealtimeAiWssTranscriptionData transcription)
+                        await OnTranscriptionReceivedAsync(parsedEvent.Type, transcription).ConfigureAwait(false);
                     break;
 
                 case RealtimeAiWssEventType.SpeechDetected:
@@ -47,18 +41,11 @@ public partial class RealtimeAiService
                     break;
 
                 case RealtimeAiWssEventType.ResponseTurnCompleted:
-                    await OnAiTurnCompletedAsync(parsedEvent.Data ?? parsedEvent.RawJson).ConfigureAwait(false);
+                    await OnAiTurnCompletedAsync().ConfigureAwait(false);
                     break;
 
                 case RealtimeAiWssEventType.Error:
-                    if (parsedEvent.Data is RealtimeAiErrorData errData)
-                    {
-                        Log.Error("[RealtimeAi] Provider error, SessionId: {SessionId}, Code: {ErrorCode}, Message: {ErrorMessage}, IsCritical: {IsCritical}",
-                            _ctx.SessionId, errData.Code, errData.Message, errData.IsCritical);
-                        await OnErrorOccurredAsync(errData).ConfigureAwait(false);
-                        if (errData.IsCritical)
-                            await DisconnectFromProviderAsync($"Critical provider error: {errData.Message}").ConfigureAwait(false);
-                    }
+                    await OnProviderErrorAsync(parsedEvent.Data as RealtimeAiErrorData ?? new RealtimeAiErrorData { Message = parsedEvent.RawJson ?? "Unknown error", IsCritical = true }).ConfigureAwait(false);
                     break;
 
                 case RealtimeAiWssEventType.ResponseAudioDone:
@@ -77,24 +64,17 @@ public partial class RealtimeAiService
 
     private async Task OnWssStateChangedAsync(WebSocketState newState, string reason)
     {
-        Log.Information("[RealtimeAi] Provider connection state changed, SessionId: {SessionId}, NewState: {NewState}, Reason: {Reason}",
-            _ctx.SessionId, newState, reason);
+        Log.Information("[RealtimeAi] Provider connection state changed, SessionId: {SessionId}, NewState: {NewState}, Reason: {Reason}", _ctx.SessionId, newState, reason);
 
-        if ((newState == WebSocketState.Closed || newState == WebSocketState.Aborted)
-            && IsProviderSessionActive)
-        {
-            await OnErrorOccurredAsync(new RealtimeAiErrorData { Code = "ConnectionLost", Message = $"Provider connection lost: {reason}", IsCritical = true });
-            await DisconnectFromProviderAsync($"Provider connection lost: {reason}").ConfigureAwait(false);
-        }
+        if ((newState == WebSocketState.Closed || newState == WebSocketState.Aborted) && IsProviderSessionActive)
+            await OnProviderErrorAsync(new RealtimeAiErrorData { Code = "ConnectionLost", Message = $"Provider connection lost: {reason}", IsCritical = true }).ConfigureAwait(false);
     }
 
     private async Task OnWssErrorOccurredAsync(Exception ex)
     {
         Log.Error(ex, "[RealtimeAi] Provider WebSocket error, SessionId: {SessionId}", _ctx.SessionId);
-        await OnErrorOccurredAsync(new RealtimeAiErrorData { Code = "ProviderClientError", Message = ex.Message, IsCritical = true });
 
-        if (IsProviderSessionActive)
-            await DisconnectFromProviderAsync($"Provider client error: {ex.Message}").ConfigureAwait(false);
+        await OnProviderErrorAsync(new RealtimeAiErrorData { Code = "ProviderClientError", Message = ex.Message, IsCritical = true }).ConfigureAwait(false);
     }
 
     private async Task OnSessionInitializedAsync()
@@ -140,18 +120,7 @@ public partial class RealtimeAiService
         await SendToClientAsync(speechDetected).ConfigureAwait(false);
     }
 
-    private async Task OnErrorOccurredAsync(RealtimeAiErrorData errorData)
-    {
-        var clientError = new
-        {
-            type = "ClientError",
-            session_id = _ctx.StreamSid
-        };
-
-        await SendToClientAsync(clientError).ConfigureAwait(false);
-    }
-
-    private async Task OnAiTurnCompletedAsync(object data)
+    private async Task OnAiTurnCompletedAsync()
     {
         _ctx.Round += 1;
         _ctx.IsAiSpeaking = false;
@@ -175,55 +144,38 @@ public partial class RealtimeAiService
         }
 
         await SendToClientAsync(turnCompleted).ConfigureAwait(false);
+        
         Log.Information("[RealtimeAi] AI turn completed, SessionId: {SessionId}, Round: {Round}", _ctx.SessionId, _ctx.Round);
     }
 
-    private async Task OnInputAudioTranscriptionCompletedAsync(RealtimeAiWssTranscriptionData transcriptionData)
+    private async Task OnTranscriptionReceivedAsync(RealtimeAiWssEventType eventType, RealtimeAiWssTranscriptionData transcriptionData)
     {
-        _ctx.Transcriptions.Enqueue((transcriptionData.Speaker, transcriptionData.Transcript));
+        // Partial transcriptions are incremental fragments (e.g. "你" → "你好" → "你好，请问..."),
+        // only sent to client for real-time UI display. Only completed transcriptions (full sentences)
+        // are queued for final delivery via OnTranscriptionsCompletedAsync at session end.
+        if (eventType != RealtimeAiWssEventType.OutputAudioTranscriptionPartial) 
+            _ctx.Transcriptions.Enqueue((transcriptionData.Speaker, transcriptionData.Transcript));
 
-        var transcription = new
+        await SendToClientAsync(new
         {
-            type = "InputAudioTranscriptionCompleted",
-            Data = new
-            {
-                transcriptionData
-            },
+            type = eventType.ToString(),
+            Data = new { transcriptionData },
             session_id = _ctx.StreamSid
-        };
-
-        await SendToClientAsync(transcription).ConfigureAwait(false);
+        }).ConfigureAwait(false);
     }
-
-    private async Task OnOutputAudioTranscriptionPartialAsync(RealtimeAiWssTranscriptionData transcriptionData)
+    
+    private async Task OnProviderErrorAsync(RealtimeAiErrorData errorData)
     {
-        var transcription = new
+        Log.Error("[RealtimeAi] Provider error, SessionId: {SessionId}, Code: {ErrorCode}, Message: {ErrorMessage}, IsCritical: {IsCritical}", _ctx.SessionId, errorData.Code, errorData.Message, errorData.IsCritical);
+
+        await SendToClientAsync(new
         {
-            type = "OutputAudioTranscriptionPartial",
-            Data = new
-            {
-                transcriptionData
-            },
-            session_id = _ctx.StreamSid
-        };
+            type = "ClientError",
+            session_id = _ctx.StreamSid,
+            Data = new { errorData.Code, errorData.Message }
+        }).ConfigureAwait(false);
 
-        await SendToClientAsync(transcription).ConfigureAwait(false);
-    }
-
-    private async Task OnOutputAudioTranscriptionCompletedAsync(RealtimeAiWssTranscriptionData transcriptionData)
-    {
-        _ctx.Transcriptions.Enqueue((transcriptionData.Speaker, transcriptionData.Transcript));
-
-        var transcription = new
-        {
-            type = "OutputAudioTranscriptionCompleted",
-            Data = new
-            {
-                transcriptionData
-            },
-            session_id = _ctx.StreamSid
-        };
-
-        await SendToClientAsync(transcription).ConfigureAwait(false);
+        if (errorData.IsCritical)
+            await DisconnectFromProviderAsync($"Critical provider error: {errorData.Message}").ConfigureAwait(false);
     }
 }
