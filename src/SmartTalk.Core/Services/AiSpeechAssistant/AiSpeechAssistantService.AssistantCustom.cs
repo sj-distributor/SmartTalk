@@ -1302,13 +1302,13 @@ public partial class AiSpeechAssistantService
             
             if (relations.Count == 0) continue;
             
-            var mergedJson = MergeKnowledgeJson(relations, sourceKnowledge, oldTarget.Json);
+            var mergedJson = MergeKnowledgeJson(relations, sourceKnowledge);
 
             var newTarget = new AiSpeechAssistantKnowledge
             {
                 AssistantId = oldTarget.AssistantId,
                 Json = oldTarget.Json,
-                Brief = oldTarget.Brief,
+                Brief = sourceKnowledge.Brief,
                 Greetings = oldTarget.Greetings,
                 IsActive = true,
                 CreatedBy = oldTarget.CreatedBy,
@@ -1342,17 +1342,23 @@ public partial class AiSpeechAssistantService
         };
     }
 
-    private static string MergeKnowledgeJson(List<AiSpeechAssistantKnowledgeCopyRelated> relations, AiSpeechAssistantKnowledge sourceKnowledge, string oldTargetJson)
+    private static string MergeKnowledgeJson(List<AiSpeechAssistantKnowledgeCopyRelated> relations, AiSpeechAssistantKnowledge sourceKnowledge)
     {
-        var mergedObj = RemoveCopySuffixFromKeys(JObject.Parse(oldTargetJson ?? "{}"));
-
+        var mergedObj = RemoveCopySuffixFromKeys(JObject.Parse(sourceKnowledge.Json ?? "{}"));
+        
+        Log.Information("[MergeKnowledgeJson] Initial merged object from source: {@MergedObj}", mergedObj);
+        
         foreach (var relation in relations)
         {
             var json = relation.SourceKnowledgeId == sourceKnowledge.Id
                 ? JObject.Parse(sourceKnowledge.Json ?? "{}")
                 : JObject.Parse(relation.CopyKnowledgePoints ?? "{}");
 
+            Log.Information("[MergeKnowledgeJson] Raw JSON before normalize: {@RawJson}", json);
+            
             var normalized = RemoveCopySuffixFromKeys(json);
+
+            Log.Information("[MergeKnowledgeJson] Normalized JSON: {@NormalizedJson}", normalized);
 
             foreach (var prop in normalized.Properties())
                 mergedObj[prop.Name] = prop.Value;
