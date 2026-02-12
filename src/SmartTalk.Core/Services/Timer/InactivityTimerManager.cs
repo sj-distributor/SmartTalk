@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Serilog;
 using SmartTalk.Core.Ioc;
 
 namespace SmartTalk.Core.Services.Timer;
@@ -6,11 +7,11 @@ namespace SmartTalk.Core.Services.Timer;
 public interface IInactivityTimerManager : IScopedDependency
 {
     void StartTimer(string sessionId, TimeSpan timeout, Func<Task> onTimeout);
-    
+
     void StopTimer(string sessionId);
-    
+
     void ResetTimer(string sessionId);
-    
+
     bool IsTimerRunning(string sessionId);
 }
 
@@ -18,62 +19,64 @@ public class InactivityTimerManager : IInactivityTimerManager
 {
     private class TimerEntry
     {
-        public CancellationTokenSource CancellationTokenSource { get; set; }
-        public Task RunningTask { get; set; }
+        public required CancellationTokenSource Cts { get; init; }
+        public required TimeSpan Timeout { get; init; }
+        public required Func<Task> OnTimeout { get; init; }
     }
 
     private readonly ConcurrentDictionary<string, TimerEntry> _timers = new();
 
     public void StartTimer(string sessionId, TimeSpan timeout, Func<Task> onTimeout)
     {
-        StopTimer(sessionId); // 保证先取消旧的
+        StopTimer(sessionId);
 
         var cts = new CancellationTokenSource();
-        var task = Task.Run(async () =>
-        {
-            try
-            {
-                await Task.Delay(timeout, cts.Token);
-                await onTimeout();
-            }
-            catch (TaskCanceledException) { /* 被取消 */ }
-        }, cts.Token);
+        var entry = new TimerEntry { Cts = cts, Timeout = timeout, OnTimeout = onTimeout };
 
-        _timers[sessionId] = new TimerEntry
-        {
-            CancellationTokenSource = cts,
-            RunningTask = task
-        };
+        _timers[sessionId] = entry;
+
+        _ = RunTimerAsync(sessionId, entry);
     }
 
     public void StopTimer(string sessionId)
     {
-        if (_timers.TryRemove(sessionId, out var timer))
+        if (!_timers.TryRemove(sessionId, out var entry)) return;
+
+        try
         {
-            try
-            {
-                timer.CancellationTokenSource.Cancel();
-                timer.CancellationTokenSource.Dispose();
-            }
-            catch
-            {
-                // ignored
-            }
+            entry.Cts.Cancel();
+            entry.Cts.Dispose();
+        }
+        catch
+        {
+            // ignored
         }
     }
 
     public void ResetTimer(string sessionId)
     {
-        if (_timers.TryGetValue(sessionId, out var timer))
-        {
-            var timeout = TimeSpan.FromMinutes(2); // 默认超时
-            var onTimeout = timer.RunningTask.AsyncState as Func<Task>;
+        if (!_timers.TryGetValue(sessionId, out var entry)) return;
 
-            // 由于 AsyncState 不可靠，可考虑扩展为 TimerEntry 内部缓存 onTimeout 与 timeout
-            StopTimer(sessionId);
-            StartTimer(sessionId, timeout, onTimeout ?? (() => Task.CompletedTask));
-        }
+        StartTimer(sessionId, entry.Timeout, entry.OnTimeout);
     }
 
     public bool IsTimerRunning(string sessionId) => _timers.ContainsKey(sessionId);
+
+    private async Task RunTimerAsync(string sessionId, TimerEntry entry)
+    {
+        try
+        {
+            await Task.Delay(entry.Timeout, entry.Cts.Token).ConfigureAwait(false);
+            await entry.OnTimeout().ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[InactivityTimer] Callback error, SessionId: {SessionId}", sessionId);
+        }
+        finally
+        {
+            _timers.TryRemove(sessionId, out _);
+        }
+    }
 }
