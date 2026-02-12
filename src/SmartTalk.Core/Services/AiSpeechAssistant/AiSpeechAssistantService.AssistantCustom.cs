@@ -1342,21 +1342,8 @@ public partial class AiSpeechAssistantService
     private static string MergeKnowledgeJson(AiSpeechAssistantKnowledge sourceKnowledge, string oldTargetJson)
     {
         var mergedObj = RemoveCopySuffixFromKeys(JObject.Parse(oldTargetJson ?? "{}"));
-        
-        Log.Information("[MergeKnowledgeJson] Initial merged object from source: {@MergedObj}", mergedObj);
-
-        var currentSource = RemoveCopySuffixFromKeys(JObject.Parse(sourceKnowledge.Json ?? "{}"));
-        var currentSourceKeys = currentSource.Properties().Select(p => p.Name).ToHashSet(StringComparer.Ordinal);
-        var existingKeys = mergedObj.Properties().Select(p => p.Name).ToList();
-        
-        foreach (var staleKey in existingKeys.Where(k => !currentSourceKeys.Contains(k)))
-        {
-            mergedObj.Remove(staleKey);
-            Log.Information("[MergeKnowledgeJson] Removed stale key from source diff: {StaleKey}", staleKey);
-        }
-
-        foreach (var prop in currentSource.Properties())
-            mergedObj[prop.Name] = prop.Value;
+        var sourceObj = RemoveCopySuffixFromKeys(JObject.Parse(sourceKnowledge.Json ?? "{}"));
+        mergedObj.Merge(sourceObj, new JsonMergeSettings { MergeArrayHandling = MergeArrayHandling.Concat });
 
         Log.Information("Merged JObject: {@mergedObj}", mergedObj);
         return mergedObj.ToString(Formatting.None);
