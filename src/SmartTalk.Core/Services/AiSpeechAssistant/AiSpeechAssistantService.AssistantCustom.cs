@@ -1344,6 +1344,18 @@ public partial class AiSpeechAssistantService
         var mergedObj = RemoveCopySuffixFromKeys(JObject.Parse(sourceKnowledge.Json ?? "{}"));
         
         Log.Information("[MergeKnowledgeJson] Initial merged object from source: {@MergedObj}", mergedObj);
+
+        var previousSourceKeys = relations
+            .Where(r => r.SourceKnowledgeId == sourceKnowledge.Id)
+            .SelectMany(r => GetNormalizedTopLevelKeys(r.CopyKnowledgePoints))
+            .ToHashSet(StringComparer.Ordinal);
+        var currentSourceKeys = GetNormalizedTopLevelKeys(sourceKnowledge.Json).ToHashSet(StringComparer.Ordinal);
+
+        foreach (var staleKey in previousSourceKeys.Except(currentSourceKeys))
+        {
+            mergedObj.Remove(staleKey);
+            Log.Information("[MergeKnowledgeJson] Removed stale key from source diff: {StaleKey}", staleKey);
+        }
         
         foreach (var relation in relations)
         {
@@ -1363,6 +1375,15 @@ public partial class AiSpeechAssistantService
 
         Log.Information("Merged JObject: {@mergedObj}", mergedObj);
         return mergedObj.ToString(Formatting.None);
+    }
+
+    private static IEnumerable<string> GetNormalizedTopLevelKeys(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return Enumerable.Empty<string>();
+
+        var obj = RemoveCopySuffixFromKeys(JObject.Parse(json));
+        return obj.Properties().Select(p => p.Name);
     }
 
     private static JObject RemoveCopySuffixFromKeys(JObject source)
