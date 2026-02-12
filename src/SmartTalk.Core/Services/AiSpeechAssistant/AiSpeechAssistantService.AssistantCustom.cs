@@ -1156,10 +1156,15 @@ public partial class AiSpeechAssistantService
     {
         var speechAssistants = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgesByCompanyIdAsync(
             request.CompanyId, request.PageIndex, request.PageSize, request.AgentId, request.StoreId, request.KeyWord, cancellationToken).ConfigureAwait(false);
+        
+        var distinctKnowledges = speechAssistants
+            .GroupBy(x => x.KnowledgeId)
+            .Select(x => x.First())
+            .ToList();
 
         return new GetKonwledgesResponse
         {
-            Data = speechAssistants
+            Data = distinctKnowledges
         };
     }
     
