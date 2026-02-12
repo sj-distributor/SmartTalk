@@ -43,22 +43,6 @@ public partial class RealtimeAiService : IRealtimeAiService
         await OrchestrateSessionAsync().ConfigureAwait(false);
     }
 
-    private void StartInactivityTimer(int seconds, string followUpMessage)
-    {
-        _inactivityTimerManager.StartTimer(_ctx.StreamSid, TimeSpan.FromSeconds(seconds), async () =>
-        {
-            Log.Information("[RealtimeAi] Idle follow-up triggered, SessionId: {SessionId}, TimeoutSeconds: {TimeoutSeconds}",
-                _ctx.SessionId, seconds);
-
-            await SendTextToProviderAsync(followUpMessage);
-        });
-    }
-
-    private void StopInactivityTimer()
-    {
-        _inactivityTimerManager.StopTimer(_ctx.StreamSid);
-    }
-
     private string GetWebSocketStateSafe()
     {
         try { return _ctx.WebSocket?.State.ToString() ?? "null"; }

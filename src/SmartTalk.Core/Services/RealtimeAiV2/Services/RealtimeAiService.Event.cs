@@ -32,6 +32,11 @@ public partial class RealtimeAiService
                         await OnInputAudioTranscriptionCompletedAsync(inputTranscription).ConfigureAwait(false);
                     break;
 
+                case RealtimeAiWssEventType.OutputAudioTranscriptionPartial:
+                    if (parsedEvent.Data is RealtimeAiWssTranscriptionData outputPartialTranscription)
+                        await OnOutputAudioTranscriptionPartialAsync(outputPartialTranscription).ConfigureAwait(false);
+                    break;
+
                 case RealtimeAiWssEventType.OutputAudioTranscriptionCompleted:
                     if (parsedEvent.Data is RealtimeAiWssTranscriptionData outputTranscription)
                         await OnOutputAudioTranscriptionCompletedAsync(outputTranscription).ConfigureAwait(false);
@@ -124,7 +129,7 @@ public partial class RealtimeAiService
     private async Task OnAiDetectedUserSpeechAsync()
     {
         if (_ctx.Options.IdleFollowUp != null)
-            StopInactivityTimer();
+            _inactivityTimerManager.StopTimer(_ctx.StreamSid);
 
         var speechDetected = new
         {
@@ -158,8 +163,16 @@ public partial class RealtimeAiService
         };
 
         var idleFollowUp = _ctx.Options.IdleFollowUp;
+        
         if (idleFollowUp != null && (!idleFollowUp.SkipRounds.HasValue || idleFollowUp.SkipRounds.Value < _ctx.Round))
-            StartInactivityTimer(idleFollowUp.TimeoutSeconds, idleFollowUp.FollowUpMessage);
+        {
+            _inactivityTimerManager.StartTimer(_ctx.StreamSid, TimeSpan.FromSeconds(idleFollowUp.TimeoutSeconds), async () =>
+            {
+                Log.Information("[RealtimeAi] Idle follow-up triggered, SessionId: {SessionId}, TimeoutSeconds: {TimeoutSeconds}", _ctx.SessionId, idleFollowUp.TimeoutSeconds);
+                
+                await SendTextToProviderAsync(idleFollowUp.FollowUpMessage);
+            });
+        }
 
         await SendToClientAsync(turnCompleted).ConfigureAwait(false);
         Log.Information("[RealtimeAi] AI turn completed, SessionId: {SessionId}, Round: {Round}", _ctx.SessionId, _ctx.Round);
@@ -172,6 +185,21 @@ public partial class RealtimeAiService
         var transcription = new
         {
             type = "InputAudioTranscriptionCompleted",
+            Data = new
+            {
+                transcriptionData
+            },
+            session_id = _ctx.StreamSid
+        };
+
+        await SendToClientAsync(transcription).ConfigureAwait(false);
+    }
+
+    private async Task OnOutputAudioTranscriptionPartialAsync(RealtimeAiWssTranscriptionData transcriptionData)
+    {
+        var transcription = new
+        {
+            type = "OutputAudioTranscriptionPartial",
             Data = new
             {
                 transcriptionData
