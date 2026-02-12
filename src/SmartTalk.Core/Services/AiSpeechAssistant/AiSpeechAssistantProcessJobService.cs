@@ -1,13 +1,15 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http;
 using System.Text;
 using AutoMapper;
 using Google.Cloud.Translation.V2;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Serilog;
+using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Ioc;
-using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.PhoneOrder;
@@ -35,6 +37,8 @@ public interface IAiSpeechAssistantProcessJobService : IScopedDependency
     Task SyncAiSpeechAssistantInfoToAgentAsync(SyncAiSpeechAssistantInfoToAgentCommand command, CancellationToken cancellationToken);
 
     Task SyncAiSpeechAssistantLanguageAsync(SyncAiSpeechAssistantLanguageCommand command, CancellationToken cancellationToken);
+
+    Task SyncAiSpeechAssistantKnowledgePromptAsync(SyncAiSpeechAssistantKnowledgePromptCommand command, CancellationToken cancellationToken);
     
     Task RecordAiSpeechAssistantCallAsync(AiSpeechAssistantStreamContextDto context, PhoneOrderRecordType orderRecordType, CancellationToken cancellationToken);
 }
@@ -204,6 +208,131 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             customerId = firstSegment;
             return true;
         }
+    }
+
+    public async Task SyncAiSpeechAssistantKnowledgePromptAsync(SyncAiSpeechAssistantKnowledgePromptCommand command, CancellationToken cancellationToken)
+    {
+        var activeKnowledges = await _speechAssistantDataProvider.GetAiSpeechAssistantKnowledgesByIsActiveAsync(true, cancellationToken).ConfigureAwait(false);
+
+        if (activeKnowledges.Count == 0) return;
+
+        var knowledgeIds = activeKnowledges.Select(x => x.Id).ToList();
+        
+        Log.Information("[Job] SyncAiSpeechAssistantKnowledgePrompt. KnowledgeIds={KnowledgeIds}", knowledgeIds);
+
+        var allCopyRelateds = await _speechAssistantDataProvider.GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync(knowledgeIds, null, cancellationToken).ConfigureAwait(false);
+
+        var relatedLookup = (allCopyRelateds ?? new List<AiSpeechAssistantKnowledgeCopyRelated>())
+            .GroupBy(x => x.TargetKnowledgeId)
+            .ToDictionary(g => g.Key, g => g.OrderBy(x => x.CreatedDate).ThenBy(x => x.Id).ToList());
+
+        var updates = new List<AiSpeechAssistantKnowledge>();
+
+        foreach (var knowledge in activeKnowledges)
+        {
+            relatedLookup.TryGetValue(knowledge.Id, out var relateds);
+            relateds ??= [];
+
+            var mergedJson = MergeNormalizedJson(knowledge.Json, relateds.Select(x => x.CopyKnowledgePoints));
+            var newPrompt = GenerateKnowledgePrompt(mergedJson);
+
+            if (!string.Equals(knowledge.Prompt ?? string.Empty, newPrompt, StringComparison.Ordinal))
+            {
+                knowledge.Prompt = newPrompt;
+                updates.Add(knowledge);
+            }
+        }
+
+        if (updates.Count == 0) return;
+
+        await _speechAssistantDataProvider
+            .UpdateAiSpeechAssistantKnowledgesAsync(updates, true, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static string MergeNormalizedJson(string knowledgeJson, IEnumerable<string> copyKnowledgePoints)
+    {
+        var merged = NormalizeJsonToObject(knowledgeJson);
+
+        foreach (var json in copyKnowledgePoints ?? Enumerable.Empty<string>())
+        {
+            var normalized = NormalizeJsonToObject(json);
+            merged.Merge(normalized, new JsonMergeSettings { MergeArrayHandling = MergeArrayHandling.Concat });
+        }
+
+        return merged.ToString(Formatting.None);
+    }
+
+    private static JObject NormalizeJsonToObject(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return new JObject();
+
+        try
+        {
+            return RemoveCopySuffixFromKeys(JObject.Parse(json));
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Sync knowledge prompt skipped invalid json: {Json}", json);
+            return new JObject();
+        }
+    }
+
+    private static JObject RemoveCopySuffixFromKeys(JObject source)
+    {
+        var result = new JObject();
+
+        foreach (var prop in source.Properties())
+        {
+            var newKey = RemoveCopySuffix(prop.Name);
+            result[newKey] = StripCopySuffixFromToken(prop.Value);
+        }
+
+        return result;
+    }
+
+    private static string RemoveCopySuffix(string key)
+    {
+        if (key.EndsWith("-副本", StringComparison.Ordinal))
+            return key[..^"-副本".Length];
+
+        if (key.EndsWith("副本", StringComparison.Ordinal))
+            return key[..^"副本".Length];
+
+        return key;
+    }
+
+    private static JToken StripCopySuffixFromToken(JToken token)
+    {
+        return token.Type switch
+        {
+            JTokenType.Object => RemoveCopySuffixFromKeys((JObject)token),
+            JTokenType.Array => new JArray(token.Select(StripCopySuffixFromToken)),
+            _ => token.DeepClone()
+        };
+    }
+
+    private static string GenerateKnowledgePrompt(string json)
+    {
+        var prompt = new StringBuilder();
+        var jsonData = JObject.Parse(json);
+        var textInfo = CultureInfo.InvariantCulture.TextInfo;
+
+        foreach (var property in jsonData.Properties())
+        {
+            var key = textInfo.ToTitleCase(property.Name);
+            var value = property.Value;
+
+            if (value is JArray array)
+            {
+                var list = array.Select((item, index) => $"{index + 1}. {item.ToString()}").ToList();
+                prompt.AppendLine($"{key}：\n{string.Join("\n", list)}\n");
+            }
+            else
+                prompt.AppendLine($"{key}： {value}\n");
+        }
+
+        return prompt.ToString();
     }
 
     private static string BuildLanguageText(IReadOnlyList<SmartTalk.Messages.Dto.Crm.CrmContactDto> contacts)

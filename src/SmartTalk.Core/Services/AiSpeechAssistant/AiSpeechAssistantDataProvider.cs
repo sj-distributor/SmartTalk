@@ -44,6 +44,8 @@ public partial interface IAiSpeechAssistantDataProvider : IScopedDependency
     
     Task<List<AiSpeechAssistantKnowledge>> GetAiSpeechAssistantKnowledgesAsync(List<int> knowledgeIds = null, CancellationToken cancellationToken = default);
 
+    Task<List<AiSpeechAssistantKnowledge>> GetAiSpeechAssistantKnowledgesByIsActiveAsync(bool isActive, CancellationToken cancellationToken = default);
+
     Task AddAiSpeechAssistantKnowledgesAsync(List<AiSpeechAssistantKnowledge> knowledges, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task UpdateAiSpeechAssistantKnowledgesAsync(List<AiSpeechAssistantKnowledge> knowledges, bool forceSave = true, CancellationToken cancellationToken = default);
@@ -313,6 +315,14 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
     {
         return await _repository.Query<AiSpeechAssistantKnowledge>()
             .Where(x => knowledgeIds.Contains(x.Id) && x.IsActive).ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+    
+    public async Task<List<AiSpeechAssistantKnowledge>> GetAiSpeechAssistantKnowledgesByIsActiveAsync(bool isActive, CancellationToken cancellationToken = default)
+    {
+        return await _repository.Query<AiSpeechAssistantKnowledge>()
+            .Where(x => x.IsActive == isActive)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task AddAiSpeechAssistantKnowledgesAsync(List<AiSpeechAssistantKnowledge> knowledges, bool forceSave = true, CancellationToken cancellationToken = default)
