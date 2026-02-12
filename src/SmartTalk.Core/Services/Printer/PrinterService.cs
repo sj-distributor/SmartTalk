@@ -917,9 +917,9 @@ public class PrinterService : IPrinterService
                     await _posDataProvider.UpdatePhoneOrderReservationInformationAsync(reservation, cancellationToken: cancellationToken).ConfigureAwait(false);
              }
              
-             //_smartTalkBackgroundJobClient.Schedule<IMediator>( x => x.SendAsync(new RetryCloudPrintingCommand{ Id = order.Id, Count = 0}, CancellationToken.None), TimeSpan.FromMinutes(1));
+             _smartTalkBackgroundJobClient.Schedule<IMediator>( x => x.SendAsync(new RetryCloudPrintingCommand{ Id = order.Id, Count = 0}, CancellationToken.None), TimeSpan.FromMinutes(1));
              
-             //await _cacheManager.SetAsync($"{order.OrderId}", true, new RedisCachingSetting(expiry: TimeSpan.FromMinutes(30)), cancellationToken).ConfigureAwait(false);
+             await _cacheManager.SetAsync($"{order.OrderId}", true, new RedisCachingSetting(expiry: TimeSpan.FromMinutes(30)), cancellationToken).ConfigureAwait(false);
              
              return new MerchPrinterOrderRetryResponse
              {
