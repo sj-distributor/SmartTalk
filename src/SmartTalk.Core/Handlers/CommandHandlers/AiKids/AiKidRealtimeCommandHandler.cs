@@ -1,16 +1,15 @@
 using Mediator.Net.Context;
 using Mediator.Net.Contracts;
 using SmartTalk.Core.Services.AiKids;
-using SmartTalk.Core.Services.RealtimeAi.Services;
 using SmartTalk.Messages.Commands.AiKids;
 
-namespace SmartTalk.Core.Handlers.CommandHandlers.RealtimeAi;
+namespace SmartTalk.Core.Handlers.CommandHandlers.AiKids;
 
 public class AiKidRealtimeCommandHandler : ICommandHandler<AiKidRealtimeCommand>
 {
-    private readonly IAiKidRealtimeService _aiKidRealtimeService;
+    private readonly IAiKidRealtimeServiceV2 _aiKidRealtimeService;
 
-    public AiKidRealtimeCommandHandler(IAiKidRealtimeService aiKidRealtimeService)
+    public AiKidRealtimeCommandHandler(IAiKidRealtimeServiceV2 aiKidRealtimeService)
     {
         _aiKidRealtimeService = aiKidRealtimeService;
     }

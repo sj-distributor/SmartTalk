@@ -54,8 +54,6 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
             }
         };
 
-        Log.Information("GoogleAdapter: 构建初始会话负载: {@Payload}", sessionPayload);
-
         return sessionPayload;
     }
 
@@ -100,10 +98,10 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
                 type = "conversation.interrupt",
                 item_id_to_interrupt = lastAssistantItemIdToInterrupt
             };
-            Log.Information("GoogleAdapter: 构建打断消息，目标 item_id: {ItemId}", lastAssistantItemIdToInterrupt);
             return message;
         }
-        Log.Warning("GoogleAdapter: 尝试构建打断消息但未提供 lastAssistantItemIdToInterrupt。");
+
+        Log.Warning("[RealtimeAi] Cannot build interrupt message, missing item ID");
         return null;
     }
 
@@ -114,8 +112,6 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
 
     public ParsedRealtimeAiProviderEvent ParseMessage(string rawMessage)
     {
-        Log.Information("Incoming response message: {@Msg}", rawMessage);
-        
         try
         {
             using var jsonDocument = JsonDocument.Parse(rawMessage);
@@ -154,18 +150,18 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
                 }
             }
             
-            Log.Warning("GoogleAdapter: 未知或未处理的 Google 返回格式");
+            Log.Debug("[RealtimeAi] Unhandled Google event");
             return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.Unknown, RawJson = rawMessage };
         }
         catch (JsonException jsonEx)
         {
-            Log.Error(jsonEx, "GoogleAdapter: 解析 JSON 消息失败: {RawMessage}", rawMessage);
-            return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.Error, Data = new RealtimeAiErrorData { Message = "JSON 解析失败: " + jsonEx.Message, IsCritical = true }, RawJson = rawMessage };
+            Log.Error(jsonEx, "[RealtimeAi] Failed to parse Google message");
+            return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.Error, Data = new RealtimeAiErrorData { Message = jsonEx.Message, IsCritical = true }, RawJson = rawMessage };
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "GoogleAdapter: 解析消息时发生意外错误: {RawMessage}", rawMessage);
-            return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.Error, Data = new RealtimeAiErrorData { Message = "解析消息时发生意外错误: " + ex.Message, IsCritical = true }, RawJson = rawMessage };
+            Log.Error(ex, "[RealtimeAi] Unexpected error parsing Google message");
+            return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.Error, Data = new RealtimeAiErrorData { Message = ex.Message, IsCritical = true }, RawJson = rawMessage };
         }
     }
     
