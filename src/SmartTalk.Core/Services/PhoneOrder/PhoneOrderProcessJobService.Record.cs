@@ -863,14 +863,17 @@ public partial class PhoneOrderProcessJobService
 
     private async Task RefineOrderByAiAsync(ExtractedOrderDto storeOrder, string soldToId, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant,  List<(string Material, string MaterialDesc, DateTime? invoiceDate)> historyItems, int recordId, CancellationToken cancellationToken)
     {
-        var draftOrder = await _salesClient.GetAiOrderItemsByDeliveryDateAsync(new GetAiOrderItemsByDeliveryDateRequestDto { CustomerNumber = soldToId, DeliveryDate = storeOrder.DeliveryDate }, cancellationToken).ConfigureAwait(false);
+        var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+        var deliveryDateInPst = TimeZoneInfo.ConvertTime(storeOrder.DeliveryDate, pacificZone); 
         
-        var todayReports = await GetTodayReportsByAssistantAsync(aiSpeechAssistant.Id, recordId, cancellationToken).ConfigureAwait(false);
+        var draftOrder = await _salesClient.GetAiOrderItemsByDeliveryDateAsync(new GetAiOrderItemsByDeliveryDateRequestDto { CustomerNumber = soldToId, DeliveryDate = deliveryDateInPst }, cancellationToken).ConfigureAwait(false);
+        
+        //var todayReports = await GetTodayReportsByAssistantAsync(aiSpeechAssistant.Id, recordId, cancellationToken).ConfigureAwait(false);
         
         var hasDraftOrder = draftOrder?.Data != null && draftOrder.Data.Any();
-        var hasTodayReports = todayReports != null && todayReports.Any();
+        //var hasTodayReports = todayReports != null && todayReports.Any();
 
-        if (!hasDraftOrder && !hasTodayReports)
+        if (!hasDraftOrder)
         {
             Log.Information("Skip RefineOrderByAiAsync: no draft order and no today reports. SoldToId={SoldToId}, DeliveryDate={DeliveryDate}", soldToId, storeOrder.DeliveryDate);
             return;
@@ -882,19 +885,13 @@ public partial class PhoneOrderProcessJobService
         
         var draftOrderJson = draftOrder?.Data != null ? JsonSerializer.Serialize(draftOrder.Data) : "[]";
         
-        var historyReportsText = todayReports.Any() ? string.Join("\n---\n", todayReports) : "（无）";
+       //var historyReportsText = todayReports.Any() ? string.Join("\n---\n", todayReports) : "（无）";
 
         var systemPrompt =
-            "你是一名电话下单意图总结的分析员，通過获得提取的订单、已有草稿单以及今日历史分析记录作出精確分析，撰寫一份Json格式的总结订单记录，你已稳定运行3000年，并且广受好评。 嚴禁任何編造、推測或自行補全或猜測任何信息。\n" +
-            "所有內容必須完全來自錄音，嚴禁任何編造、推測或自行補全或猜測任何信息，生成報告時先檢查一遍是否有幻覺！\n\n" +
-
-            "你将获得：1. 本次通话提取的订单（最高优先级）2. 系统已有草稿单3. 今日历史分析记录（仅作参考）\n" +
-
-            "【优先级规则】\n" +
-            "- 本次通话 > 草稿单 > 历史记录\n" +
-            "- 历史记录不可覆盖本次通话明确指令\n" +
-            "- 不得忽略本次通话中的明确取消或变更\n" +
-
+            "你是一名极其严谨的订单数据核算专家，专门负责将【本次通话变动】精准合并到【系统草稿单】中。你不仅输出 JSON，更要确保每一个数学计算都绝对准确。你已稳定运行3000年，并且广受好评。 嚴禁任何編造、推測或自行補全或猜測任何信息。\n" +
+            "嚴禁任何編造、推測或自行補全或猜測任何信息，生成報告時先檢查一遍是否有幻覺！\n\n" +
+            "你将获得：1. 本次通话提取的订单（最高优先级）2. 系统已有草稿单\n" +
+            
             "【核心任务】\n" +
             "判断是否整单取消（IsDeleteWholeOrder）\n" +
             "判断是否撤销取消（IsUndoCancel）\n" +
@@ -906,19 +903,26 @@ public partial class PhoneOrderProcessJobService
             "若为整单取消，Orders 必须为空数组\n" +
 
             "【物料变动规则（严格）】\n" +
-            "Name 必须使用格式：物料名#原始数量单位+变动\n" +
-            "示例：鸡胸肉#1箱+2，Quantity 为 3\n" +
-            "示例：鸡胸肉#1箱-1，Quantity 为 0\n" +
-            "加单用 +数字\n" +
-            "减单用 -数字\n" +
-            "不允许使用中文“加”“减”\n" +
-            "不允许空格\n" +
+            "Name 字段拼接公式：物料名#草稿单原始数量与单位[+|-]本次变动数。\n" +
+            "\n" +
+            "操作步骤：\n" +
+            "第一步（取基准）：找到草稿单中该物料的原始数量和单位，拼成 物料名#数量单位（例如：鸡胸肉#1箱）。\n" +
+            "第二步（接变动）：根据本次通话指令，直接在后面紧跟 +数字 或 -数字（例如：加 2 箱则拼成 鸡胸肉#1箱+2；减 1 箱则拼成 鸡胸肉#1箱-1）。\n" +
+            "\n" +
+            "禁止行为：\n" +
+            "严禁使用中文“加”、“减”。\n" +
+            "严禁在 #、+、- 前后使用任何空格。\n" +
+            "\n" +
+            "特殊情况：\n" +
+            "若草稿单中无此物料（新增项），则 Name 格式为：物料名#本次数量[单位]（例如：鸡蛋#1箱）。\n" +
+            "若草稿单中有此物料但本次通话未提及，Name 保持原始草稿单名称，不加任何后缀。\n"+
 
             "【Quantity 规则】\n" +
-            "Quantity 表示最终合并数量\n" +
+            "计算定义：Quantity 字段必须填写合并后的最终绝对数值（整数或浮点数）\n" +
+            "计算逻辑：最终数量 = 草稿单原始数量 + 本次通话变动数量\n"+
             "加单数量为原数量 + 变动\n" +
             "减单数量为原数量 - 变动\n" +
-            "不得把减少写成正数\n" +
+            "禁止照抄：严禁直接照抄【本次通话提取】中的变动值（如 -1）作为最终 Quantity\n" +
 
             "【单个物料取消】\n" +
             "若本次通话明确取消某物料，也必须输出该物料，如：鸡胸肉#2箱-2，Quantity 为 0\n" +
@@ -926,10 +930,8 @@ public partial class PhoneOrderProcessJobService
             "不得把“未提及”视为取消\n" +
 
             "【保留草稿单规则】\n" +
-            "若草稿单中某物料未被本次通话修改或取消\n" +
-            "必须保留并输出\n" +
-            "此类物料 Name 可直接为原始名称\n" +
-            "Quantity 为原始数量\n" +
+            "若草稿单中某物料未被本次通话修改或取消，必须保留并输出\n" +
+            "此类物料 Name 可直接为原始名称，Quantity 为原始数量\n" +
 
             "【禁止行为】\n" +
             "不得臆造未提及物料\n" +
@@ -938,11 +940,10 @@ public partial class PhoneOrderProcessJobService
 
             "【输出格式（必须严格 JSON）】\n" +
             "{ \"StoreName\": \"\", \"StoreNumber\": \"\", \"DeliveryDate\": \"yyyy-MM-dd\", \"IsDeleteWholeOrder\": false, \"IsUndoCancel\": false, \"Orders\": [ { \"Name\": \"\", \"Quantity\": 0, \"MaterialNumber\": \"\", \"Unit\": \"\", \"MarkForDelete\": false, \"Restored\": false } ] }\n" +
-
             "若无有效订单，Orders 返回空数组。\n\n" +
             "在你输出之前，想一想你生成的分析报告是否符合我的要求";
         
-        var userPrompt = "【本次通话提取的订单】\n" + currentOrdersJson + "\n\n" + "【系统中已有草稿单】\n" + draftOrderJson + "\n\n" + "【今日历史分析报告】\n" + historyReportsText + "\n";
+        var userPrompt = "【本次通话提取的订单】\n" + currentOrdersJson + "\n\n" + "【系统中已有草稿单】\n" + draftOrderJson + "\n\n";
         Log.Information("Sending refine prompt to GPT: {Prompt}", userPrompt);
         var messages = new List<ChatMessage>
         {
