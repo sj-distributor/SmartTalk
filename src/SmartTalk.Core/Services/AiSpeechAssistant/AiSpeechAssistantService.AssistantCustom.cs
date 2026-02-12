@@ -1302,7 +1302,7 @@ public partial class AiSpeechAssistantService
             
             if (relations.Count == 0) continue;
             
-            var mergedJson = MergeKnowledgeJson(relations, sourceKnowledge, oldTarget.Json);
+            var mergedJson = MergeKnowledgeJson(sourceKnowledge, oldTarget.Json);
 
             var newTarget = new AiSpeechAssistantKnowledge
             {
@@ -1342,51 +1342,27 @@ public partial class AiSpeechAssistantService
         };
     }
 
-    private static string MergeKnowledgeJson(List<AiSpeechAssistantKnowledgeCopyRelated> relations, AiSpeechAssistantKnowledge sourceKnowledge, string oldTargetJson)
+    private static string MergeKnowledgeJson(AiSpeechAssistantKnowledge sourceKnowledge, string oldTargetJson)
     {
         var mergedObj = RemoveCopySuffixFromKeys(JObject.Parse(oldTargetJson ?? "{}"));
         
         Log.Information("[MergeKnowledgeJson] Initial merged object from source: {@MergedObj}", mergedObj);
 
-        var previousSourceKeys = relations
-            .Where(r => r.SourceKnowledgeId == sourceKnowledge.Id)
-            .SelectMany(r => GetNormalizedTopLevelKeys(r.CopyKnowledgePoints))
-            .ToHashSet(StringComparer.Ordinal);
-        var currentSourceKeys = GetNormalizedTopLevelKeys(sourceKnowledge.Json).ToHashSet(StringComparer.Ordinal);
-
-        foreach (var staleKey in previousSourceKeys.Except(currentSourceKeys))
+        var currentSource = RemoveCopySuffixFromKeys(JObject.Parse(sourceKnowledge.Json ?? "{}"));
+        var currentSourceKeys = currentSource.Properties().Select(p => p.Name).ToHashSet(StringComparer.Ordinal);
+        var existingKeys = mergedObj.Properties().Select(p => p.Name).ToList();
+        
+        foreach (var staleKey in existingKeys.Where(k => !currentSourceKeys.Contains(k)))
         {
             mergedObj.Remove(staleKey);
             Log.Information("[MergeKnowledgeJson] Removed stale key from source diff: {StaleKey}", staleKey);
         }
-        
-        foreach (var relation in relations)
-        {
-            var json = relation.SourceKnowledgeId == sourceKnowledge.Id
-                ? JObject.Parse(sourceKnowledge.Json ?? "{}")
-                : JObject.Parse(relation.CopyKnowledgePoints ?? "{}");
 
-            Log.Information("[MergeKnowledgeJson] Raw JSON before normalize: {@RawJson}", json);
-            
-            var normalized = RemoveCopySuffixFromKeys(json);
-
-            Log.Information("[MergeKnowledgeJson] Normalized JSON: {@NormalizedJson}", normalized);
-
-            foreach (var prop in normalized.Properties())
-                mergedObj[prop.Name] = prop.Value;
-        }
+        foreach (var prop in currentSource.Properties())
+            mergedObj[prop.Name] = prop.Value;
 
         Log.Information("Merged JObject: {@mergedObj}", mergedObj);
         return mergedObj.ToString(Formatting.None);
-    }
-
-    private static IEnumerable<string> GetNormalizedTopLevelKeys(string json)
-    {
-        if (string.IsNullOrWhiteSpace(json))
-            return Enumerable.Empty<string>();
-
-        var obj = RemoveCopySuffixFromKeys(JObject.Parse(json));
-        return obj.Properties().Select(p => p.Name);
     }
 
     private static JObject RemoveCopySuffixFromKeys(JObject source)
