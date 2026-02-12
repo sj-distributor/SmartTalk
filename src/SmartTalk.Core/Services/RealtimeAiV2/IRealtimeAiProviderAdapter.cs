@@ -10,8 +10,7 @@ public interface IRealtimeAiProviderAdapter : IScopedDependency
 {
     Dictionary<string, string> GetHeaders(RealtimeAiServerRegion region);
 
-    Task<object> GetInitialSessionPayloadAsync(
-        RealtimeSessionOptions options, string sessionId = null, CancellationToken cancellationToken = default);
+    object BuildSessionConfig(RealtimeSessionOptions options);
     
     string BuildAudioAppendMessage(RealtimeAiWssAudioData audioData);
     

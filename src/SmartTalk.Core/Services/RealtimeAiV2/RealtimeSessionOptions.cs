@@ -2,7 +2,7 @@ using System.Net.WebSockets;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.RealtimeAi;
 
-namespace SmartTalk.Core.Services.RealtimeAiV2.Services;
+namespace SmartTalk.Core.Services.RealtimeAiV2;
 
 public class RealtimeAiConnectionProfile
 {
@@ -59,6 +59,8 @@ public class RealtimeAiModelConfig
 
 public class RealtimeSessionOptions
 {
+    // --- Configuration ---
+
     public RealtimeAiModelConfig ModelConfig { get; set; }
 
     public RealtimeAiConnectionProfile ConnectionProfile { get; set; }
@@ -70,21 +72,26 @@ public class RealtimeSessionOptions
     public RealtimeAiAudioCodec OutputFormat { get; set; }
 
     public RealtimeAiServerRegion Region { get; set; }
-}
 
-public class RealtimeSessionCallbacks
-{
+    /// <summary>
+    /// When true, the service buffers all audio (user + AI) and produces a WAV file on session end.
+    /// </summary>
+    public bool EnableRecording { get; set; }
+
+    /// <summary>
+    /// Optional idle follow-up configuration. When set, AI will proactively
+    /// send a follow-up message if the user stays silent after an AI turn.
+    /// Null to disable.
+    /// </summary>
+    public RealtimeSessionIdleFollowUp IdleFollowUp { get; set; }
+
+    // --- Callbacks ---
+
     /// <summary>
     /// Called when the AI session is initialized and ready.
     /// The consumer receives a sendText delegate to send messages (e.g. greetings).
     /// </summary>
     public Func<Func<string, Task>, Task> OnSessionReadyAsync { get; set; }
-
-    /// <summary>
-    /// Called when audio data is received or sent.
-    /// Parameters: (audioBytes, isAiOutput).
-    /// </summary>
-    public Func<byte[], bool, Task> OnAudioDataAsync { get; set; }
 
     /// <summary>
     /// Called when the session ends.
@@ -96,25 +103,13 @@ public class RealtimeSessionCallbacks
     /// Called when session ends with collected transcriptions.
     /// Parameters: (sessionId, transcriptions).
     /// </summary>
-    public Func<string, IReadOnlyList<(AiSpeechAssistantSpeaker Speaker, string Text)>, Task> OnTranscriptionsReadyAsync { get; set; }
-
-    /// <summary>
-    /// When true, the service buffers all audio (user + AI) and produces a WAV file on session end.
-    /// </summary>
-    public bool EnableRecording { get; set; }
+    public Func<string, IReadOnlyList<(AiSpeechAssistantSpeaker Speaker, string Text)>, Task> OnTranscriptionsCompletedAsync { get; set; }
 
     /// <summary>
     /// Called when the session ends and recording is enabled.
     /// Parameters: (sessionId, wavBytes).
     /// </summary>
     public Func<string, byte[], Task> OnRecordingCompleteAsync { get; set; }
-
-    /// <summary>
-    /// Optional idle follow-up configuration. When set, AI will proactively
-    /// send a follow-up message if the user stays silent after an AI turn.
-    /// Null to disable.
-    /// </summary>
-    public RealtimeSessionIdleFollowUp IdleFollowUp { get; set; }
 }
 
 public class RealtimeSessionIdleFollowUp

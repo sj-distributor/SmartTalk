@@ -77,8 +77,8 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
                 throw new InvalidOperationException("无法连接到底层 Realtime AI Client。"); // Cannot connect to underlying Realtime AI Client.
             }
 
-            var initialPayload = await _aiAdapter.GetInitialSessionPayloadAsync(options, _sessionId, _sessionCts.Token);
-            var initialMessageJson = JsonConvert.SerializeObject(initialPayload, new JsonSerializerSettings() { NullValueHandling = NullValueHandling.Ignore });
+            var initialPayload = _aiAdapter.BuildSessionConfig(options);
+            var initialMessageJson = JsonConvert.SerializeObject(initialPayload, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore });
 
             await _realtimeAiClient.SendMessageAsync(initialMessageJson, _sessionCts.Token);
 

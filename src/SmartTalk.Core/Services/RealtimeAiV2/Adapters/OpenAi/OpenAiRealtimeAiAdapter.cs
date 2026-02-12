@@ -31,8 +31,7 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
         };
     }
 
-    public Task<object> GetInitialSessionPayloadAsync(
-        RealtimeSessionOptions options, string sessionId, CancellationToken cancellationToken)
+    public object BuildSessionConfig(RealtimeSessionOptions options)
     {
         var modelConfig = options.ModelConfig;
 
@@ -56,7 +55,7 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
 
         Log.Information("OpenAIAdapter: 构建初始会话负载: {@Payload}", sessionPayload);
 
-        return Task.FromResult<object>(sessionPayload);
+        return sessionPayload;
     }
 
     public string BuildAudioAppendMessage(RealtimeAiWssAudioData audioData)

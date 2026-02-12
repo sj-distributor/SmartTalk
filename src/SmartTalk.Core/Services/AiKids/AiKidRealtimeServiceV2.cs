@@ -6,6 +6,7 @@ using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Attachments;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
+using SmartTalk.Core.Services.RealtimeAiV2;
 using SmartTalk.Core.Services.RealtimeAiV2.Services;
 using SmartTalk.Messages.Commands.AiKids;
 using SmartTalk.Messages.Commands.Attachments;
@@ -14,7 +15,6 @@ using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Dto.Smarties;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.Hr;
-using SmartTalk.Messages.Enums.PhoneOrder;
 
 namespace SmartTalk.Core.Services.AiKids;
 
@@ -57,6 +57,10 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
 
         var modelConfig = await BuildModelConfigAsync(assistant, cancellationToken).ConfigureAwait(false);
 
+        var greetings = assistant.Knowledge?.Greetings;
+        var orderRecordType = command.OrderRecordType;
+        var assistantId = assistant.Id;
+
         var options = new RealtimeSessionOptions
         {
             ModelConfig = modelConfig,
@@ -67,21 +71,21 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
             WebSocket = command.WebSocket,
             InputFormat = command.InputFormat,
             OutputFormat = command.OutputFormat,
-            Region = command.Region
-        };
-
-        var greetings = assistant.Knowledge?.Greetings;
-        var orderRecordType = command.OrderRecordType;
-        var assistantId = assistant.Id;
-
-        var callbacks = new RealtimeSessionCallbacks
-        {
+            Region = command.Region,
+            EnableRecording = true,
+            IdleFollowUp = timer != null
+                ? new RealtimeSessionIdleFollowUp
+                {
+                    TimeoutSeconds = timer.TimeSpanSeconds,
+                    FollowUpMessage = timer.AlterContent,
+                    SkipRounds = timer.SkipRound
+                }
+                : null,
             OnSessionReadyAsync = async sendText =>
             {
                 if (!string.IsNullOrEmpty(greetings))
                     await sendText($"Greet the user with: {greetings}").ConfigureAwait(false);
             },
-            EnableRecording = true,
             OnRecordingCompleteAsync = async (sessionId, wavBytes) =>
             {
                 var audio = await _attachmentService.UploadAttachmentAsync(
@@ -103,7 +107,7 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
                         x.RecordingRealtimeAiAsync(audio.Attachment.FileUrl, assistantId, sessionId, orderRecordType, CancellationToken.None));
                 }
             },
-            OnTranscriptionsReadyAsync = async (sessionId, transcriptions) =>
+            OnTranscriptionsCompletedAsync = async (sessionId, transcriptions) =>
             {
                 var kid = await _aiSpeechAssistantDataProvider
                     .GetAiKidAsync(agentId: assistant.AgentId, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -121,18 +125,10 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
                             Transcription = t.Text
                         }).ToList()
                     }, CancellationToken.None));
-            },
-            IdleFollowUp = timer != null
-                ? new RealtimeSessionIdleFollowUp
-                {
-                    TimeoutSeconds = timer.TimeSpanSeconds,
-                    FollowUpMessage = timer.AlterContent,
-                    SkipRounds = timer.SkipRound
-                }
-                : null
+            }
         };
 
-        await _realtimeAiService.StartAsync(options, callbacks, cancellationToken).ConfigureAwait(false);
+        await _realtimeAiService.ConnectAsync(options, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<RealtimeAiModelConfig> BuildModelConfigAsync(
