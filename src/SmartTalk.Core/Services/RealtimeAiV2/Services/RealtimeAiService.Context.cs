@@ -1,5 +1,3 @@
-using SmartTalk.Core.Services.RealtimeAiV2.Adapters.Clients.Default;
-
 namespace SmartTalk.Core.Services.RealtimeAiV2.Services;
 
 public partial class RealtimeAiService
@@ -7,6 +5,7 @@ public partial class RealtimeAiService
     private void BuildSessionContext(RealtimeSessionOptions options, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(options.ClientConfig);
         ArgumentNullException.ThrowIfNull(options.ModelConfig);
         ArgumentNullException.ThrowIfNull(options.ModelConfig.ServiceUrl);
         ArgumentNullException.ThrowIfNull(options.ConnectionProfile);
@@ -15,7 +14,6 @@ public partial class RealtimeAiService
         {
             Options = options,
             WebSocket = options.WebSocket,
-            ClientAdapter = options.ClientAdapter ?? new DefaultRealtimeAiClientAdapter(),
             SessionCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
         };
 
