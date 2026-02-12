@@ -1,7 +1,6 @@
 using System.Text.Json;
 using Serilog;
 using SmartTalk.Core.Extensions;
-using SmartTalk.Core.Services.RealtimeAiV2.Services;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
@@ -53,8 +52,6 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
             }
         };
 
-        Log.Information("OpenAIAdapter: 构建初始会话负载: {@Payload}", sessionPayload);
-
         return sessionPayload;
     }
 
@@ -99,10 +96,10 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
                 type = "conversation.interrupt",
                 item_id_to_interrupt = lastAssistantItemIdToInterrupt
             };
-            Log.Information("OpenAIAdapter: 构建打断消息，目标 item_id: {ItemId}", lastAssistantItemIdToInterrupt);
             return message;
         }
-        Log.Warning("OpenAIAdapter: 尝试构建打断消息但未提供 lastAssistantItemIdToInterrupt。");
+
+        Log.Warning("[RealtimeAi] Cannot build interrupt message, missing item ID");
         return null;
     }
 
@@ -116,75 +113,83 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
         try
         {
             using var jsonDocument = JsonDocument.Parse(rawMessage);
+            
             var root = jsonDocument.RootElement;
-            var eventTypeString = root.TryGetProperty("type", out var typeProp) ? typeProp.GetString() : null;
+            
+            var eventType = root.TryGetProperty("type", out var typeProp) ? typeProp.GetString() : null;
             var itemId = root.TryGetProperty("item_id", out var itemIdProp) ? itemIdProp.GetString() : null;
 
-            if (string.IsNullOrEmpty(eventTypeString))
+            if (string.IsNullOrEmpty(eventType))
             {
-                Log.Warning("OpenAIAdapter: 消息中缺少 'type' 字段: {RawMessage}", rawMessage);
+                Log.Warning("[RealtimeAi] Missing 'type' field in provider message");
                 return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.Unknown, RawJson = rawMessage };
             }
-            
-            switch (eventTypeString)
+
+            ParsedRealtimeAiProviderEvent Result(RealtimeAiWssEventType type, object data = null) =>
+                new() { Type = type, Data = data, RawJson = rawMessage, ItemId = itemId };
+
+            RealtimeAiWssTranscriptionData Transcription(string jsonProp, AiSpeechAssistantSpeaker speaker) =>
+                new() { Transcript = root.TryGetProperty(jsonProp, out var p) ? p.GetString() : null, Speaker = speaker };
+
+            switch (eventType)
             {
                 case "session.updated":
-                    return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.SessionInitialized, Data = rawMessage, RawJson = rawMessage, ItemId = itemId };
-                
+                    return Result(RealtimeAiWssEventType.SessionInitialized, rawMessage);
+
                 case "response.audio.delta":
                     var audioPayload = root.TryGetProperty("delta", out var deltaProp) ? deltaProp.GetString() : null;
-                    return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.ResponseAudioDelta, Data = new RealtimeAiWssAudioData { Base64Payload = audioPayload, ItemId = itemId }, RawJson = rawMessage, ItemId = itemId };
-                
+                    return Result(RealtimeAiWssEventType.ResponseAudioDelta, new RealtimeAiWssAudioData { Base64Payload = audioPayload, ItemId = itemId });
+
                 case "response.audio.done":
-                     return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.ResponseAudioDone, RawJson = rawMessage, ItemId = itemId };
+                    return Result(RealtimeAiWssEventType.ResponseAudioDone);
 
                 case "input_audio_buffer.speech_started":
-                    return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.SpeechDetected, RawJson = rawMessage, ItemId = itemId };
-                
+                    return Result(RealtimeAiWssEventType.SpeechDetected);
+
                 case "conversation.item.input_audio_transcription.delta":
-                    var userTranscriptDelta = root.TryGetProperty("delta", out var delta) ? delta.GetString() : null;
-                    return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.InputAudioTranscriptionPartial, Data = new RealtimeAiWssTranscriptionData { Transcript = userTranscriptDelta, Speaker = AiSpeechAssistantSpeaker.User }, RawJson = rawMessage };
-                
+                    return Result(RealtimeAiWssEventType.InputAudioTranscriptionPartial, Transcription("delta", AiSpeechAssistantSpeaker.User));
+
                 case "conversation.item.input_audio_transcription.completed":
-                    var userTranscript = root.TryGetProperty("transcript", out var transcript) ? transcript.GetString() : null;
-                    return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.InputAudioTranscriptionCompleted, Data = new RealtimeAiWssTranscriptionData { Transcript = userTranscript, Speaker = AiSpeechAssistantSpeaker.User }, RawJson = rawMessage };
-                
+                    return Result(RealtimeAiWssEventType.InputAudioTranscriptionCompleted, Transcription("transcript", AiSpeechAssistantSpeaker.User));
+
                 case "response.audio_transcript.delta":
-                    var aiTranscriptDelta = root.TryGetProperty("delta", out var aiDelta) ? aiDelta.GetString() : null;
-                    return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.OutputAudioTranscriptionPartial, Data = new RealtimeAiWssTranscriptionData { Transcript = aiTranscriptDelta, Speaker = AiSpeechAssistantSpeaker.Ai }, RawJson = rawMessage };
-                
+                    return Result(RealtimeAiWssEventType.OutputAudioTranscriptionPartial, Transcription("delta", AiSpeechAssistantSpeaker.Ai));
+
                 case "response.audio_transcript.done":
-                    var aiTranscription = root.TryGetProperty("transcript", out var aiTranscript) ? aiTranscript.GetString() : null;
-                    return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.OutputAudioTranscriptionCompleted, Data = new RealtimeAiWssTranscriptionData { Transcript = aiTranscription, Speaker = AiSpeechAssistantSpeaker.Ai }, RawJson = rawMessage };
+                    return Result(RealtimeAiWssEventType.OutputAudioTranscriptionCompleted, Transcription("transcript", AiSpeechAssistantSpeaker.Ai));
 
                 case "response.done":
-                     return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.ResponseTurnCompleted, RawJson = rawMessage, ItemId = itemId };
+                    return Result(RealtimeAiWssEventType.ResponseTurnCompleted);
 
                 case "error":
-                    var errorMessage = "未知 OpenAI 错误";
-                    if (root.TryGetProperty("error", out var errorProp) && errorProp.TryGetProperty("message", out var msgProp))
-                    {
-                        errorMessage = msgProp.GetString();
-                    } else if (root.TryGetProperty("last_error", out var lastErrorProp) && lastErrorProp.ValueKind != JsonValueKind.Null && lastErrorProp.TryGetProperty("message", out var lastMsgProp)) {
-                        errorMessage = lastMsgProp.GetString();
-                    }
-                    return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.Error, Data = new  { Message = errorMessage, IsCritical = true }, RawJson = rawMessage, ItemId = itemId };
-                
+                    return Result(RealtimeAiWssEventType.Error, new RealtimeAiErrorData { Message = ExtractErrorMessage(root), IsCritical = true });
+
                 default:
-                    Log.Information("OpenAIAdapter: 未知或未处理的 OpenAI 事件类型 '{EventTypeString}': {RawMessage}", eventTypeString, rawMessage);
-                    return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.Unknown, Data = eventTypeString, RawJson = rawMessage, ItemId = itemId };
+                    Log.Debug("[RealtimeAi] Unhandled OpenAI event: {EventType}", eventType);
+                    return Result(RealtimeAiWssEventType.Unknown, eventType);
             }
         }
         catch (JsonException jsonEx)
         {
-            Log.Error(jsonEx, "OpenAIAdapter: 解析 JSON 消息失败: {RawMessage}", rawMessage);
-            return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.Error, Data = new RealtimeAiErrorData { Message = "JSON 解析失败: " + jsonEx.Message, IsCritical = true }, RawJson = rawMessage };
+            Log.Error(jsonEx, "[RealtimeAi] Failed to parse OpenAI message");
+            return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.Error, Data = new RealtimeAiErrorData { Message = jsonEx.Message, IsCritical = true }, RawJson = rawMessage };
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "OpenAIAdapter: 解析消息时发生意外错误: {RawMessage}", rawMessage);
-            return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.Error, Data = new RealtimeAiErrorData { Message = "解析消息时发生意外错误: " + ex.Message, IsCritical = true }, RawJson = rawMessage };
+            Log.Error(ex, "[RealtimeAi] Unexpected error parsing OpenAI message");
+            return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.Error, Data = new RealtimeAiErrorData { Message = ex.Message, IsCritical = true }, RawJson = rawMessage };
         }
+    }
+
+    private static string ExtractErrorMessage(JsonElement root)
+    {
+        if (root.TryGetProperty("error", out var errorProp) && errorProp.TryGetProperty("message", out var msgProp))
+            return msgProp.GetString();
+
+        if (root.TryGetProperty("last_error", out var lastErrorProp) && lastErrorProp.ValueKind != JsonValueKind.Null && lastErrorProp.TryGetProperty("message", out var lastMsgProp))
+            return lastMsgProp.GetString();
+
+        return "Unknown OpenAI error";
     }
     
     public AiSpeechAssistantProvider Provider => AiSpeechAssistantProvider.OpenAi;
