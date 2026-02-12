@@ -2,7 +2,7 @@ using System.Net.WebSockets;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.RealtimeAi;
 
-namespace SmartTalk.Core.Services.RealtimeAiV2.Services;
+namespace SmartTalk.Core.Services.RealtimeAiV2;
 
 public class RealtimeAiConnectionProfile
 {

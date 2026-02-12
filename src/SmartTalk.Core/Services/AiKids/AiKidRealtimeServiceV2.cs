@@ -6,6 +6,7 @@ using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Attachments;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
+using SmartTalk.Core.Services.RealtimeAiV2;
 using SmartTalk.Core.Services.RealtimeAiV2.Services;
 using SmartTalk.Messages.Commands.AiKids;
 using SmartTalk.Messages.Commands.Attachments;
