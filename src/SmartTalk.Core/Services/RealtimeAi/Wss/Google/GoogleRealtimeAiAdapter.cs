@@ -193,5 +193,5 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
         };
     }
 
-    public AiSpeechAssistantProvider Provider => AiSpeechAssistantProvider.Google;
+    public RealtimeAiProvider Provider => RealtimeAiProvider.Google;
 }

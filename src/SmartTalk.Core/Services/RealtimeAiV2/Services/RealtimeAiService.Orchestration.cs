@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using NAudio.Wave;
 using Serilog;
+using SmartTalk.Core.Services.RealtimeAiV2.Adapters;
 using SmartTalk.Messages.Dto.RealtimeAi;
 
 namespace SmartTalk.Core.Services.RealtimeAiV2.Services;
@@ -61,23 +62,21 @@ public partial class RealtimeAiService
         return (Encoding.UTF8.GetString(ms.GetBuffer(), 0, (int)ms.Length), false);
     }
 
-    private enum ClientMessageType { Text, Image, Audio, Unknown }
-
     private async Task ProcessClientMessageAsync(string rawMessage)
     {
         try
         {
-            var (type, payload) = ParseClientMessage(rawMessage);
+            var (type, payload) = _ctx.ClientAdapter.ParseMessage(rawMessage);
 
             switch (type)
             {
-                case ClientMessageType.Audio:
+                case RealtimeAiClientMessageType.Audio:
                     await HandleClientAudioAsync(payload).ConfigureAwait(false);
                     break;
-                case ClientMessageType.Image:
+                case RealtimeAiClientMessageType.Image:
                     await HandleClientImageAsync(payload).ConfigureAwait(false);
                     break;
-                case ClientMessageType.Text:
+                case RealtimeAiClientMessageType.Text:
                     await HandleClientTextAsync(payload).ConfigureAwait(false);
                     break;
                 default:
@@ -89,41 +88,6 @@ public partial class RealtimeAiService
         {
             Log.Error(jsonEx, "[RealtimeAi] Failed to parse client message, SessionId: {SessionId}", _ctx.SessionId);
         }
-    }
-
-    private static (ClientMessageType Type, string Payload) ParseClientMessage(string rawMessage)
-    {
-        using var doc = JsonDocument.Parse(rawMessage);
-        var root = doc.RootElement;
-
-        if (root.TryGetProperty("media", out var media))
-            return ParseMediaPayload(media);
-
-        if (root.TryGetProperty("text", out var textProp) && !string.IsNullOrWhiteSpace(textProp.GetString()))
-            return (ClientMessageType.Text, textProp.GetString());
-
-        return (ClientMessageType.Unknown, null);
-    }
-
-    private static (ClientMessageType Type, string Payload) ParseMediaPayload(JsonElement media)
-    {
-        if (!media.TryGetProperty("payload", out var p)) 
-            return (ClientMessageType.Unknown, null);
-
-        var payload = p.GetString();
-        
-        if (string.IsNullOrWhiteSpace(payload)) 
-            return (ClientMessageType.Unknown, null);
-
-        // Client sends media.type = "video" for camera frames (JPEG),
-        // treated as image; all other types (including "audio" and absent) are audio.
-        var mediaType = media.TryGetProperty("type", out var t) ? t.GetString() : null;
-
-        return mediaType switch
-        {
-            "video" => (ClientMessageType.Image, payload),
-            _ => (ClientMessageType.Audio, payload)
-        };
     }
 
     private async Task HandleClientTextAsync(string text)

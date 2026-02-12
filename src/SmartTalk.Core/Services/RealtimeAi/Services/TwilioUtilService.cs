@@ -94,7 +94,7 @@ public class TwilioUtilUtilService : ITwilioUtilService
 
             // 检查是否需要转换 (Check if conversion is needed)
             // if (TwilioInputCodec == aiTargetCodec && TwilioInputSampleRate == aiTargetSampleRate)
-            if(_currentOptions.ModelConfig.Provider is AiSpeechAssistantProvider.OpenAi or AiSpeechAssistantProvider.Azure)
+            if(_currentOptions.ModelConfig.Provider is RealtimeAiProvider.OpenAi or RealtimeAiProvider.Azure)
             {
                 audioBytesForAi = twilioAudioBytes;
                 // Log.Trace("TwilioHandler: Twilio 输入音频格式 ({Codec} @ {Rate}Hz) 与 AI 期望格式相同，无需转换。", TwilioInputCodec, TwilioInputSampleRate); // TwilioHandler: Twilio input audio format ({Codec} @ {Rate}Hz) is the same as AI expected format, no conversion needed.
@@ -170,7 +170,7 @@ public class TwilioUtilUtilService : ITwilioUtilService
             byte[] audioBytesForTwilio;
 
             // 检查是否需要转换成 Twilio 期望的格式 (Check if conversion to Twilio's expected format is needed)
-            if (_currentOptions.ModelConfig.Provider is AiSpeechAssistantProvider.OpenAi or AiSpeechAssistantProvider.Azure)
+            if (_currentOptions.ModelConfig.Provider is RealtimeAiProvider.OpenAi or RealtimeAiProvider.Azure)
             {
                 audioBytesForTwilio = aiAudioBytes;
                 // Log.Trace("TwilioHandler: AI 输出音频格式 ({Codec} @ {Rate}Hz) 与 Twilio 期望格式相同，无需转换。", aiAudioData.Codec, aiAudioData.SampleRate); // TwilioHandler: AI output audio format ({Codec} @ {Rate}Hz) is the same as Twilio expected format, no conversion needed.

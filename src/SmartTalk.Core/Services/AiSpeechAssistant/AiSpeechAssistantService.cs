@@ -49,6 +49,7 @@ using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Pos;
 using SmartTalk.Messages.Dto.Smarties;
 using SmartTalk.Messages.Enums.PhoneOrder;
+using SmartTalk.Messages.Enums.RealtimeAi;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
@@ -522,15 +523,15 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     {
         switch (assistant.ModelProvider)
         {
-            case AiSpeechAssistantProvider.OpenAi:
+            case RealtimeAiProvider.OpenAi:
                 _openaiClientWebSocket.Options.SetRequestHeader("OpenAI-Beta", "realtime=v1");
                 _openaiClientWebSocket.Options.SetRequestHeader("Authorization", $"Bearer {_openAiSettings.ApiKey}");
                 break;
-            case AiSpeechAssistantProvider.ZhiPuAi:
+            case RealtimeAiProvider.ZhiPuAi:
                 _openaiClientWebSocket.Options.SetRequestHeader("OpenAI-Beta", "realtime=v1");
                 _openaiClientWebSocket.Options.SetRequestHeader("Authorization", $"Bearer {_zhiPuAiSettings.ApiKey}");
                 break;
-            case AiSpeechAssistantProvider.Azure:
+            case RealtimeAiProvider.Azure:
                 _openaiClientWebSocket.Options.SetRequestHeader("api-key", _azureSetting.ApiKey);
                 break;
             default:
@@ -1188,7 +1189,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         return assistant.ModelProvider switch
         {
-            AiSpeechAssistantProvider.OpenAi => new
+            RealtimeAiProvider.OpenAi => new
             {
                 turn_detection = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection),
                 input_audio_format = "g711_ulaw",
@@ -1201,7 +1202,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                 input_audio_noise_reduction = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction),
                 tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config)
             },
-            AiSpeechAssistantProvider.Azure => new
+            RealtimeAiProvider.Azure => new
             {
                 turn_detection = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection),
                 input_audio_format = "g711_ulaw",

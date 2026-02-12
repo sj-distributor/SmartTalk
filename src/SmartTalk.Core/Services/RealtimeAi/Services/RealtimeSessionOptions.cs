@@ -11,7 +11,7 @@ public class RealtimeAiConnectionProfile
 
 public class RealtimeAiModelConfig
 {
-    public AiSpeechAssistantProvider Provider { get; set; }
+    public RealtimeAiProvider Provider { get; set; }
 
     public string ServiceUrl { get; set; }
 

@@ -1,4 +1,5 @@
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
+using SmartTalk.Messages.Enums.RealtimeAi;
 
 namespace SmartTalk.Messages.Dto.AiSpeechAssistant;
 
@@ -18,7 +19,7 @@ public class AiSpeechAssistantDto
     
     public string ModelUrl { get; set; }
     
-    public AiSpeechAssistantProvider ModelProvider { get; set; }
+    public RealtimeAiProvider ModelProvider { get; set; }
     
     public string ModelVoice { get; set; }
     

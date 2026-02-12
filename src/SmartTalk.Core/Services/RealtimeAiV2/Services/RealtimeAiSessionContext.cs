@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Net.WebSockets;
+using SmartTalk.Core.Services.RealtimeAiV2.Adapters;
 using SmartTalk.Core.Services.RealtimeAiV2.Wss;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 
@@ -17,7 +18,9 @@ public class RealtimeAiSessionContext
     // Connection
     public WebSocket WebSocket { get; set; }
     public IRealtimeAiWssClient WssClient { get; set; }
-    public IRealtimeAiProviderAdapter Adapter { get; set; }
+    public IRealtimeAiClientAdapter ClientAdapter { get; set; }
+    
+    public IRealtimeAiProviderAdapter ProviderAdapter { get; set; }
     public CancellationTokenSource SessionCts { get; set; }
 
     // Runtime state

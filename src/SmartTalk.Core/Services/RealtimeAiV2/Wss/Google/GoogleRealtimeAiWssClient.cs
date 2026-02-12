@@ -3,6 +3,7 @@ using System.Text;
 using Serilog;
 using SmartTalk.Core.Settings.Google;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
+using SmartTalk.Messages.Enums.RealtimeAi;
 
 namespace SmartTalk.Core.Services.RealtimeAiV2.Wss.Google;
 
@@ -13,7 +14,7 @@ public class GoogleRealtimeAiWssClient : IRealtimeAiWssClient
     private readonly GoogleSettings _googleSettings;
 
     public Uri EndpointUri { get; private set; }
-    public AiSpeechAssistantProvider Provider => AiSpeechAssistantProvider.Google;
+    public RealtimeAiProvider Provider => RealtimeAiProvider.Google;
     public WebSocketState CurrentState => _webSocket?.State ?? WebSocketState.None;
 
     public event Func<string, Task> MessageReceivedAsync;

@@ -1,3 +1,5 @@
+using SmartTalk.Core.Services.RealtimeAiV2.Adapters.Clients.Default;
+
 namespace SmartTalk.Core.Services.RealtimeAiV2.Services;
 
 public partial class RealtimeAiService
@@ -13,6 +15,7 @@ public partial class RealtimeAiService
         {
             Options = options,
             WebSocket = options.WebSocket,
+            ClientAdapter = options.ClientAdapter ?? new DefaultRealtimeAiClientAdapter(),
             SessionCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
         };
 
@@ -28,6 +31,7 @@ public partial class RealtimeAiService
     private void BuildConnectSwitcher()
     {
         _ctx.WssClient = _realtimeAiSwitcher.WssClient(_ctx.Options.ModelConfig.Provider);
-        _ctx.Adapter = _realtimeAiSwitcher.ProviderAdapter(_ctx.Options.ModelConfig.Provider);
+        _ctx.ClientAdapter = _realtimeAiSwitcher.ClientAdapter(_ctx.Options.ClientConfig.Client);
+        _ctx.ProviderAdapter = _realtimeAiSwitcher.ProviderAdapter(_ctx.Options.ModelConfig.Provider);
     }
 }

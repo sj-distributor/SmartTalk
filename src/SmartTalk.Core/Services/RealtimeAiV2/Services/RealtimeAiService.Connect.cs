@@ -11,7 +11,7 @@ public partial class RealtimeAiService
         SubscribeProviderEvents();
 
         var serviceUri = new Uri(_ctx.Options.ModelConfig.ServiceUrl);
-        var headers = _ctx.Adapter.GetHeaders(_ctx.Options.Region);
+        var headers = _ctx.ProviderAdapter.GetHeaders(_ctx.Options.Region);
 
         if (_ctx.WssClient.CurrentState != WebSocketState.Open || _ctx.WssClient.EndpointUri != serviceUri)
             await _ctx.WssClient.ConnectAsync(serviceUri, headers, _ctx.SessionCts.Token).ConfigureAwait(false);
@@ -19,7 +19,7 @@ public partial class RealtimeAiService
         if (_ctx.WssClient.CurrentState != WebSocketState.Open)
             throw new InvalidOperationException("Failed to connect to AI provider WebSocket.");
 
-        var sessionConfig = _ctx.Adapter.BuildSessionConfig(_ctx.Options);
+        var sessionConfig = _ctx.ProviderAdapter.BuildSessionConfig(_ctx.Options);
         var configJson = JsonConvert.SerializeObject(sessionConfig, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore });
 
         await _ctx.WssClient.SendMessageAsync(configJson, _ctx.SessionCts.Token).ConfigureAwait(false);

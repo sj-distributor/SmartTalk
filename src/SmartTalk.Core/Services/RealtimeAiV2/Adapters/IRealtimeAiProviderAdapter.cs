@@ -1,12 +1,13 @@
 using SmartTalk.Core.Ioc;
 using SmartTalk.Messages.Dto.RealtimeAi;
-using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.RealtimeAi;
 
-namespace SmartTalk.Core.Services.RealtimeAiV2;
+namespace SmartTalk.Core.Services.RealtimeAiV2.Adapters;
 
 public interface IRealtimeAiProviderAdapter : IScopedDependency
 {
+    RealtimeAiProvider Provider { get; }
+    
     Dictionary<string, string> GetHeaders(RealtimeAiServerRegion region);
 
     object BuildSessionConfig(RealtimeSessionOptions options);
@@ -24,6 +25,4 @@ public interface IRealtimeAiProviderAdapter : IScopedDependency
     string BuildTriggerResponseMessage();
 
     ParsedRealtimeAiProviderEvent ParseMessage(string rawMessage);
-
-    AiSpeechAssistantProvider Provider { get; }
 }

@@ -151,7 +151,7 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
                          Log.Information("AiConversationEngine: 发送初始会话问候消息。会话 ID: {SessionId}", _sessionId);
 
                          await SendTextAsync($"Greet the user with: {_greetings}");
-                         if (_currentOptions.ModelConfig.Provider == AiSpeechAssistantProvider.OpenAi)
+                         if (_currentOptions.ModelConfig.Provider == RealtimeAiProvider.OpenAi)
                              await _realtimeAiClient.SendMessageAsync(JsonSerializer.Serialize(new { type = "response.create" }), _sessionCts.Token);
                      }
                      await OnSessionStatusChangedAsync(RealtimeAiWssEventType.SessionInitialized, parsedEvent.Data ?? _sessionId);

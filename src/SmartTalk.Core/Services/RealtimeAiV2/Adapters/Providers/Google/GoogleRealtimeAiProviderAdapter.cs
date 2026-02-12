@@ -1,6 +1,5 @@
 using System.Text.Json;
 using Serilog;
-using SmartTalk.Core.Services.RealtimeAiV2.Services;
 using SmartTalk.Core.Settings.Google;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
@@ -8,13 +7,13 @@ using SmartTalk.Messages.Enums.RealtimeAi;
 using JsonException = System.Text.Json.JsonException;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 
-namespace SmartTalk.Core.Services.RealtimeAiV2.Adapters.Google;
+namespace SmartTalk.Core.Services.RealtimeAiV2.Adapters.Providers.Google;
 
-public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
+public class GoogleRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
 {
     private readonly GoogleSettings _googleSettings;
 
-    public GoogleRealtimeAiAdapter(GoogleSettings googleSettings)
+    public GoogleRealtimeAiProviderAdapter(GoogleSettings googleSettings)
     {
         _googleSettings = googleSettings;
     }
@@ -176,5 +175,5 @@ public class GoogleRealtimeAiAdapter : IRealtimeAiProviderAdapter
         }
     }
     
-    public AiSpeechAssistantProvider Provider => AiSpeechAssistantProvider.Google;
+    public RealtimeAiProvider Provider => RealtimeAiProvider.Google;
 }

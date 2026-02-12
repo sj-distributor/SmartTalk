@@ -13,7 +13,7 @@ public partial class RealtimeAiService
     {
         if (!IsProviderSessionActive) return;
 
-        var parsedEvent = _ctx.Adapter.ParseMessage(rawMessage);
+        var parsedEvent = _ctx.ProviderAdapter.ParseMessage(rawMessage);
 
         try
         {
@@ -93,17 +93,7 @@ public partial class RealtimeAiService
 
         await WriteToAudioBufferAsync(audioBytes).ConfigureAwait(false);
 
-        var audioDelta = new
-        {
-            type = "ResponseAudioDelta",
-            Data = new
-            {
-                aiAudioData.Base64Payload
-            },
-            session_id = _ctx.StreamSid
-        };
-
-        await SendToClientAsync(audioDelta).ConfigureAwait(false);
+        await SendToClientAsync(_ctx.ClientAdapter.BuildAudioDeltaMessage(aiAudioData.Base64Payload, _ctx.StreamSid)).ConfigureAwait(false);
     }
 
     private async Task OnAiDetectedUserSpeechAsync()
@@ -111,13 +101,7 @@ public partial class RealtimeAiService
         if (_ctx.Options.IdleFollowUp != null)
             _inactivityTimerManager.StopTimer(_ctx.StreamSid);
 
-        var speechDetected = new
-        {
-            type = "SpeechDetected",
-            session_id = _ctx.StreamSid
-        };
-
-        await SendToClientAsync(speechDetected).ConfigureAwait(false);
+        await SendToClientAsync(_ctx.ClientAdapter.BuildSpeechDetectedMessage(_ctx.StreamSid)).ConfigureAwait(false);
     }
 
     private async Task OnAiTurnCompletedAsync()
@@ -125,25 +109,19 @@ public partial class RealtimeAiService
         _ctx.Round += 1;
         _ctx.IsAiSpeaking = false;
 
-        var turnCompleted = new
-        {
-            type = "AiTurnCompleted",
-            session_id = _ctx.StreamSid
-        };
-
         var idleFollowUp = _ctx.Options.IdleFollowUp;
-        
+
         if (idleFollowUp != null && (!idleFollowUp.SkipRounds.HasValue || idleFollowUp.SkipRounds.Value < _ctx.Round))
         {
             _inactivityTimerManager.StartTimer(_ctx.StreamSid, TimeSpan.FromSeconds(idleFollowUp.TimeoutSeconds), async () =>
             {
                 Log.Information("[RealtimeAi] Idle follow-up triggered, SessionId: {SessionId}, TimeoutSeconds: {TimeoutSeconds}", _ctx.SessionId, idleFollowUp.TimeoutSeconds);
-                
+
                 await SendTextToProviderAsync(idleFollowUp.FollowUpMessage);
             });
         }
 
-        await SendToClientAsync(turnCompleted).ConfigureAwait(false);
+        await SendToClientAsync(_ctx.ClientAdapter.BuildTurnCompletedMessage(_ctx.StreamSid)).ConfigureAwait(false);
         
         Log.Information("[RealtimeAi] AI turn completed, SessionId: {SessionId}, Round: {Round}", _ctx.SessionId, _ctx.Round);
     }
@@ -153,27 +131,17 @@ public partial class RealtimeAiService
         // Partial transcriptions are incremental fragments (e.g. "你" → "你好" → "你好，请问..."),
         // only sent to client for real-time UI display. Only completed transcriptions (full sentences)
         // are queued for final delivery via OnTranscriptionsCompletedAsync at session end.
-        if (eventType != RealtimeAiWssEventType.OutputAudioTranscriptionPartial) 
+        if (eventType != RealtimeAiWssEventType.OutputAudioTranscriptionPartial)
             _ctx.Transcriptions.Enqueue((transcriptionData.Speaker, transcriptionData.Transcript));
 
-        await SendToClientAsync(new
-        {
-            type = eventType.ToString(),
-            Data = new { transcriptionData },
-            session_id = _ctx.StreamSid
-        }).ConfigureAwait(false);
+        await SendToClientAsync(_ctx.ClientAdapter.BuildTranscriptionMessage(eventType, transcriptionData, _ctx.StreamSid)).ConfigureAwait(false);
     }
     
     private async Task OnProviderErrorAsync(RealtimeAiErrorData errorData)
     {
         Log.Error("[RealtimeAi] Provider error, SessionId: {SessionId}, Code: {ErrorCode}, Message: {ErrorMessage}, IsCritical: {IsCritical}", _ctx.SessionId, errorData.Code, errorData.Message, errorData.IsCritical);
 
-        await SendToClientAsync(new
-        {
-            type = "ClientError",
-            session_id = _ctx.StreamSid,
-            Data = new { errorData.Code, errorData.Message }
-        }).ConfigureAwait(false);
+        await SendToClientAsync(_ctx.ClientAdapter.BuildErrorMessage(errorData.Code, errorData.Message, _ctx.StreamSid)).ConfigureAwait(false);
 
         if (errorData.IsCritical)
             await DisconnectFromProviderAsync($"Critical provider error: {errorData.Message}").ConfigureAwait(false);
