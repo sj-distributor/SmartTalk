@@ -57,15 +57,34 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
 
     public string BuildAudioAppendMessage(RealtimeAiWssAudioData audioData)
     {
-        var message = new
+        object message;
+        
+        var imageBase64 = audioData.CustomProperties.GetValueOrDefault("image") as string;
+
+        if (!string.IsNullOrWhiteSpace(imageBase64))
         {
-            type = "input_audio_buffer.append",
-            audio = audioData.Base64Payload
-        };
-        var json = JsonSerializer.Serialize(message);
-        return json;
+            message = new
+            {
+                type = "conversation.item.create",
+                item = new
+                {
+                    type = "message", role = "user",
+                    content = new object[]
+                    {
+                        new { type = "input_audio", audio = audioData.Base64Payload },
+                        new { type = "input_image", image_url = $"data:image/jpeg;base64,{imageBase64}" }
+                    }
+                }
+            };
+        }
+        else
+        {
+            message = new { type = "input_audio_buffer.append", audio = audioData.Base64Payload };
+        }
+
+        return JsonSerializer.Serialize(message);
     }
-    
+
     public string BuildTextUserMessage(string text, string sessionId)
     {
         var message = new

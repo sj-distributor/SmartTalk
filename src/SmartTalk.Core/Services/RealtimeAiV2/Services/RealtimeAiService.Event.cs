@@ -32,6 +32,11 @@ public partial class RealtimeAiService
                         await OnInputAudioTranscriptionCompletedAsync(inputTranscription).ConfigureAwait(false);
                     break;
 
+                case RealtimeAiWssEventType.OutputAudioTranscriptionPartial:
+                    if (parsedEvent.Data is RealtimeAiWssTranscriptionData outputPartialTranscription)
+                        await OnOutputAudioTranscriptionPartialAsync(outputPartialTranscription).ConfigureAwait(false);
+                    break;
+
                 case RealtimeAiWssEventType.OutputAudioTranscriptionCompleted:
                     if (parsedEvent.Data is RealtimeAiWssTranscriptionData outputTranscription)
                         await OnOutputAudioTranscriptionCompletedAsync(outputTranscription).ConfigureAwait(false);
@@ -180,6 +185,21 @@ public partial class RealtimeAiService
         var transcription = new
         {
             type = "InputAudioTranscriptionCompleted",
+            Data = new
+            {
+                transcriptionData
+            },
+            session_id = _ctx.StreamSid
+        };
+
+        await SendToClientAsync(transcription).ConfigureAwait(false);
+    }
+
+    private async Task OnOutputAudioTranscriptionPartialAsync(RealtimeAiWssTranscriptionData transcriptionData)
+    {
+        var transcription = new
+        {
+            type = "OutputAudioTranscriptionPartial",
             Data = new
             {
                 transcriptionData

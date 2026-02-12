@@ -1,5 +1,4 @@
 using SmartTalk.Core.Ioc;
-using SmartTalk.Core.Services.RealtimeAiV2.Services;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.RealtimeAi;

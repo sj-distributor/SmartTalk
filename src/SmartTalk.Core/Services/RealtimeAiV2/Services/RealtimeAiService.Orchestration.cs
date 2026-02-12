@@ -10,12 +10,6 @@ namespace SmartTalk.Core.Services.RealtimeAiV2.Services;
 
 public partial class RealtimeAiService
 {
-    private static readonly (string Property, string Type, Func<JsonElement, string> Extract)[] ClientMessageParsers =
-    [
-        ("media", "audio", e => e.GetProperty("payload").GetString()),
-        ("text",  "text",  e => e.GetString())
-    ];
-    
     private async Task OrchestrateSessionAsync()
     {
         var clientIsClose = false;
@@ -67,6 +61,8 @@ public partial class RealtimeAiService
         return (Encoding.UTF8.GetString(ms.GetBuffer(), 0, (int)ms.Length), false);
     }
 
+    private enum ClientMessageType { Text, Image, Audio, Unknown }
+
     private async Task ProcessClientMessageAsync(string rawMessage)
     {
         try
@@ -75,10 +71,13 @@ public partial class RealtimeAiService
 
             switch (type)
             {
-                case "audio":
+                case ClientMessageType.Audio:
                     await HandleClientAudioAsync(payload).ConfigureAwait(false);
                     break;
-                case "text":
+                case ClientMessageType.Image:
+                    await HandleClientImageAsync(payload).ConfigureAwait(false);
+                    break;
+                case ClientMessageType.Text:
                     await HandleClientTextAsync(payload).ConfigureAwait(false);
                     break;
                 default:
@@ -92,22 +91,39 @@ public partial class RealtimeAiService
         }
     }
 
-    private static (string Type, string Payload) ParseClientMessage(string rawMessage)
+    private static (ClientMessageType Type, string Payload) ParseClientMessage(string rawMessage)
     {
         using var doc = JsonDocument.Parse(rawMessage);
-        
         var root = doc.RootElement;
 
-        foreach (var (property, type, extract) in ClientMessageParsers)
-        {
-            if (!root.TryGetProperty(property, out var element)) continue;
-            
-            var payload = extract(element);
-            
-            if (!string.IsNullOrWhiteSpace(payload)) return (type, payload);
-        }
+        if (root.TryGetProperty("media", out var media))
+            return ParseMediaPayload(media);
 
-        return (null, null);
+        if (root.TryGetProperty("text", out var textProp) && !string.IsNullOrWhiteSpace(textProp.GetString()))
+            return (ClientMessageType.Text, textProp.GetString());
+
+        return (ClientMessageType.Unknown, null);
+    }
+
+    private static (ClientMessageType Type, string Payload) ParseMediaPayload(JsonElement media)
+    {
+        if (!media.TryGetProperty("payload", out var p)) 
+            return (ClientMessageType.Unknown, null);
+
+        var payload = p.GetString();
+        
+        if (string.IsNullOrWhiteSpace(payload)) 
+            return (ClientMessageType.Unknown, null);
+
+        // Client sends media.type = "video" for camera frames (JPEG),
+        // treated as image; all other types (including "audio" and absent) are audio.
+        var mediaType = media.TryGetProperty("type", out var t) ? t.GetString() : null;
+
+        return mediaType switch
+        {
+            "video" => (ClientMessageType.Image, payload),
+            _ => (ClientMessageType.Audio, payload)
+        };
     }
 
     private async Task HandleClientTextAsync(string text)
@@ -129,6 +145,19 @@ public partial class RealtimeAiService
             CustomProperties = new Dictionary<string, object>
             {
                 { nameof(RealtimeSessionOptions.InputFormat), _ctx.Options.InputFormat }
+            }
+        }).ConfigureAwait(false);
+    }
+
+    private async Task HandleClientImageAsync(string base64Payload)
+    {
+        await SendAudioToProviderAsync(new RealtimeAiWssAudioData
+        {
+            Base64Payload = base64Payload,
+            CustomProperties = new Dictionary<string, object>
+            {
+                { nameof(RealtimeSessionOptions.InputFormat), _ctx.Options.InputFormat },
+                { "image", base64Payload }
             }
         }).ConfigureAwait(false);
     }
@@ -189,6 +218,7 @@ public partial class RealtimeAiService
         try
         {
             snapshot = _ctx.AudioBuffer;
+            _ctx.AudioBuffer = null;
         }
         finally
         {
