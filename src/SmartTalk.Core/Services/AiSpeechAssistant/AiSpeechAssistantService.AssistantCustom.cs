@@ -95,6 +95,10 @@ public partial class AiSpeechAssistantService
         if (!string.IsNullOrEmpty(command.Language))
         { latestKnowledge.ModelLanguage = command.Language; }
         
+        var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByIdAsync(command.AssistantId, cancellationToken).ConfigureAwait(false);
+        assistant.ModelLanguage = command.Language;
+        await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync([assistant], true, cancellationToken).ConfigureAwait(false);
+    
         var prevKnowledgeDto = _mapper.Map<AiSpeechAssistantKnowledgeDto>(prevKnowledge);
         var knowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(latestKnowledge);
 
