@@ -92,13 +92,10 @@ public partial class AiSpeechAssistantService
                 command.RelatedKnowledges.ToDictionary(x => x.Id, x => x), cancellationToken);
         }
         
-        if (!string.IsNullOrEmpty(command.Language))
-        { latestKnowledge.ModelLanguage = command.Language; }
-        
-        var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByIdAsync(command.AssistantId, cancellationToken).ConfigureAwait(false);
-        assistant.ModelLanguage = command.Language;
-        await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync([assistant], true, cancellationToken).ConfigureAwait(false);
-    
+        var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByIdAsync(command.AssistantId, cancellationToken).ConfigureAwait(false) ?? throw new Exception($"Assistant not found: {command.AssistantId}");
+
+        latestKnowledge.ModelLanguage = !string.IsNullOrEmpty(command.Language) ? command.Language : assistant.ModelLanguage;
+
         var prevKnowledgeDto = _mapper.Map<AiSpeechAssistantKnowledgeDto>(prevKnowledge);
         var knowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(latestKnowledge);
 
