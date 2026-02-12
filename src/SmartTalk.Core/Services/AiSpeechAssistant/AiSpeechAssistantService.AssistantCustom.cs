@@ -1302,7 +1302,7 @@ public partial class AiSpeechAssistantService
             
             if (relations.Count == 0) continue;
             
-            var mergedJson = MergeKnowledgeJson(relations, sourceKnowledge, oldTarget.Json);
+            var mergedJson = MergeKnowledgeJson(sourceKnowledge, oldTarget.Json);
 
             var newTarget = new AiSpeechAssistantKnowledge
             {
@@ -1342,21 +1342,12 @@ public partial class AiSpeechAssistantService
         };
     }
 
-    private static string MergeKnowledgeJson(List<AiSpeechAssistantKnowledgeCopyRelated> relations, AiSpeechAssistantKnowledge sourceKnowledge, string oldTargetJson)
+    private static string MergeKnowledgeJson(AiSpeechAssistantKnowledge sourceKnowledge, string oldTargetJson)
     {
         var mergedObj = RemoveCopySuffixFromKeys(JObject.Parse(oldTargetJson ?? "{}"));
 
-        foreach (var relation in relations)
-        {
-            var json = relation.SourceKnowledgeId == sourceKnowledge.Id
-                ? JObject.Parse(sourceKnowledge.Json ?? "{}")
-                : JObject.Parse(relation.CopyKnowledgePoints ?? "{}");
-
-            var normalized = RemoveCopySuffixFromKeys(json);
-
-            foreach (var prop in normalized.Properties())
-                mergedObj[prop.Name] = prop.Value;
-        }
+        var sourceObj = RemoveCopySuffixFromKeys(JObject.Parse(sourceKnowledge.Json ?? "{}"));
+        mergedObj.Merge(sourceObj, new JsonMergeSettings { MergeArrayHandling = MergeArrayHandling.Concat });
 
         Log.Information("Merged JObject: {@mergedObj}", mergedObj);
         return mergedObj.ToString(Formatting.None);
