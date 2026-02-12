@@ -40,7 +40,12 @@ public partial class RealtimeAiService
                     await OnAiDetectedUserSpeechAsync().ConfigureAwait(false);
                     break;
 
+                // Both originate from provider's response.done —
+                // FunctionCallSuggested when the response contains function calls, ResponseTurnCompleted otherwise.
+                case RealtimeAiWssEventType.FunctionCallSuggested:
                 case RealtimeAiWssEventType.ResponseTurnCompleted:
+                    if (parsedEvent.Data is List<RealtimeAiWssFunctionCallData> functionCalls)
+                        await OnFunctionCallsReceivedAsync(functionCalls).ConfigureAwait(false);
                     await OnAiTurnCompletedAsync().ConfigureAwait(false);
                     break;
 
@@ -137,6 +142,24 @@ public partial class RealtimeAiService
         await SendToClientAsync(_ctx.ClientAdapter.BuildTranscriptionMessage(eventType, transcriptionData, _ctx.StreamSid)).ConfigureAwait(false);
     }
     
+    private async Task OnFunctionCallsReceivedAsync(List<RealtimeAiWssFunctionCallData> functionCalls)
+    {
+        if (_ctx.Options.OnFunctionCallAsync == null) return;
+
+        var replies = new List<string>();
+
+        foreach (var functionCall in functionCalls)
+        {
+            Log.Information("[RealtimeAi] Function call received, SessionId: {SessionId}, Function: {FunctionName}", _ctx.SessionId, functionCall.FunctionName);
+
+            var result = await _ctx.Options.OnFunctionCallAsync(functionCall).ConfigureAwait(false);
+
+            if (!string.IsNullOrEmpty(result?.ReplyMessage)) replies.Add(result.ReplyMessage);
+        }
+
+        if (replies.Count > 0) await SendTextToProviderAsync(string.Join("\n", replies)).ConfigureAwait(false);
+    }
+
     private async Task OnProviderErrorAsync(RealtimeAiErrorData errorData)
     {
         Log.Error("[RealtimeAi] Provider error, SessionId: {SessionId}, Code: {ErrorCode}, Message: {ErrorMessage}, IsCritical: {IsCritical}", _ctx.SessionId, errorData.Code, errorData.Message, errorData.IsCritical);

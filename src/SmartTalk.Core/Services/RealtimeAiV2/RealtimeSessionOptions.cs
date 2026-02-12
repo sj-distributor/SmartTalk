@@ -1,4 +1,5 @@
 using System.Net.WebSockets;
+using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.RealtimeAi;
 
@@ -99,6 +100,13 @@ public class RealtimeSessionOptions
     /// The consumer receives a sendText delegate to send messages (e.g. greetings).
     /// </summary>
     public Func<Func<string, Task>, Task> OnSessionReadyAsync { get; set; }
+
+    /// <summary>
+    /// Called when the AI provider suggests a function call (e.g. from OpenAI response.done).
+    /// Return a <see cref="RealtimeAiFunctionCallResult"/> with ReplyMessage to continue the conversation,
+    /// or null if no reply is needed. Null callback to ignore function calls.
+    /// </summary>
+    public Func<RealtimeAiWssFunctionCallData, Task<RealtimeAiFunctionCallResult>> OnFunctionCallAsync { get; set; }
 
     /// <summary>
     /// Called when the session ends.

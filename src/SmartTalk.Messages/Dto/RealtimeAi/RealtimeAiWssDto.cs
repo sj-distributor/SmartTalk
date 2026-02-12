@@ -23,8 +23,16 @@ public class RealtimeAiWssTranscriptionData
 public class RealtimeAiWssFunctionCallData
 {
     public string FunctionName { get; set; }
-    
+
     public string ArgumentsJson { get; set; }
+}
+
+public class RealtimeAiFunctionCallResult
+{
+    /// <summary>
+    /// Message to send back to the AI provider to continue the conversation.
+    /// </summary>
+    public string ReplyMessage { get; set; }
 }
 
 public class ParsedRealtimeAiProviderEvent

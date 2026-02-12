@@ -178,7 +178,8 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
                     return Result(RealtimeAiWssEventType.OutputAudioTranscriptionCompleted, Transcription("transcript", AiSpeechAssistantSpeaker.Ai));
 
                 case "response.done":
-                    return Result(RealtimeAiWssEventType.ResponseTurnCompleted);
+                    var functionCalls = ExtractFunctionCalls(root);
+                    return functionCalls != null ? Result(RealtimeAiWssEventType.FunctionCallSuggested, functionCalls) : Result(RealtimeAiWssEventType.ResponseTurnCompleted);
 
                 case "error":
                     return Result(RealtimeAiWssEventType.Error, new RealtimeAiErrorData { Message = ExtractErrorMessage(root), IsCritical = true });
@@ -198,6 +199,32 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
             Log.Error(ex, "[RealtimeAi] Unexpected error parsing OpenAI message");
             return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.Error, Data = new RealtimeAiErrorData { Message = ex.Message, IsCritical = true }, RawJson = rawMessage };
         }
+    }
+
+    private static List<RealtimeAiWssFunctionCallData> ExtractFunctionCalls(JsonElement root)
+    {
+        if (!root.TryGetProperty("response", out var response) ||
+            !response.TryGetProperty("output", out var output) ||
+            output.GetArrayLength() == 0)
+            return null;
+
+        List<RealtimeAiWssFunctionCallData> results = null;
+
+        foreach (var item in output.EnumerateArray())
+        {
+            if (!item.TryGetProperty("type", out var typeProp) || typeProp.GetString() != "function_call")
+                continue;
+
+            var name = item.TryGetProperty("name", out var nameProp) ? nameProp.GetString() : null;
+            var args = item.TryGetProperty("arguments", out var argsProp) ? argsProp.GetString() : null;
+
+            if (string.IsNullOrEmpty(name)) continue;
+
+            results ??= new List<RealtimeAiWssFunctionCallData>();
+            results.Add(new RealtimeAiWssFunctionCallData { FunctionName = name, ArgumentsJson = args });
+        }
+
+        return results;
     }
 
     private static string ExtractErrorMessage(JsonElement root)
