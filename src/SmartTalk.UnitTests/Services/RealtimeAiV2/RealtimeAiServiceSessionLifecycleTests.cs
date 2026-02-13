@@ -1,5 +1,6 @@
 using NSubstitute;
 using Shouldly;
+using SmartTalk.Core.Services.RealtimeAiV2;
 using SmartTalk.Core.Services.RealtimeAiV2.Adapters;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
@@ -54,16 +55,16 @@ public class RealtimeAiServiceSessionLifecycleTests : RealtimeAiServiceTestBase
     [Fact]
     public async Task Session_ProviderSendsSessionInitialized_InvokesOnSessionReadyAsync()
     {
-        Func<string, Task>? capturedSendText = null;
+        RealtimeAiSessionActions capturedActions = null;
 
         ProviderAdapter.ParseMessage(Arg.Any<string>())
             .Returns(new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.SessionInitialized });
 
         var options = CreateDefaultOptions(o =>
         {
-            o.OnSessionReadyAsync = async sendText =>
+            o.OnSessionReadyAsync = async actions =>
             {
-                capturedSendText = sendText;
+                capturedActions = actions;
                 await Task.CompletedTask;
             };
         });
@@ -76,7 +77,9 @@ public class RealtimeAiServiceSessionLifecycleTests : RealtimeAiServiceTestBase
         FakeWs.EnqueueClose();
         await sessionTask;
 
-        capturedSendText.ShouldNotBeNull();
+        capturedActions.ShouldNotBeNull();
+        capturedActions!.SendTextToProviderAsync.ShouldNotBeNull();
+        capturedActions.SendAudioToClientAsync.ShouldNotBeNull();
     }
 
     [Fact]

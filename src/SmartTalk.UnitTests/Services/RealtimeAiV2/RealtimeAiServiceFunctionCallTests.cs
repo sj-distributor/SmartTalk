@@ -182,9 +182,9 @@ public class RealtimeAiServiceFunctionCallTests : RealtimeAiServiceTestBase
 
         var options = CreateDefaultOptions(o =>
         {
-            o.OnFunctionCallAsync = async (_, sendAudioToClient) =>
+            o.OnFunctionCallAsync = async (_, actions) =>
             {
-                await sendAudioToClient(audioBase64);
+                await actions.SendAudioToClientAsync(audioBase64);
                 return new RealtimeAiFunctionCallResult { Output = "done" };
             };
         });

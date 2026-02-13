@@ -19,11 +19,21 @@ public partial class RealtimeAiService
 
         BuildConnectSwitcher();
         BuildRecordingIfRequired();
+        BuildSessionActions();
     }
 
     private void BuildRecordingIfRequired()
     {
         if (_ctx.Options.EnableRecording && _ctx.AudioBuffer == null) _ctx.AudioBuffer = new MemoryStream();
+    }
+
+    private void BuildSessionActions()
+    {
+        _ctx.SessionActions = new RealtimeAiSessionActions
+        {
+            SendAudioToClientAsync = SendAudioToClientAsync,
+            SendTextToProviderAsync = SendTextToProviderAsync
+        };
     }
 
     private void BuildConnectSwitcher()

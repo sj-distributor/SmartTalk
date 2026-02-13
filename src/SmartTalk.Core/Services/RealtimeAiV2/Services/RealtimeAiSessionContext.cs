@@ -35,4 +35,7 @@ public class RealtimeAiSessionContext
 
     // Synchronization
     public SemaphoreSlim WsSendLock { get; } = new(1, 1);
+
+    // Actions exposed to consumer callbacks
+    public RealtimeAiSessionActions SessionActions { get; set; }
 }
