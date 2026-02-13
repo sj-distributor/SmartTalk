@@ -3,6 +3,7 @@ using System.Text;
 using System.Net.WebSockets;
 using SmartTalk.Core.Services.RealtimeAi.wss;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
+using SmartTalk.Messages.Enums.RealtimeAi;
 
 namespace SmartTalk.Core.Services.RealtimeAi.Wss.Qwen;
 
@@ -12,7 +13,7 @@ public class QwenRealtimeAiWssClient : IRealtimeAiWssClient
     private ClientWebSocket _webSocket;
 
     public Uri EndpointUri { get; private set; }
-    public AiSpeechAssistantProvider Provider => AiSpeechAssistantProvider.Qwen;
+    public RealtimeAiProvider Provider => RealtimeAiProvider.Qwen;
     public WebSocketState CurrentState => _webSocket?.State ?? WebSocketState.None;
 
     public event Func<string, Task> MessageReceivedAsync;

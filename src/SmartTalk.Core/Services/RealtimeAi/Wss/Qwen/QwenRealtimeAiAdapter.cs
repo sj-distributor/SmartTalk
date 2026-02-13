@@ -15,7 +15,7 @@ namespace SmartTalk.Core.Services.RealtimeAi.Wss.Qwen;
 
 public class QwenRealtimeAiAdapter : IRealtimeAiProviderAdapter
 {
-    public AiSpeechAssistantProvider Provider => AiSpeechAssistantProvider.Qwen;
+    public RealtimeAiProvider Provider => RealtimeAiProvider.Qwen;
 
     private readonly QwenSettings _qwenSettings;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;

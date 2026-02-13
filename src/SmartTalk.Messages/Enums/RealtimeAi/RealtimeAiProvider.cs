@@ -8,5 +8,7 @@ public enum RealtimeAiProvider
     
     Azure,
     
-    Google
+    Google,
+    
+    Qwen
 }

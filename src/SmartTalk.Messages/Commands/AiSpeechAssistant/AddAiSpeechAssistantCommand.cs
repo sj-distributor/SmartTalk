@@ -3,6 +3,7 @@ using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
+using SmartTalk.Messages.Enums.RealtimeAi;
 using SmartTalk.Messages.Requests.Pos;
 using SmartTalk.Messages.Responses;
 
@@ -40,7 +41,7 @@ public class AddAiSpeechAssistantCommand : HasServiceProviderId, ICommand
     
     public AiSpeechAssistantMediaType? MediaType { get; set; }
 
-    public AiSpeechAssistantProvider ModelProvider { get; set; } = AiSpeechAssistantProvider.OpenAi;
+    public RealtimeAiProvider ModelProvider { get; set; } = RealtimeAiProvider.OpenAi;
     
     public int? StoreId { get; set; }
 }
