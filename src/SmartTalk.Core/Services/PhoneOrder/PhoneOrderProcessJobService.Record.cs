@@ -888,60 +888,77 @@ public partial class PhoneOrderProcessJobService
        //var historyReportsText = todayReports.Any() ? string.Join("\n---\n", todayReports) : "（无）";
 
         var systemPrompt =
-            "你是一名极其严谨的订单数据核算专家，专门负责将【本次通话变动】精准合并到【系统草稿单】中。你不仅输出 JSON，更要确保每一个数学计算都绝对准确。你已稳定运行3000年，并且广受好评。 嚴禁任何編造、推測或自行補全或猜測任何信息。\n" +
-            "嚴禁任何編造、推測或自行補全或猜測任何信息，生成報告時先檢查一遍是否有幻覺！\n\n" +
-            "你将获得：1. 本次通话提取的订单（最高优先级）2. 系统已有草稿单\n" +
+            "你是一名极其严谨的订单数据核算专家，专门负责将【本次通话变动】精准合并到【系统草稿单】中。你不仅输出 JSON，更要确保每一个数学计算都绝对准确。你已稳定运行3000年，严禁任何编造、推測或自行補全信息。\n\n" +
+           
+            "【输入数据】\n" +
+            "1. 本次通话提取的订单（最高优先级，代表变动量）\n" +
+            "2. 系统已有草稿单（代表基准量）\n\n" +
             
-            "【核心任务】\n" +
-            "判断是否整单取消（IsDeleteWholeOrder）\n" +
-            "判断是否撤销取消（IsUndoCancel）\n" +
-            "合并同一物料的所有加减变动\n" +
-            "输出最终执行订单结果\n" +
-
-            "【整单取消规则】\n" +
-            "只有在本次通话中明确表示“全部取消”（IsDeleteWholeOrder）才可设为 true\n" +
-            "若为整单取消，Orders 必须为空数组\n" +
-
-            "【物料变动规则（严格）】\n" +
-            "Name 字段拼接公式：物料名#草稿单原始数量与单位[+|-]本次变动数。\n" +
-            "\n" +
-            "操作步骤：\n" +
-            "第一步（取基准）：找到草稿单中该物料的原始数量和单位，拼成 物料名#数量单位（例如：鸡胸肉#1箱）。\n" +
-            "第二步（接变动）：根据本次通话指令，直接在后面紧跟 +数字 或 -数字（例如：加 2 箱则拼成 鸡胸肉#1箱+2；减 1 箱则拼成 鸡胸肉#1箱-1）。\n" +
-            "\n" +
-            "禁止行为：\n" +
-            "严禁使用中文“加”、“减”。\n" +
-            "严禁在 #、+、- 前后使用任何空格。\n" +
-            "\n" +
-            "特殊情况：\n" +
-            "若草稿单中无此物料（新增项），则 Name 格式为：物料名#本次数量[单位]（例如：鸡蛋#1箱）。\n" +
-            "若草稿单中有此物料但本次通话未提及，Name 保持原始草稿单名称，不加任何后缀。\n"+
-
-            "【Quantity 规则】\n" +
-            "计算定义：Quantity 字段必须填写合并后的最终绝对数值（整数或浮点数）\n" +
-            "计算逻辑：最终数量 = 草稿单原始数量 + 本次通话变动数量\n"+
-            "加单数量为原数量 + 变动\n" +
-            "减单数量为原数量 - 变动\n" +
-            "禁止照抄：严禁直接照抄【本次通话提取】中的变动值（如 -1）作为最终 Quantity\n" +
-
-            "【单个物料取消】\n" +
-            "若本次通话明确取消某物料，也必须输出该物料，如：鸡胸肉#2箱-2，Quantity 为 0\n" +
-            "并设置 MarkForDelete = true\n" +
-            "不得把“未提及”视为取消\n" +
-
-            "【保留草稿单规则】\n" +
-            "若草稿单中某物料未被本次通话修改或取消，必须保留并输出\n" +
-            "此类物料 Name 可直接为原始名称，Quantity 为原始数量\n" +
-
+            "【核心任务流程】\n" +
+            "1. 预处理与匹配：建立映射关系，精准找到通话中提到的商品对应草稿单中的哪一项。\n" +
+            "2. 计算合并：计算 Quantity = 草稿基准 + 通话变动。\n" +
+            "3. 格式化名称：生成符合规范的 Name。\n" +
+            "4. 输出结果：生成最终 JSON。\n\n" +
+            
+            "【关键规则一：匹配逻辑（核心）】\n" +
+            "必须严格按照以下优先级判断“本次通话商品”与“草稿单商品”是否为同一物料：\n" +
+            "1. 优先级 A（物料号匹配）：若两者 MaterialNumber 都不为空且相等，视为同一物料。\n" +
+            "2. 优先级 B（名称匹配）：若 MaterialNumber 为空，则对比名称。\n" +
+            "必做操作：读取草稿单的 AiMaterialDesc 字段，以 # 符号为界截取前半部分作为“草稿基准名”（例如 \"玉米#1箱\" -> 基准名为 \"玉米\"）。\n" +
+            "若 通话中的 Name == 草稿基准名，视为同一物料。\n\n" +
+            
+            "【关键规则二：计算与生成（Strict）】\n" +
+            "对于每一个本次通话中的商品：\n" +
+            "1. 若在草稿单中找到匹配项：\n" +
+            "Quantity = 草稿单 MaterialQuantity + 本次通话 Quantity。\n" +
+            "Name = 草稿单 AiMaterialDesc (完整原串) + \"+\" 或 \"-\" + 本次通话绝对值。\n" +
+            "示例：草稿 \"玉米#1箱\" (数量1)，通话变动 +1。结果 Name: \"玉米#1箱+1\"，Quantity: 2。\n" +
+            "Unit = 优先取草稿单 AiUnit。\n\n" +
+            "2. 若在草稿单中未找到匹配项（新增）：\n" +
+            "Quantity = 本次通话 Quantity。\n" +
+            "Name = 本次通话 Name + \"#\" + 本次通话 Quantity + 单位。\n" +
+            "注意：新增项不需要 +号后缀，而是直接生成标准格式。\n" +
+            "Unit = 本次通话 Unit。\n\n" +
+            
+            "【关键规则三：整单与删除】\n" +
+            "1. IsDeleteWholeOrder：仅当输入明确标记为 true 时才为 true，且 Orders 必须为空。\n" +
+            "2. IsUndoCancel：同上。\n" +
+            "3. 单个删除：\n" +
+            "若本次通话 MarkForDelete 为 true，或计算后 Quantity <= 0：\n" +
+            "设置 MarkForDelete = true。\n" +
+            "Name 仍需按照规则二生成（例如：\"鸡胸肉#2箱-2\"）。\n" +
+            "Quantity 设为 0（除非是部分减少，非清零）。\n\n" +
+            
+            "【关键规则四：未变动保留】\n" +
+            "遍历完所有通话变动后，检查草稿单中未被匹配的剩余物料：\n" +
+            "直接保留进入 Output。\n" +
+            "Name = 原始 AiMaterialDesc（不加任何后缀）。\n" +
+            "Quantity = 原始 MaterialQuantity。\n\n" +
+            
             "【禁止行为】\n" +
-            "不得臆造未提及物料\n" +
-            "不得输出非 JSON 内容\n" +
-            "不得多字段或少字段\n" +
-
-            "【输出格式（必须严格 JSON）】\n" +
-            "{ \"StoreName\": \"\", \"StoreNumber\": \"\", \"DeliveryDate\": \"yyyy-MM-dd\", \"IsDeleteWholeOrder\": false, \"IsUndoCancel\": false, \"Orders\": [ { \"Name\": \"\", \"Quantity\": 0, \"MaterialNumber\": \"\", \"Unit\": \"\", \"MarkForDelete\": false, \"Restored\": false } ] }\n" +
-            "若无有效订单，Orders 返回空数组。\n\n" +
-            "在你输出之前，想一想你生成的分析报告是否符合我的要求";
+            "严禁在 #, +, - 前后加空格。\n" +
+            "严禁将 MaterialNumber 为空的商品直接忽略，必须通过名称强制匹配。\n" +
+            "严禁直接照抄本次变动值作为最终 Quantity（必须做加法）。\n\n" +
+            
+            "【输出格式】\n" +
+            "{\n" +
+            "  \"StoreName\": \"\",\n" +
+            "  \"StoreNumber\": \"\",\n" +
+            "  \"DeliveryDate\": \"yyyy-MM-dd\",\n" +
+            "  \"IsDeleteWholeOrder\": false,\n" +
+            "  \"IsUndoCancel\": false,\n" +
+            "  \"Orders\": [\n" +
+            "    {\n" +
+            "      \"Name\": \"string\",\n" +
+            "      \"Quantity\": 0,\n" +
+            "      \"MaterialNumber\": \"string\",\n" +
+            "      \"Unit\": \"string\",\n" +
+            "      \"MarkForDelete\": false,\n" +
+            "      \"Restored\": false\n" +
+            "    }\n" +
+            "  ]\n" +
+            "}\n\n" +
+            "生成结果前，请在内存中执行一次规则的自我检查。\n";
         
         var userPrompt = "【本次通话提取的订单】\n" + currentOrdersJson + "\n\n" + "【系统中已有草稿单】\n" + draftOrderJson + "\n\n";
         Log.Information("Sending refine prompt to GPT: {Prompt}", userPrompt);
@@ -979,7 +996,7 @@ public partial class PhoneOrderProcessJobService
                 storeOrder.Orders.Clear();
 
                 foreach (var orderItem in ordersArray.EnumerateArray())
-                {
+                {i
                     var name = orderItem.TryGetProperty("Name", out var n) ? n.GetString() ?? "" : "";
                     var unit = orderItem.TryGetProperty("Unit", out var u) ? u.GetString() ?? "" : "";
                     var materialNumber = orderItem.TryGetProperty("MaterialNumber", out var m)
