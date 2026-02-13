@@ -142,9 +142,10 @@ public class SalesService : ISalesService
     {
         var customerInfo = new StringBuilder();
 
+        var  token = await _crmClient.GetCrmTokenAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var crmCustomers = await _crmClient.GetCustomersByPhoneNumberAsync(new GetCustmoersByPhoneNumberRequestDto { PhoneNumber = phoneNumber }, cancellationToken).ConfigureAwait(false);
+            var crmCustomers = await _crmClient.GetCustomersByPhoneNumberAsync(new GetCustmoersByPhoneNumberRequestDto { PhoneNumber = phoneNumber }, token, cancellationToken).ConfigureAwait(false);
 
             if (crmCustomers != null && crmCustomers.Any())
             {

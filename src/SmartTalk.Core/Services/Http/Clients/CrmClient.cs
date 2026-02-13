@@ -11,10 +11,10 @@ namespace SmartTalk.Core.Services.Http.Clients;
 public interface ICrmClient : IScopedDependency
 {
     Task<string> GetCrmTokenAsync(CancellationToken cancellationToken);
+
+    Task<List<GetCustomersPhoneNumberDataDto>> GetCustomersByPhoneNumberAsync(GetCustmoersByPhoneNumberRequestDto numberRequest, string token = null, CancellationToken cancellationToken = default);
     
     Task<List<CrmContactDto>> GetCustomerContactsAsync(string customerId, string token = null, CancellationToken cancellationToken = default);
-
-    Task<List<GetCustomersPhoneNumberDataDto>> GetCustomersByPhoneNumberAsync(GetCustmoersByPhoneNumberRequestDto numberRequest, CancellationToken cancellationToken);
     
     Task<List<AutoTestCallLogDto>> GetCallRecordsAsync(DateTime startTimeUtc, DateTime endTimeUtc, CancellationToken cancellationToken);
 }
@@ -74,10 +74,10 @@ public class CrmClient : ICrmClient
         
         return contacts;
     }
-
-    public async Task<List<GetCustomersPhoneNumberDataDto>> GetCustomersByPhoneNumberAsync(GetCustmoersByPhoneNumberRequestDto numberRequest, CancellationToken cancellationToken)
+    
+    public async Task<List<GetCustomersPhoneNumberDataDto>> GetCustomersByPhoneNumberAsync(GetCustmoersByPhoneNumberRequestDto numberRequest, string token = null, CancellationToken cancellationToken = default)
     {
-        var  token = await GetCrmTokenAsync(cancellationToken);
+        token ??= await GetCrmTokenAsync(cancellationToken).ConfigureAwait(false);
         
         var headers = new Dictionary<string, string>
         {
