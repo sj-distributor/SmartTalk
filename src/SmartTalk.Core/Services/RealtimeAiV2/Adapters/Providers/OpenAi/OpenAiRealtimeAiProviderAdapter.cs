@@ -122,6 +122,20 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
         return null;
     }
 
+    public string BuildFunctionCallReplyMessage(RealtimeAiWssFunctionCallData functionCall, string output)
+    {
+        return JsonSerializer.Serialize(new
+        {
+            type = "conversation.item.create",
+            item = new
+            {
+                type = "function_call_output",
+                call_id = functionCall.CallId,
+                output
+            }
+        });
+    }
+
     public string BuildTriggerResponseMessage()
     {
         return JsonSerializer.Serialize(new { type = "response.create" });
@@ -220,8 +234,10 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
 
             if (string.IsNullOrEmpty(name)) continue;
 
+            var callId = item.TryGetProperty("call_id", out var callIdProp) ? callIdProp.GetString() : null;
+
             results ??= new List<RealtimeAiWssFunctionCallData>();
-            results.Add(new RealtimeAiWssFunctionCallData { FunctionName = name, ArgumentsJson = args });
+            results.Add(new RealtimeAiWssFunctionCallData { CallId = callId, FunctionName = name, ArgumentsJson = args });
         }
 
         return results;

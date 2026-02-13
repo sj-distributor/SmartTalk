@@ -18,6 +18,8 @@ public interface IRealtimeAiProviderAdapter : IScopedDependency
 
     object BuildInterruptMessage(string lastAssistantItemIdToInterrupt);
 
+    string BuildFunctionCallReplyMessage(RealtimeAiWssFunctionCallData functionCall, string output);
+
     /// <summary>
     /// Returns a JSON message to trigger an AI response after sending text,
     /// or null if the provider auto-triggers responses.

@@ -115,6 +115,25 @@ public class GoogleRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
         return null;
     }
 
+    public string BuildFunctionCallReplyMessage(RealtimeAiWssFunctionCallData functionCall, string output)
+    {
+        return JsonSerializer.Serialize(new
+        {
+            toolResponse = new
+            {
+                functionResponses = new[]
+                {
+                    new
+                    {
+                        id = functionCall.CallId,
+                        name = functionCall.FunctionName,
+                        response = new { result = output }
+                    }
+                }
+            }
+        });
+    }
+
     public string BuildTriggerResponseMessage()
     {
         return null;

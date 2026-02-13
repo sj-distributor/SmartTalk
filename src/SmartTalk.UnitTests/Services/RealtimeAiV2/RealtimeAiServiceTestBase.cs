@@ -48,6 +48,8 @@ public abstract class RealtimeAiServiceTestBase : IDisposable
             .Returns("audio_append_msg");
         ProviderAdapter.BuildTextUserMessage(Arg.Any<string>(), Arg.Any<string>())
             .Returns(ci => $"text_user:{ci.ArgAt<string>(0)}");
+        ProviderAdapter.BuildFunctionCallReplyMessage(Arg.Any<RealtimeAiWssFunctionCallData>(), Arg.Any<string>())
+            .Returns(ci => $"fc_reply:{ci.ArgAt<string>(1)}");
         ProviderAdapter.BuildTriggerResponseMessage()
             .Returns("response_create_msg");
 

@@ -148,7 +148,7 @@ public partial class RealtimeAiService
     {
         if (_ctx.Options.OnFunctionCallAsync == null) return;
 
-        var replies = new List<string>();
+        var replies = new List<(RealtimeAiWssFunctionCallData FunctionCall, string Output)>();
 
         foreach (var functionCall in functionCalls)
         {
@@ -156,10 +156,16 @@ public partial class RealtimeAiService
 
             var result = await _ctx.Options.OnFunctionCallAsync(functionCall).ConfigureAwait(false);
 
-            if (!string.IsNullOrEmpty(result?.ReplyMessage)) replies.Add(result.ReplyMessage);
+            if (!string.IsNullOrEmpty(result?.Output)) replies.Add((functionCall, result.Output));
         }
 
-        if (replies.Count > 0) await SendTextToProviderAsync(string.Join("\n", replies)).ConfigureAwait(false);
+        foreach (var (functionCall, output) in replies)
+            await SendToProviderAsync(_ctx.ProviderAdapter.BuildFunctionCallReplyMessage(functionCall, output)).ConfigureAwait(false);
+
+        // After sending all function_call_output items, explicitly trigger a new AI response
+        // so the provider incorporates the results into its next reply.
+        if (replies.Count > 0)
+            await SendToProviderAsync(_ctx.ProviderAdapter.BuildTriggerResponseMessage()).ConfigureAwait(false);
     }
 
     private async Task OnProviderErrorAsync(RealtimeAiErrorData errorData)
