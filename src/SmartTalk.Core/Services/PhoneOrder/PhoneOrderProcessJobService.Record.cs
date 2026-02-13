@@ -996,7 +996,7 @@ public partial class PhoneOrderProcessJobService
                 storeOrder.Orders.Clear();
 
                 foreach (var orderItem in ordersArray.EnumerateArray())
-                {i
+                {
                     var name = orderItem.TryGetProperty("Name", out var n) ? n.GetString() ?? "" : "";
                     var unit = orderItem.TryGetProperty("Unit", out var u) ? u.GetString() ?? "" : "";
                     var materialNumber = orderItem.TryGetProperty("MaterialNumber", out var m)
