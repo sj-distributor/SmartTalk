@@ -66,18 +66,24 @@ public partial class RealtimeAiService
     {
         try
         {
-            var (type, payload) = _ctx.ClientAdapter.ParseMessage(rawMessage);
+            var parsed = _ctx.ClientAdapter.ParseMessage(rawMessage);
 
-            switch (type)
+            switch (parsed.Type)
             {
+                case RealtimeAiClientMessageType.Start:
+                    if (_ctx.Options.OnClientStartAsync != null)
+                        await _ctx.Options.OnClientStartAsync(_ctx.SessionId, parsed.Metadata ?? new()).ConfigureAwait(false);
+                    break;
+                case RealtimeAiClientMessageType.Stop:
+                    break; // Cleanup handled by WebSocket close
                 case RealtimeAiClientMessageType.Audio:
-                    await HandleClientAudioAsync(payload).ConfigureAwait(false);
+                    await HandleClientAudioAsync(parsed.Payload).ConfigureAwait(false);
                     break;
                 case RealtimeAiClientMessageType.Image:
-                    await HandleClientImageAsync(payload).ConfigureAwait(false);
+                    await HandleClientImageAsync(parsed.Payload).ConfigureAwait(false);
                     break;
                 case RealtimeAiClientMessageType.Text:
-                    await HandleClientTextAsync(payload).ConfigureAwait(false);
+                    await HandleClientTextAsync(parsed.Payload).ConfigureAwait(false);
                     break;
                 default:
                     Log.Warning("[RealtimeAi] Unknown client message type, SessionId: {SessionId}", _ctx.SessionId);
@@ -138,7 +144,7 @@ public partial class RealtimeAiService
             () => DisconnectFromProviderAsync(clientIsClose ? "Client disconnected" : "Client disconnected abnormally"), "disconnect from provider");
 
         await SafeExecuteAsync(
-            () => { _inactivityTimerManager.StopTimer(_ctx.StreamSid); return Task.CompletedTask; }, "stop inactivity timer");
+            () => { _inactivityTimerManager.StopTimer(_ctx.SessionId); return Task.CompletedTask; }, "stop inactivity timer");
 
         await SafeExecuteAsync(async 
             () => { if (_ctx.Options?.OnSessionEndedAsync != null) await _ctx.Options.OnSessionEndedAsync(_ctx.SessionId).ConfigureAwait(false); }, "invoke OnSessionEndedAsync");

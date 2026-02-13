@@ -11,20 +11,19 @@ public class RealtimeAiServiceFunctionCallTests : RealtimeAiServiceTestBase
     [Fact]
     public async Task FunctionCall_SingleCall_ReplySentAndResponseCreateTriggered()
     {
+        var fc = new RealtimeAiWssFunctionCallData { CallId = "call_1", FunctionName = "get_weather", ArgumentsJson = "{\"city\":\"NYC\"}" };
+
         ProviderAdapter.ParseMessage(Arg.Any<string>())
             .Returns(new ParsedRealtimeAiProviderEvent
             {
                 Type = RealtimeAiWssEventType.FunctionCallSuggested,
-                Data = new List<RealtimeAiWssFunctionCallData>
-                {
-                    new() { FunctionName = "get_weather", ArgumentsJson = "{\"city\":\"NYC\"}" }
-                }
+                Data = new List<RealtimeAiWssFunctionCallData> { fc }
             });
 
         var options = CreateDefaultOptions(o =>
         {
-            o.OnFunctionCallAsync = fc =>
-                Task.FromResult(new RealtimeAiFunctionCallResult { ReplyMessage = "Weather is sunny" });
+            o.OnFunctionCallAsync = _ =>
+                Task.FromResult(new RealtimeAiFunctionCallResult { Output = "Weather is sunny" });
         });
 
         var sessionTask = await StartSessionInBackgroundAsync(options);
@@ -35,32 +34,32 @@ public class RealtimeAiServiceFunctionCallTests : RealtimeAiServiceTestBase
         FakeWs.EnqueueClose();
         await sessionTask;
 
-        // Reply should be sent as text + response.create
-        ProviderAdapter.Received().BuildTextUserMessage("Weather is sunny", Arg.Any<string>());
+        // Reply should be sent as function_call_output, not text user message
+        ProviderAdapter.Received(1).BuildFunctionCallReplyMessage(fc, "Weather is sunny");
+        ProviderAdapter.DidNotReceive().BuildTextUserMessage(Arg.Any<string>(), Arg.Any<string>());
         ProviderAdapter.Received().BuildTriggerResponseMessage();
     }
 
     [Fact]
-    public async Task FunctionCall_MultipleCalls_RepliesJoinedWithNewline()
+    public async Task FunctionCall_MultipleCalls_EachReplyIsSentSeparately()
     {
+        var fc1 = new RealtimeAiWssFunctionCallData { CallId = "call_1", FunctionName = "func1", ArgumentsJson = "{}" };
+        var fc2 = new RealtimeAiWssFunctionCallData { CallId = "call_2", FunctionName = "func2", ArgumentsJson = "{}" };
+
         ProviderAdapter.ParseMessage(Arg.Any<string>())
             .Returns(new ParsedRealtimeAiProviderEvent
             {
                 Type = RealtimeAiWssEventType.FunctionCallSuggested,
-                Data = new List<RealtimeAiWssFunctionCallData>
-                {
-                    new() { FunctionName = "func1", ArgumentsJson = "{}" },
-                    new() { FunctionName = "func2", ArgumentsJson = "{}" }
-                }
+                Data = new List<RealtimeAiWssFunctionCallData> { fc1, fc2 }
             });
 
         var callCount = 0;
         var options = CreateDefaultOptions(o =>
         {
-            o.OnFunctionCallAsync = fc =>
+            o.OnFunctionCallAsync = _ =>
             {
                 callCount++;
-                return Task.FromResult(new RealtimeAiFunctionCallResult { ReplyMessage = $"Reply{callCount}" });
+                return Task.FromResult(new RealtimeAiFunctionCallResult { Output = $"Reply{callCount}" });
             };
         });
 
@@ -72,8 +71,12 @@ public class RealtimeAiServiceFunctionCallTests : RealtimeAiServiceTestBase
         FakeWs.EnqueueClose();
         await sessionTask;
 
-        // Replies should be joined with \n
-        ProviderAdapter.Received().BuildTextUserMessage("Reply1\nReply2", Arg.Any<string>());
+        // Each function call reply should be sent separately via BuildFunctionCallReplyMessage
+        ProviderAdapter.Received(1).BuildFunctionCallReplyMessage(fc1, "Reply1");
+        ProviderAdapter.Received(1).BuildFunctionCallReplyMessage(fc2, "Reply2");
+        ProviderAdapter.DidNotReceive().BuildTextUserMessage(Arg.Any<string>(), Arg.Any<string>());
+        // Only one response.create trigger at the end
+        ProviderAdapter.Received(1).BuildTriggerResponseMessage();
     }
 
     [Fact]
@@ -130,11 +133,11 @@ public class RealtimeAiServiceFunctionCallTests : RealtimeAiServiceTestBase
         FakeWs.EnqueueClose();
         await sessionTask;
 
-        FakeWssClient.SentMessages.ShouldNotContain(m => m.StartsWith("text_user:"));
+        ProviderAdapter.DidNotReceive().BuildFunctionCallReplyMessage(Arg.Any<RealtimeAiWssFunctionCallData>(), Arg.Any<string>());
     }
 
     [Fact]
-    public async Task FunctionCall_ReturnsEmptyReplyMessage_NoReplySent()
+    public async Task FunctionCall_ReturnsEmptyOutput_NoReplySent()
     {
         ProviderAdapter.ParseMessage(Arg.Any<string>())
             .Returns(new ParsedRealtimeAiProviderEvent
@@ -149,7 +152,7 @@ public class RealtimeAiServiceFunctionCallTests : RealtimeAiServiceTestBase
         var options = CreateDefaultOptions(o =>
         {
             o.OnFunctionCallAsync = _ =>
-                Task.FromResult(new RealtimeAiFunctionCallResult { ReplyMessage = "" });
+                Task.FromResult(new RealtimeAiFunctionCallResult { Output = "" });
         });
 
         var sessionTask = await StartSessionInBackgroundAsync(options);
@@ -160,7 +163,7 @@ public class RealtimeAiServiceFunctionCallTests : RealtimeAiServiceTestBase
         FakeWs.EnqueueClose();
         await sessionTask;
 
-        FakeWssClient.SentMessages.ShouldNotContain(m => m.StartsWith("text_user:"));
+        ProviderAdapter.DidNotReceive().BuildFunctionCallReplyMessage(Arg.Any<RealtimeAiWssFunctionCallData>(), Arg.Any<string>());
     }
 
     [Fact]

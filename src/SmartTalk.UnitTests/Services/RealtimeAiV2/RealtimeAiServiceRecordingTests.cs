@@ -15,7 +15,7 @@ public class RealtimeAiServiceRecordingTests : RealtimeAiServiceTestBase
         byte[]? recordedWav = null;
 
         ClientAdapter.ParseMessage(Arg.Any<string>())
-            .Returns((RealtimeAiClientMessageType.Audio, Convert.ToBase64String(new byte[] { 1, 2, 3, 4 })));
+            .Returns(new ParsedClientMessage { Type = RealtimeAiClientMessageType.Audio, Payload = Convert.ToBase64String(new byte[] { 1, 2, 3, 4 }) });
 
         var options = CreateDefaultOptions(o =>
         {
@@ -45,7 +45,7 @@ public class RealtimeAiServiceRecordingTests : RealtimeAiServiceTestBase
         byte[]? recordedWav = null;
 
         ClientAdapter.ParseMessage(Arg.Any<string>())
-            .Returns((RealtimeAiClientMessageType.Audio, Convert.ToBase64String(new byte[] { 10, 20, 30, 40 })));
+            .Returns(new ParsedClientMessage { Type = RealtimeAiClientMessageType.Audio, Payload = Convert.ToBase64String(new byte[] { 10, 20, 30, 40 }) });
 
         var options = CreateDefaultOptions(o =>
         {
@@ -97,7 +97,7 @@ public class RealtimeAiServiceRecordingTests : RealtimeAiServiceTestBase
     public async Task Recording_OnRecordingCompleteAsyncNull_NoException()
     {
         ClientAdapter.ParseMessage(Arg.Any<string>())
-            .Returns((RealtimeAiClientMessageType.Audio, Convert.ToBase64String(new byte[] { 1, 2 })));
+            .Returns(new ParsedClientMessage { Type = RealtimeAiClientMessageType.Audio, Payload = Convert.ToBase64String(new byte[] { 1, 2 }) });
 
         var options = CreateDefaultOptions(o =>
         {
@@ -208,7 +208,7 @@ public class RealtimeAiServiceRecordingTests : RealtimeAiServiceTestBase
             });
 
         ClientAdapter.ParseMessage(Arg.Any<string>())
-            .Returns((RealtimeAiClientMessageType.Audio, userAudioBase64));
+            .Returns(new ParsedClientMessage { Type = RealtimeAiClientMessageType.Audio, Payload = userAudioBase64 });
 
         byte[]? recordedWav = null;
         var options = CreateDefaultOptions(o =>

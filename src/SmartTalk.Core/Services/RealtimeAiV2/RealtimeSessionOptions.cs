@@ -103,10 +103,16 @@ public class RealtimeSessionOptions
 
     /// <summary>
     /// Called when the AI provider suggests a function call (e.g. from OpenAI response.done).
-    /// Return a <see cref="RealtimeAiFunctionCallResult"/> with ReplyMessage to continue the conversation,
+    /// Return a <see cref="RealtimeAiFunctionCallResult"/> with Output to continue the conversation,
     /// or null if no reply is needed. Null callback to ignore function calls.
     /// </summary>
     public Func<RealtimeAiWssFunctionCallData, Task<RealtimeAiFunctionCallResult>> OnFunctionCallAsync { get; set; }
+
+    /// <summary>
+    /// Called when the client sends a "start" lifecycle event.
+    /// Parameters: (sessionId, metadata dictionary with keys like "callSid", "streamSid").
+    /// </summary>
+    public Func<string, Dictionary<string, string>, Task> OnClientStartAsync { get; set; }
 
     /// <summary>
     /// Called when the session ends.
@@ -136,8 +142,15 @@ public class RealtimeSessionIdleFollowUp
 
     /// <summary>
     /// The message AI will say when the user has been silent too long.
+    /// Can be null when only OnTimeoutAsync is needed.
     /// </summary>
     public string FollowUpMessage { get; set; }
+
+    /// <summary>
+    /// Optional async action invoked when idle timeout fires.
+    /// Called after FollowUpMessage is sent (if any).
+    /// </summary>
+    public Func<Task> OnTimeoutAsync { get; set; }
 
     /// <summary>
     /// Number of AI turns to skip before enabling idle follow-up.

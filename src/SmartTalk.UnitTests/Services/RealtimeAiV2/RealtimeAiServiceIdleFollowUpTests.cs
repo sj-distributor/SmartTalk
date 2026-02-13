@@ -194,4 +194,136 @@ public class RealtimeAiServiceIdleFollowUpTests : RealtimeAiServiceTestBase
         // We verify StopTimer was called only once (from cleanup), not from speech handler
         TimerManager.Received(1).StopTimer(Arg.Any<string>());
     }
+
+    [Fact]
+    public async Task IdleFollowUp_OnTimeoutAsync_InvokedWhenTimerFires()
+    {
+        var actionInvoked = false;
+        Func<Task> capturedCallback = null;
+
+        TimerManager.When(x => x.StartTimer(Arg.Any<string>(), Arg.Any<TimeSpan>(), Arg.Any<Func<Task>>()))
+            .Do(ci => capturedCallback = ci.ArgAt<Func<Task>>(2));
+
+        ProviderAdapter.ParseMessage(Arg.Any<string>())
+            .Returns(new ParsedRealtimeAiProviderEvent
+            {
+                Type = RealtimeAiWssEventType.ResponseTurnCompleted,
+                Data = new List<RealtimeAiWssFunctionCallData>()
+            });
+
+        var options = CreateDefaultOptions(o =>
+        {
+            o.IdleFollowUp = new RealtimeSessionIdleFollowUp
+            {
+                TimeoutSeconds = 30,
+                FollowUpMessage = "Are you still there?",
+                OnTimeoutAsync = () => { actionInvoked = true; return Task.CompletedTask; }
+            };
+        });
+
+        var sessionTask = await StartSessionInBackgroundAsync(options);
+
+        await FakeWssClient.SimulateMessageReceivedAsync("{\"type\":\"response.done\"}");
+        await Task.Delay(100);
+
+        // Simulate timer firing
+        capturedCallback.ShouldNotBeNull();
+        await capturedCallback!();
+
+        actionInvoked.ShouldBeTrue();
+
+        FakeWs.EnqueueClose();
+        await sessionTask;
+    }
+
+    [Fact]
+    public async Task IdleFollowUp_BothMessageAndAction_MessageSentFirst()
+    {
+        var order = new List<string>();
+        Func<Task> capturedCallback = null;
+
+        TimerManager.When(x => x.StartTimer(Arg.Any<string>(), Arg.Any<TimeSpan>(), Arg.Any<Func<Task>>()))
+            .Do(ci => capturedCallback = ci.ArgAt<Func<Task>>(2));
+
+        ProviderAdapter.BuildTextUserMessage(Arg.Any<string>(), Arg.Any<string>())
+            .Returns(ci =>
+            {
+                order.Add("message");
+                return $"text_user:{ci.ArgAt<string>(0)}";
+            });
+
+        ProviderAdapter.ParseMessage(Arg.Any<string>())
+            .Returns(new ParsedRealtimeAiProviderEvent
+            {
+                Type = RealtimeAiWssEventType.ResponseTurnCompleted,
+                Data = new List<RealtimeAiWssFunctionCallData>()
+            });
+
+        var options = CreateDefaultOptions(o =>
+        {
+            o.IdleFollowUp = new RealtimeSessionIdleFollowUp
+            {
+                TimeoutSeconds = 30,
+                FollowUpMessage = "Are you still there?",
+                OnTimeoutAsync = () => { order.Add("action"); return Task.CompletedTask; }
+            };
+        });
+
+        var sessionTask = await StartSessionInBackgroundAsync(options);
+
+        await FakeWssClient.SimulateMessageReceivedAsync("{\"type\":\"response.done\"}");
+        await Task.Delay(100);
+
+        capturedCallback.ShouldNotBeNull();
+        await capturedCallback!();
+
+        order.Count.ShouldBe(2);
+        order[0].ShouldBe("message");
+        order[1].ShouldBe("action");
+
+        FakeWs.EnqueueClose();
+        await sessionTask;
+    }
+
+    [Fact]
+    public async Task IdleFollowUp_NullFollowUpMessage_OnlyActionRuns()
+    {
+        var actionInvoked = false;
+        Func<Task> capturedCallback = null;
+
+        TimerManager.When(x => x.StartTimer(Arg.Any<string>(), Arg.Any<TimeSpan>(), Arg.Any<Func<Task>>()))
+            .Do(ci => capturedCallback = ci.ArgAt<Func<Task>>(2));
+
+        ProviderAdapter.ParseMessage(Arg.Any<string>())
+            .Returns(new ParsedRealtimeAiProviderEvent
+            {
+                Type = RealtimeAiWssEventType.ResponseTurnCompleted,
+                Data = new List<RealtimeAiWssFunctionCallData>()
+            });
+
+        var options = CreateDefaultOptions(o =>
+        {
+            o.IdleFollowUp = new RealtimeSessionIdleFollowUp
+            {
+                TimeoutSeconds = 30,
+                FollowUpMessage = null,
+                OnTimeoutAsync = () => { actionInvoked = true; return Task.CompletedTask; }
+            };
+        });
+
+        var sessionTask = await StartSessionInBackgroundAsync(options);
+
+        await FakeWssClient.SimulateMessageReceivedAsync("{\"type\":\"response.done\"}");
+        await Task.Delay(100);
+
+        capturedCallback.ShouldNotBeNull();
+        await capturedCallback!();
+
+        actionInvoked.ShouldBeTrue();
+        // FollowUpMessage is null, so no text should have been sent to provider for that message
+        ProviderAdapter.DidNotReceive().BuildTextUserMessage(Arg.Any<string>(), Arg.Any<string>());
+
+        FakeWs.EnqueueClose();
+        await sessionTask;
+    }
 }
