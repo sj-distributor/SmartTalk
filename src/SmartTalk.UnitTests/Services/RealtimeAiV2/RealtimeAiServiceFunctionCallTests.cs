@@ -22,7 +22,7 @@ public class RealtimeAiServiceFunctionCallTests : RealtimeAiServiceTestBase
 
         var options = CreateDefaultOptions(o =>
         {
-            o.OnFunctionCallAsync = _ =>
+            o.OnFunctionCallAsync = (_, _) =>
                 Task.FromResult(new RealtimeAiFunctionCallResult { Output = "Weather is sunny" });
         });
 
@@ -56,7 +56,7 @@ public class RealtimeAiServiceFunctionCallTests : RealtimeAiServiceTestBase
         var callCount = 0;
         var options = CreateDefaultOptions(o =>
         {
-            o.OnFunctionCallAsync = _ =>
+            o.OnFunctionCallAsync = (_, _) =>
             {
                 callCount++;
                 return Task.FromResult(new RealtimeAiFunctionCallResult { Output = $"Reply{callCount}" });
@@ -122,7 +122,7 @@ public class RealtimeAiServiceFunctionCallTests : RealtimeAiServiceTestBase
 
         var options = CreateDefaultOptions(o =>
         {
-            o.OnFunctionCallAsync = _ => Task.FromResult<RealtimeAiFunctionCallResult>(null!);
+            o.OnFunctionCallAsync = (_, _) => Task.FromResult<RealtimeAiFunctionCallResult>(null!);
         });
 
         var sessionTask = await StartSessionInBackgroundAsync(options);
@@ -151,7 +151,7 @@ public class RealtimeAiServiceFunctionCallTests : RealtimeAiServiceTestBase
 
         var options = CreateDefaultOptions(o =>
         {
-            o.OnFunctionCallAsync = _ =>
+            o.OnFunctionCallAsync = (_, _) =>
                 Task.FromResult(new RealtimeAiFunctionCallResult { Output = "" });
         });
 
@@ -164,6 +164,43 @@ public class RealtimeAiServiceFunctionCallTests : RealtimeAiServiceTestBase
         await sessionTask;
 
         ProviderAdapter.DidNotReceive().BuildFunctionCallReplyMessage(Arg.Any<RealtimeAiWssFunctionCallData>(), Arg.Any<string>());
+    }
+
+    [Fact]
+    public async Task FunctionCall_SendAudioToClient_DelegateSendsAudioDelta()
+    {
+        var fc = new RealtimeAiWssFunctionCallData { CallId = "call_1", FunctionName = "repeat_order", ArgumentsJson = "{}" };
+
+        ProviderAdapter.ParseMessage(Arg.Any<string>())
+            .Returns(new ParsedRealtimeAiProviderEvent
+            {
+                Type = RealtimeAiWssEventType.FunctionCallSuggested,
+                Data = new List<RealtimeAiWssFunctionCallData> { fc }
+            });
+
+        var audioBase64 = Convert.ToBase64String(new byte[] { 1, 2, 3, 4 });
+
+        var options = CreateDefaultOptions(o =>
+        {
+            o.OnFunctionCallAsync = async (_, sendAudioToClient) =>
+            {
+                await sendAudioToClient(audioBase64);
+                return new RealtimeAiFunctionCallResult { Output = "done" };
+            };
+        });
+
+        var sessionTask = await StartSessionInBackgroundAsync(options);
+
+        await FakeWssClient.SimulateMessageReceivedAsync("{\"type\":\"response.done\"}");
+        await Task.Delay(100);
+
+        FakeWs.EnqueueClose();
+        await sessionTask;
+
+        // The sendAudioToClient delegate should have called BuildAudioDeltaMessage
+        ClientAdapter.Received().BuildAudioDeltaMessage(audioBase64, Arg.Any<string>());
+        // And the function call reply should also have been sent
+        ProviderAdapter.Received(1).BuildFunctionCallReplyMessage(fc, "done");
     }
 
     [Fact]
@@ -181,7 +218,7 @@ public class RealtimeAiServiceFunctionCallTests : RealtimeAiServiceTestBase
 
         var options = CreateDefaultOptions(o =>
         {
-            o.OnFunctionCallAsync = _ => throw new InvalidOperationException("Function call failed");
+            o.OnFunctionCallAsync = (_, _) => throw new InvalidOperationException("Function call failed");
         });
 
         var sessionTask = await StartSessionInBackgroundAsync(options);

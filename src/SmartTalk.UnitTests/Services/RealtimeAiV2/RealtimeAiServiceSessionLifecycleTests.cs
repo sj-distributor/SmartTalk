@@ -532,7 +532,12 @@ public class RealtimeAiServiceSessionLifecycleTests : RealtimeAiServiceTestBase
                     : new ParsedClientMessage { Type = RealtimeAiClientMessageType.Text, Payload = "hello" };
             });
 
-        var sessionTask = await StartSessionInBackgroundAsync();
+        var options = CreateDefaultOptions(o =>
+        {
+            o.OnClientStopAsync = _ => Task.CompletedTask;
+        });
+
+        var sessionTask = await StartSessionInBackgroundAsync(options);
 
         // First message: stop event → should be handled gracefully
         FakeWs.EnqueueClientMessage("{\"event\":\"stop\"}");
@@ -546,5 +551,54 @@ public class RealtimeAiServiceSessionLifecycleTests : RealtimeAiServiceTestBase
         await sessionTask;
 
         ProviderAdapter.Received().BuildTextUserMessage("hello", Arg.Any<string>());
+    }
+
+    [Fact]
+    public async Task Session_ClientStopEvent_CallbackInvokedWithSessionId()
+    {
+        string receivedSessionId = null;
+
+        ClientAdapter.ParseMessage(Arg.Any<string>())
+            .Returns(new ParsedClientMessage { Type = RealtimeAiClientMessageType.Stop });
+
+        var options = CreateDefaultOptions(o =>
+        {
+            o.OnClientStopAsync = sessionId =>
+            {
+                receivedSessionId = sessionId;
+                return Task.CompletedTask;
+            };
+        });
+
+        var sessionTask = await StartSessionInBackgroundAsync(options);
+
+        FakeWs.EnqueueClientMessage("{\"event\":\"stop\"}");
+        await Task.Delay(100);
+
+        FakeWs.EnqueueClose();
+        await sessionTask;
+
+        receivedSessionId.ShouldNotBeNullOrEmpty();
+    }
+
+    [Fact]
+    public async Task Session_ClientStopEvent_NullCallback_NoException()
+    {
+        ClientAdapter.ParseMessage(Arg.Any<string>())
+            .Returns(new ParsedClientMessage { Type = RealtimeAiClientMessageType.Stop });
+
+        var options = CreateDefaultOptions(o =>
+        {
+            o.OnClientStopAsync = null;
+        });
+
+        var sessionTask = await StartSessionInBackgroundAsync(options);
+
+        FakeWs.EnqueueClientMessage("{\"event\":\"stop\"}");
+        await Task.Delay(100);
+
+        FakeWs.EnqueueClose();
+
+        await Should.NotThrowAsync(() => sessionTask);
     }
 }

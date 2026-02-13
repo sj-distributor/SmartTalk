@@ -156,7 +156,7 @@ public partial class RealtimeAiService
         {
             Log.Information("[RealtimeAi] Function call received, SessionId: {SessionId}, Function: {FunctionName}", _ctx.SessionId, functionCall.FunctionName);
 
-            var result = await _ctx.Options.OnFunctionCallAsync(functionCall).ConfigureAwait(false);
+            var result = await _ctx.Options.OnFunctionCallAsync(functionCall, SendAudioToClientAsync).ConfigureAwait(false);
 
             if (!string.IsNullOrEmpty(result?.Output)) replies.Add((functionCall, result.Output));
         }

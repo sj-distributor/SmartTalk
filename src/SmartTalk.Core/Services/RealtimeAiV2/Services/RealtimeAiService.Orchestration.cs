@@ -75,7 +75,9 @@ public partial class RealtimeAiService
                         await _ctx.Options.OnClientStartAsync(_ctx.SessionId, parsed.Metadata ?? new()).ConfigureAwait(false);
                     break;
                 case RealtimeAiClientMessageType.Stop:
-                    break; // Cleanup handled by WebSocket close
+                    if (_ctx.Options.OnClientStopAsync != null)
+                        await _ctx.Options.OnClientStopAsync(_ctx.SessionId).ConfigureAwait(false);
+                    break;
                 case RealtimeAiClientMessageType.Audio:
                     await HandleClientAudioAsync(parsed.Payload).ConfigureAwait(false);
                     break;

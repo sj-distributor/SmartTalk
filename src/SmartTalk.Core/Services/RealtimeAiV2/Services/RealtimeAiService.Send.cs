@@ -29,6 +29,11 @@ public partial class RealtimeAiService
         }
     }
 
+    private async Task SendAudioToClientAsync(string base64Payload)
+    {
+        await SendToClientAsync(_ctx.ClientAdapter.BuildAudioDeltaMessage(base64Payload, _ctx.SessionId)).ConfigureAwait(false);
+    }
+
     private async Task SendTextToProviderAsync(string text)
     {
         Log.Information("[RealtimeAi] Sending text to provider, SessionId: {SessionId}, Text: {Text}", _ctx.SessionId, text);
