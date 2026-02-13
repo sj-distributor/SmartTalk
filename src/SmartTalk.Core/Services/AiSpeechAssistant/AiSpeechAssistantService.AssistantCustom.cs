@@ -676,8 +676,8 @@ public partial class AiSpeechAssistantService
             .Aggregate(new JObject(), (acc, j) =>
                 { acc.Merge(j, new JsonMergeSettings { MergeArrayHandling = MergeArrayHandling.Concat }); return acc; });
 
-        var mergedJson = mergedJsonObj.ToString(Formatting.None);
-        
+        var mergedJson = RemoveCopySuffixFromKeys(mergedJsonObj).ToString(Formatting.None);
+
         Log.Information("InitialKnowledgeAsync mergedJson: {@mergedJson}", mergedJson);
         
         latestKnowledge.IsActive = true;
@@ -1153,10 +1153,15 @@ public partial class AiSpeechAssistantService
     {
         var speechAssistants = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgesByCompanyIdAsync(
             request.CompanyId, request.PageIndex, request.PageSize, request.AgentId, request.StoreId, request.KeyWord, cancellationToken).ConfigureAwait(false);
+        
+        var distinctKnowledges = speechAssistants
+            .GroupBy(x => x.KnowledgeId)
+            .Select(x => x.First())
+            .ToList();
 
         return new GetKonwledgesResponse
         {
-            Data = speechAssistants
+            Data = distinctKnowledges
         };
     }
     
