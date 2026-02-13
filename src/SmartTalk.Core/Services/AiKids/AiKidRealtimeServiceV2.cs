@@ -54,7 +54,6 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
 
         var timer = await _aiSpeechAssistantDataProvider
             .GetAiSpeechAssistantTimerByAssistantIdAsync(assistant.Id, cancellationToken).ConfigureAwait(false);
-        assistant.Timer = timer;
 
         var modelConfig = await BuildModelConfigAsync(assistant, cancellationToken).ConfigureAwait(false);
 
