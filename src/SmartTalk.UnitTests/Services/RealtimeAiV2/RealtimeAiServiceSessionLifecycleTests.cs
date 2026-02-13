@@ -15,7 +15,7 @@ public class RealtimeAiServiceSessionLifecycleTests : RealtimeAiServiceTestBase
     {
         var validBase64 = Convert.ToBase64String(new byte[] { 1, 2, 3, 4 });
         ClientAdapter.ParseMessage(Arg.Any<string>())
-            .Returns((RealtimeAiClientMessageType.Audio, validBase64));
+            .Returns(new ParsedClientMessage { Type = RealtimeAiClientMessageType.Audio, Payload = validBase64 });
 
         var sessionTask = await StartSessionInBackgroundAsync();
 
@@ -34,7 +34,7 @@ public class RealtimeAiServiceSessionLifecycleTests : RealtimeAiServiceTestBase
     public async Task Session_ClientSendsText_ForwardedToProviderWithResponseCreate()
     {
         ClientAdapter.ParseMessage(Arg.Any<string>())
-            .Returns((RealtimeAiClientMessageType.Text, "hello world"));
+            .Returns(new ParsedClientMessage { Type = RealtimeAiClientMessageType.Text, Payload = "hello world" });
 
         var sessionTask = await StartSessionInBackgroundAsync();
 
@@ -309,7 +309,7 @@ public class RealtimeAiServiceSessionLifecycleTests : RealtimeAiServiceTestBase
     {
         var validBase64 = Convert.ToBase64String(new byte[] { 0xFF, 0xD8, 0xFF }); // JPEG magic bytes
         ClientAdapter.ParseMessage(Arg.Any<string>())
-            .Returns((RealtimeAiClientMessageType.Image, validBase64));
+            .Returns(new ParsedClientMessage { Type = RealtimeAiClientMessageType.Image, Payload = validBase64 });
 
         var sessionTask = await StartSessionInBackgroundAsync();
 
@@ -335,8 +335,8 @@ public class RealtimeAiServiceSessionLifecycleTests : RealtimeAiServiceTestBase
             {
                 callCount++;
                 return callCount == 1
-                    ? (RealtimeAiClientMessageType.Unknown, (string?)null)
-                    : (RealtimeAiClientMessageType.Text, "hello");
+                    ? new ParsedClientMessage { Type = RealtimeAiClientMessageType.Unknown }
+                    : new ParsedClientMessage { Type = RealtimeAiClientMessageType.Text, Payload = "hello" };
             });
 
         var sessionTask = await StartSessionInBackgroundAsync();
@@ -373,7 +373,7 @@ public class RealtimeAiServiceSessionLifecycleTests : RealtimeAiServiceTestBase
             });
 
         ClientAdapter.ParseMessage(Arg.Any<string>())
-            .Returns((RealtimeAiClientMessageType.Audio, userAudioBase64));
+            .Returns(new ParsedClientMessage { Type = RealtimeAiClientMessageType.Audio, Payload = userAudioBase64 });
 
         byte[]? recordedWav = null;
         var options = CreateDefaultOptions(o =>
@@ -433,7 +433,7 @@ public class RealtimeAiServiceSessionLifecycleTests : RealtimeAiServiceTestBase
         ProviderAdapter.BuildTriggerResponseMessage().Returns((string?)null);
 
         ClientAdapter.ParseMessage(Arg.Any<string>())
-            .Returns((RealtimeAiClientMessageType.Text, "hello"));
+            .Returns(new ParsedClientMessage { Type = RealtimeAiClientMessageType.Text, Payload = "hello" });
 
         var sessionTask = await StartSessionInBackgroundAsync();
 
@@ -447,5 +447,104 @@ public class RealtimeAiServiceSessionLifecycleTests : RealtimeAiServiceTestBase
         FakeWssClient.SentMessages.ShouldContain(m => m.StartsWith("text_user:"));
         // But null trigger message should NOT appear (SendToProviderAsync skips nulls)
         FakeWssClient.SentMessages.ShouldNotContain(m => m == "response_create_msg");
+    }
+
+    [Fact]
+    public async Task Session_ClientStartEvent_CallbackInvokedWithMetadata()
+    {
+        string receivedSessionId = null;
+        Dictionary<string, string> receivedMetadata = null;
+
+        ClientAdapter.ParseMessage(Arg.Any<string>())
+            .Returns(new ParsedClientMessage
+            {
+                Type = RealtimeAiClientMessageType.Start,
+                Metadata = new Dictionary<string, string>
+                {
+                    ["streamSid"] = "real-stream-sid-123",
+                    ["callSid"] = "real-call-sid-456"
+                }
+            });
+
+        var options = CreateDefaultOptions(o =>
+        {
+            o.OnClientStartAsync = (sessionId, metadata) =>
+            {
+                receivedSessionId = sessionId;
+                receivedMetadata = metadata;
+                return Task.CompletedTask;
+            };
+        });
+
+        var sessionTask = await StartSessionInBackgroundAsync(options);
+
+        FakeWs.EnqueueClientMessage("{\"event\":\"start\",\"start\":{\"streamSid\":\"real-stream-sid-123\",\"callSid\":\"real-call-sid-456\"}}");
+        await Task.Delay(100);
+
+        FakeWs.EnqueueClose();
+        await sessionTask;
+
+        receivedSessionId.ShouldNotBeNullOrEmpty();
+        receivedMetadata.ShouldNotBeNull();
+        receivedMetadata!["streamSid"].ShouldBe("real-stream-sid-123");
+        receivedMetadata["callSid"].ShouldBe("real-call-sid-456");
+    }
+
+    [Fact]
+    public async Task Session_ClientStartEvent_NullCallback_NoException()
+    {
+        ClientAdapter.ParseMessage(Arg.Any<string>())
+            .Returns(new ParsedClientMessage
+            {
+                Type = RealtimeAiClientMessageType.Start,
+                Metadata = new Dictionary<string, string>
+                {
+                    ["streamSid"] = "stream-123"
+                }
+            });
+
+        var options = CreateDefaultOptions(o =>
+        {
+            o.OnClientStartAsync = null;
+        });
+
+        var sessionTask = await StartSessionInBackgroundAsync(options);
+
+        FakeWs.EnqueueClientMessage("{\"event\":\"start\",\"start\":{\"streamSid\":\"stream-123\"}}");
+        await Task.Delay(100);
+
+        FakeWs.EnqueueClose();
+
+        // Should not throw
+        await Should.NotThrowAsync(() => sessionTask);
+    }
+
+    [Fact]
+    public async Task Session_ClientStopEvent_SessionContinues()
+    {
+        var callCount = 0;
+        ClientAdapter.ParseMessage(Arg.Any<string>())
+            .Returns(_ =>
+            {
+                callCount++;
+                return callCount == 1
+                    ? new ParsedClientMessage { Type = RealtimeAiClientMessageType.Stop }
+                    : new ParsedClientMessage { Type = RealtimeAiClientMessageType.Text, Payload = "hello" };
+            });
+
+        var sessionTask = await StartSessionInBackgroundAsync();
+
+        // First message: stop event → should be handled gracefully
+        FakeWs.EnqueueClientMessage("{\"event\":\"stop\"}");
+        await Task.Delay(50);
+
+        // Second message: valid text → should be processed, proving session survived
+        FakeWs.EnqueueClientMessage("{\"text\":\"hello\"}");
+        await Task.Delay(100);
+
+        FakeWs.EnqueueClose();
+        await sessionTask;
+
+        ProviderAdapter.Received().BuildTextUserMessage("hello", Arg.Any<string>());
     }
 }

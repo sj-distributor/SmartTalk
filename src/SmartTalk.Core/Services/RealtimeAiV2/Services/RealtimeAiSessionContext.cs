@@ -10,7 +10,6 @@ public class RealtimeAiSessionContext
 {
     // Identity
     public string SessionId { get; } = Guid.NewGuid().ToString();
-    public string StreamSid { get; } = Guid.NewGuid().ToString("N");
 
     // Configuration
     public RealtimeSessionOptions Options { get; set; }

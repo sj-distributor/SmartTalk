@@ -162,7 +162,7 @@ public class RealtimeAiServiceErrorHandlingTests : RealtimeAiServiceTestBase
                 callCount++;
                 if (callCount == 1)
                     throw new System.Text.Json.JsonException("Malformed JSON");
-                return (RealtimeAiClientMessageType.Text, "valid text");
+                return new ParsedClientMessage { Type = RealtimeAiClientMessageType.Text, Payload = "valid text" };
             });
 
         var sessionTask = await StartSessionInBackgroundAsync();
