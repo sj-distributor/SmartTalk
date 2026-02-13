@@ -103,6 +103,8 @@ public partial class RealtimeAiService
 
     private async Task OnAiDetectedUserSpeechAsync()
     {
+        _ctx.IsAiSpeaking = false;
+
         if (_ctx.Options.IdleFollowUp != null)
             _inactivityTimerManager.StopTimer(_ctx.StreamSid);
 
