@@ -78,6 +78,19 @@ public class RealtimeAiSessionActions
     /// Send text to the AI provider as a user message and trigger an AI response.
     /// </summary>
     public Func<string, Task> SendTextToProviderAsync { get; init; }
+
+    /// <summary>
+    /// Suspend forwarding client audio to the AI provider.
+    /// Use when the consumer needs exclusive control of the audio channel
+    /// (e.g. playing a pre-recorded message to the client without the provider hearing user noise).
+    /// Client audio will still be received from the WebSocket but will not be sent to the provider.
+    /// </summary>
+    public Action SuspendClientAudioToProvider { get; init; }
+
+    /// <summary>
+    /// Resume forwarding client audio to the AI provider after a previous <see cref="SuspendClientAudioToProvider"/>.
+    /// </summary>
+    public Action ResumeClientAudioToProvider { get; init; }
 }
 
 public class RealtimeSessionOptions

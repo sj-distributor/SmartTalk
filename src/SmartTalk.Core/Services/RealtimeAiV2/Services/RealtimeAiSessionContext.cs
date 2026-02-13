@@ -25,6 +25,7 @@ public class RealtimeAiSessionContext
     // Runtime state
     public int Round { get; set; }
     public volatile bool IsAiSpeaking;
+    public volatile bool IsClientAudioToProviderSuspended;
 
     // Recording
     public MemoryStream AudioBuffer { get; set; }

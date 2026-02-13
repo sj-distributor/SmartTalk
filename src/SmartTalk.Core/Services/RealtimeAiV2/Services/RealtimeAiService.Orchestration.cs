@@ -1,7 +1,6 @@
 using System.Buffers;
 using System.Net.WebSockets;
 using System.Text;
-using System.Text.Json;
 using NAudio.Wave;
 using Serilog;
 using SmartTalk.Core.Services.RealtimeAiV2.Adapters;
@@ -71,12 +70,10 @@ public partial class RealtimeAiService
             switch (parsed.Type)
             {
                 case RealtimeAiClientMessageType.Start:
-                    if (_ctx.Options.OnClientStartAsync != null)
-                        await _ctx.Options.OnClientStartAsync(_ctx.SessionId, parsed.Metadata ?? new()).ConfigureAwait(false);
+                    await (_ctx.Options.OnClientStartAsync?.Invoke(_ctx.SessionId, parsed.Metadata ?? new()) ?? Task.CompletedTask).ConfigureAwait(false);
                     break;
                 case RealtimeAiClientMessageType.Stop:
-                    if (_ctx.Options.OnClientStopAsync != null)
-                        await _ctx.Options.OnClientStopAsync(_ctx.SessionId).ConfigureAwait(false);
+                    await (_ctx.Options.OnClientStopAsync?.Invoke(_ctx.SessionId) ?? Task.CompletedTask).ConfigureAwait(false);
                     break;
                 case RealtimeAiClientMessageType.Audio:
                     await HandleClientAudioAsync(parsed.Payload).ConfigureAwait(false);
@@ -92,24 +89,21 @@ public partial class RealtimeAiService
                     break;
             }
         }
-        catch (JsonException jsonEx)
+        catch (Exception ex)
         {
-            Log.Error(jsonEx, "[RealtimeAi] Failed to parse client message, SessionId: {SessionId}", _ctx.SessionId);
+            Log.Error(ex, "[RealtimeAi] Failed to process client message, SessionId: {SessionId}", _ctx.SessionId);
         }
-    }
-
-    private async Task HandleClientTextAsync(string text)
-    {
-        await SendTextToProviderAsync(text).ConfigureAwait(false);
     }
 
     private async Task HandleClientAudioAsync(string base64Payload)
     {
-        if (!_ctx.IsAiSpeaking)
+        if (!_ctx.IsAiSpeaking && _ctx.Options.EnableRecording)
         {
             var audioBytes = Convert.FromBase64String(base64Payload);
             await WriteToAudioBufferAsync(audioBytes).ConfigureAwait(false);
         }
+
+        if (_ctx.IsClientAudioToProviderSuspended) return;
 
         await SendAudioToProviderAsync(new RealtimeAiWssAudioData
         {
@@ -134,6 +128,11 @@ public partial class RealtimeAiService
         }).ConfigureAwait(false);
     }
 
+    private async Task HandleClientTextAsync(string text)
+    {
+        await SendTextToProviderAsync(text).ConfigureAwait(false);
+    }
+
     private async Task CleanupSessionAsync(bool clientIsClose)
     {
         if (clientIsClose)
@@ -148,8 +147,8 @@ public partial class RealtimeAiService
         await SafeExecuteAsync(
             () => { _inactivityTimerManager.StopTimer(_ctx.SessionId); return Task.CompletedTask; }, "stop inactivity timer");
 
-        await SafeExecuteAsync(async 
-            () => { if (_ctx.Options?.OnSessionEndedAsync != null) await _ctx.Options.OnSessionEndedAsync(_ctx.SessionId).ConfigureAwait(false); }, "invoke OnSessionEndedAsync");
+        await SafeExecuteAsync(
+            () => _ctx.Options?.OnSessionEndedAsync?.Invoke(_ctx.SessionId) ?? Task.CompletedTask, "invoke OnSessionEndedAsync");
 
         await SafeExecuteAsync(HandleRecordingAsync, "handle recording");
         await SafeExecuteAsync(HandleTranscriptionsAsync, "handle transcriptions");

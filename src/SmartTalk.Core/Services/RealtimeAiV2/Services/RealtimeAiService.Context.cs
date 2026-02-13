@@ -32,7 +32,9 @@ public partial class RealtimeAiService
         _ctx.SessionActions = new RealtimeAiSessionActions
         {
             SendAudioToClientAsync = SendAudioToClientAsync,
-            SendTextToProviderAsync = SendTextToProviderAsync
+            SendTextToProviderAsync = SendTextToProviderAsync,
+            SuspendClientAudioToProvider = () => _ctx.IsClientAudioToProviderSuspended = true,
+            ResumeClientAudioToProvider = () => _ctx.IsClientAudioToProviderSuspended = false
         };
     }
 
