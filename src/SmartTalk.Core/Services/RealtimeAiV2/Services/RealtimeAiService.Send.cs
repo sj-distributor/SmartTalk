@@ -33,7 +33,7 @@ public partial class RealtimeAiService
     {
         Log.Information("[RealtimeAi] Sending text to provider, SessionId: {SessionId}, Text: {Text}", _ctx.SessionId, text);
 
-        await SendToProviderAsync(
+        await SendRawToProviderAsync(
             _ctx.ProviderAdapter.BuildTextUserMessage(text, _ctx.SessionId),
             _ctx.ProviderAdapter.BuildTriggerResponseMessage()
         ).ConfigureAwait(false);
@@ -41,10 +41,10 @@ public partial class RealtimeAiService
 
     private async Task SendAudioToProviderAsync(RealtimeAiWssAudioData audioData)
     {
-        await SendToProviderAsync(_ctx.ProviderAdapter.BuildAudioAppendMessage(audioData)).ConfigureAwait(false);
+        await SendRawToProviderAsync(_ctx.ProviderAdapter.BuildAudioAppendMessage(audioData)).ConfigureAwait(false);
     }
 
-    private async Task SendToProviderAsync(params string[] messages)
+    private async Task SendRawToProviderAsync(params string[] messages)
     {
         if (!IsProviderSessionActive) return;
 
