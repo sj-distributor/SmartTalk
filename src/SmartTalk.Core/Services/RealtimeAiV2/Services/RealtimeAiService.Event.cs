@@ -29,6 +29,7 @@ public partial class RealtimeAiService
                         await OnAiAudioOutputReadyAsync(audioData).ConfigureAwait(false);
                     break;
 
+                case RealtimeAiWssEventType.InputAudioTranscriptionPartial:
                 case RealtimeAiWssEventType.InputAudioTranscriptionCompleted:
                 case RealtimeAiWssEventType.OutputAudioTranscriptionPartial:
                 case RealtimeAiWssEventType.OutputAudioTranscriptionCompleted:
