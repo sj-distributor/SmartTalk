@@ -97,7 +97,7 @@ public partial class RealtimeAiService
 
         var clientBase64 = await TranscodeAudioAsync(aiAudioData.Base64Payload, AudioSource.Provider).ConfigureAwait(false);
 
-        await SendToClientAsync(_ctx.ClientAdapter.BuildAudioDeltaMessage(clientBase64, _ctx.SessionId)).ConfigureAwait(false);
+        await SendAudioToClientAsync(clientBase64).ConfigureAwait(false);
     }
 
     private async Task OnAiDetectedUserSpeechAsync()

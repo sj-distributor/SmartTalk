@@ -4,7 +4,6 @@ using System.Text;
 using NAudio.Wave;
 using Serilog;
 using SmartTalk.Core.Services.RealtimeAiV2.Adapters;
-using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.RealtimeAi;
 
 namespace SmartTalk.Core.Services.RealtimeAiV2.Services;
@@ -102,16 +101,12 @@ public partial class RealtimeAiService
 
         if (_ctx.IsClientAudioToProviderSuspended) return;
 
-        await SendToProviderAsync(_ctx.ProviderAdapter.BuildAudioAppendMessage(new RealtimeAiWssAudioData { Base64Payload = providerBase64 })).ConfigureAwait(false);
+        await SendAudioToProviderAsync(providerBase64).ConfigureAwait(false);
     }
 
     private async Task HandleClientImageAsync(string base64Payload)
     {
-        await SendToProviderAsync(_ctx.ProviderAdapter.BuildAudioAppendMessage(new RealtimeAiWssAudioData
-        {
-            Base64Payload = base64Payload,
-            CustomProperties = new Dictionary<string, object> { { "image", base64Payload } }
-        })).ConfigureAwait(false);
+        await SendImageToProviderAsync(base64Payload).ConfigureAwait(false);
     }
 
     private async Task HandleClientTextAsync(string text)

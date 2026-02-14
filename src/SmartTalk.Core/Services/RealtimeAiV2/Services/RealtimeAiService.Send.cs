@@ -1,6 +1,7 @@
 using System.Net.WebSockets;
 using System.Text.Json;
 using Serilog;
+using SmartTalk.Messages.Dto.RealtimeAi;
 
 namespace SmartTalk.Core.Services.RealtimeAiV2.Services;
 
@@ -46,6 +47,20 @@ public partial class RealtimeAiService
     private async Task SendAudioToClientAsync(string base64Payload)
     {
         await SendToClientAsync(_ctx.ClientAdapter.BuildAudioDeltaMessage(base64Payload, _ctx.SessionId)).ConfigureAwait(false);
+    }
+
+    private async Task SendAudioToProviderAsync(string base64Payload)
+    {
+        await SendToProviderAsync(_ctx.ProviderAdapter.BuildAudioAppendMessage(new RealtimeAiWssAudioData { Base64Payload = base64Payload })).ConfigureAwait(false);
+    }
+
+    private async Task SendImageToProviderAsync(string base64Payload)
+    {
+        await SendToProviderAsync(_ctx.ProviderAdapter.BuildAudioAppendMessage(new RealtimeAiWssAudioData
+        {
+            Base64Payload = base64Payload,
+            CustomProperties = new Dictionary<string, object> { { "image", base64Payload } }
+        })).ConfigureAwait(false);
     }
 
     private async Task SendTextToProviderAsync(string text)
