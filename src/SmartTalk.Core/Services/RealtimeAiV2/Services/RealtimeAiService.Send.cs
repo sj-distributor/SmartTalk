@@ -1,8 +1,6 @@
 using System.Net.WebSockets;
 using System.Text.Json;
 using Serilog;
-using SmartTalk.Core.Services.RealtimeAiV2.Adapters;
-using SmartTalk.Messages.Dto.RealtimeAi;
 
 namespace SmartTalk.Core.Services.RealtimeAiV2.Services;
 
@@ -43,29 +41,7 @@ public partial class RealtimeAiService
         }
     }
 
-    // ── High-level: audio with codec conversion ─────────────────
-
-    private async Task SendAudioToProviderAsync(RealtimeAiWssAudioData audioData)
-    {
-        var raw = Convert.FromBase64String(audioData.Base64Payload);
-        var providerCodec = _ctx.ProviderAdapter.GetPreferredCodec(_ctx.ClientAdapter.NativeAudioCodec);
-        var converted = AudioCodecConverter.Convert(raw, _ctx.ClientAdapter.NativeAudioCodec, providerCodec);
-        
-        audioData.Base64Payload = Convert.ToBase64String(converted);
-
-        await SendToProviderAsync(_ctx.ProviderAdapter.BuildAudioAppendMessage(audioData)).ConfigureAwait(false);
-    }
-
-    private async Task SendProviderAudioToClientAsync(string providerBase64)
-    {
-        var raw = Convert.FromBase64String(providerBase64);
-        var providerCodec = _ctx.ProviderAdapter.GetPreferredCodec(_ctx.ClientAdapter.NativeAudioCodec);
-        var clientBytes = AudioCodecConverter.Convert(raw, providerCodec, _ctx.ClientAdapter.NativeAudioCodec);
-
-        await SendToClientAsync(_ctx.ClientAdapter.BuildAudioDeltaMessage(Convert.ToBase64String(clientBytes), _ctx.SessionId)).ConfigureAwait(false);
-    }
-
-    // ── High-level: no codec conversion ─────────────────────────
+    // ── High-level ────────────────────────────────────────────────
 
     private async Task SendAudioToClientAsync(string base64Payload)
     {

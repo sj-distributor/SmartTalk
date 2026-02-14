@@ -98,15 +98,11 @@ public partial class RealtimeAiService
 
     private async Task HandleClientAudioAsync(string base64Payload)
     {
-        if (!_ctx.IsAiSpeaking && _ctx.Options.EnableRecording)
-        {
-            var audioBytes = Convert.FromBase64String(base64Payload);
-            await WriteToAudioBufferAsync(audioBytes, _ctx.ClientAdapter.NativeAudioCodec).ConfigureAwait(false);
-        }
+        var providerBase64 = await TranscodeAudioAsync(base64Payload, AudioSource.Client).ConfigureAwait(false);
 
         if (_ctx.IsClientAudioToProviderSuspended) return;
 
-        await SendAudioToProviderAsync(new RealtimeAiWssAudioData { Base64Payload = base64Payload }).ConfigureAwait(false);
+        await SendToProviderAsync(_ctx.ProviderAdapter.BuildAudioAppendMessage(new RealtimeAiWssAudioData { Base64Payload = providerBase64 })).ConfigureAwait(false);
     }
 
     private async Task HandleClientImageAsync(string base64Payload)
@@ -142,6 +138,43 @@ public partial class RealtimeAiService
 
         await SafeExecuteAsync(HandleRecordingAsync, "handle recording");
         await SafeExecuteAsync(HandleTranscriptionsAsync, "handle transcriptions");
+    }
+
+    private enum AudioSource { Client, Provider }
+
+    /// <summary>
+    /// Central audio pipeline: decode → record → convert codec → re-encode.
+    /// Resolves source/target codecs from AudioSource; decodes at most once.
+    /// </summary>
+    private async Task<string> TranscodeAudioAsync(string base64Input, AudioSource source)
+    {
+        var clientCodec = _ctx.ClientAdapter.NativeAudioCodec;
+        var providerCodec = _ctx.ProviderAdapter.GetPreferredCodec(clientCodec);
+        var (sourceCodec, targetCodec) = source == AudioSource.Client ? (clientCodec, providerCodec) : (providerCodec, clientCodec);
+
+        var rawBytes = await RecordAudioIfRequiredAsync(base64Input, sourceCodec, source).ConfigureAwait(false);
+
+        if (sourceCodec == targetCodec) return base64Input;
+
+        rawBytes ??= Convert.FromBase64String(base64Input);
+        
+        return Convert.ToBase64String(AudioCodecConverter.Convert(rawBytes, sourceCodec, targetCodec));
+    }
+
+    /// <summary>
+    /// Decides whether recording should happen, decodes and writes to buffer if so.
+    /// Returns decoded bytes for reuse by codec conversion, or null if no decode occurred.
+    /// </summary>
+    private async Task<byte[]> RecordAudioIfRequiredAsync(string base64Input, RealtimeAiAudioCodec sourceCodec, AudioSource source)
+    {
+        if (!_ctx.Options.EnableRecording) return null;
+        if (source == AudioSource.Client && _ctx.IsAiSpeaking) return null;
+
+        var rawBytes = Convert.FromBase64String(base64Input);
+        
+        await WriteToAudioBufferAsync(rawBytes, sourceCodec).ConfigureAwait(false);
+        
+        return rawBytes;
     }
 
     private async Task WriteToAudioBufferAsync(byte[] data, RealtimeAiAudioCodec sourceCodec)

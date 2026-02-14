@@ -95,11 +95,9 @@ public partial class RealtimeAiService
 
         _ctx.IsAiSpeaking = true;
 
-        var providerCodec = _ctx.ProviderAdapter.GetPreferredCodec(_ctx.ClientAdapter.NativeAudioCodec);
-        
-        await WriteToAudioBufferAsync(Convert.FromBase64String(aiAudioData.Base64Payload), providerCodec).ConfigureAwait(false);
+        var clientBase64 = await TranscodeAudioAsync(aiAudioData.Base64Payload, AudioSource.Provider).ConfigureAwait(false);
 
-        await SendProviderAudioToClientAsync(aiAudioData.Base64Payload).ConfigureAwait(false);
+        await SendToClientAsync(_ctx.ClientAdapter.BuildAudioDeltaMessage(clientBase64, _ctx.SessionId)).ConfigureAwait(false);
     }
 
     private async Task OnAiDetectedUserSpeechAsync()
