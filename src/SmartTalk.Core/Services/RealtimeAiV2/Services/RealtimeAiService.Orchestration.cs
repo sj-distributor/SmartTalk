@@ -5,6 +5,7 @@ using NAudio.Wave;
 using Serilog;
 using SmartTalk.Core.Services.RealtimeAiV2.Adapters;
 using SmartTalk.Messages.Dto.RealtimeAi;
+using SmartTalk.Messages.Enums.RealtimeAi;
 
 namespace SmartTalk.Core.Services.RealtimeAiV2.Services;
 
@@ -100,7 +101,7 @@ public partial class RealtimeAiService
         if (!_ctx.IsAiSpeaking && _ctx.Options.EnableRecording)
         {
             var audioBytes = Convert.FromBase64String(base64Payload);
-            await WriteToAudioBufferAsync(audioBytes).ConfigureAwait(false);
+            await WriteToAudioBufferAsync(audioBytes, _ctx.ClientAdapter.NativeAudioCodec).ConfigureAwait(false);
         }
 
         if (_ctx.IsClientAudioToProviderSuspended) return;
@@ -143,15 +144,17 @@ public partial class RealtimeAiService
         await SafeExecuteAsync(HandleTranscriptionsAsync, "handle transcriptions");
     }
 
-    private async Task WriteToAudioBufferAsync(byte[] data)
+    private async Task WriteToAudioBufferAsync(byte[] data, RealtimeAiAudioCodec sourceCodec)
     {
         if (!_ctx.Options.EnableRecording || _ctx.AudioBuffer is not { CanWrite: true }) return;
+
+        var pcmData = AudioCodecConverter.Convert(data, sourceCodec, RealtimeAiAudioCodec.PCM16);
 
         await _ctx.BufferLock.WaitAsync(_ctx.SessionCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
         try
         {
             if (_ctx.AudioBuffer is { CanWrite: true })
-                await _ctx.AudioBuffer.WriteAsync(data).ConfigureAwait(false);
+                await _ctx.AudioBuffer.WriteAsync(pcmData).ConfigureAwait(false);
         }
         finally
         {
