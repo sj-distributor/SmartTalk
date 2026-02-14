@@ -1,6 +1,5 @@
 using System.Net.WebSockets;
 using Serilog;
-using SmartTalk.Core.Services.RealtimeAiV2.Adapters;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.RealtimeAi;
 
@@ -96,15 +95,9 @@ public partial class RealtimeAiService
 
         _ctx.IsAiSpeaking = true;
 
-        var audioBytes = Convert.FromBase64String(aiAudioData.Base64Payload);
+        await WriteToAudioBufferAsync(Convert.FromBase64String(aiAudioData.Base64Payload)).ConfigureAwait(false);
 
-        await WriteToAudioBufferAsync(audioBytes).ConfigureAwait(false);
-
-        var providerCodec = _ctx.ProviderAdapter.GetPreferredCodec(_ctx.ClientAdapter.NativeAudioCodec);
-        var clientAudioBytes = AudioCodecConverter.Convert(audioBytes, providerCodec, _ctx.ClientAdapter.NativeAudioCodec);
-        var clientBase64 = Convert.ToBase64String(clientAudioBytes);
-
-        await SendToClientAsync(_ctx.ClientAdapter.BuildAudioDeltaMessage(clientBase64, _ctx.SessionId)).ConfigureAwait(false);
+        await SendProviderAudioToClientAsync(aiAudioData.Base64Payload).ConfigureAwait(false);
     }
 
     private async Task OnAiDetectedUserSpeechAsync()
@@ -168,12 +161,12 @@ public partial class RealtimeAiService
         }
 
         foreach (var (functionCall, output) in replies)
-            await SendRawToProviderAsync(_ctx.ProviderAdapter.BuildFunctionCallReplyMessage(functionCall, output)).ConfigureAwait(false);
+            await SendToProviderAsync(_ctx.ProviderAdapter.BuildFunctionCallReplyMessage(functionCall, output)).ConfigureAwait(false);
 
         // After sending all function_call_output items, explicitly trigger a new AI response
         // so the provider incorporates the results into its next reply.
         if (replies.Count > 0)
-            await SendRawToProviderAsync(_ctx.ProviderAdapter.BuildTriggerResponseMessage()).ConfigureAwait(false);
+            await SendToProviderAsync(_ctx.ProviderAdapter.BuildTriggerResponseMessage()).ConfigureAwait(false);
     }
 
     private async Task OnProviderErrorAsync(RealtimeAiErrorData errorData)
