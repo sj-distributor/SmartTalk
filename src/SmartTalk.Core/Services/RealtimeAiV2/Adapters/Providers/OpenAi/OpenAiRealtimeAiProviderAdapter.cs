@@ -30,7 +30,7 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
         };
     }
 
-    public object BuildSessionConfig(RealtimeSessionOptions options)
+    public object BuildSessionConfig(RealtimeSessionOptions options, RealtimeAiAudioCodec clientCodec)
     {
         var modelConfig = options.ModelConfig;
 
@@ -40,8 +40,8 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
             session = new
             {
                 turn_detection = modelConfig.TurnDetection ?? new { type = "server_vad" },
-                input_audio_format = options.InputFormat.GetDescription(),
-                output_audio_format = options.OutputFormat.GetDescription(),
+                input_audio_format = clientCodec.GetDescription(),
+                output_audio_format = clientCodec.GetDescription(),
                 voice = string.IsNullOrEmpty(modelConfig.Voice) ? "alloy" : modelConfig.Voice,
                 instructions = modelConfig.Prompt,
                 modalities = new[] { "text", "audio" },
@@ -140,7 +140,7 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
     {
         return JsonSerializer.Serialize(new { type = "response.create" });
     }
-
+    
     public ParsedRealtimeAiProviderEvent ParseMessage(string rawMessage)
     {
         try
@@ -253,6 +253,8 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
 
         return "Unknown OpenAI error";
     }
+    
+    public RealtimeAiAudioCodec GetPreferredCodec(RealtimeAiAudioCodec clientCodec) => clientCodec;
     
     public RealtimeAiProvider Provider => RealtimeAiProvider.OpenAi;
 }

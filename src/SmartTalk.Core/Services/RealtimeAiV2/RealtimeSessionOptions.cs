@@ -105,10 +105,6 @@ public class RealtimeSessionOptions
 
     public WebSocket WebSocket { get; set; }
 
-    public RealtimeAiAudioCodec InputFormat { get; set; }
-
-    public RealtimeAiAudioCodec OutputFormat { get; set; }
-
     public RealtimeAiServerRegion Region { get; set; }
 
     /// <summary>

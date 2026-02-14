@@ -10,7 +10,7 @@ public interface IRealtimeAiProviderAdapter : IScopedDependency
     
     Dictionary<string, string> GetHeaders(RealtimeAiServerRegion region);
 
-    object BuildSessionConfig(RealtimeSessionOptions options);
+    object BuildSessionConfig(RealtimeSessionOptions options, RealtimeAiAudioCodec clientCodec);
     
     string BuildAudioAppendMessage(RealtimeAiWssAudioData audioData);
     
@@ -25,6 +25,13 @@ public interface IRealtimeAiProviderAdapter : IScopedDependency
     /// or null if the provider auto-triggers responses.
     /// </summary>
     string BuildTriggerResponseMessage();
+
+    /// <summary>
+    /// Returns the codec the provider will actually use, given the client's codec.
+    /// Providers that support multiple codecs (e.g. OpenAI) return the client's codec to avoid conversion.
+    /// Providers with a fixed codec (e.g. Google = PCM16) always return their own codec.
+    /// </summary>
+    RealtimeAiAudioCodec GetPreferredCodec(RealtimeAiAudioCodec clientCodec);
 
     ParsedRealtimeAiProviderEvent ParseMessage(string rawMessage);
 }

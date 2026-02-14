@@ -1,5 +1,6 @@
 using System.Net.WebSockets;
 using Serilog;
+using SmartTalk.Core.Services.RealtimeAiV2.Adapters;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.RealtimeAi;
 
@@ -99,7 +100,11 @@ public partial class RealtimeAiService
 
         await WriteToAudioBufferAsync(audioBytes).ConfigureAwait(false);
 
-        await SendToClientAsync(_ctx.ClientAdapter.BuildAudioDeltaMessage(aiAudioData.Base64Payload, _ctx.SessionId)).ConfigureAwait(false);
+        var providerCodec = _ctx.ProviderAdapter.GetPreferredCodec(_ctx.ClientAdapter.NativeAudioCodec);
+        var clientAudioBytes = AudioCodecConverter.Convert(audioBytes, providerCodec, _ctx.ClientAdapter.NativeAudioCodec);
+        var clientBase64 = Convert.ToBase64String(clientAudioBytes);
+
+        await SendToClientAsync(_ctx.ClientAdapter.BuildAudioDeltaMessage(clientBase64, _ctx.SessionId)).ConfigureAwait(false);
     }
 
     private async Task OnAiDetectedUserSpeechAsync()

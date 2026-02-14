@@ -73,8 +73,6 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
                 ProfileId = assistant.Id.ToString()
             },
             WebSocket = command.WebSocket,
-            InputFormat = command.InputFormat,
-            OutputFormat = command.OutputFormat,
             Region = command.Region,
             EnableRecording = true,
             IdleFollowUp = timer != null

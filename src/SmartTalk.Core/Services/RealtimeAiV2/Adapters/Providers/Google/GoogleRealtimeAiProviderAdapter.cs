@@ -23,7 +23,7 @@ public class GoogleRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
         return new Dictionary<string, string>();
     }
 
-    public object BuildSessionConfig(RealtimeSessionOptions options)
+    public object BuildSessionConfig(RealtimeSessionOptions options, RealtimeAiAudioCodec clientCodec)
     {
         var modelConfig = options.ModelConfig;
 
@@ -194,5 +194,7 @@ public class GoogleRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
         }
     }
     
+    public RealtimeAiAudioCodec GetPreferredCodec(RealtimeAiAudioCodec clientCodec) => RealtimeAiAudioCodec.PCM16;
+
     public RealtimeAiProvider Provider => RealtimeAiProvider.Google;
 }

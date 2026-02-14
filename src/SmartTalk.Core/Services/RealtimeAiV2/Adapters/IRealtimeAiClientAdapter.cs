@@ -8,9 +8,9 @@ public enum RealtimeAiClientMessageType { Audio, Image, Text, Start, Stop, Unkno
 
 public class ParsedClientMessage
 {
-    public RealtimeAiClientMessageType Type { get; set; }
-
     public string Payload { get; set; }
+    
+    public RealtimeAiClientMessageType Type { get; set; }
 
     /// <summary>
     /// Metadata from lifecycle events (e.g. CallSid, StreamSid from Twilio "start").
@@ -21,6 +21,11 @@ public class ParsedClientMessage
 public interface IRealtimeAiClientAdapter : IScopedDependency
 {
     RealtimeAiClient Client { get; }
+
+    /// <summary>
+    /// The audio codec the client natively uses (e.g. Twilio = MULAW).
+    /// </summary>
+    RealtimeAiAudioCodec NativeAudioCodec { get; }
 
     // Inbound: parse raw client message into a typed message
     ParsedClientMessage ParseMessage(string rawMessage);

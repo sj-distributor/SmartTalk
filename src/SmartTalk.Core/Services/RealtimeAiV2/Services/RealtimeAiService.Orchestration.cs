@@ -105,14 +105,7 @@ public partial class RealtimeAiService
 
         if (_ctx.IsClientAudioToProviderSuspended) return;
 
-        await SendAudioToProviderAsync(new RealtimeAiWssAudioData
-        {
-            Base64Payload = base64Payload,
-            CustomProperties = new Dictionary<string, object>
-            {
-                { nameof(RealtimeSessionOptions.InputFormat), _ctx.Options.InputFormat }
-            }
-        }).ConfigureAwait(false);
+        await SendAudioToProviderAsync(new RealtimeAiWssAudioData { Base64Payload = base64Payload }).ConfigureAwait(false);
     }
 
     private async Task HandleClientImageAsync(string base64Payload)
@@ -120,11 +113,7 @@ public partial class RealtimeAiService
         await SendAudioToProviderAsync(new RealtimeAiWssAudioData
         {
             Base64Payload = base64Payload,
-            CustomProperties = new Dictionary<string, object>
-            {
-                { nameof(RealtimeSessionOptions.InputFormat), _ctx.Options.InputFormat },
-                { "image", base64Payload }
-            }
+            CustomProperties = new Dictionary<string, object> { { "image", base64Payload } }
         }).ConfigureAwait(false);
     }
 
