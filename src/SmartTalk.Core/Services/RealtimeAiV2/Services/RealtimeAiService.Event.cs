@@ -138,10 +138,10 @@ public partial class RealtimeAiService
 
     private async Task OnTranscriptionReceivedAsync(RealtimeAiWssEventType eventType, RealtimeAiWssTranscriptionData transcriptionData)
     {
-        // Partial transcriptions are incremental fragments (e.g. "你" → "你好" → "你好，请问..."),
-        // only sent to client for real-time UI display. Only completed transcriptions (full sentences)
-        // are queued for final delivery via OnTranscriptionsCompletedAsync at session end.
-        if (eventType != RealtimeAiWssEventType.OutputAudioTranscriptionPartial)
+        // Only completed transcriptions (full sentences) are queued for final delivery
+        // via OnTranscriptionsCompletedAsync at session end. Partial transcriptions are
+        // incremental fragments (e.g. "你" → "你好" → "你好，请问..."), only sent to client for real-time UI display.
+        if (eventType is RealtimeAiWssEventType.InputAudioTranscriptionCompleted or RealtimeAiWssEventType.OutputAudioTranscriptionCompleted)
             _ctx.Transcriptions.Enqueue((transcriptionData.Speaker, transcriptionData.Transcript));
 
         await SendToClientAsync(_ctx.ClientAdapter.BuildTranscriptionMessage(eventType, transcriptionData, _ctx.SessionId)).ConfigureAwait(false);

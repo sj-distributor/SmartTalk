@@ -210,4 +210,86 @@ public class AudioCodecConverterTests
         result.Length.ShouldBe(pcmAudio.Length / 2);
         result.ShouldNotBe(pcmAudio);
     }
+
+    // ── GetSampleRate ─────────────────────────────────────────────
+
+    [Theory]
+    [InlineData(RealtimeAiAudioCodec.MULAW, 8000)]
+    [InlineData(RealtimeAiAudioCodec.ALAW, 8000)]
+    [InlineData(RealtimeAiAudioCodec.PCM16, 24000)]
+    public void GetSampleRate_ReturnsExpectedRate(RealtimeAiAudioCodec codec, int expectedRate)
+    {
+        AudioCodecConverter.GetSampleRate(codec).ShouldBe(expectedRate);
+    }
+
+    // ── Resample ──────────────────────────────────────────────────
+
+    [Fact]
+    public void Resample_SameRate_ReturnsSameReference()
+    {
+        var pcm = BuildPcm16(TestSamples);
+
+        var result = AudioCodecConverter.Resample(pcm, 24000, 24000);
+
+        result.ShouldBeSameAs(pcm);
+    }
+
+    [Fact]
+    public void Resample_8kTo24k_TriplesSampleCount()
+    {
+        var pcm = BuildPcm16(new short[] { 100, 200, 300, 400 }); // 4 samples = 8 bytes
+
+        var result = AudioCodecConverter.Resample(pcm, 8000, 24000);
+
+        // 4 samples * 3 = 12 samples = 24 bytes
+        result.Length.ShouldBe(24);
+    }
+
+    [Fact]
+    public void Resample_24kTo8k_ThirdsSampleCount()
+    {
+        var pcm = BuildPcm16(new short[] { 100, 200, 300, 400, 500, 600 }); // 6 samples
+
+        var result = AudioCodecConverter.Resample(pcm, 24000, 8000);
+
+        // 6 samples / 3 = 2 samples = 4 bytes
+        result.Length.ShouldBe(4);
+    }
+
+    // ── ConvertForRecording ───────────────────────────────────────
+
+    [Fact]
+    public void ConvertForRecording_Pcm16_NoConversionNoResample()
+    {
+        var pcm = BuildPcm16(TestSamples);
+
+        var result = AudioCodecConverter.ConvertForRecording(pcm, RealtimeAiAudioCodec.PCM16);
+
+        // PCM16 at 24kHz → same rate, same codec → same reference
+        result.ShouldBeSameAs(pcm);
+    }
+
+    [Fact]
+    public void ConvertForRecording_Mulaw_ConvertedAndResampled()
+    {
+        var mulaw = new byte[100];
+        Array.Fill<byte>(mulaw, 0x80);
+
+        var result = AudioCodecConverter.ConvertForRecording(mulaw, RealtimeAiAudioCodec.MULAW);
+
+        // 100 MULAW → 200 PCM16 (codec) → 600 PCM16 (8kHz→24kHz resample)
+        result.Length.ShouldBe(600);
+    }
+
+    [Fact]
+    public void ConvertForRecording_Alaw_ConvertedAndResampled()
+    {
+        var alaw = new byte[100];
+        Array.Fill<byte>(alaw, 0x80);
+
+        var result = AudioCodecConverter.ConvertForRecording(alaw, RealtimeAiAudioCodec.ALAW);
+
+        // 100 ALAW → 200 PCM16 (codec) → 600 PCM16 (8kHz→24kHz resample)
+        result.Length.ShouldBe(600);
+    }
 }

@@ -21,7 +21,7 @@ public class RealtimeAiServiceRecordingTests : RealtimeAiServiceTestBase
 
     [Theory]
     [InlineData(RealtimeAiAudioCodec.PCM16, 100)]  // Web: 100 PCM16 → 100 PCM16
-    [InlineData(RealtimeAiAudioCodec.MULAW, 200)]   // Twilio: 100 MULAW → 200 PCM16
+    [InlineData(RealtimeAiAudioCodec.MULAW, 600)]   // Twilio: 100 MULAW → 200 PCM16 → 600 PCM16 (8kHz→24kHz resample)
     public async Task Recording_ClientAudio_ConvertedToPcm16InBuffer(
         RealtimeAiAudioCodec clientCodec, int expectedDataSize)
     {
@@ -55,7 +55,7 @@ public class RealtimeAiServiceRecordingTests : RealtimeAiServiceTestBase
 
     [Theory]
     [InlineData(RealtimeAiAudioCodec.PCM16, RealtimeAiAudioCodec.PCM16, 100)]   // Web + Google: provider PCM16 → 100
-    [InlineData(RealtimeAiAudioCodec.MULAW, RealtimeAiAudioCodec.MULAW, 200)]    // Twilio + OpenAI: provider MULAW → 200
+    [InlineData(RealtimeAiAudioCodec.MULAW, RealtimeAiAudioCodec.MULAW, 600)]    // Twilio + OpenAI: provider MULAW → 600 (8kHz→24kHz resample)
     [InlineData(RealtimeAiAudioCodec.MULAW, RealtimeAiAudioCodec.PCM16, 100)]    // Twilio + Google: provider PCM16 → 100
     public async Task Recording_ProviderAudio_ConvertedToPcm16InBuffer(
         RealtimeAiAudioCodec clientCodec, RealtimeAiAudioCodec providerCodec, int expectedDataSize)

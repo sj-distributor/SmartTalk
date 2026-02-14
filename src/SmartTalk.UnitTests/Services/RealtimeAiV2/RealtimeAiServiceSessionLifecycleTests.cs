@@ -105,19 +105,24 @@ public class RealtimeAiServiceSessionLifecycleTests : RealtimeAiServiceTestBase
         FakeWs.GetSentTextMessages().ShouldNotBeEmpty();
     }
 
-    [Fact]
-    public async Task Session_ProviderSendsTranscriptionCompleted_QueuedAndSentToClient()
+    [Theory]
+    [InlineData(RealtimeAiWssEventType.InputAudioTranscriptionCompleted, true)]
+    [InlineData(RealtimeAiWssEventType.OutputAudioTranscriptionCompleted, true)]
+    [InlineData(RealtimeAiWssEventType.InputAudioTranscriptionPartial, false)]
+    [InlineData(RealtimeAiWssEventType.OutputAudioTranscriptionPartial, false)]
+    public async Task Session_Transcription_OnlyCompletedEventsQueued(
+        RealtimeAiWssEventType eventType, bool shouldBeQueued)
     {
         var transcriptions = new List<(AiSpeechAssistantSpeaker, string)>();
 
         ProviderAdapter.ParseMessage(Arg.Any<string>())
             .Returns(new ParsedRealtimeAiProviderEvent
             {
-                Type = RealtimeAiWssEventType.InputAudioTranscriptionCompleted,
+                Type = eventType,
                 Data = new RealtimeAiWssTranscriptionData
                 {
                     Speaker = AiSpeechAssistantSpeaker.User,
-                    Transcript = "Hello there"
+                    Transcript = "Test transcript"
                 }
             });
 
@@ -132,62 +137,25 @@ public class RealtimeAiServiceSessionLifecycleTests : RealtimeAiServiceTestBase
 
         var sessionTask = await StartSessionInBackgroundAsync(options);
 
-        await FakeWssClient.SimulateMessageReceivedAsync("{\"type\":\"transcription.completed\"}");
+        await FakeWssClient.SimulateMessageReceivedAsync("{\"type\":\"transcription\"}");
         await Task.Delay(100);
 
         FakeWs.EnqueueClose();
         await sessionTask;
 
-        // Transcription should have been queued and delivered at session end
-        transcriptions.ShouldNotBeEmpty();
-        transcriptions[0].Item2.ShouldBe("Hello there");
-
-        // Also sent to client
-        ClientAdapter.Received().BuildTranscriptionMessage(
-            RealtimeAiWssEventType.InputAudioTranscriptionCompleted,
-            Arg.Any<RealtimeAiWssTranscriptionData>(),
-            Arg.Any<string>());
-    }
-
-    [Fact]
-    public async Task Session_ProviderSendsPartialTranscription_SentToClientButNotQueued()
-    {
-        var transcriptions = new List<(AiSpeechAssistantSpeaker, string)>();
-
-        ProviderAdapter.ParseMessage(Arg.Any<string>())
-            .Returns(new ParsedRealtimeAiProviderEvent
-            {
-                Type = RealtimeAiWssEventType.OutputAudioTranscriptionPartial,
-                Data = new RealtimeAiWssTranscriptionData
-                {
-                    Speaker = AiSpeechAssistantSpeaker.Ai,
-                    Transcript = "Partial text"
-                }
-            });
-
-        var options = CreateDefaultOptions(o =>
+        if (shouldBeQueued)
         {
-            o.OnTranscriptionsCompletedAsync = (sessionId, t) =>
-            {
-                transcriptions.AddRange(t);
-                return Task.CompletedTask;
-            };
-        });
+            transcriptions.ShouldNotBeEmpty();
+            transcriptions[0].Item2.ShouldBe("Test transcript");
+        }
+        else
+        {
+            transcriptions.ShouldBeEmpty();
+        }
 
-        var sessionTask = await StartSessionInBackgroundAsync(options);
-
-        await FakeWssClient.SimulateMessageReceivedAsync("{\"type\":\"transcription.partial\"}");
-        await Task.Delay(100);
-
-        FakeWs.EnqueueClose();
-        await sessionTask;
-
-        // Partial transcription should NOT be in the final collection
-        transcriptions.ShouldBeEmpty();
-
-        // But still sent to client for real-time display
+        // All types should be sent to client for real-time display
         ClientAdapter.Received().BuildTranscriptionMessage(
-            RealtimeAiWssEventType.OutputAudioTranscriptionPartial,
+            eventType,
             Arg.Any<RealtimeAiWssTranscriptionData>(),
             Arg.Any<string>());
     }

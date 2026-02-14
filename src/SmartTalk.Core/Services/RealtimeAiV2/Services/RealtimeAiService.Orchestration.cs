@@ -111,11 +111,11 @@ public partial class RealtimeAiService
 
     private async Task HandleClientImageAsync(string base64Payload)
     {
-        await SendAudioToProviderAsync(new RealtimeAiWssAudioData
+        await SendToProviderAsync(_ctx.ProviderAdapter.BuildAudioAppendMessage(new RealtimeAiWssAudioData
         {
             Base64Payload = base64Payload,
             CustomProperties = new Dictionary<string, object> { { "image", base64Payload } }
-        }).ConfigureAwait(false);
+        })).ConfigureAwait(false);
     }
 
     private async Task HandleClientTextAsync(string text)
@@ -148,7 +148,7 @@ public partial class RealtimeAiService
     {
         if (!_ctx.Options.EnableRecording || _ctx.AudioBuffer is not { CanWrite: true }) return;
 
-        var pcmData = AudioCodecConverter.Convert(data, sourceCodec, RealtimeAiAudioCodec.PCM16);
+        var pcmData = AudioCodecConverter.ConvertForRecording(data, sourceCodec);
 
         await _ctx.BufferLock.WaitAsync(_ctx.SessionCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
         try
