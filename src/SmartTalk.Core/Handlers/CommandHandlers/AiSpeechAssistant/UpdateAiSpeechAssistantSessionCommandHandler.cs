@@ -3,7 +3,7 @@ using Mediator.Net.Contracts;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 
-namespace SmartTalk.Core.Handlers.CommandHandlers;
+namespace SmartTalk.Core.Handlers.CommandHandlers.AiSpeechAssistant;
 
 public class UpdateAiSpeechAssistantSessionCommandHandler : ICommandHandler<UpdateAiSpeechAssistantSessionCommand, UpdateAiSpeechAssistantSessionResponse>
 {

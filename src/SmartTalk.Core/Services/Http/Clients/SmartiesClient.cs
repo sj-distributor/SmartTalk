@@ -20,6 +20,8 @@ public interface ISmartiesClient : IScopedDependency
     Task CallBackSmartiesAiKidConversationsAsync(AiKidConversationCallBackRequestDto request, CancellationToken cancellationToken);
 
     Task<GetSaleAutoCallNumberResponse> GetSaleAutoCallNumberAsync(GetSaleAutoCallNumberRequest request, CancellationToken cancellationToken);
+
+    Task<GetCrmCustomerInfoResponseDto> GetCrmCustomerInfoAsync(Guid kidUUid, CancellationToken cancellationToken);
 }
 
 public class SmartiesClient : ISmartiesClient
@@ -80,5 +82,12 @@ public class SmartiesClient : ISmartiesClient
         Log.Information("GetSaleAutoCallNumber response: {@Response}", response);
 
         return response;
+    }
+
+    public async Task<GetCrmCustomerInfoResponseDto> GetCrmCustomerInfoAsync(Guid kidUUid, CancellationToken cancellationToken)
+    {
+        return await _httpClientFactory
+            .GetAsync<GetCrmCustomerInfoResponseDto>($"{_smartiesSettings.BaseUrl}/api/Crm/info/{kidUUid}", cancellationToken, headers: _headers)
+            .ConfigureAwait(false);
     }
 }
