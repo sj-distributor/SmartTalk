@@ -4,10 +4,8 @@ using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Ffmpeg;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Jobs;
-using SmartTalk.Core.Settings.Twilio;
+using SmartTalk.Core.Services.Twilio;
 using SmartTalk.Messages.Commands.PhoneOrder;
-using Twilio;
-using Twilio.Rest.Api.V2010.Account;
 
 namespace SmartTalk.Core.Services.PhoneOrder;
 
@@ -21,15 +19,15 @@ public interface IPhoneOrderProcessJobService : IScopedDependency
 public class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
 {
     private readonly IFfmpegService _ffmpegService;
-    private readonly TwilioSettings _twilioSettings;
+    private readonly ITwilioService _twilioService;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly ISmartTalkHttpClientFactory _smartTalkHttpClient;
     private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
 
-    public PhoneOrderProcessJobService(IFfmpegService ffmpegService, TwilioSettings twilioSettings, IPhoneOrderDataProvider phoneOrderDataProvider, ISmartTalkHttpClientFactory smartTalkHttpClient, ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient)
+    public PhoneOrderProcessJobService(IFfmpegService ffmpegService, ITwilioService twilioService, IPhoneOrderDataProvider phoneOrderDataProvider, ISmartTalkHttpClientFactory smartTalkHttpClient, ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient)
     {
         _ffmpegService = ffmpegService;
-        _twilioSettings = twilioSettings;
+        _twilioService = twilioService;
         _smartTalkHttpClient = smartTalkHttpClient;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
@@ -86,11 +84,9 @@ public class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
     {
         if (record.Url.Contains("twilio") && string.IsNullOrWhiteSpace(record.IncomingCallNumber))
         {
-            TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
+            var callInfo = await _twilioService.FetchCallAsync(record.SessionId);
 
-            var call = await CallResource.FetchAsync(record.SessionId);
-        
-            record.IncomingCallNumber = call?.From ?? string.Empty;
+            record.IncomingCallNumber = callInfo?.From ?? string.Empty;
         }
     }
 }
