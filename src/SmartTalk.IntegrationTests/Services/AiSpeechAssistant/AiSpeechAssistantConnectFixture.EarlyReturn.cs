@@ -31,7 +31,7 @@ public partial class AiSpeechAssistantConnectFixture
     [Fact]
     public async Task ShouldReturnEmpty_WhenAgentNotReceivingCalls()
     {
-        await RunWithUnitOfWork<IRepository>(async repository =>
+        await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
         {
             var agent = new Agent { Name = "TestAgent", IsReceiveCall = false, Type = AgentType.Assistant };
             await repository.InsertAsync(agent);
@@ -42,6 +42,7 @@ public partial class AiSpeechAssistantConnectFixture
                 ModelVoice = "alloy", IsDefault = true, IsDisplay = true
             };
             await repository.InsertAsync(assistant);
+            await unitOfWork.SaveChangesAsync();
 
             await repository.InsertAsync(new AgentAssistant { AgentId = agent.Id, AssistantId = assistant.Id });
         });
@@ -68,7 +69,7 @@ public partial class AiSpeechAssistantConnectFixture
             Hours = new List<HoursDto> { new() { Start = new TimeSpan(2, 0, 0), End = new TimeSpan(2, 1, 0) } }
         }).ToList());
 
-        await RunWithUnitOfWork<IRepository>(async repository =>
+        await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
         {
             var agent = new Agent
             {
@@ -83,6 +84,7 @@ public partial class AiSpeechAssistantConnectFixture
                 ModelVoice = "alloy", IsDefault = true, IsDisplay = true
             };
             await repository.InsertAsync(assistant);
+            await unitOfWork.SaveChangesAsync();
 
             await repository.InsertAsync(new AgentAssistant { AgentId = agent.Id, AssistantId = assistant.Id });
             await repository.InsertAsync(new AiSpeechAssistantKnowledge
