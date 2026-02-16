@@ -134,9 +134,7 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
 
         Log.Information("[AiAssistant] Forwarding call, ForwardNumber: {ForwardNumber}, From: {From}, To: {To}", forwardNumber, _ctx.From, _ctx.To);
 
-        await HandleForwardOnlyAsync(
-            _ctx.TwilioWebSocket, _ctx.Host, forwardNumber,
-            _ctx.OrderRecordType, cancellationToken).ConfigureAwait(false);
+        await HandleForwardOnlyAsync(forwardNumber, cancellationToken).ConfigureAwait(false);
 
         throw new AiAssistantCallForwardedException("Call forwarded");
     }
