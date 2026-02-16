@@ -1,4 +1,3 @@
-using System.Net.WebSockets;
 using System.Text;
 using Autofac;
 using Mediator.Net;
@@ -61,7 +60,7 @@ public partial class AiSpeechAssistantConnectFixture
             start = new { callSid = "CA_KB_VAR", streamSid = "MZ_KB_VAR" }
         }));
 
-        var openaiWs = new MockWebSocket(waitForCloseSignal: true);
+        var openaiWs = CreateProviderMock();
         openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new { type = "session.updated" }));
 
         var command = new ConnectAiSpeechAssistantCommand
@@ -79,7 +78,7 @@ public partial class AiSpeechAssistantConnectFixture
         {
             builder.RegisterInstance(Substitute.For<ISmartTalkBackgroundJobClient>()).As<ISmartTalkBackgroundJobClient>();
             builder.RegisterInstance(Substitute.For<ISmartiesClient>()).AsImplementedInterfaces();
-            builder.RegisterInstance(openaiWs).As<WebSocket>();
+            openaiWs.Register(builder);
         });
 
         // Session update sent to OpenAI proves all DB lookups + variable replacement completed
@@ -138,7 +137,7 @@ public partial class AiSpeechAssistantConnectFixture
             start = new { callSid = "CA_KB_FWD", streamSid = "MZ_KB_FWD" }
         }));
 
-        var openaiWs = new MockWebSocket(waitForCloseSignal: true);
+        var openaiWs = CreateProviderMock();
         openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new { type = "session.updated" }));
 
         var command = new ConnectAiSpeechAssistantCommand
@@ -156,7 +155,7 @@ public partial class AiSpeechAssistantConnectFixture
         {
             builder.RegisterInstance(Substitute.For<ISmartTalkBackgroundJobClient>()).As<ISmartTalkBackgroundJobClient>();
             builder.RegisterInstance(Substitute.For<ISmartiesClient>()).AsImplementedInterfaces();
-            builder.RegisterInstance(openaiWs).As<WebSocket>();
+            openaiWs.Register(builder);
         });
 
         // Session update sent to OpenAI proves the forwarded assistant's knowledge was used
@@ -199,7 +198,7 @@ public partial class AiSpeechAssistantConnectFixture
             start = new { callSid = "CA_KB_SVC", streamSid = "MZ_KB_SVC" }
         }));
 
-        var openaiWs = new MockWebSocket(waitForCloseSignal: true);
+        var openaiWs = CreateProviderMock();
         openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new { type = "session.updated" }));
 
         var command = new ConnectAiSpeechAssistantCommand
@@ -217,7 +216,7 @@ public partial class AiSpeechAssistantConnectFixture
         {
             builder.RegisterInstance(Substitute.For<ISmartTalkBackgroundJobClient>()).As<ISmartTalkBackgroundJobClient>();
             builder.RegisterInstance(Substitute.For<ISmartiesClient>()).AsImplementedInterfaces();
-            builder.RegisterInstance(openaiWs).As<WebSocket>();
+            openaiWs.Register(builder);
         });
 
         // Session update sent to OpenAI proves the service proceeded past the service hours check

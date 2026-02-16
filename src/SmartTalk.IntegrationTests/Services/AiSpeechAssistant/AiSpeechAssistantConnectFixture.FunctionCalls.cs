@@ -1,4 +1,3 @@
-using System.Net.WebSockets;
 using System.Text;
 using Autofac;
 using Mediator.Net;
@@ -62,7 +61,7 @@ public partial class AiSpeechAssistantConnectFixture
         }));
         twilioWs.EnqueueMessage(JsonConvert.SerializeObject(new { @event = "stop" }));
 
-        var openaiWs = new MockWebSocket(waitForCloseSignal: true);
+        var openaiWs = CreateProviderMock();
         openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new { type = "session.updated" }));
         openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new
         {
@@ -96,7 +95,7 @@ public partial class AiSpeechAssistantConnectFixture
         {
             builder.RegisterInstance(mockJobClient).As<ISmartTalkBackgroundJobClient>();
             builder.RegisterInstance(Substitute.For<ISmartiesClient>()).AsImplementedInterfaces();
-            builder.RegisterInstance(openaiWs).As<WebSocket>();
+            openaiWs.Register(builder);
         });
 
         var sentMessages = openaiWs.SentMessages.Select(b => Encoding.UTF8.GetString(b)).ToList();
@@ -146,7 +145,7 @@ public partial class AiSpeechAssistantConnectFixture
         }));
         twilioWs.EnqueueMessage(JsonConvert.SerializeObject(new { @event = "stop" }));
 
-        var openaiWs = new MockWebSocket(waitForCloseSignal: true);
+        var openaiWs = CreateProviderMock();
         openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new { type = "session.updated" }));
         openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new
         {
@@ -180,7 +179,7 @@ public partial class AiSpeechAssistantConnectFixture
         {
             builder.RegisterInstance(mockJobClient).As<ISmartTalkBackgroundJobClient>();
             builder.RegisterInstance(Substitute.For<ISmartiesClient>()).AsImplementedInterfaces();
-            builder.RegisterInstance(openaiWs).As<WebSocket>();
+            openaiWs.Register(builder);
         });
 
         mockJobClient.ReceivedWithAnyArgs(1)
@@ -225,7 +224,7 @@ public partial class AiSpeechAssistantConnectFixture
         }));
         twilioWs.EnqueueMessage(JsonConvert.SerializeObject(new { @event = "stop" }));
 
-        var openaiWs = new MockWebSocket(waitForCloseSignal: true);
+        var openaiWs = CreateProviderMock();
         openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new { type = "session.updated" }));
         openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new
         {
@@ -259,7 +258,7 @@ public partial class AiSpeechAssistantConnectFixture
         {
             builder.RegisterInstance(mockJobClient).As<ISmartTalkBackgroundJobClient>();
             builder.RegisterInstance(Substitute.For<ISmartiesClient>()).AsImplementedInterfaces();
-            builder.RegisterInstance(openaiWs).As<WebSocket>();
+            openaiWs.Register(builder);
         });
 
         mockJobClient.ReceivedWithAnyArgs(1)
@@ -308,7 +307,7 @@ public partial class AiSpeechAssistantConnectFixture
         }));
         twilioWs.EnqueueMessage(JsonConvert.SerializeObject(new { @event = "stop" }));
 
-        var openaiWs = new MockWebSocket(waitForCloseSignal: true);
+        var openaiWs = CreateProviderMock();
         openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new { type = "session.updated" }));
         openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new
         {
@@ -340,7 +339,7 @@ public partial class AiSpeechAssistantConnectFixture
         {
             builder.RegisterInstance(Substitute.For<ISmartTalkBackgroundJobClient>()).As<ISmartTalkBackgroundJobClient>();
             builder.RegisterInstance(Substitute.For<ISmartiesClient>()).AsImplementedInterfaces();
-            builder.RegisterInstance(openaiWs).As<WebSocket>();
+            openaiWs.Register(builder);
         });
 
         var sentMessages = openaiWs.SentMessages.Select(b => Encoding.UTF8.GetString(b)).ToList();
@@ -385,7 +384,7 @@ public partial class AiSpeechAssistantConnectFixture
         }));
         twilioWs.EnqueueMessage(JsonConvert.SerializeObject(new { @event = "stop" }));
 
-        var openaiWs = new MockWebSocket(waitForCloseSignal: true);
+        var openaiWs = CreateProviderMock();
         openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new { type = "session.updated" }));
         openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new
         {
@@ -434,7 +433,7 @@ public partial class AiSpeechAssistantConnectFixture
         {
             builder.RegisterInstance(Substitute.For<ISmartTalkBackgroundJobClient>()).As<ISmartTalkBackgroundJobClient>();
             builder.RegisterInstance(Substitute.For<ISmartiesClient>()).AsImplementedInterfaces();
-            builder.RegisterInstance(openaiWs).As<WebSocket>();
+            openaiWs.Register(builder);
         });
 
         var sentMessages = openaiWs.SentMessages.Select(b => Encoding.UTF8.GetString(b)).ToList();
@@ -473,7 +472,7 @@ public partial class AiSpeechAssistantConnectFixture
         }));
         twilioWs.EnqueueMessage(JsonConvert.SerializeObject(new { @event = "stop" }));
 
-        var openaiWs = new MockWebSocket(waitForCloseSignal: true);
+        var openaiWs = CreateProviderMock();
         openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new { type = "session.updated" }));
 
         var command = new ConnectAiSpeechAssistantCommand
@@ -488,7 +487,7 @@ public partial class AiSpeechAssistantConnectFixture
         {
             builder.RegisterInstance(Substitute.For<ISmartTalkBackgroundJobClient>()).As<ISmartTalkBackgroundJobClient>();
             builder.RegisterInstance(Substitute.For<ISmartiesClient>()).AsImplementedInterfaces();
-            builder.RegisterInstance(openaiWs).As<WebSocket>();
+            openaiWs.Register(builder);
         });
 
         var sentMessages = openaiWs.SentMessages.Select(b => Encoding.UTF8.GetString(b)).ToList();
@@ -527,7 +526,7 @@ public partial class AiSpeechAssistantConnectFixture
         }));
         twilioWs.EnqueueMessage(JsonConvert.SerializeObject(new { @event = "stop" }));
 
-        var openaiWs = new MockWebSocket(waitForCloseSignal: true);
+        var openaiWs = CreateProviderMock();
         openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new { type = "session.updated" }));
         openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new
         {
@@ -548,7 +547,7 @@ public partial class AiSpeechAssistantConnectFixture
         {
             builder.RegisterInstance(Substitute.For<ISmartTalkBackgroundJobClient>()).As<ISmartTalkBackgroundJobClient>();
             builder.RegisterInstance(Substitute.For<ISmartiesClient>()).AsImplementedInterfaces();
-            builder.RegisterInstance(openaiWs).As<WebSocket>();
+            openaiWs.Register(builder);
         });
 
         var twilioMessages = twilioWs.SentMessages.Select(b => Encoding.UTF8.GetString(b)).ToList();
@@ -576,6 +575,10 @@ public partial class AiSpeechAssistantConnectFixture
             {
                 AssistantId = assistant.Id, Prompt = "You are a test assistant.", IsActive = true, Version = "1.0"
             });
+            await repository.InsertAsync(new AiSpeechAssistantTimer
+            {
+                AssistantId = assistant.Id, TimeSpanSeconds = 60, AlterContent = "Are you still there?"
+            });
         });
 
         var twilioWs = new MockWebSocket();
@@ -586,7 +589,7 @@ public partial class AiSpeechAssistantConnectFixture
         }));
         twilioWs.EnqueueMessage(JsonConvert.SerializeObject(new { @event = "stop" }));
 
-        var openaiWs = new MockWebSocket(waitForCloseSignal: true);
+        var openaiWs = CreateProviderMock();
         openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new { type = "session.updated" }));
         openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new
         {
@@ -609,11 +612,11 @@ public partial class AiSpeechAssistantConnectFixture
             builder.RegisterInstance(Substitute.For<ISmartTalkBackgroundJobClient>()).As<ISmartTalkBackgroundJobClient>();
             builder.RegisterInstance(Substitute.For<ISmartiesClient>()).AsImplementedInterfaces();
             builder.RegisterInstance(mockTimerManager).As<IInactivityTimerManager>();
-            builder.RegisterInstance(openaiWs).As<WebSocket>();
+            openaiWs.Register(builder);
         });
 
         mockTimerManager.Received(1).StartTimer(
-            Arg.Is("CA_TIMER_TEST"),
+            Arg.Any<string>(),
             Arg.Any<TimeSpan>(),
             Arg.Any<Func<Task>>());
     }
@@ -655,10 +658,19 @@ public partial class AiSpeechAssistantConnectFixture
             @event = "start",
             start = new { callSid = "CA_REPEAT_TEST", streamSid = "MZ_REPEAT_TEST" }
         }));
+        twilioWs.EnqueueMessage(JsonConvert.SerializeObject(new
+        {
+            @event = "media",
+            media = new { payload = Convert.ToBase64String(new byte[160]) }
+        }));
         twilioWs.EnqueueMessage(JsonConvert.SerializeObject(new { @event = "stop" }));
 
-        var openaiWs = new MockWebSocket(waitForCloseSignal: true);
+        var openaiWs = CreateProviderMock();
+        // Queue: session.updated fires on config send, 2 no-ops absorb greeting sends,
+        // response.done fires on audio-append send (after audio is recorded in the buffer)
         openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new { type = "session.updated" }));
+        openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new { type = "response.audio.done" }));
+        openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new { type = "response.audio.done" }));
         openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new
         {
             type = "response.done",
@@ -700,7 +712,7 @@ public partial class AiSpeechAssistantConnectFixture
             builder.RegisterInstance(Substitute.For<ISmartiesClient>()).AsImplementedInterfaces();
             builder.RegisterInstance(mockOpenaiClient).As<IOpenaiClient>();
             builder.RegisterInstance(mockFfmpegService).As<IFfmpegService>();
-            builder.RegisterInstance(openaiWs).As<WebSocket>();
+            openaiWs.Register(builder);
         });
 
         var twilioMessages = twilioWs.SentMessages.Select(b => Encoding.UTF8.GetString(b)).ToList();
@@ -741,7 +753,7 @@ public partial class AiSpeechAssistantConnectFixture
         }));
         twilioWs.EnqueueMessage(JsonConvert.SerializeObject(new { @event = "stop" }));
 
-        var openaiWs = new MockWebSocket(waitForCloseSignal: true);
+        var openaiWs = CreateProviderMock();
         openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new { type = "session.updated" }));
         openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new
         {
@@ -768,7 +780,7 @@ public partial class AiSpeechAssistantConnectFixture
         {
             builder.RegisterInstance(mockJobClient).As<ISmartTalkBackgroundJobClient>();
             builder.RegisterInstance(Substitute.For<ISmartiesClient>()).AsImplementedInterfaces();
-            builder.RegisterInstance(openaiWs).As<WebSocket>();
+            openaiWs.Register(builder);
         });
 
         mockJobClient.ReceivedWithAnyArgs(1)
@@ -813,7 +825,7 @@ public partial class AiSpeechAssistantConnectFixture
         }));
         twilioWs.EnqueueMessage(JsonConvert.SerializeObject(new { @event = "stop" }));
 
-        var openaiWs = new MockWebSocket(waitForCloseSignal: true);
+        var openaiWs = CreateProviderMock();
         openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new { type = "session.updated" }));
         openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new
         {
@@ -847,7 +859,7 @@ public partial class AiSpeechAssistantConnectFixture
         {
             builder.RegisterInstance(mockJobClient).As<ISmartTalkBackgroundJobClient>();
             builder.RegisterInstance(Substitute.For<ISmartiesClient>()).AsImplementedInterfaces();
-            builder.RegisterInstance(openaiWs).As<WebSocket>();
+            openaiWs.Register(builder);
         });
 
         var sentMessages = openaiWs.SentMessages.Select(b => Encoding.UTF8.GetString(b)).ToList();
@@ -906,7 +918,7 @@ public partial class AiSpeechAssistantConnectFixture
         }));
         twilioWs.EnqueueMessage(JsonConvert.SerializeObject(new { @event = "stop" }));
 
-        var openaiWs = new MockWebSocket(waitForCloseSignal: true);
+        var openaiWs = CreateProviderMock();
         openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new { type = "session.updated" }));
         openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new
         {
@@ -957,7 +969,7 @@ public partial class AiSpeechAssistantConnectFixture
         {
             builder.RegisterInstance(mockJobClient).As<ISmartTalkBackgroundJobClient>();
             builder.RegisterInstance(Substitute.For<ISmartiesClient>()).AsImplementedInterfaces();
-            builder.RegisterInstance(openaiWs).As<WebSocket>();
+            openaiWs.Register(builder);
         });
 
         mockJobClient.ReceivedWithAnyArgs(1)
@@ -1006,7 +1018,7 @@ public partial class AiSpeechAssistantConnectFixture
         }));
         twilioWs.EnqueueMessage(JsonConvert.SerializeObject(new { @event = "stop" }));
 
-        var openaiWs = new MockWebSocket(waitForCloseSignal: true);
+        var openaiWs = CreateProviderMock();
         openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new { type = "session.updated" }));
         openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new
         {
@@ -1040,7 +1052,7 @@ public partial class AiSpeechAssistantConnectFixture
         {
             builder.RegisterInstance(mockJobClient).As<ISmartTalkBackgroundJobClient>();
             builder.RegisterInstance(Substitute.For<ISmartiesClient>()).AsImplementedInterfaces();
-            builder.RegisterInstance(openaiWs).As<WebSocket>();
+            openaiWs.Register(builder);
         });
 
         mockJobClient.ReceivedWithAnyArgs(1)
@@ -1092,7 +1104,7 @@ public partial class AiSpeechAssistantConnectFixture
         }));
         twilioWs.EnqueueMessage(JsonConvert.SerializeObject(new { @event = "stop" }));
 
-        var openaiWs = new MockWebSocket(waitForCloseSignal: true);
+        var openaiWs = CreateProviderMock();
         openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new { type = "session.updated" }));
         openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new
         {
@@ -1126,7 +1138,7 @@ public partial class AiSpeechAssistantConnectFixture
         {
             builder.RegisterInstance(mockJobClient).As<ISmartTalkBackgroundJobClient>();
             builder.RegisterInstance(Substitute.For<ISmartiesClient>()).AsImplementedInterfaces();
-            builder.RegisterInstance(openaiWs).As<WebSocket>();
+            openaiWs.Register(builder);
         });
 
         mockJobClient.ReceivedWithAnyArgs(1)
@@ -1178,7 +1190,7 @@ public partial class AiSpeechAssistantConnectFixture
         }));
         twilioWs.EnqueueMessage(JsonConvert.SerializeObject(new { @event = "stop" }));
 
-        var openaiWs = new MockWebSocket(waitForCloseSignal: true);
+        var openaiWs = CreateProviderMock();
         openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new { type = "session.updated" }));
         openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new
         {
@@ -1212,7 +1224,7 @@ public partial class AiSpeechAssistantConnectFixture
         {
             builder.RegisterInstance(mockJobClient).As<ISmartTalkBackgroundJobClient>();
             builder.RegisterInstance(Substitute.For<ISmartiesClient>()).AsImplementedInterfaces();
-            builder.RegisterInstance(openaiWs).As<WebSocket>();
+            openaiWs.Register(builder);
         });
 
         mockJobClient.ReceivedWithAnyArgs(1)

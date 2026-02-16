@@ -1,4 +1,3 @@
-using System.Net.WebSockets;
 using Autofac;
 using Mediator.Net;
 using Newtonsoft.Json;
@@ -252,7 +251,7 @@ public partial class AiSpeechAssistantConnectFixture
             start = new { callSid = "CA_TEST_TRANSFER", streamSid = "MZ_TEST_TRANSFER" }
         }));
 
-        var openaiWs = new MockWebSocket(waitForCloseSignal: true);
+        var openaiWs = CreateProviderMock();
         openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new { type = "session.updated" }));
 
         var mockJobClient = Substitute.For<ISmartTalkBackgroundJobClient>();
@@ -272,7 +271,7 @@ public partial class AiSpeechAssistantConnectFixture
         {
             builder.RegisterInstance(mockJobClient).As<ISmartTalkBackgroundJobClient>();
             builder.RegisterInstance(Substitute.For<ISmartiesClient>()).AsImplementedInterfaces();
-            builder.RegisterInstance(openaiWs).As<WebSocket>();
+            openaiWs.Register(builder);
         });
 
         // "start" event enqueues RecordCall + TransferHumanService (out of service hours with manual service)
