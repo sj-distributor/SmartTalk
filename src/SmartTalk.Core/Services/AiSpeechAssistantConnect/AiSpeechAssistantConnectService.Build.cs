@@ -21,16 +21,8 @@ public partial class AiSpeechAssistantConnectService
     private async Task<RealtimeSessionOptions> BuildSessionConfigAsync(CancellationToken cancellationToken)
     {
         await BuildKnowledgeAsync(cancellationToken).ConfigureAwait(false);
+        await BuildAssistantDataAsync(cancellationToken).ConfigureAwait(false);
 
-        _ctx.HumanContactPhone = (await _aiSpeechAssistantDataProvider
-            .GetAiSpeechAssistantHumanContactByAssistantIdAsync(_ctx.Assistant.Id, cancellationToken)
-            .ConfigureAwait(false))?.HumanPhone;
-
-        var modelConfig = await BuildModelConfigAsync(cancellationToken).ConfigureAwait(false);
-
-        var timer = await _aiSpeechAssistantDataProvider
-            .GetAiSpeechAssistantTimerByAssistantIdAsync(_ctx.Assistant.Id, cancellationToken).ConfigureAwait(false);
-
-        return BuildSessionOptions(modelConfig, timer);
+        return BuildSessionOptions();
     }
 }

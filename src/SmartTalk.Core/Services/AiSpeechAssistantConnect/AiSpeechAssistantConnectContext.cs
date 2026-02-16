@@ -1,4 +1,5 @@
 using System.Net.WebSockets;
+using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.PhoneOrder;
 
@@ -24,6 +25,8 @@ public class AiSpeechAssistantConnectContext
     public string Prompt { get; set; }
     public AiSpeechAssistantDto Assistant { get; set; }
     public AiSpeechAssistantKnowledgeDto Knowledge { get; set; }
+    public AiSpeechAssistantTimer Timer { get; set; }
+    public List<AiSpeechAssistantFunctionCall> FunctionCalls { get; set; }
 
     // Routing
     public int? ForwardAssistantId { get; set; }
