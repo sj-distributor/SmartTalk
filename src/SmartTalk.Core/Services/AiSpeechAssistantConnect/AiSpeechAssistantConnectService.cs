@@ -1,178 +1,176 @@
-using AutoMapper;
-using Mediator.Net;
-using Newtonsoft.Json;
 using Serilog;
-using SmartTalk.Core.Domain.System;
+using AutoMapper;
+using Newtonsoft.Json;
 using SmartTalk.Core.Ioc;
-using SmartTalk.Core.Services.Agents;
-using SmartTalk.Core.Services.AiSpeechAssistant;
-using SmartTalk.Core.Services.Ffmpeg;
-using SmartTalk.Core.Services.Http.Clients;
-using SmartTalk.Core.Services.Infrastructure;
+using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.Pos;
-using SmartTalk.Core.Services.RealtimeAiV2;
-using SmartTalk.Core.Services.RealtimeAiV2.Services;
 using SmartTalk.Core.Services.Sale;
-using SmartTalk.Messages.Commands.AiSpeechAssistant;
-using SmartTalk.Messages.Constants;
+using SmartTalk.Core.Services.Ffmpeg;
+using SmartTalk.Core.Services.Agents;
+using SmartTalk.Core.Services.Http.Clients;
+using SmartTalk.Core.Services.Infrastructure;
+using SmartTalk.Core.Services.AiSpeechAssistant;
+using SmartTalk.Core.Services.RealtimeAiV2.Services;
+using SmartTalk.Core.Services.AiSpeechAssistantConnect.Exceptions;
 using SmartTalk.Messages.Dto.Agent;
-using SmartTalk.Messages.Dto.AiSpeechAssistant;
-using SmartTalk.Messages.Enums.AiSpeechAssistant;
-using SmartTalk.Messages.Enums.RealtimeAi;
+using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistantConnect;
 
 public interface IAiSpeechAssistantConnectService : IScopedDependency
 {
-    Task<AiSpeechAssistantConnectCloseEvent> ConnectAsync(
-        ConnectAiSpeechAssistantCommand command, CancellationToken cancellationToken);
+    Task<AiSpeechAssistantConnectCloseEvent> ConnectAsync(ConnectAiSpeechAssistantCommand command, CancellationToken cancellationToken);
 }
 
 public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnectService
 {
+    private AiSpeechAssistantConnectContext _ctx;
+
     private readonly IClock _clock;
     private readonly IMapper _mapper;
-    private readonly IRealtimeAiService _realtimeAiService;
-    private readonly IAgentDataProvider _agentDataProvider;
-    private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
+
+    #region Data Providers
+
     private readonly IPosDataProvider _posDataProvider;
     private readonly ISalesDataProvider _salesDataProvider;
+    private readonly IAgentDataProvider _agentDataProvider;
+    private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
+
+    #endregion
+
+    #region Services
+
+    private readonly IFfmpegService _ffmpegService;
+    private readonly IRealtimeAiService _realtimeAiService;
+
+    #endregion
+
+    #region Clients
+
+    private readonly IOpenaiClient _openaiClient;
     private readonly ISmartiesClient _smartiesClient;
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
-    private readonly IOpenaiClient _openaiClient;
-    private readonly IFfmpegService _ffmpegService;
 
+    #endregion
+    
     public AiSpeechAssistantConnectService(
-        IClock clock,
-        IMapper mapper,
-        IRealtimeAiService realtimeAiService,
-        IAgentDataProvider agentDataProvider,
-        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider,
-        IPosDataProvider posDataProvider,
+        IClock clock, 
+        IMapper mapper, 
+        IPosDataProvider posDataProvider, 
         ISalesDataProvider salesDataProvider,
-        ISmartiesClient smartiesClient,
-        ISmartTalkBackgroundJobClient backgroundJobClient,
-        IOpenaiClient openaiClient,
-        IFfmpegService ffmpegService)
+        IAgentDataProvider agentDataProvider, 
+        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, 
+        IFfmpegService ffmpegService, 
+        IRealtimeAiService realtimeAiService, 
+        IOpenaiClient openaiClient, 
+        ISmartiesClient smartiesClient, 
+        ISmartTalkBackgroundJobClient backgroundJobClient)
     {
         _clock = clock;
         _mapper = mapper;
-        _realtimeAiService = realtimeAiService;
-        _agentDataProvider = agentDataProvider;
-        _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
         _posDataProvider = posDataProvider;
         _salesDataProvider = salesDataProvider;
+        _agentDataProvider = agentDataProvider;
+        _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
+        _ffmpegService = ffmpegService;
+        _realtimeAiService = realtimeAiService;
+        _openaiClient = openaiClient;
         _smartiesClient = smartiesClient;
         _backgroundJobClient = backgroundJobClient;
-        _openaiClient = openaiClient;
-        _ffmpegService = ffmpegService;
     }
 
-    public async Task<AiSpeechAssistantConnectCloseEvent> ConnectAsync(
-        ConnectAiSpeechAssistantCommand command, CancellationToken cancellationToken)
+    public async Task<AiSpeechAssistantConnectCloseEvent> ConnectAsync(ConnectAiSpeechAssistantCommand command, CancellationToken cancellationToken)
     {
-        Log.Information("The call from {From} to {To} is connected", command.From, command.To);
+        Log.Information("[AiAssistant] Call connected, From: {From}, To: {To}", command.From, command.To);
 
-        var agent = await _agentDataProvider
-            .GetAgentByNumberAsync(command.To, command.AssistantId, cancellationToken).ConfigureAwait(false);
-
-        Log.Information("Get the agent: {@Agent} by {AssistantId} or {DidNumber}", agent, command.AssistantId, command.To);
-
-        if (agent == null || agent.IsReceiveCall == false) return new AiSpeechAssistantConnectCloseEvent();
-
-        var ctx = new SessionBusinessContext
+        try
         {
-            Host = command.Host,
-            CallerNumber = command.From,
-            TransferCallNumber = agent.TransferCallNumber,
-            LastUserInfo = new AiSpeechAssistantUserInfoDto { PhoneNumber = command.From }
-        };
+            _ctx = BuildContext(command);
 
-        var resolvedPrompt = await BuildKnowledgeBaseAsync(
-            ctx, command.From, command.To, command.AssistantId, command.NumberId, agent.Id, cancellationToken).ConfigureAwait(false);
+            var agent = await ResolveActiveAgentAsync(cancellationToken).ConfigureAwait(false);
 
-        CheckIfInServiceHours(agent, ctx);
+            await ForwardIfRequiredAsync(cancellationToken).ConfigureAwait(false);
 
-        if (!ctx.IsInAiServiceHours && !ctx.IsEnableManualService)
-            return new AiSpeechAssistantConnectCloseEvent();
+            EnsureServiceAvailable(agent);
 
-        if (!ctx.ShouldForward)
-        {
-            ctx.HumanContactPhone = (await _aiSpeechAssistantDataProvider
-                .GetAiSpeechAssistantHumanContactByAssistantIdAsync(ctx.Assistant.Id, cancellationToken)
-                .ConfigureAwait(false))?.HumanPhone;
+            var options = await BuildSessionConfigAsync(cancellationToken).ConfigureAwait(false);
+
+            Log.Information("[AiAssistant] Starting AI session, AssistantId: {AssistantId}, Provider: {Provider}, From: {From}, To: {To}", _ctx.Assistant.Id, _ctx.Assistant.ModelProvider, _ctx.From, _ctx.To);
+
+            await _realtimeAiService.ConnectAsync(options, cancellationToken).ConfigureAwait(false);
         }
-
-        if (ctx.ShouldForward)
+        catch (AiAssistantNotAvailableException ex)
         {
-            await HandleForwardOnlyAsync(command.TwilioWebSocket, ctx, command.OrderRecordType, cancellationToken).ConfigureAwait(false);
-            return new AiSpeechAssistantConnectCloseEvent();
+            Log.Information("[AiAssistant] {Reason}, From: {From}, To: {To}", ex.Message, command.From, command.To);
         }
-
-        var modelConfig = await BuildModelConfigAsync(ctx, resolvedPrompt, cancellationToken).ConfigureAwait(false);
-
-        var timer = await _aiSpeechAssistantDataProvider
-            .GetAiSpeechAssistantTimerByAssistantIdAsync(ctx.Assistant.Id, cancellationToken).ConfigureAwait(false);
-
-        var options = BuildSessionOptions(command, ctx, modelConfig, timer);
-
-        await _realtimeAiService.ConnectAsync(options, cancellationToken).ConfigureAwait(false);
+        catch (AiAssistantCallForwardedException ex)
+        {
+            Log.Information("[AiAssistant] {Reason}, From: {From}, To: {To}", ex.Message, command.From, command.To);
+        }
 
         return new AiSpeechAssistantConnectCloseEvent();
     }
 
-    private static void CheckIfInServiceHours(Agent agent, SessionBusinessContext ctx)
+    private async Task<Agent> ResolveActiveAgentAsync(CancellationToken cancellationToken)
     {
-        if (agent.ServiceHours == null)
-        {
-            ctx.IsInAiServiceHours = true;
-            return;
-        }
+        var agent = await _agentDataProvider.GetAgentByNumberAsync(_ctx.To, _ctx.AssistantId, cancellationToken).ConfigureAwait(false);
 
-        var utcNow = DateTimeOffset.UtcNow;
+        if (agent?.IsReceiveCall != true)
+            throw new AiAssistantNotAvailableException("No active agent");
+
+        _ctx.AgentId = agent.Id;
+        _ctx.TransferCallNumber = agent.TransferCallNumber;
+
+        return agent;
+    }
+
+    private async Task ForwardIfRequiredAsync(CancellationToken cancellationToken)
+    {
+        var (forwardNumber, forwardAssistantId) = await ResolveInboundRouteAsync(_ctx.From, _ctx.To, cancellationToken).ConfigureAwait(false);
+
+        _ctx.ForwardAssistantId = forwardAssistantId;
+
+        if (string.IsNullOrEmpty(forwardNumber)) return;
+
+        Log.Information("[AiAssistant] Forwarding call, ForwardNumber: {ForwardNumber}, From: {From}, To: {To}", forwardNumber, _ctx.From, _ctx.To);
+
+        await HandleForwardOnlyAsync(
+            _ctx.TwilioWebSocket, _ctx.Host, forwardNumber,
+            _ctx.OrderRecordType, cancellationToken).ConfigureAwait(false);
+
+        throw new AiAssistantCallForwardedException("Call forwarded");
+    }
+
+    private void EnsureServiceAvailable(Agent agent)
+    {
+        (_ctx.IsInAiServiceHours, _ctx.IsEnableManualService) = CheckIfInServiceHours(
+            agent.ServiceHours, agent.IsTransferHuman, agent.TransferCallNumber, _clock.Now);
+
+        Log.Information("[AiAssistant] Service hours checked, InService: {InService}, ManualFallback: {ManualFallback}", _ctx.IsInAiServiceHours, _ctx.IsEnableManualService);
+
+        if (!_ctx.IsInAiServiceHours && !_ctx.IsEnableManualService)
+            throw new AiAssistantNotAvailableException("Out of service hours, no manual fallback");
+    }
+
+    public static (bool IsInServiceHours, bool IsEnableManualService) CheckIfInServiceHours(
+        string serviceHoursJson, bool isTransferHuman, string transferCallNumber, DateTimeOffset utcNow)
+    {
+        if (serviceHoursJson == null)
+            return (true, isTransferHuman && !string.IsNullOrEmpty(transferCallNumber));
+
         var pstZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
         var pstTime = TimeZoneInfo.ConvertTime(utcNow, pstZone);
-        var dayOfWeek = pstTime.DayOfWeek;
 
-        var workingHours = JsonConvert.DeserializeObject<List<AgentServiceHoursDto>>(agent.ServiceHours);
-
-        Log.Information("Parsed service hours; {@WorkingHours}", workingHours);
-
-        var specificWorkingHours = workingHours.FirstOrDefault(x => x.DayOfWeek == dayOfWeek);
-
-        Log.Information("Matched specific service hours: {@SpecificWorkingHours} and the pstTime: {@PstTime}", specificWorkingHours, pstTime);
+        var workingHours = JsonConvert.DeserializeObject<List<AgentServiceHoursDto>>(serviceHoursJson);
+        var specificWorkingHours = workingHours?.FirstOrDefault(x => x.DayOfWeek == pstTime.DayOfWeek);
 
         var pstTimeToMinute = new TimeSpan(pstTime.TimeOfDay.Hours, pstTime.TimeOfDay.Minutes, 0);
 
-        ctx.IsInAiServiceHours = specificWorkingHours != null &&
-                                  specificWorkingHours.Hours.Any(x => x.Start <= pstTimeToMinute && x.End >= pstTimeToMinute);
-        ctx.IsEnableManualService = agent.IsTransferHuman && !string.IsNullOrEmpty(agent.TransferCallNumber);
-    }
+        var isInService = specificWorkingHours != null &&
+                          specificWorkingHours.Hours.Any(x => x.Start <= pstTimeToMinute && x.End >= pstTimeToMinute);
 
-    private class SessionBusinessContext
-    {
-        public string CallSid { get; set; }
-        public string StreamSid { get; set; }
-        public string Host { get; set; }
-        public string CallerNumber { get; set; }
-
-        public AiSpeechAssistantDto Assistant { get; set; }
-        public AiSpeechAssistantKnowledgeDto Knowledge { get; set; }
-
-        public bool ShouldForward { get; set; }
-        public string ForwardPhoneNumber { get; set; }
-        public string HumanContactPhone { get; set; }
-        public string TransferCallNumber { get; set; }
-        public bool IsInAiServiceHours { get; set; } = true;
-        public bool IsEnableManualService { get; set; }
-
-        public string ModelName { get; set; }
-
-        public bool IsTransfer { get; set; }
-        public AiSpeechAssistantOrderDto OrderItems { get; set; }
-        public AiSpeechAssistantUserInfoDto UserInfo { get; set; }
-        public AiSpeechAssistantUserInfoDto LastUserInfo { get; set; }
+        return (isInService, isTransferHuman && !string.IsNullOrEmpty(transferCallNumber));
     }
 }

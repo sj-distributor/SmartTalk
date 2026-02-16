@@ -21,8 +21,10 @@ public class AiSpeechAssistantDto
     
     public RealtimeAiProvider ModelProvider { get; set; }
     
+    public string ModelName { get; set; }
+
     public string ModelVoice { get; set; }
-    
+
     public string ModelLanguage { get; set; }
     
     public string CustomRecordAnalyzePrompt { get; set; }

@@ -16,22 +16,21 @@ namespace SmartTalk.Core.Services.AiSpeechAssistantConnect;
 public partial class AiSpeechAssistantConnectService
 {
     private async Task<RealtimeAiFunctionCallResult> OnFunctionCallAsync(
-        SessionBusinessContext ctx,
         RealtimeAiWssFunctionCallData functionCallData,
         RealtimeAiSessionActions actions,
         CancellationToken cancellationToken)
     {
-        Log.Information("[AiSpeechAssistantConnect] Function call received: {FunctionName}, Args: {Args}",
-            functionCallData.FunctionName, functionCallData.ArgumentsJson);
+        Log.Information("[AiAssistant] Function call received, Name: {FunctionName}, CallSid: {CallSid}",
+            functionCallData.FunctionName, _ctx.CallSid);
 
         return functionCallData.FunctionName switch
         {
-            OpenAiToolConstants.ConfirmOrder => ProcessOrder(ctx, functionCallData),
-            OpenAiToolConstants.ConfirmCustomerInformation => ProcessRecordCustomerInformation(ctx, functionCallData),
-            OpenAiToolConstants.ConfirmPickupTime => ProcessRecordOrderPickupTime(ctx, functionCallData),
-            OpenAiToolConstants.Hangup => ProcessHangup(ctx, cancellationToken),
+            OpenAiToolConstants.ConfirmOrder => ProcessOrder(functionCallData),
+            OpenAiToolConstants.ConfirmCustomerInformation => ProcessRecordCustomerInformation(functionCallData),
+            OpenAiToolConstants.ConfirmPickupTime => ProcessRecordOrderPickupTime(functionCallData),
+            OpenAiToolConstants.Hangup => ProcessHangup(cancellationToken),
             OpenAiToolConstants.RepeatOrder or OpenAiToolConstants.SatisfyOrder =>
-                await ProcessRepeatOrderAsync(ctx, actions, cancellationToken).ConfigureAwait(false),
+                await ProcessRepeatOrderAsync(actions, cancellationToken).ConfigureAwait(false),
             OpenAiToolConstants.Refund
                 or OpenAiToolConstants.Complaint
                 or OpenAiToolConstants.ReturnGoods
@@ -49,15 +48,14 @@ public partial class AiSpeechAssistantConnectService
                 or OpenAiToolConstants.HandleThirdPartyUnexpectedIssues
                 or OpenAiToolConstants.HandleThirdPartyPickupTimeChange
                 or OpenAiToolConstants.DriverDeliveryRelatedCommunication =>
-                ProcessTransferCall(ctx, functionCallData.FunctionName, cancellationToken),
+                ProcessTransferCall(functionCallData.FunctionName, cancellationToken),
             _ => null
         };
     }
 
-    private static RealtimeAiFunctionCallResult ProcessOrder(
-        SessionBusinessContext ctx, RealtimeAiWssFunctionCallData functionCallData)
+    private RealtimeAiFunctionCallResult ProcessOrder(RealtimeAiWssFunctionCallData functionCallData)
     {
-        ctx.OrderItems = JsonConvert.DeserializeObject<AiSpeechAssistantOrderDto>(functionCallData.ArgumentsJson);
+        _ctx.OrderItems = JsonConvert.DeserializeObject<AiSpeechAssistantOrderDto>(functionCallData.ArgumentsJson);
 
         return new RealtimeAiFunctionCallResult
         {
@@ -66,10 +64,9 @@ public partial class AiSpeechAssistantConnectService
         };
     }
 
-    private static RealtimeAiFunctionCallResult ProcessRecordCustomerInformation(
-        SessionBusinessContext ctx, RealtimeAiWssFunctionCallData functionCallData)
+    private RealtimeAiFunctionCallResult ProcessRecordCustomerInformation(RealtimeAiWssFunctionCallData functionCallData)
     {
-        ctx.UserInfo = JsonConvert.DeserializeObject<AiSpeechAssistantUserInfoDto>(functionCallData.ArgumentsJson);
+        _ctx.UserInfo = JsonConvert.DeserializeObject<AiSpeechAssistantUserInfoDto>(functionCallData.ArgumentsJson);
 
         return new RealtimeAiFunctionCallResult
         {
@@ -77,12 +74,11 @@ public partial class AiSpeechAssistantConnectService
         };
     }
 
-    private static RealtimeAiFunctionCallResult ProcessRecordOrderPickupTime(
-        SessionBusinessContext ctx, RealtimeAiWssFunctionCallData functionCallData)
+    private RealtimeAiFunctionCallResult ProcessRecordOrderPickupTime(RealtimeAiWssFunctionCallData functionCallData)
     {
         var parsed = JsonConvert.DeserializeObject<AiSpeechAssistantOrderDto>(functionCallData.ArgumentsJson);
-        if (ctx.OrderItems != null)
-            ctx.OrderItems.Comments = parsed?.Comments ?? string.Empty;
+        if (_ctx.OrderItems != null)
+            _ctx.OrderItems.Comments = parsed?.Comments ?? string.Empty;
 
         return new RealtimeAiFunctionCallResult
         {
@@ -90,10 +86,10 @@ public partial class AiSpeechAssistantConnectService
         };
     }
 
-    private RealtimeAiFunctionCallResult ProcessHangup(SessionBusinessContext ctx, CancellationToken cancellationToken)
+    private RealtimeAiFunctionCallResult ProcessHangup(CancellationToken cancellationToken)
     {
         _backgroundJobClient.Schedule<IAiSpeechAssistantService>(
-            x => x.HangupCallAsync(ctx.CallSid, cancellationToken), TimeSpan.FromSeconds(2));
+            x => x.HangupCallAsync(_ctx.CallSid, cancellationToken), TimeSpan.FromSeconds(2));
 
         return new RealtimeAiFunctionCallResult
         {
@@ -102,13 +98,13 @@ public partial class AiSpeechAssistantConnectService
     }
 
     private async Task<RealtimeAiFunctionCallResult> ProcessRepeatOrderAsync(
-        SessionBusinessContext ctx, RealtimeAiSessionActions actions, CancellationToken cancellationToken)
+        RealtimeAiSessionActions actions, CancellationToken cancellationToken)
     {
         actions.SuspendClientAudioToProvider();
 
         try
         {
-            await SendRepeatOrderHoldOnAudioAsync(ctx, actions).ConfigureAwait(false);
+            await SendRepeatOrderHoldOnAudioAsync(actions).ConfigureAwait(false);
 
             var recordedAudio = await actions.GetRecordedAudioSnapshotAsync().ConfigureAwait(false);
 
@@ -118,8 +114,8 @@ public partial class AiSpeechAssistantConnectService
 
                 var responseAudio = await _openaiClient.GenerateAudioChatCompletionAsync(
                     audioData,
-                    ctx.Assistant.CustomRepeatOrderPrompt,
-                    ctx.Assistant.ModelVoice,
+                    _ctx.Assistant.CustomRepeatOrderPrompt,
+                    _ctx.Assistant.ModelVoice,
                     cancellationToken).ConfigureAwait(false);
 
                 var uLawAudioBytes = await _ffmpegService.ConvertWavToULawAsync(responseAudio, cancellationToken).ConfigureAwait(false);
@@ -135,13 +131,12 @@ public partial class AiSpeechAssistantConnectService
         return null;
     }
 
-    private static async Task SendRepeatOrderHoldOnAudioAsync(
-        SessionBusinessContext ctx, RealtimeAiSessionActions actions)
+    private async Task SendRepeatOrderHoldOnAudioAsync(RealtimeAiSessionActions actions)
     {
-        Enum.TryParse(ctx.Assistant.ModelVoice, true, out AiSpeechAssistantVoice voice);
+        Enum.TryParse(_ctx.Assistant.ModelVoice, true, out AiSpeechAssistantVoice voice);
         voice = voice == default ? AiSpeechAssistantVoice.Alloy : voice;
 
-        Enum.TryParse(ctx.Assistant.ModelLanguage, true, out AiSpeechAssistantMainLanguage language);
+        Enum.TryParse(_ctx.Assistant.ModelLanguage, true, out AiSpeechAssistantMainLanguage language);
         language = language == default ? AiSpeechAssistantMainLanguage.En : language;
 
         var stream = AudioHelper.GetRandomAudioStream(voice, language);
@@ -153,31 +148,30 @@ public partial class AiSpeechAssistantConnectService
         await actions.SendAudioToClientAsync(holdOn).ConfigureAwait(false);
     }
 
-    private RealtimeAiFunctionCallResult ProcessTransferCall(
-        SessionBusinessContext ctx, string functionName, CancellationToken cancellationToken)
+    private RealtimeAiFunctionCallResult ProcessTransferCall(string functionName, CancellationToken cancellationToken)
     {
-        Log.Information("Start transfer call");
+        if (_ctx.IsTransfer) return null;
 
-        if (ctx.IsTransfer) return null;
-
-        if (string.IsNullOrEmpty(ctx.HumanContactPhone))
+        if (string.IsNullOrEmpty(_ctx.HumanContactPhone))
         {
+            Log.Information("[AiAssistant] Transfer unavailable, no human contact, CallSid: {CallSid}", _ctx.CallSid);
             return new RealtimeAiFunctionCallResult
             {
                 Output = "Reply in the guest's language: I'm Sorry, there is no human service at the moment"
             };
         }
 
-        ctx.IsTransfer = true;
+        _ctx.IsTransfer = true;
 
         var (reply, replySeconds) = MatchTransferCallReply(functionName);
 
-        Log.Information("Transfer call reply: {Reply}", reply);
+        Log.Information("[AiAssistant] Transferring to human, Function: {Function}, Phone: {Phone}, CallSid: {CallSid}",
+            functionName, _ctx.HumanContactPhone, _ctx.CallSid);
 
         _backgroundJobClient.Schedule<IMediator>(x => x.SendAsync(new TransferHumanServiceCommand
         {
-            CallSid = ctx.CallSid,
-            HumanPhone = ctx.HumanContactPhone
+            CallSid = _ctx.CallSid,
+            HumanPhone = _ctx.HumanContactPhone
         }, cancellationToken), TimeSpan.FromSeconds(replySeconds), HangfireConstants.InternalHostingTransfer);
 
         // V1 comments out the function output send for transfer calls — returning null skips it
