@@ -10,17 +10,18 @@ using SmartTalk.Messages.Enums.Twilio;
 using SmartTalk.Core.Services.SipServer;
 using SmartTalk.Messages.Commands.Twilio;
 using SmartTalk.Messages.Enums.SipServer;
+using SmartTalk.Core.Services.Asterisk;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Settings.Communication.PhoneCall;
 
-namespace SmartTalk.Core.Services.Communication.Twilio;
+namespace SmartTalk.Core.Services.Webhook;
 
-public interface ITwilioService : IScopedDependency
+public interface ITwilioWebhookService : IScopedDependency
 {
     Task HandlePhoneCallStatusCallbackAsync(HandlePhoneCallStatusCallBackCommand callback, CancellationToken cancellationToken);
 }
 
-public class TwilioService : ITwilioService
+public class TwilioWebhookService : ITwilioWebhookService
 {
     private readonly IMapper _mapper;
     private readonly IAlidnsClient _alidnsClient;
@@ -28,9 +29,9 @@ public class TwilioService : ITwilioService
     private readonly IAsteriskClient _asteriskClient;
     private readonly ISipServerDataProvider _sipServerDataProvider;
     private readonly PhoneCallBroadcastSetting _phoneCallBroadcastSetting;
-    private readonly ITwilioServiceDataProvider _twilioServiceDataProvider;
-    
-    public TwilioService(IMapper mapper, IAlidnsClient alidnsClient, IAsteriskClient asteriskClient, IWeChatClient weChatClient, ISipServerDataProvider sipServerDataProvider, PhoneCallBroadcastSetting phoneCallBroadcastSetting, ITwilioServiceDataProvider twilioServiceDataProvider)
+    private readonly IAsteriskDataProvider _asteriskDataProvider;
+
+    public TwilioWebhookService(IMapper mapper, IAlidnsClient alidnsClient, IAsteriskClient asteriskClient, IWeChatClient weChatClient, ISipServerDataProvider sipServerDataProvider, PhoneCallBroadcastSetting phoneCallBroadcastSetting, IAsteriskDataProvider asteriskDataProvider)
     {
         _mapper = mapper;
         _weChatClient = weChatClient;
@@ -38,31 +39,31 @@ public class TwilioService : ITwilioService
         _asteriskClient = asteriskClient;
         _sipServerDataProvider = sipServerDataProvider;
         _phoneCallBroadcastSetting = phoneCallBroadcastSetting;
-        _twilioServiceDataProvider = twilioServiceDataProvider;
+        _asteriskDataProvider = asteriskDataProvider;
     }
 
     public async Task HandlePhoneCallStatusCallbackAsync(HandlePhoneCallStatusCallBackCommand callback, CancellationToken cancellationToken)
     {
         if (!string.Equals(callback.Status, "Completed", StringComparison.OrdinalIgnoreCase)) return;
-        
-        var restaurantAsterisk = (await _twilioServiceDataProvider.GetRestaurantAsteriskAsync(callback.To, callback.From, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
-        
+
+        var restaurantAsterisk = (await _asteriskDataProvider.GetRestaurantAsteriskAsync(callback.To, callback.From, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+
         Log.Information("RestaurantAsterisk is: {@restaurantAsterisk}", restaurantAsterisk);
 
         if (restaurantAsterisk == null) return;
-        
+
         var originalData = await _asteriskClient.GetAsteriskCdrAsync(Regex.Replace(callback.From, @"^\+1", ""), restaurantAsterisk.CdrBaseUrl, cancellationToken).ConfigureAwait(false);
 
         Log.Information("AsteriskCdr OriginalData: {@originalData}", originalData);
-        
-        var oldData = await _twilioServiceDataProvider.GetAsteriskCdrAsync(createdDate: originalData.Data[0].CallDate, cancellationToken: cancellationToken).ConfigureAwait(false);
-        
+
+        var oldData = await _asteriskDataProvider.GetAsteriskCdrAsync(createdDate: originalData.Data[0].CallDate, cancellationToken: cancellationToken).ConfigureAwait(false);
+
         Log.Information($"AsteriskCdr OldData: {oldData}", oldData);
 
         if (oldData != null) return;
-        
-        await _twilioServiceDataProvider.CreateAsteriskCdrAsync(_mapper.Map<AsteriskCdr>(originalData.Data[0]), cancellationToken: cancellationToken).ConfigureAwait(false);
-        
+
+        await _asteriskDataProvider.CreateAsteriskCdrAsync(_mapper.Map<AsteriskCdr>(originalData.Data[0]), cancellationToken: cancellationToken).ConfigureAwait(false);
+
         var callStatus = TryParsePhoneCallStatus(originalData.Data[0].Disposition);
 
         if (callStatus != PhoneCallStatus.Answered)
@@ -71,35 +72,35 @@ public class TwilioService : ITwilioService
         if (callStatus == PhoneCallStatus.Answered && restaurantAsterisk.PhonePathStatus == PhonePathStatus.Exception)
         {
             await SendWorkWechatRobotMessagesAsync($"✅✅已恢復正常", true, cancellationToken).ConfigureAwait(false);
-            
+
             await UpdateAllDomainStatusAsync(restaurantAsterisk, PhonePathStatus.Running, cancellationToken).ConfigureAwait(false);
         }
     }
-    
+
     private async Task ProcessCallBackExceptionsAsync(RestaurantAsterisk restaurantAsterisk, CancellationToken cancellationToken)
     {
         if (restaurantAsterisk.PhonePathStatus != PhonePathStatus.Exception)
         {
             await SendWorkWechatRobotMessagesAsync($"🆘🆘異常", true, cancellationToken).ConfigureAwait(false);
-            
+
             await UpdateAllDomainStatusAsync(restaurantAsterisk, PhonePathStatus.Exception, cancellationToken).ConfigureAwait(false);
         }
-            
+
         var sipBackupServers = (await _sipServerDataProvider.GetAllSipHostServersAsync(restaurantAsterisk.HostId, [SipServerStatus.Pending, SipServerStatus.InProgress], cancellationToken).ConfigureAwait(false)).FirstOrDefault();
 
         Log.Information("Phone CallBack serviceIp:{@serviceIp}", sipBackupServers);
-        
-        var inProgressIp = sipBackupServers?.BackupServers?.FirstOrDefault(x => x.Status == SipServerStatus.InProgress); 
-        
+
+        var inProgressIp = sipBackupServers?.BackupServers?.FirstOrDefault(x => x.Status == SipServerStatus.InProgress);
+
         var pendingIp = sipBackupServers?.BackupServers?.FirstOrDefault(x => x.Status == SipServerStatus.Pending);
-            
+
         if (pendingIp == null)
             throw new Exception("Cannot find sip backup server");
-            
+
         var updateDomainRecord = await _alidnsClient.UpdateDomainRecordAsync(restaurantAsterisk.DomainName, restaurantAsterisk.Endpoint, restaurantAsterisk.HostRecords, pendingIp.ServerIp, cancellationToken).ConfigureAwait(false);
-            
+
         Log.Information("Phone CallBack updateDomainRecord: {@updateDomainRecord}", updateDomainRecord);
-        
+
         pendingIp.Status = SipServerStatus.InProgress;
 
         var updateSipBackupServers = new List<SipBackupServer>{pendingIp};
@@ -109,13 +110,13 @@ public class TwilioService : ITwilioService
             inProgressIp.Status = SipServerStatus.Completed;
             updateSipBackupServers.Add(inProgressIp);
         }
-            
+
         await _sipServerDataProvider.UpdateSipBackupServersAsync(updateSipBackupServers, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
-    
+
     private async Task UpdateAllDomainStatusAsync(RestaurantAsterisk restaurantAsterisk, PhonePathStatus phonePathStatus, CancellationToken cancellationToken)
     {
-        var restaurantAsterisks = await _twilioServiceDataProvider.GetRestaurantAsteriskAsync(hostRecords: restaurantAsterisk.HostRecords, domainName: restaurantAsterisk.DomainName, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var restaurantAsterisks = await _asteriskDataProvider.GetRestaurantAsteriskAsync(hostRecords: restaurantAsterisk.HostRecords, domainName: restaurantAsterisk.DomainName, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         restaurantAsterisks = restaurantAsterisks.Select(x =>
         {
@@ -123,15 +124,15 @@ public class TwilioService : ITwilioService
 
             return x;
         }).ToList();
-        
-        await _twilioServiceDataProvider.UpdateRestaurantAsterisksAsync(restaurantAsterisks, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        await _asteriskDataProvider.UpdateRestaurantAsterisksAsync(restaurantAsterisks, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
     private static PhoneCallStatus TryParsePhoneCallStatus(string disposition)
     {
         if (string.IsNullOrEmpty(disposition))
             return PhoneCallStatus.Failed;
-        
+
         return Enum.TryParse(disposition.Replace(" ", ""), true, out PhoneCallStatus status) ? status : PhoneCallStatus.Failed;
     }
 
@@ -140,12 +141,12 @@ public class TwilioService : ITwilioService
         var pacificTime = DateTimeOffset.UtcNow.ConvertFromUtc(TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
         var currentDate = pacificTime.ToString("yyyy-MM-dd");
         var currentTime = pacificTime.ToString("HH:mm");
-        
+
         var text = new SendWorkWechatGroupRobotTextDto { Content = $"PST {currentDate} linphone服务器情况 \n\n{currentTime} {content}" };
 
         if (atAll)
             text.MentionedMobileList = "@all";
-        
+
         await _weChatClient.SendWorkWechatRobotMessagesAsync(_phoneCallBroadcastSetting.BroadcastUrl, new SendWorkWechatGroupRobotMessageDto
         {
             MsgType = "text",

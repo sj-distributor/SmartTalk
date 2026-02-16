@@ -7,6 +7,8 @@ namespace SmartTalk.Core.Services.RealtimeAiV2.Services;
 
 public partial class RealtimeAiService
 {
+    // ── Low-level ───────────────────────────────────────────────
+
     private async Task SendToClientAsync(object payload)
     {
         if (_ctx.WebSocket is not { State: WebSocketState.Open }) return;
@@ -29,22 +31,7 @@ public partial class RealtimeAiService
         }
     }
 
-    private async Task SendTextToProviderAsync(string text)
-    {
-        Log.Information("[RealtimeAi] Sending text to provider, SessionId: {SessionId}, Text: {Text}", _ctx.SessionId, text);
-
-        await SendRawToProviderAsync(
-            _ctx.ProviderAdapter.BuildTextUserMessage(text, _ctx.SessionId),
-            _ctx.ProviderAdapter.BuildTriggerResponseMessage()
-        ).ConfigureAwait(false);
-    }
-
-    private async Task SendAudioToProviderAsync(RealtimeAiWssAudioData audioData)
-    {
-        await SendRawToProviderAsync(_ctx.ProviderAdapter.BuildAudioAppendMessage(audioData)).ConfigureAwait(false);
-    }
-
-    private async Task SendRawToProviderAsync(params string[] messages)
+    private async Task SendToProviderAsync(params string[] messages)
     {
         if (!IsProviderSessionActive) return;
 
@@ -53,5 +40,36 @@ public partial class RealtimeAiService
             if (message != null)
                 await _ctx.WssClient.SendMessageAsync(message, _ctx.SessionCts.Token).ConfigureAwait(false);
         }
+    }
+
+    // ── High-level ────────────────────────────────────────────────
+
+    private async Task SendAudioToClientAsync(string base64Payload)
+    {
+        await SendToClientAsync(_ctx.ClientAdapter.BuildAudioDeltaMessage(base64Payload, _ctx.SessionId)).ConfigureAwait(false);
+    }
+
+    private async Task SendAudioToProviderAsync(string base64Payload)
+    {
+        await SendToProviderAsync(_ctx.ProviderAdapter.BuildAudioAppendMessage(new RealtimeAiWssAudioData { Base64Payload = base64Payload })).ConfigureAwait(false);
+    }
+
+    private async Task SendImageToProviderAsync(string base64Payload)
+    {
+        await SendToProviderAsync(_ctx.ProviderAdapter.BuildAudioAppendMessage(new RealtimeAiWssAudioData
+        {
+            Base64Payload = base64Payload,
+            CustomProperties = new Dictionary<string, object> { { "image", base64Payload } }
+        })).ConfigureAwait(false);
+    }
+
+    private async Task SendTextToProviderAsync(string text)
+    {
+        Log.Information("[RealtimeAi] Sending text to provider, SessionId: {SessionId}, Text: {Text}", _ctx.SessionId, text);
+
+        await SendToProviderAsync(
+            _ctx.ProviderAdapter.BuildTextUserMessage(text, _ctx.SessionId),
+            _ctx.ProviderAdapter.BuildTriggerResponseMessage()
+        ).ConfigureAwait(false);
     }
 }

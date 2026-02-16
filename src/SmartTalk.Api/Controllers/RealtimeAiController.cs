@@ -28,8 +28,6 @@ public class RealtimeAiController : ControllerBase
             var command = new AiKidRealtimeCommand
             {
                 AssistantId = assistantId,
-                InputFormat = RealtimeAiAudioCodec.PCM16,
-                OutputFormat = RealtimeAiAudioCodec.PCM16,
                 WebSocket = await HttpContext.WebSockets.AcceptWebSocketAsync(),
                 Region = RealtimeAiServerRegion.US,
                 OrderRecordType = PhoneOrderRecordType.TestLink
@@ -52,8 +50,6 @@ public class RealtimeAiController : ControllerBase
             var command = new AiKidRealtimeCommand
             {
                 AssistantId = assistantId,
-                InputFormat = RealtimeAiAudioCodec.PCM16,
-                OutputFormat = RealtimeAiAudioCodec.PCM16,
                 WebSocket = await HttpContext.WebSockets.AcceptWebSocketAsync(),
                 Region = region,
                 OrderRecordType = PhoneOrderRecordType.TestLink

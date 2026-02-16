@@ -29,6 +29,7 @@ public partial class RealtimeAiService
                         await OnAiAudioOutputReadyAsync(audioData).ConfigureAwait(false);
                     break;
 
+                case RealtimeAiWssEventType.InputAudioTranscriptionPartial:
                 case RealtimeAiWssEventType.InputAudioTranscriptionCompleted:
                 case RealtimeAiWssEventType.OutputAudioTranscriptionPartial:
                 case RealtimeAiWssEventType.OutputAudioTranscriptionCompleted:
@@ -85,7 +86,7 @@ public partial class RealtimeAiService
     private async Task OnSessionInitializedAsync()
     {
         if (_ctx.Options.OnSessionReadyAsync != null)
-            await _ctx.Options.OnSessionReadyAsync(SendTextToProviderAsync).ConfigureAwait(false);
+            await _ctx.Options.OnSessionReadyAsync(_ctx.SessionActions).ConfigureAwait(false);
     }
 
     private async Task OnAiAudioOutputReadyAsync(RealtimeAiWssAudioData aiAudioData)
@@ -94,11 +95,9 @@ public partial class RealtimeAiService
 
         _ctx.IsAiSpeaking = true;
 
-        var audioBytes = Convert.FromBase64String(aiAudioData.Base64Payload);
+        var clientBase64 = await TranscodeAudioAsync(aiAudioData.Base64Payload, AudioSource.Provider).ConfigureAwait(false);
 
-        await WriteToAudioBufferAsync(audioBytes).ConfigureAwait(false);
-
-        await SendToClientAsync(_ctx.ClientAdapter.BuildAudioDeltaMessage(aiAudioData.Base64Payload, _ctx.SessionId)).ConfigureAwait(false);
+        await SendAudioToClientAsync(clientBase64).ConfigureAwait(false);
     }
 
     private async Task OnAiDetectedUserSpeechAsync()
@@ -137,10 +136,10 @@ public partial class RealtimeAiService
 
     private async Task OnTranscriptionReceivedAsync(RealtimeAiWssEventType eventType, RealtimeAiWssTranscriptionData transcriptionData)
     {
-        // Partial transcriptions are incremental fragments (e.g. "你" → "你好" → "你好，请问..."),
-        // only sent to client for real-time UI display. Only completed transcriptions (full sentences)
-        // are queued for final delivery via OnTranscriptionsCompletedAsync at session end.
-        if (eventType != RealtimeAiWssEventType.OutputAudioTranscriptionPartial)
+        // Only completed transcriptions (full sentences) are queued for final delivery
+        // via OnTranscriptionsCompletedAsync at session end. Partial transcriptions are
+        // incremental fragments (e.g. "你" → "你好" → "你好，请问..."), only sent to client for real-time UI display.
+        if (eventType is RealtimeAiWssEventType.InputAudioTranscriptionCompleted or RealtimeAiWssEventType.OutputAudioTranscriptionCompleted)
             _ctx.Transcriptions.Enqueue((transcriptionData.Speaker, transcriptionData.Transcript));
 
         await SendToClientAsync(_ctx.ClientAdapter.BuildTranscriptionMessage(eventType, transcriptionData, _ctx.SessionId)).ConfigureAwait(false);
@@ -156,18 +155,18 @@ public partial class RealtimeAiService
         {
             Log.Information("[RealtimeAi] Function call received, SessionId: {SessionId}, Function: {FunctionName}", _ctx.SessionId, functionCall.FunctionName);
 
-            var result = await _ctx.Options.OnFunctionCallAsync(functionCall).ConfigureAwait(false);
+            var result = await _ctx.Options.OnFunctionCallAsync(functionCall, _ctx.SessionActions).ConfigureAwait(false);
 
             if (!string.IsNullOrEmpty(result?.Output)) replies.Add((functionCall, result.Output));
         }
 
         foreach (var (functionCall, output) in replies)
-            await SendRawToProviderAsync(_ctx.ProviderAdapter.BuildFunctionCallReplyMessage(functionCall, output)).ConfigureAwait(false);
+            await SendToProviderAsync(_ctx.ProviderAdapter.BuildFunctionCallReplyMessage(functionCall, output)).ConfigureAwait(false);
 
         // After sending all function_call_output items, explicitly trigger a new AI response
         // so the provider incorporates the results into its next reply.
         if (replies.Count > 0)
-            await SendRawToProviderAsync(_ctx.ProviderAdapter.BuildTriggerResponseMessage()).ConfigureAwait(false);
+            await SendToProviderAsync(_ctx.ProviderAdapter.BuildTriggerResponseMessage()).ConfigureAwait(false);
     }
 
     private async Task OnProviderErrorAsync(RealtimeAiErrorData errorData)

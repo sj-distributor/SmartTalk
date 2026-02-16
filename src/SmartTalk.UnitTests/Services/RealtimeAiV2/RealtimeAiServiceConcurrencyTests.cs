@@ -28,7 +28,7 @@ public class RealtimeAiServiceConcurrencyTests
         switcher1.ClientAdapter(Arg.Any<RealtimeAiClient>()).Returns(clientAdapter1);
         switcher1.ProviderAdapter(Arg.Any<RealtimeAiProvider>()).Returns(providerAdapter1);
         providerAdapter1.GetHeaders(Arg.Any<RealtimeAiServerRegion>()).Returns(new Dictionary<string, string>());
-        providerAdapter1.BuildSessionConfig(Arg.Any<RealtimeSessionOptions>()).Returns(new { });
+        providerAdapter1.BuildSessionConfig(Arg.Any<RealtimeSessionOptions>(), Arg.Any<RealtimeAiAudioCodec>()).Returns(new { });
 
         // Session 2 setup
         var fakeWs2 = new FakeWebSocket();
@@ -42,7 +42,7 @@ public class RealtimeAiServiceConcurrencyTests
         switcher2.ClientAdapter(Arg.Any<RealtimeAiClient>()).Returns(clientAdapter2);
         switcher2.ProviderAdapter(Arg.Any<RealtimeAiProvider>()).Returns(providerAdapter2);
         providerAdapter2.GetHeaders(Arg.Any<RealtimeAiServerRegion>()).Returns(new Dictionary<string, string>());
-        providerAdapter2.BuildSessionConfig(Arg.Any<RealtimeSessionOptions>()).Returns(new { });
+        providerAdapter2.BuildSessionConfig(Arg.Any<RealtimeSessionOptions>(), Arg.Any<RealtimeAiAudioCodec>()).Returns(new { });
 
         var sut1 = new RealtimeAiService(switcher1, timerManager1);
         var sut2 = new RealtimeAiService(switcher2, timerManager2);

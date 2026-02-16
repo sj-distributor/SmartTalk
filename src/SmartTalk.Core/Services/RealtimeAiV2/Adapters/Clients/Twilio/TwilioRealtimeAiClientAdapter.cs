@@ -10,6 +10,8 @@ public class TwilioRealtimeAiClientAdapter : IRealtimeAiClientAdapter
 
     public RealtimeAiClient Client => RealtimeAiClient.Twilio;
 
+    public RealtimeAiAudioCodec NativeAudioCodec => RealtimeAiAudioCodec.MULAW;
+
     public ParsedClientMessage ParseMessage(string rawMessage)
     {
         using var doc = JsonDocument.Parse(rawMessage);

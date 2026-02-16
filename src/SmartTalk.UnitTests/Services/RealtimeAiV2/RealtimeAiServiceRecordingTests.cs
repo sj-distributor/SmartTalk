@@ -9,35 +9,90 @@ namespace SmartTalk.UnitTests.Services.RealtimeAiV2;
 
 public class RealtimeAiServiceRecordingTests : RealtimeAiServiceTestBase
 {
-    [Fact]
-    public async Task Recording_Enabled_AudioBufferedDuringSession()
+    private static int GetWavDataChunkSize(byte[] wav)
     {
-        byte[]? recordedWav = null;
+        for (var i = 12; i < wav.Length - 8; i++)
+            if (wav[i] == 'd' && wav[i + 1] == 'a' && wav[i + 2] == 't' && wav[i + 3] == 'a')
+                return BitConverter.ToInt32(wav, i + 4);
+        throw new InvalidOperationException("WAV 'data' chunk not found");
+    }
 
+    // ── Client audio → recording buffer (with codec conversion) ──
+
+    [Theory]
+    [InlineData(RealtimeAiAudioCodec.PCM16, 100)]  // Web: 100 PCM16 → 100 PCM16
+    [InlineData(RealtimeAiAudioCodec.MULAW, 600)]   // Twilio: 100 MULAW → 200 PCM16 → 600 PCM16 (8kHz→24kHz resample)
+    public async Task Recording_ClientAudio_ConvertedToPcm16InBuffer(
+        RealtimeAiAudioCodec clientCodec, int expectedDataSize)
+    {
+        var inputBytes = new byte[100];
+        Array.Fill<byte>(inputBytes, 0x80);
+
+        ClientAdapter.NativeAudioCodec.Returns(clientCodec);
         ClientAdapter.ParseMessage(Arg.Any<string>())
-            .Returns(new ParsedClientMessage { Type = RealtimeAiClientMessageType.Audio, Payload = Convert.ToBase64String(new byte[] { 1, 2, 3, 4 }) });
+            .Returns(new ParsedClientMessage { Type = RealtimeAiClientMessageType.Audio, Payload = Convert.ToBase64String(inputBytes) });
 
+        byte[]? recordedWav = null;
         var options = CreateDefaultOptions(o =>
         {
             o.EnableRecording = true;
-            o.OnRecordingCompleteAsync = (sessionId, wavBytes) =>
-            {
-                recordedWav = wavBytes;
-                return Task.CompletedTask;
-            };
+            o.OnRecordingCompleteAsync = (_, wav) => { recordedWav = wav; return Task.CompletedTask; };
         });
 
         var sessionTask = await StartSessionInBackgroundAsync(options);
 
-        FakeWs.EnqueueClientMessage("{\"media\":{\"payload\":\"AQIDBA==\"}}");
+        FakeWs.EnqueueClientMessage("{\"media\":{\"payload\":\"test\"}}");
         await Task.Delay(100);
 
         FakeWs.EnqueueClose();
         await sessionTask;
 
         recordedWav.ShouldNotBeNull();
-        recordedWav!.Length.ShouldBeGreaterThan(0);
+        GetWavDataChunkSize(recordedWav!).ShouldBe(expectedDataSize);
     }
+
+    // ── Provider audio → recording buffer (with codec conversion) ──
+
+    [Theory]
+    [InlineData(RealtimeAiAudioCodec.PCM16, RealtimeAiAudioCodec.PCM16, 100)]   // Web + Google: provider PCM16 → 100
+    [InlineData(RealtimeAiAudioCodec.MULAW, RealtimeAiAudioCodec.MULAW, 600)]    // Twilio + OpenAI: provider MULAW → 600 (8kHz→24kHz resample)
+    [InlineData(RealtimeAiAudioCodec.MULAW, RealtimeAiAudioCodec.PCM16, 100)]    // Twilio + Google: provider PCM16 → 100
+    public async Task Recording_ProviderAudio_ConvertedToPcm16InBuffer(
+        RealtimeAiAudioCodec clientCodec, RealtimeAiAudioCodec providerCodec, int expectedDataSize)
+    {
+        var inputBytes = new byte[100];
+        Array.Fill<byte>(inputBytes, 0x80);
+
+        ClientAdapter.NativeAudioCodec.Returns(clientCodec);
+        ProviderAdapter.GetPreferredCodec(clientCodec).Returns(providerCodec);
+
+        ProviderAdapter.ParseMessage(Arg.Any<string>())
+            .Returns(new ParsedRealtimeAiProviderEvent
+            {
+                Type = RealtimeAiWssEventType.ResponseAudioDelta,
+                Data = new RealtimeAiWssAudioData { Base64Payload = Convert.ToBase64String(inputBytes) }
+            });
+
+        byte[]? recordedWav = null;
+        var options = CreateDefaultOptions(o =>
+        {
+            o.EnableRecording = true;
+            o.OnRecordingCompleteAsync = (_, wav) => { recordedWav = wav; return Task.CompletedTask; };
+        });
+
+        var sessionTask = await StartSessionInBackgroundAsync(options);
+
+        await FakeWssClient.SimulateMessageReceivedAsync("{\"type\":\"response.audio.delta\"}");
+        await Task.Delay(100);
+
+        FakeWs.EnqueueClose();
+        await sessionTask;
+
+        recordedWav.ShouldNotBeNull();
+        GetWavDataChunkSize(recordedWav!).ShouldBe(expectedDataSize);
+    }
+
+    // ── WAV output format ─────────────────────────────────────────
 
     [Fact]
     public async Task Recording_SessionEnd_OnRecordingCompleteAsyncInvokedWithWavBytes()
@@ -69,6 +124,8 @@ public class RealtimeAiServiceRecordingTests : RealtimeAiServiceTestBase
         // WAV file starts with RIFF header
         System.Text.Encoding.ASCII.GetString(recordedWav!, 0, 4).ShouldBe("RIFF");
     }
+
+    // ── Edge cases ────────────────────────────────────────────────
 
     [Fact]
     public async Task Recording_Disabled_NoBufferCreated()
@@ -114,43 +171,6 @@ public class RealtimeAiServiceRecordingTests : RealtimeAiServiceTestBase
 
         // Should not throw
         await Should.NotThrowAsync(() => sessionTask);
-    }
-
-    [Fact]
-    public async Task Recording_AiAudioAlsoBuffered()
-    {
-        byte[]? recordedWav = null;
-
-        ProviderAdapter.ParseMessage(Arg.Any<string>())
-            .Returns(new ParsedRealtimeAiProviderEvent
-            {
-                Type = RealtimeAiWssEventType.ResponseAudioDelta,
-                Data = new RealtimeAiWssAudioData
-                {
-                    Base64Payload = Convert.ToBase64String(new byte[] { 50, 60, 70, 80 })
-                }
-            });
-
-        var options = CreateDefaultOptions(o =>
-        {
-            o.EnableRecording = true;
-            o.OnRecordingCompleteAsync = (sessionId, wavBytes) =>
-            {
-                recordedWav = wavBytes;
-                return Task.CompletedTask;
-            };
-        });
-
-        var sessionTask = await StartSessionInBackgroundAsync(options);
-
-        await FakeWssClient.SimulateMessageReceivedAsync("{\"type\":\"response.audio.delta\"}");
-        await Task.Delay(100);
-
-        FakeWs.EnqueueClose();
-        await sessionTask;
-
-        recordedWav.ShouldNotBeNull();
-        recordedWav!.Length.ShouldBeGreaterThan(44); // WAV header is 44 bytes, should have data too
     }
 
     [Fact]

@@ -9,14 +9,12 @@ using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.Pos;
-using SmartTalk.Core.Services.Printer;
 using SmartTalk.Core.Services.Sale;
 using SmartTalk.Core.Services.SpeechMatics;
 using SmartTalk.Core.Settings.OpenAi;
+using SmartTalk.Core.Services.Twilio;
 using SmartTalk.Core.Settings.Twilio;
 using SmartTalk.Messages.Commands.PhoneOrder;
-using Twilio;
-using Twilio.Rest.Api.V2010.Account;
 
 namespace SmartTalk.Core.Services.PhoneOrder;
 
@@ -29,17 +27,16 @@ public partial interface IPhoneOrderProcessJobService : IScopedDependency
 
 public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
 {
-    private readonly IPosService  _posService;
     private readonly ISalesClient _salesClient;
     private readonly IFfmpegService _ffmpegService;
     private readonly OpenAiSettings _openAiSettings;
-    private readonly TwilioSettings _twilioSettings;
     private readonly ISmartiesClient _smartiesClient;
     private readonly IPosUtilService _posUtilService;
-    private readonly IPosDataProvider _posDataProvider;
     private readonly TranslationClient _translationClient;
     private readonly IPhoneOrderService _phoneOrderService;
     private readonly ISalesDataProvider _salesDataProvider;
+    private readonly TwilioSettings _twilioSettings;
+    private readonly ITwilioService _twilioService;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly ISmartTalkHttpClientFactory _smartTalkHttpClient;
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
@@ -50,14 +47,11 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
     private readonly IPhoneOrderUtilService _phoneOrderUtilService;
 
     public PhoneOrderProcessJobService(
-        IPosService posService,
         ISalesClient salesClient,
         IFfmpegService ffmpegService,
-        TwilioSettings twilioSettings,
         OpenAiSettings openAiSettings,
         ISmartiesClient smartiesClient,
         IPosUtilService posUtilService,
-        IPosDataProvider posDataProvider,
         TranslationClient translationClient,
         IPhoneOrderService phoneOrderService,
         ISalesDataProvider salesDataProvider,
@@ -67,16 +61,13 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
         ISpeechMaticsDataProvider speechMaticsDataProvider,
         ISmartTalkHttpClientFactory smartTalkHttpClientFactory,
         ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient,
-        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, IPhoneOrderUtilService phoneOrderUtilService)
+        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, IPhoneOrderUtilService phoneOrderUtilService, ITwilioService twilioService, TwilioSettings twilioSettings)
     {
-        _posService = posService;
         _salesClient = salesClient;
         _ffmpegService = ffmpegService;
-        _twilioSettings = twilioSettings;
         _openAiSettings = openAiSettings;
         _smartiesClient = smartiesClient;
         _posUtilService = posUtilService;
-        _posDataProvider = posDataProvider;
         _translationClient = translationClient;
         _phoneOrderService = phoneOrderService;
         _salesDataProvider = salesDataProvider;
@@ -88,6 +79,8 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
         _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
         _phoneOrderUtilService = phoneOrderUtilService;
+        _twilioService = twilioService;
+        _twilioSettings = twilioSettings;
     }
 
     public async Task CalculatePhoneOrderRecodingDurationAsync(SchedulingCalculatePhoneOrderRecodingDurationCommand command, CancellationToken cancellationToken)
@@ -149,11 +142,9 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
     {
         if (record.Url.Contains("twilio") && string.IsNullOrWhiteSpace(record.IncomingCallNumber))
         {
-            TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
+            var callInfo = await _twilioService.FetchCallAsync(record.SessionId);
 
-            var call = await CallResource.FetchAsync(record.SessionId);
-        
-            record.IncomingCallNumber = call?.From ?? string.Empty;
+            record.IncomingCallNumber = callInfo?.From ?? string.Empty;
         }
     }
 }

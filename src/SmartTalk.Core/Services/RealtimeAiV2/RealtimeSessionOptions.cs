@@ -63,6 +63,43 @@ public class RealtimeAiModelConfig
     public object InputAudioNoiseReduction { get; set; }
 }
 
+/// <summary>
+/// Exposes session-level operations to consumer callbacks.
+/// New capabilities can be added here without changing callback signatures.
+/// </summary>
+public class RealtimeAiSessionActions
+{
+    /// <summary>
+    /// Send audio (base64 payload) directly to the client (e.g. play a pre-recorded message).
+    /// </summary>
+    public Func<string, Task> SendAudioToClientAsync { get; init; }
+
+    /// <summary>
+    /// Send text to the AI provider as a user message and trigger an AI response.
+    /// </summary>
+    public Func<string, Task> SendTextToProviderAsync { get; init; }
+
+    /// <summary>
+    /// Suspend forwarding client audio to the AI provider.
+    /// Use when the consumer needs exclusive control of the audio channel
+    /// (e.g. playing a pre-recorded message to the client without the provider hearing user noise).
+    /// Client audio will still be received from the WebSocket but will not be sent to the provider.
+    /// </summary>
+    public Action SuspendClientAudioToProvider { get; init; }
+
+    /// <summary>
+    /// Resume forwarding client audio to the AI provider after a previous <see cref="SuspendClientAudioToProvider"/>.
+    /// </summary>
+    public Action ResumeClientAudioToProvider { get; init; }
+
+    /// <summary>
+    /// Returns a snapshot of the current recorded audio buffer as a WAV byte array.
+    /// Non-destructive: the recording continues after the snapshot.
+    /// Only available when <see cref="RealtimeSessionOptions.EnableRecording"/> is true.
+    /// </summary>
+    public Func<Task<byte[]>> GetRecordedAudioSnapshotAsync { get; init; }
+}
+
 public class RealtimeSessionOptions
 {
     // --- Configuration ---
@@ -74,10 +111,6 @@ public class RealtimeSessionOptions
     public RealtimeAiConnectionProfile ConnectionProfile { get; set; }
 
     public WebSocket WebSocket { get; set; }
-
-    public RealtimeAiAudioCodec InputFormat { get; set; }
-
-    public RealtimeAiAudioCodec OutputFormat { get; set; }
 
     public RealtimeAiServerRegion Region { get; set; }
 
@@ -97,22 +130,31 @@ public class RealtimeSessionOptions
 
     /// <summary>
     /// Called when the AI session is initialized and ready.
-    /// The consumer receives a sendText delegate to send messages (e.g. greetings).
+    /// The consumer receives <see cref="RealtimeAiSessionActions"/> to interact with the session (e.g. send a greeting).
     /// </summary>
-    public Func<Func<string, Task>, Task> OnSessionReadyAsync { get; set; }
+    public Func<RealtimeAiSessionActions, Task> OnSessionReadyAsync { get; set; }
 
     /// <summary>
     /// Called when the AI provider suggests a function call (e.g. from OpenAI response.done).
+    /// Parameters: (functionCallData, sessionActions).
+    /// The consumer can use <see cref="RealtimeAiSessionActions"/> to send audio to the client,
+    /// send text to the provider, etc.
     /// Return a <see cref="RealtimeAiFunctionCallResult"/> with Output to continue the conversation,
     /// or null if no reply is needed. Null callback to ignore function calls.
     /// </summary>
-    public Func<RealtimeAiWssFunctionCallData, Task<RealtimeAiFunctionCallResult>> OnFunctionCallAsync { get; set; }
+    public Func<RealtimeAiWssFunctionCallData, RealtimeAiSessionActions, Task<RealtimeAiFunctionCallResult>> OnFunctionCallAsync { get; set; }
 
     /// <summary>
     /// Called when the client sends a "start" lifecycle event.
     /// Parameters: (sessionId, metadata dictionary with keys like "callSid", "streamSid").
     /// </summary>
     public Func<string, Dictionary<string, string>, Task> OnClientStartAsync { get; set; }
+
+    /// <summary>
+    /// Called when the client sends a "stop" lifecycle event (e.g. Twilio stream stop).
+    /// Parameter: sessionId.
+    /// </summary>
+    public Func<string, Task> OnClientStopAsync { get; set; }
 
     /// <summary>
     /// Called when the session ends.

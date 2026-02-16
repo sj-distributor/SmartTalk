@@ -1,11 +1,10 @@
 using System.Buffers;
 using System.Net.WebSockets;
 using System.Text;
-using System.Text.Json;
 using NAudio.Wave;
 using Serilog;
 using SmartTalk.Core.Services.RealtimeAiV2.Adapters;
-using SmartTalk.Messages.Dto.RealtimeAi;
+using SmartTalk.Messages.Enums.RealtimeAi;
 
 namespace SmartTalk.Core.Services.RealtimeAiV2.Services;
 
@@ -71,11 +70,11 @@ public partial class RealtimeAiService
             switch (parsed.Type)
             {
                 case RealtimeAiClientMessageType.Start:
-                    if (_ctx.Options.OnClientStartAsync != null)
-                        await _ctx.Options.OnClientStartAsync(_ctx.SessionId, parsed.Metadata ?? new()).ConfigureAwait(false);
+                    await (_ctx.Options.OnClientStartAsync?.Invoke(_ctx.SessionId, parsed.Metadata ?? new()) ?? Task.CompletedTask).ConfigureAwait(false);
                     break;
                 case RealtimeAiClientMessageType.Stop:
-                    break; // Cleanup handled by WebSocket close
+                    await (_ctx.Options.OnClientStopAsync?.Invoke(_ctx.SessionId) ?? Task.CompletedTask).ConfigureAwait(false);
+                    break;
                 case RealtimeAiClientMessageType.Audio:
                     await HandleClientAudioAsync(parsed.Payload).ConfigureAwait(false);
                     break;
@@ -90,46 +89,29 @@ public partial class RealtimeAiService
                     break;
             }
         }
-        catch (JsonException jsonEx)
+        catch (Exception ex)
         {
-            Log.Error(jsonEx, "[RealtimeAi] Failed to parse client message, SessionId: {SessionId}", _ctx.SessionId);
+            Log.Error(ex, "[RealtimeAi] Failed to process client message, SessionId: {SessionId}", _ctx.SessionId);
         }
+    }
+
+    private async Task HandleClientAudioAsync(string base64Payload)
+    {
+        var providerBase64 = await TranscodeAudioAsync(base64Payload, AudioSource.Client).ConfigureAwait(false);
+
+        if (_ctx.IsClientAudioToProviderSuspended) return;
+
+        await SendAudioToProviderAsync(providerBase64).ConfigureAwait(false);
+    }
+
+    private async Task HandleClientImageAsync(string base64Payload)
+    {
+        await SendImageToProviderAsync(base64Payload).ConfigureAwait(false);
     }
 
     private async Task HandleClientTextAsync(string text)
     {
         await SendTextToProviderAsync(text).ConfigureAwait(false);
-    }
-
-    private async Task HandleClientAudioAsync(string base64Payload)
-    {
-        if (!_ctx.IsAiSpeaking)
-        {
-            var audioBytes = Convert.FromBase64String(base64Payload);
-            await WriteToAudioBufferAsync(audioBytes).ConfigureAwait(false);
-        }
-
-        await SendAudioToProviderAsync(new RealtimeAiWssAudioData
-        {
-            Base64Payload = base64Payload,
-            CustomProperties = new Dictionary<string, object>
-            {
-                { nameof(RealtimeSessionOptions.InputFormat), _ctx.Options.InputFormat }
-            }
-        }).ConfigureAwait(false);
-    }
-
-    private async Task HandleClientImageAsync(string base64Payload)
-    {
-        await SendAudioToProviderAsync(new RealtimeAiWssAudioData
-        {
-            Base64Payload = base64Payload,
-            CustomProperties = new Dictionary<string, object>
-            {
-                { nameof(RealtimeSessionOptions.InputFormat), _ctx.Options.InputFormat },
-                { "image", base64Payload }
-            }
-        }).ConfigureAwait(false);
     }
 
     private async Task CleanupSessionAsync(bool clientIsClose)
@@ -146,22 +128,61 @@ public partial class RealtimeAiService
         await SafeExecuteAsync(
             () => { _inactivityTimerManager.StopTimer(_ctx.SessionId); return Task.CompletedTask; }, "stop inactivity timer");
 
-        await SafeExecuteAsync(async 
-            () => { if (_ctx.Options?.OnSessionEndedAsync != null) await _ctx.Options.OnSessionEndedAsync(_ctx.SessionId).ConfigureAwait(false); }, "invoke OnSessionEndedAsync");
+        await SafeExecuteAsync(
+            () => _ctx.Options?.OnSessionEndedAsync?.Invoke(_ctx.SessionId) ?? Task.CompletedTask, "invoke OnSessionEndedAsync");
 
         await SafeExecuteAsync(HandleRecordingAsync, "handle recording");
         await SafeExecuteAsync(HandleTranscriptionsAsync, "handle transcriptions");
     }
 
-    private async Task WriteToAudioBufferAsync(byte[] data)
+    private enum AudioSource { Client, Provider }
+
+    /// <summary>
+    /// Central audio pipeline: decode → record → convert codec → re-encode.
+    /// Resolves source/target codecs from AudioSource; decodes at most once.
+    /// </summary>
+    private async Task<string> TranscodeAudioAsync(string base64Input, AudioSource source)
+    {
+        var clientCodec = _ctx.ClientAdapter.NativeAudioCodec;
+        var providerCodec = _ctx.ProviderAdapter.GetPreferredCodec(clientCodec);
+        var (sourceCodec, targetCodec) = source == AudioSource.Client ? (clientCodec, providerCodec) : (providerCodec, clientCodec);
+
+        var rawBytes = await RecordAudioIfRequiredAsync(base64Input, sourceCodec, source).ConfigureAwait(false);
+
+        if (sourceCodec == targetCodec) return base64Input;
+
+        rawBytes ??= Convert.FromBase64String(base64Input);
+        
+        return Convert.ToBase64String(AudioCodecConverter.Convert(rawBytes, sourceCodec, targetCodec));
+    }
+
+    /// <summary>
+    /// Decides whether recording should happen, decodes and writes to buffer if so.
+    /// Returns decoded bytes for reuse by codec conversion, or null if no decode occurred.
+    /// </summary>
+    private async Task<byte[]> RecordAudioIfRequiredAsync(string base64Input, RealtimeAiAudioCodec sourceCodec, AudioSource source)
+    {
+        if (!_ctx.Options.EnableRecording) return null;
+        if (source == AudioSource.Client && _ctx.IsAiSpeaking) return null;
+
+        var rawBytes = Convert.FromBase64String(base64Input);
+        
+        await WriteToAudioBufferAsync(rawBytes, sourceCodec).ConfigureAwait(false);
+        
+        return rawBytes;
+    }
+
+    private async Task WriteToAudioBufferAsync(byte[] data, RealtimeAiAudioCodec sourceCodec)
     {
         if (!_ctx.Options.EnableRecording || _ctx.AudioBuffer is not { CanWrite: true }) return;
+
+        var pcmData = AudioCodecConverter.ConvertForRecording(data, sourceCodec);
 
         await _ctx.BufferLock.WaitAsync(_ctx.SessionCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
         try
         {
             if (_ctx.AudioBuffer is { CanWrite: true })
-                await _ctx.AudioBuffer.WriteAsync(data).ConfigureAwait(false);
+                await _ctx.AudioBuffer.WriteAsync(pcmData).ConfigureAwait(false);
         }
         finally
         {
@@ -178,6 +199,36 @@ public partial class RealtimeAiService
         await _ctx.Options.OnTranscriptionsCompletedAsync(_ctx.SessionId, transcriptions).ConfigureAwait(false);
     }
     
+    private async Task<byte[]> GetRecordedAudioSnapshotAsync()
+    {
+        if (!_ctx.Options.EnableRecording || _ctx.AudioBuffer is not { CanRead: true }) return [];
+
+        await _ctx.BufferLock.WaitAsync().ConfigureAwait(false);
+        byte[] snapshotBytes;
+        try
+        {
+            if (_ctx.AudioBuffer is not { CanRead: true } || _ctx.AudioBuffer.Length == 0) return [];
+
+            snapshotBytes = new byte[_ctx.AudioBuffer.Length];
+            _ctx.AudioBuffer.Position = 0;
+            await _ctx.AudioBuffer.ReadAsync(snapshotBytes).ConfigureAwait(false);
+        }
+        finally
+        {
+            _ctx.BufferLock.Release();
+        }
+
+        var waveFormat = new WaveFormat(24000, 16, 1);
+        using var wavStream = new MemoryStream();
+        await using (var writer = new WaveFileWriter(wavStream, waveFormat))
+        {
+            writer.Write(snapshotBytes, 0, snapshotBytes.Length);
+            await writer.FlushAsync();
+        }
+
+        return wavStream.ToArray();
+    }
+
     private async Task HandleRecordingAsync()
     {
         if (!_ctx.Options.EnableRecording || _ctx.Options.OnRecordingCompleteAsync == null) return;

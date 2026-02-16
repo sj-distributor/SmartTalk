@@ -8,6 +8,8 @@ public class DefaultRealtimeAiClientAdapter : IRealtimeAiClientAdapter
 {
     public RealtimeAiClient Client => RealtimeAiClient.Default;
 
+    public RealtimeAiAudioCodec NativeAudioCodec => RealtimeAiAudioCodec.PCM16;
+
     public ParsedClientMessage ParseMessage(string rawMessage)
     {
         using var doc = JsonDocument.Parse(rawMessage);

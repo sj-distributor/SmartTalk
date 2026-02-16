@@ -73,8 +73,6 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
                 ProfileId = assistant.Id.ToString()
             },
             WebSocket = command.WebSocket,
-            InputFormat = command.InputFormat,
-            OutputFormat = command.OutputFormat,
             Region = command.Region,
             EnableRecording = true,
             IdleFollowUp = timer != null
@@ -85,10 +83,10 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
                     SkipRounds = timer.SkipRound
                 }
                 : null,
-            OnSessionReadyAsync = async sendText =>
+            OnSessionReadyAsync = async actions =>
             {
                 if (!string.IsNullOrEmpty(greetings))
-                    await sendText($"Greet the user with: {greetings}").ConfigureAwait(false);
+                    await actions.SendTextToProviderAsync($"Greet the user with: {greetings}").ConfigureAwait(false);
             },
             OnRecordingCompleteAsync = async (sessionId, wavBytes) =>
             {

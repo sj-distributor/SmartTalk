@@ -42,7 +42,7 @@ public abstract class RealtimeAiServiceTestBase : IDisposable
         // Default stubs for ProviderAdapter
         ProviderAdapter.GetHeaders(Arg.Any<RealtimeAiServerRegion>())
             .Returns(new Dictionary<string, string> { { "Authorization", "Bearer test" } });
-        ProviderAdapter.BuildSessionConfig(Arg.Any<RealtimeSessionOptions>())
+        ProviderAdapter.BuildSessionConfig(Arg.Any<RealtimeSessionOptions>(), Arg.Any<RealtimeAiAudioCodec>())
             .Returns(new { type = "session.update" });
         ProviderAdapter.BuildAudioAppendMessage(Arg.Any<RealtimeAiWssAudioData>())
             .Returns("audio_append_msg");
@@ -52,8 +52,11 @@ public abstract class RealtimeAiServiceTestBase : IDisposable
             .Returns(ci => $"fc_reply:{ci.ArgAt<string>(1)}");
         ProviderAdapter.BuildTriggerResponseMessage()
             .Returns("response_create_msg");
+        ProviderAdapter.GetPreferredCodec(Arg.Any<RealtimeAiAudioCodec>())
+            .Returns(ci => ci.ArgAt<RealtimeAiAudioCodec>(0));
 
         // Default stubs for ClientAdapter
+        ClientAdapter.NativeAudioCodec.Returns(RealtimeAiAudioCodec.PCM16);
         ClientAdapter.BuildAudioDeltaMessage(Arg.Any<string>(), Arg.Any<string>())
             .Returns(ci => new { type = "ResponseAudioDelta", data = ci.ArgAt<string>(0) });
         ClientAdapter.BuildSpeechDetectedMessage(Arg.Any<string>())
@@ -84,8 +87,6 @@ public abstract class RealtimeAiServiceTestBase : IDisposable
                 Prompt = "You are a helpful assistant."
             },
             ConnectionProfile = new RealtimeAiConnectionProfile { ProfileId = "test-profile" },
-            InputFormat = RealtimeAiAudioCodec.PCM16,
-            OutputFormat = RealtimeAiAudioCodec.PCM16,
             Region = RealtimeAiServerRegion.US
         };
 

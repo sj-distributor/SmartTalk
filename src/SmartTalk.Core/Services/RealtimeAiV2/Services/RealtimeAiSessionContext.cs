@@ -25,6 +25,7 @@ public class RealtimeAiSessionContext
     // Runtime state
     public int Round { get; set; }
     public volatile bool IsAiSpeaking;
+    public volatile bool IsClientAudioToProviderSuspended;
 
     // Recording
     public MemoryStream AudioBuffer { get; set; }
@@ -35,4 +36,7 @@ public class RealtimeAiSessionContext
 
     // Synchronization
     public SemaphoreSlim WsSendLock { get; } = new(1, 1);
+
+    // Actions exposed to consumer callbacks
+    public RealtimeAiSessionActions SessionActions { get; set; }
 }

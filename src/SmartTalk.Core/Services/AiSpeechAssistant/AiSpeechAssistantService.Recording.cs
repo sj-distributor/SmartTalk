@@ -1,5 +1,4 @@
 using Serilog;
-using Twilio;
 using OpenAI.Chat;
 using SmartTalk.Core.Services.Caching;
 using SmartTalk.Core.Utils;
@@ -10,7 +9,6 @@ using SmartTalk.Messages.Enums.Caching;
 using SmartTalk.Messages.Enums.SpeechMatics;
 using SmartTalk.Messages.Enums.STT;
 using Task = System.Threading.Tasks.Task;
-using RecordingResource = Twilio.Rest.Api.V2010.Account.Call.RecordingResource;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
 
@@ -25,14 +23,11 @@ public partial class AiSpeechAssistantService
 {
     public async Task RecordAiSpeechAssistantCallAsync(RecordAiSpeechAssistantCallCommand command, CancellationToken cancellationToken)
     {
-        TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
-
         await RetryHelper.RetryAsync(async () =>
         {
-            await RecordingResource.CreateAsync(
-                pathCallSid: command.CallSid,
-                recordingStatusCallbackMethod: Twilio.Http.HttpMethod.Post,
-                recordingStatusCallback: new Uri($"https://{command.Host}/api/AiSpeechAssistant/recording/callback"));
+            await _twilioService.CreateRecordingAsync(
+                command.CallSid,
+                new Uri($"https://{command.Host}/api/AiSpeechAssistant/recording/callback"));
         }, maxRetryCount: 5, delaySeconds: 5, cancellationToken);
     }
 

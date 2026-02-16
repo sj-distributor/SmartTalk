@@ -19,7 +19,7 @@ using SmartTalk.Core.Services.Restaurants;
 using SmartTalk.Core.Services.RetrievalDb.VectorDb;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Core.Settings.Sales;
-using SmartTalk.Core.Settings.Twilio;
+using SmartTalk.Core.Services.Twilio;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Constants;
 using SmartTalk.Messages.Dto.Agent;
@@ -29,8 +29,6 @@ using SmartTalk.Messages.Dto.WebSocket;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.STT;
-using Twilio;
-using Twilio.Rest.Api.V2010.Account;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
 
@@ -50,8 +48,8 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
 {
     private readonly IMapper _mapper;
     private readonly IVectorDb _vectorDb;
-    private readonly TwilioSettings _twilioSettings;
     private readonly OpenAiTrainingSettings _openAiTrainingSettings;
+    private readonly ITwilioService _twilioService;
     private readonly TranslationClient _translationClient;
     private readonly IAgentDataProvider _agentDataProvider;
     private readonly IRestaurantDataProvider _restaurantDataProvider;
@@ -67,7 +65,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         IVectorDb vectorDb,
         ICrmClient crmClient,
         SalesSetting salesSetting,
-        TwilioSettings twilioSettings,
+        ITwilioService twilioService,
         IPosDataProvider posDataProvider,
         TranslationClient translationClient,
         IAgentDataProvider agentDataProvider,
@@ -81,7 +79,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         _vectorDb = vectorDb;
         _crmClient = crmClient;
         _salesSetting = salesSetting;
-        _twilioSettings = twilioSettings;
+        _twilioService = twilioService;
         _posDataProvider = posDataProvider;
         _translationClient = translationClient;
         _agentDataProvider = agentDataProvider;
@@ -94,8 +92,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
 
     public async Task RecordAiSpeechAssistantCallAsync(AiSpeechAssistantStreamContextDto context, PhoneOrderRecordType orderRecordType, CancellationToken cancellationToken)
     {
-        TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
-        var callResource = await CallResource.FetchAsync(pathSid: context.CallSid).ConfigureAwait(false);
+        var callInfo = await _twilioService.FetchCallAsync(context.CallSid).ConfigureAwait(false);
         
         var existRecord = await _phoneOrderDataProvider.GetPhoneOrderRecordBySessionIdAsync(context.CallSid, cancellationToken).ConfigureAwait(false);
 
@@ -116,7 +113,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             Tips = context.ConversationTranscription.FirstOrDefault().Item2,
             TranscriptionText = string.Empty,
             Language = TranscriptionLanguage.Chinese,
-            CreatedDate = callResource.StartTime ?? DateTimeOffset.Now,
+            CreatedDate = callInfo.StartTime ?? DateTimeOffset.Now,
             OrderStatus = PhoneOrderOrderStatus.Pending,
             CustomerName = context.UserInfo?.UserName,
             PhoneNumber = context.UserInfo?.PhoneNumber,
