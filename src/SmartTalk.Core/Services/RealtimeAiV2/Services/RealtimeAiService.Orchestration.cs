@@ -199,6 +199,36 @@ public partial class RealtimeAiService
         await _ctx.Options.OnTranscriptionsCompletedAsync(_ctx.SessionId, transcriptions).ConfigureAwait(false);
     }
     
+    private async Task<byte[]> GetRecordedAudioSnapshotAsync()
+    {
+        if (!_ctx.Options.EnableRecording || _ctx.AudioBuffer is not { CanRead: true }) return [];
+
+        await _ctx.BufferLock.WaitAsync().ConfigureAwait(false);
+        byte[] snapshotBytes;
+        try
+        {
+            if (_ctx.AudioBuffer is not { CanRead: true } || _ctx.AudioBuffer.Length == 0) return [];
+
+            snapshotBytes = new byte[_ctx.AudioBuffer.Length];
+            _ctx.AudioBuffer.Position = 0;
+            await _ctx.AudioBuffer.ReadAsync(snapshotBytes).ConfigureAwait(false);
+        }
+        finally
+        {
+            _ctx.BufferLock.Release();
+        }
+
+        var waveFormat = new WaveFormat(24000, 16, 1);
+        using var wavStream = new MemoryStream();
+        await using (var writer = new WaveFileWriter(wavStream, waveFormat))
+        {
+            writer.Write(snapshotBytes, 0, snapshotBytes.Length);
+            await writer.FlushAsync();
+        }
+
+        return wavStream.ToArray();
+    }
+
     private async Task HandleRecordingAsync()
     {
         if (!_ctx.Options.EnableRecording || _ctx.Options.OnRecordingCompleteAsync == null) return;
