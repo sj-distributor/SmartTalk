@@ -3,7 +3,6 @@ using Serilog;
 using System.Text;
 using Newtonsoft.Json;
 using SmartTalk.Core.Ioc;
-using System.Net.Http.Json;
 
 namespace SmartTalk.Core.Services.Http;
 
