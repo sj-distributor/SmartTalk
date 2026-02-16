@@ -23,6 +23,7 @@ public class AiSpeechAssistantConnectContext
 
     // Assistant & knowledge
     public string Prompt { get; set; }
+    public string UserProfileJson { get; set; }
     public AiSpeechAssistantDto Assistant { get; set; }
     public AiSpeechAssistantKnowledgeDto Knowledge { get; set; }
     public AiSpeechAssistantTimer Timer { get; set; }
