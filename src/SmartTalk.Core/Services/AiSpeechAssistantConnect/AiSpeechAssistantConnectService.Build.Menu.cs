@@ -10,28 +10,45 @@ public partial class AiSpeechAssistantConnectService
     private async Task<string> GenerateMenuItemsAsync(CancellationToken cancellationToken)
     {
         var storeAgent = await _posDataProvider.GetPosAgentByAgentIdAsync(_ctx.AgentId, cancellationToken).ConfigureAwait(false);
-
+        
         if (storeAgent == null) return null;
 
-        var storeProducts = await _posDataProvider.GetPosProductsByAgentIdAsync(_ctx.AgentId, cancellationToken).ConfigureAwait(false);
-        var storeCategories = (await _posDataProvider.GetPosCategoriesAsync(storeId: storeAgent.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false)).DistinctBy(x => x.CategoryId).ToList();
-
-        var normalProducts = storeProducts.OrderBy(x => x.SortOrder).Where(x => x.Modifiers == "[]").Take(80).ToList();
-        var modifierProducts = storeProducts.OrderBy(x => x.SortOrder).Where(x => x.Modifiers != "[]").Take(20).ToList();
-
-        var grouped = GroupProductsByCategory(normalProducts.Concat(modifierProducts).ToList(), storeCategories);
+        var (products, categories) = await LoadStoreMenuDataAsync(storeAgent.StoreId, cancellationToken).ConfigureAwait(false);
+        
+        var selected = SelectMenuProducts(products);
+        var grouped = GroupProductsByCategory(selected, categories);
 
         return FormatMenu(grouped);
     }
 
-    private static Dictionary<PosCategory, List<PosProduct>> GroupProductsByCategory(
-        List<PosProduct> products, List<PosCategory> categories)
+    private async Task<(List<PosProduct> Products, List<PosCategory> Categories)> LoadStoreMenuDataAsync(int storeId, CancellationToken cancellationToken)
+    {
+        var products = await _posDataProvider.GetPosProductsByAgentIdAsync(_ctx.AgentId, cancellationToken).ConfigureAwait(false);
+        var categories = (await _posDataProvider.GetPosCategoriesAsync(storeId: storeId, cancellationToken: cancellationToken).ConfigureAwait(false)).DistinctBy(x => x.CategoryId).ToList();
+
+        return (products, categories);
+    }
+
+    private static List<PosProduct> SelectMenuProducts(List<PosProduct> products)
+    {
+        var ordered = products.OrderBy(x => x.SortOrder).ToList();
+
+        var normal = ordered.Where(x => !HasModifiers(x)).Take(80);
+        var withModifiers = ordered.Where(HasModifiers).Take(20);
+
+        return normal.Concat(withModifiers).ToList();
+    }
+
+    private static bool HasModifiers(PosProduct product) => !string.IsNullOrEmpty(product.Modifiers) && product.Modifiers != "[]";
+
+    private static Dictionary<PosCategory, List<PosProduct>> GroupProductsByCategory(List<PosProduct> products, List<PosCategory> categories)
     {
         var lookup = new Dictionary<PosCategory, List<PosProduct>>();
 
         foreach (var product in products)
         {
             var category = categories.FirstOrDefault(c => c.Id == product.CategoryId);
+            
             if (category == null) continue;
 
             if (!lookup.ContainsKey(category))
@@ -43,33 +60,33 @@ public partial class AiSpeechAssistantConnectService
         return lookup;
     }
 
-    private static string FormatMenu(Dictionary<PosCategory, List<PosProduct>> grouped)
+    private static string FormatMenu(Dictionary<PosCategory, List<PosProduct>> grouped) =>
+        string.Join("\n", grouped
+            .Where(g => g.Value.Count > 0)
+            .Select(g => FormatCategory(g.Key, g.Value))
+            .Where(s => !string.IsNullOrEmpty(s))).TrimEnd('\r', '\n');
+
+    private static string FormatCategory(PosCategory category, List<PosProduct> products)
     {
-        var menuItems = string.Empty;
+        var categoryName = BuildMenuItemName(JsonConvert.DeserializeObject<PosNamesLocalization>(category.Names));
+        
+        if (string.IsNullOrWhiteSpace(categoryName)) return null;
 
-        foreach (var (category, products) in grouped)
-        {
-            if (products.Count == 0) continue;
+        var lines = products
+            .Select(FormatProduct)
+            .Where(l => l != null)
+            .Select((l, i) => $"{i + 1}. {l}");
 
-            var categoryName = BuildMenuItemName(JsonConvert.DeserializeObject<PosNamesLocalization>(category.Names));
-            if (string.IsNullOrWhiteSpace(categoryName)) continue;
+        return categoryName + "\n" + string.Join("\n", lines);
+    }
 
-            var productDetails = categoryName + "\n";
-            var idx = 1;
+    private static string FormatProduct(PosProduct product)
+    {
+        var name = BuildMenuItemName(JsonConvert.DeserializeObject<PosNamesLocalization>(product.Names));
+        
+        if (string.IsNullOrWhiteSpace(name)) return null;
 
-            foreach (var product in products)
-            {
-                var productName = BuildMenuItemName(JsonConvert.DeserializeObject<PosNamesLocalization>(product.Names));
-                if (string.IsNullOrWhiteSpace(productName)) continue;
-
-                productDetails += $"{idx}. {productName}：${product.Price:F2}{FormatModifiers(product.Modifiers)}\n";
-                idx++;
-            }
-
-            menuItems += productDetails + "\n";
-        }
-
-        return menuItems.TrimEnd('\r', '\n');
+        return $"{name}：${product.Price:F2}{FormatModifiers(product.Modifiers)}";
     }
 
     private static string FormatModifiers(string modifiersJson)
@@ -77,6 +94,7 @@ public partial class AiSpeechAssistantConnectService
         if (string.IsNullOrEmpty(modifiersJson)) return string.Empty;
 
         var modifiers = JsonConvert.DeserializeObject<List<EasyPosResponseModifierGroups>>(modifiersJson);
+        
         if (modifiers is not { Count: > 0 }) return string.Empty;
 
         return string.Concat(modifiers.Select(FormatSingleModifier));
