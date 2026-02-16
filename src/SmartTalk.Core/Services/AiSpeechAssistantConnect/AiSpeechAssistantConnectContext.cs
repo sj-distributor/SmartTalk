@@ -21,6 +21,7 @@ public class AiSpeechAssistantConnectContext
     public PhoneOrderRecordType OrderRecordType { get; set; }
 
     // Assistant & knowledge
+    public string Prompt { get; set; }
     public AiSpeechAssistantDto Assistant { get; set; }
     public AiSpeechAssistantKnowledgeDto Knowledge { get; set; }
 

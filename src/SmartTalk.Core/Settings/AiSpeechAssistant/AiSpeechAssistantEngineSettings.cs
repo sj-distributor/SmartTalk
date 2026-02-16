@@ -1,6 +1,6 @@
 using SmartTalk.Core.Ioc;
 
-namespace SmartTalk.Core.Services.AiSpeechAssistantConnect;
+namespace SmartTalk.Core.Settings.AiSpeechAssistant;
 
 public class AiSpeechAssistantEngineSettings : ISingletonDependency
 {

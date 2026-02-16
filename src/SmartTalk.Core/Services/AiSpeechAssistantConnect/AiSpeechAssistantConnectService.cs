@@ -128,9 +128,7 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
 
     private async Task ForwardIfRequiredAsync(CancellationToken cancellationToken)
     {
-        var (forwardNumber, forwardAssistantId) = await ResolveInboundRouteAsync(_ctx.From, _ctx.To, cancellationToken).ConfigureAwait(false);
-
-        _ctx.ForwardAssistantId = forwardAssistantId;
+        var forwardNumber = await ResolveInboundRouteAsync(cancellationToken).ConfigureAwait(false);
 
         if (string.IsNullOrEmpty(forwardNumber)) return;
 

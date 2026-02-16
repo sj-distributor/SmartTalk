@@ -1,6 +1,6 @@
 using System.Net.WebSockets;
 using Autofac;
-using SmartTalk.Core.Services.AiSpeechAssistantConnect;
+using SmartTalk.Core.Settings.AiSpeechAssistant;
 using SmartTalk.Core.Services.RealtimeAiV2;
 using SmartTalk.Core.Services.RealtimeAiV2.Adapters;
 using SmartTalk.IntegrationTests.Mocks;
