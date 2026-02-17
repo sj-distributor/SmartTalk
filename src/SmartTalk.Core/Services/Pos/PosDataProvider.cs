@@ -63,6 +63,8 @@ public partial interface IPosDataProvider : IScopedDependency
     
     Task<List<CompanyStore>> GetAllStoresAsync(int? serviceProviderId = null, CancellationToken cancellationToken = default);
     
+    Task<PosAgent> GetPosAgentByAgentIdAsync(int agentId, CancellationToken cancellationToken);
+    
     Task<List<PosAgent>> GetPosAgentByAgentIdsAsync(List<int> agentIds, CancellationToken cancellationToken);
 
     Task<List<(PosCategory, PosProduct)>> GetPosCategoryAndProductsAsync(int storeId, CancellationToken cancellationToken);
@@ -421,6 +423,11 @@ public partial class PosDataProvider : IPosDataProvider
             select store;
         
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<PosAgent> GetPosAgentByAgentIdAsync(int agentId, CancellationToken cancellationToken)
+    {
+        return await _repository.Query<PosAgent>().Where(x => x.AgentId == agentId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<List<PosAgent>> GetPosAgentByAgentIdsAsync(List<int> agentIds, CancellationToken cancellationToken)

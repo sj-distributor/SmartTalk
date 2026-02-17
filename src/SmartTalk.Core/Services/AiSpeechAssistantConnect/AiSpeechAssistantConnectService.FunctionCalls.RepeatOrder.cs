@@ -49,7 +49,7 @@ public partial class AiSpeechAssistantConnectService
         Enum.TryParse(_ctx.Assistant.ModelLanguage, true, out AiSpeechAssistantMainLanguage language);
         language = language == default ? AiSpeechAssistantMainLanguage.En : language;
 
-        var stream = AudioHelper.GetRandomAudioStream(voice, language);
+        var stream = AudioHelper.GetRandomAudioStream(voice, language, "hold_on");
 
         using var holdOnStream = new MemoryStream();
         await stream.CopyToAsync(holdOnStream).ConfigureAwait(false);
