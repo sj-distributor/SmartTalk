@@ -1,5 +1,6 @@
 using System.Net.WebSockets;
 using Autofac;
+using Microsoft.Extensions.Configuration;
 using SmartTalk.Core.Settings.AiSpeechAssistant;
 using SmartTalk.Core.Services.RealtimeAiV2;
 using SmartTalk.Core.Services.RealtimeAiV2.Adapters;
@@ -11,11 +12,18 @@ namespace SmartTalk.IntegrationTests.TestBaseClasses;
 [Collection("AiSpeechAssistant Tests")]
 public class AiSpeechAssistantFixtureBase : TestBase
 {
-    protected const bool UseV2Engine = true;
+    protected const int EngineVersion = 2;
 
     protected AiSpeechAssistantFixtureBase() : base("_ai_speech_assistant_", "ai_speech_assistant", 2, builder =>
     {
-        builder.RegisterInstance(new AiSpeechAssistantEngineSettings { UseV2Engine = UseV2Engine });
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string>
+            {
+                ["AiSpeechAssistant:EngineVersion"] = EngineVersion.ToString()
+            })
+            .Build();
+
+        builder.RegisterInstance(new AiSpeechAssistantSettings(config));
     })
     {
     }
@@ -27,7 +35,7 @@ public class AiSpeechAssistantFixtureBase : TestBase
 
     protected static ProviderMock CreateProviderMock()
     {
-        if (UseV2Engine)
+        if (EngineVersion == 2)
         {
             var mock = new MockRealtimeAiWssClient();
             return new ProviderMock(mock.EnqueueMessage, mock.SentMessages,

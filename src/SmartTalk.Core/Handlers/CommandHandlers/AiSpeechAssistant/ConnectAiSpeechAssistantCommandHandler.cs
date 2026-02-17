@@ -11,21 +11,21 @@ public class ConnectAiSpeechAssistantCommandHandler : ICommandHandler<ConnectAiS
 {
     private readonly IAiSpeechAssistantService _v1Service;
     private readonly IAiSpeechAssistantConnectService _v2Service;
-    private readonly AiSpeechAssistantEngineSettings _engineSettings;
+    private readonly AiSpeechAssistantSettings _settings;
 
     public ConnectAiSpeechAssistantCommandHandler(
         IAiSpeechAssistantService v1Service,
         IAiSpeechAssistantConnectService v2Service,
-        AiSpeechAssistantEngineSettings engineSettings)
+        AiSpeechAssistantSettings settings)
     {
         _v1Service = v1Service;
         _v2Service = v2Service;
-        _engineSettings = engineSettings;
+        _settings = settings;
     }
 
     public async Task Handle(IReceiveContext<ConnectAiSpeechAssistantCommand> context, CancellationToken cancellationToken)
     {
-        var @event = _engineSettings.UseV2Engine
+        var @event = _settings.EngineVersion == 2
             ? await _v2Service.ConnectAsync(context.Message, cancellationToken).ConfigureAwait(false)
             : await _v1Service.ConnectAiSpeechAssistantAsync(context.Message, cancellationToken).ConfigureAwait(false);
 
