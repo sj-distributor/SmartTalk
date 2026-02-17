@@ -4,72 +4,71 @@ using Mediator.Net;
 using Serilog;
 using SmartTalk.Core.Constants;
 using SmartTalk.Core.Services.AiSpeechAssistant;
+using SmartTalk.Core.Services.WebSockets;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
-using SmartTalk.Messages.Enums.PhoneOrder;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistantConnect;
 
 public partial class AiSpeechAssistantConnectService
 {
-    private async Task HandleForwardOnlyAsync(
-        WebSocket twilioWebSocket, string host, string forwardPhoneNumber,
-        PhoneOrderRecordType orderRecordType, CancellationToken cancellationToken)
+    private async Task HandleForwardOnlyAsync(string forwardPhoneNumber, CancellationToken cancellationToken)
     {
-        var buffer = new byte[1024 * 10];
-        string callSid = null;
-        string streamSid = null;
-
         try
         {
-            while (twilioWebSocket.State == WebSocketState.Open)
+            await WebSocketReader.RunAsync(_ctx.TwilioWebSocket, message =>
             {
-                var result = await twilioWebSocket.ReceiveAsync(new ArraySegment<byte>(buffer), cancellationToken).ConfigureAwait(false);
+                using var doc = JsonDocument.Parse(message);
+                var eventType = doc.RootElement.GetProperty("event").GetString();
 
-                if (result.MessageType == WebSocketMessageType.Close) break;
-
-                if (result.Count > 0)
+                switch (eventType)
                 {
-                    using var jsonDocument = JsonSerializer.Deserialize<JsonDocument>(buffer.AsSpan(0, result.Count));
-                    var eventMessage = jsonDocument?.RootElement.GetProperty("event").GetString();
-
-                    switch (eventMessage)
-                    {
-                        case "start":
-                            callSid = jsonDocument.RootElement.GetProperty("start").GetProperty("callSid").GetString();
-                            streamSid = jsonDocument.RootElement.GetProperty("start").GetProperty("streamSid").GetString();
-
-                            Log.Information("[AiAssistant] Forward-only started, CallSid: {CallSid}, ForwardNumber: {ForwardNumber}",
-                                callSid, forwardPhoneNumber);
-
-                            _backgroundJobClient.Enqueue<IMediator>(x => x.SendAsync(new RecordAiSpeechAssistantCallCommand
-                            {
-                                CallSid = callSid, Host = host
-                            }, CancellationToken.None), HangfireConstants.InternalHostingRecordPhoneCall);
-
-                            _backgroundJobClient.Enqueue<IMediator>(x => x.SendAsync(new TransferHumanServiceCommand
-                            {
-                                CallSid = callSid,
-                                HumanPhone = forwardPhoneNumber
-                            }, CancellationToken.None));
-                            break;
-
-                        case "stop":
-                            _backgroundJobClient.Enqueue<IAiSpeechAssistantProcessJobService>(x =>
-                                x.RecordAiSpeechAssistantCallAsync(new AiSpeechAssistantStreamContextDto
-                                {
-                                    CallSid = callSid,
-                                    StreamSid = streamSid,
-                                    Host = host
-                                }, orderRecordType, CancellationToken.None));
-                            break;
-                    }
+                    case "start":
+                        HandleForwardStart(doc, forwardPhoneNumber);
+                        break;
+                    case "stop":
+                        HandleForwardStop();
+                        break;
                 }
-            }
+
+                return Task.CompletedTask;
+                
+            }, cancellationToken).ConfigureAwait(false);
         }
         catch (WebSocketException ex)
         {
-            Log.Error(ex, "[AiAssistant] Forward-only WebSocket error, CallSid: {CallSid}", callSid);
+            Log.Error(ex, "[AiAssistant] Forward-only WebSocket error, CallSid: {CallSid}", _ctx.CallSid);
         }
+    }
+
+    private void HandleForwardStart(JsonDocument jsonDocument, string forwardPhoneNumber)
+    {
+        _ctx.CallSid = jsonDocument.RootElement.GetProperty("start").GetProperty("callSid").GetString();
+        _ctx.StreamSid = jsonDocument.RootElement.GetProperty("start").GetProperty("streamSid").GetString();
+
+        Log.Information("[AiAssistant] Forward-only started, CallSid: {CallSid}, ForwardNumber: {ForwardNumber}",
+            _ctx.CallSid, forwardPhoneNumber);
+
+        _backgroundJobClient.Enqueue<IMediator>(x => x.SendAsync(new RecordAiSpeechAssistantCallCommand
+        {
+            CallSid = _ctx.CallSid, Host = _ctx.Host
+        }, CancellationToken.None), HangfireConstants.InternalHostingRecordPhoneCall);
+
+        _backgroundJobClient.Enqueue<IMediator>(x => x.SendAsync(new TransferHumanServiceCommand
+        {
+            CallSid = _ctx.CallSid,
+            HumanPhone = forwardPhoneNumber
+        }, CancellationToken.None));
+    }
+
+    private void HandleForwardStop()
+    {
+        _backgroundJobClient.Enqueue<IAiSpeechAssistantProcessJobService>(x =>
+            x.RecordAiSpeechAssistantCallAsync(new AiSpeechAssistantStreamContextDto
+            {
+                CallSid = _ctx.CallSid,
+                StreamSid = _ctx.StreamSid,
+                Host = _ctx.Host
+            }, _ctx.OrderRecordType, CancellationToken.None));
     }
 }

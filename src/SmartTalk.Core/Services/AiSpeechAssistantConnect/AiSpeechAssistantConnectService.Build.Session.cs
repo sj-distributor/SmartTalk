@@ -51,10 +51,9 @@ public partial class AiSpeechAssistantConnectService
                 : null,
             OnSessionReadyAsync = HandleSessionReadyAsync,
             OnClientStartAsync = HandleClientStartAsync,
-            OnFunctionCallAsync = (data, actions) =>
-                OnFunctionCallAsync(data, actions, CancellationToken.None),
             OnTranscriptionsCompletedAsync = HandleTranscriptionsCompletedAsync,
-            OnRecordingCompleteAsync = HandleRecordingCompleteAsync
+            OnRecordingCompleteAsync = HandleRecordingCompleteAsync,
+            OnFunctionCallAsync = (data, actions) => OnFunctionCallAsync(data, actions, CancellationToken.None)
         };
     }
 
