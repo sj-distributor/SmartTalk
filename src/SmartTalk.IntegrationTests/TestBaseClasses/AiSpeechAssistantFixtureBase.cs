@@ -35,7 +35,7 @@ public class AiSpeechAssistantFixtureBase : TestBase
 
     protected static ProviderMock CreateProviderMock()
     {
-        if (EngineVersion >= 2)
+        if (EngineVersion == 2)
         {
             var mock = new MockRealtimeAiWssClient();
             return new ProviderMock(mock.EnqueueMessage, mock.SentMessages,

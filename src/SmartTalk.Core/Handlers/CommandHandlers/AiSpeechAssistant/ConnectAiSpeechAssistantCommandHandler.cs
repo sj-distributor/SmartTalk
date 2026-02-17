@@ -25,7 +25,7 @@ public class ConnectAiSpeechAssistantCommandHandler : ICommandHandler<ConnectAiS
 
     public async Task Handle(IReceiveContext<ConnectAiSpeechAssistantCommand> context, CancellationToken cancellationToken)
     {
-        var @event = _settings.EngineVersion >= 2
+        var @event = _settings.EngineVersion == 2
             ? await _v2Service.ConnectAsync(context.Message, cancellationToken).ConfigureAwait(false)
             : await _v1Service.ConnectAiSpeechAssistantAsync(context.Message, cancellationToken).ConfigureAwait(false);
 
