@@ -4,6 +4,7 @@ using Mediator.Net;
 using Serilog;
 using SmartTalk.Core.Constants;
 using SmartTalk.Core.Services.AiSpeechAssistant;
+using SmartTalk.Core.Services.WebSockets;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 
@@ -13,30 +14,26 @@ public partial class AiSpeechAssistantConnectService
 {
     private async Task HandleForwardOnlyAsync(string forwardPhoneNumber, CancellationToken cancellationToken)
     {
-        var buffer = new byte[1024 * 10];
-
         try
         {
-            while (_ctx.TwilioWebSocket.State == WebSocketState.Open)
+            await WebSocketReader.RunAsync(_ctx.TwilioWebSocket, message =>
             {
-                var result = await _ctx.TwilioWebSocket.ReceiveAsync(new ArraySegment<byte>(buffer), cancellationToken).ConfigureAwait(false);
+                using var doc = JsonDocument.Parse(message);
+                var eventType = doc.RootElement.GetProperty("event").GetString();
 
-                if (result.MessageType == WebSocketMessageType.Close) break;
-                if (result.Count == 0) continue;
-
-                using var jsonDocument = JsonSerializer.Deserialize<JsonDocument>(buffer.AsSpan(0, result.Count));
-                var eventMessage = jsonDocument?.RootElement.GetProperty("event").GetString();
-
-                switch (eventMessage)
+                switch (eventType)
                 {
                     case "start":
-                        HandleForwardStart(jsonDocument, forwardPhoneNumber);
+                        HandleForwardStart(doc, forwardPhoneNumber);
                         break;
                     case "stop":
                         HandleForwardStop();
                         break;
                 }
-            }
+
+                return Task.CompletedTask;
+                
+            }, cancellationToken).ConfigureAwait(false);
         }
         catch (WebSocketException ex)
         {
