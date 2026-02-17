@@ -1,8 +1,13 @@
-using SmartTalk.Core.Ioc;
+using Microsoft.Extensions.Configuration;
 
 namespace SmartTalk.Core.Settings.AiSpeechAssistant;
 
-public class AiSpeechAssistantEngineSettings : ISingletonDependency
+public class AiSpeechAssistantSettings : IConfigurationSetting
 {
-    public bool UseV2Engine { get; set; }
+    public AiSpeechAssistantSettings(IConfiguration configuration)
+    {
+        EngineVersion = configuration.GetValue<int>("AiSpeechAssistant:EngineVersion");
+    }
+
+    public int EngineVersion { get; set; }
 }
