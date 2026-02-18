@@ -13,8 +13,8 @@ public class OpenAiSettings : IConfigurationSetting
         RealtimeSendBuffLength = configuration.GetValue<int>("OpenAi:Realtime:RealtimeSendBuffLength");
         RealtimeReceiveBufferLength = configuration.GetValue<int>("OpenAi:Realtime:ReceiveBufferLength");
         RealtimeTemperature = configuration.GetValue<float>("OpenAi:Realtime:Temperature");
-        RealTimeApiKeys = configuration.GetValue<string>("OpenAi:RealTimeApiKeys").Split(',').Where(x => !string.IsNullOrEmpty(x)).ToList();
-        
+        RealTimeApiKeys = (configuration.GetValue<string>("OpenAi:RealTimeApiKeys") ?? "").Split(',').Where(x => !string.IsNullOrEmpty(x)).ToList();
+
         HkBaseUrl = configuration.GetValue<string>("OpenAiForHk:BaseUrl");
         HkApiKey = configuration.GetValue<string>("OpenAiForHk:ApiKey");
         HkOrganization = configuration.GetValue<string>("OpenAiForHk:Organization");
