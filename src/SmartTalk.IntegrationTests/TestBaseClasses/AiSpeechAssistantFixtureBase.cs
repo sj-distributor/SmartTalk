@@ -30,6 +30,7 @@ public class AiSpeechAssistantFixtureBase : TestBase
 
     protected record ProviderMock(
         Action<string> EnqueueMessage,
+        Action<string> EnqueueSendTriggeredMessage,
         List<byte[]> SentMessages,
         Action<ContainerBuilder> Register);
 
@@ -38,13 +39,13 @@ public class AiSpeechAssistantFixtureBase : TestBase
         if (EngineVersion == 2)
         {
             var mock = new MockRealtimeAiWssClient();
-            return new ProviderMock(mock.EnqueueMessage, mock.SentMessages,
+            return new ProviderMock(mock.EnqueueMessage, mock.EnqueueSendTriggeredMessage, mock.SentMessages,
                 builder => RegisterMockProvider(builder, mock));
         }
         else
         {
             var mock = new MockWebSocket(waitForCloseSignal: true);
-            return new ProviderMock(mock.EnqueueMessage, mock.SentMessages,
+            return new ProviderMock(mock.EnqueueMessage, mock.EnqueueMessage, mock.SentMessages,
                 builder => builder.RegisterInstance(mock).As<WebSocket>());
         }
     }

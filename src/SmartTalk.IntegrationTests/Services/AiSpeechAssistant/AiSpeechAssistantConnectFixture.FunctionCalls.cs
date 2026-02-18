@@ -666,12 +666,10 @@ public partial class AiSpeechAssistantConnectFixture
         twilioWs.EnqueueMessage(JsonConvert.SerializeObject(new { @event = "stop" }));
 
         var openaiWs = CreateProviderMock();
-        // Queue: session.updated fires on config send, 2 no-ops absorb greeting sends,
-        // response.done fires on audio-append send (after audio is recorded in the buffer)
-        openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new { type = "session.updated" }));
-        openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new { type = "response.audio.done" }));
-        openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new { type = "response.audio.done" }));
-        openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new
+        // session.updated fires on config send; response.done must fire on the audio-append
+        // send (after audio is recorded in the buffer), so it uses send-triggered delivery.
+        openaiWs.EnqueueSendTriggeredMessage(JsonConvert.SerializeObject(new { type = "session.updated" }));
+        openaiWs.EnqueueSendTriggeredMessage(JsonConvert.SerializeObject(new
         {
             type = "response.done",
             response = new
