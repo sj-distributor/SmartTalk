@@ -1061,9 +1061,6 @@ public partial class AiSpeechAssistantConnectFixture
 
         mockJobClient.ReceivedWithAnyArgs(1)
             .Schedule<Mediator.Net.IMediator>(default, default(TimeSpan), default);
-
-        var sentMessages = openaiWs.SentMessages.Select(b => Encoding.UTF8.GetString(b)).ToList();
-        sentMessages.Any(m => m.Contains("response.create")).ShouldBeTrue();
     }
 
     [Fact]
@@ -1147,9 +1144,6 @@ public partial class AiSpeechAssistantConnectFixture
 
         mockJobClient.ReceivedWithAnyArgs(1)
             .Schedule<Mediator.Net.IMediator>(default, default(TimeSpan), default);
-
-        var sentMessages = openaiWs.SentMessages.Select(b => Encoding.UTF8.GetString(b)).ToList();
-        sentMessages.Any(m => m.Contains("response.create")).ShouldBeTrue();
     }
 
     [Fact]
@@ -1233,9 +1227,6 @@ public partial class AiSpeechAssistantConnectFixture
 
         mockJobClient.ReceivedWithAnyArgs(1)
             .Schedule<Mediator.Net.IMediator>(default, default(TimeSpan), default);
-
-        var sentMessages = openaiWs.SentMessages.Select(b => Encoding.UTF8.GetString(b)).ToList();
-        sentMessages.Any(m => m.Contains("response.create")).ShouldBeTrue();
     }
 
     [Fact]
@@ -1292,7 +1283,7 @@ public partial class AiSpeechAssistantConnectFixture
     }
 
     [Fact]
-    public async Task ShouldSendTransferReplyAndResponseCreate_WhenTransferCallSucceeds()
+    public async Task ShouldNotSendFunctionCallOutput_WhenTransferCallSucceeds()
     {
         await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
         {
@@ -1371,8 +1362,7 @@ public partial class AiSpeechAssistantConnectFixture
         });
 
         var sentMessages = openaiWs.SentMessages.Select(b => Encoding.UTF8.GetString(b)).ToList();
-        sentMessages.Any(m => m.Contains("transferring you to a human")).ShouldBeTrue();
-        sentMessages.Any(m => m.Contains("function_call_output")).ShouldBeTrue();
-        sentMessages.Any(m => m.Contains("response.create")).ShouldBeTrue();
+        sentMessages.Any(m => m.Contains("function_call_output")).ShouldBeFalse();
+        sentMessages.Any(m => m.Contains("response.create")).ShouldBeFalse();
     }
 }
