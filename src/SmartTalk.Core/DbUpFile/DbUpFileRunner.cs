@@ -2,6 +2,7 @@ using DbUp;
 using System.Reflection;
 using DbUp.ScriptProviders;
 using MySql.Data.MySqlClient;
+using Serilog;
 
 namespace SmartTalk.Core.DbUpFile;
 
@@ -36,7 +37,18 @@ public class DbUpFileRunner
         var result = upgradeEngine.PerformUpgrade();
 
         if (!result.Successful)
+        {
+            if (result.ErrorScript != null)
+            {
+                Log.Error("DbUp failed on script: {ErrorScriptName}", result.ErrorScript.Name);
+                Log.Error("DbUp failed on script content: {ErrorScriptContent}", result.ErrorScript.Contents);
+                
+                Console.WriteLine($"DbUp failed on script: {result.ErrorScript.Name}");
+                Console.WriteLine(result.ErrorScript.Contents);
+            }
+
             throw result.Error;
+        }
     }
     
     private void CreateDatabaseIfNotExist(string connectionStr)
