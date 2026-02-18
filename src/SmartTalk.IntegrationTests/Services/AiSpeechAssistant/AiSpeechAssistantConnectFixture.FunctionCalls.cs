@@ -1233,4 +1233,142 @@ public partial class AiSpeechAssistantConnectFixture
         var sentMessages = openaiWs.SentMessages.Select(b => Encoding.UTF8.GetString(b)).ToList();
         sentMessages.Any(m => m.Contains("response.create")).ShouldBeTrue();
     }
+
+    [Fact]
+    public async Task ShouldNotSendGreeting_WhenKnowledgeHasNoGreetings()
+    {
+        await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
+        {
+            var agent = new Agent { Name = "TestAgent", IsReceiveCall = true, Type = AgentType.Assistant };
+            await repository.InsertAsync(agent);
+
+            var assistant = new Core.Domain.AISpeechAssistant.AiSpeechAssistant
+            {
+                Name = "TestAssistant", AnsweringNumber = TestDidNumber, ModelProvider = RealtimeAiProvider.OpenAi,
+                ModelVoice = "alloy", IsDefault = true, IsDisplay = true
+            };
+            await repository.InsertAsync(assistant);
+            await unitOfWork.SaveChangesAsync();
+
+            await repository.InsertAsync(new AgentAssistant { AgentId = agent.Id, AssistantId = assistant.Id });
+            await repository.InsertAsync(new AiSpeechAssistantKnowledge
+            {
+                AssistantId = assistant.Id, Prompt = "You are a test assistant.", IsActive = true, Version = "1.0"
+            });
+        });
+
+        var twilioWs = new MockWebSocket();
+        twilioWs.EnqueueMessage(JsonConvert.SerializeObject(new
+        {
+            @event = "start",
+            start = new { callSid = "CA_NOGREET_TEST", streamSid = "MZ_NOGREET_TEST" }
+        }));
+        twilioWs.EnqueueMessage(JsonConvert.SerializeObject(new { @event = "stop" }));
+
+        var openaiWs = CreateProviderMock();
+        openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new { type = "session.updated" }));
+
+        var command = new ConnectAiSpeechAssistantCommand
+        {
+            From = TestCallerNumber, To = TestDidNumber, Host = TestHost, TwilioWebSocket = twilioWs
+        };
+
+        await Run<IMediator>(async mediator =>
+        {
+            await mediator.SendAsync(command);
+        }, builder =>
+        {
+            builder.RegisterInstance(Substitute.For<ISmartTalkBackgroundJobClient>()).As<ISmartTalkBackgroundJobClient>();
+            builder.RegisterInstance(Substitute.For<ISmartiesClient>()).AsImplementedInterfaces();
+            openaiWs.Register(builder);
+        });
+
+        var sentMessages = openaiWs.SentMessages.Select(b => Encoding.UTF8.GetString(b)).ToList();
+        sentMessages.Any(m => m.Contains("conversation.item.create") && m.Contains("Greet")).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task ShouldSendTransferReplyAndResponseCreate_WhenTransferCallSucceeds()
+    {
+        await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
+        {
+            var agent = new Agent { Name = "TestAgent", IsReceiveCall = true, Type = AgentType.Assistant };
+            await repository.InsertAsync(agent);
+
+            var assistant = new Core.Domain.AISpeechAssistant.AiSpeechAssistant
+            {
+                Name = "TestAssistant", AnsweringNumber = TestDidNumber, ModelProvider = RealtimeAiProvider.OpenAi,
+                ModelVoice = "alloy", IsDefault = true, IsDisplay = true
+            };
+            await repository.InsertAsync(assistant);
+            await unitOfWork.SaveChangesAsync();
+
+            await repository.InsertAsync(new AgentAssistant { AgentId = agent.Id, AssistantId = assistant.Id });
+            await repository.InsertAsync(new AiSpeechAssistantKnowledge
+            {
+                AssistantId = assistant.Id, Prompt = "You are a test assistant.", IsActive = true, Version = "1.0"
+            });
+            await repository.InsertAsync(new AiSpeechAssistantHumanContact
+            {
+                AssistantId = assistant.Id, HumanPhone = "+15559990000"
+            });
+            await repository.InsertAsync(new AiSpeechAssistantFunctionCall
+            {
+                AssistantId = assistant.Id, Name = "transfer_call",
+                Content = "{\"type\":\"function\",\"name\":\"transfer_call\"}",
+                Type = AiSpeechAssistantSessionConfigType.Tool,
+                ModelProvider = RealtimeAiProvider.OpenAi, IsActive = true
+            });
+        });
+
+        var twilioWs = new MockWebSocket();
+        twilioWs.EnqueueMessage(JsonConvert.SerializeObject(new
+        {
+            @event = "start",
+            start = new { callSid = "CA_TRANSFERREPLY_TEST", streamSid = "MZ_TRANSFERREPLY_TEST" }
+        }));
+        twilioWs.EnqueueMessage(JsonConvert.SerializeObject(new { @event = "stop" }));
+
+        var openaiWs = CreateProviderMock();
+        openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new { type = "session.updated" }));
+        openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new
+        {
+            type = "response.done",
+            response = new
+            {
+                output = new[]
+                {
+                    new
+                    {
+                        type = "function_call",
+                        name = "transfer_call",
+                        call_id = "call_transferreply_001",
+                        arguments = "{}"
+                    }
+                }
+            }
+        }));
+
+        var mockJobClient = Substitute.For<ISmartTalkBackgroundJobClient>();
+
+        var command = new ConnectAiSpeechAssistantCommand
+        {
+            From = TestCallerNumber, To = TestDidNumber, Host = TestHost, TwilioWebSocket = twilioWs
+        };
+
+        await Run<IMediator>(async mediator =>
+        {
+            await mediator.SendAsync(command);
+        }, builder =>
+        {
+            builder.RegisterInstance(mockJobClient).As<ISmartTalkBackgroundJobClient>();
+            builder.RegisterInstance(Substitute.For<ISmartiesClient>()).AsImplementedInterfaces();
+            openaiWs.Register(builder);
+        });
+
+        var sentMessages = openaiWs.SentMessages.Select(b => Encoding.UTF8.GetString(b)).ToList();
+        sentMessages.Any(m => m.Contains("transferring you to a human")).ShouldBeTrue();
+        sentMessages.Any(m => m.Contains("function_call_output")).ShouldBeTrue();
+        sentMessages.Any(m => m.Contains("response.create")).ShouldBeTrue();
+    }
 }

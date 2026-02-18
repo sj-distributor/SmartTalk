@@ -35,8 +35,7 @@ public partial class AiSpeechAssistantConnectService
             HumanPhone = _ctx.HumanContactPhone
         }, cancellationToken), TimeSpan.FromSeconds(replySeconds), HangfireConstants.InternalHostingTransfer);
 
-        // V1 comments out the function output send for transfer calls — returning null skips it
-        return null;
+        return new RealtimeAiFunctionCallResult { Output = reply };
     }
 
     private static (string Reply, int ReplySeconds) MatchTransferCallReply(string functionName)

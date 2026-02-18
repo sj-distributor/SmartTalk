@@ -32,7 +32,7 @@ public class MockRealtimeAiWssClient : IRealtimeAiWssClient
     {
         SentMessages.Add(Encoding.UTF8.GetBytes(message));
 
-        if (_responseQueue.Count > 0 && MessageReceivedAsync != null)
+        while (_responseQueue.Count > 0 && MessageReceivedAsync != null)
             await MessageReceivedAsync.Invoke(_responseQueue.Dequeue()).ConfigureAwait(false);
     }
 

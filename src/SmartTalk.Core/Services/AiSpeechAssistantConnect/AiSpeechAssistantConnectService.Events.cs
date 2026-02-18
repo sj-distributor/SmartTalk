@@ -13,7 +13,9 @@ public partial class AiSpeechAssistantConnectService
 {
     private async Task HandleSessionReadyAsync(RealtimeAiSessionActions actions)
     {
-        await actions.SendTextToProviderAsync($"Greet the user with: '{_ctx.Knowledge?.Greetings}'").ConfigureAwait(false);
+        if (string.IsNullOrEmpty(_ctx.Knowledge?.Greetings)) return;
+        
+        await actions.SendTextToProviderAsync($"Greet the user with: '{_ctx.Knowledge.Greetings}'").ConfigureAwait(false);
     }
 
     private Task HandleClientStartAsync(string sessionId, Dictionary<string, string> metadata)
