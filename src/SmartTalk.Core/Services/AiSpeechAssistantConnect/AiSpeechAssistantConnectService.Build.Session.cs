@@ -1,5 +1,6 @@
 using Newtonsoft.Json;
 using SmartTalk.Core.Services.RealtimeAiV2;
+using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Messages.Constants;
 using SmartTalk.Messages.Enums.RealtimeAi;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
@@ -10,7 +11,6 @@ public partial class AiSpeechAssistantConnectService
 {
     private RealtimeSessionOptions BuildSessionOptions()
     {
-        var timer = _ctx.Timer;
         var assistant = _ctx.Assistant;
 
         return new RealtimeSessionOptions
@@ -41,20 +41,33 @@ public partial class AiSpeechAssistantConnectService
             WebSocket = _ctx.TwilioWebSocket,
             Region = RealtimeAiServerRegion.US,
             EnableRecording = true,
-            IdleFollowUp = timer != null
-                ? new RealtimeSessionIdleFollowUp
-                {
-                    TimeoutSeconds = timer.TimeSpanSeconds,
-                    FollowUpMessage = timer.AlterContent,
-                    SkipRounds = timer.SkipRound
-                }
-                : null,
+            IdleFollowUp = BuildIdleFollowUp(),
             OnSessionReadyAsync = HandleSessionReadyAsync,
             OnClientStartAsync = HandleClientStartAsync,
             OnTranscriptionsCompletedAsync = HandleTranscriptionsCompletedAsync,
             OnRecordingCompleteAsync = HandleRecordingCompleteAsync,
             OnFunctionCallAsync = (data, actions) => OnFunctionCallAsync(data, actions, CancellationToken.None)
         };
+    }
+
+    private RealtimeSessionIdleFollowUp BuildIdleFollowUp()
+    {
+        const int defaultIdleTimeoutSeconds = 60;
+
+        return new RealtimeSessionIdleFollowUp
+        {
+            SkipRounds = _ctx.Timer?.SkipRound,
+            FollowUpMessage = _ctx.Timer?.AlterContent,
+            TimeoutSeconds = _ctx.Timer?.TimeSpanSeconds ?? defaultIdleTimeoutSeconds,
+            OnTimeoutAsync = _ctx.Timer == null ? DefaultIdleHandling : null
+        };
+
+        Task DefaultIdleHandling()
+        {
+            _backgroundJobClient.Schedule<IAiSpeechAssistantService>(x => x.HangupCallAsync(_ctx.CallSid, CancellationToken.None), TimeSpan.FromSeconds(2));
+            
+            return Task.CompletedTask;
+        }
     }
 
     private object DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType type)

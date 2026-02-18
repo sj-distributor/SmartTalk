@@ -52,7 +52,10 @@ public partial class AiSpeechAssistantConnectService
         var greeting = await _smartiesClient
             .GetSaleAutoCallNumberAsync(new GetSaleAutoCallNumberRequest { Id = _ctx.NumberId.Value }, cancellationToken).ConfigureAwait(false);
 
-        _ctx.Prompt = _ctx.Prompt.Replace("#{greeting}", !string.IsNullOrEmpty(greeting.Data.Number.Greeting) ? greeting.Data.Number.Greeting : string.Empty);
+        if (!string.IsNullOrEmpty(greeting.Data.Number.Greeting))
+            _ctx.Knowledge.Greetings = greeting.Data.Number.Greeting;
+        
+        _ctx.Prompt = _ctx.Prompt.Replace("#{greeting}", _ctx.Knowledge.Greetings ?? string.Empty);
     }
 
     private async Task ResolveCustomerItemsAsync(CancellationToken cancellationToken)

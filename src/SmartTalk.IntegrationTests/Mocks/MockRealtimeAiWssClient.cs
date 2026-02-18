@@ -8,6 +8,7 @@ namespace SmartTalk.IntegrationTests.Mocks;
 public class MockRealtimeAiWssClient : IRealtimeAiWssClient
 {
     private readonly Queue<string> _responseQueue = new();
+    private readonly Queue<string> _sendTriggeredQueue = new();
 
     public RealtimeAiProvider Provider => RealtimeAiProvider.OpenAi;
     public WebSocketState CurrentState { get; private set; } = WebSocketState.None;
@@ -20,6 +21,7 @@ public class MockRealtimeAiWssClient : IRealtimeAiWssClient
     public List<byte[]> SentMessages { get; } = new();
 
     public void EnqueueMessage(string json) => _responseQueue.Enqueue(json);
+    public void EnqueueSendTriggeredMessage(string json) => _sendTriggeredQueue.Enqueue(json);
 
     public Task ConnectAsync(Uri endpointUri, Dictionary<string, string> customHeaders, CancellationToken cancellationToken)
     {
@@ -32,7 +34,13 @@ public class MockRealtimeAiWssClient : IRealtimeAiWssClient
     {
         SentMessages.Add(Encoding.UTF8.GetBytes(message));
 
-        if (_responseQueue.Count > 0 && MessageReceivedAsync != null)
+        if (_sendTriggeredQueue.Count > 0 && MessageReceivedAsync != null)
+        {
+            await MessageReceivedAsync.Invoke(_sendTriggeredQueue.Dequeue()).ConfigureAwait(false);
+            return;
+        }
+
+        while (_responseQueue.Count > 0 && MessageReceivedAsync != null)
             await MessageReceivedAsync.Invoke(_responseQueue.Dequeue()).ConfigureAwait(false);
     }
 
