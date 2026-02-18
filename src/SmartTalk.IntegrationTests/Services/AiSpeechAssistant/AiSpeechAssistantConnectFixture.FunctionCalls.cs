@@ -554,8 +554,10 @@ public partial class AiSpeechAssistantConnectFixture
         twilioMessages.Any(m => m.Contains("\"event\":\"media\"") && m.Contains("dGVzdGF1ZGlvZGF0YQ==")).ShouldBeTrue();
     }
 
-    [Fact]
-    public async Task ShouldStartInactivityTimer_WhenResponseDoneReceived()
+    [Theory]
+    [InlineData(true, 30)]
+    [InlineData(false, 60)]
+    public async Task ShouldStartInactivityTimer_WhenResponseDoneReceived(bool hasTimer, int expectedTimeoutSeconds)
     {
         await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
         {
@@ -575,10 +577,14 @@ public partial class AiSpeechAssistantConnectFixture
             {
                 AssistantId = assistant.Id, Prompt = "You are a test assistant.", IsActive = true, Version = "1.0"
             });
-            await repository.InsertAsync(new AiSpeechAssistantTimer
+
+            if (hasTimer)
             {
-                AssistantId = assistant.Id, TimeSpanSeconds = 60, AlterContent = "Are you still there?"
-            });
+                await repository.InsertAsync(new AiSpeechAssistantTimer
+                {
+                    AssistantId = assistant.Id, TimeSpanSeconds = expectedTimeoutSeconds, AlterContent = "Are you still there?"
+                });
+            }
         });
 
         var twilioWs = new MockWebSocket();
@@ -617,7 +623,7 @@ public partial class AiSpeechAssistantConnectFixture
 
         mockTimerManager.Received(1).StartTimer(
             Arg.Any<string>(),
-            Arg.Any<TimeSpan>(),
+            TimeSpan.FromSeconds(expectedTimeoutSeconds),
             Arg.Any<Func<Task>>());
     }
 
