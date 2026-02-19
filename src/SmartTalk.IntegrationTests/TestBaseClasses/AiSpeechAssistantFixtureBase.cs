@@ -14,7 +14,7 @@ public class AiSpeechAssistantFixtureBase : TestBase
 {
     protected const int EngineVersion = 2;
 
-    protected AiSpeechAssistantFixtureBase() : base("_ai_speech_assistant_", "ai_speech_assistant", 2, builder =>
+    protected AiSpeechAssistantFixtureBase() : base("_ai_speech_assistant_", "smart_talk_ai_speech_assistant", 2, builder =>
     {
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string>
