@@ -91,6 +91,13 @@ public class RealtimeAiSessionActions
     /// Resume forwarding client audio to the AI provider after a previous <see cref="SuspendClientAudioToProvider"/>.
     /// </summary>
     public Action ResumeClientAudioToProvider { get; init; }
+
+    /// <summary>
+    /// Returns a snapshot of the current recorded audio buffer as a WAV byte array.
+    /// Non-destructive: the recording continues after the snapshot.
+    /// Only available when <see cref="RealtimeSessionOptions.EnableRecording"/> is true.
+    /// </summary>
+    public Func<Task<byte[]>> GetRecordedAudioSnapshotAsync { get; init; }
 }
 
 public class RealtimeSessionOptions

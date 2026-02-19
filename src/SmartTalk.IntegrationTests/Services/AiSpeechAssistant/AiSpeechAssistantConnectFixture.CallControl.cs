@@ -1,4 +1,3 @@
-using System.Net.WebSockets;
 using System.Text;
 using Autofac;
 using Mediator.Net;
@@ -82,7 +81,7 @@ public partial class AiSpeechAssistantConnectFixture
         }));
         twilioWs.EnqueueMessage(JsonConvert.SerializeObject(new { @event = "stop" }));
 
-        var openaiWs = new MockWebSocket(waitForCloseSignal: true);
+        var openaiWs = CreateProviderMock();
         openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new { type = "session.updated" }));
         // transfer_call sets IsTransfer = true, then hangup should be skipped
         openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new
@@ -136,7 +135,7 @@ public partial class AiSpeechAssistantConnectFixture
             builder.RegisterInstance(mockJobClient).As<ISmartTalkBackgroundJobClient>();
             builder.RegisterInstance(mockTwilioService).As<ITwilioService>();
             builder.RegisterInstance(Substitute.For<ISmartiesClient>()).AsImplementedInterfaces();
-            builder.RegisterInstance(openaiWs).As<WebSocket>();
+            openaiWs.Register(builder);
         });
 
         // transfer_call triggers Schedule for transfer, hangup also triggers Schedule for hangup

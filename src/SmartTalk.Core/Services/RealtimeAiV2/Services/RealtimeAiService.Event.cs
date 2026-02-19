@@ -163,8 +163,6 @@ public partial class RealtimeAiService
         foreach (var (functionCall, output) in replies)
             await SendToProviderAsync(_ctx.ProviderAdapter.BuildFunctionCallReplyMessage(functionCall, output)).ConfigureAwait(false);
 
-        // After sending all function_call_output items, explicitly trigger a new AI response
-        // so the provider incorporates the results into its next reply.
         if (replies.Count > 0)
             await SendToProviderAsync(_ctx.ProviderAdapter.BuildTriggerResponseMessage()).ConfigureAwait(false);
     }
