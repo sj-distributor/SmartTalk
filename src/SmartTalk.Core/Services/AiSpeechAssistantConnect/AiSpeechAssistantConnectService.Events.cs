@@ -41,11 +41,15 @@ public partial class AiSpeechAssistantConnectService
             Host = _ctx.Host,
             Assistant = _ctx.Assistant,
             Knowledge = _ctx.Knowledge,
+            LastPrompt = _ctx.Prompt,
             OrderItems = _ctx.OrderItems,
             UserInfo = _ctx.UserInfo,
             LastUserInfo = _ctx.LastUserInfo,
             IsTransfer = _ctx.IsTransfer,
             HumanContactPhone = _ctx.HumanContactPhone,
+            TransferCallNumber = _ctx.TransferCallNumber,
+            IsInAiServiceHours = _ctx.IsInAiServiceHours,
+            IsEnableManualService = _ctx.IsEnableManualService,
             ConversationTranscription = transcriptions.Select(t => (t.Speaker, t.Text)).ToList()
         };
 

@@ -222,4 +222,61 @@ public partial class AiSpeechAssistantConnectFixture
         // Session update sent to OpenAI proves the service proceeded past the service hours check
         openaiWs.SentMessages.ShouldNotBeEmpty();
     }
+
+    [Fact]
+    public async Task ShouldReplaceCustomerItemsWithSpace_WhenNoCacheDataExists()
+    {
+        await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
+        {
+            var agent = new Agent { Name = "TestAgent", IsReceiveCall = true, Type = AgentType.Assistant };
+            await repository.InsertAsync(agent);
+
+            var assistant = new Core.Domain.AISpeechAssistant.AiSpeechAssistant
+            {
+                Name = "SoldTo1/SoldTo2", AnsweringNumber = TestDidNumber, ModelProvider = RealtimeAiProvider.OpenAi,
+                ModelVoice = "alloy", IsDefault = true, IsDisplay = true
+            };
+            await repository.InsertAsync(assistant);
+            await unitOfWork.SaveChangesAsync();
+
+            await repository.InsertAsync(new AgentAssistant { AgentId = agent.Id, AssistantId = assistant.Id });
+            await repository.InsertAsync(new AiSpeechAssistantKnowledge
+            {
+                AssistantId = assistant.Id,
+                Prompt = "Items:#{customer_items}End.",
+                IsActive = true, Version = "1.0"
+            });
+        });
+
+        var twilioWs = new MockWebSocket();
+        twilioWs.EnqueueMessage(JsonConvert.SerializeObject(new
+        {
+            @event = "start",
+            start = new { callSid = "CA_CUSTITEM_TEST", streamSid = "MZ_CUSTITEM_TEST" }
+        }));
+
+        var openaiWs = CreateProviderMock();
+        openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new { type = "session.updated" }));
+
+        var command = new ConnectAiSpeechAssistantCommand
+        {
+            From = TestCallerNumber, To = TestDidNumber, Host = TestHost, TwilioWebSocket = twilioWs
+        };
+
+        await Run<IMediator>(async mediator =>
+        {
+            await mediator.SendAsync(command);
+        }, builder =>
+        {
+            builder.RegisterInstance(Substitute.For<ISmartTalkBackgroundJobClient>()).As<ISmartTalkBackgroundJobClient>();
+            builder.RegisterInstance(Substitute.For<ISmartiesClient>()).AsImplementedInterfaces();
+            openaiWs.Register(builder);
+        });
+
+        openaiWs.SentMessages.ShouldNotBeEmpty();
+        var sessionUpdate = Encoding.UTF8.GetString(openaiWs.SentMessages.First());
+        // Empty #{customer_items} replaced with space " ", not empty string ""
+        sessionUpdate.ShouldContain("Items: End.");
+        sessionUpdate.ShouldNotContain("#{customer_items}");
+    }
 }

@@ -28,7 +28,7 @@ public partial class AiSpeechAssistantConnectService
 
         TransferHumanService(_ctx.HumanContactPhone, TimeSpan.FromSeconds(replySeconds));
 
-        return null;
+        return new RealtimeAiFunctionCallResult { Output = string.Empty };
     }
 
     private static (string Reply, int ReplySeconds) MatchTransferCallReply(string functionName)

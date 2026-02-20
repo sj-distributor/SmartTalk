@@ -91,9 +91,9 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
 
             var agent = await ResolveActiveAgentAsync(cancellationToken).ConfigureAwait(false);
 
-            await ForwardIfRequiredAsync(cancellationToken).ConfigureAwait(false);
-
             EnsureServiceAvailable(agent);
+
+            await ForwardIfRequiredAsync(cancellationToken).ConfigureAwait(false);
 
             var options = await BuildSessionConfigAsync(cancellationToken).ConfigureAwait(false);
 
@@ -132,9 +132,11 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
 
         if (string.IsNullOrEmpty(forwardNumber)) return;
 
-        Log.Information("[AiAssistant] Forwarding call, ForwardNumber: {ForwardNumber}, From: {From}, To: {To}", forwardNumber, _ctx.From, _ctx.To);
+        var targetNumber = !_ctx.IsInAiServiceHours && _ctx.IsEnableManualService ? _ctx.TransferCallNumber : forwardNumber;
 
-        await HandleForwardOnlyAsync(forwardNumber, cancellationToken).ConfigureAwait(false);
+        Log.Information("[AiAssistant] Forwarding call, ForwardNumber: {ForwardNumber}, TargetNumber: {TargetNumber}, From: {From}, To: {To}", forwardNumber, targetNumber, _ctx.From, _ctx.To);
+
+        await HandleForwardOnlyAsync(targetNumber, cancellationToken).ConfigureAwait(false);
 
         throw new AiAssistantCallForwardedException("Call forwarded");
     }

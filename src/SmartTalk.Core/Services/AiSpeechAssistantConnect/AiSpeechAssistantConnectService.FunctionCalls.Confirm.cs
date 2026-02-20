@@ -13,7 +13,7 @@ public partial class AiSpeechAssistantConnectService
         return new RealtimeAiFunctionCallResult
         {
             Output = "Please confirm the order content with the customer. If this is the first time confirming, repeat the order details. Once the customer confirms, do not repeat the details again. " +
-                     "If the order is confirmed, we will proceed with asking for the pickup time and will no longer repeat the order details."
+                     "Here is the current order: {context.OrderItemsJson}. If the order is confirmed, we will proceed with asking for the pickup time and will no longer repeat the order details."
         };
     }
 
