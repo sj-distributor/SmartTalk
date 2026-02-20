@@ -51,6 +51,8 @@ public class CompanyStoreDto
     
     public int? LastModifiedBy { get; set; }
     
+    public bool IsTaskEnabled { get; set; }
+    
     public DateTimeOffset? LastModifiedDate { get; set; }
 
     public int Count { get; set; } = 0;
