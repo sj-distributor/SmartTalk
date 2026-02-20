@@ -1363,7 +1363,7 @@ public partial class AiSpeechAssistantConnectFixture
 
         var sentMessages = openaiWs.SentMessages.Select(b => Encoding.UTF8.GetString(b)).ToList();
         sentMessages.Any(m => m.Contains("function_call_output")).ShouldBeFalse();
-        sentMessages.Any(m => m.Contains("response.create")).ShouldBeFalse();
+        sentMessages.Any(m => m.Contains("response.create")).ShouldBeTrue();
     }
 
     [Fact]

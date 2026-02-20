@@ -1,8 +1,10 @@
+using System.Linq.Expressions;
 using Autofac;
 using Mediator.Net;
 using Newtonsoft.Json;
 using NSubstitute;
 using Shouldly;
+using SmartTalk.Core.Constants;
 using SmartTalk.Core.Data;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.System;
@@ -415,5 +417,9 @@ public partial class AiSpeechAssistantConnectFixture
         mockJobClient.ReceivedWithAnyArgs(2).Enqueue<Mediator.Net.IMediator>(default, default);
         // No Schedule — immediate transfer uses default queue
         mockJobClient.DidNotReceiveWithAnyArgs().Schedule<Mediator.Net.IMediator>(default, default(TimeSpan), default);
+        // TransferHumanService Enqueue uses default queue, not "transfer" queue (V1 compat)
+        mockJobClient.DidNotReceive().Enqueue<Mediator.Net.IMediator>(
+            Arg.Any<Expression<Func<Mediator.Net.IMediator, Task>>>(),
+            HangfireConstants.InternalHostingTransfer);
     }
 }

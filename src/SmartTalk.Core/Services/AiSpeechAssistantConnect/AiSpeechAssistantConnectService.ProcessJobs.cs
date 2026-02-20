@@ -21,7 +21,7 @@ public partial class AiSpeechAssistantConnectService
                 x.SendAsync(new TransferHumanServiceCommand { CallSid = _ctx.CallSid, HumanPhone = humanPhone }, CancellationToken.None), delay.Value, HangfireConstants.InternalHostingTransfer);
         else
             _backgroundJobClient.Enqueue<IMediator>(x =>
-                x.SendAsync(new TransferHumanServiceCommand { CallSid = _ctx.CallSid, HumanPhone = humanPhone }, CancellationToken.None), HangfireConstants.InternalHostingTransfer);
+                x.SendAsync(new TransferHumanServiceCommand { CallSid = _ctx.CallSid, HumanPhone = humanPhone }, CancellationToken.None));
     }
 
     private void GenerateRecordFromCall(AiSpeechAssistantStreamContextDto streamContext)
