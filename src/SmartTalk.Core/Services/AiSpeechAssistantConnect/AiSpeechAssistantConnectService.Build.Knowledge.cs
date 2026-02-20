@@ -66,9 +66,10 @@ public partial class AiSpeechAssistantConnectService
         if (soldToIds.Count == 0) return;
 
         var caches = await _salesDataProvider.GetCustomerItemsCacheBySoldToIdsAsync(soldToIds, cancellationToken).ConfigureAwait(false);
-        var items = caches.Where(c => !string.IsNullOrEmpty(c.CacheValue)).Select(c => c.CacheValue.Trim()).Distinct().Take(50);
+        var customerItems = caches.Where(c => !string.IsNullOrEmpty(c.CacheValue)).Select(c => c.CacheValue.Trim()).Distinct().ToList();
 
-        _ctx.Prompt = _ctx.Prompt.Replace("#{customer_items}", string.Join(Environment.NewLine + Environment.NewLine, items));
+        _ctx.Prompt = _ctx.Prompt.Replace("#{customer_items}",
+            customerItems.Count > 0 ? string.Join(Environment.NewLine + Environment.NewLine, customerItems.Take(50)) : " ");
     }
 
     private async Task ResolveMenuItemsAsync(CancellationToken cancellationToken)

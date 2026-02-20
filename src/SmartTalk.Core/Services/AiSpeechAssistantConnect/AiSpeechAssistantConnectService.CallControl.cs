@@ -1,11 +1,7 @@
 using System.Net.WebSockets;
 using System.Text.Json;
-using Mediator.Net;
 using Serilog;
-using SmartTalk.Core.Constants;
-using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.WebSockets;
-using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistantConnect;
@@ -46,29 +42,17 @@ public partial class AiSpeechAssistantConnectService
         _ctx.CallSid = jsonDocument.RootElement.GetProperty("start").GetProperty("callSid").GetString();
         _ctx.StreamSid = jsonDocument.RootElement.GetProperty("start").GetProperty("streamSid").GetString();
 
-        Log.Information("[AiAssistant] Forward-only started, CallSid: {CallSid}, ForwardNumber: {ForwardNumber}",
-            _ctx.CallSid, forwardPhoneNumber);
+        Log.Information("[AiAssistant] Forward started, CallSid: {CallSid}, StreamSid: {StreamSid}", _ctx.CallSid, _ctx.StreamSid);
 
-        _backgroundJobClient.Enqueue<IMediator>(x => x.SendAsync(new RecordAiSpeechAssistantCallCommand
-        {
-            CallSid = _ctx.CallSid, Host = _ctx.Host
-        }, CancellationToken.None), HangfireConstants.InternalHostingRecordPhoneCall);
-
-        _backgroundJobClient.Enqueue<IMediator>(x => x.SendAsync(new TransferHumanServiceCommand
-        {
-            CallSid = _ctx.CallSid,
-            HumanPhone = forwardPhoneNumber
-        }, CancellationToken.None));
+        TriggerTwilioRecordingPhoneCall();
+        TransferHumanService(forwardPhoneNumber);
     }
 
     private void HandleForwardStop()
     {
-        _backgroundJobClient.Enqueue<IAiSpeechAssistantProcessJobService>(x =>
-            x.RecordAiSpeechAssistantCallAsync(new AiSpeechAssistantStreamContextDto
-            {
-                CallSid = _ctx.CallSid,
-                StreamSid = _ctx.StreamSid,
-                Host = _ctx.Host
-            }, _ctx.OrderRecordType, CancellationToken.None));
+        GenerateRecordFromCall(new AiSpeechAssistantStreamContextDto
+        {
+            CallSid = _ctx.CallSid, StreamSid = _ctx.StreamSid, Host = _ctx.Host, LastUserInfo = _ctx.LastUserInfo
+        });
     }
 }

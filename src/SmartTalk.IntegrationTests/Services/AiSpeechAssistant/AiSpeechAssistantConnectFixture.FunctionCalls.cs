@@ -1363,6 +1363,83 @@ public partial class AiSpeechAssistantConnectFixture
 
         var sentMessages = openaiWs.SentMessages.Select(b => Encoding.UTF8.GetString(b)).ToList();
         sentMessages.Any(m => m.Contains("function_call_output")).ShouldBeFalse();
-        sentMessages.Any(m => m.Contains("response.create")).ShouldBeFalse();
+        sentMessages.Any(m => m.Contains("response.create")).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task ShouldContainLiteralOrderItemsJsonReference_WhenConfirmOrderProcessed()
+    {
+        await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
+        {
+            var agent = new Agent { Name = "TestAgent", IsReceiveCall = true, Type = AgentType.Assistant };
+            await repository.InsertAsync(agent);
+
+            var assistant = new Core.Domain.AISpeechAssistant.AiSpeechAssistant
+            {
+                Name = "TestAssistant", AnsweringNumber = TestDidNumber, ModelProvider = RealtimeAiProvider.OpenAi,
+                ModelVoice = "alloy", IsDefault = true, IsDisplay = true
+            };
+            await repository.InsertAsync(assistant);
+            await unitOfWork.SaveChangesAsync();
+
+            await repository.InsertAsync(new AgentAssistant { AgentId = agent.Id, AssistantId = assistant.Id });
+            await repository.InsertAsync(new AiSpeechAssistantKnowledge
+            {
+                AssistantId = assistant.Id, Prompt = "You are a test assistant.", IsActive = true, Version = "1.0"
+            });
+            await repository.InsertAsync(new AiSpeechAssistantFunctionCall
+            {
+                AssistantId = assistant.Id, Name = "order",
+                Content = "{\"type\":\"function\",\"name\":\"order\"}",
+                Type = AiSpeechAssistantSessionConfigType.Tool,
+                ModelProvider = RealtimeAiProvider.OpenAi, IsActive = true
+            });
+        });
+
+        var twilioWs = new MockWebSocket();
+        twilioWs.EnqueueMessage(JsonConvert.SerializeObject(new
+        {
+            @event = "start",
+            start = new { callSid = "CA_ORDERTEXT_TEST", streamSid = "MZ_ORDERTEXT_TEST" }
+        }));
+        twilioWs.EnqueueMessage(JsonConvert.SerializeObject(new { @event = "stop" }));
+
+        var openaiWs = CreateProviderMock();
+        openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new { type = "session.updated" }));
+        openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new
+        {
+            type = "response.done",
+            response = new
+            {
+                output = new[]
+                {
+                    new
+                    {
+                        type = "function_call",
+                        name = "order",
+                        call_id = "call_ordertext_001",
+                        arguments = "{\"order_items\":[{\"name\":\"Kung Pao Chicken\",\"quantity\":1}]}"
+                    }
+                }
+            }
+        }));
+
+        var command = new ConnectAiSpeechAssistantCommand
+        {
+            From = TestCallerNumber, To = TestDidNumber, Host = TestHost, TwilioWebSocket = twilioWs
+        };
+
+        await Run<IMediator>(async mediator =>
+        {
+            await mediator.SendAsync(command);
+        }, builder =>
+        {
+            builder.RegisterInstance(Substitute.For<ISmartTalkBackgroundJobClient>()).As<ISmartTalkBackgroundJobClient>();
+            builder.RegisterInstance(Substitute.For<ISmartiesClient>()).AsImplementedInterfaces();
+            openaiWs.Register(builder);
+        });
+
+        var sentMessages = openaiWs.SentMessages.Select(b => Encoding.UTF8.GetString(b)).ToList();
+        sentMessages.Any(m => m.Contains("{context.OrderItemsJson}")).ShouldBeTrue();
     }
 }

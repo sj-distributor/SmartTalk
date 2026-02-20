@@ -10,6 +10,7 @@ public class OpenAiRealtimeAiWssClient : IRealtimeAiWssClient
 {
     private Task _receiveLoopTask;
     private ClientWebSocket _webSocket;
+    private readonly SemaphoreSlim _sendLock = new(1, 1);
 
     public Uri EndpointUri { get; private set; }
     public RealtimeAiProvider Provider => RealtimeAiProvider.OpenAi;
@@ -83,7 +84,7 @@ public class OpenAiRealtimeAiWssClient : IRealtimeAiWssClient
 
                 ms.Seek(0, SeekOrigin.Begin);
                 var message = Encoding.UTF8.GetString(ms.ToArray());
-                Log.Information("RealtimeClient: Message received from {EndpointUri}: {Message}", EndpointUri, message);
+                Log.Debug("RealtimeClient: Message received from {EndpointUri}: {Message}", EndpointUri, message);
                 await (MessageReceivedAsync?.Invoke(message) ?? Task.CompletedTask);
             }
         }
@@ -126,9 +127,18 @@ public class OpenAiRealtimeAiWssClient : IRealtimeAiWssClient
             await (ErrorOccurredAsync?.Invoke(ex) ?? Task.CompletedTask);
             throw ex;
         }
-        // Log.Verbose("RealtimeClient: Sending message to {EndpointUri}: {Message}", EndpointUri, message);
+
         var messageBytes = Encoding.UTF8.GetBytes(message);
-        await _webSocket.SendAsync(new ArraySegment<byte>(messageBytes), WebSocketMessageType.Text, true, cancellationToken);
+
+        await _sendLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await _webSocket.SendAsync(new ArraySegment<byte>(messageBytes), WebSocketMessageType.Text, true, cancellationToken);
+        }
+        finally
+        {
+            _sendLock.Release();
+        }
     }
 
     public async Task DisconnectAsync(WebSocketCloseStatus closeStatus, string statusDescription, CancellationToken cancellationToken)

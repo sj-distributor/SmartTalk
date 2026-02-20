@@ -35,6 +35,12 @@ public class RealtimeAiFunctionCallResult
     /// The function execution output to send back to the AI provider.
     /// </summary>
     public string Output { get; set; }
+
+    /// <summary>
+    /// When true, sends response.create even if Output is empty (no function_call_output sent).
+    /// Used for scenarios like transfer calls where the AI should speak without explicit output text.
+    /// </summary>
+    public bool ShouldTriggerResponse { get; set; }
 }
 
 public class ParsedRealtimeAiProviderEvent
