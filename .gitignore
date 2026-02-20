@@ -261,3 +261,4 @@ __pycache__/
 
 #swagger xml
 Barcode.Api.xml
+/src/.claude
