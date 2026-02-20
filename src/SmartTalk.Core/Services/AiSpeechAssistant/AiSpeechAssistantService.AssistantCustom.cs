@@ -982,7 +982,25 @@ public partial class AiSpeechAssistantService
         var copyFromRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync(new List<int> { copyFromKnowledge.Id }, null, cancellationToken).ConfigureAwait(false);
         var copyFromRelatedLookup = copyFromRelateds?.GroupBy(x => x.TargetKnowledgeId)
             .ToDictionary(g => g.Key, g => g.OrderBy(x => x.CreatedDate).ToList());
-        
+         
+        var duplicated = copyToRelateds
+            .Concat(copyFromRelateds ?? new List<AiSpeechAssistantKnowledgeCopyRelated>())
+            .Where(r =>
+                (r.SourceKnowledgeId == command.SourceKnowledgeId && command.TargetKnowledgeIds.Contains(r.TargetKnowledgeId))
+                || (r.TargetKnowledgeId == command.SourceKnowledgeId && command.TargetKnowledgeIds.Contains(r.SourceKnowledgeId))
+            ).ToList();
+
+        if (duplicated.Any())
+        {
+            var existedIds = duplicated
+                .Select(r => r.SourceKnowledgeId == command.SourceKnowledgeId
+                    ? r.TargetKnowledgeId
+                    : r.SourceKnowledgeId)
+                .Distinct();
+
+            throw new InvalidOperationException($"Knowledge copy relation already exists with Id(s): {string.Join(",", existedIds)}");
+        }
+
         foreach (var copyToKnowledge in copyToKnowledges)
         {
             var newCopyToKnowledge = await BuildNewCopyToKnowledgeAsync(copyToKnowledge, copyFromKnowledge, relatedLookup, copyFromRelatedLookup, cancellationToken).ConfigureAwait(false);
