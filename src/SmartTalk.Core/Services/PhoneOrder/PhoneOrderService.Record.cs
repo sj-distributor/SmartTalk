@@ -783,6 +783,12 @@ public partial class PhoneOrderService
     {
         if (assistantIds == null || assistantIds.Count == 0) return [];
 
+        static int CountOrderIds(string orderIdJson)
+        {
+            try { return JsonConvert.DeserializeObject<List<object>>(orderIdJson)?.Count ?? 0; }
+            catch { return 0; }
+        }
+
         var chinaZone = GetChinaTimeZone();
         var nowChina = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, chinaZone);
         var todayChina = new DateTime(nowChina.Year, nowChina.Month, nowChina.Day, 0, 0, 0, DateTimeKind.Unspecified);
@@ -808,11 +814,16 @@ public partial class PhoneOrderService
                     ? $"超过{daysWindow}天"
                     : CalculateDaysSinceLastCallText(latestRecord.CreatedDate, todayChina, chinaZone);
 
+                var aiOrderCount = groupRecords
+                    .Where(r => !string.IsNullOrEmpty(r.OrderId))
+                    .Sum(r => CountOrderIds(r.OrderId));
+
                 return new CompanyCallReportRow
                 {
                     CustomerId = string.IsNullOrWhiteSpace(assistantName) ? assistantId.ToString() : assistantName,
                     CustomerLanguage = assistantLanguage ?? string.Empty,
                     TotalCalls = groupRecords.Count,
+                    AiOrderCount = aiOrderCount,
                     ScenarioCounts = scenarioCounts,
                     DaysSinceLastCallText = daysSinceLastCallText
                 };
@@ -1023,6 +1034,8 @@ public partial class PhoneOrderService
             headers.Add($"{prefix}有效通話量（下单+转接+咨询）");
         }
 
+        headers.Add($"{prefix}AI下单数量");
+
         foreach (var scenario in scenarios)
         {
             headers.Add($"{prefix}{scenario.GetDescription()}");
@@ -1053,6 +1066,7 @@ public partial class PhoneOrderService
             {
                 var invalidCount = GetScenarioCount(row.ScenarioCounts, DialogueScenarios.InvalidCall);
                 ws.Cell(rowIndex + 2, colIndex++).Value = row.TotalCalls - invalidCount;
+                ws.Cell(rowIndex + 2, colIndex++).Value = row.AiOrderCount;
 
                 foreach (var scenario in scenarios)
                 {
@@ -1069,6 +1083,7 @@ public partial class PhoneOrderService
 
                 ws.Cell(rowIndex + 2, colIndex++).Value = row.TotalCalls;
                 ws.Cell(rowIndex + 2, colIndex++).Value = orderCount + transferCount + inquiryCount;
+                ws.Cell(rowIndex + 2, colIndex++).Value = row.AiOrderCount;
 
                 foreach (var scenario in scenarios)
                 {
@@ -1115,6 +1130,8 @@ public partial class PhoneOrderService
         public string CustomerLanguage { get; set; }
 
         public int TotalCalls { get; set; }
+
+        public int AiOrderCount { get; set; }
 
         public Dictionary<DialogueScenarios, int> ScenarioCounts { get; set; } = new();
 
