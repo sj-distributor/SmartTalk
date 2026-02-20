@@ -1,13 +1,12 @@
 using Serilog;
 using SmartTalk.Core.Constants;
-using SmartTalk.Messages.Constants;
 using SmartTalk.Messages.Dto.RealtimeAi;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistantConnect;
 
 public partial class AiSpeechAssistantConnectService
 {
-    private RealtimeAiFunctionCallResult ProcessTransferCall(string functionName, CancellationToken cancellationToken)
+    private RealtimeAiFunctionCallResult ProcessTransferCall(string functionName)
     {
         if (_ctx.IsTransfer) return null;
 
