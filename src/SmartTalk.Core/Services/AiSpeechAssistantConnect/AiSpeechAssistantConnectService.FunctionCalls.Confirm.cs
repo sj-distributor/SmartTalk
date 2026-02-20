@@ -30,8 +30,8 @@ public partial class AiSpeechAssistantConnectService
     private RealtimeAiFunctionCallResult ProcessConfirmPickupTime(RealtimeAiWssFunctionCallData functionCallData)
     {
         var parsed = JsonConvert.DeserializeObject<AiSpeechAssistantOrderDto>(functionCallData.ArgumentsJson);
-        if (_ctx.OrderItems != null)
-            _ctx.OrderItems.Comments = parsed?.Comments ?? string.Empty;
+        
+        if (_ctx.OrderItems != null) _ctx.OrderItems.Comments = parsed?.Comments ?? string.Empty;
 
         return new RealtimeAiFunctionCallResult
         {

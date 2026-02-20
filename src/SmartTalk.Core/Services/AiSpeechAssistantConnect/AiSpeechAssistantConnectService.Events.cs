@@ -1,11 +1,7 @@
 using Serilog;
-using Mediator.Net;
-using SmartTalk.Core.Constants;
 using SmartTalk.Core.Services.RealtimeAiV2;
-using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
-using SmartTalk.Messages.Commands.AiSpeechAssistant;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistantConnect;
 
@@ -26,20 +22,12 @@ public partial class AiSpeechAssistantConnectService
         _ctx.CallSid = callSid;
         _ctx.StreamSid = streamSid;
 
-        _backgroundJobClient.Enqueue<IMediator>(x => x.SendAsync(new RecordAiSpeechAssistantCallCommand
-        {
-            CallSid = _ctx.CallSid, Host = _ctx.Host
-        }, CancellationToken.None), HangfireConstants.InternalHostingRecordPhoneCall);
+        Log.Information("[AiAssistant] Call started, CallSid: {CallSid}, StreamSid: {StreamSid}", callSid, streamSid);
 
-        if (!_ctx.IsInAiServiceHours && _ctx.IsEnableManualService)
-        {
-            _backgroundJobClient.Enqueue<IMediator>(x => x.SendAsync(new TransferHumanServiceCommand
-            {
-                CallSid = _ctx.CallSid,
-                HumanPhone = _ctx.TransferCallNumber
-            }, CancellationToken.None));
-        }
+        TriggerTwilioRecordingPhoneCall();
 
+        if (!_ctx.IsInAiServiceHours && _ctx.IsEnableManualService) TransferHumanService(_ctx.TransferCallNumber);
+        
         return Task.CompletedTask;
     }
 
@@ -61,8 +49,7 @@ public partial class AiSpeechAssistantConnectService
             ConversationTranscription = transcriptions.Select(t => (t.Speaker, t.Text)).ToList()
         };
 
-        _backgroundJobClient.Enqueue<IAiSpeechAssistantProcessJobService>(x =>
-            x.RecordAiSpeechAssistantCallAsync(streamContext, _ctx.OrderRecordType, CancellationToken.None));
+        GenerateRecordFromCall(streamContext);
 
         return Task.CompletedTask;
     }

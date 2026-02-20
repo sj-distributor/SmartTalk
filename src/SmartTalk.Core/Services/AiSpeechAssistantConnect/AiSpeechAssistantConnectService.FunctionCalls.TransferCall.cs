@@ -1,7 +1,5 @@
-using Mediator.Net;
 using Serilog;
 using SmartTalk.Core.Constants;
-using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Constants;
 using SmartTalk.Messages.Dto.RealtimeAi;
 
@@ -16,6 +14,7 @@ public partial class AiSpeechAssistantConnectService
         if (string.IsNullOrEmpty(_ctx.HumanContactPhone))
         {
             Log.Information("[AiAssistant] Transfer unavailable, no human contact, CallSid: {CallSid}", _ctx.CallSid);
+            
             return new RealtimeAiFunctionCallResult
             {
                 Output = "Reply in the guest's language: I'm Sorry, there is no human service at the moment"
@@ -26,14 +25,9 @@ public partial class AiSpeechAssistantConnectService
 
         var (reply, replySeconds) = MatchTransferCallReply(functionName);
 
-        Log.Information("[AiAssistant] Transferring to human, Function: {Function}, Phone: {Phone}, CallSid: {CallSid}",
-            functionName, _ctx.HumanContactPhone, _ctx.CallSid);
+        Log.Information("[AiAssistant] Transferring to human, Function: {Function}, Phone: {Phone}, CallSid: {CallSid}", functionName, _ctx.HumanContactPhone, _ctx.CallSid);
 
-        _backgroundJobClient.Schedule<IMediator>(x => x.SendAsync(new TransferHumanServiceCommand
-        {
-            CallSid = _ctx.CallSid,
-            HumanPhone = _ctx.HumanContactPhone
-        }, cancellationToken), TimeSpan.FromSeconds(replySeconds), HangfireConstants.InternalHostingTransfer);
+        TransferHumanService(_ctx.HumanContactPhone, TimeSpan.FromSeconds(replySeconds));
 
         return null;
     }
