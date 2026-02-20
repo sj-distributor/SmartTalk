@@ -38,7 +38,7 @@ public partial class AiSpeechAssistantConnectService
                 or OpenAiToolConstants.HandleThirdPartyUnexpectedIssues
                 or OpenAiToolConstants.HandleThirdPartyPickupTimeChange
                 or OpenAiToolConstants.DriverDeliveryRelatedCommunication =>
-                ProcessTransferCall(functionCallData.FunctionName, cancellationToken),
+                ProcessTransferCall(functionCallData.FunctionName),
             _ => null
         };
     }
