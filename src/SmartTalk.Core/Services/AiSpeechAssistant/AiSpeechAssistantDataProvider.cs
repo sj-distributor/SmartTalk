@@ -142,8 +142,6 @@ public partial interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task<List<AiSpeechAssistantKnowledgeCopyRelated>> GetKnowledgeCopyRelatedBySourceKnowledgeIdAsync(List<int> sourceKnowledgeIds, bool? isSyncUpdate, CancellationToken cancellationToken = default);
     
     Task<List<AiSpeechAssistantKnowledgeCopyRelated>> GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync(List<int> targetKnowledgeIds, bool? isSyncUpdate, CancellationToken cancellationToken = default);
-
-    Task<List<AiSpeechAssistantKnowledgeCopyRelated>> GetKnowledgeCopyRelatedByKnowledgeIdsAsync(int sourceKnowledgeId, List<int> targetKnowledgeIds, CancellationToken cancellationToken = default);
     
     Task<List<KnowledgeCopyRelatedInfoDto>> GetAiSpeechAssistantKnowledgesByCompanyIdAsync(int companyId,
         int? pageIndex = null, int? pageSize = null, int? agentId = null, int? storeId = null, string keyWord = null, CancellationToken cancellationToken = default);
@@ -792,18 +790,6 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
         {
             query = query.Where(x => x.IsSyncUpdate == isSyncUpdate.Value);
         }
-
-        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
-    }
-    
-    public async Task<List<AiSpeechAssistantKnowledgeCopyRelated>> GetKnowledgeCopyRelatedByKnowledgeIdsAsync(int sourceKnowledgeId, List<int> targetKnowledgeIds, CancellationToken cancellationToken = default)
-    {
-        if (targetKnowledgeIds == null || targetKnowledgeIds.Count == 0)
-            return new List<AiSpeechAssistantKnowledgeCopyRelated>();
-
-        var query = _repository.Query<AiSpeechAssistantKnowledgeCopyRelated>()
-            .Where(r =>
-                (r.SourceKnowledgeId == sourceKnowledgeId && targetKnowledgeIds.Contains(r.TargetKnowledgeId)) || (r.TargetKnowledgeId == sourceKnowledgeId && targetKnowledgeIds.Contains(r.SourceKnowledgeId)));
 
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
