@@ -70,6 +70,10 @@ public class InactivityTimerManager : IInactivityTimerManager
             await entry.OnTimeout().ConfigureAwait(false);
         }
         catch (OperationCanceledException) { }
+        catch (ObjectDisposedException)
+        {
+            Log.Warning("[InactivityTimer] Callback skipped, scope already disposed, SessionId: {SessionId}", sessionId);
+        }
         catch (Exception ex)
         {
             Log.Error(ex, "[InactivityTimer] Callback error, SessionId: {SessionId}", sessionId);

@@ -123,7 +123,13 @@ public partial class RealtimeAiService
             {
                 Log.Information("[RealtimeAi] Idle follow-up triggered, SessionId: {SessionId}, TimeoutSeconds: {TimeoutSeconds}", _ctx.SessionId, idleFollowUp.TimeoutSeconds);
 
-                if (!string.IsNullOrEmpty(idleFollowUp.FollowUpMessage)) await SendTextToProviderAsync(idleFollowUp.FollowUpMessage);
+                if (!string.IsNullOrEmpty(idleFollowUp.FollowUpMessage))
+                {
+                    if (IsProviderSessionActive)
+                        await SendTextToProviderAsync(idleFollowUp.FollowUpMessage);
+                    else
+                        Log.Warning("[RealtimeAi] Idle follow-up message skipped, session no longer active, SessionId: {SessionId}", _ctx.SessionId);
+                }
 
                 if (idleFollowUp.OnTimeoutAsync != null) await idleFollowUp.OnTimeoutAsync();
             });
