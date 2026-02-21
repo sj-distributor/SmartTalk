@@ -999,7 +999,7 @@ public partial class AiSpeechAssistantService
                     : r.SourceKnowledgeId)
                 .Distinct();
 
-            throw new InvalidOperationException($"Knowledge copy relation already exists with Id(s): {string.Join(",", existedIds)}");
+            throw new InvalidOperationException($"Knowledge copy relation already exists.");
         }
 
         foreach (var copyToKnowledge in copyToKnowledges)
