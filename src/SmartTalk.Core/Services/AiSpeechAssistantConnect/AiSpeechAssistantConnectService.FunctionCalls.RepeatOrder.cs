@@ -1,3 +1,4 @@
+using Serilog;
 using SmartTalk.Core.Services.RealtimeAiV2;
 using SmartTalk.Core.Utils;
 using SmartTalk.Messages.Dto.RealtimeAi;
@@ -49,12 +50,19 @@ public partial class AiSpeechAssistantConnectService
         Enum.TryParse(_ctx.Assistant.ModelLanguage, true, out AiSpeechAssistantMainLanguage language);
         language = language == default ? AiSpeechAssistantMainLanguage.En : language;
 
-        var stream = AudioHelper.GetRandomAudioStream(voice, language);
+        try
+        {
+            var stream = AudioHelper.GetRandomAudioStream(voice, language);
 
-        using var holdOnStream = new MemoryStream();
-        await stream.CopyToAsync(holdOnStream).ConfigureAwait(false);
-        var holdOn = Convert.ToBase64String(holdOnStream.ToArray());
+            using var holdOnStream = new MemoryStream();
+            await stream.CopyToAsync(holdOnStream).ConfigureAwait(false);
+            var holdOn = Convert.ToBase64String(holdOnStream.ToArray());
 
-        await actions.SendAudioToClientAsync(holdOn).ConfigureAwait(false);
+            await actions.SendAudioToClientAsync(holdOn).ConfigureAwait(false);
+        }
+        catch (InvalidOperationException ex)
+        {
+            Log.Warning(ex, "[AiAssistant] Hold-on audio not found, Voice: {Voice}, Language: {Language}, skipping", voice, language);
+        }
     }
 }

@@ -1442,4 +1442,105 @@ public partial class AiSpeechAssistantConnectFixture
         var sentMessages = openaiWs.SentMessages.Select(b => Encoding.UTF8.GetString(b)).ToList();
         sentMessages.Any(m => m.Contains("{context.OrderItemsJson}")).ShouldBeTrue();
     }
+
+    [Fact]
+    public async Task ShouldProcessRepeatOrder_WhenModelVoiceIsNotAlloy()
+    {
+        // Even when ModelVoice is a non-Alloy voice (e.g. Google "Puck"),
+        // hold-on audio always uses Alloy, so the repeat order flow completes normally.
+        await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
+        {
+            var agent = new Agent { Name = "TestAgent", IsReceiveCall = true, Type = AgentType.Assistant };
+            await repository.InsertAsync(agent);
+
+            var assistant = new Core.Domain.AISpeechAssistant.AiSpeechAssistant
+            {
+                Name = "TestAssistant", AnsweringNumber = TestDidNumber, ModelProvider = RealtimeAiProvider.OpenAi,
+                ModelVoice = "Puck", ModelLanguage = "En", IsDefault = true, IsDisplay = true,
+                CustomRepeatOrderPrompt = "Please repeat the order."
+            };
+            await repository.InsertAsync(assistant);
+            await unitOfWork.SaveChangesAsync();
+
+            await repository.InsertAsync(new AgentAssistant { AgentId = agent.Id, AssistantId = assistant.Id });
+            await repository.InsertAsync(new AiSpeechAssistantKnowledge
+            {
+                AssistantId = assistant.Id, Prompt = "You are a test assistant.", IsActive = true, Version = "1.0"
+            });
+            await repository.InsertAsync(new AiSpeechAssistantFunctionCall
+            {
+                AssistantId = assistant.Id, Name = "repeat_order",
+                Content = "{\"type\":\"function\",\"name\":\"repeat_order\"}",
+                Type = AiSpeechAssistantSessionConfigType.Tool,
+                ModelProvider = RealtimeAiProvider.OpenAi, IsActive = true
+            });
+        });
+
+        var twilioWs = new MockWebSocket();
+        twilioWs.EnqueueMessage(JsonConvert.SerializeObject(new
+        {
+            @event = "start",
+            start = new { callSid = "CA_REPEAT_NORES", streamSid = "MZ_REPEAT_NORES" }
+        }));
+        twilioWs.EnqueueMessage(JsonConvert.SerializeObject(new
+        {
+            @event = "media",
+            media = new { payload = Convert.ToBase64String(new byte[160]) }
+        }));
+        twilioWs.EnqueueMessage(JsonConvert.SerializeObject(new { @event = "stop" }));
+
+        var openaiWs = CreateProviderMock();
+        openaiWs.EnqueueSendTriggeredMessage(JsonConvert.SerializeObject(new { type = "session.updated" }));
+        openaiWs.EnqueueSendTriggeredMessage(JsonConvert.SerializeObject(new
+        {
+            type = "response.done",
+            response = new
+            {
+                output = new[]
+                {
+                    new
+                    {
+                        type = "function_call",
+                        name = "repeat_order",
+                        call_id = "call_repeat_nores",
+                        arguments = "{}"
+                    }
+                }
+            }
+        }));
+
+        var mockOpenaiClient = Substitute.For<IOpenaiClient>();
+        mockOpenaiClient.GenerateAudioChatCompletionAsync(
+            Arg.Any<BinaryData>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new byte[] { 1, 2, 3 });
+
+        var mockFfmpegService = Substitute.For<IFfmpegService>();
+        mockFfmpegService.ConvertWavToULawAsync(Arg.Any<byte[]>(), Arg.Any<CancellationToken>())
+            .Returns(new byte[] { 4, 5, 6 });
+
+        var command = new ConnectAiSpeechAssistantCommand
+        {
+            From = TestCallerNumber, To = TestDidNumber, Host = TestHost, TwilioWebSocket = twilioWs
+        };
+
+        await Run<IMediator>(async mediator =>
+        {
+            await mediator.SendAsync(command);
+        }, builder =>
+        {
+            builder.RegisterInstance(Substitute.For<ISmartTalkBackgroundJobClient>()).As<ISmartTalkBackgroundJobClient>();
+            builder.RegisterInstance(Substitute.For<ISmartiesClient>()).AsImplementedInterfaces();
+            builder.RegisterInstance(mockOpenaiClient).As<IOpenaiClient>();
+            builder.RegisterInstance(mockFfmpegService).As<IFfmpegService>();
+            openaiWs.Register(builder);
+        });
+
+        // The repeat order audio should still be generated and sent to the client
+        var twilioMessages = twilioWs.SentMessages.Select(b => Encoding.UTF8.GetString(b)).ToList();
+        twilioMessages.Any(m => m.Contains("\"event\":\"media\"")).ShouldBeTrue();
+
+        // OpenAI client should still be called to generate repeat order audio
+        await mockOpenaiClient.Received(1).GenerateAudioChatCompletionAsync(
+            Arg.Any<BinaryData>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
 }
