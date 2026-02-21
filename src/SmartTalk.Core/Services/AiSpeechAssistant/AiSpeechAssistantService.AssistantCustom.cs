@@ -78,7 +78,7 @@ public partial class AiSpeechAssistantService
         Log.Information( "Previous knowledge loaded. PrevKnowledgeId={PrevKnowledgeId}", prevKnowledge?.Id);
         
         var latestKnowledge = _mapper.Map<AiSpeechAssistantKnowledge>(command);
-        List<AiSpeechAssistantKnowledgeCopyRelated> newRelations = new();
+        List<AiSpeechAssistantKnowledgeCopyRelatedDto> newRelations = new();
         
         var (asTargetKnowledgePrevRelateds, selectedTargetRelateds
                 , asSourceKnowledgePrevRelateds, selectedSourceRelateds) =
@@ -102,7 +102,7 @@ public partial class AiSpeechAssistantService
         var latestKnowledgeDto = _mapper.Map<AiSpeechAssistantKnowledgeDto>(latestKnowledge);
 
         prevKnowledgeDto.KnowledgeCopyRelateds = _mapper.Map<List<AiSpeechAssistantKnowledgeCopyRelatedDto>>(asTargetKnowledgePrevRelateds.Concat(asSourceKnowledgePrevRelateds ?? new List<AiSpeechAssistantKnowledgeCopyRelated>()).ToList());
-        latestKnowledgeDto.KnowledgeCopyRelateds = command.RelatedKnowledges.Concat(_mapper.Map<List<AiSpeechAssistantKnowledgeCopyRelatedDto>>(newRelations)).ToList();
+        latestKnowledgeDto.KnowledgeCopyRelateds = _mapper.Map<List<AiSpeechAssistantKnowledgeCopyRelatedDto>>(asSourceKnowledgePrevRelateds).Concat(newRelations).ToList();
 
         if (!string.IsNullOrEmpty(command.Premise))
         {
@@ -153,11 +153,11 @@ public partial class AiSpeechAssistantService
         return (asTargetKnowledgePrevRelateds, selectedTargetRelateds, asSourceKnowledgePrevRelateds, selectedSourceRelateds);
     }
     
-    private async Task<List<AiSpeechAssistantKnowledgeCopyRelated>> HandleKnowledgeCopyRelatedUpdates(List<AiSpeechAssistantKnowledgeCopyRelated> asTargetKnowledgePrevRelateds,
+    private async Task<List<AiSpeechAssistantKnowledgeCopyRelatedDto>> HandleKnowledgeCopyRelatedUpdates(List<AiSpeechAssistantKnowledgeCopyRelated> asTargetKnowledgePrevRelateds,
         List<AiSpeechAssistantKnowledgeCopyRelated> selectedRelateds, int latestKnowledgeId, int prevKnowledgeId,
         Dictionary<int, AiSpeechAssistantKnowledgeCopyRelatedDto> relatedDtoMap, CancellationToken cancellationToken)
     {
-        if (!asTargetKnowledgePrevRelateds.Any()) { return new List<AiSpeechAssistantKnowledgeCopyRelated>(); }
+        if (!asTargetKnowledgePrevRelateds.Any()) { return new List<AiSpeechAssistantKnowledgeCopyRelatedDto>(); }
         
         Log.Information(
             "Updating knowledge copy relateds. KnowledgeId={KnowledgeId}, AllRelatedsIds={AllRelatedsIds}, SelectedRelatedsIds={SelectedRelatedsIds}",
@@ -174,7 +174,16 @@ public partial class AiSpeechAssistantService
             .ForEach(r =>
                 { r.CopyKnowledgePoints = relatedDtoMap[r.Id].CopyKnowledgePoints; });
 
-        return await _aiSpeechAssistantDataProvider.UpdateKnowledgeCopyRelatedAsync(asTargetKnowledgePrevRelateds, true, cancellationToken).ConfigureAwait(false);
+        var updatedEntities = await _aiSpeechAssistantDataProvider.UpdateKnowledgeCopyRelatedAsync(asTargetKnowledgePrevRelateds, true, cancellationToken);
+
+        return updatedEntities
+            .Select(e => _mapper.Map<AiSpeechAssistantKnowledgeCopyRelatedDto>(e))
+            .Select(dto =>
+            {
+                relatedDtoMap.TryGetValue(dto.Id, out var original);
+                dto.RelatedFrom = original?.RelatedFrom;
+                return dto;
+            }).ToList();
     }
     
     public async Task<SwitchAiSpeechAssistantKnowledgeVersionResponse> SwitchAiSpeechAssistantKnowledgeVersionAsync(SwitchAiSpeechAssistantKnowledgeVersionCommand command, CancellationToken cancellationToken)
@@ -995,7 +1004,7 @@ public partial class AiSpeechAssistantService
                     : r.SourceKnowledgeId)
                 .Distinct();
 
-            throw new InvalidOperationException($"Knowledge copy relation already exists with Id(s): {string.Join(",", existedIds)}");
+            throw new InvalidOperationException($"Knowledge copy relation already exists.");
         }
 
         foreach (var copyToKnowledge in copyToKnowledges)
