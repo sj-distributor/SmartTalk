@@ -88,6 +88,8 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
         var callResource = await CallResource.FetchAsync(pathSid: context.CallSid).ConfigureAwait(false);
         
+        Log.Information("[AiAssistant] RecordCall callInfo, CallSid: {CallSid}, From: {From}, To: {To}, StartTime: {StartTime}, FallbackNow: {FallbackNow}", context.CallSid, callResource.From, callResource.To, callResource.StartTime, DateTimeOffset.Now);
+        
         var existRecord = await _phoneOrderDataProvider.GetPhoneOrderRecordBySessionIdAsync(context.CallSid, cancellationToken).ConfigureAwait(false);
 
         if (existRecord != null ) return;
