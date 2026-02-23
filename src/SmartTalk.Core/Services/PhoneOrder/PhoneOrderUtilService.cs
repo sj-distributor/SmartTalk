@@ -317,6 +317,11 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
                     
         await _phoneOrderDataProvider.AddPhoneOrderReservationInformationAsync(information, cancellationToken: cancellationToken).ConfigureAwait(false);
 
+        await GenerateMerchPrinterOrderAsync(store, record.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task GenerateMerchPrinterOrderAsync(CompanyStore store, int? recordId = null, int? orderId = null, CancellationToken cancellationToken = default)
+    {
         if (!store.IsManualReview)
         {
             var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(storeId: store.Id, isEnabled: true, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
@@ -325,8 +330,9 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
                         
             var order = new MerchPrinterOrder
             {
-                RecordId = record.Id,
+                RecordId = recordId,
                 StoreId = store.Id,
+                OrderId = orderId,
                 PrinterMac = merchPrinter?.PrinterMac,
                 PrintDate = DateTimeOffset.Now,
                 PrintFormat = PrintFormat.Draft
@@ -390,6 +396,22 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
         };
 
         await _phoneOrderDataProvider.AddWaitingProcessingEventAsync(waitingEvent, true, cancellationToken).ConfigureAwait(false);
+
+        if (waitingEvent.TaskType == TaskType.Order)
+        {
+            var posOrder = await _posDataProvider.GetPosOrderByIdAsync(recordId: record.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            if (posOrder == null)
+            {
+                Log.Information("The order not exist: recordId: {RecordId}", record.Id);
+                return;
+            }
+            
+            await GenerateMerchPrinterOrderAsync(store, orderId: posOrder.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+
+        if (waitingEvent.TaskType == TaskType.InformationNotification)
+            await GenerateMerchPrinterOrderAsync(store, recordId: record.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
     
     private async Task<List<PhoneOrderOrderItem>> GetSimilarRestaurantByRecordAsync(PhoneOrderRecord record, PhoneOrderDetailDto foods, CancellationToken cancellationToken)
