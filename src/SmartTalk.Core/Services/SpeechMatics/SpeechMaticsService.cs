@@ -457,14 +457,13 @@ public class SpeechMaticsService : ISpeechMaticsService
         foreach (var storeOrder in extractedOrders)
         { 
             var soldToId = await ResolveSoldToIdAsync(storeOrder, aiSpeechAssistant, soldToIds, cancellationToken).ConfigureAwait(false);
-            
-            await RefineOrderByAiAsync(storeOrder, soldToId, aiSpeechAssistant, historyItems, record.Id, cancellationToken).ConfigureAwait(false);
 
             if (storeOrder.IsDeleteWholeOrder && !storeOrder.Orders.Any())
             {
                 await CreateDeleteOrderTaskAsync(record, storeOrder, soldToId, soldToIds, pacificZone, pacificNow, cancellationToken).ConfigureAwait(false);
                 continue;
             }
+            await RefineOrderByAiAsync(storeOrder, soldToId, aiSpeechAssistant, historyItems, record.Id, cancellationToken).ConfigureAwait(false);
 
             var draftOrder = CreateDraftOrder(storeOrder, soldToId, aiSpeechAssistant, pacificZone, pacificNow, storeOrder.IsUndoCancel);
 
