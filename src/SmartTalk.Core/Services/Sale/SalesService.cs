@@ -53,7 +53,7 @@ public class SalesService : ISalesService
             var orderItems = orderResponse?.Data ?? new List<SalesOrderHistoryDto>();
 
             var levelCodes = askItems.Where(x => !string.IsNullOrEmpty(x.LevelCode)).Select(x => x.LevelCode)
-                .Concat(orderItems.Where(x => !string.IsNullOrEmpty(x.LevelCode)).Select(x => x.LevelCode)).Distinct()
+                .Concat(orderItems.Where(x => !string.IsNullOrEmpty(x.Level5)).Select(x => x.Level5)).Distinct()
                 .ToList();
 
             var materials = askItems.Where(x => !string.IsNullOrEmpty(x.Material)).Select(x => x.Material)
@@ -105,7 +105,7 @@ public class SalesService : ISalesService
             }
 
             allItems.AddRange(askItems.Select(x => FormatItem(x.MaterialDesc, x.LevelCode, x.Material)));
-            allItems.AddRange(orderItems.Select(x => FormatItem(x.MaterialDescription, x.LevelCode, x.MaterialNumber)));
+            allItems.AddRange(orderItems.Select(x => FormatItem(x.MaterialDescription, x.Level5, x.MaterialNumber)));
         }
 
         return string.Join(Environment.NewLine, allItems.Distinct().Take(150));
