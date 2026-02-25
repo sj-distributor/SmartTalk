@@ -442,11 +442,12 @@ public partial class PhoneOrderProcessJobService
                 "【訂單意圖判斷規則（非常重要）】\n" +
                 "1. 如果客戶明確表示取消整張訂單、全部不要、整單取消、今天的單都不要，請在該店鋪標記 IsDeleteWholeOrder=true，orders 可以為空陣列。\n" +
                 "2. 如果客戶先說取消整單，後面又表示還是要、算了繼續下單、剛剛的取消不算，請標記 IsUndoCancel=true。\n" +
-                "3. 如果客戶只取消單個物料（例如：某某不要了、某某取消、某某 cut 掉），請保留該物料，並在該物料上標記 markForDelete=true，有提到數量的話 quantity 需要用負數表示\n" +
-                "4. 單個物料取消不等於取消整單，IsDeleteWholeOrder = false。\n" +
-                "5. 如果得到的字段restored是true，就為true，是false或者沒有得到這個字段，則為false\n" +
-                "6. 如果订单中包含明确的数量描述，即使同时出现“需要确认数量 / 数量不确定”等提示，也应先按当前报告中的数量提取。\n" +
-                "7. 如果是減少某個物料的數量，請在該物料的 quantity 使用負數表示，並要使用 markForDelete = true。\n\n" +
+                "3. 如果客戶只取消單個物料（例如：某某不要了、某某取消、某某 cut 掉），請保留該物料，並在該物料上標記 markForDelete=true，有提到數量的話 quantity 需要用負數表示,\n" +
+                "4. 如果客戶只是减少物料数量（例如：某某减掉一箱），請保留該物料，只需要在 quantity 用負數表示减少的物料数量,其他都不需要标记\n" +
+                "5. 單個物料取消不等於取消整單，IsDeleteWholeOrder = false。\n" +
+                "6. 如果得到的字段restored是true，就為true，是false或者沒有得到這個字段，則為false\n" +
+                "7. 如果订单中包含明确的数量描述，即使同时出现“需要确认数量 / 数量不确定”等提示，也应先按当前报告中的数量提取。\n" +
+                "8. 如果是減少某個物料的數量，請在該物料的 quantity 使用負數表示，並要使用 markForDelete = true。\n\n" +
 
                 "請嚴格傳回一個 JSON 對象，頂層字段為 \"stores\"，每个店铺对象包含：" +
                 "StoreName（可空字符串）, StoreNumber（可空字符串）, DeliveryDate（可空字符串）, " +
