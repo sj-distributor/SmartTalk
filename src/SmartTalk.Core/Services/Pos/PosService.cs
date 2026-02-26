@@ -444,10 +444,25 @@ public partial class PosService : IPosService
         }).ToList();
         
         Log.Information("Structured Stores With Agents: {@StructuredStores}", structuredStores);
+
+        (int, int) waitingProcessingEventCount;
         
+        if (request.AgentIds is not { Count: > 0 })
+        {
+            var agentIds = storesAndAgents.Select(x => x.AgentId).Distinct().ToList();
+            
+            waitingProcessingEventCount = await _phoneOrderDataProvider.GetAllOrUnreadWaitingProcessingEventsAsync(agentIds, request.TaskTypes, cancellationToken).ConfigureAwait(false);
+        }
+        else
+            waitingProcessingEventCount = await _phoneOrderDataProvider.GetAllOrUnreadWaitingProcessingEventsAsync(request.AgentIds, request.TaskTypes, cancellationToken).ConfigureAwait(false);
+
         return new GetSimpleStructuredStoresResponse
         {
-            Data = new GetSimpleStructuredStoresResponseData { StructuredStores = structuredStores }
+            Data = new GetSimpleStructuredStoresResponseData
+            {
+                StructuredStores = structuredStores,
+                WaitingProcessingEventCount = waitingProcessingEventCount.Item2
+            }
         };
     }
     
