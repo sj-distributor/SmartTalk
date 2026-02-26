@@ -27,7 +27,7 @@ using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Services.Printer;
 using SmartTalk.Core.Services.Sale;
 using SmartTalk.Core.Settings.OpenAi;
-using SmartTalk.Core.Settings.Twilio;
+using SmartTalk.Core.Services.Twilio;
 using SmartTalk.Messages.Dto.SpeechMatics;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Commands.PhoneOrder;
@@ -40,8 +40,6 @@ using SmartTalk.Messages.Dto.Pos;
 using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Enums.Printer;
 using SmartTalk.Messages.Enums.STT;
-using Twilio;
-using Twilio.Rest.Api.V2010.Account;
 using Exception = System.Exception;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 
@@ -58,7 +56,7 @@ public class SpeechMaticsService : ISpeechMaticsService
     private readonly IPosService _posService;
     private readonly ISalesClient _salesClient;
     private readonly OpenAiSettings _openAiSettings;
-    private readonly TwilioSettings _twilioSettings;
+    private readonly ITwilioService _twilioService;
     private readonly ISmartiesClient _smartiesClient;
     private readonly IPosUtilService _posUtilService;
     private readonly IPosDataProvider _posDataProvider;
@@ -76,7 +74,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         IPosService posService,
         ISalesClient salesClient,
         OpenAiSettings openAiSettings,
-        TwilioSettings twilioSettings,
+        ITwilioService twilioService,
         IPosUtilService posUtilService,
         ISmartiesClient smartiesClient,
         IPosDataProvider posDataProvider,
@@ -93,7 +91,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         _posService = posService;
         _salesClient = salesClient;
         _openAiSettings = openAiSettings;
-        _twilioSettings = twilioSettings;
+        _twilioService = twilioService;
         _smartiesClient = smartiesClient;
         _posUtilService = posUtilService;
         _posDataProvider = posDataProvider;
@@ -156,15 +154,13 @@ public class SpeechMaticsService : ISpeechMaticsService
         var callFrom = string.Empty;
         var callTo = string.Empty;
         
-        TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
-
         try
         {
             await RetryHelper.RetryAsync(async () =>
             {
-                var call = await CallResource.FetchAsync(record.SessionId);
-                callFrom = call?.From;
-                callTo = call?.To;
+                var callInfo = await _twilioService.FetchCallAsync(record.SessionId);
+                callFrom = callInfo?.From;
+                callTo = callInfo?.To;
                 Log.Information("Fetched incoming phone number from Twilio: {callFrom}", callFrom);
             }, maxRetryCount: 3, delaySeconds: 3, cancellationToken);
         }

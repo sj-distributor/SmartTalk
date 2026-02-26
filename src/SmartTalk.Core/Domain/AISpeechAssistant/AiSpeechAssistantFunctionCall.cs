@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
+using SmartTalk.Messages.Enums.RealtimeAi;
 
 namespace SmartTalk.Core.Domain.AISpeechAssistant;
 
@@ -25,7 +26,7 @@ public class AiSpeechAssistantFunctionCall : IEntity, IHasCreatedFields
     public AiSpeechAssistantSessionConfigType Type { get; set; }
     
     [Column("model_provider")]
-    public AiSpeechAssistantProvider ModelProvider { get; set; }
+    public RealtimeAiProvider ModelProvider { get; set; }
 
     [Column("is_active")]
     public bool IsActive { get; set; } = true;

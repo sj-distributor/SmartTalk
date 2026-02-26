@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
+using SmartTalk.Messages.Enums.RealtimeAi;
 
 namespace SmartTalk.Core.Domain.AISpeechAssistant;
 
@@ -34,7 +35,7 @@ public class AiSpeechAssistant : IEntity<int>, IAgent, IHasCreatedFields
     public string ModelLanguage { get; set; }
     
     [Column("model_provider")]
-    public AiSpeechAssistantProvider ModelProvider { get; set; }
+    public RealtimeAiProvider ModelProvider { get; set; }
     
     [Column("model_voice")]
     public string ModelVoice { get; set; }

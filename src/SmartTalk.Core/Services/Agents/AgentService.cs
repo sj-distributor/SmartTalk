@@ -19,6 +19,7 @@ using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.Account;
 using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
+using SmartTalk.Messages.Enums.RealtimeAi;
 using SmartTalk.Messages.Requests.Agent;
 
 namespace SmartTalk.Core.Services.Agents;
@@ -407,10 +408,10 @@ public class AgentService : IAgentService
 
     private async Task HandleAiSpeechAssistantConfigsAsync(Agent agent, List<Domain.AISpeechAssistant.AiSpeechAssistant> assistants, CancellationToken cancellationToken)
     {
-        var specificAssistants = assistants.Where(x => x.ModelProvider == AiSpeechAssistantProvider.OpenAi).ToList();
+        var specificAssistants = assistants.Where(x => x.ModelProvider == RealtimeAiProvider.OpenAi).ToList();
         
         var configs = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallByAssistantIdsAsync(
-            assistants.Select(x => x.Id).ToList(), AiSpeechAssistantProvider.OpenAi, cancellationToken: cancellationToken).ConfigureAwait(false);
+            assistants.Select(x => x.Id).ToList(), RealtimeAiProvider.OpenAi, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         var turnDetections = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.TurnDirection).ToList();
         var transferCallTools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool && x.Name == "transfer_call").ToList();
@@ -444,7 +445,7 @@ public class AgentService : IAgentService
                 Name = "transfer_call",
                 Content = JsonConvert.SerializeObject(content),
                 Type = AiSpeechAssistantSessionConfigType.Tool,
-                ModelProvider = AiSpeechAssistantProvider.OpenAi,
+                ModelProvider = RealtimeAiProvider.OpenAi,
                 IsActive = agent.IsTransferHuman
             }).ToList();
             
@@ -487,7 +488,7 @@ public class AgentService : IAgentService
                 Name = "turn_detection",
                 Content = JsonConvert.SerializeObject(content),
                 Type = AiSpeechAssistantSessionConfigType.TurnDirection,
-                ModelProvider = AiSpeechAssistantProvider.OpenAi,
+                ModelProvider = RealtimeAiProvider.OpenAi,
                 IsActive = true
             }).ToList();
                 

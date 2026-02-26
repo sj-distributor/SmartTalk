@@ -2,6 +2,7 @@ using System.Net.WebSockets;
 using System.Text.Json.Serialization;
 using Newtonsoft.Json;
 using Serilog;
+using SmartTalk.Core.Services.RealtimeAi.Services;
 using SmartTalk.Core.Services.RealtimeAi.wss;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
@@ -19,7 +20,7 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
     private string _greetings;
     public string CurrentSessionId { get; }
     private CancellationTokenSource _sessionCts; // 用于控制当前会话的生命周期 (For controlling the lifecycle of the current session)
-    private Domain.AISpeechAssistant.AiSpeechAssistant _currentAssistantProfile; // 保存当前会话的助手配置 (Store current session's assistant profile)
+    private RealtimeSessionOptions _currentOptions; // 保存当前会话的配置 (Store current session options)
     
     public event Func<RealtimeAiWssEventType, object, Task> SessionStatusChangedAsync;
     public event Func<RealtimeAiWssAudioData, Task> AiAudioOutputReadyAsync;
@@ -45,14 +46,13 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
         _realtimeAiClient.ErrorOccurredAsync += OnClientErrorOccurredAsync;
     }
 
-    public async Task StartSessionAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistantProfile,
-        string initialUserPrompt, RealtimeAiAudioCodec inputFormat, RealtimeAiAudioCodec outputFormat, RealtimeAiServerRegion region, CancellationToken cancellationToken)
+    public async Task StartSessionAsync(RealtimeSessionOptions options, CancellationToken cancellationToken)
     {
-        // ... (启动逻辑同前) ...
-        // ... (Startup logic same as before) ...
-        if (assistantProfile == null) throw new ArgumentNullException(nameof(assistantProfile));
-        if (string.IsNullOrEmpty(assistantProfile.ModelUrl))
-            throw new ArgumentException("Assistant profile must have a ModelUrl specified.", nameof(assistantProfile));
+        if (options?.ConnectionProfile == null) throw new ArgumentNullException(nameof(options), "ConnectionProfile is required");
+        var modelConfig = options.ModelConfig ?? throw new ArgumentNullException(nameof(options.ModelConfig), "ModelConfig is required");
+        
+        if (string.IsNullOrEmpty(modelConfig.ServiceUrl))
+            throw new ArgumentException("ModelConfig must have a ServiceUrl specified.", nameof(options));
 
         if (_sessionCts != null && !_sessionCts.IsCancellationRequested)
         {
@@ -60,13 +60,13 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
             await OnErrorOccurredAsync(new RealtimeAiErrorData { Code = "SessionInProgress", Message = "会话已在进行中" }); // Session already in progress
             return;
         }
-        _currentAssistantProfile = assistantProfile; // 保存配置 (Save profile)
-        var aiProviderServiceUri = new Uri(_currentAssistantProfile.ModelUrl);
-        var connectionHeaders = _aiAdapter.GetHeaders(region);
+        _currentOptions = options; // 保存配置 (Save options)
+        var aiProviderServiceUri = new Uri(modelConfig.ServiceUrl);
+        var connectionHeaders = _aiAdapter.GetHeaders(options.Region);
 
         _sessionId = Guid.NewGuid().ToString("N"); // 生成一个新的会话 ID (Generate a new session ID)
         _sessionCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        Log.Information("AiConversationEngine: 开始新会话 ID: {SessionId} for Provider: {Provider}, URL: {Url}", _sessionId, _currentAssistantProfile.ModelProvider, aiProviderServiceUri); // AiConversationEngine: Starting new session ID: {SessionId}
+        Log.Information("AiConversationEngine: 开始新会话 ID: {SessionId} for Provider: {Provider}, URL: {Url}", _sessionId, modelConfig.Provider, aiProviderServiceUri); // AiConversationEngine: Starting new session ID: {SessionId}
         await OnSessionStatusChangedAsync(RealtimeAiWssEventType.SessionInitializing, _sessionId);
 
         try
@@ -76,21 +76,20 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
                 Log.Information("AiConversationEngine: RealtimeAiClient 未连接或端点不同，尝试连接...", _realtimeAiClient.CurrentState, _realtimeAiClient.EndpointUri); // AiConversationEngine: RealtimeAiClient not connected or endpoint different, attempting to connect...
                 await _realtimeAiClient.ConnectAsync(aiProviderServiceUri, connectionHeaders, _sessionCts.Token);
             }
-            
+
             if (_realtimeAiClient.CurrentState != WebSocketState.Open)
             {
                 throw new InvalidOperationException("无法连接到底层 Realtime AI Client。"); // Cannot connect to underlying Realtime AI Client.
             }
 
-            var initialPayload = await _aiAdapter.GetInitialSessionPayloadAsync(_currentAssistantProfile, 
-                new RealtimeAiEngineContext { InitialPrompt = initialUserPrompt, InputFormat = inputFormat, OutputFormat = outputFormat }, _sessionId, _sessionCts.Token);
+            var initialPayload = await _aiAdapter.GetInitialSessionPayloadAsync(options, _sessionId, _sessionCts.Token);
             var initialMessageJson = JsonConvert.SerializeObject(initialPayload, new JsonSerializerSettings() { NullValueHandling = NullValueHandling.Ignore });
-            
+
             await _realtimeAiClient.SendMessageAsync(initialMessageJson, _sessionCts.Token);
 
-            if (!string.IsNullOrEmpty(assistantProfile.Knowledge?.Greetings))
-                _greetings = assistantProfile.Knowledge?.Greetings;
-            
+            if (!string.IsNullOrEmpty(modelConfig.Greetings))
+                _greetings = modelConfig.Greetings;
+
             Log.Information("AiConversationEngine: 已发送初始会话消息。会话 ID: {SessionId}", _sessionId); // AiConversationEngine: Initial session message sent. Session ID: {SessionId}
         }
         catch (OperationCanceledException) when (_sessionCts.IsCancellationRequested)
@@ -152,7 +151,7 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
                          Log.Information("AiConversationEngine: 发送初始会话问候消息。会话 ID: {SessionId}", _sessionId);
 
                          await SendTextAsync($"Greet the user with: {_greetings}");
-                         if (_currentAssistantProfile.ModelProvider == AiSpeechAssistantProvider.OpenAi)
+                         if (_currentOptions.ModelConfig.Provider == RealtimeAiProvider.OpenAi)
                              await _realtimeAiClient.SendMessageAsync(JsonSerializer.Serialize(new { type = "response.create" }), _sessionCts.Token);
                      }
                      await OnSessionStatusChangedAsync(RealtimeAiWssEventType.SessionInitialized, parsedEvent.Data ?? _sessionId);
@@ -317,7 +316,7 @@ public class RealtimeAiConversationEngine : IRealtimeAiConversationEngine
         }
         await OnSessionStatusChangedAsync(RealtimeAiWssEventType.SessionUpdateFailed, $"会话已结束/失败: {reason}"); // 使用 SessionUpdateFailed 或自定义一个 SessionEnded (Session ended/failed:)
         Log.Information("AiConversationEngine: 会话 (ID: {SessionId}) 清理完成。原因: {Reason}", _sessionId, reason); // AiConversationEngine: Session (ID: {SessionId}) cleanup complete. Reason: {Reason}
-        _currentAssistantProfile = null; // 清理当前助手配置 (Clear current assistant profile)
+        _currentOptions = null; // 清理当前会话配置 (Clear current session options)
     }
     
     private async Task OnSessionStatusChangedAsync(RealtimeAiWssEventType type, object data) => await (SessionStatusChangedAsync?.Invoke(type, data) ?? Task.CompletedTask);
