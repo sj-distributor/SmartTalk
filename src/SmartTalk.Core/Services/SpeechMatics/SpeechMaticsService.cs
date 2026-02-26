@@ -49,6 +49,8 @@ namespace SmartTalk.Core.Services.SpeechMatics;
 public interface ISpeechMaticsService : IScopedDependency
 {
     Task HandleTranscriptionCallbackAsync(HandleTranscriptionCallbackCommand command, CancellationToken cancellationToken);
+
+    Task<DialogueScenarioResultDto> IdentifyDialogueScenariosAsync(string query, CancellationToken cancellationToken);
 }
 
 public class SpeechMaticsService : ISpeechMaticsService
@@ -197,6 +199,10 @@ public class SpeechMaticsService : ISpeechMaticsService
         var scenarioInformation = await IdentifyDialogueScenariosAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
         record.Scenario = scenarioInformation.Category;
         record.Remark = scenarioInformation.Remark;
+
+        await _phoneOrderUtilService.GenerateWaitingProcessingEventAsync(record, scenarioInformation.IsIncludeTodo, agent.Id, cancellationToken).ConfigureAwait(false);
+        
+        await _posUtilService.GenerateAiDraftAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
 
         var detection = await _translationClient.DetectLanguageAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
 
@@ -716,7 +722,7 @@ public class SpeechMaticsService : ISpeechMaticsService
         return (result.IsHumanAnswered, result.IsCustomerFriendly);
     }
 
-    private async Task<DialogueScenarioResultDto> IdentifyDialogueScenariosAsync(string query, CancellationToken cancellationToken)
+    public async Task<DialogueScenarioResultDto> IdentifyDialogueScenariosAsync(string query, CancellationToken cancellationToken)
     {
         var completionResult = await _smartiesClient.PerformQueryAsync(
             new AskGptRequest
@@ -761,9 +767,10 @@ public class SpeechMaticsService : ISpeechMaticsService
                             "### 输出规则（禁止输出任何额外文本，仅返回JSON）：\n" +
                             "必须返回包含以下2个字段的JSON对象，格式如下：\n" +
                             "{\n  \"category\": \"取值范围：Reservation、Order、Inquiry、ThirdPartyOrderNotification、ComplaintFeedback、InformationNotification、TransferToHuman、SalesCall、InvalidCall、TransferVoicemail、Other\",\n " +
-                            " \"remark\": \"仅当category为'Other'时填写简短关键词（如‘咨询加盟’），其余类别留空\"\n}" +
-                            "当一个对话中有多个场景出现时，需要严格遵循以下的识别优先级：" +
-                            "*1.Order > 2.Reservation/InformationNotification > 3.Inquiry > 4.ComplaintFeedback > 5.TransferToHuman > 6.TransferVoicemail > 7.ThirdPartyOrderNotification > 8.SalesCall > 9.InvalidCall > 10.Other*"
+                            " \"remark\": \"仅当category为'Other'时填写简短关键词（如‘咨询加盟’），其余类别留空\"\n" +
+                            " \"IsIncludeTodo\": \"默认为false; 当报告中列出todo，或者待办事项时为ture，否则为false\"\n}" +
+                            "当一个对话中有多个场景出现时，需要遵循以下的识别优先级：" +
+                            "*Order > Reservation/InformationNotification > Inquiry > ComplaintFeedback > TransferToHuman > TransferVoicemail > ThirdPartyOrderNotification > SalesCall > InvalidCall > Other*"
                         )
                     },
                     new()

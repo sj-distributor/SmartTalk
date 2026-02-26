@@ -103,9 +103,9 @@ public partial class AiSpeechAssistantService
         var prevKnowledgeDto = _mapper.Map<AiSpeechAssistantKnowledgeDto>(prevKnowledge);
         var knowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(latestKnowledge);
 
-        prevKnowledgeDto.KnowledgeCopyRelateds = _mapper.Map<List<AiSpeechAssistantKnowledgeCopyRelatedDto>>(allPrevRelateds);
-        knowledge.KnowledgeCopyRelateds = _mapper.Map<List<AiSpeechAssistantKnowledgeCopyRelatedDto>>(selectedRelateds);
-        
+        prevKnowledgeDto.KnowledgeCopyRelateds = _mapper.Map<List<AiSpeechAssistantKnowledgeCopyRelatedDto>>(allPrevRelateds ?? new List<AiSpeechAssistantKnowledgeCopyRelated>());
+        knowledge.KnowledgeCopyRelateds = _mapper.Map<List<AiSpeechAssistantKnowledgeCopyRelatedDto>>(selectedRelateds ?? new List<AiSpeechAssistantKnowledgeCopyRelated>());
+
         if (!string.IsNullOrEmpty(command.Premise))
         {
             var premise = new AiSpeechAssistantPremise
@@ -119,6 +119,9 @@ public partial class AiSpeechAssistantService
             knowledge.Premise = _mapper.Map<AiSpeechAssistantPremiseDto>(premise);;
         }
         else await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantPremiseByAssistantIdAsync(command.AssistantId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Knowledge added. KnowledgeId={KnowledgeId}, RelatedCount={RelatedCount}, ShouldSyncLastedKnowledge={ShouldSyncLastedKnowledge}",
+            knowledge.Id, knowledge.KnowledgeCopyRelateds.Count, !command.RelatedKnowledges.Any());
         
         return new AiSpeechAssistantKnowledgeAddedEvent
         { 

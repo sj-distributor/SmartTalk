@@ -36,6 +36,8 @@ public class UserAccountDto
     public string LastModifiedByName { get; set; }
 
     public DateTimeOffset? LastModifiedDate { get; set; }
+
+    public bool IsTurnOnNotification { get; set; }
     
     public List<RoleDto> Roles { get; set; } = new();
 
