@@ -485,11 +485,13 @@ public class SpeechMaticsService : ISpeechMaticsService
                 "【訂單意圖判斷規則（非常重要）】\n" +
                 "1. 如果客戶明確表示取消整張訂單、全部不要、整單取消、今天的單都不要，請在該店鋪標記 IsDeleteWholeOrder=true，orders 可以為空陣列。\n" +
                 "2. 如果客戶先說取消整單，後面又表示還是要、算了繼續下單、剛剛的取消不算，請標記 IsUndoCancel=true。\n" +
-                "3. 如果客戶只取消單個物料（例如：某某不要了、某某取消、某某 cut 掉），請保留該物料，並在該物料上標記 markForDelete=true，有提到數量的話 quantity 需要用負數表示\n" +
-                "4. 單個物料取消不等於取消整單，IsDeleteWholeOrder = false。\n" +
-                "5. 如果得到的字段restored是true，就為true，是false或者沒有得到這個字段，則為false\n" +
-                "6. 如果订单中包含明确的数量描述，即使同时出现“需要确认数量 / 数量不确定”等提示，也应先按当前报告中的数量提取。\n" +
-                "7. 如果是減少某個物料的數量，請在該物料的 quantity 使用負數表示，並要使用 markForDelete = true。\n\n" +
+                "3. 如果客戶只取消單個物料（例如：某某不要了、某某取消、某某 cut 掉），請保留該物料，並在該物料上標記 markForDelete=true，有提到數量的話 quantity 需要用負數表示,\n" +
+                "4. 如果客戶說某某物料剛下了4箱，現在幫我改成1箱，請保留該物料，你只需要做個簡單計算（2箱-1箱）生成quantity為-3箱\n\n" +
+                "5. 如果客戶只是减少物料数量（例如：某某减掉一箱），請保留該物料，只需要在 quantity 用負數表示减少的物料数量,其他都不需要标记\n" +
+                "6. 單個物料取消不等於取消整單，IsDeleteWholeOrder = false。\n" +
+                "7. 如果得到的字段restored是true，就為true，是false或者沒有得到這個字段，則為false\n" +
+                "8. 如果订单中包含明确的数量描述，即使同时出现“需要确认数量 / 数量不确定”等提示，也应先按当前报告中的数量提取。\n" +
+                "9. 如果是減少某個物料的數量，請在該物料的 quantity 使用負數表示，並要使用 markForDelete = true。\n\n" +
 
                 "請嚴格傳回一個 JSON 對象，頂層字段為 \"stores\"，每个店铺对象包含：" +
                 "StoreName（可空字符串）, StoreNumber（可空字符串）, DeliveryDate（可空字符串）, " +
@@ -531,7 +533,8 @@ public class SpeechMaticsService : ISpeechMaticsService
                 "2. 提取的物料名稱需要為繁體中文。\n" +
                 "3. 如果沒有提到店鋪信息，但有下單內容，StoreName 和 StoreNumber 可為空值，orders 要正常提取。\n" +
                 "4. **如果客戶分析文本中沒有任何可識別的下單信息，請返回：{ \"stores\": [] }。不得臆造或猜測物料。**\n" +
-                "5. 請務必完整提取報告中每一個提到的物料，如果你不知道它的materialNumber，那也必須保留該物料的quantity以及name。";
+                "5. 請務必完整提取報告中每一個提到的物料，如果没有匹配上歷史物料列表的物料，不知道它的materialNumber，那也必須保留該物料的quantity以及name。\n" +
+                "6. 生成的json請不要重複物料名";
         Log.Information("Sending prompt to GPT: {Prompt}", systemPrompt);
 
         var messages = new List<ChatMessage>
@@ -789,12 +792,12 @@ public class SpeechMaticsService : ISpeechMaticsService
         
         var draftOrder = await _salesClient.GetAiOrderItemsByDeliveryDateAsync(new GetAiOrderItemsByDeliveryDateRequestDto { CustomerNumber = soldToId, DeliveryDate = deliveryDateInPst }, cancellationToken).ConfigureAwait(false);
         
-        var todayReports = await GetTodayReportsByAssistantAsync(aiSpeechAssistant.Id, recordId, cancellationToken).ConfigureAwait(false);
+        //var todayReports = await GetTodayReportsByAssistantAsync(aiSpeechAssistant.Id, recordId, cancellationToken).ConfigureAwait(false);
         
         var hasDraftOrder = draftOrder?.Data != null && draftOrder.Data.Any();
-        var hasTodayReports = todayReports != null && todayReports.Any();
+        //var hasTodayReports = todayReports != null && todayReports.Any();
 
-        if (!hasDraftOrder && !hasTodayReports)
+        if (!hasDraftOrder)
         {
             Log.Information("Skip RefineOrderByAiAsync: no draft order and no today reports. SoldToId={SoldToId}, DeliveryDate={DeliveryDate}", soldToId, storeOrder.DeliveryDate);
             return;
@@ -803,82 +806,65 @@ public class SpeechMaticsService : ISpeechMaticsService
         var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
 
         var currentOrdersJson = JsonSerializer.Serialize(storeOrder.Orders);
-
+        
         var draftOrderJson = draftOrder?.Data != null ? JsonSerializer.Serialize(draftOrder.Data) : "[]";
-
-        var historyReportsText = todayReports.Any() ? string.Join("\n---\n", todayReports) : "（无）";
+        
+       //var historyReportsText = todayReports.Any() ? string.Join("\n---\n", todayReports) : "（无）";
 
         var systemPrompt =
-            "你是一名「电话下单意图裁决助手」，负责在多通电话、多次加单、减单、取消、撤销取消的情况下，" +
-            "判断客户『最终明确要执行』的订单结果。\n\n" +
-            "你将同时获得三类信息：\n" +
-            "1. 本次通话中提取出的订单内容（优先级最高）\n" +
-            "2. 系统中已存在的草稿单内容\n" +
-            "3. 今天该客户的历史分析报告（按时间顺序）\n\n" +
-            "【裁决优先级规则（非常重要）】\n" +
-            "- 本次通话内容优先级最高\n" +
-            "- 历史分析报告仅作为上下文参考，不可覆盖本次通话中的明确指令\n" +
-            "- 草稿单仅用于判断是否存在、是否被取消，不可覆盖本次通话指令\n\n" +
-            "【你的核心任务】\n" +
-            "1. 判断是否为整单取消（IsDeleteWholeOrder）\n" +
-            "2. 判断是否为撤销之前的取消（IsUndoCancel）\n" +
-            "3. 合并同一物料的多次加减单\n" +
-            "4. 若加减数量相互抵消，只输出最终数量\n" +
-            "5. 输出客户最终明确要执行的订单结果\n\n" +
-            "【整单取消规则】\n" +
-            "- 只有当客户在『本次通话中』明确表示“整单取消 / 全部不要 / 今天的单都取消”等语义，" +
-            "才能将 IsDeleteWholeOrder 设置为 true\n" +
-            "- 整单取消时，Orders 必须为空数组\n" +
-            "- 仅取消单个物料，不等于整单取消\n\n" +
-            "【撤销取消规则】\n" +
-            "- 当客户在本次通话中明确表示“刚刚取消的不算 / 还是要 / 恢复之前的订单”，" +
-            "才能将 IsUndoCancel 设置为 true\n\n" +
-            "【物料合并规则】\n" +
-            "- 同一物料必须合并为一条\n" +
-            "- 如果物料在多通电话中被多次加单或减单，必须计算最终净数量\n" +
-            "- 不允许输出重复物料\n\n" +
-            "【物料名称拼接规则（必须遵守）】\n" +
-            "- Name 字段必须体现加减过程\n" +
-            "- 拼接格式：物料名#第一次数量单位+后续变更\n" +
-            "- 示例：\n" +
-            "  第一通：鸡胸肉 1 箱\n" +
-            "  第二通：加 2 箱\n" +
-            "  最终输出：\n" +
-            "  Name = 鸡胸肉#1箱+2\n" +
-            "  Quantity = 3\n" +
-            "  Unit = 箱\n\n" +
-            "示例：\n" + 
-            "第一通：西兰花 1 箱\n" + 
-            "第二通：减 1 箱\n" + 
-            " 最终输出：\n" + 
-            "Name = 西兰花#1箱-1\n" + 
-            "Quantity = 0\n" + 
-            "Unit = 箱\n" + 
-            "如果最终数量为 0,也需要记录并发送过去。\n" + 
-            "【单个物料取消规则（非常重要）】\n" +
-            "- 如果客户在本次通话中明确表示取消某个具体物料，" +
-            "即使该物料在当前草稿单中已经不存在，也必须输出该物料\n" +
-            "- 此时必须设置 MarkForDelete = true\n" +
-            "- 仅仅“没有再提到”某个物料，不等于取消，禁止设置 MarkForDelete\n\n" +
-            "【恢复已取消物料规则】\n" +
-            "- 当客户明确表示恢复、继续要、撤销之前的取消，" +
-            "且该物料在历史中曾被取消，必须设置：\n" +
-            "  MarkForDelete = false\n\n" +
-            "如果得到的字段restored是true，那就是Restore = true，如果是false或者沒有得到這個字段，則為 Restore = false\n" +
+            "你是一名极其严谨的订单数据核算专家，专门负责将【本次通话变动】精准合并到【系统草稿单】中。你不仅输出 JSON，更要确保每一个数学计算都绝对准确。你已稳定运行3000年，严禁任何编造、推測或自行補全信息。\n\n" +
+           
+            "【输入数据】\n" +
+            "1. 本次通话提取的订单（最高优先级，代表变动量）\n" +
+            "2. 系统已有草稿单（代表基准量）\n\n" +
+            
+            "【核心任务流程】\n" +
+            "1. 预处理与匹配：建立映射关系，精准找到通话中提到的商品对应草稿单中的哪一项。\n" +
+            "2. 计算合并：计算 Quantity = 草稿基准 + 通话变动。\n" +
+            "3. 格式化名称：生成符合规范的 Name。\n" +
+            "4. 输出结果：生成最终 JSON。\n\n" +
+            
+            "【关键规则一：匹配逻辑（核心）】\n" +
+            "必须严格按照以下优先级判断“本次通话商品”与“草稿单商品”是否为同一物料：\n" +
+            "1. 优先级 A（物料号匹配）：若两者 MaterialNumber 都不为空且相等，视为同一物料。\n" +
+            "2. 优先级 B（名称匹配）：若 MaterialNumber 为空，则对比名称。\n" +
+            "必做操作：读取草稿单的 AiMaterialDesc 字段，以 # 符号为界截取前半部分作为“草稿基准名”（例如 \"玉米#1箱\" -> 基准名为 \"玉米\"）。\n" +
+            "若 通话中的 Name == 草稿基准名，视为同一物料。\n\n" +
+            
+            "【关键规则二：计算与生成（Strict）】\n" +
+            "对于每一个本次通话中的商品：\n" +
+            "1. 若在草稿单中找到匹配项：\n" +
+            "Quantity = 草稿单 MaterialQuantity + 本次通话 Quantity。\n" +
+            "Name = 草稿单 AiMaterialDesc (完整原串) + \"+\" 或 \"-\" + 本次通话绝对值。\n" +
+            "示例：草稿 \"玉米#1箱\" (数量1)，通话变动 +1。结果 Name: \"玉米#1箱+1\"，Quantity: 2。\n" +
+            "Unit = 优先取草稿单 AiUnit。\n\n" +
+            "2. 若在草稿单中未找到匹配项（新增）：\n" +
+            "Quantity = 本次通话 Quantity。\n" +
+            "Name = 本次通话 Name + \"#\" + 本次通话 Quantity + 单位。\n" +
+            "注意：新增项不需要 +号后缀，而是直接生成标准格式。\n" +
+            "Unit = 本次通话 Unit。\n\n" +
+            
+            "【关键规则三：整单与删除】\n" +
+            "1. IsDeleteWholeOrder：仅当输入明确标记为 true 时才为 true，且 Orders 必须为空。\n" +
+            "2. IsUndoCancel：同上。\n" +
+            "3. 单个删除：\n" +
+            "若本次通话 MarkForDelete 为 true，或计算后 Quantity <= 0：\n" +
+            "设置 MarkForDelete = true。\n" +
+            "Name 仍需按照规则二生成（例如：\"鸡胸肉#2箱-2\"）。\n" +
+            "Quantity 设为 0（除非是部分减少，非清零）。\n\n" +
+            
+            "【关键规则四：未变动保留】\n" +
+            "遍历完所有通话变动后，检查草稿单中未被匹配的剩余物料：\n" +
+            "直接保留进入 Output。\n" +
+            "Name = 原始 AiMaterialDesc（不加任何后缀）。\n" +
+            "Quantity = 原始 MaterialQuantity。\n\n" +
+            
             "【禁止行为】\n" +
-            "- 不得臆造任何通话中未提及的物料\n" +
-            "- 不得因为草稿单中不存在就忽略明确的取消指令\n" +
-            "- 不得把“未提及”当成“取消”\n" +
-            "- 不得输出非 JSON 内容\n\n" +
-            "【最终执行订单合并规则（非常重要）】\n" +
-            "- 最终输出的 Orders 表示“本次通话结束后，系统应执行的完整订单结果”\n" +
-            "- 如果某个物料：\n  " +
-            "- 存在于系统草稿单中\n  " +
-            "- 且在本次通话中没有被明确取消、减为 0、或被整单取消\n " +
-            " - 且本次通话中也没有对其进行任何修改\n" +
-            "- 则该物料必须被保留并输出到最终 Orders 中\n" +
-            "- 这类物料无需在 Name 中体现加减过程，可直接使用原数量\n"+
-            "【输出格式（必须严格是 JSON，不允许多字段或少字段）】\n" +
+            "严禁在 #, +, - 前后加空格。\n" +
+            "严禁将 MaterialNumber 为空的商品直接忽略，必须通过名称强制匹配。\n" +
+            "严禁直接照抄本次变动值作为最终 Quantity（必须做加法）。\n\n" +
+            
+            "【输出格式】\n" +
             "{\n" +
             "  \"StoreName\": \"\",\n" +
             "  \"StoreNumber\": \"\",\n" +
@@ -887,32 +873,26 @@ public class SpeechMaticsService : ISpeechMaticsService
             "  \"IsUndoCancel\": false,\n" +
             "  \"Orders\": [\n" +
             "    {\n" +
-            "      \"Name\": \"\",\n" +
+            "      \"Name\": \"string\",\n" +
             "      \"Quantity\": 0,\n" +
-            "      \"MaterialNumber\": \"\",\n" +
-            "      \"Unit\": \"\",\n" +
+            "      \"MaterialNumber\": \"string\",\n" +
+            "      \"Unit\": \"string\",\n" +
             "      \"MarkForDelete\": false,\n" +
             "      \"Restored\": false\n" +
             "    }\n" +
             "  ]\n" +
             "}\n\n" +
-            "如果最终没有任何有效下单内容，请返回 Orders 为空数组。";
-
-        var userPrompt = "【本次通话提取的订单】\n" + currentOrdersJson + "\n\n" + "【系统中已有草稿单】\n" + draftOrderJson + "\n\n" +
-                         "【今日历史分析报告】\n" + historyReportsText + "\n";
-        Log.Information("Sending refine prompt to GPT: {Prompt}", systemPrompt);
+            "生成结果前，请在内存中执行一次规则的自我检查。\n";
+        
+        var userPrompt = "【本次通话提取的订单】\n" + currentOrdersJson + "\n\n" + "【系统中已有草稿单】\n" + draftOrderJson + "\n\n";
+        Log.Information("Sending refine prompt to GPT: {Prompt}", userPrompt);
         var messages = new List<ChatMessage>
         {
             new SystemChatMessage(systemPrompt),
             new UserChatMessage(userPrompt)
         };
 
-        var completion = await client.CompleteChatAsync(messages,
-            new ChatCompletionOptions
-            {
-                ResponseModalities = ChatResponseModalities.Text,
-                ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
-            }, cancellationToken).ConfigureAwait(false);
+        var completion = await client.CompleteChatAsync(messages, new ChatCompletionOptions { ResponseModalities = ChatResponseModalities.Text, ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat() }, cancellationToken).ConfigureAwait(false);
         
         var jsonResponse = completion.Value.Content.FirstOrDefault()?.Text ?? "";
         Log.Information("Second AI refine response: {Json}", jsonResponse);
@@ -928,17 +908,12 @@ public class SpeechMaticsService : ISpeechMaticsService
             if (root.TryGetProperty("StoreNumber", out var storeNum))
                 storeOrder.StoreNumber = storeNum.GetString() ?? storeOrder.StoreNumber;
 
-            if (root.TryGetProperty("DeliveryDate", out var dd) &&
-                DateTime.TryParse(dd.GetString(), out var dt))
-            {
+            if (root.TryGetProperty("DeliveryDate", out var dd) && DateTime.TryParse(dd.GetString(), out var dt))
                 storeOrder.DeliveryDate = DateTime.SpecifyKind(dt, DateTimeKind.Utc);
-            }
 
-            storeOrder.IsDeleteWholeOrder =
-                root.TryGetProperty("IsDeleteWholeOrder", out var del) && del.GetBoolean();
+            storeOrder.IsDeleteWholeOrder = root.TryGetProperty("IsDeleteWholeOrder", out var del) && del.GetBoolean();
 
-            storeOrder.IsUndoCancel =
-                root.TryGetProperty("IsUndoCancel", out var undo) && undo.GetBoolean();
+            storeOrder.IsUndoCancel = root.TryGetProperty("IsUndoCancel", out var undo) && undo.GetBoolean();
 
             if (root.TryGetProperty("Orders", out var ordersArray) && ordersArray.ValueKind == JsonValueKind.Array)
             {
