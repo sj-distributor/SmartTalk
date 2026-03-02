@@ -98,4 +98,14 @@ public class SecurityController : ControllerBase
 
         return Ok(response);
     }
+    
+    [Route("permissions/by-level"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPermissionsByPermissionLevelResponse))]
+    public async Task<IActionResult> GetPermissionsByPermissionLevelAsync([FromQuery] GetPermissionsByPermissionLevelRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetPermissionsByPermissionLevelRequest, GetPermissionsByPermissionLevelResponse>(request)
+            .ConfigureAwait(false);
+
+        return Ok(response);
+    }
 }
