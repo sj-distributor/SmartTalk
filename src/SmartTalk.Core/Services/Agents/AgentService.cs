@@ -10,6 +10,7 @@ using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Account;
 using SmartTalk.Core.Services.Identity;
 using SmartTalk.Core.Services.AiSpeechAssistant;
+using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Services.Restaurants;
 using SmartTalk.Messages.Commands.Agent;
@@ -18,6 +19,7 @@ using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.Account;
 using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
+using SmartTalk.Messages.Enums.RealtimeAi;
 using SmartTalk.Messages.Requests.Agent;
 
 namespace SmartTalk.Core.Services.Agents;
@@ -47,9 +49,10 @@ public class AgentService : IAgentService
     private readonly IAgentDataProvider _agentDataProvider;
     private readonly IAccountDataProvider _accountDataProvider;
     private readonly IRestaurantDataProvider _restaurantDataProvider;
+    private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
     
-    public AgentService(IMapper mapper, ICurrentUser currentUser, IPosDataProvider posDataProvider, IAgentDataProvider agentDataProvider, IRestaurantDataProvider restaurantDataProvider, IAccountDataProvider accountDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
+    public AgentService(IMapper mapper, ICurrentUser currentUser, IPosDataProvider posDataProvider, IAgentDataProvider agentDataProvider, IRestaurantDataProvider restaurantDataProvider, IAccountDataProvider accountDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient)
     {
         _mapper = mapper;
         _currentUser = currentUser;
@@ -58,6 +61,7 @@ public class AgentService : IAgentService
         _accountDataProvider = accountDataProvider;
         _restaurantDataProvider = restaurantDataProvider;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
+        _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
     }
 
     public async Task<GetAgentsResponse> GetAgentsAsync(GetAgentsRequest request, CancellationToken cancellationToken)
@@ -65,7 +69,7 @@ public class AgentService : IAgentService
         var agentTypes = request.AgentType.HasValue
             ? [request.AgentType.Value] : Enum.GetValues(typeof(AgentType)).Cast<AgentType>().ToList();
 
-        var currentUser = await _accountDataProvider.GetUserAccountByUserIdAsync(_currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
+        var currentUser = await _accountDataProvider.GetUserAccountByUserIdAsync(_currentUser.Id.Value, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         List<AgentPreviewDto> agentInfos;
         
@@ -120,7 +124,8 @@ public class AgentService : IAgentService
             Voice = command.Voice,
             WaitInterval = command.WaitInterval,
             IsTransferHuman = command.IsTransferHuman,
-            TransferCallNumber = command.TransferCallNumber
+            TransferCallNumber = command.TransferCallNumber,
+            ServiceHours = command.ServiceHours
         };
         
         await _agentDataProvider.AddAgentAsync(agent, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -174,6 +179,12 @@ public class AgentService : IAgentService
         
         await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantsAsync(assistants, cancellationToken: cancellationToken).ConfigureAwait(false);
             
+        var knowledges = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantActiveKnowledgesAsync(
+            assistants.Select(x=>x.Id).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        foreach (var knowledge in knowledges)
+        { _smartTalkBackgroundJobClient.Enqueue<IAiSpeechAssistantService>(x => x.SyncCopiedKnowledgesIfRequiredAsync(knowledge.Id, true,  false, CancellationToken.None)); }
+        
         var defaultAssistant = assistants.Where(x => x.IsDefault).FirstOrDefault();
 
         if (defaultAssistant is not { AnsweringNumberId: not null }) return new DeleteAgentResponse { Data = _mapper.Map<AgentDto>(agent) };
@@ -229,6 +240,7 @@ public class AgentService : IAgentService
             await task.ConfigureAwait(false);
             
             var agentList = (List<AgentPreviewDto>)((dynamic)task).Result;
+            
             result.AddRange(agentList);
         }
 
@@ -396,10 +408,10 @@ public class AgentService : IAgentService
 
     private async Task HandleAiSpeechAssistantConfigsAsync(Agent agent, List<Domain.AISpeechAssistant.AiSpeechAssistant> assistants, CancellationToken cancellationToken)
     {
-        var specificAssistants = assistants.Where(x => x.ModelProvider == AiSpeechAssistantProvider.OpenAi).ToList();
+        var specificAssistants = assistants.Where(x => x.ModelProvider == RealtimeAiProvider.OpenAi).ToList();
         
         var configs = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallByAssistantIdsAsync(
-            assistants.Select(x => x.Id).ToList(), AiSpeechAssistantProvider.OpenAi, cancellationToken: cancellationToken).ConfigureAwait(false);
+            assistants.Select(x => x.Id).ToList(), RealtimeAiProvider.OpenAi, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         var turnDetections = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.TurnDirection).ToList();
         var transferCallTools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool && x.Name == "transfer_call").ToList();
@@ -433,7 +445,7 @@ public class AgentService : IAgentService
                 Name = "transfer_call",
                 Content = JsonConvert.SerializeObject(content),
                 Type = AiSpeechAssistantSessionConfigType.Tool,
-                ModelProvider = AiSpeechAssistantProvider.OpenAi,
+                ModelProvider = RealtimeAiProvider.OpenAi,
                 IsActive = agent.IsTransferHuman
             }).ToList();
             
@@ -476,7 +488,7 @@ public class AgentService : IAgentService
                 Name = "turn_detection",
                 Content = JsonConvert.SerializeObject(content),
                 Type = AiSpeechAssistantSessionConfigType.TurnDirection,
-                ModelProvider = AiSpeechAssistantProvider.OpenAi,
+                ModelProvider = RealtimeAiProvider.OpenAi,
                 IsActive = true
             }).ToList();
                 

@@ -1,4 +1,5 @@
 using Serilog;
+using SmartTalk.Core.Constants;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
@@ -42,7 +43,7 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
 
         foreach (var soldToId in allSoldToIds)
         {
-            _backgroundJobClient.Enqueue<ISalesJobProcessJobService>(x => x.RefreshCustomerItemsCacheBySoldToIdAsync(soldToId, CancellationToken.None));
+            _backgroundJobClient.Enqueue<ISalesJobProcessJobService>(x => x.RefreshCustomerItemsCacheBySoldToIdAsync(soldToId, CancellationToken.None), HangfireConstants.InternalHostingCaCheKnowledgeVariable);
         }
 
         Log.Information("All customer items cache refresh jobs scheduled. Count: {Count}", allSoldToIds.Count);
@@ -54,15 +55,9 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
         {
             var ids = soldToId.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()).ToList();
             Log.Information("Refreshing cache for soldToId: {SoldToId}", ids);
+            
+            var combinedItems = await _salesService.BuildCustomerItemsStringAsync(ids, cancellationToken).ConfigureAwait(false);
 
-            var allItems = new List<string>();
-            foreach (var id in ids)
-            {
-                var items = await _salesService.BuildCustomerItemsStringAsync(new List<string> { id }, cancellationToken).ConfigureAwait(false);
-                allItems.Add(items);
-            }
-
-            var combinedItems = string.Join(";", allItems);
             await _salesDataProvider.UpsertCustomerItemsCacheAsync(soldToId, combinedItems, true, cancellationToken).ConfigureAwait(false);
 
             Log.Information("Cache refreshed successfully for soldToId: {SoldToId}", soldToId);
@@ -78,11 +73,14 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
         var allSales = await _salesDataProvider.GetAllSalesAsync(cancellationToken);
         var allSoldToIds = allSales.Select(s => s.Name).Where(n => !string.IsNullOrEmpty(n)).Distinct().ToList();
         
+        var crmToken = await _crmClient.GetCrmTokenAsync(cancellationToken).ConfigureAwait(false);
+        if (crmToken == null) return;
+
         var totalPhones = 0;
         
         foreach (var soldToId in allSoldToIds)
         {
-            var contacts = await _crmClient.GetCustomerContactsAsync(soldToId, cancellationToken).ConfigureAwait(false);
+            var contacts = await _crmClient.GetCustomerContactsAsync(soldToId, crmToken, cancellationToken).ConfigureAwait(false);
 
             var phoneNumbers = contacts?.Where(c => !string.IsNullOrEmpty(c.Phone)).Select(c => NormalizePhone(c.Phone)).Distinct().ToList() ?? new List<string>();
 
@@ -90,7 +88,7 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
             
             foreach (var phone in phoneNumbers)
             {
-                _backgroundJobClient.Enqueue<ISalesJobProcessJobService>(x => x.RefreshCrmCustomerInfoByPhoneNumberAsync(phone, CancellationToken.None));
+                _backgroundJobClient.Enqueue<ISalesJobProcessJobService>(x => x.RefreshCrmCustomerInfoByPhoneNumberAsync(phone, CancellationToken.None), HangfireConstants.InternalHostingCaCheKnowledgeVariable);
             }
         }
 

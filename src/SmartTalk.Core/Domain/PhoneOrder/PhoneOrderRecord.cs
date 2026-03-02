@@ -80,6 +80,27 @@ public class PhoneOrderRecord : IEntity
 
     [Column("conversation_text")]
     public string ConversationText { get; set; }
+
+    [Column("order_record_type")]
+    public PhoneOrderRecordType OrderRecordType { get; set; }
+    
+    [Column("is_customer_friendly")]
+    public bool? IsCustomerFriendly { get; set; }
+   
+    [Column("is_human_answered")]
+    public bool? IsHumanAnswered { get; set; }
+    
+    [Column("scenario")]
+    public DialogueScenarios? Scenario { get; set; }
+    
+    [Column("remark")]
+    public string Remark { get; set; }
+    
+    [Column("is_locked_scenario")]
+    public bool IsLockedScenario { get; set; }
+    
+    [Column("is_modify_scenario")]
+    public bool IsModifyScenario { get; set; }
     
     [NotMapped]
     public UserAccount UserAccount { get; set; }

@@ -1,14 +1,20 @@
 using Serilog;
 using Newtonsoft.Json;
 using System.Globalization;
+using Mediator.Net;
 using SmartTalk.Core.Constants;
+using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.Printer;
+using SmartTalk.Core.Services.Caching;
 using SmartTalk.Messages.Commands.Pos;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Pos;
+using SmartTalk.Messages.Dto.Printer;
 using SmartTalk.Messages.Enums.Caching;
+using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.Pos;
+using SmartTalk.Messages.Enums.Printer;
 using SmartTalk.Messages.Events.Pos;
 using SmartTalk.Messages.Requests.Pos;
 
@@ -25,6 +31,16 @@ public partial interface IPosService
     Task<GetPosOrderProductsResponse> GetPosOrderProductsAsync(GetPosOrderProductsRequest request, CancellationToken cancellationToken);
     
     Task<GetPosStoreOrderResponse> GetPosStoreOrderAsync(GetPosStoreOrderRequest request, CancellationToken cancellationToken);
+
+    Task HandlePosOrderAsync(PosOrder order, bool isRetry, CancellationToken cancellationToken);
+    
+    Task<GetPosOrderCloudPrintStatusResponse> GetPosOrderCloudPrintStatusAsync(GetPosOrderCloudPrintStatusRequest request, CancellationToken cancellationToken);
+
+    Task RetryCloudPrintingAsync(RetryCloudPrintingCommand command, CancellationToken cancellationToken);
+
+    Task<GetOrderReservationInfoResponse> GetOrderReservationInfoAsync(GetOrderReservationInfoRequest request, CancellationToken cancellationToken);
+
+    Task<UpdateOrderReservationInfoResponse> UpdateOrderReservationInfoAsync(UpdateOrderReservationInfoCommand command, CancellationToken cancellationToken);
 }
 
 public partial class PosService
@@ -44,46 +60,136 @@ public partial class PosService
     {
         var order = await GetOrAddPosOrderAsync(command, cancellationToken).ConfigureAwait(false);
         
+        _smartTalkBackgroundJobClient.Enqueue(() => CreateMerchPrinterOrderAsync(order.StoreId, order.Id, cancellationToken));
+        
+        await HandlePosOrderAsync(order, command.IsWithRetry, cancellationToken).ConfigureAwait(false);
+        
+        return new PosOrderPlacedEvent
+        {
+            Order = _mapper.Map<PosOrderDto>(order),
+            IsPersistAction = command.IsPersistAction
+        };
+    }
+    
+    private async Task UpdateWaitingProcessingEventAsync(int? recordId, int storeId, CancellationToken cancellationToken)
+    {
+        if (!recordId.HasValue)
+        {
+            Log.Information("Update waiting processing event recordId is null");
+            
+            return;
+        }
+        
+        var waitingEvent = (await _phoneOrderDataProvider.GetWaitingProcessingEventsAsync(recordId: recordId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+
+        Log.Information("Pos printing waiting processing event:{@waitingEvent}", waitingEvent);
+        
+        if (waitingEvent == null || waitingEvent.TaskStatus is WaitingTaskStatus.Finished or WaitingTaskStatus.FinishedPosPrinter) return;
+
+        var merchPrinter = await _printerDataProvider.GetMerchPrintersAsync(storeId: storeId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var isCloudPrinting = merchPrinter is { Count: >0 };
+        
+        waitingEvent.TaskStatus = waitingEvent.TaskStatus switch
+        {
+            WaitingTaskStatus.Unfinished => isCloudPrinting ? WaitingTaskStatus.FinishedPosPrinter : WaitingTaskStatus.Finished,
+            WaitingTaskStatus.FinishedCloudPrinter => WaitingTaskStatus.Finished
+        };
+        
+        await _phoneOrderDataProvider.UpdateWaitingProcessingEventsAsync([waitingEvent], cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task HandlePosOrderAsync(PosOrder order, bool isRetry, CancellationToken cancellationToken)
+    {
+        if (order.Items == "[]") return;
+        
         var store = await _posDataProvider.GetPosCompanyStoreAsync(id: order.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (store == null) throw new Exception("Store could not be found.");
 
-        var token = await GetPosTokenAsync(store, order, cancellationToken).ConfigureAwait(false);
-
-        _smartTalkBackgroundJobClient.Enqueue(() => CreateMerchPrinterOrderAsync(command.StoreId, order.Id, cancellationToken));
+        var token = await GetPosTokenAsync(store, cancellationToken).ConfigureAwait(false);
 
         if (!store.IsLink && string.IsNullOrWhiteSpace(token))
         {
             order.Status = PosOrderStatus.Modified;
-            
+        
             await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
-            
-            return new PosOrderPlacedEvent { Order = _mapper.Map<PosOrderDto>(order) };
+        
+            return;
         }
-        
-        await SafetyPlaceOrderAsync(order, store, token, command.IsWithRetry, 0, cancellationToken).ConfigureAwait(false);
-        
-        return new PosOrderPlacedEvent
-        {
-            Order = _mapper.Map<PosOrderDto>(order)
-        };
+    
+        await SafetyPlaceOrderAsync(order.Id, store, token, isRetry, 0, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task CreateMerchPrinterOrderAsync(int storeId, int orderId, CancellationToken cancellationToken)
     {
-        Log.Information("storeId:{storeId}, orderId:{orderId}", storeId, orderId);
+        var lockKey = $"create-merch-printer-order-key-{orderId}";
         
-        var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(storeId: storeId, isEnabled: true, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
-
-        Log.Information("get merch printer:{@merchPrinter}", merchPrinter);
+        Log.Information("Generate lock key: {lockKey} by orderId: {orderId}", lockKey, orderId);
         
-        await _printerDataProvider.AddMerchPrinterOrderAsync(new MerchPrinterOrder
+        await _redisSafeRunner.ExecuteWithLockAsync(lockKey, async () =>
         {
-            OrderId = orderId,
-            StoreId = storeId,
-            PrinterMac = merchPrinter?.PrinterMac,
-            PrintDate = DateTimeOffset.Now
-        }, cancellationToken).ConfigureAwait(false);
+            Log.Information("storeId:{storeId}, orderId:{orderId}", storeId, orderId);
+        
+            var order = (await _printerDataProvider.GetMerchPrinterOrdersAsync(storeId: storeId, orderId: orderId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+
+            if (order != null) return;
+            
+            var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(storeId: storeId, isEnabled: true, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+
+            Log.Information("get merch printer:{@merchPrinter}", merchPrinter);
+
+            var merchPrinterOrder = new MerchPrinterOrder
+            {
+                OrderId = orderId,
+                StoreId = storeId,
+                PrinterMac = merchPrinter?.PrinterMac,
+                PrintDate = DateTimeOffset.Now,
+                PrintFormat = PrintFormat.Order
+            };
+        
+            await _printerDataProvider.AddMerchPrinterOrderAsync(merchPrinterOrder, cancellationToken).ConfigureAwait(false);
+        
+            Log.Information("Create merch printer order:{@merchPrinterOrder}", merchPrinterOrder);
+
+            _smartTalkBackgroundJobClient.Schedule<IMediator>( x => x.SendAsync(new RetryCloudPrintingCommand{ Id = merchPrinterOrder.Id, Count = 0}, CancellationToken.None), TimeSpan.FromMinutes(1));
+        
+            await _cacheManager.SetAsync($"{merchPrinterOrder.OrderId}", "true", new RedisCachingSetting(expiry: TimeSpan.FromMinutes(30)), cancellationToken).ConfigureAwait(false);
+        }, wait: TimeSpan.Zero, retry: TimeSpan.Zero, server: RedisServer.System).ConfigureAwait(false);
+    }
+
+    public async Task RetryCloudPrintingAsync(RetryCloudPrintingCommand command, CancellationToken cancellationToken)
+    {
+        Log.Information("retry cloud printer:{id}", command.Id);
+        
+        var merchPrinterOrder = (await _printerDataProvider.GetMerchPrinterOrdersAsync(id: command.Id, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+
+        if (merchPrinterOrder == null) return;
+        
+        if (merchPrinterOrder.PrintStatus != PrintStatus.Printed)
+        {
+            var merchPrinter = (await _printerDataProvider.GetMerchPrintersAsync(storeId: merchPrinterOrder.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+            
+            merchPrinterOrder.PrintStatus = PrintStatus.Waiting;
+            merchPrinterOrder.PrinterMac = merchPrinter?.PrinterMac;
+            await _printerDataProvider.UpdateMerchPrinterOrderAsync(merchPrinterOrder, cancellationToken: cancellationToken).ConfigureAwait(false);
+            
+            if (command.Count < 3)
+            {
+                _smartTalkBackgroundJobClient.Schedule<IMediator>( x => x.SendAsync(new RetryCloudPrintingCommand{ Id = merchPrinterOrder.Id, Count = command.Count + 1 },  CancellationToken.None), TimeSpan.FromMinutes(1));
+            
+                await _cacheManager.SetAsync($"{merchPrinterOrder.OrderId}", "true", new RedisCachingSetting(expiry: TimeSpan.FromMinutes(30)), cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                await _cacheManager.SetAsync($"{merchPrinterOrder.OrderId}", "false", new RedisCachingSetting(expiry: TimeSpan.FromMinutes(30)), cancellationToken).ConfigureAwait(false);
+            
+                merchPrinterOrder.PrintStatus = PrintStatus.Printed;
+                await _printerDataProvider.UpdateMerchPrinterOrderAsync(merchPrinterOrder, cancellationToken: cancellationToken).ConfigureAwait(false);
+            }
+        }
+        else
+            await _cacheManager.SetAsync($"{merchPrinterOrder.OrderId}", "false", new RedisCachingSetting(expiry: TimeSpan.FromMinutes(30)), cancellationToken).ConfigureAwait(false);
     }
 
     public async Task UpdatePosOrderAsync(UpdatePosOrderCommand command, CancellationToken cancellationToken)
@@ -148,8 +254,8 @@ public partial class PosService
 
     public async Task<GetPosOrderProductsResponse> GetPosOrderProductsAsync(GetPosOrderProductsRequest request, CancellationToken cancellationToken)
     {
-        var products = await _posDataProvider.GetPosProductsAsync(
-            storeId: request.StoreId, productIds: request.ProductIds, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var products = await _posDataProvider.GetPosProductsByProductIdsAsync(
+            request.StoreId, request.ProductIds, cancellationToken).ConfigureAwait(false);
         
         var menuWithCategories = await _posDataProvider.GetPosMenuInfosAsync(request.StoreId, products.Select(x => x.CategoryId).ToList(), cancellationToken).ConfigureAwait(false);
         
@@ -164,12 +270,17 @@ public partial class PosService
         var order = await _posDataProvider.GetPosOrderByIdAsync(orderId: request.OrderId, recordId: request.RecordId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (order == null)
-            throw new Exception($"Order could not be found by orderId: {request.OrderId} or recordId: {request.RecordId}.");
-
-        return new GetPosStoreOrderResponse
         {
-            Data = _mapper.Map<PosOrderDto>(order)
-        };
+            Log.Information($"Order could not be found by orderId: {request.OrderId} or recordId: {request.RecordId}.");
+            
+            return new GetPosStoreOrderResponse();
+        }
+
+        var enrichOrder = _mapper.Map<PosOrderDto>(order);
+        
+        await EnrichPosOrderAsync(enrichOrder, request.IsWithSpecifications, cancellationToken).ConfigureAwait(false);
+
+        return new GetPosStoreOrderResponse { Data = enrichOrder };
     }
 
     private List<GetPosOrderProductsResponseData> BuildPosOrderProductsData(List<PosProduct> products, List<(PosMenu Menu, PosCategory Category)> menuWithCategories)
@@ -420,7 +531,7 @@ public partial class PosService
         return (utcStart, utcEnd);
     }
     
-    private async Task<string> GetPosTokenAsync(CompanyStore store, PosOrder order, CancellationToken cancellationToken)
+    private async Task<string> GetPosTokenAsync(CompanyStore store, CancellationToken cancellationToken)
     {
         var authorization = await _easyPosClient.GetEasyPosTokenAsync(new EasyPosTokenRequestDto
         {
@@ -481,14 +592,21 @@ public partial class PosService
         }
     }
 
-    public async Task SafetyPlaceOrderAsync(PosOrder order, CompanyStore store, string token, bool isWithRetry, int retryCount, CancellationToken cancellationToken)
+    public async Task SafetyPlaceOrderAsync(int orderId, CompanyStore store, string token, bool isWithRetry, int retryCount, CancellationToken cancellationToken)
     {
         const int MaxRetryCount = 3;
-        var lockKey = $"place-order-key-{order.Id}";
+        var lockKey = $"place-order-key-{orderId}";
         
         await _redisSafeRunner.ExecuteWithLockAsync(lockKey, async () =>
         {
-            if(order.Status == PosOrderStatus.Sent) throw new Exception("Order is already sent.");
+            var order = await _posDataProvider.GetPosOrderByIdAsync(orderId: orderId, cancellationToken: cancellationToken).ConfigureAwait(false);
+            
+            if (order.Status == PosOrderStatus.Sent)
+            {
+                Log.Information("Order {OrderId} is already sent, skip placing again.", order.Id);
+                
+                return;
+            }
 
             if (isWithRetry) order.RetryCount = retryCount;
             
@@ -497,20 +615,19 @@ public partial class PosService
             if (!isAvailable)
             {
                 Log.Information("Current token is available: {IsAvailable}", string.IsNullOrWhiteSpace(token));
-                token = !string.IsNullOrWhiteSpace(token) ? token : await GetPosTokenAsync(store, order, cancellationToken).ConfigureAwait(false);
+                token = !string.IsNullOrWhiteSpace(token) ? token : await GetPosTokenAsync(store, cancellationToken).ConfigureAwait(false);
                 
                 await MarkOrderAsSpecificStatusAsync(order, status, cancellationToken).ConfigureAwait(false);
 
                 if (status == PosOrderStatus.Error && isWithRetry && order.RetryCount < MaxRetryCount)
                     _smartTalkBackgroundJobClient.Schedule(() => SafetyPlaceOrderAsync(
-                        order, store, token, true, order.RetryCount + 1, cancellationToken), TimeSpan.FromSeconds(30), HangfireConstants.InternalHostingRestaurant);
+                        order.Id, store, token, true, order.RetryCount + 1, cancellationToken), TimeSpan.FromSeconds(30), HangfireConstants.InternalHostingRestaurant);
                 
                 return;
             }
             
             await SafetyPlaceOrderWithRetryAsync(order, store, token, isWithRetry, cancellationToken).ConfigureAwait(false);
-            
-        }, wait: TimeSpan.FromSeconds(10), retry: TimeSpan.FromSeconds(1), server: RedisServer.System).ConfigureAwait(false);
+        }, wait: TimeSpan.Zero, retry: TimeSpan.Zero, server: RedisServer.System).ConfigureAwait(false);
     }
 
     private async Task<PlaceOrderToEasyPosResponseDto> PlaceOrderAsync(PosOrder order, CompanyStore store, string token, CancellationToken cancellationToken)
@@ -573,7 +690,7 @@ public partial class PosService
 
             if (isRetry && order.RetryCount < MaxRetryCount)
                 _smartTalkBackgroundJobClient.Schedule(() => SafetyPlaceOrderAsync(
-                    order, store, token, true, order.RetryCount + 1, cancellationToken), TimeSpan.FromSeconds(30), HangfireConstants.InternalHostingRestaurant);
+                    order.Id, store, token, true, order.RetryCount + 1, cancellationToken), TimeSpan.FromSeconds(30), HangfireConstants.InternalHostingRestaurant);
         }
         catch (Exception ex)
         {
@@ -581,7 +698,7 @@ public partial class PosService
             
             if (isRetry && order.RetryCount < MaxRetryCount)
                 _smartTalkBackgroundJobClient.Schedule(() => SafetyPlaceOrderAsync(
-                    order, store, token, true, order.RetryCount + 1, cancellationToken), TimeSpan.FromSeconds(30), HangfireConstants.InternalHostingRestaurant);
+                    order.Id, store, token, true, order.RetryCount + 1, cancellationToken), TimeSpan.FromSeconds(30), HangfireConstants.InternalHostingRestaurant);
 
             Log.Information("Place order {@Order} failed: {@Exception}", order, ex);
         }
@@ -590,8 +707,15 @@ public partial class PosService
     private async Task MarkOrderAsSpecificStatusAsync(PosOrder order, PosOrderStatus status, CancellationToken cancellationToken)
     {
         order.Status = status;
-        
-        if(status == PosOrderStatus.Sent) order.IsPush = true;
+        order.SentBy = _currentUser.Id;
+        order.SentTime = DateTimeOffset.Now;
+
+        if (status == PosOrderStatus.Sent)
+        {
+            order.IsPush = true;
+            
+            await UpdateWaitingProcessingEventAsync(order.RecordId, order.StoreId, cancellationToken).ConfigureAwait(false);
+        }
         
         await _posDataProvider.UpdatePosOrdersAsync([order], cancellationToken: cancellationToken).ConfigureAwait(false);
     }
@@ -605,6 +729,216 @@ public partial class PosService
             3 => PosOrderModifiedStatus.BeMerged,
             2 => PosOrderModifiedStatus.Cancelled,
             _ => PosOrderModifiedStatus.Normal
+        };
+    }
+
+    private async Task EnrichPosOrderAsync(PosOrderDto order, bool isWithSpecifications = false, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var simpleModifiers = new List<PosProductSimpleModifiersDto>();
+            
+            var items = JsonConvert.DeserializeObject<List<PosOrderItemDto>>(order.Items);
+        
+            var products = await _posDataProvider.GetPosProductsAsync(
+                productIds: items.Select(x => x.ProductId.ToString()).Distinct().ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
+            
+            var productsLookup = products.GroupBy(x => x.ProductId).ToDictionary(
+                g => g.Key, g =>
+                {
+                    var p = g.First();
+                    
+                    return (p.Names, string.IsNullOrWhiteSpace(p.Modifiers) ? [] : JsonConvert.DeserializeObject<List<EasyPosResponseModifierGroups>>(p.Modifiers));
+                });
+
+            foreach (var item in items)
+            {
+                if (productsLookup.TryGetValue(item.ProductId.ToString(), out var product))
+                {
+                    item.ProductName = product.Names;
+
+                    if (isWithSpecifications && product.Item2.Count > 0)
+                    {
+                        var matchedModifiers = simpleModifiers.Where(x => x.ProductId == item.ProductId.ToString()).ToList();
+
+                        if (matchedModifiers.Count > 0) continue;
+                        
+                        simpleModifiers.AddRange(product.Item2.Select(x => new PosProductSimpleModifiersDto
+                        {
+                            ProductId = item.ProductId.ToString(),
+                            ModifierId = x.Id.ToString(),
+                            MinimumSelect = x.MinimumSelect,
+                            MaximumSelect = x.MaximumSelect,
+                            MaximumRepetition = x.MaximumRepetition,
+                            ModifierProductIds = x.ModifierProducts.Select(m => m.Id.ToString()).ToList()
+                        }));
+                    }
+                }
+                else
+                    item.ProductName = null;
+            }
+            
+            order.SimpleModifiers = simpleModifiers;
+            order.Items = JsonConvert.SerializeObject(items);
+            
+            var merchPrinter = await _printerDataProvider.GetMerchPrintersAsync(storeId: order.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
+            var company = await _posDataProvider.GetPosCompanyStoreAsync(id: order.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
+            var merchPrinterOrder = (await _printerDataProvider.GetMerchPrinterOrdersAsync(orderId: order.Id, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+            
+            order.IsLink = company.IsLink;
+            order.IsLinkCouldPrinting = merchPrinter is { Count: >0 };
+            order.CloudPrintOrderId = merchPrinterOrder?.Id;
+            order.CloudPrintStatus = await CalculateCloudPrintStatusAsync(merchPrinterOrder, merchPrinter, cancellationToken).ConfigureAwait(false);
+            
+            if (!order.SentBy.HasValue) return;
+            
+            var userAccount = await _accountDataProvider.GetUserAccountByUserIdAsync(order.SentBy.Value, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            order.SentByUsername = userAccount.UserName;
+        }
+        catch (Exception e)
+        {
+            Log.Information("Enriching pos order failed: {@Exception}", e);
+        }
+    }
+    
+    public async Task<GetPosOrderCloudPrintStatusResponse> GetPosOrderCloudPrintStatusAsync(GetPosOrderCloudPrintStatusRequest request, CancellationToken cancellationToken)
+    {
+        var merchPrinter = await _printerDataProvider.GetMerchPrintersAsync(storeId: request.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var store = await _posDataProvider.GetPosCompanyStoreAsync(id: request.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var merchPrinterOrder = (await _printerDataProvider.GetMerchPrinterOrdersAsync(orderId: request.OrderId, recordId: request.PhoneOrderRecordId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+        
+        var status = await CalculateCloudPrintStatusAsync(merchPrinterOrder, merchPrinter, cancellationToken).ConfigureAwait(false);
+        
+        var retryKey = merchPrinterOrder != null ? $"{merchPrinterOrder.OrderId}" : null;
+        
+        var isRetry = await _cacheManager.GetAsync<string>(retryKey, new RedisCachingSetting(), cancellationToken).ConfigureAwait(false);
+
+        Log.Information("IsRetry:{@isRetry}", isRetry);
+        
+        return new GetPosOrderCloudPrintStatusResponse
+        {
+           Data = new GetPosOrderCloudPrintStatusDto
+           {
+               Id = merchPrinterOrder?.Id,
+               CloudPrintStatus = status,
+               IsLink = store?.IsLink,
+               IsLinkCouldPrinting = merchPrinter is { Count: >0 },
+               IsRetry = isRetry == "true"
+           }
+        };
+    }
+    
+    private async Task<CloudPrintStatus> CalculateCloudPrintStatusAsync(
+        MerchPrinterOrder merchPrinterOrder, List<MerchPrinter> merchPrinters, CancellationToken cancellationToken)
+    {
+        if (merchPrinterOrder == null)
+            return CloudPrintStatus.Failed;
+
+        var merchPrinterLog = (await _printerDataProvider.GetMerchPrinterLogAsync(storeId: merchPrinterOrder.StoreId, recordId: merchPrinterOrder.RecordId, orderId: merchPrinterOrder.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false)).Item2.FirstOrDefault();
+        
+        Log.Information("Merch printer log:{@merchPrinterLog}", merchPrinterLog);
+        
+        if (merchPrinterOrder.PrintStatus == PrintStatus.Printed && merchPrinterLog is { Code: 200 })
+            return CloudPrintStatus.Successful;
+        
+        if (merchPrinters == null)
+            return CloudPrintStatus.Failed;
+       
+        var merchPrinterEnableds = merchPrinters.Where(x => x.IsEnabled).ToList();
+            
+        var merchPrinterDtos = merchPrinterEnableds is { Count: >0 } ? _mapper.Map<List<MerchPrinterDto>>(merchPrinterEnableds) : null;
+
+        var isOnlineMerchPrinter = merchPrinterDtos?.Any(x => x.PrinterStatusInfo?.Online == true) == true;
+        
+        if (merchPrinterOrder.PrintStatus is PrintStatus.Waiting or PrintStatus.Printing && isOnlineMerchPrinter)
+            return CloudPrintStatus.Printing;
+
+        return CloudPrintStatus.Failed;
+    }
+
+    public async Task<GetOrderReservationInfoResponse> GetOrderReservationInfoAsync(GetOrderReservationInfoRequest request, CancellationToken cancellationToken)
+    {
+        var reservationInfo = await _posDataProvider.GetPhoneOrderReservationInformationAsync(request.OrderId, cancellationToken).ConfigureAwait(false);
+
+        if (reservationInfo == null) return new GetOrderReservationInfoResponse();
+        
+        var reservationInfoDto = _mapper.Map<OrderReservationInfoDto>(reservationInfo);
+        
+        var merchPrinterOrder = (await _printerDataProvider.GetMerchPrinterOrdersAsync(recordId: request.OrderId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+
+        reservationInfoDto.CloudPrintOrderId = merchPrinterOrder?.Id;
+        
+        if (merchPrinterOrder != null)
+        {
+            var merchPrinter = await _printerDataProvider.GetMerchPrintersAsync(storeId: merchPrinterOrder.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
+            
+            reservationInfoDto.CloudPrintStatus = await CalculateCloudPrintStatusAsync(merchPrinterOrder, merchPrinter, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (reservationInfo.LastModifiedBy != null)
+        {
+            var account = await _accountDataProvider.GetUserAccountByUserIdAsync(reservationInfo.LastModifiedBy.Value, true, cancellationToken).ConfigureAwait(false);
+            
+            reservationInfoDto.LastModifiedByName = account?.UserName;
+            reservationInfoDto.LastModifiedByPhone = account?.UserAccountProfile?.Phone;
+        }
+        
+        return new GetOrderReservationInfoResponse
+        {
+            Data = reservationInfoDto
+        };
+    }
+
+    public async Task<UpdateOrderReservationInfoResponse> UpdateOrderReservationInfoAsync(UpdateOrderReservationInfoCommand command, CancellationToken cancellationToken)
+    {
+        var reservationInfo = await _posDataProvider.GetPhoneOrderReservationInformationAsync(command.RecordId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (!string.IsNullOrWhiteSpace(command.NotificationInfo))
+        {
+            reservationInfo.NotificationInfo = command.NotificationInfo;
+
+            if (string.IsNullOrWhiteSpace(command.EnNotificationInfo))
+            {
+                var en = await _translationClient.TranslateTextAsync(command.NotificationInfo, "en", cancellationToken: cancellationToken).ConfigureAwait(false);
+
+                reservationInfo.EnNotificationInfo = en.TranslatedText;
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(command.EnNotificationInfo))
+        {
+            reservationInfo.EnNotificationInfo = command.EnNotificationInfo;
+
+            var zh = await _translationClient.TranslateTextAsync(command.EnNotificationInfo, "zh", cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            reservationInfo.NotificationInfo = zh.TranslatedText;
+        }
+        
+        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordAsync(command.RecordId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var record = records.FirstOrDefault();
+        if (record == null) throw new Exception($"Phone order record not found: {command.RecordId}");
+            
+        record.IsModifyScenario = true;
+        await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record,  true, cancellationToken);
+        
+        await _posDataProvider.UpdatePhoneOrderReservationInformationAsync(reservationInfo, cancellationToken:cancellationToken).ConfigureAwait(false);
+        
+        await _phoneOrderDataProvider.AddPhoneOrderRecordScenarioHistoryAsync(new PhoneOrderRecordScenarioHistory
+        {
+            RecordId = command.RecordId,
+            Scenario = DialogueScenarios.Order,
+            ModifyType = ModifyType.Info,
+            UpdatedBy = _currentUser.Id ?? 0,
+            UserName = _currentUser.Name,
+            CreatedDate = DateTime.UtcNow
+        }, true, cancellationToken).ConfigureAwait(false);
+        
+        return new UpdateOrderReservationInfoResponse
+        {
+            Data = _mapper.Map<OrderReservationInfoDto>(reservationInfo)
         };
     }
 }

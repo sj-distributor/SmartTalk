@@ -10,6 +10,7 @@ using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Settings.SpeechMatics;
 using SmartTalk.Messages.Enums.SpeechMatics;
 
+
 namespace SmartTalk.Core.Services.SpeechMatics;
 
 public interface ISpeechMaticsService : IScopedDependency

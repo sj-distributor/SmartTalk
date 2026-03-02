@@ -1,5 +1,6 @@
 using Autofac;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using MySql.Data.MySqlClient;
 using Newtonsoft.Json;
@@ -48,6 +49,7 @@ public partial class TestBase
         containerBuilder.RegisterInstance(Substitute.For<IHttpContextAccessor>()).AsImplementedInterfaces();
         containerBuilder.RegisterInstance(Substitute.For<IAliYunOssService>()).AsImplementedInterfaces();
         containerBuilder.RegisterInstance(Substitute.For<IEasyPosClient>()).AsImplementedInterfaces();
+        containerBuilder.RegisterInstance(new MemoryCache(new MemoryCacheOptions())).As<IMemoryCache>().SingleInstance();
         
         RegisterRedis(containerBuilder);
         RegisterSmartTalkBackgroundJobClient(containerBuilder);

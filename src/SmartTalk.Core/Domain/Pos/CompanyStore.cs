@@ -62,6 +62,12 @@ public class CompanyStore : IEntity<int>, IAgent, IHasCreatedFields, IHasModifie
     [Column("timezone"), StringLength(64)]
     public string Timezone { get; set; }
     
+    [Column("is_manual_review")]
+    public bool IsManualReview { get; set; }
+    
+    [Column("is_task_enabled")]
+    public bool IsTaskEnabled { get; set; }
+    
     [Column("created_by")]
     public int? CreatedBy { get; set; }
     

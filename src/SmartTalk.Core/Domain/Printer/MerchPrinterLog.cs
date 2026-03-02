@@ -21,6 +21,9 @@ public class MerchPrinterLog : IEntity
         
     [Column("order_id")]
     public int? OrderId { get; set; }
+    
+    [Column("record_id")]
+    public int? RecordId { get; set; }
 
     [Column("printer_mac")]
     public string PrinterMac { get; set; }

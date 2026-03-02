@@ -1,7 +1,9 @@
 using AutoMapper;
+using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Messages.Commands.Pos;
 using SmartTalk.Messages.Dto.Pos;
+using SmartTalk.Messages.Requests.Pos;
 
 namespace SmartTalk.Core.Mappings;
 
@@ -31,5 +33,8 @@ public class PosMapping : Profile
 
         CreateMap<StoreCustomer, StoreCustomerDto>().ReverseMap();
         CreateMap<UpdateStoreCustomerCommand, StoreCustomer>();
+
+        CreateMap<PhoneOrderReservationInformation, OrderReservationInfoDto>().ReverseMap();
+        CreateMap<UpdateOrderReservationInfoCommand, PhoneOrderReservationInformation>();
     }
 }

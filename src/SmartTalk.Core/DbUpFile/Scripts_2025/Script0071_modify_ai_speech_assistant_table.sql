@@ -1,0 +1,1 @@
+alter table `ai_speech_assistant` add column `is_auto_generate_order` tinyint(1) not null default 0;

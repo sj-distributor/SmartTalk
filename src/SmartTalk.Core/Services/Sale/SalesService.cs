@@ -101,14 +101,14 @@ public class SalesService : ISalesService
                 return $"Item: {name}, Brand: {brand}, Size: {size}, Aliases: {aliasText}, " +
                        $"baseUnit: {partInfo?.BaseUnit ?? ""}, salesUnit: {partInfo?.SalesUnit ?? ""}, weights: {partInfo?.Weights ?? 0}, " +
                        $"placeOfOrigin: {partInfo?.PlaceOfOrigin ?? ""}, packing: {partInfo?.Packing ?? ""}, specifications: {partInfo?.Specifications ?? ""}, " +
-                       $"ranks: {partInfo?.Ranks ?? ""}, atr: {partInfo?.Atr ?? 0}";
+                       $"ranks: {partInfo?.Ranks ?? ""}, atr: {partInfo?.Atr}";
             }
 
             allItems.AddRange(askItems.Select(x => FormatItem(x.MaterialDesc, x.LevelCode, x.Material)));
             allItems.AddRange(orderItems.Select(x => FormatItem(x.MaterialDescription, x.LevelCode, x.MaterialNumber)));
         }
 
-        return string.Join(Environment.NewLine, allItems);
+        return string.Join(Environment.NewLine, allItems.Distinct().Take(150));
     }
     
     public async Task<string> HandleOrderArrivalTimeList(List<string> customerIds, CancellationToken cancellationToken)
@@ -138,9 +138,10 @@ public class SalesService : ISalesService
     {
         var customerInfo = new StringBuilder();
 
+        var  token = await _crmClient.GetCrmTokenAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var crmCustomers = await _crmClient.GetCustomersByPhoneNumberAsync(new GetCustmoersByPhoneNumberRequestDto { PhoneNumber = phoneNumber }, cancellationToken).ConfigureAwait(false);
+            var crmCustomers = await _crmClient.GetCustomersByPhoneNumberAsync(new GetCustmoersByPhoneNumberRequestDto { PhoneNumber = phoneNumber }, token, cancellationToken).ConfigureAwait(false);
 
             if (crmCustomers != null && crmCustomers.Any())
             {
