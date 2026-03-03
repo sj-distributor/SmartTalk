@@ -105,6 +105,36 @@ public class RealtimeAiServiceSessionLifecycleTests : RealtimeAiServiceTestBase
         FakeWs.GetSentTextMessages().ShouldNotBeEmpty();
     }
 
+    [Fact]
+    public async Task Session_TranscriptionMessageIsNull_ShouldNotSendNullPayloadToClient()
+    {
+        ProviderAdapter.ParseMessage(Arg.Any<string>())
+            .Returns(new ParsedRealtimeAiProviderEvent
+            {
+                Type = RealtimeAiWssEventType.InputAudioTranscriptionCompleted,
+                Data = new RealtimeAiWssTranscriptionData
+                {
+                    Speaker = AiSpeechAssistantSpeaker.User,
+                    Transcript = "Test transcript"
+                }
+            });
+        ClientAdapter.BuildTranscriptionMessage(
+                Arg.Any<RealtimeAiWssEventType>(),
+                Arg.Any<RealtimeAiWssTranscriptionData>(),
+                Arg.Any<string>())
+            .Returns((object)null);
+
+        var sessionTask = await StartSessionInBackgroundAsync();
+
+        await FakeWssClient.SimulateMessageReceivedAsync("{\"type\":\"transcription\"}");
+        await Task.Delay(100);
+
+        FakeWs.EnqueueClose();
+        await sessionTask;
+
+        FakeWs.GetSentTextMessages().ShouldBeEmpty();
+    }
+
     [Theory]
     [InlineData(RealtimeAiWssEventType.InputAudioTranscriptionCompleted, true)]
     [InlineData(RealtimeAiWssEventType.OutputAudioTranscriptionCompleted, true)]

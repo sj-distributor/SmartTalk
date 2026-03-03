@@ -11,6 +11,8 @@ public partial class RealtimeAiService
 
     private async Task SendToClientAsync(object payload)
     {
+        if (payload == null) return;
+
         if (_ctx.WebSocket is not { State: WebSocketState.Open }) return;
 
         await _ctx.WsSendLock.WaitAsync(_ctx.SessionCts?.Token ?? CancellationToken.None).ConfigureAwait(false);

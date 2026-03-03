@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using Serilog;
 using SmartTalk.Core.Ioc;
 
@@ -80,7 +81,10 @@ public class InactivityTimerManager : IInactivityTimerManager
         }
         finally
         {
-            _timers.TryRemove(sessionId, out _);
+            // Only remove the current timer entry to avoid deleting a newer timer
+            // that may have been started for the same session during callback execution.
+            ((ICollection<KeyValuePair<string, TimerEntry>>)_timers)
+                .Remove(new KeyValuePair<string, TimerEntry>(sessionId, entry));
         }
     }
 }

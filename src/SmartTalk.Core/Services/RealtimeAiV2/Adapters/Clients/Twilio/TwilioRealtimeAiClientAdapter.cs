@@ -92,11 +92,15 @@ public class TwilioRealtimeAiClientAdapter : IRealtimeAiClientAdapter
 
     public object BuildTranscriptionMessage(RealtimeAiWssEventType eventType, RealtimeAiWssTranscriptionData transcriptionData, string sessionId)
     {
-        return new { type = eventType.ToString(), Data = new { transcriptionData }, session_id = sessionId };
+        // Twilio Media Streams only supports a fixed set of websocket event types.
+        // Transcription payloads are internal UI messages and should not be sent to Twilio.
+        return null;
     }
 
     public object BuildErrorMessage(string code, string message, string sessionId)
     {
-        return new { type = "ClientError", session_id = sessionId, Data = new { Code = code, Message = message } };
+        // Twilio Media Streams only supports a fixed set of websocket event types.
+        // Error payloads are internal UI messages and should not be sent to Twilio.
+        return null;
     }
 }

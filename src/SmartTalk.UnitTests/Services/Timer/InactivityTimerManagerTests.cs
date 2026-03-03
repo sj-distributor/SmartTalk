@@ -129,6 +129,35 @@ public class InactivityTimerManagerTests : IDisposable
         completed.ShouldBe(secondTcs.Task, "New timer should work after previous callback threw");
     }
 
+    [Fact]
+    public async Task StartTimer_CallbackStartsNewTimer_StopShouldCancelNewTimer()
+    {
+        var firstCallbackReached = new TaskCompletionSource<bool>();
+        var secondCallbackInvoked = false;
+
+        _sut.StartTimer(SessionId, TimeSpan.FromMilliseconds(50), () =>
+        {
+            firstCallbackReached.TrySetResult(true);
+
+            _sut.StartTimer(SessionId, TimeSpan.FromMilliseconds(150), () =>
+            {
+                secondCallbackInvoked = true;
+                return Task.CompletedTask;
+            });
+
+            return Task.CompletedTask;
+        });
+
+        var completed = await Task.WhenAny(firstCallbackReached.Task, Task.Delay(TimeSpan.FromSeconds(5)));
+        completed.ShouldBe(firstCallbackReached.Task, "First callback should be invoked");
+
+        await Task.Delay(20); // allow first timer cleanup path to run
+        _sut.StopTimer(SessionId);
+
+        await Task.Delay(250);
+        secondCallbackInvoked.ShouldBeFalse("New timer should be cancellable after callback restarts same session timer");
+    }
+
     #endregion
 
     #region StopTimer
