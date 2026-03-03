@@ -80,7 +80,10 @@ public class InactivityTimerManager : IInactivityTimerManager
         }
         finally
         {
-            _timers.TryRemove(sessionId, out _);
+            // Remove only if the current dictionary value is exactly this timer entry.
+            // Prevents an older timer's finally from removing a newer timer for the same session.
+            ((ICollection<KeyValuePair<string, TimerEntry>>)_timers)
+                .Remove(new KeyValuePair<string, TimerEntry>(sessionId, entry));
         }
     }
 }

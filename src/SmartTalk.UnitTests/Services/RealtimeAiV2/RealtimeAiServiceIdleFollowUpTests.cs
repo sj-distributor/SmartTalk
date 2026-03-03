@@ -326,4 +326,49 @@ public class RealtimeAiServiceIdleFollowUpTests : RealtimeAiServiceTestBase
         FakeWs.EnqueueClose();
         await sessionTask;
     }
+
+    [Fact]
+    public async Task IdleFollowUp_OnTimeoutAsync_ShouldBeSkipped_WhenSessionIsInactive()
+    {
+        var actionInvoked = false;
+        Func<Task> capturedCallback = null;
+
+        TimerManager.When(x => x.StartTimer(Arg.Any<string>(), Arg.Any<TimeSpan>(), Arg.Any<Func<Task>>()))
+            .Do(ci => capturedCallback = ci.ArgAt<Func<Task>>(2));
+
+        ProviderAdapter.ParseMessage(Arg.Any<string>())
+            .Returns(new ParsedRealtimeAiProviderEvent
+            {
+                Type = RealtimeAiWssEventType.ResponseTurnCompleted,
+                Data = new List<RealtimeAiWssFunctionCallData>()
+            });
+
+        var options = CreateDefaultOptions(o =>
+        {
+            o.IdleFollowUp = new RealtimeSessionIdleFollowUp
+            {
+                TimeoutSeconds = 30,
+                FollowUpMessage = "Are you still there?",
+                OnTimeoutAsync = () =>
+                {
+                    actionInvoked = true;
+                    return Task.CompletedTask;
+                }
+            };
+        });
+
+        var sessionTask = await StartSessionInBackgroundAsync(options);
+
+        await FakeWssClient.SimulateMessageReceivedAsync("{\"type\":\"response.done\"}");
+        await Task.Delay(100);
+
+        FakeWs.EnqueueClose();
+        await sessionTask;
+
+        capturedCallback.ShouldNotBeNull();
+        await capturedCallback!();
+
+        actionInvoked.ShouldBeFalse();
+        ProviderAdapter.DidNotReceive().BuildTextUserMessage(Arg.Any<string>(), Arg.Any<string>());
+    }
 }

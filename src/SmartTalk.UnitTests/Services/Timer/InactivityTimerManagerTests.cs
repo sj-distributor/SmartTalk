@@ -102,6 +102,39 @@ public class InactivityTimerManagerTests : IDisposable
     }
 
     [Fact]
+    public async Task StartTimer_PreviousTimerFinally_ShouldNotRemoveNewTimer()
+    {
+        var firstCallbackStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseFirstCallback = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var secondCallbackInvoked = false;
+
+        _sut.StartTimer(SessionId, TimeSpan.FromMilliseconds(20), async () =>
+        {
+            firstCallbackStarted.TrySetResult(true);
+            await releaseFirstCallback.Task.ConfigureAwait(false);
+        });
+
+        var firstStarted = await Task.WhenAny(firstCallbackStarted.Task, Task.Delay(TimeSpan.FromSeconds(5)));
+        firstStarted.ShouldBe(firstCallbackStarted.Task, "First callback should start");
+
+        _sut.StartTimer(SessionId, TimeSpan.FromSeconds(5), () =>
+        {
+            secondCallbackInvoked = true;
+            return Task.CompletedTask;
+        });
+
+        releaseFirstCallback.TrySetResult(true);
+        await Task.Delay(100); // Allow previous timer finally block to execute
+
+        _sut.IsTimerRunning(SessionId).ShouldBeTrue("New timer should remain registered");
+
+        _sut.StopTimer(SessionId);
+        await Task.Delay(100);
+
+        secondCallbackInvoked.ShouldBeFalse("Stopped replacement timer should not fire");
+    }
+
+    [Fact]
     public async Task StartTimer_CallbackException_ShouldNotCrashAndShouldBeReusable()
     {
         var callbackReached = new TaskCompletionSource<bool>();

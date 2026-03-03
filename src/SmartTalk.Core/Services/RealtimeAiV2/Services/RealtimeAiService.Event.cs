@@ -131,7 +131,13 @@ public partial class RealtimeAiService
                         Log.Warning("[RealtimeAi] Idle follow-up message skipped, session no longer active, SessionId: {SessionId}", _ctx.SessionId);
                 }
 
-                if (idleFollowUp.OnTimeoutAsync != null) await idleFollowUp.OnTimeoutAsync();
+                if (idleFollowUp.OnTimeoutAsync != null)
+                {
+                    if (IsProviderSessionActive) 
+                        await idleFollowUp.OnTimeoutAsync();
+                    else 
+                        Log.Warning("[RealtimeAi] Idle timeout action skipped, session no longer active, SessionId: {SessionId}", _ctx.SessionId);
+                }
             });
         }
 
