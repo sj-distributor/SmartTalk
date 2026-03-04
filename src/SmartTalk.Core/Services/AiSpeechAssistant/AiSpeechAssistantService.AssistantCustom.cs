@@ -57,6 +57,11 @@ public partial interface IAiSpeechAssistantService
     Task<GetKonwledgeRelatedResponse> GetKonwledgeRelatedAsync(GetKonwledgeRelatedRequest request, CancellationToken cancellationToken);
 
     Task SyncCopiedKnowledgesIfRequiredAsync(int sourceKnowledgeId, bool deleteKnowledge, bool shouldSyncLastedKnowledge, CancellationToken cancellationToken);
+
+    Task<UpdateAiSpeechAssistantKnowledgeDetailResponse> UpdateAiSpeechAssistantKnowledgeDetailAsync(
+        UpdateAiSpeechAssistantKnowledgeDetailCommand command, CancellationToken cancellationToken);
+
+    Task DeleteAiSpeechAssistantKnowledgeDetailAsync(DeleteAiSpeechAssistantKnowledgeDetailCommand command, CancellationToken cancellationToken);
 }
 
 public partial class AiSpeechAssistantService
@@ -105,6 +110,22 @@ public partial class AiSpeechAssistantService
 
         var prevKnowledgeDto = _mapper.Map<AiSpeechAssistantKnowledgeDto>(prevKnowledge);
         var latestKnowledgeDto = _mapper.Map<AiSpeechAssistantKnowledgeDto>(latestKnowledge);
+        
+        if (command.Details is { Count: > 0 })
+        {
+            var details = command.Details.Select(x => new AiSpeechAssistantKnowledgeDetail
+            {
+                KnowledgeId = latestKnowledge.Id,
+                KnowledgeName = x.KnowledgeName,
+                FormatType = x.FormatType,
+                Content = x.Content,
+                CreatedDate = DateTimeOffset.Now
+            }).ToList();
+
+            await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgeDetailsAsync(details, true, cancellationToken).ConfigureAwait(false);
+
+            latestKnowledgeDto.Details = _mapper.Map<List<AiSpeechAssistantKnowledgeDetailDto>>(details);
+        }
 
         prevKnowledgeDto.KnowledgeCopyRelateds = _mapper.Map<List<AiSpeechAssistantKnowledgeCopyRelatedDto>>(asTargetKnowledgePrevRelateds.Concat(asSourceKnowledgePrevRelateds ?? new List<AiSpeechAssistantKnowledgeCopyRelated>()).ToList());
         latestKnowledgeDto.KnowledgeCopyRelateds = _mapper.Map<List<AiSpeechAssistantKnowledgeCopyRelatedDto>>(asSourceKnowledgePrevRelateds).Concat(newRelations).ToList();
@@ -1276,6 +1297,31 @@ public partial class AiSpeechAssistantService
         if (rebuildResult.NewTargets.Count == 0) return;
 
         await PersistNewTargetsAsync(rebuildResult, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<UpdateAiSpeechAssistantKnowledgeDetailResponse> UpdateAiSpeechAssistantKnowledgeDetailAsync(UpdateAiSpeechAssistantKnowledgeDetailCommand command, CancellationToken cancellationToken)
+    {
+        var detail = await _aiSpeechAssistantDataProvider.GetKnowledgeDetailsByKnowledgeIdAsync(command.DetailId, cancellationToken).ConfigureAwait(false);
+
+        if (detail == null || !detail.Any())
+            throw new Exception("Detail not found");
+
+        var updateDetail = detail.First();
+        updateDetail.KnowledgeName = command.KnowledgeName;
+        updateDetail.FormatType = command.FormatType;
+        updateDetail.LastModifiedDate = DateTimeOffset.Now;
+
+        await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgeDetailAsync(updateDetail, true, cancellationToken).ConfigureAwait(false);
+
+        return new UpdateAiSpeechAssistantKnowledgeDetailResponse
+        {
+            Data = _mapper.Map<AiSpeechAssistantKnowledgeDetailDto>(updateDetail)
+        };
+    }
+
+    public async Task DeleteAiSpeechAssistantKnowledgeDetailAsync(DeleteAiSpeechAssistantKnowledgeDetailCommand command, CancellationToken cancellationToken)
+    {
+        await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantKnowledgeDetailAsync(command.DetailId, true, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task DisableSyncUpdateAsync(int sourceKnowledgeId, CancellationToken cancellationToken)
