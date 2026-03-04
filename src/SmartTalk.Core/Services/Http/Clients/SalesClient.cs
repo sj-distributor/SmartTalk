@@ -1,4 +1,5 @@
 using System.Text;
+using Serilog;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Settings.Sales;
 using SmartTalk.Messages.Dto.Sales;
@@ -115,7 +116,8 @@ public class SalesClient : ISalesClient
     
     public async Task<GetAiOrderItemsByDeliveryDateResponseDto> GetAiOrderItemsByDeliveryDateAsync(GetAiOrderItemsByDeliveryDateRequestDto request, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(request.CustomerNumber)) throw new ArgumentException("CustomerNumber cannot be null or empty.");
+        if (string.IsNullOrWhiteSpace(request.CustomerNumber))
+            Log.Information("CustomerNumbers cannot be null or empty.");
 
         var deliveryDate = request.DeliveryDate.ToString("yyyy-MM-dd");
 
