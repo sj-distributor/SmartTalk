@@ -83,7 +83,7 @@ public partial class EventHandlingService
 
             if (record == null) return;
             
-            var scenarioInformation = await _speechMaticsService.IdentifyDialogueScenariosAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
+            var scenarioInformation = await _phoneOrderProcessJobService.IdentifyDialogueScenariosAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
             
             record.Remark = scenarioInformation.Remark;
             

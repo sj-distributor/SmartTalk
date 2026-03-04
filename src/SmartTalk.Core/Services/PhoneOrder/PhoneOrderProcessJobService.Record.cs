@@ -11,12 +11,17 @@ using Twilio.Rest.Api.V2010.Account;
 using SmartTalk.Messages.Dto.Sales;
 using Microsoft.IdentityModel.Tokens;
 using System.Text.RegularExpressions;
+using Smarties.Messages.DTO.OpenAi;
+using Smarties.Messages.Enums.OpenAi;
+using Smarties.Messages.Requests.Ask;
 using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Messages.Dto.SpeechMatics;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Core.Domain.AISpeechAssistant;
+using SmartTalk.Core.Utils;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
+using SmartTalk.Messages.Dto.PhoneOrder;
 using JsonDocument = System.Text.Json.JsonDocument;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 
@@ -25,6 +30,8 @@ namespace SmartTalk.Core.Services.PhoneOrder;
 public partial interface IPhoneOrderProcessJobService
 {
     Task HandleReleasedSpeechMaticsCallBackAsync(string jobId, CancellationToken cancellationToken);
+    
+    Task<DialogueScenarioResultDto> IdentifyDialogueScenariosAsync(string query, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderProcessJobService
@@ -33,15 +40,12 @@ public partial class PhoneOrderProcessJobService
     {
         if (jobId == null) return;
 
-        var speechMaticsJob = await _speechMaticsDataProvider.GetSpeechMaticsJobAsync(jobId, cancellationToken)
-            .ConfigureAwait(false);
+        var speechMaticsJob = await _speechMaticsDataProvider.GetSpeechMaticsJobAsync(jobId, cancellationToken).ConfigureAwait(false);
 
         var callBack = JsonConvert.DeserializeObject<SpeechMaticsCallBackResponseDto>(speechMaticsJob.CallbackMessage);
         
-        var record = await _phoneOrderDataProvider
-            .GetPhoneOrderRecordByTranscriptionJobIdAsync(jobId, cancellationToken)
-            .ConfigureAwait(false);
-
+        var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByTranscriptionJobIdAsync(jobId, cancellationToken).ConfigureAwait(false);
+       
         Log.Information("Get Phone order record : {@record}", record);
 
         if (record == null) return;
@@ -52,26 +56,19 @@ public partial class PhoneOrderProcessJobService
         {
             record.Status = PhoneOrderRecordStatus.Transcription;
 
-            await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken)
-                .ConfigureAwait(false);
+            await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken).ConfigureAwait(false);
 
             var speakInfos = StructureDiarizationResults(callBack.Results);
 
-            var audioContent = await _smartTalkHttpClientFactory.GetAsync<byte[]>(record.Url, cancellationToken)
-                .ConfigureAwait(false);
+            var audioContent = await _smartTalkHttpClientFactory.GetAsync<byte[]>(record.Url, cancellationToken).ConfigureAwait(false);
 
-            await _phoneOrderService
-                .ExtractPhoneOrderRecordAiMenuAsync(speakInfos, record, audioContent, cancellationToken)
-                .ConfigureAwait(false);
+            await _phoneOrderService.ExtractPhoneOrderRecordAiMenuAsync(speakInfos, record, audioContent, cancellationToken).ConfigureAwait(false);
 
             await SummarizeConversationContentAsync(record, audioContent, cancellationToken).ConfigureAwait(false);
 
-            await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken)
-                .ConfigureAwait(false);
+            await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-            _smartTalkBackgroundJobClient.Enqueue<IPhoneOrderProcessJobService>(
-                x => x.CalculateRecordingDurationAsync(record, null, cancellationToken),
-                HangfireConstants.InternalHostingFfmpeg);
+            _smartTalkBackgroundJobClient.Enqueue<IPhoneOrderProcessJobService>(x => x.CalculateRecordingDurationAsync(record, null, cancellationToken), HangfireConstants.InternalHostingFfmpeg);
         }
         catch (Exception e)
         {
@@ -84,25 +81,22 @@ public partial class PhoneOrderProcessJobService
         }
     }
 
-    private async Task SummarizeConversationContentAsync(PhoneOrderRecord record, byte[] audioContent,
-        CancellationToken cancellationToken)
+    private async Task SummarizeConversationContentAsync(PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken)
     {
-        var (aiSpeechAssistant, agent) = await _aiSpeechAssistantDataProvider
-            .GetAgentAndAiSpeechAssistantAsync(record.AgentId, record.AssistantId, cancellationToken).ConfigureAwait(false);
+        var (aiSpeechAssistant, agent) = await _aiSpeechAssistantDataProvider.GetAgentAndAiSpeechAssistantAsync(record.AgentId, record.AssistantId, cancellationToken).ConfigureAwait(false);
 
         Log.Information("Get Assistant: {@Assistant} and Agent: {@Agent} by agent id {agentId}", aiSpeechAssistant, agent, record.AgentId);
-
+        
         var callFrom = string.Empty;
-
-        TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
-
+        var callTo = string.Empty;
+      
         try
         {
-            await RetryAsync(async () =>
+            await RetryHelper.RetryAsync(async () =>
             {
-                var call = await CallResource.FetchAsync(record.SessionId);
-                callFrom = call?.From;
-                _ = call?.To;
+                var callInfo = await _twilioService.FetchCallAsync(record.SessionId);
+                callFrom = callInfo?.From;
+                callTo = callInfo?.To;
                 Log.Information("Fetched incoming phone number from Twilio: {callFrom}", callFrom);
             }, maxRetryCount: 3, delaySeconds: 3, cancellationToken);
         }
@@ -110,32 +104,39 @@ public partial class PhoneOrderProcessJobService
         {
             Log.Warning("Fetched incoming phone number from Twilio failed: {Message}", e.Message);
         }
-
-        var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow,
-            TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
+        
+        var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
+        var callSubjectCn = "通话主题:";
+        var callSubjectEn = "Conversation topic:";
 
-        var messages = await ConfigureRecordAnalyzePromptAsync(agent, aiSpeechAssistant, callFrom ?? "", currentTime, audioContent, cancellationToken);
-
+        var messages = await ConfigureRecordAnalyzePromptAsync(agent, aiSpeechAssistant, record, callFrom ?? "", callTo ?? "", currentTime, audioContent, callSubjectCn, callSubjectEn, cancellationToken);
+        
         ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
-
+ 
         ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
 
         ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
         Log.Information("sales record analyze report:" + completion.Content.FirstOrDefault()?.Text);
-
+      
         record.Status = PhoneOrderRecordStatus.Sent;
         record.TranscriptionText = completion.Content.FirstOrDefault()?.Text ?? "";
 
-        var detection = await _translationClient.DetectLanguageAsync(record.TranscriptionText, cancellationToken)
-            .ConfigureAwait(false);
+        var checkCustomerFriendly = await CheckCustomerFriendlyAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
 
-        await MultiScenarioCustomProcessingAsync(agent, aiSpeechAssistant, record, cancellationToken)
-            .ConfigureAwait(false);
+        record.IsHumanAnswered = checkCustomerFriendly.IsHumanAnswered;
+        record.IsCustomerFriendly = checkCustomerFriendly.IsCustomerFriendly;
 
-        if (agent.SourceSystem == AgentSourceSystem.Smarties)
-            await CallBackSmartiesRecordAsync(agent, record, cancellationToken).ConfigureAwait(false);
+        var scenarioInformation = await IdentifyDialogueScenariosAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
+        record.Scenario = scenarioInformation.Category;
+        record.Remark = scenarioInformation.Remark;
 
+        await _phoneOrderUtilService.GenerateWaitingProcessingEventAsync(record, scenarioInformation.IsIncludeTodo, agent.Id, cancellationToken).ConfigureAwait(false);
+        
+        await _posUtilService.GenerateAiDraftAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
+
+        var detection = await _translationClient.DetectLanguageAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
+        
         var reports = new List<PhoneOrderRecordReport>();
 
         reports.Add(new PhoneOrderRecordReport
@@ -146,17 +147,12 @@ public partial class PhoneOrderProcessJobService
             IsOrigin = SelectReportLanguageEnum(detection.Language) == record.Language,
             CreatedDate = DateTimeOffset.Now
         });
-
-        var targetLanguage =
-            SelectReportLanguageEnum(detection.Language) == TranscriptionLanguage.Chinese ? "en" : "zh";
-
-        var reportLanguage = SelectReportLanguageEnum(detection.Language) == TranscriptionLanguage.Chinese
-            ? TranscriptionLanguage.English
-            : TranscriptionLanguage.Chinese;
-
-        var translatedText = await _translationClient
-            .TranslateTextAsync(record.TranscriptionText, targetLanguage, cancellationToken: cancellationToken)
-            .ConfigureAwait(false);
+        
+        var targetLanguage = SelectReportLanguageEnum(detection.Language) == TranscriptionLanguage.Chinese ? "en" : "zh";
+        
+        var reportLanguage = SelectReportLanguageEnum(detection.Language) == TranscriptionLanguage.Chinese ? TranscriptionLanguage.English : TranscriptionLanguage.Chinese;
+        
+        var translatedText = await _translationClient.TranslateTextAsync(record.TranscriptionText, targetLanguage, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         reports.Add(new PhoneOrderRecordReport
         {
@@ -167,31 +163,27 @@ public partial class PhoneOrderProcessJobService
             CreatedDate = DateTimeOffset.Now
         });
 
-        await _phoneOrderDataProvider.AddPhoneOrderRecordReportsAsync(reports, true, cancellationToken)
-            .ConfigureAwait(false);
-
+        await _phoneOrderDataProvider.AddPhoneOrderRecordReportsAsync(reports, true, cancellationToken).ConfigureAwait(false);
+        
+        await _posUtilService.GenerateAiDraftAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
+        
+        await MultiScenarioCustomProcessingAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
+        
         await CallBackSmartiesRecordAsync(agent, record, cancellationToken).ConfigureAwait(false);
 
-        var message = agent.WechatRobotMessage?.Replace("#{assistant_name}", aiSpeechAssistant?.Name ?? "")
-            .Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString())
-            .Replace("#{assistant_file_url}", record.Url);
+        var message = agent.WechatRobotMessage?.Replace("#{assistant_name}", aiSpeechAssistant?.Name ?? "").Replace("#{agent_id}", agent.Id.ToString()).Replace("#{record_id}", record.Id.ToString()).Replace("#{assistant_file_url}", record.Url);
 
-        message = await SwitchKeyMessageByGetUserProfileAsync(record, callFrom, aiSpeechAssistant, agent, message,
-            cancellationToken).ConfigureAwait(false);
+        message = await SwitchKeyMessageByGetUserProfileAsync(record, callFrom, aiSpeechAssistant, agent, message, cancellationToken).ConfigureAwait(false);
 
-        await SendWorkWechatMessageByRobotKeyAsync(message, record, audioContent, agent, aiSpeechAssistant,
-            cancellationToken).ConfigureAwait(false);
+        await SendWorkWechatMessageByRobotKeyAsync(message, record, audioContent, agent, aiSpeechAssistant, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<string> SwitchKeyMessageByGetUserProfileAsync(PhoneOrderRecord record, string callFrom,
-        Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, Agent agent, string message,
-        CancellationToken cancellationToken)
+    private async Task<string> SwitchKeyMessageByGetUserProfileAsync(PhoneOrderRecord record, string callFrom, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, Agent agent, string message, CancellationToken cancellationToken)
     {
         if (callFrom != null && aiSpeechAssistant?.Id != null && !string.IsNullOrEmpty(message))
         {
-            var userProfile = await _aiSpeechAssistantDataProvider
-                .GetAiSpeechAssistantUserProfileAsync(aiSpeechAssistant.Id, callFrom, cancellationToken)
-                .ConfigureAwait(false);
+            var userProfile = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantUserProfileAsync(aiSpeechAssistant.Id, callFrom, cancellationToken).ConfigureAwait(false);
+            
             var salesName = userProfile?.ProfileJson != null
                 ? JObject.Parse(userProfile.ProfileJson).GetValue("correspond_sales")?.ToString()
                 : string.Empty;
@@ -356,26 +348,37 @@ public partial class PhoneOrderProcessJobService
         }
     }
 
-    private async Task<List<ChatMessage>> ConfigureRecordAnalyzePromptAsync(Agent agent,
-        Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, string callFrom, string currentTime,
-        byte[] audioContent, CancellationToken cancellationToken)
+     private async Task<List<ChatMessage>> ConfigureRecordAnalyzePromptAsync(
+         Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, PhoneOrderRecord record, string callFrom,
+         string callTo, string currentTime, byte[] audioContent, string callSubjectCn, string callSubjectEn, CancellationToken cancellationToken) 
     {
-        var soldToIds = !string.IsNullOrEmpty(aiSpeechAssistant.Name)
-            ? aiSpeechAssistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList()
-            : new List<string>();
+        var soldToIds = !string.IsNullOrEmpty(aiSpeechAssistant.Name) ? aiSpeechAssistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : new List<string>();
 
-        var customerItemsCacheList =
-            await _salesDataProvider.GetCustomerItemsCacheBySoldToIdsAsync(soldToIds, cancellationToken);
-        var customerItemsString = string.Join(Environment.NewLine,
-            soldToIds.Select(id => customerItemsCacheList.FirstOrDefault(c => c.CacheKey == id)?.CacheValue ?? ""));
+        var customerItemsCacheList = await _salesDataProvider.GetCustomerItemsCacheBySoldToIdsAsync(soldToIds, cancellationToken);
+        var customerItemsString = string.Join(Environment.NewLine, soldToIds.Select(id => customerItemsCacheList.FirstOrDefault(c => c.Filter == id)?.CacheValue ?? ""));
+        
+        var (_, menuItems) = await _posUtilService.GeneratePosMenuItemsAsync(agent.Id, false, record.Language, cancellationToken).ConfigureAwait(false);
 
         var audioData = BinaryData.FromBytes(audioContent);
         List<ChatMessage> messages =
         [
-            new SystemChatMessage((string.IsNullOrEmpty(aiSpeechAssistant?.CustomRecordAnalyzePrompt)
-                    ? "你是一名電話錄音的分析員，通過聽取錄音內容和語氣情緒作出精確分析，冩出一份分析報告。\n\n分析報告的格式：交談主題：xxx\n\n 來電號碼：#{call_from}\n\n 內容摘要:xxx \n\n 客人情感與情緒: xxx \n\n 待辦事件: \n1.xxx\n2.xxx \n\n 客人下單內容(如果沒有則忽略)：1. 牛肉(1箱)\n2. 雞腿肉(1箱)"
-                    : aiSpeechAssistant.CustomRecordAnalyzePrompt).Replace("#{call_from}", callFrom ?? "")
-                .Replace("#{current_time}", currentTime ?? "").Replace("#{customer_items}", customerItemsString ?? "")),
+            new SystemChatMessage( (string.IsNullOrEmpty(aiSpeechAssistant?.CustomRecordAnalyzePrompt)
+                ? "你是一名電話錄音的分析員，通過聽取錄音內容和語氣情緒作出精確分析，冩出一份分析報告。\n\n" +
+                  "分析報告的格式如下：" +
+                  "交談主題：xxx\n\n " +
+                  "來電號碼：#{call_from}\n\n " +
+                  "內容摘要:xxx \n\n " +
+                  "客人情感與情緒(无法判断时默认为平缓): xxx \n\n " +
+                  "待辦事件: \n1.xxx\n2.xxx \n\n " +
+                  "客人下單內容(如果沒有則忽略)：1. 牛肉(1箱)\n2. 雞腿肉(1箱)"
+                : aiSpeechAssistant.CustomRecordAnalyzePrompt)
+                .Replace("#{call_from}", callFrom ?? "")
+                .Replace("#{current_time}", currentTime ?? "")
+                .Replace("#{call_to}", callTo ?? "")
+                .Replace("#{customer_items}", customerItemsString ?? "")
+                .Replace("#{call_subject_cn}", callSubjectCn)
+                .Replace("#{call_subject_us}", callSubjectEn)
+                .Replace("#{menu_items}", menuItems ?? "")),
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
             new UserChatMessage("幫我根據錄音生成分析報告：")
         ];
@@ -428,8 +431,8 @@ public partial class PhoneOrderProcessJobService
 
         foreach (var storeOrder in extractedOrders)
         {
-            var soldToId = await ResolveSoldToIdAsync(storeOrder, aiSpeechAssistant, soldToIds, cancellationToken)
-                .ConfigureAwait(false);
+            var soldToId = await ResolveSoldToIdAsync(storeOrder, aiSpeechAssistant, soldToIds, cancellationToken).ConfigureAwait(false);
+            
             if (string.IsNullOrEmpty(soldToId))
             {
                 Log.Warning("未能获取店铺 SoldToId, StoreName={StoreName}, StoreNumber={StoreNumber}", storeOrder.StoreName,
@@ -674,5 +677,123 @@ public partial class PhoneOrderProcessJobService
 
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken)
             .ConfigureAwait(false);
+    }
+    
+     private async Task<(bool IsHumanAnswered, bool IsCustomerFriendly)> CheckCustomerFriendlyAsync(string transcriptionText, CancellationToken cancellationToken)
+    {
+        var completionResult = await _smartiesClient.PerformQueryAsync(new AskGptRequest
+        {
+            Messages = new List<CompletionsRequestMessageDto>
+            {
+                new()
+                {
+                    Role = "system",
+                    Content = new CompletionsStringContent(
+                        "你需要帮我从电话录音报告中判断两个维度：\n" +
+                        "1. 是否真人接听（IsHumanAnswered）：\n" +
+                        "   - 默认返回 true，表示是真人接听。\n" +
+                        "   - 当报告中包含转接语音信箱、系统提示、无人接听，或是 是AI 回复时，返回 false。表示非真人接听\n" +
+                        "例子：" +
+                        "“转接语音信箱“，“非真人接听”，“无人应答”，“对面为重复系统音提示”\n" +
+                        "2. 客人态度是否友好（IsCustomerFriendly）：\n" +
+                        "   - 如果语气平和、客气、积极配合，返回 true。\n" +
+                        "   - 如果语气恶劣、冷淡、负面或不耐烦，返回 false。\n" +
+                        "输出格式务必是 JSON：\n" +
+                        "{\"IsHumanAnswered\": true, \"IsCustomerFriendly\": true}\n" +
+                        "\n\n样例：\n" +
+                        "input: 通話主題：客戶查詢價格。\n內容摘要：客戶開場問候並詢問價格，語氣平和，最後表示感謝。\noutput: {\"IsHumanAnswered\": true, \"IsCustomerFriendly\": true}\n" +
+                        "input: 通話主題：外呼無人接聽。\n內容摘要：撥號後自動語音提示‘您撥打的電話暫時無法接通’。\noutput: {\"IsHumanAnswered\": false, \"IsCustomerFriendly\": false}\n"
+                    )
+                },
+                new()
+                {
+                    Role = "user",
+                    Content = new CompletionsStringContent($"input: {transcriptionText}, output:")
+                }
+            },
+            Model = OpenAiModel.Gpt4o,
+            ResponseFormat = new() { Type = "json_object" }
+        }, cancellationToken).ConfigureAwait(false);
+
+        var response = completionResult.Data.Response?.Trim();
+
+        var result = JsonConvert.DeserializeObject<PhoneOrderCustomerAttitudeAnalysis>(response);
+
+        if (result == null) throw new Exception($"无法反序列化模型返回结果: {response}");
+
+        return (result.IsHumanAnswered, result.IsCustomerFriendly); 
+    }
+    
+    public async Task<DialogueScenarioResultDto> IdentifyDialogueScenariosAsync(string query, CancellationToken cancellationToken)
+    {
+        var completionResult = await _smartiesClient.PerformQueryAsync(
+            new AskGptRequest
+            {
+                Messages = new List<CompletionsRequestMessageDto>
+                {
+                    new()
+                    {
+                        Role = "system",
+                        Content = new CompletionsStringContent(
+                            "请根据交谈主题以及交谈该内容，将其精准归类到下述预定义类别中。\n\n" +
+                            "### 可用分类（严格按定义归类，每个类别对应核心业务场景）：\n" +
+                            "1. Reservation（预订）\n   " +
+                            "- 顾客明确请求预订餐位，并提供时间、人数等关键预订信息。\n" +
+                            "2. Order（下单）\n   " +
+                            "- 顾客有明确购买意图，发起真正的下单请求（堂食、自取、餐厅直送外卖），包含菜品、数量等信息；\n " +
+                            "- 本类别排除对第三方外卖平台订单的咨询/问题类内容。\n" +
+                            "3. Inquiry（咨询）\n   " +
+                            "- 针对餐厅菜品、价格、营业时间、菜单、下单金额、促销活动、开票可行性等常规信息的提问；\n   " +
+                            "4. ThirdPartyOrderNotification（第三方订单相关）\n   " +
+                            "- 核心：**只要交谈中提及「第三方外卖平台名称/订单标识」，无论场景（咨询、催单、确认），均优先归此类**；\n   " +
+                            "- 平台范围：DoorDash、Uber Eats、Grubhub、Postmates、Caviar、Seamless、Fantuan（饭团外卖）、HungryPanda（熊猫外卖）、EzCater，及其他未列明的“非餐厅自有”外卖平台；\n   " +
+                            "- 场景包含：查询平台订单进度、催单、确认餐厅是否收到平台订单、平台/骑手通知等。\n " +
+                            "5. ComplaintFeedback（投诉与反馈）\n " +
+                            " - 顾客针对食物、服务、配送、餐厅体验提出的投诉或正向/负向反馈。\n" +
+                            "6. InformationNotification（信息通知）\n   " +
+                            "- 核心：「无提问/请求属性，仅传递事实性信息或操作意图」，无需对方即时决策；\n " +
+                            " 细分场景：\n" +
+                            " - 餐厅侧通知：“您点的菜缺货”“配送预计20分钟后到”“今天停水无法做饭”；\n    " +
+                            " - 顾客侧通知：“我预订的餐要迟到1小时”“原本4人现在改2人”“我取消今天到店”“我想把堂食改外带”；\n    " +
+                            " - 外部机构通知：“物业说明天停电”“城管通知今天不能外摆”；" +
+                            "7. TransferToHuman（转人工）\n" +
+                            " - 提及到人工客服，转接人工服务的场景。\n" +
+                            "8. SalesCall（推销电话）\n" +
+                            "- 外部公司（保险、装修、广告等）的促销/销售类来电。\n" +
+                            "9. InvalidCall（无效通话）\n" +
+                            "- 无实际业务内容的通话：静默来电、无应答、误拨、挂断、无法识别的噪音，或仅出现“请上传录音”“听不到”等无意义话术。\n" +
+                            "10. TransferVoicemail（语音信箱）\n    " +
+                            "- 通话提及到语音信箱的场景。\n" +
+                            "11. Other（其他）\n   " +
+                            "- 无法归入上述10类的内容，需在'remark'字段补充简短关键词说明。\n\n" +
+                            "### 输出规则（禁止输出任何额外文本，仅返回JSON）：\n" +
+                            "必须返回包含以下2个字段的JSON对象，格式如下：\n" +
+                            "{\n  \"category\": \"取值范围：Reservation、Order、Inquiry、ThirdPartyOrderNotification、ComplaintFeedback、InformationNotification、TransferToHuman、SalesCall、InvalidCall、TransferVoicemail、Other\",\n " +
+                            " \"remark\": \"仅当category为'Other'时填写简短关键词（如‘咨询加盟’），其余类别留空\"\n" +
+                            " \"IsIncludeTodo\": \"默认为false; 当报告中列出todo，或者待办事项时为ture，否则为false\"\n}" +
+                            "当一个对话中有多个场景出现时，需要遵循以下的识别优先级：" +
+                            "*Order > Reservation/InformationNotification > Inquiry > ComplaintFeedback > TransferToHuman > TransferVoicemail > ThirdPartyOrderNotification > SalesCall > InvalidCall > Other*"
+                        )
+                    },
+                    new()
+                    {
+                        Role = "user",
+                        Content = new CompletionsStringContent($"Call transcript: {query}\nOutput:")
+                    }
+                },
+                Model = OpenAiModel.Gpt4o,
+                ResponseFormat = new() { Type = "json_object" }
+            },
+            cancellationToken
+        ).ConfigureAwait(false);
+
+        var response = completionResult.Data.Response?.Trim();
+
+        var result = JsonConvert.DeserializeObject<DialogueScenarioResultDto>(response);
+
+        if (result == null)
+            throw new Exception($"IdentifyDialogueScenariosAsync 无法反序列化模型返回结果: {response}");
+
+        return result;
     }
 }
