@@ -699,26 +699,38 @@ public partial class AiSpeechAssistantService
     
     private async Task InitialKnowledgeAsync(AiSpeechAssistantKnowledge latestKnowledge, List<AiSpeechAssistantKnowledgeCopyRelated> relateds, CancellationToken cancellationToken)
     {
-        var latestKnowledgeJson = string.IsNullOrEmpty(latestKnowledge.Json) ? new JObject() : JObject.Parse(latestKnowledge.Json);
-        
-        var relatedJsons = Enumerable.Empty<JObject>();
-        if (relateds != null && relateds.Any())
-        {
-            relatedJsons = relateds.Select(r => JObject.Parse(r.CopyKnowledgePoints ?? "{}"));
-        }
-        
-        var mergedJsonObj = new[] { latestKnowledgeJson }
-            .Concat(relatedJsons)
-            .Aggregate(new JObject(), (acc, j) =>
-                { acc.Merge(j, new JsonMergeSettings { MergeArrayHandling = MergeArrayHandling.Concat }); return acc; });
-
-        var mergedJson = RemoveCopySuffixFromKeys(mergedJsonObj).ToString(Formatting.None);
-
-        Log.Information("InitialKnowledgeAsync mergedJson: {@mergedJson}", mergedJson);
-        
         latestKnowledge.IsActive = true;
         latestKnowledge.CreatedBy = _currentUser.Id.Value;
-        latestKnowledge.Prompt = GenerateKnowledgePrompt(mergedJson);
+
+        var mainDetails = await _aiSpeechAssistantDataProvider.GetKnowledgeDetailsByKnowledgeIdAsync(latestKnowledge.Id, cancellationToken).ConfigureAwait(false);
+
+        var relatedDetails = new List<AiSpeechAssistantKnowledgeDetail>();
+        if (relateds != null && relateds.Any())
+        {
+            var relatedKnowledgeIds = relateds
+                .Select(r => r.TargetKnowledgeId)
+                .Distinct()
+                .ToList();
+
+            foreach (var relatedId in relatedKnowledgeIds)
+            {
+                var details = await _aiSpeechAssistantDataProvider.GetKnowledgeDetailsByKnowledgeIdAsync(relatedId, cancellationToken).ConfigureAwait(false);
+
+                if (details != null && details.Any())
+                    relatedDetails.AddRange(details);
+            }
+        }
+
+        var allDetails = (mainDetails ?? Enumerable.Empty<AiSpeechAssistantKnowledgeDetail>()).Concat(relatedDetails).ToList();
+
+        if (allDetails.Any())
+        {
+            latestKnowledge.Prompt = await GenerateKnowledgePromptAsync(allDetails, cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            latestKnowledge.Prompt = string.Empty;
+        }
         latestKnowledge.Version = await HandleKnowledgeVersionAsync(latestKnowledge, cancellationToken).ConfigureAwait(false);
     }
 
@@ -743,6 +755,47 @@ public partial class AiSpeechAssistantService
         }
 
         return prompt.ToString();
+    }
+    
+    private async Task<string> GenerateKnowledgePromptAsync(List<AiSpeechAssistantKnowledgeDetail> details, CancellationToken cancellationToken)
+    {
+        if (details == null || !details.Any())
+            return string.Empty;
+
+        var sb = new StringBuilder();
+
+        foreach (var detail in details.OrderBy(x => x.Id))
+        {
+            if (string.IsNullOrWhiteSpace(detail.Content))
+                continue;
+
+            var content = detail.Content.Trim();
+
+            if (IsFileUrl(content))
+            {
+                content = await _fileTextExtractor.ExtractAsync(content, cancellationToken);
+            }
+
+            sb.AppendLine($"{detail.KnowledgeName}：");
+            sb.AppendLine(content);
+            sb.AppendLine();
+        }
+
+        return sb.ToString();
+    }
+
+    private static readonly HashSet<string> SupportedExtensions = new()
+    {
+        ".txt",".md",".pdf",".html",".xlsx",".xls",".doc",".docx",".csv"
+    };
+
+    private bool IsFileUrl(string content)
+    {
+        if (!Uri.TryCreate(content, UriKind.Absolute, out var uri))
+            return false;
+
+        var ext = Path.GetExtension(uri.AbsolutePath).ToLowerInvariant();
+        return SupportedExtensions.Contains(ext);
     }
 
     private async Task<string> HandleKnowledgeVersionAsync(AiSpeechAssistantKnowledge latestKnowledge, CancellationToken cancellationToken)
