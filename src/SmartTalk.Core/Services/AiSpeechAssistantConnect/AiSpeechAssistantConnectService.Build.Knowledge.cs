@@ -86,8 +86,7 @@ public partial class AiSpeechAssistantConnectService
         if (!_ctx.Prompt.Contains("#{customer_info}", StringComparison.OrdinalIgnoreCase)) return;
 
         var cache = await _salesDataProvider.GetCustomerInfoCacheByPhoneNumberAsync(_ctx.From, cancellationToken).ConfigureAwait(false);
-        var value = cache?.CacheValue?.Trim() ?? " ";
 
-        _ctx.Prompt = _ctx.Prompt.Replace("#{customer_info}", value);
+        _ctx.Prompt = _ctx.Prompt.Replace("#{customer_info}", cache?.CacheValue?.Trim() ?? " ");
     }
 }
