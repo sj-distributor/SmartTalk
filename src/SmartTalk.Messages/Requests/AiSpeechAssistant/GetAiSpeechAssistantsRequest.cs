@@ -7,7 +7,6 @@ using SmartTalk.Messages.Responses;
 
 namespace SmartTalk.Messages.Requests.AiSpeechAssistant;
 
-[SmartTalkAuthorize(Permissions = new[] { SecurityStore.Permissions.CanViewKnowledge })]
 public class GetAiSpeechAssistantsRequest : IRequest
 {
     public int? PageIndex { get; set; }
