@@ -89,7 +89,6 @@ public partial class AiSpeechAssistantService
         var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByIdAsync(command.AssistantId, cancellationToken).ConfigureAwait(false) ?? throw new Exception($"Assistant not found: {command.AssistantId}");
 
         latestKnowledge.ModelLanguage = !string.IsNullOrEmpty(command.Language) ? command.Language : assistant.ModelLanguage;
-        
         await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgesAsync([latestKnowledge], true, cancellationToken).ConfigureAwait(false);
         
         if (command.RelatedKnowledges is { Count: > 0 })
