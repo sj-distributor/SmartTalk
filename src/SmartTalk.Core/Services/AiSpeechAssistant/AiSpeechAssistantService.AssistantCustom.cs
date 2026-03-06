@@ -642,7 +642,8 @@ public partial class AiSpeechAssistantService
             AssistantId = assistant.Id,
             Greetings = command.Greetings,
             CreatedBy = _currentUser.Id.Value,
-            Prompt = GenerateKnowledgePrompt(command.Json)
+            Prompt = GenerateKnowledgePrompt(command.Json),
+            ModelLanguage = assistant.ModelLanguage
         };
 
         await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgesAsync([knowledge], cancellationToken: cancellationToken).ConfigureAwait(false);
