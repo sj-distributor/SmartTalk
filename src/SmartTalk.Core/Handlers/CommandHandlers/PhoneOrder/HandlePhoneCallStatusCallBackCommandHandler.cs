@@ -1,21 +1,21 @@
 using Mediator.Net.Context;
 using Mediator.Net.Contracts;
 using SmartTalk.Messages.Commands.Twilio;
-using SmartTalk.Core.Services.Communication.Twilio;
+using SmartTalk.Core.Services.Webhook;
 
 namespace SmartTalk.Core.Handlers.CommandHandlers.PhoneOrder;
 
 public class HandlePhoneCallStatusCallBackCommandHandler : ICommandHandler<HandlePhoneCallStatusCallBackCommand>
 {
-    private readonly ITwilioService _twilioService;
+    private readonly ITwilioWebhookService _twilioWebhookService;
 
-    public HandlePhoneCallStatusCallBackCommandHandler(ITwilioService twilioService)
+    public HandlePhoneCallStatusCallBackCommandHandler(ITwilioWebhookService twilioWebhookService)
     {
-        _twilioService = twilioService;
+        _twilioWebhookService = twilioWebhookService;
     }
 
     public async Task Handle(IReceiveContext<HandlePhoneCallStatusCallBackCommand> context, CancellationToken cancellationToken)
     {
-        await _twilioService.HandlePhoneCallStatusCallbackAsync(context.Message, cancellationToken).ConfigureAwait(false);
+        await _twilioWebhookService.HandlePhoneCallStatusCallbackAsync(context.Message, cancellationToken).ConfigureAwait(false);
     }
 }

@@ -14,6 +14,8 @@ using ClosedXML.Excel;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using SmartTalk.Core.Domain.PhoneOrder;
+using SmartTalk.Core.Domain.SpeechMatics;
+using SmartTalk.Core.Services.Linphone;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Dto.Attachments;
@@ -43,8 +45,6 @@ public partial interface IPhoneOrderService
     Task ExtractPhoneOrderRecordAiMenuAsync(List<SpeechMaticsSpeakInfoDto> phoneOrderInfo, PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken);
 
     Task<AddOrUpdateManualOrderResponse> AddOrUpdateManualOrderAsync(AddOrUpdateManualOrderCommand command, CancellationToken cancellationToken);
-
-    Task<string> CreateSpeechMaticsJobAsync(byte[] recordContent, string recordName, string language, CancellationToken cancellationToken);
     
     Task<GetPhoneCallUsagesPreviewResponse> GetPhoneCallUsagesPreviewAsync(GetPhoneCallUsagesPreviewRequest request, CancellationToken cancellationToken);
 
@@ -57,6 +57,10 @@ public partial interface IPhoneOrderService
     Task<GetPhoneOrderDataDashboardResponse> GetPhoneOrderDataDashboardAsync(GetPhoneOrderDataDashboardRequest request, CancellationToken cancellationToken);
     
     Task<GetPhoneOrderRecordScenarioResponse> GetPhoneOrderRecordScenarioAsync(GetPhoneOrderRecordScenarioRequest request, CancellationToken cancellationToken);
+    
+    Task<GetPhoneOrderRecordTasksResponse> GetPhoneOrderRecordTasksRequestsAsync(GetPhoneOrderRecordTasksRequest request, CancellationToken cancellationToken);
+
+    Task<UpdatePhoneOrderRecordTasksResponse> UpdatePhoneOrderRecordTasksAsync(UpdatePhoneOrderRecordTasksCommand command, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderService
@@ -115,7 +119,7 @@ public partial class PhoneOrderService
             UserName = user.UserName,
             CreatedDate = DateTime.UtcNow
         }, true, cancellationToken).ConfigureAwait(false);
-
+        
         return new PhoneOrderRecordUpdatedEvent
         {
             RecordId = record.Id,
@@ -166,7 +170,7 @@ public partial class PhoneOrderService
             return;
         }
 
-        record.TranscriptionJobId = await CreateSpeechMaticsJobAsync(command.RecordContent, command.RecordName ?? Guid.NewGuid().ToString("N") + ".wav", detection.Language, cancellationToken).ConfigureAwait(false);
+        record.TranscriptionJobId = await _speechMaticsService.CreateSpeechMaticsJobAsync(command.RecordContent, command.RecordName ?? Guid.NewGuid().ToString("N") + ".wav", detection.Language, SpeechMaticsJobScenario.Released, cancellationToken).ConfigureAwait(false);
 
         await AddPhoneOrderRecordAsync(record, PhoneOrderRecordStatus.Diarization, cancellationToken).ConfigureAwait(false);
     }
@@ -596,131 +600,28 @@ public partial class PhoneOrderService
 
         var audioBytes = await _ffmpegService.ConvertFileFormatAsync(file, fileType, cancellationToken).ConfigureAwait(false);
 
-        var splitAudios = await _ffmpegService.SpiltAudioAsync(audioBytes, speakStartTimeVideo, speakEndTimeVideo, cancellationToken).ConfigureAwait(false);
+        var splitAudios = await _ffmpegService.SpiltAudioAsync(audioBytes, speakStartTimeVideo, speakEndTimeVideo, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var transcriptionResult = new StringBuilder();
-
-        foreach (var reSplitAudio in splitAudios)
+        
+        try
         {
-            try
-            {
-                var transcriptionResponse = await _speechToTextService.SpeechToTextAsync(
-                    reSplitAudio, record.Language, TranscriptionFileType.Wav, TranscriptionResponseFormat.Text,
-                    record.RestaurantInfo?.Message ?? string.Empty, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-                transcriptionResult.Append(transcriptionResponse);
-            }
-            catch (Exception e)
-            {
-                Log.Warning("Audio segment transcription error: {@Exception}", e);
-            }
+            var transcriptionResponse = await _speechToTextService.SpeechToTextAsync(
+                splitAudios, record.Language, TranscriptionFileType.Wav, TranscriptionResponseFormat.Text,
+                record.RestaurantInfo?.Message ?? string.Empty, cancellationToken: cancellationToken).ConfigureAwait(false);
+                
+            transcriptionResult.Append(transcriptionResponse);
+        }
+        catch (Exception e)
+        {
+            Log.Warning("Audio segment transcription error: {@Exception}", e);
         }
 
         Log.Information("Transcription result {Transcription}", transcriptionResult.ToString());
 
         return transcriptionResult.ToString();
     }
-
-    private async Task<string> CreateTranscriptionJobAsync(byte[] data, string fileName, string language, CancellationToken cancellationToken)
-    {
-        var createTranscriptionDto = new SpeechMaticsCreateTranscriptionDto { Data = data, FileName = fileName };
-
-        var jobConfigDto = new SpeechMaticsJobConfigDto
-        {
-            Type = SpeechMaticsJobType.Transcription,
-            TranscriptionConfig = new SpeechMaticsTranscriptionConfigDto
-            {
-                Language = SelectSpeechMetisLanguageType(language),
-                Diarization = SpeechMaticsDiarizationType.Speaker,
-                OperatingPoint = SpeechMaticsOperatingPointType.Enhanced
-            },
-            NotificationConfig = new List<SpeechMaticsNotificationConfigDto>
-            {
-                new SpeechMaticsNotificationConfigDto
-                {
-                    AuthHeaders = _transcriptionCallbackSetting.AuthHeaders,
-                    Contents = new List<string> { "transcript" },
-                    Url = _transcriptionCallbackSetting.Url
-                }
-            }
-        };
-
-        return await _speechMaticsClient.CreateJobAsync(new SpeechMaticsCreateJobRequestDto { JobConfig = jobConfigDto }, createTranscriptionDto, cancellationToken).ConfigureAwait(false);
-    }
-
-    private SpeechMaticsLanguageType SelectSpeechMetisLanguageType(string language)
-    {
-        return language switch
-        {
-            "en" => SpeechMaticsLanguageType.En,
-            "zh" => SpeechMaticsLanguageType.Yue,
-            "zh-CN" or "zh-TW" => SpeechMaticsLanguageType.Cmn,
-            "es" => SpeechMaticsLanguageType.Es,
-            "ko" => SpeechMaticsLanguageType.Ko,
-            _ => SpeechMaticsLanguageType.En
-        };
-    }
-
-    public async Task<string> CreateSpeechMaticsJobAsync(byte[] recordContent, string recordName, string language,
-        CancellationToken cancellationToken)
-    {
-        var retryCount = 2;
-
-        while (true)
-        {
-            var transcriptionJobIdJObject = JObject.Parse(await CreateTranscriptionJobAsync(recordContent, recordName, language, cancellationToken).ConfigureAwait(false));
-
-            var transcriptionJobId = transcriptionJobIdJObject["id"]?.ToString();
-
-            Log.Information("Phone order record transcriptionJobId: {@transcriptionJobId}", transcriptionJobId);
-
-            if (transcriptionJobId != null)
-                return transcriptionJobId;
-
-            Log.Information("Create speechMatics job abnormal, start replacement key");
-
-            var keys = await _speechMaticsDataProvider.GetSpeechMaticsKeysAsync(
-                    [SpeechMaticsKeyStatus.Active, SpeechMaticsKeyStatus.NotEnabled], cancellationToken: cancellationToken).ConfigureAwait(false);
-
-            Log.Information("Get speechMatics keys：{@keys}", keys);
-
-            var activeKey = keys.FirstOrDefault(x => x.Status == SpeechMaticsKeyStatus.Active);
-
-            var notEnabledKey = keys.FirstOrDefault(x => x.Status == SpeechMaticsKeyStatus.NotEnabled);
-
-            if (notEnabledKey != null && activeKey != null)
-            {
-                notEnabledKey.Status = SpeechMaticsKeyStatus.Active;
-                notEnabledKey.LastModifiedDate = DateTimeOffset.Now;
-                activeKey.Status = SpeechMaticsKeyStatus.Discard;
-            }
-
-            Log.Information("Update speechMatics keys：{@keys}", keys);
-
-            await _speechMaticsDataProvider.UpdateSpeechMaticsKeysAsync([notEnabledKey, activeKey], cancellationToken: cancellationToken).ConfigureAwait(false);
-
-            retryCount--;
-
-            if (retryCount <= 0)
-            {
-                await _weChatClient.SendWorkWechatRobotMessagesAsync(
-                    _speechMaticsKeySetting.SpeechMaticsKeyEarlyWarningRobotUrl,
-                    new SendWorkWechatGroupRobotMessageDto
-                    {
-                        MsgType = "text",
-                        Text = new SendWorkWechatGroupRobotTextDto
-                        {
-                            Content = $"SMT Speech Matics Key Error"
-                        }
-                    }, cancellationToken).ConfigureAwait(false);
-
-                return null;
-            }
-
-            Log.Information("Retrying Create Speech Matics Job Attempts remaining: {RetryCount}", retryCount);
-        }
-    }
-
+    
     private (DateTimeOffset? UtcStart, DateTimeOffset? UtcEnd) ConvertPstDateToUtcRange(DateTimeOffset? inputDate)
     {
         if (!inputDate.HasValue) return (null, null);
@@ -856,6 +757,12 @@ public partial class PhoneOrderService
     {
         if (assistantIds == null || assistantIds.Count == 0) return [];
 
+        static int CountOrderIds(string orderIdJson)
+        {
+            try { return JsonConvert.DeserializeObject<List<object>>(orderIdJson)?.Count ?? 0; }
+            catch { return 0; }
+        }
+
         var chinaZone = GetChinaTimeZone();
         var nowChina = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, chinaZone);
         var todayChina = new DateTime(nowChina.Year, nowChina.Month, nowChina.Day, 0, 0, 0, DateTimeKind.Unspecified);
@@ -881,11 +788,16 @@ public partial class PhoneOrderService
                     ? $"超过{daysWindow}天"
                     : CalculateDaysSinceLastCallText(latestRecord.CreatedDate, todayChina, chinaZone);
 
+                var aiOrderCount = groupRecords
+                    .Where(r => !string.IsNullOrEmpty(r.OrderId))
+                    .Sum(r => CountOrderIds(r.OrderId));
+
                 return new CompanyCallReportRow
                 {
                     CustomerId = string.IsNullOrWhiteSpace(assistantName) ? assistantId.ToString() : assistantName,
                     CustomerLanguage = assistantLanguage ?? string.Empty,
                     TotalCalls = groupRecords.Count,
+                    AiOrderCount = aiOrderCount,
                     ScenarioCounts = scenarioCounts,
                     DaysSinceLastCallText = daysSinceLastCallText
                 };
@@ -1096,6 +1008,8 @@ public partial class PhoneOrderService
             headers.Add($"{prefix}有效通話量（下单+转接+咨询）");
         }
 
+        headers.Add($"{prefix}AI下单数量");
+
         foreach (var scenario in scenarios)
         {
             headers.Add($"{prefix}{scenario.GetDescription()}");
@@ -1126,6 +1040,7 @@ public partial class PhoneOrderService
             {
                 var invalidCount = GetScenarioCount(row.ScenarioCounts, DialogueScenarios.InvalidCall);
                 ws.Cell(rowIndex + 2, colIndex++).Value = row.TotalCalls - invalidCount;
+                ws.Cell(rowIndex + 2, colIndex++).Value = row.AiOrderCount;
 
                 foreach (var scenario in scenarios)
                 {
@@ -1142,6 +1057,7 @@ public partial class PhoneOrderService
 
                 ws.Cell(rowIndex + 2, colIndex++).Value = row.TotalCalls;
                 ws.Cell(rowIndex + 2, colIndex++).Value = orderCount + transferCount + inquiryCount;
+                ws.Cell(rowIndex + 2, colIndex++).Value = row.AiOrderCount;
 
                 foreach (var scenario in scenarios)
                 {
@@ -1188,6 +1104,8 @@ public partial class PhoneOrderService
         public string CustomerLanguage { get; set; }
 
         public int TotalCalls { get; set; }
+
+        public int AiOrderCount { get; set; }
 
         public Dictionary<DialogueScenarios, int> ScenarioCounts { get; set; } = new();
 
@@ -1448,6 +1366,67 @@ public partial class PhoneOrderService
         return new GetPhoneOrderRecordScenarioResponse
         {
             Data = result
+        };
+    }
+    
+    public async Task<GetPhoneOrderRecordTasksResponse> GetPhoneOrderRecordTasksRequestsAsync(
+        GetPhoneOrderRecordTasksRequest request, CancellationToken cancellationToken)
+    {
+        var (utcStart, utcEnd) = ConvertPstDateToUtcRange(request.Date);
+
+        if (request.AgentIds is not { Count: > 0 })
+        {
+            var storesAndAgents = await _posDataProvider.GetSimpleStoreAgentsAsync(request.ServiceProviderId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+            request.AgentIds = storesAndAgents.Select(x => x.AgentId).Distinct().ToList(); 
+        }
+        
+        if (request.AgentIds.Count == 0) return new GetPhoneOrderRecordTasksResponse();
+
+        bool? isIncludeTodo = request.TaskType.Contains(TaskType.Todo) ? true : null;
+        
+        var events = await _phoneOrderDataProvider.GetWaitingProcessingEventsAsync(request.AgentIds, request.WaitingTaskStatus, utcStart, utcEnd, request.TaskType, isIncludeTodo, cancellationToken).ConfigureAwait(false);
+
+        var (all, unread) = await _phoneOrderDataProvider.GetAllOrUnreadWaitingProcessingEventsAsync(request.AgentIds, request.TaskType, cancellationToken).ConfigureAwait(false);
+        
+        if (request.TaskType is { Count: > 0 } && request.TaskType.Contains(TaskType.Todo))
+        {
+            events = events.Select(x =>
+            {
+                x.TaskType = TaskType.Todo;
+                return x;
+            }).ToList();
+        }
+        
+        return new GetPhoneOrderRecordTasksResponse
+        {
+            Data = new GetPhoneOrderRecordTasksDto
+            {
+                AllCount = all,
+                UnreadCount = unread,
+                WaitingTasks = events
+            }
+        };
+    }
+
+    public async Task<UpdatePhoneOrderRecordTasksResponse> UpdatePhoneOrderRecordTasksAsync(
+        UpdatePhoneOrderRecordTasksCommand command, CancellationToken cancellationToken)
+    {
+        var waitingProcessingEvents = await _phoneOrderDataProvider.GetWaitingProcessingEventsAsync(ids: command.Ids, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (waitingProcessingEvents.Count < 0) return new UpdatePhoneOrderRecordTasksResponse();
+
+        waitingProcessingEvents = waitingProcessingEvents.Select(x =>
+        {
+            x.TaskStatus = command.WaitingTaskStatus;
+            return x;
+        }).ToList();
+        
+        await _phoneOrderDataProvider.UpdateWaitingProcessingEventsAsync(waitingProcessingEvents, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return new UpdatePhoneOrderRecordTasksResponse
+        {
+            Data = _mapper.Map<List<WaitingProcessingEventsDto>>(waitingProcessingEvents)
         };
     }
 }

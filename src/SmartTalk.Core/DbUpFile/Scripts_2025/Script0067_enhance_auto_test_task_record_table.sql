@@ -1,0 +1,1 @@
+ALTER TABLE `auto_test_task_record` ADD COLUMN `is_archived` tinyint(1) not null default 0;

@@ -3,6 +3,7 @@ using Newtonsoft.Json;
 using Serilog;
 using SmartTalk.Core.Extensions;
 using SmartTalk.Core.Services.AiSpeechAssistant;
+using SmartTalk.Core.Services.RealtimeAi.Services;
 using SmartTalk.Core.Services.RealtimeAi.Wss;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Messages.Dto.RealtimeAi;
@@ -37,22 +38,24 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
     }
 
     public async Task<object> GetInitialSessionPayloadAsync(
-        Domain.AISpeechAssistant.AiSpeechAssistant assistantProfile, RealtimeAiEngineContext context, string sessionId, CancellationToken cancellationToken)
+        RealtimeSessionOptions options, string sessionId, CancellationToken cancellationToken)
     {
-        var configs = await InitialSessionConfigAsync(assistantProfile, cancellationToken).ConfigureAwait(false);
-        var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(assistantProfile.Id, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var profile = options.ConnectionProfile;
+        var modelConfig = options.ModelConfig;
+        var configs = await InitialSessionConfigAsync(options, cancellationToken).ConfigureAwait(false);
+        var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(int.Parse(profile.ProfileId), isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
         var prompt = await ReplaceKnowledgeVariablesAsync(knowledge?.Prompt, cancellationToken).ConfigureAwait(false);
-        
+
         var sessionPayload = new
         {
             type = "session.update",
             session = new
             {
                 turn_detection = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection),
-                input_audio_format = context.InputFormat.GetDescription(),
-                output_audio_format = context.OutputFormat.GetDescription(),
-                voice = string.IsNullOrEmpty(assistantProfile.ModelVoice) ? "alloy" : assistantProfile.ModelVoice,
-                instructions = prompt ?? context.InitialPrompt,
+                input_audio_format = options.InputFormat.GetDescription(),
+                output_audio_format = options.OutputFormat.GetDescription(),
+                voice = string.IsNullOrEmpty(modelConfig.Voice) ? "alloy" : modelConfig.Voice,
+                instructions = prompt ?? options.InitialPrompt,
                 modalities = new[] { "text", "audio" },
                 temperature = 0.8,
                 input_audio_transcription = new { model = "whisper-1" },
@@ -60,9 +63,9 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
                 tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config)
             }
         };
-        
+
         Log.Information("OpenAIAdapter: 构建初始会话负载: {@Payload}", sessionPayload);
-        
+
         return sessionPayload;
     }
 
@@ -229,9 +232,9 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
         }
     }
     
-    private async Task<List<(AiSpeechAssistantSessionConfigType Type, object Config)>> InitialSessionConfigAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken = default)
+    private async Task<List<(AiSpeechAssistantSessionConfigType Type, object Config)>> InitialSessionConfigAsync(RealtimeSessionOptions options, CancellationToken cancellationToken = default)
     {
-        var functions = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallByAssistantIdsAsync([assistant.Id], assistant.ModelProvider, true, cancellationToken).ConfigureAwait(false);
+        var functions = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallByAssistantIdsAsync([int.Parse(options.ConnectionProfile.ProfileId)], options.ModelConfig.Provider, true, cancellationToken).ConfigureAwait(false);
 
         return functions.Count == 0 ? [] : functions.Where(x => !string.IsNullOrWhiteSpace(x.Content)).Select(x => (x.Type, JsonConvert.DeserializeObject<object>(x.Content))).ToList();
     }
@@ -248,5 +251,5 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
         };
     }
 
-    public AiSpeechAssistantProvider Provider => AiSpeechAssistantProvider.OpenAi;
+    public RealtimeAiProvider Provider => RealtimeAiProvider.OpenAi;
 }

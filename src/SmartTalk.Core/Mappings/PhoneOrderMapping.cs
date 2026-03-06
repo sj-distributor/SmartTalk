@@ -37,5 +37,7 @@ public class PhoneOrderMapping : Profile
         CreateMap<PhoneOrderRecordReportDto, PhoneOrderRecordReport>().ReverseMap();
         
         CreateMap<PhoneOrderRecordScenarioHistory, PhoneOrderRecordScenarioHistoryDto>().ReverseMap();
+
+        CreateMap<WaitingProcessingEvent, WaitingProcessingEventsDto>().ReverseMap();
     }
 }

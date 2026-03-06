@@ -55,7 +55,7 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
         {
             var ids = soldToId.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()).ToList();
             Log.Information("Refreshing cache for soldToId: {SoldToId}", ids);
-
+            
             var combinedItems = await _salesService.BuildCustomerItemsStringAsync(ids, cancellationToken).ConfigureAwait(false);
 
             await _salesDataProvider.UpsertCustomerItemsCacheAsync(soldToId, combinedItems, true, cancellationToken).ConfigureAwait(false);
@@ -75,7 +75,7 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
         
         var crmToken = await _crmClient.GetCrmTokenAsync(cancellationToken).ConfigureAwait(false);
         if (crmToken == null) return;
-        
+
         var totalPhones = 0;
         
         foreach (var soldToId in allSoldToIds)
