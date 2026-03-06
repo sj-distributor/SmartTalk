@@ -1,3 +1,4 @@
+using Hangfire;
 using Serilog;
 using SmartTalk.Core.Constants;
 using SmartTalk.Core.Ioc;
@@ -56,6 +57,7 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
         Log.Information("All customer items cache refresh jobs scheduled. Count: {Count}", allSoldToIds.Count);
     }
 
+    [DisableConcurrentExecution(5)]
     public async Task RefreshCustomerItemsCacheBySoldToIdAsync(string soldToId, CancellationToken cancellationToken)
     {
         try
