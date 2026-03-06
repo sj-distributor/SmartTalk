@@ -22,6 +22,8 @@ public class AiSpeechAssistantKnowledgeDto
     
     public AiSpeechAssistantPremiseDto Premise { get; set; }
     
+    public List<AiSpeechAssistantKnowledgeDetailDto> Details { get; set; }
+    
     public int CreatedBy { get; set; }
     
     public List<AiSpeechAssistantKnowledgeCopyRelatedDto> KnowledgeCopyRelateds { get; set; }

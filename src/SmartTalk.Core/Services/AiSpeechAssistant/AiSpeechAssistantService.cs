@@ -88,6 +88,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly ISpeechMaticsService _speechMaticsService;
     private readonly ISalesDataProvider _salesDataProvider;
     private readonly ISpeechToTextService _speechToTextService;
+    private readonly IFileTextExtractor _fileTextExtractor;
     private readonly WorkWeChatKeySetting _workWeChatKeySetting;
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
     private readonly IRestaurantDataProvider _restaurantDataProvider;
@@ -123,6 +124,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         ISpeechMaticsService speechMaticsService,
         ISalesDataProvider salesDataProvider,
         ISpeechToTextService speechToTextService,
+        IFileTextExtractor fileTextExtractor,
         WorkWeChatKeySetting workWeChatKeySetting,
         ISmartTalkHttpClientFactory httpClientFactory,
         IRestaurantDataProvider restaurantDataProvider,
@@ -151,6 +153,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _httpClientFactory = httpClientFactory;
         _attachmentService = attachmentService;
         _salesDataProvider = salesDataProvider;
+        _fileTextExtractor = fileTextExtractor;
         _speechToTextService = speechToTextService;
         _speechMaticsService = speechMaticsService;
         _workWeChatKeySetting = workWeChatKeySetting;
