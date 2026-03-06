@@ -1,0 +1,1 @@
+ALTER TABLE `speech_matics_job` modify `scenario_record_id` varchar(64) NULL;

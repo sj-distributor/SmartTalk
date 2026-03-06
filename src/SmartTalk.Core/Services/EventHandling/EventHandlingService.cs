@@ -37,8 +37,9 @@ public partial class EventHandlingService : IEventHandlingService
     private readonly ISpeechMaticsService _speechMaticsService;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
+    private readonly IPhoneOrderProcessJobService _phoneOrderProcessJobService;
 
-    public EventHandlingService(SmartiesClient smartiesClient, IPosUtilService posUtilService, IPosDataProvider posDataProvider, IPhoneOrderDataProvider phoneOrderDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, IAiSpeechAssistantService aiSpeechAssistantService, ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient, ICurrentUser currentUser, IAgentDataProvider agentDataProvider, IPhoneOrderUtilService phoneOrderUtilService, ISpeechMaticsService speechMaticsService)
+    public EventHandlingService(SmartiesClient smartiesClient, IPosUtilService posUtilService, IPosDataProvider posDataProvider, IPhoneOrderDataProvider phoneOrderDataProvider, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, IAiSpeechAssistantService aiSpeechAssistantService, ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient, ICurrentUser currentUser, IAgentDataProvider agentDataProvider, IPhoneOrderUtilService phoneOrderUtilService, ISpeechMaticsService speechMaticsService, IPhoneOrderProcessJobService phoneOrderProcessJobService)
     {
         _smartiesClient = smartiesClient;
         _posUtilService = posUtilService;
@@ -51,6 +52,7 @@ public partial class EventHandlingService : IEventHandlingService
         _agentDataProvider = agentDataProvider;
         _phoneOrderUtilService = phoneOrderUtilService;
         _speechMaticsService = speechMaticsService;
+        _phoneOrderProcessJobService = phoneOrderProcessJobService;
         _currentUser = currentUser;
     }
 }

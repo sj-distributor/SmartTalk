@@ -31,6 +31,9 @@ using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Services.Restaurants;
+using SmartTalk.Core.Services.SpeechMatics;
+using SmartTalk.Core.Services.Sale;
+using SmartTalk.Core.Services.STT;
 using SmartTalk.Core.Services.Sale;
 using SmartTalk.Core.Services.Timer;
 using SmartTalk.Core.Settings.Azure;
@@ -47,7 +50,10 @@ using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Pos;
 using SmartTalk.Messages.Dto.Smarties;
+using SmartTalk.Messages.Enums.SpeechMatics;
+using SmartTalk.Messages.Enums.Caching;
 using SmartTalk.Messages.Enums.PhoneOrder;
+using SmartTalk.Messages.Enums.STT;
 using SmartTalk.Messages.Enums.RealtimeAi;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 
@@ -64,6 +70,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 {
     private readonly IClock _clock;
     private readonly IMapper _mapper;
+    private readonly ICrmClient _crmClient;
+    private readonly ISalesClient _salesClient;
     private readonly ICurrentUser _currentUser;
     private readonly AzureSetting _azureSetting;
     private readonly ICacheManager _cacheManager;
@@ -77,7 +85,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly IPhoneOrderService _phoneOrderService;
     private readonly IAgentDataProvider _agentDataProvider;
     private readonly IAttachmentService _attachmentService;
+    private readonly ISpeechMaticsService _speechMaticsService;
     private readonly ISalesDataProvider _salesDataProvider;
+    private readonly ISpeechToTextService _speechToTextService;
     private readonly IFileTextExtractor _fileTextExtractor;
     private readonly WorkWeChatKeySetting _workWeChatKeySetting;
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
@@ -97,6 +107,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     public AiSpeechAssistantService(
         IClock clock,
         IMapper mapper,
+        ICrmClient crmClient,
         ICurrentUser currentUser,
         AzureSetting azureSetting,
         ICacheManager cacheManager,
@@ -110,7 +121,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         IPhoneOrderService phoneOrderService,
         IAgentDataProvider agentDataProvider,
         IAttachmentService attachmentService,
+        ISpeechMaticsService speechMaticsService,
         ISalesDataProvider salesDataProvider,
+        ISpeechToTextService speechToTextService,
         IFileTextExtractor fileTextExtractor,
         WorkWeChatKeySetting workWeChatKeySetting,
         ISmartTalkHttpClientFactory httpClientFactory,
@@ -124,6 +137,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     {
         _clock = clock;
         _mapper = mapper;
+        _crmClient = crmClient;
         _currentUser = currentUser;
         _openaiClient = openaiClient;
         _cacheManager = cacheManager;
@@ -140,6 +154,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _attachmentService = attachmentService;
         _salesDataProvider = salesDataProvider;
         _fileTextExtractor = fileTextExtractor;
+        _speechToTextService = speechToTextService;
+        _speechMaticsService = speechMaticsService;
         _workWeChatKeySetting = workWeChatKeySetting;
         _backgroundJobClient = backgroundJobClient;
         _restaurantDataProvider = restaurantDataProvider;
@@ -1052,7 +1068,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             audioData,
             _aiSpeechAssistantStreamContext.Assistant.CustomRepeatOrderPrompt,
             _aiSpeechAssistantStreamContext.Assistant.ModelVoice,
-            cancellationToken);
+            cancellationToken);  
     }
     
     private async Task ProcessUpdateOrderAsync(AiSpeechAssistantStreamContextDto context, JsonElement jsonDocument, CancellationToken cancellationToken)

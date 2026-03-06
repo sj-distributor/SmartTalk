@@ -1,5 +1,4 @@
 using Mediator.Net;
-using SmartTalk.Core.Constants;
 using SmartTalk.Core.Settings.Jobs;
 using SmartTalk.Messages.Commands.Sales;
 
