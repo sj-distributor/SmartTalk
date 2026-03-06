@@ -304,7 +304,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         {
             var root = doc.RootElement;
 
-            if (root.TryGetProperty("recording", out var recordingElement))
+            if (root.TryGetProperty("Recording", out var recordingElement))
             {
                 recording = recordingElement.GetString();
             }
@@ -324,6 +324,8 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         var callBack = JsonConvert.DeserializeObject<SpeechMaticsCallBackResponseDto>(speechMaticsJob.CallbackMessage);
         
         var speakInfos = StructureDiarizationResults(callBack.Results);
+        
+        Log.Information("Extractomg customer audio SpeakInfos: {@speakInfos}", speakInfos);
         
         var sixSentences = speakInfos.Count > 6 ? speakInfos[..6] : speakInfos.ToList();
         
