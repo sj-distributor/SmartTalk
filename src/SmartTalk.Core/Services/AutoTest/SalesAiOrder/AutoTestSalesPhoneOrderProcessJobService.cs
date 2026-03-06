@@ -332,6 +332,8 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         
         var speakInfos = StructureDiarizationResults(callBack.Results);
         
+        Log.Information("Extractomg customer audio SpeakInfos: {@speakInfos}", speakInfos);
+        
         var sixSentences = speakInfos.Count > 6 ? speakInfos[..6] : speakInfos.ToList();
         
         var (customerSpeaker, audios) = await HandlerConversationSpeakerIsCustomerAsync(sixSentences, audioBytes, cancellationToken: cancellationToken).ConfigureAwait(false);
