@@ -1,4 +1,5 @@
 using Hangfire;
+using Hangfire.Throttling;
 using Serilog;
 using SmartTalk.Core.Constants;
 using SmartTalk.Core.Ioc;
@@ -12,8 +13,8 @@ namespace SmartTalk.Core.Services.Sale;
 public interface ISalesJobProcessJobService : IScopedDependency
 {
     Task ScheduleRefreshCustomerItemsCacheAsync(RefreshAllCustomerItemsCacheCommand command, CancellationToken cancellationToken);
-
-    [DisableConcurrentExecution(5)]
+    
+    [Semaphore(HangfireConstants.SemaphoreHiFoodCacheCustomerItems)]
     Task RefreshCustomerItemsCacheBySoldToIdAsync(string soldToId, CancellationToken cancellationToken);
 
     Task ScheduleRefreshCrmCustomerInfoAsync(RefreshAllCustomerInfoCacheCommand command, CancellationToken cancellationToken);
@@ -45,7 +46,7 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
 
         foreach (var soldToId in allSoldToIds)
         {
-            _backgroundJobClient.Enqueue<ISalesJobProcessJobService>(x => x.RefreshCustomerItemsCacheBySoldToIdAsync(soldToId, CancellationToken.None), HangfireConstants.InternalHostingCaCheKnowledgeVariable);
+            _backgroundJobClient.Enqueue<ISalesJobProcessJobService>(x => x.RefreshCustomerItemsCacheBySoldToIdAsync(soldToId, CancellationToken.None), HangfireConstants.InternalHostingCaCheKnowledgeCustomerItems);
         }
 
         Log.Information("All customer items cache refresh jobs scheduled. Count: {Count}", allSoldToIds.Count);
