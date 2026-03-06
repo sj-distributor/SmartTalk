@@ -16,6 +16,7 @@ public interface ISalesJobProcessJobService : IScopedDependency
 {
     Task ScheduleRefreshCustomerItemsCacheAsync(RefreshAllCustomerItemsCacheCommand command, CancellationToken cancellationToken);
 
+    [DisableConcurrentExecution(5)]
     Task RefreshCustomerItemsCacheBySoldToIdAsync(string soldToId, CancellationToken cancellationToken);
 
     Task ScheduleRefreshCrmCustomerInfoAsync(RefreshAllCustomerInfoCacheCommand command, CancellationToken cancellationToken);
@@ -56,8 +57,7 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
 
         Log.Information("All customer items cache refresh jobs scheduled. Count: {Count}", allSoldToIds.Count);
     }
-
-    [DisableConcurrentExecution(5)]
+    
     public async Task RefreshCustomerItemsCacheBySoldToIdAsync(string soldToId, CancellationToken cancellationToken)
     {
         try
