@@ -15,8 +15,7 @@ namespace SmartTalk.Core.Services.Sale;
 public interface ISalesJobProcessJobService : IScopedDependency
 {
     Task ScheduleRefreshCustomerItemsCacheAsync(RefreshAllCustomerItemsCacheCommand command, CancellationToken cancellationToken);
-
-    [DisableConcurrentExecution(5)]
+    
     Task RefreshCustomerItemsCacheBySoldToIdAsync(string soldToId, CancellationToken cancellationToken);
 
     Task ScheduleRefreshCrmCustomerInfoAsync(RefreshAllCustomerInfoCacheCommand command, CancellationToken cancellationToken);
