@@ -1352,21 +1352,21 @@ public partial class AiSpeechAssistantService
 
     public async Task<UpdateAiSpeechAssistantKnowledgeDetailResponse> UpdateAiSpeechAssistantKnowledgeDetailAsync(UpdateAiSpeechAssistantKnowledgeDetailCommand command, CancellationToken cancellationToken)
     {
-        var detail = await _aiSpeechAssistantDataProvider.GetKnowledgeDetailsByKnowledgeIdAsync(command.DetailId, cancellationToken).ConfigureAwait(false);
+        var detail = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeDetailByDetailIdAsync(command.DetailId, cancellationToken).ConfigureAwait(false);
 
-        if (detail == null || !detail.Any())
+        if (detail == null)
             throw new Exception("Detail not found");
 
-        var updateDetail = detail.First();
-        updateDetail.KnowledgeName = command.KnowledgeName;
-        updateDetail.FormatType = command.FormatType;
-        updateDetail.LastModifiedDate = DateTimeOffset.Now;
+        detail .KnowledgeName = command.DetailName;
+        detail.Content = command.DetailContent;
+        detail .FormatType = command.FormatType;
+        detail .LastModifiedDate = DateTimeOffset.Now;
 
-        await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgeDetailAsync(updateDetail, true, cancellationToken).ConfigureAwait(false);
+        await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgeDetailAsync(detail , true, cancellationToken).ConfigureAwait(false);
 
         return new UpdateAiSpeechAssistantKnowledgeDetailResponse
         {
-            Data = _mapper.Map<AiSpeechAssistantKnowledgeDetailDto>(updateDetail)
+            Data = _mapper.Map<AiSpeechAssistantKnowledgeDetailDto>(detail)
         };
     }
 

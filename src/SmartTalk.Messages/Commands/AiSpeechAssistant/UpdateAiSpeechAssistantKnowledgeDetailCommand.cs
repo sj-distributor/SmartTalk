@@ -9,7 +9,9 @@ public class UpdateAiSpeechAssistantKnowledgeDetailCommand : ICommand
 {
     public int DetailId { get; set; }
     
-    public string KnowledgeName { get; set; }
+    public string DetailName { get; set; }
+    
+    public string DetailContent { get; set; }
     
     public AiSpeechAssistantKonwledgeFormatType FormatType { get; set; }
 }
