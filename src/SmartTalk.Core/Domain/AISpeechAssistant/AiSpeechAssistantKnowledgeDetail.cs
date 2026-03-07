@@ -27,9 +27,9 @@ public class AiSpeechAssistantKnowledgeDetail : IEntity, IHasModifiedFields
     [Column("created_date")] 
     public DateTimeOffset CreatedDate { get; set; } = DateTimeOffset.Now; 
     
-    [Column("lastModified_by")]
+    [Column("last_modified_by")]
     public int? LastModifiedBy { get; set; } 
     
-    [Column("lastModified_date")] 
+    [Column("last_modified_date")] 
     public DateTimeOffset? LastModifiedDate { get; set; } 
 }

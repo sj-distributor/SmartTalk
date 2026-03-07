@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS ai_speech_assistant_knowledge_detail (
   `last_modified_date` DATETIME(6) NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
   INDEX `idx_knowledge_id` (`knowledge_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 INSERT INTO ai_speech_assistant_knowledge_detail
 (
@@ -18,7 +18,7 @@ INSERT INTO ai_speech_assistant_knowledge_detail
     format_type,
     content,
     created_date,
-    lastModified_date
+    last_modified_date
 )
 SELECT
     k.id,

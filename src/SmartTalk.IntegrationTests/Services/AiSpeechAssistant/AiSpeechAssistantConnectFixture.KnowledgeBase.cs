@@ -7,11 +7,13 @@ using Shouldly;
 using SmartTalk.Core.Data;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.System;
+using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.IntegrationTests.Mocks;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Agent;
+using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.RealtimeAi;
 using Xunit;
 
@@ -278,5 +280,185 @@ public partial class AiSpeechAssistantConnectFixture
         // Empty #{customer_items} replaced with space " ", not empty string ""
         sessionUpdate.ShouldContain("Items: End.");
         sessionUpdate.ShouldNotContain("#{customer_items}");
+    }
+
+    [Fact]
+    public async Task ShouldUpdateKnowledgeDetail_WhenSendingUpdateCommand()
+    {
+        int detailId = 0;
+
+        await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
+        {
+            var assistant = new Core.Domain.AISpeechAssistant.AiSpeechAssistant
+            {
+                Name = "KnowledgeDetailAssistant", AnsweringNumber = TestDidNumber, ModelProvider = RealtimeAiProvider.OpenAi,
+                ModelVoice = "alloy", IsDefault = true, IsDisplay = true
+            };
+            await repository.InsertAsync(assistant);
+            await unitOfWork.SaveChangesAsync();
+
+            var knowledge = new AiSpeechAssistantKnowledge
+            {
+                AssistantId = assistant.Id, Prompt = "Knowledge detail prompt", IsActive = true, Version = "1.0"
+            };
+            await repository.InsertAsync(knowledge);
+            await unitOfWork.SaveChangesAsync();
+
+            var detail = new AiSpeechAssistantKnowledgeDetail
+            {
+                KnowledgeId = knowledge.Id,
+                KnowledgeName = "Old Detail Name",
+                Content = "Old detail content",
+                FormatType = AiSpeechAssistantKonwledgeFormatType.Text
+            };
+            await repository.InsertAsync(detail);
+            await unitOfWork.SaveChangesAsync();
+            detailId = detail.Id;
+        });
+
+        UpdateAiSpeechAssistantKnowledgeDetailResponse response = null!;
+
+        await Run<IMediator>(async mediator =>
+        {
+            response = await mediator
+                .SendAsync<UpdateAiSpeechAssistantKnowledgeDetailCommand, UpdateAiSpeechAssistantKnowledgeDetailResponse>(
+                    new UpdateAiSpeechAssistantKnowledgeDetailCommand
+                    {
+                        DetailId = detailId,
+                        DetailName = "Updated Detail Name",
+                        DetailContent = "Updated detail content",
+                        FormatType = AiSpeechAssistantKonwledgeFormatType.FAQ
+                    });
+        });
+
+        response.ShouldNotBeNull();
+        response.Data.ShouldNotBeNull();
+        response.Data.Id.ShouldBe(detailId);
+        response.Data.KnowledgeName.ShouldBe("Updated Detail Name");
+        response.Data.Content.ShouldBe("Updated detail content");
+        response.Data.FormatType.ShouldBe(AiSpeechAssistantKonwledgeFormatType.FAQ);
+
+        await Run<IAiSpeechAssistantDataProvider>(async dataProvider =>
+        {
+            var updatedDetail = await dataProvider.GetAiSpeechAssistantKnowledgeDetailByDetailIdAsync(detailId);
+            updatedDetail.ShouldNotBeNull();
+            updatedDetail.KnowledgeName.ShouldBe("Updated Detail Name");
+            updatedDetail.Content.ShouldBe("Updated detail content");
+            updatedDetail.FormatType.ShouldBe(AiSpeechAssistantKonwledgeFormatType.FAQ);
+            updatedDetail.LastModifiedDate.ShouldNotBeNull();
+        });
+    }
+
+    [Fact]
+    public async Task ShouldDeleteKnowledgeDetail_WhenSendingDeleteCommand()
+    {
+        int detailId = 0;
+
+        await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
+        {
+            var assistant = new Core.Domain.AISpeechAssistant.AiSpeechAssistant
+            {
+                Name = "KnowledgeDetailDeleteAssistant", AnsweringNumber = TestDidNumber, ModelProvider = RealtimeAiProvider.OpenAi,
+                ModelVoice = "alloy", IsDefault = true, IsDisplay = true
+            };
+            await repository.InsertAsync(assistant);
+            await unitOfWork.SaveChangesAsync();
+
+            var knowledge = new AiSpeechAssistantKnowledge
+            {
+                AssistantId = assistant.Id, Prompt = "Knowledge detail delete prompt", IsActive = true, Version = "1.0"
+            };
+            await repository.InsertAsync(knowledge);
+            await unitOfWork.SaveChangesAsync();
+
+            var detail = new AiSpeechAssistantKnowledgeDetail
+            {
+                KnowledgeId = knowledge.Id,
+                KnowledgeName = "Delete Detail Name",
+                Content = "Delete detail content",
+                FormatType = AiSpeechAssistantKonwledgeFormatType.Text
+            };
+            await repository.InsertAsync(detail);
+            await unitOfWork.SaveChangesAsync();
+            detailId = detail.Id;
+        });
+
+        await Run<IMediator>(async mediator =>
+        {
+            await mediator.SendAsync<DeleteAiSpeechAssistantKnowledgeDetailCommand, DeleteAiSpeechAssistantKnowledgeDetailResponse>(
+                new DeleteAiSpeechAssistantKnowledgeDetailCommand
+                {
+                    DetailId = detailId
+                });
+        });
+
+        await Run<IAiSpeechAssistantDataProvider>(async dataProvider =>
+        {
+            var deletedDetail = await dataProvider.GetAiSpeechAssistantKnowledgeDetailByDetailIdAsync(detailId);
+            deletedDetail.ShouldBeNull();
+        });
+    }
+
+    [Fact]
+    public async Task ShouldCreateKnowledgeDetails_WhenAddingKnowledgeWithDetails()
+    {
+        int assistantId = 0;
+
+        await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
+        {
+            var assistant = new Core.Domain.AISpeechAssistant.AiSpeechAssistant
+            {
+                Name = "KnowledgeAddAssistant", AnsweringNumber = TestDidNumber, ModelProvider = RealtimeAiProvider.OpenAi,
+                ModelVoice = "alloy", IsDefault = true, IsDisplay = true
+            };
+            await repository.InsertAsync(assistant);
+            await unitOfWork.SaveChangesAsync();
+            assistantId = assistant.Id;
+
+            await repository.InsertAsync(new AiSpeechAssistantKnowledge
+            {
+                AssistantId = assistant.Id, Prompt = "Old prompt", IsActive = true, Version = "1.0"
+            });
+        });
+
+        AddAiSpeechAssistantKnowledgeResponse response = null!;
+
+        await Run<IMediator>(async mediator =>
+        {
+            response = await mediator.SendAsync<AddAiSpeechAssistantKnowledgeCommand, AddAiSpeechAssistantKnowledgeResponse>(
+                new AddAiSpeechAssistantKnowledgeCommand
+                {
+                    AssistantId = assistantId,
+                    Details =
+                    [
+                        new()
+                        {
+                            KnowledgeName = "Business Hours",
+                            Content = "Mon-Fri 09:00-18:00",
+                            FormatType = AiSpeechAssistantKonwledgeFormatType.Text
+                        },
+                        new()
+                        {
+                            KnowledgeName = "Delivery FAQ",
+                            Content = "Delivery takes 30 minutes.",
+                            FormatType = AiSpeechAssistantKonwledgeFormatType.FAQ
+                        }
+                    ]
+                });
+        });
+
+        response.ShouldNotBeNull();
+        response.Data.ShouldNotBeNull();
+        response.Data.Id.ShouldBeGreaterThan(0);
+
+        await Run<IAiSpeechAssistantDataProvider>(async dataProvider =>
+        {
+            var details = await dataProvider.GetKnowledgeDetailsByKnowledgeIdAsync(response.Data.Id, CancellationToken.None);
+
+            details.ShouldNotBeNull();
+            details.Count.ShouldBe(2);
+            details.Any(x => x.KnowledgeName == "Business Hours" && x.Content == "Mon-Fri 09:00-18:00" && x.FormatType == AiSpeechAssistantKonwledgeFormatType.Text).ShouldBeTrue();
+            details.Any(x => x.KnowledgeName == "Delivery FAQ" && x.Content == "Delivery takes 30 minutes." && x.FormatType == AiSpeechAssistantKonwledgeFormatType.FAQ).ShouldBeTrue();
+        });
     }
 }
