@@ -663,7 +663,7 @@ public partial class AiSpeechAssistantService
             AssistantId = assistant.Id,
             Greetings = command.Greetings,
             CreatedBy = _currentUser.Id.Value,
-            Prompt = await GenerateKnowledgePromptAsync(details, cancellationToken).ConfigureAwait(false)
+            Prompt = await GenerateKnowledgePromptAsync(details, cancellationToken).ConfigureAwait(false),
             ModelLanguage = assistant.ModelLanguage
         };
 
