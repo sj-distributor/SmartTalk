@@ -94,6 +94,10 @@ public partial class AiSpeechAssistantService
         
         if (premise != null && !string.IsNullOrEmpty(premise.Content))
             result.Premise = _mapper.Map<AiSpeechAssistantPremiseDto>(premise);
+        
+        var details = await _aiSpeechAssistantDataProvider.GetKnowledgeDetailsByKnowledgeIdAsync(knowledge.Id, cancellationToken).ConfigureAwait(false);
+
+        result.Details = _mapper.Map<List<AiSpeechAssistantKnowledgeDetailDto>>(details);
 
         var allCopyRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync(new List<int> { knowledge.Id }, null,  cancellationToken).ConfigureAwait(false);
         

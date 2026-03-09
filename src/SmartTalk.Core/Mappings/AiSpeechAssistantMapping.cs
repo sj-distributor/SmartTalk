@@ -40,5 +40,7 @@ public class AiSpeechAssistantMapping : Profile
         CreateMap<AiSpeechAssistantPremise, AiSpeechAssistantPremiseDto>().ReverseMap();
         
         CreateMap<AiSpeechAssistantKnowledgeVariableCache, AiSpeechAssistantKnowledgeVariableCacheDto>().ReverseMap();
+        
+        CreateMap<AiSpeechAssistantKnowledgeDetail, AiSpeechAssistantKnowledgeDetailDto>().ReverseMap();
     }
 }

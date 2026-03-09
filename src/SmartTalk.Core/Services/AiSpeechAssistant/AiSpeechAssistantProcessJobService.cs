@@ -59,6 +59,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
     private readonly ICrmClient _crmClient;
     private readonly IPosDataProvider _posDataProvider;
     private readonly SalesSetting _salesSetting;
+    private readonly IFileTextExtractor _fileTextExtractor;
 
     public AiSpeechAssistantProcessJobService(
         IMapper mapper,
@@ -73,7 +74,8 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         OpenAiTrainingSettings openAiTrainingSettings, 
         IPhoneOrderDataProvider phoneOrderDataProvider,
         OpenAiAccountTrainingSettings openAiAccountTrainingSettings,
-        IAiSpeechAssistantDataProvider speechAssistantDataProvider)
+        IAiSpeechAssistantDataProvider speechAssistantDataProvider,
+        IFileTextExtractor fileTextExtractor)
     {
         _mapper = mapper;
         _vectorDb = vectorDb;
@@ -88,6 +90,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         _restaurantDataProvider = restaurantDataProvider;
         _openAiAccountTrainingSettings = openAiAccountTrainingSettings;
         _speechAssistantDataProvider = speechAssistantDataProvider;
+        _fileTextExtractor = fileTextExtractor;
     }
 
     public async Task RecordAiSpeechAssistantCallAsync(AiSpeechAssistantStreamContextDto context, PhoneOrderRecordType orderRecordType, CancellationToken cancellationToken)
@@ -225,6 +228,14 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         {
             relatedLookup.TryGetValue(knowledge.Id, out var relateds);
             relateds ??= [];
+            
+            var details = await _speechAssistantDataProvider.GetKnowledgeDetailsByKnowledgeIdAsync(knowledge.Id, cancellationToken).ConfigureAwait(false);
+            
+            if (details == null || !details.Any())
+            {
+                Log.Warning("KnowledgeId={KnowledgeId} has no details, skipping prompt generation", knowledge.Id);
+                continue;
+            }
 
             if (!TryMergeNormalizedJson(knowledge.Id, knowledge.Json, relateds.Select(x => x.CopyKnowledgePoints), out var mergedJson))
             {
@@ -232,7 +243,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
                 continue;
             }
 
-            var newPrompt = GenerateKnowledgePrompt(mergedJson);
+            var newPrompt = await GenerateKnowledgePromptAsync(details, cancellationToken).ConfigureAwait(false);
 
             if (!string.Equals(knowledge.Prompt ?? string.Empty, newPrompt, StringComparison.Ordinal))
             {
@@ -344,6 +355,47 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         }
 
         return prompt.ToString();
+    }
+    
+    private async Task<string> GenerateKnowledgePromptAsync(List<AiSpeechAssistantKnowledgeDetail> details, CancellationToken cancellationToken)
+    {
+        if (details == null || !details.Any())
+            return string.Empty;
+
+        var sb = new StringBuilder();
+
+        foreach (var detail in details.OrderBy(x => x.Id))
+        {
+            if (string.IsNullOrWhiteSpace(detail.Content))
+                continue;
+
+            var content = detail.Content.Trim();
+
+            if (IsFileUrl(content))
+            {
+                content = await _fileTextExtractor.ExtractAsync(content, cancellationToken);
+            }
+
+            sb.AppendLine($"{detail.KnowledgeName}：");
+            sb.AppendLine(content);
+            sb.AppendLine();
+        }
+
+        return sb.ToString();
+    }
+
+    private static readonly HashSet<string> SupportedExtensions = new()
+    {
+        ".txt",".md",".pdf",".html",".xlsx",".xls",".doc",".docx",".csv"
+    };
+
+    private bool IsFileUrl(string content)
+    {
+        if (!Uri.TryCreate(content, UriKind.Absolute, out var uri))
+            return false;
+
+        var ext = Path.GetExtension(uri.AbsolutePath).ToLowerInvariant();
+        return SupportedExtensions.Contains(ext);
     }
 
     private static string BuildLanguageText(IReadOnlyList<SmartTalk.Messages.Dto.Crm.CrmContactDto> contacts)

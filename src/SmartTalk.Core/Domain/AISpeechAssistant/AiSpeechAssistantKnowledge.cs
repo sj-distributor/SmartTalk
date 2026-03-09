@@ -43,4 +43,7 @@ public class AiSpeechAssistantKnowledge : IEntity, IHasCreatedFields
     
     [NotMapped]
     public List<AiSpeechAssistantKnowledgeCopyRelated> KnowledgeCopyRelateds { get; set; }
+    
+    [NotMapped]
+    public List<AiSpeechAssistantKnowledgeDetail> Details { get; set; }
 }
