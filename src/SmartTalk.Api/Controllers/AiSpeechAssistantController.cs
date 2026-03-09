@@ -376,6 +376,16 @@ public class AiSpeechAssistantController : ControllerBase
         return Ok(response);
     }
 
+    [Route("dynamic/configs/current-company"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetCurrentCompanyDynamicConfigsResponse))]
+    public async Task<IActionResult> GetCurrentCompanyDynamicConfigsAsync([FromQuery] GetCurrentCompanyDynamicConfigsRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetCurrentCompanyDynamicConfigsRequest, GetCurrentCompanyDynamicConfigsResponse>(request)
+            .ConfigureAwait(false);
+
+        return Ok(response);
+    }
+
     [Route("dynamic/config/update"), HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdateAiSpeechAssistantDynamicConfigResponse))]
     public async Task<IActionResult> UpdateAiSpeechAssistantDynamicConfigAsync([FromBody] UpdateAiSpeechAssistantDynamicConfigCommand command)

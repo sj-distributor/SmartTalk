@@ -10,6 +10,9 @@ public partial interface IAiSpeechAssistantService
     Task<GetAiSpeechAssistantDynamicConfigsResponse> GetAiSpeechAssistantDynamicConfigsAsync(GetAiSpeechAssistantDynamicConfigsRequest request,
         CancellationToken cancellationToken);
 
+    Task<GetCurrentCompanyDynamicConfigsResponse> GetCurrentCompanyDynamicConfigsAsync(GetCurrentCompanyDynamicConfigsRequest request,
+        CancellationToken cancellationToken);
+
     Task<UpdateAiSpeechAssistantDynamicConfigResponse> UpdateAiSpeechAssistantDynamicConfigAsync(UpdateAiSpeechAssistantDynamicConfigCommand command,
         CancellationToken cancellationToken);
 }
@@ -21,30 +24,7 @@ public partial class AiSpeechAssistantService
     {
         var configs = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantDynamicConfigsAsync(request.Status, cancellationToken).ConfigureAwait(false);
         var (_, companies) = await _posDataProvider.GetPosCompaniesAsync(isBindConfig: true, cancellationToken: cancellationToken).ConfigureAwait(false);
-        var dtoMap = _mapper.Map<List<AiSpeechAssistantDynamicConfigDto>>(configs).ToDictionary(x => x.Id);
-
-        foreach (var dto in dtoMap.Values)
-            dto.Children = [];
-
-        foreach (var config in configs)
-        {
-            if (!config.ParentId.HasValue) continue;
-            if (!dtoMap.TryGetValue(config.ParentId.Value, out var parent)) continue;
-            parent.Children.Add(dtoMap[config.Id]);
-        }
-
-        List<AiSpeechAssistantDynamicConfigDto> roots;
-        if (request.Id.HasValue)
-        {
-            roots = dtoMap.TryGetValue(request.Id.Value, out var node) ? [node] : [];
-        }
-        else
-        {
-            roots = configs
-                .Where(x => !x.ParentId.HasValue || !dtoMap.ContainsKey(x.ParentId.Value))
-                .Select(x => dtoMap[x.Id])
-                .ToList();
-        }
+        var roots = BuildDynamicConfigTree(configs, request.Id);
 
         return new GetAiSpeechAssistantDynamicConfigsResponse
         {
@@ -52,6 +32,40 @@ public partial class AiSpeechAssistantService
             {
                 Configs = roots,
                 Companies = _mapper.Map<List<CompanyDto>>(companies)
+            }
+        };
+    }
+
+    public async Task<GetCurrentCompanyDynamicConfigsResponse> GetCurrentCompanyDynamicConfigsAsync(GetCurrentCompanyDynamicConfigsRequest request,
+        CancellationToken cancellationToken)
+    {
+        var store = await _posDataProvider.GetPosCompanyStoreAsync(id: request.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (store == null)
+            return new GetCurrentCompanyDynamicConfigsResponse
+            {
+                Data = new GetCurrentCompanyDynamicConfigsResponseData { Configs = [] }
+            };
+
+        var company = await _posDataProvider.GetPosCompanyAsync(store.CompanyId, cancellationToken).ConfigureAwait(false);
+        if (company == null || !company.IsBindConfig)
+            return new GetCurrentCompanyDynamicConfigsResponse
+            {
+                Data = new GetCurrentCompanyDynamicConfigsResponseData
+                {
+                    Store = _mapper.Map<CompanyStoreDto>(store),
+                    Configs = []
+                }
+            };
+
+        var activeConfigs = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantDynamicConfigsAsync(true, cancellationToken).ConfigureAwait(false);
+        var roots = BuildDynamicConfigTree(activeConfigs);
+
+        return new GetCurrentCompanyDynamicConfigsResponse
+        {
+            Data = new GetCurrentCompanyDynamicConfigsResponseData
+            {
+                Store = _mapper.Map<CompanyStoreDto>(store),
+                Configs = roots
             }
         };
     }
@@ -78,5 +92,28 @@ public partial class AiSpeechAssistantService
         {
             Data = _mapper.Map<AiSpeechAssistantDynamicConfigDto>(updated)
         };
+    }
+
+    private List<AiSpeechAssistantDynamicConfigDto> BuildDynamicConfigTree(List<Core.Domain.AISpeechAssistant.AiSpeechAssistantDynamicConfig> configs, int? rootId = null)
+    {
+        var dtoMap = _mapper.Map<List<AiSpeechAssistantDynamicConfigDto>>(configs).ToDictionary(x => x.Id);
+
+        foreach (var dto in dtoMap.Values)
+            dto.Children = [];
+
+        foreach (var config in configs)
+        {
+            if (!config.ParentId.HasValue) continue;
+            if (!dtoMap.TryGetValue(config.ParentId.Value, out var parent)) continue;
+            parent.Children.Add(dtoMap[config.Id]);
+        }
+
+        if (rootId.HasValue)
+            return dtoMap.TryGetValue(rootId.Value, out var node) ? [node] : [];
+
+        return configs
+            .Where(x => !x.ParentId.HasValue || !dtoMap.ContainsKey(x.ParentId.Value))
+            .Select(x => dtoMap[x.Id])
+            .ToList();
     }
 }

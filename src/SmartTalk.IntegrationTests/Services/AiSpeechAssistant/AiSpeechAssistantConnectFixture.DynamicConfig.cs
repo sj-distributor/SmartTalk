@@ -15,6 +15,123 @@ namespace SmartTalk.IntegrationTests.Services.AiSpeechAssistant;
 public partial class AiSpeechAssistantConnectFixture
 {
     [Fact]
+    public async Task ShouldGetCurrentCompanyDynamicConfigs_WhenCompanyIsBound()
+    {
+        int storeId = 0;
+        int activeConfigId = 0;
+        int inactiveConfigId = 0;
+
+        await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
+        {
+            var company = new Company
+            {
+                Name = "福滿樓",
+                Description = "test",
+                Status = true,
+                IsBindConfig = true,
+                CreatedDate = DateTimeOffset.Now
+            };
+            await repository.InsertAsync(company);
+            await unitOfWork.SaveChangesAsync();
+
+            var store = new CompanyStore
+            {
+                CompanyId = company.Id,
+                Names = "福滿樓-中環",
+                Address = "test",
+                Status = true,
+                CreatedDate = DateTimeOffset.Now
+            };
+            await repository.InsertAsync(store);
+            await unitOfWork.SaveChangesAsync();
+            storeId = store.Id;
+
+            var active = new AiSpeechAssistantDynamicConfig
+            {
+                Name = "POS",
+                Level = AiSpeechAssistantDynamicConfigLevel.System,
+                Status = true
+            };
+            await repository.InsertAsync(active);
+            await unitOfWork.SaveChangesAsync();
+            activeConfigId = active.Id;
+
+            var inactive = new AiSpeechAssistantDynamicConfig
+            {
+                Name = "Hifood",
+                Level = AiSpeechAssistantDynamicConfigLevel.System,
+                Status = false
+            };
+            await repository.InsertAsync(inactive);
+            await unitOfWork.SaveChangesAsync();
+            inactiveConfigId = inactive.Id;
+        });
+
+        GetCurrentCompanyDynamicConfigsResponse response = null!;
+        await Run<IMediator>(async mediator =>
+        {
+            response = await mediator.RequestAsync<GetCurrentCompanyDynamicConfigsRequest, GetCurrentCompanyDynamicConfigsResponse>(
+                new GetCurrentCompanyDynamicConfigsRequest { StoreId = storeId });
+        });
+
+        response.ShouldNotBeNull();
+        response.Data.ShouldNotBeNull();
+        response.Data.Store.ShouldNotBeNull();
+        response.Data.Configs.Any(x => x.Id == activeConfigId).ShouldBeTrue();
+        response.Data.Configs.Any(x => x.Id == inactiveConfigId).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task ShouldReturnEmptyCurrentCompanyDynamicConfigs_WhenCompanyIsNotBound()
+    {
+        int storeId = 0;
+
+        await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
+        {
+            var company = new Company
+            {
+                Name = "江南春",
+                Description = "test",
+                Status = true,
+                IsBindConfig = false,
+                CreatedDate = DateTimeOffset.Now
+            };
+            await repository.InsertAsync(company);
+            await unitOfWork.SaveChangesAsync();
+
+            var store = new CompanyStore
+            {
+                CompanyId = company.Id,
+                Names = "江南春-灣仔",
+                Address = "test",
+                Status = true,
+                CreatedDate = DateTimeOffset.Now
+            };
+            await repository.InsertAsync(store);
+            await unitOfWork.SaveChangesAsync();
+            storeId = store.Id;
+
+            await repository.InsertAsync(new AiSpeechAssistantDynamicConfig
+            {
+                Name = "POS",
+                Level = AiSpeechAssistantDynamicConfigLevel.System,
+                Status = true
+            });
+        });
+
+        GetCurrentCompanyDynamicConfigsResponse response = null!;
+        await Run<IMediator>(async mediator =>
+        {
+            response = await mediator.RequestAsync<GetCurrentCompanyDynamicConfigsRequest, GetCurrentCompanyDynamicConfigsResponse>(
+                new GetCurrentCompanyDynamicConfigsRequest { StoreId = storeId });
+        });
+
+        response.ShouldNotBeNull();
+        response.Data.ShouldNotBeNull();
+        response.Data.Configs.ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task ShouldGetDynamicConfigsAsTree_WhenSendingGetRequest()
     {
         int systemPosId = 0;
