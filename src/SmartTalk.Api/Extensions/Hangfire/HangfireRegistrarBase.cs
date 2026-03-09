@@ -12,6 +12,7 @@ public class HangfireRegistrarBase : IHangfireRegistrar
     {
         services.AddHangfire((sp, c) =>
         {
+            c.UseThrottling();
             c.UseCorrelate(sp);
             c.UseMaxArgumentSizeToRender(int.MaxValue);
             c.UseFilter(new AutomaticRetryAttribute { Attempts = 0 });
