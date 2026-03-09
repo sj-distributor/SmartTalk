@@ -35,7 +35,10 @@ FROM ai_speech_assistant_knowledge k
     )
               ) j
          JOIN JSON_TABLE(
-        JSON_EXTRACT(k.json, CONCAT('$.', j.key_name)),
+        JSON_EXTRACT(
+            k.json,
+            CONCAT('$."', REPLACE(j.key_name, '"', '\\"'), '"')
+        ),
         '$[*]' COLUMNS (
         value TEXT PATH '$'
     )
