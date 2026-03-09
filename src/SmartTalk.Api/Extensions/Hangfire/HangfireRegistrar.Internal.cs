@@ -94,7 +94,7 @@ public class InternalHangfireRegistrar : HangfireRegistrarBase
         
         var manager = new ThrottlingManager();
         
-        manager.AddOrUpdateSemaphore(HangfireConstants.SemaphoreHiFoodCacheCustomerItems, new SemaphoreOptions(maxCount: 5));
+        manager.AddOrUpdateSemaphore(HangfireConstants.SemaphoreHiFoodCacheCustomerItems, new SemaphoreOptions(maxCount: 10));
     }
 
     private static void ScanHangfireRecurringJobs(IApplicationBuilder app)
