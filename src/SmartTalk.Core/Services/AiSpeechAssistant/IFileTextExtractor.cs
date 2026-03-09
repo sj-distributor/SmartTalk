@@ -1,8 +1,9 @@
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
 
+using SmartTalk.Core.Ioc;
 using TikaOnDotNet.TextExtraction;
 
-public interface IFileTextExtractor
+public interface IFileTextExtractor : IScopedDependency
 {
     Task<string> ExtractAsync(string fileUrl, CancellationToken cancellationToken);
 }
