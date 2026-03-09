@@ -24,5 +24,7 @@ public class AiSpeechAssistantKnowledgeDto
     
     public int CreatedBy { get; set; }
     
+    public string ModelLanguage { get; set; }
+    
     public List<AiSpeechAssistantKnowledgeCopyRelatedDto> KnowledgeCopyRelateds { get; set; }
 }
