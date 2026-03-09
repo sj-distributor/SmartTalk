@@ -30,7 +30,7 @@ public class QwenRealtimeAiAdapter : IRealtimeAiProviderAdapter
     {
         return new Dictionary<string, string>
         {
-            { "Authorization", $"Bearer {_qwenSettings.ApiKey}" }
+            { "Authorization", $"Bearer {_qwenSettings.CrmApiKey}" }
         };
     }
 
