@@ -22,7 +22,5 @@ public static class HangfireConstants
     
     public const string InternalHostingCaCheKnowledgeVariable = "cache-knowledge-variable";
     
-    public const string InternalHostingCaCheKnowledgeCustomerItems = "cache-knowledge-customer-items";
-    
     public const string SemaphoreHiFoodCacheCustomerItems = "semaphore-hi-food-cache-customer-items";
 }
