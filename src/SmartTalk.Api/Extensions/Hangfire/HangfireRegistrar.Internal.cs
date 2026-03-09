@@ -79,13 +79,6 @@ public class InternalHangfireRegistrar : HangfireRegistrarBase
             opt.Queues = new[] { HangfireConstants.InternalHostingAutoTestCallRecordSync };
             opt.ServerName = $"DEPLOY-{HangfireConstants.InternalHostingAutoTestCallRecordSync.ToUpper()}-{Guid.NewGuid()}";
         });
-        
-        services.AddHangfireServer(opt =>
-        {
-            opt.WorkerCount = 2;
-            opt.Queues = new[] { HangfireConstants.InternalHostingCaCheKnowledgeCustomerItems };
-            opt.ServerName = $"DEPLOY-{HangfireConstants.InternalHostingCaCheKnowledgeCustomerItems.ToUpper()}-{Guid.NewGuid()}";
-        });
     }
 
     public override void ApplyHangfire(IApplicationBuilder app, IConfiguration configuration)
@@ -101,7 +94,7 @@ public class InternalHangfireRegistrar : HangfireRegistrarBase
         
         var manager = new ThrottlingManager();
         
-        manager.AddOrUpdateSemaphore(HangfireConstants.SemaphoreHiFoodCacheCustomerItems, new SemaphoreOptions(maxCount: 1));
+        manager.AddOrUpdateSemaphore(HangfireConstants.SemaphoreHiFoodCacheCustomerItems, new SemaphoreOptions(maxCount: 5));
     }
 
     private static void ScanHangfireRecurringJobs(IApplicationBuilder app)
