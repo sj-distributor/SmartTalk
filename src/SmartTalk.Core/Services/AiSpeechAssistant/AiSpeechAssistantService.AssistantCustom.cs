@@ -677,6 +677,7 @@ public partial class AiSpeechAssistantService
             Version = "1.0",
             IsActive = true,
             Json = command.Json,
+            ModelLanguage =  command.ModelLanguage,
             AssistantId = assistant.Id,
             Greetings = command.Greetings,
             CreatedBy = _currentUser.Id.Value,
