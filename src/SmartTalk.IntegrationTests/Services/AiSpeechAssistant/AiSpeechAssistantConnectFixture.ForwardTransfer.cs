@@ -334,6 +334,9 @@ public partial class AiSpeechAssistantConnectFixture
             TwilioWebSocket = ws2
         };
 
+        var openaiWs = CreateProviderMock();
+        openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new { type = "session.updated" }));
+
         ISmartTalkBackgroundJobClient? jobClient2 = null;
         string? forwardedPhone2 = null;
         await Run<IMediator>(async mediator =>
@@ -352,8 +355,9 @@ public partial class AiSpeechAssistantConnectFixture
 
             builder.RegisterInstance(jobClient2).As<ISmartTalkBackgroundJobClient>();
             builder.RegisterInstance(Substitute.For<ISmartiesClient>()).AsImplementedInterfaces();
+            openaiWs.Register(builder);
         });
-        forwardedPhone2.ShouldBe(nonFallbackForwardNumber);
+        forwardedPhone2.ShouldBeNull();
     }
 
     [Fact]
