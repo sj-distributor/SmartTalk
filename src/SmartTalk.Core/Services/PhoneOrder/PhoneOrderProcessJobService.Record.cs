@@ -911,11 +911,16 @@ public partial class PhoneOrderProcessJobService
             "若 通话中的 Name == 草稿基准名，视为同一物料。\n\n" +
             
             "【关键规则二：计算与生成（Strict）】\n" +
-            "对于每一个本次通话中的商品：\n" +
+            "对于每一个本次通话中的商品，必须先做“草稿基准数量”计算，再做变动量计算：\n" +
+            "0. 先计算 DraftBaseQty（草稿基准数量）：\n" +
+            "优先读取草稿单 AiMaterialDesc 中的数量表达并累计，不要直接只看 MaterialQuantity。\n" +
+            "示例：\"2CS+2CS鸡胸肉\" 的 DraftBaseQty=4；\"鸡胸肉#2箱+2箱\" 的 DraftBaseQty=4。\n" +
+            "若 AiMaterialDesc 无法解析数量，才回退使用 MaterialQuantity。\n" +
             "1. 若在草稿单中找到匹配项：\n" +
-            "Quantity = 草稿单 MaterialQuantity + 本次通话 Quantity。\n" +
-            "Name = 草稿单 AiMaterialDesc (完整原串) + \"+\" 或 \"-\" + 本次通话绝对值。\n" +
-            "示例：草稿 \"玉米#1箱\" (数量1)，通话变动 +1。结果 Name: \"玉米#1箱+1\"，Quantity: 2。\n" +
+            "若本次通话是“改成/只要/变成目标数量”语义，则本次通话 Quantity 视为 TargetQty，必须换算为变动量：Quantity = TargetQty - DraftBaseQty。\n" +
+            "若是普通加减语义，则 Quantity = 本次通话 Quantity。\n" +
+            "Name = 草稿单 AiMaterialDesc (完整原串) + \"+\" 或 \"-\" + 变动量绝对值。\n" +
+            "示例：草稿 \"2CS+2CS鸡胸肉\"（DraftBaseQty=4），客人说“改成只要1箱”，则 Quantity = 1 - 4 = -3，Name 需带 \"-3\"。\n" +
             "Unit = 优先取草稿单 AiUnit。\n\n" +
             "2. 若在草稿单中未找到匹配项（新增）：\n" +
             "Quantity = 本次通话 Quantity。\n" +
@@ -927,10 +932,10 @@ public partial class PhoneOrderProcessJobService
             "1. IsDeleteWholeOrder：仅当输入明确标记为 true 时才为 true，且 Orders 必须为空。\n" +
             "2. IsUndoCancel：同上。\n" +
             "3. 单个删除：\n" +
-            "若本次通话 MarkForDelete 为 true，或计算后 Quantity <= 0：\n" +
+            "若本次通话 MarkForDelete 为 true，或明确表达整项取消/不要该物料：\n" +
             "设置 MarkForDelete = true。\n" +
             "Name 仍需按照规则二生成（例如：\"鸡胸肉#2箱-2\"）。\n" +
-            "Quantity 设为 0（除非是部分减少，非清零）。\n\n" +
+            "若是整项删除则 Quantity 设为 0；若只是部分减少（例如 -3）则保留负数，不可误判为整项删除。\n\n" +
             
             "【关键规则四：未变动保留】\n" +
             "遍历完所有通话变动后，检查草稿单中未被匹配的剩余物料：\n" +
