@@ -443,7 +443,7 @@ public partial class PhoneOrderProcessJobService
                 "1. 如果客戶明確表示取消整張訂單、全部不要、整單取消、今天的單都不要，請在該店鋪標記 IsDeleteWholeOrder=true，orders 可以為空陣列。\n" +
                 "2. 如果客戶先說取消整單，後面又表示還是要、算了繼續下單、剛剛的取消不算，請標記 IsUndoCancel=true。\n" +
                 "3. 如果客戶只取消單個物料（例如：某某不要了、某某取消、某某 cut 掉），請保留該物料，並在該物料上標記 markForDelete=true，有提到數量的話 quantity 需要用負數表示,\n" +
-                "4. 如果客戶說某某物料剛下了4箱，現在幫我改成1箱，請保留該物料，你只需要做個簡單計算（2箱-1箱）生成quantity為-3箱，其他都不需要标记，也不要另外去多加一個物料\n\n" +
+                "4. 如果客戶說某某物料剛下了4箱，現在幫我改成1箱，請保留該物料，你只需要做個簡單計算（4箱-1箱）生成quantity為-3箱，其他都不需要标记，也不要另外去多加一個物料\n\n" +
                 "5. 如果客戶只是减少物料数量（例如：某某减掉一箱），請保留該物料，只需要在 quantity 用負數表示减少的物料数量,其他都不需要标记\n" +
                 "6. 單個物料取消不等於取消整單，IsDeleteWholeOrder = false。\n" +
                 "7. 如果得到的字段restored是true，就為true，是false或者沒有得到這個字段，則為false\n" +
@@ -899,7 +899,7 @@ public partial class PhoneOrderProcessJobService
             
             "【核心任务流程】\n" +
             "1. 预处理与匹配：建立映射关系，精准找到通话中提到的商品对应草稿单中的哪一项。\n" +
-            "2. 计算合并：计算 Quantity = 草稿基准 + 通话变动。\n" +
+            "2. 计算变动量：先计算草稿基准数量 DraftBaseQty，再按通话语义得到 Quantity（目标量语义用 TargetQty - DraftBaseQty，普通加减语义用通话变动值）。\n" +
             "3. 格式化名称：生成符合规范的 Name。\n" +
             "4. 输出结果：生成最终 JSON。\n\n" +
             
@@ -921,6 +921,7 @@ public partial class PhoneOrderProcessJobService
             "若是普通加减语义，则 Quantity = 本次通话 Quantity。\n" +
             "Name = 草稿单 AiMaterialDesc (完整原串) + \"+\" 或 \"-\" + 变动量绝对值。\n" +
             "示例：草稿 \"2CS+2CS鸡胸肉\"（DraftBaseQty=4），客人说“改成只要1箱”，则 Quantity = 1 - 4 = -3，Name 需带 \"-3\"。\n" +
+            "若计算出的变动量为 0，则视为“未变动”：不要生成带 +0/-0 的 Name，也不要额外新增一行；保留草稿单原始名称与数量。\n" +
             "Unit = 优先取草稿单 AiUnit。\n\n" +
             "2. 若在草稿单中未找到匹配项（新增）：\n" +
             "Quantity = 本次通话 Quantity。\n" +
@@ -941,12 +942,15 @@ public partial class PhoneOrderProcessJobService
             "遍历完所有通话变动后，检查草稿单中未被匹配的剩余物料：\n" +
             "直接保留进入 Output。\n" +
             "Name = 原始 AiMaterialDesc（不加任何后缀）。\n" +
-            "Quantity = 原始 MaterialQuantity。\n\n" +
+            "Quantity = 原始 MaterialQuantity。\n" +
+            "若某物料被匹配但变动量为 0，也按本规则保留原始草稿项（仅输出一条）。\n\n" +
             
             "【禁止行为】\n" +
             "严禁在 #, +, - 前后加空格。\n" +
             "严禁将 MaterialNumber 为空的商品直接忽略，必须通过名称强制匹配。\n" +
-            "严禁直接照抄本次变动值作为最终 Quantity（必须做加法）。\n\n" +
+            "严禁直接照抄本次变动值作为最终 Quantity（必须做加法）。\n" +
+            "严禁输出 Quantity = 0 且 MarkForDelete = false 的商品。\n" +
+            "严禁同一物料输出多条（同一 MaterialNumber 或同一基准名只能输出一条）。\n\n" +
             
             "【输出格式】\n" +
             "{\n" +
