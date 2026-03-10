@@ -17,6 +17,8 @@ public interface ICrmClient : IScopedDependency
     Task<List<CrmContactDto>> GetCustomerContactsAsync(string customerId, string token = null, CancellationToken cancellationToken = default);
     
     Task<List<AutoTestCallLogDto>> GetCallRecordsAsync(DateTime startTimeUtc, DateTime endTimeUtc, CancellationToken cancellationToken);
+    
+    Task<List<GetDeliveryInfoByPhoneNumberResponseDto>> GetDeliveryInfoByPhoneNumberAsync(string phoneNumber, string apiKey = null, CancellationToken cancellationToken = default);
 }
 
 public class CrmClient : ICrmClient
@@ -106,5 +108,21 @@ public class CrmClient : ICrmClient
         var response = await _httpClient.GetAsync<GetCallRecordsDataDto>(url, headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         return response.Data;
+    }
+
+    public async Task<List<GetDeliveryInfoByPhoneNumberResponseDto>> GetDeliveryInfoByPhoneNumberAsync(string phoneNumber, string apiKey = null, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(phoneNumber))
+            throw new ArgumentException("phoneNumber cannot be null or empty.", nameof(phoneNumber));
+        
+        var url = $"{_crmSetting.BaseUrl}/api/external/get-delivery-info-by-phone-number?phone_number={phoneNumber}";
+
+        var headers = new Dictionary<string, string>
+        {
+            { "X-API-KEY", apiKey },
+            { "Accept", "application/json" }
+        };
+
+        return await _httpClient.GetAsync<List<GetDeliveryInfoByPhoneNumberResponseDto>>(url, cancellationToken: cancellationToken, headers: headers).ConfigureAwait(false);
     }
 }

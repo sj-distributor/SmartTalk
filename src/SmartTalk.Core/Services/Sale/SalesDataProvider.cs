@@ -69,7 +69,8 @@ public class SalesDataProvider : ISalesDataProvider
 
     public async Task UpsertCustomerItemsCacheAsync(string soldToId, string itemsString, bool forceSave, CancellationToken cancellationToken)
     {
-        var cache = await _repository.FirstOrDefaultAsync<AiSpeechAssistantKnowledgeVariableCache>(x => x.Filter == soldToId, cancellationToken);
+        var cache = await _repository.FirstOrDefaultAsync<AiSpeechAssistantKnowledgeVariableCache>(
+            x => x.CacheKey == "customer_items" && x.Filter == soldToId, cancellationToken);
         if (cache == null)
         {
             cache = new AiSpeechAssistantKnowledgeVariableCache
@@ -123,7 +124,48 @@ public class SalesDataProvider : ISalesDataProvider
 
     public async Task<AiSpeechAssistantKnowledgeVariableCache> GetCustomerInfoCacheByPhoneNumberAsync(string phoneNumber, CancellationToken cancellationToken)
     {
-        return await _repository.Query<AiSpeechAssistantKnowledgeVariableCache>().Where(x => x.Filter == phoneNumber).FirstOrDefaultAsync(cancellationToken);
+        var candidates = BuildPhoneCandidates(phoneNumber);
+        if (candidates.Count == 0) return null;
+
+        var caches = await _repository.Query<AiSpeechAssistantKnowledgeVariableCache>()
+            .Where(x => x.CacheKey == "customer_info" && candidates.Contains(x.Filter))
+            .OrderByDescending(x => x.LastUpdated)
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+
+        foreach (var candidate in candidates)
+        {
+            var match = caches.FirstOrDefault(x => x.Filter == candidate);
+            if (match != null) return match;
+        }
+
+        return null;
+    }
+
+    private static List<string> BuildPhoneCandidates(string phoneNumber)
+    {
+        var candidates = new List<string>();
+
+        void AddCandidate(string value)
+        {
+            if (!string.IsNullOrWhiteSpace(value) && !candidates.Contains(value))
+                candidates.Add(value);
+        }
+
+        AddCandidate(phoneNumber?.Trim());
+
+        var digits = new string((phoneNumber ?? string.Empty).Where(char.IsDigit).ToArray());
+        AddCandidate(digits);
+
+        if (digits.Length == 11 && digits.StartsWith("1", StringComparison.Ordinal))
+            AddCandidate("+" + digits);
+
+        if (digits.Length == 10)
+        {
+            AddCandidate("+1" + digits);
+            AddCandidate("1" + digits);
+        }
+
+        return candidates;
     }
     
     public async Task AddPhoneOrderPushTaskAsync(PhoneOrderPushTask task, bool forceSave = true, CancellationToken cancellationToken = default)
