@@ -259,6 +259,7 @@ public partial class AiSpeechAssistantConnectFixture
 
         await RunWithUnitOfWork<IRepository>(async repository =>
         {
+            await repository.InsertAsync(new AiSpeechAssistantInboundRoute
             {
                 To = TestDidNumber, ForwardNumber = nonFallbackForwardNumber,
                 IsFullDay = true, DayOfWeek = "0,1,2,3,4,5,6", Priority = 2,
