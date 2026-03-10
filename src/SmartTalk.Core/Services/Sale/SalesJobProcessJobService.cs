@@ -1,3 +1,5 @@
+using Hangfire;
+using Hangfire.Throttling;
 using Serilog;
 using SmartTalk.Core.Constants;
 using SmartTalk.Core.Ioc;
@@ -11,7 +13,8 @@ namespace SmartTalk.Core.Services.Sale;
 public interface ISalesJobProcessJobService : IScopedDependency
 {
     Task ScheduleRefreshCustomerItemsCacheAsync(RefreshAllCustomerItemsCacheCommand command, CancellationToken cancellationToken);
-
+    
+    [Semaphore(HangfireConstants.SemaphoreHiFoodCacheCustomerItems)]
     Task RefreshCustomerItemsCacheBySoldToIdAsync(string soldToId, CancellationToken cancellationToken);
 
     Task ScheduleRefreshCrmCustomerInfoAsync(RefreshAllCustomerInfoCacheCommand command, CancellationToken cancellationToken);
@@ -48,7 +51,7 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
 
         Log.Information("All customer items cache refresh jobs scheduled. Count: {Count}", allSoldToIds.Count);
     }
-
+    
     public async Task RefreshCustomerItemsCacheBySoldToIdAsync(string soldToId, CancellationToken cancellationToken)
     {
         try
