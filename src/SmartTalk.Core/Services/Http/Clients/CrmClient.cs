@@ -124,7 +124,7 @@ public class CrmClient : ICrmClient
         if (string.IsNullOrWhiteSpace(phoneNumber))
             throw new ArgumentException("phoneNumber cannot be null or empty.", nameof(phoneNumber));
         
-        var url = $"{_crmSetting.BaseUrl}/api/external/get-delivery-info-by-phone-number?phone_number={phoneNumber}";
+        var url = $"{_crmSetting.SyncBaseUrl}/api/external/get-delivery-info-by-phone-number?phone_number={phoneNumber}";
 
         var headers = new Dictionary<string, string>
         {
