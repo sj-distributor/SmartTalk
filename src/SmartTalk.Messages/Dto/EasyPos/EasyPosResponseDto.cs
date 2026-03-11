@@ -106,6 +106,9 @@ public class EasyPosResponseModifierProducts
     [JsonProperty("id")]
     public long Id { get; set; }
     
+    [JsonProperty("productId")]
+    public long ProductId { get; set; }
+    
     [JsonProperty("price")]
     public decimal Price { get; set; }
     
