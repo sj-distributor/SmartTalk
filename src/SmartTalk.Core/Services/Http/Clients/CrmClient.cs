@@ -18,7 +18,7 @@ public interface ICrmClient : IScopedDependency
     
     Task<List<AutoTestCallLogDto>> GetCallRecordsAsync(DateTime startTimeUtc, DateTime endTimeUtc, CancellationToken cancellationToken);
     
-    Task<List<GetDeliveryInfoByPhoneNumberResponseDto>> GetDeliveryInfoByPhoneNumberAsync(string phoneNumber, string apiKey = null, CancellationToken cancellationToken = default);
+    Task<List<GetDeliveryInfoByPhoneNumberResponseDto>> GetDeliveryInfoByPhoneNumberAsync(string phoneNumber, CancellationToken cancellationToken = default);
 }
 
 public class CrmClient : ICrmClient
