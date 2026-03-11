@@ -15,7 +15,7 @@ namespace SmartTalk.Core.Services.Pos;
 public partial interface IPosDataProvider : IScopedDependency
 {
     Task<(int Count, List<Company> Companies)> GetPosCompaniesAsync(
-        int? pageIndex = null, int? pageSize = null, List<int> companyIds = null, int? serviceProviderId = null, bool? isBindConfig = null, string keyword = null,
+        int? pageIndex = null, int? pageSize = null, List<int> companyIds = null, int? serviceProviderId = null, string keyword = null,
         CancellationToken cancellationToken = default);
         
     Task<CompanyStore> GetPosCompanyStoreAsync(
@@ -85,7 +85,7 @@ public partial class PosDataProvider : IPosDataProvider
     }
 
     public async Task<(int Count, List<Company> Companies)> GetPosCompaniesAsync(
-        int? pageIndex = null, int? pageSize = null, List<int> companyIds = null, int? serviceProviderId = null, bool? isBindConfig = null, string keyword = null,
+        int? pageIndex = null, int? pageSize = null, List<int> companyIds = null, int? serviceProviderId = null, string keyword = null,
         CancellationToken cancellationToken = default)
     {
         var query = from company in _repository.Query<Company>()
@@ -95,9 +95,6 @@ public partial class PosDataProvider : IPosDataProvider
                   && (companyIds == null || companyIds.Count == 0 || companyIds.Contains(company.Id))
                   && (string.IsNullOrEmpty(keyword) || company.Name.Contains(keyword) || (store != null && store.Names.Contains(keyword)))
             select company;
-
-        if (isBindConfig.HasValue)
-            query = query.Where(x => x.IsBindConfig == isBindConfig.Value);
 
         query = query.Distinct();
         
