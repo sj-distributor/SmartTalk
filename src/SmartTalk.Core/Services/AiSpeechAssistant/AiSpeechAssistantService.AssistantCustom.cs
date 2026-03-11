@@ -88,12 +88,9 @@ public partial class AiSpeechAssistantService
 
         await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgesAsync([latestKnowledge], true, cancellationToken).ConfigureAwait(false);
         
-        if (command.RelatedKnowledges is { Count: > 0 })
-        {
-            newRelations = await HandleKnowledgeCopyRelatedUpdates(asTargetKnowledgePrevRelateds, selectedTargetRelateds, latestKnowledge.Id, prevKnowledge.Id,
+        newRelations = await HandleKnowledgeCopyRelatedUpdates(asTargetKnowledgePrevRelateds, selectedTargetRelateds, latestKnowledge.Id, prevKnowledge.Id,
                 command.RelatedKnowledges.ToDictionary(x => x.Id, x => x), cancellationToken).ConfigureAwait(false);
-        }
-        
+
         if (!string.IsNullOrEmpty(command.Language))
         {
             var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByIdAsync(command.AssistantId, cancellationToken).ConfigureAwait(false);
