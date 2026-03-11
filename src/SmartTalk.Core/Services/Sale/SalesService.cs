@@ -205,7 +205,7 @@ public class SalesService : ISalesService
         {
             var customer = crmCustomers[i];
             customerInfo.AppendLine($"客户 {i + 1}:");
-            AppendCustomerBaseInfo(customerInfo, customer);
+            AppendCustomerBaseInfo(customerInfo, customer, normalizedPhone);
             var sapId = customer.SapId?.Trim();
             deliveryLookup.TryGetValue(sapId ?? string.Empty, out var routeInfos);
             AppendDeliveryRouteSummary(customerInfo, routeInfos);
@@ -246,7 +246,7 @@ public class SalesService : ISalesService
             .ToDictionary(x => x.Key, x => x.ToList());
     }
 
-    private static void AppendCustomerBaseInfo(StringBuilder customerInfo, GetCustomersPhoneNumberDataDto customer)
+    private static void AppendCustomerBaseInfo(StringBuilder customerInfo, GetCustomersPhoneNumberDataDto customer, string normalizedPhone)
     {
         customerInfo.AppendLine($"- SAP编号: {customer.SapId}");
         customerInfo.AppendLine($"- 客户名称: {customer.CustomerName}");
@@ -256,8 +256,15 @@ public class SalesService : ISalesService
 
         if (customer.Contacts == null || customer.Contacts.Count == 0) return;
 
+        var targetPhoneKey = NormalizePhoneKey(normalizedPhone);
+        var matchingContacts = customer.Contacts
+            .Where(c => NormalizePhoneKey(c.Phone) == targetPhoneKey)
+            .ToList();
+
+        if (matchingContacts.Count == 0) return;
+
         customerInfo.AppendLine("- 联系人信息:");
-        foreach (var c in customer.Contacts)
+        foreach (var c in matchingContacts)
             customerInfo.AppendLine($"  - 姓名: {c.Name}，电话: {c.Phone}，身份: {c.Identity}，语言: {c.Language}");
     }
 
@@ -365,6 +372,20 @@ public class SalesService : ISalesService
         if (digits.Length == 11 && digits.StartsWith("1", StringComparison.Ordinal)) return "+" + digits;
 
         return phoneNumber.Trim();
+    }
+
+    private static string NormalizePhoneKey(string phoneNumber)
+    {
+        if (string.IsNullOrWhiteSpace(phoneNumber)) return string.Empty;
+
+        var digits = new string(phoneNumber.Where(char.IsDigit).ToArray());
+        if (digits.Length == 11 && digits.StartsWith("1", StringComparison.Ordinal))
+            digits = digits.Substring(1);
+
+        if (digits.Length > 10)
+            digits = digits.Substring(digits.Length - 10);
+
+        return digits;
     }
     
     private void AppendOrderSection(StringBuilder builder, string sectionName, List<GetOrderArrivalTimeDataDto> orders)
