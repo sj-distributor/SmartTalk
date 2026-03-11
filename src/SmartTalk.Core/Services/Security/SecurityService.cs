@@ -284,6 +284,14 @@ public class SecurityService : ISecurityService
     {
         var permissions = await _securityDataProvider.GetPermissionsByPermissionLevelAsync(request.PermissionLevel, cancellationToken).ConfigureAwait(false);
 
+        Log.Information(
+            "Permission level switched. UserId={UserId}, SwitchTime={SwitchTime}, FromLevel={FromLevel}, ToLevel={ToLevel}",
+            _currentUser.Id.Value,
+            DateTimeOffset.UtcNow,
+            PermissionLevel.ServiceProvider,
+            request.PermissionLevel
+        );
+
         return new GetPermissionsByPermissionLevelResponse()
         {
             Data = _mapper.Map<List<PermissionDto>>(permissions)
