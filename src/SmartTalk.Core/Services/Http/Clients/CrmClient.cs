@@ -110,7 +110,7 @@ public class CrmClient : ICrmClient
         return response.Data;
     }
 
-    public async Task<List<GetDeliveryInfoByPhoneNumberResponseDto>> GetDeliveryInfoByPhoneNumberAsync(string phoneNumber, string apiKey = null, CancellationToken cancellationToken = default)
+    public async Task<List<GetDeliveryInfoByPhoneNumberResponseDto>> GetDeliveryInfoByPhoneNumberAsync(string phoneNumber, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(phoneNumber))
             throw new ArgumentException("phoneNumber cannot be null or empty.", nameof(phoneNumber));
@@ -119,7 +119,7 @@ public class CrmClient : ICrmClient
 
         var headers = new Dictionary<string, string>
         {
-            { "X-API-KEY", apiKey },
+            { "X-API-KEY", _crmSetting.ApiKey },
             { "Accept", "application/json" }
         };
 
