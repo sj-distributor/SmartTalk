@@ -921,6 +921,10 @@ public partial class PhoneOrderProcessJobService
             "2. 优先级 B（名称匹配）：若 MaterialNumber 为空，则对比名称。\n" +
             "必做操作：读取草稿单的 AiMaterialDesc 字段，以 # 符号为界截取前半部分作为“草稿基准名”（例如 \"玉米#1箱\" -> 基准名为 \"玉米\"）。\n" +
             "若 通话中的 Name == 草稿基准名，视为同一物料。\n\n" +
+            "【关键规则一补充：物料号对齐（必做）】\n" +
+            "只要通话商品与草稿单匹配成功（无论是物料号匹配还是名称匹配），输出的 MaterialNumber 必须等于草稿单对应项的 MaterialNumber。\n" +
+            "若通话中提供的 MaterialNumber 与草稿单不同（例如通话=110001，草稿=110002），必须以草稿单为准，先把通话项的 MaterialNumber 视为 110002，再进行后续数量计算与输出。\n" +
+            "只有当未匹配到任何草稿单项（新增）时，才使用通话中的 MaterialNumber；若通话也没有则输出空字符串。\n\n" +
             
             "【关键规则二：计算与生成（Strict）】\n" +
             "对于每一个本次通话中的商品，必须先做“草稿基准数量”计算，再做变动量计算：\n" +
@@ -933,7 +937,6 @@ public partial class PhoneOrderProcessJobService
             "若是普通加减语义，则 Quantity = 本次通话 Quantity。\n" +
             "Name = 草稿单 AiMaterialDesc (完整原串) + \"+\" 或 \"-\" + 变动量绝对值。\n" +
             "示例：草稿 \"2CS+2CS鸡胸肉\"（DraftBaseQty=4），客人说“改成只要1箱”，则 Quantity = 1 - 4 = -3，Name 需带 \"-3\"。\n" +
-            "若计算出的变动量为 0，则视为“未变动”：不要生成带 +0/-0 的 Name，也不要额外新增一行；保留草稿单原始名称与数量。\n" +
             "Unit = 优先取草稿单 AiUnit。\n\n" +
             "2. 若在草稿单中未找到匹配项（新增）：\n" +
             "Quantity = 本次通话 Quantity。\n" +
@@ -954,15 +957,12 @@ public partial class PhoneOrderProcessJobService
             "遍历完所有通话变动后，检查草稿单中未被匹配的剩余物料：\n" +
             "直接保留进入 Output。\n" +
             "Name = 原始 AiMaterialDesc（不加任何后缀）。\n" +
-            "Quantity = 原始 MaterialQuantity。\n" +
-            "若某物料被匹配但变动量为 0，也按本规则保留原始草稿项（仅输出一条）。\n\n" +
+            "Quantity = 原始 MaterialQuantity。\n\n" +
             
             "【禁止行为】\n" +
             "严禁在 #, +, - 前后加空格。\n" +
             "严禁将 MaterialNumber 为空的商品直接忽略，必须通过名称强制匹配。\n" +
-            "严禁直接照抄本次变动值作为最终 Quantity（必须做加法）。\n" +
-            "严禁输出 Quantity = 0 且 MarkForDelete = false 的商品。\n" +
-            "严禁同一物料输出多条（同一 MaterialNumber 或同一基准名只能输出一条）。\n\n" +
+            "严禁直接照抄本次变动值作为最终 Quantity（必须做加法）。\n\n" +
             
             "【输出格式】\n" +
             "{\n" +
