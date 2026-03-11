@@ -22,9 +22,6 @@ public class Company : IEntity, IHasCreatedFields, IHasModifiedFields
     
     [Column("service_provider_id")]
     public int? ServiceProviderId { get; set; }
-
-    [Column("is_bind_config")]
-    public bool IsBindConfig { get; set; }
     
     [Column("created_by")]
     public int? CreatedBy { get; set; }
