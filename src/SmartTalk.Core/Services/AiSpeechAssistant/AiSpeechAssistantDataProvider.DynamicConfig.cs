@@ -48,7 +48,12 @@ public partial class AiSpeechAssistantDataProvider
 
     public async Task<List<AiSpeechAssistantDynamicConfigRelatingCompany>> GetAiSpeechAssistantDynamicConfigRelatingCompaniesAsync(List<int> configIds = null, List<int> companyIds = null, CancellationToken cancellationToken = default)
     {
-        var query = _repository.Query<AiSpeechAssistantDynamicConfigRelatingCompany>().Where(x => configIds.Contains(x.ConfigId));
+        var query = _repository.Query<AiSpeechAssistantDynamicConfigRelatingCompany>();
+
+        if (configIds is { Count: > 0 })
+        {
+            query = query.Where(x => configIds.Contains(x.ConfigId));
+        }
 
         if (companyIds is { Count: > 0 })
         {
