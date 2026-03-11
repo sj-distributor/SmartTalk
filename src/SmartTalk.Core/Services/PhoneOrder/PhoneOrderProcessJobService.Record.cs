@@ -1,5 +1,6 @@
 using Twilio;
 using Serilog;
+using OpenAI;
 using OpenAI.Chat;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -24,6 +25,7 @@ using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using JsonDocument = System.Text.Json.JsonDocument;
 using JsonSerializer = System.Text.Json.JsonSerializer;
+using System.ClientModel;
 
 namespace SmartTalk.Core.Services.PhoneOrder;
 
@@ -112,7 +114,17 @@ public partial class PhoneOrderProcessJobService
 
         var messages = await ConfigureRecordAnalyzePromptAsync(agent, aiSpeechAssistant, record, callFrom ?? "", callTo ?? "", currentTime, audioContent, callSubjectCn, callSubjectEn, cancellationToken);
         
-        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
+        const long largeAudioBytesThreshold = 100L * 1024 * 1024;
+        
+        var networkTimeout = (audioContent?.Length ?? 0) > largeAudioBytesThreshold ? TimeSpan.FromMinutes(10) : TimeSpan.FromMinutes(5);
+
+        var client = new ChatClient(
+            "gpt-4o-audio-preview",
+            new ApiKeyCredential(_openAiSettings.ApiKey),
+            new OpenAIClientOptions
+            {
+                NetworkTimeout = networkTimeout
+            });
  
         ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
 
