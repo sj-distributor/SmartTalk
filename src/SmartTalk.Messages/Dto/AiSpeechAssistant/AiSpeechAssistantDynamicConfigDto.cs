@@ -1,3 +1,4 @@
+using SmartTalk.Messages.Dto.Pos;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 
 namespace SmartTalk.Messages.Dto.AiSpeechAssistant;
@@ -15,4 +16,6 @@ public class AiSpeechAssistantDynamicConfigDto
     public bool Status { get; set; }
 
     public List<AiSpeechAssistantDynamicConfigDto> Children { get; set; } = [];
+    
+    public List<CompanyDto> Companies { get; set; }
 }
