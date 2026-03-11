@@ -23,34 +23,35 @@ public partial class AiSpeechAssistantService
 {
     public async Task<GetAiSpeechAssistantDynamicConfigsResponse> GetAiSpeechAssistantDynamicConfigsAsync(GetAiSpeechAssistantDynamicConfigsRequest request, CancellationToken cancellationToken)
     {
-        var configs = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantDynamicConfigsAsync(cancellationToken).ConfigureAwait(false);
-        
-        var configDtos = _mapper.Map<List<AiSpeechAssistantDynamicConfigDto>>(configs);
+        var configs = await _aiSpeechAssistantDataProvider
+            .GetAiSpeechAssistantDynamicConfigsAsync(cancellationToken)
+            .ConfigureAwait(false);
 
-        var categoryDtos = configDtos.Where(c => c.Level == AiSpeechAssistantDynamicConfigLevel.Category).ToList();
+        var roots = BuildDynamicConfigTree(configs);
 
-        if (categoryDtos.Count > 0)
+        var categoryConfigIds = configs
+            .Where(x => x.Level == AiSpeechAssistantDynamicConfigLevel.Category)
+            .Select(x => x.Id)
+            .ToList();
+
+        if (categoryConfigIds.Count > 0)
         {
-            var categoryConfigIds = categoryDtos.Select(c => c.Id).ToList();
-
             var relatedCompanies = await _aiSpeechAssistantDataProvider
                 .GetAiSpeechAssistantDynamicConfigRelatingCompaniesAsync(categoryConfigIds, null, cancellationToken)
                 .ConfigureAwait(false);
 
-            foreach (var dto in categoryDtos)
-            {
-                dto.Companies = relatedCompanies
-                    .Where(x => x.ConfigId == dto.Id)
-                    .Select(x => new CompanyDto
+            var companyLookup = relatedCompanies
+                .GroupBy(x => x.ConfigId)
+                .ToDictionary(
+                    x => x.Key,
+                    x => x.Select(c => new CompanyDto
                     {
-                        Id = x.CompanyId,
-                        Name = x.CompanyName
-                    })
-                    .ToList();
-            }
-        }
+                        Id = c.CompanyId,
+                        Name = c.CompanyName
+                    }).ToList());
 
-        var roots = BuildDynamicConfigTree(configs);
+            FillCompanies(roots, companyLookup);
+        }
 
         return new GetAiSpeechAssistantDynamicConfigsResponse
         {
@@ -59,6 +60,23 @@ public partial class AiSpeechAssistantService
                 Configs = roots
             }
         };
+    }
+    
+    private void FillCompanies(List<AiSpeechAssistantDynamicConfigDto> nodes, Dictionary<int, List<CompanyDto>> companyLookup)
+    {
+        foreach (var node in nodes)
+        {
+            if (node.Level == AiSpeechAssistantDynamicConfigLevel.Category &&
+                companyLookup.TryGetValue(node.Id, out var companies))
+            {
+                node.Companies = companies;
+            }
+
+            if (node.Children.Count > 0)
+            {
+                FillCompanies(node.Children, companyLookup);
+            }
+        }
     }
 
     public async Task<GetCurrentCompanyDynamicConfigsResponse> GetCurrentCompanyDynamicConfigsAsync(GetCurrentCompanyDynamicConfigsRequest request,
@@ -122,11 +140,16 @@ public partial class AiSpeechAssistantService
             }
 
             var newRelations = selectedCompanyIds
-                .Select(companyId => new AiSpeechAssistantDynamicConfigRelatingCompany
+                .Select(companyId =>
                 {
-                    ConfigId = config.Id,
-                    CompanyId = companyId,
-                    CompanyName = command.Companies[companyId].Name
+                    var company = command.Companies.First(x => x.Id == companyId);
+
+                    return new AiSpeechAssistantDynamicConfigRelatingCompany
+                    {
+                        ConfigId = config.Id,
+                        CompanyId = companyId,
+                        CompanyName = company.Name
+                    };
                 })
                 .ToList();
 

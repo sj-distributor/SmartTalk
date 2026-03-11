@@ -11,8 +11,6 @@ public class CompanyDto
     public string Description { get; set; }
     
     public bool Status { get; set; }
-
-    public bool IsBindConfig { get; set; }
     
     public int? CreatedBy { get; set; }
     
