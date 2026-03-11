@@ -7,9 +7,6 @@ namespace SmartTalk.Messages.Requests.AiSpeechAssistant;
 
 public class GetAiSpeechAssistantDynamicConfigsRequest : IRequest
 {
-    public int? Id { get; set; }
-
-    public bool? Status { get; set; }
 }
 
 public class GetAiSpeechAssistantDynamicConfigsResponse : SmartTalkResponse<GetAiSpeechAssistantDynamicConfigsResponseData>
@@ -19,6 +16,4 @@ public class GetAiSpeechAssistantDynamicConfigsResponse : SmartTalkResponse<GetA
 public class GetAiSpeechAssistantDynamicConfigsResponseData
 {
     public List<AiSpeechAssistantDynamicConfigDto> Configs { get; set; } = [];
-    
-    public List<CompanyDto> Companies { get; set; } = [];
 }
