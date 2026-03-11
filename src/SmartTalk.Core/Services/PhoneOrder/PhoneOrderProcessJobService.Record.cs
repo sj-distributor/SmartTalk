@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Twilio;
 using Serilog;
+using OpenAI;
 using OpenAI.Chat;
 using Newtonsoft.Json.Linq;
 using SmartTalk.Core.Constants;
@@ -28,6 +29,7 @@ using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Enums.Printer;
 using SmartTalk.Messages.Enums.Sales;
 using JsonSerializer = System.Text.Json.JsonSerializer;
+using System.ClientModel;
 
 namespace SmartTalk.Core.Services.PhoneOrder;
 
@@ -117,9 +119,19 @@ public partial class PhoneOrderProcessJobService
         
         var messages = await ConfigureRecordAnalyzePromptAsync(agent, aiSpeechAssistant, record, callFrom ?? "", callTo ?? "", callSubjectCn, callSubjectEn, currentTime, audioContent, cancellationToken);
         
-        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
+        const long largeAudioBytesThreshold = 100L * 1024 * 1024;
         
-        ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text, MaxOutputTokenCount = 16384 };
+        var networkTimeout = (audioContent?.Length ?? 0) > largeAudioBytesThreshold ? TimeSpan.FromMinutes(10) : TimeSpan.FromMinutes(5);
+
+        var client = new ChatClient(
+            "gpt-4o-audio-preview",
+            new ApiKeyCredential(_openAiSettings.ApiKey),
+            new OpenAIClientOptions
+            {
+                NetworkTimeout = networkTimeout
+            });
+ 
+        ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text, MaxOutputTokenCount = 16384};
 
         ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
         Log.Information("sales record analyze report:" + completion.Content.FirstOrDefault()?.Text);
