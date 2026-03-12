@@ -455,17 +455,19 @@ public partial class PhoneOrderProcessJobService
                 "1. 如果客戶明確表示取消整張訂單、全部不要、整單取消、今天的單都不要，請在該店鋪標記 IsDeleteWholeOrder=true，orders 可以為空陣列。\n" +
                 "2. 如果客戶先說取消整單，後面又表示還是要、算了繼續下單、剛剛的取消不算，請標記 IsUndoCancel=true。\n" +
                 "3. 如果客戶只取消單個物料（例如：某某不要了、某某取消、某某 cut 掉），請保留該物料，並在該物料上標記 markForDelete=true，有提到數量的話 quantity 需要用負數表示,\n" +
-                "4. 如果客戶說某某物料剛下了4箱，現在幫我改成1箱，請保留該物料，你只需要做個簡單計算（4箱-1箱）生成quantity為-3箱，其他都不需要标记，也不要另外去多加一個物料\n\n" +
-                "5. 如果客戶只是减少物料数量（例如：某某减掉一箱），請保留該物料，只需要在 quantity 用負數表示减少的物料数量,其他都不需要标记\n" +
-                "6. 單個物料取消不等於取消整單，IsDeleteWholeOrder = false。\n" +
-                "7. 如果得到的字段restored是true，就為true，是false或者沒有得到這個字段，則為false\n" +
-                "8. 如果订单中包含明确的数量描述，即使同时出现“需要确认数量 / 数量不确定”等提示，也应先按当前报告中的数量提取。\n" +
-                "9. 如果是減少某個物料的數量，請在該物料的 quantity 使用負數表示，並要使用 markForDelete = true。\n\n" +
+                "4. 如果客戶說某某物料剛下了4箱，現在幫我改成1箱（或改成只要1箱/变成1箱/剩1箱），請保留該物料：quantity=1，並標記 isTargetQuantity=true（不要在這裡做 4-1 的計算）。\n\n" +
+                "5. 如果客戶只是增加物料数量（例如：再加2箱/多要2箱），quantity=2，isTargetQuantity=false。\n" +
+                "6. 如果客戶只是减少物料数量（例如：某某减掉一箱），quantity=-1，isTargetQuantity=false，並標記 markForDelete=true。\n" +
+                "7. 單個物料取消不等於取消整單，IsDeleteWholeOrder = false。\n" +
+                "8. 如果得到的字段restored是true，就為true，是false或者沒有得到這個字段，則為false\n" +
+                "9. 如果订单中包含明确的数量描述，即使同时出现“需要确认数量 / 数量不确定”等提示，也应先按当前报告中的数量提取。\n" +
+                "10. 如果是減少某個物料的數量，請在該物料的 quantity 使用負數表示，並要使用 markForDelete = true。\n" +
+                "11. 如果是“改成/只要/變成/剩下”目標數量語義，請務必標記 isTargetQuantity = true。\n\n" +
 
                 "請嚴格傳回一個 JSON 對象，頂層字段為 \"stores\"，每个店铺对象包含：" +
                 "StoreName（可空字符串）, StoreNumber（可空字符串）, DeliveryDate（可空字符串）, " +
                 "IsDeleteWholeOrder（boolean，默認 false）, IsUndoCancel（boolean，默認 false）, " +
-                "orders（数组，元素包含 name, quantity, unit, materialNumber, markForDelete）。\n" +
+                "orders（数组，元素包含 name, quantity, unit, materialNumber, markForDelete, isTargetQuantity）。\n" +
 
                 "範例：\n" +
                 "{\n" +
@@ -483,6 +485,7 @@ public partial class PhoneOrderProcessJobService
                 "          \"unit\": \"箱\",\n" +
                 "          \"materialNumber\": \"000000000010010253\",\n" +
                 "          \"markForDelete\": false,\n" +
+                "          \"isTargetQuantity\": false,\n" +
                 "          \"restored\": false\n" +
                 "        }\n" +
                 "      ]\n" +
@@ -503,7 +506,8 @@ public partial class PhoneOrderProcessJobService
                 "3. 如果沒有提到店鋪信息，但有下單內容，StoreName 和 StoreNumber 可為空值，orders 要正常提取。\n" +
                 "4. **如果客戶分析文本中沒有任何可識別的下單信息，請返回：{ \"stores\": [] }。不得臆造或猜測物料。**\n" +
                 "5. 請務必完整提取報告中每一個提到的物料，如果没有匹配上歷史物料列表的物料，不知道它的materialNumber，那也必須保留該物料的quantity以及name。\n" +
-                "6. 生成的json請不要重複物料名";
+                "6. 生成的json請不要重複物料名。\n" +
+                "7. 如果客戶說“改成只要1箱”但未提到之前下了多少，仍然要標記 isTargetQuantity=true。";
         Log.Information("Sending prompt to GPT: {Prompt}", systemPrompt);
 
         var messages = new List<ChatMessage>
@@ -544,6 +548,7 @@ public partial class PhoneOrderProcessJobService
                         var materialNumber = orderItem.TryGetProperty("materialNumber", out var mn) ? mn.GetString() ?? "" : ""; 
                         var markForDelete = orderItem.TryGetProperty("markForDelete", out var md) && md.GetBoolean();
                         var restored = orderItem.TryGetProperty("restored", out var rd) && rd.GetBoolean();
+                        var isTargetQuantity = orderItem.TryGetProperty("isTargetQuantity", out var tq) && tq.GetBoolean();
 
                         if (string.IsNullOrWhiteSpace(materialNumber))
                             materialNumber = MatchMaterialNumber(name, materialNumber, unit, historyItems);
@@ -555,7 +560,8 @@ public partial class PhoneOrderProcessJobService
                             Quantity = (int)qty,
                             MarkForDelete = markForDelete,
                             MaterialNumber = materialNumber,
-                            Restored = restored
+                            Restored = restored,
+                            IsTargetQuantity = isTargetQuantity
                         });
                     } 
                 }
@@ -896,6 +902,17 @@ public partial class PhoneOrderProcessJobService
         
         var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
 
+        var originalOrders = storeOrder.Orders.Select(o => new ExtractedOrderItemDto
+        {
+            Name = o.Name,
+            Quantity = o.Quantity,
+            Unit = o.Unit,
+            MaterialNumber = o.MaterialNumber,
+            MarkForDelete = o.MarkForDelete,
+            Restored = o.Restored,
+            IsTargetQuantity = o.IsTargetQuantity
+        }).ToList();
+
         var currentOrdersJson = JsonSerializer.Serialize(storeOrder.Orders);
         
         var draftOrderJson = draftOrder?.Data != null ? JsonSerializer.Serialize(draftOrder.Data) : "[]";
@@ -935,50 +952,159 @@ public partial class PhoneOrderProcessJobService
 
             storeOrder.IsUndoCancel = root.TryGetProperty("IsUndoCancel", out var undo) && undo.GetBoolean();
 
-            if (root.TryGetProperty("Orders", out var ordersArray) && ordersArray.ValueKind == JsonValueKind.Array)
-            {
-                storeOrder.Orders.Clear();
-
-                foreach (var orderItem in ordersArray.EnumerateArray())
-                {
-                    var name = orderItem.TryGetProperty("Name", out var n) ? n.GetString() ?? "" : "";
-                    var unit = orderItem.TryGetProperty("Unit", out var u) ? u.GetString() ?? "" : "";
-                    var materialNumber = orderItem.TryGetProperty("MaterialNumber", out var m)
-                        ? m.GetString() ?? ""
-                        : "";
-
-                    var quantity = 0;
-                    if (orderItem.TryGetProperty("Quantity", out var q))
-                    {
-                        if (q.ValueKind == JsonValueKind.Number)
-                            quantity = q.GetInt32();
-                        else if (q.ValueKind == JsonValueKind.String &&
-                                 int.TryParse(q.GetString(), out var parsed))
-                            quantity = parsed;
-                    }
-
-                    var markForDelete =
-                        orderItem.TryGetProperty("MarkForDelete", out var d) && d.GetBoolean();
-
-                    var restored =
-                        orderItem.TryGetProperty("Restored", out var r) && r.GetBoolean();
-
-                    storeOrder.Orders.Add(new ExtractedOrderItemDto
-                    {
-                        Name = name,
-                        Quantity = quantity,
-                        Unit = unit,
-                        MaterialNumber = materialNumber,
-                        MarkForDelete = markForDelete,
-                        Restored = restored
-                    });
-                }
-            }
         }
         catch (Exception ex)
         {
             Log.Warning("第二次模型解析失败，保留第一次模型结果: {Message}", ex.Message);
         }
+
+        if (draftOrder?.Data != null && draftOrder.Data.Any())
+        {
+            ApplyDeterministicRefine(storeOrder, originalOrders, draftOrder.Data);
+        }
+        else
+        {
+            storeOrder.Orders = originalOrders;
+        }
+    }
+
+    private static void ApplyDeterministicRefine(ExtractedOrderDto storeOrder, List<ExtractedOrderItemDto> originalOrders, List<AiOrderItemSimpleDto> draftItems)
+    {
+        if (originalOrders == null || originalOrders.Count == 0)
+        {
+            storeOrder.Orders = [];
+            return;
+        }
+
+        var result = new List<ExtractedOrderItemDto>();
+
+        foreach (var source in originalOrders)
+        {
+            var draftItem = FindMatchingDraftItem(draftItems, source);
+            if (draftItem == null)
+            {
+                var newName = BuildNewItemName(source);
+                result.Add(new ExtractedOrderItemDto
+                {
+                    Name = newName,
+                    Quantity = source.Quantity,
+                    Unit = source.Unit,
+                    MaterialNumber = source.MaterialNumber,
+                    MarkForDelete = source.MarkForDelete,
+                    Restored = source.Restored,
+                    IsTargetQuantity = source.IsTargetQuantity
+                });
+                continue;
+            }
+
+            var draftBaseQty = ParseAiMaterialDescQuantity(draftItem.AiMaterialDesc, draftItem.MaterialQuantity);
+            var deltaQty = source.Quantity;
+            var finalQty = source.Quantity;
+
+            if (source.MarkForDelete && source.Quantity == 0)
+            {
+                deltaQty = -draftBaseQty;
+                finalQty = 0;
+            }
+            else if (source.IsTargetQuantity)
+            {
+                deltaQty = source.Quantity - draftBaseQty;
+                finalQty = source.Quantity;
+            }
+
+            var prefix = string.IsNullOrWhiteSpace(draftItem.AiMaterialDesc) ? source.Name ?? "" : draftItem.AiMaterialDesc;
+            var name = deltaQty == 0 ? prefix : prefix + (deltaQty > 0 ? $"+{Math.Abs(deltaQty)}" : $"-{Math.Abs(deltaQty)}");
+
+            result.Add(new ExtractedOrderItemDto
+            {
+                Name = name,
+                Quantity = finalQty,
+                Unit = string.IsNullOrWhiteSpace(draftItem.AiUnit) ? source.Unit : draftItem.AiUnit,
+                MaterialNumber = string.IsNullOrWhiteSpace(draftItem.MaterialNumber) ? source.MaterialNumber : draftItem.MaterialNumber,
+                MarkForDelete = source.MarkForDelete,
+                Restored = source.Restored,
+                IsTargetQuantity = source.IsTargetQuantity
+            });
+        }
+
+        storeOrder.Orders = result;
+    }
+
+    private static string BuildNewItemName(ExtractedOrderItemDto source)
+    {
+        if (string.IsNullOrWhiteSpace(source?.Name)) return string.Empty;
+        if (source.Name.Contains('#')) return source.Name;
+        var unit = source.Unit ?? string.Empty;
+        return $"{source.Name}#{source.Quantity}{unit}";
+    }
+
+    private static AiOrderItemSimpleDto FindMatchingDraftItem(IEnumerable<AiOrderItemSimpleDto> draftItems, ExtractedOrderItemDto target)
+    {
+        if (draftItems == null || target == null) return null;
+
+        if (!string.IsNullOrWhiteSpace(target.MaterialNumber))
+        {
+            return draftItems.FirstOrDefault(d =>
+                !string.IsNullOrWhiteSpace(d.MaterialNumber) &&
+                string.Equals(d.MaterialNumber, target.MaterialNumber, StringComparison.OrdinalIgnoreCase));
+        }
+
+        var targetName = GetBaseName(target.Name);
+        if (string.IsNullOrWhiteSpace(targetName)) return null;
+
+        return draftItems.FirstOrDefault(d =>
+            string.Equals(GetBaseName(d.AiMaterialDesc ?? d.MaterialDescription), targetName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static int ParseAiMaterialDescQuantity(string desc, int fallback)
+    {
+        if (string.IsNullOrWhiteSpace(desc)) return fallback;
+
+        var total = 0;
+        var hasAny = false;
+        var sign = 1;
+
+        for (var i = 0; i < desc.Length; i++)
+        {
+            var c = desc[i];
+            if (c == '+')
+            {
+                sign = 1;
+                continue;
+            }
+            if (c == '-')
+            {
+                sign = -1;
+                continue;
+            }
+
+            if (!char.IsDigit(c)) continue;
+
+            var start = i;
+            while (i < desc.Length && char.IsDigit(desc[i])) i++;
+            var numberText = desc.Substring(start, i - start);
+            if (int.TryParse(numberText, out var value))
+            {
+                total += sign * value;
+                hasAny = true;
+                sign = 1;
+            }
+
+            i--;
+        }
+
+        return hasAny ? total : fallback;
+    }
+
+    private static string GetBaseName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return string.Empty;
+
+        var hashIndex = name.IndexOf('#');
+        if (hashIndex >= 0)
+            return name.Substring(0, hashIndex).Trim();
+
+        return name.Trim();
     }
 
     private static string BuildRefineOrderSystemPrompt()
@@ -1031,19 +1157,5 @@ public partial class PhoneOrderProcessJobService
             "  ]\n" +
             "}\n\n" +
             "生成结果前，请在内存中执行一次规则的自我检查。\n";
-    }
-    
-    private async Task<List<string>> GetTodayReportsByAssistantAsync(int assistantId, int recordId, CancellationToken cancellationToken)
-    {
-        var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
-        var pacificNow = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, pacificZone);
-        
-        var pacificStartOfDay = new DateTimeOffset(pacificNow.Year, pacificNow.Month, pacificNow.Day, 0, 0, 0, pacificZone.GetUtcOffset(pacificNow));
-        
-        var utcStart = pacificStartOfDay.ToUniversalTime();
-        var utcEnd = utcStart.AddDays(1);
-        
-        var reports = await _phoneOrderDataProvider.GetTranscriptionTextsAsync(assistantId, recordId, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
-        return reports;
     }
 }
