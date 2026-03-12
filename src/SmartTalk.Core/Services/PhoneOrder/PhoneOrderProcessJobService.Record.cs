@@ -626,10 +626,10 @@ public partial class PhoneOrderProcessJobService
         return pureNumber ?? candidates.First();
     }
 
-    private async Task<string> ResolveSoldToIdAsync(ExtractedOrderDto storeOrder,
-        Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, List<string> soldToIds,
-        CancellationToken cancellationToken)
+    private async Task<string> ResolveSoldToIdAsync(ExtractedOrderDto storeOrder, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, List<string> soldToIds, CancellationToken cancellationToken)
     {
+        if (soldToIds.Count == 1) return aiSpeechAssistant.Name;
+        
         if (!string.IsNullOrEmpty(storeOrder.StoreName))
         {
             var requestDto = new GetCustomerNumbersByNameRequestDto { CustomerName = storeOrder.StoreName };
@@ -643,10 +643,8 @@ public partial class PhoneOrderProcessJobService
         {
             return soldToIds[storeIndex - 1];
         }
-
-        if (soldToIds.Count > 1) return string.Empty;
-
-        return aiSpeechAssistant.Name;
+        
+        return string.Empty;
     }
 
     private GenerateAiOrdersRequestDto CreateDraftOrder(ExtractedOrderDto storeOrder, string soldToId,
