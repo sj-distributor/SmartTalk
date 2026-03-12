@@ -923,7 +923,7 @@ public partial class PhoneOrderProcessJobService
         var draftOrderJson = draftOrder?.Data != null ? JsonSerializer.Serialize(draftOrder.Data) : "[]";
         Log.Information("RefineOrderByAiAsync draft order: {DraftOrder}", draftOrderJson);
         
-       //var historyReportsText = todayReports.Any() ? string.Join("\n---\n", todayReports) : "（无）";
+        //var historyReportsText = todayReports.Any() ? string.Join("\n---\n", todayReports) : "（无）";
 
         var systemPrompt = BuildRefineOrderSystemPrompt();
         
@@ -978,7 +978,7 @@ public partial class PhoneOrderProcessJobService
     {
         if (originalOrders == null || originalOrders.Count == 0)
         {
-            storeOrder.Orders = [];
+            storeOrder.Orders = new List<ExtractedOrderItemDto>();
             return;
         }
 
@@ -989,10 +989,9 @@ public partial class PhoneOrderProcessJobService
             var draftItem = FindMatchingDraftItem(draftItems, source);
             if (draftItem == null)
             {
-                var newName = BuildNewItemName(source);
                 result.Add(new ExtractedOrderItemDto
                 {
-                    Name = newName,
+                    Name = source.Name,
                     Quantity = source.Quantity,
                     Unit = source.Unit,
                     MaterialNumber = source.MaterialNumber,
@@ -1121,7 +1120,7 @@ public partial class PhoneOrderProcessJobService
             "1. 本次通话提取的订单（变动或目标）\n" +
             "2. 系统草稿单（基准）\n\n" +
             "【总规则】\n" +
-            "仅输出本次通话涉及的物料。草稿单里未匹配的物料不要输出。\n\n" +
+            "仅输出本次通话涉及的物料。未匹配到草稿单的物料，也请保留在输出 JSON 中\n\n" +
             "【匹配规则】\n" +
             "优先物料号匹配；若物料号为空则名称匹配。\n" +
             "名称匹配时：以草稿单 AiMaterialDesc 的 # 前半段为基准名。\n" +
