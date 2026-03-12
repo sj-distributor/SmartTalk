@@ -11,6 +11,7 @@ using SmartTalk.Core.Ioc;
 using Twilio.AspNet.Core;
 using SmartTalk.Core.Utils;
 using System.Net.WebSockets;
+using System.Text.RegularExpressions;
 using AutoMapper;
 using SmartTalk.Core.Constants;
 using Microsoft.AspNetCore.Http;
@@ -234,6 +235,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _aiSpeechAssistantStreamContext.Host = host;
         _aiSpeechAssistantStreamContext.LastUserInfo = new AiSpeechAssistantUserInfoDto { PhoneNumber = from };
     }
+    
+    private static readonly Regex PosPlaceholderRegex = 
+        new(@"\[POS_(.*?)_(.*?)_(.*?)\]", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private async Task BuildingAiSpeechAssistantKnowledgeBaseAsync(string from, string to, int? assistantId, int? numberId, int? agentId, CancellationToken cancellationToken)
     {
@@ -307,6 +311,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
             finalPrompt = finalPrompt.Replace("#{customer_info}", string.IsNullOrEmpty(info) ? " " : info);
         }
+        
+        finalPrompt = await ResolvePosPlaceholdersAsync(finalPrompt, agentId.Value, cancellationToken);
         
         Log.Information($"The final prompt: {finalPrompt}");
         
@@ -1275,5 +1281,18 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
         _aiSpeechAssistantStreamContext.IsInAiServiceHours = specificWorkingHours != null && specificWorkingHours.Hours.Any(x => x.Start <= pstTimeToMinute && x.End >= pstTimeToMinute);
         _aiSpeechAssistantStreamContext.IsEnableManualService = agent.IsTransferHuman && !string.IsNullOrEmpty(agent.TransferCallNumber);
+    }
+
+    private async Task<string> ResolvePosPlaceholdersAsync(string prompt, int agentId, CancellationToken cancellationToken)
+    {
+        var match = PosPlaceholderRegex.Match(prompt);
+        if (!match.Success)
+            return prompt;
+
+        var menuText = await GenerateMenuItemsAsync(agentId, cancellationToken);
+
+        prompt = prompt.Replace(match.Value, menuText ?? "", StringComparison.OrdinalIgnoreCase);
+
+        return prompt;
     }
 }
