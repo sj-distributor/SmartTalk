@@ -48,8 +48,6 @@ public partial interface IPosDataProvider : IScopedDependency
     Task<List<PosProduct>> GetPosProductsByProductIdsAsync(int storeId, List<string> productIds, CancellationToken cancellationToken);
     
     Task<List<PosProduct>> GetPosProductsByAgentIdAsync(int agentId, CancellationToken cancellationToken);
-    
-    
 }
 
 public partial class PosDataProvider

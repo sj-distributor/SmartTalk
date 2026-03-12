@@ -236,8 +236,11 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _aiSpeechAssistantStreamContext.LastUserInfo = new AiSpeechAssistantUserInfoDto { PhoneNumber = from };
     }
     
-    private static readonly Regex PosPlaceholderRegex = 
-        new(@"\[POS_(.*?)_(.*?)_(.*?)\]", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex PosMenuRegex =
+        new(@"\[POS_Menu_[^\]]+\]", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    private static readonly Regex PosStoreTimeRegex =
+        new(@"\[POS_店铺_营业时间_(.*?)\]", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private async Task BuildingAiSpeechAssistantKnowledgeBaseAsync(string from, string to, int? assistantId, int? numberId, int? agentId, CancellationToken cancellationToken)
     {
@@ -310,6 +313,13 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             var info = customerInfoCache?.CacheValue?.Trim();
 
             finalPrompt = finalPrompt.Replace("#{customer_info}", string.IsNullOrEmpty(info) ? " " : info);
+        }
+
+        if (finalPrompt.Contains("#[POS_店铺_营业时间_(.*?)]", StringComparison.OrdinalIgnoreCase))
+        {
+            var store = await _posDataProvider.GetPosStoreByAgentIdAsync(agentId.Value, cancellationToken).ConfigureAwait(false);
+            
+            finalPrompt = finalPrompt.Replace("#[POS_店铺_营业时间_(.*?)]", store.TimePeriod?? string.Empty);
         }
         
         finalPrompt = await ResolvePosPlaceholdersAsync(finalPrompt, agentId.Value, cancellationToken);
@@ -1285,13 +1295,37 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
     private async Task<string> ResolvePosPlaceholdersAsync(string prompt, int agentId, CancellationToken cancellationToken)
     {
-        var match = PosPlaceholderRegex.Match(prompt);
-        if (!match.Success)
-            return prompt;
+        bool hasMenuPlaceholder = PosMenuRegex.IsMatch(prompt);
+        bool hasStoreTimePlaceholder = PosStoreTimeRegex.IsMatch(prompt);
 
-        var menuText = await GenerateMenuItemsAsync(agentId, cancellationToken);
+        string menuText = null;
+        string storeTimeText = null;
 
-        prompt = prompt.Replace(match.Value, menuText ?? "", StringComparison.OrdinalIgnoreCase);
+        if (hasMenuPlaceholder)
+        {
+            menuText = await GenerateMenuItemsAsync(agentId, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (hasStoreTimePlaceholder)
+        {
+            var store = await _posDataProvider.GetPosStoreByAgentIdAsync(agentId, cancellationToken).ConfigureAwait(false);
+            storeTimeText = store?.TimePeriod ?? string.Empty;
+        }
+
+        if (hasMenuPlaceholder && !string.IsNullOrWhiteSpace(menuText))
+        {
+            var match = PosMenuRegex.Match(prompt);
+            prompt = prompt.Replace(match.Value, menuText, StringComparison.OrdinalIgnoreCase);
+        }
+
+        if (hasStoreTimePlaceholder && !string.IsNullOrWhiteSpace(storeTimeText))
+        {
+            var matches = PosStoreTimeRegex.Matches(prompt);
+            foreach (Match match in matches)
+            {
+                prompt = prompt.Replace(match.Value, storeTimeText, StringComparison.OrdinalIgnoreCase);
+            }
+        }
 
         return prompt;
     }
