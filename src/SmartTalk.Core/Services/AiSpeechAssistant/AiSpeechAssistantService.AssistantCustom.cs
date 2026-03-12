@@ -1049,38 +1049,47 @@ public partial class AiSpeechAssistantService
                 || (r.TargetKnowledgeId == command.SourceKnowledgeId && command.TargetKnowledgeIds.Contains(r.SourceKnowledgeId))
             ).ToList();
 
-        if (duplicated.Any())
-        {
-            var existedIds = duplicated
-                .Select(r => r.SourceKnowledgeId == command.SourceKnowledgeId
-                    ? r.TargetKnowledgeId
-                    : r.SourceKnowledgeId)
-                .Distinct();
+        var duplicatedTargetIds = duplicated
+            .Select(r => r.SourceKnowledgeId == command.SourceKnowledgeId
+                ? r.TargetKnowledgeId
+                : r.SourceKnowledgeId)
+            .Distinct()
+            .ToHashSet();
 
-            throw new InvalidOperationException($"Knowledge copy relation already exists.");
+        if (duplicatedTargetIds.Count == copyToKnowledges.Count && copyToKnowledges.Count > 0)
+        {
+            throw new InvalidOperationException("源知识库已建立同步关联，不允许重复创建覆盖。");
         }
 
-        foreach (var copyToKnowledge in copyToKnowledges)
+        var effectiveCopyToKnowledges = copyToKnowledges
+            .Where(x => !duplicatedTargetIds.Contains(x.Id))
+            .ToList();
+
+        foreach (var copyToKnowledge in effectiveCopyToKnowledges)
         {
             var newCopyToKnowledge = await BuildNewCopyToKnowledgeAsync(copyToKnowledge, copyFromKnowledge, relatedLookup, copyFromRelatedLookup, cancellationToken).ConfigureAwait(false);
             newCopeToKnowledges.Add(newCopyToKnowledge);
         }
 
-        await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync(copyToKnowledges, true, cancellationToken).ConfigureAwait(false);
+        await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync(effectiveCopyToKnowledges, true, cancellationToken).ConfigureAwait(false);
         await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgesAsync(newCopeToKnowledges, true, cancellationToken).ConfigureAwait(false);
 
         Log.Information("KonwledgeCopy New copies inserted. newCopyToKnowledge={@newCopyToKnowledge}", newCopeToKnowledges);
         
-        await BuildAndPersistCopyRelatedsAsync(copyFromKnowledge, command.IsSyncUpdate, copyToKnowledges, newCopeToKnowledges, relatedLookup, copyFromRelatedLookup, cancellationToken).ConfigureAwait(false);
+        await BuildAndPersistCopyRelatedsAsync(copyFromKnowledge, command.IsSyncUpdate, effectiveCopyToKnowledges, newCopeToKnowledges, relatedLookup, copyFromRelatedLookup, cancellationToken).ConfigureAwait(false);
 
-        var knowledgeOldJsons = BuildKnowledgeOldJsons(copyToKnowledges, relatedLookup);
+        var knowledgeOldJsons = BuildKnowledgeOldJsons(effectiveCopyToKnowledges, relatedLookup);
+        var partialSkippedNotice = duplicatedTargetIds.Count > 0
+            ? "部分目标知识库已与来源知识库建立同步关系，不支持重复复制，系统将自动跳过这些知识库。"
+            : null;
 
         Log.Information("KonwledgeCopy process completed successfully. SourceId={SourceId}", copyFromKnowledge.Id);
 
         return new AiSpeechAssistantKonwledgeCopyAddedEvent
         {
             CopyJson = copyFromKnowledge.Json,
-            KnowledgeOldJsons = knowledgeOldJsons
+            KnowledgeOldJsons = knowledgeOldJsons,
+            NoticeMsg = partialSkippedNotice,
         };
     }
 
