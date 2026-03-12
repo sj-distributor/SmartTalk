@@ -33,7 +33,7 @@ public class SalesServiceCrmDeliveryTests
                 }
             ]);
 
-        _crmClient.GetDeliveryInfoByPhoneNumberAsync(Arg.Any<string>(), Arg.Any<string>(), cancellationToken)
+        _crmClient.GetDeliveryInfoByPhoneNumberAsync(Arg.Any<string>(), cancellationToken)
             .Returns(callInfo =>
             {
                 var phone = callInfo.ArgAt<string>(0);
@@ -76,7 +76,7 @@ public class SalesServiceCrmDeliveryTests
                     CustomerName = "Test Customer"
                 }
             ]);
-        _crmClient.GetDeliveryInfoByPhoneNumberAsync(Arg.Any<string>(), Arg.Any<string>(), cancellationToken)
+        _crmClient.GetDeliveryInfoByPhoneNumberAsync(Arg.Any<string>(), cancellationToken)
             .Returns([]);
 
         var result = await sut.BuildCrmCustomerInfoByPhoneAsync("+19164284295", cancellationToken);
@@ -96,7 +96,7 @@ public class SalesServiceCrmDeliveryTests
                 "crm-token",
                 cancellationToken)
             .Returns([]);
-        _crmClient.GetDeliveryInfoByPhoneNumberAsync(Arg.Any<string>(), Arg.Any<string>(), cancellationToken)
+        _crmClient.GetDeliveryInfoByPhoneNumberAsync(Arg.Any<string>(), cancellationToken)
             .Returns([]);
 
         var result = await sut.BuildCrmCustomerInfoByPhoneAsync("+19164284295", cancellationToken);
@@ -124,7 +124,7 @@ public class SalesServiceCrmDeliveryTests
                 }
             ]);
 
-        _crmClient.GetDeliveryInfoByPhoneNumberAsync(Arg.Any<string>(), Arg.Any<string>(), cancellationToken)
+        _crmClient.GetDeliveryInfoByPhoneNumberAsync(Arg.Any<string>(), cancellationToken)
             .Returns(callInfo =>
             {
                 var phone = callInfo.ArgAt<string>(0);
@@ -145,8 +145,8 @@ public class SalesServiceCrmDeliveryTests
         var result = await sut.BuildCrmCustomerInfoByPhoneAsync("+19164284295", cancellationToken);
 
         result.ShouldContain("路线1: ELKG");
-        await _crmClient.Received().GetDeliveryInfoByPhoneNumberAsync("+19164284295", Arg.Any<string>(), cancellationToken);
-        await _crmClient.DidNotReceive().GetDeliveryInfoByPhoneNumberAsync("19164284295", Arg.Any<string>(), cancellationToken);
-        await _crmClient.DidNotReceive().GetDeliveryInfoByPhoneNumberAsync("9164284295", Arg.Any<string>(), cancellationToken);
+        await _crmClient.Received().GetDeliveryInfoByPhoneNumberAsync("+19164284295", cancellationToken);
+        await _crmClient.DidNotReceive().GetDeliveryInfoByPhoneNumberAsync("19164284295", cancellationToken);
+        await _crmClient.DidNotReceive().GetDeliveryInfoByPhoneNumberAsync("9164284295", cancellationToken);
     }
 }
