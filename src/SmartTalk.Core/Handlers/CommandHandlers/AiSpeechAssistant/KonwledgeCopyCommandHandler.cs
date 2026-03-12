@@ -22,7 +22,8 @@ public class KonwledgeCopyCommandHandler : ICommandHandler<KonwledgeCopyCommand,
         
         return new KonwledgeCopyResponse
         {
-            Data = @event.KnowledgeOldJsons
+            Data = @event.KnowledgeOldJsons,
+            Msg = @event.NoticeMsg
         };
     }
 }
