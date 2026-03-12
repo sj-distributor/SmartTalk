@@ -314,13 +314,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
             finalPrompt = finalPrompt.Replace("#{customer_info}", string.IsNullOrEmpty(info) ? " " : info);
         }
-
-        if (finalPrompt.Contains("#[POS_店铺_营业时间_(.*?)]", StringComparison.OrdinalIgnoreCase))
-        {
-            var store = await _posDataProvider.GetPosStoreByAgentIdAsync(agentId.Value, cancellationToken).ConfigureAwait(false);
-            
-            finalPrompt = finalPrompt.Replace("#[POS_店铺_营业时间_(.*?)]", store.TimePeriod?? string.Empty);
-        }
         
         finalPrompt = await ResolvePosPlaceholdersAsync(finalPrompt, agentId.Value, cancellationToken);
         
