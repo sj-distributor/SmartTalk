@@ -1048,23 +1048,39 @@ public partial class AiSpeechAssistantService
         
         var targetRelatedByAnySourceIds = copyToRelateds?
             .Select(x => x.TargetKnowledgeId)
-            .Distinct().ToHashSet() ?? new HashSet<int>();
-        
-        var relatedTargetCount = command.TargetKnowledgeIds.Count(id => targetRelatedByAnySourceIds.Contains(id));
-        
-        if (command.TargetKnowledgeIds.Count > 1 && relatedTargetCount == command.TargetKnowledgeIds.Count)
+            .Distinct()
+            .ToHashSet() ?? new HashSet<int>();
+
+        var targetRelatedByCurrentSourceIds = copyToRelateds?
+            .Where(x => x.SourceKnowledgeId == command.SourceKnowledgeId)
+            .Select(x => x.TargetKnowledgeId)
+            .Distinct()
+            .ToHashSet() ?? new HashSet<int>();
+
+        var relatedTargetCount = copyToKnowledges.Count(x => targetRelatedByAnySourceIds.Contains(x.Id));
+
+        if (copyToKnowledges.Count == 1)
+        {
+            var onlyTargetId = copyToKnowledges[0].Id;
+
+            if (targetRelatedByCurrentSourceIds.Contains(onlyTargetId))
+                throw new InvalidOperationException("已存在此关系");
+
+            if (targetRelatedByAnySourceIds.Contains(onlyTargetId))
+                throw new InvalidOperationException("源知识库已建立同步关联，不允许重复创建覆盖。");
+        }
+        else if (copyToKnowledges.Count > 1 && relatedTargetCount == copyToKnowledges.Count)
         {
             throw new InvalidOperationException("源知识库已建立同步关联，不允许重复创建覆盖。");
         }
-        
+
         var effectiveCopyToKnowledges = copyToKnowledges
             .Where(x => !targetRelatedByAnySourceIds.Contains(x.Id))
             .ToList();
-        
-        var partialSkippedNotice =
-            command.TargetKnowledgeIds.Count > 1 &&
-            relatedTargetCount > 0 &&
-            relatedTargetCount < command.TargetKnowledgeIds.Count ? "部分目标知识库已与来源知识库建立同步关系，不支持重复复制，系统将自动跳过这些知识库。" : null;
+
+        var partialSkippedNotice = copyToKnowledges.Count > 1 && relatedTargetCount > 0
+            ? "部分目标知识库已与来源知识库建立同步关系，不支持重复复制，系统将自动跳过这些知识库。"
+            : null;
         
         var newCopeToKnowledges = new List<AiSpeechAssistantKnowledge>();
 
