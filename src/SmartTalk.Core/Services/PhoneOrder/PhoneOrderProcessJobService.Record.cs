@@ -633,16 +633,22 @@ public partial class PhoneOrderProcessJobService
         if (!string.IsNullOrEmpty(storeOrder.StoreName))
         {
             var requestDto = new GetCustomerNumbersByNameRequestDto { CustomerName = storeOrder.StoreName };
-            var customerNumber = await _salesClient.GetCustomerNumbersByNameAsync(requestDto, cancellationToken)
-                .ConfigureAwait(false);
-            return customerNumber?.Data?.FirstOrDefault()?.CustomerNumber ?? string.Empty;
+            var response = await _salesClient.GetCustomerNumbersByNameAsync(requestDto, cancellationToken).ConfigureAwait(false);
+            
+            var matchedCustomers = response?.Data?.Where(x => soldToIds.Contains(x.CustomerNumber.TrimStart('0'))).Select(x => x.CustomerNumber).ToList();
+
+            if (matchedCustomers?.Count == 1) return matchedCustomers.First();
+
+            if (matchedCustomers?.Count > 1 &&
+                int.TryParse(storeOrder.StoreNumber, out var storeIndex) &&
+                storeIndex > 0 && storeIndex <= matchedCustomers.Count)
+            {
+                return matchedCustomers[storeIndex - 1];
+            }
         }
 
-        if (!string.IsNullOrEmpty(storeOrder.StoreNumber) && soldToIds.Any() &&
-            int.TryParse(storeOrder.StoreNumber, out var storeIndex) && storeIndex > 0 && storeIndex <= soldToIds.Count)
-        {
-            return soldToIds[storeIndex - 1];
-        }
+        if (!string.IsNullOrEmpty(storeOrder.StoreNumber) && int.TryParse(storeOrder.StoreNumber, out var index) && index > 0 && index <= soldToIds.Count)
+            return soldToIds[index - 1];
         
         return string.Empty;
     }
