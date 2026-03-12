@@ -29,6 +29,28 @@ public class AudioCodecConverterTests
     private static byte[] BuildAlaw(short[] samples) =>
         samples.Select(s => ALawEncoder.LinearToALawSample(s)).ToArray();
 
+    private static IConfiguration BuildTestConfiguration()
+    {
+        var data = new Dictionary<string, string>
+        {
+            ["OpenAi:BaseUrl"] = "https://example.test",
+            ["OpenAi:ApiKey"] = "test-key",
+            ["OpenAi:Organization"] = "test-org",
+            ["OpenAi:Realtime:RealtimeSendBuffLength"] = "1024",
+            ["OpenAi:Realtime:ReceiveBufferLength"] = "1024",
+            ["OpenAi:Realtime:Temperature"] = "0.2",
+            ["OpenAi:RealTimeApiKeys"] = "key1,key2",
+            ["OpenAiForHk:BaseUrl"] = "https://example-hk.test",
+            ["OpenAiForHk:ApiKey"] = "test-hk-key",
+            ["OpenAiForHk:Organization"] = "test-hk-org",
+            ["Google:ApiKey"] = "test-google-key"
+        };
+
+        return new ConfigurationBuilder()
+            .AddInMemoryCollection(data)
+            .Build();
+    }
+
     // ── Same codec: no conversion ───────────────────────────────
 
     [Theory]
@@ -130,7 +152,7 @@ public class AudioCodecConverterTests
     public void OpenAi_GetPreferredCodec_AlwaysReturnsClientCodec(RealtimeAiAudioCodec clientCodec)
     {
         var adapter = new Core.Services.RealtimeAiV2.Adapters.Providers.OpenAi.OpenAiRealtimeAiProviderAdapter(
-            new Core.Settings.OpenAi.OpenAiSettings(Substitute.For<IConfiguration>()));
+            new Core.Settings.OpenAi.OpenAiSettings(BuildTestConfiguration()));
 
         adapter.GetPreferredCodec(clientCodec).ShouldBe(clientCodec);
     }
@@ -142,7 +164,7 @@ public class AudioCodecConverterTests
     public void Google_GetPreferredCodec_AlwaysReturnsPcm16(RealtimeAiAudioCodec clientCodec)
     {
         var adapter = new Core.Services.RealtimeAiV2.Adapters.Providers.Google.GoogleRealtimeAiProviderAdapter(
-            new Core.Settings.Google.GoogleSettings(Substitute.For<IConfiguration>()));
+            new Core.Settings.Google.GoogleSettings(BuildTestConfiguration()));
 
         adapter.GetPreferredCodec(clientCodec).ShouldBe(RealtimeAiAudioCodec.PCM16);
     }
