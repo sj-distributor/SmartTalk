@@ -921,6 +921,7 @@ public partial class PhoneOrderProcessJobService
         var currentOrdersJson = JsonSerializer.Serialize(storeOrder.Orders);
         
         var draftOrderJson = draftOrder?.Data != null ? JsonSerializer.Serialize(draftOrder.Data) : "[]";
+        Log.Information("RefineOrderByAiAsync draft order: {DraftOrder}", draftOrderJson);
         
        //var historyReportsText = todayReports.Any() ? string.Join("\n---\n", todayReports) : "（无）";
 
