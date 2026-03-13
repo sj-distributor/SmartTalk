@@ -99,22 +99,11 @@ public partial class AiSpeechAssistantService
 
         if (inheritPreviousRelations)
         {
-            newRelations = await CarryForwardPreviousRelationsAsync(
-                asTargetKnowledgePrevRelateds,
-                asSourceKnowledgePrevRelateds,
-                latestKnowledge.Id,
-                prevKnowledge.Id,
-                cancellationToken).ConfigureAwait(false);
+            newRelations = await CarryForwardPreviousRelationsAsync(asTargetKnowledgePrevRelateds, asSourceKnowledgePrevRelateds, latestKnowledge.Id, prevKnowledge.Id, cancellationToken).ConfigureAwait(false);
         }
         else
         {
-            newRelations = await HandleKnowledgeCopyRelatedUpdates(
-                asTargetKnowledgePrevRelateds,
-                selectedTargetRelateds,
-                latestKnowledge.Id,
-                prevKnowledge.Id,
-                command.RelatedKnowledges.ToDictionary(x => x.Id, x => x),
-                cancellationToken).ConfigureAwait(false);
+            newRelations = await HandleKnowledgeCopyRelatedUpdates(asTargetKnowledgePrevRelateds, selectedTargetRelateds, latestKnowledge.Id, prevKnowledge.Id, command.RelatedKnowledges.ToDictionary(x => x.Id, x => x), cancellationToken).ConfigureAwait(false);
         }
 
         var prevKnowledgeDto = _mapper.Map<AiSpeechAssistantKnowledgeDto>(prevKnowledge);
@@ -192,26 +181,17 @@ public partial class AiSpeechAssistantService
     }
 
     private async Task<List<AiSpeechAssistantKnowledgeCopyRelatedDto>> CarryForwardPreviousRelationsAsync(
-        List<AiSpeechAssistantKnowledgeCopyRelated> asTargetKnowledgePrevRelateds,
-        List<AiSpeechAssistantKnowledgeCopyRelated> asSourceKnowledgePrevRelateds,
-        int latestKnowledgeId,
-        int prevKnowledgeId,
-        CancellationToken cancellationToken)
+        List<AiSpeechAssistantKnowledgeCopyRelated> asTargetKnowledgePrevRelateds, List<AiSpeechAssistantKnowledgeCopyRelated> asSourceKnowledgePrevRelateds, int latestKnowledgeId, int prevKnowledgeId, CancellationToken cancellationToken)
     {
         var movedTargetRelations = await HandleKnowledgeCopyRelatedUpdates(
-            asTargetKnowledgePrevRelateds,
-            asTargetKnowledgePrevRelateds,
-            latestKnowledgeId,
-            prevKnowledgeId,
-            null,
-            cancellationToken).ConfigureAwait(false);
+            asTargetKnowledgePrevRelateds, asTargetKnowledgePrevRelateds, latestKnowledgeId, prevKnowledgeId, null, cancellationToken).ConfigureAwait(false);
+        
+        var sourceRelationsToMove = asSourceKnowledgePrevRelateds.ToList();
 
-        var nonSyncSourceRelations = asSourceKnowledgePrevRelateds.Where(x => !x.IsSyncUpdate).ToList();
-
-        if (nonSyncSourceRelations.Count > 0)
+        if (sourceRelationsToMove.Count > 0)
         {
-            nonSyncSourceRelations.ForEach(x => x.SourceKnowledgeId = latestKnowledgeId);
-            await _aiSpeechAssistantDataProvider.UpdateKnowledgeCopyRelatedAsync(nonSyncSourceRelations, true, cancellationToken).ConfigureAwait(false);
+            sourceRelationsToMove.ForEach(x => x.SourceKnowledgeId = latestKnowledgeId);
+            await _aiSpeechAssistantDataProvider.UpdateKnowledgeCopyRelatedAsync(sourceRelationsToMove, true, cancellationToken).ConfigureAwait(false);
         }
 
         return movedTargetRelations;
