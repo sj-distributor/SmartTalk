@@ -1127,19 +1127,17 @@ public partial class AiSpeechAssistantService
     public async Task<AiSpeechAssistantKonwledgeCopyAddedEvent> KonwledgeCopyAsync(KonwledgeCopyCommand command, CancellationToken cancellationToken)
     {
         if (command.TargetKnowledgeIds == null || command.TargetKnowledgeIds.Count == 0) throw new ArgumentException("TargetKnowledgeId is empty");
-        
-        if (command.TargetKnowledgeIds.Contains(command.SourceKnowledgeId)) throw new Exception("Source knowledge cannot be included in targets");
 
+        if (command.TargetKnowledgeIds.Contains(command.SourceKnowledgeId)) throw new Exception("Source knowledge cannot be included in targets");
+        
         var copyFromKnowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(knowledgeId: command.SourceKnowledgeId, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (copyFromKnowledge == null) throw new InvalidOperationException("Source knowledge not found");
 
         Log.Information("KonwledgeCopy Source knowledge fetched. Id={SourceId}", copyFromKnowledge.Id);
+        var copyToKnowledges = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgesAsync(command.TargetKnowledgeIds, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        var copyToKnowledges = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgesAsync(command.TargetKnowledgeIds.Distinct().ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
-        var selectedTargetIds = copyToKnowledges.Select(x => x.Id).ToHashSet();
-
-        var copyToRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync(selectedTargetIds.ToList(), null, cancellationToken).ConfigureAwait(false);
+        var copyToRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync(copyToKnowledges.Select(x => x.Id).ToList(), null, cancellationToken).ConfigureAwait(false);
 
         var relatedLookup = copyToRelateds?.GroupBy(x => x.TargetKnowledgeId)
                                 .ToDictionary(g => g.Key, g => g.OrderBy(x => x.CreatedDate).ToList())
@@ -1150,9 +1148,8 @@ public partial class AiSpeechAssistantService
         var newCopeToKnowledges = new List<AiSpeechAssistantKnowledge>();
         
         var copyFromRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync(new List<int> { copyFromKnowledge.Id }, null, cancellationToken).ConfigureAwait(false);
-
         var copyFromRelatedLookup = copyFromRelateds?.GroupBy(x => x.TargetKnowledgeId)
-            .ToDictionary(g => g.Key, g => g.OrderBy(x => x.CreatedDate).ToList());
+                .ToDictionary(g => g.Key, g => g.OrderBy(x => x.CreatedDate).ToList());
         
         var duplicated = copyToRelateds
             .Concat(copyFromRelateds ?? new List<AiSpeechAssistantKnowledgeCopyRelated>())
@@ -1169,7 +1166,7 @@ public partial class AiSpeechAssistantService
         foreach (var copyToKnowledge in copyToKnowledges)
         {
             var newCopyToKnowledge = await BuildNewCopyToKnowledgeAsync(copyToKnowledge, copyFromKnowledge, relatedLookup, copyFromRelatedLookup, cancellationToken).ConfigureAwait(false);
-
+            
             newCopeToKnowledges.Add(newCopyToKnowledge);
         }
         

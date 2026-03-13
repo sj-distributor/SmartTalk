@@ -7,8 +7,6 @@ public class AiSpeechAssistantKonwledgeCopyAddedEvent : IEvent
     public string CopyJson { get; set; }
     
     public List<AiSpeechAssistantKnowledgeOldState> KnowledgeOldJsons { get; set; } = new();
-
-    public string NoticeMsg { get; set; }
 }
 
 public class AiSpeechAssistantKnowledgeOldState
