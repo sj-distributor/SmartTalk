@@ -19,8 +19,6 @@ public class AddAiSpeechAssistantCommand : HasServiceProviderId, ICommand
     
     public string Json { get; set; }
     
-    public List<AiSpeechAssistantKnowledgeDetailDto> Details { get; set; }
-    
     public List<AiSpeechAssistantChannel> Channels { get; set; }
     
     public Guid? Uuid { get; set; }

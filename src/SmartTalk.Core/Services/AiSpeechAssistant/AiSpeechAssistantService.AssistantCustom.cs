@@ -62,6 +62,8 @@ public partial interface IAiSpeechAssistantService
         UpdateAiSpeechAssistantKnowledgeDetailCommand command, CancellationToken cancellationToken);
 
     Task DeleteAiSpeechAssistantKnowledgeDetailAsync(DeleteAiSpeechAssistantKnowledgeDetailCommand command, CancellationToken cancellationToken);
+    
+    Task<AddAiSpeechAssistantKnowledgeDetailResponse> AddAiSpeechAssistantKnowledgeDetailAsync(AddAiSpeechAssistantKnowledgeDetailCommand command, CancellationToken cancellationToken);
 }
 
 public partial class AiSpeechAssistantService
@@ -682,18 +684,6 @@ public partial class AiSpeechAssistantService
     
     private async Task InitialAssistantKnowledgeAsync(AddAiSpeechAssistantCommand command, Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken)
     {
-        var details = _mapper.Map<List<AiSpeechAssistantKnowledgeDetail>>(command.Details);
-        
-        string prompt;
-        if (!string.IsNullOrWhiteSpace(command.Json))
-        {
-            prompt = GenerateKnowledgePrompt(command.Json);
-        }
-        else
-        {
-            prompt = await GenerateKnowledgePromptAsync(details, cancellationToken).ConfigureAwait(false);
-        }
-
         var knowledge = new AiSpeechAssistantKnowledge
         {
             Version = "1.0",
@@ -703,14 +693,10 @@ public partial class AiSpeechAssistantService
             AssistantId = assistant.Id,
             Greetings = command.Greetings,
             CreatedBy = _currentUser.Id.Value,
-            Prompt = prompt
+            Prompt = GenerateKnowledgePrompt(command.Json)
         };
 
         await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgesAsync([knowledge], cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        details.ForEach(d => d.KnowledgeId = knowledge.Id);
-
-        await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgeDetailsAsync(details, true, cancellationToken).ConfigureAwait(false);
     }
     
     private async Task<AiSpeechAssistantKnowledge> UpdatePreviousKnowledgeIfRequiredAsync(int assistantId, bool isActive, CancellationToken cancellationToken)
@@ -1512,6 +1498,35 @@ public partial class AiSpeechAssistantService
     public async Task DeleteAiSpeechAssistantKnowledgeDetailAsync(DeleteAiSpeechAssistantKnowledgeDetailCommand command, CancellationToken cancellationToken)
     {
         await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantKnowledgeDetailAsync(command.DetailId, true, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<AddAiSpeechAssistantKnowledgeDetailResponse> AddAiSpeechAssistantKnowledgeDetailAsync(AddAiSpeechAssistantKnowledgeDetailCommand command, CancellationToken cancellationToken)
+    {
+        var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(knowledgeId: command.KnowledgeId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (knowledge == null) throw new Exception($"Assistant not found: {command.KnowledgeId}");
+
+        var detail = new AiSpeechAssistantKnowledgeDetail
+        {
+            KnowledgeId = command.KnowledgeId,
+            KnowledgeName = command.KnowledgeName,
+            FormatType = command.FormatType,
+            Content = command.Content,
+            CreatedDate = DateTimeOffset.Now
+        };
+
+        await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgeDetailsAsync([detail], true, cancellationToken).ConfigureAwait(false);
+        
+        var detailPrompt =  await GenerateKnowledgePromptAsync([detail], cancellationToken).ConfigureAwait(false);
+        
+        knowledge.Prompt = string.IsNullOrWhiteSpace(knowledge.Prompt) ? detailPrompt : $"{knowledge.Prompt.Trim()}\n\n{detailPrompt}";
+
+        await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync([knowledge], cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return new AddAiSpeechAssistantKnowledgeDetailResponse
+        {
+            Data = _mapper.Map<AiSpeechAssistantKnowledgeDetailDto>(detail)
+        };
     }
 
     private async Task DisableSyncUpdateAsync(int sourceKnowledgeId, CancellationToken cancellationToken)
