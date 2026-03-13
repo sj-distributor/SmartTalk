@@ -1301,15 +1301,19 @@ public partial class AiSpeechAssistantService
 
         var sourceKnowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(knowledgeId: sourceKnowledgeId, cancellationToken:cancellationToken).ConfigureAwait(false);
         if (sourceKnowledge == null) return;
-        
-        var oldTargetMap = await GetAndDeactivateOldTargetsAsync(sourceKnowledgeId, cancellationToken).ConfigureAwait(false);
-
-        if (oldTargetMap.Count == 0) return;
 
         if (shouldSyncLastedKnowledge) 
             sourceKnowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(assistantId: sourceKnowledge.AssistantId, isActive: true, cancellationToken:cancellationToken).ConfigureAwait(false);
+
+        var effectiveSourceKnowledgeId = shouldSyncLastedKnowledge ? sourceKnowledge.Id : sourceKnowledgeId;
+        Log.Information("SyncCopiedKnowledges effective source id resolved. inputSourceId={InputSourceId}, effectiveSourceId={EffectiveSourceId}",
+            sourceKnowledgeId, effectiveSourceKnowledgeId);
         
-        var rebuildResult = await RebuildTargetsAsync(oldTargetMap, sourceKnowledgeId, sourceKnowledge, cancellationToken).ConfigureAwait(false);
+        var oldTargetMap = await GetAndDeactivateOldTargetsAsync(effectiveSourceKnowledgeId, cancellationToken).ConfigureAwait(false);
+
+        if (oldTargetMap.Count == 0) return;
+        
+        var rebuildResult = await RebuildTargetsAsync(oldTargetMap, effectiveSourceKnowledgeId, sourceKnowledge, cancellationToken).ConfigureAwait(false);
 
         if (rebuildResult.NewTargets.Count == 0) return;
 
