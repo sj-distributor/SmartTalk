@@ -1028,9 +1028,10 @@ public partial class AiSpeechAssistantService
 
         Log.Information("KonwledgeCopy Source knowledge fetched. Id={SourceId}", copyFromKnowledge.Id);
 
-        var copyToKnowledges = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgesAsync(command.TargetKnowledgeIds, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var copyToKnowledges = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgesAsync(command.TargetKnowledgeIds.Distinct().ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
+        var selectedTargetIds = copyToKnowledges.Select(x => x.Id).ToHashSet();
 
-        var copyToRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync(copyToKnowledges.Select(x => x.Id).ToList(), null, cancellationToken).ConfigureAwait(false);
+        var copyToRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync(selectedTargetIds.ToList(), null, cancellationToken).ConfigureAwait(false);
 
         var relatedLookup = copyToRelateds?.GroupBy(x => x.TargetKnowledgeId)
                                 .ToDictionary(g => g.Key, g => g.OrderBy(x => x.CreatedDate).ToList())
@@ -1045,16 +1046,28 @@ public partial class AiSpeechAssistantService
         var copyFromRelatedLookup = copyFromRelateds?.GroupBy(x => x.TargetKnowledgeId)
             .ToDictionary(g => g.Key, g => g.OrderBy(x => x.CreatedDate).ToList());
         
-        var duplicated = copyToRelateds
-            .Concat(copyFromRelateds ?? new List<AiSpeechAssistantKnowledgeCopyRelated>())
-            .Where(r =>
-                (r.SourceKnowledgeId == command.SourceKnowledgeId && command.TargetKnowledgeIds.Contains(r.TargetKnowledgeId))
-                || (r.TargetKnowledgeId == command.SourceKnowledgeId && command.TargetKnowledgeIds.Contains(r.SourceKnowledgeId))
-            ).ToList();
+        var duplicatedSourceToTargetIds = copyToRelateds
+            .Where(r => r.SourceKnowledgeId == command.SourceKnowledgeId && selectedTargetIds.Contains(r.TargetKnowledgeId))
+            .Select(r => r.TargetKnowledgeId);
+        
+        var duplicatedTargetToSourceIds = (copyFromRelateds ?? new List<AiSpeechAssistantKnowledgeCopyRelated>())
+            .Where(r => selectedTargetIds.Contains(r.SourceKnowledgeId))
+            .Select(r => r.SourceKnowledgeId);
+        
+        var duplicatedTargetIds = duplicatedSourceToTargetIds.Concat(duplicatedTargetToSourceIds).Distinct().ToHashSet();
 
-        if (duplicated.Any())
+        if (duplicatedTargetIds.Count > 0 && duplicatedTargetIds.Count == selectedTargetIds.Count)
         {
-            throw new InvalidOperationException($"Knowledge copy relation already exists.");
+            throw new InvalidOperationException("源知识库已建立同步关联，不允许重复创建覆盖");
+        }
+
+        var needSkipDuplicatedTargets = duplicatedTargetIds.Count > 0;
+        if (needSkipDuplicatedTargets)
+        {
+            copyToKnowledges = copyToKnowledges.Where(x => !duplicatedTargetIds.Contains(x.Id)).ToList();
+            copyToRelateds = copyToRelateds.Where(x => !duplicatedTargetIds.Contains(x.TargetKnowledgeId)).ToList();
+            relatedLookup = copyToRelateds.GroupBy(x => x.TargetKnowledgeId)
+                .ToDictionary(g => g.Key, g => g.OrderBy(x => x.CreatedDate).ToList());
         }
 
         foreach (var copyToKnowledge in copyToKnowledges)
@@ -1077,7 +1090,10 @@ public partial class AiSpeechAssistantService
         return new AiSpeechAssistantKonwledgeCopyAddedEvent
         {
             CopyJson = copyFromKnowledge.Json,
-            KnowledgeOldJsons = knowledgeOldJsons
+            KnowledgeOldJsons = knowledgeOldJsons,
+            NoticeMsg = needSkipDuplicatedTargets
+                ? "部分目标知识库已与来源知识库建立同步关系，不支持重复复制，系统将自动跳过这些知识库。"
+                : null
         };
     }
 
@@ -1316,7 +1332,7 @@ public partial class AiSpeechAssistantService
         if (shouldSyncLastedKnowledge) 
             sourceKnowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(assistantId: sourceKnowledge.AssistantId, isActive: true, cancellationToken:cancellationToken).ConfigureAwait(false);
         
-        var rebuildResult = await RebuildTargetsAsync(oldTargetMap, sourceKnowledge, cancellationToken).ConfigureAwait(false);
+        var rebuildResult = await RebuildTargetsAsync(oldTargetMap, sourceKnowledgeId, sourceKnowledge, cancellationToken).ConfigureAwait(false);
 
         if (rebuildResult.NewTargets.Count == 0) return;
 
@@ -1356,7 +1372,8 @@ public partial class AiSpeechAssistantService
         return oldTargets.ToDictionary(x => x.Id);
     }
 
-    private async Task<RebuildResult> RebuildTargetsAsync(Dictionary<int, AiSpeechAssistantKnowledge> oldTargetMap, AiSpeechAssistantKnowledge sourceKnowledge, CancellationToken cancellationToken)
+    private async Task<RebuildResult> RebuildTargetsAsync(Dictionary<int, AiSpeechAssistantKnowledge> oldTargetMap, int sourceKnowledgeId,
+        AiSpeechAssistantKnowledge sourceKnowledge, CancellationToken cancellationToken)
     {
         var targetIds = oldTargetMap.Keys.ToList();
         
@@ -1402,12 +1419,18 @@ public partial class AiSpeechAssistantService
             var copyFromJsonForRelated = BuildCopyFromJsonForRelated(sourceKnowledge.Json);
             Log.Information("SyncCopiedKnowledges: copyFromJsonForRelated = {@copyFromJsonForRelated}", copyFromJsonForRelated);
 
-            newRelations.AddRange(relations.Select(relation => new AiSpeechAssistantKnowledgeCopyRelated
+            newRelations.AddRange(relations.Select(relation =>
             {
-                SourceKnowledgeId = sourceKnowledge.Id, 
-                TargetKnowledgeId = targetId,
-                CopyKnowledgePoints = copyFromJsonForRelated, 
-                IsSyncUpdate = relation.IsSyncUpdate,
+                var isTriggeredSourceRelation =
+                    relation.SourceKnowledgeId == sourceKnowledgeId || relation.SourceKnowledgeId == sourceKnowledge.Id;
+
+                return new AiSpeechAssistantKnowledgeCopyRelated
+                {
+                    SourceKnowledgeId = isTriggeredSourceRelation ? sourceKnowledge.Id : relation.SourceKnowledgeId,
+                    TargetKnowledgeId = targetId,
+                    CopyKnowledgePoints = isTriggeredSourceRelation ? copyFromJsonForRelated : relation.CopyKnowledgePoints,
+                    IsSyncUpdate = relation.IsSyncUpdate,
+                };
             }));
 
             Log.Information("SyncCopiedKnowledges: target rebuilt. OldTargetId={TargetId}", targetId);
