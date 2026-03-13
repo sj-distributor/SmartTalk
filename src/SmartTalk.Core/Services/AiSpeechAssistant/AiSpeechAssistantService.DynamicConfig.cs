@@ -126,7 +126,7 @@ public partial class AiSpeechAssistantService
         
         var updated = await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantDynamicConfigAsync(config, false, cancellationToken).ConfigureAwait(false);
         
-        var selectedCompanyIds = command.Companies?.Select(x => x.Id).Distinct().ToList() ?? [];
+        var selectedCompanyIds = command.CompanyIds?.Distinct().ToList() ?? [];
 
         if (selectedCompanyIds.Count > 0)
         {
@@ -138,18 +138,20 @@ public partial class AiSpeechAssistantService
                 await _aiSpeechAssistantDataProvider
                     .DeleteAiSpeechAssistantDynamicConfigRelatingCompaniesAsync(currentRelations, true, cancellationToken).ConfigureAwait(false);
             }
+            
+            var (_, companies) = await _posDataProvider
+                .GetPosCompaniesAsync(companyIds: selectedCompanyIds, cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+
+            var companyLookup = companies.ToDictionary(x => x.Id, x => x.Name);
 
             var newRelations = selectedCompanyIds
-                .Select(companyId =>
+                .Where(companyId => companyLookup.ContainsKey(companyId))
+                .Select(companyId => new AiSpeechAssistantDynamicConfigRelatingCompany
                 {
-                    var company = command.Companies.First(x => x.Id == companyId);
-
-                    return new AiSpeechAssistantDynamicConfigRelatingCompany
-                    {
-                        ConfigId = config.Id,
-                        CompanyId = companyId,
-                        CompanyName = company.Name
-                    };
+                    ConfigId = config.Id,
+                    CompanyId = companyId,
+                    CompanyName = companyLookup[companyId]
                 })
                 .ToList();
 
