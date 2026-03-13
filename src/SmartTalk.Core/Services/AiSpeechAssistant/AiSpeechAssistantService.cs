@@ -11,6 +11,7 @@ using SmartTalk.Core.Ioc;
 using Twilio.AspNet.Core;
 using SmartTalk.Core.Utils;
 using System.Net.WebSockets;
+using System.Text.RegularExpressions;
 using AutoMapper;
 using SmartTalk.Core.Constants;
 using Microsoft.AspNetCore.Http;
@@ -88,6 +89,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly ISpeechMaticsService _speechMaticsService;
     private readonly ISalesDataProvider _salesDataProvider;
     private readonly ISpeechToTextService _speechToTextService;
+    private readonly IFileTextExtractor _fileTextExtractor;
     private readonly WorkWeChatKeySetting _workWeChatKeySetting;
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
     private readonly IRestaurantDataProvider _restaurantDataProvider;
@@ -123,6 +125,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         ISpeechMaticsService speechMaticsService,
         ISalesDataProvider salesDataProvider,
         ISpeechToTextService speechToTextService,
+        IFileTextExtractor fileTextExtractor,
         WorkWeChatKeySetting workWeChatKeySetting,
         ISmartTalkHttpClientFactory httpClientFactory,
         IRestaurantDataProvider restaurantDataProvider,
@@ -151,6 +154,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _httpClientFactory = httpClientFactory;
         _attachmentService = attachmentService;
         _salesDataProvider = salesDataProvider;
+        _fileTextExtractor = fileTextExtractor;
         _speechToTextService = speechToTextService;
         _speechMaticsService = speechMaticsService;
         _workWeChatKeySetting = workWeChatKeySetting;
@@ -231,6 +235,12 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _aiSpeechAssistantStreamContext.Host = host;
         _aiSpeechAssistantStreamContext.LastUserInfo = new AiSpeechAssistantUserInfoDto { PhoneNumber = from };
     }
+    
+    private static readonly Regex PosMenuRegex =
+        new(@"\[POS_Menu_[^\]]+\]", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    private static readonly Regex PosStoreTimeRegex =
+        new(@"\[POS_店铺_营业时间_(.*?)\]", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private async Task BuildingAiSpeechAssistantKnowledgeBaseAsync(string from, string to, int? assistantId, int? numberId, int? agentId, CancellationToken cancellationToken)
     {
@@ -304,6 +314,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
             finalPrompt = finalPrompt.Replace("#{customer_info}", string.IsNullOrEmpty(info) ? " " : info);
         }
+        
+        finalPrompt = await ResolvePosPlaceholdersAsync(finalPrompt, agentId.Value, cancellationToken);
         
         Log.Information($"The final prompt: {finalPrompt}");
         
@@ -1272,5 +1284,42 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
         _aiSpeechAssistantStreamContext.IsInAiServiceHours = specificWorkingHours != null && specificWorkingHours.Hours.Any(x => x.Start <= pstTimeToMinute && x.End >= pstTimeToMinute);
         _aiSpeechAssistantStreamContext.IsEnableManualService = agent.IsTransferHuman && !string.IsNullOrEmpty(agent.TransferCallNumber);
+    }
+
+    private async Task<string> ResolvePosPlaceholdersAsync(string prompt, int agentId, CancellationToken cancellationToken)
+    {
+        bool hasMenuPlaceholder = PosMenuRegex.IsMatch(prompt);
+        bool hasStoreTimePlaceholder = PosStoreTimeRegex.IsMatch(prompt);
+
+        string menuText = null;
+        string storeTimeText = null;
+
+        if (hasMenuPlaceholder)
+        {
+            menuText = await GenerateMenuItemsAsync(agentId, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (hasStoreTimePlaceholder)
+        {
+            var store = await _posDataProvider.GetPosStoreByAgentIdAsync(agentId, cancellationToken).ConfigureAwait(false);
+            storeTimeText = store?.TimePeriod ?? string.Empty;
+        }
+
+        if (hasMenuPlaceholder && !string.IsNullOrWhiteSpace(menuText))
+        {
+            var match = PosMenuRegex.Match(prompt);
+            prompt = prompt.Replace(match.Value, menuText, StringComparison.OrdinalIgnoreCase);
+        }
+
+        if (hasStoreTimePlaceholder && !string.IsNullOrWhiteSpace(storeTimeText))
+        {
+            var matches = PosStoreTimeRegex.Matches(prompt);
+            foreach (Match match in matches)
+            {
+                prompt = prompt.Replace(match.Value, storeTimeText, StringComparison.OrdinalIgnoreCase);
+            }
+        }
+
+        return prompt;
     }
 }

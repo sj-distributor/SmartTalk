@@ -38,6 +38,12 @@ public class AiSpeechAssistantKnowledge : IEntity, IHasCreatedFields
     [Column("created_by")]
     public int CreatedBy { get; set; }
     
+    [Column("model_language")]
+    public string ModelLanguage { get; set; }
+    
     [NotMapped]
     public List<AiSpeechAssistantKnowledgeCopyRelated> KnowledgeCopyRelateds { get; set; }
+    
+    [NotMapped]
+    public List<AiSpeechAssistantKnowledgeDetail> Details { get; set; }
 }

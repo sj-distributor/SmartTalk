@@ -47,6 +47,8 @@ public static class SecurityStore
 
         public const string CanViewDataDashboard = nameof(CanViewDataDashboard);
         
+        public const string CanViewDynamicConfig = nameof(CanViewDynamicConfig);
+        
         private static List<string> _allPermissions;
 
         public static List<string> AllPermissions
@@ -88,6 +90,7 @@ public static class SecurityStore
                 nameof(CanViewAiAgent) => "进入AiAgent模块",
                 nameof(CanViewAutoTest) => "进入AutoTest模块",
                 nameof(CanViewDataDashboard) => "进入数据看板",
+                nameof(CanViewDynamicConfig) => "进入动态接口配置",
                 _ => throw new ArgumentOutOfRangeException(nameof(permission), permission, null)
             };
     }

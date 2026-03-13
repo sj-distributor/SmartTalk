@@ -348,5 +348,53 @@ public class AiSpeechAssistantController : ControllerBase
         return Ok();
     }
     
+    [Route("assistant/knowledge/detail/update"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdateAiSpeechAssistantKnowledgeDetailResponse))]
+    public async Task<IActionResult> UpdateAiSpeechAssistantKnowledgeDetailAsync([FromBody] UpdateAiSpeechAssistantKnowledgeDetailCommand command)
+    {
+        var response = await _mediator.SendAsync<UpdateAiSpeechAssistantKnowledgeDetailCommand, UpdateAiSpeechAssistantKnowledgeDetailResponse>(command).ConfigureAwait(false);
+
+        return Ok(response);
+    }
+    
+    [Route("assistant/knowledge/detail/delete"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> DeleteAiSpeechAssistantKnowledgeDetailAsync([FromBody] DeleteAiSpeechAssistantKnowledgeDetailCommand command)
+    {
+        var response = await _mediator.SendAsync<DeleteAiSpeechAssistantKnowledgeDetailCommand, DeleteAiSpeechAssistantKnowledgeDetailResponse>(command).ConfigureAwait(false);
+
+        return Ok(response);
+    }
+
+    [Route("dynamic/configs"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAiSpeechAssistantDynamicConfigsResponse))]
+    public async Task<IActionResult> GetAiSpeechAssistantDynamicConfigsAsync([FromQuery] GetAiSpeechAssistantDynamicConfigsRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetAiSpeechAssistantDynamicConfigsRequest, GetAiSpeechAssistantDynamicConfigsResponse>(request)
+            .ConfigureAwait(false);
+
+        return Ok(response);
+    }
+
+    [Route("dynamic/configs/current-company"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetCurrentCompanyDynamicConfigsResponse))]
+    public async Task<IActionResult> GetCurrentCompanyDynamicConfigsAsync([FromQuery] GetCurrentCompanyDynamicConfigsRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetCurrentCompanyDynamicConfigsRequest, GetCurrentCompanyDynamicConfigsResponse>(request)
+            .ConfigureAwait(false);
+
+        return Ok(response);
+    }
+
+    [Route("dynamic/config/update"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdateAiSpeechAssistantDynamicConfigResponse))]
+    public async Task<IActionResult> UpdateAiSpeechAssistantDynamicConfigAsync([FromBody] UpdateAiSpeechAssistantDynamicConfigCommand command)
+    {
+        var response = await _mediator.SendAsync<UpdateAiSpeechAssistantDynamicConfigCommand, UpdateAiSpeechAssistantDynamicConfigResponse>(command)
+            .ConfigureAwait(false);
+
+        return Ok(response);
+    }
+    
     #endregion
 }
