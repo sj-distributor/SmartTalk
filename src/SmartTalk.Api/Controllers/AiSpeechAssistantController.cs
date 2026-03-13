@@ -396,5 +396,14 @@ public class AiSpeechAssistantController : ControllerBase
         return Ok(response);
     }
     
+    [Route("assistant/knowledge/detail/add"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(AddAiSpeechAssistantKnowledgeDetailResponse))]
+    public async Task<IActionResult> AddAiSpeechAssistantKnowledgeDetailAsync([FromBody] AddAiSpeechAssistantKnowledgeDetailCommand command)
+    {
+        var response = await _mediator.SendAsync<AddAiSpeechAssistantKnowledgeDetailCommand, AddAiSpeechAssistantKnowledgeDetailResponse>(command).ConfigureAwait(false);
+
+        return Ok(response);
+    }
+    
     #endregion
 }
