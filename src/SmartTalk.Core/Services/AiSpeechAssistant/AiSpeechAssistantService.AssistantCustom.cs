@@ -1471,7 +1471,7 @@ public partial class AiSpeechAssistantService
         var sourceKnowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(knowledgeId: sourceKnowledgeId, cancellationToken:cancellationToken).ConfigureAwait(false);
         if (sourceKnowledge == null) return;
         
-        var oldTargetMap = await GetAndDeactivateOldTargetsAsync(sourceKnowledgeId, cancellationToken);
+        var oldTargetMap = await GetAndDeactivateOldTargetsAsync(sourceKnowledgeId, cancellationToken).ConfigureAwait(false);
 
         if (oldTargetMap.Count == 0) return;
 
@@ -1512,7 +1512,7 @@ public partial class AiSpeechAssistantService
 
     private async Task DisableSyncUpdateAsync(int sourceKnowledgeId, CancellationToken cancellationToken)
     {
-        var relations = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedBySourceKnowledgeIdAsync([sourceKnowledgeId], true,  cancellationToken);
+        var relations = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedBySourceKnowledgeIdAsync([sourceKnowledgeId], true,  cancellationToken).ConfigureAwait(false);
 
         if (relations == null || relations.Count == 0) return;
 
@@ -1520,7 +1520,7 @@ public partial class AiSpeechAssistantService
 
         Log.Information("DisableSyncUpdateAsync relationIds {@relations}", relations.Select(x => x.Id).ToList());
         
-        await _aiSpeechAssistantDataProvider.UpdateKnowledgeCopyRelatedAsync(relations, true, cancellationToken);
+        await _aiSpeechAssistantDataProvider.UpdateKnowledgeCopyRelatedAsync(relations, true, cancellationToken).ConfigureAwait(false);
     }
     
     private async Task<Dictionary<int, AiSpeechAssistantKnowledge>> GetAndDeactivateOldTargetsAsync(int sourceId, CancellationToken cancellationToken)
