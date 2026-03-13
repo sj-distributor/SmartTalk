@@ -57,8 +57,12 @@ public partial class EventHandlingService
 
         if (checkShouldSyncRelation)
         {
+            var sourceKnowledgeIdToSync = @event.ShouldSyncLastedKnowledge ? @event.LatestKnowledge.Id : @event.PrevKnowledge.Id;
+            Log.Information("Enqueue SyncCopiedKnowledges. sourceKnowledgeIdToSync={SourceKnowledgeIdToSync}, prevKnowledgeId={PrevKnowledgeId}, latestKnowledgeId={LatestKnowledgeId}",
+                sourceKnowledgeIdToSync, @event.PrevKnowledge.Id, @event.LatestKnowledge.Id);
+
             _smartTalkBackgroundJobClient.Enqueue<IAiSpeechAssistantService>(x => x.SyncCopiedKnowledgesIfRequiredAsync(
-                @event.PrevKnowledge.Id, false, @event.ShouldSyncLastedKnowledge, CancellationToken.None));
+                sourceKnowledgeIdToSync, false, @event.ShouldSyncLastedKnowledge, CancellationToken.None));
         }
     }
     
