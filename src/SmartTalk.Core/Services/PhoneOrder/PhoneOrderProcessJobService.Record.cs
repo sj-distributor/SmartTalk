@@ -938,6 +938,7 @@ public partial class PhoneOrderProcessJobService
         var completion = await client.CompleteChatAsync(messages, new ChatCompletionOptions { ResponseModalities = ChatResponseModalities.Text, ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat() }, cancellationToken).ConfigureAwait(false);
         
         var jsonResponse = completion.Value.Content.FirstOrDefault()?.Text ?? "";
+        Log.Information("Second AI refine response: {Json}", JsonConvert.SerializeObject(jsonResponse));
         
         try
         {
@@ -1029,7 +1030,6 @@ public partial class PhoneOrderProcessJobService
                 Restored = source.Restored,
                 IsTargetQuantity = source.IsTargetQuantity
             });
-            Log.Information("Second AI refine response: {Json}", JsonConvert.SerializeObject(result));
         }
 
         storeOrder.Orders = result;
