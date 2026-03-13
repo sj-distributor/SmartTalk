@@ -938,7 +938,6 @@ public partial class PhoneOrderProcessJobService
         var completion = await client.CompleteChatAsync(messages, new ChatCompletionOptions { ResponseModalities = ChatResponseModalities.Text, ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat() }, cancellationToken).ConfigureAwait(false);
         
         var jsonResponse = completion.Value.Content.FirstOrDefault()?.Text ?? "";
-        Log.Information("Second AI refine response: {Json}", jsonResponse);
         
         try
         {
@@ -1014,7 +1013,7 @@ public partial class PhoneOrderProcessJobService
             else if (source.IsTargetQuantity)
             {
                 deltaQty = source.Quantity - draftBaseQty;
-                finalQty = source.Quantity;
+                finalQty = draftItem.MaterialQuantity + deltaQty;
             }
 
             var prefix = string.IsNullOrWhiteSpace(draftItem.AiMaterialDesc) ? source.Name ?? "" : draftItem.AiMaterialDesc;
@@ -1030,6 +1029,7 @@ public partial class PhoneOrderProcessJobService
                 Restored = source.Restored,
                 IsTargetQuantity = source.IsTargetQuantity
             });
+            Log.Information("Second AI refine response: {Json}", JsonConvert.SerializeObject(result));
         }
 
         storeOrder.Orders = result;
@@ -1058,7 +1058,10 @@ public partial class PhoneOrderProcessJobService
         if (string.IsNullOrWhiteSpace(targetName)) return null;
 
         return draftItems.FirstOrDefault(d =>
-            string.Equals(GetBaseName(d.AiMaterialDesc ?? d.MaterialDescription), targetName, StringComparison.OrdinalIgnoreCase));
+        {
+            var draftDesc = (d.AiMaterialDesc ?? d.MaterialDescription ?? string.Empty).Trim();
+            return draftDesc.IndexOf(targetName, StringComparison.OrdinalIgnoreCase) >= 0;
+        });
     }
 
     private static int ParseAiMaterialDescQuantity(string desc, int fallback)
