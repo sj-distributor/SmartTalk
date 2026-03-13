@@ -1,3 +1,4 @@
+using OpenAI.Chat;
 using Serilog;
 using SmartTalk.Core.Ioc;
 using System.Net.Http.Headers;
@@ -11,6 +12,8 @@ public interface IOpenaiClient : IScopedDependency
     Task<string> InitialRealtimeSessionsAsync(OpenAiRealtimeSessionDto request, CancellationToken cancellationToken);
     
     Task<string> RealtimeChatAsync(string sdp,  string ephemeralToken, CancellationToken cancellationToken);
+
+    Task<byte[]> GenerateAudioChatCompletionAsync(BinaryData audioData, string prompt, string voice, CancellationToken cancellationToken);
 }
 
 public class OpenaiClient : IOpenaiClient
@@ -59,5 +62,27 @@ public class OpenaiClient : IOpenaiClient
         
         return await _smartTalkHttpClientFactory.PostAsync<string>(
             requestUrl, requestContent, headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<byte[]> GenerateAudioChatCompletionAsync(BinaryData audioData, string prompt, string voice, CancellationToken cancellationToken)
+    {
+        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
+        List<ChatMessage> messages =
+        [
+            new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
+            new UserChatMessage(prompt)
+        ];
+
+        ChatCompletionOptions options = new()
+        {
+            ResponseModalities = ChatResponseModalities.Text | ChatResponseModalities.Audio,
+            AudioOptions = new ChatAudioOptions(new ChatOutputAudioVoice(voice), ChatOutputAudioFormat.Wav)
+        };
+
+        ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
+
+        Log.Information("Analyze record to repeat order: {@completion}", completion);
+
+        return completion.OutputAudio.AudioBytes.ToArray();
     }
 }

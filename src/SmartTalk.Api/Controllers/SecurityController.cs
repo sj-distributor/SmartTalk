@@ -89,4 +89,13 @@ public class SecurityController : ControllerBase
 
         return Ok(response);
     }
+    
+    [Route("update/notification"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdateUserAccountTaskNotificationResponse))]
+    public async Task<IActionResult> UpdateUserAccountAsync([FromBody] UpdateUserAccountTaskNotificationCommand command)
+    {
+        var response = await _mediator.SendAsync<UpdateUserAccountTaskNotificationCommand, UpdateUserAccountTaskNotificationResponse>(command).ConfigureAwait(false);
+
+        return Ok(response);
+    }
 }

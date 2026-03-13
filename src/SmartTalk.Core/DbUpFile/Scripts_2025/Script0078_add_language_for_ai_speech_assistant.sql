@@ -1,0 +1,1 @@
+ALTER TABLE ai_speech_assistant MODIFY COLUMN `language` varchar(255) NULL;

@@ -288,6 +288,15 @@ public class PosController : ControllerBase
         return Ok(response);
     }
     
+    [Route("order/cloudPrintStatus"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPosOrderCloudPrintStatusResponse))]
+    public async Task<IActionResult> GetPosOrderProductsAsync([FromQuery] GetPosOrderCloudPrintStatusRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetPosOrderCloudPrintStatusRequest, GetPosOrderCloudPrintStatusResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
     [Route("order/products"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPosOrderProductsResponse))]
     public async Task<IActionResult> GetPosOrderProductsAsync([FromQuery] GetPosOrderProductsRequest request)
@@ -356,6 +365,60 @@ public class PosController : ControllerBase
     public async Task<IActionResult> GetAgentsStoresAsync([FromQuery] GetStoresAgentsRequest request)
     {
         var response = await _mediator.RequestAsync<GetStoresAgentsRequest, GetStoresAgentsResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("data/dashboard/companies"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetCompanyWithStoresResponse))]
+    public async Task<IActionResult> GetDataDashBoardCompanyWithStoresAsync([FromQuery] GetDataDashBoardCompanyWithStoresRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetDataDashBoardCompanyWithStoresRequest, GetDataDashBoardCompanyWithStoresResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("all/stores"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAllStoresResponse))]
+    public async Task<IActionResult> GetAllStoresAsync([FromQuery] GetAllStoresRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetAllStoresRequest, GetAllStoresResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("simple/stores"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetSimpleStructuredStoresResponse))]
+    public async Task<IActionResult> GetSimpleStructuredStoresAsync([FromQuery] GetSimpleStructuredStoresRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetSimpleStructuredStoresRequest, GetSimpleStructuredStoresResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("get/reservationInfo"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetOrderReservationInfoResponse))]
+    public async Task<IActionResult> GetOrderReservationInfoAsync([FromQuery] GetOrderReservationInfoRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetOrderReservationInfoRequest, GetOrderReservationInfoResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("update/reservationInfo"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdateOrderReservationInfoResponse))]
+    public async Task<IActionResult> UpdateOrderReservationInfoAsync([FromBody] UpdateOrderReservationInfoCommand command)
+    {
+        var response = await _mediator.SendAsync<UpdateOrderReservationInfoCommand, UpdateOrderReservationInfoResponse>(command).ConfigureAwait(false);
+
+        return Ok(response);
+    }
+    
+    [Route("store/by-agent"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetStoreByAgentIdResponse))]
+    public async Task<IActionResult> GetStoreByAgentIdAsync([FromQuery] GetStoreByAgentIdRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetStoreByAgentIdRequest, GetStoreByAgentIdResponse>(request).ConfigureAwait(false);
         
         return Ok(response);
     }

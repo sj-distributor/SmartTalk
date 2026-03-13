@@ -82,7 +82,8 @@ public class PhoneOrderFixture : PhoneOrderFixtureBase
                 TranscriptionText = $"transcription text {i}",
                 Url = $"https://restaurant{i}.com",
                 LastModifiedBy = i % 2 == 0 ? 2 : null,
-                Status = PhoneOrderRecordStatus.Sent
+                Status = PhoneOrderRecordStatus.Sent,
+                CreatedDate = DateTimeOffset.UtcNow
             });
         }
     
