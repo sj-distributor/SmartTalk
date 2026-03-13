@@ -1201,7 +1201,9 @@ public partial class AiSpeechAssistantService
         {
             CopyJson = copyFromKnowledge.Json,
             KnowledgeOldJsons = knowledgeOldJsons,
-            NoticeMsg = partialSkippedNotice,
+            NoticeMsg = needSkipDuplicatedTargets
+                ? "部分目标知识库已与来源知识库建立同步关系，不支持重复复制，系统将自动跳过这些知识库。"
+                : null
         };
     }
 
