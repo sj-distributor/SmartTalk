@@ -42,8 +42,6 @@ public partial class PosService
         
         var products = await SyncMenuDataAsync(store, posConfiguration?.Data, cancellationToken).ConfigureAwait(false);
         
-        await PosProductsVectorizationAsync(products, store, cancellationToken).ConfigureAwait(false);
-        
         return new SyncPosConfigurationResponse
         {
             Data = _mapper.Map<List<PosProductDto>>(products)
@@ -76,9 +74,6 @@ public partial class PosService
     private async Task<List<PosProduct>> DeletePosMenuDataAsync(CompanyStore store, CancellationToken cancellationToken)
     {
         var products = await _posDataProvider.DeletePosMenuInfosAsync(store.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        foreach (var product in products)
-            await DeleteInternalAsync(store, product, cancellationToken).ConfigureAwait(false);
         
         return products;
     }

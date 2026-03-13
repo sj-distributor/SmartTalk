@@ -7,5 +7,6 @@ public enum AiSpeechAssistantMainLanguage
     Cantonese,
     Korean,
     Spanish,
-    Viet
+    Viet,
+    Thai
 }

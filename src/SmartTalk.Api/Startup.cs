@@ -58,7 +58,7 @@ public class Startup
         app.UseResponseCaching();
         app.UseAuthentication();
         app.UseAuthorization();
-        app.UseHangfireInternal();
+        app.UseHangfireInternal(Configuration);
         app.UseWebSockets();
         
         app.UseEndpoints(endpoints =>

@@ -33,6 +33,24 @@ public class PhoneOrderController : ControllerBase
         return Ok(response);
     }
     
+    [Route("record/scenario"), HttpPut]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdatePhoneOrderRecordResponse))]
+    public async Task<IActionResult> UpdatePhoneOrderRecordAsync([FromBody] UpdatePhoneOrderRecordCommand command)
+    {
+        var response = await _mediator.SendAsync<UpdatePhoneOrderRecordCommand, UpdatePhoneOrderRecordResponse>(command).ConfigureAwait(false);
+
+        return Ok(response);
+    }
+    
+    [Route("record/scenario/history"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPhoneOrderRecordScenarioResponse))]
+    public async Task<IActionResult> GetPhoneOrderRecordScenarioAsync([FromQuery] GetPhoneOrderRecordScenarioRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetPhoneOrderRecordScenarioRequest, GetPhoneOrderRecordScenarioResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
     [Route("conversations"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPhoneOrderConversationsResponse))]
     public async Task<IActionResult> GetPhoneOrderConversationsAsync([FromQuery] GetPhoneOrderConversationsRequest request)
@@ -88,21 +106,6 @@ public class PhoneOrderController : ControllerBase
         return Ok();
     }
 
-    [HttpPost("transcription/callback")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> TranscriptionCallbackAsync(JObject jObject)
-    {
-        Log.Information("Receive parameter : {jObject}", jObject.ToString());
-        
-        var transcription = jObject.ToObject<SpeechMaticsGetTranscriptionResponseDto>();
-        
-        Log.Information("Transcription : {@transcription}", transcription);
-        
-        await _mediator.SendAsync(new HandleTranscriptionCallbackCommand { Transcription = transcription }).ConfigureAwait(false);
-
-        return Ok();
-    }
-
     [Route("manual/order"), HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(AddOrUpdateManualOrderResponse))]
     public async Task<IActionResult> AddOrUpdateManualOrderAsync([FromBody] AddOrUpdateManualOrderCommand command)
@@ -135,6 +138,24 @@ public class PhoneOrderController : ControllerBase
     public async Task<IActionResult> GetPhoneOrderDataDashboardAsync([FromQuery] GetPhoneOrderDataDashboardRequest request)
     {
         var response = await _mediator.RequestAsync<GetPhoneOrderDataDashboardRequest, GetPhoneOrderDataDashboardResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("tasks"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPhoneOrderRecordTasksResponse))]
+    public async Task<IActionResult> GetPhoneOrderRecordTasksAsync([FromQuery] GetPhoneOrderRecordTasksRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetPhoneOrderRecordTasksRequest, GetPhoneOrderRecordTasksResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+    
+    [Route("tasks/update"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdatePhoneOrderRecordTasksResponse))]
+    public async Task<IActionResult> UpdatePhoneOrderRecordTasksAsync([FromBody] UpdatePhoneOrderRecordTasksCommand request)
+    {
+        var response = await _mediator.SendAsync<UpdatePhoneOrderRecordTasksCommand, UpdatePhoneOrderRecordTasksResponse>(request).ConfigureAwait(false);
         
         return Ok(response);
     }

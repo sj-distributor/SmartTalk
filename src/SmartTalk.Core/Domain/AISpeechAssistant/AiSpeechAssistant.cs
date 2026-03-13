@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
+using SmartTalk.Messages.Enums.RealtimeAi;
 
 namespace SmartTalk.Core.Domain.AISpeechAssistant;
 
@@ -14,6 +15,9 @@ public class AiSpeechAssistant : IEntity<int>, IAgent, IHasCreatedFields
 
     [Column("name"), StringLength(255)]
     public string Name { get; set; }
+
+    [Column("language"), StringLength(255)]
+    public string Language { get; set; }
     
     [Column("answering_number_id")]
     public int? AnsweringNumberId { get; set; }
@@ -31,7 +35,7 @@ public class AiSpeechAssistant : IEntity<int>, IAgent, IHasCreatedFields
     public string ModelLanguage { get; set; }
     
     [Column("model_provider")]
-    public AiSpeechAssistantProvider ModelProvider { get; set; }
+    public RealtimeAiProvider ModelProvider { get; set; }
     
     [Column("model_voice")]
     public string ModelVoice { get; set; }
@@ -71,7 +75,7 @@ public class AiSpeechAssistant : IEntity<int>, IAgent, IHasCreatedFields
     
     [Column("is_auto_generate_order")]
     public bool IsAutoGenerateOrder { get; set; }
-    
+
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
     
@@ -80,4 +84,7 @@ public class AiSpeechAssistant : IEntity<int>, IAgent, IHasCreatedFields
     
     [NotMapped]
     public AiSpeechAssistantKnowledge Knowledge { get; set; }
+    
+    [NotMapped]
+    public AiSpeechAssistantTimer Timer { get; set; }
 }

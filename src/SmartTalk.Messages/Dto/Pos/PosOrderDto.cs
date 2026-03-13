@@ -44,6 +44,8 @@ public class PosOrderDto
     
     public string ModifiedItems { get; set; }
     
+    public PosOrderIsPrintStatus? IsPrinted { get; set; }
+    
     public bool IsPush { get; set; }
 
     public string Notes { get; set; }
@@ -59,4 +61,20 @@ public class PosOrderDto
     public int? LastModifiedBy { get; set; }
 
     public DateTimeOffset? LastModifiedDate { get; set; }
+    
+    public int? SentBy { get; set; }
+    
+    public DateTimeOffset? SentTime { get; set; }
+    
+    public string SentByUsername { get; set; }
+
+    public CloudPrintStatus? CloudPrintStatus { get; set; }
+
+    public Guid? CloudPrintOrderId { get; set; }
+
+    public bool? IsLink { get; set; }
+
+    public bool? IsLinkCouldPrinting { get; set; }
+    
+    public List<PosProductSimpleModifiersDto> SimpleModifiers { get; set; } = [];
 }

@@ -1,6 +1,7 @@
 using System.Net;
 using AutoMapper;
 using Serilog;
+using SmartTalk.Core.Domain.Account;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Domain.Security;
@@ -14,6 +15,7 @@ using SmartTalk.Messages.Requests.Security;
 using SmartTalk.Messages.Commands.Security;
 using SmartTalk.Messages.Constants;
 using SmartTalk.Messages.Dto.Account;
+using SmartTalk.Messages.Dto.Pos;
 using SmartTalk.Messages.Enums.Security;
 using SmartTalk.Messages.Events.Security;
 
@@ -35,6 +37,8 @@ public interface ISecurityService : IScopedDependency
          CreateUserPermissionsCommand command, CancellationToken cancellationToken);
 
      Task<SwitchLanguageResponse> SwitchLanguageAsync(SwitchLanguageCommand command, CancellationToken cancellationToken);
+     
+     Task<UpdateUserAccountTaskNotificationResponse> UpdateUserAccountTaskNotificationAsync(UpdateUserAccountTaskNotificationCommand command, CancellationToken cancellationToken);
 }
 
 public class SecurityService : ISecurityService
@@ -69,7 +73,7 @@ public class SecurityService : ISecurityService
             if (user != null)
                 throw new Exception("Username already in use");
 
-            var oldUser = await _accountDataProvider.GetUserAccountByUserIdAsync(command.UserId, cancellationToken).ConfigureAwait(false);
+            var oldUser = await _accountDataProvider.GetUserAccountByUserIdAsync(command.UserId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
             oldUser.UserName = command.NewName;
 
@@ -227,7 +231,7 @@ public class SecurityService : ISecurityService
 
     public async Task<SwitchLanguageResponse> SwitchLanguageAsync(SwitchLanguageCommand command, CancellationToken cancellationToken)
     {
-        var userAccount = await _accountDataProvider.GetUserAccountByUserIdAsync(_currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
+        var userAccount = await _accountDataProvider.GetUserAccountByUserIdAsync(_currentUser.Id.Value, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         userAccount.SystemLanguage = command.Language;
 
@@ -237,5 +241,40 @@ public class SecurityService : ISecurityService
         {
             Data = _mapper.Map<UserAccountDto>(userAccount)
         };
+    }
+    
+    public async Task<UpdateUserAccountTaskNotificationResponse> UpdateUserAccountTaskNotificationAsync(UpdateUserAccountTaskNotificationCommand command, CancellationToken cancellationToken)
+    {
+        UserAccount userAccount = null;
+        CompanyStore store = null;
+        if (command.UserId.HasValue && command.IsTurnOnNotification.HasValue)
+        {
+            userAccount = await _accountDataProvider.GetUserAccountByUserIdAsync(command.UserId.Value, cancellationToken: cancellationToken).ConfigureAwait(false);
+            if (userAccount is null) throw new AccountExpiredException("UpdateUserAccountTaskNotificationAsync User Account Is Not Exist");
+
+            userAccount.IsTurnOnNotification = command.IsTurnOnNotification.Value;
+            await _accountDataProvider.UpdateUserAccountAsync(userAccount, true, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (command.StoreId.HasValue && command.IsTaskEnabled.HasValue)
+        {
+            store = await _posDataProvider.GetPosCompanyStoreAsync(id: command.StoreId.Value, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            if (store is null) throw new InvalidOperationException($"Store not found. StoreId={command.StoreId.Value}");
+
+            store.IsTaskEnabled = command.IsTaskEnabled.Value;
+
+            await _posDataProvider.UpdatePosCompanyStoresAsync([store], true, cancellationToken).ConfigureAwait(false);
+        }
+        
+        return new UpdateUserAccountTaskNotificationResponse
+        {
+            Data = new UpdateUserAccountTaskNotificationResponseData()
+            {
+            UserAccount = userAccount is null ? null : _mapper.Map<UserAccountDto>(userAccount),
+            CompanyStore = store is null ? null : _mapper.Map<CompanyStoreDto>(store), 
+            }
+        };
+
     }
 }
