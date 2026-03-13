@@ -18,10 +18,21 @@ public interface ISalesService : IScopedDependency
 
 public class SalesService : ISalesService
 {
+    private static readonly Dictionary<string, string> WeekdayMap = new()
+    {
+        ["1"] = "周一",
+        ["2"] = "周二",
+        ["3"] = "周三",
+        ["4"] = "周四",
+        ["5"] = "周五",
+        ["6"] = "周六",
+        ["7"] = "周日"
+    };
+
     private readonly ICrmClient _crmClient;
     private readonly ISalesClient _salesClient;
 
-    public SalesService(ICrmClient crmClient,ISalesClient salesClient)
+    public SalesService(ICrmClient crmClient, ISalesClient salesClient)
     {
         _crmClient = crmClient;
         _salesClient = salesClient;
@@ -115,7 +126,8 @@ public class SalesService : ISalesService
     {
         var processedCustomerIds = customerIds.Select(id => "0000" + id).ToList();
 
-        var getOrderArrivalTimeList = await _salesClient.GetOrderArrivalTimeAsync(new GetOrderArrivalTimeRequestDto { CustomerIds = processedCustomerIds }, cancellationToken).ConfigureAwait(false);
+        var getOrderArrivalTimeList = await _salesClient.GetOrderArrivalTimeAsync(
+            new GetOrderArrivalTimeRequestDto { CustomerIds = processedCustomerIds }, cancellationToken).ConfigureAwait(false);
 
         if (getOrderArrivalTimeList.Data.Count == 0) return "这位客户暂时没有订单。";
         
@@ -136,47 +148,207 @@ public class SalesService : ISalesService
 
     public async Task<string> BuildCrmCustomerInfoByPhoneAsync(string phoneNumber, CancellationToken cancellationToken)
     {
+        var normalizedPhone = NormalizePhone(phoneNumber);
         var customerInfo = new StringBuilder();
+        var crmCustomers = await TryGetCrmCustomersByPhoneAsync(normalizedPhone, cancellationToken).ConfigureAwait(false);
+        var deliveryInfos = await TryGetDeliveryInfoByPhoneAsync(normalizedPhone, cancellationToken).ConfigureAwait(false);
 
-        var  token = await _crmClient.GetCrmTokenAsync(cancellationToken).ConfigureAwait(false);
-        try
+        customerInfo.AppendLine($"来电号码: {normalizedPhone}");
+
+        if (!crmCustomers.Any())
         {
-            var crmCustomers = await _crmClient.GetCustomersByPhoneNumberAsync(new GetCustmoersByPhoneNumberRequestDto { PhoneNumber = phoneNumber }, token, cancellationToken).ConfigureAwait(false);
-
-            if (crmCustomers != null && crmCustomers.Any())
-            {
-                foreach (var customer in crmCustomers)
-                {
-                    customerInfo.AppendLine($"手机号 {phoneNumber}:");
-                    customerInfo.AppendLine($"- SAP编号: {customer.SapId}");
-                    customerInfo.AppendLine($"- 客户名称: {customer.CustomerName}");
-                    customerInfo.AppendLine($"- 地址: {customer.Street}");
-                    customerInfo.AppendLine($"- 仓库: {customer.Warehouse}");
-                    customerInfo.AppendLine($"- 备注: {customer.HeaderNote1}");
-
-                    if (customer.Contacts != null && customer.Contacts.Count > 0)
-                    {
-                        customerInfo.AppendLine(" 联系人信息：");
-                        foreach (var c in customer.Contacts)
-                        {
-                            customerInfo.AppendLine($" - 姓名：{c.Name}，电话：{c.Phone}，身份：{c.Identity}，语言：{c.Language}");
-                        }
-                    }
-
-                    customerInfo.AppendLine();
-                }
-            }
-            else
-            {
-                customerInfo.AppendLine($"没有找到手机号 {phoneNumber} 的 CRM 客户信息");
-            }
+            customerInfo.AppendLine("- 客户ID识别状态: 未识别到CRM-SAP ID");
+            customerInfo.AppendLine("- 建议回复: 可以先请客户提供客户编号或公司名称，再协助查询对应送货时间。");
+            return customerInfo.ToString();
         }
-        catch (Exception ex)
+
+        var deliveryLookup = BuildDeliveryLookup(deliveryInfos);
+
+        for (var i = 0; i < crmCustomers.Count; i++)
         {
-            Log.Error(ex, "Build CRM info failed for phone {PhoneNumber}", phoneNumber);
+            var customer = crmCustomers[i];
+            customerInfo.AppendLine($"客户 {i + 1}:");
+            AppendCustomerBaseInfo(customerInfo, customer, normalizedPhone);
+            var sapId = customer.SapId?.Trim();
+            deliveryLookup.TryGetValue(sapId ?? string.Empty, out var routeInfos);
+            AppendDeliveryRouteSummary(customerInfo, routeInfos);
+            customerInfo.AppendLine();
         }
 
         return customerInfo.ToString();
+    }
+
+    private async Task<List<GetCustomersPhoneNumberDataDto>> TryGetCrmCustomersByPhoneAsync(string normalizedPhone, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var token = await _crmClient.GetCrmTokenAsync(cancellationToken).ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                Log.Warning("BuildCrmCustomerInfoByPhoneAsync: CRM token is empty, phone: {PhoneNumber}", normalizedPhone);
+                return [];
+            }
+
+            return await _crmClient.GetCustomersByPhoneNumberAsync(
+                    new GetCustmoersByPhoneNumberRequestDto { PhoneNumber = normalizedPhone },
+                    token, cancellationToken)
+                .ConfigureAwait(false) ?? [];
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Build CRM customer basic info failed for phone {PhoneNumber}", normalizedPhone);
+            return [];
+        }
+    }
+
+    private static Dictionary<string, List<GetDeliveryInfoByPhoneNumberResponseDto>> BuildDeliveryLookup(List<GetDeliveryInfoByPhoneNumberResponseDto> deliveryInfos)
+    {
+        return deliveryInfos
+            .Where(x => !string.IsNullOrWhiteSpace(x.SapId))
+            .GroupBy(x => x.SapId.Trim())
+            .ToDictionary(x => x.Key, x => x.ToList());
+    }
+
+    private static void AppendCustomerBaseInfo(StringBuilder customerInfo, GetCustomersPhoneNumberDataDto customer, string normalizedPhone)
+    {
+        customerInfo.AppendLine($"- SAP编号: {customer.SapId}");
+        customerInfo.AppendLine($"- 客户名称: {customer.CustomerName}");
+        customerInfo.AppendLine($"- 地址: {customer.Street}");
+        customerInfo.AppendLine($"- 仓库: {customer.Warehouse}");
+        customerInfo.AppendLine($"- 备注: {customer.HeaderNote1}");
+
+        if (customer.Contacts == null || customer.Contacts.Count == 0) return;
+
+        var targetPhoneKey = NormalizePhoneKey(normalizedPhone);
+        var matchingContacts = customer.Contacts
+            .Where(c => NormalizePhoneKey(c.Phone) == targetPhoneKey)
+            .ToList();
+
+        if (matchingContacts.Count == 0) return;
+
+        customerInfo.AppendLine("- 联系人信息:");
+        foreach (var c in matchingContacts)
+            customerInfo.AppendLine($"  - 姓名: {c.Name}，电话: {c.Phone}，身份: {c.Identity}，语言: {c.Language}");
+    }
+
+    private async Task<List<GetDeliveryInfoByPhoneNumberResponseDto>> TryGetDeliveryInfoByPhoneAsync(string phoneNumber, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var routes = await _crmClient.GetDeliveryInfoByPhoneNumberAsync(phoneNumber, cancellationToken: cancellationToken).ConfigureAwait(false);
+            if (routes == null || routes.Count == 0) return [];
+
+            Log.Information("CRM delivery route info found. QueryPhone: {QueryPhone}, Count: {Count}", phoneNumber, routes.Count);
+            return routes;
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Get CRM delivery info by phone failed. QueryPhone: {QueryPhone}", phoneNumber);
+            return [];
+        }
+    }
+
+    private static void AppendDeliveryRouteSummary(StringBuilder customerInfo, List<GetDeliveryInfoByPhoneNumberResponseDto> routeInfos)
+    {
+        if (routeInfos == null || routeInfos.Count == 0)
+        {
+            customerInfo.AppendLine("- 路线状态: 未配置路线");
+            return;
+        }
+
+        for (var i = 0; i < routeInfos.Count; i++)
+        {
+            var routeIndex = i + 1;
+            var routeInfo = routeInfos[i];
+            var routeName = routeInfo.RouteName?.Trim();
+            if (string.IsNullOrWhiteSpace(routeName))
+            {
+                customerInfo.AppendLine($"- 路线{routeIndex}: 未配置路线");
+                continue;
+            }
+
+            customerInfo.AppendLine($"- 路线{routeIndex}: {routeName}");
+
+            var deliveryDaysText = FormatDeliveryDays(routeInfo.DeliveryTime, out var hasConfiguredDays);
+            var deliveryWindow = FormatDeliveryWindow(routeInfo.EntryTime, routeInfo.LeaveTime, out var hasConfiguredWindow);
+
+            if (hasConfiguredDays)
+            {
+                customerInfo.AppendLine(hasConfiguredWindow
+                    ? $"  送货安排: 每{deliveryDaysText} {deliveryWindow}"
+                    : $"  送货安排: 每{deliveryDaysText}");
+            }
+            else
+            {
+                customerInfo.AppendLine($"  送货安排: 未配置（原始值: {deliveryDaysText}）");
+                if (!string.IsNullOrWhiteSpace(routeInfo.EntryTime) || !string.IsNullOrWhiteSpace(routeInfo.LeaveTime))
+                    customerInfo.AppendLine($"  送货时段: {deliveryWindow}");
+                customerInfo.AppendLine("  建议回复: 目前还在确认您所在路线的送货时间，建议转接人工客服协助确认。");
+            }
+        }
+    }
+
+    private static string FormatDeliveryDays(string deliveryTime, out bool hasConfiguredDays)
+    {
+        hasConfiguredDays = false;
+
+        if (string.IsNullOrWhiteSpace(deliveryTime))
+            return "空值";
+
+        var original = deliveryTime.Trim();
+        var normalized = original.Replace("，", ",").Replace("、", ",").Replace(" ", "");
+
+        var tokens = normalized.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()).Distinct().ToList();
+
+        if (tokens.Count == 0)
+            return original;
+
+        // Only numeric weekday tokens (1-7) are treated as configured delivery days.
+        var mappedDays = tokens.Select(token => WeekdayMap.TryGetValue(token, out var day) ? day : null).ToList();
+
+        if (mappedDays.Any(x => string.IsNullOrWhiteSpace(x)))
+            return original;
+
+        hasConfiguredDays = true;
+        return string.Join("、", mappedDays!);
+    }
+
+    private static string FormatDeliveryWindow(string entryTime, string leaveTime, out bool hasConfiguredWindow)
+    {
+        var entry = entryTime?.Trim();
+        var leave = leaveTime?.Trim();
+
+        hasConfiguredWindow = !string.IsNullOrWhiteSpace(entry) && !string.IsNullOrWhiteSpace(leave);
+
+        if (string.IsNullOrWhiteSpace(entry) && string.IsNullOrWhiteSpace(leave))
+            return "未配置";
+
+        return $"{entry ?? "未配置"}-{leave ?? "未配置"}";
+    }
+
+    private static string NormalizePhone(string phoneNumber)
+    {
+        if (string.IsNullOrWhiteSpace(phoneNumber)) return phoneNumber;
+
+        var digits = new string(phoneNumber.Where(char.IsDigit).ToArray());
+        if (digits.Length == 10) return "+1" + digits;
+        if (digits.Length == 11 && digits.StartsWith("1", StringComparison.Ordinal)) return "+" + digits;
+
+        return phoneNumber.Trim();
+    }
+
+    private static string NormalizePhoneKey(string phoneNumber)
+    {
+        if (string.IsNullOrWhiteSpace(phoneNumber)) return string.Empty;
+
+        var digits = new string(phoneNumber.Where(char.IsDigit).ToArray());
+        if (digits.Length == 11 && digits.StartsWith("1", StringComparison.Ordinal))
+            digits = digits.Substring(1);
+
+        if (digits.Length > 10)
+            digits = digits.Substring(digits.Length - 10);
+
+        return digits;
     }
     
     private void AppendOrderSection(StringBuilder builder, string sectionName, List<GetOrderArrivalTimeDataDto> orders)

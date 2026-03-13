@@ -110,6 +110,8 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
 
             await _salesDataProvider.UpsertCustomerInfoCacheAsync(normalizedPhone, infoString, true, cancellationToken).ConfigureAwait(false);
 
+            Log.Information("CRM customer delivery info cached to ai_speech_assistant_knowledge_variable_cache. CacheKey: {CacheKey}, Filter: {Filter}", "customer_info", normalizedPhone);
+
             Log.Information("CRM customer info cached successfully for phone {Phone}", phoneNumber);
         }
         catch (Exception ex)
