@@ -1318,12 +1318,14 @@ public partial class AiSpeechAssistantService
 
     private async Task DisableSyncUpdateAsync(int sourceKnowledgeId, CancellationToken cancellationToken)
     {
-        var relations = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedBySourceKnowledgeIdAsync([sourceKnowledgeId], null, cancellationToken);
+        var relations = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedBySourceKnowledgeIdAsync([sourceKnowledgeId], true,  cancellationToken);
 
         if (relations == null || relations.Count == 0) return;
 
         relations.ForEach(r => r.IsSyncUpdate = false);
 
+        Log.Information("DisableSyncUpdateAsync relationIds {@relations}", relations.Select(x => x.Id).ToList());
+        
         await _aiSpeechAssistantDataProvider.UpdateKnowledgeCopyRelatedAsync(relations, true, cancellationToken);
     }
     
