@@ -1649,7 +1649,6 @@ public partial class AiSpeechAssistantService
             targetPairs.Add((targetId, newTarget));
 
             var copyFromJsonForRelated = BuildCopyFromJsonForRelated(sourceKnowledge.Json);
-            newRelations.AddRange(relations.Select(relation => new AiSpeechAssistantKnowledgeCopyRelated
             Log.Information("SyncCopiedKnowledges: copyFromJsonForRelated = {@copyFromJsonForRelated}", copyFromJsonForRelated);
 
             newRelations.AddRange(relations.Select(relation =>
