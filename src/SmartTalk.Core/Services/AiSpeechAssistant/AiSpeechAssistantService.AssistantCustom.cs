@@ -1016,11 +1016,9 @@ public partial class AiSpeechAssistantService
 
     public async Task<AiSpeechAssistantKonwledgeCopyAddedEvent> KonwledgeCopyAsync(KonwledgeCopyCommand command, CancellationToken cancellationToken)
     {
-        if (command.TargetKnowledgeIds == null || command.TargetKnowledgeIds.Count == 0)
-            throw new ArgumentException("TargetKnowledgeId is empty");
+        if (command.TargetKnowledgeIds == null || command.TargetKnowledgeIds.Count == 0) throw new ArgumentException("TargetKnowledgeId is empty");
         
-        if (command.TargetKnowledgeIds.Contains(command.SourceKnowledgeId))
-            throw new Exception("Source knowledge cannot be included in targets");
+        if (command.TargetKnowledgeIds.Contains(command.SourceKnowledgeId)) throw new Exception("Source knowledge cannot be included in targets");
 
         var copyFromKnowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(knowledgeId: command.SourceKnowledgeId, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -1046,28 +1044,16 @@ public partial class AiSpeechAssistantService
         var copyFromRelatedLookup = copyFromRelateds?.GroupBy(x => x.TargetKnowledgeId)
             .ToDictionary(g => g.Key, g => g.OrderBy(x => x.CreatedDate).ToList());
         
-        var duplicatedSourceToTargetIds = copyToRelateds
-            .Where(r => r.SourceKnowledgeId == command.SourceKnowledgeId && selectedTargetIds.Contains(r.TargetKnowledgeId))
-            .Select(r => r.TargetKnowledgeId);
+        var duplicated = copyToRelateds
+            .Concat(copyFromRelateds ?? new List<AiSpeechAssistantKnowledgeCopyRelated>())
+            .Where(r =>
+                (r.SourceKnowledgeId == command.SourceKnowledgeId && command.TargetKnowledgeIds.Contains(r.TargetKnowledgeId))
+                || (r.TargetKnowledgeId == command.SourceKnowledgeId && command.TargetKnowledgeIds.Contains(r.SourceKnowledgeId))
+            ).ToList();
         
-        var duplicatedTargetToSourceIds = (copyFromRelateds ?? new List<AiSpeechAssistantKnowledgeCopyRelated>())
-            .Where(r => selectedTargetIds.Contains(r.SourceKnowledgeId))
-            .Select(r => r.SourceKnowledgeId);
-        
-        var duplicatedTargetIds = duplicatedSourceToTargetIds.Concat(duplicatedTargetToSourceIds).Distinct().ToHashSet();
-
-        if (duplicatedTargetIds.Count > 0 && duplicatedTargetIds.Count == selectedTargetIds.Count)
+        if (duplicated.Any())
         {
-            throw new InvalidOperationException("源知识库已建立同步关联，不允许重复创建覆盖");
-        }
-
-        var needSkipDuplicatedTargets = duplicatedTargetIds.Count > 0;
-        if (needSkipDuplicatedTargets)
-        {
-            copyToKnowledges = copyToKnowledges.Where(x => !duplicatedTargetIds.Contains(x.Id)).ToList();
-            copyToRelateds = copyToRelateds.Where(x => !duplicatedTargetIds.Contains(x.TargetKnowledgeId)).ToList();
-            relatedLookup = copyToRelateds.GroupBy(x => x.TargetKnowledgeId)
-                .ToDictionary(g => g.Key, g => g.OrderBy(x => x.CreatedDate).ToList());
+            throw new InvalidOperationException($"Knowledge copy relation already exists.");
         }
 
         foreach (var copyToKnowledge in copyToKnowledges)
@@ -1090,10 +1076,7 @@ public partial class AiSpeechAssistantService
         return new AiSpeechAssistantKonwledgeCopyAddedEvent
         {
             CopyJson = copyFromKnowledge.Json,
-            KnowledgeOldJsons = knowledgeOldJsons,
-            NoticeMsg = needSkipDuplicatedTargets
-                ? "部分目标知识库已与来源知识库建立同步关系，不支持重复复制，系统将自动跳过这些知识库。"
-                : null
+            KnowledgeOldJsons = knowledgeOldJsons
         };
     }
 
