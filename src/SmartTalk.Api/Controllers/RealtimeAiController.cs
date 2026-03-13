@@ -42,6 +42,28 @@ public class RealtimeAiController : ControllerBase
     }
     
     [AllowAnonymous]
+    [HttpGet("test/connect/{assistantId}")]
+    public async Task TestConnectAiKidRealtimeAsync(int assistantId)
+    {
+        if (HttpContext.WebSockets.IsWebSocketRequest)
+        {
+            var command = new AiKidRealtimeCommand
+            {
+                AssistantId = assistantId,
+                WebSocket = await HttpContext.WebSockets.AcceptWebSocketAsync(),
+                Region = RealtimeAiServerRegion.US,
+                OrderRecordType = PhoneOrderRecordType.OmeClawTest
+            };
+            
+            await _mediator.SendAsync(command).ConfigureAwait(false);
+        }
+        else
+        {
+            HttpContext.Response.StatusCode = 400;
+        }
+    }
+    
+    [AllowAnonymous]
     [HttpGet("connect/{assistantId}/{region}")]
     public async Task HkConnectAiKidRealtimeAsync(int assistantId, RealtimeAiServerRegion region)
     {
