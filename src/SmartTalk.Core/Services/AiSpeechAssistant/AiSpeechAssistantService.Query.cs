@@ -128,6 +128,8 @@ public partial class AiSpeechAssistantService
                 {
                     dto.RelatedKnowledgeId = sourceKnowledgeId;
                     dto.RelatedFrom = relatedFrom;
+                    if (!string.IsNullOrWhiteSpace(dto.KnowledgeName))
+                        dto.KnowledgeName = $"{dto.KnowledgeName}-副本";
                 }
 
                 detailDtos.AddRange(relatedDetailDtos);
