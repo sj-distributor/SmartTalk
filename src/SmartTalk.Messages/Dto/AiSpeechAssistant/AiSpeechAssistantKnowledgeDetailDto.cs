@@ -19,4 +19,8 @@ public class AiSpeechAssistantKnowledgeDetailDto
     public int? LastModifiedBy { get; set; } 
     
     public DateTimeOffset? LastModifiedDate { get; set; }
+
+    public int? RelatedKnowledgeId { get; set; }
+
+    public string RelatedFrom { get; set; }
 }
