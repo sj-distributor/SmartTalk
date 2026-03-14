@@ -93,13 +93,48 @@ public partial class AiSpeechAssistantService
         
         var details = await _aiSpeechAssistantDataProvider.GetKnowledgeDetailsByKnowledgeIdAsync(knowledge.Id, cancellationToken).ConfigureAwait(false);
 
-        result.Details = _mapper.Map<List<AiSpeechAssistantKnowledgeDetailDto>>(details);
+        var detailDtos = _mapper.Map<List<AiSpeechAssistantKnowledgeDetailDto>>(details);
+        foreach (var dto in detailDtos)
+            dto.RelatedKnowledgeId = knowledge.Id;
 
         var allCopyRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync(new List<int> { knowledge.Id }, null,  cancellationToken).ConfigureAwait(false);
         
         Log.Information("Get the knowledge copy related Ids: {@Ids}", allCopyRelateds.Select(x => x.Id));
 
         result.KnowledgeCopyRelateds = await EnhanceRelateFrom(allCopyRelateds, cancellationToken).ConfigureAwait(false);
+
+        if (allCopyRelateds is { Count: > 0 })
+        {
+            var sourceKnowledgeIds = allCopyRelateds.Select(x => x.SourceKnowledgeId).Distinct().ToList();
+            var sourceKnowledges = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgesAsync(sourceKnowledgeIds, cancellationToken).ConfigureAwait(false);
+            var sourceKnowledgeMap = sourceKnowledges.ToDictionary(k => k.Id);
+            var assistantIds = sourceKnowledges.Select(k => k.AssistantId).Distinct().ToList();
+            var enrichInfos = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedEnrichInfoAsync(assistantIds, cancellationToken).ConfigureAwait(false);
+            var enrichDict = enrichInfos.ToDictionary(x => x.AssistantId);
+
+            foreach (var sourceKnowledgeId in sourceKnowledgeIds)
+            {
+                var relatedDetails = await _aiSpeechAssistantDataProvider.GetKnowledgeDetailsByKnowledgeIdAsync(sourceKnowledgeId, cancellationToken).ConfigureAwait(false);
+                if (relatedDetails == null || relatedDetails.Count == 0) continue;
+
+                var relatedDetailDtos = _mapper.Map<List<AiSpeechAssistantKnowledgeDetailDto>>(relatedDetails);
+                string relatedFrom = null;
+
+                if (sourceKnowledgeMap.TryGetValue(sourceKnowledgeId, out var sourceKnowledge) &&
+                    enrichDict.TryGetValue(sourceKnowledge.AssistantId, out var info))
+                    relatedFrom = $"{info.StoreName} - {info.AiAgentName} - {info.AssiatantName}";
+
+                foreach (var dto in relatedDetailDtos)
+                {
+                    dto.RelatedKnowledgeId = sourceKnowledgeId;
+                    dto.RelatedFrom = relatedFrom;
+                }
+
+                detailDtos.AddRange(relatedDetailDtos);
+            }
+        }
+
+        result.Details = detailDtos;
         
         return new GetAiSpeechAssistantKnowledgeResponse { Data = result };
     }
