@@ -1129,13 +1129,29 @@ public partial class PhoneOrderProcessJobService
             "名称匹配时：以草稿单 AiMaterialDesc 的 # 前半段为基准名。\n" +
             "匹配成功后，输出 MaterialNumber 必须等于草稿单对应项。\n" +
             "未匹配到草稿单时才可用通话中的 MaterialNumber（没有则空）。\n\n" +
+            "【SMT Quantity 语义】\n" +
+            "SMT 传入的 Quantity 可能表示两种含义：\n" +
+            "1）最终目标量：当 Quantity == CallNameQty 时，Quantity 表示最终总量。\n" +
+            "2）变动量：当 Quantity ≠ CallNameQty 时，Quantity 表示相对于草稿单的增减量。\n" +
+            "计算规则：\n" +
+            "若 Quantity == CallNameQty：\n" +
+            "  目标量 = CallNameQty\n" +
+            "  变动量 = CallNameQty - DraftBaseQty\n" +
+            "若 Quantity ≠ CallNameQty：\n" +
+            "  变动量 = Quantity\n" +
+            "  目标量 = DraftBaseQty + Quantity\n\n" +
             "【数量与名称】\n" +
             "先算 DraftBaseQty：优先解析草稿单 AiMaterialDesc 的数量表达累加；解析不到才用 MaterialQuantity。\n" +
+            "若通话 Name 含 # 且有 + 或 - 数量表达，解析得到 CallNameQty（同草稿解析规则）。\n" +
             "匹配到草稿单时：\n" +
             " - Name 必须以草稿单 AiMaterialDesc 原串为前缀，只能在末尾追加 + 或 - 变动量。\n" +
-            " - 目标量语义（改成/变成/改为/只要）：TargetQty=通话 Quantity；变动量=TargetQty-DraftBaseQty；Quantity=TargetQty。\n" +
+            " - 目标量语义（改成/变成/改为/只要）：\n" +
+            "   若 CallNameQty 存在且(通话 Quantity<=0 或 通话 Quantity!=CallNameQty)，TargetQty=CallNameQty；否则 TargetQty=通话 Quantity。\n" +
+            "   变动量=TargetQty-DraftBaseQty；Quantity=TargetQty。\n" +
             "   例：草稿“蒜头#1箱+2”(基准=3)，说“改成只要1箱” => Name=“蒜头#1箱+2-2”，Quantity=1。\n" +
-            " - 普通加减语义（再加/减少）：Quantity=通话 Quantity（变动量）。\n" +
+            " - 普通加减语义（再加/减少）：默认 Quantity=通话 Quantity（变动量）。若 CallNameQty 存在且通话 Quantity==CallNameQty，视为总量：变动量=CallNameQty-DraftBaseQty；Quantity=变动量。\n" +
+            "   例：草稿“鸡胸肉#2箱”(基准=2)，说“再加2箱”，SMT“鸡胸肉#2箱+2 qty4” => CallNameQty=4，变动量=2，Name=“鸡胸肉#2箱+2”，Quantity=2。\n" +
+            "   例：草稿“鸡胸肉#2箱+2”(基准=4)，说“改成只要1箱”，SMT“鸡胸肉#2箱+2-3 qty-1” => CallNameQty=1，Name=“鸡胸肉#2箱+2-3”，Quantity=1。\n" +
             " - Unit 优先用草稿单 AiUnit。\n" +
             "未匹配到草稿单（新增）：\n" +
             " - Quantity=通话 Quantity。\n" +

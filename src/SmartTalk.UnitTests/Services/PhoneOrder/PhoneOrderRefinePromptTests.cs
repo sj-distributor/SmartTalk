@@ -24,6 +24,21 @@ public class PhoneOrderRefinePromptTests
     }
 
     [Fact]
+    public void BuildRefineOrderSystemPrompt_ShouldContainCallNameQtyRules()
+    {
+        var prompt = InvokePrivateStatic<string>("BuildRefineOrderSystemPrompt");
+
+        prompt.ShouldContain("【SMT Quantity 语义】", Case.Sensitive);
+        prompt.ShouldContain("Quantity == CallNameQty", Case.Sensitive);
+        prompt.ShouldContain("Quantity ≠ CallNameQty", Case.Sensitive);
+        prompt.ShouldContain("CallNameQty", Case.Sensitive);
+        prompt.ShouldContain("鸡胸肉#2箱+2", Case.Sensitive);
+        prompt.ShouldContain("鸡胸肉#2箱+2-3", Case.Sensitive);
+        prompt.ShouldContain("qty4", Case.Sensitive);
+        prompt.ShouldContain("qty-1", Case.Sensitive);
+    }
+
+    [Fact]
     public void ApplyDeterministicRefine_TargetQty_ShouldAppendDeltaAndKeepQuantity()
     {
         var storeOrder = new ExtractedOrderDto();
