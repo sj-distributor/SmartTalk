@@ -1,5 +1,6 @@
 using Twilio;
 using Serilog;
+using OpenAI;
 using OpenAI.Chat;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -24,6 +25,7 @@ using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using JsonDocument = System.Text.Json.JsonDocument;
 using JsonSerializer = System.Text.Json.JsonSerializer;
+using System.ClientModel;
 
 namespace SmartTalk.Core.Services.PhoneOrder;
 
@@ -112,7 +114,17 @@ public partial class PhoneOrderProcessJobService
 
         var messages = await ConfigureRecordAnalyzePromptAsync(agent, aiSpeechAssistant, record, callFrom ?? "", callTo ?? "", currentTime, audioContent, callSubjectCn, callSubjectEn, cancellationToken);
         
-        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
+        const long largeAudioBytesThreshold = 100L * 1024 * 1024;
+        
+        var networkTimeout = (audioContent?.Length ?? 0) > largeAudioBytesThreshold ? TimeSpan.FromMinutes(10) : TimeSpan.FromMinutes(5);
+
+        var client = new ChatClient(
+            "gpt-4o-audio-preview",
+            new ApiKeyCredential(_openAiSettings.ApiKey),
+            new OpenAIClientOptions
+            {
+                NetworkTimeout = networkTimeout
+            });
  
         ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
 
@@ -469,7 +481,7 @@ public partial class PhoneOrderProcessJobService
             historyItems.Select(x => $"{x.MaterialDesc} ({x.Material})【{x.invoiceDate}】"));
 
         var systemPrompt =
-            "你是一名訂單分析助手。請從下面的客戶分析報告文字中提取所有下單的物料名稱、數量、單位，並且用歷史物料列表盡力匹配每個物料的materialNumber。" +
+            "你是一名訂單分析助手。請從下面的客戶分析報告文字中提取所有下單的物料名稱、數量、單位，並且用歷史物料列表盡力匹配每個物料的materialNumber。「優先匹配物料列表中靠前的物料，如果有多個同類物料，選用歷史列表中排在前的。」" +
             "如果報告中提到了預約送貨時間，請提取送貨時間（格式yyyy-MM-dd）。" +
             "如果客戶提到了分店名，請提取 StoreName；如果提到第幾家店，請提取 StoreNumber。\n" +
             "請嚴格傳回一個 JSON 對象，頂層字段為 \"stores\"，每个店铺对象包含：StoreName（可空字符串）, StoreNumber（可空字符串）, DeliveryDate（可空字符串），orders（数组，元素包含 name, quantity, unit, materialNumber, deliveryDate）。\n" +
@@ -614,27 +626,31 @@ public partial class PhoneOrderProcessJobService
         return pureNumber ?? candidates.First();
     }
 
-    private async Task<string> ResolveSoldToIdAsync(ExtractedOrderDto storeOrder,
-        Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, List<string> soldToIds,
-        CancellationToken cancellationToken)
+    private async Task<string> ResolveSoldToIdAsync(ExtractedOrderDto storeOrder, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, List<string> soldToIds, CancellationToken cancellationToken)
     {
+        if (soldToIds.Count == 1) return aiSpeechAssistant.Name;
+        
         if (!string.IsNullOrEmpty(storeOrder.StoreName))
         {
             var requestDto = new GetCustomerNumbersByNameRequestDto { CustomerName = storeOrder.StoreName };
-            var customerNumber = await _salesClient.GetCustomerNumbersByNameAsync(requestDto, cancellationToken)
-                .ConfigureAwait(false);
-            return customerNumber?.Data?.FirstOrDefault()?.CustomerNumber ?? string.Empty;
+            var response = await _salesClient.GetCustomerNumbersByNameAsync(requestDto, cancellationToken).ConfigureAwait(false);
+            
+            var matchedCustomers = response?.Data?.Where(x => soldToIds.Contains(x.CustomerNumber.TrimStart('0'))).Select(x => x.CustomerNumber).ToList();
+
+            if (matchedCustomers?.Count == 1) return matchedCustomers.First();
+
+            if (matchedCustomers?.Count > 1 &&
+                int.TryParse(storeOrder.StoreNumber, out var storeIndex) &&
+                storeIndex > 0 && storeIndex <= matchedCustomers.Count)
+            {
+                return matchedCustomers[storeIndex - 1];
+            }
         }
 
-        if (!string.IsNullOrEmpty(storeOrder.StoreNumber) && soldToIds.Any() &&
-            int.TryParse(storeOrder.StoreNumber, out var storeIndex) && storeIndex > 0 && storeIndex <= soldToIds.Count)
-        {
-            return soldToIds[storeIndex - 1];
-        }
-
-        if (soldToIds.Count > 1) return string.Empty;
-
-        return aiSpeechAssistant.Name;
+        if (!string.IsNullOrEmpty(storeOrder.StoreNumber) && int.TryParse(storeOrder.StoreNumber, out var index) && index > 0 && index <= soldToIds.Count)
+            return soldToIds[index - 1];
+        
+        return string.Empty;
     }
 
     private GenerateAiOrdersRequestDto CreateDraftOrder(ExtractedOrderDto storeOrder, string soldToId,
