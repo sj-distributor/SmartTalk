@@ -795,7 +795,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
 
                         storeDto.Orders.Add(new ExtractedOrderItemDto
                         {
-                            Name = name,
+                            AiMaterialDesc = name,
                             Quantity = (int)qty,
                             MaterialNumber = materialNumber,
                             Unit = unit

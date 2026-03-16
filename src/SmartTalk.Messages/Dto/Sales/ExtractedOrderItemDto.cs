@@ -17,7 +17,7 @@ public class ExtractedOrderDto
 
 public class ExtractedOrderItemDto
 {
-    public string Name { get; set; }
+    public string AiMaterialDesc { get; set; }
     
     public int Quantity { get; set; } 
     
@@ -30,4 +30,6 @@ public class ExtractedOrderItemDto
     public bool Restored { get; set; }
 
     public bool IsTargetQuantity { get; set; }
+    
+    public int DeltaForAi { get; set; }
 }
