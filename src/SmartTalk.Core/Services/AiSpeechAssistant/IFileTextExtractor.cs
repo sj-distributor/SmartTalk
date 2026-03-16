@@ -5,7 +5,6 @@ using ClosedXML.Excel;
 using DocumentFormat.OpenXml.Packaging;
 using SmartTalk.Core.Ioc;
 using UglyToad.PdfPig;
-using UglyToad.PdfPig.Content;
 
 public interface IFileTextExtractor : IScopedDependency
 {
@@ -91,9 +90,9 @@ public class FileTextExtractor : IFileTextExtractor
         using var pdf = PdfDocument.Open(data);
 
         var sb = new StringBuilder();
-        foreach (Page page in pdf.GetPages())
+        foreach (var page in pdf.GetPages())
         {
-            var pageText = ContentOrderTextExtractor.GetText(page) ?? string.Empty;
+            var pageText = page.Text ?? string.Empty;
             if (pageText.Length == 0) continue;
 
             sb.AppendLine(pageText);
