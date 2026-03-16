@@ -456,12 +456,14 @@ public partial class PhoneOrderProcessJobService
             "1. 如果客戶明確表示取消整張訂單、全部不要、整單取消、今天的單都不要，請在該店鋪標記 IsDeleteWholeOrder=true，orders 可以為空陣列。\n" +
             "2. 如果客戶先說取消整單，後面又表示還是要、算了繼續下單、剛剛的取消不算，請標記 IsUndoCancel=true。\n" +
             "3. 如果客戶只取消單個物料（例如：某某不要了、某某取消、某某 cut 掉），請保留該物料，並在該物料上標記 markForDelete=true，有提到數量的話 quantity 需要用負數表示,\n" +
-            "4. 如果客戶說某某物料剛下了4箱，現在幫我改成1箱，請保留該物料，你只需要做個簡單計算（4箱-1箱）生成quantity為-3箱，其他都不需要标记，也不要另外去多加一個物料\n\n" +
-            "5. 如果客戶只是减少物料数量（例如：某某减掉一箱），請保留該物料，只需要在 quantity 用負數表示减少的物料数量,其他都不需要标记\n" +
-            "6. 單個物料取消不等於取消整單，IsDeleteWholeOrder = false。\n" +
-            "7. 如果得到的字段restored是true，就為true，是false或者沒有得到這個字段，則為false\n" +
-            "8. 如果订单中包含明确的数量描述，即使同时出现“需要确认数量 / 数量不确定”等提示，也应先按当前报告中的数量提取。\n" +
-            "9. 如果是減少某個物料的數量，請在該物料的 quantity 使用負數表示，並要使用 markForDelete = true。\n\n" +
+            "4. 如果客戶說某某物料剛下了4箱，現在幫我改成1箱（或改成只要1箱/变成1箱/剩1箱），請保留該物料：quantity=1，並標記 isTargetQuantity=true（不要在這裡做 4-1 的計算）。\n\n" +
+            "5. 如果客戶只是增加物料数量（例如：再加2箱/多要2箱），quantity=2，isTargetQuantity=false。\n" +
+            "6. 如果客戶只是减少物料数量（例如：某某减掉一箱），quantity=-1，isTargetQuantity=false，並標記 markForDelete=true。\n" +
+            "7. 單個物料取消不等於取消整單，IsDeleteWholeOrder = false。\n" +
+            "8. 如果得到的字段restored是true，就為true，是false或者沒有得到這個字段，則為false\n" +
+            "9. 如果订单中包含明确的数量描述，即使同时出现“需要确认数量 / 数量不确定”等提示，也应先按当前报告中的数量提取。\n" +
+            "10. 如果是減少某個物料的數量，請在該物料的 quantity 使用負數表示，並要使用 markForDelete = true。\n" +
+            "11. 如果是“改成/只要/變成/剩下”目標數量語義，請務必標記 isTargetQuantity = true。\n\n"+
             "請嚴格傳回一個 JSON 對象，頂層字段為 \"stores\"，每个店铺对象包含：" +
             "StoreName（可空字符串）, StoreNumber（可空字符串）, DeliveryDate（可空字符串）, " +
             "IsDeleteWholeOrder（boolean，默認 false）, IsUndoCancel（boolean，默認 false）, " +
@@ -482,6 +484,7 @@ public partial class PhoneOrderProcessJobService
             "          \"unit\": \"箱\",\n" +
             "          \"materialNumber\": \"000000000010010253\",\n" +
             "          \"markForDelete\": false,\n" +
+            "          \"isTargetQuantity\": false,\n" +
             "          \"restored\": false\n" +
             "        }\n" +
             "      ]\n" +
@@ -499,7 +502,8 @@ public partial class PhoneOrderProcessJobService
             "3. 如果沒有提到店鋪信息，但有下單內容，StoreName 和 StoreNumber 可為空值，orders 要正常提取。\n" +
             "4. **如果客戶分析文本中沒有任何可識別的下單信息，請返回：{ \"stores\": [] }。不得臆造或猜測物料。**\n" +
             "5. 請務必完整提取報告中每一個提到的物料，如果没有匹配上歷史物料列表的物料，不知道它的materialNumber，那也必須保留該物料的quantity以及name。\n" +
-            "6. 生成的json請不要重複物料名";
+            "6. 生成的json請不要重複物料名\n" + 
+            "7. 如果客戶說“改成只要1箱”但未提到之前下了多少，仍然要標記 isTargetQuantity=true。";
         Log.Information("Sending prompt to GPT: {Prompt}", systemPrompt);
 
         var messages = new List<ChatMessage>
@@ -552,6 +556,7 @@ public partial class PhoneOrderProcessJobService
                             : "";
                         var markForDelete = orderItem.TryGetProperty("markForDelete", out var md) && md.GetBoolean();
                         var restored = orderItem.TryGetProperty("restored", out var rd) && rd.GetBoolean();
+                        var isTargetQuantity = orderItem.TryGetProperty("isTargetQuantity", out var tq) && tq.GetBoolean();
 
                         if (string.IsNullOrWhiteSpace(materialNumber))
                             materialNumber = MatchMaterialNumber(name, materialNumber, unit, historyItems);
@@ -563,7 +568,8 @@ public partial class PhoneOrderProcessJobService
                             Quantity = (int)qty,
                             MarkForDelete = markForDelete,
                             MaterialNumber = materialNumber,
-                            Restored = restored
+                            Restored = restored,
+                            IsTargetQuantity = isTargetQuantity
                         });
                     }
                 }
@@ -924,15 +930,15 @@ public partial class PhoneOrderProcessJobService
 
             order.Quantity = quantityInDraft + delta;
             
-            string originalDesc = order.AiMaterialDesc ?? draft?.AiMaterialDesc ?? "";
+            string baseDesc = draft?.AiMaterialDesc ?? order.AiMaterialDesc ?? "";
             if (delta != 0)
             {
                 string sign = delta > 0 ? "+" : "";
-                order.AiMaterialDesc = $"{originalDesc}{sign}{delta}";
+                order.AiMaterialDesc = $"{baseDesc}{sign}{delta}";
             }
             else
             {
-                order.AiMaterialDesc = originalDesc;
+                order.AiMaterialDesc = baseDesc;
             }
         }
 
