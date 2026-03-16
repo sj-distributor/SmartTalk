@@ -923,15 +923,16 @@ public partial class PhoneOrderProcessJobService
             order.DeltaForAi = delta;
 
             order.Quantity = quantityInDraft + delta;
-
+            
+            string originalDesc = order.AiMaterialDesc ?? draft?.AiMaterialDesc ?? "";
             if (delta != 0)
             {
                 string sign = delta > 0 ? "+" : "";
-                order.AiMaterialDesc = $"{draft.AiMaterialDesc}{sign}{delta}";
+                order.AiMaterialDesc = $"{originalDesc}{sign}{delta}";
             }
             else
             {
-                order.AiMaterialDesc = draft?.AiMaterialDesc ?? order.AiMaterialDesc;
+                order.AiMaterialDesc = originalDesc;
             }
         }
 
