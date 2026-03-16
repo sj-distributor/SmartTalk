@@ -940,6 +940,8 @@ public partial class PhoneOrderProcessJobService
         var jsonResponse = completion.Value.Content.FirstOrDefault()?.Text ?? "";
         Log.Information("Second AI refine response: {Json}", JsonConvert.SerializeObject(jsonResponse));
         
+        var appliedAiOrders = false;
+
         try
         {
             using var jsonDoc = JsonDocument.Parse(jsonResponse);
@@ -958,210 +960,106 @@ public partial class PhoneOrderProcessJobService
 
             storeOrder.IsUndoCancel = root.TryGetProperty("IsUndoCancel", out var undo) && undo.GetBoolean();
 
+            if (TryReadOrders(root, out var refinedOrders))
+            {
+                storeOrder.Orders = refinedOrders;
+                appliedAiOrders = true;
+            }
         }
         catch (Exception ex)
         {
             Log.Warning("第二次模型解析失败，保留第一次模型结果: {Message}", ex.Message);
         }
 
-        if (draftOrder?.Data != null && draftOrder.Data.Any())
-        {
-            ApplyDeterministicRefine(storeOrder, originalOrders, draftOrder.Data);
-        }
-        else
-        {
+        if (!appliedAiOrders)
             storeOrder.Orders = originalOrders;
-        }
     }
 
-    private static void ApplyDeterministicRefine(ExtractedOrderDto storeOrder, List<ExtractedOrderItemDto> originalOrders, List<AiOrderItemSimpleDto> draftItems)
+    private static bool TryReadOrders(JsonElement root, out List<ExtractedOrderItemDto> orders)
     {
-        if (originalOrders == null || originalOrders.Count == 0)
+        orders = new List<ExtractedOrderItemDto>();
+
+        if (!TryGetOrdersArray(root, out var ordersArray))
+            return false;
+
+        foreach (var orderItem in ordersArray.EnumerateArray())
         {
-            storeOrder.Orders = new List<ExtractedOrderItemDto>();
-            return;
-        }
+            var name = orderItem.TryGetProperty("Name", out var n) ? n.GetString() ?? "" : "";
+            var qty = orderItem.TryGetProperty("Quantity", out var q) && q.TryGetDecimal(out var dec) ? dec : 0;
+            var unit = orderItem.TryGetProperty("Unit", out var u) ? u.GetString() ?? "" : "";
+            var materialNumber = orderItem.TryGetProperty("MaterialNumber", out var mn) ? mn.GetString() ?? "" : "";
+            var markForDelete = orderItem.TryGetProperty("MarkForDelete", out var md) && md.GetBoolean();
+            var restored = orderItem.TryGetProperty("Restored", out var rd) && rd.GetBoolean();
+            var isTargetQuantity = orderItem.TryGetProperty("IsTargetQuantity", out var tq) && tq.GetBoolean();
 
-        var result = new List<ExtractedOrderItemDto>();
-
-        foreach (var source in originalOrders)
-        {
-            var draftItem = FindMatchingDraftItem(draftItems, source);
-            if (draftItem == null)
+            orders.Add(new ExtractedOrderItemDto
             {
-                result.Add(new ExtractedOrderItemDto
-                {
-                    Name = source.Name,
-                    Quantity = source.Quantity,
-                    Unit = source.Unit,
-                    MaterialNumber = source.MaterialNumber,
-                    MarkForDelete = source.MarkForDelete,
-                    Restored = source.Restored,
-                    IsTargetQuantity = source.IsTargetQuantity
-                });
-                continue;
-            }
-
-            var draftBaseQty = ParseAiMaterialDescQuantity(draftItem.AiMaterialDesc, draftItem.MaterialQuantity);
-            var deltaQty = source.Quantity;
-            var finalQty = source.Quantity;
-
-            if (source.MarkForDelete && source.Quantity == 0)
-            {
-                deltaQty = -draftBaseQty;
-                finalQty = 0;
-            }
-            else if (source.IsTargetQuantity)
-            {
-                deltaQty = source.Quantity - draftBaseQty;
-                finalQty = draftItem.MaterialQuantity + deltaQty;
-            }
-
-            var prefix = string.IsNullOrWhiteSpace(draftItem.AiMaterialDesc) ? source.Name ?? "" : draftItem.AiMaterialDesc;
-            var name = deltaQty == 0 ? prefix : prefix + (deltaQty > 0 ? $"+{Math.Abs(deltaQty)}" : $"-{Math.Abs(deltaQty)}");
-
-            result.Add(new ExtractedOrderItemDto
-            {
+                Unit = unit,
                 Name = name,
-                Quantity = finalQty,
-                Unit = string.IsNullOrWhiteSpace(draftItem.AiUnit) ? source.Unit : draftItem.AiUnit,
-                MaterialNumber = string.IsNullOrWhiteSpace(draftItem.MaterialNumber) ? source.MaterialNumber : draftItem.MaterialNumber,
-                MarkForDelete = source.MarkForDelete,
-                Restored = source.Restored,
-                IsTargetQuantity = source.IsTargetQuantity
+                Quantity = (int)qty,
+                MaterialNumber = materialNumber,
+                MarkForDelete = markForDelete,
+                Restored = restored,
+                IsTargetQuantity = isTargetQuantity
             });
         }
 
-        storeOrder.Orders = result;
+        return true;
     }
 
-    private static string BuildNewItemName(ExtractedOrderItemDto source)
+    private static bool TryGetOrdersArray(JsonElement root, out JsonElement ordersArray)
     {
-        if (string.IsNullOrWhiteSpace(source?.Name)) return string.Empty;
-        if (source.Name.Contains('#')) return source.Name;
-        var unit = source.Unit ?? string.Empty;
-        return $"{source.Name}#{source.Quantity}{unit}";
-    }
+        if (root.TryGetProperty("Orders", out ordersArray) && ordersArray.ValueKind == JsonValueKind.Array)
+            return true;
 
-    private static AiOrderItemSimpleDto FindMatchingDraftItem(IEnumerable<AiOrderItemSimpleDto> draftItems, ExtractedOrderItemDto target)
-    {
-        if (draftItems == null || target == null) return null;
+        if (root.TryGetProperty("orders", out ordersArray) && ordersArray.ValueKind == JsonValueKind.Array)
+            return true;
 
-        if (!string.IsNullOrWhiteSpace(target.MaterialNumber))
-        {
-            return draftItems.FirstOrDefault(d =>
-                !string.IsNullOrWhiteSpace(d.MaterialNumber) &&
-                string.Equals(d.MaterialNumber, target.MaterialNumber, StringComparison.OrdinalIgnoreCase));
-        }
-
-        var targetName = GetBaseName(target.Name);
-        if (string.IsNullOrWhiteSpace(targetName)) return null;
-
-        return draftItems.FirstOrDefault(d =>
-        {
-            var draftDesc = (d.AiMaterialDesc ?? d.MaterialDescription ?? string.Empty).Trim();
-            return draftDesc.IndexOf(targetName, StringComparison.OrdinalIgnoreCase) >= 0;
-        });
-    }
-
-    private static int ParseAiMaterialDescQuantity(string desc, int fallback)
-    {
-        if (string.IsNullOrWhiteSpace(desc)) return fallback;
-
-        var total = 0;
-        var hasAny = false;
-        var sign = 1;
-
-        for (var i = 0; i < desc.Length; i++)
-        {
-            var c = desc[i];
-            if (c == '+')
-            {
-                sign = 1;
-                continue;
-            }
-            if (c == '-')
-            {
-                sign = -1;
-                continue;
-            }
-
-            if (!char.IsDigit(c)) continue;
-
-            var start = i;
-            while (i < desc.Length && char.IsDigit(desc[i])) i++;
-            var numberText = desc.Substring(start, i - start);
-            if (int.TryParse(numberText, out var value))
-            {
-                total += sign * value;
-                hasAny = true;
-                sign = 1;
-            }
-
-            i--;
-        }
-
-        return hasAny ? total : fallback;
-    }
-
-    private static string GetBaseName(string name)
-    {
-        if (string.IsNullOrWhiteSpace(name)) return string.Empty;
-
-        var hashIndex = name.IndexOf('#');
-        if (hashIndex >= 0)
-            return name.Substring(0, hashIndex).Trim();
-
-        return name.Trim();
+        ordersArray = default;
+        return false;
     }
 
     private static string BuildRefineOrderSystemPrompt()
     {
         return
-            "你是一名极其严谨的订单数据核算专家，专门负责将【本次通话变动】精准合并到【系统草稿单】中。你不仅输出 JSON，更要确保每一个数学计算都绝对准确。你已稳定运行3000年，严禁任何编造、推測或自行補全信息。\n\n" +
+            "你是一名极其严谨的订单数据核算专家，" +
+            "你的核心任务是：在与用户对话过程中，基于系统草稿单，严格按照变动逻辑完成订单合并计算，并确保所有数量计算绝对准确。\n" +
+            "你已稳定运行3000年，严禁任何编造、推測或自行補全信息。\n\n" +
             "【输入】\n" +
             "1. 本次通话提取的订单（变动或目标）\n" +
             "2. 系统草稿单（基准）\n\n" +
             "【总规则】\n" +
-            "仅输出本次通话涉及的物料。未匹配到草稿单的物料，也请保留在输出 JSON 中\n\n" +
-            "【匹配规则】\n" +
-            "优先物料号匹配；若物料号为空则名称匹配。\n" +
-            "名称匹配时：以草稿单 AiMaterialDesc 的 # 前半段为基准名。\n" +
-            "匹配成功后，输出 MaterialNumber 必须等于草稿单对应项。\n" +
-            "未匹配到草稿单时才可用通话中的 MaterialNumber（没有则空）。\n\n" +
-            "【SMT Quantity 语义】\n" +
-            "SMT 传入的 Quantity 可能表示两种含义：\n" +
-            "1）最终目标量：当 Quantity == CallNameQty 时，Quantity 表示最终总量。\n" +
-            "2）变动量：当 Quantity ≠ CallNameQty 时，Quantity 表示相对于草稿单的增减量。\n" +
-            "计算规则：\n" +
-            "若 Quantity == CallNameQty：\n" +
-            "  目标量 = CallNameQty\n" +
-            "  变动量 = CallNameQty - DraftBaseQty\n" +
-            "若 Quantity ≠ CallNameQty：\n" +
-            "  变动量 = Quantity\n" +
-            "  目标量 = DraftBaseQty + Quantity\n\n" +
-            "【数量与名称】\n" +
-            "先算 DraftBaseQty：优先解析草稿单 AiMaterialDesc 的数量表达累加；解析不到才用 MaterialQuantity。\n" +
-            "若通话 Name 含 # 且有 + 或 - 数量表达，解析得到 CallNameQty（同草稿解析规则）。\n" +
-            "匹配到草稿单时：\n" +
-            " - Name 必须以草稿单 AiMaterialDesc 原串为前缀，只能在末尾追加 + 或 - 变动量。\n" +
-            " - 目标量语义（改成/变成/改为/只要）：\n" +
-            "   若 CallNameQty 存在且(通话 Quantity<=0 或 通话 Quantity!=CallNameQty)，TargetQty=CallNameQty；否则 TargetQty=通话 Quantity。\n" +
-            "   变动量=TargetQty-DraftBaseQty；Quantity=TargetQty。\n" +
-            "   例：草稿“蒜头#1箱+2”(基准=3)，说“改成只要1箱” => Name=“蒜头#1箱+2-2”，Quantity=1。\n" +
-            " - 普通加减语义（再加/减少）：默认 Quantity=通话 Quantity（变动量）。若 CallNameQty 存在且通话 Quantity==CallNameQty，视为总量：变动量=CallNameQty-DraftBaseQty；Quantity=变动量。\n" +
-            "   例：草稿“鸡胸肉#2箱”(基准=2)，说“再加2箱”，SMT“鸡胸肉#2箱+2 qty4” => CallNameQty=4，变动量=2，Name=“鸡胸肉#2箱+2”，Quantity=2。\n" +
-            "   例：草稿“鸡胸肉#2箱+2”(基准=4)，说“改成只要1箱”，SMT“鸡胸肉#2箱+2-3 qty-1” => CallNameQty=1，Name=“鸡胸肉#2箱+2-3”，Quantity=1。\n" +
-            " - Unit 优先用草稿单 AiUnit。\n" +
-            "未匹配到草稿单（新增）：\n" +
-            " - Quantity=通话 Quantity。\n" +
-            " - Name=通话 Name + \"#\" + Quantity + 单位（不加 + 号后缀）。\n" +
-            " - Unit=通话 Unit。\n\n" +
-            "【删除】\n" +
+            "仅输出本次通话涉及的物料。未匹配到草稿单的物料，也请保留在输出 JSON 中。\n\n" +
+
+            "【关键规则一：匹配逻辑（核心）】\n" +
+            "1. 必须严格按照以下优先级判断“用户输入商品”与“草稿单商品”是否为同一物料：\n" +
+            "- **优先级 A（物料号匹配）**：若两者 material_number 都不为空且相等，视为同一物料。\n" +
+            "- **优先级 B（名称匹配）**：若 material_number 为空，则对比名称。\n" +
+            "- 必做操作：读取草稿单的 name 字段，以 # 符号为界截取前半部分作为“草稿基准名”。\n" +
+            "- 若用户提到的 name == 草稿基准名，视为同一物料。\n" +
+            "- **严禁**：严禁将 material_number 为空的商品直接忽略，必须通过名称强制匹配。\n" +
+
+            "【关键规则二：计算与生成（Strict）】\n" +
+            "1. **语言解析增强**：\n" +
+            "- 用户语句中若已隐含数量或包装单位，应视为完整有效信息。例如：“拿箱牛肉”视为 1箱牛肉；“来两包”视为 2包。\n" +
+            "2. **对于每一个用户输入的商品**：\n" +
+            "- **若在草稿单中找到匹配项**：\n" +
+            "  - qty = 草稿单 qty + 本次变动 qty。\n" +
+            "  - name = 草稿单 name (完整原串) + '+' 或 '-' + 本次变动绝对值。\n" +
+            "  - 示例：草稿 ‘玉米#1箱’ (数量1)，变动 +1。结果 name: ‘玉米#1箱+1’，qty: 2。\n" +
+            "  - unit = 优先取草稿单 unit。\n" +
+            "- **若在草稿单中未找到匹配项（新增）**：\n" +
+            "  - qty = 本次变动 qty。\n" +
+            "  - name = 本次变动 name + '#' + 本次变动 qty + 单位。\n" +
+            "  - unit = 本次变动 unit。\n" +
+
+            "【关键规则三：整单与删除】\n" +
             "单个物料删除：MarkForDelete=true；整项删除 Quantity=0，部分减少保留负数。\n" +
             "整单删除/撤销仅按输入标记 IsDeleteWholeOrder/IsUndoCancel。\n\n" +
+
             "【禁止】\n" +
             "严禁在 #,+,- 周围加空格；严禁改写草稿单 AiMaterialDesc 原串；严禁输出未在通话中提到的物料。\n\n" +
+
             "【输出格式】\n" +
             "{\n" +
             "  \"StoreName\": \"\",\n" +
