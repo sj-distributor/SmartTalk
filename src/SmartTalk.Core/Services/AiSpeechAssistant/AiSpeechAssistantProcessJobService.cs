@@ -386,7 +386,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
 
     private static readonly HashSet<string> SupportedExtensions = new()
     {
-        ".txt",".md",".pdf",".html",".xlsx",".xls",".doc",".docx",".csv"
+        ".txt",".md",".pdf",".html",".xlsx",".docx",".csv",".json",".xml",".htm"
     };
 
     private bool IsFileUrl(string content)
