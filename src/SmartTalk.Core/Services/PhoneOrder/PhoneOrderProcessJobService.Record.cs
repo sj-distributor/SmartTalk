@@ -1077,7 +1077,8 @@ public partial class PhoneOrderProcessJobService
             "      \"Restored\": false\n" +
             "    }\n" +
             "  ]\n" +
-            "}";
+            "}"+
+            "请严格按照 JSON 格式输出结果。";
     }
     
     private int? ParseTotalFromDescription(string aiMaterialDesc)
