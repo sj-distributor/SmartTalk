@@ -327,7 +327,8 @@ public partial class AiSpeechAssistantConnectFixture
                         DetailId = detailId,
                         DetailName = "Updated Detail Name",
                         DetailContent = "Updated detail content",
-                        FormatType = AiSpeechAssistantKonwledgeFormatType.FAQ
+                        FormatType = AiSpeechAssistantKonwledgeFormatType.FAQ,
+                        FileName = "updated.xlsx"
                     });
         });
 
@@ -337,6 +338,7 @@ public partial class AiSpeechAssistantConnectFixture
         response.Data.KnowledgeName.ShouldBe("Updated Detail Name");
         response.Data.Content.ShouldBe("Updated detail content");
         response.Data.FormatType.ShouldBe(AiSpeechAssistantKonwledgeFormatType.FAQ);
+        response.Data.FileName.ShouldBe("updated.xlsx");
 
         await Run<IAiSpeechAssistantDataProvider>(async dataProvider =>
         {
@@ -345,6 +347,7 @@ public partial class AiSpeechAssistantConnectFixture
             updatedDetail.KnowledgeName.ShouldBe("Updated Detail Name");
             updatedDetail.Content.ShouldBe("Updated detail content");
             updatedDetail.FormatType.ShouldBe(AiSpeechAssistantKonwledgeFormatType.FAQ);
+            updatedDetail.FileName.ShouldBe("updated.xlsx");
             updatedDetail.LastModifiedDate.ShouldNotBeNull();
         });
     }

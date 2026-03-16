@@ -23,6 +23,9 @@ public class AiSpeechAssistantKnowledgeDetail : IEntity, IHasModifiedFields
     
     [Column("content")]
     public string Content { get; set; }
+
+    [Column("file_name")]
+    public string FileName { get; set; }
     
     [Column("created_date")] 
     public DateTimeOffset CreatedDate { get; set; } = DateTimeOffset.Now; 

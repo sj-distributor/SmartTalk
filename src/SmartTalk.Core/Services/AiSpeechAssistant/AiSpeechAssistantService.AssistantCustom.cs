@@ -136,6 +136,7 @@ public partial class AiSpeechAssistantService
                 KnowledgeName = x.KnowledgeName,
                 FormatType = x.FormatType,
                 Content = x.Content,
+                FileName = string.IsNullOrWhiteSpace(x.FileName) ? null : x.FileName,
                 CreatedDate = DateTimeOffset.Now
             }).ToList();
 
@@ -1523,6 +1524,7 @@ public partial class AiSpeechAssistantService
         detail .KnowledgeName = command.DetailName;
         detail.Content = command.DetailContent;
         detail .FormatType = command.FormatType;
+        detail.FileName = string.IsNullOrWhiteSpace(command.FileName) ? null : command.FileName;
         detail .LastModifiedDate = DateTimeOffset.Now;
 
         await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgeDetailAsync(detail , true, cancellationToken).ConfigureAwait(false);
@@ -1550,6 +1552,7 @@ public partial class AiSpeechAssistantService
             KnowledgeName = command.KnowledgeName,
             FormatType = command.FormatType,
             Content = command.Content,
+            FileName = string.IsNullOrWhiteSpace(command.FileName) ? null : command.FileName,
             CreatedDate = DateTimeOffset.Now
         };
 

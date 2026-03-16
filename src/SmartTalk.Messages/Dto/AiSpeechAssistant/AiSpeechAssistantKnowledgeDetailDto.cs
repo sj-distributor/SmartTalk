@@ -13,6 +13,8 @@ public class AiSpeechAssistantKnowledgeDetailDto
     public AiSpeechAssistantKonwledgeFormatType FormatType { get; set; } 
     
     public string Content { get; set; }
+
+    public string FileName { get; set; }
     
     public DateTimeOffset CreatedDate { get; set; } = DateTimeOffset.Now; 
     
