@@ -14,7 +14,7 @@ public class AddAiSpeechAssistantKnowledgeCommand : ICommand
     
     public string Language { get; set; }
 
-    public List<AiSpeechAssistantKnowledgeCopyRelatedDto> RelatedKnowledges { get; set; } = new();
+    public List<AiSpeechAssistantKnowledgeCopyRelatedDto>? RelatedKnowledges { get; set; }
     
     public string Premise { get; set; }
 }
