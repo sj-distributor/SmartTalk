@@ -895,6 +895,8 @@ public partial class PhoneOrderProcessJobService
         var deliveryDateInPst = TimeZoneInfo.ConvertTime(storeOrder.DeliveryDate, pacificZone); 
         
         var draftOrder = await _salesClient.GetAiOrderItemsByDeliveryDateAsync(new GetAiOrderItemsByDeliveryDateRequestDto { CustomerNumber = soldToId, DeliveryDate = deliveryDateInPst }, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("DraftOrder: {draftOrder}", draftOrder);
 
         if (draftOrder?.Data == null || !draftOrder.Data.Any())
         {
@@ -914,7 +916,7 @@ public partial class PhoneOrderProcessJobService
         foreach (var order in storeOrder.Orders)
         {
             var draft = enrichedDraftItems.FirstOrDefault(d => d.MaterialNumber == order.MaterialNumber);
-            int totalFromDesc = draft?.TotalFromDesc ?? draft?.Quantity ?? 0;
+            int totalFromDesc = draft?.TotalFromDesc ?? 0;
             int quantityInDraft = draft?.Quantity ?? 0;
 
             int delta = order.IsTargetQuantity ? order.Quantity - totalFromDesc : order.Quantity;
@@ -925,7 +927,11 @@ public partial class PhoneOrderProcessJobService
             if (delta != 0)
             {
                 string sign = delta > 0 ? "+" : "";
-                order.AiMaterialDesc = $"{order.AiMaterialDesc}{sign}{delta}";
+                order.AiMaterialDesc = $"{draft.AiMaterialDesc}{sign}{delta}";
+            }
+            else
+            {
+                order.AiMaterialDesc = draft?.AiMaterialDesc ?? order.AiMaterialDesc;
             }
         }
 
