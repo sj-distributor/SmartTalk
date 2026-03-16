@@ -14,6 +14,8 @@ public class UpdateAiSpeechAssistantKnowledgeDetailCommand : ICommand
     public string DetailContent { get; set; }
     
     public AiSpeechAssistantKonwledgeFormatType FormatType { get; set; }
+
+    public string FileName { get; set; }
 }
 
 public class UpdateAiSpeechAssistantKnowledgeDetailResponse : SmartTalkResponse<AiSpeechAssistantKnowledgeDetailDto>

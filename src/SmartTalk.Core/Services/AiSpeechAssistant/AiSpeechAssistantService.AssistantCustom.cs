@@ -125,6 +125,7 @@ public partial class AiSpeechAssistantService
                 KnowledgeName = x.KnowledgeName,
                 FormatType = x.FormatType,
                 Content = x.Content,
+                FileName = string.IsNullOrWhiteSpace(x.FileName) ? null : x.FileName,
                 CreatedDate = DateTimeOffset.Now
             }).ToList();
 
@@ -843,7 +844,7 @@ public partial class AiSpeechAssistantService
 
     private static readonly HashSet<string> SupportedExtensions = new()
     {
-        ".txt",".md",".pdf",".html",".xlsx",".xls",".doc",".docx",".csv"
+        ".txt",".md",".pdf",".html",".xlsx",".docx",".csv",".json",".xml",".htm"
     };
 
     private bool IsFileUrl(string content)
@@ -1492,6 +1493,7 @@ public partial class AiSpeechAssistantService
         detail .KnowledgeName = command.DetailName;
         detail.Content = command.DetailContent;
         detail .FormatType = command.FormatType;
+        detail.FileName = string.IsNullOrWhiteSpace(command.FileName) ? null : command.FileName;
         detail .LastModifiedDate = DateTimeOffset.Now;
 
         await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgeDetailAsync(detail , true, cancellationToken).ConfigureAwait(false);
@@ -1519,6 +1521,7 @@ public partial class AiSpeechAssistantService
             KnowledgeName = command.KnowledgeName,
             FormatType = command.FormatType,
             Content = command.Content,
+            FileName = string.IsNullOrWhiteSpace(command.FileName) ? null : command.FileName,
             CreatedDate = DateTimeOffset.Now
         };
 
