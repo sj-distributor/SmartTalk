@@ -894,17 +894,21 @@ public partial class PhoneOrderProcessJobService
         
         var draftOrder = await _salesClient.GetAiOrderItemsByDeliveryDateAsync(new GetAiOrderItemsByDeliveryDateRequestDto { CustomerNumber = soldToId, DeliveryDate = deliveryDateInPst }, cancellationToken).ConfigureAwait(false);
         
-        //var todayReports = await GetTodayReportsByAssistantAsync(aiSpeechAssistant.Id, recordId, cancellationToken).ConfigureAwait(false);
-        
-        var hasDraftOrder = draftOrder?.Data != null && draftOrder.Data.Any();
-        //var hasTodayReports = todayReports != null && todayReports.Any();
-
-        if (!hasDraftOrder)
+        if (draftOrder?.Data == null || !draftOrder.Data.Any())
         {
-            Log.Information("Skip RefineOrderByAiAsync: no draft order and no today reports. SoldToId={SoldToId}, DeliveryDate={DeliveryDate}", soldToId, storeOrder.DeliveryDate);
+            Log.Information("Skip RefineOrderByAiAsync: no draft order. SoldToId={SoldToId}, DeliveryDate={DeliveryDate}", soldToId, storeOrder.DeliveryDate);
             return;
         }
         
+        var enrichedDraftItems = draftOrder.Data.Select(item => new
+        {
+            item.MaterialNumber,
+            item.AiMaterialDesc,
+            Quantity = item.MaterialQuantity,
+            Unit = item.AiUnit,  
+            TotalFromDesc = ParseTotalFromDescription(item.AiMaterialDesc)
+        }).ToList();
+
         var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
 
         var originalOrders = storeOrder.Orders.Select(o => new ExtractedOrderItemDto
@@ -918,28 +922,32 @@ public partial class PhoneOrderProcessJobService
             IsTargetQuantity = o.IsTargetQuantity
         }).ToList();
 
-        var currentOrdersJson = JsonSerializer.Serialize(storeOrder.Orders);
-        
-        var draftOrderJson = draftOrder?.Data != null ? JsonSerializer.Serialize(draftOrder.Data) : "[]";
-        Log.Information("RefineOrderByAiAsync draft order: {DraftOrder}", draftOrderJson);
-        
-        //var historyReportsText = todayReports.Any() ? string.Join("\n---\n", todayReports) : "（无）";
+        var currentOrdersJson = JsonConvert.SerializeObject(storeOrder.Orders, Formatting.None);
+        var enrichedDraftJson = JsonConvert.SerializeObject(enrichedDraftItems, Formatting.None);
+
+        Log.Information("RefineOrderByAiAsync - enriched draft: {DraftJson}", enrichedDraftJson);
 
         var systemPrompt = BuildRefineOrderSystemPrompt();
-        
-        var userPrompt = "【本次通话提取的订单】\n" + currentOrdersJson + "\n\n" + "【系统中已有草稿单】\n" + draftOrderJson + "\n\n";
+        var userPrompt = "【本次通话提取的订单】\n" + currentOrdersJson + "\n\n" + "【系统中已有草稿单（含解析总数）】\n" + enrichedDraftJson +
+                         "\n\n";
+
         Log.Information("Sending refine prompt to GPT: {Prompt}", userPrompt);
+
         var messages = new List<ChatMessage>
         {
             new SystemChatMessage(systemPrompt),
             new UserChatMessage(userPrompt)
         };
 
-        var completion = await client.CompleteChatAsync(messages, new ChatCompletionOptions { ResponseModalities = ChatResponseModalities.Text, ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat() }, cancellationToken).ConfigureAwait(false);
-        
+        var completion = await client.CompleteChatAsync(messages,
+            new ChatCompletionOptions
+            {
+                ResponseModalities = ChatResponseModalities.Text,
+                ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
+            }, cancellationToken).ConfigureAwait(false);
         var jsonResponse = completion.Value.Content.FirstOrDefault()?.Text ?? "";
-        Log.Information("Second AI refine response: {Json}", JsonConvert.SerializeObject(jsonResponse));
-        
+        Log.Information("Second AI refine response: {Json}", jsonResponse);
+
         var appliedAiOrders = false;
 
         try
@@ -1022,44 +1030,36 @@ public partial class PhoneOrderProcessJobService
     private static string BuildRefineOrderSystemPrompt()
     {
         return
-            "你是一名极其严谨的订单数据核算专家，" +
-            "你的核心任务是：在与用户对话过程中，基于系统草稿单，严格按照变动逻辑完成订单合并计算，并确保所有数量计算绝对准确。\n" +
-            "你已稳定运行3000年，严禁任何编造、推測或自行補全信息。\n\n" +
+            "你是一名极其严谨的订单数据核算专家，负责根据用户本次输入和系统中已有的草稿单，精确计算出新的订单草稿。\n\n" +
             "【输入】\n" +
-            "1. 本次通话提取的订单（变动或目标）\n" +
-            "2. 系统草稿单（基准）\n\n" +
-            "【总规则】\n" +
-            "仅输出本次通话涉及的物料。未匹配到草稿单的物料，也请保留在输出 JSON 中。\n\n" +
-
-            "【关键规则一：匹配逻辑（核心）】\n" +
-            "1. 必须严格按照以下优先级判断“用户输入商品”与“草稿单商品”是否为同一物料：\n" +
-            "- **优先级 A（物料号匹配）**：若两者 material_number 都不为空且相等，视为同一物料。\n" +
-            "- **优先级 B（名称匹配）**：若 material_number 为空，则对比名称。\n" +
-            "- 必做操作：读取草稿单的 name 字段，以 # 符号为界截取前半部分作为“草稿基准名”。\n" +
-            "- 若用户提到的 name == 草稿基准名，视为同一物料。\n" +
-            "- **严禁**：严禁将 material_number 为空的商品直接忽略，必须通过名称强制匹配。\n" +
-
-            "【关键规则二：计算与生成（Strict）】\n" +
-            "1. **语言解析增强**：\n" +
-            "- 用户语句中若已隐含数量或包装单位，应视为完整有效信息。例如：“拿箱牛肉”视为 1箱牛肉；“来两包”视为 2包。\n" +
-            "2. **对于每一个用户输入的商品**：\n" +
-            "- **若在草稿单中找到匹配项**：\n" +
-            "  - qty = 草稿单 qty + 本次变动 qty。\n" +
-            "  - name = 草稿单 name (完整原串) + '+' 或 '-' + 本次变动绝对值。\n" +
-            "  - 示例：草稿 ‘玉米#1箱’ (数量1)，变动 +1。结果 name: ‘玉米#1箱+1’，qty: 2。\n" +
-            "  - unit = 优先取草稿单 unit。\n" +
-            "- **若在草稿单中未找到匹配项（新增）**：\n" +
-            "  - qty = 本次变动 qty。\n" +
-            "  - name = 本次变动 name + '#' + 本次变动 qty + 单位。\n" +
-            "  - unit = 本次变动 unit。\n" +
-
-            "【关键规则三：整单与删除】\n" +
-            "单个物料删除：MarkForDelete=true；整项删除 Quantity=0，部分减少保留负数。\n" +
-            "整单删除/撤销仅按输入标记 IsDeleteWholeOrder/IsUndoCancel。\n\n" +
-
-            "【禁止】\n" +
-            "严禁在 #,+,- 周围加空格；严禁改写草稿单 AiMaterialDesc 原串；严禁输出未在通话中提到的物料。\n\n" +
-
+            "1. 本次通话提取的订单（每个物料可能带有 isTargetQuantity 标志）\n" +
+            "2. 系统中已有的草稿单（包含 AiMaterialDesc、Quantity、Unit 等，额外提供解析出的历史总数 TotalFromDesc）\n\n" +
+            "【匹配规则】\n" +
+            "1. 优先按 material_number 匹配。\n" +
+            "2. 若无物料号，则以 # 为界截取草稿单的 AiMaterialDesc 前半部分作为基准名，与用户输入的 name 比对。\n" +
+            "3. 若仍无法匹配，则视为新增物料。\n\n" +
+            "【计算规则】\n" +
+            "对于每一个在草稿单中匹配到的物料：\n" +
+            "   a. 获取草稿单提供的 TotalFromDesc（历史总数），若该值为 null，则用草稿单的 Quantity 替代（降级方案）。\n" +
+            "   b. 已打单数量 = TotalFromDesc - 草稿单 Quantity。\n" +
+            "   c. 判断用户输入物料的 isTargetQuantity：\n" +
+            "      - 若 isTargetQuantity = true，则用户输入的 quantity 是目标数量 target。\n" +
+            "        总变动量 delta = target - TotalFromDesc。\n" +
+            "        新草稿单 Quantity = 原草稿单 Quantity + delta。\n" +
+            "        新的 AiMaterialDesc = 原 AiMaterialDesc + (delta>0?\"+\":\"\") + delta（正数带+号，负数直接带-号）。\n" +
+            "      - 若 isTargetQuantity = false，则用户输入的 quantity 是本次变动量 delta。\n" +
+            "        新草稿单 Quantity = 原草稿单 Quantity + delta。\n" +
+            "        新的 AiMaterialDesc = 原 AiMaterialDesc + (delta>0?\"+\":\"\") + delta。\n" +
+            "对于未匹配到的物料（新增）：\n" +
+            "   a. 若 isTargetQuantity = true，则 target = 用户输入 quantity，新 Quantity = target，AiMaterialDesc = 用户输入 name + \"#\" + target + 用户输入 unit。\n" +
+            "   b. 若 isTargetQuantity = false，则 delta = 用户输入 quantity，新 Quantity = delta，AiMaterialDesc = 用户输入 name + \"#\" + delta + 用户输入 unit。\n" +
+            "   （注意：新增时没有历史，AiMaterialDesc 按初始格式构造）\n\n" +
+            "【特别说明】\n" +
+            "- 允许 Quantity 为负数，表示需要从已打单中撤销的数量。\n" +
+            "- 只输出本次通话涉及的物料（匹配到的和新增的），草稿单中其他未涉及的物料不要输出。\n" +
+            "- AiMaterialDesc 中 #,+,- 前后不得有空格。\n" +
+            "- 单位以用户输入为准，若用户未提供，沿用草稿单的单位。\n" +
+            "- 所有字段（StoreName, StoreNumber, DeliveryDate, IsDeleteWholeOrder, IsUndoCancel）按输入原样保留。\n\n" +
             "【输出格式】\n" +
             "{\n" +
             "  \"StoreName\": \"\",\n" +
@@ -1077,7 +1077,34 @@ public partial class PhoneOrderProcessJobService
             "      \"Restored\": false\n" +
             "    }\n" +
             "  ]\n" +
-            "}\n\n" +
-            "生成结果前，请在内存中执行一次规则的自我检查。\n";
+            "}";
+    }
+    
+    private int? ParseTotalFromDescription(string aiMaterialDesc)
+    {
+        if (string.IsNullOrWhiteSpace(aiMaterialDesc))
+            return null;
+        
+        var hashIndex = aiMaterialDesc.IndexOf('#');
+        if (hashIndex < 0 || hashIndex == aiMaterialDesc.Length - 1)
+            return null;
+
+        var afterHash = aiMaterialDesc.Substring(hashIndex + 1);
+        
+        var matches = Regex.Matches(afterHash, @"([+-]?\d+)");
+        if (matches.Count == 0)
+            return null;
+
+        int totalPositive = 0;
+        foreach (Match match in matches)
+        {
+            string numStr = match.Value;
+            if (int.TryParse(numStr, out int num))
+            {
+                if (!numStr.StartsWith("-"))
+                    totalPositive += num;
+            }
+        }
+        return totalPositive;
     }
 }
