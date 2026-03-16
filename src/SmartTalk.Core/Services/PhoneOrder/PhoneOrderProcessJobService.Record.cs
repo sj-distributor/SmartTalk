@@ -896,7 +896,7 @@ public partial class PhoneOrderProcessJobService
         
         var draftOrder = await _salesClient.GetAiOrderItemsByDeliveryDateAsync(new GetAiOrderItemsByDeliveryDateRequestDto { CustomerNumber = soldToId, DeliveryDate = deliveryDateInPst }, cancellationToken).ConfigureAwait(false);
         
-        Log.Information("DraftOrder: {draftOrder}", draftOrder);
+        Log.Information("DraftOrder JSON: {DraftOrderJson}", JsonConvert.SerializeObject(draftOrder, Formatting.Indented));
 
         if (draftOrder?.Data == null || !draftOrder.Data.Any())
         {
