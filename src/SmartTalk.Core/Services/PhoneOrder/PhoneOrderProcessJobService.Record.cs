@@ -922,11 +922,11 @@ public partial class PhoneOrderProcessJobService
         foreach (var order in storeOrder.Orders)
         {
             var draft = enrichedDraftItems.FirstOrDefault(d => d.MaterialNumber == order.MaterialNumber);
-            int totalFromDesc = draft?.TotalFromDesc ?? 0;
-            int quantityInDraft = draft?.Quantity ?? 0;
+            int historyQuantity = draft?.Quantity ?? 0;
 
-            int delta = order.IsTargetQuantity ? order.Quantity - totalFromDesc : order.Quantity;
-            order.DeltaForAi = delta;
+            int delta = order.IsTargetQuantity ? order.Quantity - historyQuantity : order.Quantity;
+            
+            int quantityInDraft = draft?.Quantity ?? 0;
 
             order.Quantity = quantityInDraft + delta;
             
@@ -995,6 +995,10 @@ public partial class PhoneOrderProcessJobService
                         origin.MarkForDelete = aiOrder.MarkForDelete;
                         origin.Restored = aiOrder.Restored;
                     }
+                    else
+                    {
+                        storeOrder.Orders.Add(aiOrder);
+                    }
                 }
 
                 appliedAiOrders = true;
@@ -1017,7 +1021,7 @@ public partial class PhoneOrderProcessJobService
 
         foreach (var orderItem in ordersArray.EnumerateArray())
         {
-            var name = orderItem.TryGetProperty("Name", out var n) ? n.GetString() ?? "" : "";
+            var aiMaterialDesc = orderItem.TryGetProperty("AiMaterialDesc", out var n) ? n.GetString() ?? "" : "";
             var qty = orderItem.TryGetProperty("Quantity", out var q) && q.TryGetDecimal(out var dec) ? dec : 0;
             var unit = orderItem.TryGetProperty("Unit", out var u) ? u.GetString() ?? "" : "";
             var materialNumber = orderItem.TryGetProperty("MaterialNumber", out var mn) ? mn.GetString() ?? "" : "";
@@ -1028,7 +1032,7 @@ public partial class PhoneOrderProcessJobService
             orders.Add(new ExtractedOrderItemDto
             {
                 Unit = unit,
-                AiMaterialDesc = name,
+                AiMaterialDesc = aiMaterialDesc,
                 Quantity = (int)qty,
                 MaterialNumber = materialNumber,
                 MarkForDelete = markForDelete,
