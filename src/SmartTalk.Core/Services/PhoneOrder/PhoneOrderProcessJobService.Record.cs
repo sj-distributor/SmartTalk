@@ -455,15 +455,16 @@ public partial class PhoneOrderProcessJobService
             "【訂單意圖判斷規則（非常重要）】\n" +
             "1. 如果客戶明確表示取消整張訂單、全部不要、整單取消、今天的單都不要，請在該店鋪標記 IsDeleteWholeOrder=true，orders 可以為空陣列。\n" +
             "2. 如果客戶先說取消整單，後面又表示還是要、算了繼續下單、剛剛的取消不算，請標記 IsUndoCancel=true。\n" +
-            "3. 如果客戶只取消單個物料（例如：某某不要了、某某取消、某某 cut 掉），請保留該物料，並在該物料上標記 markForDelete=true，有提到數量的話 quantity 需要用負數表示,\n" +
-            "4. 如果客戶說某某物料剛下了4箱，現在幫我改成1箱（或改成只要1箱/变成1箱/剩1箱），請保留該物料：quantity=1，並標記 isTargetQuantity=true（不要在這裡做 4-1 的計算）。\n\n" +
-            "5. 如果客戶只是增加物料数量（例如：再加2箱/多要2箱），quantity=2，isTargetQuantity=false。\n" +
-            "6. 如果客戶只是减少物料数量（例如：某某减掉一箱），quantity=-1，isTargetQuantity=false，並標記 markForDelete=true。\n" +
-            "7. 單個物料取消不等於取消整單，IsDeleteWholeOrder = false。\n" +
-            "8. 如果得到的字段restored是true，就為true，是false或者沒有得到這個字段，則為false\n" +
-            "9. 如果订单中包含明确的数量描述，即使同时出现“需要确认数量 / 数量不确定”等提示，也应先按当前报告中的数量提取。\n" +
-            "10. 如果是減少某個物料的數量，請在該物料的 quantity 使用負數表示，並要使用 markForDelete = true。\n" +
-            "11. 如果是“改成/只要/變成/剩下”目標數量語義，請務必標記 isTargetQuantity = true。\n\n"+
+            "3. 如果客戶只取消單個物料（例如：某某不要了、某某取消、某某 cut 掉，并没有提到数量），請保留該物料，並在該物料上標記 markForDelete=true，quantity為0，\n" +
+            "4. 如果客戶只取消單個物料的數量（例如：某某取消1箱、某某 cut 掉2箱，必须提到数量），請保留該物料和減少的quantity（負數表示）。\n" +
+            "5. 如果客戶說某某物料剛下了4箱，現在幫我改成1箱（或改成只要1箱/变成1箱/剩1箱），請保留該物料：quantity=1，並標記 isTargetQuantity=true（不要在這裡做 4-1 的計算）。\n\n" +
+            "6. 如果客戶只是增加物料数量（例如：再加2箱/多要2箱），quantity=2，isTargetQuantity=false。\n" +
+            "7. 如果客戶只是减少物料数量（例如：某某减掉一箱），quantity=-1（必須為負數），isTargetQuantity=false。\n" +
+            "8. 單個物料取消不等於取消整單，IsDeleteWholeOrder = false。\n" +
+            "9. 如果得到的字段restored是true，就為true，是false或者沒有得到這個字段，則為false\n" +
+            "10. 如果订单中包含明确的数量描述，即使同时出现“需要确认数量 / 数量不确定”等提示，也应先按当前报告中的数量提取。\n" +
+            "11. 如果是減少某個物料的數量，請在該物料的 quantity 使用負數表示。\n" +
+            "12. 如果是“改成/只要/變成/剩下”目標數量語義，請務必標記 isTargetQuantity = true。\n\n"+
             "請嚴格傳回一個 JSON 對象，頂層字段為 \"stores\"，每个店铺对象包含：" +
             "StoreName（可空字符串）, StoreNumber（可空字符串）, DeliveryDate（可空字符串）, " +
             "IsDeleteWholeOrder（boolean，默認 false）, IsUndoCancel（boolean，默認 false）, " +
@@ -919,36 +920,68 @@ public partial class PhoneOrderProcessJobService
             TotalFromDesc = ParseTotalFromDescription(item.AiMaterialDesc)
         }).ToList();
 
+        var fullOrders = new List<ExtractedOrderItemDto>();
+        
+        foreach (var draft in enrichedDraftItems)
+        {
+            fullOrders.Add(new ExtractedOrderItemDto
+            {
+                MaterialNumber = draft.MaterialNumber,
+                AiMaterialDesc = draft.AiMaterialDesc,
+                Quantity = draft.Quantity,
+                Unit = draft.Unit,
+                MarkForDelete = false,
+                Restored = false,
+                IsTargetQuantity = false
+            });
+        }
+
         foreach (var order in storeOrder.Orders)
         {
-            var draft = enrichedDraftItems.FirstOrDefault(d => d.MaterialNumber == order.MaterialNumber);
-            int historyQuantity = draft?.Quantity ?? 0;
+            var existing = fullOrders.FirstOrDefault(f => f.MaterialNumber == order.MaterialNumber);
 
-            int delta = order.IsTargetQuantity ? order.Quantity - historyQuantity : order.Quantity;
-            
-            int quantityInDraft = draft?.Quantity ?? 0;
-
-            order.Quantity = quantityInDraft + delta;
-            
-            string baseDesc = draft?.AiMaterialDesc ?? order.AiMaterialDesc ?? "";
-            if (delta != 0)
+            if (existing != null)
             {
-                string sign = delta > 0 ? "+" : "";
-                order.AiMaterialDesc = $"{baseDesc}{sign}{delta}";
+                int totalFromDesc = ParseTotalFromDescription(existing.AiMaterialDesc);
+                
+                int delta = order.IsTargetQuantity ? order.Quantity - totalFromDesc : order.Quantity;
+
+                if (delta != 0)
+                {
+                    string sign = delta > 0 ? "+" : "";
+                    existing.AiMaterialDesc = $"{existing.AiMaterialDesc}{sign}{delta}";
+                }
+                
+                order.Quantity = delta;
+                existing.Quantity = delta;
             }
             else
             {
-                order.AiMaterialDesc = baseDesc;
+                var baseDesc = order.AiMaterialDesc ?? "";
+                var finalDesc = $"{baseDesc}#{order.Quantity}{order.Unit}";
+
+                fullOrders.Add(new ExtractedOrderItemDto
+                {
+                    MaterialNumber = order.MaterialNumber,
+                    AiMaterialDesc = finalDesc,
+                    Quantity = order.Quantity,
+                    Unit = order.Unit,
+                    MarkForDelete = order.MarkForDelete,
+                    Restored = order.Restored,
+                    IsTargetQuantity = order.IsTargetQuantity
+                });
             }
         }
 
-        var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
+        storeOrder.Orders = fullOrders;
+
         var currentOrdersJson = JsonConvert.SerializeObject(storeOrder.Orders, Formatting.None);
         var enrichedDraftJson = JsonConvert.SerializeObject(enrichedDraftItems, Formatting.None);
 
         Log.Information("RefineOrderByAiAsync - current orders JSON: {CurrentOrdersJson}", currentOrdersJson);
         Log.Information("RefineOrderByAiAsync - enriched draft JSON: {EnrichedDraftJson}", enrichedDraftJson);
-
+        
+        var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
         var messages = new List<ChatMessage>
         {
             new SystemChatMessage(BuildRefineOrderSystemPrompt()),
@@ -965,23 +998,10 @@ public partial class PhoneOrderProcessJobService
         var jsonResponse = completion.Value.Content.FirstOrDefault()?.Text ?? "";
         Log.Information("AI refine response: {Json}", jsonResponse);
 
-        var appliedAiOrders = false;
         try
         {
             using var jsonDoc = JsonDocument.Parse(jsonResponse);
             var root = jsonDoc.RootElement;
-            
-            if (root.TryGetProperty("StoreName", out var sn))
-                storeOrder.StoreName = sn.GetString() ?? storeOrder.StoreName;
-            
-            if (root.TryGetProperty("StoreNumber", out var storeNum))
-                storeOrder.StoreNumber = storeNum.GetString() ?? storeOrder.StoreNumber;
-            
-            if (root.TryGetProperty("DeliveryDate", out var dd) && DateTime.TryParse(dd.GetString(), out var dt))
-                storeOrder.DeliveryDate = DateTime.SpecifyKind(dt, DateTimeKind.Utc);
-            
-            storeOrder.IsDeleteWholeOrder = root.TryGetProperty("IsDeleteWholeOrder", out var del) && del.GetBoolean();
-            storeOrder.IsUndoCancel = root.TryGetProperty("IsUndoCancel", out var undo) && undo.GetBoolean();
 
             if (TryReadOrders(root, out var refinedOrders))
             {
@@ -990,26 +1010,15 @@ public partial class PhoneOrderProcessJobService
                     var origin = storeOrder.Orders.FirstOrDefault(o => o.MaterialNumber == aiOrder.MaterialNumber);
                     if (origin != null)
                     {
-                        origin.Quantity = aiOrder.Quantity;
                         origin.AiMaterialDesc = aiOrder.AiMaterialDesc;
-                        origin.MarkForDelete = aiOrder.MarkForDelete;
-                        origin.Restored = aiOrder.Restored;
-                    }
-                    else
-                    {
-                        storeOrder.Orders.Add(aiOrder);
                     }
                 }
-
-                appliedAiOrders = true;
             }
         }
         catch (Exception ex)
         {
-            Log.Warning("AI JSON parse failed, fallback to original: {Message}", ex.Message);
+            Log.Warning("AI JSON parse failed, fallback to original AiMaterialDesc: {Message}", ex.Message);
         }
-
-        if (!appliedAiOrders) storeOrder.Orders = storeOrder.Orders;
     }
 
     private static bool TryReadOrders(JsonElement root, out List<ExtractedOrderItemDto> orders)

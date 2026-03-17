@@ -10,29 +10,15 @@ namespace SmartTalk.UnitTests.Services.PhoneOrder;
 public class PhoneOrderRefinePromptTests
 {
     [Fact]
-    public void BuildRefineOrderSystemPrompt_ShouldContainCriticalRules()
-    {
-        var prompt = InvokePrivateStatic<string>("BuildRefineOrderSystemPrompt");
-
-        prompt.ShouldContain("【总规则】", Case.Sensitive);
-        prompt.ShouldContain("仅输出本次通话涉及的物料", Case.Sensitive);
-        prompt.ShouldContain("【关键规则一：匹配逻辑（核心）】", Case.Sensitive);
-        prompt.ShouldContain("material_number", Case.Sensitive);
-        prompt.ShouldContain("草稿基准名", Case.Sensitive);
-        prompt.ShouldContain("【关键规则三：整单与删除】", Case.Sensitive);
-        prompt.ShouldContain("严禁输出未在通话中提到的物料", Case.Sensitive);
-    }
-
-    [Fact]
     public void BuildRefineOrderSystemPrompt_ShouldContainExamplesAndOutputSchema()
     {
         var prompt = InvokePrivateStatic<string>("BuildRefineOrderSystemPrompt");
 
-        prompt.ShouldContain("玉米#1箱+1", Case.Sensitive);
-        prompt.ShouldContain("qty = 草稿单 qty + 本次变动 qty", Case.Sensitive);
         prompt.ShouldContain("【输出格式】", Case.Sensitive);
         prompt.ShouldContain("\"Orders\"", Case.Sensitive);
-        prompt.ShouldContain("严禁改写草稿单 AiMaterialDesc 原串", Case.Sensitive);
+        prompt.ShouldContain("\"AiMaterialDesc\"", Case.Sensitive);
+        prompt.ShouldContain("Quantity 已在 C# 端计算", Case.Sensitive);
+        prompt.ShouldContain("#,+,- 前后不得有空格", Case.Sensitive);
     }
 
     private static T InvokePrivateStatic<T>(string methodName, params object[] args)
