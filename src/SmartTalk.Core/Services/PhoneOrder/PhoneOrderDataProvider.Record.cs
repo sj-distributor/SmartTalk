@@ -16,6 +16,8 @@ using SmartTalk.Messages.Enums;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.Pos;
 using SmartTalk.Messages.Enums.Sales;
+using SmartTalk.Messages.Enums.Sales;
+using SmartTalk.Messages.Enums.Pos;
 using SmartTalk.Messages.Enums.STT;
 
 namespace SmartTalk.Core.Services.PhoneOrder;
@@ -73,6 +75,14 @@ public partial interface IPhoneOrderDataProvider
 
     Task UpdatePhoneOrderRecordReportsAsync(List<PhoneOrderRecordReport> reports, bool forceSave = true, CancellationToken cancellationToken = default);
     
+    Task<int?> GetLatestPhoneOrderRecordIdAsync(int agentId, int assistantId, string currentSessionId, CancellationToken cancellationToken);
+    
+    Task UpdateOrderIdAsync(int recordId, Guid orderId, CancellationToken cancellationToken);
+
+    Task MarkRecordCompletedAsync(int recordId, CancellationToken cancellationToken = default);
+
+    Task<List<string>> GetTranscriptionTextsAsync(int assistantId, int recordId, DateTimeOffset utcStart, DateTimeOffset utcEnd, CancellationToken cancellationToken);
+    
     Task<PhoneOrderRecordScenarioHistory> AddPhoneOrderRecordScenarioHistoryAsync(PhoneOrderRecordScenarioHistory scenarioHistory, bool forceSave = true, CancellationToken cancellationToken = default);
 
     Task<List<PhoneOrderRecordScenarioHistory>> GetPhoneOrderRecordScenarioHistoryAsync(int recordId, CancellationToken cancellationToken = default);
@@ -82,12 +92,6 @@ public partial interface IPhoneOrderDataProvider
     Task<List<SimplePhoneOrderRecordDto>> GetSimplePhoneOrderRecordsAsync(List<int> agentIds, CancellationToken cancellationToken);
 
     Task AddPhoneOrderReservationInformationAsync(PhoneOrderReservationInformation information, bool forceSave = true, CancellationToken cancellationToken = default);
-
-    Task<int?> GetLatestPhoneOrderRecordIdAsync(int agentId, int assistantId, string currentSessionId, CancellationToken cancellationToken);
-    
-    Task UpdateOrderIdAsync(int recordId, Guid orderId, CancellationToken cancellationToken);
-
-    Task MarkRecordCompletedAsync(int recordId, CancellationToken cancellationToken = default);
 
     Task<List<int>> GetPhoneOrderReservationInfoUnreviewedRecordIdsAsync(List<int> recordIds, CancellationToken cancellationToken);
     
@@ -106,8 +110,6 @@ public partial interface IPhoneOrderDataProvider
     Task<(int, int)> GetAllOrUnreadWaitingProcessingEventsAsync(List<int> agentIds, List<TaskType> taskTypes = null, CancellationToken cancellationToken = default);
 
     Task<PhoneOrderRecordReport> GetOriginalPhoneOrderRecordReportAsync(int recordId, CancellationToken cancellationToken);
-
-    Task<List<string>> GetTranscriptionTextsAsync(int assistantId, int recordId, DateTimeOffset utcStart, DateTimeOffset utcEnd, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderDataProvider
