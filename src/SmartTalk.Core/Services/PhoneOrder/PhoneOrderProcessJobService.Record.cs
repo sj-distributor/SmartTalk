@@ -932,8 +932,10 @@ public partial class PhoneOrderProcessJobService
             "  - Name 仍需按照规则二生成（例如：\"鸡胸肉#2箱-2\"）。\n" +
             "  - quantity 设为 0（除非是部分减少，非清零）。\n\n\n" +
             
-            "【关键规则四：未变动保留】\n" +
-            "   - 遍历完所有变动后，检查草稿单中未被匹配的剩余物料：**直接保留**。：\n" +
+            "【关键规则四：未变动的保留与去除】\n" +
+            "   - 遍历完所有变动后，检查草稿单中未被匹配的剩余物料：\n" +
+            "       - 如果该剩余的物料 quantity 不为0， **直接保留**\n" +
+            "       - 如果该剩余的物料 quantity 为0， **去除该物料的数据，不要保留**\n" +
             "   - Name = 原始 AiMaterialDesc（不加任何后缀）。\n" +
             "   - Quantity = 原始 MaterialQuantity。\n\n" +
             
