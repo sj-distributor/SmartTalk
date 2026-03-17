@@ -423,8 +423,8 @@ public partial class PhoneOrderProcessJobService
         }
     }
 
-     private async Task HandleSalesScenarioAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, PhoneOrderRecord record, CancellationToken cancellationToken)
-    { 
+    private async Task HandleSalesScenarioAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, PhoneOrderRecord record, CancellationToken cancellationToken)
+    {
         if (string.IsNullOrEmpty(record.TranscriptionText)) return;
 
         var soldToIds = new List<string>(); 
@@ -464,63 +464,66 @@ public partial class PhoneOrderProcessJobService
         var materialListText = string.Join("\n", historyItems.Select(x => $"{x.MaterialDesc} ({x.Material})【{x.invoiceDate}】"));
 
         var systemPrompt =
-                "你是一名訂單分析助手。請從下面的客戶分析報告文字中提取所有下單的物料名稱、數量、單位，並且用歷史物料列表盡力匹配每個物料的materialNumber。" +
-                "如果報告中提到了預約送貨時間，請提取送貨時間（格式yyyy-MM-dd），如果說了明天送貨，則不需要填寫。" +
-                "如果客戶提到了分店名，請提取 StoreName；如果提到第幾家店，請提取 StoreNumber。\n" +
-
-                "【訂單意圖判斷規則（非常重要）】\n" +
-                "1. 如果客戶明確表示取消整張訂單、全部不要、整單取消、今天的單都不要，請在該店鋪標記 IsDeleteWholeOrder=true，orders 可以為空陣列。\n" +
-                "2. 如果客戶先說取消整單，後面又表示還是要、算了繼續下單、剛剛的取消不算，請標記 IsUndoCancel=true。\n" +
-                "3. 如果客戶只取消單個物料（例如：某某不要了、某某取消、某某 cut 掉），請保留該物料，並在該物料上標記 markForDelete=true，有提到數量的話 quantity 需要用負數表示,\n" +
-                "4. 如果客戶說某某物料剛下了4箱，現在幫我改成1箱，請保留該物料，你只需要做個簡單計算（4箱-1箱）生成quantity為-3箱，其他都不需要标记，也不要另外去多加一個物料\n\n" +
-                "5. 如果客戶只是减少物料数量（例如：某某减掉一箱），請保留該物料，只需要在 quantity 用負數表示减少的物料数量,其他都不需要标记\n" +
-                "6. 單個物料取消不等於取消整單，IsDeleteWholeOrder = false。\n" +
-                "7. 如果得到的字段restored是true，就為true，是false或者沒有得到這個字段，則為false\n" +
-                "8. 如果订单中包含明确的数量描述，即使同时出现“需要确认数量 / 数量不确定”等提示，也应先按当前报告中的数量提取。\n" +
-                "9. 如果是減少某個物料的數量，請在該物料的 quantity 使用負數表示，並要使用 markForDelete = true。\n\n" +
-
-                "請嚴格傳回一個 JSON 對象，頂層字段為 \"stores\"，每个店铺对象包含：" +
-                "StoreName（可空字符串）, StoreNumber（可空字符串）, DeliveryDate（可空字符串）, " +
-                "IsDeleteWholeOrder（boolean，默認 false）, IsUndoCancel（boolean，默認 false）, " +
-                "orders（数组，元素包含 name, quantity, unit, materialNumber, markForDelete）。\n" +
-
-                "範例：\n" +
-                "{\n" +
-                "  \"stores\": [\n" +
-                "    {\n" +
-                "      \"StoreName\": \"HaiDiLao\",\n" +
-                "      \"StoreNumber\": \"1\",\n" +
-                "      \"DeliveryDate\": \"2025-08-20\",\n" +
-                "      \"IsDeleteWholeOrder\": false,\n" +
-                "      \"IsUndoCancel\": false,\n" +
-                "      \"orders\": [\n" +
-                "        {\n" +
-                "          \"name\": \"雞胸肉\",\n" +
-                "          \"quantity\": 1,\n" +
-                "          \"unit\": \"箱\",\n" +
-                "          \"materialNumber\": \"000000000010010253\",\n" +
-                "          \"markForDelete\": false,\n" +
-                "          \"restored\": false\n" +
-                "        }\n" +
-                "      ]\n" +
-                "    }\n" +
-                "  ]\n" +
-                "}\n" +
-
-                "歷史物料列表：\n" + materialListText + "\n\n" +
-
-                "每個物料的格式為「物料名稱（物料號碼）」，部分物料會包含日期。\n" +
-                "當有多個相似的物料名稱時，請根據以下規則選擇匹配的物料號碼：\n" +
-                "1. **優先選擇沒有日期的物料。**\n" +
-                "2. 如果所有相似物料都有日期，請選擇日期 **最新** 的那個物料。\n\n" +
-
-                "注意：\n" +
-                "1. 必須嚴格輸出 JSON，物件頂層字段必須是 \"stores\"，不要有其他字段或額外說明。\n" +
-                "2. 提取的物料名稱需要為繁體中文。\n" +
-                "3. 如果沒有提到店鋪信息，但有下單內容，StoreName 和 StoreNumber 可為空值，orders 要正常提取。\n" +
-                "4. **如果客戶分析文本中沒有任何可識別的下單信息，請返回：{ \"stores\": [] }。不得臆造或猜測物料。**\n" +
-                "5. 請務必完整提取報告中每一個提到的物料，如果没有匹配上歷史物料列表的物料，不知道它的materialNumber，那也必須保留該物料的quantity以及name。\n" +
-                "6. 生成的json請不要重複物料名";
+            "你是一名訂單分析助手。請從下面的客戶分析報告文字中提取所有下單的物料名稱、數量、單位，並且用歷史物料列表盡力匹配每個物料的materialNumber。" +
+            "如果報告中提到了預約送貨時間，請提取送貨時間（格式yyyy-MM-dd），如果說了明天送貨，則不需要填寫。" +
+            "如果客戶提到了分店名，請提取 StoreName；如果提到第幾家店，請提取 StoreNumber。\n" +
+            
+            "【訂單意圖判斷規則（非常重要）】\n" +
+            "1. 如果客戶明確表示取消整張訂單、全部不要、整單取消、今天的單都不要，請在該店鋪標記 IsDeleteWholeOrder=true，orders 可以為空陣列。\n" +
+            "2. 如果客戶先說取消整單，後面又表示還是要、算了繼續下單、剛剛的取消不算，請標記 IsUndoCancel=true。\n" +
+            "3. 如果客戶只取消單個物料（例如：某某不要了、某某取消、某某 cut 掉，并没有提到数量），請保留該物料，並在該物料上標記 markForDelete=true，quantity為0，\n" +
+            "4. 如果客戶只取消單個物料的數量（例如：某某取消1箱、某某 cut 掉2箱，必须提到数量），請保留該物料和減少的quantity（負數表示）。\n" +
+            "5. 如果客戶說某某物料剛下了4箱，現在幫我改成1箱（或改成只要1箱/变成1箱/剩1箱），請保留該物料：quantity=1，並標記 isTargetQuantity=true（不要在這裡做 4-1 的計算）。\n\n" +
+            "6. 如果客戶只是增加物料数量（例如：再加2箱/多要2箱），quantity=2，isTargetQuantity=false。\n" +
+            "7. 如果客戶只是减少物料数量（例如：某某减掉一箱），quantity=-1（必須為負數），isTargetQuantity=false。\n" +
+            "8. 單個物料取消不等於取消整單，IsDeleteWholeOrder = false。\n" +
+            "9. 如果得到的字段restored是true，就為true，是false或者沒有得到這個字段，則為false\n" +
+            "10. 如果订单中包含明确的数量描述，即使同时出现“需要确认数量 / 数量不确定”等提示，也应先按当前报告中的数量提取。\n" +
+            "11. 如果是減少某個物料的數量，請在該物料的 quantity 使用負數表示。\n" +
+            "12. 如果是“改成/只要/變成/剩下”目標數量語義，請務必標記 isTargetQuantity = true。\n\n" +
+            
+            "請嚴格傳回一個 JSON 對象，頂層字段為 \"stores\"，每个店铺对象包含：" +
+            "StoreName（可空字符串）, StoreNumber（可空字符串）, DeliveryDate（可空字符串）, " +
+            "IsDeleteWholeOrder（boolean，默認 false）, IsUndoCancel（boolean，默認 false）, " +
+            "orders（数组，元素包含 name, quantity, unit, materialNumber, markForDelete）。\n" +
+            
+            "範例：\n" +
+            "{\n" +
+            "  \"stores\": [\n" +
+            "    {\n" +
+            "      \"StoreName\": \"HaiDiLao\",\n" +
+            "      \"StoreNumber\": \"1\",\n" +
+            "      \"DeliveryDate\": \"2025-08-20\",\n" +
+            "      \"IsDeleteWholeOrder\": false,\n" +
+            "      \"IsUndoCancel\": false,\n" +
+            "      \"orders\": [\n" +
+            "        {\n" +
+            "          \"name\": \"雞胸肉\",\n" +
+            "          \"quantity\": 1,\n" +
+            "          \"unit\": \"箱\",\n" +
+            "          \"materialNumber\": \"000000000010010253\",\n" +
+            "          \"markForDelete\": false,\n" +
+            "          \"isTargetQuantity\": false,\n" +
+            "          \"restored\": false\n" +
+            "        }\n" +
+            "      ]\n" +
+            "    }\n" +
+            "  ]\n" +
+            "}\n" +
+            "歷史物料列表：\n" + materialListText + "\n\n" +
+            "每個物料的格式為「物料名稱（物料號碼）」，部分物料會包含日期。\n" +
+            "當有多個相似的物料名稱時，請根據以下規則選擇匹配的物料號碼：\n" +
+            "1. **優先選擇沒有日期的物料。**\n" +
+            "2. 如果所有相似物料都有日期，請選擇日期 **最新** 的那個物料。\n\n" +
+            
+            "注意：\n" +
+            "1. 必須嚴格輸出 JSON，物件頂層字段必須是 \"stores\"，不要有其他字段或額外說明。\n" +
+            "2. 提取的物料名稱需要為繁體中文。\n" +
+            "3. 如果沒有提到店鋪信息，但有下單內容，StoreName 和 StoreNumber 可為空值，orders 要正常提取。\n" +
+            "4. **如果客戶分析文本中沒有任何可識別的下單信息，請返回：{ \"stores\": [] }。不得臆造或猜測物料。**\n" +
+            "5. 請務必完整提取報告中每一個提到的物料，如果没有匹配上歷史物料列表的物料，不知道它的materialNumber，那也必須保留該物料的quantity以及name。\n" +
+            "6. 生成的json請不要重複物料名\n" +
+            "7. 如果客戶說“改成只要1箱”但未提到之前下了多少，仍然要標記 isTargetQuantity=true。";
         Log.Information("Sending prompt to GPT: {Prompt}", systemPrompt);
 
         var messages = new List<ChatMessage>
@@ -562,6 +565,7 @@ public partial class PhoneOrderProcessJobService
                         var materialNumber = orderItem.TryGetProperty("materialNumber", out var mn) ? mn.GetString() ?? "" : ""; 
                         var markForDelete = orderItem.TryGetProperty("markForDelete", out var md) && md.GetBoolean();
                         var restored = orderItem.TryGetProperty("restored", out var rd) && rd.GetBoolean();
+                        var isTargetQuantity = orderItem.TryGetProperty("isTargetQuantity", out var itq) && itq.GetBoolean();
 
                         if (string.IsNullOrWhiteSpace(materialNumber))
                             materialNumber = MatchMaterialNumber(name, materialNumber, unit, historyItems);
@@ -573,7 +577,8 @@ public partial class PhoneOrderProcessJobService
                             Quantity = (int)qty,
                             MarkForDelete = markForDelete,
                             MaterialNumber = materialNumber,
-                            Restored = restored
+                            Restored = restored,
+                            IsTargetQuantity = isTargetQuantity
                         });
                     } 
                 }
@@ -847,172 +852,95 @@ public partial class PhoneOrderProcessJobService
     private async Task RefineOrderByAiAsync(ExtractedOrderDto storeOrder, string soldToId, CancellationToken cancellationToken)
     {
         var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
-        var deliveryDateInPst = TimeZoneInfo.ConvertTime(storeOrder.DeliveryDate, pacificZone);
-
+        var deliveryDateInPst = TimeZoneInfo.ConvertTime(storeOrder.DeliveryDate, pacificZone); 
+        
         var draftOrder = await _salesClient.GetAiOrderItemsByDeliveryDateAsync(new GetAiOrderItemsByDeliveryDateRequestDto { CustomerNumber = soldToId, DeliveryDate = deliveryDateInPst }, cancellationToken).ConfigureAwait(false);
+        
+        var hasDraftOrder = draftOrder?.Data != null && draftOrder.Data.Any();
 
-        if (draftOrder?.Data == null || !draftOrder.Data.Any())
+        if (!hasDraftOrder)
         {
-            Log.Information("Skip RefineOrderByAiAsync: no draft order. SoldToId={SoldToId}, DeliveryDate={DeliveryDate}", soldToId, storeOrder.DeliveryDate);
+            Log.Information("Skip RefineOrderByAiAsync: no draft order and no today reports. SoldToId={SoldToId}, DeliveryDate={DeliveryDate}", soldToId, storeOrder.DeliveryDate);
             return;
         }
         
-        var enrichedDraftItems = draftOrder.Data.Select(item => new
-        {
-            item.MaterialNumber,
-            item.AiMaterialDesc,
-            Quantity = item.MaterialQuantity,
-            Unit = item.AiUnit,
-            TotalFromDesc = ParseTotalFromDescription(item.AiMaterialDesc)
-        }).ToList();
-
-        foreach (var order in storeOrder.Orders)
-        {
-            var draft = enrichedDraftItems.FirstOrDefault(d => d.MaterialNumber == order.MaterialNumber);
-            int totalFromDesc = draft?.TotalFromDesc ?? 0;
-            int quantityInDraft = draft?.Quantity ?? 0;
-
-            int delta = order.IsTargetQuantity ? order.Quantity - totalFromDesc : order.Quantity;
-            order.DeltaForAi = delta;
-
-            order.Quantity = quantityInDraft + delta;
-
-            if (delta != 0)
-            {
-                string sign = delta > 0 ? "+" : "";
-                order.AiMaterialDesc = $"{draft.AiMaterialDesc}{sign}{delta}";
-            }
-            else
-            {
-                order.AiMaterialDesc = draft?.AiMaterialDesc ?? order.AiMaterialDesc;
-            }
-        }
-
         var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
-        var currentOrdersJson = JsonConvert.SerializeObject(storeOrder.Orders, Formatting.None);
-        var enrichedDraftJson = JsonConvert.SerializeObject(enrichedDraftItems, Formatting.None);
 
-        Log.Information("RefineOrderByAiAsync - current orders JSON: {CurrentOrdersJson}", currentOrdersJson);
-        Log.Information("RefineOrderByAiAsync - enriched draft JSON: {EnrichedDraftJson}", enrichedDraftJson);
-
-        var messages = new List<ChatMessage>
-        {
-            new SystemChatMessage(BuildRefineOrderSystemPrompt()),
-            new UserChatMessage("【本次通话订单】\n" + currentOrdersJson + "\n\n【草稿单】\n" + enrichedDraftJson)
-        };
-
-        var completion = await client.CompleteChatAsync(messages,
-            new ChatCompletionOptions
+        var currentOrdersJson = JsonSerializer.Serialize(storeOrder.Orders);
+        
+        var enrichedDraftOrder = draftOrder?.Data?
+            .Select(item => new
             {
-                ResponseModalities = ChatResponseModalities.Text,
-                ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
-            }, cancellationToken);
+                item.MaterialNumber,
+                item.AiMaterialDesc,
+                Quantity = item.MaterialQuantity,
+                Unit = item.AiUnit,
+                OriginalQuantity = ParseOriginalQuantity(item.AiMaterialDesc)
+            })
+            .Cast<object>()
+            .ToList() ?? new List<object>();
 
-        var jsonResponse = completion.Value.Content.FirstOrDefault()?.Text ?? "";
-        Log.Information("AI refine response: {Json}", jsonResponse);
+        var draftOrderJson = JsonSerializer.Serialize(enrichedDraftOrder);
 
-        var appliedAiOrders = false;
-        try
-        {
-            using var jsonDoc = JsonDocument.Parse(jsonResponse);
-            var root = jsonDoc.RootElement;
-            if (root.TryGetProperty("StoreName", out var sn))
-                storeOrder.StoreName = sn.GetString() ?? storeOrder.StoreName;
-            if (root.TryGetProperty("StoreNumber", out var storeNum))
-                storeOrder.StoreNumber = storeNum.GetString() ?? storeOrder.StoreNumber;
-            if (root.TryGetProperty("DeliveryDate", out var dd) && DateTime.TryParse(dd.GetString(), out var dt))
-                storeOrder.DeliveryDate = DateTime.SpecifyKind(dt, DateTimeKind.Utc);
-            storeOrder.IsDeleteWholeOrder = root.TryGetProperty("IsDeleteWholeOrder", out var del) && del.GetBoolean();
-            storeOrder.IsUndoCancel = root.TryGetProperty("IsUndoCancel", out var undo) && undo.GetBoolean();
-
-            if (TryReadOrders(root, out var refinedOrders))
-            {
-                foreach (var aiOrder in refinedOrders)
-                {
-                    var origin = storeOrder.Orders.FirstOrDefault(o => o.MaterialNumber == aiOrder.MaterialNumber);
-                    if (origin != null)
-                    {
-                        int historyTotal = ParseTotalFromDescription(origin.AiMaterialDesc);
-                        
-                        int deltaForDesc = origin.Quantity - historyTotal;
-
-                        if (deltaForDesc != 0)
-                        {
-                            string sign = deltaForDesc > 0 ? "+" : "";
-                            origin.AiMaterialDesc = $"{origin.AiMaterialDesc}{sign}{deltaForDesc}";
-                        }
-                    }
-                }
-
-                appliedAiOrders = true;
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Warning("AI JSON parse failed, fallback to original: {Message}", ex.Message);
-        }
-
-        if (!appliedAiOrders) storeOrder.Orders = storeOrder.Orders;
-    }
-
-    private static bool TryReadOrders(JsonElement root, out List<ExtractedOrderItemDto> orders)
-    {
-        orders = new List<ExtractedOrderItemDto>();
-
-        if (!TryGetOrdersArray(root, out var ordersArray))
-            return false;
-
-        foreach (var orderItem in ordersArray.EnumerateArray())
-        {
-            var name = orderItem.TryGetProperty("Name", out var n) ? n.GetString() ?? "" : "";
-            var qty = orderItem.TryGetProperty("Quantity", out var q) && q.TryGetDecimal(out var dec) ? dec : 0;
-            var unit = orderItem.TryGetProperty("Unit", out var u) ? u.GetString() ?? "" : "";
-            var materialNumber = orderItem.TryGetProperty("MaterialNumber", out var mn) ? mn.GetString() ?? "" : "";
-            var markForDelete = orderItem.TryGetProperty("MarkForDelete", out var md) && md.GetBoolean();
-            var restored = orderItem.TryGetProperty("Restored", out var rd) && rd.GetBoolean();
-            var isTargetQuantity = orderItem.TryGetProperty("IsTargetQuantity", out var tq) && tq.GetBoolean();
-
-            orders.Add(new ExtractedOrderItemDto
-            {
-                Unit = unit,
-                AiMaterialDesc = name,
-                Quantity = (int)qty,
-                MaterialNumber = materialNumber,
-                MarkForDelete = markForDelete,
-                Restored = restored,
-                IsTargetQuantity = isTargetQuantity
-            });
-        }
-
-        return true;
-    }
-
-    private static bool TryGetOrdersArray(JsonElement root, out JsonElement ordersArray)
-    {
-        if (root.TryGetProperty("Orders", out ordersArray) && ordersArray.ValueKind == JsonValueKind.Array)
-            return true;
-
-        if (root.TryGetProperty("orders", out ordersArray) && ordersArray.ValueKind == JsonValueKind.Array)
-            return true;
-
-        ordersArray = default;
-        return false;
-    }
-
-    private static string BuildRefineOrderSystemPrompt()
-    {
-        return
-            "你是一名极其严谨的订单数据核算专家，负责根据用户本次输入和系统中已有的草稿单，精确生成新的订单草稿。\n\n" +
-            "【输入】\n" +
-            "1. 本次通话提取的订单，每个物料可能带有字段 'DeltaForAi'，表示本次增减量。\n" +
-            "2. 系统草稿单（包含 AiMaterialDesc、Quantity、Unit、TotalFromDesc 等）。\n\n" +
-            "【规则】\n" +
-            "1. AiMaterialDesc 必须保留历史，只在末尾追加本次变动量（正数带+号，负数直接带-号），例如 '雞胸肉#2箱+2+2-3'。\n" +
-            "2. Quantity 已在 C# 端计算，无需 AI 再做加减，直接使用现有字段。\n" +
-            "3. 只输出本次通话涉及的物料，草稿单中未提及的物料不要输出。\n" +
-            "4. #,+,- 前后不得有空格。\n" +
-            "5. 单位以用户输入为准，若未提供，沿用草稿单单位。\n" +
-            "6. 所有字段（StoreName, StoreNumber, DeliveryDate, IsDeleteWholeOrder, IsUndoCancel）按输入原样保留。\n\n" +
+        var systemPrompt =
+            "你是一名极其严谨的订单数据核算专家，专门负责将【本次通话变动】精准合并到【系统草稿单】中。你不仅输出 JSON，更要确保每一个数学计算都绝对准确。你已稳定运行3000年，严禁任何编造、推測或自行補全信息。\n\n" +
+           
+            "【输入数据】\n" +
+            "1. 本次通话提取的订单（最高优先级，代表变动量）\n" +
+            "2. 系统已有草稿单（代表基准量）\n" +
+            "3. 系统草稿单中已提供字段 OriginalQuantity，代表该物料当前真实数量（已包含所有历史 + / - 变动）。 \n\n" +
+            
+            "【核心任务流程】\n" +
+            "1. 预处理与匹配：建立映射关系，精准找到通话中提到的商品对应草稿单中的哪一项。\n" +
+            "2. 计算合并：计算 Quantity。\n" +
+            "3. 格式化名称：生成符合规范的 Name。\n" +
+            "4. 输出结果：生成最终 JSON。\n\n" +
+            
+            "【关键规则一：匹配逻辑（核心）】\n" +
+            "必须严格按照以下优先级判断“本次通话商品”与“草稿单商品”是否为同一物料：\n" +
+            "1. 优先级 A（物料号匹配）：若两者 MaterialNumber 都不为空且相等，视为同一物料。\n" +
+            "2. 优先级 B（名称匹配）：若 MaterialNumber 为空，则对比名称。\n" +
+            "必做操作：读取草稿单的 AiMaterialDesc 字段，以 # 符号为界截取前半部分作为“草稿基准名”（例如 \"玉米#1箱\" -> 基准名为 \"玉米\"）。\n" +
+            "若 通话中的 Name == 草稿基准名，视为同一物料。\n" +
+            "  - **严禁**：严禁将 material_number 为空的商品直接忽略，必须通过名称强制匹配。\n" +
+            
+            "【关键规则二：计算与生成（Strict）】\n" +
+            " **对于每一个用户输入的商品**：\n" +
+            "- **若在草稿单中找到匹配项**：\n" +
+            " - **计算变动值（quantity）**：\n" +
+            "   - **情况A：历史物料的加减操作（如“1”、“-2”）**：\n" +
+            "      - quantity = 草稿单quantity + 本次变动数量（例如：1则为1，少2则为-2）\n\n" +
+            "   - **情况B：直接指定（IsTargetQuantity 为 true）**：" +
+            "      - quantity = 指定数量 - OriginalQuantity。（例如：原4改为1，则quantity = 1 - 4 = -3）\n\n" +
+            
+            "  - **生成结果**：\n\n" +
+            "    - name = 草稿单 name (完整原串) + (quantity > 0 ? \"+\" : \"\") + quantity。\n\n" +
+            "    - 注意：name 必须如实记录每次变动轨迹，例如 \"玉米#1箱+1-3\"。\n" +
+            "    - unit = 优先取草稿单 unit。\n\n" +
+            "  - **若在草稿单中未找到匹配项（新增）**：\n" +
+            "    - quantity = 本次变动数量\n\n" +
+            "    - name = 本次变动 name + \"#\" + 本次变动数量 + 单位。\n" +
+            "    - 注意：新增项不需要 +号后缀，而是直接生成标准格式（如 玉米#1箱）。\n" +
+            "    - unit = 本次变动 unit。\n\n" +
+            
+            "【关键规则三：整单与删除】\n" +
+            "1. IsDeleteWholeOrder：仅当输入明确标记为 true 时才为 true，且 Orders 必须为空。\n" +
+            "2. IsUndoCancel：同上。\n" +
+            "3. 单个删除：\n" +
+            "- 若本次通话 MarkForDelete 为 true，或明确表达整项取消/不要该物料：\n" +
+            "  - 设置 MarkForDelete = true。\n" +
+            "  - Name 仍需按照规则二生成（例如：\"鸡胸肉#2箱-2\"）。\n" +
+            "  - quantity 设为 0（除非是部分减少，非清零）。\n\n\n" +
+            
+            "【关键规则四：未变动保留】\n" +
+            "   - 遍历完所有变动后，检查草稿单中未被匹配的剩余物料：**直接保留**。：\n" +
+            "   - Name = 原始 AiMaterialDesc（不加任何后缀）。\n" +
+            "   - Quantity = 原始 MaterialQuantity。\n\n" +
+            
+            " 【严禁行为】：\n"+
+            "  - 严禁在 #, +, - 前后加空格。\n" +
+            "  - 严禁直接照抄本次变动值作为最终 quantity（必须做加法）。\n" +
+            
             "【输出格式】\n" +
             "{\n" +
             "  \"StoreName\": \"\",\n" +
@@ -1027,32 +955,115 @@ public partial class PhoneOrderProcessJobService
             "      \"MaterialNumber\": \"string\",\n" +
             "      \"Unit\": \"string\",\n" +
             "      \"MarkForDelete\": false,\n" +
-            "      \"Restored\": false,\n" +
-            "      \"AiMaterialDesc\": \"string\"\n" +
+            "      \"Restored\": false\n" +
             "    }\n" +
             "  ]\n" +
             "}\n\n" +
-            "请严格按照 JSON 格式输出结果（json）。" +
-            "AI只负责生成 AiMaterialDesc 字段。其他字段（Quantity、Unit、MarkForDelete、Restored等）由系统计算，AI不得修改。";
+            "生成结果前，请在内存中执行一次规则的自我检查。\n";
+        
+        var userPrompt = "【本次通话提取的订单】\n" + currentOrdersJson + "\n\n" + "【系统中已有草稿单】\n" + draftOrderJson + "\n\n";
+        Log.Information("Sending refine prompt to GPT: {Prompt}", userPrompt);
+        var messages = new List<ChatMessage>
+        {
+            new SystemChatMessage(systemPrompt),
+            new UserChatMessage(userPrompt)
+        };
+
+        var completion = await client.CompleteChatAsync(messages, new ChatCompletionOptions { ResponseModalities = ChatResponseModalities.Text, ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat() }, cancellationToken).ConfigureAwait(false);
+        
+        var jsonResponse = completion.Value.Content.FirstOrDefault()?.Text ?? "";
+        Log.Information("Second AI refine response: {Json}", jsonResponse);
+        
+        try
+        {
+            using var jsonDoc = JsonDocument.Parse(jsonResponse);
+            var root = jsonDoc.RootElement;
+
+            if (root.TryGetProperty("StoreName", out var sn))
+                storeOrder.StoreName = sn.GetString() ?? storeOrder.StoreName;
+
+            if (root.TryGetProperty("StoreNumber", out var storeNum))
+                storeOrder.StoreNumber = storeNum.GetString() ?? storeOrder.StoreNumber;
+
+            if (root.TryGetProperty("DeliveryDate", out var dd) && DateTime.TryParse(dd.GetString(), out var dt))
+                storeOrder.DeliveryDate = DateTime.SpecifyKind(dt, DateTimeKind.Utc);
+
+            storeOrder.IsDeleteWholeOrder = root.TryGetProperty("IsDeleteWholeOrder", out var del) && del.GetBoolean();
+
+            storeOrder.IsUndoCancel = root.TryGetProperty("IsUndoCancel", out var undo) && undo.GetBoolean();
+
+            if (root.TryGetProperty("Orders", out var ordersArray) && ordersArray.ValueKind == JsonValueKind.Array)
+            {
+                storeOrder.Orders.Clear();
+
+                foreach (var orderItem in ordersArray.EnumerateArray())
+                {
+                    var name = orderItem.TryGetProperty("Name", out var n) ? n.GetString() ?? "" : "";
+                    var unit = orderItem.TryGetProperty("Unit", out var u) ? u.GetString() ?? "" : "";
+                    var materialNumber = orderItem.TryGetProperty("MaterialNumber", out var m)
+                        ? m.GetString() ?? ""
+                        : "";
+
+                    var quantity = 0;
+                    if (orderItem.TryGetProperty("Quantity", out var q))
+                    {
+                        if (q.ValueKind == JsonValueKind.Number)
+                            quantity = q.GetInt32();
+                        else if (q.ValueKind == JsonValueKind.String &&
+                                 int.TryParse(q.GetString(), out var parsed))
+                            quantity = parsed;
+                    }
+
+                    var markForDelete =
+                        orderItem.TryGetProperty("MarkForDelete", out var d) && d.GetBoolean();
+
+                    var restored =
+                        orderItem.TryGetProperty("Restored", out var r) && r.GetBoolean();
+
+                    storeOrder.Orders.Add(new ExtractedOrderItemDto
+                    {
+                        AiMaterialDesc = name,
+                        Quantity = quantity,
+                        Unit = unit,
+                        MaterialNumber = materialNumber,
+                        MarkForDelete = markForDelete,
+                        Restored = restored
+                    });
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warning("第二次模型解析失败，保留第一次模型结果: {Message}", ex.Message);
+        }
     }
     
-    private int ParseTotalFromDescription(string aiMaterialDesc)
+    private int ParseOriginalQuantity(string aiMaterialDesc)
     {
         if (string.IsNullOrWhiteSpace(aiMaterialDesc))
             return 0;
-        
-        var matches = Regex.Matches(aiMaterialDesc, @"[+-]?\d+");
 
-        int total = 0;
-
-        foreach (Match match in matches)
+        try
         {
-            if (int.TryParse(match.Value, out int num))
-            {
-                total += num;
-            }
-        }
+            var baseMatch = Regex.Match(aiMaterialDesc, @"#(\d+)");
+            if (!baseMatch.Success)
+                return 0;
 
-        return total;
+            int baseQty = int.Parse(baseMatch.Groups[1].Value);
+
+            var changes = Regex.Matches(aiMaterialDesc, @"([+-]\d+)");
+            int delta = 0;
+
+            foreach (Match match in changes)
+            {
+                delta += int.Parse(match.Value);
+            }
+
+            return baseQty + delta;
+        }
+        catch
+        {
+            return 0;
+        }
     }
 }

@@ -30,6 +30,4 @@ public class ExtractedOrderItemDto
     public bool Restored { get; set; }
 
     public bool IsTargetQuantity { get; set; }
-    
-    public int DeltaForAi { get; set; }
 }
