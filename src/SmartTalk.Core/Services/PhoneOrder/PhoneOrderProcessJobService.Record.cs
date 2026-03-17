@@ -990,15 +990,10 @@ public partial class PhoneOrderProcessJobService
                     var origin = storeOrder.Orders.FirstOrDefault(o => o.MaterialNumber == aiOrder.MaterialNumber);
                     if (origin != null)
                     {
-                        int historyTotal = ParseTotalFromDescription(origin.AiMaterialDesc);
-
-                        int deltaForDesc = origin.Quantity - historyTotal;
-
-                        if (deltaForDesc != 0)
-                        {
-                            string sign = deltaForDesc > 0 ? "+" : "";
-                            origin.AiMaterialDesc = $"{origin.AiMaterialDesc}{sign}{deltaForDesc}";
-                        }
+                        origin.Quantity = aiOrder.Quantity;
+                        origin.AiMaterialDesc = aiOrder.AiMaterialDesc;
+                        origin.MarkForDelete = aiOrder.MarkForDelete;
+                        origin.Restored = aiOrder.Restored;
                     }
                 }
 
