@@ -79,7 +79,7 @@ public partial class AiSpeechAssistantService
         
         var latestKnowledge = _mapper.Map<AiSpeechAssistantKnowledge>(command);
         List<AiSpeechAssistantKnowledgeCopyRelatedDto> newRelations = new();
-        var inheritPreviousRelations = command.RelatedKnowledges == null || command.RelatedKnowledges.Count == 0;
+        var inheritPreviousRelations = command.RelatedKnowledges == null;
         
         var (asTargetKnowledgePrevRelateds, selectedTargetRelateds
                 , asSourceKnowledgePrevRelateds, selectedSourceRelateds) =
@@ -95,7 +95,13 @@ public partial class AiSpeechAssistantService
         }
         else
         {
-            newRelations = await HandleKnowledgeCopyRelatedUpdates(asTargetKnowledgePrevRelateds, selectedTargetRelateds, latestKnowledge.Id, prevKnowledge.Id, command.RelatedKnowledges.ToDictionary(x => x.Id, x => x), cancellationToken).ConfigureAwait(false);
+            newRelations = await HandleKnowledgeCopyRelatedUpdates(asTargetKnowledgePrevRelateds, selectedTargetRelateds, latestKnowledge.Id, prevKnowledge.Id, command.RelatedKnowledges!.ToDictionary(x => x.Id, x => x), cancellationToken).ConfigureAwait(false);
+            
+            if (asSourceKnowledgePrevRelateds.Count > 0)
+            {
+                asSourceKnowledgePrevRelateds.ForEach(x => x.SourceKnowledgeId = latestKnowledge.Id);
+                await _aiSpeechAssistantDataProvider.UpdateKnowledgeCopyRelatedAsync(asSourceKnowledgePrevRelateds, true, cancellationToken).ConfigureAwait(false);
+            }
         }
 
         if (!string.IsNullOrEmpty(command.Language))
@@ -142,7 +148,7 @@ public partial class AiSpeechAssistantService
                        List<AiSpeechAssistantKnowledgeCopyRelated> selectedTargetRelateds, 
                        List<AiSpeechAssistantKnowledgeCopyRelated> asSourceKnowledgePrevRelateds, 
                        List<AiSpeechAssistantKnowledgeCopyRelated> selectedSourceRelateds)>
-        GetKnowledgeCopyRelatedAsync(int prevKnowledgeId, List<AiSpeechAssistantKnowledgeCopyRelatedDto> relatedKnowledges, CancellationToken cancellationToken)
+        GetKnowledgeCopyRelatedAsync(int prevKnowledgeId, List<AiSpeechAssistantKnowledgeCopyRelatedDto>? relatedKnowledges, CancellationToken cancellationToken)
     {
         var asTargetKnowledgePrevRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync([prevKnowledgeId], null, cancellationToken).ConfigureAwait(false);
         Log.Information("All allTargetKnowledgePrevRelateds relateds: {@allPrevRelatedIds}", asTargetKnowledgePrevRelateds.Select(r => r.Id).ToList());
@@ -153,7 +159,7 @@ public partial class AiSpeechAssistantService
         if (asTargetKnowledgePrevRelateds.Count == 0 && asSourceKnowledgePrevRelateds.Count == 0)
             return ([], [], [], []);
     
-        if (relatedKnowledges == null || relatedKnowledges.Count == 0)
+        if (relatedKnowledges == null)
             return (asTargetKnowledgePrevRelateds, asTargetKnowledgePrevRelateds, asSourceKnowledgePrevRelateds, asSourceKnowledgePrevRelateds);
 
         var relatedTargetDtoMap = relatedKnowledges.Where(x => x.TargetKnowledgeId == prevKnowledgeId).ToDictionary(x => x.Id, x => x);
@@ -209,6 +215,7 @@ public partial class AiSpeechAssistantService
         var updatedEntities = await _aiSpeechAssistantDataProvider.UpdateKnowledgeCopyRelatedAsync(asTargetKnowledgePrevRelateds, true, cancellationToken);
 
         return updatedEntities
+            .Where(e => e.TargetKnowledgeId == latestKnowledgeId)
             .Select(e => _mapper.Map<AiSpeechAssistantKnowledgeCopyRelatedDto>(e))
             .Select(dto =>
             {
@@ -1023,11 +1030,11 @@ public partial class AiSpeechAssistantService
                 .ToDictionary(g => g.Key, g => g.OrderBy(x => x.CreatedDate).ToList());
         
         var duplicatedSourceToTargetIds = copyToRelateds
-            .Where(r => r.SourceKnowledgeId == command.SourceKnowledgeId && selectedTargetIds.Contains(r.TargetKnowledgeId))
+            .Where(r => r.IsSyncUpdate && r.SourceKnowledgeId == command.SourceKnowledgeId && selectedTargetIds.Contains(r.TargetKnowledgeId))
             .Select(r => r.TargetKnowledgeId);
         
         var duplicatedTargetToSourceIds = (copyFromRelateds ?? new List<AiSpeechAssistantKnowledgeCopyRelated>())
-            .Where(r => selectedTargetIds.Contains(r.SourceKnowledgeId))
+            .Where(r => r.IsSyncUpdate && selectedTargetIds.Contains(r.SourceKnowledgeId))
             .Select(r => r.SourceKnowledgeId);
         
         var duplicatedTargetIds = duplicatedSourceToTargetIds.Concat(duplicatedTargetToSourceIds).Distinct().ToHashSet();
