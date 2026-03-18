@@ -40,24 +40,29 @@ public partial class EventHandlingService
 
                 knowledge.Brief = brief;
                 await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync([knowledge], cancellationToken: cancellationToken).ConfigureAwait(false);
-                
-                Log.Information( "knowledgeIdToSync Id: {@PrevKnowledge} , {@knowledgeIdToSync}", @event.PrevKnowledge.Id, knowledge.Id);
-
-                var targerPrevRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedBySourceKnowledgeIdAsync([@event.PrevKnowledge.Id], true, cancellationToken).ConfigureAwait(false);
-                Log.Information("targerPrevRelateds prev relateds: {@allPrevRelatedIds}", targerPrevRelateds.Select(r => r.Id).ToList());
-               
-                var checkShouldSyncRelation = @event.ShouldSyncLastedKnowledge && targerPrevRelateds.Any();
-                
-                if (checkShouldSyncRelation)
-                {
-                    _smartTalkBackgroundJobClient.Enqueue<IAiSpeechAssistantService>(x => x.SyncCopiedKnowledgesIfRequiredAsync(
-                        @event.PrevKnowledge.Id, false, @event.ShouldSyncLastedKnowledge, CancellationToken.None));
-                }
             }
         }
         catch (Exception e)
         {
             Log.Error("Generate the knowledge brief error: {@Message}", e.Message);
+        }
+
+        Log.Information("knowledgeIdToSync Id: {@PrevKnowledge} , {@knowledgeIdToSync}", @event.PrevKnowledge.Id, @event.LatestKnowledge.Id);
+
+        var syncSourceRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedBySourceKnowledgeIdAsync(
+            [@event.PrevKnowledge.Id, @event.LatestKnowledge.Id], true, cancellationToken).ConfigureAwait(false);
+        Log.Information("targerPrevRelateds prev/latest relateds: {@allPrevRelatedIds}", syncSourceRelateds.Select(r => r.Id).ToList());
+
+        var checkShouldSyncRelation = @event.ShouldSyncLastedKnowledge && syncSourceRelateds.Any();
+
+        if (checkShouldSyncRelation)
+        {
+            var sourceKnowledgeIdToSync = @event.ShouldSyncLastedKnowledge ? @event.LatestKnowledge.Id : @event.PrevKnowledge.Id;
+            Log.Information("Enqueue SyncCopiedKnowledges. sourceKnowledgeIdToSync={SourceKnowledgeIdToSync}, prevKnowledgeId={PrevKnowledgeId}, latestKnowledgeId={LatestKnowledgeId}",
+                sourceKnowledgeIdToSync, @event.PrevKnowledge.Id, @event.LatestKnowledge.Id);
+
+            _smartTalkBackgroundJobClient.Enqueue<IAiSpeechAssistantService>(x => x.SyncCopiedKnowledgesIfRequiredAsync(
+                sourceKnowledgeIdToSync, false, @event.ShouldSyncLastedKnowledge, CancellationToken.None));
         }
     }
     
