@@ -123,6 +123,9 @@ public class AiKidRealtimeProcessJobService : IAiKidRealtimeProcessJobService
                 callbackRequest.CustomerId,
                 callbackRequest.Items.Count,
                 response?.StatusCode);
+            
+            Log.Information(
+                "Ai kid order items callback finished. call back json={AssistantId},",Newtonsoft.Json.JsonConvert.SerializeObject(callbackRequest));
         }
         catch (Exception ex)
         {
