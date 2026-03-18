@@ -455,7 +455,7 @@ public partial class PhoneOrderProcessJobService
             "【訂單意圖判斷規則（非常重要）】\n" +
             "1. 如果客戶明確表示取消整張訂單、全部不要、整單取消、今天的單都不要，請在該店鋪標記 IsDeleteWholeOrder=true，orders 可以為空陣列。\n" +
             "2. 如果客戶先說取消整單，後面又表示還是要、算了繼續下單、剛剛的取消不算，請標記 IsUndoCancel=true。\n" +
-            "3. 如果客戶只取消單個物料（例如：某某不要了、某某取消、某某 cut 掉，并没有提到数量），請保留該物料，並在該物料上標記 markForDelete=true，quantity為0，\n" +
+            "3. 如果客戶只取消單個物料（例如：某某不要了、某某取消、某某 cut 掉，并没有提到数量），請保留該物料，並在該物料上標記 markForDelete=true，\n" +
             "4. 如果客戶只取消單個物料的數量（例如：某某取消1箱、某某 cut 掉2箱，必须提到数量），請保留該物料和減少的quantity（負數表示）。\n" +
             "5. 如果客戶說某某物料剛下了4箱，現在幫我改成1箱（或改成只要1箱/变成1箱/剩1箱），請保留該物料数量：quantity=1，並標記 isTargetQuantity=true（不要在這裡做 4-1 的計算）。\n\n" +
             "6. 如果客戶只是增加物料数量（例如：再加2箱/多要2箱），quantity=2，isTargetQuantity=false。\n" +
