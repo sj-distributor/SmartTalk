@@ -1277,9 +1277,6 @@ public partial class AiSpeechAssistantService
         AiSpeechAssistantKnowledge copyFromKnowledge,
         CancellationToken cancellationToken)
     {
-        if (!string.IsNullOrWhiteSpace(newCopyToKnowledge.Json))
-            return;
-
         static string EnsureCopySuffix(string name)
         {
             if (string.IsNullOrWhiteSpace(name))
