@@ -295,11 +295,11 @@ public class AiKidRealtimeProcessJobService : IAiKidRealtimeProcessJobService
             CustomerId = soldToIds.FirstOrDefault() ?? "",
             Items = extractedOrders
                 .SelectMany(x => x.Orders)
-                .Where(x => !string.IsNullOrWhiteSpace(x.Name))
-                .GroupBy(x => new { x.Name, x.Unit })
+                .Where(x => !string.IsNullOrWhiteSpace(x.AiMaterialDesc))
+                .GroupBy(x => new { x.AiMaterialDesc, x.Unit })
                 .Select(x => new AiKidOrderItemDto
                 {
-                    Name = x.Key.Name,
+                    Name = x.Key.AiMaterialDesc,
                     Unit = x.Key.Unit ?? "",
                     Qty = Math.Max(1, x.Sum(y => y.Quantity))
                 })
