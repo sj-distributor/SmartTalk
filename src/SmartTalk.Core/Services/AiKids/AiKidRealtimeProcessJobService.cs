@@ -257,7 +257,7 @@ public class AiKidRealtimeProcessJobService : IAiKidRealtimeProcessJobService
                  
                         storeDto.Orders.Add(new ExtractedOrderItemDto
                         {
-                            Name = name,
+                            AiMaterialDesc = name,
                             Quantity = (int)qty,
                             Unit = unit
                         });
