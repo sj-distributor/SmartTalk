@@ -2,6 +2,7 @@ using DocumentFormat.OpenXml.Office2010.ExcelAc;
 using Serilog;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
+using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Requests.AiSpeechAssistant;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
@@ -107,42 +108,60 @@ public partial class AiSpeechAssistantService
 
         result.KnowledgeCopyRelateds = await EnhanceRelateFrom(allCopyRelateds, cancellationToken).ConfigureAwait(false);
 
-        if (allCopyRelateds is { Count: > 0 })
+        if (allCopyRelateds is { Count: > 0 } && detailDtos.Count > 0)
         {
             var sourceKnowledgeIds = allCopyRelateds.Select(x => x.SourceKnowledgeId).Distinct().ToList();
             var sourceKnowledges = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgesAsync(sourceKnowledgeIds, cancellationToken).ConfigureAwait(false);
-            var sourceKnowledgeMap = sourceKnowledges.ToDictionary(k => k.Id);
-            var assistantIds = sourceKnowledges.Select(k => k.AssistantId).Distinct().ToList();
-            var enrichInfos = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedEnrichInfoAsync(assistantIds, cancellationToken).ConfigureAwait(false);
-            var enrichDict = enrichInfos.ToDictionary(x => x.AssistantId);
+            var relatedFromMap = result.KnowledgeCopyRelateds?
+                .GroupBy(x => x.SourceKnowledgeId)
+                .ToDictionary(g => g.Key, g => g.FirstOrDefault()?.RelatedFrom)
+                ?? new Dictionary<int, string>();
 
-            foreach (var sourceKnowledgeId in sourceKnowledgeIds)
+            var sourceDetailSignatureLookup = new Dictionary<string, (int SourceKnowledgeId, string RelatedFrom)>();
+            foreach (var sourceKnowledge in sourceKnowledges)
             {
-                var relatedDetails = await _aiSpeechAssistantDataProvider.GetKnowledgeDetailsByKnowledgeIdAsync(sourceKnowledgeId, cancellationToken).ConfigureAwait(false);
-                if (relatedDetails == null || relatedDetails.Count == 0) continue;
+                var sourceDetails = await _aiSpeechAssistantDataProvider.GetKnowledgeDetailsByKnowledgeIdAsync(sourceKnowledge.Id, cancellationToken).ConfigureAwait(false);
+                if (sourceDetails == null || sourceDetails.Count == 0)
+                    continue;
 
-                var relatedDetailDtos = _mapper.Map<List<AiSpeechAssistantKnowledgeDetailDto>>(relatedDetails);
-                string relatedFrom = null;
+                relatedFromMap.TryGetValue(sourceKnowledge.Id, out var relatedFrom);
 
-                if (sourceKnowledgeMap.TryGetValue(sourceKnowledgeId, out var sourceKnowledge) &&
-                    enrichDict.TryGetValue(sourceKnowledge.AssistantId, out var info))
-                    relatedFrom = $"{info.StoreName} - {info.AiAgentName} - {info.AssiatantName}";
-
-                foreach (var dto in relatedDetailDtos)
+                foreach (var sourceDetail in sourceDetails)
                 {
-                    dto.RelatedKnowledgeId = sourceKnowledgeId;
-                    dto.RelatedFrom = relatedFrom;
-                    if (!string.IsNullOrWhiteSpace(dto.KnowledgeName))
-                        dto.KnowledgeName = $"{dto.KnowledgeName}-副本";
+                    var copiedName = EnsureCopySuffixForDetailMatching(sourceDetail.KnowledgeName);
+                    var signature = BuildDetailSignature(copiedName, sourceDetail.FormatType, sourceDetail.Content, sourceDetail.FileName);
+                    sourceDetailSignatureLookup.TryAdd(signature, (sourceKnowledge.Id, relatedFrom));
                 }
+            }
 
-                detailDtos.AddRange(relatedDetailDtos);
+            foreach (var dto in detailDtos.Where(x => !string.IsNullOrWhiteSpace(x.KnowledgeName) &&
+                                                      x.KnowledgeName.EndsWith("-副本", StringComparison.Ordinal)))
+            {
+                var signature = BuildDetailSignature(dto.KnowledgeName, dto.FormatType, dto.Content, dto.FileName);
+                if (!sourceDetailSignatureLookup.TryGetValue(signature, out var sourceInfo))
+                    continue;
+
+                dto.RelatedKnowledgeId = sourceInfo.SourceKnowledgeId;
+                dto.RelatedFrom = sourceInfo.RelatedFrom;
             }
         }
 
         result.Details = detailDtos;
         
         return new GetAiSpeechAssistantKnowledgeResponse { Data = result };
+    }
+
+    private static string EnsureCopySuffixForDetailMatching(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return name ?? string.Empty;
+
+        return name.EndsWith("-副本", StringComparison.Ordinal) ? name : $"{name}-副本";
+    }
+
+    private static string BuildDetailSignature(string name, AiSpeechAssistantKonwledgeFormatType formatType, string content, string fileName)
+    {
+        return $"{name ?? string.Empty}|{formatType}|{content ?? string.Empty}|{fileName ?? string.Empty}";
     }
 
     public async Task<List<AiSpeechAssistantKnowledgeCopyRelatedDto>> EnhanceRelateFrom(List<AiSpeechAssistantKnowledgeCopyRelated> relateds, CancellationToken cancellationToken)

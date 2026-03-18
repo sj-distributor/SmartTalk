@@ -1188,12 +1188,12 @@ public partial class AiSpeechAssistantService
 
         Log.Information("KonwledgeCopy New copies inserted. newCopyToKnowledge={@newCopyToKnowledge}", newCopeToKnowledges);
 
-        for (var i = 0; i < copyToKnowledges.Count; i++)
+        for (var i = 0; i < effectiveCopyToKnowledges.Count; i++)
         {
-            var oldCopyTo = copyToKnowledges[i];
+            var oldCopyTo = effectiveCopyToKnowledges[i];
             var newCopyTo = newCopeToKnowledges[i];
 
-            await BuildNewCopyToKnowledgeDetailAsync(oldCopyTo, newCopyTo, copyFromKnowledge, relatedLookup, copyFromRelatedLookup, cancellationToken)
+            await BuildNewCopyToKnowledgeDetailAsync(oldCopyTo, newCopyTo, copyFromKnowledge, cancellationToken)
                 .ConfigureAwait(false);
         }
         
@@ -1271,8 +1271,6 @@ public partial class AiSpeechAssistantService
         AiSpeechAssistantKnowledge copyToKnowledge,
         AiSpeechAssistantKnowledge newCopyToKnowledge,
         AiSpeechAssistantKnowledge copyFromKnowledge,
-        Dictionary<int, List<AiSpeechAssistantKnowledgeCopyRelated>> relatedLookup,
-        Dictionary<int, List<AiSpeechAssistantKnowledgeCopyRelated>> copyFromRelatedLookup,
         CancellationToken cancellationToken)
     {
         if (!string.IsNullOrWhiteSpace(newCopyToKnowledge.Json))
@@ -1294,36 +1292,8 @@ public partial class AiSpeechAssistantService
             .GetKnowledgeDetailsByKnowledgeIdAsync(copyFromKnowledge.Id, cancellationToken)
             .ConfigureAwait(false) ?? new List<AiSpeechAssistantKnowledgeDetail>();
 
-        var copyToRelatedDetails = new List<AiSpeechAssistantKnowledgeDetail>();
-        if (relatedLookup.TryGetValue(copyToKnowledge.Id, out var copyToRelated))
-        {
-            foreach (var r in copyToRelated)
-            {
-                var details = await _aiSpeechAssistantDataProvider
-                    .GetKnowledgeDetailsByKnowledgeIdAsync(r.SourceKnowledgeId, cancellationToken)
-                    .ConfigureAwait(false);
-                if (details != null && details.Any())
-                    copyToRelatedDetails.AddRange(details);
-            }
-        }
-
-        var copyFromRelatedDetails = new List<AiSpeechAssistantKnowledgeDetail>();
-        if (copyFromRelatedLookup.TryGetValue(copyFromKnowledge.Id, out var copyFromRelated))
-        {
-            foreach (var r in copyFromRelated)
-            {
-                var details = await _aiSpeechAssistantDataProvider
-                    .GetKnowledgeDetailsByKnowledgeIdAsync(r.SourceKnowledgeId, cancellationToken)
-                    .ConfigureAwait(false);
-                if (details != null && details.Any())
-                    copyFromRelatedDetails.AddRange(details);
-            }
-        }
-
         var allDetails = copyToDetails
             .Concat(copyFromDetails)
-            .Concat(copyToRelatedDetails)
-            .Concat(copyFromRelatedDetails)
             .ToList();
 
         if (allDetails.Count == 0)
@@ -1349,8 +1319,6 @@ public partial class AiSpeechAssistantService
 
         AddDetails(copyToDetails, false);
         AddDetails(copyFromDetails, true);
-        AddDetails(copyToRelatedDetails, true);
-        AddDetails(copyFromRelatedDetails, true);
 
         await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgeDetailsAsync(newDetails, true, cancellationToken)
             .ConfigureAwait(false);
