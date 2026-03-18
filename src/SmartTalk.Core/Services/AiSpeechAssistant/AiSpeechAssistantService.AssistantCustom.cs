@@ -1578,6 +1578,8 @@ public partial class AiSpeechAssistantService
         if (prevKnowledge == null)
             throw new Exception($"Knowledge not found: {detail.KnowledgeId}");
 
+        var sourceSyncInfo = await ResolveCopiedSourceDetailSyncInfoAsync(detail, cancellationToken).ConfigureAwait(false);
+
         var details = await _aiSpeechAssistantDataProvider
             .GetKnowledgeDetailsByKnowledgeIdAsync(detail.KnowledgeId, cancellationToken)
             .ConfigureAwait(false) ?? new List<AiSpeechAssistantKnowledgeDetail>();
@@ -1606,9 +1608,12 @@ public partial class AiSpeechAssistantService
         if (!detailMap.TryGetValue(detail.Id, out var updatedDetail))
             throw new Exception("Updated detail not found in new knowledge version.");
 
+        var updatedDetailDto = _mapper.Map<AiSpeechAssistantKnowledgeDetailDto>(updatedDetail);
+        updatedDetailDto.IsSyncUpdate = sourceSyncInfo?.IsSyncUpdate ?? false;
+
         return new UpdateAiSpeechAssistantKnowledgeDetailResponse
         {
-            Data = _mapper.Map<AiSpeechAssistantKnowledgeDetailDto>(updatedDetail)
+            Data = updatedDetailDto
         };
     }
 
@@ -1695,7 +1700,75 @@ public partial class AiSpeechAssistantService
         if (asTargetPrevRelateds.Any() || asSourcePrevRelateds.Any())
             await CarryForwardPreviousRelationsAsync(asTargetPrevRelateds, asSourcePrevRelateds, latestKnowledge.Id, prevKnowledge.Id, cancellationToken).ConfigureAwait(false);
 
+        if (asSourcePrevRelateds.Any(x => x.IsSyncUpdate))
+        {
+            _backgroundJobClient.Enqueue<IAiSpeechAssistantService>(x =>
+                x.SyncCopiedKnowledgesIfRequiredAsync(prevKnowledge.Id, false, true, CancellationToken.None));
+        }
+
         return (latestKnowledge, detailMap);
+    }
+
+    private sealed class CopiedSourceDetailSyncInfo
+    {
+        public int SourceKnowledgeId { get; init; }
+        public int SourceDetailId { get; init; }
+        public bool IsSyncUpdate { get; init; }
+    }
+
+    private static string EnsureDetailCopySuffix(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return name ?? string.Empty;
+
+        return name.EndsWith("-副本", StringComparison.Ordinal) ? name : $"{name}-副本";
+    }
+
+    private static bool IsSameDetail(AiSpeechAssistantKnowledgeDetail sourceDetail, AiSpeechAssistantKnowledgeDetail targetDetail)
+    {
+        return EnsureDetailCopySuffix(sourceDetail.KnowledgeName) == targetDetail.KnowledgeName &&
+               sourceDetail.FormatType == targetDetail.FormatType &&
+               sourceDetail.Content == targetDetail.Content &&
+               sourceDetail.FileName == targetDetail.FileName;
+    }
+
+    private async Task<CopiedSourceDetailSyncInfo?> ResolveCopiedSourceDetailSyncInfoAsync(
+        AiSpeechAssistantKnowledgeDetail targetDetail,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(targetDetail.KnowledgeName) ||
+            !targetDetail.KnowledgeName.EndsWith("-副本", StringComparison.Ordinal))
+            return null;
+
+        var relations = await _aiSpeechAssistantDataProvider
+            .GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync([targetDetail.KnowledgeId], null, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (relations == null || relations.Count == 0)
+            return null;
+
+        foreach (var relation in relations)
+        {
+            var sourceDetails = await _aiSpeechAssistantDataProvider
+                .GetKnowledgeDetailsByKnowledgeIdAsync(relation.SourceKnowledgeId, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (sourceDetails == null || sourceDetails.Count == 0)
+                continue;
+
+            var matchedSourceDetail = sourceDetails.FirstOrDefault(sourceDetail => IsSameDetail(sourceDetail, targetDetail));
+            if (matchedSourceDetail == null)
+                continue;
+
+            return new CopiedSourceDetailSyncInfo
+            {
+                SourceKnowledgeId = relation.SourceKnowledgeId,
+                SourceDetailId = matchedSourceDetail.Id,
+                IsSyncUpdate = relation.IsSyncUpdate
+            };
+        }
+
+        return null;
     }
 
     public async Task<AddAiSpeechAssistantKnowledgeDetailResponse> AddAiSpeechAssistantKnowledgeDetailAsync(AddAiSpeechAssistantKnowledgeDetailCommand command, CancellationToken cancellationToken)
@@ -1721,6 +1794,16 @@ public partial class AiSpeechAssistantService
         knowledge.Prompt = string.IsNullOrWhiteSpace(knowledge.Prompt) ? detailPrompt : $"{knowledge.Prompt.Trim()}\n\n{detailPrompt}";
 
         await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync([knowledge], cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var asSourceRelations = await _aiSpeechAssistantDataProvider
+            .GetKnowledgeCopyRelatedBySourceKnowledgeIdAsync([knowledge.Id], true, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (asSourceRelations is { Count: > 0 })
+        {
+            _backgroundJobClient.Enqueue<IAiSpeechAssistantService>(x =>
+                x.SyncCopiedKnowledgesIfRequiredAsync(knowledge.Id, false, true, CancellationToken.None));
+        }
 
         return new AddAiSpeechAssistantKnowledgeDetailResponse
         {
