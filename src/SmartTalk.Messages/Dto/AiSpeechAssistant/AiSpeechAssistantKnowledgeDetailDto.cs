@@ -25,6 +25,4 @@ public class AiSpeechAssistantKnowledgeDetailDto
     public int? RelatedKnowledgeId { get; set; }
 
     public string RelatedFrom { get; set; }
-
-    public bool IsSyncUpdate { get; set; }
 }
