@@ -1187,6 +1187,10 @@ public partial class AiSpeechAssistantService
         await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgesAsync(newCopeToKnowledges, true, cancellationToken).ConfigureAwait(false);
 
         Log.Information("KonwledgeCopy New copies inserted. newCopyToKnowledge={@newCopyToKnowledge}", newCopeToKnowledges);
+        
+        var effectiveCopyToKnowledges = copyToKnowledges
+            .Where(x => !duplicatedSourceToTargetIds.Contains(x.Id))
+            .ToList();
 
         for (var i = 0; i < effectiveCopyToKnowledges.Count; i++)
         {
