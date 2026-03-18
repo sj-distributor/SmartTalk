@@ -1172,17 +1172,33 @@ public partial class AiSpeechAssistantService
             relatedLookup = copyToRelateds.GroupBy(x => x.TargetKnowledgeId)
                 .ToDictionary(g => g.Key, g => g.OrderBy(x => x.CreatedDate).ToList());
         }
+        var newCopyToDetails = new List<List<AiSpeechAssistantKnowledgeDetail>>();
+
         foreach (var copyToKnowledge in copyToKnowledges)
         {
-            var newCopyToKnowledge = await BuildNewCopyToKnowledgeAsync(copyToKnowledge, copyFromKnowledge, relatedLookup, copyFromRelatedLookup, cancellationToken).ConfigureAwait(false);
+            var (newCopyToKnowledge, details) = await BuildNewCopyToKnowledgeAsync(
+                copyToKnowledge, copyFromKnowledge, relatedLookup, copyFromRelatedLookup, cancellationToken).ConfigureAwait(false);
             
             newCopeToKnowledges.Add(newCopyToKnowledge);
+            newCopyToDetails.Add(details);
             
             Log.Information("KonwledgeCopy newCopeToKnowledges Count {@newCopeToKnowledges}", newCopeToKnowledges.Count);
         }
 
         await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync(copyToKnowledges, true, cancellationToken).ConfigureAwait(false);
         await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgesAsync(newCopeToKnowledges, true, cancellationToken).ConfigureAwait(false);
+
+        for (var i = 0; i < newCopyToDetails.Count; i++)
+        {
+            var details = newCopyToDetails[i];
+            if (details == null || details.Count == 0) continue;
+
+            var knowledgeId = newCopeToKnowledges[i].Id;
+            foreach (var detail in details)
+                detail.KnowledgeId = knowledgeId;
+
+            await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgeDetailsAsync(details, true, cancellationToken).ConfigureAwait(false);
+        }
         
         Log.Information("KonwledgeCopy New copies inserted. newCopyToKnowledge={@newCopyToKnowledge}", newCopeToKnowledges);
         
@@ -1202,7 +1218,12 @@ public partial class AiSpeechAssistantService
         };
     }
 
-    private async Task<AiSpeechAssistantKnowledge> BuildNewCopyToKnowledgeAsync(AiSpeechAssistantKnowledge copyToKnowledge, AiSpeechAssistantKnowledge copyFromKnowledge, Dictionary<int, List<AiSpeechAssistantKnowledgeCopyRelated>> relatedLookup, Dictionary<int, List<AiSpeechAssistantKnowledgeCopyRelated>> copyFromRelatedLookup, CancellationToken cancellationToken)
+    private async Task<(AiSpeechAssistantKnowledge Knowledge, List<AiSpeechAssistantKnowledgeDetail> Details)> BuildNewCopyToKnowledgeAsync(
+        AiSpeechAssistantKnowledge copyToKnowledge,
+        AiSpeechAssistantKnowledge copyFromKnowledge,
+        Dictionary<int, List<AiSpeechAssistantKnowledgeCopyRelated>> relatedLookup,
+        Dictionary<int, List<AiSpeechAssistantKnowledgeCopyRelated>> copyFromRelatedLookup,
+        CancellationToken cancellationToken)
     {
         Log.Information("KonwledgeCopy Processing target knowledge. TargetId={TargetId}", copyToKnowledge.Id);
 
@@ -1210,6 +1231,7 @@ public partial class AiSpeechAssistantService
 
         string newPrompt;
         string newJson;
+        var newDetails = new List<AiSpeechAssistantKnowledgeDetail>();
 
         if (!string.IsNullOrWhiteSpace(copyToKnowledge.Json))
         {
@@ -1284,10 +1306,19 @@ public partial class AiSpeechAssistantService
                 ? await GenerateKnowledgePromptAsync(allDetails, cancellationToken).ConfigureAwait(false)
                 : string.Empty;
 
-            newJson = JsonConvert.SerializeObject(allDetails);
+            newJson = null;
+
+            newDetails = allDetails.Select(d => new AiSpeechAssistantKnowledgeDetail
+            {
+                KnowledgeName = d.KnowledgeName,
+                FormatType = d.FormatType,
+                Content = d.Content,
+                FileName = d.FileName,
+                CreatedDate = DateTimeOffset.Now
+            }).ToList();
         }
 
-        return new AiSpeechAssistantKnowledge
+        return (new AiSpeechAssistantKnowledge
         {
             AssistantId = copyToKnowledge.AssistantId,
             Json = newJson,
@@ -1297,7 +1328,7 @@ public partial class AiSpeechAssistantService
             ModelLanguage = copyFromKnowledge.ModelLanguage,
             Prompt = newPrompt,
             Version = await HandleKnowledgeVersionAsync(copyToKnowledge, cancellationToken).ConfigureAwait(false)
-        };
+        }, newDetails);
     }
 
     private async Task BuildAndPersistCopyRelatedsAsync(AiSpeechAssistantKnowledge copyFromKnowledge, bool isSyncUpdate, List<AiSpeechAssistantKnowledge> oldCopyTos, 
