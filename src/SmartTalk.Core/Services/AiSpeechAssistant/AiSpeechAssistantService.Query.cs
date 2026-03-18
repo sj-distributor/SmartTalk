@@ -113,11 +113,7 @@ public partial class AiSpeechAssistantService
                 .ToDictionary(g => g.Key, g => g.FirstOrDefault()?.RelatedFrom)
                 ?? new Dictionary<int, string>();
 
-            var sourceRelationMap = allCopyRelateds
-                .GroupBy(x => x.SourceKnowledgeId)
-                .ToDictionary(g => g.Key, g => g.First());
-
-            var sourceDetailSignatureLookup = new Dictionary<string, (int SourceKnowledgeId, string RelatedFrom, bool IsSyncUpdate)>();
+            var sourceDetailSignatureLookup = new Dictionary<string, (int SourceKnowledgeId, string RelatedFrom)>();
             foreach (var sourceKnowledge in sourceKnowledges)
             {
                 var sourceDetails = await _aiSpeechAssistantDataProvider.GetKnowledgeDetailsByKnowledgeIdAsync(sourceKnowledge.Id, cancellationToken).ConfigureAwait(false);
@@ -125,13 +121,12 @@ public partial class AiSpeechAssistantService
                     continue;
 
                 relatedFromMap.TryGetValue(sourceKnowledge.Id, out var relatedFrom);
-                var isSyncUpdate = sourceRelationMap.TryGetValue(sourceKnowledge.Id, out var relation) && relation.IsSyncUpdate;
 
                 foreach (var sourceDetail in sourceDetails)
                 {
                     var copiedName = EnsureCopySuffixForDetailMatching(sourceDetail.KnowledgeName);
                     var signature = BuildDetailSignature(copiedName, sourceDetail.FormatType, sourceDetail.Content, sourceDetail.FileName);
-                    sourceDetailSignatureLookup.TryAdd(signature, (sourceKnowledge.Id, relatedFrom, isSyncUpdate));
+                    sourceDetailSignatureLookup.TryAdd(signature, (sourceKnowledge.Id, relatedFrom));
                 }
             }
 
@@ -144,7 +139,6 @@ public partial class AiSpeechAssistantService
 
                 dto.RelatedKnowledgeId = sourceInfo.SourceKnowledgeId;
                 dto.RelatedFrom = sourceInfo.RelatedFrom;
-                dto.IsSyncUpdate = sourceInfo.IsSyncUpdate;
             }
         }
 
