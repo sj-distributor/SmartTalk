@@ -944,18 +944,18 @@ public partial class PhoneOrderProcessJobService
             
             "【关键规则二：计算与生成（Strict）】\n" +
             " **对于每一个用户输入的商品**：\n" +
-            "- **若在草稿单中找到匹配项**：\n" +
-            " - **计算变动值（quantity）**：\n" +
+            "- **若在【系统中已有草稿单】中找到匹配项**：\n" +
+            " - **计算变动值（Quantity）**：\n" +
             "   - **情况A：历史物料的加减操作（如“1”、“-2”）**：\n" +
-            "      - quantity = 草稿单quantity + 本次变动数量（例如：1则为1，少2则为-2）\n\n" +
+            "      - Quantity = 【系统中已有草稿单】的 Quantity + 本次变动数量（例如：1则为1，少2则为-2）\n\n" +
             "   - **情况B：直接指定（IsTargetQuantity 为 true）**：" +
-            "      - quantity = 指定数量 - OriginalQuantity。（例如：原4改为1，则quantity = 1 - 4 = -3）\n\n" +
+            "      - Quantity = 指定数量 - OriginalQuantity。（例如：原4改为1，Quantity = 1 - 4 = -3）\n\n" +
             "  - **生成结果**：\n\n" +
-            "    - name = 草稿单 name (完整原串) + (quantity > 0 ? \"+\" : \"\") + quantity。\n\n" +
+            "    - name = 草稿单 name (完整原串) + (Quantity > 0 ? \"+\" : \"\") + Quantity。\n\n" +
             "    - 注意：name 必须如实记录每次变动轨迹，例如 \"玉米#1箱+1-3\"。\n" +
             "    - unit = 优先取草稿单 unit。\n\n" +
             "  - **若在草稿单中未找到匹配项（新增）**：\n" +
-            "    - quantity = 本次变动数量\n\n" +
+            "    - Quantity = 本次变动数量\n\n" +
             "    - name = 本次变动 name + \"#\" + 本次变动数量 + 单位。\n" +
             "    - 注意：新增项不需要 +号后缀，而是直接生成标准格式（如 玉米#1箱）。\n" +
             "    - unit = 本次变动 unit。\n\n" +
@@ -971,8 +971,8 @@ public partial class PhoneOrderProcessJobService
             
             "【关键规则四：未变动的保留与去除】\n" +
             "   - 遍历完所有变动后，检查草稿单中未被匹配的剩余物料：\n" +
-            "       - 如果该剩余的物料 quantity 不为0， **直接保留**\n" +
-            "       - 如果该剩余的物料 quantity 为0， **去除该物料的数据，不要保留**\n" +
+            "       - 系统物料未被变动、且【系统中已有草稿单】的 Quantity=0，全部数据删除！\n" +
+            "       - 只有该剩余的物料【系统中已有草稿单】的 Quantity 不为 0，才要保留\n" +
             "   - Name = 原始 AiMaterialDesc（不加任何后缀）。\n" +
             "   - Quantity = 原始 MaterialQuantity。\n\n" +
             
@@ -999,6 +999,7 @@ public partial class PhoneOrderProcessJobService
             "  ]\n" +
             "}\n\n" +
             
+            "请注意：系统物料未被变动、且  【系统中已有草稿单】的 Quantity=0，全部数据要删除！\n"+
             "生成结果前，请在内存中执行一次规则的自我检查。\n";
 
         var userPrompt = "【本次通话提取的订单】\n" + currentOrdersJson + "\n\n" + "【系统中已有草稿单】\n" + draftOrderJson + "\n\n";
