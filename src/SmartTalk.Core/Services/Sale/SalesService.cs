@@ -13,7 +13,7 @@ public interface ISalesService : IScopedDependency
 
     Task<string> HandleOrderArrivalTimeList(List<string> customerIds, CancellationToken cancellationToken);
 
-    Task<string> BuildCrmCustomerInfoByPhoneAsync(string phoneNumber, CancellationToken cancellationToken);
+    Task<string> BuildCrmCustomerInfoByPhoneAsync(string phoneNumber, string crmToken, CancellationToken cancellationToken);
 }
 
 public class SalesService : ISalesService
@@ -147,11 +147,11 @@ public class SalesService : ISalesService
         return resultBuilder.ToString();
     }
 
-    public async Task<string> BuildCrmCustomerInfoByPhoneAsync(string phoneNumber, CancellationToken cancellationToken)
+    public async Task<string> BuildCrmCustomerInfoByPhoneAsync(string phoneNumber, string crmToken, CancellationToken cancellationToken)
     {
         var normalizedPhone = NormalizePhone(phoneNumber);
         var customerInfo = new StringBuilder();
-        var crmCustomers = await TryGetCrmCustomersByPhoneAsync(normalizedPhone, cancellationToken).ConfigureAwait(false);
+        var crmCustomers = await TryGetCrmCustomersByPhoneAsync(normalizedPhone, crmToken, cancellationToken).ConfigureAwait(false);
         var deliveryInfos = await TryGetDeliveryInfoByPhoneAsync(normalizedPhone, cancellationToken).ConfigureAwait(false);
 
         customerInfo.AppendLine($"来电号码: {normalizedPhone}");
@@ -215,12 +215,11 @@ public class SalesService : ISalesService
         return customerInfo.ToString();
     }
 
-    private async Task<List<GetCustomersPhoneNumberDataDto>> TryGetCrmCustomersByPhoneAsync(string normalizedPhone, CancellationToken cancellationToken)
+    private async Task<List<GetCustomersPhoneNumberDataDto>> TryGetCrmCustomersByPhoneAsync(string normalizedPhone, string crmToken, CancellationToken cancellationToken)
     {
         try
         {
-            var token = await _crmClient.GetCrmTokenAsync(cancellationToken).ConfigureAwait(false);
-            if (string.IsNullOrWhiteSpace(token))
+            if (string.IsNullOrWhiteSpace(crmToken))
             {
                 Log.Warning("BuildCrmCustomerInfoByPhoneAsync: CRM token is empty, phone: {PhoneNumber}", normalizedPhone);
                 return [];
@@ -228,7 +227,7 @@ public class SalesService : ISalesService
 
             return await _crmClient.GetCustomersByPhoneNumberAsync(
                     new GetCustmoersByPhoneNumberRequestDto { PhoneNumber = normalizedPhone },
-                    token, cancellationToken)
+                    crmToken, cancellationToken)
                 .ConfigureAwait(false) ?? [];
         }
         catch (Exception ex)

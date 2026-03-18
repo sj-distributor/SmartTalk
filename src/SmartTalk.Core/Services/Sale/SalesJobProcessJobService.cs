@@ -22,7 +22,7 @@ public interface ISalesJobProcessJobService : IScopedDependency
 
     Task ScheduleRefreshCrmCustomerInfoAsync(RefreshAllCustomerInfoCacheCommand command, CancellationToken cancellationToken);
 
-    Task RefreshCrmCustomerInfoByPhoneNumberAsync(string phoneNumber, CancellationToken cancellationToken);
+    Task RefreshCrmCustomerInfoByPhoneNumberAsync(string phoneNumber, string crmToken, CancellationToken cancellationToken);
 }
 
 public class SalesJobProcessJobService : ISalesJobProcessJobService
@@ -114,7 +114,7 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
             
             foreach (var phone in phoneNumbers)
             {
-                _backgroundJobClient.Enqueue<ISalesJobProcessJobService>(x => x.RefreshCrmCustomerInfoByPhoneNumberAsync(phone, CancellationToken.None), HangfireConstants.InternalHostingCaCheKnowledgeVariable);
+                _backgroundJobClient.Enqueue<ISalesJobProcessJobService>(x => x.RefreshCrmCustomerInfoByPhoneNumberAsync(phone, crmToken, CancellationToken.None), HangfireConstants.InternalHostingCaCheKnowledgeVariable);
             }
         }
         
@@ -125,15 +125,15 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
         Log.Information("Scheduled CRM customer info refresh for {CustomerCount} customers, {PhoneCount} phone numbers", assistantCustomerMappings.Count, assistantCustomerMappings.SelectMany(x => x.CallerNumbers).Count());
     }
 
-    
-    public async Task RefreshCrmCustomerInfoByPhoneNumberAsync(string phoneNumber, CancellationToken cancellationToken)
+
+    public async Task RefreshCrmCustomerInfoByPhoneNumberAsync(string phoneNumber, string crmToken, CancellationToken cancellationToken)
     {
         try
         {
             Log.Information("Refreshing CRM customer info cache for phone {Phone}", phoneNumber);
 
             var normalizedPhone = NormalizePhone(phoneNumber);
-            var infoString = await _salesService.BuildCrmCustomerInfoByPhoneAsync(normalizedPhone, cancellationToken).ConfigureAwait(false);
+            var infoString = await _salesService.BuildCrmCustomerInfoByPhoneAsync(normalizedPhone, crmToken, cancellationToken).ConfigureAwait(false);
 
             await _salesDataProvider.UpsertCustomerInfoCacheAsync(normalizedPhone, infoString, true, cancellationToken).ConfigureAwait(false);
 

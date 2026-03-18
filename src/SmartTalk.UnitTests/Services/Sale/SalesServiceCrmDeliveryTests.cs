@@ -51,7 +51,7 @@ public class SalesServiceCrmDeliveryTests
                     : [];
             });
 
-        var result = await sut.BuildCrmCustomerInfoByPhoneAsync("+1 (916) 428-4295", cancellationToken);
+        var result = await sut.BuildCrmCustomerInfoByPhoneAsync("+1 (916) 428-4295", "crm-token", cancellationToken);
 
         result.ShouldContain("SAP编号: 109782");
         result.ShouldContain("路线1: ELKG");
@@ -79,7 +79,7 @@ public class SalesServiceCrmDeliveryTests
         _crmClient.GetDeliveryInfoByPhoneNumberAsync(Arg.Any<string>(), cancellationToken)
             .Returns([]);
 
-        var result = await sut.BuildCrmCustomerInfoByPhoneAsync("+19164284295", cancellationToken);
+        var result = await sut.BuildCrmCustomerInfoByPhoneAsync("+19164284295", "crm-token", cancellationToken);
 
         result.ShouldContain("路线状态: 未配置路线");
     }
@@ -99,7 +99,7 @@ public class SalesServiceCrmDeliveryTests
         _crmClient.GetDeliveryInfoByPhoneNumberAsync(Arg.Any<string>(), cancellationToken)
             .Returns([]);
 
-        var result = await sut.BuildCrmCustomerInfoByPhoneAsync("+19164284295", cancellationToken);
+        var result = await sut.BuildCrmCustomerInfoByPhoneAsync("+19164284295", "crm-token", cancellationToken);
 
         result.ShouldContain("客户ID识别状态: 未识别到CRM-SAP ID");
         result.ShouldContain("建议回复: 可以先请客户提供客户编号或公司名称");
@@ -142,7 +142,7 @@ public class SalesServiceCrmDeliveryTests
                     : [];
             });
 
-        var result = await sut.BuildCrmCustomerInfoByPhoneAsync("+19164284295", cancellationToken);
+        var result = await sut.BuildCrmCustomerInfoByPhoneAsync("+19164284295", "crm-token", cancellationToken);
 
         result.ShouldContain("路线1: ELKG");
         await _crmClient.Received().GetDeliveryInfoByPhoneNumberAsync("+19164284295", cancellationToken);
