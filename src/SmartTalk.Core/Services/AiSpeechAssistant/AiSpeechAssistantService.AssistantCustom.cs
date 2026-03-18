@@ -1188,9 +1188,9 @@ public partial class AiSpeechAssistantService
 
         Log.Information("KonwledgeCopy New copies inserted. newCopyToKnowledge={@newCopyToKnowledge}", newCopeToKnowledges);
 
-        for (var i = 0; i < effectiveCopyToKnowledges.Count; i++)
+        for (var i = 0; i < copyToKnowledges.Count; i++)
         {
-            var oldCopyTo = effectiveCopyToKnowledges[i];
+            var oldCopyTo = copyToKnowledges[i];
             var newCopyTo = newCopeToKnowledges[i];
 
             await BuildNewCopyToKnowledgeDetailAsync(oldCopyTo, newCopyTo, copyFromKnowledge, relatedLookup, copyFromRelatedLookup, cancellationToken)
