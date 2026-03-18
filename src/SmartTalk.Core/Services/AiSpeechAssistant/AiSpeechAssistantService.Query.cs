@@ -118,8 +118,12 @@ public partial class AiSpeechAssistantService
                 .GroupBy(x => x.SourceKnowledgeId)
                 .ToDictionary(g => g.Key, g => g.FirstOrDefault()?.RelatedFrom)
                 ?? new Dictionary<int, string>();
+            
+            var sourceRelationMap = allCopyRelateds
+                .GroupBy(x => x.SourceKnowledgeId)
+                .ToDictionary(g => g.Key, g => g.First());
 
-            var sourceDetailSignatureLookup = new Dictionary<string, (int SourceKnowledgeId, string RelatedFrom)>();
+            var sourceDetailSignatureLookup = new Dictionary<string, (int SourceKnowledgeId, string RelatedFrom, bool IsSyncUpdate)>();
             var existingDetailSignatures = detailDtos
                 .Select(x => BuildDetailSignature(x.KnowledgeName, x.FormatType, x.Content, x.FileName))
                 .ToHashSet();
@@ -134,12 +138,13 @@ public partial class AiSpeechAssistantService
                     continue;
 
                 relatedFromMap.TryGetValue(sourceKnowledge.Id, out var relatedFrom);
+                var isSyncUpdate = sourceRelationMap.TryGetValue(sourceKnowledge.Id, out var relation) && relation.IsSyncUpdate;
 
                 foreach (var sourceDetail in sourceDetails)
                 {
                     var copiedName = EnsureCopySuffixForDetailMatching(sourceDetail.KnowledgeName);
                     var signature = BuildDetailSignature(copiedName, sourceDetail.FormatType, sourceDetail.Content, sourceDetail.FileName);
-                    sourceDetailSignatureLookup.TryAdd(signature, (sourceKnowledge.Id, relatedFrom));
+                    sourceDetailSignatureLookup.TryAdd(signature, (sourceKnowledge.Id, relatedFrom, isSyncUpdate));
 
                     if (existingDetailSignatures.Contains(signature))
                         continue;
@@ -156,7 +161,8 @@ public partial class AiSpeechAssistantService
                         LastModifiedBy = sourceDetail.LastModifiedBy,
                         LastModifiedDate = sourceDetail.LastModifiedDate,
                         RelatedKnowledgeId = sourceKnowledge.Id,
-                        RelatedFrom = relatedFrom
+                        RelatedFrom = relatedFrom,
+                        IsSyncUpdate = isSyncUpdate
                     });
                     existingDetailSignatures.Add(signature);
                 }
