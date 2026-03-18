@@ -102,25 +102,38 @@ public partial class AiSpeechAssistantService
         foreach (var dto in detailDtos)
             dto.RelatedKnowledgeId = knowledge.Id;
 
-        var allCopyRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync(new List<int> { knowledge.Id }, null,  cancellationToken).ConfigureAwait(false);
+        var allCopyRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync([knowledge.Id], null,  cancellationToken).ConfigureAwait(false);
         
         Log.Information("Get the knowledge copy related Ids: {@Ids}", allCopyRelateds.Select(x => x.Id));
 
         result.KnowledgeCopyRelateds = await EnhanceRelateFrom(allCopyRelateds, cancellationToken).ConfigureAwait(false);
 
-        if (allCopyRelateds is { Count: > 0 } && detailDtos.Count > 0)
+        if (allCopyRelateds is { Count: > 0 })
         {
             var sourceKnowledgeIds = allCopyRelateds.Select(x => x.SourceKnowledgeId).Distinct().ToList();
             var sourceKnowledges = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgesAsync(sourceKnowledgeIds, cancellationToken).ConfigureAwait(false);
+            var sourceDetailTasks = sourceKnowledgeIds.ToDictionary(
+                id => id,
+                id => _aiSpeechAssistantDataProvider.GetKnowledgeDetailsByKnowledgeIdAsync(id, cancellationToken));
+
+            await Task.WhenAll(sourceDetailTasks.Values).ConfigureAwait(false);
+
             var relatedFromMap = result.KnowledgeCopyRelateds?
                 .GroupBy(x => x.SourceKnowledgeId)
                 .ToDictionary(g => g.Key, g => g.FirstOrDefault()?.RelatedFrom)
                 ?? new Dictionary<int, string>();
 
             var sourceDetailSignatureLookup = new Dictionary<string, (int SourceKnowledgeId, string RelatedFrom)>();
+            var existingDetailSignatures = detailDtos
+                .Select(x => BuildDetailSignature(x.KnowledgeName, x.FormatType, x.Content, x.FileName))
+                .ToHashSet();
+
             foreach (var sourceKnowledge in sourceKnowledges)
             {
-                var sourceDetails = await _aiSpeechAssistantDataProvider.GetKnowledgeDetailsByKnowledgeIdAsync(sourceKnowledge.Id, cancellationToken).ConfigureAwait(false);
+                if (!sourceDetailTasks.TryGetValue(sourceKnowledge.Id, out var sourceDetailTask))
+                    continue;
+
+                var sourceDetails = sourceDetailTask.Result;
                 if (sourceDetails == null || sourceDetails.Count == 0)
                     continue;
 
@@ -131,6 +144,25 @@ public partial class AiSpeechAssistantService
                     var copiedName = EnsureCopySuffixForDetailMatching(sourceDetail.KnowledgeName);
                     var signature = BuildDetailSignature(copiedName, sourceDetail.FormatType, sourceDetail.Content, sourceDetail.FileName);
                     sourceDetailSignatureLookup.TryAdd(signature, (sourceKnowledge.Id, relatedFrom));
+
+                    if (existingDetailSignatures.Contains(signature))
+                        continue;
+
+                    detailDtos.Add(new AiSpeechAssistantKnowledgeDetailDto
+                    {
+                        Id = sourceDetail.Id,
+                        KnowledgeId = sourceDetail.KnowledgeId,
+                        KnowledgeName = copiedName,
+                        FormatType = sourceDetail.FormatType,
+                        Content = sourceDetail.Content,
+                        FileName = sourceDetail.FileName,
+                        CreatedDate = sourceDetail.CreatedDate,
+                        LastModifiedBy = sourceDetail.LastModifiedBy,
+                        LastModifiedDate = sourceDetail.LastModifiedDate,
+                        RelatedKnowledgeId = sourceKnowledge.Id,
+                        RelatedFrom = relatedFrom
+                    });
+                    existingDetailSignatures.Add(signature);
                 }
             }
 
