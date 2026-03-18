@@ -42,7 +42,7 @@ public class RealtimeAiController : ControllerBase
     }
     
     [AllowAnonymous]
-    [HttpGet("test/connect/{assistantId}")]
+    [HttpGet("claw/connect/{assistantId}")]
     public async Task TestConnectAiKidRealtimeAsync(int assistantId)
     {
         if (HttpContext.WebSockets.IsWebSocketRequest)
