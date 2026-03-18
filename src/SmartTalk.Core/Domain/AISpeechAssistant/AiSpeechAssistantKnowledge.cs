@@ -13,9 +13,9 @@ public class AiSpeechAssistantKnowledge : IEntity, IHasCreatedFields
     
     [Column("assistant_id")]
     public int AssistantId { get; set; }
-    
+
     [Column("json")]
-    public string Json { get; set; }
+    public string Json { get; set; } = string.Empty;
     
     [Column("prompt")]
     public string Prompt { get; set; }
