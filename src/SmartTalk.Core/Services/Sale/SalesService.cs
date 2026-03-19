@@ -13,7 +13,7 @@ public interface ISalesService : IScopedDependency
 
     Task<string> HandleOrderArrivalTimeList(List<string> customerIds, CancellationToken cancellationToken);
 
-    Task<string> BuildCrmCustomerInfoByPhoneAsync(string phoneNumber, CancellationToken cancellationToken);
+    Task<string> BuildCrmCustomerInfoByPhoneAsync(string phoneNumber, string crmToken, CancellationToken cancellationToken);
 }
 
 public class SalesService : ISalesService
@@ -134,14 +134,13 @@ public class SalesService : ISalesService
         return resultBuilder.ToString();
     }
 
-    public async Task<string> BuildCrmCustomerInfoByPhoneAsync(string phoneNumber, CancellationToken cancellationToken)
+    public async Task<string> BuildCrmCustomerInfoByPhoneAsync(string phoneNumber, string crmToken, CancellationToken cancellationToken)
     {
         var customerInfo = new StringBuilder();
 
-        var  token = await _crmClient.GetCrmTokenAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var crmCustomers = await _crmClient.GetCustomersByPhoneNumberAsync(new GetCustmoersByPhoneNumberRequestDto { PhoneNumber = phoneNumber }, token, cancellationToken).ConfigureAwait(false);
+            var crmCustomers = await _crmClient.GetCustomersByPhoneNumberAsync(new GetCustmoersByPhoneNumberRequestDto { PhoneNumber = phoneNumber }, crmToken, cancellationToken).ConfigureAwait(false);
 
             if (crmCustomers != null && crmCustomers.Any())
             {
