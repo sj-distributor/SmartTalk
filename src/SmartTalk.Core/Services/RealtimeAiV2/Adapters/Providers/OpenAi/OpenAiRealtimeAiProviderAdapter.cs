@@ -175,6 +175,9 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
 
                 case "response.audio.done":
                     return Result(RealtimeAiWssEventType.ResponseAudioDone);
+                
+                case "response.created":
+                    return Result(RealtimeAiWssEventType.ResponseStarted);
 
                 case "input_audio_buffer.speech_started":
                     return Result(RealtimeAiWssEventType.SpeechDetected);
