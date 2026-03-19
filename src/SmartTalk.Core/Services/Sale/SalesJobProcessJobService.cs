@@ -77,6 +77,7 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
         if (crmToken == null) return;
 
         var totalPhones = 0;
+        var scheduledPhones = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         
         foreach (var soldToId in allSoldToIds)
         {
@@ -88,11 +89,16 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
             
             foreach (var phone in phoneNumbers)
             {
+                if (!scheduledPhones.Add(phone)) continue;
                 _backgroundJobClient.Enqueue<ISalesJobProcessJobService>(x => x.RefreshCrmCustomerInfoByPhoneNumberAsync(phone, CancellationToken.None), HangfireConstants.InternalHostingCaCheKnowledgeVariable);
             }
         }
 
-        Log.Information("Scheduled CRM customer info refresh for {CustomerCount} customers, {PhoneCount} phone numbers", allSoldToIds.Count, totalPhones);
+        Log.Information(
+            "Scheduled CRM customer info refresh for {CustomerCount} customers, {PhoneCount} phone numbers, {UniquePhoneCount} unique phone numbers",
+            allSoldToIds.Count,
+            totalPhones,
+            scheduledPhones.Count);
     }
 
     
@@ -124,13 +130,12 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
     
     private string NormalizePhone(string phone)
     {
-        if (string.IsNullOrEmpty(phone)) return phone;
-        
-        phone = phone.Replace("-", "").Replace(" ", "").Replace("(", "").Replace(")", "");
-        
-        if (!phone.StartsWith("+") && phone.Length == 10)
-            phone = "+1" + phone;
+        if (string.IsNullOrWhiteSpace(phone)) return phone;
 
-        return phone;
+        var digits = new string(phone.Where(char.IsDigit).ToArray());
+        if (digits.Length == 10) return "+1" + digits;
+        if (digits.Length == 11 && digits.StartsWith("1", StringComparison.Ordinal)) return "+" + digits;
+
+        return phone.Trim();
     }
 }
