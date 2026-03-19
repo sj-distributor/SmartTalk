@@ -99,24 +99,25 @@ public partial class AiSpeechAssistantService
         var details = await _aiSpeechAssistantDataProvider.GetKnowledgeDetailsByKnowledgeIdAsync(knowledge.Id, cancellationToken).ConfigureAwait(false);
 
         var detailDtos = _mapper.Map<List<AiSpeechAssistantKnowledgeDetailDto>>(details);
-        foreach (var dto in detailDtos)
-            dto.RelatedKnowledgeId = knowledge.Id;
+        detailDtos.ForEach(d => d.RelatedKnowledgeId = knowledge.Id);
 
         var allCopyRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync([knowledge.Id], null,  cancellationToken).ConfigureAwait(false);
         
         Log.Information("Get the knowledge copy related Ids: {@Ids}", allCopyRelateds.Select(x => x.Id));
 
         result.KnowledgeCopyRelateds = await EnhanceRelateFrom(allCopyRelateds, cancellationToken).ConfigureAwait(false);
-
+        
         if (allCopyRelateds is { Count: > 0 })
         {
             var sourceKnowledgeIds = allCopyRelateds.Select(x => x.SourceKnowledgeId).Distinct().ToList();
             var sourceKnowledges = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgesAsync(sourceKnowledgeIds, cancellationToken).ConfigureAwait(false);
-            var sourceDetailTasks = sourceKnowledgeIds.ToDictionary(
-                id => id,
-                id => _aiSpeechAssistantDataProvider.GetKnowledgeDetailsByKnowledgeIdAsync(id, cancellationToken));
+            var allSourceDetails = await _aiSpeechAssistantDataProvider
+                .GetAiSpeechAssistantKnowledgeDetailsByKnowledgeIdsAsync(sourceKnowledgeIds, cancellationToken)
+                .ConfigureAwait(false);
 
-            await Task.WhenAll(sourceDetailTasks.Values).ConfigureAwait(false);
+            var sourceDetailLookup = allSourceDetails
+                .GroupBy(x => x.KnowledgeId)
+                .ToDictionary(g => g.Key, g => g.ToList());
 
             var relatedFromMap = result.KnowledgeCopyRelateds?
                 .GroupBy(x => x.SourceKnowledgeId)
@@ -135,10 +136,9 @@ public partial class AiSpeechAssistantService
 
             foreach (var sourceKnowledge in sourceKnowledges)
             {
-                if (!sourceDetailTasks.TryGetValue(sourceKnowledge.Id, out var sourceDetailTask))
+                if (!sourceDetailLookup.TryGetValue(sourceKnowledge.Id, out var sourceDetails))
                     continue;
 
-                var sourceDetails = sourceDetailTask.Result;
                 if (sourceDetails == null || sourceDetails.Count == 0)
                     continue;
 
