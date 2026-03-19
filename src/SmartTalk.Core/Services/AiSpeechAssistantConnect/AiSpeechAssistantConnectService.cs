@@ -103,11 +103,11 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
         }
         catch (AiAssistantNotAvailableException ex)
         {
-            Log.Information("[AiAssistant] {Reason}, From: {From}, To: {To}", ex.Message, command.From, command.To);
+            Log.Information("[AiAssistant] AiAssistantNotAvailableException {Reason}, From: {From}, To: {To}", ex.Message, command.From, command.To);
         }
         catch (AiAssistantCallForwardedException ex)
         {
-            Log.Information("[AiAssistant] {Reason}, From: {From}, To: {To}", ex.Message, command.From, command.To);
+            Log.Information("[AiAssistant] AiAssistantCallForwardedException {Reason}, From: {From}, To: {To}", ex.Message, command.From, command.To);
         }
 
         return new AiSpeechAssistantConnectCloseEvent();
