@@ -189,6 +189,7 @@ public class SalesDataProvider : ISalesDataProvider
                 candidates.Add(value);
         }
 
+        AddCandidate(NormalizePhoneFilter(phoneNumber));
         AddCandidate(phoneNumber?.Trim());
 
         var digits = new string((phoneNumber ?? string.Empty).Where(char.IsDigit).ToArray());
@@ -205,6 +206,18 @@ public class SalesDataProvider : ISalesDataProvider
 
         return candidates;
     }
+
+    private static string NormalizePhoneFilter(string phoneNumber)
+    {
+        if (string.IsNullOrWhiteSpace(phoneNumber)) return phoneNumber;
+
+        var digits = new string(phoneNumber.Where(char.IsDigit).ToArray());
+        if (digits.Length == 10) return "+1" + digits;
+        if (digits.Length == 11 && digits.StartsWith("1", StringComparison.Ordinal)) return "+" + digits;
+
+        return phoneNumber.Trim();
+    }
+
     public async Task AddPhoneOrderPushTaskAsync(PhoneOrderPushTask task, bool forceSave = true, CancellationToken cancellationToken = default)
     {
         await _repository.InsertAsync(task, cancellationToken).ConfigureAwait(false);

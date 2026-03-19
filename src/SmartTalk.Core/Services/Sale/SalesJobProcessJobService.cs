@@ -103,6 +103,9 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
         
         var crmToken = await _crmClient.GetCrmTokenAsync(cancellationToken).ConfigureAwait(false);
         if (crmToken == null) return;
+
+        var totalPhones = 0;
+        var scheduledPhones = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         
         foreach (var mapping in assistantCustomerMappings)
         {
@@ -111,9 +114,11 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
             var phoneNumbers = contacts?.Where(c => !string.IsNullOrEmpty(c.Phone)).Select(c => NormalizePhone(c.Phone)).Distinct().ToList() ?? new List<string>();
 
             mapping.CallerNumbers = phoneNumbers;
+            totalPhones += phoneNumbers.Count;
             
             foreach (var phone in phoneNumbers)
             {
+                if (!scheduledPhones.Add(phone)) continue;
                 _backgroundJobClient.Enqueue<ISalesJobProcessJobService>(x => x.RefreshCrmCustomerInfoByPhoneNumberAsync(phone, crmToken, CancellationToken.None), HangfireConstants.InternalHostingCaCheKnowledgeVariable);
             }
         }
@@ -122,7 +127,11 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
 
         await RefreshCrmCustomerInboundRoutsAsync(assistantCustomerMappings, cancellationToken).ConfigureAwait(false);
 
-        Log.Information("Scheduled CRM customer info refresh for {CustomerCount} customers, {PhoneCount} phone numbers", assistantCustomerMappings.Count, assistantCustomerMappings.SelectMany(x => x.CallerNumbers).Count());
+        Log.Information(
+            "Scheduled CRM customer info refresh for {CustomerCount} customers, {PhoneCount} phone numbers, {UniquePhoneCount} unique phone numbers",
+            assistantCustomerMappings.Count,
+            totalPhones,
+            scheduledPhones.Count);
     }
 
 
@@ -174,14 +183,13 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
     
     private string NormalizePhone(string phone)
     {
-        if (string.IsNullOrEmpty(phone)) return phone;
-        
-        phone = phone.Replace("-", "").Replace(" ", "").Replace("(", "").Replace(")", "");
-        
-        if (!phone.StartsWith("+") && phone.Length == 10)
-            phone = "+1" + phone;
+        if (string.IsNullOrWhiteSpace(phone)) return phone;
 
-        return phone;
+        var digits = new string(phone.Where(char.IsDigit).ToArray());
+        if (digits.Length == 10) return "+1" + digits;
+        if (digits.Length == 11 && digits.StartsWith("1", StringComparison.Ordinal)) return "+" + digits;
+
+        return phone.Trim();
     }
 }
 
