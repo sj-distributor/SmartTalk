@@ -1257,7 +1257,7 @@ public partial class AiSpeechAssistantService
             var oldCopyTo = effectiveCopyToKnowledges[i];
             var newCopyTo = newCopeToKnowledges[i];
 
-            await BuildNewCopyToKnowledgeDetailAsync(oldCopyTo, newCopyTo, copyFromKnowledge, cancellationToken)
+            await BuildNewCopyToKnowledgeDetailAsync(oldCopyTo, newCopyTo, copyFromKnowledge, command.IsSyncUpdate, cancellationToken)
                 .ConfigureAwait(false);
         }
         
@@ -1333,6 +1333,7 @@ public partial class AiSpeechAssistantService
         AiSpeechAssistantKnowledge copyToKnowledge,
         AiSpeechAssistantKnowledge newCopyToKnowledge,
         AiSpeechAssistantKnowledge copyFromKnowledge,
+        bool isSyncUpdate,
         CancellationToken cancellationToken)
     {
         static string EnsureCopySuffix(string name)
@@ -1351,20 +1352,22 @@ public partial class AiSpeechAssistantService
             .GetKnowledgeDetailsByKnowledgeIdAsync(copyFromKnowledge.Id, cancellationToken)
             .ConfigureAwait(false) ?? new List<AiSpeechAssistantKnowledgeDetail>();
 
-        var allDetails = copyToDetails
+        var allDetailsForPrompt = copyToDetails
             .Concat(copyFromDetails)
             .ToList();
 
-        if (allDetails.Count == 0)
+        if (allDetailsForPrompt.Count == 0)
             return;
 
-        var newDetails = new List<AiSpeechAssistantKnowledgeDetail>();
+        var detailsToPersist = new List<AiSpeechAssistantKnowledgeDetail>();
+        var detailsForPrompt = new List<AiSpeechAssistantKnowledgeDetail>();
 
-        void AddDetails(IEnumerable<AiSpeechAssistantKnowledgeDetail> details, bool applyCopySuffix)
+        void AddDetails(IEnumerable<AiSpeechAssistantKnowledgeDetail> details, bool applyCopySuffix,
+            List<AiSpeechAssistantKnowledgeDetail> target)
         {
             foreach (var detail in details)
             {
-                newDetails.Add(new AiSpeechAssistantKnowledgeDetail
+                target.Add(new AiSpeechAssistantKnowledgeDetail
                 {
                     KnowledgeId = newCopyToKnowledge.Id,
                     KnowledgeName = applyCopySuffix ? EnsureCopySuffix(detail.KnowledgeName) : detail.KnowledgeName,
@@ -1376,13 +1379,18 @@ public partial class AiSpeechAssistantService
             }
         }
 
-        AddDetails(copyToDetails, false);
-        AddDetails(copyFromDetails, true);
+        AddDetails(copyToDetails, false, detailsToPersist);
+        AddDetails(copyToDetails, false, detailsForPrompt);
+        AddDetails(copyFromDetails, true, detailsForPrompt);
 
-        await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgeDetailsAsync(newDetails, true, cancellationToken)
-            .ConfigureAwait(false);
+        if (!isSyncUpdate)
+            AddDetails(copyFromDetails, true, detailsToPersist);
 
-        newCopyToKnowledge.Prompt = await GenerateKnowledgePromptAsync(newDetails, cancellationToken)
+        if (detailsToPersist.Count > 0)
+            await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgeDetailsAsync(detailsToPersist, true, cancellationToken)
+                .ConfigureAwait(false);
+
+        newCopyToKnowledge.Prompt = await GenerateKnowledgePromptAsync(detailsForPrompt, cancellationToken)
             .ConfigureAwait(false);
 
         await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync([newCopyToKnowledge], cancellationToken: cancellationToken)
