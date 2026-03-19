@@ -18,18 +18,20 @@ public partial class EventHandlingService
     public async Task HandlingEventAsync(AiSpeechAssistantKnowledgeAddedEvent @event, CancellationToken cancellationToken)
     {
         Log.Information("Start AiSpeechAssistantKnowledgeAddedEvent");
-        
-        var prevKnowledgeCopyRelateds = @event.PrevKnowledge.KnowledgeCopyRelateds ?? new List<AiSpeechAssistantKnowledgeCopyRelatedDto>();
-        var latestKnowledgeCopyRelateds = @event.LatestKnowledge.KnowledgeCopyRelateds ?? new List<AiSpeechAssistantKnowledgeCopyRelatedDto>();
-
-        var oldMergedJsonObj = BuildMergedKnowledgeJson(@event.PrevKnowledge.Json, prevKnowledgeCopyRelateds.Select(x => x.CopyKnowledgePoints));
-        var newMergedJsonObj = BuildMergedKnowledgeJson(@event.LatestKnowledge.Json, latestKnowledgeCopyRelateds.Select(x => x.CopyKnowledgePoints));
-        
-        var diffJson = $"old: {oldMergedJsonObj}, new: {newMergedJsonObj}";
 
         try
         {
-            var brief = await GenerateKnowledgeChangeBriefAsync(diffJson, cancellationToken).ConfigureAwait(false);
+            var oldMergedJson = await BuildKnowledgeComparableJsonAsync(@event.PrevKnowledge.Id, cancellationToken).ConfigureAwait(false);
+            var newMergedJson = await BuildKnowledgeComparableJsonAsync(@event.LatestKnowledge.Id, cancellationToken).ConfigureAwait(false);
+
+            var diff = CompareJsons(oldMergedJson, newMergedJson);
+
+            if (diff == null || !diff.HasValues)
+                return;
+
+            Log.Information("AiSpeechAssistantKnowledgeAddedEvent Generate diff: {Diff}", diff);
+
+            var brief = await GenerateKnowledgeChangeBriefAsync(diff.ToString(Formatting.None), cancellationToken).ConfigureAwait(false);
         
             Log.Information($"Generate the knowledge chang brief: {brief}");
 
@@ -60,10 +62,105 @@ public partial class EventHandlingService
             Log.Error("Generate the knowledge brief error: {@Message}", e.Message);
         }
     }
+
+    private async Task<string> BuildKnowledgeComparableJsonAsync(int knowledgeId, CancellationToken cancellationToken)
+    {
+        if (knowledgeId <= 0)
+            return "{}";
+
+        var knowledge = await _aiSpeechAssistantDataProvider
+            .GetAiSpeechAssistantKnowledgeAsync(knowledgeId: knowledgeId, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+
+        var inboundRelations = await _aiSpeechAssistantDataProvider
+            .GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync([knowledgeId], null, cancellationToken)
+            .ConfigureAwait(false);
+
+        var baseObj = BuildMergedKnowledgeJson(knowledge?.Json, (inboundRelations ?? new List<AiSpeechAssistantKnowledgeCopyRelated>()).Select(x => x.CopyKnowledgePoints));
+
+        var detailsObj = new JObject();
+        baseObj["__details"] = detailsObj;
+
+        var entriesByName = new Dictionary<string, List<(int formatType, string fileName, string content)>>(StringComparer.Ordinal);
+
+        var baseDetails = await _aiSpeechAssistantDataProvider
+            .GetKnowledgeDetailsByKnowledgeIdAsync(knowledgeId, cancellationToken)
+            .ConfigureAwait(false);
+
+        AddComparableEntries(entriesByName, baseDetails, applyCopySuffix: false);
+
+        var sourceKnowledgeIds = (inboundRelations ?? new List<AiSpeechAssistantKnowledgeCopyRelated>())
+            .Select(x => x.SourceKnowledgeId)
+            .Distinct()
+            .ToList();
+
+        if (sourceKnowledgeIds.Count > 0)
+        {
+            var sourceDetails = await _aiSpeechAssistantDataProvider
+                .GetAiSpeechAssistantKnowledgeDetailsByKnowledgeIdsAsync(sourceKnowledgeIds, cancellationToken)
+                .ConfigureAwait(false);
+
+            AddComparableEntries(entriesByName, sourceDetails, applyCopySuffix: true);
+        }
+
+        foreach (var (name, entries) in entriesByName.OrderBy(k => k.Key, StringComparer.Ordinal))
+        {
+            var arr = new JArray(
+                entries
+                    .OrderBy(e => e.formatType)
+                    .ThenBy(e => e.fileName, StringComparer.Ordinal)
+                    .ThenBy(e => e.content, StringComparer.Ordinal)
+                    .Select(e => new JObject
+                    {
+                        ["formatType"] = e.formatType,
+                        ["fileName"] = e.fileName,
+                        ["content"] = e.content
+                    }));
+
+            detailsObj[name] = arr;
+        }
+
+        return baseObj.ToString(Formatting.None);
+    }
+
+    private static void AddComparableEntries(
+        Dictionary<string, List<(int formatType, string fileName, string content)>> entriesByName,
+        IEnumerable<AiSpeechAssistantKnowledgeDetail> details,
+        bool applyCopySuffix)
+    {
+        if (details == null)
+            return;
+
+        foreach (var detail in details)
+        {
+            if (detail == null)
+                continue;
+
+            var name = detail.KnowledgeName ?? string.Empty;
+            if (applyCopySuffix)
+                name = EnsureCopySuffix(name);
+
+            if (!entriesByName.TryGetValue(name, out var list))
+            {
+                list = new List<(int formatType, string fileName, string content)>();
+                entriesByName[name] = list;
+            }
+
+            list.Add(((int)detail.FormatType, detail.FileName ?? string.Empty, detail.Content ?? string.Empty));
+        }
+    }
+
+    private static string EnsureCopySuffix(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return name ?? string.Empty;
+
+        return name.EndsWith("-副本", StringComparison.Ordinal) ? name : $"{name}-副本";
+    }
     
     private JObject BuildMergedKnowledgeJson(string baseJson, IEnumerable<string> copyKnowledgePoints)
     {
-        var baseObj = JObject.Parse(baseJson ?? "{}");
+        var baseObj = string.IsNullOrWhiteSpace(baseJson) ? new JObject() : JObject.Parse(baseJson);
         
         var copyObjs = (copyKnowledgePoints ?? Enumerable.Empty<string>()).Where(x => !string.IsNullOrWhiteSpace(x)).Select(JObject.Parse); 
         
