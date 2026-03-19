@@ -306,13 +306,16 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         if (finalPrompt.Contains("#{customer_info}", StringComparison.OrdinalIgnoreCase))
         {
-            var phone = from;
-            
-            var customerInfoCache = await _salesDataProvider.GetCustomerInfoCacheByPhoneNumberAsync(phone, cancellationToken).ConfigureAwait(false);
+            var customerInfoCache = await _salesDataProvider.GetCustomerInfoCacheByPhoneNumberAsync(from, cancellationToken).ConfigureAwait(false);
+            var customerInfo = customerInfoCache?.CacheValue?.Trim();
+            finalPrompt = finalPrompt.Replace("#{customer_info}", string.IsNullOrEmpty(customerInfo) ? " " : customerInfo);
+        }
 
-            var info = customerInfoCache?.CacheValue?.Trim();
-
-            finalPrompt = finalPrompt.Replace("#{customer_info}", string.IsNullOrEmpty(info) ? " " : info);
+        if (finalPrompt.Contains("#{delivery_info}", StringComparison.OrdinalIgnoreCase))
+        {
+            var deliveryInfoCache = await _salesDataProvider.GetDeliveryInfoCacheByPhoneNumberAsync(from, cancellationToken).ConfigureAwait(false);
+            var deliveryInfo = deliveryInfoCache?.CacheValue?.Trim();
+            finalPrompt = finalPrompt.Replace("#{delivery_info}", string.IsNullOrEmpty(deliveryInfo) ? " " : deliveryInfo);
         }
 
         finalPrompt = await ResolvePosPlaceholdersAsync(finalPrompt, agentId.Value, cancellationToken);
@@ -1400,7 +1403,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _aiSpeechAssistantStreamContext.IsInAiServiceHours = specificWorkingHours != null && specificWorkingHours.Hours.Any(x => x.Start <= pstTimeToMinute && x.End >= pstTimeToMinute);
         _aiSpeechAssistantStreamContext.IsEnableManualService = agent.IsTransferHuman && !string.IsNullOrEmpty(agent.TransferCallNumber);
     }
-
     private async Task<string> ResolvePosPlaceholdersAsync(string prompt, int agentId, CancellationToken cancellationToken)
     {
         bool hasMenuPlaceholder = PosMenuRegex.IsMatch(prompt);

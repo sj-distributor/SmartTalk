@@ -133,11 +133,16 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
             Log.Information("Refreshing CRM customer info cache for phone {Phone}", phoneNumber);
 
             var normalizedPhone = NormalizePhone(phoneNumber);
-            var infoString = await _salesService.BuildCrmCustomerInfoByPhoneAsync(normalizedPhone, crmToken, cancellationToken).ConfigureAwait(false);
+            var knowledge = await _salesService.BuildCrmKnowledgeByPhoneAsync(normalizedPhone, crmToken, cancellationToken).ConfigureAwait(false);
 
-            await _salesDataProvider.UpsertCustomerInfoCacheAsync(normalizedPhone, infoString, true, cancellationToken).ConfigureAwait(false);
+            await _salesDataProvider.UpsertCustomerInfoCacheAsync(normalizedPhone, knowledge.CustomerInfo, false, cancellationToken).ConfigureAwait(false);
+            await _salesDataProvider.UpsertDeliveryInfoCacheAsync(normalizedPhone, knowledge.DeliveryInfo, true, cancellationToken).ConfigureAwait(false);
 
-            Log.Information("CRM customer delivery info cached to ai_speech_assistant_knowledge_variable_cache. CacheKey: {CacheKey}, Filter: {Filter}", "customer_info", normalizedPhone);
+            Log.Information(
+                "CRM customer knowledge cached to ai_speech_assistant_knowledge_variable_cache. CustomerCacheKey: {CustomerCacheKey}, DeliveryCacheKey: {DeliveryCacheKey}, Filter: {Filter}",
+                "customer_info",
+                "delivery_info",
+                normalizedPhone);
 
             Log.Information("CRM customer info cached successfully for phone {Phone}", phoneNumber);
         }
