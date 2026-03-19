@@ -95,6 +95,8 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
 
         if (agentAssistant == null || agentAssistant.Count == 0) throw new Exception("AgentAssistant is null");
         
+        var parentRecordId = await _phoneOrderDataProvider.GetLatestPhoneOrderRecordIdAsync(agentAssistant.First().AgentId, context.Assistant.Id, context.CallSid, cancellationToken).ConfigureAwait(false);
+        
         var record = new PhoneOrderRecord
         {
             AssistantId = context.Assistant.Id,
@@ -110,7 +112,8 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             PhoneNumber = context.UserInfo?.PhoneNumber,
             IsTransfer = context.IsTransfer,
             IncomingCallNumber = context.LastUserInfo.PhoneNumber,
-            OrderRecordType = orderRecordType
+            OrderRecordType = orderRecordType,
+            ParentRecordId = parentRecordId
         };
 
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync([record], cancellationToken: cancellationToken).ConfigureAwait(false);
