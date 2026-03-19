@@ -6,6 +6,9 @@ namespace SmartTalk.Messages.Requests.Pos;
 
 public class GetCurrentUserStoresRequest : IRequest
 {
+    public int? CompanyId { get; set; }
+    
+    public int? StoreId { get; set; }
 }
 
 public class GetCurrentUserStoresResponse : SmartTalkResponse<List<GetCurrentUserStoresResponseData>>;
