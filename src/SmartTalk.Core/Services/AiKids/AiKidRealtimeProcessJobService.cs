@@ -114,7 +114,8 @@ public class AiKidRealtimeProcessJobService : IAiKidRealtimeProcessJobService
             var callbackRequest = BuildOrderItemsCallBackRequest(extractedOrders, soldToIds);
 
             var response = await _httpClientFactory
-                .PostAsJsonAsync("http://tomsite.com/ai/order/items/callback", callbackRequest, cancellationToken)
+                .PostAsJsonAsync("https://sjlinkapi3.testomenow.com/api/external/aiDemoOrders", callbackRequest, cancellationToken,
+                    headers:new Dictionary<string, string>{{"x-api-key","API-EA080A08-128B-4F80-83CB-108CD0042706"}})
                 .ConfigureAwait(false);
 
             Log.Information(
@@ -125,7 +126,7 @@ public class AiKidRealtimeProcessJobService : IAiKidRealtimeProcessJobService
                 response?.StatusCode);
             
             Log.Information(
-                "Ai kid order items callback finished. call back json={AssistantId},",Newtonsoft.Json.JsonConvert.SerializeObject(callbackRequest));
+                "Ai kid order items callback finished. call back AssistantId={AssistantId}, callbackRequest=",Newtonsoft.Json.JsonConvert.SerializeObject(callbackRequest));
         }
         catch (Exception ex)
         {
