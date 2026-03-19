@@ -375,11 +375,32 @@ public partial class PosService : IPosService
 
     public async Task<GetCurrentUserStoresResponse> GetCurrentUserStoresAsync(GetCurrentUserStoresRequest request, CancellationToken cancellationToken)
     {
-        var storeUsers = await _posDataProvider.GetPosStoreUsersByUserIdAsync(_currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
-
-        if (storeUsers.Count == 0) return new GetCurrentUserStoresResponse { Data = [] };
+        List<int> storeIds;
         
-        var storeIds = storeUsers.Select(x => x.StoreId).ToList();
+        if (request.StoreId.HasValue)
+        {
+            storeIds = [request.StoreId.Value];
+        }
+        else if (request.CompanyId.HasValue)
+        {
+            var companyStores = await _posDataProvider
+                .GetPosCompanyStoresAsync(companyIds: [request.CompanyId.Value], cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            storeIds = companyStores.Select(x => x.Id).ToList();
+        }
+        else
+        {
+            var storeUsers = await _posDataProvider.GetPosStoreUsersByUserIdAsync(_currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
+
+            if (storeUsers.Count == 0)
+                return new GetCurrentUserStoresResponse { Data = [] };
+
+            storeIds = storeUsers.Select(x => x.StoreId).ToList();
+        }
+
+        if (storeIds.Count == 0)
+            return new GetCurrentUserStoresResponse { Data = [] };
+        
         var stores = _mapper.Map<List<CompanyStoreDto>>(
             await _posDataProvider.GetPosCompanyStoresAsync(ids: storeIds, cancellationToken: cancellationToken).ConfigureAwait(false));
         
