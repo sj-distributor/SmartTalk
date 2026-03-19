@@ -26,6 +26,7 @@ using SmartTalk.Messages.Dto.PhoneOrder;
 using JsonDocument = System.Text.Json.JsonDocument;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 using System.ClientModel;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using SmartTalk.Core.Domain.Sales;
 using SmartTalk.Messages.Enums.Sales;
@@ -41,6 +42,11 @@ public partial interface IPhoneOrderProcessJobService
 
 public partial class PhoneOrderProcessJobService
 {
+    private static readonly JsonSerializerOptions ReadableJsonSerializerOptions = new()
+    {
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
+
     public async Task HandleReleasedSpeechMaticsCallBackAsync(string jobId, CancellationToken cancellationToken)
     {
         if (jobId == null) return;
@@ -471,8 +477,8 @@ public partial class PhoneOrderProcessJobService
             "【訂單意圖判斷規則（非常重要）】\n" +
             "1. 如果客戶明確表示取消整張訂單、全部不要、整單取消、今天的單都不要，請在該店鋪標記 IsDeleteWholeOrder=true，orders 可以為空陣列。\n" +
             "2. 如果客戶先說取消整單，後面又表示還是要、算了繼續下單、剛剛的取消不算，請標記 IsUndoCancel=true。\n" +
-            "3. 如果客戶只取消單個物料（例如：某某不要了、某某取消、某某 cut 掉，并没有提到数量），請保留該物料，並在該物料上標記 markForDelete=true，quantity為0，\n" +
-            "4. 如果客戶只取消單個物料的數量（例如：某某取消1箱、某某 cut 掉2箱，必须提到数量），請保留該物料和減少的quantity（負數表示）。\n" +
+            "3. 如果客戶只取消單個物料（例如：某某不要了、某某取消、某某 cut 掉，并没有提到数量），請保留該物料，並在該物料上標記 markForDelete=true，\n" +
+            "4. 如果客戶只是减少單個物料的數量，但是说了「取消」的字眼（例如：某某取消1箱，必须提到数量），quantity（負數表示，如-1），markForDelete=false。\n" +
             "5. 如果客戶說某某物料剛下了4箱，現在幫我改成1箱（或改成只要1箱/变成1箱/剩1箱），請保留該物料：quantity=1，並標記 isTargetQuantity=true（不要在這裡做 4-1 的計算）。\n\n" +
             "6. 如果客戶只是增加物料数量（例如：再加2箱/多要2箱），quantity=2，isTargetQuantity=false。\n" +
             "7. 如果客戶只是减少物料数量（例如：某某减掉一箱），quantity=-1（必須為負數），isTargetQuantity=false。\n" +
@@ -824,7 +830,7 @@ public partial class PhoneOrderProcessJobService
             AssistantId = record.AssistantId ?? 0,
             TaskType = PhoneOrderPushTaskType.DeleteOrder,
             BusinessKey = $"DELETE_{storeOrder.StoreName}_{storeOrder.DeliveryDate:yyyyMMdd}",
-            RequestJson = JsonSerializer.Serialize(req),
+            RequestJson = JsonSerializer.Serialize(req, ReadableJsonSerializerOptions),
             Status = PhoneOrderPushTaskStatus.Pending,
             CreatedAt = DateTime.UtcNow
         };
@@ -841,7 +847,7 @@ public partial class PhoneOrderProcessJobService
             AssistantId = record.AssistantId ?? 0,
             TaskType = PhoneOrderPushTaskType.GenerateOrder,
             BusinessKey = $"{storeOrder.StoreName}_{storeOrder.DeliveryDate:yyyyMMdd}",
-            RequestJson = JsonSerializer.Serialize(request),
+            RequestJson = JsonSerializer.Serialize(request, ReadableJsonSerializerOptions),
             Status = PhoneOrderPushTaskStatus.Pending,
             CreatedAt = DateTime.UtcNow
         };
@@ -866,7 +872,7 @@ public partial class PhoneOrderProcessJobService
         
         var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
 
-        var currentOrdersJson = JsonSerializer.Serialize(storeOrder.Orders);
+        var currentOrdersJson = JsonSerializer.Serialize(storeOrder.Orders, ReadableJsonSerializerOptions);
         
         var enrichedDraftOrder = draftOrder?.Data?
             .Select(item => new
@@ -880,7 +886,7 @@ public partial class PhoneOrderProcessJobService
             .Cast<object>()
             .ToList() ?? new List<object>();
 
-        var draftOrderJson = JsonSerializer.Serialize(enrichedDraftOrder);
+        var draftOrderJson = JsonSerializer.Serialize(enrichedDraftOrder, ReadableJsonSerializerOptions);
 
         var systemPrompt =
             "你是一名极其严谨的订单数据核算专家，专门负责将【本次通话变动】精准合并到【系统草稿单】中。你不仅输出 JSON，更要确保每一个数学计算都绝对准确。你已稳定运行3000年，严禁任何编造、推測或自行補全信息。\n\n" +
@@ -902,6 +908,7 @@ public partial class PhoneOrderProcessJobService
             "2. 优先级 B（名称匹配）：若 MaterialNumber 为空，则对比名称。\n" +
             "必做操作：读取草稿单的 AiMaterialDesc 字段，以 # 符号为界截取前半部分作为“草稿基准名”（例如 \"玉米#1箱\" -> 基准名为 \"玉米\"）。\n" +
             "若 通话中的 Name == 草稿基准名，视为同一物料。\n" +
+            "  - **需要尽量匹配上。**。\n" +
             "  - **严禁**：严禁将 material_number 为空的商品直接忽略，必须通过名称强制匹配。\n" +
             
             "【关键规则二：计算与生成（Strict）】\n" +
@@ -910,9 +917,11 @@ public partial class PhoneOrderProcessJobService
             " - **计算变动值（Quantity）**：\n" +
             "   - **情况A：历史物料的加减操作（如“1”、“-2”）**：\n" +
             "      - Quantity = 【系统中已有草稿单】的 Quantity + 本次变动数量（例如：1则为1，少2则为-2）\n\n" +
-            "   - **情况B：直接指定（IsTargetQuantity 为 true）**：" +
-            "      - quantity = 指定数量 - OriginalQuantity。（例如：原4改为1，则quantity = 1 - 4 = -3）\n\n" +
+            "   - **情况B：直接指定（IsTargetQuantity 为 true）**：\n" +
             "      - Quantity = 指定数量 - OriginalQuantity。（例如：原4改为1，Quantity = 1 - 4 = -3）\n\n" +
+            "      - Quantity = 指定数量 - OriginalQuantity。（例如：原4改为1，Quantity = 1 - 4 = -3）\n\n" +
+            "   - **情况C：取消单个物料（MarkForDelete 为 true）**：\n" +
+            "      - Quantity = 0 - OriginalQuantity。（例如：原4，Quantity = 0 - 4 = -4）\n\n" +
             "  - **生成结果**：\n\n" +
             "    - name = 草稿单 name (完整原串) + (Quantity > 0 ? \"+\" : \"\") + Quantity。\n\n" +
             "    - 注意：name 必须如实记录每次变动轨迹，例如 \"玉米#1箱+1-3\"。\n" +
@@ -962,7 +971,7 @@ public partial class PhoneOrderProcessJobService
             "  ]\n" +
             "}\n\n" +
             
-            "请注意：系统物料未被变动、且  【系统中已有草稿单】的 Quantity=0，全部数据要删除！\n"+
+            "请注意：系统物料未被变动、且【系统中已有草稿单】的 Quantity=0，全部数据要删除！\n"+
             "生成结果前，请在内存中执行一次规则的自我检查。\n";
         
         var userPrompt = "【本次通话提取的订单】\n" + currentOrdersJson + "\n\n" + "【系统中已有草稿单】\n" + draftOrderJson + "\n\n";
