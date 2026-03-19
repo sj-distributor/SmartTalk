@@ -127,6 +127,12 @@ public partial class AiSpeechAssistantService
 
         var prevKnowledgeDto = _mapper.Map<AiSpeechAssistantKnowledgeDto>(prevKnowledge);
         var latestKnowledgeDto = _mapper.Map<AiSpeechAssistantKnowledgeDto>(latestKnowledge);
+        List<AiSpeechAssistantKnowledgeDetailDto> newDetail = new();
+        
+        if (inheritPreviousRelations)
+        {
+            newDetail = await CarryForwardPreviousDetailsAsync(prevKnowledge.Id, latestKnowledge.Id, cancellationToken);
+        }
         
         if (command.Details is { Count: > 0 })
         {
@@ -140,11 +146,13 @@ public partial class AiSpeechAssistantService
                 CreatedDate = DateTimeOffset.Now
             }).ToList();
 
-            await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgeDetailsAsync(details, true, cancellationToken).ConfigureAwait(false);
+            await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgeDetailsAsync(details, true, cancellationToken);
 
-            latestKnowledgeDto.Details = _mapper.Map<List<AiSpeechAssistantKnowledgeDetailDto>>(details);
+            newDetail.AddRange(details.Select(d => _mapper.Map<AiSpeechAssistantKnowledgeDetailDto>(d)));
         }
 
+        latestKnowledgeDto.Details = newDetail;
+        
         prevKnowledgeDto.KnowledgeCopyRelateds = _mapper.Map<List<AiSpeechAssistantKnowledgeCopyRelatedDto>>(asTargetKnowledgePrevRelateds);
         latestKnowledgeDto.KnowledgeCopyRelateds = newRelations;
 
@@ -224,6 +232,30 @@ public partial class AiSpeechAssistantService
         }
 
         return movedTargetRelations;
+    }
+    
+    private async Task<List<AiSpeechAssistantKnowledgeDetailDto>> CarryForwardPreviousDetailsAsync(int prevKnowledgeId, int latestKnowledgeId, CancellationToken cancellationToken)
+    {
+        var prevDetails = await _aiSpeechAssistantDataProvider.GetKnowledgeDetailsByKnowledgeIdAsync(prevKnowledgeId, cancellationToken).ConfigureAwait(false);
+
+        if (prevDetails == null || prevDetails.Count == 0)
+            return new List<AiSpeechAssistantKnowledgeDetailDto>();
+
+        var newDetails = prevDetails.Select(d => new AiSpeechAssistantKnowledgeDetail
+        {
+            KnowledgeId = latestKnowledgeId,
+            KnowledgeName = d.KnowledgeName,
+            FormatType = d.FormatType,
+            Content = d.Content,
+            FileName = d.FileName,
+            CreatedDate = DateTimeOffset.Now,
+            LastModifiedBy = d.LastModifiedBy,
+            LastModifiedDate = d.LastModifiedDate
+        }).ToList();
+
+        await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgeDetailsAsync(newDetails, true, cancellationToken).ConfigureAwait(false);
+
+        return newDetails.Select(d => _mapper.Map<AiSpeechAssistantKnowledgeDetailDto>(d)).ToList();
     }
     
     private async Task<List<AiSpeechAssistantKnowledgeCopyRelatedDto>> HandleKnowledgeCopyRelatedUpdates(List<AiSpeechAssistantKnowledgeCopyRelated> asTargetKnowledgePrevRelateds,
