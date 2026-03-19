@@ -87,6 +87,9 @@ public partial class AiSpeechAssistantService
         
         await InitialKnowledgeAsync(latestKnowledge, selectedTargetRelateds, cancellationToken).ConfigureAwait(false);
 
+        var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByIdAsync(command.AssistantId, cancellationToken).ConfigureAwait(false) ?? throw new Exception($"Assistant not found: {command.AssistantId}");
+
+        latestKnowledge.ModelLanguage = !string.IsNullOrEmpty(command.Language) ? command.Language : assistant.ModelLanguage;
         await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgesAsync([latestKnowledge], true, cancellationToken).ConfigureAwait(false);
 
         if (inheritPreviousRelations)
@@ -102,15 +105,6 @@ public partial class AiSpeechAssistantService
                 asSourceKnowledgePrevRelateds.ForEach(x => x.SourceKnowledgeId = latestKnowledge.Id);
                 await _aiSpeechAssistantDataProvider.UpdateKnowledgeCopyRelatedAsync(asSourceKnowledgePrevRelateds, true, cancellationToken).ConfigureAwait(false);
             }
-        }
-
-        if (!string.IsNullOrEmpty(command.Language))
-        {
-            var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByIdAsync(command.AssistantId, cancellationToken).ConfigureAwait(false);
-
-            assistant.ModelLanguage = command.Language;
-
-            await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync([assistant], true, cancellationToken).ConfigureAwait(false);
         }
 
         var prevKnowledgeDto = _mapper.Map<AiSpeechAssistantKnowledgeDto>(prevKnowledge);
@@ -682,7 +676,8 @@ public partial class AiSpeechAssistantService
             AssistantId = assistant.Id,
             Greetings = command.Greetings,
             CreatedBy = _currentUser.Id.Value,
-            Prompt = GenerateKnowledgePrompt(command.Json)
+            Prompt = GenerateKnowledgePrompt(command.Json),
+            ModelLanguage = assistant.ModelLanguage
         };
 
         await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgesAsync([knowledge], cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -1115,6 +1110,7 @@ public partial class AiSpeechAssistantService
             IsActive = true,
             CreatedBy = copyToKnowledge.CreatedBy,
             CreatedDate = DateTimeOffset.Now,
+            ModelLanguage = copyFromKnowledge.ModelLanguage,
             Prompt = GenerateKnowledgePrompt(mergedJson),
             Version = await HandleKnowledgeVersionAsync(copyToKnowledge, cancellationToken)
         };
@@ -1399,6 +1395,7 @@ public partial class AiSpeechAssistantService
                 IsActive = true,
                 CreatedBy = oldTarget.CreatedBy,
                 CreatedDate = DateTimeOffset.Now,
+                ModelLanguage = sourceKnowledge.ModelLanguage,
                 Prompt = GenerateKnowledgePrompt(mergedJson),
                 Version = await HandleKnowledgeVersionAsync(oldTarget, cancellationToken).ConfigureAwait(false),
             };
