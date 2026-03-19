@@ -916,7 +916,7 @@ public partial class PhoneOrderProcessJobService
             "- **若在【系统中已有草稿单】中找到匹配项**：\n" +
             " - **计算变动值（Quantity）**：\n" +
             "   - **情况A：历史物料的加减操作（如“1”、“-2”）**：\n" +
-            "      - Quantity = 【系统中已有草稿单】的 Quantity + 本次变动数量（例如：1则为1，少2则为-2）\n\n" +
+            "      - Quantity = 【系统中已有草稿单】的 MaterialQuantity + 本次变动数量（例如：MaterialQuantity=2，变动数量=1 为2+1）\n\n" +
             "   - **情况B：直接指定（IsTargetQuantity 为 true）**：\n" +
             "      - Quantity = 指定数量 - OriginalQuantity。（例如：原4改为1，Quantity = 1 - 4 = -3）\n\n" +
             "      - Quantity = 指定数量 - OriginalQuantity。（例如：原4改为1，Quantity = 1 - 4 = -3）\n\n" +
