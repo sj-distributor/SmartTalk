@@ -163,6 +163,8 @@ public partial interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task DeleteAiSpeechAssistantKnowledgeDetailAsync(int detailId, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task<AiSpeechAssistantKnowledgeDetail>  GetAiSpeechAssistantKnowledgeDetailByDetailIdAsync(int detailId, CancellationToken cancellationToken = default);
+    
+    Task<List<AiSpeechAssistantKnowledgeDetail>> GetAiSpeechAssistantKnowledgeDetailsByKnowledgeIdsAsync(List<int> knowledgeIds, CancellationToken cancellationToken = default);
 }
 
 public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
@@ -909,5 +911,12 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
     public async Task<AiSpeechAssistantKnowledgeDetail> GetAiSpeechAssistantKnowledgeDetailByDetailIdAsync(int detailId, CancellationToken cancellationToken = default)
     {
         return await _repository.Query<AiSpeechAssistantKnowledgeDetail>().Where(x => x.Id == detailId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<AiSpeechAssistantKnowledgeDetail>> GetAiSpeechAssistantKnowledgeDetailsByKnowledgeIdsAsync(List<int> knowledgeIds, CancellationToken cancellationToken = default)
+    {
+        var query = _repository.Query<AiSpeechAssistantKnowledgeDetail>().Where(x => knowledgeIds.Contains(x.KnowledgeId));
+
+        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }
