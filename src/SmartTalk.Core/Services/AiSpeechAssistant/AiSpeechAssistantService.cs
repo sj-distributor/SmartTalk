@@ -34,7 +34,6 @@ using SmartTalk.Core.Services.Restaurants;
 using SmartTalk.Core.Services.SpeechMatics;
 using SmartTalk.Core.Services.Sale;
 using SmartTalk.Core.Services.STT;
-using SmartTalk.Core.Services.Sale;
 using SmartTalk.Core.Services.Timer;
 using SmartTalk.Core.Settings.Azure;
 using SmartTalk.Core.Settings.OpenAi;
@@ -296,13 +295,16 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         if (finalPrompt.Contains("#{customer_info}", StringComparison.OrdinalIgnoreCase))
         {
-            var phone = from;
-            
-            var customerInfoCache = await _salesDataProvider.GetCustomerInfoCacheByPhoneNumberAsync(phone, cancellationToken).ConfigureAwait(false);
+            var customerInfoCache = await _salesDataProvider.GetCustomerInfoCacheByPhoneNumberAsync(from, cancellationToken).ConfigureAwait(false);
+            var customerInfo = customerInfoCache?.CacheValue?.Trim();
+            finalPrompt = finalPrompt.Replace("#{customer_info}", string.IsNullOrEmpty(customerInfo) ? " " : customerInfo);
+        }
 
-            var info = customerInfoCache?.CacheValue?.Trim();
-
-            finalPrompt = finalPrompt.Replace("#{customer_info}", string.IsNullOrEmpty(info) ? " " : info);
+        if (finalPrompt.Contains("#{delivery_info}", StringComparison.OrdinalIgnoreCase))
+        {
+            var deliveryInfoCache = await _salesDataProvider.GetDeliveryInfoCacheByPhoneNumberAsync(from, cancellationToken).ConfigureAwait(false);
+            var deliveryInfo = deliveryInfoCache?.CacheValue?.Trim();
+            finalPrompt = finalPrompt.Replace("#{delivery_info}", string.IsNullOrEmpty(deliveryInfo) ? " " : deliveryInfo);
         }
         
         Log.Information($"The final prompt: {finalPrompt}");

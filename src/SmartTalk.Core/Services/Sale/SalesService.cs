@@ -13,7 +13,7 @@ public interface ISalesService : IScopedDependency
 
     Task<string> HandleOrderArrivalTimeList(List<string> customerIds, CancellationToken cancellationToken);
 
-    Task<string> BuildCrmCustomerInfoByPhoneAsync(string phoneNumber, CancellationToken cancellationToken);
+    Task<CrmCustomerPhoneKnowledgeDto> BuildCrmKnowledgeByPhoneAsync(string phoneNumber, CancellationToken cancellationToken);
 }
 
 public class SalesService : ISalesService
@@ -146,36 +146,17 @@ public class SalesService : ISalesService
         return resultBuilder.ToString();
     }
 
-    public async Task<string> BuildCrmCustomerInfoByPhoneAsync(string phoneNumber, CancellationToken cancellationToken)
+    public async Task<CrmCustomerPhoneKnowledgeDto> BuildCrmKnowledgeByPhoneAsync(string phoneNumber, CancellationToken cancellationToken)
     {
         var normalizedPhone = NormalizePhone(phoneNumber);
-        var customerInfo = new StringBuilder();
         var crmCustomers = await TryGetCrmCustomersByPhoneAsync(normalizedPhone, cancellationToken).ConfigureAwait(false);
         var deliveryInfos = await TryGetDeliveryInfoByPhoneAsync(normalizedPhone, cancellationToken).ConfigureAwait(false);
 
-        customerInfo.AppendLine($"来电号码: {normalizedPhone}");
-
-        if (!crmCustomers.Any())
+        return new CrmCustomerPhoneKnowledgeDto
         {
-            customerInfo.AppendLine("- 客户ID识别状态: 未识别到CRM-SAP ID");
-            customerInfo.AppendLine("- 建议回复: 可以先请客户提供客户编号或公司名称，再协助查询对应送货时间。");
-            return customerInfo.ToString();
-        }
-
-        var deliveryLookup = BuildDeliveryLookup(deliveryInfos);
-
-        for (var i = 0; i < crmCustomers.Count; i++)
-        {
-            var customer = crmCustomers[i];
-            customerInfo.AppendLine($"客户 {i + 1}:");
-            AppendCustomerBaseInfo(customerInfo, customer, normalizedPhone);
-            var sapId = customer.SapId?.Trim();
-            deliveryLookup.TryGetValue(sapId ?? string.Empty, out var routeInfos);
-            AppendDeliveryRouteSummary(customerInfo, routeInfos);
-            customerInfo.AppendLine();
-        }
-
-        return customerInfo.ToString();
+            CustomerInfo = BuildCustomerInfoText(normalizedPhone, crmCustomers),
+            DeliveryInfo = BuildDeliveryInfoText(crmCustomers, deliveryInfos, normalizedPhone)
+        };
     }
 
     private async Task<List<GetCustomersPhoneNumberDataDto>> TryGetCrmCustomersByPhoneAsync(string normalizedPhone, CancellationToken cancellationToken)
@@ -185,7 +166,7 @@ public class SalesService : ISalesService
             var token = await _crmClient.GetCrmTokenAsync(cancellationToken).ConfigureAwait(false);
             if (string.IsNullOrWhiteSpace(token))
             {
-                Log.Warning("BuildCrmCustomerInfoByPhoneAsync: CRM token is empty, phone: {PhoneNumber}", normalizedPhone);
+                Log.Warning("BuildCrmKnowledgeByPhoneAsync: CRM token is empty, phone: {PhoneNumber}", normalizedPhone);
                 return [];
             }
 
@@ -199,6 +180,62 @@ public class SalesService : ISalesService
             Log.Error(ex, "Build CRM customer basic info failed for phone {PhoneNumber}", normalizedPhone);
             return [];
         }
+    }
+
+    private static string BuildCustomerInfoText(string normalizedPhone, List<GetCustomersPhoneNumberDataDto> crmCustomers)
+    {
+        var customerInfo = new StringBuilder();
+        customerInfo.AppendLine($"来电号码: {normalizedPhone}");
+
+        if (!crmCustomers.Any())
+        {
+            customerInfo.AppendLine("- 客户ID识别状态: 未识别到CRM-SAP ID");
+            customerInfo.AppendLine("- 建议回复: 可以先请客户提供客户编号或公司名称，再协助查询对应送货时间。");
+            return customerInfo.ToString();
+        }
+
+        for (var i = 0; i < crmCustomers.Count; i++)
+        {
+            var customer = crmCustomers[i];
+            customerInfo.AppendLine($"客户 {i + 1}:");
+            AppendCustomerBaseInfo(customerInfo, customer, normalizedPhone);
+            customerInfo.AppendLine();
+        }
+
+        return customerInfo.ToString();
+    }
+
+    private static string BuildDeliveryInfoText(
+        List<GetCustomersPhoneNumberDataDto> crmCustomers,
+        List<GetDeliveryInfoByPhoneNumberResponseDto> deliveryInfos,
+        string normalizedPhone)
+    {
+        var deliveryInfo = new StringBuilder();
+
+        if (!crmCustomers.Any())
+        {
+            deliveryInfo.AppendLine($"来电号码: {normalizedPhone}");
+            deliveryInfo.AppendLine("- 配送信息状态: 未识别到CRM-SAP ID，无法匹配送货路线。");
+            deliveryInfo.AppendLine("- 建议回复: 可以先请客户提供客户编号或公司名称，再协助查询对应送货时间。");
+            return deliveryInfo.ToString();
+        }
+
+        var deliveryLookup = BuildDeliveryLookup(deliveryInfos);
+
+        for (var i = 0; i < crmCustomers.Count; i++)
+        {
+            var customer = crmCustomers[i];
+            deliveryInfo.AppendLine($"客户 {i + 1}:");
+            deliveryInfo.AppendLine($"- SAP编号: {customer.SapId}");
+            deliveryInfo.AppendLine($"- 客户名称: {customer.CustomerName}");
+
+            var sapId = customer.SapId?.Trim();
+            deliveryLookup.TryGetValue(sapId ?? string.Empty, out var routeInfos);
+            AppendDeliveryRouteSummary(deliveryInfo, routeInfos);
+            deliveryInfo.AppendLine();
+        }
+
+        return deliveryInfo.ToString();
     }
 
     private static Dictionary<string, List<GetDeliveryInfoByPhoneNumberResponseDto>> BuildDeliveryLookup(List<GetDeliveryInfoByPhoneNumberResponseDto> deliveryInfos)

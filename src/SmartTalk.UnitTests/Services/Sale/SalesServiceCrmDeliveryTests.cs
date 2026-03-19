@@ -13,7 +13,7 @@ public class SalesServiceCrmDeliveryTests
     private readonly ISalesClient _salesClient = Substitute.For<ISalesClient>();
 
     [Fact]
-    public async Task BuildCrmCustomerInfoByPhoneAsync_ShouldIncludeRouteSchedule_WhenRouteConfigured()
+    public async Task BuildCrmKnowledgeByPhoneAsync_ShouldSplitCustomerAndDeliveryInfo_WhenRouteConfigured()
     {
         var sut = new SalesService(_crmClient, _salesClient);
         var cancellationToken = CancellationToken.None;
@@ -51,15 +51,16 @@ public class SalesServiceCrmDeliveryTests
                     : [];
             });
 
-        var result = await sut.BuildCrmCustomerInfoByPhoneAsync("+1 (916) 428-4295", cancellationToken);
+        var result = await sut.BuildCrmKnowledgeByPhoneAsync("+1 (916) 428-4295", cancellationToken);
 
-        result.ShouldContain("SAP编号: 109782");
-        result.ShouldContain("路线1: ELKG");
-        result.ShouldContain("送货安排: 每周二、周四、周六 10:00-18:00");
+        result.CustomerInfo.ShouldContain("SAP编号: 109782");
+        result.CustomerInfo.ShouldNotContain("路线1: ELKG");
+        result.DeliveryInfo.ShouldContain("路线1: ELKG");
+        result.DeliveryInfo.ShouldContain("送货安排: 每周二、周四、周六 10:00-18:00");
     }
 
     [Fact]
-    public async Task BuildCrmCustomerInfoByPhoneAsync_ShouldMarkRouteUnconfigured_WhenNoRouteInfoReturned()
+    public async Task BuildCrmKnowledgeByPhoneAsync_ShouldMarkRouteUnconfigured_WhenNoRouteInfoReturned()
     {
         var sut = new SalesService(_crmClient, _salesClient);
         var cancellationToken = CancellationToken.None;
@@ -79,13 +80,14 @@ public class SalesServiceCrmDeliveryTests
         _crmClient.GetDeliveryInfoByPhoneNumberAsync(Arg.Any<string>(), cancellationToken)
             .Returns([]);
 
-        var result = await sut.BuildCrmCustomerInfoByPhoneAsync("+19164284295", cancellationToken);
+        var result = await sut.BuildCrmKnowledgeByPhoneAsync("+19164284295", cancellationToken);
 
-        result.ShouldContain("路线状态: 未配置路线");
+        result.CustomerInfo.ShouldContain("客户名称: Test Customer");
+        result.DeliveryInfo.ShouldContain("路线状态: 未配置路线");
     }
 
     [Fact]
-    public async Task BuildCrmCustomerInfoByPhoneAsync_ShouldReturnUnrecognizedHint_WhenNoCrmCustomerMatched()
+    public async Task BuildCrmKnowledgeByPhoneAsync_ShouldReturnUnrecognizedHint_WhenNoCrmCustomerMatched()
     {
         var sut = new SalesService(_crmClient, _salesClient);
         var cancellationToken = CancellationToken.None;
@@ -99,14 +101,15 @@ public class SalesServiceCrmDeliveryTests
         _crmClient.GetDeliveryInfoByPhoneNumberAsync(Arg.Any<string>(), cancellationToken)
             .Returns([]);
 
-        var result = await sut.BuildCrmCustomerInfoByPhoneAsync("+19164284295", cancellationToken);
+        var result = await sut.BuildCrmKnowledgeByPhoneAsync("+19164284295", cancellationToken);
 
-        result.ShouldContain("客户ID识别状态: 未识别到CRM-SAP ID");
-        result.ShouldContain("建议回复: 可以先请客户提供客户编号或公司名称");
+        result.CustomerInfo.ShouldContain("客户ID识别状态: 未识别到CRM-SAP ID");
+        result.CustomerInfo.ShouldContain("建议回复: 可以先请客户提供客户编号或公司名称");
+        result.DeliveryInfo.ShouldContain("配送信息状态: 未识别到CRM-SAP ID，无法匹配送货路线。");
     }
 
     [Fact]
-    public async Task BuildCrmCustomerInfoByPhoneAsync_ShouldQueryDeliveryByNormalizedPhoneOnly()
+    public async Task BuildCrmKnowledgeByPhoneAsync_ShouldQueryDeliveryByNormalizedPhoneOnly()
     {
         var sut = new SalesService(_crmClient, _salesClient);
         var cancellationToken = CancellationToken.None;
@@ -142,9 +145,9 @@ public class SalesServiceCrmDeliveryTests
                     : [];
             });
 
-        var result = await sut.BuildCrmCustomerInfoByPhoneAsync("+19164284295", cancellationToken);
+        var result = await sut.BuildCrmKnowledgeByPhoneAsync("+19164284295", cancellationToken);
 
-        result.ShouldContain("路线1: ELKG");
+        result.DeliveryInfo.ShouldContain("路线1: ELKG");
         await _crmClient.Received().GetDeliveryInfoByPhoneNumberAsync("+19164284295", cancellationToken);
         await _crmClient.DidNotReceive().GetDeliveryInfoByPhoneNumberAsync("19164284295", cancellationToken);
         await _crmClient.DidNotReceive().GetDeliveryInfoByPhoneNumberAsync("9164284295", cancellationToken);
