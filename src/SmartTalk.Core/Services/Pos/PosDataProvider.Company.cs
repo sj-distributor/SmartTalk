@@ -263,7 +263,7 @@ public partial class PosDataProvider
     {
         var query = from posAgent in _repository.Query<PosAgent>().Where(x => x.AgentId == agentId)
             join store in _repository.Query<CompanyStore>() on posAgent.StoreId equals store.Id
-            join product in _repository.Query<PosProduct>() on store.Id equals product.StoreId
+            join product in _repository.Query<PosProduct>().Where(x => x.Status) on store.Id equals product.StoreId
             select product;
         
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
