@@ -162,7 +162,7 @@ public partial class EventHandlingService
 
         return name.EndsWith("-副本", StringComparison.Ordinal) ? name : $"{name}-副本";
     }
-    
+
     private JObject BuildMergedKnowledgeJson(string baseJson, IEnumerable<string> copyKnowledgePoints)
     {
         var baseObj = string.IsNullOrWhiteSpace(baseJson) ? new JObject() : JObject.Parse(baseJson);
