@@ -291,6 +291,16 @@ public partial class AiSpeechAssistantService
         var knowledgeDtos = _mapper.Map<List<AiSpeechAssistantKnowledgeDto>>(knowledges);
 
         var historyKnowledges = await EnhanceKnowledgesHistoryRelatedInfo(knowledgeDtos, cancellationToken).ConfigureAwait(false);
+
+        var premise = await _aiSpeechAssistantDataProvider
+            .GetAiSpeechAssistantPremiseByAssistantIdAsync(request.AssistantId, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (premise != null && !string.IsNullOrWhiteSpace(premise.Content))
+        {
+            var premiseDto = _mapper.Map<AiSpeechAssistantPremiseDto>(premise);
+            historyKnowledges.ForEach(k => k.Premise = premiseDto);
+        }
         
         return new GetAiSpeechAssistantKnowledgeHistoryResponse
         {
@@ -308,16 +318,151 @@ public partial class AiSpeechAssistantService
 
         var ids = knowledges.Select(k => k.Id).Distinct().ToList();
 
-        var allRelated = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync(ids, null, cancellationToken).ConfigureAwait(false);
-        
-        var relatedMap = allRelated.GroupBy(x => x.TargetKnowledgeId).ToDictionary(g => g.Key, g => g.ToList());
+        var allRelatedEntities = await _aiSpeechAssistantDataProvider
+            .GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync(ids, null, cancellationToken)
+            .ConfigureAwait(false);
 
-        knowledges.ForEach(k =>
+        var relatedDtos = await EnhanceRelateFrom(allRelatedEntities, cancellationToken).ConfigureAwait(false);
+        var relatedDtoMap = relatedDtos
+            .GroupBy(x => x.TargetKnowledgeId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        var allBaseDetails = await _aiSpeechAssistantDataProvider
+            .GetAiSpeechAssistantKnowledgeDetailsByKnowledgeIdsAsync(ids, cancellationToken)
+            .ConfigureAwait(false);
+
+        var baseDetailMap = (allBaseDetails ?? new List<AiSpeechAssistantKnowledgeDetail>())
+            .GroupBy(x => x.KnowledgeId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        var sourceKnowledgeIds = relatedDtos.Select(x => x.SourceKnowledgeId).Distinct().ToList();
+        var allSourceDetails = sourceKnowledgeIds.Count == 0
+            ? new List<AiSpeechAssistantKnowledgeDetail>()
+            : await _aiSpeechAssistantDataProvider
+                .GetAiSpeechAssistantKnowledgeDetailsByKnowledgeIdsAsync(sourceKnowledgeIds, cancellationToken)
+                .ConfigureAwait(false);
+
+        var sourceDetailLookup = (allSourceDetails ?? new List<AiSpeechAssistantKnowledgeDetail>())
+            .GroupBy(x => x.KnowledgeId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        foreach (var knowledge in knowledges)
         {
-            relatedMap.TryGetValue(k.Id, out var relateds);
+            relatedDtoMap.TryGetValue(knowledge.Id, out var relatedForKnowledge);
+            knowledge.KnowledgeCopyRelateds = relatedForKnowledge ?? new List<AiSpeechAssistantKnowledgeCopyRelatedDto>();
 
-            k.KnowledgeCopyRelateds = _mapper.Map<List<AiSpeechAssistantKnowledgeCopyRelatedDto>>(relateds ?? new List<AiSpeechAssistantKnowledgeCopyRelated>());
-        });
+            baseDetailMap.TryGetValue(knowledge.Id, out var baseDetails);
+            var detailDtos = _mapper.Map<List<AiSpeechAssistantKnowledgeDetailDto>>(baseDetails ?? new List<AiSpeechAssistantKnowledgeDetail>());
+            detailDtos.ForEach(d => d.RelatedKnowledgeId = knowledge.Id);
+
+            if (relatedForKnowledge == null || relatedForKnowledge.Count == 0)
+            {
+                knowledge.Details = detailDtos;
+                continue;
+            }
+
+            var relatedFromMap = relatedForKnowledge
+                .GroupBy(x => x.SourceKnowledgeId)
+                .ToDictionary(g => g.Key, g => g.FirstOrDefault()?.RelatedFrom);
+
+            var sourceRelationMap = relatedForKnowledge
+                .GroupBy(x => x.SourceKnowledgeId)
+                .ToDictionary(g => g.Key, g => g.First());
+
+            var sourceDetailIdentityLookup = new Dictionary<string, (int SourceKnowledgeId, string RelatedFrom, bool IsSyncUpdate)>();
+            var existingDetailSignatures = detailDtos
+                .Select(x => BuildDetailSignature(x.KnowledgeName, x.FormatType, x.Content, x.FileName))
+                .ToHashSet();
+
+            foreach (var sourceId in relatedForKnowledge.Select(x => x.SourceKnowledgeId).Distinct())
+            {
+                if (!sourceDetailLookup.TryGetValue(sourceId, out var sourceDetails) || sourceDetails == null || sourceDetails.Count == 0)
+                    continue;
+
+                relatedFromMap.TryGetValue(sourceId, out var relatedFrom);
+                var isSyncUpdate = sourceRelationMap.TryGetValue(sourceId, out var relation) && relation.IsSyncUpdate;
+
+                foreach (var sourceDetail in sourceDetails)
+                {
+                    var copiedName = EnsureCopySuffixForDetailMatching(sourceDetail.KnowledgeName);
+                    var signature = BuildDetailSignature(copiedName, sourceDetail.FormatType, sourceDetail.Content, sourceDetail.FileName);
+                    var identity = BuildDetailIdentity(copiedName, sourceDetail.FormatType, sourceDetail.FileName);
+                    sourceDetailIdentityLookup.TryAdd(identity, (sourceId, relatedFrom, isSyncUpdate));
+
+                    if (!isSyncUpdate)
+                        continue;
+
+                    var existingDtos = detailDtos.Where(x =>
+                            x.KnowledgeName == copiedName &&
+                            x.FormatType == sourceDetail.FormatType &&
+                            x.FileName == sourceDetail.FileName)
+                        .ToList();
+
+                    if (existingDtos.Count > 0)
+                    {
+                        foreach (var existingDto in existingDtos)
+                        {
+                            existingDto.Id = sourceDetail.Id;
+                            existingDto.KnowledgeId = sourceDetail.KnowledgeId;
+                            existingDto.Content = sourceDetail.Content;
+                            existingDto.CreatedDate = sourceDetail.CreatedDate;
+                            existingDto.LastModifiedBy = sourceDetail.LastModifiedBy;
+                            existingDto.LastModifiedDate = sourceDetail.LastModifiedDate;
+                            existingDto.RelatedKnowledgeId = sourceId;
+                            existingDto.RelatedFrom = relatedFrom;
+                            existingDto.IsSyncUpdate = true;
+                        }
+                    }
+                    else if (!existingDetailSignatures.Contains(signature))
+                    {
+                        detailDtos.Add(new AiSpeechAssistantKnowledgeDetailDto
+                        {
+                            Id = sourceDetail.Id,
+                            KnowledgeId = sourceDetail.KnowledgeId,
+                            KnowledgeName = copiedName,
+                            FormatType = sourceDetail.FormatType,
+                            Content = sourceDetail.Content,
+                            FileName = sourceDetail.FileName,
+                            CreatedDate = sourceDetail.CreatedDate,
+                            LastModifiedBy = sourceDetail.LastModifiedBy,
+                            LastModifiedDate = sourceDetail.LastModifiedDate,
+                            RelatedKnowledgeId = sourceId,
+                            RelatedFrom = relatedFrom,
+                            IsSyncUpdate = true
+                        });
+                    }
+
+                    existingDetailSignatures.Add(signature);
+                }
+            }
+
+            var copiedDetailDtos = detailDtos
+                .Where(x => !string.IsNullOrWhiteSpace(x.KnowledgeName) && x.KnowledgeName.EndsWith("-副本", StringComparison.Ordinal))
+                .ToList();
+            var baseDetailDtos = detailDtos
+                .Where(x => string.IsNullOrWhiteSpace(x.KnowledgeName) || !x.KnowledgeName.EndsWith("-副本", StringComparison.Ordinal))
+                .ToList();
+
+            detailDtos = baseDetailDtos
+                .Concat(copiedDetailDtos
+                    .GroupBy(d => BuildDetailIdentity(d.KnowledgeName, d.FormatType, d.FileName))
+                    .Select(g => g.First()))
+                .ToList();
+
+            foreach (var dto in detailDtos.Where(x => !string.IsNullOrWhiteSpace(x.KnowledgeName) &&
+                                                      x.KnowledgeName.EndsWith("-副本", StringComparison.Ordinal)))
+            {
+                var identity = BuildDetailIdentity(dto.KnowledgeName, dto.FormatType, dto.FileName);
+                if (!sourceDetailIdentityLookup.TryGetValue(identity, out var sourceInfo))
+                    continue;
+
+                dto.RelatedKnowledgeId = sourceInfo.SourceKnowledgeId;
+                dto.RelatedFrom = sourceInfo.RelatedFrom;
+                dto.IsSyncUpdate = sourceInfo.IsSyncUpdate;
+            }
+
+            knowledge.Details = detailDtos;
+        }
         
         return knowledges;
     }
