@@ -109,8 +109,6 @@ public partial class AiSpeechAssistantService
         {
             if (command.Greetings == null)
                 latestKnowledge.Greetings = prevKnowledge.Greetings;
-            if (command.Json == null)
-                latestKnowledge.Json = prevKnowledge.Json;
         }
         latestKnowledge.Version = prevKnowledge == null
             ? "1.0"
@@ -185,6 +183,19 @@ public partial class AiSpeechAssistantService
                 shouldSyncLastedKnowledge = selectedSourceRelateds.Any(x => x.IsSyncUpdate);
             }
         }
+        else if (prevKnowledge != null && selectedSourceRelateds.Count > 0)
+        {
+            var syncSourceRelatedsToMove = selectedSourceRelateds.Where(x => x.IsSyncUpdate).ToList();
+            if (syncSourceRelatedsToMove.Count > 0)
+            {
+                syncSourceRelatedsToMove.ForEach(x => x.SourceKnowledgeId = latestKnowledge.Id);
+                await _aiSpeechAssistantDataProvider
+                    .UpdateKnowledgeCopyRelatedAsync(syncSourceRelatedsToMove, true, cancellationToken)
+                    .ConfigureAwait(false);
+
+                shouldSyncLastedKnowledge = true;
+            }
+        }
 
         AiSpeechAssistantKnowledgeDto prevKnowledgeDto;
         if (prevKnowledge != null)
@@ -201,8 +212,7 @@ public partial class AiSpeechAssistantService
                                    Brief = prevKnowledge.Brief,
                                    Greetings = prevKnowledge.Greetings,
                                    CreatedDate = prevKnowledge.CreatedDate,
-                                   CreatedBy = prevKnowledge.CreatedBy,
-                                   ModelLanguage = prevKnowledge.ModelLanguage
+                                   CreatedBy = prevKnowledge.CreatedBy
                                };
 
             var prevDetails = await _aiSpeechAssistantDataProvider
