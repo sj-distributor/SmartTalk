@@ -136,18 +136,13 @@ public class SalesPhoneOrderPushService : ISalesPhoneOrderPushService
     private async Task ExecuteDeleteAsync(PhoneOrderPushTask task, CancellationToken cancellationToken)
     {
         var req = JsonSerializer.Deserialize<DeleteAiOrderRequestDto>(task.RequestJson);
-
-        await _salesClient.DeleteAiOrderAsync(req, cancellationToken).ConfigureAwait(false);
+        
+        var resp =await _salesClient.DeleteAiOrderAsync(req, cancellationToken).ConfigureAwait(false);
         Log.Information("Sales DeleteOrder SUCCESS. TaskId={TaskId}, Request={@Request}", task.Id, req);
-    }
-    
-    private async Task UpdateRecordOrderIdAsync(PhoneOrderRecord record, Guid orderId, CancellationToken cancellationToken) 
-    { 
-        var orderIds = string.IsNullOrEmpty(record.OrderId) ? new List<Guid>() : JsonConvert.DeserializeObject<List<Guid>>(record.OrderId)!;
         
-        orderIds.Add(orderId); 
-        record.OrderId = JsonConvert.SerializeObject(orderIds);
+        if (resp?.Data == null || resp.Data == Guid.Empty)
+            throw new Exception("DeleteAiOrderAsync failed");
         
-        await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken).ConfigureAwait(false); 
+        await _phoneOrderDataProvider.UpdateOrderIdAsync(task.RecordId, resp.Data, cancellationToken).ConfigureAwait(false);
     }
 }
