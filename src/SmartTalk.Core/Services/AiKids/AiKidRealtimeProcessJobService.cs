@@ -201,14 +201,14 @@ public class AiKidRealtimeProcessJobService : IAiKidRealtimeProcessJobService
             {
               "stores": [
                 {
-                  "StoreName": "moon house",
+                  "StoreName": "KIBI'S CAFE",
                   "StoreNumber": "1",
                   "DeliveryDate": "2026-03-26",
                   "orders": [
                     {
                       "name": "CABBAGE",
                       "quantity": 1,
-                      "unit": "Case"
+                      "unit": "CS"
                     }
                   ]
                 }
