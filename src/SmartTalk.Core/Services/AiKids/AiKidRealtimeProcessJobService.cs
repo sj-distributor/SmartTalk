@@ -178,40 +178,43 @@ public class AiKidRealtimeProcessJobService : IAiKidRealtimeProcessJobService
         if (string.IsNullOrWhiteSpace(reportText)) return [];
 
         var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
-        
+
         var systemPrompt =
-            "你是一名订单分析助手。请从下面的通话文字中，提取客户下单信息，并严格返回 JSON 结果。\n\n" +
-            "提取规则如下：\n" +
-            "1. 提取所有下单的物料，包含以下字段：name、quantity、unit。\n" +
-            "2. 如果通话内容中提到了预约送货时间，请提取 DeliveryDate，格式必须为 yyyy-MM-dd。\n" +
-            "3. 如果客户提到了分店名称，请提取 StoreName；如果提到了第几家店，请提取 StoreNumber。\n" +
-            "4. 如果没有提到店铺信息，但存在下单内容，则 StoreName 和 StoreNumber 允许为空字符串。\n" +
-            "5. 提取的物料名称必须使用繁体中文。\n" +
-            "6. 必须尽可能完整提取文本中每一个明确提到的下单物料，不得遗漏。\n" +
-            "7. 不得臆造、补全或猜测文本中未明确提到的信息。\n\n" +
-            "输出要求如下：\n" +
-            "1. 仅可输出一个 JSON 对象，不得包含任何额外说明、注释或其他文字。\n" +
-            "2. JSON 顶层字段必须为 \"stores\"。\n" +
-            "3. 每个店铺对象包含以下字段：StoreName、StoreNumber、DeliveryDate、orders。\n" +
-            "4. orders 为数组，数组元素包含：name、quantity、unit。\n" +
-            "5. 如果文本中没有任何可识别的下单信息，请返回：{\"stores\":[]}。\n\n" +
-            "输出格式示例：\n" +
-            "{\n" +
-            "  \"stores\": [\n" +
-            "    {\n" +
-            "      \"StoreName\": \"海底撈\",\n" +
-            "      \"StoreNumber\": \"1\",\n" +
-            "      \"DeliveryDate\": \"2025-08-20\",\n" +
-            "      \"orders\": [\n" +
-            "        {\n" +
-            "          \"name\": \"雞胸肉\",\n" +
-            "          \"quantity\": 1,\n" +
-            "          \"unit\": \"箱\"\n" +
-            "        }\n" +
-            "      ]\n" +
-            "    }\n" +
-            "  ]\n" +
-            "}";
+            """
+            You are an order analysis assistant. Please extract customer order information from the following call text and return a strictly JSON result.
+            Extraction rules are as follows:
+            1. Extract all ordered materials, including the following fields: name, quantity, unit.
+            2. If the call mentions a scheduled delivery time, extract DeliveryDate, which must be in the format yyyy-MM-dd.
+            3. If the customer mentions a branch name, extract StoreName; if they mention a specific branch number, extract StoreNumber.
+            4. If no branch information is mentioned, but the order details exist, StoreName and StoreNumber can be empty strings.
+            5. Extracted material names must use Traditional Chinese characters.
+            6. You must extract every explicitly mentioned ordered material from the text as completely as possible, without omissions.
+            7. Do not fabricate, supplement, or guess information not explicitly mentioned in the text.
+            Output requirements are as follows:
+            1. Only one JSON object may be output, without any additional explanations, comments, or other text.
+            2. The top-level field in the JSON must be "stores".
+            3. Each store object contains the following fields: StoreName, StoreNumber, DeliveryDate, and orders.
+            4. orders is an array, with each element containing: name, quantity, and unit.
+            5. name must be extracted in English; the English text must be extracted verbatim.
+            6. If there is no recognizable order information in the text, please return: {"stores":[]}.
+            Example output format:
+            {
+              "stores": [
+                {
+                  "StoreName": "moon house",
+                  "StoreNumber": "1",
+                  "DeliveryDate": "2026-03-26",
+                  "orders": [
+                    {
+                      "name": "CABBAGE",
+                      "quantity": 1,
+                      "unit": "Case"
+                    }
+                  ]
+                }
+              ]
+            }
+            """;
 
         var messages = new List<ChatMessage>
         {
