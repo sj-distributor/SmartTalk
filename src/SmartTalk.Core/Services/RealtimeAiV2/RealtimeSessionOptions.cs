@@ -98,6 +98,44 @@ public class RealtimeAiSessionActions
     /// Only available when <see cref="RealtimeSessionOptions.EnableRecording"/> is true.
     /// </summary>
     public Func<Task<byte[]>> GetRecordedAudioSnapshotAsync { get; init; }
+
+    /// <summary>
+    /// Update the provider session configuration (e.g., instructions/tools).
+    /// For OpenAI Realtime, this maps to "session.update".
+    /// </summary>
+    public Func<RealtimeAiSessionUpdate, Task> UpdateSessionAsync { get; init; }
+}
+
+/// <summary>
+/// Provider-agnostic session update payload.
+/// Fields left null are not updated.
+/// </summary>
+public class RealtimeAiSessionUpdate
+{
+    /// <summary>
+    /// Updated system instructions. Use empty string to clear.
+    /// </summary>
+    public string Instructions { get; set; }
+
+    /// <summary>
+    /// Updated tool definitions. Set to empty list to clear tools.
+    /// </summary>
+    public List<object> Tools { get; set; }
+
+    /// <summary>
+    /// Updated temperature (if supported by provider).
+    /// </summary>
+    public double? Temperature { get; set; }
+
+    /// <summary>
+    /// Updated turn detection configuration (provider-specific).
+    /// </summary>
+    public object TurnDetection { get; set; }
+
+    /// <summary>
+    /// Updated input audio noise reduction configuration (provider-specific).
+    /// </summary>
+    public object InputAudioNoiseReduction { get; set; }
 }
 
 public class RealtimeSessionOptions
