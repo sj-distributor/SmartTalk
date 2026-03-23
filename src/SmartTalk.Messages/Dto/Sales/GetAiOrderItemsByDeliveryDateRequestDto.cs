@@ -5,6 +5,8 @@ public class GetAiOrderItemsByDeliveryDateRequestDto
     public string CustomerNumber { get; set; }
     
     public DateTime DeliveryDate { get; set; }
+    
+    public bool IncludePrintedQuantity { get; set; }
 }
 
 public class GetAiOrderItemsByDeliveryDateResponseDto

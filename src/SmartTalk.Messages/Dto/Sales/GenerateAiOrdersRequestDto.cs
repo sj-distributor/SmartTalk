@@ -41,4 +41,6 @@ public class AiOrderItemDto
     public bool MarkForDelete { get; set; }
     
     public bool Restored { get; set; }
+    
+    public bool IsTargetQuantity { get; set; }
 }
