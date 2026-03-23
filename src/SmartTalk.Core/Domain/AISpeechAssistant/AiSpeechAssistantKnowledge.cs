@@ -38,7 +38,7 @@ public class AiSpeechAssistantKnowledge : IEntity, IHasCreatedFields
     [Column("created_by")]
     public int CreatedBy { get; set; }
     
-    [Column("model_language")]
+    [Column("model_language"), StringLength(255)]
     public string ModelLanguage { get; set; }
     
     [NotMapped]
