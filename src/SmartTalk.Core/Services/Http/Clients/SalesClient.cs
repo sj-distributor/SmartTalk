@@ -114,7 +114,8 @@ public class SalesClient : ISalesClient
 
         var deliveryDate = request.DeliveryDate.ToString("yyyy-MM-dd");
 
-        var url = $"{_salesSetting.BaseUrl}/api/SalesOrder/GetAiOrderItemsByDeliveryDate" + $"?customerNumber={Uri.EscapeDataString(request.CustomerNumber)}" + $"&deliveryDate={deliveryDate}";
+        var url = $"{_salesSetting.BaseUrl}/api/SalesOrder/GetAiOrderItemsByDeliveryDate" + $"?customerNumber={Uri.EscapeDataString(request.CustomerNumber)}"
+                  + $"&deliveryDate={deliveryDate}" + $"&includePrintedQuantity={request.IncludePrintedQuantity}";
 
         return await _httpClientFactory.GetAsync<GetAiOrderItemsByDeliveryDateResponseDto>(url, headers: _headers, cancellationToken: cancellationToken).ConfigureAwait(false);
     }

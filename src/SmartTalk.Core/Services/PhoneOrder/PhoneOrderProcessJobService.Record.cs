@@ -463,19 +463,19 @@ public partial class PhoneOrderProcessJobService
             "2. 如果客戶先說取消整單，後面又表示還是要、算了繼續下單、剛剛的取消不算，請標記 IsUndoCancel=true。\n" +
             "3. 如果客戶只取消單個物料（例如：某某不要了、某某取消、某某 cut 掉，并没有提到数量），請保留該物料，並在該物料上標記 markForDelete=true，\n" +
             "4. 如果客戶只是减少單個物料的數量，但是说了「取消」的字眼（例如：某某取消1箱，必须提到数量），quantity（負數表示，如-1），markForDelete=false。\n" +
-            "5. 如果客戶說某某物料剛下了4箱，現在幫我改成1箱（或改成只要1箱/变成1箱/剩1箱），請保留該物料：quantity=1，並標記 isTargetQuantity=true（不要在這裡做 4-1 的計算）。\n\n" +
-            "6. 如果客戶只是增加物料数量（例如：再加2箱/多要2箱），quantity=2，isTargetQuantity=false。\n" +
-            "7. 如果客戶只是减少物料数量（例如：某某减掉一箱），quantity=-1（必須為負數），isTargetQuantity=false。\n" +
+            "5. 如果客戶說某某物料剛下了4箱，現在幫我改成1箱（或改成只要1箱/变成1箱/剩1箱），請保留該物料：quantity=1，並標記 IsTargetQuantity=true（不要在這裡做 4-1 的計算）。\n\n" +
+            "6. 如果客戶只是增加物料数量（例如：再加2箱/多要2箱），quantity=2，IsTargetQuantity=false。\n" +
+            "7. 如果客戶只是减少物料数量（例如：某某减掉一箱），quantity=-1（必須為負數），IsTargetQuantity=false。\n" +
             "8. 單個物料取消不等於取消整單，IsDeleteWholeOrder = false。\n" +
             "9. 如果得到的字段restored是true，就為true，是false或者沒有得到這個字段，則為false\n" +
             "10. 如果订单中包含明确的数量描述，即使同时出现“需要确认数量 / 数量不确定”等提示，也应先按当前报告中的数量提取。\n" +
             "11. 如果是減少某個物料的數量，請在該物料的 quantity 使用負數表示。\n" +
-            "12. 如果是“改成/只要/變成/剩下”目標數量語義，請務必標記 isTargetQuantity = true。\n\n" +
+            "12. 如果是“改成/只要/變成/剩下”目標數量語義，請務必標記 IsTargetQuantity = true。\n\n" +
             
             "請嚴格傳回一個 JSON 對象，頂層字段為 \"stores\"，每个店铺对象包含：" +
             "StoreName（可空字符串）, StoreNumber（可空字符串）, DeliveryDate（可空字符串）, " +
             "IsDeleteWholeOrder（boolean，默認 false）, IsUndoCancel（boolean，默認 false）, " +
-            "orders（数组，元素包含 name, quantity, unit, materialNumber, markForDelete）。\n" +
+            "orders（数组，元素包含 name, quantity, unit, materialNumber, markForDelete, restored, IsTargetQuantity）。\n" +
             
             "範例：\n" +
             "{\n" +
@@ -493,7 +493,7 @@ public partial class PhoneOrderProcessJobService
             "          \"unit\": \"箱\",\n" +
             "          \"materialNumber\": \"000000000010010253\",\n" +
             "          \"markForDelete\": false,\n" +
-            "          \"isTargetQuantity\": false,\n" +
+            "          \"IsTargetQuantity\": false,\n" +
             "          \"restored\": false\n" +
             "        }\n" +
             "      ]\n" +
@@ -513,7 +513,7 @@ public partial class PhoneOrderProcessJobService
             "4. **如果客戶分析文本中沒有任何可識別的下單信息，請返回：{ \"stores\": [] }。不得臆造或猜測物料。**\n" +
             "5. 請務必完整提取報告中每一個提到的物料，如果没有匹配上歷史物料列表的物料，不知道它的materialNumber，那也必須保留該物料的quantity以及name。\n" +
             "6. 生成的json請不要重複物料名\n" +
-            "7. 如果客戶說“改成只要1箱”但未提到之前下了多少，仍然要標記 isTargetQuantity=true。";
+            "7. 如果客戶說“改成只要1箱”但未提到之前下了多少，仍然要標記 IsTargetQuantity=true。";
         Log.Information("Sending prompt to GPT: {Prompt}", systemPrompt);
 
         var messages = new List<ChatMessage>
@@ -555,7 +555,7 @@ public partial class PhoneOrderProcessJobService
                         var materialNumber = orderItem.TryGetProperty("materialNumber", out var mn) ? mn.GetString() ?? "" : ""; 
                         var markForDelete = orderItem.TryGetProperty("markForDelete", out var md) && md.GetBoolean();
                         var restored = orderItem.TryGetProperty("restored", out var rd) && rd.GetBoolean();
-                        var isTargetQuantity = orderItem.TryGetProperty("isTargetQuantity", out var itq) && itq.GetBoolean();
+                        var isTargetQuantity = orderItem.TryGetProperty("IsTargetQuantity", out var itq) && itq.GetBoolean();
 
                         if (string.IsNullOrWhiteSpace(materialNumber))
                             materialNumber = MatchMaterialNumber(name, materialNumber, unit, historyItems);
@@ -679,7 +679,8 @@ public partial class PhoneOrderProcessJobService
                     MaterialQuantity = i.Quantity,
                     AiUnit = i.Unit,
                     MarkForDelete = i.MarkForDelete,
-                    Restored = i.Restored
+                    Restored = i.Restored,
+                    IsTargetQuantity = i.IsTargetQuantity
                 }).ToList()
             }
         };
@@ -899,7 +900,7 @@ public partial class PhoneOrderProcessJobService
         var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
         var deliveryDateInPst = TimeZoneInfo.ConvertTime(storeOrder.DeliveryDate, pacificZone); 
         
-        var draftOrder = await _salesClient.GetAiOrderItemsByDeliveryDateAsync(new GetAiOrderItemsByDeliveryDateRequestDto { CustomerNumber = soldToId, DeliveryDate = deliveryDateInPst }, cancellationToken).ConfigureAwait(false);
+        var draftOrder = await _salesClient.GetAiOrderItemsByDeliveryDateAsync(new GetAiOrderItemsByDeliveryDateRequestDto { CustomerNumber = soldToId, DeliveryDate = deliveryDateInPst, IncludePrintedQuantity = true}, cancellationToken).ConfigureAwait(false);
         Log.Information("DraftOrder JSON: {DraftOrderJson}", JsonConvert.SerializeObject(draftOrder, Formatting.Indented));
 
         if (draftOrder?.Data == null || !draftOrder.Data.Any())
@@ -936,12 +937,12 @@ public partial class PhoneOrderProcessJobService
             
             "【核心任务流程】\n" +
             "1. 预处理与匹配：建立映射关系，精准找到通话中提到的商品对应草稿单中的哪一项。\n" +
-            "2. 计算合并：计算 Quantity。\n" +
+            "2. 计算合并：计算 Quantity，并保留 IsTargetQuantity。\n" +
             "3. 格式化名称：生成符合规范的 Name。\n" +
             "4. 输出结果：生成最终 JSON。\n\n" +
             
             "【关键规则一：匹配逻辑（核心）】\n" +
-            "必须严格按照以下优先级判断“本次通话商品”与“草稿单商品”是否为同一物料：\n" +
+            "必须严格按照以下优先级意图判断“本次通话商品”与“草稿单商品”是否为同一物料：\n" +
             "1. 优先级 A（物料号匹配）：若两者 MaterialNumber 都不为空且相等，视为同一物料。\n" +
             "2. 优先级 B（名称匹配）：若 MaterialNumber 为空，则对比名称。\n" +
             "必做操作：读取草稿单的 AiMaterialDesc 字段，以 # 符号为界截取前半部分作为“草稿基准名”（例如 \"玉米#1箱\" -> 基准名为 \"玉米\"）。\n" +
@@ -952,23 +953,26 @@ public partial class PhoneOrderProcessJobService
             "【关键规则二：计算与生成（Strict）】\n" +
             " **对于每一个用户输入的商品**：\n" +
             "- **若在【系统中已有草稿单】中找到匹配项**：\n" +
-            " - **计算变动值（Quantity）**：\n" +
-            "   - **情况A：历史物料的加减操作（如“1”、“-2”）**：\n" +
-            "      - Quantity = 【系统中已有草稿单】的 MaterialQuantity + 本次变动数量（例如：MaterialQuantity=2，变动数量=1 为2+1；或 MaterialQuantity=0，变动数量=1，为0+1）\n\n" +
-            "   - **情况B：直接指定（IsTargetQuantity 为 true）**：\n" +
-            "      - Quantity = 指定数量 - OriginalQuantity。（例如：原4改为1，Quantity = 1 - 4 = -3）\n\n" +
-            "      - Quantity = 指定数量 - OriginalQuantity。（例如：原4改为1，Quantity = 1 - 4 = -3）\n\n" +
-            "   - **情况C：取消单个物料（MarkForDelete 为 true）**：\n" +
-            "      - Quantity = 0 - OriginalQuantity。（例如：原4，Quantity = 0 - 4 = -4）\n\n" +
-            "  - **生成结果**：\n\n" +
-            "    - name = 草稿单 name (完整原串) + (Quantity > 0 ? \"+\" : \"\") + Quantity。\n\n" +
-            "    - 注意：name 必须如实记录每次变动轨迹，例如 \"玉米#1箱+1-3\"。\n" +
-            "    - unit = 优先取草稿单 unit。\n\n" +
-            "  - **若在草稿单中未找到匹配项（新增）**：\n" +
-            "    - Quantity = 本次变动数量\n\n" +
-            "    - name = 本次变动 name + \"#\" + 本次变动数量 + 单位。\n" +
-            "    - 注意：新增项不需要 +号后缀，而是直接生成标准格式（如 玉米#1箱）。\n" +
-            "    - unit = 本次变动 unit。\n\n" +
+            "  - **情况A：普通加减（IsTargetQuantity 为 false，且 MarkForDelete 为 false）**：\n" +
+            "      - Quantity = 本次变动数量。\n" +
+            "      - 例如：本次 +1，则 Quantity = 1；本次 -1，则 Quantity = -1。\n" +
+            "      - Name 保持现有逻辑不变：继续使用草稿单完整原串，并追加本次变动轨迹（例如 +1、-1）。\n" +
+            "  - **情况B：直接指定目标数量（IsTargetQuantity 为 true）**：\n" +
+            "      - Quantity 必须直接等于本次识别到的指定数量本身。\n" +
+            "      - 但 Name 保持现有逻辑不变：仍然基于草稿单完整原串记录本次变动轨迹。若原有 4 改成 1，则 Name 需要体现 -3（指定数量 - OriginalQuantity）的轨迹，但 Quantity 仍然回传 1。\n" +
+            "      - 输出结果必须保留 IsTargetQuantity = true。\n" +
+            "  - **情况C：取消单个物料（MarkForDelete 为 true）**：\n" +
+            "      - Quantity = 0。\n" +
+            "      - Name 仍需按照现有逻辑记录轨迹，例如原 4 箱取消，则 Name 应体现 -4 的轨迹。\n" +
+            "      - IsTargetQuantity = false。\n" +
+            "  - **生成结果**：\n" +
+            "    - Name 的生成逻辑不要改，保持当前原有逻辑：若匹配到草稿单，就沿用草稿单完整原串，并追加本次变动轨迹。\n" +
+            "    - Unit = 优先取草稿单 Unit。\n\n" +
+            "- **若在草稿单中未找到匹配项（新增）**：\n" +
+            "    - 若 IsTargetQuantity = true，则 Quantity = 本次指定数量，Name = 本次变动 name + \"#\" + 指定数量 + 单位。\n" +
+            "    - 若 IsTargetQuantity = false，则 Quantity = 本次变动数量，Name = 本次变动 name + \"#\" + 本次变动数量 + 单位。\n" +
+            "    - 注意：新增项不需要额外 + 号后缀，而是直接生成标准格式（如 玉米#1箱）。\n" +
+            "    - Unit = 本次变动 Unit。\n\n" +
             
             "【关键规则三：整单与删除】\n" +
             "1. IsDeleteWholeOrder：仅当输入明确标记为 true 时才为 true，且 Orders 必须为空。\n" +
@@ -977,18 +981,18 @@ public partial class PhoneOrderProcessJobService
             "- 若本次通话 MarkForDelete 为 true，或明确表达整项取消/不要该物料：\n" +
             "  - 设置 MarkForDelete = true。\n" +
             "  - Name 仍需按照规则二生成（例如：\"鸡胸肉#2箱-2\"）。\n" +
-            "  - quantity 设为 0（除非是部分减少，非清零）。\n\n\n" +
+            "  - Quantity 设为 0（除非是部分减少，非清零）。\n\n\n" +
             
             "【关键规则四：未变动的保留与去除】\n" +
             "   - 遍历完所有变动后，检查草稿单中未被匹配的剩余物料：\n" +
             "       - 系统物料未被变动、且【系统中已有草稿单】的 Quantity=0，全部数据删除！\n" +
             "       - 只有该剩余的物料【系统中已有草稿单】的 Quantity 不为 0，才要保留\n" +
             "   - Name = 原始 AiMaterialDesc（不加任何后缀）。\n" +
-            "   - Quantity = 原始 MaterialQuantity。\n\n" +
+            "   - Quantity = 原始 MaterialQuantity。\n" +
+            "   - IsTargetQuantity = false。\n\n" +
             
             " 【严禁行为】：\n" +
             "  - 严禁在 #, +, - 前后加空格。\n" +
-            "  - 严禁直接照抄本次变动值作为最终 quantity（必须做加法）。\n" +
             
             "【输出格式】\n" +
             "{\n" +
@@ -1004,7 +1008,8 @@ public partial class PhoneOrderProcessJobService
             "      \"MaterialNumber\": \"string\",\n" +
             "      \"Unit\": \"string\",\n" +
             "      \"MarkForDelete\": false,\n" +
-            "      \"Restored\": false\n" +
+            "      \"Restored\": false,\n" +
+            "      \"IsTargetQuantity\": false\n" +
             "    }\n" +
             "  ]\n" +
             "}\n\n" +
@@ -1075,6 +1080,7 @@ public partial class PhoneOrderProcessJobService
 
                     var restored =
                         orderItem.TryGetProperty("Restored", out var r) && r.GetBoolean();
+                    var isTargetQuantity = orderItem.TryGetProperty("IsTargetQuantity", out var itq) && itq.GetBoolean();
 
                     storeOrder.Orders.Add(new ExtractedOrderItemDto
                     {
@@ -1083,7 +1089,8 @@ public partial class PhoneOrderProcessJobService
                         Unit = unit,
                         MaterialNumber = materialNumber,
                         MarkForDelete = markForDelete,
-                        Restored = restored
+                        Restored = restored,
+                        IsTargetQuantity = isTargetQuantity
                     });
                 }
             }
