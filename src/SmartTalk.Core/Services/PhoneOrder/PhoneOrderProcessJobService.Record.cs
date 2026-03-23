@@ -954,8 +954,9 @@ public partial class PhoneOrderProcessJobService
             " **对于每一个用户输入的商品**：\n" +
             "- **若在【系统中已有草稿单】中找到匹配项**：\n" +
             "  - **情况A：普通加减（IsTargetQuantity 为 false，且 MarkForDelete 为 false）**：\n" +
-            "      - Quantity = 本次变动数量。\n" +
-            "      - 例如：本次 +1，则 Quantity = 1；本次 -1，则 Quantity = -1。\n" +
+            "      - Quantity = OriginalQuantity + 本次变动数量。\n" +
+            "      - 例如：若 OriginalQuantity = 2，本次 +1，则要计算 2+1，Quantity = 3；" +
+            "      - 例如：若 OriginalQuantity = 2，本次 -1，则要计算 2-1，Quantity = 1；" +
             "      - Name 保持现有逻辑不变：继续使用草稿单完整原串，并追加本次变动轨迹（例如 +1、-1）。\n" +
             "  - **情况B：直接指定目标数量（IsTargetQuantity 为 true）**：\n" +
             "      - Quantity 必须直接等于本次识别到的指定数量本身。\n" +
