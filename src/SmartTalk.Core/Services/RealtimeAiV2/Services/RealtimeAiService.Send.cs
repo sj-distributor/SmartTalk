@@ -1,6 +1,7 @@
 using System.Net.WebSockets;
 using System.Text.Json;
 using Serilog;
+using SmartTalk.Core.Services.RealtimeAiV2;
 using SmartTalk.Messages.Dto.RealtimeAi;
 
 namespace SmartTalk.Core.Services.RealtimeAiV2.Services;
@@ -71,5 +72,22 @@ public partial class RealtimeAiService
             _ctx.ProviderAdapter.BuildTextUserMessage(text, _ctx.SessionId),
             _ctx.ProviderAdapter.BuildTriggerResponseMessage()
         ).ConfigureAwait(false);
+    }
+
+    private async Task SendSessionUpdateAsync(RealtimeAiSessionUpdate update)
+    {
+        if (update == null) return;
+
+        var message = _ctx.ProviderAdapter.BuildSessionUpdateMessage(update);
+
+        if (string.IsNullOrWhiteSpace(message)) return;
+
+        await SendToProviderAsync(message).ConfigureAwait(false);
+
+        if (update.Instructions != null)
+            _ctx.Options.ModelConfig.Prompt = update.Instructions;
+
+        if (update.Tools != null)
+            _ctx.Options.ModelConfig.Tools = update.Tools;
     }
 }

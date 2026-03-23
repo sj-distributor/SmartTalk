@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Serilog;
 using SmartTalk.Core.Extensions;
 using SmartTalk.Core.Settings.OpenAi;
@@ -133,6 +134,38 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
                 call_id = functionCall.CallId,
                 output
             }
+        });
+    }
+
+    public string BuildSessionUpdateMessage(RealtimeAiSessionUpdate update)
+    {
+        if (update == null) return null;
+
+        var hasAny =
+            update.Instructions != null ||
+            update.Tools != null ||
+            update.Temperature.HasValue ||
+            update.TurnDetection != null ||
+            update.InputAudioNoiseReduction != null;
+
+        if (!hasAny) return null;
+
+        var payload = new
+        {
+            type = "session.update",
+            session = new
+            {
+                instructions = update.Instructions,
+                tools = update.Tools,
+                temperature = update.Temperature,
+                turn_detection = update.TurnDetection,
+                input_audio_noise_reduction = update.InputAudioNoiseReduction
+            }
+        };
+
+        return JsonSerializer.Serialize(payload, new JsonSerializerOptions
+        {
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
         });
     }
 

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Serilog;
 using SmartTalk.Core.Settings.Google;
+using SmartTalk.Core.Services.RealtimeAiV2;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.RealtimeAi;
@@ -132,6 +133,19 @@ public class GoogleRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
                 }
             }
         });
+    }
+
+    public string BuildSessionUpdateMessage(RealtimeAiSessionUpdate update)
+    {
+        if (update == null) return null;
+
+        if (update.Instructions != null || update.Tools != null || update.Temperature.HasValue ||
+            update.TurnDetection != null || update.InputAudioNoiseReduction != null)
+        {
+            Log.Warning("[RealtimeAi] Session update not supported for Google provider, skipping.");
+        }
+
+        return null;
     }
 
     public string BuildTriggerResponseMessage()
