@@ -56,6 +56,10 @@ public partial class RealtimeAiService
 
                 case RealtimeAiWssEventType.ResponseAudioDone:
                     break;
+                
+                case RealtimeAiWssEventType.ResponseStarted:
+                    await MarkProviderResponseStartedAsync().ConfigureAwait(false);
+                    break;
 
                 case RealtimeAiWssEventType.Unknown:
                     Log.Warning("[RealtimeAi] Unknown provider event, SessionId: {SessionId}, Data: {Data}, Raw: {RawJson}", _ctx.SessionId, parsedEvent.Data, parsedEvent.RawJson);
@@ -112,6 +116,8 @@ public partial class RealtimeAiService
 
     private async Task OnAiTurnCompletedAsync()
     {
+        await MarkProviderResponseCompletedAndDrainAsync().ConfigureAwait(false);
+
         _ctx.Round += 1;
         _ctx.IsAiSpeaking = false;
 
@@ -172,7 +178,7 @@ public partial class RealtimeAiService
             await SendToProviderAsync(_ctx.ProviderAdapter.BuildFunctionCallReplyMessage(functionCall, output)).ConfigureAwait(false);
 
         if (replies.Count > 0 || shouldTriggerResponse)
-            await SendToProviderAsync(_ctx.ProviderAdapter.BuildTriggerResponseMessage()).ConfigureAwait(false);
+            await QueueOrTriggerProviderResponseAsync("function call").ConfigureAwait(false);
     }
 
     private async Task OnProviderErrorAsync(RealtimeAiErrorData errorData)
