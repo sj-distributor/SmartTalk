@@ -1,5 +1,4 @@
 using SmartTalk.Core.Ioc;
-using SmartTalk.Core.Services.RealtimeAiV2;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.RealtimeAi;
 
@@ -20,12 +19,6 @@ public interface IRealtimeAiProviderAdapter : IScopedDependency
     object BuildInterruptMessage(string lastAssistantItemIdToInterrupt);
 
     string BuildFunctionCallReplyMessage(RealtimeAiWssFunctionCallData functionCall, string output);
-
-    /// <summary>
-    /// Builds a provider-specific session update message (e.g., OpenAI "session.update").
-    /// Returns null if the provider does not support session updates.
-    /// </summary>
-    string BuildSessionUpdateMessage(RealtimeAiSessionUpdate update);
 
     /// <summary>
     /// Returns a JSON message to trigger an AI response after sending text,
