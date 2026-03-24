@@ -35,8 +35,7 @@ public partial class RealtimeAiService
             SendTextToProviderAsync = SendTextToProviderAsync,
             SuspendClientAudioToProvider = () => _ctx.IsClientAudioToProviderSuspended = true,
             ResumeClientAudioToProvider = () => _ctx.IsClientAudioToProviderSuspended = false,
-            GetRecordedAudioSnapshotAsync = GetRecordedAudioSnapshotAsync,
-            UpdateSessionAsync = SendSessionUpdateAsync
+            GetRecordedAudioSnapshotAsync = GetRecordedAudioSnapshotAsync
         };
     }
 
