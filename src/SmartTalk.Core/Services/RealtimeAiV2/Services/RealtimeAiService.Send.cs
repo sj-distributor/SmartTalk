@@ -72,5 +72,4 @@ public partial class RealtimeAiService
             _ctx.ProviderAdapter.BuildTriggerResponseMessage()
         ).ConfigureAwait(false);
     }
-
 }
