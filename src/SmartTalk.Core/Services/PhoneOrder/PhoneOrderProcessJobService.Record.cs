@@ -990,11 +990,12 @@ public partial class PhoneOrderProcessJobService
             
             "【关键规则四：未变动的保留与去除】\n" +
             "   - 遍历完所有变动后，检查草稿单中未被匹配的剩余物料：\n" +
-            "       - 若剩余物料 IsProcessed = true，表示 hifood 已打单且当前这次通话未变动，该物料不要输出，全部数据删除！。\n" +
+            "       - 若剩余物料 IsProcessed = true，表示 hifood 已打单且当前这次通话未变动，该物料不要输出，该物料的全部数据删除！。\n" +
             "       - 只有该剩余的物料 IsProcessed = false，就必须要保留！\n" +
             "   - Name = 原始 AiMaterialDesc（不加任何后缀）。\n" +
             "   - Quantity = 原始 MaterialQuantity。\n" +
-            "   - IsTargetQuantity = false。\n\n" +
+            "   - IsTargetQuantity = 原始 IsTargetQuantity。\n\n" +
+            "   - MarkForDelete = 原始 MarkForDelete。\n\n" +
             
             " 【严禁行为】：\n" +
             "  - 严禁在 #, +, - 前后加空格。\n" +
