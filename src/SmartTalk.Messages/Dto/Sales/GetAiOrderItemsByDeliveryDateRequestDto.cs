@@ -33,4 +33,6 @@ public class AiOrderItemSimpleDto
     public bool MarkForDelete { get; set; }
 
     public bool Restored { get; set; }
+    
+    public bool IsProcessed { get; set; }
 }

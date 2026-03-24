@@ -882,7 +882,8 @@ public partial class PhoneOrderProcessJobService
                 item.AiMaterialDesc,
                 Quantity = item.MaterialQuantity,
                 Unit = item.AiUnit,
-                OriginalQuantity = ParseOriginalQuantity(item.AiMaterialDesc)
+                OriginalQuantity = ParseOriginalQuantity(item.AiMaterialDesc),
+                item.IsProcessed
             })
             .Cast<object>()
             .ToList() ?? new List<object>();
@@ -895,7 +896,8 @@ public partial class PhoneOrderProcessJobService
             "【输入数据】\n" +
             "1. 本次通话提取的订单（最高优先级，代表变动量）\n" +
             "2. 系统已有草稿单（代表基准量）\n" +
-            "3. 系统草稿单中已提供字段 OriginalQuantity，代表该物料当前真实数量（已包含所有历史 + / - 变动）。 \n\n" +
+            "3. 系统草稿单中已提供字段 OriginalQuantity，代表该物料当前真实数量（已包含所有历史 + / - 变动）。\n" +
+            "4. 系统草稿单中已提供字段 IsProcessed，true 表示该物料在 hifood 那边已经打单。\n\n" +
             
             "【核心任务流程】\n" +
             "1. 预处理与匹配：建立映射关系，精准找到通话中提到的商品对应草稿单中的哪一项。\n" +
@@ -930,7 +932,8 @@ public partial class PhoneOrderProcessJobService
             "      - IsTargetQuantity = false。\n" +
             "  - **生成结果**：\n" +
             "    - Name 的生成逻辑不要改，保持当前原有逻辑：若匹配到草稿单，就沿用草稿单完整原串，并追加本次变动轨迹。\n" +
-            "    - Unit = 优先取草稿单 Unit。\n\n" +
+            "    - Unit = 优先取草稿单 Unit。\n" +
+            "    - 即使草稿单 IsProcessed = true，只要该物料在本次通话中被匹配到并发生变动，仍然必须输出。\n\n" +
             "- **若在草稿单中未找到匹配项（新增）**：\n" +
             "    - 若 IsTargetQuantity = true，则 Quantity = 本次指定数量，Name = 本次变动 name + \"#\" + 指定数量 + 单位。\n" +
             "    - 若 IsTargetQuantity = false，则 Quantity = 本次变动数量，Name = 本次变动 name + \"#\" + 本次变动数量 + 单位。\n" +
@@ -948,8 +951,8 @@ public partial class PhoneOrderProcessJobService
             
             "【关键规则四：未变动的保留与去除】\n" +
             "   - 遍历完所有变动后，检查草稿单中未被匹配的剩余物料：\n" +
-            "       - 系统物料未被变动、且【系统中已有草稿单】的 Quantity=0，全部数据删除！\n" +
-            "       - 只有该剩余的物料【系统中已有草稿单】的 Quantity 不为 0，才要保留\n" +
+            "       - 若剩余物料 IsProcessed = true，表示 hifood 已打单且当前这次通话未变动，该物料不要输出，全部数据删除！。\n" +
+            "       - 只有该剩余的物料 IsProcessed = false，就必须要保留！\n" +
             "   - Name = 原始 AiMaterialDesc（不加任何后缀）。\n" +
             "   - Quantity = 原始 MaterialQuantity。\n" +
             "   - IsTargetQuantity = false。\n\n" +
@@ -977,7 +980,7 @@ public partial class PhoneOrderProcessJobService
             "  ]\n" +
             "}\n\n" +
             
-            "请注意：系统物料未被变动、且【系统中已有草稿单】的 Quantity=0，全部数据要删除！\n"+
+            "请注意：系统物料未被变动、且草稿单 IsProcessed = true 的，不要输出；其余未变动物料里 IsProcessed = false 的物料，就必须要保留！！\n"+
             "生成结果前，请在内存中执行一次规则的自我检查。\n";
         
         var userPrompt = "【本次通话提取的订单】\n" + currentOrdersJson + "\n\n" + "【系统中已有草稿单】\n" + draftOrderJson + "\n\n";
