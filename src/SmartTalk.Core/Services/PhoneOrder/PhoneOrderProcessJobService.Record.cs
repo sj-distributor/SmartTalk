@@ -995,7 +995,7 @@ public partial class PhoneOrderProcessJobService
             "   - Name = 原始 AiMaterialDesc（不加任何后缀）。\n" +
             "   - Quantity = 原始 MaterialQuantity。\n" +
             "   - IsTargetQuantity = true。\n\n" +
-            "   - MarkForDelete = 原始 MarkForDelete。\n\n" +
+            "   - MarkForDelete = 原始 MarkForDelete（原来的草稿单 MarkForDelete=true 就是 true，为 false 则为 false）。\n\n" +
             
             " 【严禁行为】：\n" +
             "  - 严禁在 #, +, - 前后加空格。\n" +
