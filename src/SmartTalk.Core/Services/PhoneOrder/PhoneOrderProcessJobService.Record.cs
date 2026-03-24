@@ -960,6 +960,7 @@ public partial class PhoneOrderProcessJobService
             "      - 例如：若 OriginalQuantity = 2，本次 +1，则要计算 2+1，Quantity = 3；" +
             "      - 例如：若 OriginalQuantity = 2，本次 -1，则要计算 2-1，Quantity = 1；" +
             "      - Name 保持现有逻辑不变：继续使用草稿单完整原串，并追加本次变动轨迹（例如 +1、-1）。\n" +
+            "   - 重点：计算完成后，将 IsTargetQuantity 改成 true 后直接输出，不要再做更改；\n\n" +
             "  - **情况B：直接指定目标数量（IsTargetQuantity 为 true）**：\n" +
             "      - Quantity 必须直接等于本次识别到的指定数量本身。\n" +
             "      - 但 Name 保持现有逻辑不变：仍然基于草稿单完整原串记录本次变动轨迹。若原有 4 改成 1，则 Name 需要体现 -3（指定数量 - OriginalQuantity）的轨迹，但 Quantity 仍然回传 1。\n" +
