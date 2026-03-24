@@ -930,7 +930,7 @@ public partial class PhoneOrderProcessJobService
             "  - **情况C：取消单个物料（MarkForDelete 为 true）**：\n" +
             "      - Quantity = 0。\n" +
             "      - Name 仍需按照现有逻辑记录轨迹，例如原 4 箱取消，则 Name 应体现 -4 的轨迹。\n" +
-            "      - IsTargetQuantity = false。\n" +
+            "      - IsTargetQuantity = true。\n" +
             "  - **生成结果**：\n" +
             "    - Name 的生成逻辑不要改，保持当前原有逻辑：若匹配到草稿单，就沿用草稿单完整原串，并追加本次变动轨迹。\n" +
             "    - Unit = 优先取草稿单 Unit。\n" +
@@ -956,7 +956,7 @@ public partial class PhoneOrderProcessJobService
             "       - 只要该剩余的物料 IsProcessed = false，就必须要保留！\n" +
             "   - Name = 原始 AiMaterialDesc（不加任何后缀）。\n" +
             "   - Quantity = 原始 MaterialQuantity。\n" +
-            "   - IsTargetQuantity = 原始 IsTargetQuantity。\n\n" +
+            "   - IsTargetQuantity = true。\n\n" +
             "   - MarkForDelete = 原始 MarkForDelete。\n\n" +
             
             " 【严禁行为】：\n"+
