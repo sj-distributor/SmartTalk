@@ -23,8 +23,14 @@ public partial class AiSpeechAssistantConnectService
         var args = ParseProductPriceArgs(functionCallData?.ArgumentsJson);
         var priceLine = DefaultPriceLine;
 
-        if (args.Append)
-            await AppendPriceToPromptAsync(priceLine, actions).ConfigureAwait(false);
+        if (!string.IsNullOrWhiteSpace(args.ProductName) &&
+            _ctx.PriceCache.TryGetValue(args.ProductName, out var cached))
+        {
+            return new RealtimeAiFunctionCallResult { Output = cached };
+        }
+
+        if (!string.IsNullOrWhiteSpace(args.ProductName))
+            _ctx.PriceCache[args.ProductName] = priceLine;
 
         return new RealtimeAiFunctionCallResult { Output = priceLine };
     }
@@ -51,25 +57,4 @@ public partial class AiSpeechAssistantConnectService
         }
     }
 
-    private async Task AppendPriceToPromptAsync(string priceLine, RealtimeAiSessionActions actions)
-    {
-        if (string.IsNullOrWhiteSpace(priceLine)) return;
-
-        if (!string.IsNullOrEmpty(_ctx.Prompt) && _ctx.Prompt.Contains(priceLine, StringComparison.Ordinal))
-            return;
-
-        var updatedPrompt = AppendKnowledgeToPrompt(priceLine);
-        _ctx.Prompt = updatedPrompt;
-
-        await actions.UpdateSessionAsync(new RealtimeAiSessionUpdate { Instructions = updatedPrompt }).ConfigureAwait(false);
-    }
-
-    private string AppendKnowledgeToPrompt(string knowledge)
-    {
-        if (string.IsNullOrWhiteSpace(knowledge)) return _ctx.Prompt ?? string.Empty;
-
-        return string.IsNullOrEmpty(_ctx.Prompt)
-            ? knowledge
-            : $"{_ctx.Prompt}\n\n{knowledge}";
-    }
 }
