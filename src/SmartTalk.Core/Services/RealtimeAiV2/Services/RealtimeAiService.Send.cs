@@ -87,7 +87,8 @@ public partial class RealtimeAiService
                 Log.Information("[RealtimeAi] Response trigger queued, SessionId: {SessionId}, Source: {Source}", _ctx.SessionId, source);
                 return;
             }
-
+            
+            _ctx.HasPendingProviderResponseTrigger = false;
             _ctx.IsProviderResponseInProgress = true;
             shouldSendTrigger = true;
         }
@@ -159,6 +160,26 @@ public partial class RealtimeAiService
         }
 
         if (shouldSendQueuedTrigger)
-            await SendToProviderAsync(_ctx.ProviderAdapter.BuildTriggerResponseMessage()).ConfigureAwait(false);
+        {
+            try
+            {
+                await SendToProviderAsync(_ctx.ProviderAdapter.BuildTriggerResponseMessage()).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                await _ctx.ProviderResponseStateLock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+                try
+                {
+                    _ctx.IsProviderResponseInProgress = false;
+                    _ctx.HasPendingProviderResponseTrigger = true;
+                }
+                finally
+                {
+                    _ctx.ProviderResponseStateLock.Release();
+                }
+
+                Log.Warning(ex, "[RealtimeAi] Failed to send queued response trigger, SessionId: {SessionId}", _ctx.SessionId);
+            }
+        }
     }
 }
