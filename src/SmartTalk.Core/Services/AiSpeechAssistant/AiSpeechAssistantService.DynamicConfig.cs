@@ -27,12 +27,19 @@ public partial class AiSpeechAssistantService
             .GetAiSpeechAssistantDynamicConfigsAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        var roots = BuildDynamicConfigTree(configs);
+        var roots = BuildDynamicConfigTree(configs, true);
 
-        var categoryConfigIds = configs
-            .Where(x => x.Level == AiSpeechAssistantDynamicConfigLevel.Category)
-            .Select(x => x.Id)
-            .ToList();
+        var categoryConfigIds = new List<int>();
+        var stack = new Stack<AiSpeechAssistantDynamicConfigDto>(roots);
+        while (stack.Count > 0)
+        {
+            var node = stack.Pop();
+            if (node.Level == AiSpeechAssistantDynamicConfigLevel.Category)
+                categoryConfigIds.Add(node.Id);
+
+            foreach (var child in node.Children)
+                stack.Push(child);
+        }
 
         if (categoryConfigIds.Count > 0)
         {
@@ -193,17 +200,27 @@ public partial class AiSpeechAssistantService
             return roots;
 
         return roots
-            .Where(x => x.Status)
             .Select(FilterByStatus)
+            .Where(x => x != null)
+            .Select(x => x!)
             .ToList();
     }
 
-    private AiSpeechAssistantDynamicConfigDto FilterByStatus(AiSpeechAssistantDynamicConfigDto node)
+    private AiSpeechAssistantDynamicConfigDto? FilterByStatus(AiSpeechAssistantDynamicConfigDto node)
     {
+        if (!node.Status)
+            return null;
+
+        var hadChildren = node.Children.Count > 0;
+
         node.Children = node.Children
-            .Where(x => x.Status)
             .Select(FilterByStatus)
+            .Where(x => x != null)
+            .Select(x => x!)
             .ToList();
+
+        if (hadChildren && node.Children.Count == 0)
+            return null;
 
         return node;
     }
