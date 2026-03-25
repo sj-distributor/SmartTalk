@@ -339,6 +339,8 @@ public partial class AiSpeechAssistantService
         List<AiSpeechAssistantKnowledgeCopyRelated> targetRelations,
         CancellationToken cancellationToken)
     {
+        var promptSegments = new List<string>();
+        
         if (!string.IsNullOrWhiteSpace(knowledge.Json))
         {
             var knowledgeObj = JObject.Parse(knowledge.Json);
@@ -351,12 +353,20 @@ public partial class AiSpeechAssistantService
                 .Concat(relatedJsons)
                 .Aggregate(new JObject(), (acc, j) =>
                 {
-                    acc.Merge(j, new JsonMergeSettings { MergeArrayHandling = MergeArrayHandling.Concat });
+                    acc.Merge(j, new JsonMergeSettings
+                    {
+                        MergeArrayHandling = MergeArrayHandling.Concat
+                    });
                     return acc;
                 });
 
-            var mergedJson = RemoveCopySuffixFromKeys(mergedJsonObj).ToString(Formatting.None);
-            return GenerateKnowledgePrompt(mergedJson);
+            var mergedJson = RemoveCopySuffixFromKeys(mergedJsonObj)
+                .ToString(Formatting.None);
+
+            var jsonPrompt = GenerateKnowledgePrompt(mergedJson);
+
+            if (!string.IsNullOrWhiteSpace(jsonPrompt))
+                promptSegments.Add(jsonPrompt);
         }
 
         var promptDetails = new List<AiSpeechAssistantKnowledgeDetail>();
@@ -405,8 +415,17 @@ public partial class AiSpeechAssistantService
             }));
         }
 
-        return promptDetails.Count > 0
-            ? await GenerateKnowledgePromptAsync(promptDetails, cancellationToken).ConfigureAwait(false)
+        if (promptDetails.Count > 0)
+        {
+            var detailPrompt = await GenerateKnowledgePromptAsync(promptDetails, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (!string.IsNullOrWhiteSpace(detailPrompt))
+                promptSegments.Add(detailPrompt);
+        }
+        
+        return promptSegments.Count > 0
+            ? string.Join("\n", promptSegments)
             : string.Empty;
     }
     
