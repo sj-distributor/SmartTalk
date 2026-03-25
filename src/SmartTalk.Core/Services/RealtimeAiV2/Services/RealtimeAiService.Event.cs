@@ -189,11 +189,49 @@ public partial class RealtimeAiService
 
     private async Task OnProviderErrorAsync(RealtimeAiErrorData errorData)
     {
-        Log.Error("[RealtimeAi] Provider error, SessionId: {SessionId}, Code: {ErrorCode}, Message: {ErrorMessage}, IsCritical: {IsCritical}", _ctx.SessionId, errorData.Code, errorData.Message, errorData.IsCritical);
+        if (errorData.IsCritical)
+            Log.Error("[RealtimeAi] Provider error, SessionId: {SessionId}, Code: {ErrorCode}, Message: {ErrorMessage}, IsCritical: {IsCritical}", _ctx.SessionId, errorData.Code, errorData.Message, errorData.IsCritical);
+        else
+            Log.Warning("[RealtimeAi] Recoverable provider error, SessionId: {SessionId}, Code: {ErrorCode}, Message: {ErrorMessage}", _ctx.SessionId, errorData.Code, errorData.Message);
+
+        if (IsActiveResponseInProgressError(errorData))
+        {
+            await QueueProviderResponseRetryAsync().ConfigureAwait(false);
+            return;
+        }
 
         await SendToClientAsync(_ctx.ClientAdapter.BuildErrorMessage(errorData.Code, errorData.Message, _ctx.SessionId)).ConfigureAwait(false);
 
         if (errorData.IsCritical)
             await DisconnectFromProviderAsync($"Critical provider error: {errorData.Message}").ConfigureAwait(false);
+    }
+
+    private static bool IsActiveResponseInProgressError(RealtimeAiErrorData errorData)
+    {
+        if (errorData == null) return false;
+
+        if (string.Equals(errorData.Code, "conversation_already_has_active_response", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return !string.IsNullOrEmpty(errorData.Message) &&
+               errorData.Message.Contains("active response in progress", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task QueueProviderResponseRetryAsync()
+    {
+        if (!IsProviderSessionActive) return;
+
+        await _ctx.ProviderResponseStateLock.WaitAsync(_ctx.SessionCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
+        try
+        {
+            _ctx.HasPendingProviderResponseTrigger = true;
+            _ctx.IsProviderResponseInProgress = true;
+        }
+        finally
+        {
+            _ctx.ProviderResponseStateLock.Release();
+        }
+
+        Log.Information("[RealtimeAi] Queued response trigger retry after provider active-response conflict, SessionId: {SessionId}", _ctx.SessionId);
     }
 }
