@@ -20,11 +20,13 @@ public partial class AiSpeechAssistantConnectService
         RealtimeAiSessionActions actions,
         CancellationToken cancellationToken)
     {
+        await actions.SendTextToProviderAsync("Greet the user with:'正在为您查询价格，请稍等'").ConfigureAwait(false);
+        
         var args = ParseProductPriceArgs(functionCallData?.ArgumentsJson);
-        await actions.SendTextToProviderAsync("正在为您查询价格，请稍等").ConfigureAwait(false);
+        
         var priceLine = DefaultPriceLine;
         
-        Log.Information("Get product price for {productName}", args.ProductName);
+        Log.Information("Get product price for {@productName}", args.ProductName);
         
         await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken).ConfigureAwait(false);
         
@@ -36,7 +38,7 @@ public partial class AiSpeechAssistantConnectService
 
         if (!string.IsNullOrWhiteSpace(args.ProductName))
             _ctx.PriceCache[args.ProductName] = priceLine;
-
+        
         return new RealtimeAiFunctionCallResult { Output = priceLine };
     }
 
