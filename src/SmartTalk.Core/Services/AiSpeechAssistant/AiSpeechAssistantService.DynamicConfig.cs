@@ -27,7 +27,7 @@ public partial class AiSpeechAssistantService
             .GetAiSpeechAssistantDynamicConfigsAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        var roots = BuildDynamicConfigTree(configs, true);
+        var roots = BuildDynamicConfigTree(configs);
 
         var categoryConfigIds = new List<int>();
         var stack = new Stack<AiSpeechAssistantDynamicConfigDto>(roots);
@@ -86,8 +86,7 @@ public partial class AiSpeechAssistantService
         }
     }
 
-    public async Task<GetCurrentCompanyDynamicConfigsResponse> GetCurrentCompanyDynamicConfigsAsync(GetCurrentCompanyDynamicConfigsRequest request,
-        CancellationToken cancellationToken)
+    public async Task<GetCurrentCompanyDynamicConfigsResponse> GetCurrentCompanyDynamicConfigsAsync(GetCurrentCompanyDynamicConfigsRequest request, CancellationToken cancellationToken)
     {
         var store = await _posDataProvider.GetPosCompanyStoreAsync(id: request.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
         if (store == null)
@@ -106,19 +105,20 @@ public partial class AiSpeechAssistantService
                 Data = new GetCurrentCompanyDynamicConfigsResponseData
                 {
                     Store = _mapper.Map<CompanyStoreDto>(store),
-                    Configs = []
+                    Configs = new List<AiSpeechAssistantDynamicConfigDto>()
                 }
             };
 
         var activeConfigs = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantDynamicConfigsAsync(cancellationToken).ConfigureAwait(false);
-        var roots = BuildDynamicConfigTree(activeConfigs, true);
+        var roots = BuildDynamicConfigTree(activeConfigs);
+        var filteredRoots = FilterDynamicConfigTree(roots, activeConfigs);
 
         return new GetCurrentCompanyDynamicConfigsResponse
         {
             Data = new GetCurrentCompanyDynamicConfigsResponseData
             {
                 Store = _mapper.Map<CompanyStoreDto>(store),
-                Configs = roots
+                Configs = filteredRoots
             }
         };
     }
@@ -175,7 +175,7 @@ public partial class AiSpeechAssistantService
         };
     }
 
-    private List<AiSpeechAssistantDynamicConfigDto> BuildDynamicConfigTree(List<AiSpeechAssistantDynamicConfig> configs, bool isFilter = false)
+    private List<AiSpeechAssistantDynamicConfigDto> BuildDynamicConfigTree(List<AiSpeechAssistantDynamicConfig> configs)
     {
         var dtoMap = _mapper.Map<List<AiSpeechAssistantDynamicConfigDto>>(configs)
             .ToDictionary(x => x.Id);
@@ -196,32 +196,39 @@ public partial class AiSpeechAssistantService
             .Select(x => dtoMap[x.Id])
             .ToList();
 
-        if (!isFilter)
-            return roots;
-
-        return roots
-            .Select(FilterByStatus)
-            .Where(x => x != null)
-            .Select(x => x!)
-            .ToList();
+        return roots;
     }
 
-    private AiSpeechAssistantDynamicConfigDto? FilterByStatus(AiSpeechAssistantDynamicConfigDto node)
-    {
+    private AiSpeechAssistantDynamicConfigDto FilterByStatus(AiSpeechAssistantDynamicConfigDto node, HashSet<int> parentIds)
+    { 
         if (!node.Status)
             return null;
 
-        var hadChildren = node.Children.Count > 0;
-
         node.Children = node.Children
-            .Select(FilterByStatus)
+            .Select(child => FilterByStatus(child, parentIds))
             .Where(x => x != null)
             .Select(x => x!)
             .ToList();
+
+        var hadChildren = parentIds.Contains(node.Id);
 
         if (hadChildren && node.Children.Count == 0)
             return null;
 
         return node;
+    }
+    
+    private List<AiSpeechAssistantDynamicConfigDto> FilterDynamicConfigTree(List<AiSpeechAssistantDynamicConfigDto> roots, List<AiSpeechAssistantDynamicConfig> originalConfigs)
+    {
+        var parentIds = originalConfigs
+            .Where(x => x.ParentId.HasValue)
+            .Select(x => x.ParentId!.Value)
+            .ToHashSet();
+
+        return roots
+            .Select(x => FilterByStatus(x, parentIds))
+            .Where(x => x != null)
+            .Select(x => x!)
+            .ToList();
     }
 }
