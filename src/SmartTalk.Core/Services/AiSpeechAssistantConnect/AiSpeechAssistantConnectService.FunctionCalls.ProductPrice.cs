@@ -1,4 +1,5 @@
 using Newtonsoft.Json.Linq;
+using Org.BouncyCastle.Asn1.Cms;
 using Serilog;
 using SmartTalk.Core.Services.RealtimeAiV2;
 using SmartTalk.Messages.Dto.RealtimeAi;
@@ -22,7 +23,9 @@ public partial class AiSpeechAssistantConnectService
     {
         var args = ParseProductPriceArgs(functionCallData?.ArgumentsJson);
         var priceLine = DefaultPriceLine;
-
+        
+        await Task.Delay(TimeSpan.FromSeconds(3), cancellationToken).ConfigureAwait(false);
+        
         if (!string.IsNullOrWhiteSpace(args.ProductName) &&
             _ctx.PriceCache.TryGetValue(args.ProductName, out var cached))
         {
