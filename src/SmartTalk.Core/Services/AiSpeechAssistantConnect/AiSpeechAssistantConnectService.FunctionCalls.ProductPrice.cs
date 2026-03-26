@@ -1,5 +1,4 @@
 using Newtonsoft.Json.Linq;
-using Org.BouncyCastle.Asn1.Cms;
 using Serilog;
 using SmartTalk.Core.Services.RealtimeAiV2;
 using SmartTalk.Messages.Dto.RealtimeAi;
@@ -8,7 +7,7 @@ namespace SmartTalk.Core.Services.AiSpeechAssistantConnect;
 
 public partial class AiSpeechAssistantConnectService
 {
-    private const string DefaultPriceLine = "4元";
+    private static string DefaultPriceLine => $"{Random.Shared.Next(1, 21)}元";
 
     private sealed class ProductPriceArgs
     {
