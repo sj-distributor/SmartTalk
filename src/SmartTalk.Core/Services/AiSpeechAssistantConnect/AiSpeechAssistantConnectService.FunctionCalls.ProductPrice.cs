@@ -8,7 +8,7 @@ namespace SmartTalk.Core.Services.AiSpeechAssistantConnect;
 
 public partial class AiSpeechAssistantConnectService
 {
-    private const string DefaultPriceLine = "戚风蛋糕:3元";
+    private const string DefaultPriceLine = "3元";
 
     private sealed class ProductPriceArgs
     {
