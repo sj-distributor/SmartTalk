@@ -85,6 +85,7 @@ public partial class AiSpeechAssistantService
         Log.Information( "Previous knowledge loaded. PrevKnowledgeId={PrevKnowledgeId}", prevKnowledge?.Id);
         
         var latestKnowledge = _mapper.Map<AiSpeechAssistantKnowledge>(command);
+        latestKnowledge.Json = string.IsNullOrWhiteSpace(latestKnowledge.Json) ? "{}" : latestKnowledge.Json;
         List<AiSpeechAssistantKnowledgeCopyRelatedDto> newRelations = new();
         var shouldHandleRelatedKnowledges = prevKnowledge != null && command.RelatedKnowledges != null;
         
@@ -896,7 +897,7 @@ public partial class AiSpeechAssistantService
         {
             Version = "1.0",
             IsActive = true,
-            Json = command.Json,
+            Json = string.IsNullOrWhiteSpace(command.Json) ? "{}" : command.Json,
             ModelLanguage = command.ModelLanguage,
             AssistantId = assistant.Id,
             Greetings = command.Greetings,

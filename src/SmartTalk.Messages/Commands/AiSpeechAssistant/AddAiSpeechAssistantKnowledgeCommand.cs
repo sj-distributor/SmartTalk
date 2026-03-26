@@ -10,7 +10,7 @@ public class AddAiSpeechAssistantKnowledgeCommand : ICommand
     
     public string Greetings { get; set; }
     
-    public string Json { get; set; }
+    public string Json { get; set; } = "{}";
     
     public string Language { get; set; }
 
