@@ -24,7 +24,7 @@ public partial class AiSpeechAssistantConnectService
         var args = ParseProductPriceArgs(functionCallData?.ArgumentsJson);
         var priceLine = DefaultPriceLine;
         
-        await Task.Delay(TimeSpan.FromSeconds(3), cancellationToken).ConfigureAwait(false);
+        await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken).ConfigureAwait(false);
         
         if (!string.IsNullOrWhiteSpace(args.ProductName) &&
             _ctx.PriceCache.TryGetValue(args.ProductName, out var cached))
