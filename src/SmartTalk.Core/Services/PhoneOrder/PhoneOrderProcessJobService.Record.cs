@@ -538,7 +538,7 @@ public partial class PhoneOrderProcessJobService
             new UserChatMessage("客戶分析報告文本：\n" + reportText + "\n\n")
         };
 
-        var completion = await client.CompleteChatAsync(messages, new ChatCompletionOptions { ResponseModalities = ChatResponseModalities.Text, ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat() }, cancellationToken).ConfigureAwait(false);
+        var completion = await client.CompleteChatAsync(messages, new ChatCompletionOptions { ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat() }, cancellationToken).ConfigureAwait(false);
         var jsonResponse = completion.Value.Content.FirstOrDefault()?.Text ?? "";
         
         Log.Information("AI JSON Response: {JsonResponse}", jsonResponse);
@@ -997,8 +997,12 @@ public partial class PhoneOrderProcessJobService
             new SystemChatMessage(systemPrompt),
             new UserChatMessage(userPrompt)
         };
-
-        var completion = await client.CompleteChatAsync(messages, new ChatCompletionOptions { ResponseModalities = ChatResponseModalities.Text, ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat() }, cancellationToken).ConfigureAwait(false);
+        
+        var completion = await client.CompleteChatAsync(messages,
+            new ChatCompletionOptions
+            {
+                ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
+            }, cancellationToken).ConfigureAwait(false);
         
         var jsonResponse = completion.Value.Content.FirstOrDefault()?.Text ?? "";
         Log.Information("Second AI refine response: {Json}", jsonResponse);
