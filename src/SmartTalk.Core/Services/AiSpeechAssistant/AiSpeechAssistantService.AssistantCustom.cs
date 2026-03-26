@@ -333,40 +333,55 @@ public partial class AiSpeechAssistantService
         return (asTargetKnowledgePrevRelateds, selectedTargetRelateds, asSourceKnowledgePrevRelateds, selectedSourceRelateds);
     }
     
-    private async Task<string> GeneratePromptForKnowledgeAsync(
-        AiSpeechAssistantKnowledge knowledge,
-        List<AiSpeechAssistantKnowledgeDetailDto> baseDetailDtos,
-        List<AiSpeechAssistantKnowledgeCopyRelated> targetRelations,
-        CancellationToken cancellationToken)
+    private async Task<string> GeneratePromptForKnowledgeAsync(AiSpeechAssistantKnowledge knowledge, List<AiSpeechAssistantKnowledgeDetailDto> baseDetailDtos, List<AiSpeechAssistantKnowledgeCopyRelated> targetRelations, CancellationToken cancellationToken)
     {
         var promptSegments = new List<string>();
         
         if (!string.IsNullOrWhiteSpace(knowledge.Json))
         {
-            var knowledgeObj = JObject.Parse(knowledge.Json);
+            try
+            { 
+                var knowledgeObj = JObject.Parse(knowledge.Json);
 
-            var relatedJsons = (targetRelations ?? new List<AiSpeechAssistantKnowledgeCopyRelated>())
-                .Where(r => !string.IsNullOrWhiteSpace(r.CopyKnowledgePoints))
-                .Select(r => JObject.Parse(r.CopyKnowledgePoints));
-
-            var mergedJsonObj = new[] { knowledgeObj }
-                .Concat(relatedJsons)
-                .Aggregate(new JObject(), (acc, j) =>
+                var relatedJsons = new List<JObject>();
+                foreach (var relation in targetRelations ?? new List<AiSpeechAssistantKnowledgeCopyRelated>())
                 {
-                    acc.Merge(j, new JsonMergeSettings
+                    var points = relation?.CopyKnowledgePoints;
+                    if (string.IsNullOrWhiteSpace(points))
+                        continue;
+
+                    try
                     {
-                        MergeArrayHandling = MergeArrayHandling.Concat
+                        relatedJsons.Add(JObject.Parse(points));
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Warning(ex,
+                            "GeneratePromptForKnowledgeAsync: skip invalid CopyKnowledgePoints json. KnowledgeId={KnowledgeId}, SourceKnowledgeId={SourceKnowledgeId}, TargetKnowledgeId={TargetKnowledgeId}",
+                            knowledge.Id, relation?.SourceKnowledgeId, relation?.TargetKnowledgeId);
+                    }
+                }
+
+                var mergedJsonObj = new[] { knowledgeObj }
+                    .Concat(relatedJsons)
+                    .Aggregate(new JObject(), (acc, j) =>
+                    {
+                        acc.Merge(j, new JsonMergeSettings { MergeArrayHandling = MergeArrayHandling.Concat });
+                        return acc;
                     });
-                    return acc;
-                });
 
-            var mergedJson = RemoveCopySuffixFromKeys(mergedJsonObj)
-                .ToString(Formatting.None);
+                var mergedJson = RemoveCopySuffixFromKeys(mergedJsonObj).ToString(Formatting.None);
+                var jsonPrompt = GenerateKnowledgePrompt(mergedJson);
 
-            var jsonPrompt = GenerateKnowledgePrompt(mergedJson);
-
-            if (!string.IsNullOrWhiteSpace(jsonPrompt))
-                promptSegments.Add(jsonPrompt);
+                if (!string.IsNullOrWhiteSpace(jsonPrompt))
+                    promptSegments.Add(jsonPrompt);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex,
+                    "GeneratePromptForKnowledgeAsync: skip invalid knowledge json. KnowledgeId={KnowledgeId}",
+                    knowledge.Id);
+            }
         }
 
         var promptDetails = new List<AiSpeechAssistantKnowledgeDetail>();
@@ -425,7 +440,7 @@ public partial class AiSpeechAssistantService
         }
         
         return promptSegments.Count > 0
-            ? string.Join("\n", promptSegments)
+            ? string.Join("\n\n", promptSegments.Select(x => x.TrimEnd()))
             : string.Empty;
     }
     
@@ -882,7 +897,7 @@ public partial class AiSpeechAssistantService
             Version = "1.0",
             IsActive = true,
             Json = command.Json,
-            ModelLanguage =  command.ModelLanguage,
+            ModelLanguage = command.ModelLanguage,
             AssistantId = assistant.Id,
             Greetings = command.Greetings,
             CreatedBy = _currentUser.Id.Value,
@@ -890,6 +905,8 @@ public partial class AiSpeechAssistantService
         };
 
         await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgesAsync([knowledge], cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var promptSegments = new List<string>();
 
         if (command.Details is { Count: > 0 })
         {
@@ -905,12 +922,32 @@ public partial class AiSpeechAssistantService
 
             await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgeDetailsAsync(details, true, cancellationToken).ConfigureAwait(false);
 
-            if (string.IsNullOrWhiteSpace(knowledge.Json))
-                knowledge.Prompt = await GenerateKnowledgePromptAsync(details, cancellationToken).ConfigureAwait(false);
+            var detailPrompt = await GenerateKnowledgePromptAsync(details, cancellationToken).ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(detailPrompt))
+                promptSegments.Add(detailPrompt);
         }
 
         if (!string.IsNullOrWhiteSpace(knowledge.Json))
-            knowledge.Prompt = GenerateKnowledgePrompt(knowledge.Json);
+        {
+            try
+            {
+                var knowledgeObj = JObject.Parse(knowledge.Json);
+                if (knowledgeObj.Properties().Any())
+                {
+                    var jsonPrompt = GenerateKnowledgePrompt(knowledge.Json);
+                    if (!string.IsNullOrWhiteSpace(jsonPrompt))
+                        promptSegments.Add(jsonPrompt);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex,
+                    "InitialAssistantKnowledgeAsync: skip invalid knowledge json when generating prompt. KnowledgeId={KnowledgeId}",
+                    knowledge.Id);
+            }
+        }
+
+        knowledge.Prompt = promptSegments.Count > 0 ? string.Join("\n\n", promptSegments.Select(x => x.TrimEnd())) : string.Empty;
 
         if (!string.IsNullOrWhiteSpace(knowledge.Prompt))
             await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync([knowledge], cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -1031,8 +1068,21 @@ public partial class AiSpeechAssistantService
     
     public string GenerateKnowledgePrompt(string json)
     {
+        if (string.IsNullOrWhiteSpace(json))
+            return string.Empty;
+
+        JObject jsonData;
+        try
+        {
+            jsonData = JObject.Parse(json);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "GenerateKnowledgePrompt: invalid json, skip.");
+            return string.Empty;
+        }
+
         var prompt = new StringBuilder();
-        var jsonData = JObject.Parse(json);
         var textInfo = CultureInfo.InvariantCulture.TextInfo;
 
         foreach (var property in jsonData.Properties())
