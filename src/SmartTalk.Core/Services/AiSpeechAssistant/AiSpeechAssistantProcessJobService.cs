@@ -336,8 +336,20 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
 
     private static string GenerateKnowledgePrompt(string json)
     {
+        if (string.IsNullOrWhiteSpace(json))
+            return string.Empty;
+
         var prompt = new StringBuilder();
-        var jsonData = JObject.Parse(json);
+        JObject jsonData;
+        try
+        {
+            jsonData = JObject.Parse(json);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "GenerateKnowledgePrompt: invalid json, skip.");
+            return string.Empty;
+        }
         var textInfo = CultureInfo.InvariantCulture.TextInfo;
 
         foreach (var property in jsonData.Properties())
