@@ -86,19 +86,24 @@ public partial class AiSpeechAssistantService
         }
     }
 
-    public async Task<GetCurrentCompanyDynamicConfigsResponse> GetCurrentCompanyDynamicConfigsAsync(GetCurrentCompanyDynamicConfigsRequest request, CancellationToken cancellationToken)
+    public async Task<GetCurrentCompanyDynamicConfigsResponse> GetCurrentCompanyDynamicConfigsAsync(
+        GetCurrentCompanyDynamicConfigsRequest request, CancellationToken cancellationToken)
     {
-        var store = await _posDataProvider.GetPosCompanyStoreAsync(id: request.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var store = await _posDataProvider
+            .GetPosCompanyStoreAsync(id: request.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
         if (store == null)
             return new GetCurrentCompanyDynamicConfigsResponse
             {
                 Data = new GetCurrentCompanyDynamicConfigsResponseData { Configs = [] }
             };
 
-        var company = await _posDataProvider.GetPosCompanyAsync(store.CompanyId, cancellationToken).ConfigureAwait(false);
-        
-        var configRelatingCompany = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantDynamicConfigRelatingCompaniesAsync(companyIds: [company.Id], cancellationToken: cancellationToken).ConfigureAwait(false);
-        
+        var company = await _posDataProvider.GetPosCompanyAsync(store.CompanyId, cancellationToken)
+            .ConfigureAwait(false);
+
+        var configRelatingCompany = await _aiSpeechAssistantDataProvider
+            .GetAiSpeechAssistantDynamicConfigRelatingCompaniesAsync(companyIds: [company.Id],
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+
         if (configRelatingCompany == null)
             return new GetCurrentCompanyDynamicConfigsResponse
             {
@@ -109,9 +114,57 @@ public partial class AiSpeechAssistantService
                 }
             };
 
-        var activeConfigs = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantDynamicConfigsAsync(cancellationToken).ConfigureAwait(false);
+        var activeConfigs = await _aiSpeechAssistantDataProvider
+            .GetAiSpeechAssistantDynamicConfigsAsync(cancellationToken).ConfigureAwait(false);
         var roots = BuildDynamicConfigTree(activeConfigs);
-        var filteredRoots = FilterDynamicConfigTree(roots, activeConfigs);
+        var rootHasAnyActiveImmediateChild = roots.ToDictionary(
+            x => x.Id,
+            x => x.Children.Any(c => c.Status));
+
+        AiSpeechAssistantDynamicConfigDto? FilterNode(AiSpeechAssistantDynamicConfigDto node, bool isRoot)
+        {
+            if (!node.Status)
+                return null;
+
+            if (node.Children.Count > 0)
+            {
+                node.Children = node.Children
+                    .Select(child => FilterNode(child, false))
+                    .Where(x => x != null)
+                    .Select(x => x!)
+                    .ToList();
+            }
+
+            if (!isRoot &&
+                node.Level == AiSpeechAssistantDynamicConfigLevel.Category &&
+                node.Children.Count == 0)
+            {
+                return null;
+            }
+
+            return node;
+        }
+
+        var filteredRoots = roots
+            .Select(root =>
+            {
+                var filtered = FilterNode(root, true);
+                if (filtered == null)
+                    return null;
+
+                if (filtered.Level == AiSpeechAssistantDynamicConfigLevel.System &&
+                    filtered.Children.Count == 0 &&
+                    rootHasAnyActiveImmediateChild.TryGetValue(root.Id, out var hasActiveImmediateChild) &&
+                    !hasActiveImmediateChild)
+                {
+                    return null;
+                }
+
+                return filtered;
+            })
+            .Where(x => x != null)
+            .Select(x => x!)
+            .ToList();
 
         return new GetCurrentCompanyDynamicConfigsResponse
         {
