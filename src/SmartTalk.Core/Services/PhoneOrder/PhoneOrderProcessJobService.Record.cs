@@ -908,8 +908,8 @@ public partial class PhoneOrderProcessJobService
             Log.Information("Skip RefineOrderByAiAsync: no draft order and no today reports. SoldToId={SoldToId}, DeliveryDate={DeliveryDate}", soldToId, storeOrder.DeliveryDate);
             return;
         }
-
-        var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
+        
+        var client = new ChatClient("gpt-5.1", _openAiSettings.ApiKey);
         
         var currentOrdersJson = JsonSerializer.Serialize(storeOrder.Orders, ReadableJsonSerializerOptions);
         
@@ -920,6 +920,7 @@ public partial class PhoneOrderProcessJobService
                 item.AiMaterialDesc,
                 Quantity = item.MaterialQuantity,
                 Unit = item.AiUnit,
+                item.MarkForDelete,
                 OriginalQuantity = ParseOriginalQuantity(item.AiMaterialDesc),
                 item.IsProcessed
             })
@@ -939,14 +940,17 @@ public partial class PhoneOrderProcessJobService
             
             "【核心任务流程】\n" +
             "1. 预处理与匹配：建立映射关系，精准找到通话中提到的商品对应草稿单中的哪一项。\n" +
-            "2. 计算合并：计算 Quantity，并保留 IsTargetQuantity。\n" +
+            "2. 计算合并：计算 Quantity，并保留 IsTargetQuantity、MarkForDelete。\n" +
             "3. 格式化名称：生成符合规范的 Name。\n" +
             "4. 输出结果：生成最终 JSON。\n\n" +
             
             "【关键规则一：匹配逻辑（核心）】\n" +
             "必须严格按照以下优先级意图判断“本次通话商品”与“草稿单商品”是否为同一物料：\n" +
             "1. 优先级 A（物料号匹配）：若两者 MaterialNumber 都不为空且相等，视为同一物料。\n" +
-            "2. 优先级 B（名称匹配）：若 MaterialNumber 为空，则对比名称。\n" +
+            "2. 优先级 B（弱物料号 + 名称意图匹配）：若两者 MaterialNumber 都不为空但不相等：\n" +
+            "      - 若名称在语义上明显指向同一商品（如简称、去前缀、去包装描述后相同），仍视为同一物料；\n" +
+            "      - 必须使用【系统中已有草稿单】商品的 MaterialNumber。\n" +
+            "3. 优先级 C（名称匹配）：若 MaterialNumber 为空，则对比名称。\n" +
             "必做操作：读取草稿单的 AiMaterialDesc 字段，以 # 符号为界截取前半部分作为“草稿基准名”（例如 \"玉米#1箱\" -> 基准名为 \"玉米\"）。\n" +
             "若 通话中的 Name == 草稿基准名，视为同一物料。\n" +
             "  - **需要尽量匹配上。**。\n" +
@@ -960,7 +964,7 @@ public partial class PhoneOrderProcessJobService
             "      - 例如：若 OriginalQuantity = 2，本次 +1，则要计算 2+1，Quantity = 3；" +
             "      - 例如：若 OriginalQuantity = 2，本次 -1，则要计算 2-1，Quantity = 1；" +
             "      - Name 保持现有逻辑不变：继续使用草稿单完整原串，并追加本次变动轨迹（例如 +1、-1）。\n" +
-            "   - 重点：计算完成后，将 IsTargetQuantity 改成 true 后直接输出，不要再做更改；\n\n" +
+            "   - 重点：计算完成后，必须要将 IsTargetQuantity 改成 true 后直接输出，然后不要再做更改；\n\n" +
             "  - **情况B：直接指定目标数量（IsTargetQuantity 为 true）**：\n" +
             "      - Quantity 必须直接等于本次识别到的指定数量本身。\n" +
             "      - 但 Name 保持现有逻辑不变：仍然基于草稿单完整原串记录本次变动轨迹。若原有 4 改成 1，则 Name 需要体现 -3（指定数量 - OriginalQuantity）的轨迹，但 Quantity 仍然回传 1。\n" +
@@ -995,10 +999,11 @@ public partial class PhoneOrderProcessJobService
             "   - Name = 原始 AiMaterialDesc（不加任何后缀）。\n" +
             "   - Quantity = 原始 MaterialQuantity。\n" +
             "   - IsTargetQuantity = true。\n\n" +
-            "   - MarkForDelete = 原始 MarkForDelete（原来的草稿单 MarkForDelete=true 就是 true，为 false 则为 false）。\n\n" +
+            "   - MarkForDelete = 原始 MarkForDelete（系统中已有草稿单里该物料的 MarkForDelete=true 就是 true，为 false 则为 false，严禁自行更改）。\n\n" +
             
             " 【严禁行为】：\n" +
             "  - 严禁在 #, +, - 前后加空格。\n" +
+            "  - 严禁保留【本次通话提取的订单】中没有的物料、且该物料在【系统中已有草稿单】的 IsProcessed = true 。\n\n" +
             
             "【输出格式】\n" +
             "{\n" +
