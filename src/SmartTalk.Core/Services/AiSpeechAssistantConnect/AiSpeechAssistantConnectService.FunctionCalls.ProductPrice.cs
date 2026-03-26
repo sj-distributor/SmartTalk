@@ -21,7 +21,10 @@ public partial class AiSpeechAssistantConnectService
         CancellationToken cancellationToken)
     {
         var args = ParseProductPriceArgs(functionCallData?.ArgumentsJson);
+        await actions.SendTextToProviderAsync("正在为您查询价格，请稍等").ConfigureAwait(false);
         var priceLine = DefaultPriceLine;
+        
+        Log.Information("Get product price for {productName}", args.ProductName);
         
         await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken).ConfigureAwait(false);
         
