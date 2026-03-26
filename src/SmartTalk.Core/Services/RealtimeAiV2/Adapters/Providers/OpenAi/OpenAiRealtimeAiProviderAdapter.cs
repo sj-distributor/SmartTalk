@@ -199,7 +199,14 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
                     return functionCalls != null ? Result(RealtimeAiWssEventType.FunctionCallSuggested, functionCalls) : Result(RealtimeAiWssEventType.ResponseTurnCompleted);
 
                 case "error":
-                    return Result(RealtimeAiWssEventType.Error, new RealtimeAiErrorData { Message = ExtractErrorMessage(root), IsCritical = true });
+                    var errorCode = ExtractErrorCode(root);
+                    var errorMessage = ExtractErrorMessage(root);
+                    return Result(RealtimeAiWssEventType.Error, new RealtimeAiErrorData
+                    {
+                        Code = errorCode,
+                        Message = errorMessage,
+                        IsCritical = !IsRecoverableError(errorCode, errorMessage)
+                    });
 
                 default:
                     Log.Debug("[RealtimeAi] Unhandled OpenAI event: {EventType}", eventType);
@@ -255,6 +262,32 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
             return lastMsgProp.GetString();
 
         return "Unknown OpenAI error";
+    }
+
+    private static string ExtractErrorCode(JsonElement root)
+    {
+        if (root.TryGetProperty("error", out var errorProp) && errorProp.TryGetProperty("code", out var codeProp))
+            return codeProp.GetString();
+
+        if (root.TryGetProperty("last_error", out var lastErrorProp) && lastErrorProp.ValueKind != JsonValueKind.Null && lastErrorProp.TryGetProperty("code", out var lastCodeProp))
+            return lastCodeProp.GetString();
+
+        return null;
+    }
+
+    private static bool IsRecoverableError(string errorCode, string errorMessage)
+    {
+        var normalizedCode = errorCode?.Trim();
+        var normalizedMessage = errorMessage?.Trim();
+
+        if (string.Equals(normalizedCode, "conversation_already_has_active_response", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (!string.IsNullOrEmpty(normalizedMessage) &&
+            normalizedMessage.Contains("active response in progress", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return false;
     }
     
     public RealtimeAiAudioCodec GetPreferredCodec(RealtimeAiAudioCodec clientCodec) => clientCodec;
