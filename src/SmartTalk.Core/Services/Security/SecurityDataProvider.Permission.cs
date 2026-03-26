@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Domain.Security;
 using SmartTalk.Messages.DTO.Security;
+using SmartTalk.Messages.Enums.Security;
 
 namespace SmartTalk.Core.Services.Security;
 
@@ -58,7 +59,16 @@ public partial class SecurityDataProvider
     {
         return await _repository.GetByIdAsync<Permission>(id, cancellationToken).ConfigureAwait(false);
     }
-    
+
+    public async Task<List<Permission>> GetPermissionsByPermissionLevelAsync(PermissionLevel permissionLevel, CancellationToken cancellationToken)
+    {
+        var permissionIds = _repository.Query<PermissionRatingLevel>().Where(x => x.PermissionLevel == permissionLevel)
+            .Select(x => x.PermissionId);
+
+        return await _repository.Query<Permission>().Where(p => permissionIds.Contains(p.Id))
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<(int, List<Permission>)> GetPermissionsPagingAsync(
         List<string> names = null, string keyword = null, int? pageIndex = null, int? pageSize = null, CancellationToken cancellationToken = default)
     {

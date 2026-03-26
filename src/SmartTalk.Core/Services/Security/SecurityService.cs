@@ -39,6 +39,8 @@ public interface ISecurityService : IScopedDependency
      Task<SwitchLanguageResponse> SwitchLanguageAsync(SwitchLanguageCommand command, CancellationToken cancellationToken);
      
      Task<UpdateUserAccountTaskNotificationResponse> UpdateUserAccountTaskNotificationAsync(UpdateUserAccountTaskNotificationCommand command, CancellationToken cancellationToken);
+     
+     Task<GetPermissionsByPermissionLevelResponse> GetPermissionsByPermissionLevelAsync(GetPermissionsByPermissionLevelRequest request, CancellationToken cancellationToken);
 }
 
 public class SecurityService : ISecurityService
@@ -276,5 +278,23 @@ public class SecurityService : ISecurityService
             }
         };
 
+    }
+
+    public async Task<GetPermissionsByPermissionLevelResponse> GetPermissionsByPermissionLevelAsync(GetPermissionsByPermissionLevelRequest request, CancellationToken cancellationToken)
+    {
+        var permissions = await _securityDataProvider.GetPermissionsByPermissionLevelAsync(request.PermissionLevel, cancellationToken).ConfigureAwait(false);
+
+        Log.Information(
+            "Permission level switched. UserId={UserId}, SwitchTime={SwitchTime}, FromLevel={FromLevel}, ToLevel={ToLevel}",
+            _currentUser.Id.Value,
+            DateTimeOffset.UtcNow,
+            PermissionLevel.ServiceProvider,
+            request.PermissionLevel
+        );
+
+        return new GetPermissionsByPermissionLevelResponse()
+        {
+            Data = _mapper.Map<List<PermissionDto>>(permissions)
+        };
     }
 }

@@ -6,7 +6,6 @@ using SmartTalk.Messages.Responses;
 
 namespace SmartTalk.Message.Commands.Printer;
 
-[SmartTalkAuthorize(Permissions = new []{ SecurityStore.Permissions.CanViewMerchPrinter})]
 public class AddMerchPrinterCommand : ICommand
 {
     public string PrinterName { get; set; }
