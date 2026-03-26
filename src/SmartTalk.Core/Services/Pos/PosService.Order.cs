@@ -814,7 +814,7 @@ public partial class PosService
         
         var retryKey = merchPrinterOrder != null ? $"{merchPrinterOrder.OrderId}" : null;
         
-        var isRetry = await _cacheManager.GetAsync<string>(retryKey, new RedisCachingSetting(), cancellationToken).ConfigureAwait(false);
+        var isRetry = retryKey == null ? "false" : await _cacheManager.GetAsync<string>(retryKey, new RedisCachingSetting(), cancellationToken).ConfigureAwait(false);
 
         Log.Information("IsRetry:{@isRetry}", isRetry);
         
