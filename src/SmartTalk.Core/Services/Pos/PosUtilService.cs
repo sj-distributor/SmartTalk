@@ -484,6 +484,7 @@ public class PosUtilService : IPosUtilService
             {
                 Price = x.Price,
                 Quantity = aiItemModifiersLookup.TryGetValue(x.Id, out var quantity) ? quantity : 0,
+                ProductId = x.ProductId,
                 ModifierId = modifierItem.Id,
                 ModifierProductId = x?.Id ?? 0,
                 Localizations = _mapper.Map<List<PhoneCallOrderItemLocalization>>(modifierItem.Localizations ?? []),
