@@ -1,4 +1,3 @@
-using System.ClientModel;
 using AutoMapper;
 using Newtonsoft.Json;
 using OpenAI.Chat;
@@ -59,47 +58,13 @@ public class PosUtilService : IPosUtilService
         
         var (products, menuItems) = await GeneratePosMenuItemsAsync(agent.Id, true, record.Language, cancellationToken).ConfigureAwait(false);
 
-        var completion = await ExtractProductsFromAnalysisReportAsync(record, menuItems, report, cancellationToken).ConfigureAwait(false);
-
         try
         {
-            var aiDraftOrder = JsonConvert.DeserializeObject<AiDraftOrderDto>(completion.Value.Content.FirstOrDefault()?.Text ?? "");
+            var aiDraftOrder = await GenerateDraftOrderFromReportAsync(record, menuItems, report, cancellationToken).ConfigureAwait(false);
 
-            Log.Information("Deserialize response to ai order: {@AiOrder}", aiDraftOrder);
+            var matchedProducts = MatchPosProducts(products, aiDraftOrder);
 
-            var matchedProducts = products.Where(x => aiDraftOrder.Items.Select(p => p.ProductId).Contains(x.ProductId)).DistinctBy(x => x.ProductId).ToList();
-
-            Log.Information("Matched products: {@MatchedProducts}", matchedProducts);
-
-            var productModifiersLookup = matchedProducts.Where(x => !string.IsNullOrWhiteSpace(x.Modifiers))
-                .ToDictionary(x => x.ProductId, x => JsonConvert.DeserializeObject<List<EasyPosResponseModifierGroups>>(x.Modifiers));
-
-            Log.Information("Build product's modifiers: {@ModifiersLookUp}", productModifiersLookup);
-
-            foreach (var aiDraftItem in aiDraftOrder.Items.Where(x => !string.IsNullOrEmpty(x.Specification) && !string.IsNullOrEmpty(x.ProductId)))
-            {
-                if (productModifiersLookup.TryGetValue(aiDraftItem.ProductId, out var modifiers))
-                {
-                    try
-                    {
-                        var builtModifiers = await GenerateSpecificationProductsAsync(modifiers, record.Language, aiDraftItem.Specification, cancellationToken).ConfigureAwait(false);
-                        
-                        Log.Information("Matched modifiers: {@MatchedModifiers}", builtModifiers);
-
-                        if (builtModifiers == null || builtModifiers.Count == 0) continue;
-
-                        aiDraftItem.Modifiers = builtModifiers;
-                    }
-                    catch (Exception e)
-                    {
-                        aiDraftItem.Modifiers = [];
-                        
-                        Log.Error(e, "Failed to build product: {@AiDraftItem} modifiers", aiDraftItem);
-                    }
-                }
-            }
-
-            Log.Information("Enrich ai draft order: {@EnrichAiDraftOrder}", aiDraftOrder);
+            await HandleAiDraftOrderSpecificationsAsync(record, matchedProducts, aiDraftOrder, cancellationToken).ConfigureAwait(false);
 
             var order = await BuildPosOrderAsync(record, aiDraftOrder, matchedProducts, cancellationToken).ConfigureAwait(false);
 
@@ -108,7 +73,7 @@ public class PosUtilService : IPosUtilService
         }
         catch (Exception e)
         {
-            Log.Error(e, "Failed to extract products from report text");
+            Log.Error(e, "Generate ai draft order failed");
         }
     }
 
@@ -139,7 +104,7 @@ public class PosUtilService : IPosUtilService
         return originalReport?.Report ?? record.TranscriptionText;
     }
 
-    private async Task<ClientResult<ChatCompletion>> ExtractProductsFromAnalysisReportAsync(PhoneOrderRecord record, string menuItems, string report, CancellationToken cancellationToken)
+    private async Task<AiDraftOrderDto> GenerateDraftOrderFromReportAsync(PhoneOrderRecord record, string menuItems, string report, CancellationToken cancellationToken)
     {
         var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
 
@@ -175,11 +140,17 @@ public class PosUtilService : IPosUtilService
             new UserChatMessage("客戶分析報告文本：\n" + report + "\n\n")
         };
 
-        return await client.CompleteChatAsync(messages, new ChatCompletionOptions
+        var completion = await client.CompleteChatAsync(messages, new ChatCompletionOptions
         {
             ResponseModalities = ChatResponseModalities.Text,
             ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
         }, cancellationToken).ConfigureAwait(false);
+        
+        var aiDraftOrder = JsonConvert.DeserializeObject<AiDraftOrderDto>(completion.Value.Content.FirstOrDefault()?.Text ?? "");
+
+        Log.Information("Deserialize response to ai order: {@AiOrder}", aiDraftOrder);
+        
+        return aiDraftOrder;
     }
 
     public async Task<List<AiDraftItemModifiersDto>> GenerateSpecificationProductsAsync(List<EasyPosResponseModifierGroups> modifiers, TranscriptionLanguage language, string specification, CancellationToken cancellationToken)
@@ -215,6 +186,48 @@ public class PosUtilService : IPosUtilService
         Log.Information("Deserialize response to ai specification: {@Result}", result);
         
         return result.Modifiers;
+    }
+
+    private List<PosProduct> MatchPosProducts(List<PosProduct> products, AiDraftOrderDto aiDraftOrder)
+    {
+        var matchedProducts = products.Where(x => aiDraftOrder.Items.Select(p => p.ProductId).Contains(x.ProductId)).DistinctBy(x => x.ProductId).ToList();
+
+        Log.Information("Matched products: {@MatchedProducts}", matchedProducts);
+        
+        return matchedProducts;
+    }
+
+    private async Task HandleAiDraftOrderSpecificationsAsync(PhoneOrderRecord record, List<PosProduct> matchedProducts, AiDraftOrderDto aiDraftOrder, CancellationToken cancellationToken)
+    {
+        var productModifiersLookup = matchedProducts.Where(x => !string.IsNullOrWhiteSpace(x.Modifiers))
+            .ToDictionary(x => x.ProductId, x => JsonConvert.DeserializeObject<List<EasyPosResponseModifierGroups>>(x.Modifiers));
+
+        Log.Information("Build product's modifiers: {@ModifiersLookUp}", productModifiersLookup);
+
+        foreach (var aiDraftItem in aiDraftOrder.Items.Where(x => !string.IsNullOrEmpty(x.Specification) && !string.IsNullOrEmpty(x.ProductId)))
+        {
+            if (productModifiersLookup.TryGetValue(aiDraftItem.ProductId, out var modifiers))
+            {
+                try
+                {
+                    var builtModifiers = await GenerateSpecificationProductsAsync(modifiers, record.Language, aiDraftItem.Specification, cancellationToken).ConfigureAwait(false);
+                        
+                    Log.Information("Matched modifiers: {@MatchedModifiers}", builtModifiers);
+
+                    if (builtModifiers == null || builtModifiers.Count == 0) continue;
+
+                    aiDraftItem.Modifiers = builtModifiers;
+                }
+                catch (Exception e)
+                {
+                    aiDraftItem.Modifiers = [];
+                        
+                    Log.Error(e, "Failed to build product: {@AiDraftItem} modifiers", aiDraftItem);
+                }
+            }
+        }
+
+        Log.Information("Enrich ai draft order: {@EnrichAiDraftOrder}", aiDraftOrder);
     }
     
      public async Task<(List<PosProduct> Products, string MenuItems)> GeneratePosMenuItemsAsync(int agentId, bool isWithProductId = false, TranscriptionLanguage language = TranscriptionLanguage.Chinese, CancellationToken cancellationToken = default)
