@@ -2,8 +2,6 @@ using Newtonsoft.Json.Linq;
 using Serilog;
 using SmartTalk.Core.Services.RealtimeAiV2;
 using SmartTalk.Messages.Dto.RealtimeAi;
-using System.Linq;
-using System.Text;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistantConnect;
 
@@ -22,7 +20,7 @@ public partial class AiSpeechAssistantConnectService
         RealtimeAiSessionActions actions,
         CancellationToken cancellationToken)
     {
-        await SendPriceLookupHoldOnAudioAsync(actions, cancellationToken).ConfigureAwait(false);
+        await SendRepeatOrderHoldOnAudioAsync(actions).ConfigureAwait(false);
         
         Log.Information("Get product price for {@productName}", functionCallData?.ArgumentsJson);
         
@@ -127,97 +125,4 @@ public partial class AiSpeechAssistantConnectService
                || key.Contains("item", StringComparison.OrdinalIgnoreCase)
                || key.Contains("dish", StringComparison.OrdinalIgnoreCase);
     }
-
-    private async Task SendPriceLookupHoldOnAudioAsync(
-        RealtimeAiSessionActions actions,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            const string holdOnText = "正在为您查询价格，请稍等";
-
-            var responseAudio = await _openaiClient.GenerateSpeechAsync(
-                holdOnText,
-                _ctx.Assistant.ModelVoice,
-                cancellationToken).ConfigureAwait(false);
-
-            if (responseAudio is not { Length: > 0 })
-                return;
-
-            responseAudio = NormalizeWavHeader(responseAudio);
-
-            var uLawAudioBytes = await _ffmpegService
-                .ConvertWavToULawAsync(responseAudio, cancellationToken)
-                .ConfigureAwait(false);
-
-            await actions
-                .SendAudioToClientAsync(Convert.ToBase64String(uLawAudioBytes))
-                .ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            Log.Warning(ex, "[AiAssistant] Failed to send price lookup TTS.");
-        }
-    }
-
-    private static byte[] NormalizeWavHeader(byte[] wavBytes)
-    {
-        if (wavBytes is not { Length: >= 44 })
-            return wavBytes;
-
-        if (!IsAsciiAt(wavBytes, 0, "RIFF") || !IsAsciiAt(wavBytes, 8, "WAVE"))
-            return wavBytes;
-
-        // Fix RIFF chunk size
-        WriteInt32LE(wavBytes, 4, wavBytes.Length - 8);
-
-        // Fix data chunk size if present
-        var index = 12;
-        while (index + 8 <= wavBytes.Length)
-        {
-            var chunkId = Encoding.ASCII.GetString(wavBytes, index, 4);
-            var chunkSize = BitConverter.ToInt32(wavBytes, index + 4);
-            var nextIndex = index + 8 + Math.Max(chunkSize, 0);
-
-            if (chunkId == "data")
-            {
-                var dataSize = wavBytes.Length - (index + 8);
-                if (chunkSize != dataSize)
-                    WriteInt32LE(wavBytes, index + 4, dataSize);
-                break;
-            }
-
-            if (nextIndex <= index + 8 || nextIndex > wavBytes.Length)
-                break;
-
-            index = nextIndex;
-            if ((chunkSize & 1) == 1)
-                index += 1;
-        }
-
-        return wavBytes;
-    }
-
-    private static bool IsAsciiAt(byte[] buffer, int offset, string value)
-    {
-        if (offset < 0 || offset + value.Length > buffer.Length)
-            return false;
-
-        for (var i = 0; i < value.Length; i++)
-        {
-            if (buffer[offset + i] != (byte)value[i])
-                return false;
-        }
-
-        return true;
-    }
-
-    private static void WriteInt32LE(byte[] buffer, int offset, int value)
-    {
-        buffer[offset] = (byte)(value & 0xFF);
-        buffer[offset + 1] = (byte)((value >> 8) & 0xFF);
-        buffer[offset + 2] = (byte)((value >> 16) & 0xFF);
-        buffer[offset + 3] = (byte)((value >> 24) & 0xFF);
-    }
-
 }

@@ -13,8 +13,6 @@ public interface IOpenaiClient : IScopedDependency
     
     Task<string> RealtimeChatAsync(string sdp,  string ephemeralToken, CancellationToken cancellationToken);
 
-    Task<byte[]> GenerateSpeechAsync(string text, string voice, CancellationToken cancellationToken);
-
     Task<byte[]> GenerateAudioChatCompletionAsync(BinaryData audioData, string prompt, string voice, CancellationToken cancellationToken);
 }
 
@@ -86,27 +84,5 @@ public class OpenaiClient : IOpenaiClient
         Log.Information("Analyze record to repeat order: {@completion}", completion);
 
         return completion.OutputAudio.AudioBytes.ToArray();
-    }
-
-    public async Task<byte[]> GenerateSpeechAsync(string text, string voice, CancellationToken cancellationToken)
-    {
-        var requestUrl = $"{_openAiSettings.BaseUrl}/v1/audio/speech";
-
-        var headers = new Dictionary<string, string>
-        {
-            { "Authorization", $"Bearer {_openAiSettings.ApiKey}" }
-        };
-
-        var payload = new
-        {
-            model = "gpt-4o-mini-tts",
-            voice = string.IsNullOrWhiteSpace(voice) ? "alloy" : voice,
-            input = text,
-            response_format = "wav"
-        };
-
-        return await _smartTalkHttpClientFactory
-            .PostAsJsonAsync<byte[]>(requestUrl, payload, cancellationToken, headers: headers)
-            .ConfigureAwait(false);
     }
 }
