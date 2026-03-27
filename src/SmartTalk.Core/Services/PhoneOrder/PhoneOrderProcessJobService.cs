@@ -76,6 +76,7 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _speechMaticsDataProvider = speechMaticsDataProvider;
         _smartTalkHttpClientFactory = smartTalkHttpClientFactory;
+        _smartTalkBackgroundJobClient = backgroundJobClient;
         _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
         _phoneOrderUtilService = phoneOrderUtilService;
