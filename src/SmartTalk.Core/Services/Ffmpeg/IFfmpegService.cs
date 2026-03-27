@@ -455,7 +455,7 @@ public class FfmpegService : IFfmpegService
                 proc.StartInfo = new ProcessStartInfo
                 {
                     FileName = "ffmpeg",
-                    Arguments = $"-y -i {inputFileName} -c:a pcm_mulaw -ar 8000 {outputFileName}",
+                    Arguments = $"-hide_banner -loglevel error -y -i {inputFileName} -c:a pcm_mulaw -ar 8000 {outputFileName}",
                     RedirectStandardError = true,
                     RedirectStandardOutput = true,
                     UseShellExecute = false,
@@ -468,8 +468,7 @@ public class FfmpegService : IFfmpegService
                     if (string.IsNullOrEmpty(e.Data)) return;
                     
                     errorBuilder.AppendLine(e.Data);
-                    
-                    Log.Error("FFmpeg Error: {Error}", e.Data);
+                    Log.Debug("FFmpeg: {Line}", e.Data);
                 };
 
                 proc.Start();

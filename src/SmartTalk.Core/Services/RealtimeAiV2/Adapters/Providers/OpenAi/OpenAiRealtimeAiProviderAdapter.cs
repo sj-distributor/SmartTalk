@@ -240,7 +240,7 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
                 continue;
 
             var name = item.TryGetProperty("name", out var nameProp) ? nameProp.GetString() : null;
-            var args = item.TryGetProperty("arguments", out var argsProp) ? argsProp.GetString() : null;
+            var args = ExtractArgumentsJson(item);
 
             if (string.IsNullOrEmpty(name)) continue;
 
@@ -251,6 +251,31 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
         }
 
         return results;
+    }
+
+    private static string ExtractArgumentsJson(JsonElement item)
+    {
+        if (item.TryGetProperty("arguments", out var argsProp))
+        {
+            return argsProp.ValueKind switch
+            {
+                JsonValueKind.String => argsProp.GetString(),
+                JsonValueKind.Undefined or JsonValueKind.Null => null,
+                _ => argsProp.GetRawText()
+            };
+        }
+
+        if (item.TryGetProperty("arguments_json", out var argsJsonProp))
+        {
+            return argsJsonProp.ValueKind switch
+            {
+                JsonValueKind.String => argsJsonProp.GetString(),
+                JsonValueKind.Undefined or JsonValueKind.Null => null,
+                _ => argsJsonProp.GetRawText()
+            };
+        }
+
+        return null;
     }
 
     private static string ExtractErrorMessage(JsonElement root)
