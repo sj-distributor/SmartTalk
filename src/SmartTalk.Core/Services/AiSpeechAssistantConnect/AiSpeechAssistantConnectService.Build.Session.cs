@@ -1,4 +1,6 @@
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using SmartTalk.Core.Constants;
 using SmartTalk.Core.Services.RealtimeAiV2;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Messages.Constants;
@@ -12,6 +14,7 @@ public partial class AiSpeechAssistantConnectService
     private RealtimeSessionOptions BuildSessionOptions()
     {
         var assistant = _ctx.Assistant;
+        var tools = BuildTools();
 
         return new RealtimeSessionOptions
         {
@@ -27,10 +30,7 @@ public partial class AiSpeechAssistantConnectService
                 ModelName = assistant.ModelName,
                 ModelLanguage = assistant.ModelLanguage,
                 Prompt = _ctx.Prompt,
-                Tools = _ctx.FunctionCalls
-                    .Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool && !string.IsNullOrWhiteSpace(x.Content))
-                    .Select(x => JsonConvert.DeserializeObject<object>(x.Content))
-                    .ToList(),
+                Tools = tools,
                 TurnDetection = DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.TurnDirection),
                 InputAudioNoiseReduction = DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction)
             },
@@ -48,6 +48,56 @@ public partial class AiSpeechAssistantConnectService
             OnRecordingCompleteAsync = HandleRecordingCompleteAsync,
             OnFunctionCallAsync = (data, actions) => OnFunctionCallAsync(data, actions, CancellationToken.None)
         };
+    }
+
+    private List<object> BuildTools()
+    {
+        var tools = _ctx.FunctionCalls
+            .Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool && !string.IsNullOrWhiteSpace(x.Content))
+            .Select(x => JsonConvert.DeserializeObject<JObject>(x.Content))
+            .Where(x => x != null)
+            .Cast<object>()
+            .ToList();
+
+        if (_ctx.Assistant.ModelProvider == RealtimeAiProvider.OpenAi)
+            EnsureGetProductPriceSchema(tools);
+
+        return tools;
+    }
+
+    private static void EnsureGetProductPriceSchema(List<object> tools)
+    {
+        foreach (var tool in tools.OfType<JObject>())
+        {
+            var name = tool.Value<string>("name");
+            if (!string.Equals(name, OpenAiToolConstants.GetProductPrice, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            tool["type"] ??= "function";
+
+            var parameters = tool["parameters"] as JObject ?? new JObject();
+            parameters["type"] ??= "object";
+
+            var properties = parameters["properties"] as JObject ?? new JObject();
+            if (properties["product_name"] == null)
+            {
+                properties["product_name"] = new JObject
+                {
+                    ["type"] = "string",
+                    ["description"] = "The product/dish name the user asked about."
+                };
+            }
+
+            var required = parameters["required"] as JArray ?? new JArray();
+            if (!required.Any(x => string.Equals(x?.ToString(), "product_name", StringComparison.Ordinal)))
+                required.Add("product_name");
+
+            parameters["properties"] = properties;
+            parameters["required"] = required;
+            parameters["additionalProperties"] ??= false;
+
+            tool["parameters"] = parameters;
+        }
     }
 
     private RealtimeSessionIdleFollowUp BuildIdleFollowUp()
