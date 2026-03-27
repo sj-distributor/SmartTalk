@@ -467,8 +467,15 @@ public class FfmpegService : IFfmpegService
                     if (string.IsNullOrEmpty(e.Data)) return;
                     
                     errorBuilder.AppendLine(e.Data);
-                    
-                    Log.Error("FFmpeg Error: {Error}", e.Data);
+
+                    if (e.Data.Contains("may be invalid", StringComparison.OrdinalIgnoreCase) ||
+                        e.Data.Contains("Estimating duration from bitrate", StringComparison.OrdinalIgnoreCase))
+                    {
+                        Log.Warning("FFmpeg warning: {Warning}", e.Data);
+                        return;
+                    }
+
+                    Log.Information("FFmpeg stderr: {Data}", e.Data);
                 };
 
                 proc.Start();

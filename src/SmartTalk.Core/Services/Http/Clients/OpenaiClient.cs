@@ -4,6 +4,7 @@ using SmartTalk.Core.Ioc;
 using System.Net.Http.Headers;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Messages.Dto.OpenAi;
+using NAudio.Wave;
 
 namespace SmartTalk.Core.Services.Http.Clients;
 
@@ -79,10 +80,35 @@ public class OpenaiClient : IOpenaiClient
             AudioOptions = new ChatAudioOptions(new ChatOutputAudioVoice(voice), ChatOutputAudioFormat.Wav)
         };
 
-        ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
+        ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken).ConfigureAwait(false);
 
         Log.Information("Analyze record to repeat order: {@completion}", completion);
 
-        return completion.OutputAudio.AudioBytes.ToArray();
+        var outputAudio = completion.OutputAudio?.AudioBytes.ToArray();
+
+        if (outputAudio is not { Length: > 0 })
+        {
+            Log.Warning("OpenAI audio completion returned no output audio.");
+            return Array.Empty<byte>();
+        }
+
+        return NormalizeWavHeader(outputAudio);
+    }
+
+    private static byte[] NormalizeWavHeader(byte[] wavBytes)
+    {
+        try
+        {
+            using var input = new MemoryStream(wavBytes);
+            using var reader = new WaveFileReader(input);
+            using var output = new MemoryStream();
+            WaveFileWriter.WriteWavFileToStream(output, reader);
+            return output.ToArray();
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Failed to normalize WAV header from OpenAI output; using raw bytes.");
+            return wavBytes;
+        }
     }
 }
