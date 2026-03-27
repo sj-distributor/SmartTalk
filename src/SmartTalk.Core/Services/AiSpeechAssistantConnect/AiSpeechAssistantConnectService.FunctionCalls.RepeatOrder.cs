@@ -52,7 +52,7 @@ public partial class AiSpeechAssistantConnectService
 
         try
         {
-            var stream = AudioHelper.GetRandomAudioStream(voice, language, "hold_on");
+            var stream = AudioHelper.GetRandomAudioStream(voice, language, "SmartTalk.Core.Assets.Audio.RepeatOrderHoldon");
 
             using var holdOnStream = new MemoryStream();
             await stream.CopyToAsync(holdOnStream).ConfigureAwait(false);

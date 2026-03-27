@@ -26,20 +26,27 @@ public partial class AiSpeechAssistantConnectService
         
         var args = ParseProductPriceArgs(functionCallData?.ArgumentsJson);
 
+        if (string.IsNullOrWhiteSpace(args.ProductName))
+        {
+            Log.Warning("[AiAssistant] get_product_price missing product_name. Raw args: {Args}", functionCallData?.ArgumentsJson);
+            return new RealtimeAiFunctionCallResult
+            {
+                Output = "Missing product_name. Ask the user which product they want the price for."
+            };
+        }
+
         var priceLine = DefaultPriceLine;
 
         Log.Information("Get product price for {@productName}", args);
 
         await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken).ConfigureAwait(false);
         
-        if (!string.IsNullOrWhiteSpace(args.ProductName) &&
-            _ctx.PriceCache.TryGetValue(args.ProductName, out var cached))
+        if (_ctx.PriceCache.TryGetValue(args.ProductName, out var cached))
         {
             return new RealtimeAiFunctionCallResult { Output = cached };
         }
 
-        if (!string.IsNullOrWhiteSpace(args.ProductName))
-            _ctx.PriceCache[args.ProductName] = priceLine;
+        _ctx.PriceCache[args.ProductName] = priceLine;
         
         return new RealtimeAiFunctionCallResult { Output = priceLine };
     }
