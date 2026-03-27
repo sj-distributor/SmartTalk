@@ -88,6 +88,7 @@ public partial class PhoneOrderProcessJobService
 
             await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken)
                 .ConfigureAwait(false);
+            await _phoneOrderDataProvider.MarkRecordCompletedAsync(record.Id, cancellationToken).ConfigureAwait(false);
 
             Log.Warning("Handle transcription callback failed: {@Exception}", e);
         }
