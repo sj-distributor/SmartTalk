@@ -34,6 +34,8 @@ public interface IPosUtilService : IScopedDependency
     Task<List<PosMenuProductBriefDto>> GetPosMenuProductBriefsAsync(int agentId, TranscriptionLanguage language = TranscriptionLanguage.Chinese, CancellationToken cancellationToken = default);
 
     Task<string> GetPosMenuTimePeriodsAsync(int agentId, TranscriptionLanguage language = TranscriptionLanguage.Chinese, CancellationToken cancellationToken = default);
+
+    Task<string> GetPosStoreTimePeriodsAsync(int agentId, TranscriptionLanguage language = TranscriptionLanguage.Chinese, CancellationToken cancellationToken = default);
 }
 
 public class PosUtilService : IPosUtilService
@@ -391,6 +393,51 @@ public class PosUtilService : IPosUtilService
                 if (!string.IsNullOrWhiteSpace(line))
                     lines.Add(line);
             }
+        }
+
+        var distinctLines = lines
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        return distinctLines.Count == 0 ? string.Empty : string.Join(Environment.NewLine, distinctLines);
+    }
+
+    public async Task<string> GetPosStoreTimePeriodsAsync(int agentId, TranscriptionLanguage language = TranscriptionLanguage.Chinese, CancellationToken cancellationToken = default)
+    {
+        var store = await _posDataProvider.GetPosStoreByAgentIdAsync(agentId, cancellationToken).ConfigureAwait(false);
+        if (store == null || string.IsNullOrWhiteSpace(store.TimePeriod)) return string.Empty;
+
+        List<StoreTimePeriod> periods;
+        try
+        {
+            periods = JsonConvert.DeserializeObject<List<StoreTimePeriod>>(store.TimePeriod);
+        }
+        catch
+        {
+            return string.Empty;
+        }
+
+        if (periods == null || periods.Count == 0) return string.Empty;
+
+        var lines = new List<string>();
+
+        foreach (var period in periods)
+        {
+            if (period == null || string.IsNullOrWhiteSpace(period.StartTime) || string.IsNullOrWhiteSpace(period.EndTime))
+                continue;
+
+            var dayText = BuildDayOfWeekSummary(period.DayOfWeeks, language);
+            var periodName = string.IsNullOrWhiteSpace(period.Name) ? string.Empty : period.Name.Trim();
+            var window = $"{period.StartTime}-{period.EndTime}";
+
+            var line = string.IsNullOrWhiteSpace(periodName)
+                ? $"{dayText} {window}".Trim()
+                : $"{periodName} {dayText} {window}".Trim();
+
+            if (!string.IsNullOrWhiteSpace(line))
+                lines.Add(line);
         }
 
         var distinctLines = lines

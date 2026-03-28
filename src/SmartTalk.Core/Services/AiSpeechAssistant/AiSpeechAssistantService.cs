@@ -1419,11 +1419,12 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
         var language = ConvertAssistantLanguageToTranscriptionLanguage(assistantLanguage);
         var productBriefs = await _posUtilService.GetPosMenuProductBriefsAsync(agentId, language, cancellationToken).ConfigureAwait(false);
+        var menuTimePeriods = await _posUtilService.GetPosMenuTimePeriodsAsync(agentId, language, cancellationToken).ConfigureAwait(false);
 
         return PosMenuFieldRegex.Replace(prompt, match =>
         {
             var field = match.Groups.Count > 1 ? match.Groups[1].Value : string.Empty;
-            var replacement = BuildPosMenuFieldReplacement(productBriefs, field);
+            var replacement = BuildPosMenuFieldReplacement(productBriefs, menuTimePeriods, field);
 
             return string.IsNullOrWhiteSpace(replacement) ? " " : replacement;
         });
@@ -1442,11 +1443,14 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         return TranscriptionLanguage.Chinese;
     }
 
-    private static string BuildPosMenuFieldReplacement(List<PosMenuProductBriefDto> productBriefs, string field)
+    private static string BuildPosMenuFieldReplacement(List<PosMenuProductBriefDto> productBriefs, string menuTimePeriods, string field)
     {
-        if (productBriefs == null || productBriefs.Count == 0) return " ";
-
         var normalizedField = NormalizePosMenuField(field);
+
+        if (normalizedField is "菜单时间")
+            return string.IsNullOrWhiteSpace(menuTimePeriods) ? " " : menuTimePeriods;
+
+        if (productBriefs == null || productBriefs.Count == 0) return " ";
 
         return normalizedField switch
         {
@@ -1496,7 +1500,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         if (!PosStoreTimeRegex.IsMatch(prompt)) return prompt;
 
         var language = ConvertAssistantLanguageToTranscriptionLanguage(assistantLanguage);
-        var storeTimeText = await _posUtilService.GetPosMenuTimePeriodsAsync(agentId, language, cancellationToken).ConfigureAwait(false);
+        var storeTimeText = await _posUtilService.GetPosStoreTimePeriodsAsync(agentId, language, cancellationToken).ConfigureAwait(false);
         var replacement = string.IsNullOrWhiteSpace(storeTimeText) ? " " : storeTimeText;
 
         var matches = PosStoreTimeRegex.Matches(prompt);
