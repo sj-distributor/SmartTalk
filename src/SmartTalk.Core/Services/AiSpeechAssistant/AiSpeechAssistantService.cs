@@ -83,6 +83,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly ZhiPuAiSettings _zhiPuAiSettings;
     private readonly IRedisSafeRunner _redisSafeRunner;
     private readonly IPosDataProvider _posDataProvider;
+    private readonly IPosUtilService _posUtilService;
     private readonly IPhoneOrderService _phoneOrderService;
     private readonly IAgentDataProvider _agentDataProvider;
     private readonly IAttachmentService _attachmentService;
@@ -119,6 +120,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         ZhiPuAiSettings zhiPuAiSettings,
         IRedisSafeRunner redisSafeRunner,
         IPosDataProvider posDataProvider,
+        IPosUtilService posUtilService,
         IPhoneOrderService phoneOrderService,
         IAgentDataProvider agentDataProvider,
         IAttachmentService attachmentService,
@@ -149,6 +151,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _zhiPuAiSettings = zhiPuAiSettings;
         _redisSafeRunner = redisSafeRunner;
         _posDataProvider = posDataProvider;
+        _posUtilService = posUtilService;
         _agentDataProvider = agentDataProvider;
         _phoneOrderService = phoneOrderService;
         _httpClientFactory = httpClientFactory;
@@ -235,12 +238,12 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _aiSpeechAssistantStreamContext.Host = host;
         _aiSpeechAssistantStreamContext.LastUserInfo = new AiSpeechAssistantUserInfoDto { PhoneNumber = from };
     }
-    
-    private static readonly Regex PosMenuRegex =
-        new(@"\[POS_Menu_[^\]]+\]", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly Regex PosStoreTimeRegex =
         new(@"\[POS_店铺_营业时间_(.*?)\]", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    private static readonly Regex PosMenuFieldRegex =
+        new(@"\[POS_菜单_([^_\]]+)_([^\]]+)\]", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private async Task BuildingAiSpeechAssistantKnowledgeBaseAsync(string from, string to, int? assistantId, int? numberId, int? agentId, CancellationToken cancellationToken)
     {
@@ -315,7 +318,16 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             finalPrompt = finalPrompt.Replace("#{customer_info}", string.IsNullOrEmpty(info) ? " " : info);
         }
         
-        finalPrompt = await ResolvePosPlaceholdersAsync(finalPrompt, agentId.Value, cancellationToken);
+        if (agentId.HasValue)
+        {
+            finalPrompt = await ResolvePosMenuFieldPlaceholdersAsync(finalPrompt, assistant.Language, agentId.Value, cancellationToken).ConfigureAwait(false);
+            finalPrompt = await ResolvePosStoreTimePlaceholdersAsync(finalPrompt, assistant.Language, agentId.Value, cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            finalPrompt = PosMenuFieldRegex.Replace(finalPrompt, " ");
+            finalPrompt = PosStoreTimeRegex.Replace(finalPrompt, " ");
+        }
         
         Log.Information($"The final prompt: {finalPrompt}");
         
@@ -1286,39 +1298,95 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _aiSpeechAssistantStreamContext.IsEnableManualService = agent.IsTransferHuman && !string.IsNullOrEmpty(agent.TransferCallNumber);
     }
 
-    private async Task<string> ResolvePosPlaceholdersAsync(string prompt, int agentId, CancellationToken cancellationToken)
+    private async Task<string> ResolvePosMenuFieldPlaceholdersAsync(string prompt, string assistantLanguage, int agentId, CancellationToken cancellationToken)
     {
-        bool hasMenuPlaceholder = PosMenuRegex.IsMatch(prompt);
-        bool hasStoreTimePlaceholder = PosStoreTimeRegex.IsMatch(prompt);
+        if (!PosMenuFieldRegex.IsMatch(prompt)) return prompt;
 
-        string menuText = null;
-        string storeTimeText = null;
+        var language = ConvertAssistantLanguageToTranscriptionLanguage(assistantLanguage);
+        var productBriefs = await _posUtilService.GetPosMenuProductBriefsAsync(agentId, language, cancellationToken).ConfigureAwait(false);
 
-        if (hasMenuPlaceholder)
+        return PosMenuFieldRegex.Replace(prompt, match =>
         {
-            menuText = await GenerateMenuItemsAsync(agentId, cancellationToken).ConfigureAwait(false);
-        }
+            var field = match.Groups.Count > 1 ? match.Groups[1].Value : string.Empty;
+            var replacement = BuildPosMenuFieldReplacement(productBriefs, field);
 
-        if (hasStoreTimePlaceholder)
-        {
-            var store = await _posDataProvider.GetPosStoreByAgentIdAsync(agentId, cancellationToken).ConfigureAwait(false);
-            storeTimeText = store?.TimePeriod ?? string.Empty;
-        }
+            return string.IsNullOrWhiteSpace(replacement) ? " " : replacement;
+        });
+    }
 
-        if (hasMenuPlaceholder && !string.IsNullOrWhiteSpace(menuText))
-        {
-            var match = PosMenuRegex.Match(prompt);
-            prompt = prompt.Replace(match.Value, menuText, StringComparison.OrdinalIgnoreCase);
-        }
+    private static TranscriptionLanguage ConvertAssistantLanguageToTranscriptionLanguage(string assistantLanguage)
+    {
+        if (string.IsNullOrWhiteSpace(assistantLanguage)) return TranscriptionLanguage.Chinese;
 
-        if (hasStoreTimePlaceholder && !string.IsNullOrWhiteSpace(storeTimeText))
+        var normalized = assistantLanguage.Trim().ToLowerInvariant();
+
+        if (normalized.StartsWith("en", StringComparison.Ordinal)) return TranscriptionLanguage.English;
+        if (normalized.StartsWith("es", StringComparison.Ordinal)) return TranscriptionLanguage.Spanish;
+        if (normalized.StartsWith("ko", StringComparison.Ordinal)) return TranscriptionLanguage.Korean;
+
+        return TranscriptionLanguage.Chinese;
+    }
+
+    private static string BuildPosMenuFieldReplacement(List<PosMenuProductBriefDto> productBriefs, string field)
+    {
+        if (productBriefs == null || productBriefs.Count == 0) return " ";
+
+        var normalizedField = NormalizePosMenuField(field);
+
+        return normalizedField switch
         {
-            var matches = PosStoreTimeRegex.Matches(prompt);
-            foreach (Match match in matches)
-            {
-                prompt = prompt.Replace(match.Value, storeTimeText, StringComparison.OrdinalIgnoreCase);
-            }
-        }
+            "商品名称"
+                => JoinDistinctValues(productBriefs.Select(x => x.Name), "、"),
+            "商品价格"
+                => JoinDistinctValues(productBriefs.Select(x => !string.IsNullOrWhiteSpace(x.Name) ? $"{x.Name}:{x.Price:0.##}" : string.Empty), "；"),
+            "商品规格"
+                => JoinDistinctValues(productBriefs.Select(x => !string.IsNullOrWhiteSpace(x.Modifiers) ? $"{x.Name}:{x.Modifiers}" : string.Empty), "；"),
+            "商品税率"
+                => JoinDistinctValues(productBriefs.Select(x => !string.IsNullOrWhiteSpace(x.Tax) ? $"{x.Name}:{x.Tax}" : string.Empty), "；"),
+            "商品类别"
+                => JoinDistinctValues(productBriefs.Select(x => x.CategoryName), "、"),
+            _ => JoinDistinctValues(productBriefs.Select(BuildPosMenuBriefLine), Environment.NewLine)
+        };
+    }
+
+    private static string BuildPosMenuBriefLine(PosMenuProductBriefDto dto)
+    {
+        if (dto == null || string.IsNullOrWhiteSpace(dto.Name)) return string.Empty;
+
+        return $"{dto.Name}，price:{dto.Price:0.##}，modifier:{(string.IsNullOrWhiteSpace(dto.Modifiers) ? "-" : dto.Modifiers)}，tax:{(string.IsNullOrWhiteSpace(dto.Tax) ? "-" : dto.Tax)}，类别:{(string.IsNullOrWhiteSpace(dto.CategoryName) ? "-" : dto.CategoryName)}";
+    }
+
+    private static string NormalizePosMenuField(string field)
+    {
+        return (field ?? string.Empty)
+            .Replace(" ", string.Empty, StringComparison.Ordinal)
+            .Replace("_", string.Empty, StringComparison.Ordinal)
+            .Trim()
+            .ToLowerInvariant();
+    }
+
+    private static string JoinDistinctValues(IEnumerable<string> values, string separator)
+    {
+        var lines = values
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        return lines.Count == 0 ? " " : string.Join(separator, lines);
+    }
+
+    private async Task<string> ResolvePosStoreTimePlaceholdersAsync(string prompt, string assistantLanguage, int agentId, CancellationToken cancellationToken)
+    {
+        if (!PosStoreTimeRegex.IsMatch(prompt)) return prompt;
+
+        var language = ConvertAssistantLanguageToTranscriptionLanguage(assistantLanguage);
+        var storeTimeText = await _posUtilService.GetPosMenuTimePeriodsAsync(agentId, language, cancellationToken).ConfigureAwait(false);
+        var replacement = string.IsNullOrWhiteSpace(storeTimeText) ? " " : storeTimeText;
+
+        var matches = PosStoreTimeRegex.Matches(prompt);
+        foreach (Match match in matches)
+            prompt = prompt.Replace(match.Value, replacement, StringComparison.OrdinalIgnoreCase);
 
         return prompt;
     }
