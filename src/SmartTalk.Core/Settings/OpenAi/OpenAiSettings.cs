@@ -63,6 +63,7 @@ public class OpenAiSettings : IConfigurationSetting
             .Where(x => !string.IsNullOrWhiteSpace(x))
             .Distinct(StringComparer.Ordinal)
             .ToList();
+    }
 
     public string GetPreferredApiKey(bool isHk = false)
     {
