@@ -10,17 +10,11 @@ public class OpenAiSettings : IConfigurationSetting
         ApiKey = configuration.GetValue<string>("OpenAi:ApiKey");
         ApiKeySlave = configuration.GetValue<string>("OpenAi:ApiKeySlave");
         ApiKeySlave2 = configuration.GetValue<string>("OpenAi:ApiKeySlave2");
-        Organization = configuration.GetValue<string>("OpenAi:Organization");
-        OrganizationSlave = configuration.GetValue<string>("OpenAi:OrganizationSlave");
-        OrganizationSlave2 = configuration.GetValue<string>("OpenAi:OrganizationSlave2");
         
         HkBaseUrl = configuration.GetValue<string>("OpenAiForHk:BaseUrl");
         HkApiKey = configuration.GetValue<string>("OpenAiForHk:ApiKey");
         HkApiKeySlave = configuration.GetValue<string>("OpenAiForHk:ApiKeySlave");
         HkApiKeySlave2 = configuration.GetValue<string>("OpenAiForHk:ApiKeySlave2");
-        HkOrganization = configuration.GetValue<string>("OpenAiForHk:Organization");
-        HkOrganizationSlave = configuration.GetValue<string>("OpenAiForHk:OrganizationSlave");
-        HkOrganizationSlave2 = configuration.GetValue<string>("OpenAiForHk:OrganizationSlave2");
     }
     
     // Us 
@@ -32,12 +26,6 @@ public class OpenAiSettings : IConfigurationSetting
     
     public string ApiKeySlave2 { get; set; }
     
-    public string Organization { get; set; }
-    
-    public string OrganizationSlave { get; set; }
-    
-    public string OrganizationSlave2 { get; set; }
-    
     // Hk 
     public string HkBaseUrl { get; set; }
     
@@ -46,12 +34,6 @@ public class OpenAiSettings : IConfigurationSetting
     public string HkApiKeySlave { get; set; }
     
     public string HkApiKeySlave2 { get; set; }
-    
-    public string HkOrganization { get; set; }
-
-    public string HkOrganizationSlave { get; set; }
-
-    public string HkOrganizationSlave2 { get; set; }
 
     public IReadOnlyList<string> GetApiKeyCandidates(bool isHk = false)
     {
