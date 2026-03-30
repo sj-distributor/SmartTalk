@@ -72,8 +72,6 @@ public class PosUtilService : IPosUtilService
         
         var (products, menuItems) = await GeneratePosMenuItemsAsync(agent.Id, true, record.Language, cancellationToken).ConfigureAwait(false);
 
-        var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
-
         var systemPrompt =
             "你是一名訂單分析助手。請從下面的客戶分析報告文字中提取客人的姓名、电话、配送类型以及配送地址，以及所有下單的菜品、數量、規格、备注，並且用菜單列表盡力匹配每個菜品。\n" +
             "如果報告中提到了送餐類型，請提取送餐類型 type (0: 自提订单，1：配送订单)。\n" +
@@ -98,11 +96,26 @@ public class PosUtilService : IPosUtilService
             new UserChatMessage("客戶分析報告文本：\n" + report + "\n\n")
         };
 
-        var completion = await client.CompleteChatAsync(messages, new ChatCompletionOptions { ResponseModalities = ChatResponseModalities.Text, ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat() }, cancellationToken).ConfigureAwait(false);
+        var completionText = await _openAiSettings.ExecuteWithApiKeyFailoverAsync(
+            async apiKey =>
+            {
+                var client = new ChatClient("gpt-4.1", apiKey);
+                var completion = await client.CompleteChatAsync(messages, new ChatCompletionOptions
+                {
+                    ResponseModalities = ChatResponseModalities.Text,
+                    ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
+                }, cancellationToken).ConfigureAwait(false);
+
+                return completion.Value.Content.FirstOrDefault()?.Text;
+            },
+            isSuccess: text => !string.IsNullOrWhiteSpace(text),
+            operationName: $"{nameof(PosUtilService)}.{nameof(GenerateAiDraftAsync)}",
+            throwIfAllFailed: true,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
 
         try
         {
-            var aiDraftOrder = JsonConvert.DeserializeObject<AiDraftOrderDto>(completion.Value.Content.FirstOrDefault()?.Text ?? "");
+            var aiDraftOrder = JsonConvert.DeserializeObject<AiDraftOrderDto>(completionText ?? "");
 
             Log.Information("Deserialize response to ai order: {@AiOrder}", aiDraftOrder);
 
@@ -153,8 +166,6 @@ public class PosUtilService : IPosUtilService
 
     public async Task<List<AiDraftItemModifiersDto>> GenerateSpecificationProductsAsync(List<EasyPosResponseModifierGroups> modifiers, TranscriptionLanguage language, string specification, CancellationToken cancellationToken)
     {
-        var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
-
         var builtModifiers = BuildItemModifiers(modifiers);
 
         if (string.IsNullOrWhiteSpace(builtModifiers)) return [];
@@ -177,9 +188,24 @@ public class PosUtilService : IPosUtilService
             new UserChatMessage("规格菜品：\n" + specification + "\n\n")
         };
 
-        var completion = await client.CompleteChatAsync(messages, new ChatCompletionOptions { ResponseModalities = ChatResponseModalities.Text, ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat() }, cancellationToken).ConfigureAwait(false);
+        var completionText = await _openAiSettings.ExecuteWithApiKeyFailoverAsync(
+            async apiKey =>
+            {
+                var client = new ChatClient("gpt-4.1", apiKey);
+                var completion = await client.CompleteChatAsync(messages, new ChatCompletionOptions
+                {
+                    ResponseModalities = ChatResponseModalities.Text,
+                    ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
+                }, cancellationToken).ConfigureAwait(false);
 
-        var result = JsonConvert.DeserializeObject<AiDraftItemSpecificationDto>(completion.Value.Content.FirstOrDefault()?.Text ?? "");
+                return completion.Value.Content.FirstOrDefault()?.Text;
+            },
+            isSuccess: text => !string.IsNullOrWhiteSpace(text),
+            operationName: $"{nameof(PosUtilService)}.{nameof(GenerateSpecificationProductsAsync)}",
+            throwIfAllFailed: true,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var result = JsonConvert.DeserializeObject<AiDraftItemSpecificationDto>(completionText ?? "");
         
         Log.Information("Deserialize response to ai specification: {@Result}", result);
         

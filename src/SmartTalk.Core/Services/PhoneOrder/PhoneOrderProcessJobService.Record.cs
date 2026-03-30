@@ -20,6 +20,7 @@ using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Messages.Dto.SpeechMatics;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Core.Domain.AISpeechAssistant;
+using SmartTalk.Core.Extensions;
 using SmartTalk.Core.Utils;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.PhoneOrder;
@@ -118,21 +119,31 @@ public partial class PhoneOrderProcessJobService
         
         var networkTimeout = (audioContent?.Length ?? 0) > largeAudioBytesThreshold ? TimeSpan.FromMinutes(10) : TimeSpan.FromMinutes(5);
 
-        var client = new ChatClient(
-            "gpt-4o-audio-preview",
-            new ApiKeyCredential(_openAiSettings.ApiKey),
-            new OpenAIClientOptions
-            {
-                NetworkTimeout = networkTimeout
-            });
- 
         ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
 
-        ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
-        Log.Information("sales record analyze report:" + completion.Content.FirstOrDefault()?.Text);
+        var summaryText = await _openAiSettings.ExecuteWithApiKeyFailoverAsync(
+            async apiKey =>
+            {
+                var client = new ChatClient(
+                    "gpt-4o-audio-preview",
+                    new ApiKeyCredential(apiKey),
+                    new OpenAIClientOptions
+                    {
+                        NetworkTimeout = networkTimeout
+                    });
+
+                ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
+                return completion.Content.FirstOrDefault()?.Text;
+            },
+            isSuccess: text => !string.IsNullOrWhiteSpace(text),
+            operationName: $"{nameof(PhoneOrderProcessJobService)}.{nameof(SummarizeConversationContentAsync)}",
+            throwIfAllFailed: true,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        Log.Information("sales record analyze report:" + summaryText);
       
         record.Status = PhoneOrderRecordStatus.Sent;
-        record.TranscriptionText = completion.Content.FirstOrDefault()?.Text ?? "";
+        record.TranscriptionText = summaryText ?? "";
 
         var checkCustomerFriendly = await CheckCustomerFriendlyAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
 
@@ -475,8 +486,6 @@ public partial class PhoneOrderProcessJobService
         List<(string Material, string MaterialDesc, DateTime? invoiceDate)> historyItems,
         CancellationToken cancellationToken)
     {
-        var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
-
         var materialListText = string.Join("\n",
             historyItems.Select(x => $"{x.MaterialDesc} ({x.Material})【{x.invoiceDate}】"));
 
@@ -499,13 +508,22 @@ public partial class PhoneOrderProcessJobService
             new UserChatMessage("客戶分析報告文本：\n" + reportText + "\n\n")
         };
 
-        var completion = await client.CompleteChatAsync(messages,
-            new ChatCompletionOptions
+        var jsonResponse = await _openAiSettings.ExecuteWithApiKeyFailoverAsync(
+            async apiKey =>
             {
-                ResponseModalities = ChatResponseModalities.Text,
-                ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
-            }, cancellationToken).ConfigureAwait(false);
-        var jsonResponse = completion.Value.Content.FirstOrDefault()?.Text ?? "";
+                var client = new ChatClient("gpt-4.1", apiKey);
+                var completion = await client.CompleteChatAsync(messages,
+                    new ChatCompletionOptions
+                    {
+                        ResponseModalities = ChatResponseModalities.Text,
+                        ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
+                    }, cancellationToken).ConfigureAwait(false);
+                return completion.Value.Content.FirstOrDefault()?.Text;
+            },
+            isSuccess: text => !string.IsNullOrWhiteSpace(text),
+            operationName: $"{nameof(PhoneOrderProcessJobService)}.{nameof(ExtractAndMatchOrderItemsFromReportAsync)}",
+            throwIfAllFailed: true,
+            cancellationToken: cancellationToken).ConfigureAwait(false) ?? "";
 
         Log.Information("AI JSON Response: {JsonResponse}", jsonResponse);
 
