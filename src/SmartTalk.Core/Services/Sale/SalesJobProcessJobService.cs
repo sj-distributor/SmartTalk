@@ -19,7 +19,7 @@ public interface ISalesJobProcessJobService : IScopedDependency
 
     Task ScheduleRefreshCrmCustomerInfoAsync(RefreshAllCustomerInfoCacheCommand command, CancellationToken cancellationToken);
 
-    Task RefreshCrmCustomerInfoByPhoneNumberAsync(string phoneNumber, CancellationToken cancellationToken);
+    Task RefreshCrmCustomerInfoByPhoneNumberAsync(string phoneNumber, string crmToken, CancellationToken cancellationToken);
 }
 
 public class SalesJobProcessJobService : ISalesJobProcessJobService
@@ -79,34 +79,47 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
         var crmToken = await _crmClient.GetCrmTokenAsync(cancellationToken).ConfigureAwait(false);
         if (crmToken == null) return;
 
-        var totalPhones = 0;
+        var phoneNumbersToRefresh = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         
         foreach (var soldToId in allSoldToIds)
         {
-            var contacts = await _crmClient.GetCustomerContactsAsync(soldToId, crmToken, cancellationToken).ConfigureAwait(false);
+            var customerIds = soldToId
+                .Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(id => id.Trim())
+                .Where(id => !string.IsNullOrEmpty(id))
+                .Distinct()
+                .ToList();
 
-            var phoneNumbers = contacts?.Where(c => !string.IsNullOrEmpty(c.Phone)).Select(c => NormalizePhone(c.Phone)).Distinct().ToList() ?? new List<string>();
-
-            totalPhones += phoneNumbers.Count;
-            
-            foreach (var phone in phoneNumbers)
+            foreach (var customerId in customerIds)
             {
-                _backgroundJobClient.Enqueue<ISalesJobProcessJobService>(x => x.RefreshCrmCustomerInfoByPhoneNumberAsync(phone, CancellationToken.None), HangfireConstants.InternalHostingCaCheKnowledgeVariable);
+                var contacts = await _crmClient.GetCustomerContactsAsync(customerId, crmToken, cancellationToken).ConfigureAwait(false);
+                if (contacts == null || contacts.Count == 0) continue;
+
+                foreach (var phone in contacts.Where(c => !string.IsNullOrEmpty(c.Phone)).Select(c => NormalizePhone(c.Phone)))
+                {
+                    if (!string.IsNullOrEmpty(phone))
+                        phoneNumbersToRefresh.Add(phone);
+                }
             }
         }
 
-        Log.Information("Scheduled CRM customer info refresh for {CustomerCount} customers, {PhoneCount} phone numbers", allSoldToIds.Count, totalPhones);
+        foreach (var phone in phoneNumbersToRefresh)
+        {
+            _backgroundJobClient.Enqueue<ISalesJobProcessJobService>(x => x.RefreshCrmCustomerInfoByPhoneNumberAsync(phone, crmToken, CancellationToken.None), HangfireConstants.InternalHostingCaCheKnowledgeVariable);
+        }
+
+        Log.Information("Scheduled CRM customer info refresh for {SoldToIdCount} sold-to entries, {PhoneCount} phone numbers", allSoldToIds.Count, phoneNumbersToRefresh.Count);
     }
 
-    
-    public async Task RefreshCrmCustomerInfoByPhoneNumberAsync(string phoneNumber, CancellationToken cancellationToken)
+
+    public async Task RefreshCrmCustomerInfoByPhoneNumberAsync(string phoneNumber, string crmToken, CancellationToken cancellationToken)
     {
         try
         {
             Log.Information("Refreshing CRM customer info cache for phone {Phone}", phoneNumber);
 
             var normalizedPhone = NormalizePhone(phoneNumber);
-            var infoString = await _salesService.BuildCrmCustomerInfoByPhoneAsync(normalizedPhone, cancellationToken).ConfigureAwait(false);
+            var infoString = await _salesService.BuildCrmCustomerInfoByPhoneAsync(normalizedPhone, crmToken, cancellationToken).ConfigureAwait(false);
 
             await _salesDataProvider.UpsertCustomerInfoCacheAsync(normalizedPhone, infoString, true, cancellationToken).ConfigureAwait(false);
 
