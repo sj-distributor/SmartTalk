@@ -62,8 +62,6 @@ public class SpeechToTextService : ISpeechToTextService
         byte[] file, TranscriptionLanguage? language, TranscriptionFileType fileType = TranscriptionFileType.Wav, 
         TranscriptionResponseFormat responseFormat = TranscriptionResponseFormat.Vtt, string prompt = null, CancellationToken cancellationToken = default)
     {
-        AudioClient client = new("whisper-1", _openAiSettings.ApiKey);
-        
         var filename = $"{Guid.NewGuid()}.{fileType.ToString().ToLower()}";
         
         var fileResponseFormat = responseFormat switch
@@ -84,11 +82,21 @@ public class SpeechToTextService : ISpeechToTextService
         };
         
         if (language.HasValue) options.Language = language.Value.GetDescription();
-        
-        var response = await client.TranscribeAudioAsync(stream, "test.wav", options, cancellationToken);
 
-        Log.Information("Transcription {FileName} response {@Response}", filename, response);
-        
-        return response?.Value?.Text;
+        return await _openAiSettings.ExecuteWithApiKeyFailoverAsync(
+            async apiKey =>
+            {
+                AudioClient client = new("whisper-1", apiKey);
+                stream.Position = 0;
+                var response = await client.TranscribeAudioAsync(stream, "test.wav", options, cancellationToken);
+
+                Log.Information("Transcription {FileName} response {@Response}", filename, response);
+
+                return response?.Value?.Text;
+            },
+            isSuccess: text => !string.IsNullOrWhiteSpace(text),
+            operationName: nameof(TranscriptionAsync),
+            throwIfAllFailed: true,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 }

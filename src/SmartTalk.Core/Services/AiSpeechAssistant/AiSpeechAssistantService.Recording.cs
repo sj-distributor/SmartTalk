@@ -1,5 +1,6 @@
 using Serilog;
 using OpenAI.Chat;
+using SmartTalk.Core.Extensions;
 using SmartTalk.Core.Services.Caching;
 using SmartTalk.Core.Utils;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
@@ -102,8 +103,6 @@ public partial class AiSpeechAssistantService
 
     private async Task<string> DetectAudioLanguageAsync(byte[] audioContent, CancellationToken cancellationToken)
     {
-        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
-
         var audioData = BinaryData.FromBytes(audioContent);
         List<ChatMessage> messages =
         [
@@ -149,11 +148,22 @@ public partial class AiSpeechAssistantService
 
         ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
 
-        ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
+        var result = await _openAiSettings.ExecuteWithApiKeyFailoverAsync(
+            async apiKey =>
+            {
+                ChatClient client = new("gpt-4o-audio-preview", apiKey);
+                ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
 
-        Log.Information("Detect the audio language: " + completion.Content.FirstOrDefault()?.Text);
+                return completion.Content.FirstOrDefault()?.Text;
+            },
+            isSuccess: text => !string.IsNullOrWhiteSpace(text),
+            operationName: nameof(DetectAudioLanguageAsync),
+            throwIfAllFailed: true,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        return completion.Content.FirstOrDefault()?.Text ?? "en";
+        Log.Information("Detect the audio language: " + result);
+
+        return result ?? "en";
     }
 
     private async Task SendServerRestoreMessageIfNecessaryAsync(CancellationToken cancellationToken)

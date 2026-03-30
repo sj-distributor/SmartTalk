@@ -11,6 +11,7 @@ using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.Printer;
 using SmartTalk.Core.Domain.System;
+using SmartTalk.Core.Extensions;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Caching.Redis;
@@ -152,8 +153,7 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
     public async Task GenerateAiDraftAsync(PhoneOrderRecord record, Agent agent, CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(record.TranscriptionText) || agent == null) return;
-        
-        var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
+
         var systemPrompt = "";
                     
         var store = await _posDataProvider.GetPosStoreByAgentIdAsync(agent.Id, cancellationToken).ConfigureAwait(false);
@@ -281,8 +281,21 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
             new UserChatMessage("客戶預約資訊文本：\n" + record.TranscriptionText + "\n\n")
         };
 
-        var completion = await client.CompleteChatAsync(messages, new ChatCompletionOptions { ResponseModalities = ChatResponseModalities.Text, ResponseFormat = ChatResponseFormat.CreateTextFormat() }, cancellationToken).ConfigureAwait(false);
-        var jsonResponse = completion.Value.Content.FirstOrDefault()?.Text ?? "";
+        var jsonResponse = await _openAiSettings.ExecuteWithApiKeyFailoverAsync(
+            async apiKey =>
+            {
+                var client = new ChatClient("gpt-4.1", apiKey);
+                var completion = await client.CompleteChatAsync(messages, new ChatCompletionOptions
+                {
+                    ResponseModalities = ChatResponseModalities.Text,
+                    ResponseFormat = ChatResponseFormat.CreateTextFormat()
+                }, cancellationToken).ConfigureAwait(false);
+                return completion.Value.Content.FirstOrDefault()?.Text;
+            },
+            isSuccess: text => !string.IsNullOrWhiteSpace(text),
+            operationName: $"{nameof(PhoneOrderUtilService)}.{nameof(GenerateAiDraftAsync)}",
+            throwIfAllFailed: true,
+            cancellationToken: cancellationToken).ConfigureAwait(false) ?? "";
         
         var detection = await _translationClient.DetectLanguageAsync(jsonResponse, cancellationToken).ConfigureAwait(false);
 

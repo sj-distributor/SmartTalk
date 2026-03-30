@@ -15,6 +15,7 @@ using Smarties.Messages.DTO.OpenAi;
 using Microsoft.IdentityModel.Tokens;
 using NAudio.Wave;
 using Smarties.Messages.Enums.OpenAi;
+using SmartTalk.Core.Extensions;
 using SmartTalk.Core.Settings.OpenAi;
 using Smarties.Messages.Requests.Ask;
 using SmartTalk.Core.Domain.AutoTest;
@@ -487,8 +488,6 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
             new SystemChatMessage(prompt)
         };
 
-        var client = new ChatClient("gpt-4o-audio-preview", _openAiSettings.ApiKey);
-
         var options = new ChatCompletionOptions
         {
             ResponseModalities = ChatResponseModalities.Text | ChatResponseModalities.Audio,
@@ -513,7 +512,16 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
                         BinaryData.FromBytes(await File.ReadAllBytesAsync(userWavFile, cancellationToken)),
                         ChatInputAudioFormat.Wav)));
 
-                var completion = await client.CompleteChatAsync(conversationHistory, options, cancellationToken);
+                var completion = await _openAiSettings.ExecuteWithApiKeyFailoverAsync(
+                    async apiKey =>
+                    {
+                        var client = new ChatClient("gpt-4o-audio-preview", apiKey);
+                        return await client.CompleteChatAsync(conversationHistory, options, cancellationToken);
+                    },
+                    isSuccess: response => response?.Value?.OutputAudio?.AudioBytes is { Length: > 0 },
+                    operationName: $"{nameof(AutoTestSalesPhoneOrderProcessJobService)}.{nameof(ProcessAudioConversationAsync)}",
+                    throwIfAllFailed: true,
+                    cancellationToken: cancellationToken).ConfigureAwait(false);
 
                 var aiWavFile = Path.GetTempFileName() + ".wav";
                 await File.WriteAllBytesAsync(aiWavFile, completion.Value.OutputAudio.AudioBytes.ToArray(), cancellationToken);
@@ -612,13 +620,21 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
     private async Task<(string Report, List<AutoTestInputDetail> Order)> GenerateSalesAiOrderAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, byte[] audio, CancellationToken cancellationToken)
     {
         var messages = await ConfigureRecordAnalyzePromptAsync(assistant, audio, cancellationToken).ConfigureAwait(false);
-        
-        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
 
         ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
 
-        ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
-        var report = completion.Content.FirstOrDefault()?.Text;
+        var report = await _openAiSettings.ExecuteWithApiKeyFailoverAsync(
+            async apiKey =>
+            {
+                ChatClient client = new("gpt-4o-audio-preview", apiKey);
+                ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
+                return completion.Content.FirstOrDefault()?.Text;
+            },
+            isSuccess: text => !string.IsNullOrWhiteSpace(text),
+            operationName: $"{nameof(AutoTestSalesPhoneOrderProcessJobService)}.{nameof(GenerateSalesAiOrderAsync)}",
+            throwIfAllFailed: true,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
         Log.Information("sales record analyze report:" + report);
 
         var soldToIds = new List<string>();
@@ -686,8 +702,6 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
     
     private async Task<List<ExtractedOrderDto>> ExtractAndMatchOrderItemsFromReportAsync(string reportText, List<(string Material, string MaterialDesc, DateTime? invoiceDate)> historyItems, CancellationToken cancellationToken)
     {
-        var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
-
         var materialListText = string.Join("\n",
             historyItems.Select(x => $"{x.MaterialDesc} ({x.Material})【{x.invoiceDate}】"));
 
@@ -710,13 +724,22 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
             new UserChatMessage("客戶分析報告文本：\n" + reportText + "\n\n")
         };
 
-        var completion = await client.CompleteChatAsync(messages,
-            new ChatCompletionOptions
+        var jsonResponse = await _openAiSettings.ExecuteWithApiKeyFailoverAsync(
+            async apiKey =>
             {
-                ResponseModalities = ChatResponseModalities.Text,
-                ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
-            }, cancellationToken).ConfigureAwait(false);
-        var jsonResponse = completion.Value.Content.FirstOrDefault()?.Text ?? "";
+                var client = new ChatClient("gpt-4.1", apiKey);
+                var completion = await client.CompleteChatAsync(messages,
+                    new ChatCompletionOptions
+                    {
+                        ResponseModalities = ChatResponseModalities.Text,
+                        ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
+                    }, cancellationToken).ConfigureAwait(false);
+                return completion.Value.Content.FirstOrDefault()?.Text;
+            },
+            isSuccess: text => !string.IsNullOrWhiteSpace(text),
+            operationName: $"{nameof(AutoTestSalesPhoneOrderProcessJobService)}.{nameof(ExtractAndMatchOrderItemsFromReportAsync)}",
+            throwIfAllFailed: true,
+            cancellationToken: cancellationToken).ConfigureAwait(false) ?? "";
 
         Log.Information("AI JSON Response: {JsonResponse}", jsonResponse);
 

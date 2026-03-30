@@ -2,6 +2,7 @@ using OpenAI.Chat;
 using Serilog;
 using SmartTalk.Core.Ioc;
 using System.Net.Http.Headers;
+using SmartTalk.Core.Extensions;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Messages.Dto.OpenAi;
 
@@ -29,19 +30,26 @@ public class OpenaiClient : IOpenaiClient
 
     public async Task<string> InitialRealtimeSessionsAsync(OpenAiRealtimeSessionDto request, CancellationToken cancellationToken)
     {
-        var headers = new Dictionary<string, string>
-        {
-            { "Authorization", $"Bearer {_openAiSettings.ApiKey}" }
-        };
-
         var requestUrl = $"{_openAiSettings.BaseUrl}/v1/realtime/sessions";
-        
-        var response = await _smartTalkHttpClientFactory.PostAsJsonAsync<OpenAiRealtimeSessionsResponseDto>(
-            requestUrl, request, headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        Log.Information("Initial realtime session response: {@Response}", response);
-        
-        return response?.ClientSecret?.Value;
+
+        return await _openAiSettings.ExecuteWithApiKeyFailoverAsync(
+            async apiKey =>
+            {
+                var headers = new Dictionary<string, string>
+                {
+                    { "Authorization", $"Bearer {apiKey}" }
+                };
+
+                var response = await _smartTalkHttpClientFactory.PostAsJsonAsync<OpenAiRealtimeSessionsResponseDto>(
+                    requestUrl, request, headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+                Log.Information("Initial realtime session response: {@Response}", response);
+
+                return response?.ClientSecret?.Value;
+            },
+            isSuccess: token => !string.IsNullOrWhiteSpace(token),
+            operationName: nameof(InitialRealtimeSessionsAsync),
+            cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<string> RealtimeChatAsync(string sdp, string ephemeralToken, CancellationToken cancellationToken)
@@ -66,23 +74,31 @@ public class OpenaiClient : IOpenaiClient
 
     public async Task<byte[]> GenerateAudioChatCompletionAsync(BinaryData audioData, string prompt, string voice, CancellationToken cancellationToken)
     {
-        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
-        List<ChatMessage> messages =
-        [
-            new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
-            new UserChatMessage(prompt)
-        ];
+        return await _openAiSettings.ExecuteWithApiKeyFailoverAsync(
+            async apiKey =>
+            {
+                ChatClient client = new("gpt-4o-audio-preview", apiKey);
+                List<ChatMessage> messages =
+                [
+                    new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
+                    new UserChatMessage(prompt)
+                ];
 
-        ChatCompletionOptions options = new()
-        {
-            ResponseModalities = ChatResponseModalities.Text | ChatResponseModalities.Audio,
-            AudioOptions = new ChatAudioOptions(new ChatOutputAudioVoice(voice), ChatOutputAudioFormat.Wav)
-        };
+                ChatCompletionOptions options = new()
+                {
+                    ResponseModalities = ChatResponseModalities.Text | ChatResponseModalities.Audio,
+                    AudioOptions = new ChatAudioOptions(new ChatOutputAudioVoice(voice), ChatOutputAudioFormat.Wav)
+                };
 
-        ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
+                ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
 
-        Log.Information("Analyze record to repeat order: {@completion}", completion);
+                Log.Information("Analyze record to repeat order: {@completion}", completion);
 
-        return completion.OutputAudio.AudioBytes.ToArray();
+                return completion.OutputAudio?.AudioBytes?.ToArray();
+            },
+            isSuccess: bytes => bytes is { Length: > 0 },
+            operationName: nameof(GenerateAudioChatCompletionAsync),
+            throwIfAllFailed: true,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 }
