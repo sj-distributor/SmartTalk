@@ -12,6 +12,8 @@ public interface ISalesDataProvider : IScopedDependency
     
     Task<Sales> GetCallInSalesByNameAsync(string assistantName, SalesCallType? type, CancellationToken cancellationToken);
     
+    Task<List<AiSpeechAssistantKnowledgeVariableCache>> GetCustomerItemsCacheByAssistantNameAsync(string assistantName, CancellationToken cancellationToken);
+
     Task<List<AiSpeechAssistantKnowledgeVariableCache>> GetCustomerItemsCacheBySoldToIdsAsync(List<string> soldToIds, CancellationToken cancellationToken);
 
     Task UpsertCustomerItemsCacheAsync(string soldToId, string itemsString, bool forceSave, CancellationToken cancellationToken);
@@ -44,6 +46,16 @@ public class SalesDataProvider : ISalesDataProvider
         if (type.HasValue) query = query.Where(s => s.Type == type.Value);
 
         return await query.FirstOrDefaultAsync(cancellationToken);
+    }
+
+    public async Task<List<AiSpeechAssistantKnowledgeVariableCache>> GetCustomerItemsCacheByAssistantNameAsync(string assistantName, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(assistantName))
+            return [];
+
+        return await _repository.Query<AiSpeechAssistantKnowledgeVariableCache>()
+            .Where(x => x.CacheKey == "customer_items" && x.Filter == assistantName)
+            .ToListAsync(cancellationToken);
     }
 
     public async Task<List<AiSpeechAssistantKnowledgeVariableCache>> GetCustomerItemsCacheBySoldToIdsAsync(List<string> soldToIds, CancellationToken cancellationToken)
