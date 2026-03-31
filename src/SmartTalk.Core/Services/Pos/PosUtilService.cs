@@ -289,50 +289,106 @@ public class PosUtilService : IPosUtilService
 
     public async Task<List<PosMenuProductBriefDto>> GetPosMenuProductBriefsAsync(int agentId, TranscriptionLanguage language = TranscriptionLanguage.Chinese, CancellationToken cancellationToken = default)
     {
-        var storeAgent = await _posDataProvider.GetPosAgentByAgentIdAsync(agentId, cancellationToken).ConfigureAwait(false);
-        if (storeAgent == null) return [];
+        var productMenuPairs = await _posDataProvider
+            .GetPosProductsWithMenusByAgentIdAsync(agentId, cancellationToken)
+            .ConfigureAwait(false);
 
-        var categoryProductsPairs = await _posDataProvider.GetPosCategoryAndProductsAsync(storeAgent.StoreId, cancellationToken).ConfigureAwait(false);
+        if (productMenuPairs.Count == 0) return [];
 
-        var categoryNamesById = categoryProductsPairs
-            .Select(x => x.Item1)
+        var productsWithMenus = productMenuPairs
+            .Where(x => x.Product is { Status: true } && !string.IsNullOrWhiteSpace(x.Product.ProductId))
+            .GroupBy(x => x.Product.ProductId)
+            .Select(group =>
+            {
+                var product = group
+                    .Select(x => x.Product)
+                    .OrderBy(x => x.SortOrder ?? int.MaxValue)
+                    .ThenBy(x => x.Id)
+                    .First();
+
+                var menus = group
+                    .Select(x => x.Menu)
+                    .Where(x => x != null)
+                    .DistinctBy(x => x.Id)
+                    .OrderBy(x => x.Id)
+                    .ToList();
+
+                return (Product: product, Menus: menus);
+            })
+            .OrderBy(x => x.Product.SortOrder ?? int.MaxValue)
+            .ThenBy(x => x.Product.ProductId ?? string.Empty, StringComparer.Ordinal)
+            .ToList();
+
+        var categories = await _posDataProvider.GetPosCategoriesAsync(
+            ids: productsWithMenus.Select(x => x.Product.CategoryId).Distinct().ToList(),
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var categoryNamesById = categories
             .DistinctBy(x => x.Id)
             .ToDictionary(
                 x => x.Id,
                 x =>
                 {
-                    var localization = JsonConvert.DeserializeObject<PosNamesLocalization>(x.Names);
-                    return BuildMenuItemPosName(localization, language);
+                    try
+                    {
+                        var localization = JsonConvert.DeserializeObject<PosNamesLocalization>(x.Names);
+                        return BuildMenuItemPosName(localization, language);
+                    }
+                    catch
+                    {
+                        return string.Empty;
+                    }
                 });
 
-        var products = categoryProductsPairs
-            .Select(x => x.Item2)
-            .Where(x => x is { Status: true })
-            .DistinctBy(x => x.ProductId)
-            .OrderBy(x => x.SortOrder ?? int.MaxValue)
-            .ThenBy(x => x.ProductId ?? string.Empty, StringComparer.Ordinal)
-            .ToList();
+        var result = new List<PosMenuProductBriefDto>(productsWithMenus.Count);
 
-        var result = new List<PosMenuProductBriefDto>(products.Count);
-
-        foreach (var product in products)
+        foreach (var (product, menus) in productsWithMenus)
         {
             var productLocalization = JsonConvert.DeserializeObject<PosNamesLocalization>(product.Names);
             var name = BuildMenuItemPosName(productLocalization, language);
-
-            var categoryName = categoryNamesById.TryGetValue(product.CategoryId, out var catName) ? catName : string.Empty;
+            var categoryName = categoryNamesById.TryGetValue(product.CategoryId, out var currentCategoryName) ? currentCategoryName : string.Empty;
 
             var taxes = ParseProductTaxes(product.Tax);
-            var modifiers = ParseProductModifierOptions(product.Modifiers, language);
+            var specification = ParseProductModifierOptions(product.Modifiers, language);
+            var modifierGroups = ParseProductModifierGroups(product.Modifiers, language);
+            var menuInfos = menus
+                .Select(menu =>
+                {
+                    string menuName;
+                    try
+                    {
+                        var localization = JsonConvert.DeserializeObject<PosNamesLocalization>(menu.Names);
+                        menuName = BuildMenuItemPosName(localization, language);
+                    }
+                    catch
+                    {
+                        menuName = string.Empty;
+                    }
+
+                    var timePeriod = ParseMenuTimePeriods(menu.TimePeriod, language);
+
+                    if (string.IsNullOrWhiteSpace(menuName) && string.IsNullOrWhiteSpace(timePeriod))
+                        return null;
+
+                    return new PosMenuBriefDto
+                    {
+                        Name = menuName,
+                        TimePeriod = timePeriod
+                    };
+                })
+                .Where(x => x != null)
+                .DistinctBy(x => new { x.Name, x.TimePeriod })
+                .ToList();
 
             result.Add(new PosMenuProductBriefDto
             {
-                ProductId = product.ProductId,
                 Name = name,
                 CategoryName = categoryName,
                 Price = product.Price,
                 Tax = taxes,
-                Modifiers = modifiers
+                Specification = specification,
+                ModifierGroups = modifierGroups,
+                PosMenus = menuInfos
             });
         }
 
@@ -540,7 +596,13 @@ public class PosUtilService : IPosUtilService
                 if (group?.ModifierProducts == null || group.ModifierProducts.Count == 0) continue;
 
                 var options = group.ModifierProducts
-                    .Select(x => BuildModifierName(x.Localizations, language))
+                    .Select(x =>
+                    {
+                        var optionName = BuildModifierName(x.Localizations, language);
+                        if (string.IsNullOrWhiteSpace(optionName)) return null;
+
+                        return $"{optionName}(+{x.Price:0.##})";
+                    })
                     .Where(x => !string.IsNullOrWhiteSpace(x))
                     .Distinct(StringComparer.Ordinal)
                     .ToList();
@@ -559,6 +621,79 @@ public class PosUtilService : IPosUtilService
             if (groupSummaries.Count == 0) return string.Empty;
 
             return string.Join("；", groupSummaries.Distinct(StringComparer.Ordinal));
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    private List<PosMenuProductModifierGroupDto> ParseProductModifierGroups(string modifiersJson, TranscriptionLanguage language)
+    {
+        if (string.IsNullOrWhiteSpace(modifiersJson) || modifiersJson == "[]") return [];
+
+        try
+        {
+            var groups = JsonConvert.DeserializeObject<List<EasyPosResponseModifierGroups>>(modifiersJson);
+            if (groups == null || groups.Count == 0) return [];
+
+            return groups
+                .Where(x => x?.ModifierProducts != null && x.ModifierProducts.Count != 0)
+                .Select(group => new PosMenuProductModifierGroupDto
+                {
+                    Id = group.Id,
+                    Name = BuildModifierName(group.Localizations, language),
+                    MinimumSelect = group.MinimumSelect,
+                    MaximumSelect = group.MaximumSelect,
+                    MaximumRepetition = group.MaximumRepetition,
+                    Options = group.ModifierProducts
+                        .Select(option => new PosMenuProductModifierOptionDto
+                        {
+                            Id = option.Id,
+                            ProductId = option.ProductId,
+                            Name = BuildModifierName(option.Localizations, language),
+                            Price = option.Price
+                        })
+                        .Where(x => !string.IsNullOrWhiteSpace(x.Name))
+                        .DistinctBy(x => x.Id)
+                        .ToList()
+                })
+                .Where(x => x.Options.Count != 0)
+                .DistinctBy(x => x.Id)
+                .ToList();
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    private string ParseMenuTimePeriods(string timePeriodJson, TranscriptionLanguage language)
+    {
+        if (string.IsNullOrWhiteSpace(timePeriodJson)) return string.Empty;
+
+        try
+        {
+            var periods = JsonConvert.DeserializeObject<List<EasyPosResponseTimePeriod>>(timePeriodJson);
+            if (periods == null || periods.Count == 0) return string.Empty;
+
+            var lines = periods
+                .Where(x => x != null && !string.IsNullOrWhiteSpace(x.StartTime) && !string.IsNullOrWhiteSpace(x.EndTime))
+                .Select(x =>
+                {
+                    var dayText = BuildDayOfWeekSummary(x.DayOfWeeks, language);
+                    var periodName = string.IsNullOrWhiteSpace(x.Name) ? string.Empty : x.Name.Trim();
+                    var window = $"{x.StartTime}-{x.EndTime}";
+
+                    return string.IsNullOrWhiteSpace(periodName)
+                        ? $"{dayText} {window}".Trim()
+                        : $"{periodName} {dayText} {window}".Trim();
+                })
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+
+            return lines.Count == 0 ? string.Empty : string.Join("；", lines);
         }
         catch
         {

@@ -69,6 +69,9 @@ public partial interface IPosDataProvider : IScopedDependency
     Task<List<PosAgent>> GetPosAgentByAgentIdsAsync(List<int> agentIds, CancellationToken cancellationToken);
 
     Task<List<(PosCategory, PosProduct)>> GetPosCategoryAndProductsAsync(int storeId, CancellationToken cancellationToken);
+
+    Task<List<(PosProduct Product, PosMenu Menu)>> GetPosProductsWithMenusByAgentIdAsync(
+        int agentId, CancellationToken cancellationToken = default);
 }
 
 public partial class PosDataProvider : IPosDataProvider
@@ -446,5 +449,56 @@ public partial class PosDataProvider : IPosDataProvider
         var result = await query.ToListAsync(cancellationToken).ConfigureAwait(false);
         
         return result.Select(x => (x.category, x.product)).ToList();
+    }
+
+    public async Task<List<(PosProduct Product, PosMenu Menu)>> GetPosProductsWithMenusByAgentIdAsync(
+        int agentId, CancellationToken cancellationToken = default)
+    {
+        var storeId = await _repository.Query<PosAgent>()
+            .Where(x => x.AgentId == agentId)
+            .Select(x => x.StoreId)
+            .FirstOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        if (storeId <= 0) return [];
+
+        var products = await _repository.Query<PosProduct>()
+            .Where(x => x.StoreId == storeId)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        if (products.Count == 0) return [];
+
+        var categoryIds = products
+            .Select(x => x.CategoryId)
+            .Distinct()
+            .ToList();
+
+        var categoryMenus = await (
+            from category in _repository.Query<PosCategory>().Where(x => x.StoreId == storeId && categoryIds.Contains(x.Id))
+            join menu in _repository.Query<PosMenu>().Where(x => x.StoreId == storeId) on category.MenuId equals menu.Id
+            select new { categoryId = category.Id, menu }
+        ).ToListAsync(cancellationToken).ConfigureAwait(false);
+
+        var menusByCategoryId = categoryMenus
+            .GroupBy(x => x.categoryId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(x => x.menu).DistinctBy(x => x.Id).ToList());
+
+        var result = new List<(PosProduct Product, PosMenu Menu)>();
+
+        foreach (var product in products)
+        {
+            if (!menusByCategoryId.TryGetValue(product.CategoryId, out var menus) || menus.Count == 0)
+            {
+                result.Add((product, null));
+                continue;
+            }
+
+            result.AddRange(menus.Select(menu => (product, menu)));
+        }
+
+        return result;
     }
 }

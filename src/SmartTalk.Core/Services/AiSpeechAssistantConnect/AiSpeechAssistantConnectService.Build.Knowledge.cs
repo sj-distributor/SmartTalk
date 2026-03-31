@@ -1,6 +1,9 @@
 using Serilog;
 using SmartTalk.Messages.Dto.Smarties;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
+using SmartTalk.Messages.Dto.Pos;
+using SmartTalk.Messages.Enums.AiSpeechAssistant;
+using SmartTalk.Messages.Enums.STT;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistantConnect;
 
@@ -17,6 +20,7 @@ public partial class AiSpeechAssistantConnectService
         await ResolveMenuItemsAsync(cancellationToken).ConfigureAwait(false);
         await ResolveCustomerInfoAsync(cancellationToken).ConfigureAwait(false);
         await ResolveDeliveryInfoAsync(cancellationToken).ConfigureAwait(false);
+        await ResolvePosPromptVariablesAsync(cancellationToken).ConfigureAwait(false);
 
         Log.Information("[AiAssistant] Prompt resolved, Prompt: {Prompt}", _ctx.Prompt);
     }
@@ -61,7 +65,7 @@ public partial class AiSpeechAssistantConnectService
 
     private async Task ResolveCustomerItemsAsync(CancellationToken cancellationToken)
     {
-        if (!_ctx.Prompt.Contains("#{customer_items}", StringComparison.OrdinalIgnoreCase)) return;
+        if (!_ctx.Prompt.Contains("#{customer_items}", StringComparison.OrdinalIgnoreCase) || !_ctx.Prompt.Contains("#{HiFood_商品_商品数据}", StringComparison.OrdinalIgnoreCase)) return;
 
         var soldToIds = !string.IsNullOrEmpty(_ctx.Assistant.Name) ? _ctx.Assistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : [];
         if (soldToIds.Count == 0) return;
@@ -84,7 +88,7 @@ public partial class AiSpeechAssistantConnectService
 
     private async Task ResolveCustomerInfoAsync(CancellationToken cancellationToken)
     {
-        if (!_ctx.Prompt.Contains("#{customer_info}", StringComparison.OrdinalIgnoreCase)) return;
+        if (!_ctx.Prompt.Contains("#{customer_info}", StringComparison.OrdinalIgnoreCase) || !_ctx.Prompt.Contains("#{CRM_客户_客户数据}", StringComparison.OrdinalIgnoreCase)) return;
 
         var cache = await _salesDataProvider.GetCustomerInfoCacheByPhoneNumberAsync(_ctx.From, cancellationToken).ConfigureAwait(false);
         _ctx.Prompt = _ctx.Prompt.Replace("#{customer_info}", cache?.CacheValue?.Trim() ?? " ");
@@ -96,5 +100,147 @@ public partial class AiSpeechAssistantConnectService
 
         var cache = await _salesDataProvider.GetDeliveryInfoCacheByPhoneNumberAsync(_ctx.From, cancellationToken).ConfigureAwait(false);
         _ctx.Prompt = _ctx.Prompt.Replace("#{delivery_info}", cache?.CacheValue?.Trim() ?? " ");
+    }
+
+    private async Task ResolvePosPromptVariablesAsync(CancellationToken cancellationToken)
+    {
+        var needProducts = HasPromptToken("{POS_菜单_商品名称}")
+                           || HasPromptToken("{POS_菜单_商品类别}")
+                           || HasPromptToken("{POS_菜单_商品规格}")
+                           || HasPromptToken("{POS_菜单_商品税率}")
+                           || HasPromptToken("{POS_菜单_商品价格}")
+                           || HasPromptToken("{POS_菜单_商品时间}");
+        var needStoreHours = HasPromptToken("{POS_店铺_营业时间}");
+
+        if (!needProducts && !needStoreHours) return;
+
+        var language = ResolvePosPromptLanguage();
+        var products = needProducts
+            ? await _posUtilService.GetPosMenuProductBriefsAsync(_ctx.AgentId, language, cancellationToken).ConfigureAwait(false)
+            : [];
+
+        ResolvePosMenuProductNames(products);
+        ResolvePosMenuProductCategories(products);
+        ResolvePosMenuProductSpecifications(products);
+        ResolvePosMenuProductTaxes(products);
+        ResolvePosMenuProductPrices(products);
+        ResolvePosMenuProductTimes(products);
+
+        if (needStoreHours)
+        {
+            var storeHours = await _posUtilService.GetPosStoreTimePeriodsAsync(_ctx.AgentId, language, cancellationToken).ConfigureAwait(false);
+            ResolvePosStoreBusinessHours(storeHours);
+        }
+    }
+
+    private void ResolvePosMenuProductNames(List<PosMenuProductBriefDto> products)
+    {
+        var value = string.Join("、", products
+            .Select(x => x.Name)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.Ordinal));
+
+        ReplacePromptToken("{POS_菜单_商品名称}", value);
+    }
+
+    private void ResolvePosMenuProductCategories(List<PosMenuProductBriefDto> products)
+    {
+        var value = string.Join("、", products
+            .Select(x => x.CategoryName)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.Ordinal));
+
+        ReplacePromptToken("{POS_菜单_商品类别}", value);
+    }
+
+    private void ResolvePosMenuProductSpecifications(List<PosMenuProductBriefDto> products)
+    {
+        var lines = products
+            .Where(x => !string.IsNullOrWhiteSpace(x.Name) && !string.IsNullOrWhiteSpace(x.Specification))
+            .Select(x => $"{x.Name}：{x.Specification}")
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        ReplacePromptToken("{POS_菜单_商品规格}", string.Join(Environment.NewLine, lines));
+    }
+
+    private void ResolvePosMenuProductTaxes(List<PosMenuProductBriefDto> products)
+    {
+        var lines = products
+            .Where(x => !string.IsNullOrWhiteSpace(x.Name) && !string.IsNullOrWhiteSpace(x.Tax))
+            .Select(x => $"{x.Name}：{x.Tax}")
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        ReplacePromptToken("{POS_菜单_商品税率}", string.Join(Environment.NewLine, lines));
+    }
+
+    private void ResolvePosMenuProductPrices(List<PosMenuProductBriefDto> products)
+    {
+        var lines = products
+            .Where(x => !string.IsNullOrWhiteSpace(x.Name))
+            .Select(x => $"{x.Name}：{x.Price:F2}")
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        ReplacePromptToken("{POS_菜单_商品价格}", string.Join(Environment.NewLine, lines));
+    }
+
+    private void ResolvePosMenuProductTimes(List<PosMenuProductBriefDto> products)
+    {
+        var lines = products
+            .Where(x => !string.IsNullOrWhiteSpace(x.Name) && x.PosMenus is { Count: > 0 })
+            .Select(x =>
+            {
+                var periods = x.PosMenus
+                    .Select(menu =>
+                    {
+                        var name = menu?.Name?.Trim() ?? string.Empty;
+                        var time = menu?.TimePeriod?.Trim() ?? string.Empty;
+
+                        if (string.IsNullOrWhiteSpace(name)) return time;
+                        if (string.IsNullOrWhiteSpace(time)) return name;
+
+                        return $"{name}({time})";
+                    })
+                    .Where(v => !string.IsNullOrWhiteSpace(v))
+                    .Distinct(StringComparer.Ordinal)
+                    .ToList();
+
+                if (periods.Count == 0) return null;
+
+                return $"{x.Name}：{string.Join("；", periods)}";
+            })
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        ReplacePromptToken("{POS_菜单_商品时间}", string.Join(Environment.NewLine, lines));
+    }
+
+    private void ResolvePosStoreBusinessHours(string storeHours) => ReplacePromptToken("{POS_店铺_营业时间}", storeHours);
+
+    private bool HasPromptToken(string token) => _ctx.Prompt.Contains(token, StringComparison.OrdinalIgnoreCase);
+
+    private void ReplacePromptToken(string token, string value)
+    {
+        if (!HasPromptToken(token)) return;
+
+        _ctx.Prompt = _ctx.Prompt.Replace(token, string.IsNullOrWhiteSpace(value) ? " " : value);
+    }
+
+    private TranscriptionLanguage ResolvePosPromptLanguage()
+    {
+        Enum.TryParse(_ctx.Assistant?.ModelLanguage, true, out AiSpeechAssistantMainLanguage language);
+        language = language == default ? AiSpeechAssistantMainLanguage.En : language;
+
+        return language switch
+        {
+            AiSpeechAssistantMainLanguage.Zh => TranscriptionLanguage.Chinese,
+            AiSpeechAssistantMainLanguage.Cantonese => TranscriptionLanguage.Chinese,
+            AiSpeechAssistantMainLanguage.Spanish => TranscriptionLanguage.Spanish,
+            AiSpeechAssistantMainLanguage.Korean => TranscriptionLanguage.Korean,
+            _ => TranscriptionLanguage.English
+        };
     }
 }
