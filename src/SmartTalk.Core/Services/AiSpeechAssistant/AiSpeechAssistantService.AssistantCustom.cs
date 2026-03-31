@@ -1534,6 +1534,9 @@ public partial class AiSpeechAssistantService
             IsActive = true,
             CreatedBy = copyToKnowledge.CreatedBy,
             CreatedDate = DateTimeOffset.Now,
+            ModelLanguage = !string.IsNullOrWhiteSpace(copyFromKnowledge.ModelLanguage)
+                ? copyFromKnowledge.ModelLanguage
+                : copyToKnowledge.ModelLanguage,
             Prompt = newPrompt,
             Version = await HandleKnowledgeVersionAsync(copyToKnowledge, cancellationToken).ConfigureAwait(false)
         };
