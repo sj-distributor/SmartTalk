@@ -981,6 +981,7 @@ public partial class PhoneOrderProcessJobService
             " 【严禁行为】：\n"+
             "  - 严禁在 #, +, - 前后加空格。\n" +
             "  - 严禁保留【本次通话提取的订单】中没有的物料、且该物料在【系统中已有草稿单】的 IsProcessed = true 。\n\n" +
+            "  - 严禁随意输出 DeliveryDate。只有在客人明确说明日期（几月几日）时才需要输出 DeliveryDate。如果只是说明天，不需要输出 DeliveryDate。\n\n" +
             
             "【输出格式】\n" +
             "{\n" +
