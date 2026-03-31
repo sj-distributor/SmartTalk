@@ -240,7 +240,7 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
                 continue;
 
             var name = item.TryGetProperty("name", out var nameProp) ? nameProp.GetString() : null;
-            var args = ExtractArgumentsJson(item);
+            var args = item.TryGetProperty("arguments", out var argsProp) ? argsProp.GetString() : null;
 
             if (string.IsNullOrEmpty(name)) continue;
 
