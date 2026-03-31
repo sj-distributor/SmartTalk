@@ -1378,8 +1378,6 @@ public partial class PhoneOrderService
             .ToList();
         
         records.ForEach(x => x.IsUnreviewed = result.Contains(x.Id));
-        
-        Log.Information("Enrich complete records: {@Records}", records);
     }
     
     public async Task<GetPhoneOrderRecordScenarioResponse> GetPhoneOrderRecordScenarioAsync(GetPhoneOrderRecordScenarioRequest request, CancellationToken cancellationToken)
