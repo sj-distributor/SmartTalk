@@ -330,7 +330,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             finalPrompt = PosStoreTimeRegex.Replace(finalPrompt, " ");
         }
         
-        Log.Information($"The final prompt: {finalPrompt}");
+        Log.Information("The final prompt: {FinalPrompt}", finalPrompt);
         
         _aiSpeechAssistantStreamContext.LastPrompt = finalPrompt;
         _aiSpeechAssistantStreamContext.Assistant = _mapper.Map<AiSpeechAssistantDto>(assistant);
