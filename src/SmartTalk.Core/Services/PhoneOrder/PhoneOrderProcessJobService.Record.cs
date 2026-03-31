@@ -360,14 +360,13 @@ public partial class PhoneOrderProcessJobService
         }
     }
 
-     private async Task<List<ChatMessage>> ConfigureRecordAnalyzePromptAsync(
+    private async Task<List<ChatMessage>> ConfigureRecordAnalyzePromptAsync(
          Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, PhoneOrderRecord record, string callFrom,
          string callTo, string currentTime, byte[] audioContent, string callSubjectCn, string callSubjectEn, CancellationToken cancellationToken) 
     {
-        var soldToIds = !string.IsNullOrEmpty(aiSpeechAssistant.Name) ? aiSpeechAssistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : new List<string>();
-
-        var customerItemsCacheList = await _salesDataProvider.GetCustomerItemsCacheBySoldToIdsAsync(soldToIds, cancellationToken);
-        var customerItemsString = string.Join(Environment.NewLine, soldToIds.Select(id => customerItemsCacheList.FirstOrDefault(c => c.Filter == id)?.CacheValue ?? ""));
+        var customerItemsCacheList = await _salesDataProvider.GetCustomerItemsCacheByAssistantNameAsync(aiSpeechAssistant.Name, cancellationToken);
+        var customerItemsString = string.Join(Environment.NewLine,
+            customerItemsCacheList.Where(c => !string.IsNullOrEmpty(c.CacheValue)).Select(c => c.CacheValue.Trim()).Distinct());
         
         var (_, menuItems) = await _posUtilService.GeneratePosMenuItemsAsync(agent.Id, false, record.Language, cancellationToken).ConfigureAwait(false);
 

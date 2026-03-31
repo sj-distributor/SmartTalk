@@ -51,6 +51,7 @@ public class SalesService : ISalesService
                     cancellationToken).ConfigureAwait(false);
 
             var orderItems = orderResponse?.Data ?? new List<SalesOrderHistoryDto>();
+            var goodsStatusLookup = await BuildGoodsStatusLookupAsync(askItems, orderItems, soldToId, cancellationToken).ConfigureAwait(false);
 
             var levelCodes = askItems.Where(x => !string.IsNullOrEmpty(x.LevelCode)).Select(x => x.LevelCode)
                 .Concat(orderItems.Where(x => !string.IsNullOrEmpty(x.LevelCode)).Select(x => x.LevelCode)).Distinct()
@@ -78,12 +79,13 @@ public class SalesService : ISalesService
             var habitLookup = habitResponse?.HistoryCustomerLevel5HabitDtos?.ToDictionary(h => h.LevelCode5, h => h)
                               ?? new Dictionary<string, HistoryCustomerLevel5HabitDto>();
 
-            string FormatItem(string materialDesc, string levelCode = null, string materialNumber = null)
+            string FormatItem(string materialDesc, string levelCode = null, string materialNumber = null, string plant = null, string rtype = null)
             {
                 var parts = materialDesc?.Split('·') ?? Array.Empty<string>();
                 var name = parts.Length > 4 ? $"{parts[0]}{parts[4]}" : parts.FirstOrDefault() ?? "";
                 var brand = parts.Length > 1 ? parts[1] : "";
                 var size = parts.Length > 3 ? parts[3] : "";
+                var status = string.IsNullOrWhiteSpace(materialNumber) || string.IsNullOrWhiteSpace(plant) ? string.Empty : goodsStatusLookup.GetValueOrDefault(BuildGoodsStatusKey(materialNumber, plant, rtype), string.Empty);
 
                 string aliasText = "";
                 MaterialPartInfoDto partInfo = null;
@@ -98,14 +100,14 @@ public class SalesService : ISalesService
                         string.Equals(p.MaterialNumber, materialNumber, StringComparison.OrdinalIgnoreCase));
                 }
 
-                return $"Item: {name}, Brand: {brand}, Size: {size}, Aliases: {aliasText}, " +
+                return $"Item: {name}, Brand: {brand}, Size: {size}, Aliases: {aliasText}, status: {status}, " +
                        $"baseUnit: {partInfo?.BaseUnit ?? ""}, salesUnit: {partInfo?.SalesUnit ?? ""}, weights: {partInfo?.Weights ?? 0}, " +
                        $"placeOfOrigin: {partInfo?.PlaceOfOrigin ?? ""}, packing: {partInfo?.Packing ?? ""}, specifications: {partInfo?.Specifications ?? ""}, " +
                        $"ranks: {partInfo?.Ranks ?? ""}, atr: {partInfo?.Atr}";
             }
 
-            allItems.AddRange(askItems.Select(x => FormatItem(x.MaterialDesc, x.LevelCode, x.Material)));
-            allItems.AddRange(orderItems.Select(x => FormatItem(x.MaterialDescription, x.LevelCode, x.MaterialNumber)));
+            allItems.AddRange(askItems.Select(x => FormatItem(x.MaterialDesc, x.LevelCode, x.Material, x.Plant, x.MaterialType)));
+            allItems.AddRange(orderItems.Select(x => FormatItem(x.MaterialDescription, x.LevelCode, x.MaterialNumber, x.Plant, x.MaterialType)));
         }
 
         return string.Join(Environment.NewLine, allItems.Distinct().Take(150));
@@ -191,5 +193,52 @@ public class SalesService : ISalesService
             }
             builder.AppendLine();
         }
+    }
+
+    private static string BuildGoodsStatusKey(string material, string plant, string rtype)
+    {
+        return $"{material?.Trim().ToUpperInvariant()}|{plant?.Trim().ToUpperInvariant()}|{(rtype ?? string.Empty).Trim().ToUpperInvariant()}";
+    }
+
+    private async Task<Dictionary<string, string>> BuildGoodsStatusLookupAsync(List<VwAskDetail> askItems, List<SalesOrderHistoryDto> orderItems, string soldToId, CancellationToken cancellationToken)
+    {
+        var goodsStatusRequestItems = BuildGoodsStatusRequestItems(askItems, orderItems);
+
+        if (goodsStatusRequestItems.Count == 0)
+            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        var goodsStatusResponse = await _salesClient.QueryGoodsStatusAsync(new QueryGoodsStatusRequestDto { List = goodsStatusRequestItems }, cancellationToken).ConfigureAwait(false);
+
+        if (goodsStatusResponse?.ResultCode != 200 || goodsStatusResponse.ResultData == null)
+        {
+            Log.Warning("QueryGoodsStatusAsync returned non-success response for soldToId {SoldToId}. ResultCode: {ResultCode}, ResultMsg: {ResultMsg}", soldToId, goodsStatusResponse?.ResultCode, goodsStatusResponse?.ResultMsg);
+
+            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        return goodsStatusResponse.ResultData.GroupBy(x => BuildGoodsStatusKey(x.Material, x.Plant, x.Rtype))
+            .ToDictionary(g => g.Key, g => g.FirstOrDefault()?.Status ?? string.Empty, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static List<QueryGoodsStatusItemDto> BuildGoodsStatusRequestItems(List<VwAskDetail> askItems, List<SalesOrderHistoryDto> orderItems)
+    {
+        return askItems
+            .Where(x => !string.IsNullOrWhiteSpace(x.Material) && !string.IsNullOrWhiteSpace(x.Plant))
+            .Select(x => new QueryGoodsStatusItemDto
+            {
+                Material = x.Material,
+                Plant = x.Plant,
+                Rtype = x.MaterialType ?? string.Empty
+            })
+            .Concat(orderItems
+                .Where(x => !string.IsNullOrWhiteSpace(x.MaterialNumber) && !string.IsNullOrWhiteSpace(x.Plant))
+                .Select(x => new QueryGoodsStatusItemDto
+                {
+                    Material = x.MaterialNumber,
+                    Plant = x.Plant,
+                    Rtype = x.MaterialType ?? string.Empty
+                }))
+            .DistinctBy(x => BuildGoodsStatusKey(x.Material, x.Plant, x.Rtype))
+            .ToList();
     }
 }
