@@ -57,4 +57,6 @@ public class VwAskDetail
     public string LevelCode { get; set; }
      
     public string LevelText { get; set; }
+    
+    public double Atr { get; set; }
 }
