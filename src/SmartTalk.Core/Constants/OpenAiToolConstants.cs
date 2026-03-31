@@ -27,5 +27,5 @@ public static class OpenAiToolConstants
     public const string Refund = "refund";
     public const string RefuseToAcceptGoods = "refuse_to_accept_goods";
     public const string PickUpGoodsFromTheWarehouse = "pick_up_goods_from_the_warehouse";
-    public const string GetProductPrice = "get_product_price";
+    //public const string GetProductPrice = "get_product_price";
 }
