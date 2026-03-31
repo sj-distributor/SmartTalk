@@ -106,6 +106,13 @@ public class SalesService : ISalesService
 
             allItems.AddRange(askItems.Select(x => FormatItem(x.MaterialDesc, x.LevelCode, x.Material)));
             allItems.AddRange(orderItems.Select(x => FormatItem(x.MaterialDescription, x.LevelCode, x.MaterialNumber)));
+            
+            var customerOrderArrivalText = await HandleOrderArrivalTimeList(new List<string> { soldToId }, cancellationToken);
+            if (!string.IsNullOrEmpty(customerOrderArrivalText))
+            {
+                allItems.Add($"=== 客户 {soldToId} 订单到货信息 ===");
+                allItems.Add(customerOrderArrivalText);
+            }
         }
 
         return string.Join(Environment.NewLine, allItems.Distinct().Take(150));
