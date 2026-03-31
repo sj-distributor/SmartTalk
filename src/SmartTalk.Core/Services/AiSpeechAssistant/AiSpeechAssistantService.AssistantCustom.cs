@@ -1117,9 +1117,9 @@ public partial class AiSpeechAssistantService
 
             var content = detail.Content.Trim();
 
-            if (IsFileUrl(content))
+            if (IsFileUrl(content, detail.FileName))
             {
-                content = await _fileTextExtractor.ExtractAsync(content, cancellationToken);
+                content = await _fileTextExtractor.ExtractAsync(content, detail.FileName, cancellationToken);
             }
 
             sb.AppendLine($"{detail.KnowledgeName}：");
@@ -1135,13 +1135,17 @@ public partial class AiSpeechAssistantService
         ".txt",".md",".pdf",".html",".xlsx",".docx",".csv",".json",".xml",".htm"
     };
 
-    private bool IsFileUrl(string content)
+    private bool IsFileUrl(string content, string fileName = null)
     {
         if (!Uri.TryCreate(content, UriKind.Absolute, out var uri))
             return false;
 
         var ext = Path.GetExtension(uri.AbsolutePath).ToLowerInvariant();
-        return SupportedExtensions.Contains(ext);
+        if (!string.IsNullOrWhiteSpace(ext) && SupportedExtensions.Contains(ext))
+            return true;
+
+        var fileNameExt = Path.GetExtension(fileName ?? string.Empty).ToLowerInvariant();
+        return !string.IsNullOrWhiteSpace(fileNameExt) && SupportedExtensions.Contains(fileNameExt);
     }
 
     private async Task<string> HandleKnowledgeVersionAsync(AiSpeechAssistantKnowledge latestKnowledge, CancellationToken cancellationToken)
@@ -1530,6 +1534,9 @@ public partial class AiSpeechAssistantService
             IsActive = true,
             CreatedBy = copyToKnowledge.CreatedBy,
             CreatedDate = DateTimeOffset.Now,
+            ModelLanguage = !string.IsNullOrWhiteSpace(copyFromKnowledge.ModelLanguage)
+                ? copyFromKnowledge.ModelLanguage
+                : copyToKnowledge.ModelLanguage,
             Prompt = newPrompt,
             Version = await HandleKnowledgeVersionAsync(copyToKnowledge, cancellationToken).ConfigureAwait(false)
         };

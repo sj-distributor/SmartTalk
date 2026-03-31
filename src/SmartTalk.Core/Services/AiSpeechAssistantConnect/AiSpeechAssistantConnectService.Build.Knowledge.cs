@@ -145,10 +145,25 @@ public partial class AiSpeechAssistantConnectService
 
     private void ResolvePosMenuProductCategories(List<PosMenuProductBriefDto> products)
     {
-        var value = string.Join("、", products
-            .Select(x => x.CategoryName)
+        var lines = products
+            .Where(x => !string.IsNullOrWhiteSpace(x.Name))
+            .GroupBy(x => x.Name.Trim(), StringComparer.Ordinal)
+            .Select(group =>
+            {
+                var categories = group
+                    .Select(x => x.CategoryName?.Trim())
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct(StringComparer.Ordinal)
+                    .ToList();
+
+                if (categories.Count == 0) return null;
+
+                return $"{group.Key}：{string.Join("、", categories)}";
+            })
             .Where(x => !string.IsNullOrWhiteSpace(x))
-            .Distinct(StringComparer.Ordinal));
+            .ToList();
+
+        var value = string.Join(Environment.NewLine, lines);
 
         ReplacePromptToken("{POS_菜单_商品类别}", value);
     }
