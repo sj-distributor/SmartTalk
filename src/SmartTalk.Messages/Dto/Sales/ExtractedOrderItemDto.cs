@@ -17,8 +17,8 @@ public class ExtractedOrderDto
 
 public class ExtractedOrderItemDto
 {
-    public string Name { get; set; }
-
+    public string AiMaterialDesc { get; set; }
+    
     public int Quantity { get; set; } 
 
     public string MaterialNumber { get; set; }
@@ -26,4 +26,8 @@ public class ExtractedOrderItemDto
     public string Unit { get; set; }
     
     public bool MarkForDelete { get; set; } 
+    
+    public bool Restored { get; set; }
+
+    public bool IsTargetQuantity { get; set; }
 }

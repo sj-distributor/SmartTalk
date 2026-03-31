@@ -29,10 +29,11 @@ public class AiSpeechAssistantMapping : Profile
         CreateMap<AgentAssistant, AgentAssistantDto>().ReverseMap();
         CreateMap<AiSpeechAssistantSession, AiSpeechAssistantSessionDto>().ReverseMap();
         CreateMap<ExtractedOrderItemDto, AiOrderItemDto>()
-            .ForMember(dest => dest.AiMaterialDesc, opt => opt.MapFrom(src => src.Name))
+            .ForMember(dest => dest.AiMaterialDesc, opt => opt.MapFrom(src => src.AiMaterialDesc))
             .ForMember(dest => dest.MaterialQuantity, opt => opt.MapFrom(src => src.Quantity))
             .ForMember(dest => dest.MaterialNumber, opt => opt.MapFrom(src => src.MaterialNumber))
-            .ForMember(dest => dest.AiUnit, opt => opt.MapFrom(src => src.Unit));
+            .ForMember(dest => dest.AiUnit, opt => opt.MapFrom(src => src.Unit))
+            .ForMember(dest => dest.IsTargetQuantity, opt => opt.MapFrom(src => src.IsTargetQuantity));
         CreateMap<AiSpeechAssistantInboundRoute, AiSpeechAssistantInboundRouteDto>().ReverseMap();
 
         CreateMap<AiSpeechAssistantKnowledgeCopyRelatedDto, AiSpeechAssistantKnowledgeCopyRelated>().ReverseMap();
