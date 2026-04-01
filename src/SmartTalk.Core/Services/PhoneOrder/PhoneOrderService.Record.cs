@@ -1211,8 +1211,8 @@ public partial class PhoneOrderService
         var transferCount = callInRecords.Count(x => x.IsTransfer == true || x.Scenario == DialogueScenarios.TransferToHuman);
         var transferRate = answeredCount > 0 ? (double)transferCount / answeredCount : 0;
         var repeatRate = answeredCount > 0 ? (double)totalRepeatCalls / answeredCount : 0;
-        var missByHuman = callInRecords.Count(x => (x.IsTransfer == true || x.Scenario == DialogueScenarios.TransferToHuman) && !x.IsHumanAnswered.Value);
-        
+        var missByHuman = callInRecords.Count(x => (x.IsTransfer == true || x.Scenario == DialogueScenarios.TransferToHuman) && x.IsHumanAnswered != true);
+
         var totalDurationPerPeriod = GroupDurationByRequestType(callInRecords, start, end, dataType);
 
         return new CallInDataDto

@@ -318,12 +318,11 @@ public partial class PhoneOrderProcessJobService
             }
         }
         
+        var customerItemsCacheList = await _salesDataProvider.GetCustomerItemsCacheByAssistantNameAsync(aiSpeechAssistant.Name, cancellationToken);
+        var customerItemsString = string.Join(Environment.NewLine,
+            customerItemsCacheList.Where(c => !string.IsNullOrEmpty(c.CacheValue)).Select(c => c.CacheValue.Trim()).Distinct());
+        
         var (_, menuItems) = await _posUtilService.GeneratePosMenuItemsAsync(agent.Id, false, record.Language, cancellationToken).ConfigureAwait(false);
-        
-        var soldToIds = !string.IsNullOrEmpty(aiSpeechAssistant.Name) ? aiSpeechAssistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : new List<string>();
-        
-        var customerItemsCacheList = await _salesDataProvider.GetCustomerItemsCacheBySoldToIdsAsync(soldToIds, cancellationToken);
-        var customerItemsString = string.Join(Environment.NewLine, soldToIds.Select(id => customerItemsCacheList.FirstOrDefault(c => c.Filter == id)?.CacheValue ?? ""));
 
         var audioData = BinaryData.FromBytes(audioContent);
         List<ChatMessage> messages =

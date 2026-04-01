@@ -23,6 +23,8 @@ public interface ISalesClient : IScopedDependency
     Task<DeleteAiOrderResponseDto> DeleteAiOrderAsync(DeleteAiOrderRequestDto request, CancellationToken cancellationToken);
     
     Task<GetAiOrderItemsByDeliveryDateResponseDto> GetAiOrderItemsByDeliveryDateAsync(GetAiOrderItemsByDeliveryDateRequestDto request, CancellationToken cancellationToken);
+
+    Task<QueryGoodsStatusResponseDto> QueryGoodsStatusAsync(QueryGoodsStatusRequestDto request, CancellationToken cancellationToken);
 }
 
 public class SalesClient : ISalesClient
@@ -118,5 +120,17 @@ public class SalesClient : ISalesClient
                   + $"&deliveryDate={deliveryDate}" + $"&includePrintedQuantity={request.IncludePrintedQuantity}";
 
         return await _httpClientFactory.GetAsync<GetAiOrderItemsByDeliveryDateResponseDto>(url, headers: _headers, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<QueryGoodsStatusResponseDto> QueryGoodsStatusAsync(QueryGoodsStatusRequestDto request, CancellationToken cancellationToken)
+    {
+        if (request?.List == null || request.List.Count == 0)
+            throw new ArgumentException("List cannot be null or empty.");
+
+        var url = $"{_salesSetting.BaseUrl}/api/GoodsStatus/QueryGoodsStatus";
+
+        var response = await _httpClientFactory.PostAsJsonAsync<QueryGoodsStatusResponseDto>(url, request, headers: _headers, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return response;
     }
 }
