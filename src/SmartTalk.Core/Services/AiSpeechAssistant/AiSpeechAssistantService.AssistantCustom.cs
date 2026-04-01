@@ -198,6 +198,12 @@ public partial class AiSpeechAssistantService
             }
         }
 
+        await SyncTargetKnowledgeLanguageIfCurrentKnowledgeIsSourceAsync(
+            latestKnowledge.Id,
+            latestKnowledge.ModelLanguage,
+            cancellationToken)
+            .ConfigureAwait(false);
+
         AiSpeechAssistantKnowledgeDto prevKnowledgeDto;
         if (prevKnowledge != null)
         {
@@ -305,6 +311,47 @@ public partial class AiSpeechAssistantService
             LatestKnowledge = latestKnowledgeDto, 
             ShouldSyncLastedKnowledge = shouldSyncLastedKnowledge
         };
+    }
+
+    private async Task SyncTargetKnowledgeLanguageIfCurrentKnowledgeIsSourceAsync(
+        int sourceKnowledgeId,
+        string sourceModelLanguage,
+        CancellationToken cancellationToken)
+    {
+        var sourceRelateds = await _aiSpeechAssistantDataProvider
+            .GetKnowledgeCopyRelatedBySourceKnowledgeIdAsync([sourceKnowledgeId], true, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (sourceRelateds == null || sourceRelateds.Count == 0)
+            return;
+
+        var targetKnowledgeIds = sourceRelateds
+            .Select(x => x.TargetKnowledgeId)
+            .Distinct()
+            .ToList();
+
+        if (targetKnowledgeIds.Count == 0)
+            return;
+
+        var targetKnowledges = await _aiSpeechAssistantDataProvider
+            .GetAiSpeechAssistantKnowledgesAsync(targetKnowledgeIds, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (targetKnowledges == null || targetKnowledges.Count == 0)
+            return;
+
+        var targetKnowledgesToUpdate = targetKnowledges
+            .Where(x => !string.Equals(x.ModelLanguage ?? string.Empty, sourceModelLanguage ?? string.Empty, StringComparison.Ordinal))
+            .ToList();
+
+        if (targetKnowledgesToUpdate.Count == 0)
+            return;
+
+        targetKnowledgesToUpdate.ForEach(x => x.ModelLanguage = sourceModelLanguage);
+
+        await _aiSpeechAssistantDataProvider
+            .UpdateAiSpeechAssistantKnowledgesAsync(targetKnowledgesToUpdate, true, cancellationToken)
+            .ConfigureAwait(false);
     }
     
     private async Task<(List<AiSpeechAssistantKnowledgeCopyRelated> asTargetKnowledgePrevRelateds, 
@@ -1534,9 +1581,7 @@ public partial class AiSpeechAssistantService
             IsActive = true,
             CreatedBy = copyToKnowledge.CreatedBy,
             CreatedDate = DateTimeOffset.Now,
-            ModelLanguage = !string.IsNullOrWhiteSpace(copyFromKnowledge.ModelLanguage)
-                ? copyFromKnowledge.ModelLanguage
-                : copyToKnowledge.ModelLanguage,
+            ModelLanguage = copyFromKnowledge.ModelLanguage,
             Prompt = newPrompt,
             Version = await HandleKnowledgeVersionAsync(copyToKnowledge, cancellationToken).ConfigureAwait(false)
         };
