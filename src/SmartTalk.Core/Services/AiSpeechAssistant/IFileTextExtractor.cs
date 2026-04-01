@@ -1,3 +1,5 @@
+using UglyToad.PdfPig;
+
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
 
 using global::System.Text;
@@ -6,7 +8,7 @@ using DocumentFormat.OpenXml.Packaging;
 using NPOI.HSSF.UserModel;
 using NPOI.SS.UserModel;
 using SmartTalk.Core.Ioc;
-using UglyToad.PdfPig;
+using UglyToad.PdfPig.Core;
 
 public interface IFileTextExtractor : IScopedDependency
 {
