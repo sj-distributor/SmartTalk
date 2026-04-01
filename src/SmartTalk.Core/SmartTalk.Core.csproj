@@ -59,6 +59,7 @@
         <PackageReference Include="System.Net.Http" Version="4.3.4" />
         <PackageReference Include="Twilio.AspNet.Core" Version="8.1.1" />
         <PackageReference Include="UglyToad.PdfPig" Version="1.7.0-custom-5" />
+        <PackageReference Include="UglyToad.PdfPig.Core" Version="1.7.0-custom-5" />
         <PackageReference Include="WebSocketSharp-netstandard" Version="1.0.1" />
     </ItemGroup>
 

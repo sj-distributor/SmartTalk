@@ -1944,48 +1944,39 @@ public partial class AiSpeechAssistantService
             string newPrompt;
             string newJson;
 
-	            if (!string.IsNullOrWhiteSpace(oldTarget.Json))
-	            {
-	                var mergedJson = MergeKnowledgeJson(sourceKnowledge, oldTarget.Json);
-	                newPrompt = GenerateKnowledgePrompt(mergedJson);
-	                newJson = oldTarget.Json;
-	            }
-	            else
-	            {
-	                detailModeOldTargetIds.Add(oldTarget.Id);
+            detailModeOldTargetIds.Add(oldTarget.Id);
 
-	                var targetDetails = await _aiSpeechAssistantDataProvider
-	                    .GetKnowledgeDetailsByKnowledgeIdAsync(oldTarget.Id, cancellationToken)
-	                    .ConfigureAwait(false) ?? new List<AiSpeechAssistantKnowledgeDetail>();
+            var targetDetails = await _aiSpeechAssistantDataProvider
+                .GetKnowledgeDetailsByKnowledgeIdAsync(oldTarget.Id, cancellationToken)
+                .ConfigureAwait(false) ?? new List<AiSpeechAssistantKnowledgeDetail>();
 
-	                var baseDetailDtos = targetDetails
-	                    .Select(d => _mapper.Map<AiSpeechAssistantKnowledgeDetailDto>(d))
-	                    .ToList();
+            var baseDetailDtos = targetDetails
+                .Select(d => _mapper.Map<AiSpeechAssistantKnowledgeDetailDto>(d))
+                .ToList();
 
-	                var relationsForPrompt = relations.Select(relation =>
-	                {
-	                    var isTriggeredSourceRelation =
-	                        relation.SourceKnowledgeId == sourceKnowledgeId || relation.SourceKnowledgeId == sourceKnowledge.Id;
+            var relationsForPrompt = relations.Select(relation =>
+            {
+                var isTriggeredSourceRelation =
+                    relation.SourceKnowledgeId == sourceKnowledgeId || relation.SourceKnowledgeId == sourceKnowledge.Id;
 
-	                    return new AiSpeechAssistantKnowledgeCopyRelated
-	                    {
-	                        SourceKnowledgeId = isTriggeredSourceRelation ? sourceKnowledge.Id : relation.SourceKnowledgeId,
-	                        TargetKnowledgeId = oldTarget.Id,
-	                        CopyKnowledgePoints = relation.CopyKnowledgePoints,
-	                        IsSyncUpdate = relation.IsSyncUpdate,
-	                        CreatedDate = relation.CreatedDate
-	                    };
-	                }).ToList();
+                return new AiSpeechAssistantKnowledgeCopyRelated
+                {
+                    SourceKnowledgeId = isTriggeredSourceRelation ? sourceKnowledge.Id : relation.SourceKnowledgeId,
+                    TargetKnowledgeId = oldTarget.Id,
+                    CopyKnowledgePoints = relation.CopyKnowledgePoints,
+                    IsSyncUpdate = relation.IsSyncUpdate,
+                    CreatedDate = relation.CreatedDate
+                };
+            }).ToList();
 
-	                newPrompt = await GeneratePromptForKnowledgeAsync(
-	                        new AiSpeechAssistantKnowledge { Id = oldTarget.Id, Json = string.Empty },
-	                        baseDetailDtos,
-	                        relationsForPrompt,
-	                        cancellationToken)
-	                    .ConfigureAwait(false);
+            newPrompt = await GeneratePromptForKnowledgeAsync(
+                    new AiSpeechAssistantKnowledge { Id = oldTarget.Id, Json = oldTarget.Json ?? "{}" },
+                    baseDetailDtos,
+                    relationsForPrompt,
+                    cancellationToken)
+                .ConfigureAwait(false);
 
-	                newJson = oldTarget.Json;
-	            }
+            newJson = oldTarget.Json;
 
             var newTarget = new AiSpeechAssistantKnowledge
             {
@@ -2033,17 +2024,6 @@ public partial class AiSpeechAssistantService
 	        };
 	    }
     
-    private static string MergeKnowledgeJson(AiSpeechAssistantKnowledge sourceKnowledge, string oldTargetJson)
-    {
-        var mergedObj = RemoveCopySuffixFromKeys(JObject.Parse(oldTargetJson ?? "{}"));
-
-        var sourceObj = RemoveCopySuffixFromKeys(JObject.Parse(sourceKnowledge.Json ?? "{}"));
-        mergedObj.Merge(sourceObj, new JsonMergeSettings { MergeArrayHandling = MergeArrayHandling.Concat });
-
-        Log.Information("Merged JObject: {@mergedObj}", mergedObj);
-        return mergedObj.ToString(Formatting.None);
-    }
-
     private static JObject RemoveCopySuffixFromKeys(JObject source)
     {
         var result = new JObject();
