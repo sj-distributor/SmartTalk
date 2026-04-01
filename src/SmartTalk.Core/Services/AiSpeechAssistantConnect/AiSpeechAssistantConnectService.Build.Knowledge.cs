@@ -65,7 +65,11 @@ public partial class AiSpeechAssistantConnectService
 
     private async Task ResolveCustomerItemsAsync(CancellationToken cancellationToken)
     {
-        if (!_ctx.Prompt.Contains("#{customer_items}", StringComparison.OrdinalIgnoreCase) || !_ctx.Prompt.Contains("#{HiFood_商品_商品数据}", StringComparison.OrdinalIgnoreCase)) return;
+        var hasCustomerItemsToken = _ctx.Prompt.Contains("#{customer_items}", StringComparison.OrdinalIgnoreCase);
+        
+        var hasHiFoodItemsToken = _ctx.Prompt.Contains("#{HiFood_商品_商品数据}", StringComparison.OrdinalIgnoreCase);
+        
+        if (!hasCustomerItemsToken && !hasHiFoodItemsToken) return;
 
         var soldToIds = !string.IsNullOrEmpty(_ctx.Assistant.Name) ? _ctx.Assistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : [];
         if (soldToIds.Count == 0) return;
@@ -73,8 +77,13 @@ public partial class AiSpeechAssistantConnectService
         var caches = await _salesDataProvider.GetCustomerItemsCacheBySoldToIdsAsync(soldToIds, cancellationToken).ConfigureAwait(false);
         var customerItems = caches.Where(c => !string.IsNullOrEmpty(c.CacheValue)).Select(c => c.CacheValue.Trim()).Distinct().ToList();
 
-        _ctx.Prompt = _ctx.Prompt.Replace("#{customer_items}",
-            customerItems.Count > 0 ? string.Join(Environment.NewLine + Environment.NewLine, customerItems.Take(50)) : " ");
+        var value = customerItems.Count > 0
+            ? string.Join(Environment.NewLine + Environment.NewLine, customerItems.Take(50))
+            : " ";
+
+        _ctx.Prompt = _ctx.Prompt
+            .Replace("#{customer_items}", value)
+            .Replace("{HiFood_商品_商品数据}", value);
     }
 
     private async Task ResolveMenuItemsAsync(CancellationToken cancellationToken)
@@ -88,15 +97,24 @@ public partial class AiSpeechAssistantConnectService
 
     private async Task ResolveCustomerInfoAsync(CancellationToken cancellationToken)
     {
-        if (!_ctx.Prompt.Contains("#{customer_info}", StringComparison.OrdinalIgnoreCase) || !_ctx.Prompt.Contains("#{CRM_客户_客户数据}", StringComparison.OrdinalIgnoreCase)) return;
+        var hasCustomerInfoToken = _ctx.Prompt.Contains("#{customer_info}", StringComparison.OrdinalIgnoreCase);
+        
+        var hasCrmCustomerToken = _ctx.Prompt.Contains("#{CRM_客户_客户数据}", StringComparison.OrdinalIgnoreCase);
+        
+        if (!hasCustomerInfoToken && !hasCrmCustomerToken) return;
 
         var cache = await _salesDataProvider.GetCustomerInfoCacheByPhoneNumberAsync(_ctx.From, cancellationToken).ConfigureAwait(false);
-        _ctx.Prompt = _ctx.Prompt.Replace("#{customer_info}", cache?.CacheValue?.Trim() ?? " ");
+
+        var value = cache?.CacheValue?.Trim() ?? " ";
+
+        _ctx.Prompt = _ctx.Prompt
+            .Replace("#{customer_info}", value)
+            .Replace("{CRM_客户_客户数据}", value);
     }
 
     private async Task ResolveDeliveryInfoAsync(CancellationToken cancellationToken)
     {
-        if (!_ctx.Prompt.Contains("#{delivery_info}", StringComparison.OrdinalIgnoreCase)) return;
+        if (!_ctx.Prompt.Contains("#{delivery_info}", StringComparison.OrdinalIgnoreCase) && !_ctx.Prompt.Contains("#{CRM_路线_送货日数据}", StringComparison.OrdinalIgnoreCase)) return;
 
         var cache = await _salesDataProvider.GetDeliveryInfoCacheByPhoneNumberAsync(_ctx.From, cancellationToken).ConfigureAwait(false);
         _ctx.Prompt = _ctx.Prompt.Replace("#{delivery_info}", cache?.CacheValue?.Trim() ?? " ");
