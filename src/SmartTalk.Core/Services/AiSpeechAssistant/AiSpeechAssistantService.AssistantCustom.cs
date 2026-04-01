@@ -1501,6 +1501,15 @@ public partial class AiSpeechAssistantService
         await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync(copyToKnowledges, true, cancellationToken).ConfigureAwait(false);
         await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgesAsync(newCopeToKnowledges, true, cancellationToken).ConfigureAwait(false);
 
+        var newCopyToIds = newCopeToKnowledges.Select(x => x.Id).ToList();
+        var persistedNewCopyTos = await _aiSpeechAssistantDataProvider
+            .GetAiSpeechAssistantKnowledgesAsync(newCopyToIds, cancellationToken)
+            .ConfigureAwait(false);
+        persistedNewCopyTos.ForEach(x => x.ModelLanguage = copyFromKnowledge.ModelLanguage);
+        await _aiSpeechAssistantDataProvider
+            .UpdateAiSpeechAssistantKnowledgesAsync(persistedNewCopyTos, true, cancellationToken)
+            .ConfigureAwait(false);
+
         Log.Information("KonwledgeCopy New copies inserted. newCopyToKnowledge={@newCopyToKnowledge}", newCopeToKnowledges);
         
         var effectiveCopyToKnowledges = copyToKnowledges
@@ -1650,6 +1659,7 @@ public partial class AiSpeechAssistantService
 
         newCopyToKnowledge.Prompt = await GenerateKnowledgePromptAsync(detailsForPrompt, cancellationToken)
             .ConfigureAwait(false);
+        newCopyToKnowledge.ModelLanguage = copyFromKnowledge.ModelLanguage;
 
         await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync([newCopyToKnowledge], cancellationToken: cancellationToken)
             .ConfigureAwait(false);
