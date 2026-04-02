@@ -295,6 +295,8 @@ public class PosUtilService : IPosUtilService
         {
             var productLocalization = JsonConvert.DeserializeObject<PosNamesLocalization>(product.Names);
             var name = BuildMenuItemPosName(productLocalization, language);
+            var nameCn = BuildMenuItemPosName(productLocalization, TranscriptionLanguage.Chinese);
+            var nameEn = BuildMenuItemPosName(productLocalization, TranscriptionLanguage.English);
             var categoryName = categoryNamesById.TryGetValue(product.CategoryId, out var currentCategoryName) ? currentCategoryName : string.Empty;
 
             var taxes = ParseProductTaxes(product.Tax);
@@ -331,7 +333,10 @@ public class PosUtilService : IPosUtilService
 
             result.Add(new PosMenuProductBriefDto
             {
+                ProductId = product.ProductId,
                 Name = name,
+                NameCn = nameCn,
+                NameEn = nameEn,
                 CategoryName = categoryName,
                 Price = product.Price,
                 Tax = taxes,

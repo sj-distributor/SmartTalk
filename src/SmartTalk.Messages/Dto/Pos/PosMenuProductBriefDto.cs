@@ -2,7 +2,13 @@ namespace SmartTalk.Messages.Dto.Pos;
 
 public class PosMenuProductBriefDto
 {
+    public string ProductId { get; set; }
+
     public string Name { get; set; }
+
+    public string NameCn { get; set; }
+
+    public string NameEn { get; set; }
 
     public string CategoryName { get; set; }
 
