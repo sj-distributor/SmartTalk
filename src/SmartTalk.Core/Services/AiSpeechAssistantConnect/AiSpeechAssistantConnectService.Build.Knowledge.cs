@@ -124,8 +124,8 @@ public partial class AiSpeechAssistantConnectService
                            || HasPromptToken("{POS_菜单_商品规格}")
                            || HasPromptToken("{POS_菜单_商品税率}")
                            || HasPromptToken("{POS_菜单_商品价格}")
-                           || HasPromptToken("{POS_菜单_商品时间}");
-        var needStoreHours = HasPromptToken("{POS_店铺_营业时间}");
+                           || HasPromptToken("{POS_菜单_菜单时间}");
+        var needStoreHours = HasPromptToken("{POS_店铺信息_营业时间}");
 
         if (!needProducts && !needStoreHours) return;
 
@@ -250,10 +250,10 @@ public partial class AiSpeechAssistantConnectService
             .Distinct(StringComparer.Ordinal)
             .ToList();
 
-        ReplacePromptToken("{POS_菜单_商品时间}", string.Join(Environment.NewLine, lines));
+        ReplacePromptToken("{POS_菜单_菜单时间}", string.Join(Environment.NewLine, lines));
     }
 
-    private void ResolvePosStoreBusinessHours(string storeHours) => ReplacePromptToken("{POS_店铺_营业时间}", storeHours);
+    private void ResolvePosStoreBusinessHours(string storeHours) => ReplacePromptToken("{POS_店铺信息_营业时间}", storeHours);
 
     private bool HasPromptToken(string token) => _ctx.Prompt.Contains(token, StringComparison.OrdinalIgnoreCase);
 

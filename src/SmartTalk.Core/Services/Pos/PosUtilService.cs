@@ -300,11 +300,20 @@ public class PosUtilService : IPosUtilService
             .GroupBy(x => x.Product.ProductId)
             .Select(group =>
             {
-                var product = group
+                var products = group
                     .Select(x => x.Product)
+                    .DistinctBy(x => x.Id)
+                    .ToList();
+
+                var product = products
                     .OrderBy(x => x.SortOrder ?? int.MaxValue)
                     .ThenBy(x => x.Id)
                     .First();
+
+                var categoryIds = products
+                    .Select(x => x.CategoryId)
+                    .Distinct()
+                    .ToList();
 
                 var menus = group
                     .Select(x => x.Menu)
@@ -313,14 +322,14 @@ public class PosUtilService : IPosUtilService
                     .OrderBy(x => x.Id)
                     .ToList();
 
-                return (Product: product, Menus: menus);
+                return (Product: product, Menus: menus, CategoryIds: categoryIds);
             })
             .OrderBy(x => x.Product.SortOrder ?? int.MaxValue)
             .ThenBy(x => x.Product.ProductId ?? string.Empty, StringComparer.Ordinal)
             .ToList();
 
         var categories = await _posDataProvider.GetPosCategoriesAsync(
-            ids: productsWithMenus.Select(x => x.Product.CategoryId).Distinct().ToList(),
+            ids: productsWithMenus.SelectMany(x => x.CategoryIds).Distinct().ToList(),
             cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var categoryNamesById = categories
@@ -332,7 +341,7 @@ public class PosUtilService : IPosUtilService
                     try
                     {
                         var localization = JsonConvert.DeserializeObject<PosNamesLocalization>(x.Names);
-                        return BuildMenuItemPosName(localization, language);
+                        return BuildMenuItemPosDisplayName(localization);
                     }
                     catch
                     {
@@ -342,13 +351,16 @@ public class PosUtilService : IPosUtilService
 
         var result = new List<PosMenuProductBriefDto>(productsWithMenus.Count);
 
-        foreach (var (product, menus) in productsWithMenus)
+        foreach (var (product, menus, categoryIds) in productsWithMenus)
         {
             var productLocalization = JsonConvert.DeserializeObject<PosNamesLocalization>(product.Names);
             var name = BuildMenuItemPosName(productLocalization, language);
             var nameCn = BuildMenuItemPosName(productLocalization, TranscriptionLanguage.Chinese);
             var nameEn = BuildMenuItemPosName(productLocalization, TranscriptionLanguage.English);
-            var categoryName = categoryNamesById.TryGetValue(product.CategoryId, out var currentCategoryName) ? currentCategoryName : string.Empty;
+            var categoryName = string.Join("、", categoryIds
+                .Select(id => categoryNamesById.TryGetValue(id, out var currentCategoryName) ? currentCategoryName : string.Empty)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.Ordinal));
 
             var taxes = ParseProductTaxes(product.Tax);
             var specification = ParseProductModifierOptions(product.Modifiers, language);
@@ -554,6 +566,23 @@ public class PosUtilService : IPosUtilService
 
         var usSendChefName = !string.IsNullOrWhiteSpace(localization?.En?.SendChefName) ? localization.En.SendChefName : string.Empty;
         if (!string.IsNullOrWhiteSpace(usSendChefName)) return usSendChefName;
+
+        return string.Empty;
+    }
+
+    private string BuildMenuItemPosDisplayName(PosNamesLocalization localization)
+    {
+        var cn = BuildMenuItemPosName(localization, TranscriptionLanguage.Chinese).Trim();
+        var en = BuildMenuItemPosName(localization, TranscriptionLanguage.English).Trim();
+
+        if (!string.IsNullOrWhiteSpace(cn) && !string.IsNullOrWhiteSpace(en))
+            return string.Equals(cn, en, StringComparison.OrdinalIgnoreCase) ? cn : $"{cn} ({en})";
+
+        if (!string.IsNullOrWhiteSpace(cn))
+            return cn;
+
+        if (!string.IsNullOrWhiteSpace(en))
+            return en;
 
         return string.Empty;
     }
