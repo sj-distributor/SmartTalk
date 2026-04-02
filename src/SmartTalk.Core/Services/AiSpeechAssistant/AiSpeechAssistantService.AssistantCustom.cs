@@ -1166,7 +1166,14 @@ public partial class AiSpeechAssistantService
 
             if (IsFileUrl(content, detail.FileName))
             {
-                content = await _fileTextExtractor.ExtractAsync(content, detail.FileName, cancellationToken);
+                try
+                {
+                    content = await _fileTextExtractor.ExtractAsync(content, detail.FileName, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning(ex, "GenerateKnowledgePromptAsync: failed to extract file content, keep original text. Content={Content}, FileName={FileName}", content, detail.FileName);
+                }
             }
 
             sb.AppendLine($"{detail.KnowledgeName}：");
@@ -1179,20 +1186,26 @@ public partial class AiSpeechAssistantService
 
     private static readonly HashSet<string> SupportedExtensions = new()
     {
-        ".txt",".md",".pdf",".html",".xlsx",".docx",".csv",".json",".xml",".htm"
+        ".txt",".md",".pdf",".html",".xlsx",".xls",".docx",".csv",".json",".xml",".htm"
     };
 
     private bool IsFileUrl(string content, string fileName = null)
     {
+        var fileNameExt = Path.GetExtension(fileName ?? string.Empty).ToLowerInvariant();
+        var fileNameMatched = !string.IsNullOrWhiteSpace(fileNameExt) && SupportedExtensions.Contains(fileNameExt);
+
         if (!Uri.TryCreate(content, UriKind.Absolute, out var uri))
-            return false;
+            return fileNameMatched;
 
         var ext = Path.GetExtension(uri.AbsolutePath).ToLowerInvariant();
         if (!string.IsNullOrWhiteSpace(ext) && SupportedExtensions.Contains(ext))
             return true;
 
-        var fileNameExt = Path.GetExtension(fileName ?? string.Empty).ToLowerInvariant();
-        return !string.IsNullOrWhiteSpace(fileNameExt) && SupportedExtensions.Contains(fileNameExt);
+        if (fileNameMatched)
+            return true;
+
+        return uri.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
+               || uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task<string> HandleKnowledgeVersionAsync(AiSpeechAssistantKnowledge latestKnowledge, CancellationToken cancellationToken)
