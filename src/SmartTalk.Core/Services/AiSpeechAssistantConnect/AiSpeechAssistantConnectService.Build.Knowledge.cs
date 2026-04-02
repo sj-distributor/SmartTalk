@@ -146,7 +146,7 @@ public partial class AiSpeechAssistantConnectService
     private void ResolvePosMenuProductNames(List<PosMenuProductBriefDto> products)
     {
         var value = string.Join("、", products
-            .Select(x => x.Name)
+            .Select(BuildProductDisplayName)
             .Where(x => !string.IsNullOrWhiteSpace(x))
             .Distinct(StringComparer.Ordinal));
 
@@ -156,8 +156,9 @@ public partial class AiSpeechAssistantConnectService
     private void ResolvePosMenuProductCategories(List<PosMenuProductBriefDto> products)
     {
         var lines = products
-            .Where(x => !string.IsNullOrWhiteSpace(x.Name))
-            .GroupBy(x => x.Name.Trim(), StringComparer.Ordinal)
+            .Select(x => new { ProductName = BuildProductDisplayName(x), x.CategoryName })
+            .Where(x => !string.IsNullOrWhiteSpace(x.ProductName))
+            .GroupBy(x => x.ProductName.Trim(), StringComparer.Ordinal)
             .Select(group =>
             {
                 var categories = group
@@ -181,8 +182,9 @@ public partial class AiSpeechAssistantConnectService
     private void ResolvePosMenuProductSpecifications(List<PosMenuProductBriefDto> products)
     {
         var lines = products
-            .Where(x => !string.IsNullOrWhiteSpace(x.Name) && !string.IsNullOrWhiteSpace(x.Specification))
-            .Select(x => $"{x.Name}：{x.Specification}")
+            .Select(x => new { ProductName = BuildProductDisplayName(x), x.Specification })
+            .Where(x => !string.IsNullOrWhiteSpace(x.ProductName) && !string.IsNullOrWhiteSpace(x.Specification))
+            .Select(x => $"{x.ProductName}：{x.Specification}")
             .Distinct(StringComparer.Ordinal)
             .ToList();
 
@@ -192,8 +194,9 @@ public partial class AiSpeechAssistantConnectService
     private void ResolvePosMenuProductTaxes(List<PosMenuProductBriefDto> products)
     {
         var lines = products
-            .Where(x => !string.IsNullOrWhiteSpace(x.Name) && !string.IsNullOrWhiteSpace(x.Tax))
-            .Select(x => $"{x.Name}：{x.Tax}")
+            .Select(x => new { ProductName = BuildProductDisplayName(x), x.Tax })
+            .Where(x => !string.IsNullOrWhiteSpace(x.ProductName) && !string.IsNullOrWhiteSpace(x.Tax))
+            .Select(x => $"{x.ProductName}：{x.Tax}")
             .Distinct(StringComparer.Ordinal)
             .ToList();
 
@@ -203,8 +206,9 @@ public partial class AiSpeechAssistantConnectService
     private void ResolvePosMenuProductPrices(List<PosMenuProductBriefDto> products)
     {
         var lines = products
-            .Where(x => !string.IsNullOrWhiteSpace(x.Name))
-            .Select(x => $"{x.Name}：{x.Price:F2}")
+            .Select(x => new { ProductName = BuildProductDisplayName(x), x.Price })
+            .Where(x => !string.IsNullOrWhiteSpace(x.ProductName))
+            .Select(x => $"{x.ProductName}：{x.Price:F2}")
             .Distinct(StringComparer.Ordinal)
             .ToList();
 
@@ -214,7 +218,8 @@ public partial class AiSpeechAssistantConnectService
     private void ResolvePosMenuProductTimes(List<PosMenuProductBriefDto> products)
     {
         var lines = products
-            .Where(x => !string.IsNullOrWhiteSpace(x.Name) && x.PosMenus is { Count: > 0 })
+            .Select(x => new { ProductName = BuildProductDisplayName(x), x.PosMenus })
+            .Where(x => !string.IsNullOrWhiteSpace(x.ProductName) && x.PosMenus is { Count: > 0 })
             .Select(x =>
             {
                 var periods = x.PosMenus
@@ -234,7 +239,7 @@ public partial class AiSpeechAssistantConnectService
 
                 if (periods.Count == 0) return null;
 
-                return $"{x.Name}：{string.Join("；", periods)}";
+                return $"{x.ProductName}：{string.Join("；", periods)}";
             })
             .Where(x => !string.IsNullOrWhiteSpace(x))
             .Distinct(StringComparer.Ordinal)
@@ -252,6 +257,24 @@ public partial class AiSpeechAssistantConnectService
         if (!HasPromptToken(token)) return;
 
         _ctx.Prompt = _ctx.Prompt.Replace(token, string.IsNullOrWhiteSpace(value) ? " " : value);
+    }
+
+    private static string BuildProductDisplayName(PosMenuProductBriefDto product)
+    {
+        var cn = product?.NameCn?.Trim() ?? string.Empty;
+        var en = product?.NameEn?.Trim() ?? string.Empty;
+        var fallback = product?.Name?.Trim() ?? string.Empty;
+
+        if (!string.IsNullOrWhiteSpace(cn) && !string.IsNullOrWhiteSpace(en))
+            return string.Equals(cn, en, StringComparison.OrdinalIgnoreCase) ? cn : $"{cn} ({en})";
+
+        if (!string.IsNullOrWhiteSpace(cn))
+            return cn;
+
+        if (!string.IsNullOrWhiteSpace(en))
+            return en;
+
+        return fallback;
     }
 
     private TranscriptionLanguage ResolvePosPromptLanguage()

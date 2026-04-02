@@ -1,5 +1,3 @@
-using UglyToad.PdfPig;
-
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
 
 using global::System.Text;
@@ -8,7 +6,7 @@ using DocumentFormat.OpenXml.Packaging;
 using NPOI.HSSF.UserModel;
 using NPOI.SS.UserModel;
 using SmartTalk.Core.Ioc;
-using UglyToad.PdfPig.Core;
+using UglyToad.PdfPig;
 
 public interface IFileTextExtractor : IScopedDependency
 {
@@ -125,14 +123,14 @@ public class FileTextExtractor : IFileTextExtractor
 
     private static string ExtractTextFromPdf(byte[] content)
     {
+        var sb = new StringBuilder();
         using var data = new MemoryStream(content);
         using var pdf = PdfDocument.Open(data);
-
-        var sb = new StringBuilder();
         foreach (var page in pdf.GetPages())
         {
             var pageText = page.Text ?? string.Empty;
-            if (pageText.Length == 0) continue;
+            if (pageText.Length == 0)
+                continue;
 
             sb.AppendLine(pageText);
             sb.AppendLine();
