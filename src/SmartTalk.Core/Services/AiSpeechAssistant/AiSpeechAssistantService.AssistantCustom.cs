@@ -1549,7 +1549,7 @@ public partial class AiSpeechAssistantService
 
     private async Task<AiSpeechAssistantKnowledge> BuildNewCopyToKnowledgeAsync(AiSpeechAssistantKnowledge copyToKnowledge, AiSpeechAssistantKnowledge copyFromKnowledge, Dictionary<int, List<AiSpeechAssistantKnowledgeCopyRelated>> relatedLookup, Dictionary<int, List<AiSpeechAssistantKnowledgeCopyRelated>> copyFromRelatedLookup, CancellationToken cancellationToken)
     {
-        Log.Information("KonwledgeCopy Processing target knowledge. TargetId={TargetId}, SourceId ={SourseId}", copyToKnowledge.Id, copyFromKnowledge.Id);
+        Log.Information("KonwledgeCopy Processing target knowledge and souceId. TargetId={@TargetId}, SourceId ={@SourceId}", copyToKnowledge.Id, copyFromKnowledge.Id);
 
         string newPrompt;
         string newJson;
