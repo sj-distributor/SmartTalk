@@ -5,6 +5,7 @@ using ClosedXML.Excel;
 using DocumentFormat.OpenXml.Packaging;
 using NPOI.HSSF.UserModel;
 using NPOI.SS.UserModel;
+using NPOI.XSSF.UserModel;
 using SmartTalk.Core.Ioc;
 using UglyToad.PdfPig;
 
@@ -141,12 +142,27 @@ public class FileTextExtractor : IFileTextExtractor
 
     private static string ExtractTextFromExcel(byte[] content)
     {
-        using var workbook = new XLWorkbook(new MemoryStream(content));
+        try
+        {
+            using var workbook = new XLWorkbook(new MemoryStream(content));
+            return ExtractTextFromClosedXmlWorkbook(workbook);
+        }
+        catch
+        {
+            // Some xlsx files can be opened by Excel but rejected by ClosedXML.
+            return ExtractTextFromXlsxWithNpoi(content);
+        }
+    }
 
+    private static string ExtractTextFromClosedXmlWorkbook(XLWorkbook workbook)
+    {
         var sb = new StringBuilder();
         foreach (var worksheet in workbook.Worksheets)
         {
-            foreach (var row in worksheet.RangeUsed().RowsUsed())
+            var range = worksheet.RangeUsed();
+            if (range == null) continue;
+
+            foreach (var row in range.RowsUsed())
             {
                 var cells = row.CellsUsed().ToList();
                 for (var i = 0; i < cells.Count; i++)
@@ -164,11 +180,30 @@ public class FileTextExtractor : IFileTextExtractor
         return sb.ToString().Trim();
     }
 
-    private static string ExtractTextFromXls(byte[] content)
+    private static string ExtractTextFromXlsxWithNpoi(byte[] content)
     {
         using var stream = new MemoryStream(content);
-        IWorkbook workbook = new HSSFWorkbook(stream);
+        using var workbook = new XSSFWorkbook(stream);
+        return ExtractTextFromNpoiWorkbook(workbook);
+    }
 
+    private static string ExtractTextFromXls(byte[] content)
+    {
+        try
+        {
+            using var stream = new MemoryStream(content);
+            using var workbook = new HSSFWorkbook(stream);
+            return ExtractTextFromNpoiWorkbook(workbook);
+        }
+        catch
+        {
+            // Some files are labeled as .xls but actually contain xlsx content.
+            return ExtractTextFromXlsxWithNpoi(content);
+        }
+    }
+
+    private static string ExtractTextFromNpoiWorkbook(IWorkbook workbook)
+    {
         var sb = new StringBuilder();
         for (var sheetIndex = 0; sheetIndex < workbook.NumberOfSheets; sheetIndex++)
         {
