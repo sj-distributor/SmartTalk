@@ -65,7 +65,12 @@ public partial class AiSpeechAssistantConnectService
 
     private async Task ResolveCustomerItemsAsync(CancellationToken cancellationToken)
     {
-        if (!_ctx.Prompt.Contains("#{customer_items}", StringComparison.OrdinalIgnoreCase)) return;
+        var hasCustomerItemsToken = _ctx.Prompt.Contains("#{customer_items}", StringComparison.OrdinalIgnoreCase);
+        
+        var hasHiFoodItemsToken = _ctx.Prompt.Contains("#{HiFood_商品_商品数据}", StringComparison.OrdinalIgnoreCase);
+        
+        if (!hasCustomerItemsToken && !hasHiFoodItemsToken) return;
+        
         if (string.IsNullOrWhiteSpace(_ctx.Assistant.Name)) return;
 
         var caches = await _salesDataProvider.GetCustomerItemsCacheByAssistantNameAsync(_ctx.Assistant.Name, cancellationToken).ConfigureAwait(false);
@@ -109,7 +114,7 @@ public partial class AiSpeechAssistantConnectService
         if (!_ctx.Prompt.Contains("#{delivery_info}", StringComparison.OrdinalIgnoreCase) && !_ctx.Prompt.Contains("#{CRM_路线_送货日数据}", StringComparison.OrdinalIgnoreCase)) return;
 
         var cache = await _salesDataProvider.GetDeliveryInfoCacheByPhoneNumberAsync(_ctx.From, cancellationToken).ConfigureAwait(false);
-        _ctx.Prompt = _ctx.Prompt.Replace("#{delivery_info}", cache?.CacheValue?.Trim() ?? " ");
+        _ctx.Prompt = _ctx.Prompt.Replace("#{delivery_info}", cache?.CacheValue?.Trim() ?? " ").Replace("#{CRM_路线_送货日数据}", cache?.CacheValue?.Trim() ?? " ");
     }
 
     private async Task ResolvePosPromptVariablesAsync(CancellationToken cancellationToken)
