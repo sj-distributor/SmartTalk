@@ -1478,7 +1478,7 @@ public partial class AiSpeechAssistantService
         var copyFromRelatedLookup = copyFromRelateds?.GroupBy(x => x.TargetKnowledgeId)
                 .ToDictionary(g => g.Key, g => g.OrderBy(x => x.CreatedDate).ToList());
         
-        var duplicatedSourceToTargetIds = copyToRelateds
+        var duplicatedSourceToTargetIds = (copyToRelateds?? new List<AiSpeechAssistantKnowledgeCopyRelated>())
             .Where(r => r.IsSyncUpdate && r.SourceKnowledgeId == command.SourceKnowledgeId && selectedTargetIds.Contains(r.TargetKnowledgeId))
             .Select(r => r.TargetKnowledgeId);
         
@@ -1511,17 +1511,10 @@ public partial class AiSpeechAssistantService
             Log.Information("KonwledgeCopy newCopeToKnowledges Count {@newCopeToKnowledges}", newCopeToKnowledges.Count);
         }
 
+        copyToKnowledges.ForEach(x => x.IsActive = false);
+
         await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync(copyToKnowledges, true, cancellationToken).ConfigureAwait(false);
         await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgesAsync(newCopeToKnowledges, true, cancellationToken).ConfigureAwait(false);
-
-        var newCopyToIds = newCopeToKnowledges.Select(x => x.Id).ToList();
-        var persistedNewCopyTos = await _aiSpeechAssistantDataProvider
-            .GetAiSpeechAssistantKnowledgesAsync(newCopyToIds, cancellationToken)
-            .ConfigureAwait(false);
-        persistedNewCopyTos.ForEach(x => x.ModelLanguage = copyFromKnowledge.ModelLanguage);
-        await _aiSpeechAssistantDataProvider
-            .UpdateAiSpeechAssistantKnowledgesAsync(persistedNewCopyTos, true, cancellationToken)
-            .ConfigureAwait(false);
 
         Log.Information("KonwledgeCopy New copies inserted. newCopyToKnowledge={@newCopyToKnowledge}", newCopeToKnowledges);
         
@@ -1556,9 +1549,7 @@ public partial class AiSpeechAssistantService
 
     private async Task<AiSpeechAssistantKnowledge> BuildNewCopyToKnowledgeAsync(AiSpeechAssistantKnowledge copyToKnowledge, AiSpeechAssistantKnowledge copyFromKnowledge, Dictionary<int, List<AiSpeechAssistantKnowledgeCopyRelated>> relatedLookup, Dictionary<int, List<AiSpeechAssistantKnowledgeCopyRelated>> copyFromRelatedLookup, CancellationToken cancellationToken)
     {
-        Log.Information("KonwledgeCopy Processing target knowledge. TargetId={TargetId}", copyToKnowledge.Id);
-
-        copyToKnowledge.IsActive = false;
+        Log.Information("KonwledgeCopy Processing target knowledge. TargetId={TargetId}, SourceId ={SourseId}", copyToKnowledge.Id, copyFromKnowledge.Id);
 
         string newPrompt;
         string newJson;
