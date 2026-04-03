@@ -66,7 +66,7 @@ public partial class AiSpeechAssistantConnectService
     {
         var hasCustomerItemsToken = _ctx.Prompt.Contains("#{customer_items}", StringComparison.OrdinalIgnoreCase);
         
-        var hasHiFoodItemsToken = _ctx.Prompt.Contains("#{HiFood_商品_商品数据}", StringComparison.OrdinalIgnoreCase);
+        var hasHiFoodItemsToken = _ctx.Prompt.Contains("{HiFood_商品_商品数据}", StringComparison.OrdinalIgnoreCase);
         
         if (!hasCustomerItemsToken && !hasHiFoodItemsToken) return;
 
@@ -98,7 +98,7 @@ public partial class AiSpeechAssistantConnectService
     {
         var hasCustomerInfoToken = _ctx.Prompt.Contains("#{customer_info}", StringComparison.OrdinalIgnoreCase);
         
-        var hasCrmCustomerToken = _ctx.Prompt.Contains("#{CRM_客户_客户数据}", StringComparison.OrdinalIgnoreCase);
+        var hasCrmCustomerToken = _ctx.Prompt.Contains("{CRM_客户_客户数据}", StringComparison.OrdinalIgnoreCase);
         
         if (!hasCustomerInfoToken && !hasCrmCustomerToken) return;
 
