@@ -11,6 +11,8 @@ public partial interface IPosDataProvider : IScopedDependency
 
     Task UpdatePosCompanyAsync(Company company, bool isForceSave = true, CancellationToken cancellationToken = default);
 
+    Task UpdatePosCompaniesAsync(List<Company> companies, bool isForceSave = true, CancellationToken cancellationToken = default);
+
     Task DeletePosCompanyAsync(Company company, bool isForceSave = true, CancellationToken cancellationToken = default);
 
     Task<Company> GetPosCompanyAsync(int id, CancellationToken cancellationToken);
@@ -61,6 +63,15 @@ public partial class PosDataProvider
     {
         await _repository.UpdateAsync(company, cancellationToken).ConfigureAwait(false);
         
+        if (isForceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task UpdatePosCompaniesAsync(List<Company> companies, bool isForceSave = true, CancellationToken cancellationToken = default)
+    {
+        if (companies is not { Count: > 0 }) return;
+
+        await _repository.UpdateAllAsync(companies, cancellationToken).ConfigureAwait(false);
+
         if (isForceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
