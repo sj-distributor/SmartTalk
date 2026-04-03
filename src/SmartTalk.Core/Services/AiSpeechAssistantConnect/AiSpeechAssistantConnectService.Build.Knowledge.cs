@@ -111,10 +111,10 @@ public partial class AiSpeechAssistantConnectService
 
     private async Task ResolveDeliveryInfoAsync(CancellationToken cancellationToken)
     {
-        if (!_ctx.Prompt.Contains("#{delivery_info}", StringComparison.OrdinalIgnoreCase) && !_ctx.Prompt.Contains("#{CRM_路线_送货日数据}", StringComparison.OrdinalIgnoreCase)) return;
+        if (!_ctx.Prompt.Contains("#{delivery_info}", StringComparison.OrdinalIgnoreCase) && !_ctx.Prompt.Contains("{CRM_路线_送货日数据}", StringComparison.OrdinalIgnoreCase)) return;
 
         var cache = await _salesDataProvider.GetDeliveryInfoCacheByPhoneNumberAsync(_ctx.From, cancellationToken).ConfigureAwait(false);
-        _ctx.Prompt = _ctx.Prompt.Replace("#{delivery_info}", cache?.CacheValue?.Trim() ?? " ").Replace("#{CRM_路线_送货日数据}", cache?.CacheValue?.Trim() ?? " ");
+        _ctx.Prompt = _ctx.Prompt.Replace("#{delivery_info}", cache?.CacheValue?.Trim() ?? " ").Replace("{CRM_路线_送货日数据}", cache?.CacheValue?.Trim() ?? " ");
     }
 
     private async Task ResolvePosPromptVariablesAsync(CancellationToken cancellationToken)
