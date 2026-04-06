@@ -61,11 +61,9 @@ public partial class AiSpeechAssistantConnectService
     private async Task ResolveCustomerItemsAsync(CancellationToken cancellationToken)
     {
         if (!_ctx.Prompt.Contains("#{customer_items}", StringComparison.OrdinalIgnoreCase)) return;
+        if (string.IsNullOrWhiteSpace(_ctx.Assistant.Name)) return;
 
-        var soldToIds = !string.IsNullOrEmpty(_ctx.Assistant.Name) ? _ctx.Assistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : [];
-        if (soldToIds.Count == 0) return;
-
-        var caches = await _salesDataProvider.GetCustomerItemsCacheBySoldToIdsAsync(soldToIds, cancellationToken).ConfigureAwait(false);
+        var caches = await _salesDataProvider.GetCustomerItemsCacheByAssistantNameAsync(_ctx.Assistant.Name, cancellationToken).ConfigureAwait(false);
         var customerItems = caches.Where(c => !string.IsNullOrEmpty(c.CacheValue)).Select(c => c.CacheValue.Trim()).Distinct().ToList();
 
         _ctx.Prompt = _ctx.Prompt.Replace("#{customer_items}",
