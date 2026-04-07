@@ -86,37 +86,53 @@ public partial class AiSpeechAssistantService
         }
     }
 
-    public async Task<GetCurrentCompanyDynamicConfigsResponse> GetCurrentCompanyDynamicConfigsAsync(
-        GetCurrentCompanyDynamicConfigsRequest request, CancellationToken cancellationToken)
+    public async Task<GetCurrentCompanyDynamicConfigsResponse> GetCurrentCompanyDynamicConfigsAsync(GetCurrentCompanyDynamicConfigsRequest request, CancellationToken cancellationToken)
     {
-        var store = await _posDataProvider
-            .GetPosCompanyStoreAsync(id: request.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
-        if (store == null)
-            return new GetCurrentCompanyDynamicConfigsResponse
+        static GetCurrentCompanyDynamicConfigsResponse BuildEmptyResponse() => new()
+        {
+            Data = new GetCurrentCompanyDynamicConfigsResponseData
             {
-                Data = new GetCurrentCompanyDynamicConfigsResponseData { Configs = [] }
-            };
+                Store = null,
+                Configs = []
+            }
+        };
 
-        var company = await _posDataProvider.GetPosCompanyAsync(store.CompanyId, cancellationToken)
-            .ConfigureAwait(false);
+        var company = await _posDataProvider.GetPosCompanyByStoreIdAsync(request.StoreId, cancellationToken).ConfigureAwait(false);
+        if (company == null)
+            return BuildEmptyResponse();
 
         var configRelatingCompany = await _aiSpeechAssistantDataProvider
-            .GetAiSpeechAssistantDynamicConfigRelatingCompaniesAsync(companyIds: [company.Id],
-                cancellationToken: cancellationToken).ConfigureAwait(false);
+            .GetAiSpeechAssistantDynamicConfigRelatingCompaniesAsync(companyIds: [company.Id], cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
 
-        if (configRelatingCompany == null)
-            return new GetCurrentCompanyDynamicConfigsResponse
-            {
-                Data = new GetCurrentCompanyDynamicConfigsResponseData
-                {
-                    Store = _mapper.Map<CompanyStoreDto>(store),
-                    Configs = new List<AiSpeechAssistantDynamicConfigDto>()
-                }
-            };
+        var relatedConfigIds = configRelatingCompany
+            .Select(x => x.ConfigId)
+            .Distinct()
+            .ToHashSet();
+        
+        if (relatedConfigIds.Count == 0)
+            return BuildEmptyResponse();
 
-        var activeConfigs = await _aiSpeechAssistantDataProvider
+        var allConfigs = await _aiSpeechAssistantDataProvider
             .GetAiSpeechAssistantDynamicConfigsAsync(cancellationToken).ConfigureAwait(false);
-        var roots = BuildDynamicConfigTree(activeConfigs);
+
+        var relatedSystemConfigIds = allConfigs
+            .Where(x => x.Level == AiSpeechAssistantDynamicConfigLevel.System &&
+                        x.Status &&
+                        relatedConfigIds.Contains(x.Id))
+            .Select(x => x.Id)
+            .ToHashSet();
+        if (relatedSystemConfigIds.Count == 0)
+            return BuildEmptyResponse();
+
+        var store = await _posDataProvider
+            .GetPosCompanyStoreAsync(id: request.StoreId, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+        
+        if (store == null)
+            return BuildEmptyResponse();
+
+        var roots = BuildDynamicConfigTree(allConfigs);
         var rootHasAnyActiveImmediateChild = roots.ToDictionary(
             x => x.Id,
             x => x.Children.Any(c => c.Status));
@@ -146,6 +162,8 @@ public partial class AiSpeechAssistantService
         }
 
         var filteredRoots = roots
+            .Where(root => root.Level == AiSpeechAssistantDynamicConfigLevel.System &&
+                           relatedSystemConfigIds.Contains(root.Id))
             .Select(root =>
             {
                 var filtered = FilterNode(root, true);
