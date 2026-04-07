@@ -116,13 +116,13 @@ public partial class AiSpeechAssistantService
         var allConfigs = await _aiSpeechAssistantDataProvider
             .GetAiSpeechAssistantDynamicConfigsAsync(cancellationToken).ConfigureAwait(false);
 
-        var relatedSystemConfigIds = allConfigs
-            .Where(x => x.Level == AiSpeechAssistantDynamicConfigLevel.System &&
+        var relatedCategoryConfigIds = allConfigs
+            .Where(x => x.Level == AiSpeechAssistantDynamicConfigLevel.Category &&
                         x.Status &&
                         relatedConfigIds.Contains(x.Id))
             .Select(x => x.Id)
             .ToHashSet();
-        if (relatedSystemConfigIds.Count == 0)
+        if (relatedCategoryConfigIds.Count == 0)
             return BuildEmptyResponse();
 
         var store = await _posDataProvider
@@ -133,26 +133,46 @@ public partial class AiSpeechAssistantService
             return BuildEmptyResponse();
 
         var roots = BuildDynamicConfigTree(allConfigs);
-        var rootHasAnyActiveImmediateChild = roots.ToDictionary(
-            x => x.Id,
-            x => x.Children.Any(c => c.Status));
 
-        AiSpeechAssistantDynamicConfigDto? FilterNode(AiSpeechAssistantDynamicConfigDto node, bool isRoot)
+        AiSpeechAssistantDynamicConfigDto? FilterNode(AiSpeechAssistantDynamicConfigDto node, bool isRoot, bool inRelatedCategoryBranch)
         {
             if (!node.Status)
                 return null;
 
+            var isRelatedCategory = node.Level == AiSpeechAssistantDynamicConfigLevel.Category &&
+                                    relatedCategoryConfigIds.Contains(node.Id);
+            var nextInRelatedCategoryBranch = inRelatedCategoryBranch || isRelatedCategory;
+
+            if (node.Level == AiSpeechAssistantDynamicConfigLevel.Category &&
+                !nextInRelatedCategoryBranch)
+            {
+                return null;
+            }
+
             if (node.Children.Count > 0)
             {
                 node.Children = node.Children
-                    .Select(child => FilterNode(child, false))
+                    .Select(child => FilterNode(child, false, nextInRelatedCategoryBranch))
                     .Where(x => x != null)
                     .Select(x => x!)
                     .ToList();
             }
 
+            if (node.Level == AiSpeechAssistantDynamicConfigLevel.Category &&
+                node.Children.Count == 0)
+            {
+                return null;
+            }
+
             if (!isRoot &&
-                node.Level == AiSpeechAssistantDynamicConfigLevel.Category &&
+                !nextInRelatedCategoryBranch &&
+                node.Children.Count == 0)
+            {
+                return null;
+            }
+
+            if (isRoot &&
+                node.Level == AiSpeechAssistantDynamicConfigLevel.System &&
                 node.Children.Count == 0)
             {
                 return null;
@@ -162,21 +182,12 @@ public partial class AiSpeechAssistantService
         }
 
         var filteredRoots = roots
-            .Where(root => root.Level == AiSpeechAssistantDynamicConfigLevel.System &&
-                           relatedSystemConfigIds.Contains(root.Id))
+            .Where(root => root.Level == AiSpeechAssistantDynamicConfigLevel.System)
             .Select(root =>
             {
-                var filtered = FilterNode(root, true);
+                var filtered = FilterNode(root, true, false);
                 if (filtered == null)
                     return null;
-
-                if (filtered.Level == AiSpeechAssistantDynamicConfigLevel.System &&
-                    filtered.Children.Count == 0 &&
-                    rootHasAnyActiveImmediateChild.TryGetValue(root.Id, out var hasActiveImmediateChild) &&
-                    !hasActiveImmediateChild)
-                {
-                    return null;
-                }
 
                 return filtered;
             })
