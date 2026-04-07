@@ -17,6 +17,8 @@ public partial interface IPosDataProvider : IScopedDependency
 
     Task<Company> GetPosCompanyAsync(int id, CancellationToken cancellationToken);
 
+    Task<Company> GetPosCompanyByStoreIdAsync(int storeId, CancellationToken cancellationToken = default);
+
     Task<Company> GetPosCompanyByNameAsync(string name, CancellationToken cancellationToken);
 
     Task<List<int>> GetAssistantIdsByCompanyIdAsync(int companyId, CancellationToken cancellationToken = default);
@@ -85,6 +87,15 @@ public partial class PosDataProvider
     public async Task<Company> GetPosCompanyAsync(int id, CancellationToken cancellationToken)
     {
         return await _repository.Query<Company>(x => x.Id == id).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<Company> GetPosCompanyByStoreIdAsync(int storeId, CancellationToken cancellationToken = default)
+    {
+        var query = from store in _repository.Query<CompanyStore>().Where(x => x.Id == storeId)
+            join company in _repository.Query<Company>() on store.CompanyId equals company.Id
+            select company;
+
+        return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<Company> GetPosCompanyByNameAsync(string name, CancellationToken cancellationToken)
