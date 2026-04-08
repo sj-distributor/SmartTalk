@@ -1,3 +1,5 @@
+using Hangfire;
+using Hangfire.Throttling;
 using Serilog;
 using SmartTalk.Core.Constants;
 using SmartTalk.Core.Ioc;
@@ -12,11 +14,12 @@ public interface ISalesJobProcessJobService : IScopedDependency
 {
     Task ScheduleRefreshCustomerItemsCacheAsync(RefreshAllCustomerItemsCacheCommand command, CancellationToken cancellationToken);
 
+    [Semaphore(HangfireConstants.SemaphoreHiFoodCacheCustomerItems)]
     Task RefreshCustomerItemsCacheBySoldToIdAsync(string soldToId, CancellationToken cancellationToken);
 
     Task ScheduleRefreshCrmCustomerInfoAsync(RefreshAllCustomerInfoCacheCommand command, CancellationToken cancellationToken);
 
-    Task RefreshCrmCustomerInfoByPhoneNumberAsync(string phoneNumber, CancellationToken cancellationToken);
+    Task RefreshCrmCustomerInfoByPhoneNumberAsync(string phoneNumber, string crmToken, CancellationToken cancellationToken);
 }
 
 public class SalesJobProcessJobService : ISalesJobProcessJobService
@@ -25,7 +28,7 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
     private readonly ISalesService _salesService;
     private readonly ISalesDataProvider _salesDataProvider;
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
-    
+
     public SalesJobProcessJobService(ICrmClient crmClient, ISalesService salesService, ISalesDataProvider salesDataProvider, ISmartTalkBackgroundJobClient backgroundJobClient, SpeechMaticsDataProvider speechMaticsDataProvide)
     {
         _crmClient = crmClient;
@@ -48,7 +51,7 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
 
         Log.Information("All customer items cache refresh jobs scheduled. Count: {Count}", allSoldToIds.Count);
     }
-
+    
     public async Task RefreshCustomerItemsCacheBySoldToIdAsync(string soldToId, CancellationToken cancellationToken)
     {
         try
@@ -74,45 +77,69 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
         var allSoldToIds = allSales.Select(s => s.Name).Where(n => !string.IsNullOrEmpty(n)).Distinct().ToList();
         
         var crmToken = await _crmClient.GetCrmTokenAsync(cancellationToken).ConfigureAwait(false);
-        if (crmToken == null) return;
+        if (string.IsNullOrWhiteSpace(crmToken)) return;
 
         var totalPhones = 0;
-        var scheduledPhones = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var phoneNumbersToRefresh = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         
         foreach (var soldToId in allSoldToIds)
         {
-            var contacts = await _crmClient.GetCustomerContactsAsync(soldToId, crmToken, cancellationToken).ConfigureAwait(false);
+            var customerIds = soldToId
+                .Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(id => id.Trim())
+                .Where(id => !string.IsNullOrEmpty(id))
+                .Distinct()
+                .ToList();
 
-            var phoneNumbers = contacts?.Where(c => !string.IsNullOrEmpty(c.Phone)).Select(c => NormalizePhone(c.Phone)).Distinct().ToList() ?? new List<string>();
-
-            totalPhones += phoneNumbers.Count;
-            
-            foreach (var phone in phoneNumbers)
+            foreach (var customerId in customerIds)
             {
-                if (!scheduledPhones.Add(phone)) continue;
-                _backgroundJobClient.Enqueue<ISalesJobProcessJobService>(x => x.RefreshCrmCustomerInfoByPhoneNumberAsync(phone, CancellationToken.None), HangfireConstants.InternalHostingCaCheKnowledgeVariable);
+                var contacts = await _crmClient.GetCustomerContactsAsync(customerId, crmToken, cancellationToken).ConfigureAwait(false);
+                if (contacts == null || contacts.Count == 0) continue;
+
+                var phoneNumbers = contacts
+                    .Where(c => !string.IsNullOrEmpty(c.Phone))
+                    .Select(c => NormalizePhone(c.Phone))
+                    .Where(phone => !string.IsNullOrEmpty(phone))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                totalPhones += phoneNumbers.Count;
+
+                foreach (var phone in phoneNumbers)
+                {
+                    phoneNumbersToRefresh.Add(phone);
+                }
             }
         }
 
+        foreach (var phone in phoneNumbersToRefresh)
+        {
+            _backgroundJobClient.Enqueue<ISalesJobProcessJobService>(
+                x => x.RefreshCrmCustomerInfoByPhoneNumberAsync(phone, crmToken, CancellationToken.None),
+                HangfireConstants.InternalHostingCaCheKnowledgeVariable);
+        }
+
         Log.Information(
-            "Scheduled CRM customer info refresh for {CustomerCount} customers, {PhoneCount} phone numbers, {UniquePhoneCount} unique phone numbers",
+            "Scheduled CRM customer info refresh for {SoldToIdCount} sold-to entries, {PhoneCount} phone numbers, {UniquePhoneCount} unique phone numbers",
             allSoldToIds.Count,
             totalPhones,
-            scheduledPhones.Count);
+            phoneNumbersToRefresh.Count);
     }
 
-    
-    public async Task RefreshCrmCustomerInfoByPhoneNumberAsync(string phoneNumber, CancellationToken cancellationToken)
+
+    public async Task RefreshCrmCustomerInfoByPhoneNumberAsync(string phoneNumber, string crmToken, CancellationToken cancellationToken)
     {
         try
         {
             Log.Information("Refreshing CRM customer info cache for phone {Phone}", phoneNumber);
 
             var normalizedPhone = NormalizePhone(phoneNumber);
-            var knowledge = await _salesService.BuildCrmKnowledgeByPhoneAsync(normalizedPhone, cancellationToken).ConfigureAwait(false);
+            var knowledge = await _salesService.BuildCrmKnowledgeByPhoneAsync(normalizedPhone, crmToken, cancellationToken).ConfigureAwait(false);
 
-            await _salesDataProvider.UpsertCustomerInfoCacheAsync(normalizedPhone, knowledge.CustomerInfo, false, cancellationToken).ConfigureAwait(false);
-            await _salesDataProvider.UpsertDeliveryInfoCacheAsync(normalizedPhone, knowledge.DeliveryInfo, true, cancellationToken).ConfigureAwait(false);
+            await _salesDataProvider.UpsertCustomerInfoCacheAsync(normalizedPhone, knowledge.CustomerInfo, false, cancellationToken)
+                .ConfigureAwait(false);
+            await _salesDataProvider.UpsertDeliveryInfoCacheAsync(normalizedPhone, knowledge.DeliveryInfo, true, cancellationToken)
+                .ConfigureAwait(false);
 
             Log.Information(
                 "CRM customer knowledge cached to ai_speech_assistant_knowledge_variable_cache. CustomerCacheKey: {CustomerCacheKey}, DeliveryCacheKey: {DeliveryCacheKey}, Filter: {Filter}",

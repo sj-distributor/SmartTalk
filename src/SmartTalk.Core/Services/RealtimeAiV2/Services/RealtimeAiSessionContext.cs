@@ -26,6 +26,8 @@ public class RealtimeAiSessionContext
     public int Round { get; set; }
     public volatile bool IsAiSpeaking;
     public volatile bool IsClientAudioToProviderSuspended;
+    public bool IsProviderResponseInProgress;
+    public bool HasPendingProviderResponseTrigger;
 
     // Recording
     public MemoryStream AudioBuffer { get; set; }
@@ -36,6 +38,7 @@ public class RealtimeAiSessionContext
 
     // Synchronization
     public SemaphoreSlim WsSendLock { get; } = new(1, 1);
+    public SemaphoreSlim ProviderResponseStateLock { get; } = new(1, 1);
 
     // Actions exposed to consumer callbacks
     public RealtimeAiSessionActions SessionActions { get; set; }

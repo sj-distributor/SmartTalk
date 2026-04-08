@@ -14,6 +14,10 @@ public interface ISalesService : IScopedDependency
     Task<string> HandleOrderArrivalTimeList(List<string> customerIds, CancellationToken cancellationToken);
 
     Task<CrmCustomerPhoneKnowledgeDto> BuildCrmKnowledgeByPhoneAsync(string phoneNumber, CancellationToken cancellationToken);
+
+    Task<CrmCustomerPhoneKnowledgeDto> BuildCrmKnowledgeByPhoneAsync(string phoneNumber, string crmToken, CancellationToken cancellationToken);
+
+    Task<string> BuildCrmCustomerInfoByPhoneAsync(string phoneNumber, string crmToken, CancellationToken cancellationToken);
 }
 
 public class SalesService : ISalesService
@@ -148,8 +152,13 @@ public class SalesService : ISalesService
 
     public async Task<CrmCustomerPhoneKnowledgeDto> BuildCrmKnowledgeByPhoneAsync(string phoneNumber, CancellationToken cancellationToken)
     {
+        return await BuildCrmKnowledgeByPhoneAsync(phoneNumber, null, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<CrmCustomerPhoneKnowledgeDto> BuildCrmKnowledgeByPhoneAsync(string phoneNumber, string crmToken, CancellationToken cancellationToken)
+    {
         var normalizedPhone = NormalizePhone(phoneNumber);
-        var crmCustomers = await TryGetCrmCustomersByPhoneAsync(normalizedPhone, cancellationToken).ConfigureAwait(false);
+        var crmCustomers = await TryGetCrmCustomersByPhoneAsync(normalizedPhone, crmToken, cancellationToken).ConfigureAwait(false);
         var deliveryInfos = await TryGetDeliveryInfoByPhoneAsync(normalizedPhone, cancellationToken).ConfigureAwait(false);
 
         return new CrmCustomerPhoneKnowledgeDto
@@ -159,14 +168,23 @@ public class SalesService : ISalesService
         };
     }
 
-    private async Task<List<GetCustomersPhoneNumberDataDto>> TryGetCrmCustomersByPhoneAsync(string normalizedPhone, CancellationToken cancellationToken)
+    public async Task<string> BuildCrmCustomerInfoByPhoneAsync(string phoneNumber, string crmToken, CancellationToken cancellationToken)
+    {
+        var knowledge = await BuildCrmKnowledgeByPhoneAsync(phoneNumber, crmToken, cancellationToken).ConfigureAwait(false);
+        return knowledge.CustomerInfo;
+    }
+
+    private async Task<List<GetCustomersPhoneNumberDataDto>> TryGetCrmCustomersByPhoneAsync(string normalizedPhone, string crmToken, CancellationToken cancellationToken)
     {
         try
         {
-            var token = await _crmClient.GetCrmTokenAsync(cancellationToken).ConfigureAwait(false);
+            var token = crmToken;
+            if (string.IsNullOrWhiteSpace(token))
+                token = await _crmClient.GetCrmTokenAsync(cancellationToken).ConfigureAwait(false);
+
             if (string.IsNullOrWhiteSpace(token))
             {
-                Log.Warning("BuildCrmKnowledgeByPhoneAsync: CRM token is empty, phone: {PhoneNumber}", normalizedPhone);
+                Log.Warning("CRM token is empty, phone: {PhoneNumber}", normalizedPhone);
                 return [];
             }
 

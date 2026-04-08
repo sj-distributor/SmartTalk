@@ -67,9 +67,119 @@ public partial class RealtimeAiService
     {
         Log.Information("[RealtimeAi] Sending text to provider, SessionId: {SessionId}, Text: {Text}", _ctx.SessionId, text);
 
-        await SendToProviderAsync(
-            _ctx.ProviderAdapter.BuildTextUserMessage(text, _ctx.SessionId),
-            _ctx.ProviderAdapter.BuildTriggerResponseMessage()
-        ).ConfigureAwait(false);
+        await SendToProviderAsync(_ctx.ProviderAdapter.BuildTextUserMessage(text, _ctx.SessionId)).ConfigureAwait(false);
+        await QueueOrTriggerProviderResponseAsync("text input").ConfigureAwait(false);
+    }
+
+    private async Task QueueOrTriggerProviderResponseAsync(string source)
+    {
+        if (!IsProviderSessionActive) return;
+
+        var token = _ctx.SessionCts?.Token ?? CancellationToken.None;
+        var shouldSendTrigger = false;
+
+        await _ctx.ProviderResponseStateLock.WaitAsync(token).ConfigureAwait(false);
+        try
+        {
+            if (_ctx.IsProviderResponseInProgress)
+            {
+                _ctx.HasPendingProviderResponseTrigger = true;
+                Log.Information("[RealtimeAi] Response trigger queued, SessionId: {SessionId}, Source: {Source}", _ctx.SessionId, source);
+                return;
+            }
+            
+            _ctx.HasPendingProviderResponseTrigger = false;
+            _ctx.IsProviderResponseInProgress = true;
+            shouldSendTrigger = true;
+        }
+        finally
+        {
+            _ctx.ProviderResponseStateLock.Release();
+        }
+
+        if (!shouldSendTrigger) return;
+
+        try
+        {
+            await SendToProviderAsync(_ctx.ProviderAdapter.BuildTriggerResponseMessage()).ConfigureAwait(false);
+        }
+        catch
+        {
+            await _ctx.ProviderResponseStateLock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+            try
+            {
+                _ctx.IsProviderResponseInProgress = false;
+                _ctx.HasPendingProviderResponseTrigger = true;
+            }
+            finally
+            {
+                _ctx.ProviderResponseStateLock.Release();
+            }
+
+            throw;
+        }
+    }
+
+    private async Task MarkProviderResponseStartedAsync()
+    {
+        if (!IsProviderSessionActive) return;
+
+        await _ctx.ProviderResponseStateLock.WaitAsync(_ctx.SessionCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
+        try
+        {
+            _ctx.IsProviderResponseInProgress = true;
+        }
+        finally
+        {
+            _ctx.ProviderResponseStateLock.Release();
+        }
+    }
+
+    private async Task MarkProviderResponseCompletedAndDrainAsync()
+    {
+        if (!IsProviderSessionActive) return;
+
+        var token = _ctx.SessionCts?.Token ?? CancellationToken.None;
+        var shouldSendQueuedTrigger = false;
+
+        await _ctx.ProviderResponseStateLock.WaitAsync(token).ConfigureAwait(false);
+        try
+        {
+            _ctx.IsProviderResponseInProgress = false;
+
+            if (_ctx.HasPendingProviderResponseTrigger)
+            {
+                _ctx.HasPendingProviderResponseTrigger = false;
+                _ctx.IsProviderResponseInProgress = true;
+                shouldSendQueuedTrigger = true;
+            }
+        }
+        finally
+        {
+            _ctx.ProviderResponseStateLock.Release();
+        }
+
+        if (shouldSendQueuedTrigger)
+        {
+            try
+            {
+                await SendToProviderAsync(_ctx.ProviderAdapter.BuildTriggerResponseMessage()).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                await _ctx.ProviderResponseStateLock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+                try
+                {
+                    _ctx.IsProviderResponseInProgress = false;
+                    _ctx.HasPendingProviderResponseTrigger = true;
+                }
+                finally
+                {
+                    _ctx.ProviderResponseStateLock.Release();
+                }
+
+                Log.Warning(ex, "[RealtimeAi] Failed to send queued response trigger, SessionId: {SessionId}", _ctx.SessionId);
+            }
+        }
     }
 }

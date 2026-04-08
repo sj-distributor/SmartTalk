@@ -52,9 +52,9 @@ public class CrmClient : ICrmClient
             { "Accept", "application/json" }
         };
 
-        var resp = await _httpClient.PostAsync<CrmTokenResponse>(url, content, headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var response = await _httpClient.PostAsync<CrmTokenResponse>(url, content, cancellationToken, headers: headers).ConfigureAwait(false);
 
-        return resp.AccessToken;
+        return response?.AccessToken;
     }
 
     public async Task<List<CrmContactDto>> GetCustomerContactsAsync(string customerId,

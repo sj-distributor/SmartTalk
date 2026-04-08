@@ -431,7 +431,7 @@ public partial class PosDataProvider : IPosDataProvider
     public async Task<List<(PosCategory, PosProduct)>> GetPosCategoryAndProductsAsync(int storeId, CancellationToken cancellationToken)
     {
         var query = from category in _repository.Query<PosCategory>().Where(x => x.StoreId == storeId)
-            join product in _repository.Query<PosProduct>().Where(x => x.StoreId == storeId) on category.Id equals product.CategoryId
+            join product in _repository.Query<PosProduct>().Where(x => x.StoreId == storeId && x.Status) on category.Id equals product.CategoryId
             select new { category, product };
         
         var result = await query.ToListAsync(cancellationToken).ConfigureAwait(false);

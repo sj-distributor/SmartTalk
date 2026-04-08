@@ -5,7 +5,6 @@ using SmartTalk.Messages.Responses;
 
 namespace SmartTalk.Messages.Commands.Printer;
 
-[SmartTalkAuthorize(Permissions = new []{ SecurityStore.Permissions.CanViewMerchPrinter})]
 public class PrintTestCommand : ICommand
 {
     public int StoreId { get; set; }
