@@ -19,7 +19,7 @@ public partial class AiSpeechAssistantService
 
         await _twilioService.UpdateCallTwimlAsync(
             command.CallSid,
-            $"<Response>\n    <Dial  answerOnBridge=\"true\">\n      <Number>{command.HumanPhone}</Number>\n    </Dial>\n  </Response>");
+            $"<Response>\n    <Dial>\n      <Number>{command.HumanPhone}</Number>\n    </Dial>\n  </Response>");
     }
 
     public async Task HangupCallAsync(string callSid, CancellationToken cancellationToken)
