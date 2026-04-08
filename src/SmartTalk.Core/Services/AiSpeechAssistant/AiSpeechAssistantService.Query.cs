@@ -126,12 +126,14 @@ public partial class AiSpeechAssistantService
             
             var sourceRelationMap = allCopyRelateds
                 .GroupBy(x => x.SourceKnowledgeId)
-                .ToDictionary(g => g.Key, g => g.First());
+                .ToDictionary(g => g.Key, g => g
+                    .OrderByDescending(x => x.IsSyncUpdate)
+                    .ThenByDescending(x => x.CreatedDate)
+                    .First());
 
-            var sourceDetailSignatureLookup = new Dictionary<string, (int SourceKnowledgeId, string RelatedFrom, bool IsSyncUpdate)>();
-            var sourceDetailIdentityLookup = new Dictionary<string, (int SourceKnowledgeId, string RelatedFrom, bool IsSyncUpdate)>();
-            var existingDetailSignatures = detailDtos
-                .Select(x => BuildDetailSignature(x.KnowledgeName, x.FormatType, x.Content, x.FileName))
+            var existingSyncDetailKeys = detailDtos
+                .Where(x => x.IsSyncUpdate && x.RelatedKnowledgeId.HasValue)
+                .Select(x => $"{x.RelatedKnowledgeId.Value}|{BuildDetailSignature(x.KnowledgeName, x.FormatType, x.Content, x.FileName)}")
                 .ToHashSet();
 
             foreach (var sourceKnowledge in sourceKnowledges)
@@ -149,54 +151,29 @@ public partial class AiSpeechAssistantService
                 {
                     var copiedName = EnsureCopySuffixForDetailMatching(sourceDetail.KnowledgeName);
                     var signature = BuildDetailSignature(copiedName, sourceDetail.FormatType, sourceDetail.Content, sourceDetail.FileName);
-                    sourceDetailSignatureLookup.TryAdd(signature, (sourceKnowledge.Id, relatedFrom, isSyncUpdate));
-                    var identity = BuildDetailIdentity(copiedName, sourceDetail.FormatType, sourceDetail.FileName);
-                    sourceDetailIdentityLookup.TryAdd(identity, (sourceKnowledge.Id, relatedFrom, isSyncUpdate));
 
                     if (!isSyncUpdate)
                         continue;
 
-                    var existingDtos = detailDtos.Where(x =>
-                            x.KnowledgeName == copiedName &&
-                            x.FormatType == sourceDetail.FormatType &&
-                            x.FileName == sourceDetail.FileName)
-                        .ToList();
+                    var syncDetailKey = $"{sourceKnowledge.Id}|{signature}";
+                    if (!existingSyncDetailKeys.Add(syncDetailKey))
+                        continue;
 
-                    if (existingDtos.Count > 0)
+                    detailDtos.Add(new AiSpeechAssistantKnowledgeDetailDto
                     {
-                        foreach (var existingDto in existingDtos)
-                        {
-                            existingDto.Id = sourceDetail.Id;
-                            existingDto.KnowledgeId = sourceDetail.KnowledgeId;
-                            existingDto.Content = sourceDetail.Content;
-                            existingDto.CreatedDate = sourceDetail.CreatedDate;
-                            existingDto.LastModifiedBy = sourceDetail.LastModifiedBy;
-                            existingDto.LastModifiedDate = sourceDetail.LastModifiedDate;
-                            existingDto.RelatedKnowledgeId = sourceKnowledge.Id;
-                            existingDto.RelatedFrom = relatedFrom;
-                            existingDto.IsSyncUpdate = true;
-                        }
-                    }
-                    else if (!existingDetailSignatures.Contains(signature))
-                    {
-                        detailDtos.Add(new AiSpeechAssistantKnowledgeDetailDto
-                        {
-                            Id = sourceDetail.Id,
-                            KnowledgeId = sourceDetail.KnowledgeId,
-                            KnowledgeName = copiedName,
-                            FormatType = sourceDetail.FormatType,
-                            Content = sourceDetail.Content,
-                            FileName = sourceDetail.FileName,
-                            CreatedDate = sourceDetail.CreatedDate,
-                            LastModifiedBy = sourceDetail.LastModifiedBy,
-                            LastModifiedDate = sourceDetail.LastModifiedDate,
-                            RelatedKnowledgeId = sourceKnowledge.Id,
-                            RelatedFrom = relatedFrom,
-                            IsSyncUpdate = true
-                        });
-                    }
-
-                    existingDetailSignatures.Add(signature);
+                        Id = sourceDetail.Id,
+                        KnowledgeId = sourceDetail.KnowledgeId,
+                        KnowledgeName = copiedName,
+                        FormatType = sourceDetail.FormatType,
+                        Content = sourceDetail.Content,
+                        FileName = sourceDetail.FileName,
+                        CreatedDate = sourceDetail.CreatedDate,
+                        LastModifiedBy = sourceDetail.LastModifiedBy,
+                        LastModifiedDate = sourceDetail.LastModifiedDate,
+                        RelatedKnowledgeId = sourceKnowledge.Id,
+                        RelatedFrom = relatedFrom,
+                        IsSyncUpdate = true
+                    });
                 }
             }
 
@@ -209,21 +186,12 @@ public partial class AiSpeechAssistantService
 
             detailDtos = baseDetailDtos
                 .Concat(copiedDetailDtos
-                    .GroupBy(d => BuildDetailIdentity(d.KnowledgeName, d.FormatType, d.FileName))
+                    .GroupBy(d =>
+                        $"{BuildDetailIdentity(d.KnowledgeName, d.FormatType, d.FileName)}|" +
+                        $"{d.IsSyncUpdate}|" +
+                        $"{(d.IsSyncUpdate ? d.RelatedKnowledgeId : knowledge.Id)}")
                     .Select(g => g.First()))
                 .ToList();
-
-            foreach (var dto in detailDtos.Where(x => !string.IsNullOrWhiteSpace(x.KnowledgeName) &&
-                                                      x.KnowledgeName.EndsWith("-副本", StringComparison.Ordinal)))
-            {
-                var identity = BuildDetailIdentity(dto.KnowledgeName, dto.FormatType, dto.FileName);
-                if (!sourceDetailIdentityLookup.TryGetValue(identity, out var sourceInfo))
-                    continue;
-
-                dto.RelatedKnowledgeId = sourceInfo.IsSyncUpdate ? sourceInfo.SourceKnowledgeId : knowledge.Id;
-                dto.RelatedFrom = sourceInfo.RelatedFrom;
-                dto.IsSyncUpdate = sourceInfo.IsSyncUpdate;
-            }
         }
 
         result.Details = detailDtos;
@@ -367,11 +335,14 @@ public partial class AiSpeechAssistantService
 
             var sourceRelationMap = relatedForKnowledge
                 .GroupBy(x => x.SourceKnowledgeId)
-                .ToDictionary(g => g.Key, g => g.First());
+                .ToDictionary(g => g.Key, g => g
+                    .OrderByDescending(x => x.IsSyncUpdate)
+                    .ThenByDescending(x => x.CreatedDate)
+                    .First());
 
-            var sourceDetailIdentityLookup = new Dictionary<string, (int SourceKnowledgeId, string RelatedFrom, bool IsSyncUpdate)>();
-            var existingDetailSignatures = detailDtos
-                .Select(x => BuildDetailSignature(x.KnowledgeName, x.FormatType, x.Content, x.FileName))
+            var existingSyncDetailKeys = detailDtos
+                .Where(x => x.IsSyncUpdate && x.RelatedKnowledgeId.HasValue)
+                .Select(x => $"{x.RelatedKnowledgeId.Value}|{BuildDetailSignature(x.KnowledgeName, x.FormatType, x.Content, x.FileName)}")
                 .ToHashSet();
 
             foreach (var sourceId in relatedForKnowledge.Select(x => x.SourceKnowledgeId).Distinct())
@@ -386,53 +357,29 @@ public partial class AiSpeechAssistantService
                 {
                     var copiedName = EnsureCopySuffixForDetailMatching(sourceDetail.KnowledgeName);
                     var signature = BuildDetailSignature(copiedName, sourceDetail.FormatType, sourceDetail.Content, sourceDetail.FileName);
-                    var identity = BuildDetailIdentity(copiedName, sourceDetail.FormatType, sourceDetail.FileName);
-                    sourceDetailIdentityLookup.TryAdd(identity, (sourceId, relatedFrom, isSyncUpdate));
 
                     if (!isSyncUpdate)
                         continue;
 
-                    var existingDtos = detailDtos.Where(x =>
-                            x.KnowledgeName == copiedName &&
-                            x.FormatType == sourceDetail.FormatType &&
-                            x.FileName == sourceDetail.FileName)
-                        .ToList();
+                    var syncDetailKey = $"{sourceId}|{signature}";
+                    if (!existingSyncDetailKeys.Add(syncDetailKey))
+                        continue;
 
-                    if (existingDtos.Count > 0)
+                    detailDtos.Add(new AiSpeechAssistantKnowledgeDetailDto
                     {
-                        foreach (var existingDto in existingDtos)
-                        {
-                            existingDto.Id = sourceDetail.Id;
-                            existingDto.KnowledgeId = sourceDetail.KnowledgeId;
-                            existingDto.Content = sourceDetail.Content;
-                            existingDto.CreatedDate = sourceDetail.CreatedDate;
-                            existingDto.LastModifiedBy = sourceDetail.LastModifiedBy;
-                            existingDto.LastModifiedDate = sourceDetail.LastModifiedDate;
-                            existingDto.RelatedKnowledgeId = sourceId;
-                            existingDto.RelatedFrom = relatedFrom;
-                            existingDto.IsSyncUpdate = true;
-                        }
-                    }
-                    else if (!existingDetailSignatures.Contains(signature))
-                    {
-                        detailDtos.Add(new AiSpeechAssistantKnowledgeDetailDto
-                        {
-                            Id = sourceDetail.Id,
-                            KnowledgeId = sourceDetail.KnowledgeId,
-                            KnowledgeName = copiedName,
-                            FormatType = sourceDetail.FormatType,
-                            Content = sourceDetail.Content,
-                            FileName = sourceDetail.FileName,
-                            CreatedDate = sourceDetail.CreatedDate,
-                            LastModifiedBy = sourceDetail.LastModifiedBy,
-                            LastModifiedDate = sourceDetail.LastModifiedDate,
-                            RelatedKnowledgeId = sourceId,
-                            RelatedFrom = relatedFrom,
-                            IsSyncUpdate = true
-                        });
-                    }
-
-                    existingDetailSignatures.Add(signature);
+                        Id = sourceDetail.Id,
+                        KnowledgeId = sourceDetail.KnowledgeId,
+                        KnowledgeName = copiedName,
+                        FormatType = sourceDetail.FormatType,
+                        Content = sourceDetail.Content,
+                        FileName = sourceDetail.FileName,
+                        CreatedDate = sourceDetail.CreatedDate,
+                        LastModifiedBy = sourceDetail.LastModifiedBy,
+                        LastModifiedDate = sourceDetail.LastModifiedDate,
+                        RelatedKnowledgeId = sourceId,
+                        RelatedFrom = relatedFrom,
+                        IsSyncUpdate = true
+                    });
                 }
             }
 
@@ -445,21 +392,12 @@ public partial class AiSpeechAssistantService
 
             detailDtos = baseDetailDtos
                 .Concat(copiedDetailDtos
-                    .GroupBy(d => BuildDetailIdentity(d.KnowledgeName, d.FormatType, d.FileName))
+                    .GroupBy(d =>
+                        $"{BuildDetailIdentity(d.KnowledgeName, d.FormatType, d.FileName)}|" +
+                        $"{d.IsSyncUpdate}|" +
+                        $"{(d.IsSyncUpdate ? d.RelatedKnowledgeId : knowledge.Id)}")
                     .Select(g => g.First()))
                 .ToList();
-
-            foreach (var dto in detailDtos.Where(x => !string.IsNullOrWhiteSpace(x.KnowledgeName) &&
-                                                      x.KnowledgeName.EndsWith("-副本", StringComparison.Ordinal)))
-            {
-                var identity = BuildDetailIdentity(dto.KnowledgeName, dto.FormatType, dto.FileName);
-                if (!sourceDetailIdentityLookup.TryGetValue(identity, out var sourceInfo))
-                    continue;
-
-                dto.RelatedKnowledgeId = sourceInfo.IsSyncUpdate ? sourceInfo.SourceKnowledgeId : knowledge.Id;
-                dto.RelatedFrom = sourceInfo.RelatedFrom;
-                dto.IsSyncUpdate = sourceInfo.IsSyncUpdate;
-            }
 
             knowledge.Details = detailDtos;
         }
