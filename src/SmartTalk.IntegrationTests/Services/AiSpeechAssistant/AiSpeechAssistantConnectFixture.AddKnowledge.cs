@@ -26,8 +26,8 @@ public partial class AiSpeechAssistantConnectFixture
         var extractedFileText = $"Extracted file content for {caseId}";
         var textDetailContent = $"Text knowledge content for {caseId}";
 
-        int assistantId = 1;
-        int previousKnowledgeId = 1;
+        int assistantId = 0;
+        int previousKnowledgeId = 0;
 
         await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
         {
@@ -58,6 +58,7 @@ public partial class AiSpeechAssistantConnectFixture
                 ModelLanguage = "English"
             };
             await repository.InsertAsync(previousKnowledge);
+            await unitOfWork.SaveChangesAsync();
 
             previousKnowledgeId = previousKnowledge.Id;
         });
@@ -121,6 +122,11 @@ public partial class AiSpeechAssistantConnectFixture
         {
             var previous = await repository.Query<AiSpeechAssistantKnowledge>()
                 .FirstOrDefaultAsync(x => x.Id == previousKnowledgeId);
+            if (previous == null)
+            {
+                previous = await repository.Query<AiSpeechAssistantKnowledge>()
+                    .FirstOrDefaultAsync(x => x.AssistantId == assistantId && x.Version == "1.0");
+            }
             previous.ShouldNotBeNull();
             previous.IsActive.ShouldBeFalse();
 
