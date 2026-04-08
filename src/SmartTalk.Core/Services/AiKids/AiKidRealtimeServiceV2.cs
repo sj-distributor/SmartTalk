@@ -267,10 +267,12 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
                 Output = "Missing product_name. Ask the user which product they want the price for."
             };
         }
+
+        var price = DefaultPriceLine;
         
-        var priceLine = $"{args.ProductName}：{DefaultPriceLine}";
+        var priceLine = $"{args.ProductName}：{price}";
         
-        Log.Information("Get product price: {@productName}:{@DefaultPriceLine}", args.ProductName, DefaultPriceLine);
+        Log.Information("Get product price: {@productName}:{@DefaultPriceLine}", args.ProductName, price);
 
         return new RealtimeAiFunctionCallResult { Output = priceLine };
     }
