@@ -220,7 +220,7 @@ public partial class AiSpeechAssistantService
                 if (!sourceDetailIdentityLookup.TryGetValue(identity, out var sourceInfo))
                     continue;
 
-                dto.RelatedKnowledgeId = sourceInfo.SourceKnowledgeId;
+                dto.RelatedKnowledgeId = sourceInfo.IsSyncUpdate ? sourceInfo.SourceKnowledgeId : knowledge.Id;
                 dto.RelatedFrom = sourceInfo.RelatedFrom;
                 dto.IsSyncUpdate = sourceInfo.IsSyncUpdate;
             }
@@ -456,7 +456,7 @@ public partial class AiSpeechAssistantService
                 if (!sourceDetailIdentityLookup.TryGetValue(identity, out var sourceInfo))
                     continue;
 
-                dto.RelatedKnowledgeId = sourceInfo.SourceKnowledgeId;
+                dto.RelatedKnowledgeId = sourceInfo.IsSyncUpdate ? sourceInfo.SourceKnowledgeId : knowledge.Id;
                 dto.RelatedFrom = sourceInfo.RelatedFrom;
                 dto.IsSyncUpdate = sourceInfo.IsSyncUpdate;
             }
