@@ -268,9 +268,9 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
             };
         }
         
-        Log.Information("Get product price for {@productName}", args);
-        
         var priceLine = $"{args.ProductName}：{DefaultPriceLine}";
+        
+        Log.Information("Get product price: {@productName}:{@DefaultPriceLine}", args.ProductName, DefaultPriceLine);
 
         return new RealtimeAiFunctionCallResult { Output = priceLine };
     }
