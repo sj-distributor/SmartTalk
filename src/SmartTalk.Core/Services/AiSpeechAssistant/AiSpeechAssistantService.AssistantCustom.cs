@@ -1687,7 +1687,8 @@ public partial class AiSpeechAssistantService
                     TargetKnowledgeId = newCopyTo.Id,
                     CopyKnowledgePoints = r.CopyKnowledgePoints,
                     IsSyncUpdate = r.IsSyncUpdate
-                }));
+                })
+                .Where(x => x.SourceKnowledgeId != copyFromKnowledge.Id));
             }
             
             if (copyFromRelatedLookup.TryGetValue(copyFromKnowledge.Id, out var copyFromRelated))
