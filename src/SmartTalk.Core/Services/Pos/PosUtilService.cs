@@ -134,7 +134,12 @@ public class PosUtilService : IPosUtilService
             "4. 嚴禁將“序號.菜名”或“序號.菜名(數字ID)”或任何包含文字的內容作為 productId。\n" +
             "5. 如果 productId 包含非數字內容（如字母、點號、菜名），則該結果視為錯誤，不允許輸出。\n" +
             "6. productId 必須能在菜單中唯一對應到某一個菜品，否則不得輸出該 item。\n" +
-            "5. 如果客戶對飯或湯有修改（如不要湯、換飯），需體現在 specification 或 notes 中。\n" +
+            "7. 如果客戶對飯或湯有修改（如不要湯、換飯），需體現在 specification 或 notes 中。\n" +
+            "8. 菜品匹配优先依据关键字（如 Seafood / Chicken / Beef + Fried / Soup / Pan Fried + Rice / Noodle），尽量保持这些词一致。\n" +
+            "9. 若有多个相似菜品，优先选择关键字重合度最高的一个，而不是第一个匹配项。\n" +
+            "10. 若客户提到 Fried / Soup / Rice / Noodle 等关键类型词，不得匹配相反类型（如 Noodle ≠ Rice，Fried ≠ Soup）。\n" +
+            "11. 用户表达不完整时（如 “seafood noodle”），可匹配最合理的完整菜品，不要求完全一致。\n" +
+            "12. 在多个候选中，请先比较再选择最合适的一个，避免误选相似菜品。\n" +
             "注意：\n1. 必須嚴格按格式輸出 JSON，不要有其他字段或額外說明。\n2. **如果客戶分析文本中沒有任何可識別的下單信息，請返回：{ \"type\":0, \"items\": [] }。不得臆造或猜測菜品。** \n" +
             "請務必完整提取報告中每一個提到的菜品";
 
