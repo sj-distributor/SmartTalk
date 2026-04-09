@@ -20,6 +20,7 @@ public partial class AiSpeechAssistantConnectService
         await ResolveMenuItemsAsync(cancellationToken).ConfigureAwait(false);
         await ResolveCustomerInfoAsync(cancellationToken).ConfigureAwait(false);
         await ResolvePosPromptVariablesAsync(cancellationToken).ConfigureAwait(false);
+        await ResolveDeliveryInfoAsync(cancellationToken).ConfigureAwait(false);
 
         Log.Information("[AiAssistant] Prompt resolved, Prompt: {Prompt}", _ctx.Prompt);
     }
@@ -289,5 +290,13 @@ public partial class AiSpeechAssistantConnectService
             AiSpeechAssistantMainLanguage.Korean => TranscriptionLanguage.Korean,
             _ => TranscriptionLanguage.English
         };
+    }
+
+    private async Task ResolveDeliveryInfoAsync(CancellationToken cancellationToken)
+    {
+        if (!_ctx.Prompt.Contains("#{delivery_info}", StringComparison.OrdinalIgnoreCase) || !_ctx.Prompt.Contains("#{CRM_路线_送货日数据}", StringComparison.OrdinalIgnoreCase)) return;
+
+        var cache = await _salesDataProvider.GetDeliveryInfoCacheByPhoneNumberAsync(_ctx.From, cancellationToken).ConfigureAwait(false);
+        _ctx.Prompt = _ctx.Prompt.Replace("#{delivery_info}", cache?.CacheValue?.Trim() ?? " ");
     }
 }
