@@ -11,9 +11,13 @@ public partial interface IPosDataProvider : IScopedDependency
 
     Task UpdatePosCompanyAsync(Company company, bool isForceSave = true, CancellationToken cancellationToken = default);
 
+    Task UpdatePosCompaniesAsync(List<Company> companies, bool isForceSave = true, CancellationToken cancellationToken = default);
+
     Task DeletePosCompanyAsync(Company company, bool isForceSave = true, CancellationToken cancellationToken = default);
 
     Task<Company> GetPosCompanyAsync(int id, CancellationToken cancellationToken);
+
+    Task<Company> GetPosCompanyByStoreIdAsync(int storeId, CancellationToken cancellationToken = default);
 
     Task<Company> GetPosCompanyByNameAsync(string name, CancellationToken cancellationToken);
 
@@ -64,6 +68,15 @@ public partial class PosDataProvider
         if (isForceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task UpdatePosCompaniesAsync(List<Company> companies, bool isForceSave = true, CancellationToken cancellationToken = default)
+    {
+        if (companies is not { Count: > 0 }) return;
+
+        await _repository.UpdateAllAsync(companies, cancellationToken).ConfigureAwait(false);
+
+        if (isForceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task DeletePosCompanyAsync(Company company, bool isForceSave = true, CancellationToken cancellationToken = default)
     {
         await _repository.DeleteAsync(company, cancellationToken).ConfigureAwait(false);
@@ -74,6 +87,15 @@ public partial class PosDataProvider
     public async Task<Company> GetPosCompanyAsync(int id, CancellationToken cancellationToken)
     {
         return await _repository.Query<Company>(x => x.Id == id).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<Company> GetPosCompanyByStoreIdAsync(int storeId, CancellationToken cancellationToken = default)
+    {
+        var query = from store in _repository.Query<CompanyStore>().Where(x => x.Id == storeId)
+            join company in _repository.Query<Company>() on store.CompanyId equals company.Id
+            select company;
+
+        return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<Company> GetPosCompanyByNameAsync(string name, CancellationToken cancellationToken)

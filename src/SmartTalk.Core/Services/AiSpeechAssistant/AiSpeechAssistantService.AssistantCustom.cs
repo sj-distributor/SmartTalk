@@ -57,6 +57,13 @@ public partial interface IAiSpeechAssistantService
     Task<GetKonwledgeRelatedResponse> GetKonwledgeRelatedAsync(GetKonwledgeRelatedRequest request, CancellationToken cancellationToken);
 
     Task SyncCopiedKnowledgesIfRequiredAsync(int sourceKnowledgeId, bool deleteKnowledge, bool shouldSyncLastedKnowledge, CancellationToken cancellationToken);
+
+    Task<UpdateAiSpeechAssistantKnowledgeDetailResponse> UpdateAiSpeechAssistantKnowledgeDetailAsync(
+        UpdateAiSpeechAssistantKnowledgeDetailCommand command, CancellationToken cancellationToken);
+
+    Task DeleteAiSpeechAssistantKnowledgeDetailAsync(DeleteAiSpeechAssistantKnowledgeDetailCommand command, CancellationToken cancellationToken);
+    
+    Task<AddAiSpeechAssistantKnowledgeDetailResponse> AddAiSpeechAssistantKnowledgeDetailAsync(AddAiSpeechAssistantKnowledgeDetailCommand command, CancellationToken cancellationToken);
 }
 
 public partial class AiSpeechAssistantService
@@ -78,64 +85,273 @@ public partial class AiSpeechAssistantService
         Log.Information( "Previous knowledge loaded. PrevKnowledgeId={PrevKnowledgeId}", prevKnowledge?.Id);
         
         var latestKnowledge = _mapper.Map<AiSpeechAssistantKnowledge>(command);
+        latestKnowledge.Json = string.IsNullOrWhiteSpace(latestKnowledge.Json) ? "{}" : latestKnowledge.Json;
         List<AiSpeechAssistantKnowledgeCopyRelatedDto> newRelations = new();
-        var inheritPreviousRelations = command.RelatedKnowledges == null;
+        var shouldHandleRelatedKnowledges = prevKnowledge != null && command.RelatedKnowledges != null;
         
-        var (asTargetKnowledgePrevRelateds, selectedTargetRelateds
-                , asSourceKnowledgePrevRelateds, selectedSourceRelateds) =
-            await GetKnowledgeCopyRelatedAsync(prevKnowledge.Id, command.RelatedKnowledges, cancellationToken).ConfigureAwait(false);
-        
-        await InitialKnowledgeAsync(latestKnowledge, selectedTargetRelateds, cancellationToken).ConfigureAwait(false);
+        var asTargetKnowledgePrevRelateds = new List<AiSpeechAssistantKnowledgeCopyRelated>();
+        var selectedTargetRelateds = new List<AiSpeechAssistantKnowledgeCopyRelated>();
+        var asSourceKnowledgePrevRelateds = new List<AiSpeechAssistantKnowledgeCopyRelated>();
+        var selectedSourceRelateds = new List<AiSpeechAssistantKnowledgeCopyRelated>();
+
+        if (prevKnowledge != null)
+        {
+            (asTargetKnowledgePrevRelateds, selectedTargetRelateds, asSourceKnowledgePrevRelateds, selectedSourceRelateds) =
+                await GetKnowledgeCopyRelatedAsync(prevKnowledge.Id, command.RelatedKnowledges, cancellationToken)
+                    .ConfigureAwait(false);
+        }
 
         var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByIdAsync(command.AssistantId, cancellationToken).ConfigureAwait(false) ?? throw new Exception($"Assistant not found: {command.AssistantId}");
 
         latestKnowledge.ModelLanguage = !string.IsNullOrEmpty(command.Language) ? command.Language : assistant.ModelLanguage;
+        latestKnowledge.IsActive = true;
+        latestKnowledge.CreatedBy = _currentUser.Id.Value;
+        if (prevKnowledge != null)
+        {
+            if (command.Greetings == null)
+                latestKnowledge.Greetings = prevKnowledge.Greetings;
+        }
+        latestKnowledge.Version = prevKnowledge == null
+            ? "1.0"
+            : await HandleKnowledgeVersionAsync(latestKnowledge, cancellationToken).ConfigureAwait(false);
+        latestKnowledge.Prompt ??= string.Empty;
         await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgesAsync([latestKnowledge], true, cancellationToken).ConfigureAwait(false);
 
-        if (inheritPreviousRelations)
+        var relatedDtoMap = command.RelatedKnowledges?.ToDictionary(x => x.Id, x => x);
+        var newRelationEntities = new List<AiSpeechAssistantKnowledgeCopyRelated>();
+        var shouldSyncLastedKnowledge = false;
+
+        if (shouldHandleRelatedKnowledges)
         {
-            newRelations = await CarryForwardPreviousRelationsAsync(asTargetKnowledgePrevRelateds, asSourceKnowledgePrevRelateds, latestKnowledge.Id, prevKnowledge.Id, cancellationToken).ConfigureAwait(false);
-        }
-        else
-        {
-            newRelations = await HandleKnowledgeCopyRelatedUpdates(asTargetKnowledgePrevRelateds, selectedTargetRelateds, latestKnowledge.Id, prevKnowledge.Id, command.RelatedKnowledges!.ToDictionary(x => x.Id, x => x), cancellationToken).ConfigureAwait(false);
-            
-            if (asSourceKnowledgePrevRelateds.Count > 0)
+            var newRelationsWithOriginalId = selectedTargetRelateds
+                .Select(r =>
+                {
+                    AiSpeechAssistantKnowledgeCopyRelatedDto? dto = null;
+                    if (relatedDtoMap != null && relatedDtoMap.TryGetValue(r.Id, out var found))
+                        dto = found;
+                    return (OriginalRelationId: r.Id, Entity: new AiSpeechAssistantKnowledgeCopyRelated
+                    {
+                        SourceKnowledgeId = r.SourceKnowledgeId,
+                        TargetKnowledgeId = latestKnowledge.Id,
+                        CopyKnowledgePoints = dto?.CopyKnowledgePoints ?? r.CopyKnowledgePoints,
+                        IsSyncUpdate = dto?.IsSyncUpdate ?? r.IsSyncUpdate,
+                        CreatedDate = DateTimeOffset.Now
+                    });
+                })
+                .ToList();
+
+            newRelationEntities = newRelationsWithOriginalId.Select(x => x.Entity).ToList();
+
+            if (newRelationEntities.Count > 0)
             {
-                asSourceKnowledgePrevRelateds.ForEach(x => x.SourceKnowledgeId = latestKnowledge.Id);
-                await _aiSpeechAssistantDataProvider.UpdateKnowledgeCopyRelatedAsync(asSourceKnowledgePrevRelateds, true, cancellationToken).ConfigureAwait(false);
+                var persisted = await _aiSpeechAssistantDataProvider
+                    .AddKnowledgeCopyRelatedAsync(newRelationEntities, true, cancellationToken)
+                    .ConfigureAwait(false);
+
+                newRelationEntities = persisted.ToList();
+                newRelations = new List<AiSpeechAssistantKnowledgeCopyRelatedDto>(persisted.Count);
+                for (var i = 0; i < persisted.Count; i++)
+                {
+                    var dto = _mapper.Map<AiSpeechAssistantKnowledgeCopyRelatedDto>(persisted[i]);
+                    if (relatedDtoMap != null &&
+                        relatedDtoMap.TryGetValue(newRelationsWithOriginalId[i].OriginalRelationId, out var originalDto))
+                    {
+                        dto.RelatedFrom = originalDto.RelatedFrom;
+                    }
+
+                    newRelations.Add(dto);
+                }
+            }
+
+            if (selectedSourceRelateds.Count > 0)
+            {
+                if (relatedDtoMap != null)
+                {
+                    selectedSourceRelateds
+                        .Where(r => relatedDtoMap.ContainsKey(r.Id))
+                        .ToList()
+                        .ForEach(r =>
+                        {
+                            r.CopyKnowledgePoints = relatedDtoMap[r.Id].CopyKnowledgePoints;
+                            r.IsSyncUpdate = relatedDtoMap[r.Id].IsSyncUpdate;
+                        });
+                }
+
+                selectedSourceRelateds.ForEach(x => x.SourceKnowledgeId = latestKnowledge.Id);
+                await _aiSpeechAssistantDataProvider.UpdateKnowledgeCopyRelatedAsync(selectedSourceRelateds, true, cancellationToken)
+                    .ConfigureAwait(false);
+
+                shouldSyncLastedKnowledge = selectedSourceRelateds.Any(x => x.IsSyncUpdate);
+            }
+        }
+        else if (prevKnowledge != null && selectedSourceRelateds.Count > 0)
+        {
+            var syncSourceRelatedsToMove = selectedSourceRelateds.Where(x => x.IsSyncUpdate).ToList();
+            if (syncSourceRelatedsToMove.Count > 0)
+            {
+                syncSourceRelatedsToMove.ForEach(x => x.SourceKnowledgeId = latestKnowledge.Id);
+                await _aiSpeechAssistantDataProvider
+                    .UpdateKnowledgeCopyRelatedAsync(syncSourceRelatedsToMove, true, cancellationToken)
+                    .ConfigureAwait(false);
+
+                shouldSyncLastedKnowledge = true;
             }
         }
 
-        var prevKnowledgeDto = _mapper.Map<AiSpeechAssistantKnowledgeDto>(prevKnowledge);
-        var latestKnowledgeDto = _mapper.Map<AiSpeechAssistantKnowledgeDto>(latestKnowledge);
+        await SyncTargetKnowledgeLanguageIfCurrentKnowledgeIsSourceAsync(
+            latestKnowledge.Id,
+            latestKnowledge.ModelLanguage,
+            cancellationToken)
+            .ConfigureAwait(false);
 
+        AiSpeechAssistantKnowledgeDto prevKnowledgeDto;
+        if (prevKnowledge != null)
+        {
+            prevKnowledgeDto = _mapper.Map<AiSpeechAssistantKnowledgeDto>(prevKnowledge) ??
+                               new AiSpeechAssistantKnowledgeDto
+                               {
+                                   Id = prevKnowledge.Id,
+                                   AssistantId = prevKnowledge.AssistantId,
+                                   Json = prevKnowledge.Json,
+                                   Prompt = prevKnowledge.Prompt,
+                                   Version = prevKnowledge.Version,
+                                   IsActive = prevKnowledge.IsActive,
+                                   Brief = prevKnowledge.Brief,
+                                   Greetings = prevKnowledge.Greetings,
+                                   CreatedDate = prevKnowledge.CreatedDate,
+                                   CreatedBy = prevKnowledge.CreatedBy
+                               };
+
+            var prevDetails = await _aiSpeechAssistantDataProvider
+                .GetKnowledgeDetailsByKnowledgeIdAsync(prevKnowledge.Id, cancellationToken)
+                .ConfigureAwait(false);
+            prevKnowledgeDto.Details = prevDetails.Select(d => _mapper.Map<AiSpeechAssistantKnowledgeDetailDto>(d)).ToList();
+
+            prevKnowledgeDto.KnowledgeCopyRelateds ??= new List<AiSpeechAssistantKnowledgeCopyRelatedDto>();
+        }
+        else
+        {
+            prevKnowledgeDto = new AiSpeechAssistantKnowledgeDto
+            {
+                AssistantId = command.AssistantId,
+                Json = "{}",
+                Prompt = string.Empty,
+                Version = "0.0",
+                IsActive = false,
+                Details = new List<AiSpeechAssistantKnowledgeDetailDto>(),
+                KnowledgeCopyRelateds = new List<AiSpeechAssistantKnowledgeCopyRelatedDto>()
+            };
+        }
+        var latestKnowledgeDto = _mapper.Map<AiSpeechAssistantKnowledgeDto>(latestKnowledge);
+        List<AiSpeechAssistantKnowledgeDetailDto> newDetail = new();
+        
+        if (command.Details is { Count: > 0 })
+        {
+            var details = command.Details.Select(x => new AiSpeechAssistantKnowledgeDetail
+            {
+                KnowledgeId = latestKnowledge.Id,
+                KnowledgeName = x.KnowledgeName,
+                FormatType = x.FormatType,
+                Content = x.Content,
+                FileName = string.IsNullOrWhiteSpace(x.FileName) ? null : x.FileName,
+                CreatedDate = DateTimeOffset.Now
+            }).ToList();
+
+            await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgeDetailsAsync(details, true, cancellationToken);
+
+            newDetail.AddRange(details.Select(d => _mapper.Map<AiSpeechAssistantKnowledgeDetailDto>(d)));
+        }
+        else if (command.Details is { Count: 0 })
+        {
+            newDetail = new List<AiSpeechAssistantKnowledgeDetailDto>();
+        }
+
+        latestKnowledgeDto.Details = newDetail;
+        
         prevKnowledgeDto.KnowledgeCopyRelateds = _mapper.Map<List<AiSpeechAssistantKnowledgeCopyRelatedDto>>(asTargetKnowledgePrevRelateds);
         latestKnowledgeDto.KnowledgeCopyRelateds = newRelations;
 
-        if (!string.IsNullOrEmpty(command.Premise))
+        var prompt = await GeneratePromptForKnowledgeAsync(latestKnowledge, newDetail, newRelationEntities, cancellationToken)
+            .ConfigureAwait(false);
+        if (!string.Equals(latestKnowledge.Prompt ?? string.Empty, prompt ?? string.Empty, StringComparison.Ordinal))
         {
-            var premise = new AiSpeechAssistantPremise
-            {
-                AssistantId = command.AssistantId,
-                Content = command.Premise
-            };
-            
-            await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantPremiseAsync(premise, cancellationToken: cancellationToken);
-            
-            latestKnowledgeDto.Premise = _mapper.Map<AiSpeechAssistantPremiseDto>(premise);;
+            latestKnowledge.Prompt = prompt ?? string.Empty;
+            latestKnowledgeDto.Prompt = latestKnowledge.Prompt;
+            await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync([latestKnowledge], cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
         }
-        else await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantPremiseByAssistantIdAsync(command.AssistantId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (command.Premise != null)
+        {
+            if (!string.IsNullOrEmpty(command.Premise))
+            {
+                var premise = new AiSpeechAssistantPremise
+                {
+                    AssistantId = command.AssistantId,
+                    Content = command.Premise
+                };
+
+                await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantPremiseAsync(premise, cancellationToken: cancellationToken);
+
+                latestKnowledgeDto.Premise = _mapper.Map<AiSpeechAssistantPremiseDto>(premise);
+            }
+            else
+            {
+                await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantPremiseByAssistantIdAsync(command.AssistantId, cancellationToken: cancellationToken)
+                    .ConfigureAwait(false);
+            }
+        }
         
         Log.Information("Knowledge added. KnowledgeId={KnowledgeId}, RelatedCount={RelatedCount}, ShouldSyncLastedKnowledge={ShouldSyncLastedKnowledge}",
-            latestKnowledgeDto.Id, latestKnowledgeDto.KnowledgeCopyRelateds.Count, asSourceKnowledgePrevRelateds.Any(x => x.IsSyncUpdate));
+            latestKnowledgeDto.Id, latestKnowledgeDto.KnowledgeCopyRelateds.Count, shouldSyncLastedKnowledge);
         
         return new AiSpeechAssistantKnowledgeAddedEvent
         { 
             PrevKnowledge = prevKnowledgeDto, 
             LatestKnowledge = latestKnowledgeDto, 
-            ShouldSyncLastedKnowledge = asSourceKnowledgePrevRelateds.Any(x => x.IsSyncUpdate)
+            ShouldSyncLastedKnowledge = shouldSyncLastedKnowledge
         };
+    }
+
+    private async Task SyncTargetKnowledgeLanguageIfCurrentKnowledgeIsSourceAsync(
+        int sourceKnowledgeId,
+        string sourceModelLanguage,
+        CancellationToken cancellationToken)
+    {
+        var sourceRelateds = await _aiSpeechAssistantDataProvider
+            .GetKnowledgeCopyRelatedBySourceKnowledgeIdAsync([sourceKnowledgeId], true, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (sourceRelateds == null || sourceRelateds.Count == 0)
+            return;
+
+        var targetKnowledgeIds = sourceRelateds
+            .Select(x => x.TargetKnowledgeId)
+            .Distinct()
+            .ToList();
+
+        if (targetKnowledgeIds.Count == 0)
+            return;
+
+        var targetKnowledges = await _aiSpeechAssistantDataProvider
+            .GetAiSpeechAssistantKnowledgesAsync(targetKnowledgeIds, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (targetKnowledges == null || targetKnowledges.Count == 0)
+            return;
+
+        var targetKnowledgesToUpdate = targetKnowledges
+            .Where(x => !string.Equals(x.ModelLanguage ?? string.Empty, sourceModelLanguage ?? string.Empty, StringComparison.Ordinal))
+            .ToList();
+
+        if (targetKnowledgesToUpdate.Count == 0)
+            return;
+
+        targetKnowledgesToUpdate.ForEach(x => x.ModelLanguage = sourceModelLanguage);
+
+        await _aiSpeechAssistantDataProvider
+            .UpdateAiSpeechAssistantKnowledgesAsync(targetKnowledgesToUpdate, true, cancellationToken)
+            .ConfigureAwait(false);
     }
     
     private async Task<(List<AiSpeechAssistantKnowledgeCopyRelated> asTargetKnowledgePrevRelateds, 
@@ -164,60 +380,116 @@ public partial class AiSpeechAssistantService
     
         return (asTargetKnowledgePrevRelateds, selectedTargetRelateds, asSourceKnowledgePrevRelateds, selectedSourceRelateds);
     }
-
-    private async Task<List<AiSpeechAssistantKnowledgeCopyRelatedDto>> CarryForwardPreviousRelationsAsync(
-        List<AiSpeechAssistantKnowledgeCopyRelated> asTargetKnowledgePrevRelateds, List<AiSpeechAssistantKnowledgeCopyRelated> asSourceKnowledgePrevRelateds, int latestKnowledgeId, int prevKnowledgeId, CancellationToken cancellationToken)
-    {
-        var movedTargetRelations = await HandleKnowledgeCopyRelatedUpdates(
-            asTargetKnowledgePrevRelateds, asTargetKnowledgePrevRelateds, latestKnowledgeId, prevKnowledgeId, null, cancellationToken).ConfigureAwait(false);
-        
-        var sourceRelationsToMove = asSourceKnowledgePrevRelateds.ToList();
-
-        if (sourceRelationsToMove.Count > 0)
-        {
-            sourceRelationsToMove.ForEach(x => x.SourceKnowledgeId = latestKnowledgeId);
-            await _aiSpeechAssistantDataProvider.UpdateKnowledgeCopyRelatedAsync(sourceRelationsToMove, true, cancellationToken).ConfigureAwait(false);
-        }
-
-        return movedTargetRelations;
-    }
     
-    private async Task<List<AiSpeechAssistantKnowledgeCopyRelatedDto>> HandleKnowledgeCopyRelatedUpdates(List<AiSpeechAssistantKnowledgeCopyRelated> asTargetKnowledgePrevRelateds,
-        List<AiSpeechAssistantKnowledgeCopyRelated> selectedRelateds, int latestKnowledgeId, int prevKnowledgeId,
-        Dictionary<int, AiSpeechAssistantKnowledgeCopyRelatedDto>? relatedDtoMap, CancellationToken cancellationToken)
+    private async Task<string> GeneratePromptForKnowledgeAsync(AiSpeechAssistantKnowledge knowledge, List<AiSpeechAssistantKnowledgeDetailDto> baseDetailDtos, List<AiSpeechAssistantKnowledgeCopyRelated> targetRelations, CancellationToken cancellationToken)
     {
-        if (!asTargetKnowledgePrevRelateds.Any()) return new List<AiSpeechAssistantKnowledgeCopyRelatedDto>();
+        var promptSegments = new List<string>();
+        
+        if (!string.IsNullOrWhiteSpace(knowledge.Json))
+        {
+            try
+            { 
+                var knowledgeObj = JObject.Parse(knowledge.Json);
 
-        Log.Information(
-            "Updating knowledge copy relateds. KnowledgeId={KnowledgeId}, AllRelatedsIds={AllRelatedsIds}, SelectedRelatedsIds={SelectedRelatedsIds}",
-            latestKnowledgeId, string.Join(",", asTargetKnowledgePrevRelateds.Select(x => x.Id)), string.Join(",", selectedRelateds.Select(x => x.Id)));
-        
-        asTargetKnowledgePrevRelateds.ForEach(r =>
-        {
-            if (r.TargetKnowledgeId == prevKnowledgeId && selectedRelateds.Any(s => s.Id == r.Id)) { r.TargetKnowledgeId = latestKnowledgeId; }
-        });
-        
-        if (relatedDtoMap != null)
-        {
-            selectedRelateds
-                .Where(r => relatedDtoMap.ContainsKey(r.Id))
-                .ToList()
-                .ForEach(r =>
-                    { r.CopyKnowledgePoints = relatedDtoMap[r.Id].CopyKnowledgePoints; });
+                var relatedJsons = new List<JObject>();
+                foreach (var relation in targetRelations ?? new List<AiSpeechAssistantKnowledgeCopyRelated>())
+                {
+                    var points = relation?.CopyKnowledgePoints;
+                    if (string.IsNullOrWhiteSpace(points))
+                        continue;
+
+                    try
+                    {
+                        relatedJsons.Add(JObject.Parse(points));
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Warning(ex,
+                            "GeneratePromptForKnowledgeAsync: skip invalid CopyKnowledgePoints json. KnowledgeId={KnowledgeId}, SourceKnowledgeId={SourceKnowledgeId}, TargetKnowledgeId={TargetKnowledgeId}",
+                            knowledge.Id, relation?.SourceKnowledgeId, relation?.TargetKnowledgeId);
+                    }
+                }
+
+                var mergedJsonObj = new[] { knowledgeObj }
+                    .Concat(relatedJsons)
+                    .Aggregate(new JObject(), (acc, j) =>
+                    {
+                        acc.Merge(j, new JsonMergeSettings { MergeArrayHandling = MergeArrayHandling.Concat });
+                        return acc;
+                    });
+
+                var mergedJson = RemoveCopySuffixFromKeys(mergedJsonObj).ToString(Formatting.None);
+                var jsonPrompt = GenerateKnowledgePrompt(mergedJson);
+
+                if (!string.IsNullOrWhiteSpace(jsonPrompt))
+                    promptSegments.Add(jsonPrompt);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex,
+                    "GeneratePromptForKnowledgeAsync: skip invalid knowledge json. KnowledgeId={KnowledgeId}",
+                    knowledge.Id);
+            }
         }
 
-        var updatedEntities = await _aiSpeechAssistantDataProvider.UpdateKnowledgeCopyRelatedAsync(asTargetKnowledgePrevRelateds, true, cancellationToken);
+        var promptDetails = new List<AiSpeechAssistantKnowledgeDetail>();
 
-        return updatedEntities
-            .Where(e => e.TargetKnowledgeId == latestKnowledgeId)
-            .Select(e => _mapper.Map<AiSpeechAssistantKnowledgeCopyRelatedDto>(e))
-            .Select(dto =>
+        if (baseDetailDtos is { Count: > 0 })
+        {
+            promptDetails.AddRange(baseDetailDtos.Select(d => new AiSpeechAssistantKnowledgeDetail
             {
-                AiSpeechAssistantKnowledgeCopyRelatedDto? original = null;
-                relatedDtoMap?.TryGetValue(dto.Id, out original);
-                dto.RelatedFrom = original?.RelatedFrom;
-                return dto;
-            }).ToList();
+                Id = d.Id,
+                KnowledgeId = knowledge.Id,
+                KnowledgeName = d.KnowledgeName,
+                FormatType = d.FormatType,
+                Content = d.Content,
+                FileName = d.FileName,
+                CreatedDate = d.CreatedDate,
+                LastModifiedBy = d.LastModifiedBy,
+                LastModifiedDate = d.LastModifiedDate
+            }));
+        }
+
+        var sourceKnowledgeIds = (targetRelations ?? new List<AiSpeechAssistantKnowledgeCopyRelated>())
+            .Select(x => x.SourceKnowledgeId)
+            .Distinct()
+            .ToList();
+
+        foreach (var sourceKnowledgeId in sourceKnowledgeIds)
+        {
+            var sourceDetails = await _aiSpeechAssistantDataProvider
+                .GetKnowledgeDetailsByKnowledgeIdAsync(sourceKnowledgeId, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (sourceDetails == null || sourceDetails.Count == 0)
+                continue;
+
+            promptDetails.AddRange(sourceDetails.Select(d => new AiSpeechAssistantKnowledgeDetail
+            {
+                Id = d.Id,
+                KnowledgeId = d.KnowledgeId,
+                KnowledgeName = EnsureCopySuffixForPromptDetail(d.KnowledgeName),
+                FormatType = d.FormatType,
+                Content = d.Content,
+                FileName = d.FileName,
+                CreatedDate = d.CreatedDate,
+                LastModifiedBy = d.LastModifiedBy,
+                LastModifiedDate = d.LastModifiedDate
+            }));
+        }
+
+        if (promptDetails.Count > 0)
+        {
+            var detailPrompt = await GenerateKnowledgePromptAsync(promptDetails, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (!string.IsNullOrWhiteSpace(detailPrompt))
+                promptSegments.Add(detailPrompt);
+        }
+        
+        return promptSegments.Count > 0
+            ? string.Join("\n\n", promptSegments.Select(x => x.TrimEnd()))
+            : string.Empty;
     }
     
     public async Task<SwitchAiSpeechAssistantKnowledgeVersionResponse> SwitchAiSpeechAssistantKnowledgeVersionAsync(SwitchAiSpeechAssistantKnowledgeVersionCommand command, CancellationToken cancellationToken)
@@ -672,15 +944,61 @@ public partial class AiSpeechAssistantService
         {
             Version = "1.0",
             IsActive = true,
-            Json = command.Json,
+            Json = string.IsNullOrWhiteSpace(command.Json) ? "{}" : command.Json,
+            ModelLanguage = command.ModelLanguage,
             AssistantId = assistant.Id,
             Greetings = command.Greetings,
             CreatedBy = _currentUser.Id.Value,
-            Prompt = GenerateKnowledgePrompt(command.Json),
-            ModelLanguage = assistant.ModelLanguage
+            Prompt = string.Empty
         };
 
         await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgesAsync([knowledge], cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var promptSegments = new List<string>();
+
+        if (command.Details is { Count: > 0 })
+        {
+            var details = command.Details.Select(x => new AiSpeechAssistantKnowledgeDetail
+            {
+                KnowledgeId = knowledge.Id,
+                KnowledgeName = x.KnowledgeName,
+                FormatType = x.FormatType,
+                Content = x.Content,
+                FileName = string.IsNullOrWhiteSpace(x.FileName) ? null : x.FileName,
+                CreatedDate = DateTimeOffset.Now
+            }).ToList();
+
+            await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgeDetailsAsync(details, true, cancellationToken).ConfigureAwait(false);
+
+            var detailPrompt = await GenerateKnowledgePromptAsync(details, cancellationToken).ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(detailPrompt))
+                promptSegments.Add(detailPrompt);
+        }
+
+        if (!string.IsNullOrWhiteSpace(knowledge.Json))
+        {
+            try
+            {
+                var knowledgeObj = JObject.Parse(knowledge.Json);
+                if (knowledgeObj.Properties().Any())
+                {
+                    var jsonPrompt = GenerateKnowledgePrompt(knowledge.Json);
+                    if (!string.IsNullOrWhiteSpace(jsonPrompt))
+                        promptSegments.Add(jsonPrompt);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex,
+                    "InitialAssistantKnowledgeAsync: skip invalid knowledge json when generating prompt. KnowledgeId={KnowledgeId}",
+                    knowledge.Id);
+            }
+        }
+
+        knowledge.Prompt = promptSegments.Count > 0 ? string.Join("\n\n", promptSegments.Select(x => x.TrimEnd())) : string.Empty;
+
+        if (!string.IsNullOrWhiteSpace(knowledge.Prompt))
+            await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync([knowledge], cancellationToken: cancellationToken).ConfigureAwait(false);
     }
     
     private async Task<AiSpeechAssistantKnowledge> UpdatePreviousKnowledgeIfRequiredAsync(int assistantId, bool isActive, CancellationToken cancellationToken)
@@ -708,33 +1026,111 @@ public partial class AiSpeechAssistantService
     
     private async Task InitialKnowledgeAsync(AiSpeechAssistantKnowledge latestKnowledge, List<AiSpeechAssistantKnowledgeCopyRelated> relateds, CancellationToken cancellationToken)
     {
-        var latestKnowledgeJson = string.IsNullOrEmpty(latestKnowledge.Json) ? new JObject() : JObject.Parse(latestKnowledge.Json);
-        
-        var relatedJsons = Enumerable.Empty<JObject>();
-        if (relateds != null && relateds.Any())
-        {
-            relatedJsons = relateds.Select(r => JObject.Parse(r.CopyKnowledgePoints ?? "{}"));
-        }
-        
-        var mergedJsonObj = new[] { latestKnowledgeJson }
-            .Concat(relatedJsons)
-            .Aggregate(new JObject(), (acc, j) =>
-                { acc.Merge(j, new JsonMergeSettings { MergeArrayHandling = MergeArrayHandling.Concat }); return acc; });
-
-        var mergedJson = RemoveCopySuffixFromKeys(mergedJsonObj).ToString(Formatting.None);
-
-        Log.Information("InitialKnowledgeAsync mergedJson: {@mergedJson}", mergedJson);
-        
         latestKnowledge.IsActive = true;
         latestKnowledge.CreatedBy = _currentUser.Id.Value;
-        latestKnowledge.Prompt = GenerateKnowledgePrompt(mergedJson);
+
+        if (!string.IsNullOrWhiteSpace(latestKnowledge.Json))
+        {
+            var latestKnowledgeJson = JObject.Parse(latestKnowledge.Json);
+
+            var relatedJsons = Enumerable.Empty<JObject>();
+            if (relateds != null && relateds.Any())
+            {
+                relatedJsons = relateds
+                    .Select(r => string.IsNullOrWhiteSpace(r.CopyKnowledgePoints) ? new JObject() : JObject.Parse(r.CopyKnowledgePoints));
+            }
+
+            var mergedJsonObj = new[] { latestKnowledgeJson }
+                .Concat(relatedJsons)
+                .Aggregate(new JObject(), (acc, j) =>
+                {
+                    acc.Merge(j, new JsonMergeSettings { MergeArrayHandling = MergeArrayHandling.Concat });
+                    return acc;
+                });
+
+            var mergedJson = RemoveCopySuffixFromKeys(mergedJsonObj).ToString(Formatting.None);
+
+            Log.Information("InitialKnowledgeAsync mergedJson: {@mergedJson}", mergedJson);
+
+            latestKnowledge.Prompt = GenerateKnowledgePrompt(mergedJson);
+        }
+        else
+        {
+            var mergedDetails = new List<AiSpeechAssistantKnowledgeDetail>();
+
+            var targetKnowledgeIds = (relateds ?? new List<AiSpeechAssistantKnowledgeCopyRelated>())
+                .Select(x => x.TargetKnowledgeId)
+                .Distinct()
+                .ToList();
+
+            foreach (var targetKnowledgeId in targetKnowledgeIds)
+            {
+                var targetDetails = await _aiSpeechAssistantDataProvider
+                    .GetKnowledgeDetailsByKnowledgeIdAsync(targetKnowledgeId, cancellationToken)
+                    .ConfigureAwait(false);
+
+                if (targetDetails != null && targetDetails.Count > 0)
+                    mergedDetails.AddRange(targetDetails);
+            }
+
+            var sourceKnowledgeIds = (relateds ?? new List<AiSpeechAssistantKnowledgeCopyRelated>())
+                .Select(x => x.SourceKnowledgeId)
+                .Distinct()
+                .ToList();
+
+            foreach (var sourceKnowledgeId in sourceKnowledgeIds)
+            {
+                var sourceDetails = await _aiSpeechAssistantDataProvider
+                    .GetKnowledgeDetailsByKnowledgeIdAsync(sourceKnowledgeId, cancellationToken)
+                    .ConfigureAwait(false);
+
+                if (sourceDetails == null || sourceDetails.Count == 0)
+                    continue;
+
+                mergedDetails.AddRange(sourceDetails.Select(d => new AiSpeechAssistantKnowledgeDetail
+                {
+                    KnowledgeId = d.KnowledgeId,
+                    KnowledgeName = EnsureCopySuffixForPromptDetail(d.KnowledgeName),
+                    FormatType = d.FormatType,
+                    Content = d.Content,
+                    FileName = d.FileName,
+                    CreatedDate = d.CreatedDate
+                }));
+            }
+
+            latestKnowledge.Prompt = mergedDetails.Count > 0
+                ? await GenerateKnowledgePromptAsync(mergedDetails, cancellationToken).ConfigureAwait(false)
+                : string.Empty;
+        }
+
         latestKnowledge.Version = await HandleKnowledgeVersionAsync(latestKnowledge, cancellationToken).ConfigureAwait(false);
     }
 
+    private static string EnsureCopySuffixForPromptDetail(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return name;
+
+        return name.EndsWith("-副本", StringComparison.Ordinal) ? name : $"{name}-副本";
+    }
+    
     public string GenerateKnowledgePrompt(string json)
     {
+        if (string.IsNullOrWhiteSpace(json))
+            return string.Empty;
+
+        JObject jsonData;
+        try
+        {
+            jsonData = JObject.Parse(json);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "GenerateKnowledgePrompt: invalid json, skip.");
+            return string.Empty;
+        }
+
         var prompt = new StringBuilder();
-        var jsonData = JObject.Parse(json);
         var textInfo = CultureInfo.InvariantCulture.TextInfo;
 
         foreach (var property in jsonData.Properties())
@@ -752,6 +1148,64 @@ public partial class AiSpeechAssistantService
         }
 
         return prompt.ToString();
+    }
+    
+    private async Task<string> GenerateKnowledgePromptAsync(List<AiSpeechAssistantKnowledgeDetail> details, CancellationToken cancellationToken)
+    {
+        if (details == null || !details.Any())
+            return string.Empty;
+
+        var sb = new StringBuilder();
+
+        foreach (var detail in details.OrderBy(x => x.Id))
+        {
+            if (string.IsNullOrWhiteSpace(detail.Content))
+                continue;
+
+            var content = detail.Content.Trim();
+
+            if (IsFileUrl(content, detail.FileName))
+            {
+                try
+                {
+                    content = await _fileTextExtractor.ExtractAsync(content, detail.FileName, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning(ex, "GenerateKnowledgePromptAsync: failed to extract file content, keep original text. Content={Content}, FileName={FileName}", content, detail.FileName);
+                }
+            }
+
+            sb.AppendLine($"{detail.KnowledgeName}：");
+            sb.AppendLine(content);
+            sb.AppendLine();
+        }
+
+        return sb.ToString();
+    }
+
+    private static readonly HashSet<string> SupportedExtensions = new()
+    {
+        ".txt",".md",".pdf",".html",".xlsx",".xls",".docx",".csv",".json",".xml",".htm"
+    };
+
+    private bool IsFileUrl(string content, string fileName = null)
+    {
+        var fileNameExt = Path.GetExtension(fileName ?? string.Empty).ToLowerInvariant();
+        var fileNameMatched = !string.IsNullOrWhiteSpace(fileNameExt) && SupportedExtensions.Contains(fileNameExt);
+
+        if (!Uri.TryCreate(content, UriKind.Absolute, out var uri))
+            return fileNameMatched;
+
+        var ext = Path.GetExtension(uri.AbsolutePath).ToLowerInvariant();
+        if (!string.IsNullOrWhiteSpace(ext) && SupportedExtensions.Contains(ext))
+            return true;
+
+        if (fileNameMatched)
+            return true;
+
+        return uri.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
+               || uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task<string> HandleKnowledgeVersionAsync(AiSpeechAssistantKnowledge latestKnowledge, CancellationToken cancellationToken)
@@ -1024,7 +1478,7 @@ public partial class AiSpeechAssistantService
         var copyFromRelatedLookup = copyFromRelateds?.GroupBy(x => x.TargetKnowledgeId)
                 .ToDictionary(g => g.Key, g => g.OrderBy(x => x.CreatedDate).ToList());
         
-        var duplicatedSourceToTargetIds = copyToRelateds
+        var duplicatedSourceToTargetIds = (copyToRelateds?? new List<AiSpeechAssistantKnowledgeCopyRelated>())
             .Where(r => r.IsSyncUpdate && r.SourceKnowledgeId == command.SourceKnowledgeId && selectedTargetIds.Contains(r.TargetKnowledgeId))
             .Select(r => r.TargetKnowledgeId);
         
@@ -1046,19 +1500,36 @@ public partial class AiSpeechAssistantService
             relatedLookup = copyToRelateds.GroupBy(x => x.TargetKnowledgeId)
                 .ToDictionary(g => g.Key, g => g.OrderBy(x => x.CreatedDate).ToList());
         }
+
         foreach (var copyToKnowledge in copyToKnowledges)
         {
-            var newCopyToKnowledge = await BuildNewCopyToKnowledgeAsync(copyToKnowledge, copyFromKnowledge, relatedLookup, copyFromRelatedLookup, cancellationToken).ConfigureAwait(false);
+            var newCopyToKnowledge = await BuildNewCopyToKnowledgeAsync(
+                copyToKnowledge, copyFromKnowledge, relatedLookup, copyFromRelatedLookup, cancellationToken).ConfigureAwait(false);
             
             newCopeToKnowledges.Add(newCopyToKnowledge);
             
             Log.Information("KonwledgeCopy newCopeToKnowledges Count {@newCopeToKnowledges}", newCopeToKnowledges.Count);
         }
 
+        copyToKnowledges.ForEach(x => x.IsActive = false);
+
         await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync(copyToKnowledges, true, cancellationToken).ConfigureAwait(false);
         await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgesAsync(newCopeToKnowledges, true, cancellationToken).ConfigureAwait(false);
-        
+
         Log.Information("KonwledgeCopy New copies inserted. newCopyToKnowledge={@newCopyToKnowledge}", newCopeToKnowledges);
+        
+        var effectiveCopyToKnowledges = copyToKnowledges
+            .Where(x => !duplicatedSourceToTargetIds.Contains(x.Id))
+            .ToList();
+
+        for (var i = 0; i < effectiveCopyToKnowledges.Count; i++)
+        {
+            var oldCopyTo = effectiveCopyToKnowledges[i];
+            var newCopyTo = newCopeToKnowledges[i];
+
+            await BuildNewCopyToKnowledgeDetailAsync(oldCopyTo, newCopyTo, copyFromKnowledge, command.IsSyncUpdate, cancellationToken)
+                .ConfigureAwait(false);
+        }
         
         await BuildAndPersistCopyRelatedsAsync(copyFromKnowledge, command.IsSyncUpdate, copyToKnowledges, newCopeToKnowledges, relatedLookup, copyFromRelatedLookup, cancellationToken).ConfigureAwait(false);
 
@@ -1076,44 +1547,126 @@ public partial class AiSpeechAssistantService
         };
     }
 
-    private async Task<AiSpeechAssistantKnowledge> BuildNewCopyToKnowledgeAsync(AiSpeechAssistantKnowledge copyToKnowledge, AiSpeechAssistantKnowledge copyFromKnowledge,
-        Dictionary<int, List<AiSpeechAssistantKnowledgeCopyRelated>> relatedLookup, Dictionary<int, List<AiSpeechAssistantKnowledgeCopyRelated>> copyFromRelatedLookup, CancellationToken cancellationToken)
+    private async Task<AiSpeechAssistantKnowledge> BuildNewCopyToKnowledgeAsync(AiSpeechAssistantKnowledge copyToKnowledge, AiSpeechAssistantKnowledge copyFromKnowledge, Dictionary<int, List<AiSpeechAssistantKnowledgeCopyRelated>> relatedLookup, Dictionary<int, List<AiSpeechAssistantKnowledgeCopyRelated>> copyFromRelatedLookup, CancellationToken cancellationToken)
     {
-        Log.Information("KonwledgeCopy Processing target knowledge. TargetId={TargetId}", copyToKnowledge.Id);
-        
-        copyToKnowledge.IsActive = false;
-        
-        var copyToJson = JObject.Parse(copyToKnowledge.Json ?? "{}");
-        var copyFromJson = JObject.Parse(copyFromKnowledge.Json ?? "{}");
-        
-        var copyToRelatedJsons = relatedLookup.TryGetValue(copyToKnowledge.Id, out var copyToRelated)
-            ? copyToRelated.Select(r => JObject.Parse(r.CopyKnowledgePoints ?? "{}"))
-            : Enumerable.Empty<JObject>();
-        
-        var copyFromRelatedJsons = copyFromRelatedLookup.TryGetValue(copyToKnowledge.Id, out var copyFromRelated)
-            ? copyFromRelated.Select(r => JObject.Parse(r.CopyKnowledgePoints ?? "{}"))
-            : Enumerable.Empty<JObject>();
-        
-        var mergedJsonObj = new[] { copyToJson }
-            .Concat(copyToRelatedJsons)
-            .Concat(copyFromRelatedJsons)
-            .Append(copyFromJson)
-            .Aggregate(new JObject(), (acc, j) =>
-            { acc.Merge(j, new JsonMergeSettings { MergeArrayHandling = MergeArrayHandling.Concat }); return acc; });
+        Log.Information("KonwledgeCopy Processing target knowledge. TargetId={TargetId}, SourceId ={SourseId}", copyToKnowledge.Id, copyFromKnowledge.Id);
 
-        var mergedJson = mergedJsonObj.ToString(Formatting.None);
-        
+        string newPrompt;
+        string newJson;
+
+        if (!string.IsNullOrWhiteSpace(copyToKnowledge.Json))
+        {
+            var copyToJson = JObject.Parse(copyToKnowledge.Json);
+            var copyFromJson = JObject.Parse(copyFromKnowledge.Json ?? "{}");
+
+            var copyToRelatedJsons = relatedLookup.TryGetValue(copyToKnowledge.Id, out var copyToRelated)
+                ? copyToRelated.Select(r => JObject.Parse(r.CopyKnowledgePoints ?? "{}"))
+                : Enumerable.Empty<JObject>();
+
+            var copyFromRelatedJsons = copyFromRelatedLookup.TryGetValue(copyToKnowledge.Id, out var copyFromRelated)
+                ? copyFromRelated.Select(r => JObject.Parse(r.CopyKnowledgePoints ?? "{}"))
+                : Enumerable.Empty<JObject>();
+
+            var mergedJsonObj = new[] { copyToJson }
+                .Concat(copyToRelatedJsons)
+                .Concat(copyFromRelatedJsons)
+                .Append(copyFromJson)
+                .Aggregate(new JObject(), (acc, j) =>
+                {
+                    acc.Merge(j, new JsonMergeSettings { MergeArrayHandling = MergeArrayHandling.Concat });
+                    return acc;
+                });
+
+            var mergedJson = mergedJsonObj.ToString(Formatting.None);
+            newPrompt = GenerateKnowledgePrompt(mergedJson);
+            newJson = copyToKnowledge.Json;
+        }
+        else
+        {
+            newPrompt = string.Empty;
+            newJson = copyToKnowledge.Json;
+        }
+
         return new AiSpeechAssistantKnowledge
         {
             AssistantId = copyToKnowledge.AssistantId,
-            Json = copyToKnowledge.Json,
+            Json = newJson,
             IsActive = true,
             CreatedBy = copyToKnowledge.CreatedBy,
             CreatedDate = DateTimeOffset.Now,
             ModelLanguage = copyFromKnowledge.ModelLanguage,
-            Prompt = GenerateKnowledgePrompt(mergedJson),
-            Version = await HandleKnowledgeVersionAsync(copyToKnowledge, cancellationToken)
+            Prompt = newPrompt,
+            Version = await HandleKnowledgeVersionAsync(copyToKnowledge, cancellationToken).ConfigureAwait(false)
         };
+    }
+
+    private async Task BuildNewCopyToKnowledgeDetailAsync(
+        AiSpeechAssistantKnowledge copyToKnowledge,
+        AiSpeechAssistantKnowledge newCopyToKnowledge,
+        AiSpeechAssistantKnowledge copyFromKnowledge,
+        bool isSyncUpdate,
+        CancellationToken cancellationToken)
+    {
+        static string EnsureCopySuffix(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                return name;
+
+            return name.EndsWith("-副本", StringComparison.Ordinal) ? name : $"{name}-副本";
+        }
+
+        var copyToDetails = await _aiSpeechAssistantDataProvider
+            .GetKnowledgeDetailsByKnowledgeIdAsync(copyToKnowledge.Id, cancellationToken)
+            .ConfigureAwait(false) ?? new List<AiSpeechAssistantKnowledgeDetail>();
+
+        var copyFromDetails = await _aiSpeechAssistantDataProvider
+            .GetKnowledgeDetailsByKnowledgeIdAsync(copyFromKnowledge.Id, cancellationToken)
+            .ConfigureAwait(false) ?? new List<AiSpeechAssistantKnowledgeDetail>();
+
+        var allDetailsForPrompt = copyToDetails
+            .Concat(copyFromDetails)
+            .ToList();
+
+        if (allDetailsForPrompt.Count == 0)
+            return;
+
+        var detailsToPersist = new List<AiSpeechAssistantKnowledgeDetail>();
+        var detailsForPrompt = new List<AiSpeechAssistantKnowledgeDetail>();
+
+        void AddDetails(IEnumerable<AiSpeechAssistantKnowledgeDetail> details, bool applyCopySuffix,
+            List<AiSpeechAssistantKnowledgeDetail> target)
+        {
+            foreach (var detail in details)
+            {
+                target.Add(new AiSpeechAssistantKnowledgeDetail
+                {
+                    KnowledgeId = newCopyToKnowledge.Id,
+                    KnowledgeName = applyCopySuffix ? EnsureCopySuffix(detail.KnowledgeName) : detail.KnowledgeName,
+                    FormatType = detail.FormatType,
+                    Content = detail.Content,
+                    FileName = detail.FileName,
+                    CreatedDate = DateTimeOffset.Now
+                });
+            }
+        }
+
+        AddDetails(copyToDetails, false, detailsToPersist);
+        AddDetails(copyToDetails, false, detailsForPrompt);
+        AddDetails(copyFromDetails, true, detailsForPrompt);
+
+        if (!isSyncUpdate)
+            AddDetails(copyFromDetails, true, detailsToPersist);
+
+        if (detailsToPersist.Count > 0)
+            await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgeDetailsAsync(detailsToPersist, true, cancellationToken)
+                .ConfigureAwait(false);
+
+        newCopyToKnowledge.Prompt = await GenerateKnowledgePromptAsync(detailsForPrompt, cancellationToken)
+            .ConfigureAwait(false);
+        newCopyToKnowledge.ModelLanguage = copyFromKnowledge.ModelLanguage;
+
+        await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync([newCopyToKnowledge], cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
     }
 
     private async Task BuildAndPersistCopyRelatedsAsync(AiSpeechAssistantKnowledge copyFromKnowledge, bool isSyncUpdate, List<AiSpeechAssistantKnowledge> oldCopyTos, 
@@ -1134,7 +1687,8 @@ public partial class AiSpeechAssistantService
                     TargetKnowledgeId = newCopyTo.Id,
                     CopyKnowledgePoints = r.CopyKnowledgePoints,
                     IsSyncUpdate = r.IsSyncUpdate
-                }));
+                })
+                .Where(x => x.SourceKnowledgeId != copyFromKnowledge.Id));
             }
             
             if (copyFromRelatedLookup.TryGetValue(copyFromKnowledge.Id, out var copyFromRelated))
@@ -1323,6 +1877,21 @@ public partial class AiSpeechAssistantService
         await PersistNewTargetsAsync(rebuildResult, cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<UpdateAiSpeechAssistantKnowledgeDetailResponse> UpdateAiSpeechAssistantKnowledgeDetailAsync(UpdateAiSpeechAssistantKnowledgeDetailCommand command, CancellationToken cancellationToken)
+    {
+        throw new NotSupportedException("Knowledge detail APIs are deprecated. Use AddAiSpeechAssistantKnowledgeAsync to iterate knowledge versions with updated details.");
+    }
+
+    public async Task DeleteAiSpeechAssistantKnowledgeDetailAsync(DeleteAiSpeechAssistantKnowledgeDetailCommand command, CancellationToken cancellationToken)
+    {
+        throw new NotSupportedException("Knowledge detail APIs are deprecated. Use AddAiSpeechAssistantKnowledgeAsync to iterate knowledge versions with updated details.");
+    }
+
+    public async Task<AddAiSpeechAssistantKnowledgeDetailResponse> AddAiSpeechAssistantKnowledgeDetailAsync(AddAiSpeechAssistantKnowledgeDetailCommand command, CancellationToken cancellationToken)
+    {
+        throw new NotSupportedException("Knowledge detail APIs are deprecated. Use AddAiSpeechAssistantKnowledgeAsync to iterate knowledge versions with updated details.");
+    }
+
     private async Task DisableSyncUpdateAsync(int sourceKnowledgeId, CancellationToken cancellationToken)
     {
         var relations = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedBySourceKnowledgeIdAsync([sourceKnowledgeId], true,  cancellationToken).ConfigureAwait(false);
@@ -1362,52 +1931,90 @@ public partial class AiSpeechAssistantService
         AiSpeechAssistantKnowledge sourceKnowledge, CancellationToken cancellationToken)
     {
         var targetIds = oldTargetMap.Keys.ToList();
-        
-        var allTargetRelations = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync(targetIds, true, cancellationToken).ConfigureAwait(false) ?? new List<AiSpeechAssistantKnowledgeCopyRelated>();
-        
-        Log.Information("RebuildTargetsAsync allTargetRelationsIds {allTargetRelationsIds}",  allTargetRelations.Select(x=>x.Id));
-        
+
+        var allTargetRelations = await _aiSpeechAssistantDataProvider
+            .GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync(targetIds, true, cancellationToken)
+            .ConfigureAwait(false) ?? new List<AiSpeechAssistantKnowledgeCopyRelated>();
+
+        Log.Information("RebuildTargetsAsync allTargetRelationsIds {allTargetRelationsIds}", allTargetRelations.Select(x => x.Id));
+
         var relationsByTarget = allTargetRelations
             .GroupBy(r => r.TargetKnowledgeId)
             .ToDictionary(g => g.Key, g => g.OrderBy(r => r.CreatedDate).ToList());
 
-        var newTargets = new List<AiSpeechAssistantKnowledge>();
-        var targetPairs = new List<(int OldTargetId, AiSpeechAssistantKnowledge NewTarget)>();
-        var newRelations = new List<AiSpeechAssistantKnowledgeCopyRelated>();
-        
+	        var newTargets = new List<AiSpeechAssistantKnowledge>();
+	        var targetPairs = new List<(int OldTargetId, AiSpeechAssistantKnowledge NewTarget)>();
+	        var newRelations = new List<AiSpeechAssistantKnowledgeCopyRelated>();
+	        var detailModeOldTargetIds = new List<int>();
+
         foreach (var (targetId, oldTarget) in oldTargetMap)
         {
             relationsByTarget.TryGetValue(targetId, out var relations);
             relations ??= new List<AiSpeechAssistantKnowledgeCopyRelated>();
-            
-            Log.Information("relations : {@relations}，sourceKnowledge {@sourceKnowledge}", relations.Select(x=>x.Id), sourceKnowledge.Id);
-            
+
+            Log.Information("relations : {@relations}，sourceKnowledge {@sourceKnowledge}", relations.Select(x => x.Id), sourceKnowledge.Id);
+
             if (relations.Count == 0) continue;
-            
-            var mergedJson = MergeKnowledgeJson(sourceKnowledge, oldTarget.Json);
+
+            string newPrompt;
+            string newJson;
+
+            detailModeOldTargetIds.Add(oldTarget.Id);
+
+            var targetDetails = await _aiSpeechAssistantDataProvider
+                .GetKnowledgeDetailsByKnowledgeIdAsync(oldTarget.Id, cancellationToken)
+                .ConfigureAwait(false) ?? new List<AiSpeechAssistantKnowledgeDetail>();
+
+            var baseDetailDtos = targetDetails
+                .Select(d => _mapper.Map<AiSpeechAssistantKnowledgeDetailDto>(d))
+                .ToList();
+
+            var relationsForPrompt = relations.Select(relation =>
+            {
+                var isTriggeredSourceRelation =
+                    relation.SourceKnowledgeId == sourceKnowledgeId || relation.SourceKnowledgeId == sourceKnowledge.Id;
+
+                return new AiSpeechAssistantKnowledgeCopyRelated
+                {
+                    SourceKnowledgeId = isTriggeredSourceRelation ? sourceKnowledge.Id : relation.SourceKnowledgeId,
+                    TargetKnowledgeId = oldTarget.Id,
+                    CopyKnowledgePoints = relation.CopyKnowledgePoints,
+                    IsSyncUpdate = relation.IsSyncUpdate,
+                    CreatedDate = relation.CreatedDate
+                };
+            }).ToList();
+
+            newPrompt = await GeneratePromptForKnowledgeAsync(
+                    new AiSpeechAssistantKnowledge { Id = oldTarget.Id, Json = oldTarget.Json ?? "{}" },
+                    baseDetailDtos,
+                    relationsForPrompt,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            newJson = oldTarget.Json;
 
             var newTarget = new AiSpeechAssistantKnowledge
             {
                 AssistantId = oldTarget.AssistantId,
-                Json = oldTarget.Json,
-                Brief = oldTarget.Brief,
+                Json = newJson,
+                Brief = sourceKnowledge.Brief,
                 Greetings = oldTarget.Greetings,
                 IsActive = true,
                 CreatedBy = oldTarget.CreatedBy,
                 CreatedDate = DateTimeOffset.Now,
                 ModelLanguage = sourceKnowledge.ModelLanguage,
-                Prompt = GenerateKnowledgePrompt(mergedJson),
-                Version = await HandleKnowledgeVersionAsync(oldTarget, cancellationToken).ConfigureAwait(false),
+                Prompt = newPrompt,
+                Version = await HandleKnowledgeVersionAsync(oldTarget, cancellationToken).ConfigureAwait(false)
             };
 
             newTargets.Add(newTarget);
             targetPairs.Add((targetId, newTarget));
-            
+
             var copyFromJsonForRelated = BuildCopyFromJsonForRelated(sourceKnowledge.Json);
             Log.Information("SyncCopiedKnowledges: copyFromJsonForRelated = {@copyFromJsonForRelated}", copyFromJsonForRelated);
 
             newRelations.AddRange(relations.Select(relation =>
-            {
+            { 
                 var isTriggeredSourceRelation =
                     relation.SourceKnowledgeId == sourceKnowledgeId || relation.SourceKnowledgeId == sourceKnowledge.Id;
 
@@ -1423,25 +2030,15 @@ public partial class AiSpeechAssistantService
             Log.Information("SyncCopiedKnowledges: target rebuilt. OldTargetId={TargetId}", targetId);
         }
 
-        return new RebuildResult
-        {
-            NewTargets = newTargets,
-            TargetPairs = targetPairs,
-            NewRelations = newRelations
-        };
-    }
-
-    private static string MergeKnowledgeJson(AiSpeechAssistantKnowledge sourceKnowledge, string oldTargetJson)
-    {
-        var mergedObj = RemoveCopySuffixFromKeys(JObject.Parse(oldTargetJson ?? "{}"));
-
-        var sourceObj = RemoveCopySuffixFromKeys(JObject.Parse(sourceKnowledge.Json ?? "{}"));
-        mergedObj.Merge(sourceObj, new JsonMergeSettings { MergeArrayHandling = MergeArrayHandling.Concat });
-
-        Log.Information("Merged JObject: {@mergedObj}", mergedObj);
-        return mergedObj.ToString(Formatting.None);
-    }
-
+	        return new RebuildResult
+	        {
+	            NewTargets = newTargets,
+	            TargetPairs = targetPairs,
+	            NewRelations = newRelations,
+	            DetailModeOldTargetIds = detailModeOldTargetIds
+	        };
+	    }
+    
     private static JObject RemoveCopySuffixFromKeys(JObject source)
     {
         var result = new JObject();
@@ -1476,27 +2073,65 @@ public partial class AiSpeechAssistantService
         };
     }
     
-    private async Task PersistNewTargetsAsync(RebuildResult result, CancellationToken cancellationToken)
-    {
-        await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgesAsync(result.NewTargets, true, cancellationToken).ConfigureAwait(false);
+	    private async Task PersistNewTargetsAsync(RebuildResult result, CancellationToken cancellationToken)
+	    {
+	        await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgesAsync(result.NewTargets, true, cancellationToken).ConfigureAwait(false);
 
-        var newTargetIdMap = result.TargetPairs.ToDictionary(x => x.OldTargetId, x => x.NewTarget.Id);
+	        var newTargetIdMap = result.TargetPairs.ToDictionary(x => x.OldTargetId, x => x.NewTarget.Id);
 
-        foreach (var relation in result.NewRelations)
-        {
-            if (newTargetIdMap.TryGetValue(relation.TargetKnowledgeId, out var newTargetId))
-                relation.TargetKnowledgeId = newTargetId;
-        }
+	        if (result.DetailModeOldTargetIds is { Count: > 0 })
+	        {
+	            var oldDetails = await _aiSpeechAssistantDataProvider
+	                .GetAiSpeechAssistantKnowledgeDetailsByKnowledgeIdsAsync(result.DetailModeOldTargetIds, cancellationToken)
+	                .ConfigureAwait(false);
 
-        await _aiSpeechAssistantDataProvider.AddKnowledgeCopyRelatedAsync(result.NewRelations, true, cancellationToken).ConfigureAwait(false);
-    }
+	            if (oldDetails != null && oldDetails.Count > 0)
+	            {
+	                var newDetails = new List<AiSpeechAssistantKnowledgeDetail>(oldDetails.Count);
+	                foreach (var d in oldDetails)
+	                {
+	                    if (!newTargetIdMap.TryGetValue(d.KnowledgeId, out var newTargetId))
+	                        continue;
 
-    private sealed class RebuildResult
-    {
-        public List<AiSpeechAssistantKnowledge> NewTargets { get; init; } = new();
-        
-        public List<(int OldTargetId, AiSpeechAssistantKnowledge NewTarget)> TargetPairs { get; init; } = new();
-        
-        public List<AiSpeechAssistantKnowledgeCopyRelated> NewRelations { get; init; } = new();
-    }
+	                    newDetails.Add(new AiSpeechAssistantKnowledgeDetail
+	                    {
+	                        KnowledgeId = newTargetId,
+	                        KnowledgeName = d.KnowledgeName,
+	                        FormatType = d.FormatType,
+	                        Content = d.Content,
+	                        FileName = d.FileName,
+	                        CreatedDate = DateTimeOffset.Now,
+	                        LastModifiedBy = d.LastModifiedBy,
+	                        LastModifiedDate = d.LastModifiedDate
+	                    });
+	                }
+
+	                if (newDetails.Count > 0)
+	                {
+	                    await _aiSpeechAssistantDataProvider
+	                        .AddAiSpeechAssistantKnowledgeDetailsAsync(newDetails, true, cancellationToken)
+	                        .ConfigureAwait(false);
+	                }
+	            }
+	        }
+
+	        foreach (var relation in result.NewRelations)
+	        {
+	            if (newTargetIdMap.TryGetValue(relation.TargetKnowledgeId, out var newTargetId))
+	                relation.TargetKnowledgeId = newTargetId;
+	        }
+
+	        await _aiSpeechAssistantDataProvider.AddKnowledgeCopyRelatedAsync(result.NewRelations, true, cancellationToken).ConfigureAwait(false);
+	    }
+
+	    private sealed class RebuildResult
+	    {
+	        public List<AiSpeechAssistantKnowledge> NewTargets { get; init; } = new();
+	        
+	        public List<(int OldTargetId, AiSpeechAssistantKnowledge NewTarget)> TargetPairs { get; init; } = new();
+	        
+	        public List<AiSpeechAssistantKnowledgeCopyRelated> NewRelations { get; init; } = new();
+	        
+	        public List<int> DetailModeOldTargetIds { get; init; } = new();
+	    }
 }

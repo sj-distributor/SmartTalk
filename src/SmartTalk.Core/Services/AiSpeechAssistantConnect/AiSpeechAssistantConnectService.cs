@@ -43,6 +43,7 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
     #region Services
 
     private readonly IFfmpegService _ffmpegService;
+    private readonly IPosUtilService _posUtilService;
     private readonly IRealtimeAiService _realtimeAiService;
 
     #endregion
@@ -63,6 +64,7 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
         IAgentDataProvider agentDataProvider, 
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, 
         IFfmpegService ffmpegService, 
+        IPosUtilService posUtilService,
         IRealtimeAiService realtimeAiService, 
         IOpenaiClient openaiClient, 
         ISmartiesClient smartiesClient, 
@@ -75,6 +77,7 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
         _agentDataProvider = agentDataProvider;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
         _ffmpegService = ffmpegService;
+        _posUtilService = posUtilService;
         _realtimeAiService = realtimeAiService;
         _openaiClient = openaiClient;
         _smartiesClient = smartiesClient;

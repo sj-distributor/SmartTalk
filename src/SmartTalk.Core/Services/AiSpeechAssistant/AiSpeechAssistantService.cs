@@ -11,6 +11,7 @@ using SmartTalk.Core.Ioc;
 using Twilio.AspNet.Core;
 using SmartTalk.Core.Utils;
 using System.Net.WebSockets;
+using System.Text.RegularExpressions;
 using AutoMapper;
 using SmartTalk.Core.Constants;
 using Microsoft.AspNetCore.Http;
@@ -81,12 +82,14 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly ZhiPuAiSettings _zhiPuAiSettings;
     private readonly IRedisSafeRunner _redisSafeRunner;
     private readonly IPosDataProvider _posDataProvider;
+    private readonly IPosUtilService _posUtilService;
     private readonly IPhoneOrderService _phoneOrderService;
     private readonly IAgentDataProvider _agentDataProvider;
     private readonly IAttachmentService _attachmentService;
     private readonly ISpeechMaticsService _speechMaticsService;
     private readonly ISalesDataProvider _salesDataProvider;
     private readonly ISpeechToTextService _speechToTextService;
+    private readonly IFileTextExtractor _fileTextExtractor;
     private readonly WorkWeChatKeySetting _workWeChatKeySetting;
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
     private readonly IRestaurantDataProvider _restaurantDataProvider;
@@ -116,12 +119,14 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         ZhiPuAiSettings zhiPuAiSettings,
         IRedisSafeRunner redisSafeRunner,
         IPosDataProvider posDataProvider,
+        IPosUtilService posUtilService,
         IPhoneOrderService phoneOrderService,
         IAgentDataProvider agentDataProvider,
         IAttachmentService attachmentService,
         ISpeechMaticsService speechMaticsService,
         ISalesDataProvider salesDataProvider,
         ISpeechToTextService speechToTextService,
+        IFileTextExtractor fileTextExtractor,
         WorkWeChatKeySetting workWeChatKeySetting,
         ISmartTalkHttpClientFactory httpClientFactory,
         IRestaurantDataProvider restaurantDataProvider,
@@ -145,11 +150,13 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _zhiPuAiSettings = zhiPuAiSettings;
         _redisSafeRunner = redisSafeRunner;
         _posDataProvider = posDataProvider;
+        _posUtilService = posUtilService;
         _agentDataProvider = agentDataProvider;
         _phoneOrderService = phoneOrderService;
         _httpClientFactory = httpClientFactory;
         _attachmentService = attachmentService;
         _salesDataProvider = salesDataProvider;
+        _fileTextExtractor = fileTextExtractor;
         _speechToTextService = speechToTextService;
         _speechMaticsService = speechMaticsService;
         _workWeChatKeySetting = workWeChatKeySetting;
