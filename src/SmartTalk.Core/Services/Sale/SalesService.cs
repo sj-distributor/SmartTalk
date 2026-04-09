@@ -67,8 +67,20 @@ public class SalesService : ISalesService
 
             var orderItems = orderResponse?.Data ?? new List<SalesOrderHistoryDto>();
 
-            var levelCodes = askItems.Where(x => !string.IsNullOrEmpty(x.LevelCode)).Select(x => x.LevelCode)
-                .Concat(orderItems.Where(x => !string.IsNullOrEmpty(x.LevelCode)).Select(x => x.LevelCode)).Distinct()
+            var levelCodes = askItems.Where(x => !string.IsNullOrWhiteSpace(x.LevelCode))
+                .Select(x =>
+                {
+                    var levelCode = x.LevelCode.Trim();
+                    return levelCode[..Math.Min(levelCode.Length, 15)];
+                })
+                .Concat(orderItems.Where(x => !string.IsNullOrWhiteSpace(x.LevelCode))
+                    .Select(x =>
+                    {
+                        var levelCode = x.LevelCode.Trim();
+                        return levelCode[..Math.Min(levelCode.Length, 15)];
+                    }))
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct()
                 .ToList();
 
             var materials = askItems.Where(x => !string.IsNullOrEmpty(x.Material)).Select(x => x.Material)
@@ -90,8 +102,15 @@ public class SalesService : ISalesService
 
             Log.Information("GetCustomerLevel5HabitAsync Response: {@HabitResponse}", habitResponse);
 
-            var habitLookup = habitResponse?.HistoryCustomerLevel5HabitDtos?.ToDictionary(h => h.LevelCode5, h => h)
-                              ?? new Dictionary<string, HistoryCustomerLevel5HabitDto>();
+            var habitLookup = habitResponse?.HistoryCustomerLevel5HabitDtos?
+                                  .Where(h => !string.IsNullOrWhiteSpace(h.LevelCode5))
+                                  .GroupBy(h =>
+                                  {
+                                      var levelCode = h.LevelCode5.Trim();
+                                      return levelCode[..Math.Min(levelCode.Length, 15)];
+                                  })
+                                  .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase)
+                              ?? new Dictionary<string, HistoryCustomerLevel5HabitDto>(StringComparer.OrdinalIgnoreCase);
 
             string FormatItem(string materialDesc, string levelCode = null, string materialNumber = null)
             {
@@ -103,7 +122,11 @@ public class SalesService : ISalesService
                 string aliasText = "";
                 MaterialPartInfoDto partInfo = null;
 
-                if (!string.IsNullOrEmpty(levelCode) && habitLookup.TryGetValue(levelCode, out var habit))
+                var normalizedLevelCode = string.IsNullOrWhiteSpace(levelCode)
+                    ? string.Empty
+                    : levelCode.Trim()[..Math.Min(levelCode.Trim().Length, 15)];
+
+                if (!string.IsNullOrEmpty(normalizedLevelCode) && habitLookup.TryGetValue(normalizedLevelCode, out var habit))
                 {
                     aliasText = habit.CustomerLikeNames != null && habit.CustomerLikeNames.Any()
                         ? string.Join(", ", habit.CustomerLikeNames.Select(n => n.CustomerLikeName))
