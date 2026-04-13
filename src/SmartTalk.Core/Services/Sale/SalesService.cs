@@ -57,11 +57,24 @@ public class SalesService : ISalesService
             var orderResponse = await _salesClient.GetOrderHistoryByCustomerAsync(new GetOrderHistoryByCustomerRequestDto { CustomerNumber = soldToId }, cancellationToken).ConfigureAwait(false);
             
             var orderItems = orderResponse?.Data ?? new List<SalesOrderHistoryDto>();
-
+            
             var goodsStatusLookup = await BuildGoodsStatusLookupAsync(askItems, orderItems, soldToId, cancellationToken).ConfigureAwait(false);
             
-            var levelCodes = askItems.Where(x => !string.IsNullOrEmpty(x.LevelCode)).Select(x => x.LevelCode)
-                .Concat(orderItems.Where(x => !string.IsNullOrEmpty(x.LevelCode)).Select(x => x.LevelCode)).Distinct().ToList();
+            var levelCodes = askItems.Where(x => !string.IsNullOrWhiteSpace(x.LevelCode))
+                .Select(x =>
+                {
+                    var levelCode = x.LevelCode.Trim();
+                    return levelCode[..Math.Min(levelCode.Length, 15)];
+                })
+                .Concat(orderItems.Where(x => !string.IsNullOrWhiteSpace(x.LevelCode))
+                    .Select(x =>
+                    {
+                        var levelCode = x.LevelCode.Trim();
+                        return levelCode[..Math.Min(levelCode.Length, 15)];
+                    }))
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct()
+                .ToList();
             
             var materials = askItems.Where(x => !string.IsNullOrEmpty(x.Material)).Select(x => x.Material)
                 .Concat(orderItems.Where(x => !string.IsNullOrEmpty(x.MaterialNumber)).Select(x => x.MaterialNumber)).Distinct().ToList();
@@ -78,9 +91,16 @@ public class SalesService : ISalesService
             var habitResponse = levelCodes.Any() ? await _salesClient.GetCustomerLevel5HabitAsync(requestDto, cancellationToken).ConfigureAwait(false) : null;
             
             Log.Information("GetCustomerLevel5HabitAsync Response: {@HabitResponse}", habitResponse);
-            
-            var habitLookup = habitResponse?.HistoryCustomerLevel5HabitDtos?.ToDictionary(h => h.LevelCode5, h => h)
-                              ?? new Dictionary<string, HistoryCustomerLevel5HabitDto>();
+
+            var habitLookup = habitResponse?.HistoryCustomerLevel5HabitDtos?
+                                  .Where(h => !string.IsNullOrWhiteSpace(h.LevelCode5))
+                                  .GroupBy(h =>
+                                  {
+                                      var levelCode = h.LevelCode5.Trim();
+                                      return levelCode[..Math.Min(levelCode.Length, 15)];
+                                  })
+                                  .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase)
+                              ?? new Dictionary<string, HistoryCustomerLevel5HabitDto>(StringComparer.OrdinalIgnoreCase);
 
             string FormatItem(string materialDesc, string levelCode = null, string materialNumber = null, string plant = null, string rtype = null)
             {
@@ -93,11 +113,18 @@ public class SalesService : ISalesService
                 string aliasText = "";
                 MaterialPartInfoDto partInfo = null;
                 
-                if (!string.IsNullOrEmpty(levelCode) && habitLookup.TryGetValue(levelCode, out var habit)) 
-                { 
-                    aliasText = habit.CustomerLikeNames != null && habit.CustomerLikeNames.Any() ? string.Join(", ", habit.CustomerLikeNames.Select(n => n.CustomerLikeName)) : "";
-                    
-                    partInfo = habit.MaterialPartInfoDtos?.FirstOrDefault(p => string.Equals(p.MaterialNumber, materialNumber, StringComparison.OrdinalIgnoreCase)); 
+                var normalizedLevelCode = string.IsNullOrWhiteSpace(levelCode)
+                    ? string.Empty
+                    : levelCode.Trim()[..Math.Min(levelCode.Trim().Length, 15)];
+
+                if (!string.IsNullOrEmpty(normalizedLevelCode) && habitLookup.TryGetValue(normalizedLevelCode, out var habit))
+                {
+                    aliasText = habit.CustomerLikeNames != null && habit.CustomerLikeNames.Any()
+                        ? string.Join(", ", habit.CustomerLikeNames.Select(n => n.CustomerLikeName))
+                        : "";
+
+                    partInfo = habit.MaterialPartInfoDtos?.FirstOrDefault(p =>
+                        string.Equals(p.MaterialNumber, materialNumber, StringComparison.OrdinalIgnoreCase));
                 }
 
                 return $"Item: {name}, Brand: {brand}, Size: {size}, Aliases: {aliasText}, status: {status}, " +
