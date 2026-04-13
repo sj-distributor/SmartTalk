@@ -9,6 +9,22 @@ namespace SmartTalk.Core.Services.AiSpeechAssistantConnect;
 
 public partial class AiSpeechAssistantConnectService
 {
+    private const string PosMenuProductNameToken = "{POS_菜单_商品名称}";
+    private const string PosMenuProductCategoryToken = "{POS_菜单_商品类别}";
+    private const string PosMenuProductSpecificationToken = "{POS_菜单_商品规格}";
+    private const string PosMenuProductTaxToken = "{POS_菜单_商品税率}";
+    private const string PosMenuProductPriceToken = "{POS_菜单_商品价格}";
+    private const string PosMenuProductTimeToken = "{POS_菜单_菜单时间}";
+    private static readonly string[] PosMenuProductTokens =
+    [
+        PosMenuProductNameToken,
+        PosMenuProductCategoryToken,
+        PosMenuProductSpecificationToken,
+        PosMenuProductTaxToken,
+        PosMenuProductPriceToken,
+        PosMenuProductTimeToken
+    ];
+
     private async Task BuildKnowledgeAsync(CancellationToken cancellationToken)
     {
         await LoadAssistantInfoAsync(cancellationToken).ConfigureAwait(false);
@@ -114,12 +130,8 @@ public partial class AiSpeechAssistantConnectService
 
     private async Task ResolvePosPromptVariablesAsync(CancellationToken cancellationToken)
     {
-        var needProducts = HasPromptToken("{POS_菜单_商品名称}")
-                           || HasPromptToken("{POS_菜单_商品类别}")
-                           || HasPromptToken("{POS_菜单_商品规格}")
-                           || HasPromptToken("{POS_菜单_商品税率}")
-                           || HasPromptToken("{POS_菜单_商品价格}")
-                           || HasPromptToken("{POS_菜单_菜单时间}");
+        var requestedProductTokens = GetRequestedPosProductTokens();
+        var needProducts = requestedProductTokens.Count > 0;
         var needStoreHours = HasPromptToken("{POS_店铺信息_营业时间}");
 
         if (!needProducts && !needStoreHours) return;
@@ -129,12 +141,19 @@ public partial class AiSpeechAssistantConnectService
             ? await _posUtilService.GetPosMenuProductBriefsAsync(_ctx.AgentId, language, cancellationToken).ConfigureAwait(false)
             : [];
 
-        ResolvePosMenuProductNames(products);
-        ResolvePosMenuProductCategories(products);
-        ResolvePosMenuProductSpecifications(products);
-        ResolvePosMenuProductTaxes(products);
-        ResolvePosMenuProductPrices(products);
-        ResolvePosMenuProductTimes(products);
+        if (requestedProductTokens.Count > 2)
+        {
+            ResolveCompactPosProductData(products, requestedProductTokens);
+        }
+        else
+        {
+            ResolvePosMenuProductNames(products);
+            ResolvePosMenuProductCategories(products);
+            ResolvePosMenuProductSpecifications(products);
+            ResolvePosMenuProductTaxes(products);
+            ResolvePosMenuProductPrices(products);
+            ResolvePosMenuProductTimes(products);
+        }
 
         if (needStoreHours)
         {
@@ -250,6 +269,137 @@ public partial class AiSpeechAssistantConnectService
 
     private void ResolvePosStoreBusinessHours(string storeHours) => ReplacePromptToken("{POS_店铺信息_营业时间}", storeHours);
 
+    private List<string> GetRequestedPosProductTokens()
+    {
+        return PosMenuProductTokens
+            .Select(token => new { Token = token, Index = _ctx.Prompt.IndexOf(token, StringComparison.OrdinalIgnoreCase) })
+            .Where(x => x.Index >= 0)
+            .OrderBy(x => x.Index)
+            .Select(x => x.Token)
+            .ToList();
+    }
+
+    private void ResolveCompactPosProductData(List<PosMenuProductBriefDto> products, List<string> requestedTokens)
+    {
+        var compactValue = BuildCompactPosProductData(products, requestedTokens);
+
+        if (string.IsNullOrWhiteSpace(compactValue))
+        {
+            foreach (var token in requestedTokens)
+                ReplacePromptToken(token, " ");
+
+            return;
+        }
+
+        ReplacePromptToken(requestedTokens[0], compactValue);
+
+        foreach (var token in requestedTokens.Skip(1))
+            ReplacePromptToken(token, "见 POS 商品索引与详情。");
+    }
+
+    private string BuildCompactPosProductData(List<PosMenuProductBriefDto> products, List<string> requestedTokens)
+    {
+        var entries = BuildCompactPosProductEntries(products);
+
+        if (entries.Count == 0) return " ";
+
+        var indexLines = entries
+            .Select(entry => $"{entry.Id}={entry.ProductName}")
+            .ToList();
+
+        var detailLines = entries
+            .Select(entry => BuildCompactPosProductDetailLine(entry, requestedTokens))
+            .Where(line => !string.IsNullOrWhiteSpace(line))
+            .ToList();
+
+        var requestedFields = string.Join("、", requestedTokens
+            .Select(GetPosPromptFieldLabel)
+            .Distinct(StringComparer.Ordinal));
+
+        return string.Join(Environment.NewLine, new[]
+        {
+            $"POS商品紧凑数据（覆盖字段：{requestedFields}；编号仅用于内部关联，回答用户时请使用商品名称）",
+            "商品索引:",
+            string.Join(Environment.NewLine, indexLines),
+            "商品详情:",
+            string.Join(Environment.NewLine, detailLines)
+        });
+    }
+
+    private List<PosProductPromptEntry> BuildCompactPosProductEntries(List<PosMenuProductBriefDto> products)
+    {
+        return products
+            .Select((product, index) => new
+            {
+                Product = product,
+                Index = index,
+                ProductName = BuildProductDisplayName(product).Trim()
+            })
+            .Where(x => !string.IsNullOrWhiteSpace(x.ProductName))
+            .GroupBy(x => x.ProductName, StringComparer.Ordinal)
+            .OrderBy(group => group.Min(x => x.Index))
+            .Select((group, index) => new PosProductPromptEntry(
+                $"P{index + 1:000}",
+                group.Key,
+                group.Select(x => x.Product.CategoryName?.Trim())
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct(StringComparer.Ordinal)
+                    .ToList(),
+                group.Select(x => x.Product.Specification?.Trim())
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct(StringComparer.Ordinal)
+                    .ToList(),
+                group.Select(x => x.Product.Tax?.Trim())
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct(StringComparer.Ordinal)
+                    .ToList(),
+                group.Select(x => x.Product.Price.ToString("F2"))
+                    .Distinct(StringComparer.Ordinal)
+                    .ToList(),
+                group.SelectMany(x => x.Product.PosMenus ?? [])
+                    .Select(BuildPosMenuPeriod)
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct(StringComparer.Ordinal)
+                    .ToList()))
+            .ToList();
+    }
+
+    private string BuildCompactPosProductDetailLine(PosProductPromptEntry entry, List<string> requestedTokens)
+    {
+        var segments = new List<string> { entry.Id };
+
+        if (requestedTokens.Contains(PosMenuProductCategoryToken) && entry.Categories.Count > 0)
+            segments.Add($"类别={string.Join("、", entry.Categories)}");
+
+        if (requestedTokens.Contains(PosMenuProductSpecificationToken) && entry.Specifications.Count > 0)
+            segments.Add($"规格={string.Join("、", entry.Specifications)}");
+
+        if (requestedTokens.Contains(PosMenuProductTaxToken) && entry.Taxes.Count > 0)
+            segments.Add($"税率={string.Join("、", entry.Taxes)}");
+
+        if (requestedTokens.Contains(PosMenuProductPriceToken) && entry.Prices.Count > 0)
+            segments.Add($"价格={string.Join("、", entry.Prices)}");
+
+        if (requestedTokens.Contains(PosMenuProductTimeToken) && entry.MenuTimes.Count > 0)
+            segments.Add($"菜单时间={string.Join("；", entry.MenuTimes)}");
+
+        return string.Join(" | ", segments);
+    }
+
+    private static string GetPosPromptFieldLabel(string token)
+    {
+        return token switch
+        {
+            PosMenuProductNameToken => "商品名称",
+            PosMenuProductCategoryToken => "商品类别",
+            PosMenuProductSpecificationToken => "商品规格",
+            PosMenuProductTaxToken => "商品税率",
+            PosMenuProductPriceToken => "商品价格",
+            PosMenuProductTimeToken => "菜单时间",
+            _ => token
+        };
+    }
+
     private bool HasPromptToken(string token) => _ctx.Prompt.Contains(token, StringComparison.OrdinalIgnoreCase);
 
     private void ReplacePromptToken(string token, string value)
@@ -277,6 +427,17 @@ public partial class AiSpeechAssistantConnectService
         return fallback;
     }
 
+    private static string BuildPosMenuPeriod(PosMenuBriefDto menu)
+    {
+        var name = menu?.Name?.Trim() ?? string.Empty;
+        var time = menu?.TimePeriod?.Trim() ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(name)) return time;
+        if (string.IsNullOrWhiteSpace(time)) return name;
+
+        return $"{name}({time})";
+    }
+
     private TranscriptionLanguage ResolvePosPromptLanguage()
     {
         Enum.TryParse(_ctx.Assistant?.ModelLanguage, true, out AiSpeechAssistantMainLanguage language);
@@ -299,4 +460,13 @@ public partial class AiSpeechAssistantConnectService
         var cache = await _salesDataProvider.GetDeliveryInfoCacheByPhoneNumberAsync(_ctx.From, cancellationToken).ConfigureAwait(false);
         _ctx.Prompt = _ctx.Prompt.Replace("#{delivery_info}", cache?.CacheValue?.Trim() ?? " ");
     }
+
+    private sealed record PosProductPromptEntry(
+        string Id,
+        string ProductName,
+        List<string> Categories,
+        List<string> Specifications,
+        List<string> Taxes,
+        List<string> Prices,
+        List<string> MenuTimes);
 }
