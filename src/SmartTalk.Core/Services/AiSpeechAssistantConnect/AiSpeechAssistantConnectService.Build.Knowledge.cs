@@ -148,7 +148,7 @@ public partial class AiSpeechAssistantConnectService
 
         if (requestedProductTokens.Count > 2)
         {
-            ResolveCompactPosProductData(products, requestedProductTokens);
+            ResolveCompactPosProductData(products, requestedProductTokens, language);
         }
         else
         {
@@ -284,9 +284,9 @@ public partial class AiSpeechAssistantConnectService
             .ToList();
     }
 
-    private void ResolveCompactPosProductData(List<PosMenuProductBriefDto> products, List<string> requestedTokens)
+    private void ResolveCompactPosProductData(List<PosMenuProductBriefDto> products, List<string> requestedTokens, TranscriptionLanguage language)
     {
-        var compactValue = BuildCompactPosProductData(products, requestedTokens);
+        var compactValue = BuildCompactPosProductData(products, requestedTokens, language);
 
         if (string.IsNullOrWhiteSpace(compactValue))
         {
@@ -299,110 +299,188 @@ public partial class AiSpeechAssistantConnectService
         ReplacePromptToken(requestedTokens[0], compactValue);
 
         foreach (var token in requestedTokens.Skip(1))
-            ReplacePromptToken(token, "见 POS 商品索引与详情。");
+            ReplacePromptToken(token, "见上方POS压缩数据");
     }
 
-    private string BuildCompactPosProductData(List<PosMenuProductBriefDto> products, List<string> requestedTokens)
+    private string BuildCompactPosProductData(List<PosMenuProductBriefDto> products, List<string> requestedTokens, TranscriptionLanguage language)
     {
-        var entries = BuildCompactPosProductEntries(products);
-
+        var entries = BuildCompactPosProductEntries(products, language);
         if (entries.Count == 0) return " ";
 
-        var indexLines = entries
-            .Select(entry => $"{entry.Id}={entry.ProductName}")
-            .ToList();
+        var categoryCodebook = requestedTokens.Contains(PosMenuProductCategoryToken)
+            ? BuildCompactCodebook(entries.SelectMany(entry => entry.Categories), "C")
+            : null;
+        var menuTimeCodebook = requestedTokens.Contains(PosMenuProductTimeToken)
+            ? BuildCompactCodebook(entries.SelectMany(entry => entry.MenuTimes), "R")
+            : null;
+        var taxCodebook = requestedTokens.Contains(PosMenuProductTaxToken)
+            ? BuildCompactCodebook(entries.SelectMany(entry => entry.Taxes), "T")
+            : null;
+        var specificationCodebook = requestedTokens.Contains(PosMenuProductSpecificationToken)
+            ? BuildCompactCodebook(entries.SelectMany(entry => entry.Specifications), "S")
+            : null;
 
-        var detailLines = entries
-            .Select(entry => BuildCompactPosProductDetailLine(entry, requestedTokens))
-            .Where(line => !string.IsNullOrWhiteSpace(line))
-            .ToList();
-
-        var requestedFields = string.Join("、", requestedTokens
-            .Select(GetPosPromptFieldLabel)
-            .Distinct(StringComparer.Ordinal));
-
-        return string.Join(Environment.NewLine, new[]
+        var sections = new List<string>
         {
-            $"POS商品紧凑数据（覆盖字段：{requestedFields}；编号仅用于内部关联，回答用户时请使用商品名称）",
-            "商品索引:",
-            string.Join(Environment.NewLine, indexLines),
-            "商品详情:",
-            string.Join(Environment.NewLine, detailLines)
-        });
+            "POS压缩数据(先按码表解码;回答时用商品名称,不要直接回复P/C/R/T/S编码)",
+            BuildCompactPosProductHeader(requestedTokens),
+            string.Join(Environment.NewLine, entries.Select(entry => BuildCompactPosProductRow(entry, requestedTokens, categoryCodebook, menuTimeCodebook, taxCodebook, specificationCodebook)))
+        };
+
+        AppendCompactProductCodebookSection(sections, entries);
+        AppendCompactCodebookSection(sections, "C", categoryCodebook);
+        AppendCompactCodebookSection(sections, "R", menuTimeCodebook);
+        AppendCompactCodebookSection(sections, "T", taxCodebook);
+        AppendCompactCodebookSection(sections, "S", specificationCodebook);
+
+        return string.Join(Environment.NewLine, sections);
     }
 
-    private List<PosProductPromptEntry> BuildCompactPosProductEntries(List<PosMenuProductBriefDto> products)
+    private static string BuildCompactPosProductHeader(List<string> requestedTokens)
+    {
+        var columns = new List<string> { "P" };
+
+        if (requestedTokens.Contains(PosMenuProductCategoryToken))
+            columns.Add("C");
+
+        if (requestedTokens.Contains(PosMenuProductTimeToken))
+            columns.Add("R");
+
+        if (requestedTokens.Contains(PosMenuProductPriceToken))
+            columns.Add("价");
+
+        if (requestedTokens.Contains(PosMenuProductTaxToken))
+            columns.Add("T");
+
+        if (requestedTokens.Contains(PosMenuProductSpecificationToken))
+            columns.Add("S");
+
+        return string.Join("|", columns);
+    }
+
+    private static string BuildCompactPosProductRow(
+        PosCompactProductEntry entry,
+        List<string> requestedTokens,
+        PosCompactCodebook categoryCodebook,
+        PosCompactCodebook menuTimeCodebook,
+        PosCompactCodebook taxCodebook,
+        PosCompactCodebook specificationCodebook)
+    {
+        var columns = new List<string>
+        {
+            entry.ProductCode
+        };
+
+        if (requestedTokens.Contains(PosMenuProductCategoryToken))
+            columns.Add(ResolveCompactCodes(entry.Categories, categoryCodebook));
+
+        if (requestedTokens.Contains(PosMenuProductTimeToken))
+            columns.Add(ResolveCompactCodes(entry.MenuTimes, menuTimeCodebook));
+
+        if (requestedTokens.Contains(PosMenuProductPriceToken))
+            columns.Add(entry.Price);
+
+        if (requestedTokens.Contains(PosMenuProductTaxToken))
+            columns.Add(ResolveCompactCodes(entry.Taxes, taxCodebook));
+
+        if (requestedTokens.Contains(PosMenuProductSpecificationToken))
+            columns.Add(ResolveCompactCodes(entry.Specifications, specificationCodebook));
+
+        return string.Join("|", columns);
+    }
+
+    private List<PosCompactProductEntry> BuildCompactPosProductEntries(List<PosMenuProductBriefDto> products, TranscriptionLanguage language)
     {
         return products
-            .Select((product, index) => new
-            {
-                Product = product,
-                Index = index,
-                ProductName = BuildProductDisplayName(product).Trim()
-            })
-            .Where(x => !string.IsNullOrWhiteSpace(x.ProductName))
-            .GroupBy(x => x.ProductName, StringComparer.Ordinal)
-            .OrderBy(group => group.Min(x => x.Index))
-            .Select((group, index) => new PosProductPromptEntry(
+            .Select((product, index) => new PosCompactProductEntry(
                 $"P{index + 1:000}",
-                group.Key,
-                group.Select(x => x.Product.CategoryName?.Trim())
-                    .Where(x => !string.IsNullOrWhiteSpace(x))
-                    .Distinct(StringComparer.Ordinal)
-                    .ToList(),
-                group.Select(x => x.Product.Specification?.Trim())
-                    .Where(x => !string.IsNullOrWhiteSpace(x))
-                    .Distinct(StringComparer.Ordinal)
-                    .ToList(),
-                group.Select(x => x.Product.Tax?.Trim())
-                    .Where(x => !string.IsNullOrWhiteSpace(x))
-                    .Distinct(StringComparer.Ordinal)
-                    .ToList(),
-                group.Select(x => x.Product.Price.ToString("F2"))
-                    .Distinct(StringComparer.Ordinal)
-                    .ToList(),
-                group.SelectMany(x => x.Product.PosMenus ?? [])
+                BuildCompactProductName(product, language).Trim(),
+                SplitCompactValues(product?.CategoryName, "、"),
+                (product?.PosMenus ?? [])
                     .Select(BuildPosMenuPeriod)
                     .Where(x => !string.IsNullOrWhiteSpace(x))
                     .Distinct(StringComparer.Ordinal)
-                    .ToList()))
+                    .ToList(),
+                product?.Price.ToString("0.##") ?? "0",
+                SplitCompactTaxValues(product?.Tax),
+                SplitCompactValues(product?.Specification, "；")))
+            .Where(entry => !string.IsNullOrWhiteSpace(entry.ProductName))
             .ToList();
     }
 
-    private string BuildCompactPosProductDetailLine(PosProductPromptEntry entry, List<string> requestedTokens)
+    private static PosCompactCodebook BuildCompactCodebook(IEnumerable<string> values, string prefix)
     {
-        var segments = new List<string> { entry.Id };
+        var items = new List<PosCompactCodeItem>();
+        var valueToCode = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        if (requestedTokens.Contains(PosMenuProductCategoryToken) && entry.Categories.Count > 0)
-            segments.Add($"类别={string.Join("、", entry.Categories)}");
+        foreach (var value in values.Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.Ordinal))
+        {
+            var code = $"{prefix}{items.Count + 1}";
+            items.Add(new PosCompactCodeItem(code, value));
+            valueToCode[value] = code;
+        }
 
-        if (requestedTokens.Contains(PosMenuProductSpecificationToken) && entry.Specifications.Count > 0)
-            segments.Add($"规格={string.Join("、", entry.Specifications)}");
-
-        if (requestedTokens.Contains(PosMenuProductTaxToken) && entry.Taxes.Count > 0)
-            segments.Add($"税率={string.Join("、", entry.Taxes)}");
-
-        if (requestedTokens.Contains(PosMenuProductPriceToken) && entry.Prices.Count > 0)
-            segments.Add($"价格={string.Join("、", entry.Prices)}");
-
-        if (requestedTokens.Contains(PosMenuProductTimeToken) && entry.MenuTimes.Count > 0)
-            segments.Add($"菜单时间={string.Join("；", entry.MenuTimes)}");
-
-        return string.Join(" | ", segments);
+        return new PosCompactCodebook(items, valueToCode);
     }
 
-    private static string GetPosPromptFieldLabel(string token)
+    private static void AppendCompactCodebookSection(List<string> sections, string label, PosCompactCodebook codebook)
     {
-        return token switch
-        {
-            PosMenuProductNameToken => "商品名称",
-            PosMenuProductCategoryToken => "商品类别",
-            PosMenuProductSpecificationToken => "商品规格",
-            PosMenuProductTaxToken => "商品税率",
-            PosMenuProductPriceToken => "商品价格",
-            PosMenuProductTimeToken => "菜单时间",
-            _ => token
-        };
+        if (codebook is null || codebook.Items.Count == 0) return;
+
+        sections.Add($"{label}:");
+        sections.Add(string.Join(Environment.NewLine, codebook.Items.Select(item => $"{item.Code}={item.Value}")));
+    }
+
+    private static void AppendCompactProductCodebookSection(List<string> sections, List<PosCompactProductEntry> entries)
+    {
+        if (entries.Count == 0) return;
+
+        sections.Add("P:");
+        sections.Add(string.Join(Environment.NewLine, entries.Select(entry => $"{entry.ProductCode}={entry.ProductName}")));
+    }
+
+    private static string ResolveCompactCodes(IEnumerable<string> values, PosCompactCodebook codebook)
+    {
+        var codes = values
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(value => codebook != null && codebook.ValueToCode.TryGetValue(value, out var code) ? code : value)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        return codes.Count == 0 ? "-" : string.Join("+", codes);
+    }
+
+    private static List<string> SplitCompactValues(string value, string separator)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return [];
+
+        return value
+            .Split([separator], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+    }
+
+    private static List<string> SplitCompactTaxValues(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return [];
+
+        return value
+            .Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(NormalizeCompactTaxValue)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+    }
+
+    private static string NormalizeCompactTaxValue(string value)
+    {
+        var normalized = value?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(normalized)) return string.Empty;
+
+        return normalized.Contains('%', StringComparison.Ordinal) || normalized.StartsWith('$')
+            ? normalized
+            : $"${normalized}";
     }
 
     private bool HasPromptToken(string token) => _ctx.Prompt.Contains(token, StringComparison.OrdinalIgnoreCase);
@@ -432,6 +510,24 @@ public partial class AiSpeechAssistantConnectService
         return fallback;
     }
 
+    private static string BuildCompactProductName(PosMenuProductBriefDto product, TranscriptionLanguage language)
+    {
+        var cn = product?.NameCn?.Trim() ?? string.Empty;
+        var en = product?.NameEn?.Trim() ?? string.Empty;
+        var fallback = product?.Name?.Trim() ?? string.Empty;
+
+        return language switch
+        {
+            TranscriptionLanguage.Chinese when !string.IsNullOrWhiteSpace(cn) => cn,
+            TranscriptionLanguage.English when !string.IsNullOrWhiteSpace(en) => en,
+            TranscriptionLanguage.Spanish when !string.IsNullOrWhiteSpace(en) => en,
+            TranscriptionLanguage.Korean when !string.IsNullOrWhiteSpace(en) => en,
+            _ when !string.IsNullOrWhiteSpace(fallback) => fallback,
+            _ when !string.IsNullOrWhiteSpace(cn) => cn,
+            _ => en
+        };
+    }
+
     private static string BuildPosMenuPeriod(PosMenuBriefDto menu)
     {
         var name = menu?.Name?.Trim() ?? string.Empty;
@@ -458,12 +554,20 @@ public partial class AiSpeechAssistantConnectService
         };
     }
 
-    private sealed record PosProductPromptEntry(
-        string Id,
+    private sealed record PosCompactProductEntry(
+        string ProductCode,
         string ProductName,
         List<string> Categories,
-        List<string> Specifications,
+        List<string> MenuTimes,
+        string Price,
         List<string> Taxes,
-        List<string> Prices,
-        List<string> MenuTimes);
+        List<string> Specifications);
+
+    private sealed record PosCompactCodeItem(
+        string Code,
+        string Value);
+
+    private sealed record PosCompactCodebook(
+        List<PosCompactCodeItem> Items,
+        Dictionary<string, string> ValueToCode);
 }
