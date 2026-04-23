@@ -35,8 +35,8 @@ public partial class AiSpeechAssistantService
     {
         Log.Information("Handling ReceivePhoneRecord command: {@Command}", command);
 
-        var (record, agent) = await RetryHelper.RetryOnResultAsync(
-            ct => _phoneOrderDataProvider.GetRecordWithAgentAsync(command.CallSid, ct),
+        var (record, agent, assistant) = await RetryHelper.RetryOnResultAsync(
+            ct => _phoneOrderDataProvider.GetRecordWithAgentAndAssistantAsync(command.CallSid, ct),
             result => result.Item1 == null,
             maxRetryCount: 3,
             delay: TimeSpan.FromSeconds(10),
@@ -71,7 +71,8 @@ public partial class AiSpeechAssistantService
         var language = string.Empty;
         try
         {
-            language = await DetectAudioLanguageAsync(audioFileRawBytes, cancellationToken).ConfigureAwait(false);
+            var defaultLanguageCode = ResolveDefaultLanguageCode(assistant?.ModelLanguage);
+            language = await DetectAudioLanguageAsync(audioFileRawBytes, defaultLanguageCode, cancellationToken).ConfigureAwait(false);
 
             await SendServerRestoreMessageIfNecessaryAsync(cancellationToken).ConfigureAwait(false);
         }
@@ -100,11 +101,13 @@ public partial class AiSpeechAssistantService
         };
     }
 
-    private async Task<string> DetectAudioLanguageAsync(byte[] audioContent, CancellationToken cancellationToken)
+    private async Task<string> DetectAudioLanguageAsync(byte[] audioContent, string defaultLanguageCode, CancellationToken cancellationToken)
     {
         ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
 
         var audioData = BinaryData.FromBytes(audioContent);
+        var normalizedDefaultLanguageCode = NormalizeLanguageCode(defaultLanguageCode) ?? "en";
+
         List<ChatMessage> messages =
         [
             new SystemChatMessage("""
@@ -149,11 +152,81 @@ public partial class AiSpeechAssistantService
 
         ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
 
-        ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
+        ChatCompletion firstCompletion = await client.CompleteChatAsync(messages, options, cancellationToken).ConfigureAwait(false);
+        var firstPassLanguageCode = NormalizeLanguageCode(firstCompletion.Content.FirstOrDefault()?.Text) ?? normalizedDefaultLanguageCode;
 
-        Log.Information("Detect the audio language: " + completion.Content.FirstOrDefault()?.Text);
+        Log.Information("Detect audio language first pass. Default: {DefaultLanguage}, Result: {Result}",
+            normalizedDefaultLanguageCode, firstPassLanguageCode);
 
-        return completion.Content.FirstOrDefault()?.Text ?? "en";
+        if (string.Equals(firstPassLanguageCode, normalizedDefaultLanguageCode, StringComparison.OrdinalIgnoreCase))
+        {
+            return firstPassLanguageCode;
+        }
+
+        List<ChatMessage> compareMessages =
+        [
+            new SystemChatMessage($$"""
+                                    You are a professional speech recognition analyst.
+                                    Re-check the audio and return only one language code from:
+                                    zh-CN, zh, zh-TW, en, es, ko
+
+                                    First-pass detected language: {{firstPassLanguageCode}}
+                                    Call default language: {{normalizedDefaultLanguageCode}}
+
+                                    Rules:
+                                    1. Analyze the dominant spoken language across the whole audio.
+                                    2. If first-pass result and default language conflict, compare them carefully with the audio again.
+                                    3. If evidence is not strong enough to overturn the default language, keep the default language.
+                                    4. Return only one code without extra text.
+                                    """),
+            new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
+            new UserChatMessage("Re-check this recording and return the final language code only.")
+        ];
+
+        ChatCompletion secondCompletion = await client.CompleteChatAsync(compareMessages, options, cancellationToken).ConfigureAwait(false);
+        var secondPassLanguageCode = NormalizeLanguageCode(secondCompletion.Content.FirstOrDefault()?.Text);
+        var finalLanguageCode = secondPassLanguageCode ?? normalizedDefaultLanguageCode;
+
+        Log.Information(
+            "Detect audio language second pass. Default: {DefaultLanguage}, FirstPass: {FirstPass}, SecondPass: {SecondPass}, Final: {Final}",
+            normalizedDefaultLanguageCode,
+            firstPassLanguageCode,
+            secondPassLanguageCode ?? "<invalid>",
+            finalLanguageCode);
+
+        return finalLanguageCode;
+    }
+
+    private string ResolveDefaultLanguageCode(string assistantModelLanguage)
+    {
+        return NormalizeLanguageCode(assistantModelLanguage) ?? "en";
+    }
+
+    private string NormalizeLanguageCode(string languageCode)
+    {
+        if (string.IsNullOrWhiteSpace(languageCode))
+        {
+            return null;
+        }
+
+        var normalized = languageCode.Trim()
+            .Trim('"', '\'', '`', '.', ',', ';', ':', '!', '?')
+            .ToLowerInvariant();
+
+        return normalized switch
+        {
+            "en" or "english" or "en-us" or "en-gb" => "en",
+            "es" or "spanish" or "es-es" or "es-mx" or "espanol" => "es",
+            "ko" or "korean" or "ko-kr" => "ko",
+            "zh-cn" or "zh_cn" or "zh-hans" or "mandarin" or "chinese" or "simplified chinese" => "zh-CN",
+            "zh" => "zh",
+            "zh-tw" or "zh_tw" or "zh-hant" or "traditional chinese" or "taiwanese chinese" => "zh-TW",
+            "cantonese" or "yue" or "zh-hk" or "zh_hk" => "zh",
+            _ when normalized.StartsWith("en-", StringComparison.Ordinal) => "en",
+            _ when normalized.StartsWith("es-", StringComparison.Ordinal) => "es",
+            _ when normalized.StartsWith("ko-", StringComparison.Ordinal) => "ko",
+            _ => null
+        };
     }
 
     private async Task SendServerRestoreMessageIfNecessaryAsync(CancellationToken cancellationToken)
