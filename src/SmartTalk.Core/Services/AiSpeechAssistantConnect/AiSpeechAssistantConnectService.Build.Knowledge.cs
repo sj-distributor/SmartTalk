@@ -298,6 +298,7 @@ public partial class AiSpeechAssistantConnectService
         if (!_ctx.Prompt.Contains("#{delivery_info}", StringComparison.OrdinalIgnoreCase) || !_ctx.Prompt.Contains("#{CRM_路线_送货日数据}", StringComparison.OrdinalIgnoreCase)) return;
 
         var cache = await _salesDataProvider.GetDeliveryInfoCacheByPhoneNumberAsync(_ctx.From, cancellationToken).ConfigureAwait(false);
+        
         _ctx.Prompt = _ctx.Prompt.Replace("#{delivery_info}", cache?.CacheValue?.Trim() ?? " ");
     }
     
@@ -305,8 +306,8 @@ public partial class AiSpeechAssistantConnectService
     {
         if (!_ctx.Prompt.Contains("#{item_description}", StringComparison.OrdinalIgnoreCase) ) return;
 
-        var cache = await _salesDataProvider.GetCustomerInfoCacheByPhoneNumberAsync(_ctx.From, cancellationToken).ConfigureAwait(false);
+        var cache = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantDescriptionAsync(_ctx.From, cancellationToken).ConfigureAwait(false);
         
-        _ctx.Prompt = _ctx.Prompt.Replace("#{item_description}", cache?.CacheValue?.Trim() ?? string.Empty);
+        _ctx.Prompt = _ctx.Prompt.Replace("#{item_description}", cache?.ModelDescription?.Trim() ?? string.Empty);
     }
 }
