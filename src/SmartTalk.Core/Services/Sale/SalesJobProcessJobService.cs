@@ -55,15 +55,16 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
             var ids = soldToId.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()).ToList();
             Log.Information("Refreshing cache for soldToId: {SoldToId}", ids);
 
-            var allItems = new List<string>();
-            foreach (var id in ids)
+            for (var index = 0; index < ids.Count; index++)
             {
+                var id = ids[index];
                 var items = await _salesService.BuildCustomerItemsStringAsync(new List<string> { id }, cancellationToken).ConfigureAwait(false);
-                allItems.Add(items);
-            }
+                var orderArrivalTime = await _salesService.BuildCustomerOrderArrivalTimeStringAsync(new List<string> { id }, cancellationToken).ConfigureAwait(false);
+                var shouldSave = index == ids.Count - 1;
 
-            var combinedItems = string.Join(";", allItems);
-            await _salesDataProvider.UpsertCustomerItemsCacheAsync(soldToId, combinedItems, true, cancellationToken).ConfigureAwait(false);
+                await _salesDataProvider.UpsertCustomerItemsCacheAsync(id, items, false, cancellationToken).ConfigureAwait(false);
+                await _salesDataProvider.UpsertCustomerOrderArrivalTimeCacheAsync(id, orderArrivalTime, shouldSave, cancellationToken).ConfigureAwait(false);
+            }
 
             Log.Information("Cache refreshed successfully for soldToId: {SoldToId}", soldToId);
         }

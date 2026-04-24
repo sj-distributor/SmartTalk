@@ -11,6 +11,8 @@ public interface ISalesService : IScopedDependency
 {
     Task<string> BuildCustomerItemsStringAsync(List<string> soldToIds, CancellationToken cancellationToken);
 
+    Task<string> BuildCustomerOrderArrivalTimeStringAsync(List<string> soldToIds, CancellationToken cancellationToken);
+
     Task<string> HandleOrderArrivalTimeList(List<string> customerIds, CancellationToken cancellationToken);
 
     Task<string> BuildCrmCustomerInfoByPhoneAsync(string phoneNumber, CancellationToken cancellationToken);
@@ -106,16 +108,31 @@ public class SalesService : ISalesService
 
             allItems.AddRange(askItems.Select(x => FormatItem(x.MaterialDesc, x.LevelCode, x.Material)));
             allItems.AddRange(orderItems.Select(x => FormatItem(x.MaterialDescription, x.LevelCode, x.MaterialNumber)));
-            
-            var customerOrderArrivalText = await HandleOrderArrivalTimeList(new List<string> { soldToId }, cancellationToken);
-            if (!string.IsNullOrEmpty(customerOrderArrivalText))
-            {
-                allItems.Add($"=== 客户 {soldToId} 订单到货信息 ===");
-                allItems.Add(customerOrderArrivalText);
-            }
         }
 
         return string.Join(Environment.NewLine, allItems.Take(50));
+    }
+
+    public async Task<string> BuildCustomerOrderArrivalTimeStringAsync(List<string> soldToIds, CancellationToken cancellationToken)
+    {
+        var orderArrivalTexts = new List<string>();
+
+        if (soldToIds == null || soldToIds.Count == 0)
+        {
+            Log.Warning("BuildCustomerOrderArrivalTimeStringAsync called with empty soldToIds");
+            return string.Empty;
+        }
+
+        foreach (var soldToId in soldToIds)
+        {
+            var customerOrderArrivalText = await HandleOrderArrivalTimeList(new List<string> { soldToId }, cancellationToken).ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(customerOrderArrivalText)) continue;
+
+            orderArrivalTexts.Add($"=== 客户 {soldToId} 订单到货信息 ===");
+            orderArrivalTexts.Add(customerOrderArrivalText.TrimEnd());
+        }
+
+        return string.Join(Environment.NewLine, orderArrivalTexts);
     }
     
     public async Task<string> HandleOrderArrivalTimeList(List<string> customerIds, CancellationToken cancellationToken)

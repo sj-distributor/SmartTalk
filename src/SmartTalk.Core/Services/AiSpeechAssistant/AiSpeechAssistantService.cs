@@ -446,9 +446,11 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             finalPrompt = finalPrompt.Replace("#{greeting}", knowledge.Greetings ?? string.Empty);
         }
         
+        var soldToIds = !string.IsNullOrEmpty(assistant.Name) ? assistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : new List<string>();
+
         if (finalPrompt.Contains("#{customer_items}", StringComparison.OrdinalIgnoreCase))
         {
-            var soldToIds = !string.IsNullOrEmpty(assistant.Name) ? assistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : new List<string>();
+            var customerItemsText = " ";
 
             if (soldToIds.Any())
             {
@@ -456,8 +458,31 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
                 var customerItems = caches.Where(c => !string.IsNullOrEmpty(c.CacheValue)).Select(c => c.CacheValue.Trim()).Distinct().ToList();
 
-                finalPrompt = finalPrompt.Replace("#{customer_items}", customerItems.Any() ? string.Join(Environment.NewLine + Environment.NewLine, customerItems.Take(50)) : " ");
+                customerItemsText = customerItems.Any() ? string.Join(Environment.NewLine + Environment.NewLine, customerItems.Take(50)) : " ";
             }
+
+            finalPrompt = finalPrompt.Replace("#{customer_items}", customerItemsText);
+        }
+
+        if (finalPrompt.Contains("#{customer_order_arrival_time}", StringComparison.OrdinalIgnoreCase))
+        {
+            var customerOrderArrivalTimeText = " ";
+
+            if (soldToIds.Any())
+            {
+                var caches = await _salesDataProvider.GetCustomerOrderArrivalTimeCacheBySoldToIdsAsync(soldToIds, cancellationToken).ConfigureAwait(false);
+
+                var customerOrderArrivalTimes = soldToIds
+                    .Select(id => caches.FirstOrDefault(c => string.Equals(c.Filter, id, StringComparison.OrdinalIgnoreCase))?.CacheValue?.Trim())
+                    .Where(value => !string.IsNullOrWhiteSpace(value))
+                    .ToList();
+
+                customerOrderArrivalTimeText = customerOrderArrivalTimes.Any()
+                    ? string.Join(Environment.NewLine + Environment.NewLine, customerOrderArrivalTimes)
+                    : " ";
+            }
+
+            finalPrompt = finalPrompt.Replace("#{customer_order_arrival_time}", customerOrderArrivalTimeText);
         }
         
         if (finalPrompt.Contains("#{customer_info}", StringComparison.OrdinalIgnoreCase))

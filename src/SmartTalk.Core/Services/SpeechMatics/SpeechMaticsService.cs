@@ -376,19 +376,42 @@ public class SpeechMaticsService : ISpeechMaticsService
         }
     }
     
-     private async Task<List<ChatMessage>> ConfigureRecordAnalyzePromptAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, string callFrom, string currentTime, byte[] audioContent, CancellationToken cancellationToken) 
+    private async Task<List<ChatMessage>> ConfigureRecordAnalyzePromptAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, string callFrom, string currentTime, byte[] audioContent, CancellationToken cancellationToken) 
     {
         var soldToIds = !string.IsNullOrEmpty(aiSpeechAssistant.Name) ? aiSpeechAssistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : new List<string>();
+        var promptTemplate = string.IsNullOrEmpty(aiSpeechAssistant?.CustomRecordAnalyzePrompt)
+            ? "你是一名電話錄音的分析員，通過聽取錄音內容和語氣情緒作出精確分析，冩出一份分析報告。\n\n分析報告的格式：交談主題：xxx\n\n 來電號碼：#{call_from}\n\n 內容摘要:xxx \n\n 客人情感與情緒: xxx \n\n 待辦事件: \n1.xxx\n2.xxx \n\n 客人下單內容(如果沒有則忽略)：1. 牛肉(1箱)\n2. 雞腿肉(1箱)"
+            : aiSpeechAssistant.CustomRecordAnalyzePrompt;
 
-        var customerItemsCacheList = await _salesDataProvider.GetCustomerItemsCacheBySoldToIdsAsync(soldToIds, cancellationToken);
-        var customerItemsString = string.Join(Environment.NewLine, soldToIds.Select(id => customerItemsCacheList.FirstOrDefault(c => c.Filter == id)?.CacheValue ?? ""));
+        var customerItemsString = " ";
+        if (promptTemplate.Contains("#{customer_items}", StringComparison.OrdinalIgnoreCase) && soldToIds.Any())
+        {
+            var customerItemsCacheList = await _salesDataProvider.GetCustomerItemsCacheBySoldToIdsAsync(soldToIds, cancellationToken).ConfigureAwait(false);
+            customerItemsString = string.Join(Environment.NewLine, soldToIds.Select(id => customerItemsCacheList.FirstOrDefault(c => c.Filter == id)?.CacheValue ?? ""));
+            customerItemsString = string.IsNullOrWhiteSpace(customerItemsString) ? " " : customerItemsString;
+        }
+
+        var customerOrderArrivalTimeString = " ";
+        if (promptTemplate.Contains("#{customer_order_arrival_time}", StringComparison.OrdinalIgnoreCase) && soldToIds.Any())
+        {
+            var customerOrderArrivalTimeCacheList = await _salesDataProvider.GetCustomerOrderArrivalTimeCacheBySoldToIdsAsync(soldToIds, cancellationToken).ConfigureAwait(false);
+            customerOrderArrivalTimeString = string.Join(
+                Environment.NewLine,
+                soldToIds.Select(id => customerOrderArrivalTimeCacheList
+                    .FirstOrDefault(c => string.Equals(c.Filter, id, StringComparison.OrdinalIgnoreCase))?.CacheValue ?? ""));
+            customerOrderArrivalTimeString = string.IsNullOrWhiteSpace(customerOrderArrivalTimeString) ? " " : customerOrderArrivalTimeString;
+        }
+
+        var systemPrompt = promptTemplate
+            .Replace("#{call_from}", callFrom ?? "")
+            .Replace("#{current_time}", currentTime ?? "")
+            .Replace("#{customer_items}", customerItemsString)
+            .Replace("#{customer_order_arrival_time}", customerOrderArrivalTimeString);
 
         var audioData = BinaryData.FromBytes(audioContent);
         List<ChatMessage> messages =
         [
-            new SystemChatMessage( (string.IsNullOrEmpty(aiSpeechAssistant?.CustomRecordAnalyzePrompt)
-                ? "你是一名電話錄音的分析員，通過聽取錄音內容和語氣情緒作出精確分析，冩出一份分析報告。\n\n分析報告的格式：交談主題：xxx\n\n 來電號碼：#{call_from}\n\n 內容摘要:xxx \n\n 客人情感與情緒: xxx \n\n 待辦事件: \n1.xxx\n2.xxx \n\n 客人下單內容(如果沒有則忽略)：1. 牛肉(1箱)\n2. 雞腿肉(1箱)"
-                : aiSpeechAssistant.CustomRecordAnalyzePrompt).Replace("#{call_from}", callFrom ?? "").Replace("#{current_time}", currentTime ?? "").Replace("#{customer_items}", customerItemsString ?? "")),
+            new SystemChatMessage(systemPrompt),
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
             new UserChatMessage("幫我根據錄音生成分析報告：")
         ];
