@@ -37,6 +37,7 @@ public partial class AiSpeechAssistantConnectService
         await ResolveCustomerInfoAsync(cancellationToken).ConfigureAwait(false);
         await ResolveDeliveryInfoAsync(cancellationToken).ConfigureAwait(false);
         await ResolvePosPromptVariablesAsync(cancellationToken).ConfigureAwait(false);
+        await ResolveItemDescriptionAsync(cancellationToken).ConfigureAwait(false);
 
         Log.Information("[AiAssistant] Prompt resolved, Prompt: {Prompt}", _ctx.Prompt);
     }
@@ -552,6 +553,15 @@ public partial class AiSpeechAssistantConnectService
             AiSpeechAssistantMainLanguage.Korean => TranscriptionLanguage.Korean,
             _ => TranscriptionLanguage.English
         };
+    }
+    
+    private async Task ResolveItemDescriptionAsync(CancellationToken cancellationToken)
+    {
+        if (!_ctx.Prompt.Contains("#{item_description}", StringComparison.OrdinalIgnoreCase) ) return;
+
+        var cache = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantDescriptionAsync(_ctx.From, cancellationToken).ConfigureAwait(false);
+        
+        _ctx.Prompt = _ctx.Prompt.Replace("#{item_description}", cache?.ModelDescription?.Trim() ?? string.Empty);
     }
 
     private sealed record PosCompactProductEntry(
