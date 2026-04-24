@@ -10,5 +10,7 @@ public class AiSpeechAssistantSessionDto
     
     public int Count { get; set; }
     
+    public AiSpeechAssistantPremiseDto Premise { get; set; }
+    
     public DateTimeOffset CreatedDate { get; set; }
 }

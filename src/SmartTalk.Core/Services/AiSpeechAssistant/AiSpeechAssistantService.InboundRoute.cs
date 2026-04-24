@@ -27,7 +27,8 @@ public partial class AiSpeechAssistantService
                 TimeZone = "Asia/Shanghai",
                 DayOfWeek = "0,1,2,3,4,5,6",
                 IsFullDay = true,
-                Emergency = true
+                Emergency = true,
+                IsFallback = true
             }
         ], true, cancellationToken).ConfigureAwait(false);
     }

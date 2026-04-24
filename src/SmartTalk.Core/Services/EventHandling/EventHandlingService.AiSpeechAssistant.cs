@@ -1,8 +1,14 @@
+using DocumentFormat.OpenXml.Office2010.ExcelAc;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Serilog;
 using Smarties.Messages.DTO.OpenAi;
 using Smarties.Messages.Enums.OpenAi;
 using Smarties.Messages.Requests.Ask;
+using SmartTalk.Core.Constants;
+using SmartTalk.Core.Domain.AISpeechAssistant;
+using SmartTalk.Core.Services.AiSpeechAssistant;
+using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
 
 namespace SmartTalk.Core.Services.EventHandling;
@@ -11,13 +17,21 @@ public partial class EventHandlingService
 {
     public async Task HandlingEventAsync(AiSpeechAssistantKnowledgeAddedEvent @event, CancellationToken cancellationToken)
     {
-        var diff = CompareJsons(@event.PrevKnowledge.Json, @event.LatestKnowledge.Json);
-        
-        Log.Information("Generate the compare result: {@Diff}", diff);
+        Log.Information("Start AiSpeechAssistantKnowledgeAddedEvent");
 
         try
         {
-            var brief = await GenerateKnowledgeChangeBriefAsync(diff.ToString(), cancellationToken).ConfigureAwait(false);
+            var oldMergedJson = await BuildKnowledgeComparableJsonAsync(@event.PrevKnowledge.Id, cancellationToken).ConfigureAwait(false);
+            var newMergedJson = await BuildKnowledgeComparableJsonAsync(@event.LatestKnowledge.Id, cancellationToken).ConfigureAwait(false);
+
+            var diff = CompareJsons(oldMergedJson, newMergedJson);
+
+            if (diff == null || !diff.HasValues)
+                return;
+
+            Log.Information("AiSpeechAssistantKnowledgeAddedEvent Generate diff: {Diff}", diff);
+
+            var brief = await GenerateKnowledgeChangeBriefAsync(diff.ToString(Formatting.None), cancellationToken).ConfigureAwait(false);
         
             Log.Information($"Generate the knowledge chang brief: {brief}");
 
@@ -34,8 +48,136 @@ public partial class EventHandlingService
         {
             Log.Error("Generate the knowledge brief error: {@Message}", e.Message);
         }
+
+        Log.Information("knowledgeIdToSync Id: {@PrevKnowledge} , {@knowledgeIdToSync}", @event.PrevKnowledge.Id, @event.LatestKnowledge.Id);
+
+        var syncSourceRelateds = await _aiSpeechAssistantDataProvider.GetKnowledgeCopyRelatedBySourceKnowledgeIdAsync(
+            [@event.PrevKnowledge.Id, @event.LatestKnowledge.Id], true, cancellationToken).ConfigureAwait(false);
+        Log.Information("targerPrevRelateds prev/latest relateds: {@allPrevRelatedIds}", syncSourceRelateds.Select(r => r.Id).ToList());
+
+        var checkShouldSyncRelation = @event.ShouldSyncLastedKnowledge && syncSourceRelateds.Any();
+
+        if (checkShouldSyncRelation)
+        {
+            var sourceKnowledgeIdToSync = @event.ShouldSyncLastedKnowledge ? @event.LatestKnowledge.Id : @event.PrevKnowledge.Id;
+            Log.Information("Enqueue SyncCopiedKnowledges. sourceKnowledgeIdToSync={SourceKnowledgeIdToSync}, prevKnowledgeId={PrevKnowledgeId}, latestKnowledgeId={LatestKnowledgeId}",
+                sourceKnowledgeIdToSync, @event.PrevKnowledge.Id, @event.LatestKnowledge.Id);
+
+            _smartTalkBackgroundJobClient.Enqueue<IAiSpeechAssistantService>(x => x.SyncCopiedKnowledgesIfRequiredAsync(
+                sourceKnowledgeIdToSync, false, @event.ShouldSyncLastedKnowledge, CancellationToken.None));
+        }
     }
-    
+
+    private async Task<string> BuildKnowledgeComparableJsonAsync(int knowledgeId, CancellationToken cancellationToken)
+    {
+        if (knowledgeId <= 0)
+            return "{}";
+
+        var knowledge = await _aiSpeechAssistantDataProvider
+            .GetAiSpeechAssistantKnowledgeAsync(knowledgeId: knowledgeId, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+
+        var inboundRelations = await _aiSpeechAssistantDataProvider
+            .GetKnowledgeCopyRelatedByTargetKnowledgeIdAsync([knowledgeId], null, cancellationToken)
+            .ConfigureAwait(false);
+
+        var baseObj = BuildMergedKnowledgeJson(knowledge?.Json, (inboundRelations ?? new List<AiSpeechAssistantKnowledgeCopyRelated>()).Select(x => x.CopyKnowledgePoints));
+
+        var detailsObj = new JObject();
+        baseObj["__details"] = detailsObj;
+
+        var entriesByName = new Dictionary<string, List<(int formatType, string fileName, string content)>>(StringComparer.Ordinal);
+
+        var baseDetails = await _aiSpeechAssistantDataProvider
+            .GetKnowledgeDetailsByKnowledgeIdAsync(knowledgeId, cancellationToken)
+            .ConfigureAwait(false);
+
+        AddComparableEntries(entriesByName, baseDetails, applyCopySuffix: false);
+
+        var sourceKnowledgeIds = (inboundRelations ?? new List<AiSpeechAssistantKnowledgeCopyRelated>())
+            .Select(x => x.SourceKnowledgeId)
+            .Distinct()
+            .ToList();
+
+        if (sourceKnowledgeIds.Count > 0)
+        {
+            var sourceDetails = await _aiSpeechAssistantDataProvider
+                .GetAiSpeechAssistantKnowledgeDetailsByKnowledgeIdsAsync(sourceKnowledgeIds, cancellationToken)
+                .ConfigureAwait(false);
+
+            AddComparableEntries(entriesByName, sourceDetails, applyCopySuffix: true);
+        }
+
+        foreach (var (name, entries) in entriesByName.OrderBy(k => k.Key, StringComparer.Ordinal))
+        {
+            var arr = new JArray(
+                entries
+                    .OrderBy(e => e.formatType)
+                    .ThenBy(e => e.fileName, StringComparer.Ordinal)
+                    .ThenBy(e => e.content, StringComparer.Ordinal)
+                    .Select(e => new JObject
+                    {
+                        ["formatType"] = e.formatType,
+                        ["fileName"] = e.fileName,
+                        ["content"] = e.content
+                    }));
+
+            detailsObj[name] = arr;
+        }
+
+        return baseObj.ToString(Formatting.None);
+    }
+
+    private static void AddComparableEntries(
+        Dictionary<string, List<(int formatType, string fileName, string content)>> entriesByName,
+        IEnumerable<AiSpeechAssistantKnowledgeDetail> details,
+        bool applyCopySuffix)
+    {
+        if (details == null)
+            return;
+
+        foreach (var detail in details)
+        {
+            if (detail == null)
+                continue;
+
+            var name = detail.KnowledgeName ?? string.Empty;
+            if (applyCopySuffix)
+                name = EnsureCopySuffix(name);
+
+            if (!entriesByName.TryGetValue(name, out var list))
+            {
+                list = new List<(int formatType, string fileName, string content)>();
+                entriesByName[name] = list;
+            }
+
+            list.Add(((int)detail.FormatType, detail.FileName ?? string.Empty, detail.Content ?? string.Empty));
+        }
+    }
+
+    private static string EnsureCopySuffix(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return name ?? string.Empty;
+
+        return name.EndsWith("-副本", StringComparison.Ordinal) ? name : $"{name}-副本";
+    }
+
+    private JObject BuildMergedKnowledgeJson(string baseJson, IEnumerable<string> copyKnowledgePoints)
+    {
+        var baseObj = string.IsNullOrWhiteSpace(baseJson) ? new JObject() : JObject.Parse(baseJson);
+        
+        var copyObjs = (copyKnowledgePoints ?? Enumerable.Empty<string>()).Where(x => !string.IsNullOrWhiteSpace(x)).Select(JObject.Parse); 
+        
+        return new[] { baseObj }
+            .Concat(copyObjs)
+            .Aggregate(new JObject(), (acc, j) =>
+            {
+                acc.Merge(j, new JsonMergeSettings { MergeArrayHandling = MergeArrayHandling.Concat });
+                return acc;
+            });
+    }
+
     private JObject CompareJsons(string oldJson, string newJson)
     {
         var result = new JObject();;
@@ -132,5 +274,57 @@ public partial class EventHandlingService
         }, cancellationToken).ConfigureAwait(false);
         
         return completionResult?.Data?.Response;
+    }
+
+    public async Task HandlingEventAsync(AiSpeechAssistantKonwledgeCopyAddedEvent @event, CancellationToken cancellationToken)
+    {
+        if (@event.KnowledgeOldJsons == null || @event.KnowledgeOldJsons.Count == 0) return;
+
+        Log.Information("KonwledgeCopyAddedEvent KnowledgeId: {@Diff}", @event.KnowledgeOldJsons.Select(x=>x.KnowledgeId).ToList());
+        
+        try
+        {
+            var knowledgeIds = @event.KnowledgeOldJsons.Select(s => s.KnowledgeId).ToList();
+            var knowledges = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgesAsync(knowledgeIds, cancellationToken).ConfigureAwait(false);
+
+            var updates = new List<AiSpeechAssistantKnowledge>();
+
+            foreach (var state in @event.KnowledgeOldJsons)
+            {
+                var knowledge = knowledges.FirstOrDefault(knowledge => knowledge.Id == state.KnowledgeId);
+                if (knowledge == null) continue;
+
+                var diff = CompareJsons(state.OldMergedJson, MergeJsons(new[] { JObject.Parse(state.OldMergedJson), JObject.Parse(@event.CopyJson) }));
+
+                if (diff == null || !diff.HasValues) continue;
+                
+                Log.Information($"KonwledgeCopyAddedEvent Generate diff: {diff}");
+
+                var brief = await GenerateKnowledgeChangeBriefAsync(diff.ToString(), cancellationToken).ConfigureAwait(false);
+
+                Log.Information($"KonwledgeCopyAddedEvent Generate the knowledge chang brief: {brief}");
+                
+                if (!string.IsNullOrEmpty(brief))
+                {
+                    knowledge.Brief = brief;
+                    updates.Add(knowledge);
+                }
+            }
+
+            if (updates.Count > 0)
+            {
+                await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync(updates, true, cancellationToken).ConfigureAwait(false);
+            }
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "KonwledgeCopyAddedEvent Generate knowledge brief error for multiple copy targets");
+        }
+    }
+    
+    private static string MergeJsons(IEnumerable<JObject> jsons)
+    {
+        return jsons.Aggregate(new JObject(), (acc, j) =>
+        { acc.Merge(j, new JsonMergeSettings { MergeArrayHandling = MergeArrayHandling.Concat }); return acc; }).ToString(Formatting.None);
     }
 }

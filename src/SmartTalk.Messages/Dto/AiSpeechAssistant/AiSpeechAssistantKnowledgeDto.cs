@@ -20,5 +20,13 @@ public class AiSpeechAssistantKnowledgeDto
     
     public DateTimeOffset CreatedDate { get; set; }
     
+    public AiSpeechAssistantPremiseDto Premise { get; set; }
+    
+    public List<AiSpeechAssistantKnowledgeDetailDto> Details { get; set; }
+    
     public int CreatedBy { get; set; }
+    
+    public string ModelLanguage { get; set; }
+    
+    public List<AiSpeechAssistantKnowledgeCopyRelatedDto> KnowledgeCopyRelateds { get; set; }
 }

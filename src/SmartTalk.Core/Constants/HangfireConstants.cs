@@ -13,4 +13,14 @@ public static class HangfireConstants
     public const string InternalHostingFfmpeg = "ffmpeg";
     
     public const string InternalHostingTransfer = "transfer";
+    
+    public const string InternalHostingTestingSalesPhoneOrder = "auto-testing-sales-phone-order";
+    
+    public const string InternalHostingAutoTestCallRecordSync = "auto-test-call-record-sync";
+
+    public const string InternalHostingRecordPhoneCall = "record-phone-call";
+    
+    public const string InternalHostingCaCheKnowledgeVariable = "cache-knowledge-variable";
+    
+    public const string SemaphoreHiFoodCacheCustomerItems = "semaphore-hi-food-cache-customer-items";
 }

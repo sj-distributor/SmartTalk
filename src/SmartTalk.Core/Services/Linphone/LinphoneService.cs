@@ -4,7 +4,6 @@ using SmartTalk.Core.Domain.Asterisk;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Domain.Linphone;
 using SmartTalk.Core.Services.Caching;
-using SmartTalk.Core.Services.Communication.Twilio;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Messages.Dto.Linphone;
 using SmartTalk.Messages.Enums.Linphone;
@@ -36,15 +35,13 @@ public class LinphoneService : ILinphoneService
     private readonly ICacheManager _cacheManager;
     private readonly IAsteriskClient _asteriskClient;
     private readonly ILinphoneDataProvider _linphoneDataProvider;
-    private readonly ITwilioServiceDataProvider _twilioServiceDataProvider;
 
-    public LinphoneService(IMapper mapper, ICacheManager cacheManager, IAsteriskClient asteriskClient, ILinphoneDataProvider linphoneDataProvider, ITwilioServiceDataProvider twilioServiceDataProvider)
+    public LinphoneService(IMapper mapper, ICacheManager cacheManager, IAsteriskClient asteriskClient, ILinphoneDataProvider linphoneDataProvider)
     {
         _mapper = mapper;
         _cacheManager = cacheManager;
         _asteriskClient = asteriskClient;
         _linphoneDataProvider = linphoneDataProvider;
-        _twilioServiceDataProvider = twilioServiceDataProvider;
     }
 
     public async Task AddLinphoneCdrAsync(string recordName, LinphoneStatus? linphoneStatus = null, CancellationToken cancellationToken = default)

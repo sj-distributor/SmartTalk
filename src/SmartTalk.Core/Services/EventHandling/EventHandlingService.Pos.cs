@@ -1,11 +1,7 @@
-using Newtonsoft.Json.Linq;
-using Serilog;
-using Smarties.Messages.DTO.OpenAi;
-using Smarties.Messages.Enums.OpenAi;
-using Smarties.Messages.Requests.Ask;
+using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Domain.Pos;
+using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.Pos;
-using SmartTalk.Messages.Events.AiSpeechAssistant;
 using SmartTalk.Messages.Events.Pos;
 
 namespace SmartTalk.Core.Services.EventHandling;
@@ -14,7 +10,12 @@ public partial class EventHandlingService
 {
     public async Task HandlingEventAsync(PosOrderPlacedEvent @event, CancellationToken cancellationToken)
     {
-        if (@event == null || string.IsNullOrEmpty(@event.Order?.Phone)) return;
+        if (@event?.Order == null) return;
+
+        if (@event.Order.RecordId.HasValue && @event.Order.Status == PosOrderStatus.Sent && @event.Order.IsPush)
+            await LockedPhoneOrderRecordScenarioAsync(@event.Order.RecordId.Value, cancellationToken).ConfigureAwait(false);
+        
+        if (string.IsNullOrEmpty(@event.Order?.Phone)) return;
         
         var customer = await _posDataProvider.GetStoreCustomerAsync(storeId: @event.Order.StoreId, phone: @event.Order.Phone, cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -59,5 +60,37 @@ public partial class EventHandlingService
             
             await _posDataProvider.UpdateStoreCustomersAsync([customer], cancellationToken: cancellationToken).ConfigureAwait(false);
         }
+
+        if (@event.IsPersistAction && @event.Order.RecordId.HasValue)
+        {
+            var records = await _phoneOrderDataProvider.GetPhoneOrderRecordAsync(@event.Order.RecordId.Value, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            var record = records.FirstOrDefault();
+            if (record == null) throw new Exception($"Phone order record not found: {@event.Order.RecordId.Value}");
+            
+            record.IsModifyScenario = true;
+            await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record,  true, cancellationToken);
+            
+            await _phoneOrderDataProvider.AddPhoneOrderRecordScenarioHistoryAsync(new PhoneOrderRecordScenarioHistory
+            {
+                RecordId = @event.Order.RecordId.Value,
+                Scenario = DialogueScenarios.Order,
+                ModifyType = ModifyType.Order,
+                UpdatedBy = _currentUser.Id.Value,
+                UserName = _currentUser.Name,
+                CreatedDate = DateTime.UtcNow
+            }, true, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private async Task LockedPhoneOrderRecordScenarioAsync(int recordId, CancellationToken cancellationToken)
+    {
+        var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByIdAsync(recordId, cancellationToken).ConfigureAwait(false);
+
+        if (record == null) return;
+        
+        record.IsLockedScenario = true;
+        
+        await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 }

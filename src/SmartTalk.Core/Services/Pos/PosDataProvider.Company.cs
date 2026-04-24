@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Ioc;
 
@@ -10,9 +11,17 @@ public partial interface IPosDataProvider : IScopedDependency
 
     Task UpdatePosCompanyAsync(Company company, bool isForceSave = true, CancellationToken cancellationToken = default);
 
+    Task UpdatePosCompaniesAsync(List<Company> companies, bool isForceSave = true, CancellationToken cancellationToken = default);
+
     Task DeletePosCompanyAsync(Company company, bool isForceSave = true, CancellationToken cancellationToken = default);
 
     Task<Company> GetPosCompanyAsync(int id, CancellationToken cancellationToken);
+
+    Task<Company> GetPosCompanyByStoreIdAsync(int storeId, CancellationToken cancellationToken = default);
+
+    Task<Company> GetPosCompanyByNameAsync(string name, CancellationToken cancellationToken);
+
+    Task<List<int>> GetAssistantIdsByCompanyIdAsync(int companyId, CancellationToken cancellationToken = default);
 
     Task<List<PosMenu>> GetPosMenusAsync(int storeId, bool? IsActive = null, CancellationToken cancellationToken = default);
 
@@ -37,6 +46,10 @@ public partial interface IPosDataProvider : IScopedDependency
     Task<List<PosOrder>> GetPosOrdersByCompanyIdAsync(int companyId, CancellationToken cancellationToken);
 
     Task<List<PosOrder>> GetPosOrdersByStoreIdAsync(int storeId, CancellationToken cancellationToken);
+    
+    Task<List<PosProduct>> GetPosProductsByProductIdsAsync(int storeId, List<string> productIds, CancellationToken cancellationToken);
+    
+    Task<List<PosProduct>> GetPosProductsByAgentIdAsync(int agentId, CancellationToken cancellationToken);
 }
 
 public partial class PosDataProvider
@@ -55,6 +68,15 @@ public partial class PosDataProvider
         if (isForceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task UpdatePosCompaniesAsync(List<Company> companies, bool isForceSave = true, CancellationToken cancellationToken = default)
+    {
+        if (companies is not { Count: > 0 }) return;
+
+        await _repository.UpdateAllAsync(companies, cancellationToken).ConfigureAwait(false);
+
+        if (isForceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task DeletePosCompanyAsync(Company company, bool isForceSave = true, CancellationToken cancellationToken = default)
     {
         await _repository.DeleteAsync(company, cancellationToken).ConfigureAwait(false);
@@ -65,6 +87,36 @@ public partial class PosDataProvider
     public async Task<Company> GetPosCompanyAsync(int id, CancellationToken cancellationToken)
     {
         return await _repository.Query<Company>(x => x.Id == id).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<Company> GetPosCompanyByStoreIdAsync(int storeId, CancellationToken cancellationToken = default)
+    {
+        var query = from store in _repository.Query<CompanyStore>().Where(x => x.Id == storeId)
+            join company in _repository.Query<Company>() on store.CompanyId equals company.Id
+            select company;
+
+        return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<Company> GetPosCompanyByNameAsync(string name, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return null;
+
+        var normalizedName = name.Trim();
+
+        return await _repository.Query<Company>().Where(x => x.Name == normalizedName).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<int>> GetAssistantIdsByCompanyIdAsync(int companyId, CancellationToken cancellationToken = default)
+    {
+        if (companyId <= 0) return [];
+
+        var query = from store in _repository.Query<CompanyStore>().Where(x => x.CompanyId == companyId)
+            join posAgent in _repository.Query<PosAgent>() on store.Id equals posAgent.StoreId
+            join agentAssistant in _repository.Query<AgentAssistant>() on posAgent.AgentId equals agentAssistant.AgentId
+            select agentAssistant.AssistantId;
+
+        return await query.Distinct().ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<List<PosMenu>> GetPosMenusAsync(int storeId, bool? IsActive = null, CancellationToken cancellationToken = default)
@@ -204,6 +256,26 @@ public partial class PosDataProvider
             join order in _repository.Query<PosOrder>() on store.Id equals order.StoreId
             where store.Id == storeId
             select order;
+        
+        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<PosProduct>> GetPosProductsByProductIdsAsync(int storeId, List<string> productIds, CancellationToken cancellationToken)
+    {
+        var query = from menu in _repository.Query<PosMenu>().Where(x => x.Status)
+            join category in _repository.Query<PosCategory>() on menu.Id equals category.MenuId
+            join product in _repository.Query<PosProduct>().Where(x => x.StoreId == storeId && productIds.Contains(x.ProductId)) on category.Id equals product.CategoryId
+            select product;
+        
+        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<PosProduct>> GetPosProductsByAgentIdAsync(int agentId, CancellationToken cancellationToken)
+    {
+        var query = from posAgent in _repository.Query<PosAgent>().Where(x => x.AgentId == agentId)
+            join store in _repository.Query<CompanyStore>() on posAgent.StoreId equals store.Id
+            join product in _repository.Query<PosProduct>().Where(x => x.Status) on store.Id equals product.StoreId
+            select product;
         
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }

@@ -3,6 +3,7 @@
     <PropertyGroup>
         <TargetFramework>net8.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
+        <NoWarn>$(NoWarn);OPENAI001</NoWarn>
     </PropertyGroup>
 
     <ItemGroup>
@@ -16,12 +17,14 @@
         <PackageReference Include="dbup" Version="5.0.8" />
         <PackageReference Include="dbup-mysql" Version="5.0.10" />
         <PackageReference Include="Destructurama.JsonNet" Version="2.0.0" />
+        <PackageReference Include="DocumentFormat.OpenXml" Version="3.1.1" />
         <PackageReference Include="EFCore.BulkExtensions" Version="7.0.1" />
         <PackageReference Include="FluentValidation" Version="11.11.0" />
         <PackageReference Include="Google.Cloud.Translation.V2" Version="3.4.0" />
         <PackageReference Include="Hangfire" Version="1.8.3" />
         <PackageReference Include="Hangfire.Correlate" Version="2.0.0" />
         <PackageReference Include="Hangfire.Pro.Redis" Version="3.0.0" />
+        <PackageReference Include="Hangfire.Throttling" Version="1.0.0-beta1" />
         <PackageReference Include="Mediator.Net" Version="4.7.0" />
         <PackageReference Include="Mediator.Net.Autofac" Version="4.7.0" />
         <PackageReference Include="Mediator.Net.Middlewares.Serilog" Version="4.7.0" />
@@ -37,7 +40,8 @@
         <PackageReference Include="Microsoft.KernelMemory.AI.OpenAI" Version="0.35.240321.1" />
         <PackageReference Include="NAudio" Version="2.2.1" />
         <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-        <PackageReference Include="OpenAI" Version="2.2.0-beta.4" />
+        <PackageReference Include="NPOI" Version="2.7.3" />
+        <PackageReference Include="OpenAI" Version="2.8.0" />
         <PackageReference Include="OpenCCNET" Version="1.0.2" />
         <PackageReference Include="NRedisStack" Version="0.12.0" />
         <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="7.0.0" />
@@ -48,12 +52,14 @@
         <PackageReference Include="Serilog.Enrichers.CorrelationId" Version="3.0.1" />
         <PackageReference Include="Serilog.Sinks.Seq" Version="5.2.2" />
         <PackageReference Include="SixLabors.Fonts" Version="2.1.3" />
-        <PackageReference Include="SixLabors.ImageSharp" Version="2.1.9" />
+        <PackageReference Include="SixLabors.ImageSharp" Version="2.1.10" />
         <PackageReference Include="SixLabors.ImageSharp.Drawing" Version="1.0.0" />
         <PackageReference Include="StackExchange.Redis" Version="2.6.122" />
         <PackageReference Include="Smarties.Messages" Version="3.86.1" />
         <PackageReference Include="System.Net.Http" Version="4.3.4" />
         <PackageReference Include="Twilio.AspNet.Core" Version="8.1.1" />
+        <PackageReference Include="UglyToad.PdfPig" Version="1.7.0-custom-5" />
+        <PackageReference Include="UglyToad.PdfPig.Core" Version="1.7.0-custom-5" />
         <PackageReference Include="WebSocketSharp-netstandard" Version="1.0.1" />
     </ItemGroup>
 
@@ -77,8 +83,11 @@
       <Folder Include="Assets\Audio\RepeatOrderHoldon\Alloy\Cantonese\" />
       <Folder Include="Assets\Audio\RepeatOrderHoldon\Alloy\Korean\" />
       <Folder Include="Assets\Audio\RepeatOrderHoldon\Alloy\Spanish\" />
+      <Folder Include="Assets\Audio\RepeatOrderHoldon\Alloy\Thai\" />
       <Folder Include="Assets\Audio\RepeatOrderHoldon\Alloy\Viet\" />
       <Folder Include="Assets\Audio\RepeatOrderHoldon\Alloy\Zh\" />
+      <Folder Include="Services\RealtimeAiV2\Adapters\Clients\" />
+      <Folder Include="Services\RealtimeAiV2\Adapters\Providers\" />
     </ItemGroup>
     
 </Project>
