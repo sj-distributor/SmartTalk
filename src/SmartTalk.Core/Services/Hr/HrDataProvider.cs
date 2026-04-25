@@ -22,7 +22,7 @@ public interface IHrDataProvider : IScopedDependency
     
     Task UpdateHrInterviewQuestionsAsync(List<HrInterviewQuestion> questions, bool forceSave = true, CancellationToken cancellationToken = default);
 
-    Task DeleteHrInterviewQuestionsBySectionAsync(HrInterviewQuestionSection section, bool forceSave, CancellationToken cancellationToken = default);
+    Task ReplaceHrInterviewQuestionsAsync(HrInterviewQuestionSection section, List<string> questions, CancellationToken cancellationToken = default);
 }
 
 public class HrDataProvider : IHrDataProvider
@@ -84,14 +84,27 @@ public class HrDataProvider : IHrDataProvider
             await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
     
-    public async Task DeleteHrInterviewQuestionsBySectionAsync(HrInterviewQuestionSection section, bool forceSave, CancellationToken cancellationToken = default)
+    public async Task ReplaceHrInterviewQuestionsAsync(HrInterviewQuestionSection section, List<string> questions, CancellationToken cancellationToken = default)
     {
-        var questions = await _repository.Query<HrInterviewQuestion>().Where(x => x.Section == section)
-            .ToListAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+        var existing = await _repository.Query<HrInterviewQuestion>()
+            .Where(x => x.Section == section)
+            .ToListAsync(cancellationToken);
 
-        await _repository.DeleteAllAsync(questions, cancellationToken).ConfigureAwait(false);
-
-        if (forceSave)
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        if (existing.Count > 0)
+        {
+            await _repository.DeleteAllAsync(existing, cancellationToken);
+        }
+        
+        var entities = questions?
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => new HrInterviewQuestion
+            { Question = x.Trim(), Section = section, IsUsing = false }).ToList();
+        
+        if (entities != null && entities.Count > 0)
+        {
+            await _repository.InsertAllAsync(entities, cancellationToken);
+        }
+        
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 }
