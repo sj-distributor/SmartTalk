@@ -1,6 +1,5 @@
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
-using EnumsNET;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Data;
 using SmartTalk.Core.Domain.Hr;
