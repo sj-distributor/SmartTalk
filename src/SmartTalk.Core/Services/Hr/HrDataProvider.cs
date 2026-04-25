@@ -1,5 +1,6 @@
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
+using EnumsNET;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Data;
 using SmartTalk.Core.Domain.Hr;
@@ -21,6 +22,8 @@ public interface IHrDataProvider : IScopedDependency
     Task AddHrInterviewQuestionsAsync(List<HrInterviewQuestion> questions, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task UpdateHrInterviewQuestionsAsync(List<HrInterviewQuestion> questions, bool forceSave = true, CancellationToken cancellationToken = default);
+
+    Task DeleteHrInterviewQuestionsBySectionAsync(HrInterviewQuestionSection section, bool forceSave, CancellationToken cancellationToken = default);
 }
 
 public class HrDataProvider : IHrDataProvider
@@ -77,6 +80,17 @@ public class HrDataProvider : IHrDataProvider
     public async Task UpdateHrInterviewQuestionsAsync(List<HrInterviewQuestion> questions, bool forceSave, CancellationToken cancellationToken = default)
     {
         await _repository.UpdateAllAsync(questions, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave)
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+    
+    public async Task DeleteHrInterviewQuestionsBySectionAsync(HrInterviewQuestionSection section, bool forceSave, CancellationToken cancellationToken = default)
+    {
+        var questions = await _repository.Query<HrInterviewQuestion>().Where(x => x.Section == section)
+            .ToListAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        await _repository.DeleteAllAsync(questions, cancellationToken).ConfigureAwait(false);
 
         if (forceSave)
             await _unitOfWork.SaveChangesAsync(cancellationToken);

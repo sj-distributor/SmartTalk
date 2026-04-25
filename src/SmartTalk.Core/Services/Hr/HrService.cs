@@ -23,6 +23,11 @@ public class HrService : IHrService
 
     public async Task AddHrInterviewQuestionsAsync(AddHrInterviewQuestionsCommand command, CancellationToken cancellationToken = default)
     {
+        if (command.ClearExisting)
+        {
+            await _hrDataProvider.DeleteHrInterviewQuestionsBySectionAsync(command.Section, true, cancellationToken);
+        }
+
         var questions = command.Questions.Select(x => new HrInterviewQuestion
         {
             Question = x,
