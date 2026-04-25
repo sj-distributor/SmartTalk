@@ -25,7 +25,7 @@ public class HrService : IHrService
     {
         if (command.ClearExisting)
         {
-            await _hrDataProvider.ReplaceHrInterviewQuestionsAsync(command.Section, command.Questions, cancellationToken).ConfigureAwait(f);
+            await _hrDataProvider.ReplaceHrInterviewQuestionsAsync(command.Section, command.Questions, cancellationToken).ConfigureAwait(false);
         }
         else
         {
