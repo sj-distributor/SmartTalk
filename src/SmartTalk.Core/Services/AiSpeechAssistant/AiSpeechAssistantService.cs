@@ -297,7 +297,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             finalPrompt = finalPrompt.Replace("#{customer_items}", customerItemsText);
         }
 
-        if (finalPrompt.Contains("#{customer_order_arrival_time}", StringComparison.OrdinalIgnoreCase))
+        if (finalPrompt.Contains("#{delivery_progress}", StringComparison.OrdinalIgnoreCase))
         {
             var customerOrderArrivalTimeText = " ";
 
@@ -315,7 +315,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                     : " ";
             }
 
-            finalPrompt = finalPrompt.Replace("#{customer_order_arrival_time}", customerOrderArrivalTimeText);
+            finalPrompt = finalPrompt.Replace("#{delivery_progress}", customerOrderArrivalTimeText);
         }
         
         if (agentId.HasValue && finalPrompt.Contains("#{menu_items}", StringComparison.OrdinalIgnoreCase))

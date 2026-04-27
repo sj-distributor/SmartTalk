@@ -68,7 +68,7 @@ public class SalesPlaceholderFixture
                 new AiSpeechAssistantKnowledge
                 {
                     AssistantId = 1,
-                    Prompt = "到货信息:\n#{customer_order_arrival_time}"
+                    Prompt = "到货信息:\n#{delivery_progress}"
                 },
                 new AiSpeechAssistantUserProfile
                 {
@@ -104,7 +104,7 @@ public class SalesPlaceholderFixture
         var streamContext = (AiSpeechAssistantStreamContextDto)streamContextField!.GetValue(assistantService)!;
         streamContext.LastPrompt.ShouldContain("到货信息:\n到货1001");
         streamContext.LastPrompt.ShouldContain("到货1002");
-        streamContext.LastPrompt.ShouldNotContain("#{customer_order_arrival_time}");
+        streamContext.LastPrompt.ShouldNotContain("#{delivery_progress}");
     }
 
     [Fact]
