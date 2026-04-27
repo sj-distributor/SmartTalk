@@ -1,10 +1,3 @@
-using Newtonsoft.Json;
-using Serilog;
-using SmartTalk.Core.Ioc;
-using Newtonsoft.Json.Linq;
-using Smarties.Messages.DTO.OpenAi;
-using Smarties.Messages.Enums.OpenAi;
-using Smarties.Messages.Requests.Ask;
 using Serilog;
 using SmartTalk.Core.Ioc;
 using Newtonsoft.Json.Linq;
@@ -14,7 +7,6 @@ using SmartTalk.Core.Domain.SpeechMatics;
 using SmartTalk.Messages.Dto.SpeechMatics;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Settings.SpeechMatics;
-using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Enums.SpeechMatics;
 
 namespace SmartTalk.Core.Services.SpeechMatics;
@@ -108,7 +100,7 @@ public class SpeechMaticsService : ISpeechMaticsService
                         MsgType = "text",
                         Text = new SendWorkWechatGroupRobotTextDto
                         {
-                            Content = $"SMT Speech Matics Key Error"
+                            Content = "SMT Speech Matics Key Error"
                         }
                     }, cancellationToken).ConfigureAwait(false);
 
@@ -134,16 +126,19 @@ public class SpeechMaticsService : ISpeechMaticsService
             },
             NotificationConfig = new List<SpeechMaticsNotificationConfigDto>
             {
-                new SpeechMaticsNotificationConfigDto
+                new()
                 {
                     AuthHeaders = _transcriptionCallbackSetting.AuthHeaders,
-                    Contents = new List<string> { "transcript" },
+                    Contents = ["transcript"],
                     Url = _transcriptionCallbackSetting.Url
                 }
             }
         };
 
-        return await _speechMaticsClient.CreateJobAsync(new SpeechMaticsCreateJobRequestDto { JobConfig = jobConfigDto }, createTranscriptionDto, cancellationToken).ConfigureAwait(false);
+        return await _speechMaticsClient.CreateJobAsync(
+            new SpeechMaticsCreateJobRequestDto { JobConfig = jobConfigDto },
+            createTranscriptionDto,
+            cancellationToken).ConfigureAwait(false);
     }
     
     private SpeechMaticsLanguageType SelectSpeechMetisLanguageType(string language)

@@ -33,8 +33,15 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
     private readonly ISalesDataProvider _salesDataProvider;
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
-    
-    public SalesJobProcessJobService(ICrmClient crmClient, SalesSetting salesSetting, ISalesService salesService, ISalesDataProvider salesDataProvider, ISmartTalkBackgroundJobClient backgroundJobClient, SpeechMaticsDataProvider speechMaticsDataProvide, IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
+
+    public SalesJobProcessJobService(
+        ICrmClient crmClient,
+        SalesSetting salesSetting,
+        ISalesService salesService,
+        ISalesDataProvider salesDataProvider,
+        ISmartTalkBackgroundJobClient backgroundJobClient,
+        SpeechMaticsDataProvider speechMaticsDataProvide,
+        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
     {
         _crmClient = crmClient;
         _salesSetting = salesSetting;
@@ -53,7 +60,9 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
 
         foreach (var soldToId in allSoldToIds)
         {
-            _backgroundJobClient.Enqueue<ISalesJobProcessJobService>(x => x.RefreshCustomerItemsCacheBySoldToIdAsync(soldToId, CancellationToken.None));
+            _backgroundJobClient.Enqueue<ISalesJobProcessJobService>(
+                x => x.RefreshCustomerItemsCacheBySoldToIdAsync(soldToId, CancellationToken.None),
+                HangfireConstants.InternalHostingCaCheKnowledgeVariable);
         }
 
         Log.Information("All customer items cache refresh jobs scheduled. Count: {Count}", allSoldToIds.Count);
@@ -66,9 +75,16 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
             var ids = soldToId.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()).ToList();
             Log.Information("Refreshing cache for soldToId: {SoldToId}", ids);
 
-            var combinedItems = await _salesService.BuildCustomerItemsStringAsync(ids, cancellationToken).ConfigureAwait(false);
+            for (var index = 0; index < ids.Count; index++)
+            {
+                var id = ids[index];
+                var items = await _salesService.BuildCustomerItemsStringAsync([id], cancellationToken).ConfigureAwait(false);
+                var orderArrivalTime = await _salesService.BuildCustomerOrderArrivalTimeStringAsync([id], cancellationToken).ConfigureAwait(false);
+                var shouldSave = index == ids.Count - 1;
 
-            await _salesDataProvider.UpsertCustomerItemsCacheAsync(soldToId, combinedItems, true, cancellationToken).ConfigureAwait(false);
+                await _salesDataProvider.UpsertCustomerItemsCacheAsync(id, items, false, cancellationToken).ConfigureAwait(false);
+                await _salesDataProvider.UpsertCustomerOrderArrivalTimeCacheAsync(id, orderArrivalTime, shouldSave, cancellationToken).ConfigureAwait(false);
+            }
 
             Log.Information("Cache refreshed successfully for soldToId: {SoldToId}", soldToId);
         }
@@ -102,7 +118,7 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
         Log.Information("Assistant customer mappings: {@AssistantCustomerMappings}", assistantCustomerMappings);
         
         var crmToken = await _crmClient.GetCrmTokenAsync(cancellationToken).ConfigureAwait(false);
-        if (crmToken == null) return;
+        if (string.IsNullOrWhiteSpace(crmToken)) return;
 
         var totalPhones = 0;
         var scheduledPhones = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -133,8 +149,7 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
             totalPhones,
             scheduledPhones.Count);
     }
-
-
+    
     public async Task RefreshCrmCustomerInfoByPhoneNumberAsync(string phoneNumber, string crmToken, CancellationToken cancellationToken)
     {
         try

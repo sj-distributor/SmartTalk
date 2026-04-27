@@ -11,6 +11,8 @@ public interface ISalesService : IScopedDependency
 {
     Task<string> BuildCustomerItemsStringAsync(List<string> soldToIds, CancellationToken cancellationToken);
 
+    Task<string> BuildCustomerOrderArrivalTimeStringAsync(List<string> soldToIds, CancellationToken cancellationToken);
+
     Task<string> HandleOrderArrivalTimeList(List<string> customerIds, CancellationToken cancellationToken);
 
     Task<CrmCustomerPhoneKnowledgeDto> BuildCrmKnowledgeByPhoneAsync(string phoneNumber, string crmToken, CancellationToken cancellationToken);
@@ -145,6 +147,28 @@ public class SalesService : ISalesService
         }
 
         return string.Join(Environment.NewLine, allItems.Distinct().Take(150));
+    }
+
+    public async Task<string> BuildCustomerOrderArrivalTimeStringAsync(List<string> soldToIds, CancellationToken cancellationToken)
+    {
+        var orderArrivalTexts = new List<string>();
+
+        if (soldToIds == null || soldToIds.Count == 0)
+        {
+            Log.Warning("BuildCustomerOrderArrivalTimeStringAsync called with empty soldToIds");
+            return string.Empty;
+        }
+
+        foreach (var soldToId in soldToIds)
+        {
+            var customerOrderArrivalText = await HandleOrderArrivalTimeList(new List<string> { soldToId }, cancellationToken).ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(customerOrderArrivalText)) continue;
+
+            orderArrivalTexts.Add($"=== 客户 {soldToId} 订单到货信息 ===");
+            orderArrivalTexts.Add(customerOrderArrivalText.TrimEnd());
+        }
+
+        return string.Join(Environment.NewLine, orderArrivalTexts);
     }
 
     public async Task<string> HandleOrderArrivalTimeList(List<string> customerIds, CancellationToken cancellationToken)
