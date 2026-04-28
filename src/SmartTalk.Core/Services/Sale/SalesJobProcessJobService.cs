@@ -70,11 +70,11 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
             {
                 var id = ids[index];
                 var items = await _salesService.BuildCustomerItemsStringAsync([id], cancellationToken).ConfigureAwait(false);
-                var orderArrivalTime = await _salesService.BuildCustomerOrderArrivalTimeStringAsync([id], cancellationToken).ConfigureAwait(false);
+                var deliveryProgress = await _salesService.BuildCustomerDeliveryProgressStringAsync([id], cancellationToken).ConfigureAwait(false);
                 var shouldSave = index == ids.Count - 1;
 
                 await _salesDataProvider.UpsertCustomerItemsCacheAsync(id, items, false, cancellationToken).ConfigureAwait(false);
-                await _salesDataProvider.UpsertCustomerOrderArrivalTimeCacheAsync(id, orderArrivalTime, shouldSave, cancellationToken).ConfigureAwait(false);
+                await _salesDataProvider.UpsertDeliveryProgressCacheAsync(id, deliveryProgress, shouldSave, cancellationToken).ConfigureAwait(false);
             }
 
             Log.Information("Cache refreshed successfully for soldToId: {SoldToId}", soldToId);
