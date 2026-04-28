@@ -54,20 +54,15 @@ public partial class AiSpeechAssistantConnectService
     {
         const int defaultIdleTimeoutSeconds = 60;
 
+        if (_ctx.Timer == null)
+            return null;
+
         return new RealtimeSessionIdleFollowUp
         {
             SkipRounds = _ctx.Timer?.SkipRound,
             FollowUpMessage = _ctx.Timer?.AlterContent,
-            TimeoutSeconds = _ctx.Timer?.TimeSpanSeconds ?? defaultIdleTimeoutSeconds,
-            OnTimeoutAsync = _ctx.Timer == null ? DefaultIdleHandling : null
+            TimeoutSeconds = _ctx.Timer?.TimeSpanSeconds > 0 ? _ctx.Timer.TimeSpanSeconds : defaultIdleTimeoutSeconds
         };
-
-        Task DefaultIdleHandling()
-        {
-            _backgroundJobClient.Schedule<IAiSpeechAssistantService>(x => x.HangupCallAsync(_ctx.CallSid, CancellationToken.None), TimeSpan.FromSeconds(2));
-            
-            return Task.CompletedTask;
-        }
     }
 
     private object DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType type)
