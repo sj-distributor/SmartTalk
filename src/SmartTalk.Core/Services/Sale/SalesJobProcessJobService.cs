@@ -50,7 +50,7 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
         _backgroundJobClient = backgroundJobClient;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
     }
-    
+
     public async Task ScheduleRefreshCustomerItemsCacheAsync(RefreshAllCustomerItemsCacheCommand command, CancellationToken cancellationToken)
     {
         Log.Information("Start full customer items cache refresh...");
@@ -67,7 +67,7 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
 
         Log.Information("All customer items cache refresh jobs scheduled. Count: {Count}", allSoldToIds.Count);
     }
-    
+
     public async Task RefreshCustomerItemsCacheBySoldToIdAsync(string soldToId, CancellationToken cancellationToken)
     {
         try
@@ -93,7 +93,7 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
             Log.Error(ex, "Failed to refresh cache for soldToId: {SoldToId}", soldToId);
         }
     }
-    
+
     public async Task ScheduleRefreshCrmCustomerInfoAsync(RefreshAllCustomerInfoCacheCommand command, CancellationToken cancellationToken)
     {
         var assistants = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantsByCompanyIdAsync(_salesSetting.SpecificCompanyId, cancellationToken).ConfigureAwait(false);
@@ -116,7 +116,6 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
         }
         
         Log.Information("Assistant customer mappings: {@AssistantCustomerMappings}", assistantCustomerMappings);
-        
         var crmToken = await _crmClient.GetCrmTokenAsync(cancellationToken).ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(crmToken)) return;
 
@@ -149,7 +148,7 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
             totalPhones,
             scheduledPhones.Count);
     }
-    
+
     public async Task RefreshCrmCustomerInfoByPhoneNumberAsync(string phoneNumber, string crmToken, CancellationToken cancellationToken)
     {
         try
@@ -195,7 +194,7 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
         if (routes.Count != 0)
             await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantInboundRoutesAsync(routes, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
-    
+
     private string NormalizePhone(string phone)
     {
         if (string.IsNullOrWhiteSpace(phone)) return phone;

@@ -15,7 +15,6 @@ public interface ISalesDataProvider : IScopedDependency
     Task<Sales> GetCallInSalesByNameAsync(string assistantName, SalesCallType? type, CancellationToken cancellationToken);
 
     Task<List<AiSpeechAssistantKnowledgeVariableCache>> GetCustomerItemsCacheByAssistantNameAsync(string assistantName, CancellationToken cancellationToken);
-
     Task<List<AiSpeechAssistantKnowledgeVariableCache>> GetCustomerItemsCacheBySoldToIdsAsync(List<string> soldToIds, CancellationToken cancellationToken);
 
     Task<List<AiSpeechAssistantKnowledgeVariableCache>> GetDeliveryProgressCacheBySoldToIdsAsync(List<string> soldToIds, CancellationToken cancellationToken);

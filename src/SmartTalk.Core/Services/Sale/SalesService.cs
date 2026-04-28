@@ -187,7 +187,6 @@ public class SalesService : ISalesService
         var completedOrders = deliveryProgressResponse.Data
             .Where(order => order.OrderStatus == 7)
             .ToList();
-
         AppendOrderSection(resultBuilder, "未配送", notDeliveredOrders);
         AppendOrderSection(resultBuilder, "配送中", deliveringOrders);
         AppendOrderSection(resultBuilder, "已完成", completedOrders);
