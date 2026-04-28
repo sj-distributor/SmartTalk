@@ -18,11 +18,11 @@ public interface ISalesDataProvider : IScopedDependency
 
     Task<List<AiSpeechAssistantKnowledgeVariableCache>> GetCustomerItemsCacheBySoldToIdsAsync(List<string> soldToIds, CancellationToken cancellationToken);
 
-    Task<List<AiSpeechAssistantKnowledgeVariableCache>> GetCustomerOrderArrivalTimeCacheBySoldToIdsAsync(List<string> soldToIds, CancellationToken cancellationToken);
+    Task<List<AiSpeechAssistantKnowledgeVariableCache>> GetDeliveryProgressCacheBySoldToIdsAsync(List<string> soldToIds, CancellationToken cancellationToken);
 
     Task UpsertCustomerItemsCacheAsync(string soldToId, string itemsString, bool forceSave, CancellationToken cancellationToken);
 
-    Task UpsertCustomerOrderArrivalTimeCacheAsync(string soldToId, string orderArrivalTimeString, bool forceSave, CancellationToken cancellationToken);
+    Task UpsertDeliveryProgressCacheAsync(string soldToId, string deliveryProgressString, bool forceSave, CancellationToken cancellationToken);
 
     Task UpsertCustomerInfoCacheAsync(string phoneNumber, string cacheValue, bool forceSave, CancellationToken cancellationToken);
 
@@ -50,7 +50,7 @@ public interface ISalesDataProvider : IScopedDependency
 public class SalesDataProvider : ISalesDataProvider
 {
     private const string CustomerItemsCacheKey = "customer_items";
-    private const string CustomerOrderArrivalTimeCacheKey = "customer_order_arrival_time";
+    private const string DeliveryProgressCacheKey = "delivery_progress";
     private const string CustomerInfoCacheKey = "customer_info";
     private const string DeliveryInfoCacheKey = "delivery_info";
 
@@ -101,9 +101,9 @@ public class SalesDataProvider : ISalesDataProvider
         return await GetKnowledgeVariableCachesByFiltersAsync(CustomerItemsCacheKey, soldToIds, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<AiSpeechAssistantKnowledgeVariableCache>> GetCustomerOrderArrivalTimeCacheBySoldToIdsAsync(List<string> soldToIds, CancellationToken cancellationToken)
+    public async Task<List<AiSpeechAssistantKnowledgeVariableCache>> GetDeliveryProgressCacheBySoldToIdsAsync(List<string> soldToIds, CancellationToken cancellationToken)
     {
-        return await GetKnowledgeVariableCachesByFiltersAsync(CustomerOrderArrivalTimeCacheKey, soldToIds, cancellationToken).ConfigureAwait(false);
+        return await GetKnowledgeVariableCachesByFiltersAsync(DeliveryProgressCacheKey, soldToIds, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task UpsertCustomerItemsCacheAsync(string soldToId, string itemsString, bool forceSave, CancellationToken cancellationToken)
@@ -111,9 +111,9 @@ public class SalesDataProvider : ISalesDataProvider
         await UpsertKnowledgeVariableCacheAsync(CustomerItemsCacheKey, soldToId, itemsString, forceSave, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task UpsertCustomerOrderArrivalTimeCacheAsync(string soldToId, string orderArrivalTimeString, bool forceSave, CancellationToken cancellationToken)
+    public async Task UpsertDeliveryProgressCacheAsync(string soldToId, string deliveryProgressString, bool forceSave, CancellationToken cancellationToken)
     {
-        await UpsertKnowledgeVariableCacheAsync(CustomerOrderArrivalTimeCacheKey, soldToId, orderArrivalTimeString, forceSave, cancellationToken).ConfigureAwait(false);
+        await UpsertKnowledgeVariableCacheAsync(DeliveryProgressCacheKey, soldToId, deliveryProgressString, forceSave, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task UpsertCustomerInfoCacheAsync(string phoneNumber, string cacheValue, bool forceSave, CancellationToken cancellationToken)

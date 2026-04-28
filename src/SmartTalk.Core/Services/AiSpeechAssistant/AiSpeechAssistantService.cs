@@ -298,23 +298,23 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
         if (finalPrompt.Contains("#{delivery_progress}", StringComparison.OrdinalIgnoreCase))
         {
-            var customerOrderArrivalTimeText = " ";
+            var deliveryProgressText = " ";
 
             if (soldToIds.Any())
             {
-                var caches = await _salesDataProvider.GetCustomerOrderArrivalTimeCacheBySoldToIdsAsync(soldToIds, cancellationToken).ConfigureAwait(false);
+                var caches = await _salesDataProvider.GetDeliveryProgressCacheBySoldToIdsAsync(soldToIds, cancellationToken).ConfigureAwait(false);
 
-                var customerOrderArrivalTimes = soldToIds
+                var deliveryProgressValues = soldToIds
                     .Select(id => caches.FirstOrDefault(c => string.Equals(c.Filter, id, StringComparison.OrdinalIgnoreCase))?.CacheValue?.Trim())
                     .Where(value => !string.IsNullOrWhiteSpace(value))
                     .ToList();
 
-                customerOrderArrivalTimeText = customerOrderArrivalTimes.Any()
-                    ? string.Join(Environment.NewLine + Environment.NewLine, customerOrderArrivalTimes)
+                deliveryProgressText = deliveryProgressValues.Any()
+                    ? string.Join(Environment.NewLine + Environment.NewLine, deliveryProgressValues)
                     : " ";
             }
 
-            finalPrompt = finalPrompt.Replace("#{delivery_progress}", customerOrderArrivalTimeText);
+            finalPrompt = finalPrompt.Replace("#{delivery_progress}", deliveryProgressText);
         }
         
         if (agentId.HasValue && finalPrompt.Contains("#{menu_items}", StringComparison.OrdinalIgnoreCase))

@@ -17,7 +17,7 @@ namespace SmartTalk.IntegrationTests.Services.Sale;
 public class SalesPlaceholderFixture
 {
     [Fact]
-    public async Task ShouldBuildUnifiedCustomerOrderArrivalTimePrompt()
+    public async Task ShouldBuildUnifiedDeliveryProgressPrompt()
     {
         var mapper = Substitute.For<IMapper>();
         var aiSpeechAssistantDataProvider = Substitute.For<IAiSpeechAssistantDataProvider>();
@@ -76,7 +76,7 @@ public class SalesPlaceholderFixture
                     ProfileJson = string.Empty
                 }));
         salesDataProvider
-            .GetCustomerOrderArrivalTimeCacheBySoldToIdsAsync(
+            .GetDeliveryProgressCacheBySoldToIdsAsync(
                 Arg.Is<List<string>>(x => x.Count == 2 && x[0] == "1001" && x[1] == "1002"),
                 Arg.Any<CancellationToken>())
             .Returns(
@@ -107,7 +107,7 @@ public class SalesPlaceholderFixture
     }
 
     [Fact]
-    public async Task ShouldRefreshCustomerOrderArrivalTimeCacheByIndividualSoldToId()
+    public async Task ShouldRefreshDeliveryProgressCacheByIndividualSoldToId()
     {
         var crmClient = Substitute.For<ICrmClient>();
         var salesService = Substitute.For<ISalesService>();
@@ -122,11 +122,11 @@ public class SalesPlaceholderFixture
                 Arg.Is<List<string>>(x => x.Count == 1 && x[0] == "1002"),
                 Arg.Any<CancellationToken>())
             .Returns("商品1002");
-        salesService.BuildCustomerOrderArrivalTimeStringAsync(
+        salesService.BuildCustomerDeliveryProgressStringAsync(
                 Arg.Is<List<string>>(x => x.Count == 1 && x[0] == "1001"),
                 Arg.Any<CancellationToken>())
             .Returns("到货1001");
-        salesService.BuildCustomerOrderArrivalTimeStringAsync(
+        salesService.BuildCustomerDeliveryProgressStringAsync(
                 Arg.Is<List<string>>(x => x.Count == 1 && x[0] == "1002"),
                 Arg.Any<CancellationToken>())
             .Returns("到货1002");
@@ -144,8 +144,8 @@ public class SalesPlaceholderFixture
 
         await salesDataProvider.Received(1).UpsertCustomerItemsCacheAsync("1001", "商品1001", false, Arg.Any<CancellationToken>());
         await salesDataProvider.Received(1).UpsertCustomerItemsCacheAsync("1002", "商品1002", false, Arg.Any<CancellationToken>());
-        await salesDataProvider.Received(1).UpsertCustomerOrderArrivalTimeCacheAsync("1001", "到货1001", false, Arg.Any<CancellationToken>());
-        await salesDataProvider.Received(1).UpsertCustomerOrderArrivalTimeCacheAsync("1002", "到货1002", true, Arg.Any<CancellationToken>());
-        await salesDataProvider.DidNotReceive().UpsertCustomerOrderArrivalTimeCacheAsync("1001/1002", Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
+        await salesDataProvider.Received(1).UpsertDeliveryProgressCacheAsync("1001", "到货1001", false, Arg.Any<CancellationToken>());
+        await salesDataProvider.Received(1).UpsertDeliveryProgressCacheAsync("1002", "到货1002", true, Arg.Any<CancellationToken>());
+        await salesDataProvider.DidNotReceive().UpsertDeliveryProgressCacheAsync("1001/1002", Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 }
