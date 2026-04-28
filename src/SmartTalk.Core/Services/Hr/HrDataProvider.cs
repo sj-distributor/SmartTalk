@@ -104,7 +104,5 @@ public class HrDataProvider : IHrDataProvider
         {
             await _repository.InsertAllAsync(entities, cancellationToken);
         }
-        
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 }
