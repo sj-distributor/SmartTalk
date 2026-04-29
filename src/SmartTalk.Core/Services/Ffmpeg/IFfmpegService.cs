@@ -454,7 +454,7 @@ public class FfmpegService : IFfmpegService
                 proc.StartInfo = new ProcessStartInfo
                 {
                     FileName = "ffmpeg",
-                    Arguments = $"-y -i {inputFileName} -c:a pcm_mulaw -ar 8000 {outputFileName}",
+                    Arguments = $"-hide_banner -loglevel error -y -i {inputFileName} -c:a pcm_mulaw -ar 8000 {outputFileName}",
                     RedirectStandardError = true,
                     RedirectStandardOutput = true,
                     UseShellExecute = false,
