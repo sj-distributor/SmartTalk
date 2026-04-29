@@ -121,80 +121,78 @@ public partial class AiSpeechAssistantService
         var newRelationEntities = new List<AiSpeechAssistantKnowledgeCopyRelated>();
         var shouldSyncLastedKnowledge = false;
 
-        if (shouldHandleRelatedKnowledges)
+        var newRelationsWithOriginalId = selectedTargetRelateds
+            .Select(r =>
+            {
+                AiSpeechAssistantKnowledgeCopyRelatedDto? dto = null;
+                if (relatedDtoMap != null && relatedDtoMap.TryGetValue(r.Id, out var found))
+                    dto = found;
+                return (OriginalRelationId: r.Id, Entity: new AiSpeechAssistantKnowledgeCopyRelated
+                {
+                    SourceKnowledgeId = r.SourceKnowledgeId,
+                    TargetKnowledgeId = latestKnowledge.Id,
+                    CopyKnowledgePoints = dto?.CopyKnowledgePoints ?? r.CopyKnowledgePoints,
+                    IsSyncUpdate = dto?.IsSyncUpdate ?? r.IsSyncUpdate,
+                    CreatedDate = DateTimeOffset.Now
+                });
+            })
+            .ToList();
+
+        newRelationEntities = newRelationsWithOriginalId.Select(x => x.Entity).ToList();
+
+        if (newRelationEntities.Count > 0)
         {
-            var newRelationsWithOriginalId = selectedTargetRelateds
-                .Select(r =>
-                {
-                    AiSpeechAssistantKnowledgeCopyRelatedDto? dto = null;
-                    if (relatedDtoMap != null && relatedDtoMap.TryGetValue(r.Id, out var found))
-                        dto = found;
-                    return (OriginalRelationId: r.Id, Entity: new AiSpeechAssistantKnowledgeCopyRelated
-                    {
-                        SourceKnowledgeId = r.SourceKnowledgeId,
-                        TargetKnowledgeId = latestKnowledge.Id,
-                        CopyKnowledgePoints = dto?.CopyKnowledgePoints ?? r.CopyKnowledgePoints,
-                        IsSyncUpdate = dto?.IsSyncUpdate ?? r.IsSyncUpdate,
-                        CreatedDate = DateTimeOffset.Now
-                    });
-                })
-                .ToList();
+            var persisted = await _aiSpeechAssistantDataProvider
+                .AddKnowledgeCopyRelatedAsync(newRelationEntities, true, cancellationToken)
+                .ConfigureAwait(false);
 
-            newRelationEntities = newRelationsWithOriginalId.Select(x => x.Entity).ToList();
-
-            if (newRelationEntities.Count > 0)
+            newRelationEntities = persisted.ToList();
+            newRelations = new List<AiSpeechAssistantKnowledgeCopyRelatedDto>(persisted.Count);
+            for (var i = 0; i < persisted.Count; i++)
             {
-                var persisted = await _aiSpeechAssistantDataProvider
-                    .AddKnowledgeCopyRelatedAsync(newRelationEntities, true, cancellationToken)
-                    .ConfigureAwait(false);
-
-                newRelationEntities = persisted.ToList();
-                newRelations = new List<AiSpeechAssistantKnowledgeCopyRelatedDto>(persisted.Count);
-                for (var i = 0; i < persisted.Count; i++)
+                var dto = _mapper.Map<AiSpeechAssistantKnowledgeCopyRelatedDto>(persisted[i]);
+                if (relatedDtoMap != null &&
+                    relatedDtoMap.TryGetValue(newRelationsWithOriginalId[i].OriginalRelationId, out var originalDto))
                 {
-                    var dto = _mapper.Map<AiSpeechAssistantKnowledgeCopyRelatedDto>(persisted[i]);
-                    if (relatedDtoMap != null &&
-                        relatedDtoMap.TryGetValue(newRelationsWithOriginalId[i].OriginalRelationId, out var originalDto))
-                    {
-                        dto.RelatedFrom = originalDto.RelatedFrom;
-                    }
-
-                    newRelations.Add(dto);
+                    dto.RelatedFrom = originalDto.RelatedFrom;
                 }
+
+                newRelations.Add(dto);
             }
+        }
 
-            if (selectedSourceRelateds.Count > 0)
+        if (prevKnowledge != null && selectedSourceRelateds.Count > 0)
+        {
+            if (shouldHandleRelatedKnowledges && relatedDtoMap != null)
             {
-                if (relatedDtoMap != null)
-                {
-                    selectedSourceRelateds
-                        .Where(r => relatedDtoMap.ContainsKey(r.Id))
-                        .ToList()
-                        .ForEach(r =>
-                        {
-                            r.CopyKnowledgePoints = relatedDtoMap[r.Id].CopyKnowledgePoints;
-                            r.IsSyncUpdate = relatedDtoMap[r.Id].IsSyncUpdate;
-                        });
-                }
+                selectedSourceRelateds
+                    .Where(r => relatedDtoMap.ContainsKey(r.Id))
+                    .ToList()
+                    .ForEach(r =>
+                    {
+                        r.CopyKnowledgePoints = relatedDtoMap[r.Id].CopyKnowledgePoints;
+                        r.IsSyncUpdate = relatedDtoMap[r.Id].IsSyncUpdate;
+                    });
 
                 selectedSourceRelateds.ForEach(x => x.SourceKnowledgeId = latestKnowledge.Id);
-                await _aiSpeechAssistantDataProvider.UpdateKnowledgeCopyRelatedAsync(selectedSourceRelateds, true, cancellationToken)
+                await _aiSpeechAssistantDataProvider
+                    .UpdateKnowledgeCopyRelatedAsync(selectedSourceRelateds, true, cancellationToken)
                     .ConfigureAwait(false);
 
                 shouldSyncLastedKnowledge = selectedSourceRelateds.Any(x => x.IsSyncUpdate);
             }
-        }
-        else if (prevKnowledge != null && selectedSourceRelateds.Count > 0)
-        {
-            var syncSourceRelatedsToMove = selectedSourceRelateds.Where(x => x.IsSyncUpdate).ToList();
-            if (syncSourceRelatedsToMove.Count > 0)
+            else
             {
-                syncSourceRelatedsToMove.ForEach(x => x.SourceKnowledgeId = latestKnowledge.Id);
-                await _aiSpeechAssistantDataProvider
-                    .UpdateKnowledgeCopyRelatedAsync(syncSourceRelatedsToMove, true, cancellationToken)
-                    .ConfigureAwait(false);
+                var syncSourceRelatedsToMove = selectedSourceRelateds.Where(x => x.IsSyncUpdate).ToList();
+                if (syncSourceRelatedsToMove.Count > 0)
+                {
+                    syncSourceRelatedsToMove.ForEach(x => x.SourceKnowledgeId = latestKnowledge.Id);
+                    await _aiSpeechAssistantDataProvider
+                        .UpdateKnowledgeCopyRelatedAsync(syncSourceRelatedsToMove, true, cancellationToken)
+                        .ConfigureAwait(false);
 
-                shouldSyncLastedKnowledge = true;
+                    shouldSyncLastedKnowledge = true;
+                }
             }
         }
 
