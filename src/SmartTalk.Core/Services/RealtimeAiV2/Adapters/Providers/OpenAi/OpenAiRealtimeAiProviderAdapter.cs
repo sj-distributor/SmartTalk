@@ -253,6 +253,31 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
         return results;
     }
 
+    private static string ExtractArgumentsJson(JsonElement item)
+    {
+        if (item.TryGetProperty("arguments", out var argsProp))
+        {
+            return argsProp.ValueKind switch
+            {
+                JsonValueKind.String => argsProp.GetString(),
+                JsonValueKind.Undefined or JsonValueKind.Null => null,
+                _ => argsProp.GetRawText()
+            };
+        }
+
+        if (item.TryGetProperty("arguments_json", out var argsJsonProp))
+        {
+            return argsJsonProp.ValueKind switch
+            {
+                JsonValueKind.String => argsJsonProp.GetString(),
+                JsonValueKind.Undefined or JsonValueKind.Null => null,
+                _ => argsJsonProp.GetRawText()
+            };
+        }
+
+        return null;
+    }
+
     private static string ExtractErrorMessage(JsonElement root)
     {
         if (root.TryGetProperty("error", out var errorProp) && errorProp.TryGetProperty("message", out var msgProp))
