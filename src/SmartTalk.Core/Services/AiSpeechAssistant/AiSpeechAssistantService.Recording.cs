@@ -1,5 +1,6 @@
 using Serilog;
-using OpenAI.Chat;
+using Lingua;
+using OpenAI.Audio;
 using SmartTalk.Core.Services.Caching;
 using SmartTalk.Core.Utils;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
@@ -8,6 +9,7 @@ using SmartTalk.Messages.Dto.Attachments;
 using SmartTalk.Messages.Enums.Caching;
 using SmartTalk.Messages.Enums.SpeechMatics;
 using SmartTalk.Messages.Enums.STT;
+using System.Text.RegularExpressions;
 using Task = System.Threading.Tasks.Task;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
@@ -21,6 +23,10 @@ public partial interface IAiSpeechAssistantService
 
 public partial class AiSpeechAssistantService
 {
+    private static readonly Regex TranscriptTokenRegex = new(
+        @"[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF]+|[\u1100-\u11FF\u3130-\u318F\uAC00-\uD7AF]+|[\p{L}]+(?:['’-][\p{L}]+)*",
+        RegexOptions.Compiled);
+
     public async Task RecordAiSpeechAssistantCallAsync(RecordAiSpeechAssistantCallCommand command, CancellationToken cancellationToken)
     {
         await RetryHelper.RetryAsync(async () =>
@@ -35,8 +41,8 @@ public partial class AiSpeechAssistantService
     {
         Log.Information("Handling ReceivePhoneRecord command: {@Command}", command);
 
-        var (record, agent) = await RetryHelper.RetryOnResultAsync(
-            ct => _phoneOrderDataProvider.GetRecordWithAgentAsync(command.CallSid, ct),
+        var (record, agent, _) = await RetryHelper.RetryOnResultAsync(
+            ct => _phoneOrderDataProvider.GetRecordWithAgentAndAssistantAsync(command.CallSid, ct),
             result => result.Item1 == null,
             maxRetryCount: 3,
             delay: TimeSpan.FromSeconds(10),
@@ -71,7 +77,7 @@ public partial class AiSpeechAssistantService
         var language = string.Empty;
         try
         {
-            language = await DetectAudioLanguageAsync(audioFileRawBytes, cancellationToken).ConfigureAwait(false);
+            language = await DetectAudioLanguageFromTranscriptAsync(audioFileRawBytes, cancellationToken).ConfigureAwait(false);
 
             await SendServerRestoreMessageIfNecessaryAsync(cancellationToken).ConfigureAwait(false);
         }
@@ -100,60 +106,138 @@ public partial class AiSpeechAssistantService
         };
     }
 
-    private async Task<string> DetectAudioLanguageAsync(byte[] audioContent, CancellationToken cancellationToken)
+    private async Task<string> DetectAudioLanguageFromTranscriptAsync(byte[] audioContent, CancellationToken cancellationToken)
     {
-        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
+        var transcript = await TranscribeAudioAsync(audioContent, cancellationToken).ConfigureAwait(false);
+        var languageCode = DetectDominantLanguageFromTranscript(transcript);
 
-        var audioData = BinaryData.FromBytes(audioContent);
-        List<ChatMessage> messages =
-        [
-            new SystemChatMessage("""
-                                  You are a professional speech recognition analyst. Based on the audio content, determine the main language used and return only one language code from the following options:
-                                  zh-CN: Mandarin (Simplified Chinese)
-                                  zh: Cantonese
-                                  zh-TW: Taiwanese Chinese (Traditional Chinese)
-                                  en: English
-                                  es: Spanish
-                                  ko: Korean
+        Log.Information("Detect audio language by transcript. TranscriptLength: {TranscriptLength}, Result: {Result}",
+            transcript?.Length ?? 0, languageCode);
 
-                                  Rules:
-                                  1. Carefully analyze the entire speech content and identify the **dominant spoken language**, not just occasional words or short phrases.
-                                  2. If the recording contains noise, background sounds, or non-standard pronunciation, focus on consistent linguistic features such as tone, rhythm, and pronunciation pattern.
-                                  3. **Do NOT confuse accented English with Chinese.** English spoken with a Chinese accent or non-standard pronunciation must still be classified as English (en).
-                                  4. Only return 'es' (Spanish) if the majority of the recording is clearly and consistently spoken in Spanish. Do NOT classify English with Spanish-like sounds or background as Spanish.
-                                  5. If the recording mixes languages, return the code of the language that dominates the majority of the speaking time.
-                                  6. **If you are uncertain between English and Chinese, always choose English (en).**
-                                  7. Return only the code without any additional text, punctuation, or explanations.
+        return languageCode;
+    }
 
-                                  Examples:
-                                  If the audio is in Mandarin, even with background noise, return: zh-CN
-                                  If the audio is in Cantonese, possibly with some Mandarin words, return: zh
-                                  If the audio is in Taiwanese Mandarin (Traditional Chinese), return: zh-TW
-                                  If the audio is in English, even with a strong accent or imperfect pronunciation, return: en
-                                  If the audio is in English with background noise, return: en
-                                  If the audio is predominantly in Spanish, spoken clearly and throughout most of the recording, return: es
-                                  If the audio is predominantly in Korean, spoken clearly and throughout most of the recording, return: ko
-                                  If the audio has both Mandarin and English but Mandarin is the dominant language, return: zh-CN
-                                  If the audio has both Cantonese and English but English dominates, return: en
-                                  If the audio is in English but contains occasional Chinese filler words such as "啊", "嗯", or "對", return: en
-                                  If the audio is mainly in Chinese but the speaker occasionally uses short English words like "OK", "yeah", or "sorry", return: zh-CN
-                                  If the recording has Chinese background speech but the main speaker talks in English, return: en
-                                  If the recording has multiple speakers where one speaks English and others speak Mandarin, determine which language dominates most of the speaking time and return that language code.
-                                  If the audio is short and contains only a few clear English words, classify as English (en).
-                                  If the audio is mostly silent, unclear, or contains indistinguishable sounds, choose the language that can be most confidently recognized based on speech features, not noise.
+    private async Task<string> TranscribeAudioAsync(byte[] audioContent, CancellationToken cancellationToken)
+    {
+        AudioClient client = new("gpt-4o-transcribe", _openAiSettings.ApiKey);
 
-                                  """),
-            new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
-            new UserChatMessage("Please determine the language based on the recording and return the corresponding code.")
-        ];
+        await using var audioStream = new MemoryStream(audioContent);
 
-        ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
+        AudioTranscriptionOptions options = new()
+        {
+            ResponseFormat = AudioTranscriptionFormat.Text
+        };
 
-        ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
+        var transcription = await client
+            .TranscribeAudioAsync(audioStream, "recording.wav", options, cancellationToken)
+            .ConfigureAwait(false);
 
-        Log.Information("Detect the audio language: " + completion.Content.FirstOrDefault()?.Text);
+        return transcription.Value?.Text?.Trim() ?? string.Empty;
+    }
 
-        return completion.Content.FirstOrDefault()?.Text ?? "en";
+    private string DetectDominantLanguageFromTranscript(string transcript)
+    {
+        var detector = LanguageDetectorBuilder
+            .FromLanguages(Language.English, Language.Spanish, Language.Korean, Language.Chinese)
+            .Build();
+
+        var weights = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var totalWeight = 0;
+
+        foreach (Match match in TranscriptTokenRegex.Matches(transcript ?? string.Empty))
+        {
+            var token = match.Value.Trim();
+
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                continue;
+            }
+
+            var languageCode = MapLinguaLanguageToCode(detector.DetectLanguageOf(token));
+
+            if (string.IsNullOrWhiteSpace(languageCode))
+            {
+                continue;
+            }
+
+            var weight = token.Length;
+            totalWeight += weight;
+
+            if (!weights.TryAdd(languageCode, weight))
+            {
+                weights[languageCode] += weight;
+            }
+        }
+
+        if (totalWeight == 0 && !string.IsNullOrWhiteSpace(transcript))
+        {
+            return RefineChineseLanguageCode(MapLinguaLanguageToCode(detector.DetectLanguageOf(transcript)) ?? "en", transcript);
+        }
+
+        var dominantLanguageCode = weights
+            .OrderByDescending(x => x.Value)
+            .Select(x => x.Key)
+            .FirstOrDefault() ?? "en";
+
+        return RefineChineseLanguageCode(dominantLanguageCode, transcript);
+    }
+
+    private string MapLinguaLanguageToCode(Language language)
+    {
+        return language switch
+        {
+            Language.English => "en",
+            Language.Spanish => "es",
+            Language.Korean => "ko",
+            Language.Chinese => "zh",
+            _ => null
+        };
+    }
+
+    private string RefineChineseLanguageCode(string languageCode, string transcript)
+    {
+        if (!string.Equals(languageCode, "zh", StringComparison.OrdinalIgnoreCase))
+        {
+            return languageCode;
+        }
+
+        if (ContainsCantoneseMarkers(transcript))
+        {
+            return "zh";
+        }
+
+        return ContainsTraditionalChineseMarkers(transcript) ? "zh-TW" : "zh-CN";
+    }
+
+    private bool ContainsCantoneseMarkers(string transcript)
+    {
+        if (string.IsNullOrWhiteSpace(transcript))
+        {
+            return false;
+        }
+
+        var markers = new[]
+        {
+            "佢", "佢哋", "冇", "咗", "喺", "嘅", "咩", "啲", "唔", "嚟", "呢", "嗰", "咁", "噉", "而家", "邊個", "乜嘢"
+        };
+
+        return markers.Any(transcript.Contains);
+    }
+
+    private bool ContainsTraditionalChineseMarkers(string transcript)
+    {
+        if (string.IsNullOrWhiteSpace(transcript))
+        {
+            return false;
+        }
+
+        var markers = new[]
+        {
+            "這", "個", "們", "來", "還", "說", "點", "裡", "為", "會", "讓", "買", "賣", "應", "該", "覺", "關", "係",
+            "處", "龍", "體", "醫", "藥", "臺", "灣", "與", "對", "於", "經", "過", "聽", "訊", "錄"
+        };
+
+        return markers.Any(transcript.Contains);
     }
 
     private async Task SendServerRestoreMessageIfNecessaryAsync(CancellationToken cancellationToken)
