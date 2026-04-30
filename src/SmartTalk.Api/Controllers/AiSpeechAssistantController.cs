@@ -130,6 +130,15 @@ public class AiSpeechAssistantController : ControllerBase
 
         return Ok(response);
     }
+
+    [Route("recording/transcribe-diarize"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(TranscribeDiarizedAudioResponse))]
+    public async Task<IActionResult> TranscribeDiarizedAudioAsync([FromBody] TranscribeDiarizedAudioCommand command)
+    {
+        var response = await _mediator.SendAsync<TranscribeDiarizedAudioCommand, TranscribeDiarizedAudioResponse>(command).ConfigureAwait(false);
+
+        return Ok(response);
+    }
     
     [Route("numbers"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetNumbersResponse))]

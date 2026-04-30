@@ -1,5 +1,6 @@
 using Serilog;
 using Lingua;
+using Newtonsoft.Json.Linq;
 using OpenAI.Audio;
 using OpenAI.Chat;
 using SmartTalk.Core.Services.Caching;
@@ -24,6 +25,8 @@ public partial interface IAiSpeechAssistantService
     Task<DetectAudioLanguageResponse> DetectAudioLanguageAsync(DetectAudioLanguageCommand command, CancellationToken cancellationToken);
 
     Task<TranscribeAndDetectAudioLanguageResponse> TranscribeAndDetectAudioLanguageAsync(TranscribeAndDetectAudioLanguageCommand command, CancellationToken cancellationToken);
+
+    Task<TranscribeDiarizedAudioResponse> TranscribeDiarizedAudioAsync(TranscribeDiarizedAudioCommand command, CancellationToken cancellationToken);
 }
 
 public partial class AiSpeechAssistantService
@@ -64,6 +67,25 @@ public partial class AiSpeechAssistantService
         return new TranscribeAndDetectAudioLanguageResponse
         {
             Data = detection
+        };
+    }
+
+    public async Task<TranscribeDiarizedAudioResponse> TranscribeDiarizedAudioAsync(TranscribeDiarizedAudioCommand command, CancellationToken cancellationToken)
+    {
+        var audioContent = await _httpClientFactory
+            .GetAsync<byte[]>(command.RecordingUrl, timeout: TimeSpan.FromMinutes(5), cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var extension = ResolveAudioFileExtension(command.RecordingUrl);
+        var diarizedSegments = await TranscribeDiarizedAudioSegmentsAsync(audioContent, extension, cancellationToken).ConfigureAwait(false);
+
+        Log.Information(
+            "Transcribe diarized audio by url. RecordingUrl: {RecordingUrl}, SegmentCount: {SegmentCount}",
+            command.RecordingUrl,
+            diarizedSegments.Count);
+
+        return new TranscribeDiarizedAudioResponse
+        {
+            Data = diarizedSegments
         };
     }
 
@@ -300,6 +322,68 @@ public partial class AiSpeechAssistantService
         return transcription.Value?.Text?.Trim() ?? string.Empty;
     }
 
+    private async Task<List<TranscribeDiarizedAudioSegmentDto>> TranscribeDiarizedAudioSegmentsAsync(
+        byte[] audioContent,
+        string fileExtension,
+        CancellationToken cancellationToken)
+    {
+        var headers = new Dictionary<string, string>
+        {
+            { "Authorization", $"Bearer {_openAiSettings.ApiKey}" }
+        };
+
+        if (!string.IsNullOrWhiteSpace(_openAiSettings.Organization))
+        {
+            headers["OpenAI-Organization"] = _openAiSettings.Organization;
+        }
+
+        var requestUrl = $"{ResolveOpenAiBaseUrl()}/v1/audio/transcriptions";
+        var response = await _httpClientFactory.PostAsMultipartAsync<string>(
+            requestUrl,
+            new Dictionary<string, string>
+            {
+                ["model"] = "gpt-4o-transcribe-diarize",
+                ["response_format"] = "diarized_json",
+                ["chunking_strategy"] = "auto"
+            },
+            new Dictionary<string, (byte[], string)>
+            {
+                ["file"] = (audioContent, $"recording{fileExtension}")
+            },
+            cancellationToken,
+            timeout: TimeSpan.FromMinutes(10),
+            headers: headers,
+            isNeedToReadErrorContent: true).ConfigureAwait(false);
+
+        if (string.IsNullOrWhiteSpace(response))
+        {
+            return [];
+        }
+
+        var payload = JObject.Parse(response);
+        var segments = payload["segments"] as JArray;
+
+        if (segments == null || segments.Count == 0)
+        {
+            return [];
+        }
+
+        var speakerRoles = ResolveSpeakerRoles(segments);
+
+        return segments
+            .OfType<JObject>()
+            .Select(segment => new TranscribeDiarizedAudioSegmentDto
+            {
+                Start = segment.Value<double?>("start") ?? 0,
+                End = segment.Value<double?>("end") ?? 0,
+                Speaker = segment.Value<string>("speaker"),
+                Role = ResolveSpeakerRole(segment.Value<string>("speaker"), speakerRoles),
+                Text = segment.Value<string>("text")?.Trim()
+            })
+            .Where(segment => !string.IsNullOrWhiteSpace(segment.Text))
+            .ToList();
+    }
+
     private TranscribeAndDetectAudioLanguageResponseData DetectDominantLanguageFromTranscript(string transcript)
     {
         var detector = LanguageDetectorBuilder
@@ -362,6 +446,96 @@ public partial class AiSpeechAssistantService
     private string ResolveDefaultLanguageCode(string assistantModelLanguage)
     {
         return NormalizeLanguageCode(assistantModelLanguage) ?? "en";
+    }
+
+    private string ResolveOpenAiBaseUrl()
+    {
+        return string.IsNullOrWhiteSpace(_openAiSettings.BaseUrl)
+            ? "https://api.openai.com"
+            : _openAiSettings.BaseUrl.TrimEnd('/');
+    }
+
+    private string ResolveAudioFileExtension(string recordingUrl)
+    {
+        if (!Uri.TryCreate(recordingUrl, UriKind.Absolute, out var uri))
+        {
+            return ".wav";
+        }
+
+        var extension = Path.GetExtension(uri.AbsolutePath);
+
+        return string.IsNullOrWhiteSpace(extension) ? ".wav" : extension;
+    }
+
+    private Dictionary<string, string> ResolveSpeakerRoles(JArray segments)
+    {
+        var speakerRoles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var speaker in segments
+                     .OfType<JObject>()
+                     .Select(segment => segment.Value<string>("speaker"))
+                     .Where(speaker => !string.IsNullOrWhiteSpace(speaker))
+                     .Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var explicitRole = TryResolveExplicitRole(speaker);
+
+            if (!string.IsNullOrWhiteSpace(explicitRole))
+            {
+                speakerRoles[speaker] = explicitRole;
+                continue;
+            }
+
+            speakerRoles[speaker] = speakerRoles.Count switch
+            {
+                0 => "客服",
+                1 => "用户",
+                _ => "未知"
+            };
+        }
+
+        return speakerRoles;
+    }
+
+    private string ResolveSpeakerRole(string speaker, Dictionary<string, string> speakerRoles)
+    {
+        if (string.IsNullOrWhiteSpace(speaker))
+        {
+            return "未知";
+        }
+
+        return speakerRoles.TryGetValue(speaker, out var role) ? role : "未知";
+    }
+
+    private string TryResolveExplicitRole(string speaker)
+    {
+        if (string.IsNullOrWhiteSpace(speaker))
+        {
+            return null;
+        }
+
+        var normalizedSpeaker = speaker.Trim().ToLowerInvariant();
+
+        if (normalizedSpeaker.Contains("agent") ||
+            normalizedSpeaker.Contains("assistant") ||
+            normalizedSpeaker.Contains("support") ||
+            normalizedSpeaker.Contains("客服") ||
+            normalizedSpeaker.Contains("店员") ||
+            normalizedSpeaker.Contains("商家"))
+        {
+            return "客服";
+        }
+
+        if (normalizedSpeaker.Contains("customer") ||
+            normalizedSpeaker.Contains("client") ||
+            normalizedSpeaker.Contains("caller") ||
+            normalizedSpeaker.Contains("user") ||
+            normalizedSpeaker.Contains("用户") ||
+            normalizedSpeaker.Contains("顾客"))
+        {
+            return "用户";
+        }
+
+        return null;
     }
 
     private string MapLinguaLanguageToCode(Language language)
