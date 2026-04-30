@@ -29,7 +29,7 @@ public partial interface IAiSpeechAssistantService
 public partial class AiSpeechAssistantService
 {
     private static readonly Regex TranscriptTokenRegex = new(
-        @"[\p{IsHan}]+|[\p{IsHangul}]+|[\p{L}]+(?:['’-][\p{L}]+)*",
+        @"[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF]+|[\u1100-\u11FF\u3130-\u318F\uAC00-\uD7AF]+|[\p{L}]+(?:['’-][\p{L}]+)*",
         RegexOptions.Compiled);
 
     public async Task<DetectAudioLanguageResponse> DetectAudioLanguageAsync(DetectAudioLanguageCommand command, CancellationToken cancellationToken)
