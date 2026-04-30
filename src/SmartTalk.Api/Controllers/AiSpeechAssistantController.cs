@@ -121,6 +121,15 @@ public class AiSpeechAssistantController : ControllerBase
 
         return Ok(response);
     }
+
+    [Route("recording/language/transcribe-detect"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(TranscribeAndDetectAudioLanguageResponse))]
+    public async Task<IActionResult> TranscribeAndDetectAudioLanguageAsync([FromBody] TranscribeAndDetectAudioLanguageCommand command)
+    {
+        var response = await _mediator.SendAsync<TranscribeAndDetectAudioLanguageCommand, TranscribeAndDetectAudioLanguageResponse>(command).ConfigureAwait(false);
+
+        return Ok(response);
+    }
     
     [Route("numbers"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetNumbersResponse))]

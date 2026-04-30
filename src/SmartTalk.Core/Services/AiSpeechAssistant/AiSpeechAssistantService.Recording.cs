@@ -1,4 +1,6 @@
 using Serilog;
+using Lingua;
+using OpenAI.Audio;
 using OpenAI.Chat;
 using SmartTalk.Core.Services.Caching;
 using SmartTalk.Core.Utils;
@@ -8,6 +10,7 @@ using SmartTalk.Messages.Dto.Attachments;
 using SmartTalk.Messages.Enums.Caching;
 using SmartTalk.Messages.Enums.SpeechMatics;
 using SmartTalk.Messages.Enums.STT;
+using System.Text.RegularExpressions;
 using Task = System.Threading.Tasks.Task;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
@@ -19,10 +22,16 @@ public partial interface IAiSpeechAssistantService
     Task ReceivePhoneRecordingStatusCallbackAsync(ReceivePhoneRecordingStatusCallbackCommand command, CancellationToken cancellationToken);
 
     Task<DetectAudioLanguageResponse> DetectAudioLanguageAsync(DetectAudioLanguageCommand command, CancellationToken cancellationToken);
+
+    Task<TranscribeAndDetectAudioLanguageResponse> TranscribeAndDetectAudioLanguageAsync(TranscribeAndDetectAudioLanguageCommand command, CancellationToken cancellationToken);
 }
 
 public partial class AiSpeechAssistantService
 {
+    private static readonly Regex TranscriptTokenRegex = new(
+        @"[\p{IsHan}]+|[\p{IsHangul}]+|[\p{L}]+(?:['’-][\p{L}]+)*",
+        RegexOptions.Compiled);
+
     public async Task<DetectAudioLanguageResponse> DetectAudioLanguageAsync(DetectAudioLanguageCommand command, CancellationToken cancellationToken)
     {
         var audioContent = await _httpClientFactory
@@ -35,6 +44,26 @@ public partial class AiSpeechAssistantService
         return new DetectAudioLanguageResponse
         {
             Data = languageCode
+        };
+    }
+
+    public async Task<TranscribeAndDetectAudioLanguageResponse> TranscribeAndDetectAudioLanguageAsync(TranscribeAndDetectAudioLanguageCommand command, CancellationToken cancellationToken)
+    {
+        var audioContent = await _httpClientFactory
+            .GetAsync<byte[]>(command.RecordingUrl, timeout: TimeSpan.FromMinutes(5), cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var transcript = await TranscribeAudioAsync(audioContent, cancellationToken).ConfigureAwait(false);
+        var detection = DetectDominantLanguageFromTranscript(transcript);
+
+        Log.Information(
+            "Transcribe and detect audio language by url. RecordingUrl: {RecordingUrl}, Result: {Result}, TranscriptLength: {TranscriptLength}",
+            command.RecordingUrl,
+            detection.Language,
+            transcript?.Length ?? 0);
+
+        return new TranscribeAndDetectAudioLanguageResponse
+        {
+            Data = detection
         };
     }
 
@@ -253,9 +282,103 @@ public partial class AiSpeechAssistantService
         return languageCode;
     }
 
+    private async Task<string> TranscribeAudioAsync(byte[] audioContent, CancellationToken cancellationToken)
+    {
+        AudioClient client = new("gpt-4o-transcribe", _openAiSettings.ApiKey);
+
+        await using var audioStream = new MemoryStream(audioContent);
+
+        AudioTranscriptionOptions options = new()
+        {
+            ResponseFormat = AudioTranscriptionFormat.Text
+        };
+
+        var transcription = await client
+            .TranscribeAudioAsync(audioStream, "recording.wav", options, cancellationToken)
+            .ConfigureAwait(false);
+
+        return transcription.Value?.Text?.Trim() ?? string.Empty;
+    }
+
+    private TranscribeAndDetectAudioLanguageResponseData DetectDominantLanguageFromTranscript(string transcript)
+    {
+        var detector = LanguageDetectorBuilder
+            .FromAllLanguages()
+            .Build();
+
+        var weights = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var totalWeight = 0;
+
+        foreach (Match match in TranscriptTokenRegex.Matches(transcript ?? string.Empty))
+        {
+            var token = match.Value.Trim();
+
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                continue;
+            }
+
+            var languageCode = MapLinguaLanguageToCode(detector.DetectLanguageOf(token));
+
+            if (string.IsNullOrWhiteSpace(languageCode))
+            {
+                continue;
+            }
+
+            var weight = token.Length;
+            totalWeight += weight;
+
+            if (!weights.TryAdd(languageCode, weight))
+            {
+                weights[languageCode] += weight;
+            }
+        }
+
+        if (totalWeight == 0 && !string.IsNullOrWhiteSpace(transcript))
+        {
+            var fallbackLanguageCode = MapLinguaLanguageToCode(detector.DetectLanguageOf(transcript)) ?? "unknown";
+            weights[fallbackLanguageCode] = 1;
+            totalWeight = 1;
+        }
+
+        var ratios = weights
+            .OrderByDescending(x => x.Value)
+            .Select(x => new TranscribeAndDetectAudioLanguageRatioDto
+            {
+                Language = x.Key,
+                Weight = x.Value,
+                Ratio = Math.Round((double)x.Value / totalWeight, 4)
+            })
+            .ToList();
+
+        return new TranscribeAndDetectAudioLanguageResponseData
+        {
+            Language = ratios.FirstOrDefault()?.Language ?? "unknown",
+            Transcript = transcript,
+            Ratios = ratios
+        };
+    }
+
     private string ResolveDefaultLanguageCode(string assistantModelLanguage)
     {
         return NormalizeLanguageCode(assistantModelLanguage) ?? "en";
+    }
+
+    private string MapLinguaLanguageToCode(Language language)
+    {
+        if (language == Language.Unknown)
+        {
+            return null;
+        }
+
+        var isoCode = LanguageInfo.IsoCode6391(language);
+
+        if (isoCode == IsoCode6391.None)
+        {
+            return null;
+        }
+
+        return isoCode.ToString().ToLowerInvariant();
     }
 
     private string NormalizeLanguageCode(string languageCode)
