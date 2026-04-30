@@ -17,10 +17,27 @@ public partial interface IAiSpeechAssistantService
     Task RecordAiSpeechAssistantCallAsync(RecordAiSpeechAssistantCallCommand command, CancellationToken cancellationToken);
 
     Task ReceivePhoneRecordingStatusCallbackAsync(ReceivePhoneRecordingStatusCallbackCommand command, CancellationToken cancellationToken);
+
+    Task<DetectAudioLanguageResponse> DetectAudioLanguageAsync(DetectAudioLanguageCommand command, CancellationToken cancellationToken);
 }
 
 public partial class AiSpeechAssistantService
 {
+    public async Task<DetectAudioLanguageResponse> DetectAudioLanguageAsync(DetectAudioLanguageCommand command, CancellationToken cancellationToken)
+    {
+        var audioContent = await _httpClientFactory
+            .GetAsync<byte[]>(command.RecordingUrl, timeout: TimeSpan.FromMinutes(5), cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var languageCode = await DetectAudioLanguageOnceAsync(audioContent, cancellationToken).ConfigureAwait(false);
+
+        Log.Information("Detect audio language by url. RecordingUrl: {RecordingUrl}, Result: {Result}", command.RecordingUrl, languageCode);
+
+        return new DetectAudioLanguageResponse
+        {
+            Data = languageCode
+        };
+    }
+
     public async Task RecordAiSpeechAssistantCallAsync(RecordAiSpeechAssistantCallCommand command, CancellationToken cancellationToken)
     {
         await RetryHelper.RetryAsync(async () =>
@@ -195,6 +212,45 @@ public partial class AiSpeechAssistantService
             finalLanguageCode);
 
         return finalLanguageCode;
+    }
+
+    private async Task<string> DetectAudioLanguageOnceAsync(byte[] audioContent, CancellationToken cancellationToken)
+    {
+        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
+
+        var audioData = BinaryData.FromBytes(audioContent);
+        List<ChatMessage> messages =
+        [
+            new SystemChatMessage("""
+                                  You are a professional speech recognition analyst. Based on the audio content, determine the main language used and return only one language code from the following options:
+                                  zh-CN: Mandarin (Simplified Chinese)
+                                  zh: Cantonese
+                                  zh-TW: Taiwanese Chinese (Traditional Chinese)
+                                  en: English
+                                  es: Spanish
+                                  ko: Korean
+
+                                  Rules:
+                                  1. Carefully analyze the entire speech content and identify the dominant spoken language, not just occasional words or short phrases.
+                                  2. If the recording contains noise, background sounds, or non-standard pronunciation, focus on consistent linguistic features such as tone, rhythm, and pronunciation pattern.
+                                  3. Do NOT confuse accented English with Chinese. English spoken with a Chinese accent or non-standard pronunciation must still be classified as English (en).
+                                  4. Only return 'es' (Spanish) if the majority of the recording is clearly and consistently spoken in Spanish. Do NOT classify English with Spanish-like sounds or background as Spanish.
+                                  5. If the recording mixes languages, return the code of the language that dominates the majority of the speaking time.
+                                  6. If you are uncertain between English and Chinese, always choose English (en).
+                                  7. Return only the code without any additional text, punctuation, or explanations.
+                                  """),
+            new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
+            new UserChatMessage("Please determine the language based on the recording and return the corresponding code.")
+        ];
+
+        ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
+
+        ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken).ConfigureAwait(false);
+        var languageCode = NormalizeLanguageCode(completion.Content.FirstOrDefault()?.Text) ?? "en";
+
+        Log.Information("Detect audio language single pass result: {Result}", languageCode);
+
+        return languageCode;
     }
 
     private string ResolveDefaultLanguageCode(string assistantModelLanguage)
