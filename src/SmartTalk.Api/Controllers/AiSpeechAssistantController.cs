@@ -103,6 +103,15 @@ public class AiSpeechAssistantController : ControllerBase
         
         return Ok();
     }
+
+    [Route("recording/language/detect"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(DetectAudioLanguageResponse))]
+    public async Task<IActionResult> DetectAudioLanguageAsync([FromBody] DetectAudioLanguageCommand command)
+    {
+        var response = await _mediator.SendAsync<DetectAudioLanguageCommand, DetectAudioLanguageResponse>(command).ConfigureAwait(false);
+
+        return Ok(response);
+    }
     
     [Route("numbers"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetNumbersResponse))]
