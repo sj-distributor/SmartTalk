@@ -11,6 +11,7 @@ using SmartTalk.Messages.Dto.Attachments;
 using SmartTalk.Messages.Enums.Caching;
 using SmartTalk.Messages.Enums.SpeechMatics;
 using SmartTalk.Messages.Enums.STT;
+using System.Net.Http.Headers;
 using System.Text.RegularExpressions;
 using Task = System.Threading.Tasks.Task;
 
@@ -327,45 +328,99 @@ public partial class AiSpeechAssistantService
         string fileExtension,
         CancellationToken cancellationToken)
     {
-        var headers = new Dictionary<string, string>
+        var requestUrl = $"{ResolveOpenAiBaseUrl()}/v1/audio/transcriptions";
+        var requestFileName = $"recording{fileExtension}";
+        var requestBaseUrl = ResolveOpenAiBaseUrl();
+
+        Log.Information(
+            "Starting OpenAI diarized transcription. Url: {Url}, BaseUrl: {BaseUrl}, FileName: {FileName}, FileSize: {FileSize}, ContentType: {ContentType}",
+            requestUrl,
+            requestBaseUrl,
+            requestFileName,
+            audioContent?.Length ?? 0,
+            ResolveAudioContentType(fileExtension));
+
+        if ((audioContent?.Length ?? 0) > 25 * 1024 * 1024)
         {
-            { "Authorization", $"Bearer {_openAiSettings.ApiKey}" }
-        };
+            Log.Warning(
+                "OpenAI diarized transcription input exceeds documented file size limit. FileName: {FileName}, FileSize: {FileSize}",
+                requestFileName,
+                audioContent?.Length ?? 0);
+        }
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, requestUrl);
+        using var multipartContent = new MultipartFormDataContent();
+        using var fileContent = new ByteArrayContent(audioContent);
+
+        fileContent.Headers.ContentType = MediaTypeHeaderValue.Parse(ResolveAudioContentType(fileExtension));
+
+        multipartContent.Add(new StringContent("gpt-4o-transcribe-diarize"), "model");
+        multipartContent.Add(new StringContent("diarized_json"), "response_format");
+        multipartContent.Add(new StringContent("auto"), "chunking_strategy");
+        multipartContent.Add(fileContent, "file", requestFileName);
+
+        request.Content = multipartContent;
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _openAiSettings.ApiKey);
 
         if (!string.IsNullOrWhiteSpace(_openAiSettings.Organization))
         {
-            headers["OpenAI-Organization"] = _openAiSettings.Organization;
+            request.Headers.Add("OpenAI-Organization", _openAiSettings.Organization);
         }
 
-        var requestUrl = $"{ResolveOpenAiBaseUrl()}/v1/audio/transcriptions";
-        var response = await _httpClientFactory.PostAsMultipartAsync<string>(
-            requestUrl,
-            new Dictionary<string, string>
-            {
-                ["model"] = "gpt-4o-transcribe-diarize",
-                ["response_format"] = "diarized_json",
-                ["chunking_strategy"] = "auto"
-            },
-            new Dictionary<string, (byte[], string)>
-            {
-                ["file"] = (audioContent, $"recording{fileExtension}")
-            },
-            cancellationToken,
-            timeout: TimeSpan.FromMinutes(10),
-            headers: headers,
-            isNeedToReadErrorContent: true).ConfigureAwait(false);
+        using var client = _httpClientFactory.CreateClient(timeout: TimeSpan.FromMinutes(10));
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+        var responseText = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
 
-        if (string.IsNullOrWhiteSpace(response))
+        Log.Information(
+            "OpenAI diarized transcription response received. StatusCode: {StatusCode}, ReasonPhrase: {ReasonPhrase}, ContentType: {ResponseContentType}, BodyPreview: {BodyPreview}",
+            (int)response.StatusCode,
+            response.ReasonPhrase ?? string.Empty,
+            response.Content.Headers.ContentType?.ToString() ?? string.Empty,
+            BuildResponsePreview(responseText));
+
+        if (!response.IsSuccessStatusCode)
         {
-            return [];
+            throw new InvalidOperationException(
+                $"OpenAI diarized transcription request failed. StatusCode={(int)response.StatusCode}, Reason={response.ReasonPhrase}, Body={BuildResponsePreview(responseText)}");
         }
 
-        var payload = JObject.Parse(response);
+        if (string.IsNullOrWhiteSpace(responseText))
+        {
+            throw new InvalidOperationException("OpenAI diarized transcription returned an empty response body.");
+        }
+
+        JObject payload;
+        try
+        {
+            payload = JObject.Parse(responseText);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to parse OpenAI diarized transcription response. BodyPreview: {BodyPreview}", BuildResponsePreview(responseText));
+            throw new InvalidOperationException(
+                $"OpenAI diarized transcription returned non-JSON content. Body={BuildResponsePreview(responseText)}",
+                ex);
+        }
+
+        if (payload["error"] is JObject error)
+        {
+            Log.Error("OpenAI diarized transcription returned an error payload: {Error}", error.ToString());
+            throw new InvalidOperationException($"OpenAI diarized transcription returned an error payload: {error}");
+        }
+
         var segments = payload["segments"] as JArray;
+        var text = payload.Value<string>("text")?.Trim() ?? string.Empty;
+
+        Log.Information(
+            "Parsed OpenAI diarized transcription payload. Keys: {Keys}, SegmentCount: {SegmentCount}, TranscriptLength: {TranscriptLength}",
+            string.Join(", ", payload.Properties().Select(p => p.Name)),
+            segments?.Count ?? 0,
+            text.Length);
 
         if (segments == null || segments.Count == 0)
         {
-            return [];
+            throw new InvalidOperationException(
+                $"OpenAI diarized transcription did not return any segments. Body={BuildResponsePreview(responseText)}");
         }
 
         var speakerRoles = ResolveSpeakerRoles(segments);
@@ -465,6 +520,35 @@ public partial class AiSpeechAssistantService
         var extension = Path.GetExtension(uri.AbsolutePath);
 
         return string.IsNullOrWhiteSpace(extension) ? ".wav" : extension;
+    }
+
+    private string ResolveAudioContentType(string fileExtension)
+    {
+        return fileExtension.ToLowerInvariant() switch
+        {
+            ".mp3" => "audio/mpeg",
+            ".mp4" => "audio/mp4",
+            ".mpeg" => "audio/mpeg",
+            ".mpga" => "audio/mpeg",
+            ".m4a" => "audio/m4a",
+            ".wav" => "audio/wav",
+            ".webm" => "audio/webm",
+            _ => "application/octet-stream"
+        };
+    }
+
+    private string BuildResponsePreview(string responseText, int maxLength = 1200)
+    {
+        if (string.IsNullOrWhiteSpace(responseText))
+        {
+            return "<empty>";
+        }
+
+        var normalized = responseText.Replace("\r", " ").Replace("\n", " ").Trim();
+
+        return normalized.Length <= maxLength
+            ? normalized
+            : normalized[..maxLength] + "...";
     }
 
     private Dictionary<string, string> ResolveSpeakerRoles(JArray segments)
