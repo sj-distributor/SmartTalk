@@ -1,13 +1,13 @@
 using Serilog;
-using OpenAI.Chat;
+using Newtonsoft.Json.Linq;
 using SmartTalk.Core.Services.Caching;
 using SmartTalk.Core.Utils;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.Attachments;
 using SmartTalk.Messages.Dto.Attachments;
+using SmartTalk.Messages.Dto.SpeechMatics;
 using SmartTalk.Messages.Enums.Caching;
-using SmartTalk.Messages.Enums.SpeechMatics;
-using SmartTalk.Messages.Enums.STT;
+using SmartTalk.Messages.Enums.PhoneOrder;
 using Task = System.Threading.Tasks.Task;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
@@ -68,10 +68,19 @@ public partial class AiSpeechAssistantService
             await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, agent.WechatRobotKey, $"来电电话：{record.IncomingCallNumber ?? ""}\n\n您有一条新的AI通话录音：\n{recordingUrl}", Array.Empty<string>(), cancellationToken).ConfigureAwait(false);
         }
 
-        var language = string.Empty;
         try
         {
-            language = await DetectAudioLanguageAsync(audioFileRawBytes, cancellationToken).ConfigureAwait(false);
+            var speakInfos = await TranscribePhoneOrderSegmentsAsync(audioFileRawBytes, cancellationToken).ConfigureAwait(false);
+
+            record.Status = speakInfos.Count == 0 ? PhoneOrderRecordStatus.NoContent : PhoneOrderRecordStatus.Diarization;
+            record.TranscriptionJobId = null;
+
+            await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken).ConfigureAwait(false);
+
+            if (speakInfos.Count != 0)
+            {
+                await _phoneOrderProcessJobService.HandleReleasedOpenAiDiarizedRecordingAsync(record, audioFileRawBytes, speakInfos, cancellationToken).ConfigureAwait(false);
+            }
 
             await SendServerRestoreMessageIfNecessaryAsync(cancellationToken).ConfigureAwait(false);
         }
@@ -81,79 +90,77 @@ public partial class AiSpeechAssistantService
 
             await _phoneOrderService.SendWorkWeChatRobotNotifyAsync(null, _workWeChatKeySetting.Key, alertMessage, mentionedList: new[]{"@all"}, cancellationToken: cancellationToken).ConfigureAwait(false);
             await _cacheManager.GetOrAddAsync("gpt-4o-audio-exception", _ => Task.FromResult(Task.FromResult(alertMessage)), new RedisCachingSetting(RedisServer.System, TimeSpan.FromDays(1)), cancellationToken).ConfigureAwait(false);
+
+            record.Status = PhoneOrderRecordStatus.Exception;
+            await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken).ConfigureAwait(false);
+
+            Log.Error(e, "Handle ReceivePhoneRecord with OpenAI diarized transcription failed. CallSid: {CallSid}", command.CallSid);
+        }
+    }
+
+    private async Task<List<SpeechMaticsSpeakInfoDto>> TranscribePhoneOrderSegmentsAsync(byte[] audioContent, CancellationToken cancellationToken)
+    {
+        Log.Information(
+            "Starting OpenAI diarized transcription for phone call. FileSize: {FileSize}",
+            audioContent?.Length ?? 0);
+
+        var responseText = await _openaiClient
+            .TranscribeDiarizedAudioAsync(audioContent, "recording.wav", cancellationToken)
+            .ConfigureAwait(false);
+
+        Log.Information(
+            "OpenAI diarized transcription response received. BodyPreview: {BodyPreview}",
+            BuildResponsePreview(responseText));
+
+        if (string.IsNullOrWhiteSpace(responseText))
+        {
+            return [];
         }
 
-        record.Language = ConvertLanguageCode(language);
-        record.TranscriptionJobId = await _speechMaticsService.CreateSpeechMaticsJobAsync(audioFileRawBytes, Guid.NewGuid().ToString("N") + ".wav", language, SpeechMaticsJobScenario.Released, cancellationToken).ConfigureAwait(false);
+        var payload = JObject.Parse(responseText);
 
-        await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
-    }
-
-    private TranscriptionLanguage ConvertLanguageCode(string languageCode)
-    {
-        return languageCode switch
+        if (payload["error"] is JObject error)
         {
-            "en" => TranscriptionLanguage.English,
-            "es" => TranscriptionLanguage.Spanish,
-            "ko" => TranscriptionLanguage.Korean,
-            _ => TranscriptionLanguage.Chinese
-        };
+            throw new InvalidOperationException($"OpenAI diarized transcription request failed. Body={BuildResponsePreview(error.ToString())}");
+        }
+
+        var segments = payload["segments"] as JArray;
+
+        if (segments == null || segments.Count == 0)
+        {
+            Log.Warning("OpenAI diarized transcription returned no segments. PayloadKeys: {Keys}", string.Join(", ", payload.Properties().Select(x => x.Name)));
+            return [];
+        }
+
+        var speakInfos = segments
+            .OfType<JObject>()
+            .Select(x => new SpeechMaticsSpeakInfoDto
+            {
+                StartTime = x.Value<double?>("start") ?? 0,
+                EndTime = x.Value<double?>("end") ?? 0,
+                Speaker = x.Value<string>("speaker") ?? string.Empty,
+                Text = x.Value<string>("text")?.Trim() ?? string.Empty
+            })
+            .Where(x => !string.IsNullOrWhiteSpace(x.Text))
+            .ToList();
+
+        Log.Information("OpenAI diarized transcription parsed speakInfos: {@SpeakInfos}", speakInfos);
+
+        return speakInfos;
     }
 
-    private async Task<string> DetectAudioLanguageAsync(byte[] audioContent, CancellationToken cancellationToken)
+    private static string BuildResponsePreview(string responseText, int maxLength = 1200)
     {
-        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
+        if (string.IsNullOrWhiteSpace(responseText))
+        {
+            return "<empty>";
+        }
 
-        var audioData = BinaryData.FromBytes(audioContent);
-        List<ChatMessage> messages =
-        [
-            new SystemChatMessage("""
-                                  You are a professional speech recognition analyst. Based on the audio content, determine the main language used and return only one language code from the following options:
-                                  zh-CN: Mandarin (Simplified Chinese)
-                                  zh: Cantonese
-                                  zh-TW: Taiwanese Chinese (Traditional Chinese)
-                                  en: English
-                                  es: Spanish
-                                  ko: Korean
+        var normalized = responseText.Replace("\r", " ").Replace("\n", " ").Trim();
 
-                                  Rules:
-                                  1. Carefully analyze the entire speech content and identify the **dominant spoken language**, not just occasional words or short phrases.
-                                  2. If the recording contains noise, background sounds, or non-standard pronunciation, focus on consistent linguistic features such as tone, rhythm, and pronunciation pattern.
-                                  3. **Do NOT confuse accented English with Chinese.** English spoken with a Chinese accent or non-standard pronunciation must still be classified as English (en).
-                                  4. Only return 'es' (Spanish) if the majority of the recording is clearly and consistently spoken in Spanish. Do NOT classify English with Spanish-like sounds or background as Spanish.
-                                  5. If the recording mixes languages, return the code of the language that dominates the majority of the speaking time.
-                                  6. **If you are uncertain between English and Chinese, always choose English (en).**
-                                  7. Return only the code without any additional text, punctuation, or explanations.
-
-                                  Examples:
-                                  If the audio is in Mandarin, even with background noise, return: zh-CN
-                                  If the audio is in Cantonese, possibly with some Mandarin words, return: zh
-                                  If the audio is in Taiwanese Mandarin (Traditional Chinese), return: zh-TW
-                                  If the audio is in English, even with a strong accent or imperfect pronunciation, return: en
-                                  If the audio is in English with background noise, return: en
-                                  If the audio is predominantly in Spanish, spoken clearly and throughout most of the recording, return: es
-                                  If the audio is predominantly in Korean, spoken clearly and throughout most of the recording, return: ko
-                                  If the audio has both Mandarin and English but Mandarin is the dominant language, return: zh-CN
-                                  If the audio has both Cantonese and English but English dominates, return: en
-                                  If the audio is in English but contains occasional Chinese filler words such as "啊", "嗯", or "對", return: en
-                                  If the audio is mainly in Chinese but the speaker occasionally uses short English words like "OK", "yeah", or "sorry", return: zh-CN
-                                  If the recording has Chinese background speech but the main speaker talks in English, return: en
-                                  If the recording has multiple speakers where one speaks English and others speak Mandarin, determine which language dominates most of the speaking time and return that language code.
-                                  If the audio is short and contains only a few clear English words, classify as English (en).
-                                  If the audio is mostly silent, unclear, or contains indistinguishable sounds, choose the language that can be most confidently recognized based on speech features, not noise.
-
-                                  """),
-            new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
-            new UserChatMessage("Please determine the language based on the recording and return the corresponding code.")
-        ];
-
-        ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
-
-        ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
-
-        Log.Information("Detect the audio language: " + completion.Content.FirstOrDefault()?.Text);
-
-        return completion.Content.FirstOrDefault()?.Text ?? "en";
+        return normalized.Length <= maxLength
+            ? normalized
+            : normalized[..maxLength] + "...";
     }
 
     private async Task SendServerRestoreMessageIfNecessaryAsync(CancellationToken cancellationToken)

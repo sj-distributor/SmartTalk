@@ -61,6 +61,8 @@ public partial interface IPhoneOrderService
     Task<GetPhoneOrderRecordTasksResponse> GetPhoneOrderRecordTasksRequestsAsync(GetPhoneOrderRecordTasksRequest request, CancellationToken cancellationToken);
 
     Task<UpdatePhoneOrderRecordTasksResponse> UpdatePhoneOrderRecordTasksAsync(UpdatePhoneOrderRecordTasksCommand command, CancellationToken cancellationToken);
+
+    TranscriptionLanguage SelectLanguageEnum(string language);
 }
 
 public partial class PhoneOrderService
@@ -186,6 +188,8 @@ public partial class PhoneOrderService
         {
             "zh" or "zh-CN" or "zh-TW" => TranscriptionLanguage.Chinese,
             "en" => TranscriptionLanguage.English,
+            "es" => TranscriptionLanguage.Spanish,
+            "ko" => TranscriptionLanguage.Korean,
             _ => TranscriptionLanguage.English
         };
     }
@@ -282,8 +286,11 @@ public partial class PhoneOrderService
     private async Task<List<SpeechMaticsSpeakInfoDto>> HandlerConversationFirstSentenceAsync(
         List<SpeechMaticsSpeakInfoDto> phoneOrderInfos, PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken)
     {
-        var originText = await SplitAudioAsync(audioContent, record, phoneOrderInfos[0].StartTime * 1000,
-            phoneOrderInfos[0].EndTime * 1000, TranscriptionFileType.Wav, cancellationToken).ConfigureAwait(false);
+        var firstSpeakInfo = phoneOrderInfos[0];
+        var originText = !string.IsNullOrWhiteSpace(firstSpeakInfo.Text)
+            ? firstSpeakInfo.Text
+            : await SplitAudioAsync(audioContent, record, firstSpeakInfo.StartTime * 1000,
+                firstSpeakInfo.EndTime * 1000, TranscriptionFileType.Wav, cancellationToken).ConfigureAwait(false);
 
         if (await CheckAudioFirstSentenceIsRestaurantAsync(originText, cancellationToken).ConfigureAwait(false))
             return phoneOrderInfos;
@@ -320,11 +327,19 @@ public partial class PhoneOrderService
             {
                 string originText;
 
-                if (speakDetail.StartTime != 0 && speakDetail.EndTime != 0)
+                if (!string.IsNullOrWhiteSpace(speakDetail.Text))
+                {
+                    originText = speakDetail.Text;
+                }
+                else if (speakDetail.StartTime != 0 && speakDetail.EndTime != 0)
+                {
                     originText = await SplitAudioAsync(
                         audioContent, record, speakDetail.StartTime * 1000, speakDetail.EndTime * 1000, TranscriptionFileType.Wav, cancellationToken).ConfigureAwait(false);
+                }
                 else
+                {
                     originText = "";
+                }
 
                 Log.Information("Phone Order transcript originText: {originText}", originText);
 
@@ -372,6 +387,8 @@ public partial class PhoneOrderService
         }
 
         goalTextsString = ProcessConversation(conversations, goalTextsString);
+
+        await _phoneOrderDataProvider.DeletePhoneOrderConversationsAsync(record.Id, cancellationToken).ConfigureAwait(false);
 
         await _phoneOrderDataProvider.AddPhoneOrderConversationsAsync(conversations.Count != 0 ? conversations : 
         [

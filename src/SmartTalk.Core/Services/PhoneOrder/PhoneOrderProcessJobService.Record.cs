@@ -32,6 +32,8 @@ namespace SmartTalk.Core.Services.PhoneOrder;
 public partial interface IPhoneOrderProcessJobService
 {
     Task HandleReleasedSpeechMaticsCallBackAsync(string jobId, CancellationToken cancellationToken);
+
+    Task HandleReleasedOpenAiDiarizedRecordingAsync(PhoneOrderRecord record, byte[] audioContent, List<SpeechMaticsSpeakInfoDto> speakInfos, CancellationToken cancellationToken);
     
     Task<DialogueScenarioResultDto> IdentifyDialogueScenariosAsync(string query, CancellationToken cancellationToken);
 }
@@ -80,6 +82,56 @@ public partial class PhoneOrderProcessJobService
                 .ConfigureAwait(false);
 
             Log.Warning("Handle transcription callback failed: {@Exception}", e);
+        }
+    }
+
+    public async Task HandleReleasedOpenAiDiarizedRecordingAsync(PhoneOrderRecord record, byte[] audioContent, List<SpeechMaticsSpeakInfoDto> speakInfos, CancellationToken cancellationToken)
+    {
+        if (record == null || audioContent == null) return;
+
+        Log.Information("OpenAI diarized transcription results : {@results}", speakInfos);
+
+        try
+        {
+            record.Status = PhoneOrderRecordStatus.Transcription;
+
+            await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken).ConfigureAwait(false);
+
+            var normalizedSpeakInfos = NormalizeOpenAiDiarizedSpeakInfos(speakInfos);
+
+            if (normalizedSpeakInfos.Count == 0)
+            {
+                record.Status = PhoneOrderRecordStatus.NoContent;
+                await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken).ConfigureAwait(false);
+                return;
+            }
+
+            var transcript = string.Join("\n", normalizedSpeakInfos
+                .Where(x => !string.IsNullOrWhiteSpace(x.Text))
+                .Select(x => $"{x.Speaker}: {x.Text}"));
+
+            if (!string.IsNullOrWhiteSpace(transcript))
+            {
+                var detection = await _translationClient.DetectLanguageAsync(transcript, cancellationToken).ConfigureAwait(false);
+                record.Language = _phoneOrderService.SelectLanguageEnum(detection.Language);
+                Log.Information("OpenAI diarized transcription detected language: {Language}", detection.Language);
+            }
+
+            await _phoneOrderService.ExtractPhoneOrderRecordAiMenuAsync(normalizedSpeakInfos, record, audioContent, cancellationToken).ConfigureAwait(false);
+
+            await SummarizeConversationContentAsync(record, audioContent, cancellationToken).ConfigureAwait(false);
+
+            await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            _smartTalkBackgroundJobClient.Enqueue<IPhoneOrderProcessJobService>(x => x.CalculateRecordingDurationAsync(record, null, cancellationToken), HangfireConstants.InternalHostingFfmpeg);
+        }
+        catch (Exception e)
+        {
+            record.Status = PhoneOrderRecordStatus.Exception;
+
+            await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken).ConfigureAwait(false);
+
+            Log.Warning("Handle OpenAI diarized recording failed: {@Exception}", e);
         }
     }
 
@@ -329,6 +381,114 @@ public partial class PhoneOrderProcessJobService
         Log.Information("Structure diarization results : {@speakInfos}", speakInfos);
 
         return speakInfos;
+    }
+
+    private List<SpeechMaticsSpeakInfoDto> NormalizeOpenAiDiarizedSpeakInfos(List<SpeechMaticsSpeakInfoDto> speakInfos)
+    {
+        if (speakInfos is not { Count: > 0 })
+            return [];
+
+        var orderedSpeakInfos = speakInfos
+            .Where(x => !string.IsNullOrWhiteSpace(x.Text))
+            .Select(x => new SpeechMaticsSpeakInfoDto
+            {
+                StartTime = Math.Max(0, x.StartTime),
+                EndTime = x.EndTime < x.StartTime ? x.StartTime : x.EndTime,
+                Speaker = string.IsNullOrWhiteSpace(x.Speaker) ? "unknown" : x.Speaker.Trim(),
+                Text = NormalizeSegmentText(x.Text)
+            })
+            .Where(x => !string.IsNullOrWhiteSpace(x.Text))
+            .OrderBy(x => x.StartTime)
+            .ThenBy(x => x.EndTime)
+            .ToList();
+
+        var speakerMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var speakInfo in orderedSpeakInfos)
+        {
+            if (!speakerMap.TryGetValue(speakInfo.Speaker, out var normalizedSpeaker))
+            {
+                normalizedSpeaker = speakerMap.Count switch
+                {
+                    0 => "S1",
+                    1 => "S2",
+                    _ => "S2"
+                };
+
+                speakerMap[speakInfo.Speaker] = normalizedSpeaker;
+
+                if (speakerMap.Count > 2)
+                {
+                    Log.Warning("OpenAI diarized transcription returned more than two speakers. SpeakerMap: {@SpeakerMap}", speakerMap);
+                }
+            }
+
+            speakInfo.Speaker = normalizedSpeaker;
+            speakInfo.Role = normalizedSpeaker == "S1" ? PhoneOrderRole.Restaurant : PhoneOrderRole.Client;
+        }
+
+        for (var i = 1; i < orderedSpeakInfos.Count - 1; i++)
+        {
+            var previous = orderedSpeakInfos[i - 1];
+            var current = orderedSpeakInfos[i];
+            var next = orderedSpeakInfos[i + 1];
+
+            if (previous.Speaker == next.Speaker &&
+                current.Speaker != previous.Speaker &&
+                ShouldSmoothIntermediateSegment(previous, current, next))
+            {
+                current.Speaker = previous.Speaker;
+                current.Role = previous.Role;
+            }
+        }
+
+        var mergedSpeakInfos = new List<SpeechMaticsSpeakInfoDto>();
+
+        foreach (var speakInfo in orderedSpeakInfos)
+        {
+            if (mergedSpeakInfos.Count == 0)
+            {
+                mergedSpeakInfos.Add(speakInfo);
+                continue;
+            }
+
+            var lastSpeakInfo = mergedSpeakInfos[^1];
+            var gap = speakInfo.StartTime - lastSpeakInfo.EndTime;
+
+            if (lastSpeakInfo.Speaker == speakInfo.Speaker && gap <= 0.8)
+            {
+                lastSpeakInfo.EndTime = Math.Max(lastSpeakInfo.EndTime, speakInfo.EndTime);
+                lastSpeakInfo.Text = string.Join(" ", new[] { lastSpeakInfo.Text, speakInfo.Text }.Where(x => !string.IsNullOrWhiteSpace(x))).Trim();
+                continue;
+            }
+
+            mergedSpeakInfos.Add(speakInfo);
+        }
+
+        Log.Information("Normalized OpenAI diarized speak infos: {@SpeakInfos}", mergedSpeakInfos);
+
+        return mergedSpeakInfos;
+    }
+
+    private static bool ShouldSmoothIntermediateSegment(
+        SpeechMaticsSpeakInfoDto previous,
+        SpeechMaticsSpeakInfoDto current,
+        SpeechMaticsSpeakInfoDto next)
+    {
+        var duration = current.EndTime - current.StartTime;
+        var previousGap = current.StartTime - previous.EndTime;
+        var nextGap = next.StartTime - current.EndTime;
+        var wordCount = current.Text?.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length ?? 0;
+
+        return duration <= 1.2 &&
+               previousGap <= 0.6 &&
+               nextGap <= 0.6 &&
+               (wordCount <= 4 || (current.Text?.Length ?? 0) <= 24);
+    }
+
+    private static string NormalizeSegmentText(string text)
+    {
+        return Regex.Replace(text ?? string.Empty, @"\s+", " ").Trim();
     }
 
     private TranscriptionLanguage SelectReportLanguageEnum(string language)
