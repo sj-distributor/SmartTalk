@@ -28,9 +28,10 @@ public class DifyRealtimeController : ControllerBase
 
     [AllowAnonymous]
     [HttpPost("end")]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(DifyRealtimeEndSessionResponse))]
     public async Task<IActionResult> EndSessionAsync([FromBody] DifyRealtimeEndSessionRequest request, CancellationToken cancellationToken)
     {
-        await _bridgeService.EndSessionAsync(request, cancellationToken).ConfigureAwait(false);
-        return Ok();
+        var response = await _bridgeService.EndSessionAsync(request, cancellationToken).ConfigureAwait(false);
+        return Ok(response);
     }
 }

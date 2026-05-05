@@ -21,13 +21,14 @@ public interface IDifyRealtimeBridgeService : ISingletonDependency
 {
     Task<DifyRealtimeMessageResponse> SendMessageAsync(DifyRealtimeMessageRequest request, CancellationToken cancellationToken);
 
-    Task EndSessionAsync(DifyRealtimeEndSessionRequest request, CancellationToken cancellationToken);
+    Task<DifyRealtimeEndSessionResponse> EndSessionAsync(DifyRealtimeEndSessionRequest request, CancellationToken cancellationToken);
 }
 
 public class DifyRealtimeBridgeService : IDifyRealtimeBridgeService
 {
     private const string DefaultVoice = "alloy";
     private const int DefaultTimeoutSeconds = 60;
+    private const int DefaultEndSessionTimeoutSeconds = 120;
 
     private readonly IServiceScopeFactory _serviceScopeFactory;
     private readonly ConcurrentDictionary<string, DifyRealtimeSession> _sessions = new();
@@ -61,6 +62,7 @@ public class DifyRealtimeBridgeService : IDifyRealtimeBridgeService
 
         var session = GetOrCreateSession(request);
         var ended = false;
+        var recordingUrl = string.Empty;
 
         await session.TurnLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -78,7 +80,8 @@ public class DifyRealtimeBridgeService : IDifyRealtimeBridgeService
             if (request.EndSession)
             {
                 ended = true;
-                await RemoveAndEndSessionAsync(session.Key, cancellationToken).ConfigureAwait(false);
+                var endResult = await RemoveAndEndSessionAsync(session.Key, cancellationToken).ConfigureAwait(false);
+                recordingUrl = endResult?.RecordingUrl;
             }
 
             Log.Information(
@@ -96,7 +99,8 @@ public class DifyRealtimeBridgeService : IDifyRealtimeBridgeService
                     SessionId = session.SessionId,
                     ConversationId = session.ConversationId,
                     Answer = answer,
-                    Ended = ended
+                    Ended = ended,
+                    RecordingUrl = recordingUrl
                 }
             };
         }
@@ -106,13 +110,25 @@ public class DifyRealtimeBridgeService : IDifyRealtimeBridgeService
         }
     }
 
-    public async Task EndSessionAsync(DifyRealtimeEndSessionRequest request, CancellationToken cancellationToken)
+    public async Task<DifyRealtimeEndSessionResponse> EndSessionAsync(DifyRealtimeEndSessionRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
 
         var key = BuildSessionKey(request.AssistantId, request.ConversationId, request.User);
         Log.Information("[DifyRealtime] End session requested, AssistantId: {AssistantId}, SessionKey: {SessionKey}", request.AssistantId, key);
-        await RemoveAndEndSessionAsync(key, cancellationToken).ConfigureAwait(false);
+        var result = await RemoveAndEndSessionAsync(key, cancellationToken).ConfigureAwait(false);
+
+        return new DifyRealtimeEndSessionResponse
+        {
+            Code = HttpStatusCode.OK,
+            Data = new DifyRealtimeEndSessionResponseData
+            {
+                SessionId = result?.SessionId,
+                ConversationId = result?.ConversationId ?? request.ConversationId,
+                RecordingUrl = result?.RecordingUrl,
+                Ended = true
+            }
+        };
     }
 
     private DifyRealtimeSession GetOrCreateSession(DifyRealtimeMessageRequest request)
@@ -160,7 +176,9 @@ public class DifyRealtimeBridgeService : IDifyRealtimeBridgeService
                 scope.ServiceProvider,
                 text,
                 voice,
-                token)
+                token),
+            OnRecordingUploadedAsync = (providerSessionId, recordingUrl) =>
+                session.SetRecordingUploadedAsync(providerSessionId, recordingUrl)
         };
 
         Log.Information(
@@ -375,17 +393,24 @@ public class DifyRealtimeBridgeService : IDifyRealtimeBridgeService
         }
     }
 
-    private async Task RemoveAndEndSessionAsync(string key, CancellationToken cancellationToken)
+    private async Task<DifyRealtimeEndSessionResult> RemoveAndEndSessionAsync(string key, CancellationToken cancellationToken)
     {
         if (!_sessions.TryRemove(key, out var session))
         {
             Log.Debug("[DifyRealtime] Session not found while ending, SessionKey: {SessionKey}", key);
-            return;
+            return null;
         }
 
         Log.Information("[DifyRealtime] Ending session, SessionId: {SessionId}, SessionKey: {SessionKey}", session.SessionId, key);
-        await session.EndAsync(cancellationToken).ConfigureAwait(false);
-        Log.Information("[DifyRealtime] Session ended, SessionId: {SessionId}, SessionKey: {SessionKey}", session.SessionId, key);
+        var recordingUrl = await session.EndAsync(cancellationToken).ConfigureAwait(false);
+        Log.Information("[DifyRealtime] Session ended, SessionId: {SessionId}, SessionKey: {SessionKey}, RecordingUrl: {RecordingUrl}", session.SessionId, key, recordingUrl);
+
+        return new DifyRealtimeEndSessionResult
+        {
+            SessionId = session.SessionId,
+            ConversationId = session.ConversationId,
+            RecordingUrl = recordingUrl
+        };
     }
 
     private static string BuildSessionKey(int assistantId, string conversationId, string user)
@@ -402,6 +427,7 @@ public class DifyRealtimeBridgeService : IDifyRealtimeBridgeService
     private sealed class DifyRealtimeSession
     {
         private readonly IServiceScope _scope;
+        private readonly object _recordingLock = new();
 
         public DifyRealtimeSession(string key, string conversationId, DifyRealtimeWebSocket webSocket, IServiceScope scope)
         {
@@ -427,12 +453,33 @@ public class DifyRealtimeBridgeService : IDifyRealtimeBridgeService
 
         public DateTimeOffset LastAccessedAt { get; private set; }
 
+        public string ProviderSessionId { get; private set; }
+
+        public string RecordingUrl { get; private set; }
+
         public void Touch()
         {
             LastAccessedAt = DateTimeOffset.UtcNow;
         }
 
-        public async Task EndAsync(CancellationToken cancellationToken)
+        public Task SetRecordingUploadedAsync(string providerSessionId, string recordingUrl)
+        {
+            lock (_recordingLock)
+            {
+                ProviderSessionId = providerSessionId;
+                RecordingUrl = recordingUrl;
+            }
+
+            Log.Information(
+                "[DifyRealtime] Recording uploaded, SessionId: {SessionId}, ProviderSessionId: {ProviderSessionId}, RecordingUrl: {RecordingUrl}",
+                SessionId,
+                providerSessionId,
+                recordingUrl);
+
+            return Task.CompletedTask;
+        }
+
+        public async Task<string> EndAsync(CancellationToken cancellationToken)
         {
             try
             {
@@ -440,7 +487,7 @@ public class DifyRealtimeBridgeService : IDifyRealtimeBridgeService
                 WebSocket.EnqueueClientClose();
 
                 if (Runner != null)
-                    await Runner.WaitAsync(TimeSpan.FromSeconds(10), cancellationToken).ConfigureAwait(false);
+                    await Runner.WaitAsync(TimeSpan.FromSeconds(DefaultEndSessionTimeoutSeconds), cancellationToken).ConfigureAwait(false);
             }
             catch (TimeoutException)
             {
@@ -453,6 +500,18 @@ public class DifyRealtimeBridgeService : IDifyRealtimeBridgeService
                 _scope.Dispose();
                 Log.Debug("[DifyRealtime] Session resources disposed, SessionId: {SessionId}, SessionKey: {SessionKey}", SessionId, Key);
             }
+
+            lock (_recordingLock)
+                return RecordingUrl;
         }
+    }
+
+    private sealed class DifyRealtimeEndSessionResult
+    {
+        public string SessionId { get; set; }
+
+        public string ConversationId { get; set; }
+
+        public string RecordingUrl { get; set; }
     }
 }
