@@ -25,21 +25,17 @@ public class DifyRealtimeWebSocket : WebSocket
     public void EnqueueClientText(string json)
     {
         var bytes = Encoding.UTF8.GetBytes(json);
-        var written = _clientToServer.Writer.TryWrite((bytes, WebSocketMessageType.Text));
-        Log.Debug("[DifyRealtimeWS:{TraceId}] Enqueue client text, TextLength: {TextLength}, QueueWriteSuccess: {QueueWriteSuccess}", _traceId, json?.Length ?? 0, written);
+        _clientToServer.Writer.TryWrite((bytes, WebSocketMessageType.Text));
     }
 
     public void EnqueueClientClose()
     {
-        var written = _clientToServer.Writer.TryWrite((Array.Empty<byte>(), WebSocketMessageType.Close));
-        Log.Debug("[DifyRealtimeWS:{TraceId}] Enqueue client close, QueueWriteSuccess: {QueueWriteSuccess}", _traceId, written);
+        _clientToServer.Writer.TryWrite((Array.Empty<byte>(), WebSocketMessageType.Close));
     }
 
     public async Task<string> ReadServerTextAsync(CancellationToken cancellationToken)
     {
-        var text = await _serverToClient.Reader.ReadAsync(cancellationToken).ConfigureAwait(false);
-        Log.Debug("[DifyRealtimeWS:{TraceId}] Read server text, TextLength: {TextLength}", _traceId, text?.Length ?? 0);
-        return text;
+        return await _serverToClient.Reader.ReadAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public int DrainServerMessages()
@@ -47,9 +43,6 @@ public class DifyRealtimeWebSocket : WebSocket
         var count = 0;
         while (_serverToClient.Reader.TryRead(out _))
             count += 1;
-
-        if (count > 0)
-            Log.Debug("[DifyRealtimeWS:{TraceId}] Drained server messages, Count: {Count}", _traceId, count);
 
         return count;
     }
@@ -70,12 +63,10 @@ public class DifyRealtimeWebSocket : WebSocket
     private async ValueTask<ValueWebSocketReceiveResult> ReceiveInternalAsync(Memory<byte> buffer, CancellationToken cancellationToken)
     {
         var (data, type) = await _clientToServer.Reader.ReadAsync(cancellationToken).ConfigureAwait(false);
-        Log.Debug("[DifyRealtimeWS:{TraceId}] ReceiveInternal dequeued, MessageType: {MessageType}, ByteCount: {ByteCount}", _traceId, type, data.Length);
 
         if (type == WebSocketMessageType.Close)
         {
             _state = WebSocketState.CloseReceived;
-            Log.Debug("[DifyRealtimeWS:{TraceId}] Client close received, State -> {State}", _traceId, _state);
             return new ValueWebSocketReceiveResult(0, WebSocketMessageType.Close, true);
         }
 
@@ -102,7 +93,6 @@ public class DifyRealtimeWebSocket : WebSocket
         var text = Encoding.UTF8.GetString(data);
         _sentMessages.Enqueue(text);
         _serverToClient.Writer.TryWrite(text);
-        Log.Debug("[DifyRealtimeWS:{TraceId}] Captured server message, TextLength: {TextLength}, MessageType: {MessageType}", _traceId, text.Length, messageType);
     }
 
     public override Task CloseAsync(WebSocketCloseStatus closeStatus, string statusDescription, CancellationToken cancellationToken)
@@ -117,7 +107,6 @@ public class DifyRealtimeWebSocket : WebSocket
     public override Task CloseOutputAsync(WebSocketCloseStatus closeStatus, string statusDescription, CancellationToken cancellationToken)
     {
         _state = WebSocketState.CloseSent;
-        Log.Debug("[DifyRealtimeWS:{TraceId}] CloseOutputAsync, State -> {State}, CloseStatus: {CloseStatus}, Description: {Description}", _traceId, _state, closeStatus, statusDescription);
         return Task.CompletedTask;
     }
 
@@ -133,6 +122,5 @@ public class DifyRealtimeWebSocket : WebSocket
     {
         _serverToClient.Writer.TryComplete();
         _clientToServer.Writer.TryComplete();
-        Log.Debug("[DifyRealtimeWS:{TraceId}] Disposed", _traceId);
     }
 }
