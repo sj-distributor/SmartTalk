@@ -94,23 +94,49 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
             },
             OnRecordingCompleteAsync = async (sessionId, wavBytes) =>
             {
-                var audio = await _attachmentService.UploadAttachmentAsync(
-                    new UploadAttachmentCommand
-                    {
-                        Attachment = new UploadAttachmentDto
-                        {
-                            FileName = Guid.NewGuid() + ".wav",
-                            FileContent = wavBytes
-                        }
-                    }, CancellationToken.None).ConfigureAwait(false);
-
-                Log.Information("[AiKidRealtimeV2] Audio uploaded, SessionId: {SessionId}, AssistantId: {AssistantId}, Url: {Url}",
-                    sessionId, assistantId, audio?.Attachment?.FileUrl);
-
-                if (!string.IsNullOrEmpty(audio?.Attachment?.FileUrl) && assistantId != 0)
+                try
                 {
-                    _backgroundJobClient.Enqueue<IAiKidRealtimeProcessJobService>(x =>
-                        x.RecordingRealtimeAiAsync(audio.Attachment.FileUrl, assistantId, sessionId, orderRecordType, CancellationToken.None));
+                    Log.Information("[AiKidRealtimeV2] Recording callback triggered, SessionId: {SessionId}, AssistantId: {AssistantId}, WavBytes: {WavBytes}",
+                        sessionId, assistantId, wavBytes?.Length ?? 0);
+
+                    var audio = await _attachmentService.UploadAttachmentAsync(
+                        new UploadAttachmentCommand
+                        {
+                            Attachment = new UploadAttachmentDto
+                            {
+                                FileName = Guid.NewGuid() + ".wav",
+                                FileContent = wavBytes
+                            }
+                        }, CancellationToken.None).ConfigureAwait(false);
+
+                    Log.Information("[AiKidRealtimeV2] Audio uploaded, SessionId: {SessionId}, AssistantId: {AssistantId}, Url: {Url}",
+                        sessionId, assistantId, audio?.Attachment?.FileUrl);
+
+                    if (!string.IsNullOrEmpty(audio?.Attachment?.FileUrl) && assistantId != 0)
+                    {
+                        var jobId = _backgroundJobClient.Enqueue<IAiKidRealtimeProcessJobService>(x =>
+                            x.RecordingRealtimeAiAsync(audio.Attachment.FileUrl, assistantId, sessionId, orderRecordType, CancellationToken.None));
+
+                        Log.Information(
+                            "[AiKidRealtimeV2] Recording job enqueued, SessionId: {SessionId}, AssistantId: {AssistantId}, JobId: {JobId}, RecordingUrl: {RecordingUrl}",
+                            sessionId,
+                            assistantId,
+                            jobId,
+                            audio.Attachment.FileUrl);
+                    }
+                    else
+                    {
+                        Log.Warning(
+                            "[AiKidRealtimeV2] Recording job skipped, SessionId: {SessionId}, AssistantId: {AssistantId}, HasRecordingUrl: {HasRecordingUrl}",
+                            sessionId,
+                            assistantId,
+                            !string.IsNullOrEmpty(audio?.Attachment?.FileUrl));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "[AiKidRealtimeV2] Recording callback failed, SessionId: {SessionId}, AssistantId: {AssistantId}", sessionId, assistantId);
+                    throw;
                 }
             },
             OnTranscriptionsCompletedAsync = async (sessionId, transcriptions) =>
