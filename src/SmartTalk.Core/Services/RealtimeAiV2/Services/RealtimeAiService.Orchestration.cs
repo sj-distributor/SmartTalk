@@ -258,7 +258,15 @@ public partial class RealtimeAiService
 
     private async Task HandleRecordingAsync()
     {
-        if (!_ctx.Options.EnableRecording || _ctx.Options.OnRecordingCompleteAsync == null) return;
+        if (!_ctx.Options.EnableRecording || _ctx.Options.OnRecordingCompleteAsync == null)
+        {
+            Log.Information(
+                "[RealtimeAi] Recording skipped at cleanup, SessionId: {SessionId}, EnableRecording: {EnableRecording}, HasRecordingCallback: {HasRecordingCallback}",
+                _ctx.SessionId,
+                _ctx.Options.EnableRecording,
+                _ctx.Options.OnRecordingCompleteAsync != null);
+            return;
+        }
 
         MemoryStream snapshot;
 
@@ -273,10 +281,19 @@ public partial class RealtimeAiService
             _ctx.BufferLock.Release();
         }
 
-        if (snapshot is not { CanRead: true } || snapshot.Length == 0) return;
+        if (snapshot is not { CanRead: true } || snapshot.Length == 0)
+        {
+            Log.Warning("[RealtimeAi] Recording buffer is empty at cleanup, SessionId: {SessionId}", _ctx.SessionId);
+            return;
+        }
 
         try
         {
+            Log.Information(
+                "[RealtimeAi] Finalizing recording buffer, SessionId: {SessionId}, RawPcmBytes: {RawPcmBytes}",
+                _ctx.SessionId,
+                snapshot.Length);
+
             var waveFormat = new WaveFormat(24000, 16, 1);
             using var wavStream = new MemoryStream();
 
@@ -299,6 +316,10 @@ public partial class RealtimeAiService
                 }
             }
 
+            Log.Information(
+                "[RealtimeAi] Recording WAV prepared, SessionId: {SessionId}, WavBytes: {WavBytes}",
+                _ctx.SessionId,
+                wavStream.Length);
             await _ctx.Options.OnRecordingCompleteAsync(_ctx.SessionId, wavStream.ToArray()).ConfigureAwait(false);
         }
         finally
