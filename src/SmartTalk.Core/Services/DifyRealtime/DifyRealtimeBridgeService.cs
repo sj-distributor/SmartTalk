@@ -7,12 +7,17 @@ using NAudio.Wave;
 using Serilog;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.AiKids;
+using SmartTalk.Core.Services.Attachments;
 using SmartTalk.Core.Services.Ffmpeg;
 using SmartTalk.Core.Services.Http.Clients;
+using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Messages.Commands.AiKids;
+using SmartTalk.Messages.Commands.Attachments;
+using SmartTalk.Messages.Dto.Attachments;
 using SmartTalk.Messages.Dto.DifyRealtime;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
+using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.RealtimeAi;
 
 namespace SmartTalk.Core.Services.DifyRealtime;
@@ -76,6 +81,7 @@ public class DifyRealtimeBridgeService : IDifyRealtimeBridgeService
 
             var answer = await WaitForAnswerAsync(session, TimeSpan.FromSeconds(request.TimeoutSeconds ?? DefaultTimeoutSeconds), cancellationToken)
                 .ConfigureAwait(false);
+            session.RecordTurn(userText, answer);
 
             if (request.EndSession)
             {
@@ -158,10 +164,10 @@ public class DifyRealtimeBridgeService : IDifyRealtimeBridgeService
     {
         var scope = _serviceScopeFactory.CreateScope();
         var webSocket = new DifyRealtimeWebSocket();
-        var session = new DifyRealtimeSession(key, request.ConversationId, webSocket, scope);
+        var voice = ResolveRecordingVoice(request);
+        var session = new DifyRealtimeSession(key, request.ConversationId, webSocket, scope, request.AssistantId, request.OrderRecordType, voice);
 
         var aiKidRealtimeService = scope.ServiceProvider.GetRequiredService<IAiKidRealtimeServiceV2>();
-        var voice = ResolveRecordingVoice(request);
 
         var command = new AiKidRealtimeCommand
         {
@@ -428,13 +434,24 @@ public class DifyRealtimeBridgeService : IDifyRealtimeBridgeService
     {
         private readonly IServiceScope _scope;
         private readonly object _recordingLock = new();
+        private readonly ConcurrentQueue<(string UserText, string Answer)> _turns = new();
 
-        public DifyRealtimeSession(string key, string conversationId, DifyRealtimeWebSocket webSocket, IServiceScope scope)
+        public DifyRealtimeSession(
+            string key,
+            string conversationId,
+            DifyRealtimeWebSocket webSocket,
+            IServiceScope scope,
+            int assistantId,
+            PhoneOrderRecordType orderRecordType,
+            string voice)
         {
             Key = key;
             ConversationId = conversationId;
             WebSocket = webSocket;
             _scope = scope;
+            AssistantId = assistantId;
+            OrderRecordType = orderRecordType;
+            Voice = voice;
             SessionId = Guid.NewGuid().ToString();
             Touch();
         }
@@ -444,6 +461,12 @@ public class DifyRealtimeBridgeService : IDifyRealtimeBridgeService
         public string ConversationId { get; }
 
         public string SessionId { get; }
+
+        public int AssistantId { get; }
+
+        public PhoneOrderRecordType OrderRecordType { get; }
+
+        public string Voice { get; }
 
         public DifyRealtimeWebSocket WebSocket { get; }
 
@@ -460,6 +483,13 @@ public class DifyRealtimeBridgeService : IDifyRealtimeBridgeService
         public void Touch()
         {
             LastAccessedAt = DateTimeOffset.UtcNow;
+        }
+
+        public void RecordTurn(string userText, string answer)
+        {
+            if (string.IsNullOrWhiteSpace(userText) && string.IsNullOrWhiteSpace(answer)) return;
+
+            _turns.Enqueue((userText, answer));
         }
 
         public Task SetRecordingUploadedAsync(string providerSessionId, string recordingUrl)
@@ -496,13 +526,91 @@ public class DifyRealtimeBridgeService : IDifyRealtimeBridgeService
             }
             finally
             {
+                if (string.IsNullOrEmpty(GetRecordingUrl()))
+                    await TryUploadFallbackRecordingAsync(cancellationToken).ConfigureAwait(false);
+
                 WebSocket.Dispose();
                 _scope.Dispose();
                 Log.Debug("[DifyRealtime] Session resources disposed, SessionId: {SessionId}, SessionKey: {SessionKey}", SessionId, Key);
             }
 
+            return GetRecordingUrl();
+        }
+
+        private string GetRecordingUrl()
+        {
             lock (_recordingLock)
                 return RecordingUrl;
+        }
+
+        private async Task TryUploadFallbackRecordingAsync(CancellationToken cancellationToken)
+        {
+            if (_turns.IsEmpty)
+            {
+                Log.Warning("[DifyRealtime] Fallback recording skipped because no text turns were captured, SessionId: {SessionId}", SessionId);
+                return;
+            }
+
+            try
+            {
+                var fallbackText = string.Join("\n", _turns
+                    .SelectMany(turn => new[] { turn.UserText, turn.Answer })
+                    .Where(x => !string.IsNullOrWhiteSpace(x)));
+
+                if (string.IsNullOrWhiteSpace(fallbackText))
+                {
+                    Log.Warning("[DifyRealtime] Fallback recording skipped because captured text is empty, SessionId: {SessionId}", SessionId);
+                    return;
+                }
+
+                var openaiClient = _scope.ServiceProvider.GetRequiredService<IOpenaiClient>();
+                var attachmentService = _scope.ServiceProvider.GetRequiredService<IAttachmentService>();
+                var backgroundJobClient = _scope.ServiceProvider.GetRequiredService<ISmartTalkBackgroundJobClient>();
+
+                Log.Warning("[DifyRealtime] Realtime recording missing, generating fallback TTS recording, SessionId: {SessionId}, TextLength: {TextLength}", SessionId, fallbackText.Length);
+                var wavBytes = await openaiClient.GenerateSpeechAsync(fallbackText, Voice, cancellationToken).ConfigureAwait(false);
+                if (wavBytes is not { Length: > 0 })
+                {
+                    Log.Warning("[DifyRealtime] Fallback TTS returned empty audio, SessionId: {SessionId}", SessionId);
+                    return;
+                }
+
+                var audio = await attachmentService.UploadAttachmentAsync(
+                    new UploadAttachmentCommand
+                    {
+                        Attachment = new UploadAttachmentDto
+                        {
+                            FileName = Guid.NewGuid() + ".wav",
+                            FileContent = wavBytes
+                        }
+                    }, CancellationToken.None).ConfigureAwait(false);
+
+                var recordingUrl = audio?.Attachment?.FileUrl;
+                if (string.IsNullOrEmpty(recordingUrl))
+                {
+                    Log.Warning("[DifyRealtime] Fallback recording upload returned empty url, SessionId: {SessionId}", SessionId);
+                    return;
+                }
+
+                await SetRecordingUploadedAsync(SessionId, recordingUrl).ConfigureAwait(false);
+
+                if (AssistantId != 0)
+                {
+                    var jobId = backgroundJobClient.Enqueue<IAiKidRealtimeProcessJobService>(x =>
+                        x.RecordingRealtimeAiAsync(recordingUrl, AssistantId, SessionId, OrderRecordType, CancellationToken.None));
+
+                    Log.Information(
+                        "[DifyRealtime] Fallback recording job enqueued, SessionId: {SessionId}, AssistantId: {AssistantId}, JobId: {JobId}, RecordingUrl: {RecordingUrl}",
+                        SessionId,
+                        AssistantId,
+                        jobId,
+                        recordingUrl);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "[DifyRealtime] Failed to upload fallback recording, SessionId: {SessionId}", SessionId);
+            }
         }
     }
 
