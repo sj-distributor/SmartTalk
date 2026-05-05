@@ -57,7 +57,7 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
                 instructions = knowledge?.Prompt ?? options.InitialPrompt,
                 modalities = new[] { "text", "audio" },
                 temperature = 0.8,
-                input_audio_transcription = new { model = "whisper-1" },
+                input_audio_transcription = new { model = "gpt-4o-transcribe" },
                 input_audio_noise_reduction = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction),
                 tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config)
             }

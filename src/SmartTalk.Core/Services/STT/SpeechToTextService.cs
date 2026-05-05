@@ -62,9 +62,8 @@ public class SpeechToTextService : ISpeechToTextService
         byte[] file, TranscriptionLanguage? language, TranscriptionFileType fileType = TranscriptionFileType.Wav, 
         TranscriptionResponseFormat responseFormat = TranscriptionResponseFormat.Vtt, string prompt = null, CancellationToken cancellationToken = default)
     {
+        AudioClient client = new("gpt-4o-transcribe", _openAiSettings.ApiKey);
         Log.Information("The transcription language: {@Language}", language);
-        
-        AudioClient client = new("whisper-1", _openAiSettings.ApiKey);
         
         var filename = $"{Guid.NewGuid()}.{fileType.ToString().ToLower()}";
         

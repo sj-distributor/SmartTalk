@@ -49,7 +49,7 @@ public partial class AiSpeechAssistantService
             Voice = string.IsNullOrEmpty(assistant?.ModelVoice) ? "alloy" : assistant.ModelVoice,
             Instructions = prompt,
             Modalities = ["audio", "text"],
-            InputAudioTranscription = new { model = "whisper-1" },
+            InputAudioTranscription = new { model = "gpt-4o-transcribe" },
             Tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config).ToList()
         };
 
