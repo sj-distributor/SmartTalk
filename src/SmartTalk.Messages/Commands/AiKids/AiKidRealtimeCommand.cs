@@ -1,5 +1,6 @@
 using System.Net.WebSockets;
 using Mediator.Net.Contracts;
+using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.RealtimeAi;
 
@@ -18,4 +19,12 @@ public class AiKidRealtimeCommand : ICommand
     public RealtimeAiServerRegion Region { get; set; }
     
     public PhoneOrderRecordType OrderRecordType { get; set; }
+
+    public bool SuppressGreeting { get; set; }
+
+    public bool DisableIdleFollowUp { get; set; }
+
+    public bool RecordTextInputAsTranscription { get; set; }
+
+    public Func<string, CancellationToken, Task<RealtimeTextRecordingAudio>> TextInputRecordingAudioProviderAsync { get; set; }
 }

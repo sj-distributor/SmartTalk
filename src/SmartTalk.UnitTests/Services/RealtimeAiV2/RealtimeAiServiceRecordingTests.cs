@@ -2,6 +2,7 @@ using NSubstitute;
 using Shouldly;
 using SmartTalk.Core.Services.RealtimeAiV2.Adapters;
 using SmartTalk.Messages.Dto.RealtimeAi;
+using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.RealtimeAi;
 using Xunit;
 
@@ -90,6 +91,45 @@ public class RealtimeAiServiceRecordingTests : RealtimeAiServiceTestBase
 
         recordedWav.ShouldNotBeNull();
         GetWavDataChunkSize(recordedWav!).ShouldBe(expectedDataSize);
+    }
+
+    [Fact]
+    public async Task Recording_TextInput_UsesSyntheticAudioAndQueuesUserTranscription()
+    {
+        var text = "hello from dify";
+        var syntheticUserAudio = new byte[] { 10, 20, 30, 40 };
+        byte[]? recordedWav = null;
+        IReadOnlyList<(AiSpeechAssistantSpeaker Speaker, string Text)> transcriptions = [];
+
+        ClientAdapter.ParseMessage(Arg.Any<string>())
+            .Returns(new ParsedClientMessage { Type = RealtimeAiClientMessageType.Text, Payload = text });
+
+        var options = CreateDefaultOptions(o =>
+        {
+            o.EnableRecording = true;
+            o.RecordTextInputAsTranscription = true;
+            o.TextInputRecordingAudioProviderAsync = (_, _) => Task.FromResult(new RealtimeTextRecordingAudio
+            {
+                AudioBytes = syntheticUserAudio,
+                AudioCodec = RealtimeAiAudioCodec.PCM16
+            });
+            o.OnRecordingCompleteAsync = (_, wav) => { recordedWav = wav; return Task.CompletedTask; };
+            o.OnTranscriptionsCompletedAsync = (_, items) => { transcriptions = items; return Task.CompletedTask; };
+        });
+
+        var sessionTask = await StartSessionInBackgroundAsync(options);
+
+        FakeWs.EnqueueClientMessage("{\"text\":\"hello from dify\"}");
+        await Task.Delay(100);
+
+        FakeWs.EnqueueClose();
+        await sessionTask;
+
+        recordedWav.ShouldNotBeNull();
+        GetWavDataChunkSize(recordedWav!).ShouldBe(syntheticUserAudio.Length);
+        transcriptions.ShouldContain(x => x.Speaker == AiSpeechAssistantSpeaker.User && x.Text == text);
+        FakeWssClient.SentMessages.ShouldContain(x => x == $"text_user:{text}");
+        FakeWssClient.SentMessages.ShouldNotContain(x => x == "audio_append_msg");
     }
 
     // ── WAV output format ─────────────────────────────────────────

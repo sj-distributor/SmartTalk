@@ -4,6 +4,7 @@ using System.Text;
 using NAudio.Wave;
 using Serilog;
 using SmartTalk.Core.Services.RealtimeAiV2.Adapters;
+using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.RealtimeAi;
 
 namespace SmartTalk.Core.Services.RealtimeAiV2.Services;
@@ -111,7 +112,33 @@ public partial class RealtimeAiService
 
     private async Task HandleClientTextAsync(string text)
     {
+        await RecordTextInputIfRequiredAsync(text).ConfigureAwait(false);
         await SendTextToProviderAsync(text).ConfigureAwait(false);
+    }
+
+    private async Task RecordTextInputIfRequiredAsync(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return;
+
+        if (_ctx.Options.RecordTextInputAsTranscription)
+            _ctx.Transcriptions.Enqueue((AiSpeechAssistantSpeaker.User, text));
+
+        if (!_ctx.Options.EnableRecording || _ctx.Options.TextInputRecordingAudioProviderAsync == null) return;
+
+        try
+        {
+            var recordingAudio = await _ctx.Options
+                .TextInputRecordingAudioProviderAsync(text, _ctx.SessionCts?.Token ?? CancellationToken.None)
+                .ConfigureAwait(false);
+
+            if (recordingAudio?.AudioBytes is { Length: > 0 })
+                await WriteToAudioBufferAsync(recordingAudio.AudioBytes, recordingAudio.AudioCodec).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "[RealtimeAi] Failed to append text input audio to recording, SessionId: {SessionId}", _ctx.SessionId);
+        }
     }
 
     private async Task CleanupSessionAsync(bool clientIsClose)
