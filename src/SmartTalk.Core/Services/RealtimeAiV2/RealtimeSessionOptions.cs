@@ -120,6 +120,19 @@ public class RealtimeSessionOptions
     public bool EnableRecording { get; set; }
 
     /// <summary>
+    /// Optional hook used by text-only clients (e.g. Dify) to synthesize user text
+    /// into audio that should be appended to the recording buffer. The generated
+    /// audio is not sent to the realtime provider, avoiding duplicated user input.
+    /// </summary>
+    public Func<string, CancellationToken, Task<RealtimeTextRecordingAudio>> TextInputRecordingAudioProviderAsync { get; set; }
+
+    /// <summary>
+    /// When true, text-only user inputs are included in the final transcription list.
+    /// Audio inputs still rely on provider transcription events.
+    /// </summary>
+    public bool RecordTextInputAsTranscription { get; set; }
+
+    /// <summary>
     /// Optional idle follow-up configuration. When set, AI will proactively
     /// send a follow-up message if the user stays silent after an AI turn.
     /// Null to disable.

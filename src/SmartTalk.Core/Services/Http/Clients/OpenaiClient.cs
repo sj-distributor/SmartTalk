@@ -1,3 +1,4 @@
+using OpenAI.Audio;
 using OpenAI.Chat;
 using Serilog;
 using SmartTalk.Core.Ioc;
@@ -14,6 +15,8 @@ public interface IOpenaiClient : IScopedDependency
     Task<string> RealtimeChatAsync(string sdp,  string ephemeralToken, CancellationToken cancellationToken);
 
     Task<byte[]> GenerateAudioChatCompletionAsync(BinaryData audioData, string prompt, string voice, CancellationToken cancellationToken);
+
+    Task<byte[]> GenerateSpeechAsync(string text, string voice, CancellationToken cancellationToken);
 }
 
 public class OpenaiClient : IOpenaiClient
@@ -84,5 +87,30 @@ public class OpenaiClient : IOpenaiClient
         Log.Information("Analyze record to repeat order: {@completion}", completion);
 
         return completion.OutputAudio.AudioBytes.ToArray();
+    }
+
+    public async Task<byte[]> GenerateSpeechAsync(string text, string voice, CancellationToken cancellationToken)
+    {
+        AudioClient client = new("tts-1", _openAiSettings.ApiKey);
+        var result = await client.GenerateSpeechAsync(
+            text,
+            ResolveSpeechVoice(voice),
+            new SpeechGenerationOptions { ResponseFormat = GeneratedSpeechFormat.Wav },
+            cancellationToken).ConfigureAwait(false);
+
+        return result.Value.ToArray();
+    }
+
+    private static GeneratedSpeechVoice ResolveSpeechVoice(string voice)
+    {
+        return voice?.Trim().ToLowerInvariant() switch
+        {
+            "echo" => GeneratedSpeechVoice.Echo,
+            "fable" => GeneratedSpeechVoice.Fable,
+            "nova" => GeneratedSpeechVoice.Nova,
+            "onyx" => GeneratedSpeechVoice.Onyx,
+            "shimmer" => GeneratedSpeechVoice.Shimmer,
+            _ => GeneratedSpeechVoice.Alloy
+        };
     }
 }

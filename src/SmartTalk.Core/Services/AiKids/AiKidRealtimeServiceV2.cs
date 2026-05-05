@@ -75,7 +75,9 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
             WebSocket = command.WebSocket,
             Region = command.Region,
             EnableRecording = true,
-            IdleFollowUp = timer != null
+            TextInputRecordingAudioProviderAsync = command.TextInputRecordingAudioProviderAsync,
+            RecordTextInputAsTranscription = command.RecordTextInputAsTranscription,
+            IdleFollowUp = !command.DisableIdleFollowUp && timer != null
                 ? new RealtimeSessionIdleFollowUp
                 {
                     TimeoutSeconds = timer.TimeSpanSeconds,
@@ -85,7 +87,7 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
                 : null,
             OnSessionReadyAsync = async actions =>
             {
-                if (!string.IsNullOrEmpty(greetings))
+                if (!command.SuppressGreeting && !string.IsNullOrEmpty(greetings))
                     await actions.SendTextToProviderAsync($"Greet the user with: {greetings}").ConfigureAwait(false);
             },
             OnRecordingCompleteAsync = async (sessionId, wavBytes) =>
