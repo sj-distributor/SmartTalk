@@ -112,17 +112,22 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
                     Log.Information("[AiKidRealtimeV2] Audio uploaded, SessionId: {SessionId}, AssistantId: {AssistantId}, Url: {Url}",
                         sessionId, assistantId, audio?.Attachment?.FileUrl);
 
-                    if (!string.IsNullOrEmpty(audio?.Attachment?.FileUrl) && assistantId != 0)
+                    var recordingUrl = audio?.Attachment?.FileUrl;
+
+                    if (!string.IsNullOrEmpty(recordingUrl))
+                        await (command.OnRecordingUploadedAsync?.Invoke(sessionId, recordingUrl) ?? Task.CompletedTask).ConfigureAwait(false);
+
+                    if (!string.IsNullOrEmpty(recordingUrl) && assistantId != 0)
                     {
                         var jobId = _backgroundJobClient.Enqueue<IAiKidRealtimeProcessJobService>(x =>
-                            x.RecordingRealtimeAiAsync(audio.Attachment.FileUrl, assistantId, sessionId, orderRecordType, CancellationToken.None));
+                            x.RecordingRealtimeAiAsync(recordingUrl, assistantId, sessionId, orderRecordType, CancellationToken.None));
 
                         Log.Information(
                             "[AiKidRealtimeV2] Recording job enqueued, SessionId: {SessionId}, AssistantId: {AssistantId}, JobId: {JobId}, RecordingUrl: {RecordingUrl}",
                             sessionId,
                             assistantId,
                             jobId,
-                            audio.Attachment.FileUrl);
+                            recordingUrl);
                     }
                     else
                     {

@@ -27,4 +27,6 @@ public class AiKidRealtimeCommand : ICommand
     public bool RecordTextInputAsTranscription { get; set; }
 
     public Func<string, CancellationToken, Task<RealtimeTextRecordingAudio>> TextInputRecordingAudioProviderAsync { get; set; }
+
+    public Func<string, string, Task> OnRecordingUploadedAsync { get; set; }
 }

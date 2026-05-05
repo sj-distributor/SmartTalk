@@ -46,6 +46,8 @@ public class DifyRealtimeEndSessionRequest
 
 public class DifyRealtimeMessageResponse : SmartTalkResponse<DifyRealtimeMessageResponseData>;
 
+public class DifyRealtimeEndSessionResponse : SmartTalkResponse<DifyRealtimeEndSessionResponseData>;
+
 public class DifyRealtimeMessageResponseData
 {
     public string SessionId { get; set; }
@@ -57,4 +59,19 @@ public class DifyRealtimeMessageResponseData
     public string Answer { get; set; }
 
     public bool Ended { get; set; }
+
+    public string RecordingUrl { get; set; }
+}
+
+public class DifyRealtimeEndSessionResponseData
+{
+    public string SessionId { get; set; }
+
+    [JsonProperty("conversation_id")]
+    [JsonPropertyName("conversation_id")]
+    public string ConversationId { get; set; }
+
+    public bool Ended { get; set; }
+
+    public string RecordingUrl { get; set; }
 }
