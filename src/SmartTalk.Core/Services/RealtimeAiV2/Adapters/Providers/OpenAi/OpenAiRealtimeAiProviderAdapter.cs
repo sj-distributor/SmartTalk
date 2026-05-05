@@ -46,7 +46,7 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
                 instructions = modelConfig.Prompt,
                 modalities = new[] { "text", "audio" },
                 temperature = 0.8,
-                input_audio_transcription = new { model = "whisper-1" },
+                input_audio_transcription = new { model = "gpt-4o-transcribe" },
                 input_audio_noise_reduction = modelConfig.InputAudioNoiseReduction,
                 tools = modelConfig.Tools.Any() ? modelConfig.Tools : null
             }
