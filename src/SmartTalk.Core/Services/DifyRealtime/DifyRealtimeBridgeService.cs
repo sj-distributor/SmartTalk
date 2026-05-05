@@ -62,11 +62,9 @@ public class DifyRealtimeBridgeService : IDifyRealtimeBridgeService
         var session = GetOrCreateSession(request);
         var ended = false;
 
-        Log.Debug("[DifyRealtime] Waiting turn lock, SessionId: {SessionId}, SessionKey: {SessionKey}", session.SessionId, session.Key);
         await session.TurnLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            Log.Debug("[DifyRealtime] Turn lock acquired, SessionId: {SessionId}, SessionKey: {SessionKey}", session.SessionId, session.Key);
             session.Touch();
             var drained = session.WebSocket.DrainServerMessages();
             if (drained > 0)
@@ -105,7 +103,6 @@ public class DifyRealtimeBridgeService : IDifyRealtimeBridgeService
         finally
         {
             session.TurnLock.Release();
-            Log.Debug("[DifyRealtime] Turn lock released, SessionId: {SessionId}, SessionKey: {SessionKey}", session.SessionId, session.Key);
         }
     }
 
@@ -290,8 +287,6 @@ public class DifyRealtimeBridgeService : IDifyRealtimeBridgeService
 
         var partialAnswer = string.Empty;
         var completedAnswer = string.Empty;
-        Log.Debug("[DifyRealtime] Waiting answer, SessionId: {SessionId}, SessionKey: {SessionKey}, TimeoutSeconds: {TimeoutSeconds}", session.SessionId, session.Key, timeout.TotalSeconds);
-
         while (!linkedCts.IsCancellationRequested)
         {
             string raw;
@@ -312,13 +307,6 @@ public class DifyRealtimeBridgeService : IDifyRealtimeBridgeService
 
             if (!TryParseClientMessage(raw, out var type, out var transcript, out var speaker))
                 continue;
-
-            Log.Debug("[DifyRealtime] Received server event, SessionId: {SessionId}, SessionKey: {SessionKey}, Type: {Type}, Speaker: {Speaker}, TranscriptLength: {TranscriptLength}",
-                session.SessionId,
-                session.Key,
-                type,
-                speaker,
-                transcript?.Length ?? 0);
 
             if (type == "AiTurnCompleted")
             {
@@ -383,7 +371,6 @@ public class DifyRealtimeBridgeService : IDifyRealtimeBridgeService
         }
         catch
         {
-            Log.Debug("[DifyRealtime] Failed to parse server message payload");
             return false;
         }
     }
