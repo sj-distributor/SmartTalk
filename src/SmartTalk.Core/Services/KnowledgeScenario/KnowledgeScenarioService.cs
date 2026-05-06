@@ -1,4 +1,5 @@
 using AutoMapper;
+using Serilog;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.KnowledgeScenario;
@@ -90,6 +91,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         folder.UpdatedAt = DateTimeOffset.UtcNow;
 
         await _knowledgeScenarioDataProvider.UpdateKnowledgeSceneFolderAsync(folder, cancellationToken: cancellationToken).ConfigureAwait(false);
+        Log.Information("UpdateKnowledgeSceneFolderAsync renamed folder. FolderId={@FolderId}, CurrentName={@CurrentName}", folder.Id, folder.Name);
 
         return new UpdateKnowledgeSceneFolderResponse
         {
@@ -108,15 +110,18 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
 
         var scenes = await _knowledgeScenarioDataProvider.GetKnowledgeScenesByFolderIdAsync(command.Id, cancellationToken).ConfigureAwait(false);
         var sceneIds = scenes.Select(x => x.Id).ToList();
-        var knowledges = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdsAsync(sceneIds, cancellationToken).ConfigureAwait(false);
+        var knowledgeSceneItems = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdsAsync(sceneIds, cancellationToken).ConfigureAwait(false);
         var relations = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeSceneRelationsBySceneIdsAsync(sceneIds, cancellationToken).ConfigureAwait(false);
         var knowledgeIds = relations.Select(x => x.KnowledgeId).Distinct().ToList();
+        
+        Log.Information("DeleteKnowledgeSceneFolderAsync loaded related data. FolderId={@FolderId}, SceneIds={@SceneIds}, SceneItemIds={@SceneItemIds}, RelationIds={@RelationIds}, KnowledgeIds={@KnowledgeIds}",
+            folder.Id, sceneIds, knowledgeSceneItems.Select(x => x.Id).ToList(), relations.Select(x => x.Id).ToList(), knowledgeIds);
 
         if (relations.Count != 0)
             await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantKnowledgeSceneRelationsAsync(relations, false, cancellationToken).ConfigureAwait(false);
 
-        if (knowledges.Count != 0)
-            await _knowledgeScenarioDataProvider.DeleteKnowledgeSceneItemsAsync(knowledges, false, cancellationToken).ConfigureAwait(false);
+        if (knowledgeSceneItems.Count != 0)
+            await _knowledgeScenarioDataProvider.DeleteKnowledgeSceneItemsAsync(knowledgeSceneItems, false, cancellationToken).ConfigureAwait(false);
 
         if (scenes.Count != 0)
             await _knowledgeScenarioDataProvider.DeleteKnowledgeScenesAsync(scenes, false, cancellationToken).ConfigureAwait(false);
@@ -124,6 +129,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         await _knowledgeScenarioDataProvider.DeleteKnowledgeSceneFolderAsync(folder, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         await _aiSpeechAssistantKnowledgePromptService.RefreshScenePromptsAsync(knowledgeIds, cancellationToken).ConfigureAwait(false);
+        Log.Information("DeleteKnowledgeSceneFolderAsync completed. FolderId={@FolderId}", folder.Id);
 
         return new DeleteKnowledgeSceneFolderResponse
         {
@@ -153,6 +159,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         var scene = _mapper.Map<KnowledgeScene>(command);
 
         await _knowledgeScenarioDataProvider.AddKnowledgeSceneAsync(scene, true, cancellationToken: cancellationToken).ConfigureAwait(false);
+        Log.Information("AddKnowledgeSceneAsync completed. SceneId={@SceneId}, FolderId={@FolderId}, Status={@Status}", scene.Id, scene.FolderId, scene.Status);
 
         return new AddKnowledgeSceneResponse
         {
@@ -189,7 +196,11 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
 
         await _knowledgeScenarioDataProvider.UpdateKnowledgeSceneAsync(scene, cancellationToken: cancellationToken).ConfigureAwait(false);
         if (command.Status.HasValue)
+        {
+            Log.Information("UpdateKnowledgeSceneAsync status changed. SceneId={@SceneId}, SceneStatus={@SceneStatus}. Refreshing related prompts.", scene.Id, scene.Status);
             await _aiSpeechAssistantKnowledgePromptService.RefreshScenePromptsBySceneIdsAsync([scene.Id], cancellationToken).ConfigureAwait(false);
+        }
+        Log.Information("UpdateKnowledgeSceneAsync updated scene. SceneId={@SceneId}, SceneFolderId={@SceneFolderId}, SceneName={@SceneName}", scene.Id, scene.FolderId, scene.Name);
 
         return new UpdateKnowledgeSceneResponse
         {
@@ -222,6 +233,9 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         scene.UpdatedAt = now;
         await _knowledgeScenarioDataProvider.UpdateKnowledgeSceneAsync(scene, true, cancellationToken).ConfigureAwait(false);
         await _aiSpeechAssistantKnowledgePromptService.RefreshScenePromptsBySceneIdsAsync([scene.Id], cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("AddKnowledgeSceneItemAsync added scene item and refreshed prompts. SceneId={@SceneId}, ItemId={@ItemId}, ItemType={@ItemType}", 
+            knowledge.SceneId, knowledge.Id, knowledge.Type);
 
         return new AddKnowledgeSceneItemResponse
         {
@@ -260,6 +274,9 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         scene.UpdatedAt = now;
         await _knowledgeScenarioDataProvider.UpdateKnowledgeSceneAsync(scene, true, cancellationToken).ConfigureAwait(false);
         await _aiSpeechAssistantKnowledgePromptService.RefreshScenePromptsBySceneIdsAsync([scene.Id], cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("UpdateKnowledgeSceneItemAsync updated scene item and refreshed prompts. ItemId={ItemId}, SceneId={SceneId},  KnowledgeName={KnowledgeName}, KnowledgeType={KnowledgeType}",
+            knowledge.Id, knowledge.SceneId, knowledge.Name, knowledge.Type);
 
         return new UpdateKnowledgeSceneItemResponse
         {
@@ -286,6 +303,9 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         scene.UpdatedAt = DateTimeOffset.UtcNow;
         await _knowledgeScenarioDataProvider.UpdateKnowledgeSceneAsync(scene, true, cancellationToken).ConfigureAwait(false);
         await _aiSpeechAssistantKnowledgePromptService.RefreshScenePromptsBySceneIdsAsync([scene.Id], cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("DeleteKnowledgeSceneItemAsync removed scene item and refreshed prompts. ItemId={ItemId}, SceneId={SceneId}, ItemType={ItemType}",
+            knowledge.Id, scene.Id, knowledge.Type);
 
         return new DeleteKnowledgeSceneItemResponse
         {
@@ -296,6 +316,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
     public async Task<GetKnowledgeSceneFoldersResponse> GetKnowledgeSceneFoldersAsync(GetKnowledgeSceneFoldersRequest request, CancellationToken cancellationToken)
     {
         var folders = await _knowledgeScenarioDataProvider.GetKnowledgeSceneFoldersAsync(request.Keyword, cancellationToken).ConfigureAwait(false);
+        Log.Information("GetKnowledgeSceneFoldersAsync completed. FolderCount={Count}", folders.Count);
 
         return new GetKnowledgeSceneFoldersResponse
         {
@@ -308,6 +329,8 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         if (request.FolderId <= 0) throw new Exception("GetKnowledgeScenes FolderId is required.");
 
         var scenes = await _knowledgeScenarioDataProvider.GetKnowledgeScenesAsync(request.FolderId, request.Keyword, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("GetKnowledgeScenesAsync completed. FolderId={FolderId}, SceneCount={Count}", request.FolderId, scenes.Count);
 
         return new GetKnowledgeScenesResponse
         {
@@ -327,7 +350,8 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         var knowledges = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsAsync(request.Id, null, cancellationToken).ConfigureAwait(false);
         var sceneDto = _mapper.Map<KnowledgeSceneDto>(scene);
         sceneDto.SceneItems = _mapper.Map<List<KnowledgeSceneItemDto>>(knowledges);
-
+        Log.Information("GetKnowledgeSceneAsync completed. SceneId={SceneId}, SceneItemCount={SceneItemCount}", scene.Id, knowledges.Count);
+      
         return new GetKnowledgeSceneResponse
         {
             Data = new GetKnowledgeSceneResponseData
@@ -347,6 +371,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
             throw new Exception($"GetKnowledgeSceneItems Scene [{request.SceneId}] does not exist.");
 
         var knowledges = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsAsync(request.SceneId, request.Keyword, cancellationToken).ConfigureAwait(false);
+        Log.Information("GetKnowledgeSceneItemsAsync completed. SceneId={SceneId}, SceneItemCount={Count}", request.SceneId, knowledges.Count);
 
         return new GetKnowledgeSceneItemsResponse
         {
@@ -365,7 +390,9 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
 
         var relations = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeSceneRelationsBySceneIdAsync(request.SceneId, cancellationToken).ConfigureAwait(false);
         var data = await BuildRelatedKnowledgeDtosAsync(relations, cancellationToken).ConfigureAwait(false);
-
+        Log.Information("GetKnowledgeSceneRelatedKnowledgesAsync completed. SceneId={SceneId}, RelationCount={RelationCount}, ActiveKnowledgeCount={KnowledgeCount}",
+            request.SceneId, relations.Count, data.Count);
+  
         return new GetKnowledgeSceneRelatedKnowledgesResponse
         {
             Data = data
@@ -388,7 +415,10 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         var targetKnowledgeIdSet = targetKnowledgeIds.ToHashSet();
 
         var relationsToDelete = currentRelations.Where(x => !targetKnowledgeIdSet.Contains(x.KnowledgeId)).ToList();
-        var knowledgeIdsToAdd = targetKnowledgeIds.Where(x => !currentKnowledgeIds.Contains(x)).ToList();
+        var knowledgeIdsToAdd = targetKnowledgeIds.Where(x => !currentKnowledgeIds.Contains(x)).ToList(); 
+        
+        Log.Information("SaveKnowledgeSceneRelatedKnowledgesAsync diff built. SceneId={SceneId}, CurrentCount={CurrentCount}, TargetCount={TargetCount}, DeleteCount={DeleteCount}, AddCount={AddCount}",
+            command.SceneId, currentKnowledgeIds.Count, targetKnowledgeIds.Count, relationsToDelete.Count, knowledgeIdsToAdd.Count);
 
         if (relationsToDelete.Count != 0)
             await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantKnowledgeSceneRelationsAsync(relationsToDelete, true, cancellationToken).ConfigureAwait(false);
@@ -404,15 +434,17 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
             await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgeSceneRelationAsync(relation, true, cancellationToken).ConfigureAwait(false);
         }
 
-        var affectedKnowledgeIds = currentKnowledgeIds
-            .Union(targetKnowledgeIdSet)
-            .ToList();
+        var affectedKnowledgeIds = currentKnowledgeIds.Union(targetKnowledgeIdSet).ToList();
 
         if (affectedKnowledgeIds.Count != 0)
+        {
+            Log.Information("SaveKnowledgeSceneRelatedKnowledgesAsync refresh prompts. SceneId={SceneId}, AffectedKnowledgeCount={AffectedKnowledgeCount}", command.SceneId, affectedKnowledgeIds.Count);
             await _aiSpeechAssistantKnowledgePromptService.RefreshScenePromptsAsync(affectedKnowledgeIds, cancellationToken).ConfigureAwait(false);
+        }
 
         var latestRelations = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeSceneRelationsBySceneIdAsync(command.SceneId, cancellationToken).ConfigureAwait(false);
         var data = await BuildRelatedKnowledgeDtosAsync(latestRelations, cancellationToken).ConfigureAwait(false);
+        Log.Information("SaveKnowledgeSceneRelatedKnowledgesAsync completed. SceneId={SceneId}, SavedKnowledgeCount={KnowledgeCount}", command.SceneId, data.Count);
 
         return new SaveKnowledgeSceneRelatedKnowledgesResponse
         {
