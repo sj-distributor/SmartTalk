@@ -78,6 +78,8 @@ public partial interface IPhoneOrderDataProvider
     Task UpdateOrderIdAsync(int recordId, Guid orderId, CancellationToken cancellationToken);
 
     Task MarkRecordCompletedAsync(int recordId, CancellationToken cancellationToken = default);
+
+    Task<List<string>> GetTranscriptionTextsAsync(int assistantId, int recordId, DateTimeOffset utcStart, DateTimeOffset utcEnd, CancellationToken cancellationToken);
     
     Task<PhoneOrderRecordScenarioHistory> AddPhoneOrderRecordScenarioHistoryAsync(PhoneOrderRecordScenarioHistory scenarioHistory, bool forceSave = true, CancellationToken cancellationToken = default);
 
@@ -141,7 +143,7 @@ public partial class PhoneOrderDataProvider
         var agents = (await agentsQuery.ToListAsync(cancellationToken).ConfigureAwait(false)).Select(x => x.Id).Distinct().ToList();
 
         if (agents.Count == 0) return [];
-
+        
         var query = from record in _repository.Query<PhoneOrderRecord>()
             where record.Status == PhoneOrderRecordStatus.Sent && agents.Contains(record.AgentId)
             select record;
@@ -163,8 +165,7 @@ public partial class PhoneOrderDataProvider
         if (assistantId.HasValue)
             query = query.Where(x => x.AssistantId.HasValue && x.AssistantId == assistantId.Value);
 
-        return await query.OrderByDescending(record => record.CreatedDate).Take(1000).ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
+        return await query.OrderByDescending(record => record.CreatedDate).Take(1000).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsByAgentIdsAsync(List<int> agentIds, DateTimeOffset? utcStart = null, DateTimeOffset? utcEnd = null, CancellationToken cancellationToken = default)
@@ -518,7 +519,22 @@ public partial class PhoneOrderDataProvider
         await _repository.Query<PhoneOrderRecord>().Where(r => r.Id == recordId && !r.IsCompleted)
             .ExecuteUpdateAsync(setters => setters.SetProperty(r => r.IsCompleted, true), cancellationToken).ConfigureAwait(false);
     }
-    
+
+    public async Task<List<string>> GetTranscriptionTextsAsync(int assistantId, int recordId, DateTimeOffset utcStart, DateTimeOffset utcEnd, CancellationToken cancellationToken)
+    {
+        return await _repository.Query<PhoneOrderRecord>().AsNoTracking()
+            .Where(x =>
+                x.AssistantId == assistantId &&
+                x.Id != recordId &&
+                x.CreatedDate >= utcStart &&
+                x.CreatedDate < utcEnd &&
+                !string.IsNullOrEmpty(x.TranscriptionText))
+            .OrderBy(x => x.CreatedDate)
+            .Select(x => x.TranscriptionText)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+    }
+
     public async Task<PhoneOrderRecordScenarioHistory> AddPhoneOrderRecordScenarioHistoryAsync(PhoneOrderRecordScenarioHistory scenarioHistory, bool forceSave = true, CancellationToken cancellationToken = default)
     {
         await _repository.InsertAsync(scenarioHistory, cancellationToken).ConfigureAwait(false);
