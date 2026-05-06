@@ -11,13 +11,6 @@ public class RealtimeAiWssAudioData
     public Dictionary<string, object> CustomProperties { get; set; } = new();
 }
 
-public class RealtimeTextRecordingAudio
-{
-    public byte[] AudioBytes { get; set; }
-
-    public RealtimeAiAudioCodec AudioCodec { get; set; } = RealtimeAiAudioCodec.PCM16;
-}
-
 public class RealtimeAiWssTranscriptionData
 {
     public string Transcript { get; set; }

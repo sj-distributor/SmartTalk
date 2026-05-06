@@ -4,7 +4,6 @@ using System.Text;
 using NAudio.Wave;
 using Serilog;
 using SmartTalk.Core.Services.RealtimeAiV2.Adapters;
-using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.RealtimeAi;
 
 namespace SmartTalk.Core.Services.RealtimeAiV2.Services;
@@ -112,33 +111,7 @@ public partial class RealtimeAiService
 
     private async Task HandleClientTextAsync(string text)
     {
-        await RecordTextInputIfRequiredAsync(text).ConfigureAwait(false);
         await SendTextToProviderAsync(text).ConfigureAwait(false);
-    }
-
-    private async Task RecordTextInputIfRequiredAsync(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text)) return;
-
-        if (_ctx.Options.RecordTextInputAsTranscription)
-            _ctx.Transcriptions.Enqueue((AiSpeechAssistantSpeaker.User, text));
-
-        if (!_ctx.Options.EnableRecording || _ctx.Options.TextInputRecordingAudioProviderAsync == null) return;
-
-        try
-        {
-            var recordingAudio = await _ctx.Options
-                .TextInputRecordingAudioProviderAsync(text, _ctx.SessionCts?.Token ?? CancellationToken.None)
-                .ConfigureAwait(false);
-
-            if (recordingAudio?.AudioBytes is { Length: > 0 })
-                await WriteToAudioBufferAsync(recordingAudio.AudioBytes, recordingAudio.AudioCodec).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) { }
-        catch (Exception ex)
-        {
-            Log.Warning(ex, "[RealtimeAi] Failed to append text input audio to recording, SessionId: {SessionId}", _ctx.SessionId);
-        }
     }
 
     private async Task CleanupSessionAsync(bool clientIsClose)
@@ -258,15 +231,7 @@ public partial class RealtimeAiService
 
     private async Task HandleRecordingAsync()
     {
-        if (!_ctx.Options.EnableRecording || _ctx.Options.OnRecordingCompleteAsync == null)
-        {
-            Log.Information(
-                "[RealtimeAi] Recording skipped at cleanup, SessionId: {SessionId}, EnableRecording: {EnableRecording}, HasRecordingCallback: {HasRecordingCallback}",
-                _ctx.SessionId,
-                _ctx.Options.EnableRecording,
-                _ctx.Options.OnRecordingCompleteAsync != null);
-            return;
-        }
+        if (!_ctx.Options.EnableRecording || _ctx.Options.OnRecordingCompleteAsync == null) return;
 
         MemoryStream snapshot;
 
@@ -281,19 +246,10 @@ public partial class RealtimeAiService
             _ctx.BufferLock.Release();
         }
 
-        if (snapshot is not { CanRead: true } || snapshot.Length == 0)
-        {
-            Log.Warning("[RealtimeAi] Recording buffer is empty at cleanup, SessionId: {SessionId}", _ctx.SessionId);
-            return;
-        }
+        if (snapshot is not { CanRead: true } || snapshot.Length == 0) return;
 
         try
         {
-            Log.Information(
-                "[RealtimeAi] Finalizing recording buffer, SessionId: {SessionId}, RawPcmBytes: {RawPcmBytes}",
-                _ctx.SessionId,
-                snapshot.Length);
-
             var waveFormat = new WaveFormat(24000, 16, 1);
             using var wavStream = new MemoryStream();
 
@@ -316,10 +272,6 @@ public partial class RealtimeAiService
                 }
             }
 
-            Log.Information(
-                "[RealtimeAi] Recording WAV prepared, SessionId: {SessionId}, WavBytes: {WavBytes}",
-                _ctx.SessionId,
-                wavStream.Length);
             await _ctx.Options.OnRecordingCompleteAsync(_ctx.SessionId, wavStream.ToArray()).ConfigureAwait(false);
         }
         finally
