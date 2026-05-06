@@ -485,8 +485,8 @@ public partial class PhoneOrderProcessJobService
         var materialListText = string.Join("\n", historyItems.Select(x => $"{x.MaterialDesc} ({x.Material})【{x.invoiceDate}】"));
 
         var systemPrompt =
-            "你是一名訂單分析助手。請從下面的客戶分析報告文字中提取所有下單的物料名稱、數量、單位，並且用歷史物料列表盡力匹配每個物料的materialNumber。" +
-            "如果報告中提到了預約送貨時間，請提取送貨時間（格式yyyy-MM-dd），如果說了明天送貨，則不需要填寫。" +
+            "你是一名訂單分析助手。請從下面的客戶分析報告文字中提取所有下單的物料名稱、數量、單位，並且用歷史物料列表盡力匹配每個物料的materialNumber。「優先準確匹配物料列表中靠前的物料，如果有多個同類一樣物料，選用歷史列表中排在前的。」" +
+            "如果報告中提到了預約送貨時間，請提取送貨時間（格式yyyy-MM-dd）。" +
             "如果客戶提到了分店名，請提取 StoreName；如果提到第幾家店，請提取 StoreNumber。\n" +
             
             "【訂單意圖判斷規則（非常重要）】\n" +

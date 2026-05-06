@@ -18,6 +18,8 @@ public interface ICrmClient : IScopedDependency
     Task<List<GetCustomersPhoneNumberDataDto>> GetCustomersByPhoneNumberAsync(GetCustmoersByPhoneNumberRequestDto numberRequest, string token = null, CancellationToken cancellationToken = default);
 
     Task<List<CrmContactDto>> GetCustomerContactsAsync(string customerId, string token = null, CancellationToken cancellationToken = default);
+
+    Task<List<GetDeliveryInfoByPhoneNumberResponseDto>> GetDeliveryInfoByPhoneNumberAsync(string phoneNumber, CancellationToken cancellationToken = default);
 }
 
 public class CrmClient : ICrmClient
@@ -50,9 +52,9 @@ public class CrmClient : ICrmClient
             { "Accept", "application/json" }
         };
 
-        var resp = await _httpClient.PostAsync<CrmTokenResponse>(url, content, headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var response = await _httpClient.PostAsync<CrmTokenResponse>(url, content, cancellationToken, headers: headers).ConfigureAwait(false);
 
-        return resp.AccessToken;
+        return response?.AccessToken;
     }
 
     public async Task<List<CrmContactDto>> GetCustomerContactsAsync(string customerId,
@@ -115,5 +117,21 @@ public class CrmClient : ICrmClient
         };
 
         return await _httpClient.GetAsync<List<CrmContactDto>>($"{_crmSetting.BaseUrl}/api/customer/{customerId}/contacts", headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<GetDeliveryInfoByPhoneNumberResponseDto>> GetDeliveryInfoByPhoneNumberAsync(string phoneNumber, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(phoneNumber))
+            throw new ArgumentException("phoneNumber cannot be null or empty.", nameof(phoneNumber));
+        
+        var url = $"{_crmSetting.SyncBaseUrl}/api/external/get-delivery-info-by-phone-number?phone_number={phoneNumber}";
+
+        var headers = new Dictionary<string, string>
+        {
+            { "X-API-KEY", _crmSetting.ApiKey },
+            { "Accept", "application/json" }
+        };
+
+        return await _httpClient.GetAsync<List<GetDeliveryInfoByPhoneNumberResponseDto>>(url, cancellationToken: cancellationToken, headers: headers).ConfigureAwait(false);
     }
 }

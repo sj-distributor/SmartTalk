@@ -8,4 +8,6 @@ public class AddHrInterviewQuestionsCommand : ICommand
     public HrInterviewQuestionSection Section { get; set; }
     
     public List<string> Questions { get; set; }
+    
+    public bool ClearExisting { get; set; } = true;
 }

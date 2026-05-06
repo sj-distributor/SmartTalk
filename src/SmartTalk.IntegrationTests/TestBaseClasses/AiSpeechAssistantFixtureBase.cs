@@ -2,9 +2,11 @@ using System.Net.WebSockets;
 using Autofac;
 using Microsoft.Extensions.Configuration;
 using SmartTalk.Core.Settings.AiSpeechAssistant;
+using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.RealtimeAiV2;
 using SmartTalk.Core.Services.RealtimeAiV2.Adapters;
 using SmartTalk.IntegrationTests.Mocks;
+using NSubstitute;
 using Xunit;
 
 namespace SmartTalk.IntegrationTests.TestBaseClasses;
@@ -24,6 +26,10 @@ public class AiSpeechAssistantFixtureBase : TestBase
             .Build();
 
         builder.RegisterInstance(new AiSpeechAssistantSettings(config));
+
+        var fileTextExtractor = Substitute.For<IFileTextExtractor>();
+        fileTextExtractor.ExtractAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(string.Empty);
+        builder.RegisterInstance(fileTextExtractor).As<IFileTextExtractor>();
     })
     {
     }
