@@ -87,6 +87,9 @@ public partial class AiSpeechAssistantService
         if (knowledge == null) { return new GetAiSpeechAssistantKnowledgeResponse { Data = null }; }
 
         var result = _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge);
+        
+        var sceneRelationMap = await BuildKnowledgeSceneRelationDtosAsync([knowledge.Id], cancellationToken).ConfigureAwait(false);
+        result.SceneRelations = sceneRelationMap.TryGetValue(knowledge.Id, out var relations) ? relations : [];
         var premise = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantPremiseByAssistantIdAsync(request.AssistantId, cancellationToken).ConfigureAwait(false);
         
         if (premise != null && !string.IsNullOrEmpty(premise.Content))

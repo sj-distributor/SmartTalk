@@ -14,6 +14,8 @@ public partial interface IAiSpeechAssistantDataProvider
 
     Task<List<AiSpeechAssistantKnowledgeSceneRelation>> GetAiSpeechAssistantKnowledgeSceneRelationsAsync(int knowledgeId, CancellationToken cancellationToken = default);
 
+    Task<List<AiSpeechAssistantKnowledgeSceneRelation>> GetAiSpeechAssistantKnowledgeSceneRelationsByKnowledgeIdsAsync(List<int> knowledgeIds, CancellationToken cancellationToken = default);
+
     Task<List<AiSpeechAssistantKnowledgeSceneRelation>> GetAiSpeechAssistantKnowledgeSceneRelationsBySceneIdAsync(int sceneId, CancellationToken cancellationToken = default);
 
     Task<List<AiSpeechAssistantKnowledgeSceneRelation>> GetAiSpeechAssistantKnowledgeSceneRelationsBySceneIdsAsync(List<int> sceneIds, CancellationToken cancellationToken = default);
@@ -54,6 +56,18 @@ public partial class AiSpeechAssistantDataProvider
     {
         return await _repository.Query<AiSpeechAssistantKnowledgeSceneRelation>()
             .Where(x => x.KnowledgeId == knowledgeId)
+            .OrderByDescending(x => x.CreatedAt)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public async Task<List<AiSpeechAssistantKnowledgeSceneRelation>> GetAiSpeechAssistantKnowledgeSceneRelationsByKnowledgeIdsAsync(List<int> knowledgeIds, CancellationToken cancellationToken = default)
+    {
+        if (knowledgeIds.Count == 0)
+            return new List<AiSpeechAssistantKnowledgeSceneRelation>();
+
+        return await _repository.Query<AiSpeechAssistantKnowledgeSceneRelation>()
+            .Where(x => knowledgeIds.Contains(x.KnowledgeId))
             .OrderByDescending(x => x.CreatedAt)
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);

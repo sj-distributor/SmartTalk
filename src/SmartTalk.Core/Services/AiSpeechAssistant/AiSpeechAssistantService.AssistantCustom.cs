@@ -1786,6 +1786,15 @@ public partial class AiSpeechAssistantService
             .Select(x => x.First())
             .ToList();
 
+        var sceneRelationMap = await BuildKnowledgeSceneRelationDtosAsync(
+            distinctKnowledges.Select(x => x.KnowledgeId).ToList(),
+            cancellationToken).ConfigureAwait(false);
+
+        distinctKnowledges.ForEach(x =>
+        {
+            x.SceneRelations = sceneRelationMap.TryGetValue(x.KnowledgeId, out var relations) ? relations : [];
+        });
+
         return new GetKonwledgesResponse
         {
             Data = distinctKnowledges
