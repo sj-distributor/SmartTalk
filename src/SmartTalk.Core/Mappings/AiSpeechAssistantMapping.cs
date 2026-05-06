@@ -17,7 +17,6 @@ public class AiSpeechAssistantMapping : Profile
 
         CreateMap<AddAiSpeechAssistantKnowledgeCommand, AiSpeechAssistantKnowledge>();
         CreateMap<AiSpeechAssistantKnowledge, AiSpeechAssistantKnowledgeDto>().ReverseMap();
-        CreateMap<AddAiSpeechAssistantKnowledgeSceneRelationCommand, AiSpeechAssistantKnowledgeSceneRelation>();
         CreateMap<AiSpeechAssistantKnowledgeSceneRelation, AiSpeechAssistantKnowledgeSceneRelationDto>();
         CreateMap<NumberPool, NumberPoolDto>().ReverseMap();
 

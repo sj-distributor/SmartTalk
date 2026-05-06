@@ -8,10 +8,6 @@ public partial interface IAiSpeechAssistantDataProvider
 {
     Task<KnowledgeScene> GetKnowledgeSceneByIdAsync(int id, CancellationToken cancellationToken = default);
 
-    Task<AiSpeechAssistantKnowledgeSceneRelation> GetAiSpeechAssistantKnowledgeSceneRelationByIdAsync(int id, CancellationToken cancellationToken = default);
-
-    Task<AiSpeechAssistantKnowledgeSceneRelation> GetAiSpeechAssistantKnowledgeSceneRelationAsync(int knowledgeId, int sceneId, CancellationToken cancellationToken = default);
-
     Task<List<AiSpeechAssistantKnowledgeSceneRelation>> GetAiSpeechAssistantKnowledgeSceneRelationsAsync(int knowledgeId, CancellationToken cancellationToken = default);
 
     Task<List<AiSpeechAssistantKnowledgeSceneRelation>> GetAiSpeechAssistantKnowledgeSceneRelationsByKnowledgeIdsAsync(List<int> knowledgeIds, CancellationToken cancellationToken = default);
@@ -35,20 +31,6 @@ public partial class AiSpeechAssistantDataProvider
     {
         return await _repository.Query<KnowledgeScene>()
             .FirstOrDefaultAsync(x => x.Id == id, cancellationToken)
-            .ConfigureAwait(false);
-    }
-
-    public async Task<AiSpeechAssistantKnowledgeSceneRelation> GetAiSpeechAssistantKnowledgeSceneRelationByIdAsync(int id, CancellationToken cancellationToken = default)
-    {
-        return await _repository.Query<AiSpeechAssistantKnowledgeSceneRelation>()
-            .FirstOrDefaultAsync(x => x.Id == id, cancellationToken)
-            .ConfigureAwait(false);
-    }
-
-    public async Task<AiSpeechAssistantKnowledgeSceneRelation> GetAiSpeechAssistantKnowledgeSceneRelationAsync(int knowledgeId, int sceneId, CancellationToken cancellationToken = default)
-    {
-        return await _repository.Query<AiSpeechAssistantKnowledgeSceneRelation>()
-            .FirstOrDefaultAsync(x => x.KnowledgeId == knowledgeId && x.SceneId == sceneId, cancellationToken)
             .ConfigureAwait(false);
     }
 
