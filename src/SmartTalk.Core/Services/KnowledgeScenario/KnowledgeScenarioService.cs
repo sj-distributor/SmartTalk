@@ -1,5 +1,6 @@
 using AutoMapper;
 using SmartTalk.Core.Services.AiSpeechAssistant;
+using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.KnowledgeScenario;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Messages.Commands.KnowledgeScenario;
@@ -20,11 +21,11 @@ public interface IKnowledgeScenarioService : IScopedDependency
 
     Task<UpdateKnowledgeSceneResponse> UpdateKnowledgeSceneAsync(UpdateKnowledgeSceneCommand command, CancellationToken cancellationToken);
 
-    Task<AddKnowledgeSceneKnowledgeResponse> AddKnowledgeSceneKnowledgeAsync(AddKnowledgeSceneKnowledgeCommand command, CancellationToken cancellationToken);
+    Task<AddKnowledgeSceneItemResponse> AddKnowledgeSceneItemAsync(AddKnowledgeSceneItemCommand command, CancellationToken cancellationToken);
 
-    Task<UpdateKnowledgeSceneKnowledgeResponse> UpdateKnowledgeSceneKnowledgeAsync(UpdateKnowledgeSceneKnowledgeCommand command, CancellationToken cancellationToken);
+    Task<UpdateKnowledgeSceneItemResponse> UpdateKnowledgeSceneItemAsync(UpdateKnowledgeSceneItemCommand command, CancellationToken cancellationToken);
 
-    Task<DeleteKnowledgeSceneKnowledgeResponse> DeleteKnowledgeSceneKnowledgeAsync(DeleteKnowledgeSceneKnowledgeCommand command, CancellationToken cancellationToken);
+    Task<DeleteKnowledgeSceneItemResponse> DeleteKnowledgeSceneItemAsync(DeleteKnowledgeSceneItemCommand command, CancellationToken cancellationToken);
 
     Task<GetKnowledgeSceneFoldersResponse> GetKnowledgeSceneFoldersAsync(GetKnowledgeSceneFoldersRequest request, CancellationToken cancellationToken);
 
@@ -32,7 +33,11 @@ public interface IKnowledgeScenarioService : IScopedDependency
 
     Task<GetKnowledgeSceneResponse> GetKnowledgeSceneAsync(GetKnowledgeSceneRequest request, CancellationToken cancellationToken);
 
-    Task<GetKnowledgeSceneKnowledgesResponse> GetKnowledgeSceneKnowledgesAsync(GetKnowledgeSceneKnowledgesRequest request, CancellationToken cancellationToken);
+    Task<GetKnowledgeSceneItemsResponse> GetKnowledgeSceneItemsAsync(GetKnowledgeSceneItemsRequest request, CancellationToken cancellationToken);
+
+    Task<GetKnowledgeSceneRelatedKnowledgesResponse> GetKnowledgeSceneRelatedKnowledgesAsync(GetKnowledgeSceneRelatedKnowledgesRequest request, CancellationToken cancellationToken);
+
+    Task<SaveKnowledgeSceneRelatedKnowledgesResponse> SaveKnowledgeSceneRelatedKnowledgesAsync(SaveKnowledgeSceneRelatedKnowledgesCommand command, CancellationToken cancellationToken);
 }
 
 public class KnowledgeScenarioService : IKnowledgeScenarioService
@@ -103,7 +108,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
 
         var scenes = await _knowledgeScenarioDataProvider.GetKnowledgeScenesByFolderIdAsync(command.Id, cancellationToken).ConfigureAwait(false);
         var sceneIds = scenes.Select(x => x.Id).ToList();
-        var knowledges = await _knowledgeScenarioDataProvider.GetKnowledgeSceneKnowledgesBySceneIdsAsync(sceneIds, cancellationToken).ConfigureAwait(false);
+        var knowledges = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdsAsync(sceneIds, cancellationToken).ConfigureAwait(false);
         var relations = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeSceneRelationsBySceneIdsAsync(sceneIds, cancellationToken).ConfigureAwait(false);
         var knowledgeIds = relations.Select(x => x.KnowledgeId).Distinct().ToList();
 
@@ -111,13 +116,13 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
             await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantKnowledgeSceneRelationsAsync(relations, false, cancellationToken).ConfigureAwait(false);
 
         if (knowledges.Count != 0)
-            await _knowledgeScenarioDataProvider.DeleteKnowledgeSceneKnowledgesAsync(knowledges, false, cancellationToken).ConfigureAwait(false);
+            await _knowledgeScenarioDataProvider.DeleteKnowledgeSceneItemsAsync(knowledges, false, cancellationToken).ConfigureAwait(false);
 
         if (scenes.Count != 0)
             await _knowledgeScenarioDataProvider.DeleteKnowledgeScenesAsync(scenes, false, cancellationToken).ConfigureAwait(false);
 
         await _knowledgeScenarioDataProvider.DeleteKnowledgeSceneFolderAsync(folder, cancellationToken: cancellationToken).ConfigureAwait(false);
-        //更新场景的prompt 等待review
+
         await _aiSpeechAssistantKnowledgePromptService.RefreshScenePromptsAsync(knowledgeIds, cancellationToken).ConfigureAwait(false);
 
         return new DeleteKnowledgeSceneFolderResponse
@@ -139,12 +144,11 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
 
         if (folder == null)
             throw new Exception($"AddKnowledgeScene Folder [{command.FolderId}] does not exist.");
-
-        var trimmedName = command.Name.Trim();
-        var duplicatedScene = await _knowledgeScenarioDataProvider.GetKnowledgeSceneByFolderAndNameAsync(command.FolderId, trimmedName, cancellationToken).ConfigureAwait(false);
+        
+        var duplicatedScene = await _knowledgeScenarioDataProvider.GetKnowledgeSceneByFolderAndNameAsync(command.FolderId, command.Name, cancellationToken).ConfigureAwait(false);
 
         if (duplicatedScene != null)
-            throw new Exception($"AddKnowledgeScene Scene [{trimmedName}] already exists in this folder.");
+            throw new Exception($"AddKnowledgeScene Scene [{command.Name}] already exists in this folder.");
 
         var scene = _mapper.Map<KnowledgeScene>(command);
 
@@ -174,18 +178,18 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         var scene = await _knowledgeScenarioDataProvider.GetKnowledgeSceneByIdAsync(command.Id, cancellationToken).ConfigureAwait(false);
 
         if (scene == null) throw new Exception($"UpdateKnowledgeScene Scene [{command.Id}] does not exist.");
-
-        var trimmedName = command.Name.Trim();
-        var duplicatedScene = await _knowledgeScenarioDataProvider.GetKnowledgeSceneByFolderAndNameAsync(command.FolderId, trimmedName, cancellationToken).ConfigureAwait(false);
+        
+        var duplicatedScene = await _knowledgeScenarioDataProvider.GetKnowledgeSceneByFolderAndNameAsync(command.FolderId, command.Name, cancellationToken).ConfigureAwait(false);
 
         if (duplicatedScene != null && duplicatedScene.Id != command.Id)
-            throw new Exception($"UpdateKnowledgeScene Scene [{trimmedName}] already exists in this folder.");
+            throw new Exception($"UpdateKnowledgeScene Scene [{command.Name}] already exists in this folder.");
 
         _mapper.Map(command, scene);
         scene.UpdatedAt = DateTimeOffset.UtcNow;
 
         await _knowledgeScenarioDataProvider.UpdateKnowledgeSceneAsync(scene, cancellationToken: cancellationToken).ConfigureAwait(false);
-        await _aiSpeechAssistantKnowledgePromptService.RefreshScenePromptsBySceneIdsAsync([scene.Id], cancellationToken).ConfigureAwait(false);
+        if (command.Status.HasValue)
+            await _aiSpeechAssistantKnowledgePromptService.RefreshScenePromptsBySceneIdsAsync([scene.Id], cancellationToken).ConfigureAwait(false);
 
         return new UpdateKnowledgeSceneResponse
         {
@@ -193,99 +197,99 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         };
     }
 
-    public async Task<AddKnowledgeSceneKnowledgeResponse> AddKnowledgeSceneKnowledgeAsync(AddKnowledgeSceneKnowledgeCommand command, CancellationToken cancellationToken)
+    public async Task<AddKnowledgeSceneItemResponse> AddKnowledgeSceneItemAsync(AddKnowledgeSceneItemCommand command, CancellationToken cancellationToken)
     {
-        if (command.SceneId <= 0) throw new Exception("AddKnowledgeSceneKnowledge SceneId is required.");
+        if (command.SceneId <= 0) throw new Exception("AddKnowledgeSceneItem SceneId is required.");
 
-        if (string.IsNullOrWhiteSpace(command.Name)) throw new Exception("AddKnowledgeSceneKnowledge Name is required.");
+        if (string.IsNullOrWhiteSpace(command.Name)) throw new Exception("AddKnowledgeSceneItem Name is required.");
 
         var scene = await _knowledgeScenarioDataProvider.GetKnowledgeSceneByIdAsync(command.SceneId, cancellationToken).ConfigureAwait(false);
 
         if (scene == null)
-            throw new Exception($"AddKnowledgeSceneKnowledge Scene [{command.SceneId}] does not exist.");
+            throw new Exception($"AddKnowledgeSceneItem Scene [{command.SceneId}] does not exist.");
 
         var trimmedName = command.Name.Trim();
-        var duplicatedKnowledge = await _knowledgeScenarioDataProvider.GetKnowledgeSceneKnowledgeBySceneAndNameAsync(command.SceneId, trimmedName, cancellationToken).ConfigureAwait(false);
+        var duplicatedKnowledge = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemBySceneAndNameAsync(command.SceneId, trimmedName, cancellationToken).ConfigureAwait(false);
 
         if (duplicatedKnowledge != null)
-            throw new Exception($"AddKnowledgeSceneKnowledge Knowledge [{trimmedName}] already exists in this scene.");
+            throw new Exception($"AddKnowledgeSceneItem Item [{trimmedName}] already exists in this scene.");
 
-        var knowledge = _mapper.Map<KnowledgeSceneKnowledge>(command);
+        var knowledge = _mapper.Map<KnowledgeSceneItem>(command);
         var now = DateTimeOffset.UtcNow;
 
-        await _knowledgeScenarioDataProvider.AddKnowledgeSceneKnowledgeAsync(knowledge, false, cancellationToken).ConfigureAwait(false);
+        await _knowledgeScenarioDataProvider.AddKnowledgeSceneItemAsync(knowledge, false, cancellationToken).ConfigureAwait(false);
 
         scene.UpdatedAt = now;
         await _knowledgeScenarioDataProvider.UpdateKnowledgeSceneAsync(scene, true, cancellationToken).ConfigureAwait(false);
         await _aiSpeechAssistantKnowledgePromptService.RefreshScenePromptsBySceneIdsAsync([scene.Id], cancellationToken).ConfigureAwait(false);
 
-        return new AddKnowledgeSceneKnowledgeResponse
+        return new AddKnowledgeSceneItemResponse
         {
-            Data = _mapper.Map<KnowledgeSceneKnowledgeDto>(knowledge)
+            Data = _mapper.Map<KnowledgeSceneItemDto>(knowledge)
         };
     }
 
-    public async Task<UpdateKnowledgeSceneKnowledgeResponse> UpdateKnowledgeSceneKnowledgeAsync(UpdateKnowledgeSceneKnowledgeCommand command, CancellationToken cancellationToken)
+    public async Task<UpdateKnowledgeSceneItemResponse> UpdateKnowledgeSceneItemAsync(UpdateKnowledgeSceneItemCommand command, CancellationToken cancellationToken)
     {
-        if (command.Id <= 0) throw new Exception("UpdateKnowledgeSceneKnowledge Id is required.");
+        if (command.Id <= 0) throw new Exception("UpdateKnowledgeSceneItem Id is required.");
 
-        if (string.IsNullOrWhiteSpace(command.Name)) throw new Exception("UpdateKnowledgeSceneKnowledge Name is required.");
+        if (string.IsNullOrWhiteSpace(command.Name)) throw new Exception("UpdateKnowledgeSceneItem Name is required.");
 
-        var knowledge = await _knowledgeScenarioDataProvider.GetKnowledgeSceneKnowledgeByIdAsync(command.Id, cancellationToken).ConfigureAwait(false);
+        var knowledge = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemByIdAsync(command.Id, cancellationToken).ConfigureAwait(false);
 
         if (knowledge == null)
-            throw new Exception($"UpdateKnowledgeSceneKnowledge Knowledge [{command.Id}] does not exist.");
+            throw new Exception($"UpdateKnowledgeSceneItem Item [{command.Id}] does not exist.");
 
         var scene = await _knowledgeScenarioDataProvider.GetKnowledgeSceneByIdAsync(knowledge.SceneId, cancellationToken).ConfigureAwait(false);
 
         if (scene == null)
-            throw new Exception($"UpdateKnowledgeSceneKnowledge Scene [{knowledge.SceneId}] does not exist.");
+            throw new Exception($"UpdateKnowledgeSceneItem Scene [{knowledge.SceneId}] does not exist.");
 
         var trimmedName = command.Name.Trim();
-        var duplicatedKnowledge = await _knowledgeScenarioDataProvider.GetKnowledgeSceneKnowledgeBySceneAndNameAsync(knowledge.SceneId, trimmedName, cancellationToken).ConfigureAwait(false);
+        var duplicatedKnowledge = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemBySceneAndNameAsync(knowledge.SceneId, trimmedName, cancellationToken).ConfigureAwait(false);
 
         if (duplicatedKnowledge != null && duplicatedKnowledge.Id != command.Id)
-            throw new Exception($"UpdateKnowledgeSceneKnowledge Knowledge [{trimmedName}] already exists in this scene.");
+            throw new Exception($"UpdateKnowledgeSceneItem Item [{trimmedName}] already exists in this scene.");
 
         _mapper.Map(command, knowledge);
         var now = DateTimeOffset.UtcNow;
         knowledge.UpdatedAt = now;
 
-        await _knowledgeScenarioDataProvider.UpdateKnowledgeSceneKnowledgeAsync(knowledge, false, cancellationToken).ConfigureAwait(false);
+        await _knowledgeScenarioDataProvider.UpdateKnowledgeSceneItemAsync(knowledge, false, cancellationToken).ConfigureAwait(false);
 
         scene.UpdatedAt = now;
         await _knowledgeScenarioDataProvider.UpdateKnowledgeSceneAsync(scene, true, cancellationToken).ConfigureAwait(false);
         await _aiSpeechAssistantKnowledgePromptService.RefreshScenePromptsBySceneIdsAsync([scene.Id], cancellationToken).ConfigureAwait(false);
 
-        return new UpdateKnowledgeSceneKnowledgeResponse
+        return new UpdateKnowledgeSceneItemResponse
         {
-            Data = _mapper.Map<KnowledgeSceneKnowledgeDto>(knowledge)
+            Data = _mapper.Map<KnowledgeSceneItemDto>(knowledge)
         };
     }
 
-    public async Task<DeleteKnowledgeSceneKnowledgeResponse> DeleteKnowledgeSceneKnowledgeAsync(DeleteKnowledgeSceneKnowledgeCommand command, CancellationToken cancellationToken)
+    public async Task<DeleteKnowledgeSceneItemResponse> DeleteKnowledgeSceneItemAsync(DeleteKnowledgeSceneItemCommand command, CancellationToken cancellationToken)
     {
-        if (command.Id <= 0) throw new Exception("DeleteKnowledgeSceneKnowledge Id is required.");
+        if (command.Id <= 0) throw new Exception("DeleteKnowledgeSceneItem Id is required.");
 
-        var knowledge = await _knowledgeScenarioDataProvider.GetKnowledgeSceneKnowledgeByIdAsync(command.Id, cancellationToken).ConfigureAwait(false);
+        var knowledge = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemByIdAsync(command.Id, cancellationToken).ConfigureAwait(false);
 
         if (knowledge == null)
-            throw new Exception($"DeleteKnowledgeSceneKnowledge Knowledge [{command.Id}] does not exist.");
+            throw new Exception($"DeleteKnowledgeSceneItem Item [{command.Id}] does not exist.");
 
         var scene = await _knowledgeScenarioDataProvider.GetKnowledgeSceneByIdAsync(knowledge.SceneId, cancellationToken).ConfigureAwait(false);
 
         if (scene == null)
-            throw new Exception($"DeleteKnowledgeSceneKnowledge Scene [{knowledge.SceneId}] does not exist.");
+            throw new Exception($"DeleteKnowledgeSceneItem Scene [{knowledge.SceneId}] does not exist.");
 
-        await _knowledgeScenarioDataProvider.DeleteKnowledgeSceneKnowledgeAsync(knowledge, false, cancellationToken).ConfigureAwait(false);
+        await _knowledgeScenarioDataProvider.DeleteKnowledgeSceneItemAsync(knowledge, false, cancellationToken).ConfigureAwait(false);
 
         scene.UpdatedAt = DateTimeOffset.UtcNow;
         await _knowledgeScenarioDataProvider.UpdateKnowledgeSceneAsync(scene, true, cancellationToken).ConfigureAwait(false);
         await _aiSpeechAssistantKnowledgePromptService.RefreshScenePromptsBySceneIdsAsync([scene.Id], cancellationToken).ConfigureAwait(false);
 
-        return new DeleteKnowledgeSceneKnowledgeResponse
+        return new DeleteKnowledgeSceneItemResponse
         {
-            Data = _mapper.Map<KnowledgeSceneKnowledgeDto>(knowledge)
+            Data = _mapper.Map<KnowledgeSceneItemDto>(knowledge)
         };
     }
 
@@ -320,30 +324,117 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         if (scene == null)
             throw new Exception($"GetKnowledgeScene Scene [{request.Id}] does not exist.");
 
-        var knowledges = await _knowledgeScenarioDataProvider.GetKnowledgeSceneKnowledgesAsync(request.Id, null, cancellationToken).ConfigureAwait(false);
-        var sceneDto = _mapper.Map<KnowledgeSceneDetailDto>(scene);
-        sceneDto.Knowledges = _mapper.Map<List<KnowledgeSceneKnowledgeDto>>(knowledges);
+        var knowledges = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsAsync(request.Id, null, cancellationToken).ConfigureAwait(false);
+        var sceneDto = _mapper.Map<KnowledgeSceneDto>(scene);
+        sceneDto.SceneItems = _mapper.Map<List<KnowledgeSceneItemDto>>(knowledges);
 
         return new GetKnowledgeSceneResponse
         {
-            Data = sceneDto
+            Data = new GetKnowledgeSceneResponseData
+            {
+                SceneData = sceneDto
+            }
         };
     }
 
-    public async Task<GetKnowledgeSceneKnowledgesResponse> GetKnowledgeSceneKnowledgesAsync(GetKnowledgeSceneKnowledgesRequest request, CancellationToken cancellationToken)
+    public async Task<GetKnowledgeSceneItemsResponse> GetKnowledgeSceneItemsAsync(GetKnowledgeSceneItemsRequest request, CancellationToken cancellationToken)
     {
-        if (request.SceneId <= 0) throw new Exception("GetKnowledgeSceneKnowledges SceneId is required.");
+        if (request.SceneId <= 0) throw new Exception("GetKnowledgeSceneItems SceneId is required.");
 
         var scene = await _knowledgeScenarioDataProvider.GetKnowledgeSceneByIdAsync(request.SceneId, cancellationToken).ConfigureAwait(false);
 
         if (scene == null)
-            throw new Exception($"GetKnowledgeSceneKnowledges Scene [{request.SceneId}] does not exist.");
+            throw new Exception($"GetKnowledgeSceneItems Scene [{request.SceneId}] does not exist.");
 
-        var knowledges = await _knowledgeScenarioDataProvider.GetKnowledgeSceneKnowledgesAsync(request.SceneId, request.Keyword, cancellationToken).ConfigureAwait(false);
+        var knowledges = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsAsync(request.SceneId, request.Keyword, cancellationToken).ConfigureAwait(false);
 
-        return new GetKnowledgeSceneKnowledgesResponse
+        return new GetKnowledgeSceneItemsResponse
         {
-            Data = _mapper.Map<List<KnowledgeSceneKnowledgeDto>>(knowledges)
+            Data = _mapper.Map<List<KnowledgeSceneItemDto>>(knowledges)
         };
+    }
+
+    public async Task<GetKnowledgeSceneRelatedKnowledgesResponse> GetKnowledgeSceneRelatedKnowledgesAsync(GetKnowledgeSceneRelatedKnowledgesRequest request, CancellationToken cancellationToken)
+    {
+        if (request.SceneId <= 0) throw new Exception("GetKnowledgeSceneRelatedKnowledges SceneId is required.");
+
+        var scene = await _knowledgeScenarioDataProvider.GetKnowledgeSceneByIdAsync(request.SceneId, cancellationToken).ConfigureAwait(false);
+
+        if (scene == null)
+            throw new Exception($"GetKnowledgeSceneRelatedKnowledges Scene [{request.SceneId}] does not exist.");
+
+        var relations = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeSceneRelationsBySceneIdAsync(request.SceneId, cancellationToken).ConfigureAwait(false);
+        var data = await BuildRelatedKnowledgeDtosAsync(relations, cancellationToken).ConfigureAwait(false);
+
+        return new GetKnowledgeSceneRelatedKnowledgesResponse
+        {
+            Data = data
+        };
+    }
+
+    public async Task<SaveKnowledgeSceneRelatedKnowledgesResponse> SaveKnowledgeSceneRelatedKnowledgesAsync(SaveKnowledgeSceneRelatedKnowledgesCommand command, CancellationToken cancellationToken)
+    {
+        if (command.SceneId <= 0) throw new Exception("SaveKnowledgeSceneRelatedKnowledges SceneId is required.");
+
+        var scene = await _knowledgeScenarioDataProvider.GetKnowledgeSceneByIdAsync(command.SceneId, cancellationToken).ConfigureAwait(false);
+
+        if (scene == null)
+            throw new Exception($"SaveKnowledgeSceneRelatedKnowledges Scene [{command.SceneId}] does not exist.");
+
+        var targetKnowledgeIds = command.KnowledgeIds.Distinct().ToList();
+        
+        var currentRelations = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeSceneRelationsBySceneIdAsync(command.SceneId, cancellationToken).ConfigureAwait(false);
+        var currentKnowledgeIds = currentRelations.Select(x => x.KnowledgeId).Distinct().ToHashSet();
+        var targetKnowledgeIdSet = targetKnowledgeIds.ToHashSet();
+
+        var relationsToDelete = currentRelations.Where(x => !targetKnowledgeIdSet.Contains(x.KnowledgeId)).ToList();
+        var knowledgeIdsToAdd = targetKnowledgeIds.Where(x => !currentKnowledgeIds.Contains(x)).ToList();
+
+        if (relationsToDelete.Count != 0)
+            await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantKnowledgeSceneRelationsAsync(relationsToDelete, true, cancellationToken).ConfigureAwait(false);
+
+        foreach (var knowledgeId in knowledgeIdsToAdd)
+        {
+            var relation = new AiSpeechAssistantKnowledgeSceneRelation
+            {
+                KnowledgeId = knowledgeId,
+                SceneId = command.SceneId
+            };
+
+            await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgeSceneRelationAsync(relation, true, cancellationToken).ConfigureAwait(false);
+        }
+
+        var affectedKnowledgeIds = currentKnowledgeIds
+            .Union(targetKnowledgeIdSet)
+            .ToList();
+
+        if (affectedKnowledgeIds.Count != 0)
+            await _aiSpeechAssistantKnowledgePromptService.RefreshScenePromptsAsync(affectedKnowledgeIds, cancellationToken).ConfigureAwait(false);
+
+        var latestRelations = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeSceneRelationsBySceneIdAsync(command.SceneId, cancellationToken).ConfigureAwait(false);
+        var data = await BuildRelatedKnowledgeDtosAsync(latestRelations, cancellationToken).ConfigureAwait(false);
+
+        return new SaveKnowledgeSceneRelatedKnowledgesResponse
+        {
+            Data = data
+        };
+    }
+
+    private async Task<List<int>> BuildRelatedKnowledgeDtosAsync(List<AiSpeechAssistantKnowledgeSceneRelation> relations, CancellationToken cancellationToken)
+    {
+        if (relations.Count == 0)
+            return [];
+
+        var relationMap = relations
+            .GroupBy(x => x.KnowledgeId)
+            .ToDictionary(x => x.Key, x => x.OrderByDescending(y => y.CreatedAt).First());
+        var knowledgeIds = relationMap.Keys.ToList();
+        var knowledges = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgesAsync(knowledgeIds, cancellationToken).ConfigureAwait(false);
+
+        return knowledges
+            .Where(x => relationMap.ContainsKey(x.Id))
+            .OrderByDescending(x => relationMap[x.Id].CreatedAt)
+            .Select(x => x.Id)
+            .ToList();
     }
 }

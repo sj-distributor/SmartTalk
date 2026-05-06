@@ -5,7 +5,7 @@ using SmartTalk.Messages.Enums.KnowledgeScenario;
 namespace SmartTalk.Core.Domain.KnowledgeScenario;
 
 [Table("knowledge_scene_knowledge")]
-public class KnowledgeSceneKnowledge : IEntity
+public class KnowledgeSceneItem : IEntity
 {
     [Key]
     [Column("id")]
@@ -19,7 +19,7 @@ public class KnowledgeSceneKnowledge : IEntity
     public string Name { get; set; }
 
     [Column("type")]
-    public KnowledgeSceneKnowledgeType Type { get; set; } = KnowledgeSceneKnowledgeType.Text;
+    public KnowledgeSceneItemType Type { get; set; } = KnowledgeSceneItemType.Text;
 
     [Column("content")]
     public string Content { get; set; }

@@ -9,6 +9,11 @@ public class GetKnowledgeSceneRequest : IRequest
     public int Id { get; set; }
 }
 
-public class GetKnowledgeSceneResponse : SmartTalkResponse<KnowledgeSceneDetailDto>
+public class GetKnowledgeSceneResponse : SmartTalkResponse<GetKnowledgeSceneResponseData>
 {
+}
+
+public class GetKnowledgeSceneResponseData
+{
+    public KnowledgeSceneDto SceneData { get; set; }
 }

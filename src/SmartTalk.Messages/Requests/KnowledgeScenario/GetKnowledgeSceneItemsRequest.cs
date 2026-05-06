@@ -4,13 +4,13 @@ using SmartTalk.Messages.Responses;
 
 namespace SmartTalk.Messages.Requests.KnowledgeScenario;
 
-public class GetKnowledgeSceneKnowledgesRequest : IRequest
+public class GetKnowledgeSceneItemsRequest : IRequest
 {
     public int SceneId { get; set; }
 
     public string Keyword { get; set; }
 }
 
-public class GetKnowledgeSceneKnowledgesResponse : SmartTalkResponse<List<KnowledgeSceneKnowledgeDto>>
+public class GetKnowledgeSceneItemsResponse : SmartTalkResponse<List<KnowledgeSceneItemDto>>
 {
 }

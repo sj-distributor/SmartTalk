@@ -5,19 +5,19 @@ using SmartTalk.Messages.Responses;
 
 namespace SmartTalk.Messages.Commands.KnowledgeScenario;
 
-public class AddKnowledgeSceneKnowledgeCommand : ICommand
+public class AddKnowledgeSceneItemCommand : ICommand
 {
     public int SceneId { get; set; }
 
     public string Name { get; set; }
 
-    public KnowledgeSceneKnowledgeType Type { get; set; } = KnowledgeSceneKnowledgeType.Text;
+    public KnowledgeSceneItemType Type { get; set; } = KnowledgeSceneItemType.Text;
 
     public string Content { get; set; }
 
     public string FileName { get; set; }
 }
 
-public class AddKnowledgeSceneKnowledgeResponse : SmartTalkResponse<KnowledgeSceneKnowledgeDto>
+public class AddKnowledgeSceneItemResponse : SmartTalkResponse<KnowledgeSceneItemDto>
 {
 }

@@ -76,7 +76,7 @@ public class KnowledgeScenarioController : ControllerBase
 
         return Ok(response);
     }
-
+    
     [Route("scene/add"), HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(AddKnowledgeSceneResponse))]
     public async Task<IActionResult> AddKnowledgeSceneAsync([FromBody] AddKnowledgeSceneCommand command)
@@ -94,42 +94,61 @@ public class KnowledgeScenarioController : ControllerBase
 
         return Ok(response);
     }
-    
     #endregion
 
-    #region scene_knowledge
-    [Route("scene/knowledge/get"), HttpGet]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetKnowledgeSceneKnowledgesResponse))]
-    public async Task<IActionResult> GetKnowledgeSceneKnowledgesAsync([FromQuery] GetKnowledgeSceneKnowledgesRequest request)
+    #region scene_relation
+    [Route("scene/relation/list"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetKnowledgeSceneRelatedKnowledgesResponse))]
+    public async Task<IActionResult> GetKnowledgeSceneRelatedKnowledgesAsync([FromQuery] GetKnowledgeSceneRelatedKnowledgesRequest request)
     {
-        var response = await _mediator.RequestAsync<GetKnowledgeSceneKnowledgesRequest, GetKnowledgeSceneKnowledgesResponse>(request).ConfigureAwait(false);
+        var response = await _mediator.RequestAsync<GetKnowledgeSceneRelatedKnowledgesRequest, GetKnowledgeSceneRelatedKnowledgesResponse>(request).ConfigureAwait(false);
+
+        return Ok(response);
+    }
+
+    [Route("scene/relation/save"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(SaveKnowledgeSceneRelatedKnowledgesResponse))]
+    public async Task<IActionResult> SaveKnowledgeSceneRelatedKnowledgesAsync([FromBody] SaveKnowledgeSceneRelatedKnowledgesCommand command)
+    {
+        var response = await _mediator.SendAsync<SaveKnowledgeSceneRelatedKnowledgesCommand, SaveKnowledgeSceneRelatedKnowledgesResponse>(command).ConfigureAwait(false);
+
+        return Ok(response);
+    }
+    #endregion
+
+    #region scene_item
+    [Route("scene/knowledge/get"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetKnowledgeSceneItemsResponse))]
+    public async Task<IActionResult> GetKnowledgeSceneItemsAsync([FromQuery] GetKnowledgeSceneItemsRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetKnowledgeSceneItemsRequest, GetKnowledgeSceneItemsResponse>(request).ConfigureAwait(false);
 
         return Ok(response);
     }
 
     [Route("scene/knowledge/add"), HttpPost]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(AddKnowledgeSceneKnowledgeResponse))]
-    public async Task<IActionResult> AddKnowledgeSceneKnowledgeAsync([FromBody] AddKnowledgeSceneKnowledgeCommand command)
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(AddKnowledgeSceneItemResponse))]
+    public async Task<IActionResult> AddKnowledgeSceneItemAsync([FromBody] AddKnowledgeSceneItemCommand command)
     {
-        var response = await _mediator.SendAsync<AddKnowledgeSceneKnowledgeCommand, AddKnowledgeSceneKnowledgeResponse>(command).ConfigureAwait(false);
+        var response = await _mediator.SendAsync<AddKnowledgeSceneItemCommand, AddKnowledgeSceneItemResponse>(command).ConfigureAwait(false);
 
         return Ok(response);
     }
 
     [Route("scene/knowledge/update"), HttpPost]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdateKnowledgeSceneKnowledgeResponse))]
-    public async Task<IActionResult> UpdateKnowledgeSceneKnowledgeAsync([FromBody] UpdateKnowledgeSceneKnowledgeCommand command)
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdateKnowledgeSceneItemResponse))]
+    public async Task<IActionResult> UpdateKnowledgeSceneItemAsync([FromBody] UpdateKnowledgeSceneItemCommand command)
     {
-        var response = await _mediator.SendAsync<UpdateKnowledgeSceneKnowledgeCommand, UpdateKnowledgeSceneKnowledgeResponse>(command).ConfigureAwait(false);
+        var response = await _mediator.SendAsync<UpdateKnowledgeSceneItemCommand, UpdateKnowledgeSceneItemResponse>(command).ConfigureAwait(false);
 
         return Ok(response);
     }
 
     [Route("scene/knowledge/delete"), HttpPost]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(DeleteKnowledgeSceneKnowledgeResponse))]
-    public async Task<IActionResult> DeleteKnowledgeSceneKnowledgeAsync([FromBody] DeleteKnowledgeSceneKnowledgeCommand command)
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(DeleteKnowledgeSceneItemResponse))]
+    public async Task<IActionResult> DeleteKnowledgeSceneItemAsync([FromBody] DeleteKnowledgeSceneItemCommand command)
     {
-        var response = await _mediator.SendAsync<DeleteKnowledgeSceneKnowledgeCommand, DeleteKnowledgeSceneKnowledgeResponse>(command).ConfigureAwait(false);
+        var response = await _mediator.SendAsync<DeleteKnowledgeSceneItemCommand, DeleteKnowledgeSceneItemResponse>(command).ConfigureAwait(false);
 
         return Ok(response);
     }

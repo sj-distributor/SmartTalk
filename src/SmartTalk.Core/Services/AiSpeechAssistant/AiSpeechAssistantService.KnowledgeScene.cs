@@ -75,7 +75,7 @@ public partial class AiSpeechAssistantService
         var relation = _mapper.Map<AiSpeechAssistantKnowledgeSceneRelation>(command);
 
         await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgeSceneRelationAsync(relation, cancellationToken: cancellationToken).ConfigureAwait(false);
-        await _aiSpeechAssistantKnowledgePromptService.RefreshScenePromptAsync(command.KnowledgeId, cancellationToken).ConfigureAwait(false);
+        await _aiSpeechAssistantKnowledgePromptService.RefreshScenePromptsAsync([command.KnowledgeId], cancellationToken).ConfigureAwait(false);
 
         var dto = _mapper.Map<AiSpeechAssistantKnowledgeSceneRelationDto>(relation);
         dto.FolderId = scene.FolderId;
@@ -101,7 +101,7 @@ public partial class AiSpeechAssistantService
         var scene = await _aiSpeechAssistantDataProvider.GetKnowledgeSceneByIdAsync(relation.SceneId, cancellationToken).ConfigureAwait(false);
 
         await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantKnowledgeSceneRelationAsync(relation, cancellationToken: cancellationToken).ConfigureAwait(false);
-        await _aiSpeechAssistantKnowledgePromptService.RefreshScenePromptAsync(relation.KnowledgeId, cancellationToken).ConfigureAwait(false);
+        await _aiSpeechAssistantKnowledgePromptService.RefreshScenePromptsAsync([relation.KnowledgeId], cancellationToken).ConfigureAwait(false);
 
         var dto = _mapper.Map<AiSpeechAssistantKnowledgeSceneRelationDto>(relation);
 

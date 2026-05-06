@@ -18,11 +18,11 @@ public class KnowledgeScenarioMapping : Profile
             .ForMember(dest => dest.Id, opt => opt.Ignore())
             .ForMember(dest => dest.CreatedAt, opt => opt.Ignore())
             .ForMember(dest => dest.UpdatedAt, opt => opt.Ignore());
-        CreateMap<AddKnowledgeSceneKnowledgeCommand, KnowledgeSceneKnowledge>()
+        CreateMap<AddKnowledgeSceneItemCommand, KnowledgeSceneItem>()
             .ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.Name.Trim()))
             .ForMember(dest => dest.Content, opt => opt.MapFrom(src => src.Content == null ? null : src.Content.Trim()))
             .ForMember(dest => dest.FileName, opt => opt.MapFrom(src => src.FileName == null ? null : src.FileName.Trim()));
-        CreateMap<UpdateKnowledgeSceneKnowledgeCommand, KnowledgeSceneKnowledge>()
+        CreateMap<UpdateKnowledgeSceneItemCommand, KnowledgeSceneItem>()
             .ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.Name.Trim()))
             .ForMember(dest => dest.Content, opt => opt.MapFrom(src => src.Content == null ? null : src.Content.Trim()))
             .ForMember(dest => dest.FileName, opt => opt.MapFrom(src => src.FileName == null ? null : src.FileName.Trim()))
@@ -31,8 +31,7 @@ public class KnowledgeScenarioMapping : Profile
             .ForMember(dest => dest.CreatedAt, opt => opt.Ignore())
             .ForMember(dest => dest.UpdatedAt, opt => opt.Ignore());
         CreateMap<KnowledgeScene, KnowledgeSceneDto>();
-        CreateMap<KnowledgeScene, KnowledgeSceneDetailDto>();
         CreateMap<KnowledgeSceneFolder, KnowledgeSceneFolderDto>();
-        CreateMap<KnowledgeSceneKnowledge, KnowledgeSceneKnowledgeDto>();
+        CreateMap<KnowledgeSceneItem, KnowledgeSceneItemDto>();
     }
 }

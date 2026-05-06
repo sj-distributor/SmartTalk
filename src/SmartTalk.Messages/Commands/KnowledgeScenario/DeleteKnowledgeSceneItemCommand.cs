@@ -4,11 +4,11 @@ using SmartTalk.Messages.Responses;
 
 namespace SmartTalk.Messages.Commands.KnowledgeScenario;
 
-public class DeleteKnowledgeSceneKnowledgeCommand : ICommand
+public class DeleteKnowledgeSceneItemCommand : ICommand
 {
     public int Id { get; set; }
 }
 
-public class DeleteKnowledgeSceneKnowledgeResponse : SmartTalkResponse<KnowledgeSceneKnowledgeDto>
+public class DeleteKnowledgeSceneItemResponse : SmartTalkResponse<KnowledgeSceneItemDto>
 {
 }

@@ -13,8 +13,6 @@ public interface IAiSpeechAssistantKnowledgePromptService : IScopedDependency
 
     Task<string> GenerateScenePromptAsync(int knowledgeId, CancellationToken cancellationToken);
 
-    Task RefreshScenePromptAsync(int knowledgeId, CancellationToken cancellationToken);
-
     Task RefreshScenePromptsAsync(List<int> knowledgeIds, CancellationToken cancellationToken);
 
     Task RefreshScenePromptsBySceneIdsAsync(List<int> sceneIds, CancellationToken cancellationToken);
@@ -66,9 +64,7 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
         if (publishedScenes.Count == 0)
             return string.Empty;
 
-        var sceneKnowledgeMap = (await _knowledgeScenarioDataProvider
-                .GetKnowledgeSceneKnowledgesBySceneIdsAsync(publishedScenes.Select(x => x.Id).ToList(), cancellationToken)
-                .ConfigureAwait(false))
+        var sceneKnowledgeMap = (await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdsAsync(publishedScenes.Select(x => x.Id).ToList(), cancellationToken).ConfigureAwait(false))
             .GroupBy(x => x.SceneId)
             .ToDictionary(g => g.Key, g => g.OrderBy(x => x.UpdatedAt ?? x.CreatedAt).ThenBy(x => x.Id).ToList());
 
@@ -79,17 +75,15 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
             if (!sceneKnowledgeMap.TryGetValue(scene.Id, out var sceneKnowledges) || sceneKnowledges.Count == 0)
                 continue;
 
-            sb.AppendLine($"场景：{scene.Name}");
+            var sceneContents = sceneKnowledges
+                .Select(ResolveSceneKnowledgeContent)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .ToList();
 
-            if (!string.IsNullOrWhiteSpace(scene.Description))
-                sb.AppendLine($"场景描述：{scene.Description.Trim()}");
-
-            foreach (var sceneKnowledge in sceneKnowledges)
+            if (sceneContents.Count != 0)
             {
-                sb.AppendLine($"知识点：{sceneKnowledge.Name}");
-
-                var content = ResolveSceneKnowledgeContent(sceneKnowledge);
-                if (!string.IsNullOrWhiteSpace(content))
+                sb.AppendLine("场景知识点：");
+                foreach (var content in sceneContents)
                     sb.AppendLine(content);
             }
 
@@ -97,22 +91,6 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
         }
 
         return sb.ToString().TrimEnd();
-    }
-
-    public async Task RefreshScenePromptAsync(int knowledgeId, CancellationToken cancellationToken)
-    {
-        var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(knowledgeId: knowledgeId, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        if (knowledge == null)
-            return;
-
-        var scenePrompt = await GenerateScenePromptAsync(knowledgeId, cancellationToken).ConfigureAwait(false);
-
-        if (string.Equals(knowledge.ScenePrompt ?? string.Empty, scenePrompt, StringComparison.Ordinal))
-            return;
-
-        knowledge.ScenePrompt = scenePrompt;
-        await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync([knowledge], cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
     public async Task RefreshScenePromptsAsync(List<int> knowledgeIds, CancellationToken cancellationToken)
@@ -163,9 +141,9 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
         await RefreshScenePromptsAsync(knowledgeIds, cancellationToken).ConfigureAwait(false);
     }
 
-    private static string ResolveSceneKnowledgeContent(KnowledgeSceneKnowledge sceneKnowledge)
+    private static string ResolveSceneKnowledgeContent(KnowledgeSceneItem sceneKnowledge)
     {
-        if (sceneKnowledge.Type == KnowledgeSceneKnowledgeType.File)
+        if (sceneKnowledge.Type == KnowledgeSceneItemType.File)
         {
             if (!string.IsNullOrWhiteSpace(sceneKnowledge.FileName))
                 return $"文件：{sceneKnowledge.FileName.Trim()}";

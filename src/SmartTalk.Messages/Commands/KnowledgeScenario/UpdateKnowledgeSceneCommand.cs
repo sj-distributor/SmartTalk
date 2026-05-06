@@ -15,7 +15,7 @@ public class UpdateKnowledgeSceneCommand : ICommand
 
     public string Description { get; set; }
 
-    public KnowledgeSceneStatus Status { get; set; }
+    public KnowledgeSceneStatus? Status { get; set; }
 }
 
 public class UpdateKnowledgeSceneResponse : SmartTalkResponse<KnowledgeSceneDto>

@@ -1,6 +1,6 @@
 namespace SmartTalk.Messages.Enums.KnowledgeScenario;
 
-public enum KnowledgeSceneKnowledgeType
+public enum KnowledgeSceneItemType
 {
     Text = 0,
     FAQ = 1,

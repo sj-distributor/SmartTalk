@@ -2,7 +2,7 @@ using SmartTalk.Messages.Enums.KnowledgeScenario;
 
 namespace SmartTalk.Messages.Dto.KnowledgeScenario;
 
-public class KnowledgeSceneKnowledgeDto
+public class KnowledgeSceneItemDto
 {
     public int Id { get; set; }
 
@@ -10,7 +10,7 @@ public class KnowledgeSceneKnowledgeDto
 
     public string Name { get; set; }
 
-    public KnowledgeSceneKnowledgeType Type { get; set; }
+    public KnowledgeSceneItemType Type { get; set; }
 
     public string Content { get; set; }
 
