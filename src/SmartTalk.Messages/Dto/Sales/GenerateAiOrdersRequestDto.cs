@@ -5,11 +5,15 @@ public class GenerateAiOrdersRequestDto
     public string AiModel { get; set; }
     
     public AiOrderInfoDto AiOrderInfoDto { get; set; }
+    
+    public bool UseCanceledOrder { get; set; }
 }
 
 public class AiOrderInfoDto
 {
     public string SoldToId { get; set; } 
+    
+    public int? AiAssistantId { get; set; }
     
     public DateTime DocumentDate { get; set; }
     
@@ -33,4 +37,10 @@ public class AiOrderItemDto
     public int MaterialQuantity { get; set; } = 1;
 
     public string AiUnit { get; set; }
+    
+    public bool MarkForDelete { get; set; }
+    
+    public bool Restored { get; set; }
+    
+    public bool IsTargetQuantity { get; set; }
 }

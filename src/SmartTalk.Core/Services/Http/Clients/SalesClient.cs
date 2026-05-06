@@ -1,4 +1,5 @@
 using System.Text;
+using Serilog;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Settings.Sales;
 using SmartTalk.Messages.Dto.Sales;
@@ -18,6 +19,10 @@ public interface ISalesClient : IScopedDependency
     Task<GetCustomerNumbersByNameResponseDto> GetCustomerNumbersByNameAsync(GetCustomerNumbersByNameRequestDto request, CancellationToken cancellationToken); 
 
     Task<GetCustomerLevel5HabitResponseDto> GetCustomerLevel5HabitAsync(GetCustomerLevel5HabitRequstDto request, CancellationToken cancellationToken);
+    
+    Task<DeleteAiOrderResponseDto> DeleteAiOrderAsync(DeleteAiOrderRequestDto request, CancellationToken cancellationToken);
+    
+    Task<GetAiOrderItemsByDeliveryDateResponseDto> GetAiOrderItemsByDeliveryDateAsync(GetAiOrderItemsByDeliveryDateRequestDto request, CancellationToken cancellationToken);
 }
 
 public class SalesClient : ISalesClient
@@ -102,5 +107,23 @@ public class SalesClient : ISalesClient
         };
         
         return await _httpClientFactory.PostAsJsonAsync<GetCustomerLevel5HabitResponseDto>($"{_salesCustomerHabitSetting.BaseUrl}/api/CustomerInfo/QueryHistoryCustomerLevel5Habit", request, headers: header, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<DeleteAiOrderResponseDto> DeleteAiOrderAsync(DeleteAiOrderRequestDto request, CancellationToken cancellationToken)
+    {
+        return await _httpClientFactory.PostAsJsonAsync<DeleteAiOrderResponseDto>($"{_salesSetting.BaseUrl}/api/SalesOrder/DeleteAiOrder", request, headers: _headers, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+    
+    public async Task<GetAiOrderItemsByDeliveryDateResponseDto> GetAiOrderItemsByDeliveryDateAsync(GetAiOrderItemsByDeliveryDateRequestDto request, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.CustomerNumber))
+            Log.Information("CustomerNumbers cannot be null or empty.");
+
+        var deliveryDate = request.DeliveryDate.ToString("yyyy-MM-dd");
+
+        var url = $"{_salesSetting.BaseUrl}/api/SalesOrder/GetAiOrderItemsByDeliveryDate" + $"?customerNumber={Uri.EscapeDataString(request.CustomerNumber)}"
+                  + $"&deliveryDate={deliveryDate}" + $"&includePrintedQuantity={request.IncludePrintedQuantity}";
+
+        return await _httpClientFactory.GetAsync<GetAiOrderItemsByDeliveryDateResponseDto>(url, headers: _headers, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 }
