@@ -47,6 +47,8 @@ public partial class AiSpeechAssistantConnectService
             IdleFollowUp = BuildIdleFollowUp(),
             OnSessionReadyAsync = HandleSessionReadyAsync,
             OnClientStartAsync = HandleClientStartAsync,
+            OnClientStopAsync = HandleClientStopAsync,
+            OnSessionEndedAsync = HandleSessionEndedAsync,
             OnTranscriptionsCompletedAsync = HandleTranscriptionsCompletedAsync,
             OnRecordingCompleteAsync = HandleRecordingCompleteAsync,
             OnFunctionCallAsync = (data, actions) => OnFunctionCallAsync(data, actions, CancellationToken.None)
