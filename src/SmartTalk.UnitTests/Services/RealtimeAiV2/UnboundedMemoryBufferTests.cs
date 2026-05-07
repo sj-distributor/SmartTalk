@@ -103,6 +103,91 @@ public class UnboundedMemoryBufferTests
         await buffer.DisposeAsync();  // second dispose must not throw
     }
 
+    // ── Race safety: late frame arrives after Dispose ───────────
+    //
+    // The session orchestrator nulls _ctx.AudioBuffer before disposing, so most
+    // late writes never reach the buffer. But a frame already past the null check
+    // can still call WriteAsync on the captured reference. The pre-refactor code
+    // never disposed its session-scoped SemaphoreSlim, so the late call would
+    // gracefully no-op. These tests pin the same contract for the new buffer:
+    // post-dispose Write/Snapshot/Extract must NOT throw ObjectDisposedException.
+
+    [Fact]
+    public async Task WriteAsync_AfterDispose_NoOpsInsteadOfThrowing()
+    {
+        var buffer = new UnboundedMemoryBuffer();
+        await buffer.WriteAsync(new byte[] { 1, 2, 3 });
+        await buffer.DisposeAsync();
+
+        var ex = await Record.ExceptionAsync(() => buffer.WriteAsync(new byte[] { 99 }));
+
+        ex.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task SnapshotAsync_AfterDispose_ReturnsEmptyInsteadOfThrowing()
+    {
+        var buffer = new UnboundedMemoryBuffer();
+        await buffer.WriteAsync(new byte[] { 1, 2, 3 });
+        await buffer.DisposeAsync();
+
+        byte[] snapshot = null!;
+        var ex = await Record.ExceptionAsync(async () => snapshot = await buffer.SnapshotAsync());
+
+        ex.ShouldBeNull();
+        snapshot.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task ExtractAsync_AfterDispose_ReturnsEmptyInsteadOfThrowing()
+    {
+        var buffer = new UnboundedMemoryBuffer();
+        await buffer.WriteAsync(new byte[] { 1, 2, 3 });
+        await buffer.DisposeAsync();
+
+        byte[] extracted = null!;
+        var ex = await Record.ExceptionAsync(async () => extracted = await buffer.ExtractAsync());
+
+        ex.ShouldBeNull();
+        extracted.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task ConcurrentDisposeAndWrite_NeverThrows()
+    {
+        // Stress test: spawn N writers and a disposer racing simultaneously.
+        // Whichever order they interleave, no call must throw.
+        const int writers = 16;
+        var buffer = new UnboundedMemoryBuffer();
+
+        var startGate = new ManualResetEventSlim(false);
+
+        var writeTasks = Enumerable.Range(0, writers)
+            .Select(_ => Task.Run(async () =>
+            {
+                startGate.Wait();
+                for (var i = 0; i < 10; i++)
+                {
+                    await buffer.WriteAsync(new byte[] { (byte)i });
+                    await Task.Yield();
+                }
+            }))
+            .ToArray();
+
+        var disposeTask = Task.Run(async () =>
+        {
+            startGate.Wait();
+            await Task.Yield();
+            await buffer.DisposeAsync();
+        });
+
+        startGate.Set();
+
+        var ex = await Record.ExceptionAsync(() => Task.WhenAll(writeTasks.Concat(new[] { disposeTask })));
+
+        ex.ShouldBeNull();
+    }
+
     [Fact]
     public async Task ConcurrentWriteAndSnapshot_NoExceptionAndAllBytesObserved()
     {
