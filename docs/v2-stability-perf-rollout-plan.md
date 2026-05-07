@@ -12,8 +12,8 @@
 
 | Phase | PR # | Branch | Title | 狀態 | 開始 | 完成 | Reviewer |
 |---|---|---|---|---|---|---|---|
-| 0 | 0.1 | `feat/v2-stability-perf-overhaul` | 主分支 + 骨架 | ⚪ | - | - | - |
-| 1 | 1.1 | `fix/v2-alaw-codec-typo` | 修復 g712_alaw 拼寫 | ⚪ | - | - | - |
+| 0 | 0.1 | `feat/v2-stability-perf-overhaul` | 主分支 + 骨架 | 🟢 | 2026-05-07 | 2026-05-07 | - |
+| 1 | 1.1 | `fix/v2-alaw-codec-typo` | 修復 g712_alaw 拼寫 | 🟢 待 PR | 2026-05-07 | 2026-05-07 | - |
 | 1 | 1.2 | `fix/v2-delivery-info-token` | 修復 ResolveDeliveryInfoAsync 邏輯反轉 | ⚪ | - | - | - |
 | 1 | 1.3 | `fix/v2-hangup-cancellation-token` | 修復 ProcessHangup token 序列化 | ⚪ | - | - | - |
 | 1 | 1.4 | `perf/v2-cache-pst-timezone` | 緩存 PST TimeZone | ⚪ | - | - | - |
@@ -179,21 +179,33 @@
 
 ### Phase 0
 
-#### PR 0.1
-- **預期工作量**：-
-- **實際工作量**：-
-- **遇到問題**：-
-- **學到什麼**：-
-- **後續調整**：-
+#### PR 0.1 — 主分支與骨架
+- **預期工作量**：15 分鐘
+- **實際工作量**：~10 分鐘
+- **遇到問題**：無
+- **學到什麼**：
+  - 確認 `docs/` 目錄已存在但只有 `.DS_Store`
+  - 倉庫 commit 歷史以 PR merge 為主，個別 commit 有 fix/update 動詞
+- **後續調整**：無
 
 ### Phase 1
 
-#### PR 1.1
+#### PR 1.1 — 修復 g712_alaw 拼寫
 - **預期工作量**：30 分鐘
-- **實際工作量**：-
-- **遇到問題**：-
-- **學到什麼**：-
-- **後續調整**：-
+- **實際工作量**：~25 分鐘（含完整文檔調研、grep 全 codebase、TDD 三步、commit）
+- **遇到問題**：無
+- **學到什麼**：
+  - V1 (`AiSpeechAssistantService.cs`) 對 `input_audio_format` **硬編碼了 `"g711_ulaw"` 字串**（line 1210, 1211, 1223, 1224），完全繞過 enum description。所以 V1 對這個 bug 是免疫的
+  - V2 (`OpenAiRealtimeAiProviderAdapter.cs:43-44`) 用 `clientCodec.GetDescription()`，所以 V2 會踩到這個 bug — 但因為 Twilio 用 MULAW，ALAW 路徑當前是死代碼
+  - 內部 `RealtimeAi/Readme.md:19` 已明確記載支持 `g711_ulaw、g711_alaw、pcm16`，bug 與內部文檔不一致
+  - GetDescription extension method 在 `SmartTalk.Core.Extensions.EnumerableExtension`，依賴 `System.ComponentModel.DescriptionAttribute`
+- **TDD 流程記錄**：
+  - **🔴 Red**：寫 3 個 InlineData theory pinning test，預期值為正確的 OpenAI wire format → ALAW 案例失敗（got "g712_alaw" expected "g711_alaw"），MULAW + PCM16 通過
+  - **🟢 Green**：改一個字符（`g712_alaw` → `g711_alaw`）→ 所有 3 case 通過
+  - **🔵 Refactor**：無（一字符 fix 無重構空間）
+- **回歸驗證**：完整 unit test suite 157/157 通過，零 regression
+- **後續調整**：無
+- **PR 提交**：commit `3cbe34372` 於 `fix/v2-alaw-codec-typo` 分支
 
 #### PR 1.2
 - **預期工作量**：60 分鐘
