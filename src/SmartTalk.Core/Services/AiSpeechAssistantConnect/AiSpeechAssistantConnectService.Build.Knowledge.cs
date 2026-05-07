@@ -1,5 +1,6 @@
 using Serilog;
 using SmartTalk.Core.Services.AiSpeechAssistantConnect.Exceptions;
+using SmartTalk.Core.Utils;
 using SmartTalk.Messages.Dto.Smarties;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Pos;
@@ -63,7 +64,7 @@ public partial class AiSpeechAssistantConnectService
 
     private void ResolveStaticPromptVariables()
     {
-        var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
+        var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, PstTimeZone.Get());
 
         _ctx.Prompt = ResolveStaticTokens(_ctx.Prompt, _ctx.UserProfileJson, _ctx.From, pstTime);
     }
