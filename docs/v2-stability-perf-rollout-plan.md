@@ -23,7 +23,8 @@
 | 2 | 2.2 | `fix/v2-session-lifecycle-callbacks` | Wire OnClientStop/SessionEnded | 🟡 PR #924 | 2026-05-07 | 2026-05-07 | - |
 | 2 | 2.3 | `stab/v2-ws-keepalive` | WS KeepAlive 15s | 🟡 PR #925 | 2026-05-07 | 2026-05-07 | - |
 | 2 | 2.4 | `stab/v2-stream-sid-race` | StreamSid race 防護 | 🟡 PR #926 | 2026-05-07 | 2026-05-07 | - |
-| 3 | 3.1 | `stab/v2-audio-buffer-bounded` | AudioBuffer 限制 | ⚪ | - | - | - |
+| 3 | 3.1 | `refactor/v2-recording-buffer-abstraction` | 抽出 IRecordingBuffer（純 refactor） | ⚪ | - | - | - |
+| 3 | 3.2 | `feat/v2-recording-buffer-rolling-window` | RollingWindowBuffer + env var | ⚪ | - | - | - |
 | 4 | 4.1 | `feat/v2-assistant-config-fields` | Entity 加配置字段 | ⚪ | - | - | - |
 | 4 | 4.2 | `feat/v2-config-dto-passthrough` | DTO/ModelConfig 透傳 | ⚪ | - | - | - |
 | 5 | 5.1 | `feat/v2-transcription-model-config` | Transcription 模型 opt-in | ⚪ | - | - | - |
