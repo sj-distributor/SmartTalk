@@ -27,7 +27,21 @@ public partial class AiSpeechAssistantConnectService
         TriggerTwilioRecordingPhoneCall();
 
         if (!_ctx.IsInAiServiceHours && _ctx.IsEnableManualService) TransferHumanService(_ctx.TransferCallNumber);
-        
+
+        return Task.CompletedTask;
+    }
+
+    private Task HandleClientStopAsync(string sessionId)
+    {
+        Log.Information("[AiAssistant] Twilio stop event received, SessionId: {SessionId}, CallSid: {CallSid}, StreamSid: {StreamSid}", sessionId, _ctx.CallSid, _ctx.StreamSid);
+
+        return Task.CompletedTask;
+    }
+
+    private Task HandleSessionEndedAsync(string sessionId)
+    {
+        Log.Information("[AiAssistant] Session ended, SessionId: {SessionId}, CallSid: {CallSid}", sessionId, _ctx.CallSid);
+
         return Task.CompletedTask;
     }
 
