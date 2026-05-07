@@ -51,7 +51,9 @@ public class SalesPlaceholderFixture
             backgroundJobClient: null!,
             twilioService: null!,
             aiSpeechAssistantDataProvider: aiSpeechAssistantDataProvider,
-            openaiWebSocket: null!);
+            aiSpeechAssistantKnowledgePromptService: null,
+            openaiWebSocket: null!
+       );
 
         aiSpeechAssistantDataProvider
             .GetAiSpeechAssistantInboundRouteAsync("+15550001", "+15550002", Arg.Any<CancellationToken>())
