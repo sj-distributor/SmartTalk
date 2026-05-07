@@ -2,6 +2,7 @@ using Serilog;
 using AutoMapper;
 using Newtonsoft.Json;
 using SmartTalk.Core.Ioc;
+using SmartTalk.Core.Utils;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.Pos;
@@ -161,8 +162,7 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
         if (serviceHoursJson == null)
             return (true, isTransferHuman && !string.IsNullOrEmpty(transferCallNumber));
 
-        var pstZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
-        var pstTime = TimeZoneInfo.ConvertTime(utcNow, pstZone);
+        var pstTime = TimeZoneInfo.ConvertTime(utcNow, PstTimeZone.Get());
 
         var workingHours = JsonConvert.DeserializeObject<List<AgentServiceHoursDto>>(serviceHoursJson);
         var specificWorkingHours = workingHours?.FirstOrDefault(x => x.DayOfWeek == pstTime.DayOfWeek);
