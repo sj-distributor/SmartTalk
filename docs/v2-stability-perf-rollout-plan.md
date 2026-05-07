@@ -15,7 +15,7 @@
 | 0 | 0.1 | `feat/v2-stability-perf-overhaul` | 主分支 + 骨架 | 🟢 | 2026-05-07 | 2026-05-07 | - |
 | 1 | 1.1 | `fix/v2-alaw-codec-typo` | 修復 g712_alaw 拼寫 | 🟢 待 PR | 2026-05-07 | 2026-05-07 | - |
 | 1 | 1.2 | `fix/v2-delivery-info-token` | 修復 ResolveDeliveryInfoAsync 邏輯反轉 | 🟢 待 PR | 2026-05-07 | 2026-05-07 | - |
-| 1 | 1.3 | `fix/v2-hangup-cancellation-token` | 修復 ProcessHangup token 序列化 | ⚪ | - | - | - |
+| 1 | 1.3 | `fix/v2-hangup-cancellation-token` | 修復 ProcessHangup token 序列化 | 🟢 待 PR | 2026-05-07 | 2026-05-07 | - |
 | 1 | 1.4 | `perf/v2-cache-pst-timezone` | 緩存 PST TimeZone | ⚪ | - | - | - |
 | 1 | 1.5 | `fix/v2-prompt-static-vars-npe` | ResolveStaticPromptVariables NPE 防護 | ⚪ | - | - | - |
 | 1 | 1.6 | `fix/v2-data-provider-null-handling` | 資料層 null 處理 | ⚪ | - | - | - |
@@ -228,12 +228,25 @@
 - **後續調整**：無
 - **PR 提交**：commit `af7f0f0be` 於 `fix/v2-delivery-info-token` 分支
 
-#### PR 1.3
+#### PR 1.3 — 修復 ProcessHangup CancellationToken
 - **預期工作量**：30 分鐘
-- **實際工作量**：-
-- **遇到問題**：-
-- **學到什麼**：-
-- **後續調整**：-
+- **實際工作量**：~40 分鐘（多花 10 分鐘決定測試策略）
+- **遇到問題**：
+  - 原計劃用「mock IBackgroundJobClient + 捕獲 expression」直接測 `ProcessHangup` 私有方法，但需要實例化 12 dependency 的 SUT，過重
+  - 改成 extract pure helper `BuildHangupJobExpression(string)` 為 `public static`，使用 expression compile + NSubstitute 驗證實際傳入的參數類型
+  - 確認 V1 (`AiSpeechAssistantService.cs:932`) 也有同樣的 anti-pattern。決定 **不修 V1**（scope 限制在 V2 重構）
+- **學到什麼**：
+  - Hangfire 對 closure-captured `CancellationToken` 的處理：序列化時被替換為 `default`，所以行為今天恰好等價於 None。但這是隱性依賴，未來 Hangfire 升級或 token 類型變更時會 silent break
+  - `Expression<Func<T, Task>>` 可以 `.Compile()` 出來用 NSubstitute fake target 跑，反向驗證 expression 樹的實際參數值
+  - 5 個 theory（包括 callSid null/empty/normal）覆蓋 expression 構建的所有路徑
+- **TDD 流程記錄**：
+  - **🔴 Red**：寫 5 個 theory 引用 `BuildHangupJobExpression`（不存在）→ 3 個 compile error 確認 Red
+  - **🟢 Green**：抽 `BuildHangupJobExpression` + 改 ProcessHangup 用它 → 5/5 通過
+  - **🔵 Refactor**：原 method 從 4 行降為 3 行純編排，加 `_ = cancellationToken;` discard 明確意圖
+- **回歸驗證**：完整 unit test suite 159/159 通過（基線 154 + 5 新 theory）
+- **未覆蓋的測試類型**：Integration / E2E — 此修復是運行時等價的純意圖改進，集成測試從 Phase 7 補充
+- **後續調整**：V1 同樣有此 bug，後續可單獨 PR 修
+- **PR 提交**：commit `b78ba1057` 於 `fix/v2-hangup-cancellation-token` 分支
 
 #### PR 1.4
 - **預期工作量**：45 分鐘
