@@ -1,9 +1,12 @@
 using Serilog;
+using SmartTalk.Core.Services.AiSpeechAssistantConnect.Exceptions;
 using SmartTalk.Messages.Dto.Smarties;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Pos;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.STT;
+using AiSpeechAssistantEntity = SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistant;
+using AiSpeechAssistantKnowledgeEntity = SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistantKnowledge;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistantConnect;
 
@@ -32,11 +35,30 @@ public partial class AiSpeechAssistantConnectService
 
         Log.Information("[AiAssistant] Assistant matched, AssistantId: {AssistantId}, HasProfile: {HasProfile}, From: {From}, To: {To}", assistant?.Id, userProfile != null, _ctx.From, _ctx.To);
 
+        EnsureAssistantInfoComplete(assistant, knowledge);
+
         _ctx.Assistant = _mapper.Map<AiSpeechAssistantDto>(assistant);
         _ctx.Knowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge);
-        
+
         _ctx.Prompt = _ctx.Knowledge.Prompt;
         _ctx.UserProfileJson = userProfile?.ProfileJson;
+    }
+
+    /// <summary>
+    /// Validates that the data provider returned both an assistant and an active knowledge entry.
+    /// Throws <see cref="AiAssistantNotAvailableException"/> with an actionable message — the
+    /// existing <c>ConnectAsync</c> try/catch catches this exception type cleanly and closes
+    /// the Twilio WebSocket; raw <c>NullReferenceException</c> would otherwise escape and leave
+    /// the call hanging.
+    /// Public static; not intended for external use.
+    /// </summary>
+    public static void EnsureAssistantInfoComplete(AiSpeechAssistantEntity assistant, AiSpeechAssistantKnowledgeEntity knowledge)
+    {
+        if (assistant == null)
+            throw new AiAssistantNotAvailableException("No assistant configured for caller/DID");
+
+        if (knowledge == null)
+            throw new AiAssistantNotAvailableException($"No active knowledge for assistant {assistant.Id}");
     }
 
     private void ResolveStaticPromptVariables()
