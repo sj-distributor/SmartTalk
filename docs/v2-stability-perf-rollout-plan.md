@@ -17,7 +17,7 @@
 | 1 | 1.2 | `fix/v2-delivery-info-token` | 修復 ResolveDeliveryInfoAsync 邏輯反轉 | 🟢 待 PR | 2026-05-07 | 2026-05-07 | - |
 | 1 | 1.3 | `fix/v2-hangup-cancellation-token` | 修復 ProcessHangup token 序列化 | 🟢 待 PR | 2026-05-07 | 2026-05-07 | - |
 | 1 | 1.4 | `perf/v2-cache-pst-timezone` | 緩存 PST TimeZone | 🟢 待 PR | 2026-05-07 | 2026-05-07 | - |
-| 1 | 1.5 | `fix/v2-prompt-static-vars-npe` | ResolveStaticPromptVariables NPE 防護 | ⚪ | - | - | - |
+| 1 | 1.5 | `fix/v2-prompt-static-vars-npe` | ResolveStaticPromptVariables NPE 防護 | 🟢 待 PR | 2026-05-07 | 2026-05-07 | - |
 | 1 | 1.6 | `fix/v2-data-provider-null-handling` | 資料層 null 處理 | ⚪ | - | - | - |
 | 2 | 2.1 | `fix/v2-connect-async-cleanup` | ConnectAsync 兜底清理 | ⚪ | - | - | - |
 | 2 | 2.2 | `fix/v2-session-lifecycle-callbacks` | Wire OnClientStop/SessionEnded | ⚪ | - | - | - |
@@ -269,12 +269,27 @@
 - **後續調整**：codebase 其他 7+ 處 `FindSystemTimeZoneById` 直接調用可在後續 PR 統一收編到 helper
 - **PR 提交**：commit `072d2f237` 於 `perf/v2-cache-pst-timezone` 分支
 
-#### PR 1.5
+#### PR 1.5 — ResolveStaticPromptVariables NPE 防護
 - **預期工作量**：45 分鐘
-- **實際工作量**：-
-- **遇到問題**：-
-- **學到什麼**：-
-- **後續調整**：-
+- **實際工作量**：~50 分鐘（含 StartsWith CurrentCulture vs Ordinal 微調與 byte-exact 驗證）
+- **遇到問題**：
+  - 第一版 helper 用 `StartsWith("+1", StringComparison.Ordinal)` 但原代碼是 `StartsWith("+1")`（默認 CurrentCulture）。雖然 ASCII 結果等價，仍然把 helper 改回 default 比較以保證 byte-exact 等價（已加注釋說明）
+  - 為避免與 PR 1.4 衝突，line 44 的 `TimeZoneInfo.FindSystemTimeZoneById` 保持原樣不動。當 PR 1.4 先 merge 時這行會被自動 resolve 為 `PstTimeZone.Get()`
+- **學到什麼**：
+  - 微妙的 string API 默認對比語義：`StartsWith(string)` 用 CurrentCulture，而 `Contains(string, StringComparison)` 顯式要求 comparison。這類隱性約定 refactor 時極易出錯
+  - 抽 `ResolveStaticTokens(prompt, userProfileJson, from, pstTime)` 後，私有 wrapper 從 8 行降到 4 行，pure helper 完全可獨立測試
+  - 20 個 theory case 達到充分覆蓋：null/empty 邊界 + +1 strip 規則 + 國際號碼保留 + Twilio anonymous 標記 + 重複 token + deterministic time formatting
+- **TDD 流程記錄**：
+  - **🔴 Red**：寫 20 個 theory，引用未存在的 helper → 多個 compile error
+  - **🟢 Green-1**：實現 helper（含 `StringComparison.Ordinal`）→ 全綠
+  - **🔵 Refactor**：發現 `Ordinal` 與原 `StartsWith` 的 CurrentCulture 默認有微妙差異，回退為默認對比 + 加注釋
+  - **🟢 Green-2**：再驗證一次 → 174/174 仍綠
+- **回歸驗證**：完整 unit test suite 174/174 通過（基線 154 + 20 新 theory）
+- **未覆蓋的測試類型**：私有 wrapper `ResolveStaticPromptVariables` 沒有直接 unit test（依靠 helper 全綠 + 簡單 wrapper 邏輯靠 code review 保證）。Integration test 留待 Phase 7
+- **後續調整**：
+  - PR 1.4 merge 時 line 44 自動切換到 `PstTimeZone.Get()`
+  - PR 1.6 處理 `_ctx.Knowledge` null 情況（上游根因）
+- **PR 提交**：commit `99fa945bd` 於 `fix/v2-prompt-static-vars-npe` 分支
 
 #### PR 1.6
 - **預期工作量**：90 分鐘
