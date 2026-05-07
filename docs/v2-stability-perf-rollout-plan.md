@@ -16,7 +16,7 @@
 | 1 | 1.1 | `fix/v2-alaw-codec-typo` | 修復 g712_alaw 拼寫 | 🟢 待 PR | 2026-05-07 | 2026-05-07 | - |
 | 1 | 1.2 | `fix/v2-delivery-info-token` | 修復 ResolveDeliveryInfoAsync 邏輯反轉 | 🟢 待 PR | 2026-05-07 | 2026-05-07 | - |
 | 1 | 1.3 | `fix/v2-hangup-cancellation-token` | 修復 ProcessHangup token 序列化 | 🟢 待 PR | 2026-05-07 | 2026-05-07 | - |
-| 1 | 1.4 | `perf/v2-cache-pst-timezone` | 緩存 PST TimeZone | ⚪ | - | - | - |
+| 1 | 1.4 | `perf/v2-cache-pst-timezone` | 緩存 PST TimeZone | 🟢 待 PR | 2026-05-07 | 2026-05-07 | - |
 | 1 | 1.5 | `fix/v2-prompt-static-vars-npe` | ResolveStaticPromptVariables NPE 防護 | ⚪ | - | - | - |
 | 1 | 1.6 | `fix/v2-data-provider-null-handling` | 資料層 null 處理 | ⚪ | - | - | - |
 | 2 | 2.1 | `fix/v2-connect-async-cleanup` | ConnectAsync 兜底清理 | ⚪ | - | - | - |
@@ -248,12 +248,26 @@
 - **後續調整**：V1 同樣有此 bug，後續可單獨 PR 修
 - **PR 提交**：commit `b78ba1057` 於 `fix/v2-hangup-cancellation-token` 分支
 
-#### PR 1.4
+#### PR 1.4 — 緩存 PST TimeZone + Linux fallback
 - **預期工作量**：45 分鐘
-- **實際工作量**：-
-- **遇到問題**：-
-- **學到什麼**：-
-- **後續調整**：-
+- **實際工作量**：~50 分鐘（含文檔調研發現 .NET 6+/8 已有平臺支持，重新評估 PR 價值）
+- **遇到問題**：
+  - 文檔調研發現：.NET 6+ 已自動處理 Windows ↔ IANA ID 轉換，.NET 8 內建 `FindSystemTimeZoneById` cache。原本的「跨平臺安全 + 性能」雙動機都已被平臺方案
+  - 重新定位 PR 價值：核心是 **集中化 magic string** + **defense-in-depth fallback** + **可讀性**，而非性能或修 bug
+  - 為避免「靜態 init 失敗污染整個 process」，使用 `Lazy<T>` 而非 `static readonly` field
+- **學到什麼**：
+  - .NET 8 已對 `FindSystemTimeZoneById` 內建 ID-key cache，所以本 PR 對性能幾乎無影響（從 dictionary lookup 改為 atomic field read，差別微秒級）
+  - `Lazy<T>` 默認用 `LazyThreadSafetyMode.ExecutionAndPublication`，failure 會被 cache（適合 timezone 這種不可恢復的環境問題）
+  - codebase 中還有 7+ 處用 `FindSystemTimeZoneById` 直接調用（PhoneOrderProcessJobService、TwilioWebhookService 等）。本 PR scope 只動 V2 兩處，留待後續統一
+  - 測試使用 `BaseUtcOffset.ShouldBe(-8h)` 與 `Id.ShouldBeOneOf(...)` 雙重驗證，跨 OS 通用
+- **TDD 流程記錄**：
+  - **🔴 Red**：寫 4 個 helper test，引用未存在的 `PstTimeZone.Get()` → 5 個 compile error
+  - **🟢 Green**：實現 helper（`Lazy<TimeZoneInfo>` + 雙 ID fallback + actionable error）→ 4/4 通過
+  - **🔵 Refactor**：替換 V2 兩處調用點，依賴 helper（同時 cleanup 一個沒用的 local var `pstZone`）
+- **回歸驗證**：完整 unit test suite 158/158 通過。**現存 `CheckIfInServiceHoursTests` 15 個 case 隱式作為 helper 集成測試** — 它們未變但全綠，證明改寫的 service hours 邏輯行為等價
+- **未覆蓋的測試類型**：N/A（unit + 隱式 integration 已足夠，無外部依賴）
+- **後續調整**：codebase 其他 7+ 處 `FindSystemTimeZoneById` 直接調用可在後續 PR 統一收編到 helper
+- **PR 提交**：commit `072d2f237` 於 `perf/v2-cache-pst-timezone` 分支
 
 #### PR 1.5
 - **預期工作量**：45 分鐘
