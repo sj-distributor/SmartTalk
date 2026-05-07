@@ -117,7 +117,7 @@ public class KnowledgeScenarioController : ControllerBase
     #endregion
 
     #region scene_item
-    [Route("scene/knowledge/get"), HttpGet]
+    [Route("scene/Items/get"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetKnowledgeSceneItemsResponse))]
     public async Task<IActionResult> GetKnowledgeSceneItemsAsync([FromQuery] GetKnowledgeSceneItemsRequest request)
     {
@@ -126,7 +126,7 @@ public class KnowledgeScenarioController : ControllerBase
         return Ok(response);
     }
 
-    [Route("scene/knowledge/add"), HttpPost]
+    [Route("scene/Item/add"), HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(AddKnowledgeSceneItemResponse))]
     public async Task<IActionResult> AddKnowledgeSceneItemAsync([FromBody] AddKnowledgeSceneItemCommand command)
     {
@@ -135,7 +135,7 @@ public class KnowledgeScenarioController : ControllerBase
         return Ok(response);
     }
 
-    [Route("scene/knowledge/update"), HttpPost]
+    [Route("scene/Item/update"), HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdateKnowledgeSceneItemResponse))]
     public async Task<IActionResult> UpdateKnowledgeSceneItemAsync([FromBody] UpdateKnowledgeSceneItemCommand command)
     {
