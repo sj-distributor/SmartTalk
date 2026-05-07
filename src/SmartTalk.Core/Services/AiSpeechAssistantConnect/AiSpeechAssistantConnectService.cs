@@ -1,3 +1,4 @@
+using System.Net.WebSockets;
 using Serilog;
 using AutoMapper;
 using Newtonsoft.Json;
@@ -113,8 +114,40 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
         {
             Log.Information("[AiAssistant] {Reason}, From: {From}, To: {To}", ex.Message, command.From, command.To);
         }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[AiAssistant] Unhandled error during connect, From: {From}, To: {To}", command.From, command.To);
+        }
+        finally
+        {
+            await TryCloseTwilioWebSocketAsync(command.TwilioWebSocket).ConfigureAwait(false);
+        }
 
         return new AiSpeechAssistantConnectCloseEvent();
+    }
+
+    /// <summary>
+    /// Best-effort close of the Twilio WebSocket. Used by ConnectAsync's finally block
+    /// to guarantee the socket is released even when an unknown exception escapes — without
+    /// this, the socket dangles until the platform's idle timeout (~30s) and the caller
+    /// hears silence. No-op when the socket is already closed/aborted/null. Swallows all
+    /// errors during close because we cannot do better than best-effort here.
+    /// Public static for unit testability; not intended for external use.
+    /// </summary>
+    public static async Task TryCloseTwilioWebSocketAsync(WebSocket twilioWebSocket)
+    {
+        if (twilioWebSocket is null) return;
+        if (twilioWebSocket.State is WebSocketState.Closed or WebSocketState.Aborted or WebSocketState.None) return;
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+
+        try
+        {
+            await twilioWebSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Session ended", cts.Token).ConfigureAwait(false);
+        }
+        catch (WebSocketException) { }
+        catch (ObjectDisposedException) { }
+        catch (OperationCanceledException) { }
     }
 
     private async Task<Agent> ResolveActiveAgentAsync(CancellationToken cancellationToken)
