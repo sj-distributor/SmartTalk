@@ -13,12 +13,12 @@
 | Phase | PR # | Branch | Title | 狀態 | 開始 | 完成 | Reviewer |
 |---|---|---|---|---|---|---|---|
 | 0 | 0.1 | `feat/v2-stability-perf-overhaul` | 主分支 + 骨架 | 🟢 | 2026-05-07 | 2026-05-07 | - |
-| 1 | 1.1 | `fix/v2-alaw-codec-typo` | 修復 g712_alaw 拼寫 | 🟢 待 PR | 2026-05-07 | 2026-05-07 | - |
-| 1 | 1.2 | `fix/v2-delivery-info-token` | 修復 ResolveDeliveryInfoAsync 邏輯反轉 | 🟢 待 PR | 2026-05-07 | 2026-05-07 | - |
-| 1 | 1.3 | `fix/v2-hangup-cancellation-token` | 修復 ProcessHangup token 序列化 | 🟢 待 PR | 2026-05-07 | 2026-05-07 | - |
-| 1 | 1.4 | `perf/v2-cache-pst-timezone` | 緩存 PST TimeZone | 🟢 待 PR | 2026-05-07 | 2026-05-07 | - |
-| 1 | 1.5 | `fix/v2-prompt-static-vars-npe` | ResolveStaticPromptVariables NPE 防護 | 🟢 待 PR | 2026-05-07 | 2026-05-07 | - |
-| 1 | 1.6 | `fix/v2-data-provider-null-handling` | 資料層 null 處理 | 🟢 待 PR | 2026-05-07 | 2026-05-07 | - |
+| 1 | 1.1 | `fix/v2-alaw-codec-typo` | 修復 g712_alaw 拼寫 | 🟡 PR #916 | 2026-05-07 | 2026-05-07 | - |
+| 1 | 1.2 | `fix/v2-delivery-info-token` | 修復 ResolveDeliveryInfoAsync 邏輯反轉 | 🟡 PR #917 | 2026-05-07 | 2026-05-07 | - |
+| 1 | 1.3 | `fix/v2-hangup-cancellation-token` | 修復 ProcessHangup token 序列化 | 🟡 PR #918 | 2026-05-07 | 2026-05-07 | - |
+| 1 | 1.4 | `perf/v2-cache-pst-timezone` | 緩存 PST TimeZone | 🟡 PR #919 | 2026-05-07 | 2026-05-07 | - |
+| 1 | 1.5 | `fix/v2-prompt-static-vars-npe` | ResolveStaticPromptVariables NPE 防護 | 🟡 PR #920 | 2026-05-07 | 2026-05-07 | - |
+| 1 | 1.6 | `fix/v2-data-provider-null-handling` | 資料層 null 處理 | 🟡 PR #921 | 2026-05-07 | 2026-05-07 | - |
 | 2 | 2.1 | `fix/v2-connect-async-cleanup` | ConnectAsync 兜底清理 | ⚪ | - | - | - |
 | 2 | 2.2 | `fix/v2-session-lifecycle-callbacks` | Wire OnClientStop/SessionEnded | ⚪ | - | - | - |
 | 2 | 2.3 | `stab/v2-ws-keepalive` | WS KeepAlive 15s | ⚪ | - | - | - |
