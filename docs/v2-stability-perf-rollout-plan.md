@@ -69,45 +69,32 @@
 
 ---
 
-## 標準 PR Description 模板
+## 標準 PR Description 模板（per Rule 13）
+
+PR title 用祈使句，無 phase / sprint / step 前綴。Body 維持兩段：
 
 ```markdown
-## Why
-（這個 bug 為什麼需要修，影響什麼業務場景）
+## Summary
 
-## What changed
-- 文件清單與變更摘要
+- 簡述 1：這個 PR 做了什麼（用戶/系統視角）
+- 簡述 2：為什麼這樣做（Why）
+- 內聯引用文檔：[OpenAI Realtime API session.update](URL)、相關代碼路徑 `src/...:line`
 
-## Breaking risk assessment
-- [ ] 已 grep 全 codebase 確認無破壞調用
-- [ ] 對行為變更場景做了 staging A/B 對比
-- [ ] 默認行為 100% 與線上一致（金樣測試通過）
+## Test plan
 
-## Reference docs
-- OpenAI Realtime API: ...
-- Twilio Media Streams: ...
-- 內部代碼依賴鏈: ...
-
-## Test coverage
-- [ ] Unit (XX cases): ...
-- [ ] Integration (YY cases): ...
-- [ ] E2E (ZZ cases): ...
-- [ ] 金樣 / pinning test (per Rule 8): ...
-
-## Feature flag (if any)
-- Env var: `SQUID_SMARTTALK_XXX_YYY`
-- Default: `off`
-- Rollout plan: staging warn 1 week → 1 assistant strict 1 week → batch enable
-
-## Rollback playbook
-1. 即時關閉：set env var = off
-2. 中期回退：revert PR
-3. DB 影響：（如 PR 4.x 需描述 migration down）
-
-## Monitoring
-- 新增 metrics: ...
-- 告警閾值: ...
+- [x] Unit: 描述（X cases）
+- [x] Integration: 描述
+- [ ] Staging: 觀察項
 ```
+
+額外（僅必要時）：
+- **Feature flag** — 若引入新 env var，注明 default + rollout plan
+- **Out of scope** — 若刻意未修某些相關問題，注明
+- **Rollback** — 若 `git revert` 不夠（例如 DB migration），描述具體 playbook
+
+**禁止**：title 含 `[Phase X.Y]` / `[Sprint N]` / `[Step Z/M]`；body 含 progress narrative（"This is the 3rd PR..."）；body 含內部狀態 emoji（🟢/🟡/⚪）。
+
+> 內部跟蹤狀態（本文檔的 🟢/🔵 標記）保留 — 那是內部 docs，不是 GitHub PR body。
 
 ---
 
