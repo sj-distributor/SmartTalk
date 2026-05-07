@@ -147,8 +147,6 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
         {
             if (!string.IsNullOrWhiteSpace(sceneKnowledge.FileName))
                 return $"文件：{sceneKnowledge.FileName.Trim()}";
-
-            return sceneKnowledge.Content?.Trim() ?? string.Empty;
         }
 
         return sceneKnowledge.Content?.Trim() ?? string.Empty;
