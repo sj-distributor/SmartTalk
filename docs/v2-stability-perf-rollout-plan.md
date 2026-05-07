@@ -21,7 +21,7 @@
 | 1 | 1.6 | `fix/v2-data-provider-null-handling` | 資料層 null 處理 | 🔵 #921 merged | 2026-05-07 | 2026-05-07 | - |
 | 2 | 2.1 | `fix/v2-connect-async-cleanup` | ConnectAsync 兜底清理 | 🟡 PR #923 | 2026-05-07 | 2026-05-07 | - |
 | 2 | 2.2 | `fix/v2-session-lifecycle-callbacks` | Wire OnClientStop/SessionEnded | 🟡 PR #924 | 2026-05-07 | 2026-05-07 | - |
-| 2 | 2.3 | `stab/v2-ws-keepalive` | WS KeepAlive 15s | ⚪ | - | - | - |
+| 2 | 2.3 | `stab/v2-ws-keepalive` | WS KeepAlive 15s | 🟡 PR #925 | 2026-05-07 | 2026-05-07 | - |
 | 2 | 2.4 | `stab/v2-stream-sid-race` | StreamSid race 防護 | ⚪ | - | - | - |
 | 3 | 3.1 | `stab/v2-audio-buffer-bounded` | AudioBuffer 限制 | ⚪ | - | - | - |
 | 4 | 4.1 | `feat/v2-assistant-config-fields` | Entity 加配置字段 | ⚪ | - | - | - |
