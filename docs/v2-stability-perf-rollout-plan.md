@@ -13,12 +13,12 @@
 | Phase | PR # | Branch | Title | 狀態 | 開始 | 完成 | Reviewer |
 |---|---|---|---|---|---|---|---|
 | 0 | 0.1 | `feat/v2-stability-perf-overhaul` | 主分支 + 骨架 | 🟢 | 2026-05-07 | 2026-05-07 | - |
-| 1 | 1.1 | `fix/v2-alaw-codec-typo` | 修復 g712_alaw 拼寫 | 🟢 待 PR | 2026-05-07 | 2026-05-07 | - |
-| 1 | 1.2 | `fix/v2-delivery-info-token` | 修復 ResolveDeliveryInfoAsync 邏輯反轉 | 🟢 待 PR | 2026-05-07 | 2026-05-07 | - |
-| 1 | 1.3 | `fix/v2-hangup-cancellation-token` | 修復 ProcessHangup token 序列化 | 🟢 待 PR | 2026-05-07 | 2026-05-07 | - |
-| 1 | 1.4 | `perf/v2-cache-pst-timezone` | 緩存 PST TimeZone | ⚪ | - | - | - |
-| 1 | 1.5 | `fix/v2-prompt-static-vars-npe` | ResolveStaticPromptVariables NPE 防護 | ⚪ | - | - | - |
-| 1 | 1.6 | `fix/v2-data-provider-null-handling` | 資料層 null 處理 | ⚪ | - | - | - |
+| 1 | 1.1 | `fix/v2-alaw-codec-typo` | 修復 g712_alaw 拼寫 | 🟡 PR #916 | 2026-05-07 | 2026-05-07 | - |
+| 1 | 1.2 | `fix/v2-delivery-info-token` | 修復 ResolveDeliveryInfoAsync 邏輯反轉 | 🟡 PR #917 | 2026-05-07 | 2026-05-07 | - |
+| 1 | 1.3 | `fix/v2-hangup-cancellation-token` | 修復 ProcessHangup token 序列化 | 🟡 PR #918 | 2026-05-07 | 2026-05-07 | - |
+| 1 | 1.4 | `perf/v2-cache-pst-timezone` | 緩存 PST TimeZone | 🟡 PR #919 | 2026-05-07 | 2026-05-07 | - |
+| 1 | 1.5 | `fix/v2-prompt-static-vars-npe` | ResolveStaticPromptVariables NPE 防護 | 🟡 PR #920 | 2026-05-07 | 2026-05-07 | - |
+| 1 | 1.6 | `fix/v2-data-provider-null-handling` | 資料層 null 處理 | 🟡 PR #921 | 2026-05-07 | 2026-05-07 | - |
 | 2 | 2.1 | `fix/v2-connect-async-cleanup` | ConnectAsync 兜底清理 | ⚪ | - | - | - |
 | 2 | 2.2 | `fix/v2-session-lifecycle-callbacks` | Wire OnClientStop/SessionEnded | ⚪ | - | - | - |
 | 2 | 2.3 | `stab/v2-ws-keepalive` | WS KeepAlive 15s | ⚪ | - | - | - |
@@ -248,26 +248,73 @@
 - **後續調整**：V1 同樣有此 bug，後續可單獨 PR 修
 - **PR 提交**：commit `b78ba1057` 於 `fix/v2-hangup-cancellation-token` 分支
 
-#### PR 1.4
+#### PR 1.4 — 緩存 PST TimeZone + Linux fallback
 - **預期工作量**：45 分鐘
-- **實際工作量**：-
-- **遇到問題**：-
-- **學到什麼**：-
-- **後續調整**：-
+- **實際工作量**：~50 分鐘（含文檔調研發現 .NET 6+/8 已有平臺支持，重新評估 PR 價值）
+- **遇到問題**：
+  - 文檔調研發現：.NET 6+ 已自動處理 Windows ↔ IANA ID 轉換，.NET 8 內建 `FindSystemTimeZoneById` cache。原本的「跨平臺安全 + 性能」雙動機都已被平臺方案
+  - 重新定位 PR 價值：核心是 **集中化 magic string** + **defense-in-depth fallback** + **可讀性**，而非性能或修 bug
+  - 為避免「靜態 init 失敗污染整個 process」，使用 `Lazy<T>` 而非 `static readonly` field
+- **學到什麼**：
+  - .NET 8 已對 `FindSystemTimeZoneById` 內建 ID-key cache，所以本 PR 對性能幾乎無影響（從 dictionary lookup 改為 atomic field read，差別微秒級）
+  - `Lazy<T>` 默認用 `LazyThreadSafetyMode.ExecutionAndPublication`，failure 會被 cache（適合 timezone 這種不可恢復的環境問題）
+  - codebase 中還有 7+ 處用 `FindSystemTimeZoneById` 直接調用（PhoneOrderProcessJobService、TwilioWebhookService 等）。本 PR scope 只動 V2 兩處，留待後續統一
+  - 測試使用 `BaseUtcOffset.ShouldBe(-8h)` 與 `Id.ShouldBeOneOf(...)` 雙重驗證，跨 OS 通用
+- **TDD 流程記錄**：
+  - **🔴 Red**：寫 4 個 helper test，引用未存在的 `PstTimeZone.Get()` → 5 個 compile error
+  - **🟢 Green**：實現 helper（`Lazy<TimeZoneInfo>` + 雙 ID fallback + actionable error）→ 4/4 通過
+  - **🔵 Refactor**：替換 V2 兩處調用點，依賴 helper（同時 cleanup 一個沒用的 local var `pstZone`）
+- **回歸驗證**：完整 unit test suite 158/158 通過。**現存 `CheckIfInServiceHoursTests` 15 個 case 隱式作為 helper 集成測試** — 它們未變但全綠，證明改寫的 service hours 邏輯行為等價
+- **未覆蓋的測試類型**：N/A（unit + 隱式 integration 已足夠，無外部依賴）
+- **後續調整**：codebase 其他 7+ 處 `FindSystemTimeZoneById` 直接調用可在後續 PR 統一收編到 helper
+- **PR 提交**：commit `072d2f237` 於 `perf/v2-cache-pst-timezone` 分支
 
-#### PR 1.5
+#### PR 1.5 — ResolveStaticPromptVariables NPE 防護
 - **預期工作量**：45 分鐘
-- **實際工作量**：-
-- **遇到問題**：-
-- **學到什麼**：-
-- **後續調整**：-
+- **實際工作量**：~50 分鐘（含 StartsWith CurrentCulture vs Ordinal 微調與 byte-exact 驗證）
+- **遇到問題**：
+  - 第一版 helper 用 `StartsWith("+1", StringComparison.Ordinal)` 但原代碼是 `StartsWith("+1")`（默認 CurrentCulture）。雖然 ASCII 結果等價，仍然把 helper 改回 default 比較以保證 byte-exact 等價（已加注釋說明）
+  - 為避免與 PR 1.4 衝突，line 44 的 `TimeZoneInfo.FindSystemTimeZoneById` 保持原樣不動。當 PR 1.4 先 merge 時這行會被自動 resolve 為 `PstTimeZone.Get()`
+- **學到什麼**：
+  - 微妙的 string API 默認對比語義：`StartsWith(string)` 用 CurrentCulture，而 `Contains(string, StringComparison)` 顯式要求 comparison。這類隱性約定 refactor 時極易出錯
+  - 抽 `ResolveStaticTokens(prompt, userProfileJson, from, pstTime)` 後，私有 wrapper 從 8 行降到 4 行，pure helper 完全可獨立測試
+  - 20 個 theory case 達到充分覆蓋：null/empty 邊界 + +1 strip 規則 + 國際號碼保留 + Twilio anonymous 標記 + 重複 token + deterministic time formatting
+- **TDD 流程記錄**：
+  - **🔴 Red**：寫 20 個 theory，引用未存在的 helper → 多個 compile error
+  - **🟢 Green-1**：實現 helper（含 `StringComparison.Ordinal`）→ 全綠
+  - **🔵 Refactor**：發現 `Ordinal` 與原 `StartsWith` 的 CurrentCulture 默認有微妙差異，回退為默認對比 + 加注釋
+  - **🟢 Green-2**：再驗證一次 → 174/174 仍綠
+- **回歸驗證**：完整 unit test suite 174/174 通過（基線 154 + 20 新 theory）
+- **未覆蓋的測試類型**：私有 wrapper `ResolveStaticPromptVariables` 沒有直接 unit test（依靠 helper 全綠 + 簡單 wrapper 邏輯靠 code review 保證）。Integration test 留待 Phase 7
+- **後續調整**：
+  - PR 1.4 merge 時 line 44 自動切換到 `PstTimeZone.Get()`
+  - PR 1.6 處理 `_ctx.Knowledge` null 情況（上游根因）
+- **PR 提交**：commit `99fa945bd` 於 `fix/v2-prompt-static-vars-npe` 分支
 
-#### PR 1.6
+#### PR 1.6 — 資料層 null 處理
 - **預期工作量**：90 分鐘
-- **實際工作量**：-
-- **遇到問題**：-
-- **學到什麼**：-
-- **後續調整**：-
+- **實際工作量**：~75 分鐘（決策做得快但編碼遇到 namespace 衝突）
+- **遇到問題**：
+  - 原計劃拆 1.6a + 1.6b 兩 PR，發現「caller-side defense」根本無法獨立做 — 因為 NRE 發生在 data provider 內部，caller 看不到 null 結果。最終合並成單個 PR
+  - 對 V1 是否「順手修一下」糾結很久。最終決策：**不修 V1**，因為 (1) PR scope 是 V2 stability rollout，(2) V1 的 NRE 經過數據提供者轉移到 V1 自己的代碼，user-visible 行為一致（call 仍然崩潰），無 regression
+  - C# 命名空間 `SmartTalk.Core.Domain.AISpeechAssistant` 與類別 `AiSpeechAssistant` 同名衝突 — 用 type alias `AiSpeechAssistantEntity = ...` 解決
+- **學到什麼**：
+  - 一個微妙的 invariant：如果 data provider 改成返回 `(null, null, null)`，原本 V1 在 data provider 內 NRE 的位置，會轉移到 V1 自己代碼的下一個 deref。這在 stack trace 層面是變化，但 user-visible 行為（連線崩潰）一致
+  - V2 用 `AiAssistantNotAvailableException` 作為「missing data」的領域異常，現存 try/catch 已處理。把 NRE 翻譯成這個異常是優雅的
+  - 整合測試填補了 unit test 無法覆蓋的「data provider 真實 DB no-match」場景，pin 住整個鏈路的契約
+- **TDD 流程記錄**：
+  - **🔴 Red**：寫 4 個 helper test，引用未存在的 `EnsureAssistantInfoComplete` → 5+ compile error
+  - **🟢 Green-1**：實現 helper + 改 data provider + 改 V2 caller → 編譯失敗（namespace 衝突）
+  - **🔵 Refactor**：加 type alias 解決命名衝突
+  - **🟢 Green-2**：158/158 通過
+  - 補充：integration test 加在 `AiSpeechAssistantConnectFixture.DataProvider.cs` pin 住 no-match 的數據層契約
+- **回歸驗證**：完整 unit test suite 158/158 通過。Integration test 編譯通過（CI 跑真實 DB）
+- **未覆蓋的測試類型**：
+  - V2 caller 的端到端測試（mock 整個依賴鏈 + 觀察 AiAssistantNotAvailableException 路徑）— 留待 Phase 7 集成測試專項補
+- **後續調整**：
+  - V1 同樣場景下會 NRE 在 V1 自己的代碼（line 268），不在本 PR scope。應有獨立 PR 修 V1
+  - 7+ 個其他 `FindSystemTimeZoneById` 直接調用（PR 1.4 retrospective 提到）也適用同樣的 helper 推廣
+- **PR 提交**：commit `879fcd21e` 於 `fix/v2-data-provider-null-handling` 分支
 
 ---
 

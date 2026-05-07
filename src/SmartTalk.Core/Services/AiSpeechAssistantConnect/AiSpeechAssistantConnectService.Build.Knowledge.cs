@@ -1,10 +1,13 @@
 using Serilog;
+using SmartTalk.Core.Services.AiSpeechAssistantConnect.Exceptions;
 using SmartTalk.Core.Utils;
 using SmartTalk.Messages.Dto.Smarties;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Pos;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.STT;
+using AiSpeechAssistantEntity = SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistant;
+using AiSpeechAssistantKnowledgeEntity = SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistantKnowledge;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistantConnect;
 
@@ -33,22 +36,70 @@ public partial class AiSpeechAssistantConnectService
 
         Log.Information("[AiAssistant] Assistant matched, AssistantId: {AssistantId}, HasProfile: {HasProfile}, From: {From}, To: {To}", assistant?.Id, userProfile != null, _ctx.From, _ctx.To);
 
+        EnsureAssistantInfoComplete(assistant, knowledge);
+
         _ctx.Assistant = _mapper.Map<AiSpeechAssistantDto>(assistant);
         _ctx.Knowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge);
-        
+
         _ctx.Prompt = _ctx.Knowledge.Prompt;
         _ctx.UserProfileJson = userProfile?.ProfileJson;
+    }
+
+    /// <summary>
+    /// Validates that the data provider returned both an assistant and an active knowledge entry.
+    /// Throws <see cref="AiAssistantNotAvailableException"/> with an actionable message — the
+    /// existing <c>ConnectAsync</c> try/catch catches this exception type cleanly and closes
+    /// the Twilio WebSocket; raw <c>NullReferenceException</c> would otherwise escape and leave
+    /// the call hanging.
+    /// Public static; not intended for external use.
+    /// </summary>
+    public static void EnsureAssistantInfoComplete(AiSpeechAssistantEntity assistant, AiSpeechAssistantKnowledgeEntity knowledge)
+    {
+        if (assistant == null)
+            throw new AiAssistantNotAvailableException("No assistant configured for caller/DID");
+
+        if (knowledge == null)
+            throw new AiAssistantNotAvailableException($"No active knowledge for assistant {assistant.Id}");
     }
 
     private void ResolveStaticPromptVariables()
     {
         var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, PstTimeZone.Get());
 
-        _ctx.Prompt = _ctx.Prompt
-            .Replace("#{user_profile}", string.IsNullOrEmpty(_ctx.UserProfileJson) ? " " : _ctx.UserProfileJson)
+        _ctx.Prompt = ResolveStaticTokens(_ctx.Prompt, _ctx.UserProfileJson, _ctx.From, pstTime);
+    }
+
+    /// <summary>
+    /// Pure version of static token replacement, isolated for unit testability.
+    /// Returns the prompt unchanged if it is null or empty (no tokens to replace),
+    /// matching the safe-no-op contract callers expect.
+    /// Public static; not intended for external use.
+    /// </summary>
+    public static string ResolveStaticTokens(string prompt, string userProfileJson, string from, DateTimeOffset pstTime)
+    {
+        if (string.IsNullOrEmpty(prompt)) return prompt;
+
+        return prompt
+            .Replace("#{user_profile}", string.IsNullOrEmpty(userProfileJson) ? " " : userProfileJson)
             .Replace("#{current_time}", pstTime.ToString("yyyy-MM-dd HH:mm:ss"))
-            .Replace("#{customer_phone}", _ctx.From.StartsWith("+1") ? _ctx.From[2..] : _ctx.From)
+            .Replace("#{customer_phone}", FormatCustomerPhone(from))
             .Replace("#{pst_date}", $"{pstTime.Date:yyyy-MM-dd} {pstTime.DayOfWeek}");
+    }
+
+    /// <summary>
+    /// Formats the caller phone number for inclusion in the prompt:
+    /// strips the leading <c>+1</c> for North American numbers, returns the rest verbatim,
+    /// and returns empty string for null/empty input (anonymous Twilio caller edge case).
+    /// Public static; not intended for external use.
+    /// </summary>
+    public static string FormatCustomerPhone(string from)
+    {
+        if (string.IsNullOrEmpty(from)) return string.Empty;
+
+        // NOTE: matching the original behaviour exactly — `string.StartsWith(string)` uses
+        // CurrentCulture comparison. For ASCII "+1" the result is identical to Ordinal,
+        // but we preserve the original to avoid any culture-dependent surprise.
+        return from.StartsWith("+1") ? from[2..] : from;
     }
 
     private async Task ResolveGreetingAsync(CancellationToken cancellationToken)
@@ -295,9 +346,37 @@ public partial class AiSpeechAssistantConnectService
 
     private async Task ResolveDeliveryInfoAsync(CancellationToken cancellationToken)
     {
-        if (!_ctx.Prompt.Contains("#{delivery_info}", StringComparison.OrdinalIgnoreCase) || !_ctx.Prompt.Contains("#{CRM_路线_送货日数据}", StringComparison.OrdinalIgnoreCase)) return;
+        if (!HasDeliveryInfoToken(_ctx.Prompt)) return;
 
         var cache = await _salesDataProvider.GetDeliveryInfoCacheByPhoneNumberAsync(_ctx.From, cancellationToken).ConfigureAwait(false);
-        _ctx.Prompt = _ctx.Prompt.Replace("#{delivery_info}", cache?.CacheValue?.Trim() ?? " ");
+
+        _ctx.Prompt = ApplyDeliveryInfoTokens(_ctx.Prompt, cache?.CacheValue?.Trim());
+    }
+
+    /// <summary>
+    /// Returns true if the prompt contains either delivery info token literal.
+    /// Tokens are pinned: <c>#{delivery_info}</c> (English) or <c>#{CRM_路线_送货日数据}</c> (Chinese).
+    /// Public static for unit testability; not intended for external use.
+    /// </summary>
+    public static bool HasDeliveryInfoToken(string prompt) =>
+        !string.IsNullOrEmpty(prompt) &&
+        (prompt.Contains("#{delivery_info}", StringComparison.OrdinalIgnoreCase) ||
+         prompt.Contains("#{CRM_路线_送货日数据}", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Replaces both delivery info tokens with the given value.
+    /// Null/empty <paramref name="deliveryValue"/> becomes a single space placeholder
+    /// (preserves V2's existing <c>?? " "</c> semantic so the model never sees a literal token).
+    /// Public static for unit testability; not intended for external use.
+    /// </summary>
+    public static string ApplyDeliveryInfoTokens(string prompt, string deliveryValue)
+    {
+        if (string.IsNullOrEmpty(prompt)) return prompt;
+
+        var value = string.IsNullOrEmpty(deliveryValue) ? " " : deliveryValue;
+
+        return prompt
+            .Replace("#{delivery_info}", value)
+            .Replace("#{CRM_路线_送货日数据}", value);
     }
 }
