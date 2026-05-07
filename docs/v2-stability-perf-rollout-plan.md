@@ -14,7 +14,7 @@
 |---|---|---|---|---|---|---|---|
 | 0 | 0.1 | `feat/v2-stability-perf-overhaul` | 主分支 + 骨架 | 🟢 | 2026-05-07 | 2026-05-07 | - |
 | 1 | 1.1 | `fix/v2-alaw-codec-typo` | 修復 g712_alaw 拼寫 | 🟢 待 PR | 2026-05-07 | 2026-05-07 | - |
-| 1 | 1.2 | `fix/v2-delivery-info-token` | 修復 ResolveDeliveryInfoAsync 邏輯反轉 | ⚪ | - | - | - |
+| 1 | 1.2 | `fix/v2-delivery-info-token` | 修復 ResolveDeliveryInfoAsync 邏輯反轉 | 🟢 待 PR | 2026-05-07 | 2026-05-07 | - |
 | 1 | 1.3 | `fix/v2-hangup-cancellation-token` | 修復 ProcessHangup token 序列化 | ⚪ | - | - | - |
 | 1 | 1.4 | `perf/v2-cache-pst-timezone` | 緩存 PST TimeZone | ⚪ | - | - | - |
 | 1 | 1.5 | `fix/v2-prompt-static-vars-npe` | ResolveStaticPromptVariables NPE 防護 | ⚪ | - | - | - |
@@ -207,12 +207,26 @@
 - **後續調整**：無
 - **PR 提交**：commit `3cbe34372` 於 `fix/v2-alaw-codec-typo` 分支
 
-#### PR 1.2
+#### PR 1.2 — 修復 ResolveDeliveryInfoAsync 邏輯反轉
 - **預期工作量**：60 分鐘
-- **實際工作量**：-
-- **遇到問題**：-
-- **學到什麼**：-
-- **後續調整**：-
+- **實際工作量**：~50 分鐘（含對 V1 邏輯比對 + 識別語義差異 + 18 case theory）
+- **遇到問題**：
+  - 第二個 token 的字面 literal `#{CRM_路线_送货日数据}` 在整個 codebase 只出現一次（即 buggy 處）。無法從代碼判斷 token 拼寫是否符合 DB 中真實 prompt。決策：preserve 字面值不動（最低風險）
+  - V1 與 V2 的「empty cache → placeholder space」語義有微妙差異：V1 用 `IsNullOrEmpty(deliveryInfo) ? " " : deliveryInfo`；V2 sibling `ResolveCustomerInfoAsync` 用 `?? " "`（只 null 觸發）。本次修復保留 V2 author 的 `?? " "` 風格（在 helper 內已合並 null 與 empty 都觸發，與 V1 一致）
+- **學到什麼**：
+  - 抽 `HasDeliveryInfoToken` + `ApplyDeliveryInfoTokens` 為 public static，跟 `CheckIfInServiceHours` 同樣 pattern，私有 method 從 7 行降到 5 行純編排
+  - 對 partial class 加 public static 是 codebase 既定 testability pattern
+  - 18 個 theory case 覆蓋 token 存在/缺失、value 空/非空、case 大小寫、重複 token、whitespace value 等邊界
+- **TDD 流程記錄**：
+  - **🔴 Red**：寫 18 個 theory，引用尚未存在的 API → 11 個 compile error 確認 Red
+  - **🟢 Green**：抽 helper + 改 wiring → 全 18 case 通過
+  - **🔵 Refactor**：無新重構（已隨 fix 同步抽出 helper）
+- **回歸驗證**：完整 unit test suite 172/172 通過（從基線 154 + 18 新 theory case）
+- **未覆蓋的測試類型**：
+  - Integration test（mock `_salesDataProvider` + 調用 `BuildKnowledgeAsync`）— 留待 Phase 7（fetch+apply split）一併補上
+  - E2E test — 留待 Phase 7
+- **後續調整**：無
+- **PR 提交**：commit `af7f0f0be` 於 `fix/v2-delivery-info-token` 分支
 
 #### PR 1.3
 - **預期工作量**：30 分鐘
