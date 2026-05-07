@@ -19,8 +19,7 @@ public class RealtimeHttpGatewayController : ControllerBase
     {
         _mediator = mediator;
     }
-
-    [AllowAnonymous]
+    
     [HttpPost("sessions")]
     public async Task<ActionResult<RealtimeHttpCreateSessionResponse>> CreateSessionAsync(
         [FromBody] RealtimeHttpCreateSessionRequest request,
@@ -43,8 +42,7 @@ public class RealtimeHttpGatewayController : ControllerBase
             return BadRequest(new { message = ex.Message });
         }
     }
-
-    [AllowAnonymous]
+    
     [HttpGet("sessions")]
     public async Task<ActionResult<IReadOnlyList<RealtimeHttpSessionDetailResponse>>> ListSessions()
     {
@@ -53,8 +51,7 @@ public class RealtimeHttpGatewayController : ControllerBase
 
         return Ok(response.Sessions);
     }
-
-    [AllowAnonymous]
+    
     [HttpPost("scripted/default-two-turns")]
     public async Task<ActionResult<RealtimeHttpRunDefaultConversationResponse>> RunDefaultTwoTurnsAsync(
         [FromBody] RealtimeHttpRunDefaultConversationRequest request,
@@ -72,8 +69,7 @@ public class RealtimeHttpGatewayController : ControllerBase
             return BadRequest(new { message = ex.Message });
         }
     }
-
-    [AllowAnonymous]
+    
     [HttpGet("sessions/{sessionId}")]
     public async Task<ActionResult<RealtimeHttpSessionDetailResponse>> GetSessionAsync(string sessionId)
     {
@@ -86,8 +82,7 @@ public class RealtimeHttpGatewayController : ControllerBase
 
         return Ok(response.Session);
     }
-
-    [AllowAnonymous]
+    
     [HttpPost("sessions/{sessionId}/messages")]
     public async Task<ActionResult<RealtimeHttpSendMessageResponse>> SendMessageAsync(
         string sessionId,
@@ -116,8 +111,7 @@ public class RealtimeHttpGatewayController : ControllerBase
             return BadRequest(new { message = ex.Message });
         }
     }
-
-    [AllowAnonymous]
+    
     [HttpDelete("sessions/{sessionId}")]
     public async Task<ActionResult<RealtimeHttpDisconnectResponse>> DisconnectSessionAsync(
         string sessionId,
@@ -135,8 +129,7 @@ public class RealtimeHttpGatewayController : ControllerBase
 
         return Ok(result);
     }
-
-    [AllowAnonymous]
+    
     [HttpGet("recordings/{sessionId}")]
     public async Task<ActionResult<RealtimeHttpRecordingInfoResponse>> GetRecordingAsync(
         string sessionId,
@@ -158,8 +151,7 @@ public class RealtimeHttpGatewayController : ControllerBase
             return BadRequest(new { message = ex.Message });
         }
     }
-
-    [AllowAnonymous]
+    
     [HttpGet("recordings/{sessionId}/file")]
     public async Task<IActionResult> DownloadRecordingAsync(
         string sessionId,
