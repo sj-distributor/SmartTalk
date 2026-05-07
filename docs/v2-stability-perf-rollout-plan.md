@@ -13,12 +13,12 @@
 | Phase | PR # | Branch | Title | 狀態 | 開始 | 完成 | Reviewer |
 |---|---|---|---|---|---|---|---|
 | 0 | 0.1 | `feat/v2-stability-perf-overhaul` | 主分支 + 骨架 | 🟢 | 2026-05-07 | 2026-05-07 | - |
-| 1 | 1.1 | `fix/v2-alaw-codec-typo` | 修復 g712_alaw 拼寫 | 🟡 PR #916 | 2026-05-07 | 2026-05-07 | - |
-| 1 | 1.2 | `fix/v2-delivery-info-token` | 修復 ResolveDeliveryInfoAsync 邏輯反轉 | 🟡 PR #917 | 2026-05-07 | 2026-05-07 | - |
-| 1 | 1.3 | `fix/v2-hangup-cancellation-token` | 修復 ProcessHangup token 序列化 | 🟡 PR #918 | 2026-05-07 | 2026-05-07 | - |
-| 1 | 1.4 | `perf/v2-cache-pst-timezone` | 緩存 PST TimeZone | 🟡 PR #919 | 2026-05-07 | 2026-05-07 | - |
-| 1 | 1.5 | `fix/v2-prompt-static-vars-npe` | ResolveStaticPromptVariables NPE 防護 | 🟡 PR #920 | 2026-05-07 | 2026-05-07 | - |
-| 1 | 1.6 | `fix/v2-data-provider-null-handling` | 資料層 null 處理 | 🟡 PR #921 | 2026-05-07 | 2026-05-07 | - |
+| 1 | 1.1 | `fix/v2-alaw-codec-typo` | 修復 g712_alaw 拼寫 | 🔵 #916 merged | 2026-05-07 | 2026-05-07 | - |
+| 1 | 1.2 | `fix/v2-delivery-info-token` | 修復 ResolveDeliveryInfoAsync 邏輯反轉 | 🔵 #917 merged | 2026-05-07 | 2026-05-07 | - |
+| 1 | 1.3 | `fix/v2-hangup-cancellation-token` | 修復 ProcessHangup token 序列化 | 🔵 #918 merged | 2026-05-07 | 2026-05-07 | - |
+| 1 | 1.4 | `perf/v2-cache-pst-timezone` | 緩存 PST TimeZone | 🔵 #919 merged | 2026-05-07 | 2026-05-07 | - |
+| 1 | 1.5 | `fix/v2-prompt-static-vars-npe` | ResolveStaticPromptVariables NPE 防護 | 🔵 #920 merged | 2026-05-07 | 2026-05-07 | - |
+| 1 | 1.6 | `fix/v2-data-provider-null-handling` | 資料層 null 處理 | 🔵 #921 merged | 2026-05-07 | 2026-05-07 | - |
 | 2 | 2.1 | `fix/v2-connect-async-cleanup` | ConnectAsync 兜底清理 | ⚪ | - | - | - |
 | 2 | 2.2 | `fix/v2-session-lifecycle-callbacks` | Wire OnClientStop/SessionEnded | ⚪ | - | - | - |
 | 2 | 2.3 | `stab/v2-ws-keepalive` | WS KeepAlive 15s | ⚪ | - | - | - |
@@ -354,4 +354,43 @@
 ## 完整原計劃參考
 
 > 此文檔是**精簡跟蹤版**。完整 23 PR 詳細計劃見對話歷史中的「AiSpeechAssistantConnect V2 安全修復實施計劃」段落。
+
+---
+
+## Phase 1 Close-out（合併後狀態）
+
+**日期**：2026-05-07
+**全部 6 個 PR 已合入主分支** `feat/v2-stability-perf-overhaul`
+
+### 合併順序與測試結果
+
+| 步驟 | PR | 合併後 unit test | Δ |
+|---|---|---|---|
+| 1 | #916 (1.1) | 157/157 | +3 (codec pinning) |
+| 2 | #918 (1.3) | 162/162 | +5 (hangup expression) |
+| 3 | #921 (1.6) | 166/166 | +4 (null handling) |
+| 4 | #917 (1.2) | 184/184 | +18 (delivery info tokens) |
+| 5 | #920 (1.5) | 204/204 | +20 (static prompt vars) |
+| 6 | #919 (1.4) | **208/208** | +4 (PstTimeZone) |
+
+### 合併過程中的衝突
+
+- **PR 1.4 在最後合併時與 PR 1.6 在 using 區塊衝突**（都加新 using 但行號相鄰）
+- 解決：本地 merge → 手動 keep both → push → re-merge
+- 結論：line 44 (`PstTimeZone.Get()` swap) 由 git 三路合併自動解決，因為 PR 1.5 把該行作為 context 而非修改
+
+### 最終驗證
+
+- ✅ build 0 errors
+- ✅ unit suite 208/208 全綠
+- ✅ 主分支 commit history 線性（每個 PR 一個 merge commit）
+- ✅ V1 路徑零修改、零 regression
+- ✅ DB schema 零變動
+
+### 下一步
+
+主分支累積 6 個 PR + tracking commits。建議的下一步：
+1. **觀察 1 週 staging** — 把主分支部署到 staging 環境，跟蹤 V2 通話 success rate / NRE log 數
+2. **PR 主分支 → main** — staging 無 regression 後合入 main
+3. **開始 Phase 2** — 防禦性修復（PR 2.1-2.4）
 
