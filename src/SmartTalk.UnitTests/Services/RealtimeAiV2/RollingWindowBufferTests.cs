@@ -147,6 +147,90 @@ public class RollingWindowBufferTests
         await buffer.DisposeAsync();
     }
 
+    // ── Race safety: late frame arrives after Dispose ───────────
+    //
+    // Same scenario as the unbounded buffer: a frame already past the null check
+    // can call WriteAsync on the captured reference after cleanup ran. The
+    // original V2 code never disposed its session-scoped SemaphoreSlim, so the
+    // late call gracefully no-ops. These tests pin the same contract.
+
+    [Fact]
+    public async Task WriteAsync_AfterDispose_NoOpsInsteadOfThrowing()
+    {
+        var buffer = new RollingWindowBuffer(10);
+        await buffer.WriteAsync(new byte[] { 1, 2, 3 });
+        await buffer.DisposeAsync();
+
+        var ex = await Record.ExceptionAsync(() => buffer.WriteAsync(new byte[] { 99 }));
+
+        ex.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task SnapshotAsync_AfterDispose_ReturnsEmptyInsteadOfThrowing()
+    {
+        var buffer = new RollingWindowBuffer(10);
+        await buffer.WriteAsync(new byte[] { 1, 2, 3 });
+        await buffer.DisposeAsync();
+
+        byte[] snapshot = null!;
+        var ex = await Record.ExceptionAsync(async () => snapshot = await buffer.SnapshotAsync());
+
+        ex.ShouldBeNull();
+        snapshot.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task ExtractAsync_AfterDispose_ReturnsEmptyInsteadOfThrowing()
+    {
+        var buffer = new RollingWindowBuffer(10);
+        await buffer.WriteAsync(new byte[] { 1, 2, 3 });
+        await buffer.DisposeAsync();
+
+        byte[] extracted = null!;
+        var ex = await Record.ExceptionAsync(async () => extracted = await buffer.ExtractAsync());
+
+        ex.ShouldBeNull();
+        extracted.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task ConcurrentDisposeAndWrite_NeverThrows()
+    {
+        // Stress test: 16 concurrent writers vs disposer. Whatever the interleaving,
+        // no method must throw — the cap simply enforces "at most capacity" bytes.
+        const int writers = 16;
+        const int capacity = 4096;
+        var buffer = new RollingWindowBuffer(capacity);
+
+        var startGate = new ManualResetEventSlim(false);
+
+        var writeTasks = Enumerable.Range(0, writers)
+            .Select(_ => Task.Run(async () =>
+            {
+                startGate.Wait();
+                for (var i = 0; i < 10; i++)
+                {
+                    await buffer.WriteAsync(new byte[] { (byte)i });
+                    await Task.Yield();
+                }
+            }))
+            .ToArray();
+
+        var disposeTask = Task.Run(async () =>
+        {
+            startGate.Wait();
+            await Task.Yield();
+            await buffer.DisposeAsync();
+        });
+
+        startGate.Set();
+
+        var ex = await Record.ExceptionAsync(() => Task.WhenAll(writeTasks.Concat(new[] { disposeTask })));
+
+        ex.ShouldBeNull();
+    }
+
     [Fact]
     public async Task ConcurrentWriteAndSnapshot_PreservesAtMostCapacityBytes()
     {

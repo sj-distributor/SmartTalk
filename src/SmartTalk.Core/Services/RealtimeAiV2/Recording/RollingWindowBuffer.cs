@@ -131,7 +131,13 @@ public sealed class RollingWindowBuffer : IRecordingBuffer
             _lock.Release();
         }
 
-        _lock.Dispose();
+        // Deliberately do NOT call `_lock.Dispose()` — same rationale as
+        // UnboundedMemoryBuffer.DisposeAsync. SemaphoreSlim.Dispose is not
+        // thread-safe; a late audio frame arriving after cleanup must be a
+        // silent no-op (post-dispose Write/Snapshot/Extract acquire the
+        // lock, see `_extracted == true`, return). Letting the GC reclaim
+        // the lock when the session scope dies matches V2's existing
+        // pattern for all other session-scoped semaphores.
     }
 
     /// <summary>Builds the chronologically-ordered snapshot. Caller must hold the lock.</summary>
