@@ -211,6 +211,15 @@ public class AiSpeechAssistantController : ControllerBase
 
         return Ok(response);
     }
+
+    [Route("knowledge/scene/list"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAiSpeechAssistantKnowledgeSceneRelationsResponse))]
+    public async Task<IActionResult> GetAiSpeechAssistantKnowledgeSceneRelationsAsync([FromQuery] GetAiSpeechAssistantKnowledgeSceneRelationsRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetAiSpeechAssistantKnowledgeSceneRelationsRequest, GetAiSpeechAssistantKnowledgeSceneRelationsResponse>(request).ConfigureAwait(false);
+
+        return Ok(response);
+    }
     
     [Route("assistant/update"), HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdateAiSpeechAssistantResponse))]

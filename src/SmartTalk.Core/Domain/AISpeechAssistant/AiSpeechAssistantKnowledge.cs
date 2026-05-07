@@ -19,6 +19,9 @@ public class AiSpeechAssistantKnowledge : IEntity, IHasCreatedFields
     
     [Column("prompt")]
     public string Prompt { get; set; }
+
+    [Column("scene_prompt")]
+    public string ScenePrompt { get; set; }
     
     [Column("version")]
     public string Version { get; set; }
