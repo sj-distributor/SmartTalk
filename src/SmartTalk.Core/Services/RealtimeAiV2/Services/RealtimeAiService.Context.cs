@@ -26,9 +26,10 @@ public partial class RealtimeAiService
 
     private void BuildRecordingIfRequired()
     {
-        // PR 3.2 will choose between Unbounded and RollingWindow based on env var.
-        // For now (and as the default), preserve the previous unbounded MemoryStream behaviour.
-        if (_ctx.Options.EnableRecording && _ctx.AudioBuffer == null) _ctx.AudioBuffer = new UnboundedMemoryBuffer();
+        // RealtimeAiRecordingSettings.Create() picks UnboundedMemoryBuffer (default) or
+        // RollingWindowBuffer based on the BufferMode env var. Default preserves the
+        // pre-Phase-3 unbounded behaviour exactly.
+        if (_ctx.Options.EnableRecording && _ctx.AudioBuffer == null) _ctx.AudioBuffer = RealtimeAiRecordingSettings.Create();
     }
 
     private void BuildSessionActions()
