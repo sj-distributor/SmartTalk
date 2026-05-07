@@ -65,11 +65,40 @@ public partial class AiSpeechAssistantConnectService
     {
         var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
 
-        _ctx.Prompt = _ctx.Prompt
-            .Replace("#{user_profile}", string.IsNullOrEmpty(_ctx.UserProfileJson) ? " " : _ctx.UserProfileJson)
+        _ctx.Prompt = ResolveStaticTokens(_ctx.Prompt, _ctx.UserProfileJson, _ctx.From, pstTime);
+    }
+
+    /// <summary>
+    /// Pure version of static token replacement, isolated for unit testability.
+    /// Returns the prompt unchanged if it is null or empty (no tokens to replace),
+    /// matching the safe-no-op contract callers expect.
+    /// Public static; not intended for external use.
+    /// </summary>
+    public static string ResolveStaticTokens(string prompt, string userProfileJson, string from, DateTimeOffset pstTime)
+    {
+        if (string.IsNullOrEmpty(prompt)) return prompt;
+
+        return prompt
+            .Replace("#{user_profile}", string.IsNullOrEmpty(userProfileJson) ? " " : userProfileJson)
             .Replace("#{current_time}", pstTime.ToString("yyyy-MM-dd HH:mm:ss"))
-            .Replace("#{customer_phone}", _ctx.From.StartsWith("+1") ? _ctx.From[2..] : _ctx.From)
+            .Replace("#{customer_phone}", FormatCustomerPhone(from))
             .Replace("#{pst_date}", $"{pstTime.Date:yyyy-MM-dd} {pstTime.DayOfWeek}");
+    }
+
+    /// <summary>
+    /// Formats the caller phone number for inclusion in the prompt:
+    /// strips the leading <c>+1</c> for North American numbers, returns the rest verbatim,
+    /// and returns empty string for null/empty input (anonymous Twilio caller edge case).
+    /// Public static; not intended for external use.
+    /// </summary>
+    public static string FormatCustomerPhone(string from)
+    {
+        if (string.IsNullOrEmpty(from)) return string.Empty;
+
+        // NOTE: matching the original behaviour exactly — `string.StartsWith(string)` uses
+        // CurrentCulture comparison. For ASCII "+1" the result is identical to Ordinal,
+        // but we preserve the original to avoid any culture-dependent surprise.
+        return from.StartsWith("+1") ? from[2..] : from;
     }
 
     private async Task ResolveGreetingAsync(CancellationToken cancellationToken)
