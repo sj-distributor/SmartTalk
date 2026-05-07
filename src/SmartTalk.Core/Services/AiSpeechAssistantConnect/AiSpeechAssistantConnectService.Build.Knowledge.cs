@@ -294,9 +294,37 @@ public partial class AiSpeechAssistantConnectService
 
     private async Task ResolveDeliveryInfoAsync(CancellationToken cancellationToken)
     {
-        if (!_ctx.Prompt.Contains("#{delivery_info}", StringComparison.OrdinalIgnoreCase) || !_ctx.Prompt.Contains("#{CRM_路线_送货日数据}", StringComparison.OrdinalIgnoreCase)) return;
+        if (!HasDeliveryInfoToken(_ctx.Prompt)) return;
 
         var cache = await _salesDataProvider.GetDeliveryInfoCacheByPhoneNumberAsync(_ctx.From, cancellationToken).ConfigureAwait(false);
-        _ctx.Prompt = _ctx.Prompt.Replace("#{delivery_info}", cache?.CacheValue?.Trim() ?? " ");
+
+        _ctx.Prompt = ApplyDeliveryInfoTokens(_ctx.Prompt, cache?.CacheValue?.Trim());
+    }
+
+    /// <summary>
+    /// Returns true if the prompt contains either delivery info token literal.
+    /// Tokens are pinned: <c>#{delivery_info}</c> (English) or <c>#{CRM_路线_送货日数据}</c> (Chinese).
+    /// Public static for unit testability; not intended for external use.
+    /// </summary>
+    public static bool HasDeliveryInfoToken(string prompt) =>
+        !string.IsNullOrEmpty(prompt) &&
+        (prompt.Contains("#{delivery_info}", StringComparison.OrdinalIgnoreCase) ||
+         prompt.Contains("#{CRM_路线_送货日数据}", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Replaces both delivery info tokens with the given value.
+    /// Null/empty <paramref name="deliveryValue"/> becomes a single space placeholder
+    /// (preserves V2's existing <c>?? " "</c> semantic so the model never sees a literal token).
+    /// Public static for unit testability; not intended for external use.
+    /// </summary>
+    public static string ApplyDeliveryInfoTokens(string prompt, string deliveryValue)
+    {
+        if (string.IsNullOrEmpty(prompt)) return prompt;
+
+        var value = string.IsNullOrEmpty(deliveryValue) ? " " : deliveryValue;
+
+        return prompt
+            .Replace("#{delivery_info}", value)
+            .Replace("#{CRM_路线_送货日数据}", value);
     }
 }
