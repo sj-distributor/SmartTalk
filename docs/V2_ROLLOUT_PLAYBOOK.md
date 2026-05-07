@@ -6,7 +6,7 @@
 
 | Env Var | 引入 PR | 預設值 | 當前狀態 | 說明 |
 |---|---|---|---|---|
-| _尚未引入_ | - | - | - | - |
+| `SQUID_SMARTTALK_REALTIME_WS_KEEPALIVE_SECONDS` | PR 2.3 | `15` | default | 提供 OpenAI/Google realtime WebSocket 客戶端的 keep-alive 間隔（秒）。範圍 5–120；越界或非數字回退為 15s。比 .NET 默認 30s 更頻繁，避免 corporate proxy / cloud LB 在 AI 沉默期間 idle-out 連線。 |
 
 ## 灰度狀態定義
 
