@@ -100,6 +100,17 @@ public sealed class UnboundedMemoryBuffer : IRecordingBuffer
             _lock.Release();
         }
 
-        _lock.Dispose();
+        // Deliberately do NOT call `_lock.Dispose()`.
+        //
+        // SemaphoreSlim.Dispose is not thread-safe (per Microsoft docs). A late audio
+        // frame arriving from the read loop while session cleanup is in flight can
+        // capture a reference to this buffer before `_ctx.AudioBuffer` is nulled, then
+        // call WriteAsync after Dispose has finished. With the lock disposed, that
+        // call's `_lock.WaitAsync()` would throw ObjectDisposedException — a behaviour
+        // change vs. the pre-refactor code, which never disposed any of the session's
+        // SemaphoreSlim instances (BufferLock, WsSendLock, ProviderResponseStateLock).
+        // Letting the GC reclaim the lock when the session scope dies preserves the
+        // original "late writes are silent no-ops" contract: post-dispose WriteAsync
+        // acquires the lock, sees `_extracted == true`, returns. Same for SnapshotAsync.
     }
 }
