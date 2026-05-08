@@ -1,0 +1,120 @@
+using Serilog;
+using SmartTalk.Core.Domain.PhoneOrder;
+using SmartTalk.Messages.Dto.PhoneOrder;
+using SmartTalk.Messages.Enums.PhoneOrder;
+
+namespace SmartTalk.Core.Services.PhoneOrder;
+
+public partial interface IPhoneOrderService
+{
+    Task<(string GoalText, string Tip, List<PhoneOrderConversationOpenAi> Conversations)> BuildOpenAiComparisonConversationsAsync(List<PhoneOrderOpenAiSpeakInfoDto> phoneOrderInfo, PhoneOrderRecord record, CancellationToken cancellationToken);
+}
+
+public partial class PhoneOrderService
+{
+    public Task<(string GoalText, string Tip, List<PhoneOrderConversationOpenAi> Conversations)> BuildOpenAiComparisonConversationsAsync(List<PhoneOrderOpenAiSpeakInfoDto> phoneOrderInfo, PhoneOrderRecord record, CancellationToken cancellationToken)
+    {
+        if (phoneOrderInfo is not { Count: > 0 })
+            return Task.FromResult<(string GoalText, string Tip, List<PhoneOrderConversationOpenAi> Conversations)>((string.Empty, string.Empty, []));
+
+        Log.Information("OpenAI comparison phone order info: {@PhoneOrderInfo}", phoneOrderInfo);
+
+        return OpenAiComparisonTranscriptionAsync(phoneOrderInfo, record);
+    }
+
+    private Task<(string GoalText, string Tip, List<PhoneOrderConversationOpenAi> Conversations)> OpenAiComparisonTranscriptionAsync(List<PhoneOrderOpenAiSpeakInfoDto> phoneOrderInfo, PhoneOrderRecord record)
+    {
+        var conversationIndex = 0;
+        var goalTexts = new List<string>();
+        var conversations = new List<PhoneOrderConversationOpenAi>();
+
+        foreach (var speakDetail in phoneOrderInfo)
+        {
+            Log.Information(
+                "OpenAI comparison segment. Start: {StartTime}, End: {EndTime}, Speaker: {Speaker}, Role: {Role}, RoleText: {RoleText}",
+                speakDetail.StartTime,
+                speakDetail.EndTime,
+                speakDetail.Speaker,
+                speakDetail.Role,
+                speakDetail.RoleText);
+
+            try
+            {
+                var originText = speakDetail.Text ?? string.Empty;
+                var currentRole = speakDetail.Role ?? PhoneOrderRole.Client;
+
+                Log.Information("OpenAI comparison originText: {OriginText}", originText);
+
+                goalTexts.Add((currentRole == PhoneOrderRole.Restaurant
+                    ? PhoneOrderRole.Restaurant.ToString()
+                    : PhoneOrderRole.Client.ToString()) + ": " + originText);
+
+                if (currentRole == PhoneOrderRole.Restaurant)
+                {
+                    conversations.Add(new PhoneOrderConversationOpenAi
+                    {
+                        RecordId = record.Id,
+                        Question = originText,
+                        Answer = string.Empty,
+                        Order = conversationIndex,
+                        StartTime = speakDetail.StartTime,
+                        EndTime = speakDetail.EndTime,
+                        CreatedDate = DateTimeOffset.Now
+                    });
+                }
+                else
+                {
+                    if (conversationIndex >= conversations.Count)
+                    {
+                        conversations.Add(new PhoneOrderConversationOpenAi
+                        {
+                            RecordId = record.Id,
+                            Question = string.Empty,
+                            Answer = string.Empty,
+                            Order = conversationIndex,
+                            StartTime = speakDetail.StartTime,
+                            EndTime = speakDetail.EndTime,
+                            CreatedDate = DateTimeOffset.Now
+                        });
+                    }
+
+                    conversations[conversationIndex].Answer = originText;
+                    conversationIndex++;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Information("OpenAI comparison transcription error: {ErrorMessage}", ex.Message);
+            }
+        }
+
+        var goalTextsString = ProcessOpenAiComparisonConversation(conversations, string.Join("\n", goalTexts));
+
+        return Task.FromResult((goalTextsString, conversations.FirstOrDefault()?.Question ?? goalTextsString, conversations));
+    }
+
+    private static string ProcessOpenAiComparisonConversation(List<PhoneOrderConversationOpenAi> conversations, string goalTextsString)
+    {
+        if (conversations == null || conversations.Count == 0) return goalTextsString;
+
+        goalTextsString = string.Empty;
+
+        foreach (var conversation in conversations.ToList())
+        {
+            if (string.IsNullOrEmpty(conversation.Answer) && string.IsNullOrEmpty(conversation.Question))
+            {
+                conversations.Remove(conversation);
+                continue;
+            }
+
+            conversation.Answer ??= string.Empty;
+            conversation.Question ??= string.Empty;
+
+            goalTextsString = goalTextsString + "Restaurant: " + conversation.Question + "\nClient:" + conversation.Answer + "\n";
+        }
+
+        Log.Information("Processed OpenAI comparison conversation: {@Conversations}, GoalText: {GoalText}", conversations, goalTextsString);
+
+        return goalTextsString;
+    }
+}

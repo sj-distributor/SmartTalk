@@ -30,12 +30,13 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
     private readonly ISalesClient _salesClient;
     private readonly IFfmpegService _ffmpegService;
     private readonly OpenAiSettings _openAiSettings;
+    private readonly IOpenaiClient _openaiClient;
+    private readonly TwilioSettings _twilioSettings;
     private readonly ISmartiesClient _smartiesClient;
     private readonly IPosUtilService _posUtilService;
     private readonly TranslationClient _translationClient;
     private readonly IPhoneOrderService _phoneOrderService;
     private readonly ISalesDataProvider _salesDataProvider;
-    private readonly TwilioSettings _twilioSettings;
     private readonly ITwilioService _twilioService;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly ISmartTalkHttpClientFactory _smartTalkHttpClient;
@@ -50,6 +51,7 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
         ISalesClient salesClient,
         IFfmpegService ffmpegService,
         OpenAiSettings openAiSettings,
+        IOpenaiClient openaiClient,
         ISmartiesClient smartiesClient,
         IPosUtilService posUtilService,
         TranslationClient translationClient,
@@ -66,6 +68,7 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
         _salesClient = salesClient;
         _ffmpegService = ffmpegService;
         _openAiSettings = openAiSettings;
+        _openaiClient = openaiClient;
         _smartiesClient = smartiesClient;
         _posUtilService = posUtilService;
         _translationClient = translationClient;
