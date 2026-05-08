@@ -27,6 +27,7 @@ public partial class PhoneOrderService
         var conversationIndex = 0;
         var goalTexts = new List<string>();
         var conversations = new List<PhoneOrderConversationOpenAi>();
+        PhoneOrderRole? previousRole = null;
 
         foreach (var speakDetail in phoneOrderInfo)
         {
@@ -41,7 +42,8 @@ public partial class PhoneOrderService
             try
             {
                 var originText = speakDetail.Text ?? string.Empty;
-                var currentRole = speakDetail.Role ?? PhoneOrderRole.Client;
+                var isRestaurantTurn = string.Equals(speakDetail.Speaker, "S1", StringComparison.OrdinalIgnoreCase);
+                var currentRole = isRestaurantTurn ? PhoneOrderRole.Restaurant : PhoneOrderRole.Client;
 
                 Log.Information("OpenAI comparison originText: {OriginText}", originText);
 
@@ -51,25 +53,17 @@ public partial class PhoneOrderService
 
                 if (currentRole == PhoneOrderRole.Restaurant)
                 {
-                    conversations.Add(new PhoneOrderConversationOpenAi
+                    if (previousRole == PhoneOrderRole.Restaurant && conversations.Count > 0 && string.IsNullOrWhiteSpace(conversations[^1].Answer))
                     {
-                        RecordId = record.Id,
-                        Question = originText,
-                        Answer = string.Empty,
-                        Order = conversationIndex,
-                        StartTime = speakDetail.StartTime,
-                        EndTime = speakDetail.EndTime,
-                        CreatedDate = DateTimeOffset.Now
-                    });
-                }
-                else
-                {
-                    if (conversationIndex >= conversations.Count)
+                        conversations[^1].Question = JoinOpenAiConversationText(conversations[^1].Question, originText);
+                        conversations[^1].EndTime = MaxOpenAiConversationEndTime(conversations[^1].EndTime, speakDetail.EndTime);
+                    }
+                    else
                     {
                         conversations.Add(new PhoneOrderConversationOpenAi
                         {
                             RecordId = record.Id,
-                            Question = string.Empty,
+                            Question = originText,
                             Answer = string.Empty,
                             Order = conversationIndex,
                             StartTime = speakDetail.StartTime,
@@ -77,10 +71,37 @@ public partial class PhoneOrderService
                             CreatedDate = DateTimeOffset.Now
                         });
                     }
-
-                    conversations[conversationIndex].Answer = originText;
-                    conversationIndex++;
                 }
+                else
+                {
+                    if (previousRole == PhoneOrderRole.Client && conversations.Count > 0)
+                    {
+                        conversations[^1].Answer = JoinOpenAiConversationText(conversations[^1].Answer, originText);
+                        conversations[^1].EndTime = MaxOpenAiConversationEndTime(conversations[^1].EndTime, speakDetail.EndTime);
+                    }
+                    else
+                    {
+                        if (conversationIndex >= conversations.Count)
+                        {
+                            conversations.Add(new PhoneOrderConversationOpenAi
+                            {
+                                RecordId = record.Id,
+                                Question = string.Empty,
+                                Answer = string.Empty,
+                                Order = conversationIndex,
+                                StartTime = speakDetail.StartTime,
+                                EndTime = speakDetail.EndTime,
+                                CreatedDate = DateTimeOffset.Now
+                            });
+                        }
+
+                        conversations[conversationIndex].Answer = originText;
+                        conversations[conversationIndex].EndTime = MaxOpenAiConversationEndTime(conversations[conversationIndex].EndTime, speakDetail.EndTime);
+                        conversationIndex++;
+                    }
+                }
+
+                previousRole = currentRole;
             }
             catch (Exception ex)
             {
@@ -116,5 +137,28 @@ public partial class PhoneOrderService
         Log.Information("Processed OpenAI comparison conversation: {@Conversations}, GoalText: {GoalText}", conversations, goalTextsString);
 
         return goalTextsString;
+    }
+
+    private static string JoinOpenAiConversationText(string previousText, string currentText)
+    {
+        if (string.IsNullOrWhiteSpace(previousText))
+            return currentText?.Trim() ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(currentText))
+            return previousText.Trim();
+
+        var left = previousText.Trim();
+        var right = currentText.Trim();
+
+        return right.StartsWith(",", StringComparison.Ordinal) || right.StartsWith(".", StringComparison.Ordinal)
+            ? left + right
+            : left + " " + right;
+    }
+
+    private static double MaxOpenAiConversationEndTime(double? previousEndTime, double currentEndTime)
+    {
+        return previousEndTime.HasValue && previousEndTime.Value > currentEndTime
+            ? previousEndTime.Value
+            : currentEndTime;
     }
 }
