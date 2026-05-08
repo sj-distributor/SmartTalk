@@ -1,3 +1,5 @@
+using SmartTalk.Core.Services.RealtimeAiV2.Recording;
+
 namespace SmartTalk.Core.Services.RealtimeAiV2.Services;
 
 public partial class RealtimeAiService
@@ -24,7 +26,9 @@ public partial class RealtimeAiService
 
     private void BuildRecordingIfRequired()
     {
-        if (_ctx.Options.EnableRecording && _ctx.AudioBuffer == null) _ctx.AudioBuffer = new MemoryStream();
+        // PR 3.2 will choose between Unbounded and RollingWindow based on env var.
+        // For now (and as the default), preserve the previous unbounded MemoryStream behaviour.
+        if (_ctx.Options.EnableRecording && _ctx.AudioBuffer == null) _ctx.AudioBuffer = new UnboundedMemoryBuffer();
     }
 
     private void BuildSessionActions()
