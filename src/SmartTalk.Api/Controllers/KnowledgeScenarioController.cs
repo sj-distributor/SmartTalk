@@ -144,7 +144,7 @@ public class KnowledgeScenarioController : ControllerBase
         return Ok(response);
     }
 
-    [Route("scene/knowledge/delete"), HttpPost]
+    [Route("scene/Item/delete"), HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(DeleteKnowledgeSceneItemResponse))]
     public async Task<IActionResult> DeleteKnowledgeSceneItemAsync([FromBody] DeleteKnowledgeSceneItemCommand command)
     {
