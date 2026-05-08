@@ -46,6 +46,24 @@ public partial class PhoneOrderProcessJobService
         (27, 552),   // GLORIAZ / +12132056562
         (396, 349)   // 106991粤語版 / +12132056897
     ];
+    private static readonly HashSet<string> QuantityLeadWords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "a", "an", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+        "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty",
+        "half", "quarter", "pair", "pairs", "dozen", "dozens", "case", "cases", "box", "boxes", "bag", "bags",
+        "pack", "packs", "bottle", "bottles", "jar", "jars", "tray", "trays", "bucket", "buckets", "piece", "pieces",
+        "cup", "cups", "can", "cans", "carton", "cartons", "pound", "pounds", "lb", "lbs", "kg", "kilogram", "kilograms"
+    };
+    private static readonly HashSet<string> QuantityUnitWords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "case", "cases", "box", "boxes", "bag", "bags", "pack", "packs", "bottle", "bottles", "jar", "jars",
+        "tray", "trays", "bucket", "buckets", "piece", "pieces", "cup", "cups", "can", "cans", "carton", "cartons",
+        "pound", "pounds", "lb", "lbs", "kg", "kilogram", "kilograms", "oz", "ounce", "ounces"
+    };
+    private static readonly HashSet<string> FragmentLeadWords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "and", "or", "with", "without", "plus", "of", "for", "to", "then", "also"
+    };
 
     public async Task HandleReleasedSpeechMaticsCallBackAsync(string jobId, CancellationToken cancellationToken)
     {
@@ -425,51 +443,27 @@ public partial class PhoneOrderProcessJobService
             .ThenBy(x => x.EndTime)
             .ToList();
 
-        var speakerMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var speakerRoleMap = new Dictionary<string, PhoneOrderRole>(StringComparer.OrdinalIgnoreCase);
+        var distinctSpeakers = orderedSpeakInfos
+            .Select(x => x.Speaker)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (distinctSpeakers.Count > 2)
+        {
+            Log.Warning("OpenAI diarized transcription returned more than two speakers. Speakers: {@Speakers}", distinctSpeakers);
+        }
+
+        var restaurantSpeaker = DetermineRestaurantSpeaker(orderedSpeakInfos);
+
+        Log.Information("Locked OpenAI comparison restaurant speaker. RestaurantSpeaker: {RestaurantSpeaker}", restaurantSpeaker);
 
         foreach (var speakInfo in orderedSpeakInfos)
         {
             var originalSpeaker = speakInfo.Speaker;
+            var isRestaurantSpeaker = string.Equals(originalSpeaker, restaurantSpeaker, StringComparison.OrdinalIgnoreCase);
 
-            if (!speakerMap.TryGetValue(originalSpeaker, out var normalizedSpeaker))
-            {
-                normalizedSpeaker = speakerMap.Count switch
-                {
-                    0 => "S1",
-                    1 => "S2",
-                    _ => "S2"
-                };
-
-                speakerMap[originalSpeaker] = normalizedSpeaker;
-
-                if (speakerMap.Count > 2)
-                {
-                    Log.Warning("OpenAI diarized transcription returned more than two speakers. SpeakerMap: {@SpeakerMap}", speakerMap);
-                }
-            }
-
-            if (speakInfo.Role.HasValue)
-            {
-                speakerRoleMap[originalSpeaker] = speakInfo.Role.Value;
-            }
-            else if (speakerRoleMap.TryGetValue(originalSpeaker, out var mappedRole))
-            {
-                speakInfo.Role = mappedRole;
-            }
-
-            speakInfo.Speaker = normalizedSpeaker;
-
-            if (!speakInfo.Role.HasValue)
-            {
-                speakInfo.Role = normalizedSpeaker == "S1" ? PhoneOrderRole.Restaurant : PhoneOrderRole.Client;
-
-                Log.Warning(
-                    "OpenAI diarized transcription segment missing role. Falling back to speaker-based role. OriginalSpeaker: {OriginalSpeaker}, NormalizedSpeaker: {NormalizedSpeaker}, Text: {Text}",
-                    originalSpeaker,
-                    normalizedSpeaker,
-                    speakInfo.Text);
-            }
+            speakInfo.Speaker = isRestaurantSpeaker ? "S1" : "S2";
+            speakInfo.Role = isRestaurantSpeaker ? PhoneOrderRole.Restaurant : PhoneOrderRole.Client;
         }
 
         for (var i = 1; i < orderedSpeakInfos.Count - 1; i++)
@@ -509,6 +503,8 @@ public partial class PhoneOrderProcessJobService
 
             mergedSpeakInfos.Add(speakInfo);
         }
+
+        mergedSpeakInfos = StitchFragmentedOpenAiSegments(mergedSpeakInfos);
 
         Log.Information("Normalized OpenAI diarized speak infos: {@SpeakInfos}", mergedSpeakInfos);
 
@@ -595,6 +591,210 @@ public partial class PhoneOrderProcessJobService
                previousGap <= 0.6 &&
                nextGap <= 0.6 &&
                (wordCount <= 4 || (current.Text?.Length ?? 0) <= 24);
+    }
+
+    private static string DetermineRestaurantSpeaker(List<PhoneOrderOpenAiSpeakInfoDto> speakInfos)
+    {
+        if (speakInfos is not { Count: > 0 })
+            return "unknown";
+
+        var firstSpeaker = speakInfos[0].Speaker;
+        var speakerScores = speakInfos
+            .GroupBy(x => x.Speaker, StringComparer.OrdinalIgnoreCase)
+            .Select(group =>
+            {
+                var restaurantDuration = group
+                    .Where(x => x.Role == PhoneOrderRole.Restaurant)
+                    .Sum(x => Math.Max(0.1, x.EndTime - x.StartTime));
+
+                var clientDuration = group
+                    .Where(x => x.Role == PhoneOrderRole.Client)
+                    .Sum(x => Math.Max(0.1, x.EndTime - x.StartTime));
+
+                var restaurantSegments = group.Count(x => x.Role == PhoneOrderRole.Restaurant);
+                var firstSegmentBonus = string.Equals(group.Key, firstSpeaker, StringComparison.OrdinalIgnoreCase) ? 1.5 : 0;
+                var score = (restaurantDuration * 3) + restaurantSegments + firstSegmentBonus - clientDuration;
+
+                return new
+                {
+                    Speaker = group.Key,
+                    Score = score,
+                    RestaurantDuration = restaurantDuration,
+                    ClientDuration = clientDuration,
+                    FirstStartTime = group.Min(x => x.StartTime)
+                };
+            })
+            .OrderByDescending(x => x.Score)
+            .ThenBy(x => x.FirstStartTime)
+            .ToList();
+
+        var restaurantSpeaker = speakerScores.FirstOrDefault()?.Speaker ?? firstSpeaker;
+
+        Log.Information("OpenAI comparison speaker scorecard: {@SpeakerScores}", speakerScores);
+
+        return restaurantSpeaker;
+    }
+
+    private List<PhoneOrderOpenAiSpeakInfoDto> StitchFragmentedOpenAiSegments(List<PhoneOrderOpenAiSpeakInfoDto> speakInfos)
+    {
+        if (speakInfos is not { Count: > 1 })
+            return speakInfos;
+
+        var stitchedSpeakInfos = new List<PhoneOrderOpenAiSpeakInfoDto>();
+
+        foreach (var speakInfo in speakInfos)
+        {
+            if (stitchedSpeakInfos.Count == 0)
+            {
+                stitchedSpeakInfos.Add(speakInfo);
+                continue;
+            }
+
+            var lastSpeakInfo = stitchedSpeakInfos[^1];
+            var gap = Math.Max(0, speakInfo.StartTime - lastSpeakInfo.EndTime);
+
+            if (ShouldStitchFragmentedSegment(lastSpeakInfo, speakInfo, gap))
+            {
+                Log.Information(
+                    "Stitch fragmented OpenAI diarized segments. Previous: {PreviousText}, Current: {CurrentText}, Gap: {Gap}",
+                    lastSpeakInfo.Text,
+                    speakInfo.Text,
+                    gap);
+
+                lastSpeakInfo.EndTime = Math.Max(lastSpeakInfo.EndTime, speakInfo.EndTime);
+                lastSpeakInfo.Text = JoinSegmentText(lastSpeakInfo.Text, speakInfo.Text);
+                continue;
+            }
+
+            stitchedSpeakInfos.Add(speakInfo);
+        }
+
+        return stitchedSpeakInfos;
+    }
+
+    private static bool ShouldStitchFragmentedSegment(
+        PhoneOrderOpenAiSpeakInfoDto previous,
+        PhoneOrderOpenAiSpeakInfoDto current,
+        double gap)
+    {
+        if (!string.Equals(previous.Speaker, current.Speaker, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (previous.Role != current.Role)
+            return false;
+
+        if (gap > 1.6)
+            return false;
+
+        return LooksLikeTrailingFragment(previous.Text) ||
+               LooksLikeLeadingFragment(current.Text) ||
+               LooksLikeSplitQuantity(previous.Text, current.Text) ||
+               LooksLikeSentenceContinuation(previous.Text, current.Text);
+    }
+
+    private static bool LooksLikeTrailingFragment(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        var trimmed = text.Trim();
+
+        if (trimmed.EndsWith(",") || trimmed.EndsWith(";") || trimmed.EndsWith(":"))
+            return true;
+
+        var lastToken = ExtractLastToken(trimmed);
+
+        if (string.IsNullOrWhiteSpace(lastToken))
+            return false;
+
+        return IsNumericOrQuantityWord(lastToken) ||
+               QuantityUnitWords.Contains(lastToken) ||
+               FragmentLeadWords.Contains(lastToken);
+    }
+
+    private static bool LooksLikeLeadingFragment(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        var firstToken = ExtractFirstToken(text);
+
+        if (string.IsNullOrWhiteSpace(firstToken))
+            return false;
+
+        return QuantityUnitWords.Contains(firstToken) ||
+               FragmentLeadWords.Contains(firstToken) ||
+               firstToken.Equals("of", StringComparison.OrdinalIgnoreCase) ||
+               IsLowerCaseWord(firstToken);
+    }
+
+    private static bool LooksLikeSplitQuantity(string previousText, string currentText)
+    {
+        var previousLastToken = ExtractLastToken(previousText);
+        var currentFirstToken = ExtractFirstToken(currentText);
+
+        if (string.IsNullOrWhiteSpace(previousLastToken) || string.IsNullOrWhiteSpace(currentFirstToken))
+            return false;
+
+        return (IsNumericOrQuantityWord(previousLastToken) && QuantityUnitWords.Contains(currentFirstToken)) ||
+               (QuantityLeadWords.Contains(previousLastToken) && currentFirstToken.Equals("of", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool LooksLikeSentenceContinuation(string previousText, string currentText)
+    {
+        if (string.IsNullOrWhiteSpace(previousText) || string.IsNullOrWhiteSpace(currentText))
+            return false;
+
+        var trimmedPrevious = previousText.Trim();
+        var trimmedCurrent = currentText.Trim();
+
+        return !EndsWithSentencePunctuation(trimmedPrevious) &&
+               !char.IsUpper(trimmedCurrent[0]);
+    }
+
+    private static string JoinSegmentText(string previousText, string currentText)
+    {
+        if (string.IsNullOrWhiteSpace(previousText))
+            return currentText?.Trim() ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(currentText))
+            return previousText.Trim();
+
+        var left = previousText.Trim();
+        var right = currentText.Trim();
+
+        return right.StartsWith(",", StringComparison.Ordinal) || right.StartsWith(".", StringComparison.Ordinal)
+            ? left + right
+            : left + " " + right;
+    }
+
+    private static string ExtractFirstToken(string text)
+    {
+        return Regex.Match(text ?? string.Empty, @"[\p{L}\p{N}]+").Value;
+    }
+
+    private static string ExtractLastToken(string text)
+    {
+        var matches = Regex.Matches(text ?? string.Empty, @"[\p{L}\p{N}]+");
+        return matches.Count == 0 ? string.Empty : matches[^1].Value;
+    }
+
+    private static bool IsNumericOrQuantityWord(string token)
+    {
+        if (string.IsNullOrWhiteSpace(token))
+            return false;
+
+        return Regex.IsMatch(token, @"^\d+(?:\.\d+)?$") || QuantityLeadWords.Contains(token);
+    }
+
+    private static bool EndsWithSentencePunctuation(string text)
+    {
+        return text.EndsWith(".") || text.EndsWith("!") || text.EndsWith("?");
+    }
+
+    private static bool IsLowerCaseWord(string token)
+    {
+        return token.Any(char.IsLetter) && token.All(ch => !char.IsLetter(ch) || char.IsLower(ch));
     }
 
     private static bool TryParseOpenAiComparisonRole(string roleText, out PhoneOrderRole role)
