@@ -42,9 +42,9 @@ public partial class PhoneOrderProcessJobService
 {
     private static readonly HashSet<(int AgentId, int AssistantId)> OpenAiComparisonAgentPairs =
     [
-        (32, 349),   // ELENAL / +12132216619
+        (32, 555),   // ELENAL / +12132216619
         (27, 552),   // GLORIAZ / +12132056562
-        (396, 555)   // 106991粤語版 / +12132056897
+        (396, 349)   // 106991粤語版 / +12132056897
     ];
 
     public async Task HandleReleasedSpeechMaticsCallBackAsync(string jobId, CancellationToken cancellationToken)
