@@ -37,6 +37,7 @@ public class SalesPlaceholderFixture
             redisSafeRunner: null!,
             posDataProvider: null!,
             phoneOrderService: null!,
+            phoneOrderProcessJobService: null!,
             agentDataProvider: null!,
             attachmentService: null!,
             salesDataProvider: salesDataProvider,
