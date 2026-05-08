@@ -4,7 +4,7 @@ using SmartTalk.Messages.Enums.KnowledgeScenario;
 
 namespace SmartTalk.Core.Domain.KnowledgeScenario;
 
-[Table("knowledge_scene_knowledge")]
+[Table("knowledge_scene_item")]
 public class KnowledgeSceneItem : IEntity
 {
     [Key]
