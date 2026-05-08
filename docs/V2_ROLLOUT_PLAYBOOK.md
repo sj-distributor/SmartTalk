@@ -7,6 +7,8 @@
 | Env Var | 引入 PR | 預設值 | 當前狀態 | 說明 |
 |---|---|---|---|---|
 | `SQUID_SMARTTALK_REALTIME_WS_KEEPALIVE_SECONDS` | PR 2.3 | `15` | default | 提供 OpenAI/Google realtime WebSocket 客戶端的 keep-alive 間隔（秒）。範圍 5–120；越界或非數字回退為 15s。比 .NET 默認 30s 更頻繁，避免 corporate proxy / cloud LB 在 AI 沉默期間 idle-out 連線。 |
+| `SQUID_SMARTTALK_RECORDING_BUFFER_MODE` | PR 3.2 | `unbounded` | default | 錄音 buffer 實現策略。值：`unbounded`（與當前行為一致）或 `rolling`（環形 buffer，超出窗口的舊數據自動丟棄）。任何非 `rolling` 值（含未設）視為 unbounded。 |
+| `SQUID_SMARTTALK_RECORDING_BUFFER_SECONDS` | PR 3.2 | `300` | default | 當 `BUFFER_MODE=rolling` 時的窗口大小（秒）。範圍 30–3600；越界回退 300。300s × 48,000 byte/s = 14.4 MB cap per call。 |
 
 ## 灰度狀態定義
 
