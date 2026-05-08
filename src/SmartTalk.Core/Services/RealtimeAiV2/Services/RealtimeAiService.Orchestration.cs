@@ -174,11 +174,21 @@ public partial class RealtimeAiService
 
     private async Task WriteToAudioBufferAsync(byte[] data, RealtimeAiAudioCodec sourceCodec)
     {
-        if (!_ctx.Options.EnableRecording || _ctx.AudioBuffer is null) return;
+        if (!_ctx.Options.EnableRecording) return;
+
+        // Capture the buffer reference ONCE. `_ctx.AudioBuffer` may be nulled by
+        // HandleRecordingAsync between the null check and the WriteAsync call —
+        // a real race when a late audio frame arrives during cleanup. Reading the
+        // field twice (`is null` check + `.WriteAsync`) would NRE on null. The
+        // captured reference is still valid even after `_ctx.AudioBuffer = null`,
+        // and the buffer's internal `_extracted` flag turns the late write into
+        // a silent no-op (matching the pre-refactor BufferLock + double-check pattern).
+        var buffer = _ctx.AudioBuffer;
+        if (buffer is null) return;
 
         var pcmData = AudioCodecConverter.ConvertForRecording(data, sourceCodec);
 
-        await _ctx.AudioBuffer.WriteAsync(pcmData).ConfigureAwait(false);
+        await buffer.WriteAsync(pcmData).ConfigureAwait(false);
     }
 
     private async Task HandleTranscriptionsAsync()
@@ -192,9 +202,15 @@ public partial class RealtimeAiService
     
     private async Task<byte[]> GetRecordedAudioSnapshotAsync()
     {
-        if (!_ctx.Options.EnableRecording || _ctx.AudioBuffer is null) return [];
+        if (!_ctx.Options.EnableRecording) return [];
 
-        var snapshotBytes = await _ctx.AudioBuffer.SnapshotAsync().ConfigureAwait(false);
+        // Capture the buffer reference ONCE — same race rationale as
+        // WriteToAudioBufferAsync above. RepeatOrder calls this from a function-call
+        // handler, which can fire concurrently with cleanup.
+        var buffer = _ctx.AudioBuffer;
+        if (buffer is null) return [];
+
+        var snapshotBytes = await buffer.SnapshotAsync().ConfigureAwait(false);
 
         if (snapshotBytes.Length == 0) return [];
 
