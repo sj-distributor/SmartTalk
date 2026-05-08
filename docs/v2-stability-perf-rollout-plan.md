@@ -23,8 +23,8 @@
 | 2 | 2.2 | `fix/v2-session-lifecycle-callbacks` | Wire OnClientStop/SessionEnded | 🟡 PR #924 | 2026-05-07 | 2026-05-07 | - |
 | 2 | 2.3 | `stab/v2-ws-keepalive` | WS KeepAlive 15s | 🟡 PR #925 | 2026-05-07 | 2026-05-07 | - |
 | 2 | 2.4 | `stab/v2-stream-sid-race` | StreamSid race 防護 | 🟡 PR #926 | 2026-05-07 | 2026-05-07 | - |
-| 3 | 3.1 | `refactor/v2-recording-buffer-abstraction` | 抽出 IRecordingBuffer（純 refactor） | 🟡 PR #927 | 2026-05-07 | 2026-05-07 | - |
-| 3 | 3.2 | `feat/v2-recording-buffer-rolling-window` | RollingWindowBuffer + env var | ⚪ | - | - | - |
+| 3 | 3.1 | `refactor/v2-recording-buffer-abstraction` | 抽出 IRecordingBuffer（純 refactor） | 🔵 #927 merged | 2026-05-07 | 2026-05-08 | - |
+| 3 | 3.2 | `feat/v2-recording-buffer-rolling-window` | RollingWindowBuffer + env var | 🔵 #928 merged | 2026-05-07 | 2026-05-08 | - |
 | 4 | 4.1 | `feat/v2-assistant-config-fields` | Entity 加配置字段 | ⚪ | - | - | - |
 | 4 | 4.2 | `feat/v2-config-dto-passthrough` | DTO/ModelConfig 透傳 | ⚪ | - | - | - |
 | 5 | 5.1 | `feat/v2-transcription-model-config` | Transcription 模型 opt-in | ⚪ | - | - | - |
@@ -381,4 +381,42 @@ PR title 用祈使句，無 phase / sprint / step 前綴。Body 維持兩段：
 1. **觀察 1 週 staging** — 把主分支部署到 staging 環境，跟蹤 V2 通話 success rate / NRE log 數
 2. **PR 主分支 → main** — staging 無 regression 後合入 main
 3. **開始 Phase 2** — 防禦性修復（PR 2.1-2.4）
+
+---
+
+## Phase 3 Close-out（合併後狀態）
+
+**日期**：2026-05-08
+**全部 2 個 PR 已合入主分支**
+
+### 合併順序與測試結果
+
+| 步驟 | PR | 合併後 unit test | Δ |
+|---|---|---|---|
+| 1 | #927 (3.1) | 253/253 | +12（IRecordingBuffer + UnboundedMemoryBuffer 8 + race-safety 4） |
+| 2 | #928 (3.2) | **298/298** | +45（RollingWindowBuffer 16 + Settings 29） |
+
+### 兩輪 review 額外發現的 race issue 與修補
+
+第一輪：發現 `_lock.Dispose()` 不安全 → 兩個 buffer 各加 `_lock.Dispose()` 移除 + 4 race-safety tests
+
+**第二輪（critical）**：發現 `WriteToAudioBufferAsync` / `GetRecordedAudioSnapshotAsync` 在 cleanup race 下 NRE
+- Refactor 過程「拆 BufferLock + 雙 null-check」時，外層保護被悄悄拿掉
+- 修復：capture-once 模式 — 讀取 `_ctx.AudioBuffer` 進局部變量再用
+- 教訓：refactor 對 `if (X is null) return; ... await X.Method()` 雙讀模式必須 capture-once
+
+### 最終驗證
+
+- ✅ build 0 errors
+- ✅ unit suite 298/298 全綠
+- ✅ Default mode（Unbounded）行為與 pre-refactor V2 完全等價
+- ✅ Opt-in mode（Rolling）可通過 `SQUID_SMARTTALK_REALTIME_RECORDING_BUFFER_MODE=rolling` 啟用
+- ✅ V1 路徑零修改
+
+### 引入的 env vars
+
+| Env Var | 預設 | 說明 |
+|---|---|---|
+| `SQUID_SMARTTALK_REALTIME_RECORDING_BUFFER_MODE` | `unbounded` | `unbounded`（默認）或 `rolling` |
+| `SQUID_SMARTTALK_REALTIME_RECORDING_BUFFER_SECONDS` | `300` | rolling mode 容量秒數，範圍 30-3600 |
 

@@ -174,20 +174,21 @@ public partial class RealtimeAiService
 
     private async Task WriteToAudioBufferAsync(byte[] data, RealtimeAiAudioCodec sourceCodec)
     {
-        if (!_ctx.Options.EnableRecording || _ctx.AudioBuffer is not { CanWrite: true }) return;
+        if (!_ctx.Options.EnableRecording) return;
+
+        // Capture the buffer reference ONCE. `_ctx.AudioBuffer` may be nulled by
+        // HandleRecordingAsync between the null check and the WriteAsync call —
+        // a real race when a late audio frame arrives during cleanup. Reading the
+        // field twice (`is null` check + `.WriteAsync`) would NRE on null. The
+        // captured reference is still valid even after `_ctx.AudioBuffer = null`,
+        // and the buffer's internal `_extracted` flag turns the late write into
+        // a silent no-op (matching the pre-refactor BufferLock + double-check pattern).
+        var buffer = _ctx.AudioBuffer;
+        if (buffer is null) return;
 
         var pcmData = AudioCodecConverter.ConvertForRecording(data, sourceCodec);
 
-        await _ctx.BufferLock.WaitAsync(_ctx.SessionCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
-        try
-        {
-            if (_ctx.AudioBuffer is { CanWrite: true })
-                await _ctx.AudioBuffer.WriteAsync(pcmData).ConfigureAwait(false);
-        }
-        finally
-        {
-            _ctx.BufferLock.Release();
-        }
+        await buffer.WriteAsync(pcmData).ConfigureAwait(false);
     }
 
     private async Task HandleTranscriptionsAsync()
@@ -201,22 +202,17 @@ public partial class RealtimeAiService
     
     private async Task<byte[]> GetRecordedAudioSnapshotAsync()
     {
-        if (!_ctx.Options.EnableRecording || _ctx.AudioBuffer is not { CanRead: true }) return [];
+        if (!_ctx.Options.EnableRecording) return [];
 
-        await _ctx.BufferLock.WaitAsync().ConfigureAwait(false);
-        byte[] snapshotBytes;
-        try
-        {
-            if (_ctx.AudioBuffer is not { CanRead: true } || _ctx.AudioBuffer.Length == 0) return [];
+        // Capture the buffer reference ONCE — same race rationale as
+        // WriteToAudioBufferAsync above. RepeatOrder calls this from a function-call
+        // handler, which can fire concurrently with cleanup.
+        var buffer = _ctx.AudioBuffer;
+        if (buffer is null) return [];
 
-            snapshotBytes = new byte[_ctx.AudioBuffer.Length];
-            _ctx.AudioBuffer.Position = 0;
-            await _ctx.AudioBuffer.ReadAsync(snapshotBytes).ConfigureAwait(false);
-        }
-        finally
-        {
-            _ctx.BufferLock.Release();
-        }
+        var snapshotBytes = await buffer.SnapshotAsync().ConfigureAwait(false);
+
+        if (snapshotBytes.Length == 0) return [];
 
         var waveFormat = new WaveFormat(24000, 16, 1);
         using var wavStream = new MemoryStream();
@@ -232,51 +228,31 @@ public partial class RealtimeAiService
     private async Task HandleRecordingAsync()
     {
         if (!_ctx.Options.EnableRecording || _ctx.Options.OnRecordingCompleteAsync == null) return;
+        if (_ctx.AudioBuffer is null) return;
 
-        MemoryStream snapshot;
-
-        await _ctx.BufferLock.WaitAsync().ConfigureAwait(false);
-        try
-        {
-            snapshot = _ctx.AudioBuffer;
-            _ctx.AudioBuffer = null;
-        }
-        finally
-        {
-            _ctx.BufferLock.Release();
-        }
-
-        if (snapshot is not { CanRead: true } || snapshot.Length == 0) return;
+        var buffer = _ctx.AudioBuffer;
+        _ctx.AudioBuffer = null;
 
         try
         {
+            var pcmBytes = await buffer.ExtractAsync().ConfigureAwait(false);
+
+            if (pcmBytes.Length == 0) return;
+
             var waveFormat = new WaveFormat(24000, 16, 1);
             using var wavStream = new MemoryStream();
 
             await using (var writer = new WaveFileWriter(wavStream, waveFormat))
             {
-                var rented = ArrayPool<byte>.Shared.Rent(64 * 1024);
-                try
-                {
-                    if (snapshot.CanSeek) snapshot.Position = 0;
-                    int read;
-                    while ((read = await snapshot.ReadAsync(rented.AsMemory(0, rented.Length))) > 0)
-                    {
-                        writer.Write(rented, 0, read);
-                    }
-                    await writer.FlushAsync();
-                }
-                finally
-                {
-                    ArrayPool<byte>.Shared.Return(rented);
-                }
+                writer.Write(pcmBytes, 0, pcmBytes.Length);
+                await writer.FlushAsync();
             }
 
             await _ctx.Options.OnRecordingCompleteAsync(_ctx.SessionId, wavStream.ToArray()).ConfigureAwait(false);
         }
         finally
         {
-            await snapshot.DisposeAsync();
+            await buffer.DisposeAsync();
         }
     }
     
