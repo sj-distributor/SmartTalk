@@ -630,22 +630,6 @@ public partial class PhoneOrderProcessJobService
         }
     }
 
-    private static bool ShouldSmoothIntermediateSegment(
-        SpeechMaticsSpeakInfoDto previous,
-        SpeechMaticsSpeakInfoDto current,
-        SpeechMaticsSpeakInfoDto next)
-    {
-        var duration = current.EndTime - current.StartTime;
-        var previousGap = current.StartTime - previous.EndTime;
-        var nextGap = next.StartTime - current.EndTime;
-        var wordCount = current.Text?.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length ?? 0;
-
-        return duration <= 1.2 &&
-               previousGap <= 0.6 &&
-               nextGap <= 0.6 &&
-               (wordCount <= 4 || (current.Text?.Length ?? 0) <= 24);
-    }
-
     private static string NormalizeSegmentText(string text)
     {
         return Regex.Replace(text ?? string.Empty, @"\s+", " ").Trim();

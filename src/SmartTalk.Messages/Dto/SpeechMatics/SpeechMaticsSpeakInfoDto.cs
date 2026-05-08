@@ -11,8 +11,6 @@ public class SpeechMaticsSpeakInfoDto
     public string Speaker { get; set; }
     
     public PhoneOrderRole Role { get; set; }
-
-    public string Text { get; set; }
 }
 
 public class SpeechMaticsSpeakInfoForAutoTestDto
