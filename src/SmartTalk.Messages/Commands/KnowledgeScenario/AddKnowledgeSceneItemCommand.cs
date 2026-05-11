@@ -9,15 +9,9 @@ public class AddKnowledgeSceneItemCommand : ICommand
 {
     public int SceneId { get; set; }
 
-    public string Name { get; set; }
-
-    public KnowledgeSceneItemType Type { get; set; } = KnowledgeSceneItemType.Text;
-
-    public string Content { get; set; }
-
-    public string FileName { get; set; }
+    public List<AddKnowledgeSceneItemDto> Items { get; set; } = new();
 }
 
-public class AddKnowledgeSceneItemResponse : SmartTalkResponse<KnowledgeSceneItemDto>
+public class AddKnowledgeSceneItemResponse : SmartTalkResponse<List<KnowledgeSceneItemDto>>
 {
 }

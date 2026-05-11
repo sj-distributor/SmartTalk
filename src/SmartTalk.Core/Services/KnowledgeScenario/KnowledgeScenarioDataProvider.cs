@@ -37,11 +37,15 @@ public interface IKnowledgeScenarioDataProvider : IScopedDependency
 
     Task<KnowledgeSceneItem> GetKnowledgeSceneItemBySceneAndNameAsync(int sceneId, string name, CancellationToken cancellationToken = default);
 
+    Task<List<KnowledgeSceneItem>> GetKnowledgeSceneItemsBySceneAndNamesAsync(int sceneId, List<string> names, CancellationToken cancellationToken = default);
+
     Task<List<KnowledgeSceneItem>> GetKnowledgeSceneItemsAsync(int sceneId, string keyword, CancellationToken cancellationToken = default);
 
     Task<List<KnowledgeSceneItem>> GetKnowledgeSceneItemsBySceneIdsAsync(List<int> sceneIds, CancellationToken cancellationToken = default);
 
     Task AddKnowledgeSceneItemAsync(KnowledgeSceneItem knowledge, bool forceSave = true, CancellationToken cancellationToken = default);
+
+    Task AddKnowledgeSceneItemsAsync(List<KnowledgeSceneItem> knowledges, bool forceSave = true, CancellationToken cancellationToken = default);
 
     Task UpdateKnowledgeSceneItemAsync(KnowledgeSceneItem knowledge, bool forceSave = true, CancellationToken cancellationToken = default);
 
@@ -180,6 +184,19 @@ public class KnowledgeScenarioDataProvider : IKnowledgeScenarioDataProvider
             .ConfigureAwait(false);
     }
 
+    public async Task<List<KnowledgeSceneItem>> GetKnowledgeSceneItemsBySceneAndNamesAsync(int sceneId, List<string> names, CancellationToken cancellationToken = default)
+    {
+        if (names.Count == 0)
+            return new List<KnowledgeSceneItem>();
+
+        var distinctNames = names.Distinct().ToList();
+
+        return await _repository.Query<KnowledgeSceneItem>()
+            .Where(x => x.SceneId == sceneId && distinctNames.Contains(x.Name))
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+    }
+
     public async Task<List<KnowledgeSceneItem>> GetKnowledgeSceneItemsAsync(int sceneId, string keyword, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<KnowledgeSceneItem>().Where(x => x.SceneId == sceneId);
@@ -201,6 +218,15 @@ public class KnowledgeScenarioDataProvider : IKnowledgeScenarioDataProvider
     public async Task AddKnowledgeSceneItemAsync(KnowledgeSceneItem knowledge, bool forceSave = true, CancellationToken cancellationToken = default)
     {
         await _repository.InsertAsync(knowledge, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave)
+            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task AddKnowledgeSceneItemsAsync(List<KnowledgeSceneItem> knowledges, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        if (knowledges.Count != 0)
+            await _repository.InsertAllAsync(knowledges, cancellationToken).ConfigureAwait(false);
 
         if (forceSave)
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);

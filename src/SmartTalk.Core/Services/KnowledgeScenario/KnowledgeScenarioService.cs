@@ -212,34 +212,55 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
     {
         if (command.SceneId <= 0) throw new Exception("AddKnowledgeSceneItem SceneId is required.");
 
-        if (string.IsNullOrWhiteSpace(command.Name)) throw new Exception("AddKnowledgeSceneItem Name is required.");
+        if (command.Items == null || command.Items.Count == 0) throw new Exception("AddKnowledgeSceneItem Items is required.");
+
+        var itemNames = new List<string>();
+        foreach (var item in command.Items)
+        {
+            if (string.IsNullOrWhiteSpace(item.Name)) throw new Exception("AddKnowledgeSceneItem Name is required.");
+
+            itemNames.Add(item.Name.Trim());
+        }
+
+        var duplicatedItemNames = itemNames
+            .GroupBy(x => x)
+            .Where(x => x.Count() > 1)
+            .Select(x => x.Key)
+            .ToList();
+
+        if (duplicatedItemNames.Count != 0)
+            throw new Exception($"AddKnowledgeSceneItem Items [{string.Join(", ", duplicatedItemNames)}] are duplicated in this request.");
 
         var scene = await _knowledgeScenarioDataProvider.GetKnowledgeSceneByIdAsync(command.SceneId, cancellationToken).ConfigureAwait(false);
 
         if (scene == null)
             throw new Exception($"AddKnowledgeSceneItem Scene [{command.SceneId}] does not exist.");
 
-        var trimmedName = command.Name.Trim();
-        var duplicatedKnowledge = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemBySceneAndNameAsync(command.SceneId, trimmedName, cancellationToken).ConfigureAwait(false);
+        var duplicatedKnowledges = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneAndNamesAsync(command.SceneId, itemNames, cancellationToken).ConfigureAwait(false);
 
-        if (duplicatedKnowledge != null)
-            throw new Exception($"AddKnowledgeSceneItem Item [{trimmedName}] already exists in this scene.");
+        if (duplicatedKnowledges.Count != 0)
+            throw new Exception($"AddKnowledgeSceneItem Items [{string.Join(", ", duplicatedKnowledges.Select(x => x.Name))}] already exist in this scene.");
 
-        var knowledge = _mapper.Map<KnowledgeSceneItem>(command);
+        var knowledges = command.Items.Select(item =>
+        {
+            var knowledge = _mapper.Map<KnowledgeSceneItem>(item);
+            knowledge.SceneId = command.SceneId;
+            return knowledge;
+        }).ToList();
         var now = DateTimeOffset.UtcNow;
 
-        await _knowledgeScenarioDataProvider.AddKnowledgeSceneItemAsync(knowledge, false, cancellationToken).ConfigureAwait(false);
+        await _knowledgeScenarioDataProvider.AddKnowledgeSceneItemsAsync(knowledges, false, cancellationToken).ConfigureAwait(false);
 
         scene.UpdatedAt = now;
         await _knowledgeScenarioDataProvider.UpdateKnowledgeSceneAsync(scene, true, cancellationToken).ConfigureAwait(false);
         await _aiSpeechAssistantKnowledgePromptService.RefreshScenePromptsBySceneIdsAsync([scene.Id], cancellationToken).ConfigureAwait(false);
         
-        Log.Information("AddKnowledgeSceneItemAsync added scene item and refreshed prompts. SceneId={@SceneId}, ItemId={@ItemId}, ItemType={@ItemType}", 
-            knowledge.SceneId, knowledge.Id, knowledge.Type);
+        Log.Information("AddKnowledgeSceneItemAsync added scene items and refreshed prompts. SceneId={@SceneId}, ItemIds={@ItemIds}", 
+            scene.Id, knowledges.Select(x => x.Id).ToList());
 
         return new AddKnowledgeSceneItemResponse
         {
-            Data = _mapper.Map<KnowledgeSceneItemDto>(knowledge)
+            Data = _mapper.Map<List<KnowledgeSceneItemDto>>(knowledges)
         };
     }
 
