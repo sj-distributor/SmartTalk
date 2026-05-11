@@ -9,6 +9,7 @@ using SmartTalk.Core.Domain.KnowledgeScenario;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.IntegrationTests.TestBaseClasses;
 using SmartTalk.Messages.Commands.KnowledgeScenario;
+using SmartTalk.Messages.Dto.KnowledgeScenario;
 using SmartTalk.Messages.Enums.KnowledgeScenario;
 using SmartTalk.Messages.Enums.RealtimeAi;
 using SmartTalk.Messages.Requests.KnowledgeScenario;
@@ -385,18 +386,35 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
                 new AddKnowledgeSceneItemCommand
                 {
                     SceneId = sceneId,
-                    Name = $"  Item-{caseId}  ",
-                    Type = KnowledgeSceneItemType.File,
-                    Content = $"  Content {caseId}  ",
-                    FileName = $"  file-{caseId}.pdf  "
+                    Items =
+                    [
+                        new AddKnowledgeSceneItemDto
+                        {
+                            Name = $"  Item-{caseId}  ",
+                            Type = KnowledgeSceneItemType.File,
+                            Content = $"  Content {caseId}  ",
+                            FileName = $"  file-{caseId}.pdf  "
+                        },
+                        new AddKnowledgeSceneItemDto
+                        {
+                            Name = $"  Item-Second-{caseId}  ",
+                            Type = KnowledgeSceneItemType.Text,
+                            Content = $"  Content Second {caseId}  "
+                        }
+                    ]
                 });
 
             response.Data.ShouldNotBeNull();
-            response.Data.SceneId.ShouldBe(sceneId);
-            response.Data.Name.ShouldBe($"Item-{caseId}");
-            response.Data.Type.ShouldBe(KnowledgeSceneItemType.File);
-            response.Data.Content.ShouldBe($"Content {caseId}");
-            response.Data.FileName.ShouldBe($"file-{caseId}.pdf");
+            response.Data.Count.ShouldBe(2);
+            response.Data[0].SceneId.ShouldBe(sceneId);
+            response.Data[0].Name.ShouldBe($"Item-{caseId}");
+            response.Data[0].Type.ShouldBe(KnowledgeSceneItemType.File);
+            response.Data[0].Content.ShouldBe($"Content {caseId}");
+            response.Data[0].FileName.ShouldBe($"file-{caseId}.pdf");
+            response.Data[1].SceneId.ShouldBe(sceneId);
+            response.Data[1].Name.ShouldBe($"Item-Second-{caseId}");
+            response.Data[1].Type.ShouldBe(KnowledgeSceneItemType.Text);
+            response.Data[1].Content.ShouldBe($"Content Second {caseId}");
         }, BuildPromptServiceRegistration(promptService));
 
         await promptService.Received(1).RefreshScenePromptsBySceneIdsAsync(Arg.Is<List<int>>(ids => ids.Count == 1 && ids[0] == sceneId), Arg.Any<CancellationToken>());
