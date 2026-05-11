@@ -1126,6 +1126,11 @@ public partial class PhoneOrderProcessJobService
         Log.Information("Candidate material code list: {@Candidates}", candidates);
 
         if (!candidates.Any()) return string.IsNullOrEmpty(baseNumber) ? "" : baseNumber;
+        
+        if (!string.IsNullOrWhiteSpace(baseNumber) &&
+            candidates.Contains(baseNumber, StringComparer.OrdinalIgnoreCase))
+            return baseNumber;
+
         if (candidates.Count == 1) return candidates.First();
 
         var isCase = !string.IsNullOrWhiteSpace(unit) && (unit.Contains("case", StringComparison.OrdinalIgnoreCase) || unit.Contains("箱"));
