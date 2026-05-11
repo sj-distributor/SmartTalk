@@ -25,6 +25,7 @@
 | 2 | 2.4 | `stab/v2-stream-sid-race` | StreamSid race 防護 | 🟡 PR #926 | 2026-05-07 | 2026-05-07 | - |
 | 3 | 3.1 | `refactor/v2-recording-buffer-abstraction` | 抽出 IRecordingBuffer（純 refactor） | 🔵 #927 merged | 2026-05-07 | 2026-05-08 | - |
 | 3 | 3.2 | `feat/v2-recording-buffer-rolling-window` | RollingWindowBuffer + env var | 🔵 #928 merged | 2026-05-07 | 2026-05-08 | - |
+| 3.5 | 3.5.1 | `feat/v2-realtime-2-opt-in-url` | gpt-realtime-2 + rollback URL 常量 | 🟡 PR #929 | 2026-05-08 | 2026-05-08 | - |
 | 4 | 4.1 | `feat/v2-assistant-config-fields` | Entity 加配置字段 | ⚪ | - | - | - |
 | 4 | 4.2 | `feat/v2-config-dto-passthrough` | DTO/ModelConfig 透傳 | ⚪ | - | - | - |
 | 5 | 5.1 | `feat/v2-transcription-model-config` | Transcription 模型 opt-in | ⚪ | - | - | - |
