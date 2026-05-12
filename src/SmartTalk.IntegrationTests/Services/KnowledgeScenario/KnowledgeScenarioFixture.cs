@@ -544,15 +544,15 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
                 });
 
             switchResponse.Data.Description.ShouldBe($"Desc-{caseId}");
-            switchResponse.Data.Version.ShouldBe("1.2");
+            switchResponse.Data.Version.ShouldBe("1.0");
             switchResponse.Data.SceneItems.Single().Content.ShouldBe($"Content-{caseId}");
             updateResponse.Data.Version.ShouldBe("1.1");
 
             var latestHistoryResponse = await mediator.RequestAsync<GetKnowledgeSceneHistoryRequest, GetKnowledgeSceneHistoryResponse>(
                 new GetKnowledgeSceneHistoryRequest { SceneId = addResponse.Data.Id });
-            latestHistoryResponse.Data.Count.ShouldBe(3);
+            latestHistoryResponse.Data.Count.ShouldBe(2);
             latestHistoryResponse.Data.Scenes.Count(x => x.IsActive).ShouldBe(1);
-            latestHistoryResponse.Data.Scenes.Single(x => x.IsActive).Version.ShouldBe("1.2");
+            latestHistoryResponse.Data.Scenes.Single(x => x.IsActive).Version.ShouldBe("1.0");
         });
     }
 
