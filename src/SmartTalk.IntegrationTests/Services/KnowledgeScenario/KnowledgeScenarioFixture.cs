@@ -212,7 +212,22 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
                     FolderId = folderId,
                     Name = $"  Scene-{caseId}  ",
                     Description = $"  Scene Desc {caseId}  ",
-                    Status = KnowledgeSceneStatus.Published
+                    Status = KnowledgeSceneStatus.Published,
+                    SceneItems =
+                    [
+                        new KnowledgeSceneItemDto
+                        {
+                            Name = $"  Item-{caseId}  ",
+                            Type = KnowledgeSceneItemType.Text,
+                            Content = $"  Content {caseId}  "
+                        },
+                        new KnowledgeSceneItemDto
+                        {
+                            Name = $"  Item-File-{caseId}  ",
+                            Type = KnowledgeSceneItemType.File,
+                            FileName = $"  file-{caseId}.pdf  "
+                        }
+                    ]
                 });
 
             response.Data.ShouldNotBeNull();
@@ -220,6 +235,13 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
             response.Data.Name.ShouldBe($"Scene-{caseId}");
             response.Data.Description.ShouldBe($"Scene Desc {caseId}");
             response.Data.Status.ShouldBe(KnowledgeSceneStatus.Published);
+            response.Data.SceneItems.Count.ShouldBe(2);
+            response.Data.SceneItems[0].SceneId.ShouldBe(response.Data.Id);
+            response.Data.SceneItems[0].Name.ShouldBe($"Item-{caseId}");
+            response.Data.SceneItems[0].Content.ShouldBe($"Content {caseId}");
+            response.Data.SceneItems[1].SceneId.ShouldBe(response.Data.Id);
+            response.Data.SceneItems[1].Name.ShouldBe($"Item-File-{caseId}");
+            response.Data.SceneItems[1].FileName.ShouldBe($"file-{caseId}.pdf");
         });
     }
 
@@ -229,6 +251,7 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
         var caseId = Guid.NewGuid().ToString("N")[..8];
         int folderId = 0;
         int sceneId = 0;
+        int itemId = 0;
         var promptService = CreatePromptServiceMock();
 
         await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
@@ -236,6 +259,8 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
             var folder = await CreateFolderAsync(repository, unitOfWork, $"Folder-{caseId}");
             folderId = folder.Id;
             sceneId = (await CreateSceneAsync(repository, unitOfWork, folderId, $"Scene-{caseId}", "desc", KnowledgeSceneStatus.OffShelf)).Id;
+            itemId = (await CreateSceneItemAsync(repository, unitOfWork, sceneId, $"Item-{caseId}", KnowledgeSceneItemType.Text, $"Content {caseId}")).Id;
+            await CreateSceneItemAsync(repository, unitOfWork, sceneId, $"Item-Delete-{caseId}", KnowledgeSceneItemType.Text, $"Delete Content {caseId}");
         });
 
         await Run<IMediator>(async mediator =>
@@ -247,7 +272,24 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
                     FolderId = folderId,
                     Name = $"  Scene-Updated-{caseId}  ",
                     Description = $"  Updated Desc {caseId}  ",
-                    Status = KnowledgeSceneStatus.Published
+                    Status = KnowledgeSceneStatus.Published,
+                    SceneItems =
+                    [
+                        new KnowledgeSceneItemDto
+                        {
+                            Id = itemId,
+                            Name = $"  Item-Updated-{caseId}  ",
+                            Type = KnowledgeSceneItemType.FAQ,
+                            Content = $"  Updated Content {caseId}  ",
+                            FileName = $"  updated-{caseId}.txt  "
+                        },
+                        new KnowledgeSceneItemDto
+                        {
+                            Name = $"  Item-New-{caseId}  ",
+                            Type = KnowledgeSceneItemType.Text,
+                            Content = $"  New Content {caseId}  "
+                        }
+                    ]
                 });
 
             response.Data.ShouldNotBeNull();
@@ -255,6 +297,9 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
             response.Data.Name.ShouldBe($"Scene-Updated-{caseId}");
             response.Data.Description.ShouldBe($"Updated Desc {caseId}");
             response.Data.Status.ShouldBe(KnowledgeSceneStatus.Published);
+            response.Data.SceneItems.Count.ShouldBe(2);
+            response.Data.SceneItems.Any(x => x.Id == itemId && x.Name == $"Item-Updated-{caseId}" && x.Type == KnowledgeSceneItemType.FAQ).ShouldBeTrue();
+            response.Data.SceneItems.Any(x => x.Name == $"Item-New-{caseId}" && x.Content == $"New Content {caseId}").ShouldBeTrue();
         }, BuildPromptServiceRegistration(promptService));
 
         await Run<IRepository>(async repository =>
@@ -266,6 +311,12 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
             scene.Description.ShouldBe($"Updated Desc {caseId}");
             scene.Status.ShouldBe(KnowledgeSceneStatus.Published);
             scene.UpdatedAt.ShouldNotBeNull();
+            var items = await repository.Query<KnowledgeSceneItem>().Where(x => x.SceneId == sceneId).ToListAsync();
+
+            items.Count.ShouldBe(2);
+            items.Any(x => x.Id == itemId && x.Name == $"Item-Updated-{caseId}" && x.Type == KnowledgeSceneItemType.FAQ).ShouldBeTrue();
+            items.Any(x => x.Name == $"Item-New-{caseId}" && x.Content == $"New Content {caseId}").ShouldBeTrue();
+            items.Any(x => x.Name == $"Item-Delete-{caseId}").ShouldBeFalse();
         });
 
         await promptService.Received(1).RefreshScenePromptsBySceneIdsAsync(Arg.Is<List<int>>(ids => ids.Count == 1 && ids[0] == sceneId), Arg.Any<CancellationToken>());
@@ -331,8 +382,8 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
             relations.Single().KnowledgeId.ShouldBe(seeded.SecondKnowledgeId);
         });
 
-        await promptService.Received(1).RefreshScenePromptsAsync(Arg.Is<List<int>>(ids => ids.Count == 2 
-            && ids.Contains(seeded.FirstKnowledgeId) 
+        await promptService.Received(1).RefreshScenePromptsAsync(Arg.Is<List<int>>(ids => ids.Count == 2
+            && ids.Contains(seeded.FirstKnowledgeId)
             && ids.Contains(seeded.SecondKnowledgeId)),
             Arg.Any<CancellationToken>());
     }
@@ -365,147 +416,6 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
             response.Data.Count.ShouldBe(1);
             response.Data.Single().Name.ShouldBe($"Item-Match-{caseId}");
         });
-    }
-
-    [Fact]
-    public async Task ShouldAddKnowledgeSceneItem()
-    {
-        var caseId = Guid.NewGuid().ToString("N")[..8];
-        int sceneId = 0;
-        var promptService = CreatePromptServiceMock();
-
-        await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
-        {
-            var folder = await CreateFolderAsync(repository, unitOfWork, $"Folder-{caseId}");
-            sceneId = (await CreateSceneAsync(repository, unitOfWork, folder.Id, $"Scene-{caseId}", "desc", KnowledgeSceneStatus.Published)).Id;
-        });
-
-        await Run<IMediator>(async mediator =>
-        {
-            var response = await mediator.SendAsync<AddKnowledgeSceneItemCommand, AddKnowledgeSceneItemResponse>(
-                new AddKnowledgeSceneItemCommand
-                {
-                    SceneId = sceneId,
-                    Items =
-                    [
-                        new AddKnowledgeSceneItemDto
-                        {
-                            Name = $"  Item-{caseId}  ",
-                            Type = KnowledgeSceneItemType.File,
-                            Content = $"  Content {caseId}  ",
-                            FileName = $"  file-{caseId}.pdf  "
-                        },
-                        new AddKnowledgeSceneItemDto
-                        {
-                            Name = $"  Item-Second-{caseId}  ",
-                            Type = KnowledgeSceneItemType.Text,
-                            Content = $"  Content Second {caseId}  "
-                        }
-                    ]
-                });
-
-            response.Data.ShouldNotBeNull();
-            response.Data.Count.ShouldBe(2);
-            response.Data[0].SceneId.ShouldBe(sceneId);
-            response.Data[0].Name.ShouldBe($"Item-{caseId}");
-            response.Data[0].Type.ShouldBe(KnowledgeSceneItemType.File);
-            response.Data[0].Content.ShouldBe($"Content {caseId}");
-            response.Data[0].FileName.ShouldBe($"file-{caseId}.pdf");
-            response.Data[1].SceneId.ShouldBe(sceneId);
-            response.Data[1].Name.ShouldBe($"Item-Second-{caseId}");
-            response.Data[1].Type.ShouldBe(KnowledgeSceneItemType.Text);
-            response.Data[1].Content.ShouldBe($"Content Second {caseId}");
-        }, BuildPromptServiceRegistration(promptService));
-
-        await promptService.Received(1).RefreshScenePromptsBySceneIdsAsync(Arg.Is<List<int>>(ids => ids.Count == 1 && ids[0] == sceneId), Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task ShouldUpdateKnowledgeSceneItem()
-    {
-        var caseId = Guid.NewGuid().ToString("N")[..8];
-        int itemId = 0;
-        int sceneId = 0;
-        var promptService = CreatePromptServiceMock();
-
-        await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
-        {
-            var folder = await CreateFolderAsync(repository, unitOfWork, $"Folder-{caseId}");
-            sceneId = (await CreateSceneAsync(repository, unitOfWork, folder.Id, $"Scene-{caseId}", "desc", KnowledgeSceneStatus.Published)).Id;
-            itemId = (await CreateSceneItemAsync(repository, unitOfWork, sceneId, $"Item-{caseId}", KnowledgeSceneItemType.Text, $"Content {caseId}")).Id;
-        });
-
-        await Run<IMediator>(async mediator =>
-        {
-            var response = await mediator.SendAsync<UpdateKnowledgeSceneItemCommand, UpdateKnowledgeSceneItemResponse>(
-                new UpdateKnowledgeSceneItemCommand
-                {
-                    Id = itemId,
-                    Name = $"  Item-Updated-{caseId}  ",
-                    Type = KnowledgeSceneItemType.FAQ,
-                    Content = $"  Updated Content {caseId}  ",
-                    FileName = $"  updated-{caseId}.txt  "
-                });
-
-            response.Data.ShouldNotBeNull();
-            response.Data.Id.ShouldBe(itemId);
-            response.Data.Name.ShouldBe($"Item-Updated-{caseId}");
-            response.Data.Type.ShouldBe(KnowledgeSceneItemType.FAQ);
-            response.Data.Content.ShouldBe($"Updated Content {caseId}");
-            response.Data.FileName.ShouldBe($"updated-{caseId}.txt");
-        }, BuildPromptServiceRegistration(promptService));
-
-        await Run<IRepository>(async repository =>
-        {
-            var item = await repository.Query<KnowledgeSceneItem>().FirstOrDefaultAsync(x => x.Id == itemId);
-
-            item.ShouldNotBeNull();
-            item.Name.ShouldBe($"Item-Updated-{caseId}");
-            item.Type.ShouldBe(KnowledgeSceneItemType.FAQ);
-            item.Content.ShouldBe($"Updated Content {caseId}");
-            item.FileName.ShouldBe($"updated-{caseId}.txt");
-            item.UpdatedAt.ShouldNotBeNull();
-        });
-
-        await promptService.Received(1).RefreshScenePromptsBySceneIdsAsync(Arg.Is<List<int>>(ids => ids.Count == 1 && ids[0] == sceneId), Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task ShouldDeleteKnowledgeSceneItem()
-    {
-        var caseId = Guid.NewGuid().ToString("N")[..8];
-        int itemId = 0;
-        int sceneId = 0;
-        var promptService = CreatePromptServiceMock();
-
-        await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
-        {
-            var folder = await CreateFolderAsync(repository, unitOfWork, $"Folder-{caseId}");
-            sceneId = (await CreateSceneAsync(repository, unitOfWork, folder.Id, $"Scene-{caseId}", "desc", KnowledgeSceneStatus.Published)).Id;
-            itemId = (await CreateSceneItemAsync(repository, unitOfWork, sceneId, $"Item-{caseId}", KnowledgeSceneItemType.Text, $"Content {caseId}")).Id;
-        });
-
-        await Run<IMediator>(async mediator =>
-        {
-            var response = await mediator.SendAsync<DeleteKnowledgeSceneItemCommand, DeleteKnowledgeSceneItemResponse>(
-                new DeleteKnowledgeSceneItemCommand { Id = itemId });
-
-            response.Data.ShouldNotBeNull();
-            response.Data.Id.ShouldBe(itemId);
-            response.Data.SceneId.ShouldBe(sceneId);
-        }, BuildPromptServiceRegistration(promptService));
-
-        await Run<IRepository>(async repository =>
-        {
-            (await repository.Query<KnowledgeSceneItem>().AnyAsync(x => x.Id == itemId)).ShouldBeFalse();
-
-            var scene = await repository.Query<KnowledgeScene>().FirstOrDefaultAsync(x => x.Id == sceneId);
-
-            scene.ShouldNotBeNull();
-            scene.UpdatedAt.ShouldNotBeNull();
-        });
-
-        await promptService.Received(1).RefreshScenePromptsBySceneIdsAsync(Arg.Is<List<int>>(ids => ids.Count == 1 && ids[0] == sceneId), Arg.Any<CancellationToken>());
     }
 
     private static IAiSpeechAssistantKnowledgePromptService CreatePromptServiceMock()
