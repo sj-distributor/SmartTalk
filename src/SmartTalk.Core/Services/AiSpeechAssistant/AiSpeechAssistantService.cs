@@ -33,6 +33,7 @@ using SmartTalk.Messages.Constants;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.Pos;
+using SmartTalk.Core.Services.KnowledgeScenario;
 using SmartTalk.Core.Services.Restaurants;
 using SmartTalk.Core.Services.Sale;
 using SmartTalk.Core.Services.SpeechMatics;
@@ -98,6 +99,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly ITwilioService _twilioService;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
     private readonly IAiSpeechAssistantKnowledgePromptService _aiSpeechAssistantKnowledgePromptService;
+    private readonly IKnowledgeScenarioDataProvider _knowledgeScenarioDataProvider;
 
     private StringBuilder _openaiEvent;
     private bool _shouldSendBuffToOpenAi;
@@ -136,6 +138,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         ITwilioService twilioService,
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider,
         IAiSpeechAssistantKnowledgePromptService aiSpeechAssistantKnowledgePromptService,
+        IKnowledgeScenarioDataProvider knowledgeScenarioDataProvider,
         WebSocket openaiWebSocket = null)
     {
         _clock = clock;
@@ -168,6 +171,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _inactivityTimerManager = inactivityTimerManager;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
         _aiSpeechAssistantKnowledgePromptService = aiSpeechAssistantKnowledgePromptService;
+        _knowledgeScenarioDataProvider = knowledgeScenarioDataProvider;
 
         _openaiEvent = new StringBuilder();
         _openaiWebSocket = openaiWebSocket ?? new ClientWebSocket();

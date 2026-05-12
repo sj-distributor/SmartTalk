@@ -384,6 +384,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         var knowledges = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsAsync(request.Id, null, cancellationToken).ConfigureAwait(false);
         var sceneDto = _mapper.Map<KnowledgeSceneDto>(scene);
         sceneDto.SceneItems = _mapper.Map<List<KnowledgeSceneItemDto>>(knowledges);
+        sceneDto.SceneItems.ForEach(x => x.SceneStatus = scene.Status);
         Log.Information("GetKnowledgeSceneAsync completed. SceneId={SceneId}, SceneItemCount={SceneItemCount}", scene.Id, knowledges.Count);
       
         return new GetKnowledgeSceneResponse
@@ -409,7 +410,11 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
 
         return new GetKnowledgeSceneItemsResponse
         {
-            Data = _mapper.Map<List<KnowledgeSceneItemDto>>(knowledges)
+            Data = _mapper.Map<List<KnowledgeSceneItemDto>>(knowledges).Select(x =>
+            {
+                x.SceneStatus = scene.Status;
+                return x;
+            }).ToList()
         };
     }
 
@@ -452,6 +457,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
                         Type = item.Type,
                         Content = item.Content,
                         FileName = item.FileName,
+                        SceneStatus = history.Status,
                         CreatedAt = item.CreatedAt,
                         UpdatedAt = item.UpdatedAt
                     }).ToList()
