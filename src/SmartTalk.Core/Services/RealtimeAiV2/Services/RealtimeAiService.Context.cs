@@ -1,3 +1,5 @@
+using SmartTalk.Core.Services.RealtimeAiV2.Recording;
+
 namespace SmartTalk.Core.Services.RealtimeAiV2.Services;
 
 public partial class RealtimeAiService
@@ -24,7 +26,10 @@ public partial class RealtimeAiService
 
     private void BuildRecordingIfRequired()
     {
-        if (_ctx.Options.EnableRecording && _ctx.AudioBuffer == null) _ctx.AudioBuffer = new MemoryStream();
+        // RealtimeAiRecordingSettings.Create() picks UnboundedMemoryBuffer (default) or
+        // RollingWindowBuffer based on the BufferMode env var. Default preserves the
+        // pre-Phase-3 unbounded behaviour exactly.
+        if (_ctx.Options.EnableRecording && _ctx.AudioBuffer == null) _ctx.AudioBuffer = RealtimeAiRecordingSettings.Create();
     }
 
     private void BuildSessionActions()

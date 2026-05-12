@@ -10,6 +10,29 @@ namespace SmartTalk.IntegrationTests.Services.AiSpeechAssistant;
 public partial class AiSpeechAssistantConnectFixture
 {
     [Fact]
+    public async Task ShouldGetAssistantInfo_NoMatch_ReturnsTupleOfNulls()
+    {
+        // Pin the post-fix contract: when no assistant matches the (caller, DID) combo,
+        // the data provider must return (null, null, null) — not throw NRE. The previous
+        // implementation crashed inside the provider on `result.assistant` deref, leaking
+        // a raw NullReferenceException up to V2's ConnectAsync (which only handles
+        // AiAssistantNotAvailableException + AiAssistantCallForwardedException) and
+        // leaving the Twilio WebSocket dangling. Regression here means that bug returns.
+
+        await Run<IAiSpeechAssistantDataProvider>(async dataProvider =>
+        {
+            var (assistant, knowledge, userProfile) =
+                await dataProvider.GetAiSpeechAssistantInfoByNumbersAsync(
+                    callerNumber: "+10000000000",        // unmatched caller
+                    didNumber: "+19999999999");          // unmatched DID
+
+            assistant.ShouldBeNull();
+            knowledge.ShouldBeNull();
+            userProfile.ShouldBeNull();
+        });
+    }
+
+    [Fact]
     public async Task ShouldGetAssistantInfo_WithKnowledgeAndUserProfile()
     {
         await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
