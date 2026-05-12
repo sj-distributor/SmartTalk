@@ -22,10 +22,12 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
     public Dictionary<string, string> GetHeaders(RealtimeAiServerRegion region)
     {
         var apiKey = region == RealtimeAiServerRegion.US ? _openAiSettings.ApiKey : _openAiSettings.HkApiKey;
-        
+
+        // OpenAI removed the `OpenAI-Beta: realtime=v1` header from the Realtime API on 2026-05-07
+        // when the API moved Beta → GA. Sending it now returns `invalid_beta` and the WS is closed
+        // before the first session.update. Authorization is the only required custom header.
         return new Dictionary<string, string>
         {
-            { "OpenAI-Beta", "realtime=v1" },
             { "Authorization", $"Bearer {apiKey}" }
         };
     }
@@ -34,26 +36,54 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
     {
         var modelConfig = options.ModelConfig;
 
-        var sessionPayload = new
+        // GA session.update payload (post 2026-05-07):
+        // - new required `session.type` field ("realtime" | "transcription")
+        // - audio config nested under `session.audio.{input,output}` rather than flat fields
+        // - audio format becomes an object {type, rate} rather than a bare string
+        // - `modalities` → `output_modalities`; `temperature` field dropped
+        // Reference: https://platform.openai.com/docs/guides/realtime
+        // Canonical sample: https://github.com/twilio-samples/speech-assistant-openai-realtime-api-python
+        return new
         {
             type = "session.update",
             session = new
             {
-                turn_detection = modelConfig.TurnDetection ?? new { type = "server_vad" },
-                input_audio_format = clientCodec.GetDescription(),
-                output_audio_format = clientCodec.GetDescription(),
-                voice = string.IsNullOrEmpty(modelConfig.Voice) ? "alloy" : modelConfig.Voice,
+                type = "realtime",
                 instructions = modelConfig.Prompt,
-                modalities = new[] { "text", "audio" },
-                temperature = 0.8,
-                input_audio_transcription = new { model = "gpt-4o-transcribe" },
-                input_audio_noise_reduction = modelConfig.InputAudioNoiseReduction,
+                output_modalities = new[] { "audio" },
+                audio = new
+                {
+                    input = new
+                    {
+                        format = ConvertCodecToGaFormat(clientCodec),
+                        transcription = new { model = "whisper-1" },
+                        turn_detection = modelConfig.TurnDetection ?? new { type = "server_vad" },
+                        noise_reduction = modelConfig.InputAudioNoiseReduction
+                    },
+                    output = new
+                    {
+                        format = ConvertCodecToGaFormat(clientCodec),
+                        voice = string.IsNullOrEmpty(modelConfig.Voice) ? "alloy" : modelConfig.Voice
+                    }
+                },
                 tools = modelConfig.Tools.Any() ? modelConfig.Tools : null
             }
         };
-
-        return sessionPayload;
     }
+
+    /// <summary>
+    /// Converts our internal codec enum to the GA session.update audio.format object.
+    /// G.711 (pcmu/pcma) is fixed at 8 kHz in the GA contract; sending `rate` is
+    /// rejected as an unknown field. PCM16 carries an explicit rate. Canonical reference:
+    /// https://github.com/twilio-samples/speech-assistant-openai-realtime-api-python
+    /// </summary>
+    private static object ConvertCodecToGaFormat(RealtimeAiAudioCodec codec) => codec switch
+    {
+        RealtimeAiAudioCodec.MULAW => new { type = "audio/pcmu" },
+        RealtimeAiAudioCodec.ALAW => new { type = "audio/pcma" },
+        RealtimeAiAudioCodec.PCM16 => new { type = "audio/pcm", rate = 24000 },
+        _ => new { type = "audio/pcmu" }
+    };
 
     public string BuildAudioAppendMessage(RealtimeAiWssAudioData audioData)
     {
@@ -169,13 +199,18 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
                 case "session.updated":
                     return Result(RealtimeAiWssEventType.SessionInitialized, rawMessage);
 
+                // GA renamed several audio events; accept BOTH the old beta name and the new GA
+                // name so the deploy is robust to any leftover preview snapshots and to the GA
+                // models. https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/realtime-audio-preview-api-migration-guide
                 case "response.audio.delta":
+                case "response.output_audio.delta":
                     var audioPayload = root.TryGetProperty("delta", out var deltaProp) ? deltaProp.GetString() : null;
                     return Result(RealtimeAiWssEventType.ResponseAudioDelta, new RealtimeAiWssAudioData { Base64Payload = audioPayload, ItemId = itemId });
 
                 case "response.audio.done":
+                case "response.output_audio.done":
                     return Result(RealtimeAiWssEventType.ResponseAudioDone);
-                
+
                 case "response.created":
                     return Result(RealtimeAiWssEventType.ResponseStarted);
 
@@ -189,9 +224,11 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
                     return Result(RealtimeAiWssEventType.InputAudioTranscriptionCompleted, Transcription("transcript", AiSpeechAssistantSpeaker.User));
 
                 case "response.audio_transcript.delta":
+                case "response.output_audio_transcript.delta":
                     return Result(RealtimeAiWssEventType.OutputAudioTranscriptionPartial, Transcription("delta", AiSpeechAssistantSpeaker.Ai));
 
                 case "response.audio_transcript.done":
+                case "response.output_audio_transcript.done":
                     return Result(RealtimeAiWssEventType.OutputAudioTranscriptionCompleted, Transcription("transcript", AiSpeechAssistantSpeaker.Ai));
 
                 case "response.done":

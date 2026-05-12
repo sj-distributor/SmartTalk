@@ -29,10 +29,12 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
     public Dictionary<string, string> GetHeaders(RealtimeAiServerRegion region)
     {
         var apiKey = region == RealtimeAiServerRegion.US ? _openAiSettings.ApiKey : _openAiSettings.HkApiKey;
-        
+
+        // OpenAI removed the `OpenAI-Beta: realtime=v1` header from the Realtime API on 2026-05-07
+        // when the API moved Beta → GA. Sending it now returns `invalid_beta` and the WS is closed
+        // before the first session.update. Authorization is the only required custom header.
         return new Dictionary<string, string>
         {
-            { "OpenAI-Beta", "realtime=v1" },
             { "Authorization", $"Bearer {apiKey}" }
         };
     }
@@ -44,21 +46,38 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
         var modelConfig = options.ModelConfig;
         var configs = await InitialSessionConfigAsync(options, cancellationToken).ConfigureAwait(false);
         var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(int.Parse(profile.ProfileId), isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var prompt = await ReplaceKnowledgeVariablesAsync(knowledge?.Prompt ?? options.InitialPrompt, cancellationToken).ConfigureAwait(false);
 
+        // GA session.update payload (post 2026-05-07):
+        // - new required `session.type` field ("realtime" | "transcription")
+        // - audio config nested under `session.audio.{input,output}` rather than flat fields
+        // - audio format becomes an object {type[, rate]} rather than a bare codec string
+        // - `modalities` → `output_modalities`; `temperature` field dropped
+        // Reference: https://platform.openai.com/docs/guides/realtime
+        // Canonical sample: https://github.com/twilio-samples/speech-assistant-openai-realtime-api-python
         var sessionPayload = new
         {
             type = "session.update",
             session = new
             {
-                turn_detection = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection),
-                input_audio_format = options.InputFormat.GetDescription(),
-                output_audio_format = options.OutputFormat.GetDescription(),
-                voice = string.IsNullOrEmpty(modelConfig.Voice) ? "alloy" : modelConfig.Voice,
-                instructions = knowledge?.Prompt ?? options.InitialPrompt,
-                modalities = new[] { "text", "audio" },
-                temperature = 0.8,
-                input_audio_transcription = new { model = "gpt-4o-transcribe" },
-                input_audio_noise_reduction = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction),
+                type = "realtime",
+                instructions = prompt ?? options.InitialPrompt,
+                output_modalities = new[] { "audio" },
+                audio = new
+                {
+                    input = new
+                    {
+                        format = ConvertCodecToGaFormat(options.InputFormat),
+                        transcription = new { model = "whisper-1" },
+                        turn_detection = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.TurnDirection),
+                        noise_reduction = InitialSessionParameters(configs, AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction)
+                    },
+                    output = new
+                    {
+                        format = ConvertCodecToGaFormat(options.OutputFormat),
+                        voice = string.IsNullOrEmpty(modelConfig.Voice) ? "alloy" : modelConfig.Voice
+                    }
+                },
                 tools = configs.Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool).Select(x => x.Config)
             }
         };
@@ -66,6 +85,57 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
         Log.Information("OpenAIAdapter: 构建初始会话负载: {@Payload}", sessionPayload);
 
         return sessionPayload;
+    }
+    /// <summary>
+    /// Converts our internal codec enum to the GA session.update audio.format object.
+    /// G.711 (pcmu/pcma) is fixed at 8 kHz in the GA contract; sending `rate` is
+    /// rejected as an unknown field. PCM16 carries an explicit rate. Canonical reference:
+    /// https://github.com/twilio-samples/speech-assistant-openai-realtime-api-python
+    /// </summary>
+    private static object ConvertCodecToGaFormat(RealtimeAiAudioCodec codec) => codec switch
+    {
+        RealtimeAiAudioCodec.MULAW => new { type = "audio/pcmu" },
+        RealtimeAiAudioCodec.ALAW => new { type = "audio/pcma" },
+        RealtimeAiAudioCodec.PCM16 => new { type = "audio/pcm", rate = 24000 },
+        _ => new { type = "audio/pcmu" }
+    };
+
+    private async Task<string> ReplaceKnowledgeVariablesAsync(string prompt, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(prompt))
+        {
+            return prompt;
+        }
+
+        if (prompt.Contains("#{hr_interview_section1}", StringComparison.OrdinalIgnoreCase))
+        {
+            var cacheKeys = Enum.GetValues(typeof(HrInterviewQuestionSection))
+                .Cast<HrInterviewQuestionSection>()
+                .Select(section => "hr_interview_" + section.ToString().ToLower())
+                .ToList();
+
+            var caches = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeVariableCachesAsync(cacheKeys, cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+
+            prompt = Enum.GetValues(typeof(HrInterviewQuestionSection))
+                .Cast<HrInterviewQuestionSection>()
+                .Aggregate(prompt, (current, section) =>
+                {
+                    var cacheKey = $"hr_interview_{section.ToString().ToLower()}";
+                    var placeholder = $"#{{{cacheKey}}}";
+                    var cacheValue = caches.FirstOrDefault(x => x.CacheKey == cacheKey)?.CacheValue;
+                    return current.Replace(placeholder, cacheValue);
+                });
+        }
+
+        if (prompt.Contains("#{hr_interview_questions}", StringComparison.OrdinalIgnoreCase))
+        {
+            var cache = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeVariableCachesAsync(["hr_interview_questions"], cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            prompt = prompt.Replace("#{hr_interview_questions}", cache.FirstOrDefault()?.CacheValue);
+        }
+
+        return prompt;
     }
     
     public (string MessageJson, bool IsOpenAiImage) BuildAudioAppendMessage(RealtimeAiWssAudioData audioData)
@@ -172,30 +242,37 @@ public class OpenAiRealtimeAiAdapter : IRealtimeAiProviderAdapter
             {
                 case "session.updated":
                     return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.SessionInitialized, Data = rawMessage, RawJson = rawMessage, ItemId = itemId };
-                
+
+                // GA renamed several audio events (post 2026-05-07). Accept BOTH the old beta name
+                // and the new GA name so we survive any transition-window mismatch between models.
+                // https://platform.openai.com/docs/guides/realtime
                 case "response.audio.delta":
+                case "response.output_audio.delta":
                     var audioPayload = root.TryGetProperty("delta", out var deltaProp) ? deltaProp.GetString() : null;
                     return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.ResponseAudioDelta, Data = new RealtimeAiWssAudioData { Base64Payload = audioPayload, ItemId = itemId }, RawJson = rawMessage, ItemId = itemId };
-                
+
                 case "response.audio.done":
+                case "response.output_audio.done":
                      return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.ResponseAudioDone, RawJson = rawMessage, ItemId = itemId };
 
                 case "input_audio_buffer.speech_started":
                     return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.SpeechDetected, RawJson = rawMessage, ItemId = itemId };
-                
+
                 case "conversation.item.input_audio_transcription.delta":
                     var userTranscriptDelta = root.TryGetProperty("delta", out var delta) ? delta.GetString() : null;
                     return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.InputAudioTranscriptionPartial, Data = new RealtimeAiWssTranscriptionData { Transcript = userTranscriptDelta, Speaker = AiSpeechAssistantSpeaker.User }, RawJson = rawMessage };
-                
+
                 case "conversation.item.input_audio_transcription.completed":
                     var userTranscript = root.TryGetProperty("transcript", out var transcript) ? transcript.GetString() : null;
                     return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.InputAudioTranscriptionCompleted, Data = new RealtimeAiWssTranscriptionData { Transcript = userTranscript, Speaker = AiSpeechAssistantSpeaker.User }, RawJson = rawMessage };
-                
+
                 case "response.audio_transcript.delta":
+                case "response.output_audio_transcript.delta":
                     var aiTranscriptDelta = root.TryGetProperty("delta", out var aiDelta) ? aiDelta.GetString() : null;
                     return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.OutputAudioTranscriptionPartial, Data = new RealtimeAiWssTranscriptionData { Transcript = aiTranscriptDelta, Speaker = AiSpeechAssistantSpeaker.Ai }, RawJson = rawMessage };
-                
+
                 case "response.audio_transcript.done":
+                case "response.output_audio_transcript.done":
                     var aiTranscription = root.TryGetProperty("transcript", out var aiTranscript) ? aiTranscript.GetString() : null;
                     return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.OutputAudioTranscriptionCompleted, Data = new RealtimeAiWssTranscriptionData { Transcript = aiTranscription, Speaker = AiSpeechAssistantSpeaker.Ai }, RawJson = rawMessage };
 
